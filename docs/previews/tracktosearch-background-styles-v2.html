@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TrackToSearch · 真实页面背景风格预览 V2</title>
+  <style>
+    :root {
+      --ink: #111729;
+      --muted: #68738a;
+      --quiet: #8994a7;
+      --green: #5e9b73;
+      --green-soft: rgba(94, 155, 115, .15);
+      --blue: #5870c6;
+      --edge: rgba(255, 255, 255, .82);
+      --glass: rgba(255, 255, 255, .78);
+      --glass-low: rgba(255, 255, 255, .64);
+      --shadow: rgba(80, 96, 127, .16);
+      --font: "Avenir Next", "SF Pro Display", "Noto Sans CJK SC", "PingFang SC", sans-serif;
+      --mono: "SF Mono", "Cascadia Code", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body { margin: 0; background: #f1f3fa; color: var(--ink); font-family: var(--font); -webkit-font-smoothing: antialiased; }
+    button { font: inherit; }
+    button:focus-visible { outline: 3px solid rgba(94, 155, 115, .38); outline-offset: 3px; }
+
+    .workbench { width: min(1180px, calc(100% - 34px)); margin: 0 auto; padding: 28px 0 32px; }
+    .intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 30px; margin-bottom: 19px; }
+    .eyebrow { margin: 0 0 8px; color: var(--green); font: 10px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: clamp(25px, 3.4vw, 40px); letter-spacing: -.055em; line-height: 1.05; }
+    .intro p { max-width: 570px; margin-top: 10px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .reference { color: var(--quiet); font: 10px/1.5 var(--mono); text-align: right; white-space: nowrap; }
+
+    .controls { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px; border: 1px solid rgba(255,255,255,.85); border-radius: 18px; background: rgba(255,255,255,.62); box-shadow: 0 12px 30px rgba(93,106,139,.1), inset 0 1px 0 #fff; backdrop-filter: blur(18px); }
+    .control-block { display: flex; align-items: center; gap: 11px; min-width: 0; }
+    .control-block + .control-block { padding-left: 17px; border-left: 1px solid rgba(104,117,147,.15); }
+    .control-label { color: var(--quiet); font: 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
+    .segmented { display: flex; gap: 3px; padding: 3px; border-radius: 11px; background: rgba(101,116,149,.08); }
+    .segmented button { padding: 7px 12px; border: 0; border-radius: 8px; color: var(--muted); background: transparent; cursor: pointer; font-size: 11px; transition: .18s ease; }
+    .segmented button[aria-pressed="true"] { color: #fff; background: var(--green); box-shadow: 0 4px 9px rgba(94,155,115,.24); }
+    .locked { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+    .lock-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(94,155,115,.13); }
+
+    .stage { display: grid; grid-template-columns: minmax(200px,1fr) 390px minmax(200px,1fr); align-items: center; gap: clamp(28px, 6vw, 88px); min-height: 900px; padding: 34px 10px 10px; }
+    .callout { max-width: 230px; color: var(--muted); }
+    .callout.right { justify-self: end; }
+    .callout-index { display: block; margin-bottom: 14px; color: var(--green); font: 10px var(--mono); letter-spacing: .13em; }
+    .callout h2 { margin-bottom: 9px; color: var(--ink); font-size: 20px; letter-spacing: -.035em; line-height: 1.2; }
+    .callout p { font-size: 12px; line-height: 1.75; }
+    .callout ul { margin: 14px 0 0; padding: 0; list-style: none; font-size: 11px; line-height: 2; }
+    .callout li::before { content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 8px 1px 0; border-radius: 50%; background: var(--green); }
+    .swatches { display: flex; gap: 8px; margin-top: 17px; }
+    .swatch { width: 25px; height: 25px; border: 1px solid #fff; border-radius: 50%; box-shadow: 0 3px 9px rgba(73,87,119,.15); }
+
+    .device { position: relative; width: 390px; height: 844px; overflow: hidden; justify-self: center; border-radius: 34px; background: #edf2ff; box-shadow: 0 28px 62px rgba(63,77,111,.25), 0 6px 14px rgba(63,77,111,.12), 0 0 0 1px rgba(255,255,255,.9); }
+    .app { position: relative; height: 100%; overflow: hidden; background: var(--page-bg); }
+    .ambient { position: absolute; inset: 0; overflow: hidden; pointer-events: none; background: var(--page-bg); }
+    .ambient::before, .ambient::after { content: ""; position: absolute; inset: -18%; }
+    .ambient::before { background: var(--glow-a); filter: blur(27px); }
+    .ambient::after { background: var(--glow-b); filter: blur(36px); }
+    .app[data-style="baseline"] { --page-bg: #eef2ff; --glow-a: radial-gradient(circle at 77% 18%, rgba(168,177,224,.74), transparent 28%), radial-gradient(circle at 52% 55%, rgba(171,224,229,.42), transparent 24%); --glow-b: radial-gradient(circle at 16% 67%, rgba(237,181,226,.57), transparent 27%), radial-gradient(circle at 80% 86%, rgba(218,200,238,.5), transparent 29%), radial-gradient(circle at 39% 92%, rgba(247,221,196,.28), transparent 25%); }
+    .app[data-style="blue-diffuse"] { --page-bg: #f0f4ff; --glow-a: radial-gradient(ellipse at 73% 20%, rgba(166,178,225,.72), transparent 38%); --glow-b: radial-gradient(ellipse at 35% 63%, rgba(191,223,232,.4), transparent 31%), radial-gradient(ellipse at 18% 90%, rgba(226,205,239,.28), transparent 33%); }
+    .app[data-style="mesh"] { --page-bg: #eff3ff; --glow-a: radial-gradient(circle at 22% 18%, rgba(196,218,225,.54), transparent 26%), radial-gradient(circle at 84% 21%, rgba(182,187,225,.62), transparent 30%), radial-gradient(circle at 67% 63%, rgba(213,224,237,.46), transparent 25%); --glow-b: radial-gradient(circle at 17% 69%, rgba(236,191,226,.45), transparent 26%), radial-gradient(circle at 54% 90%, rgba(244,219,194,.33), transparent 25%), radial-gradient(circle at 90% 84%, rgba(206,196,237,.42), transparent 25%); }
+    .app[data-style="aurora"] { --page-bg: #eef3ff; --glow-a: linear-gradient(116deg, transparent 31%, rgba(184,206,226,.34) 43%, transparent 56%), linear-gradient(73deg, transparent 40%, rgba(199,190,229,.38) 52%, transparent 66%); --glow-b: radial-gradient(ellipse at 15% 75%, rgba(211,232,220,.36), transparent 29%), radial-gradient(ellipse at 75% 73%, rgba(242,209,222,.36), transparent 31%), radial-gradient(ellipse at 50% 10%, rgba(196,207,236,.32), transparent 32%); }
+
+    .statusbar { display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 6px 20px 0; color: #293143; font-size: 14px; font-weight: 700; }
+    .status-icons { display: flex; align-items: center; gap: 7px; font-size: 11px; }
+    .battery { display: inline-flex; align-items: center; height: 19px; padding: 0 5px; border-radius: 6px; color: #fff; background: #2ac45b; font-size: 11px; }
+    .app-scroll { position: relative; height: calc(100% - 48px); overflow: auto; padding: 15px 18px 104px; scrollbar-width: none; }
+    .app-scroll::-webkit-scrollbar { display: none; }
+    .page-head { display: flex; align-items: center; justify-content: space-between; margin: 0 2px 25px; }
+    .page-head h2 { color: var(--ink); font-size: 34px; font-weight: 800; letter-spacing: -.075em; line-height: 1; }
+    .head-actions { display: flex; gap: 9px; }
+    .round-action { display: grid; place-items: center; width: 48px; height: 48px; border: 1px solid rgba(194,200,210,.65); border-radius: 50%; color: var(--ink); background: rgba(255,255,255,.52); box-shadow: 0 5px 11px rgba(88,100,128,.1), inset 0 1px 0 #fff; }
+    .round-action svg { width: 23px; height: 23px; }
+
+    .glass { border: 1px solid var(--edge); background: var(--glass); box-shadow: 0 9px 20px var(--shadow), inset 0 1px 0 rgba(255,255,255,.95); backdrop-filter: blur(20px) saturate(125%); }
+    .pill { border-radius: 99px; }
+    .card { border-radius: 24px; }
+    .search-hero { padding-top: 34px; }
+    .cloud-logo { position: relative; width: 118px; height: 100px; margin: 0 auto 20px; }
+    .cloud-logo .cloud { position: absolute; left: 11px; bottom: 20px; width: 83px; height: 51px; border: 4px solid #c99131; border-radius: 37px; background: #fff9ea; box-shadow: 0 4px 8px rgba(82,94,126,.16); }
+    .cloud-logo .cloud::before, .cloud-logo .cloud::after { content: ""; position: absolute; bottom: 14px; border: 4px solid #c99131; border-bottom: 0; border-radius: 50% 50% 0 0; background: #fff9ea; }
+    .cloud-logo .cloud::before { left: 8px; width: 26px; height: 28px; }
+    .cloud-logo .cloud::after { left: 43px; width: 25px; height: 31px; }
+    .reel { position: absolute; left: 30px; top: 20px; z-index: 1; width: 45px; height: 45px; border: 4px solid #c99131; border-radius: 50%; background: #fff9ea; }
+    .reel::before { content: ""; position: absolute; inset: 9px; border-radius: 50%; background: radial-gradient(circle at 50% 0, #c99131 0 4px, transparent 5px), radial-gradient(circle at 100% 52%, #c99131 0 4px, transparent 5px), radial-gradient(circle at 8% 70%, #c99131 0 4px, transparent 5px), #fff9ea; }
+    .play { position: absolute; z-index: 2; right: 3px; top: 48px; display: grid; place-items: center; width: 46px; height: 46px; border: 4px solid #fff6dd; border-radius: 50%; color: #fff; background: #d79425; box-shadow: 0 4px 7px rgba(66,74,105,.24); }
+    .play::before { content: ""; margin-left: 3px; border-top: 10px solid transparent; border-bottom: 10px solid transparent; border-left: 15px solid #fff; }
+    .handle { position: absolute; right: -3px; bottom: 5px; width: 29px; height: 11px; border-radius: 7px; background: #fff4d7; transform: rotate(47deg); box-shadow: 0 3px 4px rgba(66,74,105,.15); }
+
+    .search-box { display: flex; align-items: center; gap: 8px; height: 61px; padding: 5px 7px 5px 18px; color: var(--muted); }
+    .search-mode { color: var(--blue); font-size: 16px; font-weight: 750; white-space: nowrap; }
+    .search-mode::after { content: ""; display: inline-block; margin: 0 0 3px 7px; border-top: 6px solid var(--blue); border-left: 5px solid transparent; border-right: 5px solid transparent; }
+    .placeholder { flex: 1; min-width: 0; color: #92a2b3; font-size: 16px; font-weight: 650; white-space: nowrap; }
+    .search-submit { display: grid; place-items: center; width: 49px; height: 49px; flex: 0 0 49px; border: 0; border-radius: 50%; color: #fff; background: var(--green); box-shadow: 0 5px 10px rgba(70,118,87,.28); }
+    .search-submit svg { width: 25px; height: 25px; }
+    .section-line { display: flex; align-items: baseline; justify-content: space-between; margin: 37px 2px 13px; }
+    .section-line h3 { color: var(--ink); font-size: 21px; letter-spacing: -.055em; }
+    .section-line span { color: var(--green); font-size: 14px; font-weight: 700; }
+    .tag-wrap { display: flex; flex-wrap: wrap; gap: 12px 9px; }
+    .search-tag { display: flex; align-items: center; gap: 7px; min-height: 39px; padding: 0 13px; color: #47556b; font-size: 13px; font-weight: 650; white-space: nowrap; }
+    .search-tag b { color: var(--blue); font-size: 11px; font-weight: 750; }
+    .search-tag svg { width: 17px; height: 17px; color: #7791a3; }
+    .search-tag .close { color: #8c99a8; font-size: 22px; font-weight: 300; line-height: .8; }
+
+    .discover-head { margin-bottom: 25px; }
+    .rail { display: flex; gap: 14px; margin: 0 -18px; padding: 0 18px 8px; overflow: hidden; }
+    .rank-card { position: relative; flex: 0 0 161px; height: 101px; padding: 22px 16px; overflow: hidden; border: 1px solid rgba(255,255,255,.55); border-radius: 24px; color: #fff; box-shadow: 0 8px 14px rgba(71,87,118,.15), inset 0 1px 0 rgba(255,255,255,.4); }
+    .rank-card::after { content: ""; position: absolute; right: -27px; bottom: -50px; width: 105px; height: 105px; border-radius: 50%; background: rgba(255,255,255,.16); filter: blur(11px); }
+    .rank-card h3 { position: relative; z-index: 1; font-size: 20px; letter-spacing: -.05em; }
+    .rank-card span { position: relative; z-index: 1; display: block; margin-top: 12px; font-size: 13px; }
+    .rank-green { background: linear-gradient(128deg, #46b68b, #35a4ac); }
+    .rank-orange { background: linear-gradient(128deg, #f47527, #ec9d21); }
+    .rank-purple { background: linear-gradient(128deg, #b55ca6, #7e8cc3); }
+    .recommend { margin-top: 22px; padding: 25px 14px 22px; color: #fff; text-align: center; background: linear-gradient(118deg, #49bb85, #3ba8b1); }
+    .recommend h3 { font-size: 20px; letter-spacing: -.04em; }
+    .recommend button { display: block; margin: 14px auto 0; padding: 0; border: 0; color: #fff; background: transparent; font-size: 21px; font-weight: 800; cursor: pointer; }
+    .poster-section { margin-top: 34px; }
+    .poster-rail { display: flex; gap: 13px; margin: 0 -18px; padding: 0 18px 5px; overflow: hidden; }
+    .movie-tile { flex: 0 0 116px; min-width: 0; }
+    .movie-art { position: relative; height: 166px; overflow: hidden; border-radius: 18px; box-shadow: 0 7px 12px rgba(61,72,103,.2); }
+    .movie-art::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 58%, rgba(14,21,37,.45)); }
+    .movie-art::after { content: ""; position: absolute; top: 13px; left: 12px; width: 44px; height: 3px; border-radius: 4px; background: rgba(255,255,255,.72); box-shadow: 0 7px 0 rgba(255,255,255,.5); transform: rotate(-15deg); }
+    .art-yellow { background: linear-gradient(145deg, #5f99b8, #e9b126 56%, #df4627); }
+    .art-blue { background: radial-gradient(ellipse at 60% 44%, #d9e8f0 0 11%, transparent 12%), linear-gradient(145deg, #a7c7d8, #3d5f87 54%, #171c35); }
+    .art-space { background: radial-gradient(circle at 54% 39%, #f1b04d 0 6%, transparent 7%), linear-gradient(145deg, #f29231, #772d40 46%, #1d2542); }
+    .art-red { background: linear-gradient(145deg, #f36d2d, #8e2d3c 52%, #e2c17b); }
+    .art-dark { background: linear-gradient(145deg, #8e9e9b, #151f2c 55%, #3f704c); }
+    .art-sky { background: linear-gradient(145deg, #89c3da, #f7d578 49%, #356788); }
+    .movie-badge { position: absolute; z-index: 1; top: 8px; left: 8px; padding: 4px 7px; border-radius: 99px; color: #fff; background: rgba(94,155,115,.92); font-size: 10px; font-weight: 750; }
+    .movie-title { margin: 8px 2px 0; font-size: 13px; font-weight: 750; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .movie-meta { display: block; margin: 4px 2px 0; color: var(--green); font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .mine-head { margin-bottom: 20px; }
+    .watch-toggle { display: flex; padding: 3px; border-radius: 99px; background: rgba(255,255,255,.55); box-shadow: inset 0 2px 5px rgba(102,114,144,.08); }
+    .watch-toggle button { min-width: 65px; padding: 10px 12px; border: 0; border-radius: 99px; color: #68738a; background: transparent; font-size: 14px; font-weight: 750; }
+    .watch-toggle .selected { color: #fff; background: var(--green); box-shadow: 0 5px 10px rgba(70,118,87,.22); }
+    .mine-search { display: flex; align-items: center; gap: 12px; height: 54px; padding: 0 17px; color: #6f7a8e; font-size: 16px; font-weight: 650; }
+    .mine-search svg { width: 24px; height: 24px; }
+    .mine-tools { display: flex; align-items: center; gap: 10px; }
+    .tab-row { display: flex; gap: 33px; margin: 27px 0 16px; padding-left: 15px; }
+    .tab-row button { position: relative; padding: 0 0 9px; border: 0; color: var(--ink); background: transparent; font-size: 18px; font-weight: 750; }
+    .tab-row button.selected { color: var(--green); }
+    .tab-row button.selected::after { content: ""; position: absolute; bottom: 0; left: 50%; width: 43px; height: 5px; border-radius: 5px; background: var(--green); transform: translateX(-50%); }
+    .poster-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 19px 9px; }
+    .poster-grid .movie-tile { width: auto; min-width: 0; }
+    .poster-grid .movie-art { height: 174px; border-radius: 17px; }
+    .poster-grid .movie-title { font-size: 13px; }
+
+    .settings-head { margin-bottom: 22px; }
+    .message-action { background: rgba(255,255,255,.54); }
+    .setting-card { display: flex; align-items: center; gap: 15px; min-height: 108px; padding: 17px; }
+    .setting-icon { display: grid; place-items: center; width: 51px; height: 51px; flex: 0 0 51px; border-radius: 17px; color: var(--green); background: rgba(226,239,233,.88); }
+    .setting-icon svg { width: 29px; height: 29px; }
+    .setting-copy { min-width: 0; flex: 1; }
+    .setting-copy h3 { font-size: 18px; letter-spacing: -.035em; }
+    .setting-copy p { margin-top: 6px; color: #566072; font-size: 13px; font-weight: 650; line-height: 1.45; }
+    .chevron { color: #8c96a1; font-size: 35px; font-weight: 300; }
+    .settings-label { margin: 35px 5px 13px; color: var(--green); font-size: 18px; font-weight: 800; letter-spacing: -.035em; }
+    .appearance-card { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px 12px; padding: 22px 12px 17px; }
+    .appearance-item { display: grid; justify-items: center; gap: 10px; color: #353d50; font-size: 13px; font-weight: 750; text-align: center; }
+    .appearance-icon { display: grid; place-items: center; width: 58px; height: 58px; border-radius: 17px; color: var(--green); background: #e4f0ec; }
+    .appearance-icon svg { width: 27px; height: 27px; }
+    .motion-row { display: flex; align-items: center; gap: 12px; grid-column: 1 / -1; padding: 8px 10px 0; border-top: 1px solid rgba(91,111,114,.1); }
+    .motion-row p { flex: 1; color: #505b6d; font-size: 12px; font-weight: 650; line-height: 1.45; }
+    .motion-row strong { display: block; color: var(--ink); font-size: 14px; }
+    .toggle { position: relative; width: 48px; height: 28px; border: 3px solid #a9c7b9; border-radius: 99px; background: #e0efe9; }
+    .toggle::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 2px 4px rgba(65,86,77,.15); }
+    .source-card { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 20px 16px 24px; }
+    .source-item { display: flex; align-items: center; justify-content: space-between; gap: 7px; color: #20293a; font-size: 15px; font-weight: 800; }
+    .source-item .toggle { width: 53px; }
+    .source-item .toggle.on { border-color: var(--green); background: var(--green); }
+    .source-item .toggle.on::after { left: 23px; }
+
+    .bottom-nav { position: absolute; z-index: 10; right: 14px; bottom: 11px; left: 14px; display: grid; grid-template-columns: repeat(4,1fr); padding: 7px; border-radius: 28px; background: rgba(255,255,255,.7); }
+    .nav-item { display: grid; justify-items: center; gap: 5px; padding: 7px 0 5px; border: 0; border-radius: 22px; color: #303749; background: transparent; cursor: pointer; font-size: 12px; font-weight: 750; }
+    .nav-item svg { width: 28px; height: 28px; }
+    .nav-item.active { color: var(--green); background: rgba(239,245,255,.82); }
+
+    .app[data-style="blue-diffuse"] .glass, .app[data-style="aurora"] .glass { background: rgba(255,255,255,.76); }
+    .app[data-style="mesh"] .glass { background: rgba(255,255,255,.72); }
+    .style-note { max-width: 235px; color: var(--muted); font-size: 12px; line-height: 1.75; }
+    .style-note strong { display: block; margin-bottom: 6px; color: var(--ink); font-size: 17px; letter-spacing: -.03em; }
+    .style-note code { color: var(--green); font: 10px var(--mono); }
+    .footnote { color: var(--quiet); font: 10px var(--mono); text-align: center; }
+
+    @media (max-width: 860px) { .stage { grid-template-columns: 1fr 390px 1fr; gap: 24px; } .callout { max-width: 170px; } }
+    @media (max-width: 690px) {
+      .workbench { width: min(100% - 20px, 450px); padding-top: 20px; }
+      .intro { display: block; }
+      .reference { margin-top: 12px; text-align: left; }
+      .controls { display: block; padding: 9px; }
+      .control-block { display: block; }
+      .control-block + .control-block { margin-top: 10px; padding: 10px 0 0; border-top: 1px solid rgba(104,117,147,.15); border-left: 0; }
+      .control-label { display: block; margin-bottom: 6px; }
+      .segmented { width: 100%; }
+      .segmented button { flex: 1; padding-inline: 5px; }
+      .locked { margin-top: 10px; }
+      .stage { display: block; min-height: auto; padding: 24px 0 12px; }
+      .callout { display: none; }
+      .device { width: min(390px, 100%); height: min(844px, calc(100vh - 282px)); min-height: 700px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <main class="workbench">
+    <header class="intro">
+      <div>
+        <p class="eyebrow">TrackToSearch / screenshot-aligned study 02</p>
+        <h1>基于真实页面，重新比较背景。</h1>
+        <p>这次不重画 App。四个页面的内容密度、玻璃卡片、桥绿强调色和底部导航都按截图重建，只把底层光晕替换成不同方向。</p>
+      </div>
+      <div class="reference">LIGHT THEME<br>390 × 844 · BACKGROUND ONLY</div>
+    </header>
+
+    <section class="controls" aria-label="预览控制">
+      <div class="control-block"><span class="control-label">背景</span><div class="segmented" id="style-controls" role="group" aria-label="背景风格"><button type="button" data-style="baseline" aria-pressed="true">截图基准</button><button type="button" data-style="blue-diffuse" aria-pressed="false">蓝紫弥散</button><button type="button" data-style="mesh" aria-pressed="false">低饱和 Mesh</button><button type="button" data-style="aurora" aria-pressed="false">柔和 Aurora</button></div></div>
+      <div class="control-block"><span class="control-label">页面</span><div class="segmented" id="page-controls" role="group" aria-label="App 页面"><button type="button" data-page="search" aria-pressed="true">搜索</button><button type="button" data-page="discover" aria-pressed="false">发现</button><button type="button" data-page="mine" aria-pressed="false">我的</button><button type="button" data-page="settings" aria-pressed="false">设置</button></div></div>
+      <div class="locked"><i class="lock-dot"></i><span>前景材质锁定</span></div>
+    </section>
+
+    <section class="stage">
+      <aside class="callout"><span class="callout-index">01 / BASELINE</span><h2>先对齐截图，再谈风格。</h2><p>截图里的背景不是一块纯色，而是低饱和的蓝、紫、青、粉柔焦层，卡片在变化上面保持清晰。</p><div class="swatches"><i class="swatch" style="background:#aab4df"></i><i class="swatch" style="background:#c7e5e6"></i><i class="swatch" style="background:#eebce1"></i><i class="swatch" style="background:#5e9b73"></i></div></aside>
+
+      <div class="device" aria-label="TrackToSearch 页面预览">
+        <div class="app" id="app" data-style="baseline" data-page="search">
+          <div class="ambient" aria-hidden="true"></div>
+          <div class="statusbar"><span>11:22</span><span class="status-icons"><span>0.23</span><span>4G</span><span>◼◼◼</span><span>⌁</span><span class="battery">69</span><span>ϟ</span></span></div>
+          <div id="screen" class="app-scroll"></div>
+          <nav class="bottom-nav glass" aria-label="主导航">
+            <button class="nav-item active" data-nav="search" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.5" cy="10.5" r="6"></circle><path d="m15 15 5 5"></path></svg><span>搜索</span></button>
+            <button class="nav-item" data-nav="discover" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m14.3 4.2 5.5 5.5-9.4 9.4-5.6.1.1-5.6 9.4-9.4Z"></path><path d="m13 5.5 5.5 5.5M7.3 16.7l-1.8 1.8"></path></svg><span>发现</span></button>
+            <button class="nav-item" data-nav="mine" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3.3"></circle><path d="M5.2 20c.6-3.6 2.8-5.4 6.8-5.4s6.2 1.8 6.8 5.4"></path></svg><span>我的</span></button>
+            <button class="nav-item" data-nav="settings" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="m19.4 13.5.1-1.5-.1-1.5 2-1.5-1.8-3.1-2.3.9a7.2 7.2 0 0 0-2.6-1.5L14.4 3h-3.6l-.3 2.3c-1 .3-1.8.8-2.6 1.5l-2.3-.9L3.8 9l2 1.5-.1 1.5.1 1.5-2 1.5 1.8 3.1 2.3-.9c.8.7 1.6 1.2 2.6 1.5l.3 2.3h3.6l.3-2.3c1-.3 1.8-.8 2.6-1.5l2.3.9 1.8-3.1-2-1.5ZM12.6 15.6A3.6 3.6 0 1 1 12.6 8a3.6 3.6 0 0 1 0 7.6Z"></path></svg><span>设置</span></button>
+          </nav>
+        </div>
+      </div>
+
+      <aside class="callout right"><span class="callout-index">02 / COMPARISON</span><div class="style-note"><strong id="style-title">截图基准</strong><span id="style-copy">当前截图中的多点低饱和光晕：蓝紫在右上，青色托住中心，粉紫留在下方。</span><br><br><code>前景 / unchanged</code><br>玻璃卡片、桥绿、字号、间距、海报比例。</div><ul><li>观察卡片边缘是否清楚</li><li>观察小字是否被背景吞掉</li><li>观察底部导航是否漂浮</li></ul></aside>
+    </section>
+    <p class="footnote">切换背景和页面 · 预览重点是光晕位置与强度，不代表生产 Compose 代码</p>
+  </main>
+
+  <script>
+    const app = document.querySelector('#app');
+    const screen = document.querySelector('#screen');
+    const styleTitle = document.querySelector('#style-title');
+    const styleCopy = document.querySelector('#style-copy');
+    const styleInfo = {
+      baseline: ['截图基准', '当前截图中的多点低饱和光晕：蓝紫在右上，青色托住中心，粉紫留在下方。'],
+      'blue-diffuse': ['蓝紫弥散', '减少色块数量，只保留右上蓝紫主光和很轻的青紫辅光，信息最安静。'],
+      mesh: ['低饱和 Mesh', '保留多色关系，但把色块揉得更均匀，适合发现页和海报密集区域。'],
+      aurora: ['柔和 Aurora', '把色块拉成长条柔光，方向感更强，但需要注意设置页文字对比度。']
+    };
+    const paths = {
+      search: {
+        title: '搜索',
+        render: () => `
+          <div class="page-head"><h2>搜索</h2></div>
+          <div class="search-hero">
+            <div class="cloud-logo" aria-hidden="true"><div class="cloud"></div><div class="reel"></div><div class="play"></div><div class="handle"></div></div>
+            <div class="search-box glass pill"><strong class="search-mode">电影</strong><span class="placeholder">输入片名搜索电影</span><button class="search-submit" aria-label="搜索"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="10.5" cy="10.5" r="6"></circle><path d="m15 15 5 5"></path></svg></button></div>
+          </div>
+          <div class="section-line"><h3>搜索历史</h3><span>清空全部</span></div>
+          <div class="tag-wrap"><div class="search-tag glass pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 8v5l3 2"></path><circle cx="12" cy="12" r="8"></circle><path d="M4 5v4h4"></path></svg><b>电影</b><span>年会不能停！2</span><span class="close">×</span></div><div class="search-tag glass pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 8v5l3 2"></path><circle cx="12" cy="12" r="8"></circle><path d="M4 5v4h4"></path></svg><b>电影</b><span>miss Americana</span><span class="close">×</span></div></div>
+          <div class="section-line"><h3>热门搜索</h3></div>
+          <div class="tag-wrap"><div class="search-tag glass pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="10.5" cy="10.5" r="6"></circle><path d="m15 15 5 5"></path></svg><span>年会不能停！2</span></div><div class="search-tag glass pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="10.5" cy="10.5" r="6"></circle><path d="m15 15 5 5"></path></svg><span>奥德赛</span></div><div class="search-tag glass pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="10.5" cy="10.5" r="6"></circle><path d="m15 15 5 5"></path></svg><span>群星闪耀时</span></div><div class="search-tag glass pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="10.5" cy="10.5" r="6"></circle><path d="m15 15 5 5"></path></svg><span>群体</span></div><div class="search-tag glass pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="10.5" cy="10.5" r="6"></circle><path d="m15 15 5 5"></path></svg><span>寒战1994</span></div><div class="search-tag glass pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="10.5" cy="10.5" r="6"></circle><path d="m15 15 5 5"></path></svg><span>10间敢死队</span></div><div class="search-tag glass pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="10.5" cy="10.5" r="6"></circle><path d="m15 15 5 5"></path></svg><span>永远心跳漏一拍</span></div><div class="search-tag glass pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="10.5" cy="10.5" r="6"></circle><path d="m15 15 5 5"></path></svg><span>今晚正好</span></div></div>`
+      },
+      discover: {
+        title: '发现',
+        render: () => `
+          <div class="page-head discover-head"><h2>发现</h2><div class="head-actions"><button class="round-action" aria-label="筛选"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M8 12h8M10 18h4"></path></svg></button><button class="round-action" aria-label="列表排序"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h12M8 12h12M8 18h12"></path><path d="M4 6h.01M4 12h.01M4 18h.01"></path></svg></button></div></div>
+          <div class="rail"><article class="rank-card rank-green"><h3>新片榜</h3><span>查看全部(55)</span></article><article class="rank-card rank-orange"><h3>趋势电影</h3><span>查看全部(20)</span></article><article class="rank-card rank-purple"><h3>口碑榜</h3><span>查看全部(10)</span></article></div>
+          <div class="section-line" style="margin-top:27px"><h3>猜你喜欢</h3></div><div class="recommend card"><h3>登录豆瓣解锁个性化推荐</h3><button>去登录豆瓣</button></div>
+          <div class="poster-section"><div class="section-line" style="margin-top:0"><h3>新片榜</h3><span>查看全部(10) ›</span></div><div class="poster-rail"><div class="movie-tile"><div class="movie-art art-yellow"></div><strong class="movie-title">年会不能停！2</strong></div><div class="movie-tile"><div class="movie-art art-blue"></div><strong class="movie-title">奥德赛</strong></div><div class="movie-tile"><div class="movie-art art-space"></div><strong class="movie-title">群星闪耀时</strong></div><div class="movie-tile"><div class="movie-art art-dark"></div><strong class="movie-title">群体</strong></div></div></div>
+          <div class="poster-section"><div class="section-line" style="margin-top:0"><h3>口碑榜</h3><span>查看全部(10) ›</span></div><div class="poster-rail"><div class="movie-tile"><div class="movie-art art-red"></div><strong class="movie-title">八仙！</strong></div><div class="movie-tile"><div class="movie-art art-sky"></div><strong class="movie-title">蜘蛛侠：新新的日</strong></div><div class="movie-tile"><div class="movie-art art-dark"></div><strong class="movie-title">痴迷</strong></div><div class="movie-tile"><div class="movie-art art-blue"></div><strong class="movie-title">德古拉</strong></div></div></div>`
+      },
+      mine: {
+        title: '我的',
+        render: () => `
+          <div class="page-head mine-head"><h2>我的</h2><div class="watch-toggle"><button class="selected">想看</button><button>已看</button></div></div>
+          <div class="mine-tools"><div class="mine-search glass pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.5" cy="10.5" r="6"></circle><path d="m15 15 5 5"></path></svg><span>搜索想看</span></div><button class="round-action" aria-label="筛选"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M8 12h8M10 18h4"></path></svg></button></div>
+          <div class="tab-row"><button class="selected">电影(200)</button><button>电视剧(121)</button></div>
+          <div class="poster-grid"><div class="movie-tile"><div class="movie-art art-yellow"><span class="movie-badge">▮ 想看</span></div><strong class="movie-title">垫底辣妹</strong><span class="movie-meta">喜剧 · 剧情</span></div><div class="movie-tile"><div class="movie-art art-dark"><span class="movie-badge">▮ 想看</span></div><strong class="movie-title">南山的部长们</strong><span class="movie-meta">剧情 · 惊悚</span></div><div class="movie-tile"><div class="movie-art art-red"><span class="movie-badge">▮ 想看</span></div><strong class="movie-title">铁雨</strong><span class="movie-meta">动作 · 惊悚</span></div><div class="movie-tile"><div class="movie-art art-sky"><span class="movie-badge">▮ 想看</span></div><strong class="movie-title">隐秘而伟大</strong><span class="movie-meta">动作 · 剧情 · 喜剧</span></div><div class="movie-tile"><div class="movie-art art-blue"><span class="movie-badge">▮ 想看</span></div><strong class="movie-title">隧道</strong><span class="movie-meta">惊悚 · 剧情</span></div><div class="movie-tile"><div class="movie-art art-yellow"><span class="movie-badge">▮ 想看</span></div><strong class="movie-title">末路狂花</strong><span class="movie-meta">剧情 · 犯罪 · 冒险</span></div><div class="movie-tile"><div class="movie-art art-red"><span class="movie-badge">▮ 想看</span></div><strong class="movie-title">给阿嬷的情书</strong><span class="movie-meta">剧情</span></div><div class="movie-tile"><div class="movie-art art-space"><span class="movie-badge">▮ 想看</span></div><strong class="movie-title">杀手疾风号</strong><span class="movie-meta">动作 · 喜剧</span></div><div class="movie-tile"><div class="movie-art art-sky"><span class="movie-badge">▮ 想看</span></div><strong class="movie-title">极速车王</strong><span class="movie-meta">剧情 · 传记</span></div></div>`
+      },
+      settings: {
+        title: '设置',
+        render: () => `
+          <div class="page-head settings-head"><h2>设置</h2><button class="round-action message-action" aria-label="消息"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6.5 12 12l8-5.5"></path><rect x="3" y="5" width="18" height="14" rx="2"></rect></svg></button></div>
+          <div class="setting-card glass card"><div class="setting-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M5 18V9M12 18V5M19 18v-7"></path></svg></div><div class="setting-copy"><h3>观看统计</h3><p>观看总数、观影时长、评分统计、热力图、类型分布</p></div><span class="chevron">›</span></div>
+          <div class="setting-card glass card" style="margin-top:18px"><div class="setting-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 6v6l4 2"></path><path d="M5 7v4h4"></path><path d="M5.8 15a7.5 7.5 0 1 0 1.4-8.2"></path></svg></div><div class="setting-copy"><h3>标记记录</h3><p>查看你的想看/已看/移除操作历史</p></div><span class="chevron">›</span></div>
+          <h3 class="settings-label">外观</h3><div class="appearance-card glass card"><div class="appearance-item"><div class="appearance-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14.8 3.1A8.7 8.7 0 1 0 20.9 15 7 7 0 0 1 14.8 3.1Z"></path></svg></div><span>深色模式 - 跟随系统</span></div><div class="appearance-item"><div class="appearance-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8"></circle><circle cx="8" cy="10" r="1" fill="currentColor"></circle><circle cx="12" cy="7.5" r="1" fill="currentColor"></circle><circle cx="16" cy="10" r="1" fill="currentColor"></circle></svg></div><span>应用色调 - 日式桥绿</span></div><div class="appearance-item"><div class="appearance-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"></circle><path d="M4 12h16M12 4c2.4 2.2 2.4 13.8 0 16M12 4c-2.4 2.2-2.4 13.8 0 16"></path></svg></div><span>语言 - 跟随系统</span></div><div class="appearance-item"><div class="appearance-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 11 12 4l8 7v8a1 1 0 0 1-1 1h-5v-5h-4v5H5a1 1 0 0 1-1-1v-8Z"></path></svg></div><span>默认启动页 - 搜索</span></div><div class="motion-row"><span style="font-size:22px;color:var(--green)">✦</span><p><strong>共享元素转场动画</strong>在页面间为共享元素添加转场动画。默认关闭，以降低性能开销。</p><i class="toggle"></i></div></div>
+          <h3 class="settings-label">搜索源</h3><div class="source-card glass card"><div class="source-item"><span style="color:var(--green)">PanSou</span><i class="toggle on"></i></div><div class="source-item"><span>PanHub</span><i class="toggle"></i></div><div class="source-item"><span>ZReso</span><i class="toggle on"></i></div><div class="source-item"><span>自定义</span><i class="toggle"></i></div></div>`
+      }
+    };
+
+    function render(page) {
+      app.dataset.page = page;
+      screen.innerHTML = paths[page].render();
+      screen.scrollTop = 0;
+      document.querySelectorAll('[data-page]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.page === page)));
+      document.querySelectorAll('[data-nav]').forEach((button) => button.classList.toggle('active', button.dataset.nav === page));
+    }
+    function setStyle(style) {
+      app.dataset.style = style;
+      styleTitle.textContent = styleInfo[style][0];
+      styleCopy.textContent = styleInfo[style][1];
+      document.querySelectorAll('[data-style]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.style === style)));
+    }
+    document.querySelector('#style-controls').addEventListener('click', (event) => { const button = event.target.closest('[data-style]'); if (button) setStyle(button.dataset.style); });
+    document.querySelector('#page-controls').addEventListener('click', (event) => { const button = event.target.closest('[data-page]'); if (button) render(button.dataset.page); });
+    document.querySelectorAll('[data-nav]').forEach((button) => button.addEventListener('click', () => render(button.dataset.nav)));
+    render('search');
+  </script>
+</body>
+</html>
