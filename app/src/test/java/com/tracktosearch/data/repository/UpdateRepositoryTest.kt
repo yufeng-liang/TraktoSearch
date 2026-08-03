@@ -205,17 +205,11 @@ class UpdateRepositoryTest {
     fun checkForUpdate_GitHub失败_降级Gitee成功() = runTest {
         coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
         coEvery { gitHubApi.getLatestRelease(any(), any()) } throws RuntimeException("GitHub 网络错误")
-        // Gitee 主仓库返回新版本
-        coEvery {
-            giteeApi.getLatestRelease("yufeng-liang", "TrackToSearch")
-        } returns listOf(
-            buildGiteeRelease(tagName = "v99.0.0", body = "Gitee 更新内容")
-        )
-        // fetchDownloadUrl 调用公开仓库
         coEvery {
             giteeApi.getLatestRelease("yufeng-liang", "TrackToSearch-release")
-        } returns listOf(
-            buildGiteeRelease(
+        } returnsMany listOf(
+            listOf(buildGiteeRelease(tagName = "v99.0.0", body = "Gitee 更新内容")),
+            listOf(buildGiteeRelease(
                 tagName = "v99.0.0",
                 assets = listOf(
                     GiteeAsset(
@@ -223,7 +217,7 @@ class UpdateRepositoryTest {
                         browser_download_url = "https://gitee.com/v99.apk"
                     )
                 )
-            )
+            ))
         )
 
         val result = repository.checkForUpdate()

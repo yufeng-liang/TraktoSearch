@@ -219,10 +219,10 @@ fun MarkRecordItemRow(
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(Modifier.height(4.dp))
-                    // 操作胶囊（右对齐）
+                    // 操作胶囊（左对齐）
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
+                        horizontalArrangement = Arrangement.Start
                     ) {
                         ActionTypeChip(item.actionType)
                     }
@@ -336,8 +336,8 @@ private fun MarkRecordFilterChip(
         label = label,
         modifier = modifier,
         colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+            selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
             labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
         ),

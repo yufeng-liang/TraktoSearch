@@ -50,6 +50,7 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Palette
@@ -953,7 +954,8 @@ fun SettingsScreen(
                         Spacer(Modifier.weight(1f))
                         NeumorphicIconButton(
                             onClick = onMessagesClick,
-                            isDark = isDark
+                            isDark = isDark,
+                            lightBorderAlpha = 0.35f
                         ) {
                             BadgedBox(badge = { if (unreadCount > 0) { Badge { Text(if (unreadCount > 99) "99+" else unreadCount.toString()) } } }) {
                                 Icon(imageVector = Icons.Rounded.Email, contentDescription = stringResource(R.string.feedback_messages), modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurface)
@@ -1766,7 +1768,7 @@ private fun NotificationItem(
                         Icon(
                             Icons.Rounded.Movie,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.tertiary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -1812,9 +1814,9 @@ private fun NotificationItem(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            Icons.Rounded.Tv,
+                            Icons.Rounded.LiveTv,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.secondary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(22.dp)
                         )
                     }

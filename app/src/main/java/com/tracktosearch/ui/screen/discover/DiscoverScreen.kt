@@ -831,7 +831,8 @@ fun DiscoverScreen(
                                 onFilterDiscoverClick()
                             },
                             modifier = iconModifier,
-                            isDark = isDark
+                            isDark = isDark,
+                            lightBorderAlpha = 0.35f
                         ) {
                             Icon(
                                 Icons.Rounded.FilterList,
@@ -842,7 +843,8 @@ fun DiscoverScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         NeumorphicIconButton(
                             onClick = { showDiscoverSectionsDialog = true },
-                            isDark = isDark
+                            isDark = isDark,
+                            lightBorderAlpha = 0.35f
                         ) {
                             Icon(
                                 Icons.Rounded.FormatListNumbered,
