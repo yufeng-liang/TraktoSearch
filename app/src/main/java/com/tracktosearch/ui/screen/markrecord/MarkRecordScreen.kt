@@ -353,7 +353,8 @@ fun MarkRecordScreen(
         val sheetState = rememberModalBottomSheetState()
         ModalBottomSheet(
             onDismissRequest = { showFilterSheet = false },
-            sheetState = sheetState
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ) {
             FilterSheetContent(
                 mediaTypes = uiState.filterMediaTypes,
