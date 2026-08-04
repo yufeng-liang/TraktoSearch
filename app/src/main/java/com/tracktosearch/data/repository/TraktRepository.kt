@@ -10,6 +10,7 @@ import com.tracktosearch.data.local.db.MarkActionRecordDao
 import com.tracktosearch.data.local.db.MarkActionRecordEntity
 import com.tracktosearch.data.local.db.MarkActionType
 import com.tracktosearch.data.remote.trakt.TraktApiService
+import com.tracktosearch.data.remote.trakt.TraktConnectionCheckResult
 import com.tracktosearch.data.remote.trakt.dto.*
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.TtlCache
@@ -25,7 +26,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.sync.Mutex
@@ -2045,6 +2049,8 @@ class TraktRepository @Inject constructor(
     // 用户资料缓存（获取一次后永久缓存，登出才清除）
     @Volatile
     private var userProfileCache: TraktUserProfileResponse? = null
+    private val _userProfile = MutableStateFlow<TraktUserProfileResponse?>(null)
+    val userProfile: StateFlow<TraktUserProfileResponse?> = _userProfile.asStateFlow()
 
     private fun TraktUserProfileResponse.hasAvatarUrl(): Boolean =
         images.avatar.full.isNotBlank()
@@ -2085,9 +2091,13 @@ class TraktRepository @Inject constructor(
     suspend fun getUserProfile(): Result<TraktUserProfileResponse> {
         // 1. 内存缓存
         userProfileCache?.let { cached ->
-            if (cached.hasAvatarUrl()) return Result.success(cached)
+            if (cached.hasAvatarUrl()) {
+                _userProfile.value = cached
+                return Result.success(cached)
+            }
             val enriched = enrichUserProfileAvatar(cached)
             userProfileCache = enriched
+            _userProfile.value = enriched
             if (enriched.hasAvatarUrl()) userProfileStorage.saveProfile(enriched)
             return Result.success(enriched)
         }
@@ -2096,6 +2106,7 @@ class TraktRepository @Inject constructor(
         if (persisted != null) {
             val enriched = enrichUserProfileAvatar(persisted)
             userProfileCache = enriched
+            _userProfile.value = enriched
             if (enriched.hasAvatarUrl()) userProfileStorage.saveProfile(enriched)
             return Result.success(enriched)
         }
@@ -2105,6 +2116,7 @@ class TraktRepository @Inject constructor(
             if (response.isSuccessful) {
                 val profile = enrichUserProfileAvatar(response.body() ?: TraktUserProfileResponse())
                 userProfileCache = profile
+                _userProfile.value = profile
                 userProfileStorage.saveProfile(profile)
                 Result.success(profile)
             } else Result.failure(Exception("HTTP ${response.code()}"))
@@ -2113,8 +2125,14 @@ class TraktRepository @Inject constructor(
 
     /** 只读取本地 profile 缓存，不发起网络请求，供启动阶段先展示上次数据。 */
     suspend fun getCachedUserProfile(): TraktUserProfileResponse? {
-        userProfileCache?.let { return it }
-        return userProfileStorage.getProfile()?.also { userProfileCache = it }
+        userProfileCache?.let {
+            _userProfile.value = it
+            return it
+        }
+        return userProfileStorage.getProfile()?.also {
+            userProfileCache = it
+            _userProfile.value = it
+        }
     }
 
     /**
@@ -2123,25 +2141,36 @@ class TraktRepository @Inject constructor(
      * 这里必须绕过用户资料缓存：网关授权和 Trakt OAuth 是两套独立会话，
      * 不能因为上一个账号留下的本地资料缓存就误判当前账号已登录。
      */
-    suspend fun checkTraktConnection(): Boolean {
+    suspend fun checkTraktConnectionResult(): TraktConnectionCheckResult {
         return try {
             val response = traktApiService.getUserProfile()
-            if (!response.isSuccessful) return false
+            if (!response.isSuccessful) {
+                return if (response.code() == 401 || response.code() == 403) {
+                    TraktConnectionCheckResult.DISCONNECTED
+                } else {
+                    TraktConnectionCheckResult.UNKNOWN
+                }
+            }
 
             // 启动检查本身已经拿到了当前账号资料，直接写入后续页面共用的缓存，避免再次请求。
             val profile = enrichUserProfileAvatar(response.body() ?: TraktUserProfileResponse())
             userProfileCache = profile
+            _userProfile.value = profile
             userProfileStorage.saveProfile(profile)
-            true
+            TraktConnectionCheckResult.CONNECTED
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            false
+            TraktConnectionCheckResult.UNKNOWN
         }
     }
 
+    suspend fun checkTraktConnection(): Boolean =
+        checkTraktConnectionResult() == TraktConnectionCheckResult.CONNECTED
+
     suspend fun clearUserProfileCache() {
         userProfileCache = null
+        _userProfile.value = null
         userProfileStorage.clear()
     }
 

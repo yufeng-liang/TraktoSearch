@@ -31,6 +31,7 @@ import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
 import com.tracktosearch.data.auth.AuthCheckScheduler
 import com.tracktosearch.data.remote.trakt.TraktAuthManager
+import com.tracktosearch.data.remote.trakt.TraktConnectionCheckResult
 import com.tracktosearch.data.remote.trakt.TraktConnectionState
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.StartupTrace
@@ -176,10 +177,6 @@ class MainActivity : AppCompatActivity() {
 
         var startDest by mutableStateOf(Routes.LOGIN)
         var initialTab by mutableStateOf(0)
-        // 本地 Compose state 仅用于 setContent 触发首次重组；
-        // 真实 trakt 连接态以 SessionModeManager 为单一数据源（由 AppNavigation collectAsStateWithLifecycle 读取）
-        var isTraktConnected by mutableStateOf(false)
-
         authInitializationJob = lifecycleScope.launch {
             StartupTrace.mark("startup.enter")
             val splashStartTime = System.currentTimeMillis()
@@ -202,10 +199,13 @@ class MainActivity : AppCompatActivity() {
                 StartupTrace.mark("trakt.profile.cache.skipped", "reason=not_authorized")
                 null
             }
-            isTraktConnected = cachedTraktProfile != null
             // 同步初始 Trakt 连接态到 SessionModeManager（AppNavigation 据此派生 isLoggedIn/isDoubanMode）
             sessionModeManager.setTraktConnectionState(
-                if (isAuthorized) TraktConnectionState.CHECKING else TraktConnectionState.DISCONNECTED
+                when {
+                    !isAuthorized -> TraktConnectionState.DISCONNECTED
+                    cachedTraktProfile != null -> TraktConnectionState.CONNECTED
+                    else -> TraktConnectionState.CHECKING
+                }
             )
             startDest = when {
                 isAuthorized -> Routes.MAIN
@@ -254,17 +254,29 @@ class MainActivity : AppCompatActivity() {
             }
             if (isAuthorized) {
                 this@MainActivity.lifecycleScope.launch {
-                    val connected = StartupTrace.measure("trakt.profile") {
-                        traktRepository.checkTraktConnection()
+                    val checkResult = StartupTrace.measure("trakt.profile") {
+                        traktRepository.checkTraktConnectionResult()
                     }
-                    isTraktConnected = connected
                     // 网络校验完成后写入 SessionModeManager，驱动 UI 切换到 TRAKT 模式或留在 GUEST/DOUBAN
-                    sessionModeManager.setTraktConnectionState(
-                        if (connected) TraktConnectionState.CONNECTED else TraktConnectionState.DISCONNECTED
-                    )
+                    val nextState = when (checkResult) {
+                        TraktConnectionCheckResult.CONNECTED -> TraktConnectionState.CONNECTED
+                        TraktConnectionCheckResult.DISCONNECTED -> TraktConnectionState.DISCONNECTED
+                        TraktConnectionCheckResult.UNKNOWN -> {
+                            if (cachedTraktProfile != null) {
+                                TraktConnectionState.CONNECTED
+                            } else {
+                                TraktConnectionState.DISCONNECTED
+                            }
+                        }
+                    }
+                    sessionModeManager.setTraktConnectionState(nextState)
                     StartupTrace.mark(
                         "trakt.connection.state",
-                        if (connected) "connected" else "disconnected"
+                        when (checkResult) {
+                            TraktConnectionCheckResult.CONNECTED -> "connected"
+                            TraktConnectionCheckResult.DISCONNECTED -> "disconnected"
+                            TraktConnectionCheckResult.UNKNOWN -> "unknown_preserved_cache=${cachedTraktProfile != null}"
+                        }
                     )
                 }
             } else {

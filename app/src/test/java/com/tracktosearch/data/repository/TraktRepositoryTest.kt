@@ -33,6 +33,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import retrofit2.Response
+import java.io.IOException
 import java.time.Instant
 
 /**
@@ -162,6 +163,33 @@ class TraktRepositoryTest {
         assertThat(cachedResult.getOrNull()).isEqualTo(profile)
         coVerify(exactly = 1) { traktApiService.getUserProfile() }
         coVerify(exactly = 1) { userProfileStorage.saveProfile(profile) }
+    }
+
+    @Test
+    fun `getCachedUserProfile_publishesCachedProfileForImmediateUi`() = runTest {
+        val cached = TraktUserProfileResponse(username = "yuhu", name = "yufeng liang")
+        coEvery { userProfileStorage.getProfile() } returns cached
+
+        repository.getCachedUserProfile()
+
+        assertThat(repository.userProfile.value).isEqualTo(cached)
+    }
+
+    @Test
+    fun `checkTraktConnection_401_returnsDisconnected`() = runTest {
+        coEvery { traktApiService.getUserProfile() } returns
+            Response.error(401, "".toResponseBody())
+
+        assertThat(repository.checkTraktConnectionResult())
+            .isEqualTo(com.tracktosearch.data.remote.trakt.TraktConnectionCheckResult.DISCONNECTED)
+    }
+
+    @Test
+    fun `checkTraktConnection_networkFailure_returnsUnknown`() = runTest {
+        coEvery { traktApiService.getUserProfile() } throws IOException("offline")
+
+        assertThat(repository.checkTraktConnectionResult())
+            .isEqualTo(com.tracktosearch.data.remote.trakt.TraktConnectionCheckResult.UNKNOWN)
     }
 
     private fun parseTraktDate(dateStr: String?): Long {

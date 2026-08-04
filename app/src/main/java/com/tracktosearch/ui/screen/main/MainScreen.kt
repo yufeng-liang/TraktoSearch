@@ -204,7 +204,13 @@ fun MainScreen(
     // - 豆瓣模式：从 DoubanAuthStorage.doubanProfile.avatarUrl 读取（StateFlow 直读，登录后即可拿到）
     // - trakt 模式：从 TraktRepository.getUserProfile() 获取（带永久缓存）
     // - GUEST 模式：不显示头像（isLoggedIn=false 时占位）
-    var userAvatarUrl by remember { mutableStateOf<String?>(null) }
+    val traktRepository = remember {
+        EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            TraktRepositoryEntryPoint::class.java
+        ).traktRepository()
+    }
+    val traktProfile by traktRepository.userProfile.collectAsState()
     val doubanAuthStorage = remember {
         EntryPointAccessors.fromApplication(context.applicationContext, DoubanAuthStorageEntryPoint::class.java).doubanAuthStorage()
     }
@@ -213,19 +219,11 @@ fun MainScreen(
         if (isLoggedIn) {
             if (isDoubanMode) {
                 // 豆瓣模式：avatarUrl 由 doubanProfile StateFlow 实时驱动（在 NavTabItem 中读取），
-                // 此处置空避免 trakt 头像残留
-                userAvatarUrl = null
+                // 这里不触发 Trakt 刷新。
             } else {
                 // trakt 模式：从 TraktRepository 获取头像
-                val traktRepository = EntryPointAccessors.fromApplication(
-                    context.applicationContext, TraktRepositoryEntryPoint::class.java
-                ).traktRepository()
-                traktRepository.getUserProfile().onSuccess { profile ->
-                    userAvatarUrl = profile.images.avatar.full.takeIf { it.isNotBlank() }
-                }
+                traktRepository.getUserProfile()
             }
-        } else {
-            userAvatarUrl = null
         }
     }
 
@@ -543,9 +541,13 @@ fun MainScreen(
                         val isSelected = selectedTab == index
                         // "我的"tab(index=2)登录后显示用户头像：
                         // - 豆瓣模式：doubanProfile.avatarUrl（StateFlow 实时）
-                        // - trakt 模式：userAvatarUrl（TraktRepository 缓存）
+                        // - trakt 模式：TraktRepository 缓存资料
                         val avatarUrl = if (index == 2 && isLoggedIn) {
-                            if (isDoubanMode) doubanProfile?.avatarUrl else userAvatarUrl
+                            if (isDoubanMode) {
+                                doubanProfile?.avatarUrl
+                            } else {
+                                traktProfile?.images?.avatar?.full?.takeIf { it.isNotBlank() }
+                            }
                         } else null
                         NavTabItem(
                             icon = tab.icon,

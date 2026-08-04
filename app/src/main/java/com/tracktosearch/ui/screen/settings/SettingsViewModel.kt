@@ -540,8 +540,8 @@ class SettingsViewModel @Inject constructor(
 
     // ========== 用户资料 ==========
 
-    private val _userProfile = MutableStateFlow<TraktUserProfileResponse?>(null)
-    val userProfile: StateFlow<TraktUserProfileResponse?> = _userProfile.asStateFlow()
+    val userProfile: StateFlow<TraktUserProfileResponse?> =
+        traktRepository.userProfile
 
     // ========== 豆瓣登录态（账户区展示用） ==========
     val doubanLoggedIn: StateFlow<Boolean> = doubanAuthStorage.isLoggedIn
@@ -675,15 +675,12 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun loadUserProfile() {
-        if (_userProfile.value != null) return
         viewModelScope.launch {
             traktRepository.getUserProfile()
-                .onSuccess { _userProfile.value = it }
         }
     }
 
     fun clearUserProfile() {
-        _userProfile.value = null
         viewModelScope.launch {
             traktRepository.clearUserProfileCache()
             traktRepository.clearWatchlistWatchedCache()
