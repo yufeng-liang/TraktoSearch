@@ -13,11 +13,15 @@ import com.tracktosearch.data.repository.FeedbackCacheStore
 import com.tracktosearch.data.repository.FeedbackRepository
 import com.tracktosearch.test.MainDispatcherRule
 import io.mockk.coEvery
+import io.mockk.just
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.Runs
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -37,6 +41,9 @@ class FeedbackViewModelTest {
     private fun createViewModel(): FeedbackViewModel {
         every { authManager.nickname } returns MutableStateFlow(null)
         coEvery { userProfileStorage.getProfile() } returns null
+        coEvery { cacheStore.loadFromDisk() } just Runs
+        every { cacheStore.getCachedList() } returns null
+        coEvery { cacheStore.getCachedDetail(any()) } returns null
         every { doubanAuthStorage.doubanProfile } returns MutableStateFlow(null)
         return FeedbackViewModel(feedbackRepository, cacheStore, authManager, userProfileStorage, doubanAuthStorage)
     }
@@ -96,6 +103,26 @@ class FeedbackViewModelTest {
     }
 
     @Test
+    fun `loadList shows cached items before refresh completes`() = runTest {
+        val cached = FeedbackListItem("cached", "BUG", "cached content", null, "PENDING", 1700000000L)
+        val remoteResult = CompletableDeferred<Result<MineResponse>>()
+        val viewModel = createViewModel()
+
+        every { cacheStore.getCachedList() } returns MineResponse(listOf(cached), 20, 0, 1, false)
+        coEvery { feedbackRepository.getMine(any(), any()) } coAnswers { remoteResult.await() }
+
+        viewModel.loadList(refresh = true)
+        runCurrent()
+
+        val state = viewModel.listState.value as FeedbackViewModel.ListState.Success
+        assertThat(state.items.single().id).isEqualTo("cached")
+
+        remoteResult.complete(Result.success(MineResponse(emptyList(), 20, 0, 0, false)))
+        advanceUntilIdle()
+        assertThat((viewModel.listState.value as FeedbackViewModel.ListState.Success).items).isEmpty()
+    }
+
+    @Test
     fun `loadDetail success updates detailState to Success`() = runTest {
         val detail = FeedbackDetail(
             "fb1", "f1", "friend", null, null, null, "BUG", "content", null, null,
@@ -110,6 +137,32 @@ class FeedbackViewModelTest {
         advanceUntilIdle()
 
         assertThat(viewModel.detailState.value).isInstanceOf(FeedbackViewModel.DetailState.Success::class.java)
+    }
+
+    @Test
+    fun `loadDetail keeps cached content visible while replies refresh`() = runTest {
+        val cachedDetail = FeedbackDetail(
+            "fb1", "f1", "friend", null, null, null, "BUG", "cached content", null, null,
+            "1.0", "14", "Pixel", "PENDING", 1700000000L
+        )
+        val remoteResult = CompletableDeferred<Result<FeedbackDetailResponse>>()
+        val viewModel = createViewModel()
+
+        coEvery { cacheStore.getCachedDetail("fb1") } returns FeedbackDetailResponse(cachedDetail, emptyList())
+        coEvery { feedbackRepository.getDetail("fb1") } coAnswers { remoteResult.await() }
+
+        viewModel.loadDetail("fb1")
+        runCurrent()
+
+        val state = viewModel.detailState.value as FeedbackViewModel.DetailState.Success
+        assertThat(state.data.feedback.content).isEqualTo("cached content")
+        assertThat(state.isRefreshing).isTrue()
+
+        remoteResult.complete(Result.success(FeedbackDetailResponse(cachedDetail.copy(content = "remote content"), emptyList())))
+        advanceUntilIdle()
+        val refreshed = viewModel.detailState.value as FeedbackViewModel.DetailState.Success
+        assertThat(refreshed.data.feedback.content).isEqualTo("remote content")
+        assertThat(refreshed.isRefreshing).isFalse()
     }
 
     @Test
