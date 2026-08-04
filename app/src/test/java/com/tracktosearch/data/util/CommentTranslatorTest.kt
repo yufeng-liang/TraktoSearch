@@ -2,11 +2,14 @@ package com.tracktosearch.data.util
 
 import android.util.LruCache
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
 import com.tracktosearch.data.remote.translate.TranslateApiService
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.spyk
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
@@ -40,13 +43,16 @@ import java.util.Locale
 class CommentTranslatorTest {
 
     private val translateApi = io.mockk.mockk<TranslateApiService>(relaxed = true)
+    private val configuredLanguage = MutableStateFlow(LanguageStorage.LANGUAGE_SYSTEM)
+    private val languageStorage = io.mockk.mockk<LanguageStorage>()
     private lateinit var translator: CommentTranslator
     private var originalLocale: Locale? = null
 
     @Before
     fun setup() {
         originalLocale = Locale.getDefault()
-        translator = spyk(CommentTranslator(translateApi), recordPrivateCalls = true)
+        every { languageStorage.language } returns configuredLanguage
+        translator = spyk(CommentTranslator(translateApi, languageStorage), recordPrivateCalls = true)
     }
 
     @After
@@ -92,6 +98,27 @@ class CommentTranslatorTest {
     fun getTargetLangCode_zh映射为zh() {
         Locale.setDefault(Locale.CHINESE)
         assertThat(callGetTargetLangCode()).isEqualTo("zh")
+    }
+
+    @Test
+    fun getTargetLangCode_应用语言为中文且系统语言为英文_映射为zh() {
+        Locale.setDefault(Locale.ENGLISH)
+        configuredLanguage.value = LanguageStorage.LANGUAGE_CHINESE
+
+        assertThat(callGetTargetLangCode()).isEqualTo("zh")
+    }
+
+    @Test
+    fun translateSingleComment_应用语言为中文且系统语言为英文_返回译文() = runBlocking {
+        Locale.setDefault(Locale.ENGLISH)
+        configuredLanguage.value = LanguageStorage.LANGUAGE_CHINESE
+        mockBaiduAI("中文译文")
+
+        val result = translator.translateSingleComment(
+            TraktComment(id = 31, comment = "english comment")
+        )
+
+        assertThat(result.comment).isEqualTo("中文译文")
     }
 
     @Test
@@ -274,7 +301,7 @@ class CommentTranslatorTest {
             "application/json".toMediaType(),
             """{"translation":"标准化译文"}"""
         )
-        val realTranslator = CommentTranslator(api)
+        val realTranslator = CommentTranslator(api, languageStorage)
 
         val result = realTranslator.translateSingleComment(
             TraktComment(id = 26, comment = "english text")

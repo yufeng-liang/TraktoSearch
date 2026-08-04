@@ -1,6 +1,7 @@
 package com.tracktosearch.data.util
 
 import android.util.Log
+import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.remote.translate.TranslateApiService
 import com.tracktosearch.data.remote.translate.TranslateRequest
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
@@ -24,6 +25,7 @@ import javax.inject.Singleton
 @Singleton
 class CommentTranslator @Inject constructor(
     private val translateApi: TranslateApiService,
+    private val languageStorage: LanguageStorage,
 ) {
 
     // 翻译结果缓存（相同评论的翻译不会变，LRU 限制 200 条防内存增长）
@@ -218,7 +220,13 @@ class CommentTranslator @Inject constructor(
     }
 
     private fun getTargetLangCode(): String {
-        val deviceLang = Locale.getDefault().language
+        // 应用语言可能与系统语言不同，优先使用应用内设置；system 才回退到系统语言。
+        val configuredLanguage = languageStorage.language.value
+        val deviceLang = if (configuredLanguage == LanguageStorage.LANGUAGE_SYSTEM) {
+            Locale.getDefault().language
+        } else {
+            configuredLanguage
+        }
         return when (deviceLang) {
             "zh" -> "zh"
             "ja" -> "jp"
