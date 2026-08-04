@@ -35,6 +35,8 @@ import com.tracktosearch.data.remote.trakt.TraktConnectionState
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.StartupTrace
 import com.tracktosearch.ui.navigation.AppNavigation
+import com.tracktosearch.ui.navigation.NotificationNavigator
+import com.tracktosearch.ui.navigation.NotificationTarget
 import com.tracktosearch.ui.navigation.Routes
 import com.tracktosearch.ui.theme.TraktoSearchTheme
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
@@ -176,6 +178,10 @@ class MainActivity : AppCompatActivity() {
 
         var startDest by mutableStateOf(Routes.LOGIN)
         var initialTab by mutableStateOf(0)
+        val notificationOpensWatchlist = intent?.getStringExtra("navigate_to") in setOf(
+            "douban_sync",
+            "consistency_check"
+        )
         // 本地 Compose state 仅用于 setContent 触发首次重组；
         // 真实 trakt 连接态以 SessionModeManager 为单一数据源（由 AppNavigation collectAsStateWithLifecycle 读取）
         var isTraktConnected by mutableStateOf(false)
@@ -213,7 +219,9 @@ class MainActivity : AppCompatActivity() {
                 else -> Routes.LOGIN
             }
             // 根据 Trakt 连接状态选择默认标签页
-            initialTab = if (isAuthorized) {
+            initialTab = if (notificationOpensWatchlist) {
+                2
+            } else if (isAuthorized) {
                 StartupTrace.measure("local.default_tab") {
                     defaultTabStorage.defaultTab.first()
                 }
@@ -400,6 +408,11 @@ class MainActivity : AppCompatActivity() {
             if (traktId > 0) {
                 DeepLinkNavigator.navigateToDetail(type, traktId, tmdbId, title)
             }
+            return
+        }
+        when (intent?.getStringExtra("navigate_to")) {
+            "douban_sync" -> NotificationNavigator.request(NotificationTarget.DOUBAN_SYNC)
+            "consistency_check" -> NotificationNavigator.request(NotificationTarget.CONSISTENCY_CHECK)
         }
     }
 

@@ -9,7 +9,9 @@ import com.tracktosearch.data.local.LastConsistencyCheckStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.remote.douban.DelayInfo
+import com.tracktosearch.data.remote.douban.DoubanCookieExpiredException
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
+import com.tracktosearch.data.remote.douban.DoubanNetworkException
 import com.tracktosearch.data.remote.douban.DoubanRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -102,8 +104,15 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
     /** Application scope：手动检查协程在此运行，Activity/Service 销毁不影响 */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** 检查任务的原子占用令牌，覆盖自动检查和手动检查两个入口。 */
+    private val checkLock = Any()
+
     @Volatile
-    private var checkJob: Job? = null
+    private var activeCheckToken: Any? = null
+
+    /** 仅手动检查需要保存 Job，供取消按钮使用；自动检查由调用方生命周期管理。 */
+    @Volatile
+    private var manualCheckJob: Job? = null
 
     @Volatile
     private var cancelled = false
@@ -133,12 +142,30 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
     }
 
     /** 检查是否在运行中 */
-    fun isRunning(): Boolean = checkJob?.isActive == true
+    fun isRunning(): Boolean = activeCheckToken != null
+
+    private fun tryAcquireCheck(token: Any): Boolean = synchronized(checkLock) {
+        if (activeCheckToken != null) {
+            false
+        } else {
+            activeCheckToken = token
+            true
+        }
+    }
+
+    private fun releaseCheck(token: Any) {
+        synchronized(checkLock) {
+            if (activeCheckToken === token) {
+                activeCheckToken = null
+                manualCheckJob = null
+            }
+        }
+    }
 
     /** 取消正在进行的检查 */
     fun cancel() {
         cancelled = true
-        checkJob?.cancel()
+        manualCheckJob?.cancel()
         // 同步更新 isCancelling 中间态:UI 立即禁用取消按钮 + 显示"正在取消..." 文案
         _checkProgress.value = _checkProgress.value.copy(
             isCancelling = true,
@@ -185,25 +212,32 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
      * @return 检查结果
      */
     suspend fun checkAndUnify(): ConsistencyCheckResult = withContext(Dispatchers.IO) {
-        // 同步后自动检查也占用 checkJob,防止与手动检查(checkAndUnifyWithCrawl)并发读写 DAO
-        // 注意:此处不调用 acquireWakeLock(同步流程已有自己的 WakeLock),不更新 checkProgress(静默执行)
-        if (isRunning()) {
+        // 自动检查和手动检查共用同一个原子令牌，避免 check-then-set 竞态。
+        val token = Any()
+        if (!tryAcquireCheck(token)) {
             return@withContext ConsistencyCheckResult(
                 isComplete = true,
                 errors = 1,
-                phase = "已有检查正在运行"
+                phase = context.getString(R.string.consistency_check_already_running)
             )
         }
-        checkJob = coroutineContext[Job]
         try {
-            val allItems = runCatching { doubanSyncedItemDao.getAllSyncedItems() }.getOrDefault(emptyList())
+            val allItems = try {
+                doubanSyncedItemDao.getAllSyncedItems()
+            } catch (e: Exception) {
+                return@withContext failureResult(e)
+            }
             if (allItems.isEmpty()) {
                 return@withContext ConsistencyCheckResult(isComplete = true)
             }
 
             // 确保 Trakt 侧 watchlistWatchedIds 已加载
-            runCatching { traktRepository.loadWatchlistWatchedIds() }
-            val watchedIds = traktRepository.getWatchlistWatchedIds()
+            val watchedIds = try {
+                val loaded = traktRepository.loadWatchlistWatchedIds()
+                traktRepository.getWatchlistWatchedIds() ?: loaded
+            } catch (e: Exception) {
+                return@withContext failureResult(e, totalChecked = allItems.size)
+            }
 
             val classifyResult = classifyConflicts(allItems, watchedIds)
             val traktNeedWatched = classifyResult.traktNeedWatched
@@ -213,19 +247,23 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             val skipped = classifyResult.skipped
 
             // 1. 批量更新 Trakt 侧
-            var traktUpdated = batchUpdateTrakt(traktNeedWatched, traktNeedWatchlist)
+            val traktResult = batchUpdateTrakt(traktNeedWatched, traktNeedWatchlist)
+            var traktUpdated = traktResult.updated
+            var errors = traktResult.errors
 
             // 1b. 全量清理 Trakt 侧想看+已看双状态冲突（覆盖非豆瓣来源的纯 Trakt 数据）
             //     取最新缓存快照（batchUpdateTrakt 已同步更新缓存），避免与豆瓣表内冲突重复计数
-            val traktConflictRemoved = resolveTraktWatchlistWatchedConflicts(traktRepository.getWatchlistWatchedIds())
-            traktUpdated += traktConflictRemoved
+            val traktConflictResult = resolveTraktWatchlistWatchedConflicts(traktRepository.getWatchlistWatchedIds())
+            traktUpdated += traktConflictResult.updated
+            errors += traktConflictResult.errors
 
             // 2. 逐条更新豆瓣侧
-            val (doubanUpdated, errors) = batchUpdateDouban(doubanNeedUpdate)
+            val (doubanUpdated, doubanErrors) = batchUpdateDouban(doubanNeedUpdate)
+            errors += doubanErrors
 
             val result = ConsistencyCheckResult(
                 totalChecked = allItems.size,
-                conflictsFound = conflicts + traktConflictRemoved,
+                conflictsFound = conflicts + traktConflictResult.updated,
                 doubanUpdated = doubanUpdated,
                 traktUpdated = traktUpdated,
                 skipped = skipped,
@@ -237,11 +275,7 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             Log.i(TAG, "状态一致性检查完成（本地表对比）: $result")
             result
         } finally {
-            // 释放 checkJob,允许后续手动检查启动
-            // 仅当 checkJob 是当前协程 Job 时才清除(避免清除已被新检查占用的 checkJob)
-            if (checkJob === coroutineContext[Job]) {
-                checkJob = null
-            }
+            releaseCheck(token)
         }
     }
 
@@ -258,24 +292,20 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
      * 在 appScope 中运行，不阻塞调用者。进度通过 checkProgress StateFlow 暴露。
      */
     fun checkAndUnifyWithCrawl(): Boolean {
-        if (isRunning()) return false
+        val token = Any()
+        if (!tryAcquireCheck(token)) return false
         cancelled = false
         // 新检查开始:重置完成事件标志,允许本次完成触发弹窗
         checkCompleteHandled = false
         // 息屏时保持 CPU 唤醒,避免豆瓣爬取过程中网络请求 timeout
         acquireWakeLock()
-        checkJob = appScope.launch {
+        val job = appScope.launch {
             try {
                 runCheckWithCrawl()
             } catch (e: CancellationException) {
                 // 取消时更新进度状态,否则 isRunning 仍为 true 导致弹窗不响应
                 // isCancelled=true 区分"取消"与"正常完成",避免 WatchlistScreen 自动弹出结果弹窗
-                _checkProgress.value = _checkProgress.value.copy(
-                    isRunning = false,
-                    isComplete = true,
-                    isCancelled = true,
-                    phase = context.getString(R.string.consistency_check_phase_cancelled)
-                )
+                markCancelledProgress()
                 // 延迟清理:让 UI 短暂展示"已取消"终态后重置,避免 checkProgress 永远停留在取消状态
                 // 用独立 appScope launch,不阻塞当前被取消的协程
                 appScope.launch {
@@ -290,26 +320,43 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                 // 网络错误(DNS 解析失败、连接超时、SSL 握手失败等)按异常类型提供友好提示,
                 // 不暴露原始异常信息。注意:取消时不设置 checkCompleteHandled,
                 // 避免错误完成事件被消费后触发 Watchlist 页弹窗
-                val friendlyMsg = when (e) {
-                    is UnknownHostException -> context.getString(R.string.consistency_check_network_failed)
-                    is SocketTimeoutException -> context.getString(R.string.consistency_check_network_timeout)
-                    is SSLException -> context.getString(R.string.consistency_check_network_failed)
-                    is ConnectException -> context.getString(R.string.consistency_check_network_failed)
-                    else -> when {
-                        e.message?.contains("timeout", ignoreCase = true) == true ->
-                            context.getString(R.string.consistency_check_network_timeout)
-                        else -> context.getString(R.string.consistency_check_exception, e.message ?: "")
-                    }
-                }
-                _checkProgress.value = _checkProgress.value.copy(
-                    isRunning = false,
-                    isComplete = true,
-                    phase = friendlyMsg
-                )
+                _checkProgress.value = failureResult(e, base = _checkProgress.value)
                 // 错误完成也应触发一次完成弹窗,让用户看到错误信息
                 checkCompleteHandled = true
             } finally {
-                releaseWakeLock()
+                // 先释放唤醒锁，再释放运行令牌，避免 UI 观察到 isRunning=false 时仍残留 WakeLock。
+                try {
+                    releaseWakeLock()
+                } finally {
+                    releaseCheck(token)
+                }
+            }
+        }
+        synchronized(checkLock) {
+            // 任务可能在这里之前就完成；只为仍持有当前令牌的任务登记 Job，避免完成后残留旧引用。
+            if (activeCheckToken === token) {
+                manualCheckJob = job
+            }
+        }
+        job.invokeOnCompletion { cause ->
+            if (cause is CancellationException) {
+                val needsFallback = !_checkProgress.value.isComplete
+                if (needsFallback) {
+                    // 协程可能在进入 try/catch 前就被取消，补发取消终态并保持 UI 可恢复。
+                    markCancelledProgress()
+                    appScope.launch {
+                        delay(1500)
+                        if (_checkProgress.value.isCancelled) {
+                            resetProgress()
+                        }
+                    }
+                }
+                // 协程体未启动时不会执行 finally，这里补做资源和运行令牌清理。
+                try {
+                    releaseWakeLock()
+                } finally {
+                    releaseCheck(token)
+                }
             }
         }
         return true
@@ -328,6 +375,18 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
     private fun releaseWakeLock() {
         wakeLock?.takeIf { it.isHeld }?.release()
         wakeLock = null
+    }
+
+    /** 发布取消终态，覆盖取消发生在协程体开始前的情况。 */
+    private fun markCancelledProgress() {
+        val current = _checkProgress.value
+        if (current.isComplete && current.isCancelled) return
+        _checkProgress.value = current.copy(
+            isRunning = false,
+            isComplete = true,
+            isCancelled = true,
+            phase = context.getString(R.string.consistency_check_phase_cancelled)
+        )
     }
 
     private suspend fun runCheckWithCrawl() {
@@ -405,7 +464,15 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             }
         }
 
+        // 远端列表为空时仍需检查本地同步记录，避免跳过用户刚从豆瓣取消的标记。
+        val allSyncedItems = doubanSyncedItemDao.getAllSyncedItems()
+        allSyncedItems.forEach { item ->
+            latestDoubanStatuses.putIfAbsent(item.doubanId, "" to item.title)
+        }
+
         if (latestDoubanStatuses.isEmpty()) {
+            // 先记录完成时间，再发布完成态，避免 UI 观察到 isComplete 后读到旧的检查时间。
+            runCatching { lastConsistencyCheckStorage.recordCheck() }
             _checkProgress.value = ConsistencyCheckResult(
                 isComplete = true,
                 totalChecked = 0,
@@ -434,12 +501,10 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             total = latestDoubanStatuses.size
         )
 
-        // 确保 Trakt 侧 watchlistWatchedIds 已加载
-        runCatching { traktRepository.loadWatchlistWatchedIds() }
-        val watchedIds = traktRepository.getWatchlistWatchedIds()
+        // 手动检查必须强制刷新 Trakt，避免用旧快照误判刚发生的状态变化。
+        val watchedIds = traktRepository.loadWatchlistWatchedIds(forceRefresh = true)
 
         // 从本地表查 traktId 映射（豆瓣ID → traktId + mediaType）
-        val allSyncedItems = runCatching { doubanSyncedItemDao.getAllSyncedItems() }.getOrDefault(emptyList())
         val doubanIdToSyncedItem = allSyncedItems.associateBy { it.doubanId }
 
         val traktNeedWatched = mutableListOf<Pair<Int, MediaType>>()
@@ -478,8 +543,8 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                 continue
             }
             val mediaType = if (syncedItem.mediaType == "show") MediaType.SHOW else MediaType.MOVIE
-            val traktIsWatched = watchedIds?.isWatched(traktId, null, mediaType) ?: false
-            val traktIsInWatchlist = watchedIds?.isInWatchlist(traktId, null, mediaType) ?: false
+            val traktIsWatched = watchedIds.isWatched(traktId, null, mediaType)
+            val traktIsInWatchlist = watchedIds.isInWatchlist(traktId, null, mediaType)
 
             when {
                 (doubanIsCollect && traktIsWatched) || (doubanIsWish && traktIsInWatchlist) -> {
@@ -533,15 +598,19 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             current = 0,
             total = traktNeedWatched.size + traktNeedWatchlist.size
         )
-        var traktUpdated = batchUpdateTrakt(traktNeedWatched, traktNeedWatchlist)
+        val traktResult = batchUpdateTrakt(traktNeedWatched, traktNeedWatchlist)
+        var traktUpdated = traktResult.updated
+        var errors = traktResult.errors
         // 全量清理 Trakt 侧想看+已看双状态冲突（覆盖非豆瓣来源的纯 Trakt 数据）
-        val traktConflictRemoved = resolveTraktWatchlistWatchedConflicts(traktRepository.getWatchlistWatchedIds())
-        traktUpdated += traktConflictRemoved
-        conflicts += traktConflictRemoved
+        val traktConflictResult = resolveTraktWatchlistWatchedConflicts(traktRepository.getWatchlistWatchedIds())
+        traktUpdated += traktConflictResult.updated
+        errors += traktConflictResult.errors
+        conflicts += traktConflictResult.updated
         _checkProgress.value = _checkProgress.value.copy(
             traktUpdated = traktUpdated,
             conflictsFound = conflicts,
             current = traktUpdated,
+            errors = errors,
             total = traktNeedWatched.size + traktNeedWatchlist.size
         )
 
@@ -562,9 +631,15 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             current = 0,
             total = doubanNeedUpdate.size
         )
-        val (doubanUpdated, errors) = batchUpdateDoubanWithProgress(doubanNeedUpdate)
+        val (doubanUpdated, totalErrors) = batchUpdateDoubanWithProgress(
+            doubanNeedUpdate,
+            initialErrors = errors
+        )
+        errors = totalErrors
 
         // ========== 阶段5: 完成 ==========
+        // 先记录检查完成时间，再发布完成态，避免 UI 观察到 isComplete 后读到旧的检查时间。
+        runCatching { lastConsistencyCheckStorage.recordCheck() }
         _checkProgress.value = _checkProgress.value.copy(
             isRunning = false,
             isComplete = true,
@@ -577,8 +652,6 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         )
         // 正常完成,设置完成事件标志,允许 WatchlistViewModel 通过 consumeCheckCompleteEvent 触发一次弹窗
         checkCompleteHandled = true
-        // 记录检查完成时间（供设置页二次确认弹窗显示）
-        runCatching { lastConsistencyCheckStorage.recordCheck() }
         Log.i(TAG, "状态一致性检查完成（爬豆瓣列表）: ${_checkProgress.value}")
     }
 
@@ -656,22 +729,28 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
      */
     private suspend fun resolveTraktWatchlistWatchedConflicts(
         watchedIds: TraktRepository.WatchlistWatchedIds?
-    ): Int {
-        if (watchedIds == null) return 0
+    ): TraktUpdateResult {
+        if (watchedIds == null) return TraktUpdateResult()
         val (movieConflicts, showConflicts) = watchedIds.watchlistWatchedConflicts()
-        if (movieConflicts.isEmpty() && showConflicts.isEmpty()) return 0
+        if (movieConflicts.isEmpty() && showConflicts.isEmpty()) return TraktUpdateResult()
 
-        val result = traktRepository.batchRemoveFromWatchlist(
-            movieConflicts.toList(),
-            showConflicts.toList()
-        )
+        val result = try {
+            traktRepository.batchRemoveFromWatchlist(
+                movieConflicts.toList(),
+                showConflicts.toList()
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
         return if (result.isSuccess) {
             val removed = movieConflicts.size + showConflicts.size
             Log.i(TAG, "清理 Trakt 想看+已看双状态冲突: 移除想看 $removed 条")
-            removed
+            TraktUpdateResult(updated = removed)
         } else {
             Log.e(TAG, "清理 Trakt 想看+已看冲突失败", result.exceptionOrNull())
-            0
+            TraktUpdateResult(errors = movieConflicts.size + showConflicts.size)
         }
     }
 
@@ -679,30 +758,45 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
     private suspend fun batchUpdateTrakt(
         traktNeedWatched: List<Pair<Int, MediaType>>,
         traktNeedWatchlist: List<Pair<Int, MediaType>>
-    ): Int {
+    ): TraktUpdateResult {
         var traktUpdated = 0
+        var errors = 0
         val movieWatched = traktNeedWatched.filter { it.second == MediaType.MOVIE }.map { it.first }
         val showWatched = traktNeedWatched.filter { it.second == MediaType.SHOW }.map { it.first }
         val movieWatchlist = traktNeedWatchlist.filter { it.second == MediaType.MOVIE }.map { it.first }
         val showWatchlist = traktNeedWatchlist.filter { it.second == MediaType.SHOW }.map { it.first }
 
         if (movieWatched.isNotEmpty() || showWatched.isNotEmpty()) {
-            val watchedResult = traktRepository.batchMarkAsWatched(movieWatched, showWatched)
+            val watchedResult = try {
+                traktRepository.batchMarkAsWatched(movieWatched, showWatched)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
             if (watchedResult.isSuccess) {
                 traktUpdated += movieWatched.size + showWatched.size
             } else {
+                errors += movieWatched.size + showWatched.size
                 Log.e(TAG, "Trakt 批量标记已看失败", watchedResult.exceptionOrNull())
             }
         }
         if (movieWatchlist.isNotEmpty() || showWatchlist.isNotEmpty()) {
-            val watchlistResult = traktRepository.batchAddToWatchlist(movieWatchlist, showWatchlist)
+            val watchlistResult = try {
+                traktRepository.batchAddToWatchlist(movieWatchlist, showWatchlist)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
             if (watchlistResult.isSuccess) {
                 traktUpdated += movieWatchlist.size + showWatchlist.size
             } else {
+                errors += movieWatchlist.size + showWatchlist.size
                 Log.e(TAG, "Trakt 批量标记想看失败", watchlistResult.exceptionOrNull())
             }
         }
-        return traktUpdated
+        return TraktUpdateResult(updated = traktUpdated, errors = errors)
     }
 
     /** 逐条更新豆瓣侧（静默版，不更新进度） */
@@ -730,8 +824,13 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                                 update.action, update.doubanId, cred.cookie, ck
                             )
                             if (result.success) {
-                                runCatching {
+                                try {
                                     doubanSyncedItemDao.updateStatus(update.syncedDoubanId, update.action)
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "本地状态写入失败: ${update.doubanId}", e)
+                                    return@runCatching false
                                 }
                                 true
                             } else false
@@ -749,16 +848,19 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
     }
 
     /** 逐条更新豆瓣侧（带进度更新版） */
-    private suspend fun batchUpdateDoubanWithProgress(doubanNeedUpdate: List<DoubanStatusUpdate>): Pair<Int, Int> {
-        if (doubanNeedUpdate.isEmpty()) return 0 to 0
+    private suspend fun batchUpdateDoubanWithProgress(
+        doubanNeedUpdate: List<DoubanStatusUpdate>,
+        initialErrors: Int = 0
+    ): Pair<Int, Int> {
+        if (doubanNeedUpdate.isEmpty()) return 0 to initialErrors
         val cred = doubanAuthStorage.getCredentials()
         if (cred == null) {
             _checkProgress.value = _checkProgress.value.copy(cookieExpired = true)
-            return 0 to doubanNeedUpdate.size
+            return 0 to (initialErrors + doubanNeedUpdate.size)
         }
         val semaphore = Semaphore(DOUBAN_CONCURRENCY)
         var doubanUpdated = 0
-        var errors = 0
+        var errors = initialErrors
         var done = 0
         val total = doubanNeedUpdate.size
         coroutineScope {
@@ -776,8 +878,13 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                                 update.action, update.doubanId, cred.cookie, ck
                             )
                             if (result.success) {
-                                runCatching {
+                                try {
                                     doubanSyncedItemDao.updateStatus(update.syncedDoubanId, update.action)
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "本地状态写入失败: ${update.doubanId}", e)
+                                    return@runCatching false
                                 }
                                 true
                             } else false
@@ -800,6 +907,40 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         }
         return doubanUpdated to errors
     }
+
+    private fun failureResult(
+        exception: Exception,
+        totalChecked: Int = 0,
+        base: ConsistencyCheckResult? = null
+    ): ConsistencyCheckResult {
+        val phase = when (exception) {
+            is DoubanCookieExpiredException -> context.getString(R.string.consistency_check_cookie_expired)
+            is SocketTimeoutException -> context.getString(R.string.consistency_check_network_timeout)
+            is DoubanNetworkException,
+            is UnknownHostException,
+            is ConnectException,
+            is SSLException -> context.getString(R.string.consistency_check_network_failed)
+            else -> if (exception.message?.contains("timeout", ignoreCase = true) == true) {
+                context.getString(R.string.consistency_check_network_timeout)
+            } else {
+                context.getString(R.string.consistency_check_exception, exception.message ?: "")
+            }
+        }
+        val cookieExpired = exception is DoubanCookieExpiredException
+        return (base ?: ConsistencyCheckResult()).copy(
+            isRunning = false,
+            isComplete = true,
+            phase = phase,
+            totalChecked = maxOf(base?.totalChecked ?: 0, totalChecked),
+            errors = (base?.errors ?: 0) + 1,
+            cookieExpired = cookieExpired
+        )
+    }
+
+    private data class TraktUpdateResult(
+        val updated: Int = 0,
+        val errors: Int = 0
+    )
 
     private data class DoubanStatusUpdate(
         val doubanId: String,

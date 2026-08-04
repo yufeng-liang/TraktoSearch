@@ -22,6 +22,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
@@ -161,6 +162,60 @@ class DoubanRepositoryTest {
     }
 
     /** 登录页 HTML（Cookie 过期） */
+    // ==================== fetchMarkList error semantics ====================
+
+    @Test
+    fun fetchMarkList_HTTP500重试耗尽抛出网络异常(): Unit = runBlocking {
+        mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("error"))
+        mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("error"))
+
+        var thrown: Throwable? = null
+        try {
+            repository.fetchMarkList(
+                userId = "user123",
+                cookie = "testcookie",
+                status = DoubanMarkStatus.WISH,
+                onPage = { _, _ -> }
+            )
+        } catch (e: Throwable) {
+            thrown = e
+        }
+
+        assertThat(thrown).isInstanceOf(IOException::class.java)
+        assertThat(thrown).isNotInstanceOf(DoubanCookieExpiredException::class.java)
+        assertThat(mockWebServer.requestCount).isEqualTo(2)
+    }
+
+    @Test
+    fun fetchMarkList_HTTP403按Cookie过期处理且不重试(): Unit = runBlocking {
+        mockWebServer.enqueue(MockResponse().setResponseCode(403).setBody("forbidden"))
+
+        val result = repository.fetchMarkList(
+            userId = "user123",
+            cookie = "expiredcookie",
+            status = DoubanMarkStatus.WISH,
+            onPage = { _, _ -> }
+        )
+
+        assertThat(result).isFalse()
+        assertThat(mockWebServer.requestCount).isEqualTo(1)
+    }
+
+    @Test
+    fun fetchMarkList_登录页按Cookie过期处理且不重试(): Unit = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody(loginPageHtml))
+
+        val result = repository.fetchMarkList(
+            userId = "user123",
+            cookie = "expiredcookie",
+            status = DoubanMarkStatus.WISH,
+            onPage = { _, _ -> }
+        )
+
+        assertThat(result).isFalse()
+        assertThat(mockWebServer.requestCount).isEqualTo(1)
+    }
+
     private val loginPageHtml: String =
         """<html><head><title>登录豆瓣</title></head><body><form id="lzform"></form></body></html>"""
 

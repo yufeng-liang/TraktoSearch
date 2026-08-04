@@ -1,9 +1,11 @@
 package com.tracktosearch.ui.screen.watchlist
 
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.R
 import com.tracktosearch.data.repository.DoubanSyncLoginTarget
 import com.tracktosearch.data.repository.DoubanSyncProgress
 import com.tracktosearch.data.repository.DoubanSyncStage
+import com.tracktosearch.data.repository.DoubanSyncSubStage
 import org.junit.Test
 
 class DoubanSyncInteractionTest {
@@ -49,5 +51,25 @@ class DoubanSyncInteractionTest {
                 loginTarget = DoubanSyncLoginTarget.TRAKT
             ).bannerClickAction()
         ).isEqualTo(DoubanSyncBannerAction.NAVIGATE_TO_TRAKT_LOGIN)
+    }
+
+    @Test
+    fun `列表子阶段由状态标签承载_横幅不再重复显示子阶段`() {
+        assertThat(
+            DoubanSyncProgress(
+                stage = DoubanSyncStage.FETCHING_LIST,
+                subStage = DoubanSyncSubStage.FETCHING_WISH_LIST
+            ).bannerSubStageRes()
+        ).isNull()
+    }
+
+    @Test
+    fun `详情子阶段保留本地化标签`() {
+        assertThat(
+            DoubanSyncProgress(
+                stage = DoubanSyncStage.PARSING_DATA,
+                subStage = DoubanSyncSubStage.FETCHING_DETAIL
+            ).bannerSubStageRes()
+        ).isEqualTo(R.string.douban_sync_substage_fetching_detail)
     }
 }

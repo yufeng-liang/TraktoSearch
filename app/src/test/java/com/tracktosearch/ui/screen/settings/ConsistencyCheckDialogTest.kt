@@ -32,7 +32,7 @@ import org.robolectric.annotation.Config
  * Robolectric 默认加载 values/（英文），故使用英文文案断言：
  * - "Background" / "Cancel" / "Cancelling..." / "Done"
  *
- * Cookie 过期提示为硬编码中文 "豆瓣登录已过期，请重新登录"（不经过 stringResource）。
+ * Cookie 过期提示来自 values/ 的英文资源 "Douban login expired, please log in again"。
  *
  * phase 字段故意避开按钮文案（"Checking"/"Stopping"/"Finished"），避免 `onNodeWithText`
  * 命中多个节点；完成态使用非空 phase 避免与 "Done" 按钮文案冲突。
@@ -153,6 +153,22 @@ class ConsistencyCheckDialogTest {
     }
 
     @Test
+    fun `主阶段已包含子阶段时不重复显示`() {
+        emit(
+            ConsistencyCheckResult(
+                isRunning = true,
+                phase = "Checking · Wish list",
+                subPhase = "Wish list",
+                current = 5,
+                total = 100
+            )
+        )
+        setContent()
+        assertThat(consistencySubPhaseForDisplay("Checking · Wish list", "Wish list"))
+            .isNull()
+    }
+
+    @Test
     fun `运行中显示当前条目标题`() {
         emit(
             ConsistencyCheckResult(
@@ -171,8 +187,7 @@ class ConsistencyCheckDialogTest {
     fun `cookie过期显示重新登录提示`() {
         emit(ConsistencyCheckResult(isComplete = true, cookieExpired = true, phase = "Finished"))
         setContent()
-        // 硬编码中文，不经过 stringResource
-        composeRule.onNodeWithText("豆瓣登录已过期，请重新登录").assertIsDisplayed()
+        composeRule.onNodeWithText("Douban login expired, please log in again").assertIsDisplayed()
     }
 
     /**
@@ -209,4 +224,5 @@ class ConsistencyCheckDialogTest {
             "Checked 100 items, found 10 conflicts, Trakt updated 7, Douban updated 3, errors 2"
         ).assertIsDisplayed()
     }
+
 }

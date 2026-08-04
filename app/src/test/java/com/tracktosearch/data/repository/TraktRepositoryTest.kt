@@ -13,6 +13,7 @@ import com.tracktosearch.data.remote.trakt.dto.TraktHistoryMovie
 import com.tracktosearch.data.remote.trakt.dto.TraktHistoryShow
 import com.tracktosearch.data.remote.trakt.dto.TraktIds
 import com.tracktosearch.data.remote.trakt.dto.TraktMovie
+import com.tracktosearch.data.remote.trakt.dto.TraktShow
 import com.tracktosearch.data.remote.trakt.dto.TraktAvatar
 import com.tracktosearch.data.remote.trakt.dto.TraktUserImages
 import com.tracktosearch.data.remote.trakt.dto.TraktUserProfileResponse
@@ -104,6 +105,61 @@ class TraktRepositoryTest {
         assertThat(repository.getMovieWatchlistTotalCount(1, 200)).isEqualTo(237)
         assertThat(repository.getShowWatchlist(1, 200, forceRefresh = true).getOrThrow().second).isEqualTo(1)
         assertThat(repository.getShowWatchlistTotalCount(1, 200)).isEqualTo(19)
+    }
+
+    @Test
+    fun `loadWatchlistWatchedIds_propagates_snapshot_failure`() = runTest {
+        repository.clearWatchlistWatchedCache()
+        coEvery { traktApiService.getWatchlist(any(), any(), any(), any()) } returns
+            Response.success(emptyList(), Headers.headersOf("X-Pagination-Page-Count", "1"))
+        coEvery { traktApiService.getShowWatchlist(any(), any(), any(), any()) } returns
+            Response.success(emptyList(), Headers.headersOf("X-Pagination-Page-Count", "1"))
+        coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns
+            Response.error(503, "movie history unavailable".toResponseBody())
+        coEvery { traktApiService.getShowHistory(any(), any(), any(), any()) } returns
+            Response.success(emptyList(), Headers.headersOf("X-Pagination-Page-Count", "1"))
+
+        val failure = runCatching { repository.loadWatchlistWatchedIds() }.exceptionOrNull()
+
+        assertThat(failure).isNotNull()
+        assertThat(repository.getWatchlistWatchedIds()).isNull()
+    }
+
+    @Test
+    fun `loadWatchlistWatchedIds_forceRefresh_bypasses_all_caches`() = runTest {
+        repository.clearWatchlistWatchedCache()
+        val headers = Headers.headersOf("X-Pagination-Page-Count", "1")
+        coEvery { traktApiService.getWatchlist(any(), any(), any(), any()) } returns
+            Response.success(listOf(TraktWatchlistMovieItem(movie = TraktMovie(ids = TraktIds(trakt = 1, tmdb = 101)))), headers)
+        coEvery { traktApiService.getShowWatchlist(any(), any(), any(), any()) } returns
+            Response.success(listOf(TraktWatchlistShowItem(show = TraktShow(ids = TraktIds(trakt = 2, tmdb = 102)))), headers)
+        coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns
+            Response.success(listOf(TraktWatchlistMovieItem(movie = TraktMovie(ids = TraktIds(trakt = 3, tmdb = 103)))), headers)
+        coEvery { traktApiService.getShowHistory(any(), any(), any(), any()) } returns
+            Response.success(listOf(TraktWatchlistShowItem(show = TraktShow(ids = TraktIds(trakt = 4, tmdb = 104)))), headers)
+
+        val cached = repository.loadWatchlistWatchedIds()
+
+        coEvery { traktApiService.getWatchlist(any(), any(), any(), any()) } returns
+            Response.success(listOf(TraktWatchlistMovieItem(movie = TraktMovie(ids = TraktIds(trakt = 11, tmdb = 111)))), headers)
+        coEvery { traktApiService.getShowWatchlist(any(), any(), any(), any()) } returns
+            Response.success(listOf(TraktWatchlistShowItem(show = TraktShow(ids = TraktIds(trakt = 12, tmdb = 112)))), headers)
+        coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns
+            Response.success(listOf(TraktWatchlistMovieItem(movie = TraktMovie(ids = TraktIds(trakt = 13, tmdb = 113)))), headers)
+        coEvery { traktApiService.getShowHistory(any(), any(), any(), any()) } returns
+            Response.success(listOf(TraktWatchlistShowItem(show = TraktShow(ids = TraktIds(trakt = 14, tmdb = 114)))), headers)
+
+        val refreshed = repository.loadWatchlistWatchedIds(forceRefresh = true)
+
+        assertThat(cached.movieWatchlistTraktIds).containsExactly(1)
+        assertThat(refreshed.movieWatchlistTraktIds).containsExactly(11)
+        assertThat(refreshed.showWatchlistTraktIds).containsExactly(12)
+        assertThat(refreshed.movieWatchedTraktIds).containsExactly(13)
+        assertThat(refreshed.showWatchedTraktIds).containsExactly(14)
+        coVerify(exactly = 2) { traktApiService.getWatchlist(any(), any(), any(), any()) }
+        coVerify(exactly = 2) { traktApiService.getShowWatchlist(any(), any(), any(), any()) }
+        coVerify(exactly = 2) { traktApiService.getMovieHistory(any(), any(), any(), any()) }
+        coVerify(exactly = 2) { traktApiService.getShowHistory(any(), any(), any(), any()) }
     }
 
     @Test

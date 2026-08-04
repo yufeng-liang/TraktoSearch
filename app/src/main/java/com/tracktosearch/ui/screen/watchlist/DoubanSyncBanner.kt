@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.watchlist
 import com.tracktosearch.data.repository.DoubanSyncLoginTarget
 import com.tracktosearch.data.repository.DoubanSyncProgress
 import com.tracktosearch.data.repository.DoubanSyncStage
+import com.tracktosearch.data.repository.secondaryLabelRes
 
 /** Watchlist 横幅点击后的动作，避免 Composable 直接猜测同步状态。 */
 enum class DoubanSyncBannerAction {
@@ -25,3 +26,5 @@ fun DoubanSyncProgress.bannerClickAction(): DoubanSyncBannerAction {
 
     return DoubanSyncBannerAction.SHOW_PROGRESS
 }
+
+fun DoubanSyncProgress.bannerSubStageRes(): Int? = subStage.secondaryLabelRes()

@@ -266,6 +266,19 @@ class DoubanSyncDialogTest {
         composeRule.onNodeWithText("Success 50 · Skipped 5 · Cached 10 · Failed 5").assertIsDisplayed()
     }
 
+    @Test
+    fun `同步异常结果显示错误详情`() {
+        emit(
+            DoubanSyncProgress(
+                isComplete = true,
+                stage = DoubanSyncStage.FAILED,
+                errorMessage = "Network unavailable"
+            )
+        )
+        setContent()
+        composeRule.onNodeWithText("Error: Network unavailable").assertIsDisplayed()
+    }
+
     // ==================== 失败项展示 ====================
 
     @Test

@@ -10,13 +10,17 @@ import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.local.db.DoubanSyncFailureDao
 import com.tracktosearch.data.local.db.DoubanSyncFailureEntity
 import com.tracktosearch.data.local.db.DoubanSyncPendingItemDao
+import com.tracktosearch.data.local.db.DoubanSyncPendingItemEntity
 import com.tracktosearch.data.local.db.DoubanSyncRollbackDao
+import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.remote.douban.DelayInfo
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
+import com.tracktosearch.data.remote.douban.DoubanDetailInfo
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
 import com.tracktosearch.data.remote.douban.DoubanMarkItem
 import com.tracktosearch.data.remote.douban.DoubanRepository
+import com.tracktosearch.data.remote.trakt.dto.TraktSyncResponse
 import com.tracktosearch.data.util.PersistentTtlCache
 import io.mockk.clearMocks
 import io.mockk.coEvery
@@ -272,6 +276,128 @@ class DoubanSyncManagerLifecycleTest {
      * 下次重试时 status 分组失效,UI 展示与重试链路都会受影响。
      */
     @Test
+    fun 全量重写删除Trakt失败时保留本地同步表和回滚信息() = runBlocking {
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("uid", "cookie")
+        val syncedItem = DoubanSyncedItem(
+            doubanId = "full-rewrite-1",
+            imdbId = "tt-full-rewrite-1",
+            traktId = 1001,
+            title = "全量重写条目",
+            status = "wish",
+            rating = null,
+            syncedAt = 1L,
+            mediaType = "movie"
+        )
+        coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns listOf(syncedItem)
+        coEvery {
+            traktRepository.batchRemoveFromWatchlist(any(), any())
+        } returns Result.failure(IllegalStateException("Trakt 删除失败"))
+        coEvery {
+            traktRepository.batchRemoveFromWatched(any(), any())
+        } returns Result.success(TraktSyncResponse())
+
+        manager.startSync(SyncMode.FULL_REWRITE)
+        waitForCondition { manager.progress.value.isComplete && !manager.isRunning() }
+
+        assertThat(manager.progress.value.stage).isEqualTo(DoubanSyncStage.FAILED)
+        coVerify(exactly = 0) { doubanSyncedItemDao.clearAll() }
+        coVerify(exactly = 1) { doubanSyncRollbackDao.replaceAll(any()) }
+    }
+
+    @Test
+    fun 续传条目Trakt失败时保留pending以便重试() = runBlocking {
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("uid", "cookie")
+        val pendingItem = DoubanSyncPendingItemEntity(
+            doubanId = "resume-failed",
+            title = "续传失败",
+            posterUrl = null,
+            rating = null,
+            comment = null,
+            markedAt = "2024-01-01",
+            doubanUrl = "https://movie.douban.com/subject/resume-failed/",
+            status = "wish",
+            crawledAt = 1L
+        )
+        coEvery { doubanSyncedItemDao.getAllSyncedDoubanIds() } returns emptyList()
+        coEvery { doubanSyncPendingItemDao.getByStatus("wish") } returns listOf(pendingItem)
+        coEvery { doubanSyncPendingItemDao.getByStatus("collect") } returns emptyList()
+        coEvery {
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+        } returns Pair(DoubanDetailInfo(
+            imdbId = "tt-resume-failed",
+            isTvShow = false,
+            title = "续传失败",
+            posterUrl = null,
+            genres = emptyList(),
+            year = "2024",
+            countries = emptyList(),
+            directors = emptyList()
+        ), false)
+        every { traktRepository.getCachedTraktIdByImdb(any(), any()) } returns 1002
+        coEvery {
+            traktRepository.batchAddToWatchlist(any(), any())
+        } returns Result.failure(IllegalStateException("Trakt 写入失败"))
+
+        manager.startResume()
+        waitForCondition { manager.progress.value.isComplete && !manager.isRunning() }
+
+        coVerify(exactly = 0) { doubanSyncPendingItemDao.deleteByDoubanIds(any()) }
+    }
+
+    @Test
+    fun 续传取消时保留pending以便重试() = runBlocking {
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("uid", "cookie")
+        val pendingItem = DoubanSyncPendingItemEntity(
+            doubanId = "resume-cancelled",
+            title = "续传取消",
+            posterUrl = null,
+            rating = null,
+            comment = null,
+            markedAt = "2024-01-01",
+            doubanUrl = "https://movie.douban.com/subject/resume-cancelled/",
+            status = "wish",
+            crawledAt = 1L
+        )
+        val fetchStarted = CompletableDeferred<Unit>()
+        val releaseFetch = CompletableDeferred<Pair<DoubanDetailInfo?, Boolean>>()
+        coEvery { doubanSyncedItemDao.getAllSyncedDoubanIds() } returns emptyList()
+        coEvery { doubanSyncPendingItemDao.getByStatus("wish") } returns listOf(pendingItem)
+        coEvery { doubanSyncPendingItemDao.getByStatus("collect") } returns emptyList()
+        coEvery {
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+        } coAnswers {
+            fetchStarted.complete(Unit)
+            releaseFetch.await()
+        }
+
+        manager.startResume()
+        fetchStarted.await()
+        manager.cancel()
+        releaseFetch.complete(Pair(null, false))
+        waitForCondition { manager.progress.value.isComplete && !manager.isRunning() }
+
+        coVerify(exactly = 0) { doubanSyncPendingItemDao.deleteByDoubanIds(any()) }
+    }
+
+    @Test
+    fun 自动一致性检查失败时同步结果不得被吞掉() = runBlocking {
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("uid", "cookie")
+        coEvery {
+            doubanRepository.fetchMarkList(any(), any(), any(), any(), any(), any())
+        } returns true
+        coEvery {
+            statusConsistencyChecker.checkAndUnify()
+        } throws IllegalStateException("一致性检查失败")
+
+        manager.startSync(SyncMode.INCREMENTAL_WITH_CHANGES)
+        waitForCondition { manager.progress.value.isComplete && !manager.isRunning() }
+
+        assertThat(manager.progress.value.stage).isEqualTo(DoubanSyncStage.FAILED)
+        assertThat(manager.progress.value.errorMessage).contains("一致性检查失败")
+        coVerify(exactly = 0) { cloudPersonalSyncManager.uploadAll(any(), any(), any()) }
+    }
+
+    @Test
     fun persistFailures正常同步按status覆盖调用replaceByStatus() {
         val failures = listOf(
             buildFailure(DoubanMarkStatus.WISH),
@@ -459,6 +585,32 @@ class DoubanSyncManagerLifecycleTest {
      * DoubanSyncManager 的 appScope 使用 Dispatchers.IO(真实线程),
      * 无法用 runTest 的 advanceUntilIdle 控制,需用 Thread.sleep 轮询。
      */
+    @Test
+    fun doubanModeSync_skipsTraktConsistencyCheck_butUploadsCloudData() = runBlocking {
+        every { sessionModeManager.sessionMode } returns
+            kotlinx.coroutines.flow.flowOf(com.tracktosearch.data.session.SessionMode.DOUBAN)
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("uid", "cookie")
+        coEvery {
+            doubanRepository.fetchMarkList(any(), any(), any(), any(), any(), any())
+        } returns true
+        coEvery {
+            statusConsistencyChecker.checkAndUnify()
+        } returns ConsistencyCheckResult(isComplete = true, errors = 1)
+
+        manager.startSync(SyncMode.INCREMENTAL_WITH_CHANGES)
+        waitForCondition { manager.progress.value.isComplete && !manager.isRunning() }
+
+        assertThat(manager.progress.value.stage).isEqualTo(DoubanSyncStage.COMPLETED)
+        coVerify(exactly = 0) { statusConsistencyChecker.checkAndUnify() }
+        coVerify(exactly = 1) {
+            cloudPersonalSyncManager.uploadAll(
+                lastSyncMode = "INCREMENTAL_WITH_CHANGES",
+                isFullComplete = true,
+                uploadIdMappings = true
+            )
+        }
+    }
+
     private fun waitForCondition(
         timeoutMs: Long = 10000L,
         intervalMs: Long = 50L,

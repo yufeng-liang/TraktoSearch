@@ -95,6 +95,7 @@ import com.tracktosearch.ui.screen.settings.SettingsScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchViewModel
 import com.tracktosearch.ui.screen.watchlist.WatchlistScreen
+import com.tracktosearch.ui.navigation.NotificationNavigator
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.showToast
@@ -106,6 +107,7 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -276,6 +278,16 @@ fun MainScreen(
     // Pager 滑动 → 同步 selectedTab
     LaunchedEffect(pagerState.currentPage) {
         selectedTab = pagerState.currentPage
+    }
+
+    // 通知点击可能发生在 Activity 已经打开时，主动切到 Watchlist 页。
+    LaunchedEffect(Unit) {
+        NotificationNavigator.pendingTarget.collect { target ->
+            if (target != null) {
+                pagerState.animateScrollToPage(2)
+                selectedTab = 2
+            }
+        }
     }
 
     // 获取屏幕宽度用于导航栏宽度计算

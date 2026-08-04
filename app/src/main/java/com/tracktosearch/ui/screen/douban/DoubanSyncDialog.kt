@@ -308,6 +308,14 @@ fun DoubanSyncDialog(
 
                 if (p.isComplete) {
                     Spacer(modifier = Modifier.height(12.dp))
+                    p.errorMessage?.takeIf { it.isNotBlank() }?.let { errorMessage ->
+                        Text(
+                            stringResource(R.string.douban_sync_error_detail, errorMessage),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                     // 完成总结:成功·跳过·缓存命中·失败
                     Text(
                         stringResource(
@@ -530,8 +538,9 @@ fun DoubanSyncDialog(
                             // 正在取消时禁用"转后台":避免用户在取消过程中触发前台服务启动导致状态混乱
                             enabled = !p.isCancelling,
                             onClick = {
-                                DoubanSyncService.start(context)
-                                onBackground()
+                                if (DoubanSyncService.start(context)) {
+                                    onBackground()
+                                }
                             }
                         ) { Text(stringResource(R.string.douban_sync_background)) }
                         Spacer(modifier = Modifier.width(8.dp))

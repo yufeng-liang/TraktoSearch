@@ -22,6 +22,7 @@ import com.tracktosearch.data.repository.DoubanSyncStage
 import com.tracktosearch.data.repository.DoubanSyncSubStage
 import com.tracktosearch.data.repository.compactLabelRes
 import com.tracktosearch.data.repository.labelRes
+import com.tracktosearch.data.repository.secondaryLabelRes
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,15 +56,16 @@ class DoubanSyncService : Service() {
         const val ACTION_START = "com.tracktosearch.START_DOUBAN_SYNC"
         const val ACTION_CANCEL = "com.tracktosearch.CANCEL_DOUBAN_SYNC"
 
-        fun start(context: Context) {
+        fun start(context: Context): Boolean {
             // 通知权限未授予时不启动 Service（同步仍在 Application scope 跑，只是没通知）
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 val granted = context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
                     PackageManager.PERMISSION_GRANTED
-                if (!granted) return
+                if (!granted) return false
             }
             val intent = Intent(context, DoubanSyncService::class.java).setAction(ACTION_START)
             context.startForegroundService(intent)
+            return true
         }
 
         fun cancel(context: Context) {
@@ -149,7 +151,7 @@ class DoubanSyncService : Service() {
     private fun buildNotification(progress: DoubanSyncProgress): Notification {
         val contentIntent = PendingIntent.getActivity(
             this, 0,
-            Intent(this, MainActivity::class.java),
+            Intent(this, MainActivity::class.java).putExtra("navigate_to", "douban_sync"),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         val cancelIntent = PendingIntent.getService(
@@ -159,7 +161,7 @@ class DoubanSyncService : Service() {
         )
         val stageLabel = getString(progress.stage.labelRes())
         val compactLabel = getString(progress.stage.compactLabelRes())
-        val subStageLabel = progress.subStage.labelRes()?.let(::getString)
+        val subStageLabel = progress.subStage.secondaryLabelRes()?.let(::getString)
         val targetLabel = when (progress.subStage) {
             DoubanSyncSubStage.FETCHING_WISH_LIST -> getString(R.string.douban_sync_preview_status_wish)
             DoubanSyncSubStage.FETCHING_COLLECT_LIST -> getString(R.string.douban_sync_preview_status_collect)
@@ -185,17 +187,27 @@ class DoubanSyncService : Service() {
                 progress.current,
                 progress.total
             )
+            progress.total > 0 && subStageLabel != null -> getString(
+                R.string.douban_sync_notification_progress_format,
+                stageLabel,
+                subStageLabel,
+                progress.current,
+                progress.total
+            )
             progress.total > 0 -> getString(
                 R.string.douban_sync_progress_format,
                 stageLabel,
                 progress.current,
                 progress.total
             )
+            subStageLabel != null -> getString(
+                R.string.douban_sync_notification_stage_format,
+                stageLabel,
+                subStageLabel
+            )
             else -> stageLabel
         }
         val expandedParts = buildList {
-            // 列表阶段已经在摘要中给出想看/看过，避免重复显示同一阶段名称。
-            if (subStageLabel != null && targetLabel == null) add(subStageLabel)
             progress.currentTitle?.takeIf { it.isNotBlank() }?.let {
                 add(getString(R.string.douban_sync_notification_current, it))
             } ?: progress.recentItems.firstOrNull()?.title?.takeIf { it.isNotBlank() }?.let {
@@ -203,6 +215,9 @@ class DoubanSyncService : Service() {
             }
             if (progress.isRunning && progress.etaSeconds >= 0) {
                 add(getString(R.string.douban_sync_eta_format, formatEta(progress.etaSeconds)))
+            }
+            progress.errorMessage?.takeIf { it.isNotBlank() }?.let {
+                add(getString(R.string.douban_sync_error_detail, it))
             }
         }
         val expandedText = expandedParts.joinToString(" · ").ifBlank { contentText }

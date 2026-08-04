@@ -28,9 +28,32 @@ data class SearchHistoryItem(val keyword: String, val type: String)
 private val Context.legacySearchHistoryDataStore: DataStore<Preferences> by preferencesDataStore(name = "search_history")
 
 @Singleton
-class SearchHistoryStorage @Inject constructor(
-    @ApplicationContext private val context: Context
+class SearchHistoryStorage private constructor(
+    private val context: Context,
+    private val prefsFactory: () -> SharedPreferences
 ) {
+    @Inject
+    constructor(@ApplicationContext context: Context) : this(
+        context = context,
+        prefsFactory = {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            EncryptedSharedPreferences.create(
+                context,
+                PREFS_NAME,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        }
+    )
+
+    internal constructor(
+        context: Context,
+        sharedPreferences: SharedPreferences
+    ) : this(context, { sharedPreferences })
+
     private companion object {
         // 用 String 存储有序历史（换行符分隔），避免 Set 无序导致历史顺序丢失
         const val KEY_HISTORY = "search_keywords_joined"
@@ -49,16 +72,7 @@ class SearchHistoryStorage @Inject constructor(
         prefsCache?.let { return it }
         return withContext(Dispatchers.IO) {
             prefsCache?.let { return@withContext it }
-            val masterKey = MasterKey.Builder(context)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
-            val created = EncryptedSharedPreferences.create(
-                context,
-                PREFS_NAME,
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
+            val created = prefsFactory()
             prefsCache = created
             created
         }

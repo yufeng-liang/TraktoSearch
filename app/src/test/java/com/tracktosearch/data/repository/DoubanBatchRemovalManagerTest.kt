@@ -24,6 +24,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowPowerManager
+import java.util.Collections
 
 /**
  * DoubanBatchRemovalManager 单元测试。
@@ -184,7 +185,9 @@ class DoubanBatchRemovalManagerTest {
         coEvery { doubanSyncedItemDao.getByImdbId("tt0000003") } returns buildSyncedItem(doubanId = "db-3")
         coEvery { doubanRepository.fetchCsrfToken(any(), any()) } returns "csrf-token"
         // 用 coAnswers 记录每次 removeMark 的参数(doubanId, cookie, csrf)
-        val removeMarkCalls = mutableListOf<Triple<String, String, String>>()
+        val removeMarkCalls = Collections.synchronizedList(
+            mutableListOf<Triple<String, String, String>>()
+        )
         coEvery {
             doubanRepository.removeMark(any(), any(), any())
         } coAnswers {
@@ -540,7 +543,7 @@ class DoubanBatchRemovalManagerTest {
         assertThat(p.total).isEqualTo(3)
         assertThat(p.current).isEqualTo(3)
         assertThat(p.currentTitle).isNull()  // 完成后清空
-        assertThat(p.phase).isEqualTo("完成")
+        assertThat(p.phase).isEqualTo(BatchRemovalPhase.DONE)
     }
 
     // ============================================================

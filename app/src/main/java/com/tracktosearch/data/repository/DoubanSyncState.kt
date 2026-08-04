@@ -140,6 +140,15 @@ fun DoubanSyncSubStage.labelRes(): Int? = when (this) {
     DoubanSyncSubStage.WAITING_DELAY -> R.string.douban_sync_substage_waiting_delay
 }
 
+/** 通知和横幅展示的次级阶段；列表阶段由「想看/看过」标签承载，避免重复。 */
+@StringRes
+fun DoubanSyncSubStage.secondaryLabelRes(): Int? = when (this) {
+    DoubanSyncSubStage.NONE,
+    DoubanSyncSubStage.FETCHING_WISH_LIST,
+    DoubanSyncSubStage.FETCHING_COLLECT_LIST -> null
+    else -> labelRes()
+}
+
 @StringRes
 fun DoubanMarkStatus.labelRes(): Int = when (this) {
     DoubanMarkStatus.WISH -> R.string.douban_sync_preview_status_wish

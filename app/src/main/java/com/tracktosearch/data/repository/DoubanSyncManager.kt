@@ -18,6 +18,7 @@ import com.tracktosearch.data.remote.douban.DoubanDetailInfo
 import com.tracktosearch.data.remote.douban.DoubanMarkItem
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
 import com.tracktosearch.data.remote.douban.DoubanRepository
+import com.tracktosearch.data.remote.trakt.dto.TraktSyncResponse
 import com.tracktosearch.data.session.SessionMode
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.PersistentTtlCache
@@ -772,10 +773,9 @@ class DoubanSyncManager @Inject constructor(
             totalSuccess += result.success
             totalSkipped += result.skipped
             totalCacheHit += result.cacheHit
-            // 处理完一批后,从 pending items 表删除已处理的 doubanId(无论成功还是失败)
-            // 这样取消后 pending items 表只保留未处理的条目,下次续传时直接处理这些
-            if (pageItems.isNotEmpty()) {
-                doubanSyncPendingItemDao.deleteByDoubanIds(pageItems.map { it.doubanId })
+            // 仅删除完整成功的条目，失败或取消的条目保留以便下次续传
+            if (result.successDoubanIds.isNotEmpty()) {
+                doubanSyncPendingItemDao.deleteByDoubanIds(result.successDoubanIds.toList())
             }
         }
 
@@ -1030,8 +1030,8 @@ class DoubanSyncManager @Inject constructor(
             totalSuccess += result.success
             totalSkipped += result.skipped
             totalCacheHit += result.cacheHit
-            if (pageItems.isNotEmpty()) {
-                doubanSyncPendingItemDao.deleteByDoubanIds(pageItems.map { it.doubanId })
+            if (result.successDoubanIds.isNotEmpty()) {
+                doubanSyncPendingItemDao.deleteByDoubanIds(result.successDoubanIds.toList())
             }
         }
 
@@ -1107,8 +1107,14 @@ class DoubanSyncManager @Inject constructor(
                         // COLLECT → WISH: 先 add 到 watchlist,再 remove 从 watched
                         // (先 add 后 remove:如果第二步失败,标记同时存在于两个列表,
                         //  下次一致性检查会自动统一为 watched 优先,不会丢失标记)
-                        traktRepository.batchAddToWatchlist(movieIds, showIds)
-                        traktRepository.batchRemoveFromWatched(movieIds, showIds)
+                        checkTraktResult(
+                            traktRepository.batchAddToWatchlist(movieIds, showIds),
+                            "batchAddToWatchlist"
+                        )
+                        checkTraktResult(
+                            traktRepository.batchRemoveFromWatched(movieIds, showIds),
+                            "batchRemoveFromWatched"
+                        )
                     }
                     DoubanMarkStatus.COLLECT -> {
                         // WISH → COLLECT: 先 markAsWatched,再 remove 从 watchlist
@@ -1117,8 +1123,14 @@ class DoubanSyncManager @Inject constructor(
                         val watchedAtIso = markedAtToIso(item.markedAt)
                         val movieItems = if (mediaType == MediaType.MOVIE) listOf(traktId to watchedAtIso) else emptyList()
                         val showItems = if (mediaType == MediaType.SHOW) listOf(traktId to watchedAtIso) else emptyList()
-                        traktRepository.batchMarkAsWatchedAt(movieItems, showItems)
-                        traktRepository.batchRemoveFromWatchlist(movieIds, showIds)
+                        checkTraktResult(
+                            traktRepository.batchMarkAsWatchedAt(movieItems, showItems),
+                            "batchMarkAsWatchedAt"
+                        )
+                        checkTraktResult(
+                            traktRepository.batchRemoveFromWatchlist(movieIds, showIds),
+                            "batchRemoveFromWatchlist"
+                        )
                     }
                 }
 
@@ -1235,8 +1247,14 @@ class DoubanSyncManager @Inject constructor(
 
         try {
             if (cancelled) return
-            traktRepository.batchRemoveFromWatchlist(wishMovieIds, wishShowIds)
-            traktRepository.batchRemoveFromWatched(collectMovieIds, collectShowIds)
+            checkTraktResult(
+                traktRepository.batchRemoveFromWatchlist(wishMovieIds, wishShowIds),
+                "batchRemoveFromWatchlist"
+            )
+            checkTraktResult(
+                traktRepository.batchRemoveFromWatched(collectMovieIds, collectShowIds),
+                "batchRemoveFromWatched"
+            )
         } catch (e: Exception) {
             _progress.value = _progress.value.copy(
                 stage = DoubanSyncStage.FAILED,
@@ -1381,8 +1399,8 @@ class DoubanSyncManager @Inject constructor(
             totalSkipped += result.skipped
             totalCacheHit += result.cacheHit
             // 处理完一批后,从 pending items 表删除已处理的 doubanId
-            if (items.isNotEmpty()) {
-                doubanSyncPendingItemDao.deleteByDoubanIds(items.map { it.doubanId })
+            if (result.successDoubanIds.isNotEmpty()) {
+                doubanSyncPendingItemDao.deleteByDoubanIds(result.successDoubanIds.toList())
             }
         }
 
@@ -1638,9 +1656,15 @@ class DoubanSyncManager @Inject constructor(
         runCatching { doubanSyncMetaStorage.recordLocalSync(mode, isFullComplete) }
         // 状态一致性检查（前移到上传之前）：统一豆瓣与 Trakt 状态并回写本地表，
         // 确保上传到云端的 synced_items.json 中的 status 是统一后的值
-        runCatching {
-            val result = statusConsistencyChecker.checkAndUnify()
-            android.util.Log.i("DoubanSync", "同步后状态一致性检查: $result")
+        val consistencyResult = if (isDoubanMode()) {
+            // 豆瓣独立模式没有 Trakt 状态可供对比，跳过检查但继续上传本地同步数据。
+            ConsistencyCheckResult(isComplete = true)
+        } else {
+            statusConsistencyChecker.checkAndUnify()
+        }
+        android.util.Log.i("DoubanSync", "同步后状态一致性检查: $consistencyResult")
+        if (consistencyResult.errors > 0) {
+            throw IllegalStateException("Automatic consistency check failed: ${consistencyResult.errors} errors")
         }
         // 上传个人数据（含统一后的 status）
         runCatching {
@@ -1985,12 +2009,11 @@ class DoubanSyncManager @Inject constructor(
                     }
                 }
                 DoubanMarkStatus.COLLECT -> {
-                    if (isInWatchlist) {
-                        when (r.mediaType) {
-                            MediaType.MOVIE -> removeFromWatchlistMovieIds.add(r.traktId)
-                            MediaType.SHOW -> removeFromWatchlistShowIds.add(r.traktId)
-                            else -> {}
-                        }
+                    // 豆瓣已看是明确的目标状态，必须显式移除 Trakt 想看，不能依赖本地缓存判断。
+                    when (r.mediaType) {
+                        MediaType.MOVIE -> removeFromWatchlistMovieIds.add(r.traktId)
+                        MediaType.SHOW -> removeFromWatchlistShowIds.add(r.traktId)
+                        else -> {}
                     }
                     if (!isWatched) {
                         when (r.mediaType) {
@@ -2031,16 +2054,27 @@ class DoubanSyncManager @Inject constructor(
         var writeFailedCount = 0
         try {
             withTimeout(60_000L) {
+                val traktResults = mutableListOf<Pair<String, Result<*>>>()
                 when (status) {
                     DoubanMarkStatus.WISH -> {
-                        traktRepository.batchAddToWatchlist(wishMovieIds, wishShowIds)
+                        traktResults += "batchAddToWatchlist" to
+                            traktRepository.batchAddToWatchlist(wishMovieIds, wishShowIds)
                     }
                     DoubanMarkStatus.COLLECT -> {
-                        traktRepository.batchRemoveFromWatchlist(removeFromWatchlistMovieIds, removeFromWatchlistShowIds)
-                        traktRepository.batchMarkAsWatchedAt(collectMovieItems, collectShowItems)
+                        traktResults += "batchRemoveFromWatchlist" to
+                            traktRepository.batchRemoveFromWatchlist(
+                                removeFromWatchlistMovieIds,
+                                removeFromWatchlistShowIds
+                            )
+                        traktResults += "batchMarkAsWatchedAt" to
+                            traktRepository.batchMarkAsWatchedAt(collectMovieItems, collectShowItems)
                     }
                 }
-                traktRepository.batchAddRatingsAt(movieRatings, showRatings)
+                traktResults += "batchAddRatingsAt" to
+                    traktRepository.batchAddRatingsAt(movieRatings, showRatings)
+                traktResults.forEach { (operation, result) ->
+                    checkTraktResult(result, operation)
+                }
 
                 if (batchToInsert.isNotEmpty()) {
                     doubanSyncedItemDao.insertAll(batchToInsert)
@@ -2066,6 +2100,18 @@ class DoubanSyncManager @Inject constructor(
         // (failed 列表包含阶段1详情页失败项,不能直接用 withTraktId.size - failed.size)
         val successCount = withTraktId.size - writeFailedCount
         return BatchSyncResult(success = successCount, failed = failed, skipped = skippedCount, cacheHit = cacheHit, successDoubanIds = successDoubanIds.toSet())
+    }
+
+    /** 校验 Trakt API 的 HTTP/业务结果，避免失败后把本地记录标记为成功。 */
+    private fun checkTraktResult(result: Result<*>, operation: String) {
+        val value = result.getOrElse { error ->
+            throw IllegalStateException("$operation failed", error)
+        }
+        if (value is TraktSyncResponse &&
+            (value.not_found.movies.isNotEmpty() || value.not_found.shows.isNotEmpty())
+        ) {
+            throw IllegalStateException("$operation returned not_found items")
+        }
     }
 
     /**

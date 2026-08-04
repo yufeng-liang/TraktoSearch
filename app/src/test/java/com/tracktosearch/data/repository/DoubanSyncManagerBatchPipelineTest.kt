@@ -16,6 +16,7 @@ import com.tracktosearch.data.remote.douban.DoubanDetailInfo
 import com.tracktosearch.data.remote.douban.DoubanMarkItem
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
 import com.tracktosearch.data.remote.douban.DoubanRepository
+import com.tracktosearch.data.remote.trakt.dto.TraktSyncResponse
 import com.tracktosearch.data.util.PersistentTtlCache
 import io.mockk.clearMocks
 import io.mockk.coEvery
@@ -464,6 +465,87 @@ class DoubanSyncManagerBatchPipelineTest {
      * 重试模式下 attemptCount=existing+1)。
      */
     @Test
+    fun Trakt批量写入失败时不得写入本地同步表() {
+        coEvery {
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+        } returns Pair(buildDetail(imdbId = "tt-write-failed", isTvShow = false), false)
+        every { traktRepository.getCachedTraktIdByImdb(any(), any()) } returns 12345
+        coEvery {
+            traktRepository.batchAddToWatchlist(any(), any())
+        } returns Result.failure(IllegalStateException("Trakt 写入失败"))
+
+        val result = invokeSyncBatchToTrakt(
+            items = listOf(buildMarkItem("write-failed")),
+            status = DoubanMarkStatus.WISH
+        )
+
+        assertThat(resultSuccess(result)).isEqualTo(0)
+        assertThat(resultSuccessDoubanIds(result)).isEmpty()
+        assertThat(resultFailed(result)).hasSize(1)
+        assertThat(resultFailed(result)[0].doubanId).isEqualTo("write-failed")
+        coVerify(exactly = 0) { doubanSyncedItemDao.insertAll(any()) }
+    }
+
+    @Test
+    fun 豆瓣已看状态始终移除Trakt想看且移除失败不得写入本地同步表() {
+        coEvery {
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+        } returns Pair(buildDetail(imdbId = "tt-collect", isTvShow = false), false)
+        every { traktRepository.getCachedTraktIdByImdb(any(), any()) } returns 67890
+        coEvery {
+            traktRepository.batchRemoveFromWatchlist(any(), any())
+        } returns Result.failure(IllegalStateException("移除想看失败"))
+        coEvery {
+            traktRepository.batchMarkAsWatchedAt(any(), any())
+        } returns Result.success(TraktSyncResponse())
+
+        val movieIdsSlot = slot<List<Int>>()
+        val result = invokeSyncBatchToTrakt(
+            items = listOf(buildMarkItem("collect-failed")),
+            status = DoubanMarkStatus.COLLECT,
+            watchlistWatchedIds = TraktRepository.WatchlistWatchedIds()
+        )
+
+        assertThat(resultSuccess(result)).isEqualTo(0)
+        assertThat(resultSuccessDoubanIds(result)).isEmpty()
+        assertThat(resultFailed(result)).hasSize(1)
+        coVerify(exactly = 0) { doubanSyncedItemDao.insertAll(any()) }
+        coVerify(exactly = 1) {
+            traktRepository.batchRemoveFromWatchlist(capture(movieIdsSlot), emptyList())
+        }
+        assertThat(movieIdsSlot.captured).containsExactly(67890)
+    }
+
+    @Test
+    fun 状态变更的Trakt结果失败时不得更新本地状态() {
+        val synced = DoubanSyncedItem(
+            doubanId = "status-change",
+            imdbId = "tt-status-change",
+            traktId = 24680,
+            title = "状态变更",
+            status = DoubanMarkStatus.WISH.path,
+            rating = null,
+            syncedAt = 1L,
+            mediaType = "movie"
+        )
+        coEvery {
+            traktRepository.batchMarkAsWatchedAt(any(), any())
+        } returns Result.success(TraktSyncResponse())
+        coEvery {
+            traktRepository.batchRemoveFromWatchlist(any(), any())
+        } returns Result.failure(IllegalStateException("移除想看失败"))
+
+        val result = invokeProcessStatusChanges(
+            changedItems = listOf(buildMarkItem("status-change")),
+            newStatus = DoubanMarkStatus.COLLECT,
+            syncedItemsMap = mapOf(synced.doubanId to synced)
+        )
+
+        assertThat(result).isEqualTo(0)
+        coVerify(exactly = 0) { doubanSyncedItemDao.insertAll(any()) }
+    }
+
+    @Test
     fun existingFailures累加attemptCount() {
         val items = listOf(buildMarkItem("1"))
         coEvery {
@@ -638,6 +720,53 @@ class DoubanSyncManagerBatchPipelineTest {
         }
         error?.let { throw it }
         return resultValue
+    }
+
+    private fun invokeProcessStatusChanges(
+        changedItems: List<DoubanMarkItem>,
+        newStatus: DoubanMarkStatus,
+        syncedItemsMap: Map<String, DoubanSyncedItem>,
+        watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null
+    ): Int {
+        val method = DoubanSyncManager::class.java.getDeclaredMethod(
+            "processStatusChanges",
+            List::class.java,
+            DoubanMarkStatus::class.java,
+            Map::class.java,
+            TraktRepository.WatchlistWatchedIds::class.java,
+            Continuation::class.java
+        )
+        method.isAccessible = true
+
+        val latch = CountDownLatch(1)
+        var error: Throwable? = null
+        var resultValue: Any? = null
+        val continuation = object : Continuation<Any?> {
+            override val context: CoroutineContext = EmptyCoroutineContext
+            override fun resumeWith(result: Result<Any?>) {
+                result.onSuccess { resultValue = it }
+                    .onFailure { error = it }
+                latch.countDown()
+            }
+        }
+
+        val rawResult = method.invoke(
+            manager,
+            changedItems,
+            newStatus,
+            syncedItemsMap,
+            watchlistWatchedIds,
+            continuation
+        )
+        if (rawResult != COROUTINE_SUSPENDED) {
+            resultValue = rawResult
+            latch.countDown()
+        }
+        if (!latch.await(15, TimeUnit.SECONDS)) {
+            throw AssertionError("processStatusChanges 在 15 秒内未完成")
+        }
+        error?.let { throw it }
+        return resultValue as Int
     }
 
     /** 反射读取 BatchSyncResult(private 嵌套 data class)的字段 */

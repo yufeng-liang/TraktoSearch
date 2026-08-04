@@ -173,6 +173,7 @@
     <string name="douban_sync_cancelled_banner">동기화 취소됨</string>
     <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
     <string name="douban_sync_result_format">성공 %1$d건, 실패 %2$d건</string>
+    <string name="douban_sync_error_detail">오류: %1$s</string>
     <string name="douban_sync_failed_list_label">실패 항목:</string>
     <string name="douban_sync_failed_more_format">...총 %1$d항목 실패</string>
     <string name="douban_sync_eta_format">약 %1$s 남음</string>
@@ -672,7 +673,7 @@
     <string name="settings_douban_resync_running">동기화 중…</string>
     <string name="settings_douban_resync_running_desc">더우반 데이터 동기화 중, 클릭하여 진행 상황 보기</string>
     <string name="settings_douban_not_logged_in_title">더우반 미로그인</string>
-    <string name="settings_douban_not_logged_in_message">더우반 재동기화에는 로그인이 필요합니다. 로그인 페이지로 이동하시겠습니까?</string>
+    <string name="settings_douban_not_logged_in_message">더우반 동기화에는 로그인이 필요합니다. 로그인 페이지로 이동하시겠습니까?</string>
     <string name="settings_douban_not_logged_in_login">로그인으로</string>
     <!-- 증분 동기화 쿨다운(7일) -->
     <string name="cooldown_remaining_days">쿨다운·남%1$d일</string>
@@ -731,6 +732,12 @@
     <string name="consistency_check_phase_update_douban">더우반 업데이트 중</string>
     <string name="consistency_check_phase_done">완료</string>
     <string name="consistency_check_summary">%1$d건 확인, %2$d개 충돌, Trakt 업데이트 %3$d건, 더우반 업데이트 %4$d건, 오류 %5$d건</string>
+    <string name="consistency_check_notification_progress">%1$s (%2$d/%3$d)</string>
+    <string name="consistency_check_notification_progress_with_subphase">%1$s · %2$s (%3$d/%4$d)</string>
+    <string name="consistency_check_notification_stage_with_subphase">%1$s · %2$s</string>
+    <string name="consistency_check_notification_current">현재: %1$s</string>
+    <string name="consistency_check_notification_eta">예상 남은 시간: %1$s</string>
+    <string name="consistency_check_notification_public">상태 확인: %1$s</string>
     <string name="consistency_check_sub_wish">보고싶어요 목록</string>
     <string name="consistency_check_sub_collect">봤어요 목록</string>
     <string name="consistency_check_sub_detail_ck">상세 페이지 ck 가져오는 중</string>
@@ -739,6 +746,13 @@
     <string name="consistency_check_network_failed">네트워크 연결 실패, 네트워크를 확인하고 다시 시도하세요</string>
     <string name="consistency_check_network_timeout">네트워크 요청 시간 초과, 다시 시도하세요</string>
     <string name="consistency_check_exception">확인 오류: %1$s</string>
+    <string name="consistency_check_already_running">상태 일관성 검사가 실행 중입니다</string>
+    <string name="consistency_check_trakt_required_title">Trakt 연결 필요</string>
+    <string name="consistency_check_trakt_required_message">일관성 검사는 Douban과 Trakt의 상태를 비교합니다. 먼저 Trakt 계정을 연결하세요.</string>
+    <string name="consistency_check_trakt_required_login">Trakt 연결</string>
+    <string name="consistency_check_blocked_title">일관성 검사를 시작할 수 없습니다</string>
+    <string name="consistency_check_blocked_douban_mode">Douban 전용 모드에서는 일관성 검사를 사용할 수 없습니다.</string>
+    <string name="consistency_check_blocked_sync">Douban 동기화가 끝난 후 일관성을 확인하세요.</string>
     <string name="consistency_check_not_logged_in">더우반 미로그인</string>
     <string name="consistency_check_cookie_expired">더우반 로그인 만료</string>
     <string name="consistency_check_cookie_expired_prompt">더우반 로그인이 만료되었습니다. 다시 로그인하세요</string>

@@ -167,6 +167,8 @@ import com.tracktosearch.ui.screen.discover.CapsuleTabSelector
 import com.tracktosearch.ui.screen.douban.DoubanFirstSyncGuideDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
+import com.tracktosearch.ui.navigation.NotificationNavigator
+import com.tracktosearch.ui.navigation.NotificationTarget
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
@@ -279,6 +281,21 @@ fun WatchlistScreen(
 
     // 监听状态检查完成事件 → 自动弹出 ConsistencyCheckDialog 显示结果
     var showConsistencyDialog by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        NotificationNavigator.pendingTarget.collect { target ->
+            when (target) {
+                NotificationTarget.DOUBAN_SYNC -> {
+                    showSyncDialog = true
+                    NotificationNavigator.consume(target)
+                }
+                NotificationTarget.CONSISTENCY_CHECK -> {
+                    showConsistencyDialog = true
+                    NotificationNavigator.consume(target)
+                }
+                null -> Unit
+            }
+        }
+    }
     LaunchedEffect(Unit) {
         viewModel.consistencyCheckCompleteEvent.collect {
             showConsistencyDialog = true
@@ -1015,6 +1032,8 @@ fun WatchlistScreen(
                                                     stringResource(R.string.douban_sync_preview_status_collect)
                                                 else -> null
                                             }
+                                            val subStageLabel = syncProgress.bannerSubStageRes()
+                                                ?.let { stringResource(it) }
                                             Text(
                                                 text = if (syncProgress.cookieExpired) {
                                                     stringResource(R.string.douban_sync_cookie_expired_banner)
@@ -1042,12 +1061,26 @@ fun WatchlistScreen(
                                                         syncProgress.current,
                                                         syncProgress.total
                                                     )
+                                                } else if (syncProgress.total > 0 && subStageLabel != null) {
+                                                    stringResource(
+                                                        R.string.douban_sync_notification_progress_format,
+                                                        stageLabel,
+                                                        subStageLabel,
+                                                        syncProgress.current,
+                                                        syncProgress.total
+                                                    )
                                                 } else if (syncProgress.total > 0) {
                                                     stringResource(
                                                         R.string.douban_sync_progress_format,
                                                         stageLabel,
                                                         syncProgress.current,
                                                         syncProgress.total
+                                                    )
+                                                } else if (subStageLabel != null) {
+                                                    stringResource(
+                                                        R.string.douban_sync_notification_stage_format,
+                                                        stageLabel,
+                                                        subStageLabel
                                                     )
                                                 } else {
                                                     stageLabel
@@ -1124,15 +1157,40 @@ fun WatchlistScreen(
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column(modifier = Modifier.weight(1f)) {
+                                            val checkPhase = checkProgress.phase.ifBlank {
+                                                stringResource(R.string.consistency_check_phase_preparing)
+                                            }
+                                            val checkSubPhase = checkProgress.subPhase.takeIf {
+                                                it.isNotBlank() && !checkPhase.contains(it)
+                                            }
                                             Text(
                                                 text = if (checkProgress.cookieExpired) {
                                                     stringResource(R.string.douban_sync_cookie_expired_banner)
                                                 } else if (checkProgress.isComplete) {
                                                     stringResource(R.string.consistency_check_complete_banner)
+                                                } else if (checkProgress.total > 0 && checkSubPhase != null) {
+                                                    stringResource(
+                                                        R.string.consistency_check_notification_progress_with_subphase,
+                                                        checkPhase,
+                                                        checkSubPhase,
+                                                        checkProgress.current,
+                                                        checkProgress.total
+                                                    )
                                                 } else if (checkProgress.total > 0) {
-                                                    "${checkProgress.phase} (${checkProgress.current}/${checkProgress.total})"
+                                                    stringResource(
+                                                        R.string.consistency_check_notification_progress,
+                                                        checkPhase,
+                                                        checkProgress.current,
+                                                        checkProgress.total
+                                                    )
+                                                } else if (checkSubPhase != null) {
+                                                    stringResource(
+                                                        R.string.consistency_check_notification_stage_with_subphase,
+                                                        checkPhase,
+                                                        checkSubPhase
+                                                    )
                                                 } else {
-                                                    checkProgress.phase
+                                                    checkPhase
                                                 },
                                                 style = MaterialTheme.typography.labelMedium,
                                                 color = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer

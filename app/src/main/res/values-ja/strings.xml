@@ -173,6 +173,7 @@
     <string name="douban_sync_cancelled_banner">同期をキャンセルしました</string>
     <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
     <string name="douban_sync_result_format">成功 %1$d 件、失敗 %2$d 件</string>
+    <string name="douban_sync_error_detail">エラー：%1$s</string>
     <string name="douban_sync_failed_list_label">失敗項目：</string>
     <string name="douban_sync_failed_more_format">...合計 %1$d 項目失敗</string>
     <string name="douban_sync_eta_format">残り約 %1$s</string>
@@ -672,7 +673,7 @@
     <string name="settings_douban_resync_running">同期中…</string>
     <string name="settings_douban_resync_running_desc">豆瓣データを同期中、クリックして進捗を表示</string>
     <string name="settings_douban_not_logged_in_title">豆瓣に未ログイン</string>
-    <string name="settings_douban_not_logged_in_message">豆瓣の再同期にはログインが必要です。ログインページへ移動しますか?</string>
+    <string name="settings_douban_not_logged_in_message">豆瓣の同期にはログインが必要です。ログインページへ移動しますか?</string>
     <string name="settings_douban_not_logged_in_login">ログインへ</string>
     <!-- 増分同期クールダウン(7日) -->
     <string name="cooldown_remaining_days">クールダウン·残り%1$d日</string>
@@ -731,6 +732,12 @@
     <string name="consistency_check_phase_update_douban">豆瓣更新中</string>
     <string name="consistency_check_phase_done">完了</string>
     <string name="consistency_check_summary">%1$d件チェック、%2$d件の競合、Trakt更新%3$d件、豆瓣更新%4$d件、エラー%5$d件</string>
+    <string name="consistency_check_notification_progress">%1$s（%2$d/%3$d）</string>
+    <string name="consistency_check_notification_progress_with_subphase">%1$s · %2$s（%3$d/%4$d）</string>
+    <string name="consistency_check_notification_stage_with_subphase">%1$s · %2$s</string>
+    <string name="consistency_check_notification_current">現在：%1$s</string>
+    <string name="consistency_check_notification_eta">残り時間：%1$s</string>
+    <string name="consistency_check_notification_public">状態チェック：%1$s</string>
     <string name="consistency_check_sub_wish">見たいリスト</string>
     <string name="consistency_check_sub_collect">見たリスト</string>
     <string name="consistency_check_sub_detail_ck">詳細ページck取得</string>
@@ -739,6 +746,13 @@
     <string name="consistency_check_network_failed">ネットワーク接続に失敗しました。ネットワークを確認して再試行してください</string>
     <string name="consistency_check_network_timeout">ネットワークリクエストがタイムアウトしました。再試行してください</string>
     <string name="consistency_check_exception">チェックエラー: %1$s</string>
+    <string name="consistency_check_already_running">状態の整合性チェックが実行中です</string>
+    <string name="consistency_check_trakt_required_title">Trakt 接続が必要です</string>
+    <string name="consistency_check_trakt_required_message">整合性チェックでは豆瓣と Trakt の状態を比較します。先に Trakt アカウントを接続してください。</string>
+    <string name="consistency_check_trakt_required_login">Trakt を接続</string>
+    <string name="consistency_check_blocked_title">整合性チェックを開始できません</string>
+    <string name="consistency_check_blocked_douban_mode">豆瓣専用モードでは整合性チェックを利用できません。</string>
+    <string name="consistency_check_blocked_sync">豆瓣の同期が完了してから整合性をチェックしてください。</string>
     <string name="consistency_check_not_logged_in">豆瓣未ログイン</string>
     <string name="consistency_check_cookie_expired">豆瓣ログイン期限切れ</string>
     <string name="consistency_check_cookie_expired_prompt">豆瓣ログインの有効期限が切れました。再度ログインしてください</string>

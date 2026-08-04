@@ -188,33 +188,39 @@ class TraktRepository @Inject constructor(
     /** 加载全局想看/已看 ID 缓存（登录后调用，仅加载一次）。
      *  优先读持久化缓存（6h TTL，跨 App 重启复用），未命中或过期时走网络全量拉取并写回持久化缓存。
      *  并发去重：多个调用方共享同一次网络加载，避免重复发 4 个 sync 请求 */
-    suspend fun loadWatchlistWatchedIds(): WatchlistWatchedIds {
-        watchlistWatchedIds?.let { return it }
+    suspend fun loadWatchlistWatchedIds(forceRefresh: Boolean = false): WatchlistWatchedIds {
+        if (!forceRefresh) {
+            watchlistWatchedIds?.let { return it }
+        }
         // 先尝试持久化缓存（避免每次启动都发 4 个 /sync/* 请求）
         val cacheKey = "watchlist_watched_ids"
-        watchlistWatchedIdsCache.awaitLoaded()
-        watchlistWatchedIdsCache.get(cacheKey)?.let { cached ->
-            synchronized(watchlistWatchedIdsLock) { watchlistWatchedIds = cached }
-            return cached
-        }
-        // 并发去重:同一时刻只允许一个网络全量拉取,其他调用方等待结果
-        return loadWatchlistMutex.withLock {
-            // double-check:等待期间可能已被其他协程填充
-            watchlistWatchedIds?.let { return it }
+        if (!forceRefresh) {
+            watchlistWatchedIdsCache.awaitLoaded()
             watchlistWatchedIdsCache.get(cacheKey)?.let { cached ->
                 synchronized(watchlistWatchedIdsLock) { watchlistWatchedIds = cached }
                 return cached
             }
+        }
+        // 并发去重:同一时刻只允许一个网络全量拉取,其他调用方等待结果
+        return loadWatchlistMutex.withLock {
+            // double-check:等待期间可能已被其他协程填充
+            if (!forceRefresh) {
+                watchlistWatchedIds?.let { return it }
+                watchlistWatchedIdsCache.get(cacheKey)?.let { cached ->
+                    synchronized(watchlistWatchedIdsLock) { watchlistWatchedIds = cached }
+                    return cached
+                }
+            }
             try {
                 coroutineScope {
-                    val movieWatchlistDef = async { getAllMovieWatchlist() }
-                    val showWatchlistDef = async { getAllShowWatchlist() }
-                    val movieHistoryDef = async { getAllMovieHistory(extended = "min") }
-                    val showHistoryDef = async { getAllShowHistory(extended = "min") }
-                    val movieWatchlist = movieWatchlistDef.await().getOrDefault(emptyList())
-                    val showWatchlist = showWatchlistDef.await().getOrDefault(emptyList())
-                    val movieHistory = movieHistoryDef.await().getOrDefault(emptyList())
-                    val showHistory = showHistoryDef.await().getOrDefault(emptyList())
+                    val movieWatchlistDef = async { getAllMovieWatchlist(forceRefresh) }
+                    val showWatchlistDef = async { getAllShowWatchlist(forceRefresh) }
+                    val movieHistoryDef = async { getAllMovieHistory(extended = "min", forceRefresh = forceRefresh) }
+                    val showHistoryDef = async { getAllShowHistory(extended = "min", forceRefresh = forceRefresh) }
+                    val movieWatchlist = movieWatchlistDef.await().getOrThrow()
+                    val showWatchlist = showWatchlistDef.await().getOrThrow()
+                    val movieHistory = movieHistoryDef.await().getOrThrow()
+                    val showHistory = showHistoryDef.await().getOrThrow()
                     val ids = WatchlistWatchedIds(
                         movieWatchlistTraktIds = movieWatchlist.map { it.movie.ids.trakt }.toSet(),
                         movieWatchlistTmdbIds = movieWatchlist.map { it.movie.ids.tmdb }.filter { it > 0 }.toSet(),
@@ -702,9 +708,14 @@ class TraktRepository @Inject constructor(
     }
 
     /** 获取全部电影观看历史（跨页拉取），用于统计。带 5 分钟 TTL 缓存 */
-    suspend fun getAllMovieHistory(extended: String = "full"): Result<List<TraktWatchlistMovieItem>> {
+    suspend fun getAllMovieHistory(
+        extended: String = "full",
+        forceRefresh: Boolean = false
+    ): Result<List<TraktWatchlistMovieItem>> {
         val cacheKey = "all_$extended"
-        movieHistoryCache.get(cacheKey)?.let { return Result.success(it) }
+        if (!forceRefresh) {
+            movieHistoryCache.get(cacheKey)?.let { return Result.success(it) }
+        }
         val allItems = mutableListOf<TraktWatchlistMovieItem>()
         var page = 1
         var totalPages = 1
@@ -723,9 +734,14 @@ class TraktRepository @Inject constructor(
     }
 
     /** 获取全部电视剧观看历史（跨页拉取），用于统计。带 5 分钟 TTL 缓存 */
-    suspend fun getAllShowHistory(extended: String = "min"): Result<List<TraktWatchlistShowItem>> {
+    suspend fun getAllShowHistory(
+        extended: String = "min",
+        forceRefresh: Boolean = false
+    ): Result<List<TraktWatchlistShowItem>> {
         val cacheKey = "all_$extended"
-        showHistoryCache.get(cacheKey)?.let { return Result.success(it) }
+        if (!forceRefresh) {
+            showHistoryCache.get(cacheKey)?.let { return Result.success(it) }
+        }
         val allItems = mutableListOf<TraktWatchlistShowItem>()
         var page = 1
         var totalPages = 1
@@ -761,12 +777,12 @@ class TraktRepository @Inject constructor(
     }
 
     /** 获取全部电影想看列表（跨页拉取），用于通知检查 */
-    suspend fun getAllMovieWatchlist(): Result<List<TraktWatchlistMovieItem>> {
+    suspend fun getAllMovieWatchlist(forceRefresh: Boolean = false): Result<List<TraktWatchlistMovieItem>> {
         val allItems = mutableListOf<TraktWatchlistMovieItem>()
         var page = 1
         var totalPages = 1
         while (page <= totalPages) {
-            val result = getMovieWatchlist(page = page, limit = 200)
+            val result = getMovieWatchlist(page = page, limit = 200, forceRefresh = forceRefresh)
             result.onSuccess { (items, tp) ->
                 allItems.addAll(items)
                 totalPages = tp
@@ -779,12 +795,12 @@ class TraktRepository @Inject constructor(
     }
 
     /** 获取全部电视剧想看列表（跨页拉取），用于通知检查 */
-    suspend fun getAllShowWatchlist(): Result<List<TraktWatchlistShowItem>> {
+    suspend fun getAllShowWatchlist(forceRefresh: Boolean = false): Result<List<TraktWatchlistShowItem>> {
         val allItems = mutableListOf<TraktWatchlistShowItem>()
         var page = 1
         var totalPages = 1
         while (page <= totalPages) {
-            val result = getShowWatchlist(page = page, limit = 200)
+            val result = getShowWatchlist(page = page, limit = 200, forceRefresh = forceRefresh)
             result.onSuccess { (items, tp) ->
                 allItems.addAll(items)
                 totalPages = tp

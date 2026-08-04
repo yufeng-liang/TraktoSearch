@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.R
 import com.tracktosearch.data.util.PosterColorExtractor
 import io.mockk.mockk
 import org.junit.Rule
@@ -303,7 +304,9 @@ class MarkRecordComponentsTest {
                 )
             }
         }
-        composeRule.onNodeWithText("Current: Watchlist").assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.mark_records_current_in_watchlist_short)
+        ).assertIsDisplayed()
     }
 
     @Test
@@ -317,7 +320,9 @@ class MarkRecordComponentsTest {
                 )
             }
         }
-        composeRule.onNodeWithText("Current: Watched").assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.mark_records_current_watched_short)
+        ).assertIsDisplayed()
     }
 
     @Test
@@ -332,7 +337,9 @@ class MarkRecordComponentsTest {
                 )
             }
         }
-        composeRule.onNodeWithText("Current: Removed").assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.mark_records_current_none_short)
+        ).assertIsDisplayed()
     }
 
     @Test
@@ -347,6 +354,8 @@ class MarkRecordComponentsTest {
                 )
             }
         }
-        composeRule.onNodeWithText("Current: Removed").assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.mark_records_current_none_short)
+        ).assertIsDisplayed()
     }
 }

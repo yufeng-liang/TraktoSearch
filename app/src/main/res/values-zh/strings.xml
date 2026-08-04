@@ -270,6 +270,7 @@
     <string name="douban_sync_cancelled_banner">同步已取消</string>
     <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
     <string name="douban_sync_result_format">成功 %1$d 条，失败 %2$d 条</string>
+    <string name="douban_sync_error_detail">错误：%1$s</string>
     <string name="douban_sync_failed_list_label">失败项：</string>
     <string name="douban_sync_failed_more_format">...共 %1$d 项失败</string>
     <string name="douban_sync_eta_format">预计剩余 %1$s</string>
@@ -794,7 +795,7 @@
     <string name="settings_douban_resync_running">同步进行中…</string>
     <string name="settings_douban_resync_running_desc">正在同步豆瓣数据,点击查看进度</string>
     <string name="settings_douban_not_logged_in_title">未登录豆瓣</string>
-    <string name="settings_douban_not_logged_in_message">重新同步豆瓣需要先登录豆瓣,是否前往登录?</string>
+    <string name="settings_douban_not_logged_in_message">同步豆瓣需要先登录豆瓣,是否前往登录?</string>
     <string name="settings_douban_not_logged_in_login">前往登录</string>
     <!-- 增量同步冷却期(7天) -->
     <string name="cooldown_remaining_days">冷却中·剩%1$d天</string>
@@ -853,6 +854,12 @@
     <string name="consistency_check_phase_update_douban">更新豆瓣</string>
     <string name="consistency_check_phase_done">完成</string>
     <string name="consistency_check_summary">检查 %1$d 项，发现 %2$d 个冲突，Trakt 更新 %3$d 项，豆瓣更新 %4$d 项，错误 %5$d 项</string>
+    <string name="consistency_check_notification_progress">%1$s（%2$d/%3$d）</string>
+    <string name="consistency_check_notification_progress_with_subphase">%1$s · %2$s（%3$d/%4$d）</string>
+    <string name="consistency_check_notification_stage_with_subphase">%1$s · %2$s</string>
+    <string name="consistency_check_notification_current">当前：%1$s</string>
+    <string name="consistency_check_notification_eta">预计剩余：%1$s</string>
+    <string name="consistency_check_notification_public">状态检查：%1$s</string>
     <string name="consistency_check_sub_wish">想看列表</string>
     <string name="consistency_check_sub_collect">已看列表</string>
     <string name="consistency_check_sub_detail_ck">详情页拿ck</string>
@@ -861,6 +868,13 @@
     <string name="consistency_check_network_failed">网络连接失败,请检查网络后重试</string>
     <string name="consistency_check_network_timeout">网络请求超时,请重试</string>
     <string name="consistency_check_exception">检查异常: %1$s</string>
+    <string name="consistency_check_already_running">状态一致性检查正在运行</string>
+    <string name="consistency_check_trakt_required_title">需要连接 Trakt</string>
+    <string name="consistency_check_trakt_required_message">状态一致性检查需要比较豆瓣与 Trakt 的状态，请先连接 Trakt 账号。</string>
+    <string name="consistency_check_trakt_required_login">连接 Trakt</string>
+    <string name="consistency_check_blocked_title">无法开始一致性检查</string>
+    <string name="consistency_check_blocked_douban_mode">豆瓣独立模式下无法进行状态一致性检查。</string>
+    <string name="consistency_check_blocked_sync">请等待豆瓣同步完成后再检查状态一致性。</string>
     <string name="consistency_check_not_logged_in">豆瓣未登录</string>
     <string name="consistency_check_cookie_expired">豆瓣登录已过期</string>
     <string name="consistency_check_cookie_expired_prompt">豆瓣登录已过期，请重新登录</string>

@@ -31,6 +31,13 @@ import kotlin.random.Random
  *  message 默认英文（ViewModel error 用英文规范），UI 层基于异常类型映射本地化文案。 */
 class DoubanCookieExpiredException(message: String = "Douban cookie expired") : Exception(message)
 
+/** 豆瓣请求在重试后仍失败，供上层区别于 Cookie 失效。 */
+class DoubanNetworkException(
+    message: String,
+    val statusCode: Int? = null,
+    cause: Throwable? = null
+) : IOException(message, cause)
+
 /**
  * 延时信息(用于同步进度弹窗展示倒计时)。
  *
@@ -166,6 +173,7 @@ class DoubanRepository(
      * @param onProgress 进度回调（已处理条目数，总数）
      * @param isCancelled 取消检查回调,返回 true 时立即停止爬取(每页爬完检查一次)
      * @return true=正常爬完或无更多条目；false=Cookie 过期中断
+     * @throws DoubanNetworkException 网络异常或重试耗尽
      */
     suspend fun fetchMarkList(
         userId: String,
@@ -177,7 +185,6 @@ class DoubanRepository(
     ): Boolean {
         var start = 0
         var pageIndex = 1
-        var cookieExpired = false
         var knownTotal: Int? = null
 
         while (true) {
@@ -186,25 +193,32 @@ class DoubanRepository(
             val url = "https://movie.douban.com/people/${userId}/${status.path}?start=${start}&sort=time&mode=grid"
             // 捕获网络异常(超时/连接失败),重试一次
             val html = try {
-                fetchHtml(url, cookie)
+                fetchHtml(url, cookie, validateStatus = true)
             } catch (e: CancellationException) {
                 throw e
+            } catch (_: DoubanCookieExpiredException) {
+                return false
             } catch (e: Exception) {
                 // 网络异常重试一次
                 delayWithEvent(DelayType.DOUBAN_RETRY, 2000L..4000L)
                 try {
-                    fetchHtml(url, cookie)
+                    fetchHtml(url, cookie, validateStatus = true)
                 } catch (e2: CancellationException) {
                     throw e2
+                } catch (_: DoubanCookieExpiredException) {
+                    return false
                 } catch (e2: Exception) {
-                    // 重试仍失败,中止爬取(返回已爬取的数据)
-                    break
+                    throw if (e2 is DoubanNetworkException) {
+                        e2
+                    } else {
+                        DoubanNetworkException(
+                            message = "Douban mark list request failed after retry",
+                            cause = e2
+                        )
+                    }
                 }
             }
-            if (DoubanSpider.isLoginPage(html)) {
-                cookieExpired = true
-                break
-            }
+            if (DoubanSpider.isLoginPage(html)) return false
             val page = DoubanSpider.parseMarkListPage(html)
             if (page.items.isEmpty()) break
 
@@ -222,7 +236,7 @@ class DoubanRepository(
             // 反爬延迟：每页间 5-10 秒
             delayWithEvent(DelayType.DOUBAN_LIST_CRAWL, 5000L..10000L)
         }
-        return !cookieExpired
+        return true
     }
 
     /**
@@ -409,7 +423,11 @@ class DoubanRepository(
         )
     }
 
-    private suspend fun fetchHtml(url: String, cookie: String): String = withContext(Dispatchers.IO) {
+    private suspend fun fetchHtml(
+        url: String,
+        cookie: String,
+        validateStatus: Boolean = false
+    ): String = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", ua)
@@ -417,7 +435,22 @@ class DoubanRepository(
             .header("Referer", "https://movie.douban.com/")
             .build()
         client.newCall(request).execute().use { response ->
-            response.body?.string() ?: ""
+            if (validateStatus) {
+                if (response.code == 401 || response.code == 403) {
+                    throw DoubanCookieExpiredException("Douban cookie expired (HTTP ${response.code})")
+                }
+                if (!response.isSuccessful) {
+                    throw DoubanNetworkException(
+                        message = "Douban request failed with HTTP ${response.code}",
+                        statusCode = response.code
+                    )
+                }
+            }
+            val body = response.body?.string()
+            if (validateStatus && body == null) {
+                throw DoubanNetworkException("Douban response body is empty", response.code)
+            }
+            body ?: ""
         }
     }
 
