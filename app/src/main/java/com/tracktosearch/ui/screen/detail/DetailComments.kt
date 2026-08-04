@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -36,6 +34,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
+import com.tracktosearch.ui.component.NeumorphicFrostedSurface
+import com.tracktosearch.ui.component.isAppDarkTheme
 
 // ==================== 单条评论 ====================
 
@@ -51,17 +51,24 @@ internal fun CommentItem(
     var spoilerRevealed by remember { mutableStateOf(false) }
 
     val displayText = if (showOriginal) comment.comment else (translatedText ?: comment.comment)
+    val isDark = isAppDarkTheme()
 
-    Card(
+    NeumorphicFrostedSurface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
+        isDark = isDark,
+        shape = RoundedCornerShape(18.dp),
+        elevation = 6.dp,
+        blurRadius = 16.dp,
+        shadowOffset = 5.dp,
+        backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.65f),
+        borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color(0xFFD0D5DC).copy(alpha = 0.9f),
+        darkShadowAlpha = if (isDark) 0.25f else 0.16f,
+        lightShadowAlpha = if (isDark) 0.08f else 0.65f,
+        hazeState = null
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             // 用户名 + 评分
             Row(
                 modifier = Modifier.fillMaxWidth(),
