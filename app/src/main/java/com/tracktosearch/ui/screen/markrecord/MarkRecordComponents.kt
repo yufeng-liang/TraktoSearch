@@ -75,7 +75,7 @@ fun MarkRecordItemRow(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    // 移除分类（已无标记）的卡片：保留海报沉浸色,叠加暗化遮罩并降透明度
+    // 移除分类（已无标记）的卡片：通过外层透明度让整张卡片均匀变暗
     val isRemoved = item.currentStatus == CurrentMarkStatus.NONE
     var dominantColor by remember { mutableStateOf<Color?>(null) }
 
@@ -230,14 +230,6 @@ fun MarkRecordItemRow(
             }
         }
 
-        // 移除分类：叠暗色遮罩
-        if (isRemoved) {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .background(Color.Black.copy(alpha = 0.35f))
-            )
-        }
     }
 }
 
