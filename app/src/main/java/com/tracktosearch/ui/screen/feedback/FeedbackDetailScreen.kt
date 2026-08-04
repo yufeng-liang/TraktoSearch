@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.repeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -170,15 +171,26 @@ fun FeedbackDetailScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         item(key = "original") { OriginalFeedbackCard(feedback = feedback, onScreenshotClick = { urls, index -> fullscreenUrls = urls; fullscreenIndex = index }) }
-                        if (replies.isNotEmpty()) {
+                        if (replies.isNotEmpty() || state.isRefreshing) {
                             item(key = "conv_title") {
-                                Text(
-                                    text = stringResource(R.string.feedback_conversation),
-                                    fontSize = 15.sp,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(top = 8.dp)
-                                )
+                                Row(
+                                    modifier = Modifier.padding(top = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.feedback_conversation),
+                                        fontSize = 15.sp,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    if (state.isRefreshing) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(14.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                    }
+                                }
                             }
                         }
                         items(replies, key = { it.id }) { reply -> ConversationBubble(reply = reply, highlight = highlightReplyId == reply.id, onHighlightDone = { if (highlightReplyId == reply.id) highlightReplyId = null }, onScreenshotClick = { urls, index -> fullscreenUrls = urls; fullscreenIndex = index }) }
@@ -286,53 +298,44 @@ private fun OriginalFeedbackCard(feedback: com.tracktosearch.data.remote.feedbac
                 }
             }
 
-            Text(
-                text = stringResource(R.string.feedback_app_info),
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.SemiBold
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            val appInfo = buildList {
+                add(stringResource(R.string.feedback_app_version, feedback.app_version))
+                add(stringResource(R.string.feedback_device_model, feedback.device_model))
+                feedback.trakt_username?.takeIf { it.isNotBlank() }?.let {
+                    add(stringResource(R.string.feedback_trakt_username, it))
+                }
+                feedback.douban_username?.takeIf { it.isNotBlank() }?.let {
+                    add(stringResource(R.string.feedback_douban_username, it))
+                }
+                feedback.contact?.takeIf { it.isNotBlank() }?.let {
+                    add(stringResource(R.string.feedback_contact_value, it))
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    text = stringResource(R.string.feedback_app_version, feedback.app_version),
-                    modifier = Modifier.weight(0.8f),
+                    text = stringResource(R.string.feedback_app_info),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    fontWeight = FontWeight.SemiBold
                 )
-                Text(
-                    text = stringResource(R.string.feedback_device_model, feedback.device_model),
-                    modifier = Modifier.weight(1.2f),
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            feedback.trakt_username?.takeIf { it.isNotBlank() }?.let {
-                Text(
-                    text = stringResource(R.string.feedback_trakt_username, it),
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            feedback.douban_username?.takeIf { it.isNotBlank() }?.let {
-                Text(
-                    text = stringResource(R.string.feedback_douban_username, it),
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            feedback.contact?.takeIf { it.isNotBlank() }?.let {
-                Text(
-                    text = stringResource(R.string.feedback_contact_value, it),
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                appInfo.chunked(2).forEach { rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        rowItems.forEach { value ->
+                            Text(
+                                text = value,
+                                modifier = Modifier.weight(1f),
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        if (rowItems.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
             }
         }
     }
@@ -349,32 +352,44 @@ private fun ConversationBubble(reply: FeedbackReply, highlight: Boolean, onHighl
     val avatarColor = if (isDeveloper) Color(0xFF34D399) else MaterialTheme.colorScheme.primary
     val avatarLabel = if (isDeveloper) "D" else "我"
 
-    val targetAlpha = if (highlight) 0.3f else 1f
-    val animatedAlpha by animateFloatAsState(targetValue = targetAlpha, animationSpec = if (highlight) repeatable(iterations = 3, animation = tween(1500), repeatMode = RepeatMode.Reverse) else tween(300), finishedListener = { if (highlight) onHighlightDone() }, label = "highlight")
-    val finalBubbleColor = if (isDeveloper) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = animatedAlpha) else MaterialTheme.colorScheme.primary.copy(alpha = animatedAlpha)
+    val highlightProgress by animateFloatAsState(
+        targetValue = if (highlight) 1f else 0f,
+        animationSpec = if (highlight) {
+            repeatable(iterations = 6, animation = tween(180), repeatMode = RepeatMode.Reverse)
+        } else {
+            tween(250)
+        },
+        finishedListener = { if (highlight) onHighlightDone() },
+        label = "highlight"
+    )
+    val highlightBorder = if (highlightProgress > 0f) {
+        BorderStroke(2.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = highlightProgress))
+    } else {
+        null
+    }
 
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = arrangement, verticalAlignment = Alignment.Top) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = arrangement, verticalAlignment = Alignment.Bottom) {
         if (isDeveloper) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(avatarColor),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(avatarLabel, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(stringResource(R.string.feedback_role_developer), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(2.dp))
+                Box(
+                    modifier = Modifier.size(32.dp).clip(CircleShape).background(avatarColor),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(avatarLabel, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
             }
             Spacer(Modifier.width(8.dp))
         }
-        Column(
-            modifier = Modifier
-                .fillMaxWidth(0.8f)
-                .widthIn(max = 320.dp),
-            horizontalAlignment = if (isDeveloper) Alignment.Start else Alignment.End
+        Surface(
+            modifier = Modifier.widthIn(max = 320.dp),
+            shape = borderRadius,
+            color = bubbleColor,
+            border = highlightBorder,
+            tonalElevation = if (isDeveloper) 1.dp else 0.dp
         ) {
-            Text(text = if (isDeveloper) stringResource(R.string.feedback_role_developer) else stringResource(R.string.feedback_role_me), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(2.dp))
-            Surface(shape = borderRadius, color = finalBubbleColor, tonalElevation = if (isDeveloper) 1.dp else 0.dp) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(text = reply.content, fontSize = 14.sp, color = bubbleContentColor)
                     val screenshots = reply.screenshots
@@ -401,20 +416,29 @@ private fun ConversationBubble(reply: FeedbackReply, highlight: Boolean, onHighl
                     }
                 }
             }
-            Text(text = formatTime(reply.created_at), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        if (!isDeveloper) {
-            Spacer(Modifier.width(8.dp))
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(avatarColor),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(avatarLabel, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            if (!isDeveloper) {
+                Spacer(Modifier.width(8.dp))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(stringResource(R.string.feedback_role_me), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(2.dp))
+                    Box(
+                        modifier = Modifier.size(32.dp).clip(CircleShape).background(avatarColor),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(avatarLabel, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
+        Text(
+            text = formatTime(reply.created_at),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 40.dp),
+            textAlign = if (isDeveloper) TextAlign.Start else TextAlign.End,
+            fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -473,15 +497,6 @@ private fun ReplyBar(text: String, onTextChange: (String) -> Unit, screenshots: 
             (replyState as? FeedbackViewModel.ReplyState.Error)?.let {
                 Text(it.message, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
             }
-            val progressText = when (replyState) {
-                is FeedbackViewModel.ReplyState.Uploading -> stringResource(
-                    R.string.feedback_reply_uploading,
-                    replyState.current + 1,
-                    replyState.total
-                )
-                is FeedbackViewModel.ReplyState.Sending -> stringResource(R.string.feedback_submitting)
-                else -> null
-            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -525,9 +540,6 @@ private fun ReplyBar(text: String, onTextChange: (String) -> Unit, screenshots: 
                         )
                     }
                 }
-            }
-            progressText?.let {
-                Text(it, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

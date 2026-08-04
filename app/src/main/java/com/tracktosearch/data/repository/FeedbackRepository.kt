@@ -73,7 +73,16 @@ class FeedbackRepository(
     }
 
     suspend fun getMessages(limit: Int = 50, offset: Int = 0): Result<MessagesResponse> {
-        return try { val response = api.getMessages(limit, offset); val data = response.body()?.data; if (response.isSuccessful && data != null) Result.success(data) else Result.failure(IllegalStateException(response.body()?.message ?: "HTTP ${response.code()}")) }
+        return try {
+            val response = api.getMessages(limit, offset)
+            val data = response.body()?.data
+            if (response.isSuccessful && data != null) {
+                cacheStore.saveMessages(data)
+                Result.success(data)
+            } else {
+                Result.failure(IllegalStateException(response.body()?.message ?: "HTTP ${response.code()}"))
+            }
+        }
         catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 

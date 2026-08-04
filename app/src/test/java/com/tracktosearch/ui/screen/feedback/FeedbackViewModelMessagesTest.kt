@@ -13,8 +13,10 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -82,5 +84,39 @@ class FeedbackViewModelMessagesTest {
 
         val state = viewModel.messagesState.value as FeedbackViewModel.MessagesState.Success
         assertThat(state.items.map { it.is_unread }).containsExactly(false, false)
+    }
+
+    @Test
+    fun cachedMessagesRemainVisibleWhileRefreshIsInFlight() = runTest {
+        val cached = MessagesResponse(listOf(message("cached", true)), 50, 0, 1, false)
+        val networkResult = CompletableDeferred<Result<MessagesResponse>>()
+        every { cacheStore.getCachedMessages() } returns cached
+        coEvery { feedbackRepository.getMessages(50, 0) } coAnswers { networkResult.await() }
+        val viewModel = createViewModel()
+
+        viewModel.loadMessages(refresh = true)
+        runCurrent()
+
+        assertThat((viewModel.messagesState.value as FeedbackViewModel.MessagesState.Success).items.map { it.id })
+            .containsExactly("cached")
+
+        networkResult.complete(Result.success(MessagesResponse(listOf(message("fresh", false)), 50, 0, 1, false)))
+        advanceUntilIdle()
+        assertThat((viewModel.messagesState.value as FeedbackViewModel.MessagesState.Success).items.map { it.id })
+            .containsExactly("fresh")
+    }
+
+    @Test
+    fun refreshFailureKeepsCachedMessagesVisible() = runTest {
+        val cached = MessagesResponse(listOf(message("cached", true)), 50, 0, 1, false)
+        every { cacheStore.getCachedMessages() } returns cached
+        coEvery { feedbackRepository.getMessages(50, 0) } returns Result.failure(IllegalStateException("NETWORK_FAILED"))
+        val viewModel = createViewModel()
+
+        viewModel.loadMessages(refresh = true)
+        advanceUntilIdle()
+
+        assertThat((viewModel.messagesState.value as FeedbackViewModel.MessagesState.Success).items.map { it.id })
+            .containsExactly("cached")
     }
 }

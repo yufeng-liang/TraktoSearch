@@ -45,7 +45,7 @@ class FeedbackViewModel @Inject constructor(
 
     sealed interface DetailState {
         data object Loading : DetailState
-        data class Success(val data: FeedbackDetailResponse) : DetailState
+        data class Success(val data: FeedbackDetailResponse, val isRefreshing: Boolean = false) : DetailState
         data class Error(val message: String) : DetailState
     }
 
@@ -106,39 +106,79 @@ class FeedbackViewModel @Inject constructor(
     fun loadList(refresh: Boolean = false) {
         val currentOffset = (_listState.value as? ListState.Success)?.offset ?: 0
         val offset = if (refresh) 0 else currentOffset
-        if (refresh) _listState.value = ListState.Loading
-
         loadListJob?.cancel()
         loadListJob = viewModelScope.launch {
             try {
+                // 先恢复本地列表；有缓存时保持内容可见，网络请求只做静默更新。
+                if (refresh && _listState.value !is ListState.Success) {
+                    cacheStore.loadFromDisk()
+                    cacheStore.getCachedList()?.let { cached ->
+                        _listState.value = ListState.Success(
+                            items = cached.feedbacks,
+                            hasMore = cached.hasMore,
+                            offset = cached.offset + cached.feedbacks.size
+                        )
+                    }
+                }
+                if (refresh && _listState.value !is ListState.Success) {
+                    _listState.value = ListState.Loading
+                }
                 val result = feedbackRepository.getMine(limit = 20, offset = offset)
                 result.onSuccess { response ->
                     val prev = (_listState.value as? ListState.Success)?.items ?: emptyList()
                     val items = if (refresh) response.feedbacks else prev + response.feedbacks
                     _listState.value = ListState.Success(items, response.hasMore, offset + response.feedbacks.size)
                 }.onFailure { e ->
-                    _listState.value = ListState.Error(e.message ?: "LOAD_FAILED")
+                    if (_listState.value !is ListState.Success) {
+                        _listState.value = ListState.Error(e.message ?: "LOAD_FAILED")
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _listState.value = ListState.Error(e.message ?: "LOAD_FAILED")
+                if (_listState.value !is ListState.Success) {
+                    _listState.value = ListState.Error(e.message ?: "LOAD_FAILED")
+                }
             }
         }
     }
 
     /** 加载详情 */
     fun loadDetail(id: String) {
-        _detailState.value = DetailState.Loading
+        val current = (_detailState.value as? DetailState.Success)
+            ?.takeIf { it.data.feedback.id == id }
+        if (current != null) {
+            _detailState.value = current.copy(isRefreshing = true)
+        } else {
+            _detailState.value = DetailState.Loading
+        }
         viewModelScope.launch {
             try {
+                if (current == null) {
+                    cacheStore.loadFromDisk()
+                    cacheStore.getCachedDetail(id)?.let {
+                        _detailState.value = DetailState.Success(it, isRefreshing = true)
+                    }
+                }
                 val result = feedbackRepository.getDetail(id)
                 result.onSuccess { _detailState.value = DetailState.Success(it) }
-                    .onFailure { e -> _detailState.value = DetailState.Error(e.message ?: "LOAD_FAILED") }
+                    .onFailure { e ->
+                        if (_detailState.value !is DetailState.Success) {
+                            _detailState.value = DetailState.Error(e.message ?: "LOAD_FAILED")
+                        } else {
+                            _detailState.value = (_detailState.value as DetailState.Success)
+                                .copy(isRefreshing = false)
+                        }
+                    }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _detailState.value = DetailState.Error(e.message ?: "LOAD_FAILED")
+                if (_detailState.value !is DetailState.Success) {
+                    _detailState.value = DetailState.Error(e.message ?: "LOAD_FAILED")
+                } else {
+                    _detailState.value = (_detailState.value as DetailState.Success)
+                        .copy(isRefreshing = false)
+                }
             }
         }
     }
@@ -253,21 +293,36 @@ class FeedbackViewModel @Inject constructor(
         if (filter != null) _messagesFilter.value = filter
         val currentOffset = (_messagesState.value as? MessagesState.Success)?.offset ?: 0
         val offset = if (refresh) 0 else currentOffset
-        if (refresh) {
-            allMessages = emptyList()
+        val hadVisibleMessages = _messagesState.value is MessagesState.Success
+        if (refresh && !hadVisibleMessages) {
             _messagesState.value = MessagesState.Loading
         }
         viewModelScope.launch {
             try {
+                if (refresh && !hadVisibleMessages) {
+                    cacheStore.loadMessagesFromDisk()
+                    cacheStore.getCachedMessages()?.let { cached ->
+                        allMessages = cached.messages
+                        _messagesState.value = MessagesState.Success(
+                            items = applyFilter(allMessages, _messagesFilter.value),
+                            hasMore = cached.hasMore,
+                            offset = cached.offset + cached.messages.size
+                        )
+                    }
+                }
                 val result = feedbackRepository.getMessages(limit = 50, offset = offset)
                 result.onSuccess { response ->
                     allMessages = if (refresh) response.messages else allMessages + response.messages
                     _messagesState.value = MessagesState.Success(applyFilter(allMessages, _messagesFilter.value), response.hasMore, offset + response.messages.size)
                 }.onFailure { e ->
-                    _messagesState.value = MessagesState.Error(e.message ?: "LOAD_FAILED")
+                    if (_messagesState.value !is MessagesState.Success) {
+                        _messagesState.value = MessagesState.Error(e.message ?: "LOAD_FAILED")
+                    }
                 }
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
-                _messagesState.value = MessagesState.Error(e.message ?: "LOAD_FAILED")
+                if (_messagesState.value !is MessagesState.Success) {
+                    _messagesState.value = MessagesState.Error(e.message ?: "LOAD_FAILED")
+                }
             }
         }
     }
