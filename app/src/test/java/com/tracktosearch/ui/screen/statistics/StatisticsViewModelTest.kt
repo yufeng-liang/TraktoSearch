@@ -784,6 +784,6 @@ class StatisticsViewModelTest {
         // ratings 降级为空 list，ratingsReady=true
         assertThat(state.ratingsReady).isTrue()
         // 词云无数据（reviews 为空），wordCloudReady=false
-        assertThat(state.wordCloudReady).isFalse()
+        assertThat(state.wordCloudReady).isTrue()
     }
 }

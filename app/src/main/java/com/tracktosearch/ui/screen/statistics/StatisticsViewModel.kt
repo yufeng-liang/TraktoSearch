@@ -130,16 +130,20 @@ class StatisticsViewModel @Inject constructor(
                         val reviews = userReviewRepository.getAllReviews()
                         val comments = reviews.mapNotNull { it.comment?.takeIf { c -> c.isNotBlank() } }
                         val freq = ReviewTokenizer.tokenize(comments)
-                        freq.entries
-                            .sortedByDescending { it.value }
-                            .map { WordCloudItem(it.key, it.value) }
+                        Result.success(
+                            freq.entries
+                                .sortedByDescending { it.value }
+                                .map { WordCloudItem(it.key, it.value) }
+                        )
                     } catch (_: Exception) {
-                        emptyList<WordCloudItem>()
+                        Result.failure(Exception("WORD_CLOUD_LOAD_FAILED"))
                     }
                 }
 
                 // 渐进式发布：每拿到一个依赖就计算并刷新已就绪的区块
-                val words = wordCloudDeferred.await()
+                val wordCloudResult = wordCloudDeferred.await()
+                val words = wordCloudResult.getOrDefault(emptyList())
+                val wordCloudReady = wordCloudResult.isSuccess
                 var movies: List<TraktWatchlistMovieItem>? = null
                 var shows: List<TraktWatchlistShowItem>? = null
                 var watchedShows: List<TraktWatchedShow>? = null
@@ -149,7 +153,8 @@ class StatisticsViewModel @Inject constructor(
                 // 词云（本地、最快）先发布
                 publish(
                     movies = movies, shows = shows, watchedShows = watchedShows,
-                    userStats = userStats, allRatings = allRatings, words = words
+                    userStats = userStats, allRatings = allRatings, words = words,
+                    wordCloudReady = wordCloudReady
                 )
 
                 // 电影历史（致命）：到达后观影时长即用本地 runtime 兜底
@@ -157,29 +162,29 @@ class StatisticsViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(initialLoading = false, error = it.message ?: context.getString(R.string.error_load_failed))
                     return@launch
                 }
-                publish(movies, shows, watchedShows, userStats, allRatings, words)
+                publish(movies, shows, watchedShows, userStats, allRatings, words, wordCloudReady)
 
                 // 剧集历史（致命）：+电影后热力图就绪
                 shows = showHistoryDeferred.await().getOrElse {
                     _uiState.value = _uiState.value.copy(initialLoading = false, error = it.message ?: context.getString(R.string.error_load_failed))
                     return@launch
                 }
-                publish(movies, shows, watchedShows, userStats, allRatings, words)
+                publish(movies, shows, watchedShows, userStats, allRatings, words, wordCloudReady)
 
                 // 已看剧（致命）：+电影+剧集后概览与类型分布就绪
                 watchedShows = watchedShowsDeferred.await().getOrElse {
                     _uiState.value = _uiState.value.copy(initialLoading = false, error = it.message ?: context.getString(R.string.error_load_failed))
                     return@launch
                 }
-                publish(movies, shows, watchedShows, userStats, allRatings, words)
+                publish(movies, shows, watchedShows, userStats, allRatings, words, wordCloudReady)
 
                 // 用户统计（非致命，优先用于时长/集数）
                 userStats = userStatsDeferred.await().getOrNull()
-                publish(movies, shows, watchedShows, userStats, allRatings, words)
+                publish(movies, shows, watchedShows, userStats, allRatings, words, wordCloudReady)
 
                 // 评分（非致命）
                 allRatings = ratingsDeferred.await().getOrDefault(emptyList())
-                publish(movies, shows, watchedShows, userStats, allRatings, words)
+                publish(movies, shows, watchedShows, userStats, allRatings, words, wordCloudReady)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     initialLoading = false,
@@ -199,7 +204,8 @@ class StatisticsViewModel @Inject constructor(
         watchedShows: List<TraktWatchedShow>?,
         userStats: TraktUserStatsResponse?,
         allRatings: List<TraktRatingItem>?,
-        words: List<WordCloudItem>
+        words: List<WordCloudItem>,
+        wordCloudReady: Boolean
     ) {
         val prev = _uiState.value
 
@@ -269,8 +275,6 @@ class StatisticsViewModel @Inject constructor(
         val totalRatings = allRatings?.size ?: 0
         val averageRating = if (totalRatings > 0) allRatings!!.map { it.rating }.average() else 0.0
         val ratingDistribution = allRatings?.groupBy { it.rating }?.mapValues { it.value.size } ?: emptyMap()
-
-        val wordCloudReady = words.isNotEmpty()
 
         // 首个区块就绪即退出整页骨架
         val initialLoading = prev.initialLoading &&

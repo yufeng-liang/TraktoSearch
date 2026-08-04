@@ -133,9 +133,7 @@ fun StatisticsScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            if (uiState.initialLoading) {
-                StatisticsSkeleton(hazeState = statsHazeState)
-            } else if (uiState.error != null) {
+            if (uiState.error != null && !uiState.watchTimeReady && !uiState.overviewReady) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -296,13 +294,17 @@ fun StatisticsScreen(
                             listState.layoutInfo.visibleItemsInfo.any { it.key == "pie" }
                         }
                     }
-                    if (uiState.genreReady && uiState.genreDistribution.isNotEmpty()) {
-                        SectionCard(title = stringResource(R.string.statistics_genre_distribution)) {
+                    SectionCard(title = stringResource(R.string.statistics_genre_distribution)) {
+                        if (uiState.genreReady && uiState.genreDistribution.isNotEmpty()) {
                             GenrePieChart(genreDistribution = uiState.genreDistribution, isVisible = isVisible)
-                        }
-                    } else if (!uiState.genreReady) {
-                        SectionCard(title = stringResource(R.string.statistics_genre_distribution)) {
+                        } else if (!uiState.genreReady) {
                             StatisticsSkeletonContent(StatisticsSkeletonVariant.PIE)
+                        } else {
+                            Text(
+                                text = stringResource(R.string.common_no_data),
+                                modifier = Modifier.padding(24.dp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
@@ -314,13 +316,17 @@ fun StatisticsScreen(
                             listState.layoutInfo.visibleItemsInfo.any { it.key == "ranking" }
                         }
                     }
-                    if (uiState.genreReady && uiState.genreDistribution.isNotEmpty()) {
-                        SectionCard(title = stringResource(R.string.statistics_genre_ranking)) {
+                    SectionCard(title = stringResource(R.string.statistics_genre_ranking)) {
+                        if (uiState.genreReady && uiState.genreDistribution.isNotEmpty()) {
                             GenreRanking(genreDistribution = uiState.genreDistribution, isVisible = isVisible)
-                        }
-                    } else if (!uiState.genreReady) {
-                        SectionCard(title = stringResource(R.string.statistics_genre_ranking)) {
+                        } else if (!uiState.genreReady) {
                             StatisticsSkeletonContent(StatisticsSkeletonVariant.RANKING)
+                        } else {
+                            Text(
+                                text = stringResource(R.string.common_no_data),
+                                modifier = Modifier.padding(24.dp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
@@ -1370,7 +1376,48 @@ private fun StatisticsSkeletonContent(
             }
         }
 
-        StatisticsSkeletonVariant.WORD_CLOUD,
+        StatisticsSkeletonVariant.WORD_CLOUD -> {
+            Column(
+                modifier = modifier.fillMaxWidth().height(220.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically)
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    listOf(76.dp, 120.dp, 58.dp).forEach { width ->
+                        Box(
+                            modifier = Modifier
+                                .width(width)
+                                .height(24.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(brush)
+                        )
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    listOf(52.dp, 148.dp).forEach { width ->
+                        Box(
+                            modifier = Modifier
+                                .width(width)
+                                .height(34.dp)
+                                .clip(RoundedCornerShape(17.dp))
+                                .background(brush)
+                        )
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    listOf(108.dp, 68.dp, 92.dp).forEach { width ->
+                        Box(
+                            modifier = Modifier
+                                .width(width)
+                                .height(18.dp)
+                                .clip(RoundedCornerShape(9.dp))
+                                .background(brush)
+                        )
+                    }
+                }
+            }
+        }
+
         StatisticsSkeletonVariant.PIE -> {
             Column(
                 modifier = modifier.fillMaxWidth(),
