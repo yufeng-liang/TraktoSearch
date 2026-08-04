@@ -8,6 +8,7 @@ import com.tracktosearch.data.local.LastConsistencyCheckStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.remote.douban.DelayInfo
+import com.tracktosearch.data.remote.douban.DoubanNetworkException
 import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.douban.MarkWriteResult
 import com.tracktosearch.data.remote.trakt.dto.TraktSyncResponse
@@ -31,7 +32,7 @@ import org.robolectric.annotation.Config
 /**
  * DoubanTraktStatusConsistencyChecker 单元测试。
  *
- * 覆盖点（共12个）：
+ * 覆盖点（核心行为）：
  * 1. checkAndUnify() 空表 → 返回 isComplete=true，不调用任何更新方法
  * 2. checkAndUnify() 一致状态（douban=collect+trakt=watched，douban=wish+trakt=watchlist）→ 无更新，conflictsFound=0
  * 3. checkAndUnify() douban=collect + trakt=watchlist → 冲突，traktNeedWatched，调用 batchMarkAsWatched
@@ -41,7 +42,7 @@ import org.robolectric.annotation.Config
  * 7. checkAndUnify() traktId=null → skipped 计数
  * 8. checkAndUnify() 完成后调用 lastConsistencyCheckStorage.recordCheck()
  * 9. checkAndUnify() 豆瓣侧更新成功 → doubanUpdated 计数正确，调用 updateStatus
- * 10. checkAndUnifyWithCrawl() 未登录豆瓣 → checkProgress 最终 cookieExpired=true, isComplete=true
+ * 10. checkAndUnifyWithCrawl() 未登录豆瓣 → checkProgress 最终 neverLoggedInDouban=true、cookieExpired=false、isComplete=true
  * 11. checkAndUnifyWithCrawl() 已在运行 → 返回 false
  * 12. resetProgress() 非运行时重置为初始值；isRunning() checkAndUnify 后为 false
  *
@@ -442,15 +443,15 @@ class DoubanTraktStatusConsistencyCheckerTest {
     }
 
     // ============================================================
-    // 测试点10：checkAndUnifyWithCrawl() 未登录 → cookieExpired=true, isComplete=true
+    // 测试点10：checkAndUnifyWithCrawl() 未登录 → neverLoggedInDouban=true, cookieExpired=false, isComplete=true
     // ============================================================
 
     /**
      * 测试点10：checkAndUnifyWithCrawl() 未登录豆瓣（getCredentials 返回 null）
-     * → checkProgress 最终 cookieExpired=true, isComplete=true。
+     * → checkProgress 最终 neverLoggedInDouban=true、cookieExpired=false、isComplete=true。
      */
     @Test
-    fun checkAndUnifyWithCrawl_未登录_cookieExpiredTrueIsCompleteTrue() = runTest {
+    fun checkAndUnifyWithCrawl_neverLoggedIn_isCompleteTrue() = runTest {
         every { doubanAuthStorage.getCredentials() } returns null
 
         val started = checker.checkAndUnifyWithCrawl()
@@ -599,10 +600,10 @@ class DoubanTraktStatusConsistencyCheckerTest {
     }
 
     /**
-     * 测试点15：checkAndUnify() Trakt 冲突清理失败 → 仅记录日志，不影响完成状态
+     * 测试点15：checkAndUnify() Trakt 冲突清理失败 → 计入错误，但仍保持完成状态
      */
     @Test
-    fun checkAndUnify_Trakt冲突清理失败_仅记录日志() = runTest {
+    fun checkAndUnify_Trakt冲突清理失败_计入错误但保持完成() = runTest {
         val items = listOf(
             buildSyncedItem(doubanId = "db-1", traktId = 1, status = "collect")
         )
@@ -616,8 +617,160 @@ class DoubanTraktStatusConsistencyCheckerTest {
 
         val result = checker.checkAndUnify()
 
-        // 仍完成（失败仅记录日志）
+        // 仍完成，同时把失败条数计入 errors
         assertThat(result.isComplete).isTrue()
+        assertThat(result.errors).isEqualTo(1)
         coVerify(exactly = 1) { traktRepository.batchRemoveFromWatchlist(any(), any()) }
+    }
+
+    @Test
+    fun checkAndUnify_daoReadFailure_countsErrorWithoutWrites() = runTest {
+        coEvery { doubanSyncedItemDao.getAllSyncedItems() } throws IllegalStateException("dao read failed")
+
+        val result = checker.checkAndUnify()
+
+        assertThat(result.isComplete).isTrue()
+        assertThat(result.errors).isEqualTo(1)
+        coVerify(exactly = 0) { traktRepository.batchMarkAsWatched(any(), any()) }
+        coVerify(exactly = 0) { traktRepository.batchAddToWatchlist(any(), any()) }
+    }
+
+    @Test
+    fun checkAndUnify_traktSnapshotFailure_countsErrorWithoutWrites() = runTest {
+        coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns listOf(
+            buildSyncedItem(doubanId = "db-1", traktId = 1, status = "collect")
+        )
+        coEvery { traktRepository.loadWatchlistWatchedIds() } throws IllegalStateException("trakt read failed")
+
+        val result = checker.checkAndUnify()
+
+        assertThat(result.isComplete).isTrue()
+        assertThat(result.errors).isEqualTo(1)
+        coVerify(exactly = 0) { traktRepository.batchMarkAsWatched(any(), any()) }
+        coVerify(exactly = 0) { traktRepository.batchAddToWatchlist(any(), any()) }
+    }
+
+    @Test
+    fun checkAndUnify_traktBatchFailure_countsError() = runTest {
+        coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns listOf(
+            buildSyncedItem(doubanId = "db-1", traktId = 1, status = "collect")
+        )
+        every { traktRepository.getWatchlistWatchedIds() } returns WatchlistWatchedIds()
+        coEvery { traktRepository.loadWatchlistWatchedIds() } returns WatchlistWatchedIds()
+        coEvery {
+            traktRepository.batchMarkAsWatched(any(), any())
+        } returns Result.failure(IllegalStateException("trakt write failed"))
+
+        val result = checker.checkAndUnify()
+
+        assertThat(result.isComplete).isTrue()
+        assertThat(result.traktUpdated).isEqualTo(0)
+        assertThat(result.errors).isEqualTo(1)
+    }
+
+    @Test
+    fun checkAndUnify_traktConflictCleanupFailure_countsError() = runTest {
+        coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns listOf(
+            buildSyncedItem(doubanId = "db-1", traktId = 1, status = "collect")
+        )
+        val conflictIds = WatchlistWatchedIds(
+            movieWatchedTraktIds = setOf(1),
+            movieWatchlistTraktIds = setOf(1)
+        )
+        every { traktRepository.getWatchlistWatchedIds() } returns conflictIds
+        coEvery { traktRepository.loadWatchlistWatchedIds() } returns conflictIds
+        coEvery {
+            traktRepository.batchRemoveFromWatchlist(any(), any())
+        } returns Result.failure(IllegalStateException("conflict cleanup failed"))
+
+        val result = checker.checkAndUnify()
+
+        assertThat(result.isComplete).isTrue()
+        assertThat(result.errors).isEqualTo(1)
+    }
+
+    @Test
+    fun checkAndUnify_daoStatusWriteFailure_doesNotCountAsDoubanUpdate() = runTest {
+        coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns listOf(
+            buildSyncedItem(doubanId = "db-1", traktId = 1, status = "wish")
+        )
+        every { traktRepository.getWatchlistWatchedIds() } returns WatchlistWatchedIds(
+            movieWatchedTraktIds = setOf(1)
+        )
+        coEvery { traktRepository.loadWatchlistWatchedIds() } returns WatchlistWatchedIds(
+            movieWatchedTraktIds = setOf(1)
+        )
+        stubLoggedIn()
+        stubDoubanMarkSuccess()
+        coEvery { doubanSyncedItemDao.updateStatus(any(), any(), any()) } throws
+            IllegalStateException("dao status write failed")
+
+        val result = checker.checkAndUnify()
+
+        assertThat(result.doubanUpdated).isEqualTo(0)
+        assertThat(result.errors).isEqualTo(1)
+    }
+
+    @Test
+    fun checkAndUnifyWithCrawl_forcesTraktSnapshotRefresh() = runTest {
+        stubLoggedIn()
+        coEvery {
+            doubanRepository.fetchMarkList(any(), any(), any(), any(), any(), any())
+        } returns true
+        coEvery {
+            traktRepository.loadWatchlistWatchedIds(forceRefresh = true)
+        } returns WatchlistWatchedIds()
+        every { traktRepository.getWatchlistWatchedIds() } returns WatchlistWatchedIds()
+        coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns listOf(
+            buildSyncedItem(doubanId = "db-1", traktId = 1, status = "collect")
+        )
+
+        assertThat(checker.checkAndUnifyWithCrawl()).isTrue()
+        assertThat(waitForCompletion()).isTrue()
+
+        coVerify(exactly = 1) { traktRepository.loadWatchlistWatchedIds(forceRefresh = true) }
+        coVerify(exactly = 0) { traktRepository.loadWatchlistWatchedIds() }
+    }
+
+    @Test
+    fun checkAndUnifyWithCrawl_networkFailureIsNotCookieExpiry() = runTest {
+        stubLoggedIn()
+        coEvery {
+            doubanRepository.fetchMarkList(any(), any(), any(), any(), any(), any())
+        } throws DoubanNetworkException("network failed")
+
+        assertThat(checker.checkAndUnifyWithCrawl()).isTrue()
+        assertThat(waitForCompletion()).isTrue()
+
+        val progress = checker.checkProgress.value
+        assertThat(progress.cookieExpired).isFalse()
+        assertThat(progress.errors).isEqualTo(1)
+        assertThat(progress.phase).isEqualTo(
+            appContext.getString(com.tracktosearch.R.string.consistency_check_network_failed)
+        )
+    }
+
+    @Test
+    fun checkAndUnifyWithCrawl_emptyRemoteListStillProcessesLocalItems() = runTest {
+        stubLoggedIn()
+        val item = buildSyncedItem(doubanId = "db-1", traktId = 1, status = "wish")
+        coEvery { doubanRepository.fetchMarkList(any(), any(), any(), any(), any(), any()) } returns true
+        coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns listOf(item)
+        val watchedIds = WatchlistWatchedIds(movieWatchedTraktIds = setOf(1))
+        coEvery {
+            traktRepository.loadWatchlistWatchedIds(forceRefresh = true)
+        } returns watchedIds
+        every { traktRepository.getWatchlistWatchedIds() } returns watchedIds
+        stubDoubanMarkSuccess()
+
+        assertThat(checker.checkAndUnifyWithCrawl()).isTrue()
+        assertThat(waitForCompletion()).isTrue()
+
+        val progress = checker.checkProgress.value
+        assertThat(progress.totalChecked).isEqualTo(1)
+        assertThat(progress.doubanUpdated).isEqualTo(1)
+        coVerify(exactly = 1) {
+            doubanRepository.markInterestByCk("collect", "db-1", any(), any())
+        }
     }
 }

@@ -38,11 +38,16 @@ import org.robolectric.annotation.Config
 class SearchHistoryStorageTest {
 
     private val appContext: Context = RuntimeEnvironment.getApplication()
+    private val testPreferences = appContext.getSharedPreferences(
+        "search_history_test",
+        Context.MODE_PRIVATE
+    )
     private lateinit var storage: SearchHistoryStorage
 
     @Before
     fun setUp() = runTest {
-        storage = SearchHistoryStorage(appContext)
+        testPreferences.edit().clear().commit()
+        storage = SearchHistoryStorage(appContext, testPreferences)
         // 清空 DataStore，避免跨测试污染（DataStore name 固定为 "search_history"）
         storage.clear()
     }

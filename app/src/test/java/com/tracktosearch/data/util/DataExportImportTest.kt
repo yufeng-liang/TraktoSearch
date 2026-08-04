@@ -133,6 +133,8 @@ class DataExportImportTest {
     fun parseImdbCsv_fixtureFile_parsesAllRowsCorrectly() {
         val csv = javaClass.getResourceAsStream("/fixtures/imdb/ratings.csv")
             ?.bufferedReader()?.use { it.readText() }
+            ?.replace("\r\n", "\n")
+            ?.replace('\r', '\n')
             ?: error("fixture 文件未找到: /fixtures/imdb/ratings.csv")
         val result = DataExportImport.parseImdbCsv(csv)
 

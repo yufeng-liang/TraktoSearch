@@ -622,9 +622,8 @@ class SettingsViewModel @Inject constructor(
     suspend fun getLastConsistencyCheckAt(): Long = lastConsistencyCheckStorage.getLastCheckAt()
 
     /** 手动触发：爬豆瓣列表拿最新状态后对比（分钟级，进度通过 checkProgress 暴露） */
-    fun startManualConsistencyCheck() {
+    fun startManualConsistencyCheck(): Boolean =
         statusConsistencyChecker.checkAndUnifyWithCrawl()
-    }
 
     /** 取消正在进行的检查 */
     fun cancelConsistencyCheck() {

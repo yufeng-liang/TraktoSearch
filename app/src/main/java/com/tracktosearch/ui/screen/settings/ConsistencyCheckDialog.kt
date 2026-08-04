@@ -32,6 +32,11 @@ import com.tracktosearch.data.remote.douban.DelayType
 import com.tracktosearch.service.ConsistencyCheckService
 import kotlinx.coroutines.delay
 
+internal fun consistencySubPhaseForDisplay(phase: String, subPhase: String): String? {
+    val candidate = subPhase.trim()
+    return candidate.takeIf { it.isNotEmpty() && !phase.contains(it) }
+}
+
 /**
  * 状态一致性检查进度弹窗。
  *
@@ -78,11 +83,17 @@ fun ConsistencyCheckDialog(
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 // 主进度（阶段 + current/total）
+                val displaySubPhase = consistencySubPhaseForDisplay(p.phase, p.subPhase)
                 if (p.isRunning) {
                     val phaseText = if (p.total > 0) {
-                        "${p.phase} (${p.current}/${p.total})"
+                        stringResource(
+                            R.string.consistency_check_notification_progress,
+                            p.phase,
+                            p.current,
+                            p.total
+                        )
                     } else {
-                        p.phase
+                        p.phase.ifEmpty { stringResource(R.string.consistency_check_phase_preparing) }
                     }
                     Text(
                         text = phaseText,
@@ -98,10 +109,10 @@ fun ConsistencyCheckDialog(
                 }
 
                 // 子阶段
-                if (p.subPhase.isNotEmpty()) {
+                if (displaySubPhase != null) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "· ${p.subPhase}",
+                        text = displaySubPhase,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -143,7 +154,11 @@ fun ConsistencyCheckDialog(
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "$delayTypeText ${delayRemainingSeconds}s",
+                        text = stringResource(
+                            R.string.douban_sync_delay_format,
+                            delayRemainingSeconds,
+                            delayTypeText
+                        ),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.tertiary
                     )
@@ -192,8 +207,9 @@ fun ConsistencyCheckDialog(
                             // 正在取消时禁用"转后台":避免用户在取消过程中触发前台服务启动导致状态混乱
                             enabled = !p.isCancelling,
                             onClick = {
-                                ConsistencyCheckService.start(context)
-                                onBackground()
+                                if (ConsistencyCheckService.start(context)) {
+                                    onBackground()
+                                }
                             }
                         ) {
                             Text(stringResource(R.string.consistency_check_background))

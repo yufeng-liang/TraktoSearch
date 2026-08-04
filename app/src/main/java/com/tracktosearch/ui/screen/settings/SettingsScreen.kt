@@ -131,6 +131,29 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+private enum class ConsistencyCheckBlocker {
+    DOUBAN_LOGIN,
+    TRAKT_LOGIN,
+    DOUBAN_MODE,
+    DOUBAN_SYNC_RUNNING,
+    CHECK_RUNNING
+}
+
+private fun resolveConsistencyCheckBlocker(
+    doubanLoggedIn: Boolean,
+    traktConnected: Boolean,
+    doubanMode: Boolean,
+    doubanSyncRunning: Boolean,
+    checkRunning: Boolean
+): ConsistencyCheckBlocker? = when {
+    !doubanLoggedIn -> ConsistencyCheckBlocker.DOUBAN_LOGIN
+    !traktConnected -> ConsistencyCheckBlocker.TRAKT_LOGIN
+    doubanMode -> ConsistencyCheckBlocker.DOUBAN_MODE
+    doubanSyncRunning -> ConsistencyCheckBlocker.DOUBAN_SYNC_RUNNING
+    checkRunning -> ConsistencyCheckBlocker.CHECK_RUNNING
+    else -> null
+}
+
 @OptIn(
     ExperimentalMaterial3Api::class,
     kotlinx.coroutines.FlowPreview::class,
@@ -201,6 +224,8 @@ fun SettingsScreen(
     var showConsistencyConfirm by remember { mutableStateOf(false) }
     var lastCheckTimeText by remember { mutableStateOf<String?>(null) }
     var showDoubanLoginPrompt by remember { mutableStateOf(false) }
+    var showTraktLoginPrompt by remember { mutableStateOf(false) }
+    var consistencyCheckBlocker by remember { mutableStateOf<ConsistencyCheckBlocker?>(null) }
     var showDoubanRetryDialog by remember { mutableStateOf(false) }
     var showSyncModePicker by remember { mutableStateOf(false) }
     var showSyncProgressDialog by remember { mutableStateOf(false) }
@@ -211,6 +236,58 @@ fun SettingsScreen(
     val context = LocalContext.current
     // snackbarHostState 在 importFailuresLauncher 之前声明,供 launcher 回调内使用
     val snackbarHostState = remember { SnackbarHostState() }
+
+    fun openConsistencyCheckRequest() {
+        when (val blocker = resolveConsistencyCheckBlocker(
+            doubanLoggedIn = doubanLoggedIn,
+            traktConnected = isTraktConnected,
+            doubanMode = isDoubanMode,
+            doubanSyncRunning = isDoubanSyncRunning,
+            checkRunning = viewModel.isCheckRunning()
+        )) {
+            null -> scope.launch {
+                val lastMs = viewModel.getLastConsistencyCheckAt()
+                lastCheckTimeText = formatLastCheckTime(lastMs, context)
+                showConsistencyConfirm = true
+            }
+            ConsistencyCheckBlocker.DOUBAN_LOGIN -> showDoubanLoginPrompt = true
+            ConsistencyCheckBlocker.TRAKT_LOGIN -> showTraktLoginPrompt = true
+            ConsistencyCheckBlocker.CHECK_RUNNING -> showConsistencyDialog = true
+            else -> consistencyCheckBlocker = blocker
+        }
+    }
+
+    fun startConfirmedConsistencyCheck() {
+        when (val blocker = resolveConsistencyCheckBlocker(
+            doubanLoggedIn = doubanLoggedIn,
+            traktConnected = isTraktConnected,
+            doubanMode = isDoubanMode,
+            doubanSyncRunning = isDoubanSyncRunning,
+            checkRunning = viewModel.isCheckRunning()
+        )) {
+            null -> {
+                showConsistencyConfirm = false
+                viewModel.startManualConsistencyCheck()
+                showConsistencyDialog = true
+            }
+            ConsistencyCheckBlocker.DOUBAN_LOGIN -> {
+                showConsistencyConfirm = false
+                showDoubanLoginPrompt = true
+            }
+            ConsistencyCheckBlocker.TRAKT_LOGIN -> {
+                showConsistencyConfirm = false
+                showTraktLoginPrompt = true
+            }
+            ConsistencyCheckBlocker.CHECK_RUNNING -> {
+                showConsistencyConfirm = false
+                showConsistencyDialog = true
+            }
+            else -> {
+                showConsistencyConfirm = false
+                consistencyCheckBlocker = blocker
+            }
+        }
+    }
 
     val importDoneTemplate = stringResource(R.string.snackbar_import_done_json)
     val invalidFormatMsg = stringResource(R.string.error_invalid_json_format)
@@ -667,8 +744,9 @@ fun SettingsScreen(
                             SettingsItemCard(
                                 icon = Icons.Rounded.Sync,
                                 title = stringResource(
-                                    if (isDoubanSyncRunning) R.string.settings_douban_resync_running
-                                    else if (cooldownStatus?.neverSynced == true) R.string.settings_douban_sync
+                                    if (!doubanLoggedIn) R.string.settings_douban_sync
+                                    else if (isDoubanSyncRunning) R.string.settings_douban_resync_running
+                                    else if (cooldownStatus?.neverSynced != false) R.string.settings_douban_sync
                                     else R.string.settings_douban_resync
                                 ),
                                 subtitle = stringResource(
@@ -760,20 +838,7 @@ fun SettingsScreen(
                                             stringResource(R.string.settings_douban_status_consistency_desc)
                                         }
                                     },
-                                    onClick = {
-                                        if (!doubanLoggedIn) {
-                                            showDoubanLoginPrompt = true
-                                        } else if (viewModel.isCheckRunning()) {
-                                            // 检查已运行时直接弹窗恢复进度；未运行时先弹二次确认
-                                            showConsistencyDialog = true
-                                        } else {
-                                            scope.launch {
-                                                val lastMs = viewModel.getLastConsistencyCheckAt()
-                                                lastCheckTimeText = formatLastCheckTime(lastMs, context)
-                                                showConsistencyConfirm = true
-                                            }
-                                        }
-                                },
+                                    onClick = { openConsistencyCheckRequest() },
                                 trailing = {},
                                 containerColor = Color.Transparent
                             )
@@ -1296,7 +1361,22 @@ fun SettingsScreen(
     if (showSyncProgressDialog) {
         val doubanSyncViewModel: DoubanSyncViewModel = hiltViewModel()
         DoubanSyncDialog(
-            onDismiss = { showSyncProgressDialog = false },
+            onDismiss = {
+                showSyncProgressDialog = false
+                if (!doubanSyncViewModel.doubanSyncManager.isRunning()) {
+                    doubanSyncViewModel.doubanSyncManager.resetProgress()
+                }
+            },
+            onRelogin = {
+                showSyncProgressDialog = false
+                doubanSyncViewModel.doubanSyncManager.resetProgress()
+                onNavigateToDoubanLogin()
+            },
+            onTraktLogin = {
+                showSyncProgressDialog = false
+                doubanSyncViewModel.doubanSyncManager.resetProgress()
+                onNavigateToLogin()
+            },
             viewModel = doubanSyncViewModel
         )
     }
@@ -1324,15 +1404,7 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    showConsistencyConfirm = false
-                    if (doubanLoggedIn) {
-                        viewModel.startManualConsistencyCheck()
-                        showConsistencyDialog = true
-                    } else {
-                        showDoubanLoginPrompt = true
-                    }
-                }) {
+                TextButton(onClick = { startConfirmedConsistencyCheck() }) {
                     Text(stringResource(R.string.consistency_check_confirm_button))
                 }
             },
@@ -1376,6 +1448,50 @@ fun SettingsScreen(
             dismissButton = {
                 TextButton(onClick = { showDoubanLoginPrompt = false }) {
                     Text(stringResource(R.string.common_cancel))
+                }
+            }
+        )
+    }
+
+    if (showTraktLoginPrompt) {
+        AlertDialog(
+            onDismissRequest = { showTraktLoginPrompt = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            title = { Text(stringResource(R.string.consistency_check_trakt_required_title)) },
+            text = { Text(stringResource(R.string.consistency_check_trakt_required_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showTraktLoginPrompt = false
+                    onNavigateToLogin()
+                }) { Text(stringResource(R.string.consistency_check_trakt_required_login)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTraktLoginPrompt = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            }
+        )
+    }
+
+    consistencyCheckBlocker?.let { blocker ->
+        AlertDialog(
+            onDismissRequest = { consistencyCheckBlocker = null },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            title = { Text(stringResource(R.string.consistency_check_blocked_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        when (blocker) {
+                            ConsistencyCheckBlocker.DOUBAN_MODE -> R.string.consistency_check_blocked_douban_mode
+                            ConsistencyCheckBlocker.DOUBAN_SYNC_RUNNING -> R.string.consistency_check_blocked_sync
+                            else -> R.string.consistency_check_already_running
+                        }
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { consistencyCheckBlocker = null }) {
+                    Text(stringResource(R.string.common_confirm))
                 }
             }
         )

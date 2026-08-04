@@ -21,6 +21,8 @@ class ResourceItemCardTest {
     @get:Rule
     val composeRule = createComposeRule()
 
+    private val alphaQuantizationTolerance = 1f / 255f
+
     private fun createResourceItem(
         name: String = "测试资源",
         diskType: DiskType = DiskType.BAIDU,
@@ -79,11 +81,11 @@ class ResourceItemCardTest {
             isDark = true
         )
 
-        assertThat(light[0].alpha).isWithin(0.001f).of(0.14f)
-        assertThat(light[1].alpha).isWithin(0.001f).of(0.05f)
+        assertThat(light[0].alpha).isWithin(alphaQuantizationTolerance).of(0.14f)
+        assertThat(light[1].alpha).isWithin(alphaQuantizationTolerance).of(0.05f)
         assertThat(light.last()).isEqualTo(Color(0xFFE8C8B8).copy(alpha = 0.18f))
-        assertThat(dark[0].alpha).isWithin(0.001f).of(0.22f)
-        assertThat(dark[1].alpha).isWithin(0.001f).of(0.08f)
+        assertThat(dark[0].alpha).isWithin(alphaQuantizationTolerance).of(0.22f)
+        assertThat(dark[1].alpha).isWithin(alphaQuantizationTolerance).of(0.08f)
         assertThat(dark.last()).isEqualTo(Color(0xFF6F453A).copy(alpha = 0.26f))
     }
 

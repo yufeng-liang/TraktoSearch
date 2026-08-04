@@ -2,6 +2,7 @@ package com.tracktosearch.data.repository
 
 import android.content.Context
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.R
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.DoubanCredentials
 import com.tracktosearch.data.local.LastConsistencyCheckStorage
@@ -90,15 +91,16 @@ class ConsistencyCheckerCrawlTest {
     // ============================================================
 
     /**
-     * 未登录豆瓣 → getCredentials 返回 null → 设置 cookieExpired=true 直接完成。
+     * 未登录豆瓣 → getCredentials 返回 null → 设置 neverLoggedInDouban=true 直接完成。
      */
     @Test
-    fun 未登录豆瓣时cookieExpired为true直接完成() = runBlocking {
+    fun 未登录豆瓣时neverLoggedInDouban为true直接完成() = runBlocking {
         checker.checkAndUnifyWithCrawl()
         waitForCondition { checker.checkProgress.value.isComplete }
         val p = checker.checkProgress.value
         assertThat(p.isComplete).isTrue()
-        assertThat(p.cookieExpired).isTrue()
+        assertThat(p.cookieExpired).isFalse()
+        assertThat(p.neverLoggedInDouban).isTrue()
     }
 
     /**
@@ -200,6 +202,9 @@ class ConsistencyCheckerCrawlTest {
     @Test
     fun 完整流程完成后调用recordCheck() = runBlocking {
         every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("uid", "cookie")
+        val emptyTraktStatus = TraktRepository.WatchlistWatchedIds()
+        coEvery { traktRepository.loadWatchlistWatchedIds(forceRefresh = true) } returns emptyTraktStatus
+        every { traktRepository.getWatchlistWatchedIds() } returns emptyTraktStatus
         coEvery {
             doubanRepository.fetchMarkList(any(), any(), any(), any(), any(), any())
         } coAnswers {
@@ -227,7 +232,10 @@ class ConsistencyCheckerCrawlTest {
         }
 
         checker.checkAndUnifyWithCrawl()
-        waitForCondition { checker.checkProgress.value.isComplete }
+        waitForCondition { checker.checkProgress.value.isComplete && !checker.isRunning() }
+        assertThat(checker.checkProgress.value.phase).isEqualTo(
+            appContext.getString(R.string.consistency_check_phase_done)
+        )
 
         coVerify(exactly = 1) { lastConsistencyCheckStorage.recordCheck() }
     }

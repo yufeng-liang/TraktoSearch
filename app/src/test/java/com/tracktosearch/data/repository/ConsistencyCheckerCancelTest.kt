@@ -3,6 +3,7 @@ package com.tracktosearch.data.repository
 import android.content.Context
 import android.os.PowerManager
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.R
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.DoubanCredentials
 import com.tracktosearch.data.local.LastConsistencyCheckStorage
@@ -115,7 +116,9 @@ class ConsistencyCheckerCancelTest {
     @Test
     fun cancel后checkProgress的phase包含正在取消() {
         checker.cancel()
-        assertThat(checker.checkProgress.value.phase).contains("正在取消")
+        assertThat(checker.checkProgress.value.phase).isEqualTo(
+            RuntimeEnvironment.getApplication().getString(R.string.consistency_check_phase_cancelling)
+        )
     }
 
     /**
@@ -394,7 +397,9 @@ class ConsistencyCheckerCancelTest {
             ShadowLooper.idleMainLooper()
             Thread.sleep(intervalMs)
         }
-        throw AssertionError("条件在 ${timeoutMs}ms 内未满足")
+        throw AssertionError(
+            "条件在 ${timeoutMs}ms 内未满足: progress=${checker.checkProgress.value}, isRunning=${checker.isRunning()}"
+        )
     }
 
     /** 反射读取 private var wakeLock 字段 */
