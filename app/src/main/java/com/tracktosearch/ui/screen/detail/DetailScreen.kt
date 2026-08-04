@@ -85,8 +85,10 @@ import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.NeumorphicIconButton
+import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
@@ -749,12 +751,13 @@ fun DetailScreen(
                     .align(Alignment.TopStart),
                 hazeState = detailHazeState,
                 hazeStyle = HazeMaterials.ultraThin(),
-                size = 40.dp
+                size = 40.dp,
+                buttonStyle = NeumorphicIconButtonStyle.DetailTopBar
             ) {
                 Icon(
                     Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = stringResource(R.string.detail_back),
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = detailTopBarIconColor(),
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -782,19 +785,20 @@ fun DetailScreen(
                         enabled = !uiState.isDoubanSyncing,
                         hazeState = detailHazeState,
                         hazeStyle = HazeMaterials.ultraThin(),
-                        size = 40.dp
+                        size = 40.dp,
+                        buttonStyle = NeumorphicIconButtonStyle.DetailTopBar
                     ) {
                         if (uiState.isDoubanSyncing) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(18.dp),
                                 strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.primary
+                                color = detailTopBarIconColor()
                             )
                         } else {
                             Icon(
                                 Icons.Rounded.Refresh,
                                 contentDescription = stringResource(R.string.detail_douban_sync_retry),
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = detailTopBarIconColor(),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -830,12 +834,13 @@ fun DetailScreen(
                     isDark = detailIsDark,
                     hazeState = detailHazeState,
                     hazeStyle = HazeMaterials.ultraThin(),
-                    size = 40.dp
+                    size = 40.dp,
+                    buttonStyle = NeumorphicIconButtonStyle.DetailTopBar
                 ) {
                     Icon(
                         Icons.Rounded.Share,
                         contentDescription = stringResource(R.string.detail_share),
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = detailTopBarIconColor(),
                         modifier = Modifier.size(20.dp)
                     )
                 }

@@ -24,10 +24,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.ColorUtils
 import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
@@ -173,20 +175,41 @@ fun Modifier.neumorphicShadow(
 @Composable
 fun BoxScope.GlassHighlight(
     isDark: Boolean,
-    shape: Shape = RoundedCornerShape(32.dp)
+    shape: Shape = RoundedCornerShape(32.dp),
+    alphaScale: Float = 1f
 ) {
+    val resolvedScale = alphaScale.coerceIn(0f, 1f)
     Box(
         modifier = Modifier
             .matchParentSize()
             .clip(shape)
             .background(
                 Brush.verticalGradient(
-                    0.0f to Color.White.copy(alpha = if (isDark) 0.08f else 0.60f),
-                    0.25f to Color.White.copy(alpha = if (isDark) 0.03f else 0.25f),
-                    0.50f to Color.White.copy(alpha = if (isDark) 0.01f else 0.08f),
+                    0.0f to Color.White.copy(alpha = (if (isDark) 0.08f else 0.60f) * resolvedScale),
+                    0.25f to Color.White.copy(alpha = (if (isDark) 0.03f else 0.25f) * resolvedScale),
+                    0.50f to Color.White.copy(alpha = (if (isDark) 0.01f else 0.08f) * resolvedScale),
                     1.0f to Color.Transparent
                 )
             )
+    )
+}
+
+enum class NeumorphicIconButtonStyle {
+    Default,
+    DetailTopBar
+}
+
+/** 详情页顶部图标色：保持主题色相，适度提亮并增加饱和度。 */
+@Composable
+fun detailTopBarIconColor(): Color {
+    val hsl = FloatArray(3)
+    val primary = MaterialTheme.colorScheme.primary
+    ColorUtils.colorToHSL(primary.toArgb(), hsl)
+    return Color.hsl(
+        hue = hsl[0],
+        saturation = (hsl[1] * 1.12f).coerceAtMost(1f),
+        lightness = (hsl[2] + 0.06f).coerceAtMost(0.94f),
+        alpha = primary.alpha
     )
 }
 
@@ -320,8 +343,10 @@ fun NeumorphicIconButton(
     hazeStyle: HazeBlurStyle? = null,
     enabled: Boolean = true,
     lightBorderAlpha: Float = 0.55f,
+    buttonStyle: NeumorphicIconButtonStyle = NeumorphicIconButtonStyle.Default,
     content: @Composable () -> Unit
 ) {
+    val isDetailTopBar = buttonStyle == NeumorphicIconButtonStyle.DetailTopBar
     val shape = CircleShape
     val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin()
     val hazeModifier = if (hazeState != null) {
@@ -351,13 +376,21 @@ fun NeumorphicIconButton(
                 shape = shape,
                 isDark = isDark,
                 elevation = 4.dp,
-                lightAlpha = if (isDark) 0.08f else 0.65f,
+                lightAlpha = if (isDark) {
+                    if (isDetailTopBar) 0.04f else 0.08f
+                } else {
+                    if (isDetailTopBar) 0.33f else 0.65f
+                },
                 blurRadius = 10.dp,
                 shadowOffset = 4.dp
             )
             .border(
                 width = 1.dp,
-                color = if (isDark) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.outline.copy(alpha = lightBorderAlpha),
+                color = if (isDark) {
+                    Color.White.copy(alpha = if (isDetailTopBar) 0.06f else 0.12f)
+                } else {
+                    MaterialTheme.colorScheme.outline.copy(alpha = if (isDetailTopBar) lightBorderAlpha * 0.5f else lightBorderAlpha)
+                },
                 shape = shape
             )
             .clickable(
@@ -368,7 +401,11 @@ fun NeumorphicIconButton(
             ),
         contentAlignment = Alignment.Center
     ) {
-        GlassHighlight(isDark = isDark, shape = shape)
+        GlassHighlight(
+            isDark = isDark,
+            shape = shape,
+            alphaScale = if (isDetailTopBar) 0.5f else 1f
+        )
         content()
     }
 }

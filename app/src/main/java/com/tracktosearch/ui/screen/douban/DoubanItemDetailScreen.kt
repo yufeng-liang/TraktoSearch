@@ -140,6 +140,8 @@ import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.ActionButtonRow
 import com.tracktosearch.ui.component.ActionItem
 import com.tracktosearch.ui.component.NeumorphicIconButton
+import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
+import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.isAppDarkTheme
@@ -1228,12 +1230,13 @@ fun DoubanItemDetailScreen(
                     .align(Alignment.TopStart),
                 hazeState = hazeState,
                 hazeStyle = dev.chrisbanes.haze.blur.materials.HazeMaterials.ultraThin(),
-                size = 40.dp
+                size = 40.dp,
+                buttonStyle = NeumorphicIconButtonStyle.DetailTopBar
             ) {
                 Icon(
                     Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = stringResource(R.string.detail_back),
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = detailTopBarIconColor(),
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -1255,12 +1258,13 @@ fun DoubanItemDetailScreen(
                         isDark = isDarkTheme,
                         hazeState = hazeState,
                         hazeStyle = dev.chrisbanes.haze.blur.materials.HazeMaterials.ultraThin(),
-                        size = 40.dp
+                        size = 40.dp,
+                        buttonStyle = NeumorphicIconButtonStyle.DetailTopBar
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Edit,
                             contentDescription = stringResource(R.string.screen_douban_failures_mark_as_movie),
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = detailTopBarIconColor(),
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -1369,12 +1373,13 @@ fun DoubanItemDetailScreen(
                     isDark = isDarkTheme,
                     hazeState = hazeState,
                     hazeStyle = dev.chrisbanes.haze.blur.materials.HazeMaterials.ultraThin(),
-                    size = 40.dp
+                    size = 40.dp,
+                    buttonStyle = NeumorphicIconButtonStyle.DetailTopBar
                 ) {
                     Icon(
                         Icons.Rounded.Share,
                         contentDescription = stringResource(R.string.detail_share),
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = detailTopBarIconColor(),
                         modifier = Modifier.size(20.dp)
                     )
                 }
