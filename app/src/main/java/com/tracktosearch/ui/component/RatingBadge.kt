@@ -2,6 +2,7 @@ package com.tracktosearch.ui.component
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,11 +14,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.ui.theme.RatingGold
@@ -39,14 +37,7 @@ private val RatingIconSize = 11.dp
 fun RatingBadge(rating: Double, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
-            .dropShadow(
-                shape = RatingCorner,
-                shadow = Shadow(
-                    radius = 4.dp,
-                    color = Color.Black.copy(alpha = 0.45f),
-                    offset = DpOffset(0.dp, 2.dp)
-                )
-            )
+            .offset(y = (-4).dp)
             .padding(horizontal = 5.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(2.dp)
