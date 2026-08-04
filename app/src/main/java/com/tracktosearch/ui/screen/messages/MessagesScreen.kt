@@ -66,16 +66,16 @@ fun MessagesScreen(
                 MessageFilterChip(stringResource(R.string.feedback_filter_all), filter == FeedbackViewModel.MessageFilter.ALL) { viewModel.setMessagesFilter(FeedbackViewModel.MessageFilter.ALL) }
                 MessageFilterChip(stringResource(R.string.feedback_filter_unread), filter == FeedbackViewModel.MessageFilter.UNREAD) { viewModel.setMessagesFilter(FeedbackViewModel.MessageFilter.UNREAD) }
                 MessageFilterChip(stringResource(R.string.feedback_filter_developer), filter == FeedbackViewModel.MessageFilter.DEVELOPER) { viewModel.setMessagesFilter(FeedbackViewModel.MessageFilter.DEVELOPER) }
-                MessageFilterChip(stringResource(R.string.feedback_filter_mine), filter == FeedbackViewModel.MessageFilter.USER) { viewModel.setMessagesFilter(FeedbackViewModel.MessageFilter.USER) }
             }
             when (val state = messagesState) {
                 is FeedbackViewModel.MessagesState.Loading -> { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
                 is FeedbackViewModel.MessagesState.Error -> { Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) { Text(state.message, color = MaterialTheme.colorScheme.error); Spacer(Modifier.height(8.dp)); TextButton(onClick = { viewModel.loadMessages(refresh = true) }) { Text(stringResource(R.string.feedback_retry)) } } }
                 is FeedbackViewModel.MessagesState.Success -> {
-                    if (state.items.isEmpty()) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.feedback_messages_empty), color = MaterialTheme.colorScheme.onSurfaceVariant) } }
+                    val visibleItems = state.items.filter { it.author_role == "developer" }
+                    if (visibleItems.isEmpty()) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.feedback_messages_empty), color = MaterialTheme.colorScheme.onSurfaceVariant) } }
                     else {
-                        LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(state.items, key = { it.id }) { item -> MessageItemRow(item = item, onClick = { onMessageClick(item.feedback_id, item.id) }) }
+                        LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(visibleItems, key = { it.id }) { item -> MessageItemRow(item = item, onClick = { onMessageClick(item.feedback_id, item.id) }) }
                             if (state.hasMore) { item(key = "load_more") { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { TextButton(onClick = { viewModel.loadMessages(refresh = false) }) { Text(stringResource(R.string.feedback_load_more)) } } } }
                         }
                     }
@@ -100,9 +100,19 @@ private fun MessageItemRow(item: MessageItem, onClick: () -> Unit) {
     val typeColor = when (item.type) { "FEATURE" -> Color(0xFF34D399); "BUG" -> Color(0xFFFB7185); "UX" -> Color(0xFFFBBF24); else -> Color(0xFF9CA3AF) }
     val hasScreenshot = item.screenshots.isNotEmpty()
 
-    Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (item.is_unread) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else Color.Transparent).clickable { onClick() }.padding(12.dp).alpha(if (item.is_unread) 1f else 0.6f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(Modifier.size(8.dp)) { if (item.is_unread) { Box(Modifier.size(8.dp).clip(CircleShape).background(Color(0xFFFB7185))) } }
-        Box(Modifier.size(36.dp).clip(CircleShape).background(avatarColor), contentAlignment = Alignment.Center) { Text(avatarLabel, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+    Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (item.is_unread) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else Color.Transparent).clickable { onClick() }.padding(horizontal = 8.dp, vertical = 10.dp).alpha(if (item.is_unread) 1f else 0.6f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box {
+            Box(Modifier.size(36.dp).clip(CircleShape).background(avatarColor), contentAlignment = Alignment.Center) { Text(avatarLabel, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+            if (item.is_unread) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .align(Alignment.TopEnd)
+                        .clip(CircleShape)
+                        .background(Color(0xFFFB7185))
+                )
+            }
+        }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(text = item.display_id, fontSize = 12.sp, color = typeColor, fontWeight = FontWeight.SemiBold)
