@@ -373,6 +373,19 @@ class DetailViewModelSupplementTest {
     }
 
     @Test
+    fun loadMoreComments_invalidTraktId_doesNotRequestTraktComments() = runTest {
+        setPrivateField("currentTraktId", 0)
+        setPrivateField("currentMediaType", MediaType.MOVIE)
+        setUiState { it.copy(hasMoreComments = true) }
+
+        viewModel.loadMoreComments()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { traktRepository.getComments(any(), any(), any(), any()) }
+        assertThat(viewModel.uiState.value.isLoadingMoreComments).isFalse()
+    }
+
+    @Test
     fun loadMoreComments_成功加载并去重() = runTest {
         setupLoggedInState(traktId = 100, mediaType = MediaType.MOVIE)
         val existingComment = TraktComment(id = 1, comment = "已有")
@@ -724,7 +737,18 @@ class DetailViewModelSupplementTest {
         val cacheField = DetailViewModel::class.java.getDeclaredField("detailCache")
         cacheField.isAccessible = true
         @Suppress("UNCHECKED_CAST")
-        val cache = cacheField.get(null) as MutableMap<Int, *>
+        val cache = cacheField.get(null) as MutableMap<Any, *>
+        val detailCacheKeyConstructor = Class.forName(
+            "com.tracktosearch.ui.screen.detail.DetailCacheKey"
+        ).getDeclaredConstructor(
+            Int::class.javaPrimitiveType!!,
+            Int::class.javaPrimitiveType!!,
+            String::class.java,
+            MediaType::class.java
+        )
+        detailCacheKeyConstructor.isAccessible = true
+        val cacheKey = detailCacheKeyConstructor.newInstance(12345, 0, null, MediaType.MOVIE)
+        setPrivateField("currentDetailCacheKey", cacheKey)
         // 构造一个最小 CachedDetailData（用反射创建）
         val cachedDataClass = DetailViewModel.Companion::class.java
             .declaredClasses.find { it.simpleName == "CachedDetailData" }!!
@@ -748,12 +772,12 @@ class DetailViewModelSupplementTest {
         }
         val cachedData = constructor.newInstance(*args)
         @Suppress("UNCHECKED_CAST")
-        (cacheField.get(null) as MutableMap<Int, Any>)[12345] = cachedData
-        assertThat(cache).containsKey(12345)
+        (cacheField.get(null) as MutableMap<Any, Any>)[cacheKey] = cachedData
+        assertThat(cache).containsKey(cacheKey)
 
         callOnCleared()
 
-        assertThat(cache).doesNotContainKey(12345)
+        assertThat(cache).doesNotContainKey(cacheKey)
     }
 
     @Test
@@ -786,5 +810,100 @@ class DetailViewModelSupplementTest {
 
         viewModel.updatePosterColor(Color.Blue)
         assertThat(viewModel.uiState.value.posterDominantColor).isEqualTo(Color.Blue)
+    }
+
+    @Test
+    fun dualLoginDoubanItemWithoutTraktId_usesDoubanForWatchlist() = runTest {
+        setupDoubanBackedTraktDetail()
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user", "fake_cookie")
+        coEvery { doubanRepository.markWish("db-1", "fake_cookie") } returns true
+        advanceUntilIdle()
+
+        viewModel.toggleWatchlist()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.isMarkedWatchlist).isTrue()
+        coVerify { doubanRepository.markWish("db-1", "fake_cookie") }
+        coVerify(exactly = 0) { traktRepository.addToWatchlist(any(), any(), any()) }
+        coVerify(exactly = 0) { traktRepository.removeFromWatchlist(any(), any(), any()) }
+    }
+
+    @Test
+    fun dualLoginDoubanItemWithoutTraktId_usesDoubanForWatched() = runTest {
+        setupDoubanBackedTraktDetail()
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user", "fake_cookie")
+        coEvery { doubanRepository.markCollect("db-1", "fake_cookie", null) } returns true
+        advanceUntilIdle()
+
+        viewModel.toggleWatched()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.isMarkedWatched).isTrue()
+        coVerify { doubanRepository.markCollect("db-1", "fake_cookie", null) }
+        coVerify(exactly = 0) { traktRepository.markAsWatched(any(), any(), any()) }
+        coVerify(exactly = 0) { traktRepository.removeWatched(any(), any(), any()) }
+    }
+
+    @Test
+    fun dualLoginDoubanItemWithoutTraktId_usesDoubanForRatingAndComment() = runTest {
+        setupDoubanBackedTraktDetail()
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user", "fake_cookie")
+        coEvery { doubanRepository.fetchCsrfToken("db-1", "fake_cookie") } returns "fake_ck"
+        coEvery {
+            doubanRepository.markWatchedWithRating("db-1", "fake_cookie", "fake_ck", any(), any())
+        } returns MarkWriteResult(success = true, statusCode = 200, message = "ok")
+        advanceUntilIdle()
+
+        viewModel.setRating(8)
+        advanceUntilIdle()
+        viewModel.setRatingWithComment(10, "note")
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.userRating).isEqualTo(10)
+        coVerify(exactly = 2) { doubanRepository.markWatchedWithRating(any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { traktRepository.addRating(any(), any(), any()) }
+        coVerify(exactly = 0) { traktRepository.postComment(any(), any(), any()) }
+    }
+
+    @Test
+    fun dualLoginDoubanItemWithoutTraktId_usesDoubanForRemovingRating() = runTest {
+        setupDoubanBackedTraktDetail(userRating = 8)
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user", "fake_cookie")
+        coEvery { doubanRepository.markInterest("db-1", "collect", "fake_cookie", null) } returns true
+        advanceUntilIdle()
+
+        viewModel.removeRating()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.userRating).isNull()
+        coVerify { doubanRepository.markInterest("db-1", "collect", "fake_cookie", null) }
+        coVerify(exactly = 0) { traktRepository.removeRating(any(), any()) }
+    }
+
+    @Test
+    fun doubanBackedItemSubmitMarkWatchedDoesNotCallTrakt() = runTest {
+        setupDoubanBackedTraktDetail()
+        setPrivateField("currentMediaType", MediaType.SHOW)
+        setUiState { it.copy(showMarkWatchedDialog = true) }
+
+        viewModel.submitMarkWatched(listOf(101, 102))
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.showMarkWatchedDialog).isFalse()
+        assertThat(viewModel.uiState.value.isMarkingWatched).isFalse()
+        assertThat(viewModel.uiState.value.watchedChanged).isFalse()
+        coVerify(exactly = 0) { traktRepository.markEpisodesWatched(any(), any(), any()) }
+    }
+
+    private fun setupDoubanBackedTraktDetail(userRating: Int? = null) {
+        setupLoggedInState(traktId = 0)
+        setPrivateField("currentDoubanId", "db-1")
+        setPrivateField("currentImdbId", "tt1234567")
+        setUiState {
+            it.copy(
+                doubanIdForSync = "db-1",
+                userRating = userRating
+            )
+        }
     }
 }

@@ -148,10 +148,10 @@
 
     <!-- Douban Sync -->
     <string name="douban_login_title">더우반 로그인</string>
-    <string name="douban_login_hint">아래에서 더우반 계정으로 로그인하면 마크가 Trakt에 자동 동기화됩니다</string>
+    <string name="douban_login_hint">Douban에 로그인하면 관심/시청 마크를 Watchlist에서 볼 수 있으며, Trakt에 연결하면 Trakt에도 동기화할 수 있습니다.</string>
     <string name="douban_login_privacy_short">이 페이지는 공개 마크(보고싶음/봄)를 읽기 위해 더우반에 로그인합니다. 인증 정보는 이번 동기화에만 사용되며 제3자 서버에 업로드되지 않습니다.</string>
     <string name="douban_login_privacy_detail_title">상세 정보</string>
-    <string name="douban_login_privacy_detail">• 로그인 이유: 더우반 마크(보고싶음, 봄, 평점) 읽기\n• 저장 내용: Cookie와 userId(이번 크롤링용)만 저장, 더우반 비밀번호는 저장하지 않음\n• Cookie 용도: movie.douban.com/people/{userId}/wish|collect 페이지 요청에만 사용\n• 동기화 완료 후: 설정에서 더우반 인증 정보를 언제든 삭제 가능\n• 데이터 흐름: 더우반 → 앱 → Trakt, 중간 서버 없음</string>
+    <string name="douban_login_privacy_detail">• 로그인 이유: 더우반 마크(보고싶음, 봄, 평점) 읽기\n• 저장 내용: Cookie와 userId(이번 크롤링용)만 저장, 더우반 비밀번호는 저장하지 않음\n• Cookie 용도: movie.douban.com/people/{userId}/wish|collect 페이지 요청에만 사용\n• 동기화 완료 후: 설정에서 더우반 인증 정보를 언제든 삭제 가능\n• 데이터 흐름: 더우반 → 앱. Trakt에 연결하면 Trakt에도 동기화할 수 있습니다.</string>
     <string name="douban_login_privacy_expand">상세 정보 보기</string>
     <string name="douban_login_privacy_collapse">접기</string>
     <string name="douban_login_success_snackbar">더우반 로그인 성공</string>
@@ -169,19 +169,15 @@
     <string name="douban_sync_douban_login_required_banner">더우반 로그인이 필요합니다. 탭하여 로그인</string>
     <string name="douban_sync_trakt_login_required_banner">Trakt 로그인이 필요합니다. 탭하여 로그인</string>
     <string name="douban_sync_complete_banner">동기화 완료, %1$d건 추가</string>
-    <string name="douban_sync_failed_banner">동기화 실패, %1$d건 실패</string>
     <string name="douban_sync_cancelled_banner">동기화 취소됨</string>
     <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
-    <string name="douban_sync_result_format">성공 %1$d건, 실패 %2$d건</string>
     <string name="douban_sync_error_detail">오류: %1$s</string>
-    <string name="douban_sync_failed_list_label">실패 항목:</string>
-    <string name="douban_sync_failed_more_format">...총 %1$d항목 실패</string>
     <string name="douban_sync_eta_format">약 %1$s 남음</string>
     <string name="douban_sync_delay_format">%1$d초 대기 중 (%2$s)</string>
     <string name="douban_sync_delay_detail_crawl">Douban 크롤링 지연</string>
     <string name="douban_sync_delay_list_crawl">목록 페이지 크롤링 지연</string>
     <string name="douban_sync_delay_retry">재시도 대기</string>
-    <string name="douban_sync_summary_format">성공 %1$d · 건너뜀 %2$d · 캐시 %3$d · 실패 %4$d</string>
+    <string name="douban_sync_summary_format">성공 %1$d · 건너뜀 %2$d · 캐시 %3$d</string>
 
     <!-- Douban 동기화 실패 항목 재시도 -->
     <string name="douban_retry_title">Douban 동기화 실패 항목 재시도</string>
@@ -210,21 +206,12 @@
     <string name="douban_failure_reason_no_imdb_id">IMDb ID 없음</string>
     <string name="douban_failure_reason_detail_fetch_failed">상세 페이지 가져오기 실패</string>
     <string name="douban_failure_reason_trakt_not_found">Trakt 항목을 찾을 수 없음</string>
+    <string name="douban_failure_reason_trakt_search_failed">Trakt 검색 실패</string>
     <string name="douban_failure_reason_trakt_write_timeout">Trakt 쓰기 시간 초과</string>
     <string name="douban_failure_reason_trakt_write_failed">Trakt 쓰기 실패</string>
 
     <!-- 동기화 결과 대화상자 -->
-    <string name="douban_sync_failed_group_recoverable">복구 가능 (%1$d)</string>
-    <string name="douban_sync_failed_group_non_recoverable">복구 불가 (%1$d)</string>
-    <string name="douban_sync_failed_export">실패 항목 내보내기</string>
-    <string name="douban_sync_failed_export_nothing">내보낼 실패 항목 없음</string>
-    <string name="douban_sync_failed_export_success">%1$d 실패 항목 내보냄</string>
-    <string name="douban_sync_failed_export_failed">내보내기 실패</string>
-    <string name="douban_sync_failed_export_chooser_title">실패 항목 JSON 공유</string>
-    <string name="douban_sync_failed_show_all">모든 %1$d 항목 표시</string>
-    <string name="douban_sync_failed_collapse">접기</string>
     <string name="douban_sync_current_processing">처리 중: %1$s</string>
-    <string name="douban_sync_recent_failures">최근 실패:</string>
     <string name="douban_sync_retry_complete_banner">재시도 완료, %1$d 항목 성공</string>
 
     <!-- Douban 동기화 재개 (취소 후 복원) -->
@@ -538,7 +525,12 @@
     <string name="detail_info_countries">제작국/지역</string>
     <string name="detail_info_directors">감독</string>
     <string name="detail_info_genres">장르</string>
+    <string name="detail_info_imdb_rating">IMDb</string>
+    <string name="detail_info_imdb_id">IMDb ID</string>
     <string name="detail_info_douban_rating">더우반</string>
+    <string name="detail_info_metacritic_rating">MTC</string>
+    <string name="detail_info_tmdb_rating">TMDB</string>
+    <string name="detail_info_rotten_tomatoes_rating">RT</string>
     <string name="detail_info_rating_count">(%1$d명 평가)</string>
     <string name="detail_info_aka">다른 이름</string>
     <string name="detail_info_runtime">상영시간</string>
@@ -686,7 +678,6 @@
     <string name="cooldown_guidance_message">7일 이내에 리스트 크롤링을 동기화했습니다. 증분 동기화는 건너뛰며(데이터는 클라우드에서). 강제 동기화로 더우반 리스트를 다시 크롤링하시겠습니까?\n\n더우반에는 안티 크롤링 메커니즘이 있어, 잦은 반복 크롤링 시 IP 주소가 블랙리스트에 등록될 수 있습니다. 강제 동기화는 본인 책임하에.</string>
     <string name="cooldown_force_sync">강제 동기화</string>
     <string name="cooldown_skip">건너뛰기</string>
-    <string name="settings_douban_retry_failures">이전 실패 항목 재시도</string>
 
     <!-- Douban sync mode picker -->
     <string name="douban_sync_mode_picker_title">재동기화 모드 선택</string>
@@ -705,8 +696,6 @@
     <string name="douban_retry_option_export_desc">JSON 파일로 저장, 백업이나 공유에 사용</string>
 
     <!-- Douban failures viewer -->
-    <string name="settings_douban_view_failures">동기화 실패 항목 보기</string>
-    <string name="settings_douban_view_failures_desc">%1$d개 더우반 항목 동기화 실패</string>
     <string name="settings_douban_status_consistency">상태 일관성 확인</string>
     <string name="settings_douban_status_consistency_desc">더우반과 Trakt의 위시리스트/시청 완료 상태가 일치하는지 확인</string>
     <string name="settings_douban_status_consistency_checking">확인 중…</string>
@@ -770,37 +759,12 @@
     <string name="consistency_check_time_minutes_ago">%1$d분 전</string>
     <string name="consistency_check_time_hours_ago">%1$d시간 전</string>
     <string name="consistency_check_time_days_ago">%1$d일 전</string>
-    <string name="settings_douban_import_failures">JSON에서 실패 항목 가져오기</string>
-    <string name="settings_douban_import_failures_desc">다른 기기에서 내보낸 실패 항목 JSON 파일을 가져와서 여기서 보기</string>
     <string name="screen_douban_failures_title">동기화 실패 항목</string>
     <string name="share_failures_json">실패 항목 JSON 공유</string>
 
     <!-- 클라우드 실패 데이터 동기화 -->
-    <string name="cloud_failures_detected_title">클라우드 실패 데이터 감지</string>
-    <string name="cloud_failures_detected_desc">클라우드에 이 더우반 계정의 실패 데이터 %1$d개가 있습니다. 로컬로 다운로드하여 보시겠습니까?</string>
-    <string name="cloud_failures_download">다운로드</string>
-    <string name="cloud_failures_dismiss">나중에</string>
-    <string name="cloud_failures_downloaded">클라우드 실패 데이터를 다운로드하고 병합했습니다</string>
-    <string name="cloud_failures_downloaded_with_count">클라우드 실패 데이터 %1$d건을 다운로드하고 병합하여 로컬 데이터를 교체했습니다</string>
 
     <!-- Manual cloud sync (settings page) -->
-    <string name="settings_douban_upload_cloud">실패 데이터 업로드</string>
-    <string name="settings_douban_upload_cloud_desc">로컬 실패 항목을 Gitee 클라우드에 업로드하여 다른 기기에서 보기(더우반 로그인 필요)</string>
-    <string name="settings_douban_download_cloud">실패 데이터 가져오기</string>
-    <string name="settings_douban_download_cloud_desc">이 더우반 계정의 클라우드 실패 데이터를 다운로드하여 로컬에 병합</string>
-    <string name="cloud_sync_no_login">먼저 더우반 계정에 로그인하세요</string>
-    <string name="cloud_sync_no_local_failures">로컬 실패 항목이 없어 업로드를 건너뛰었습니다</string>
-    <string name="cloud_sync_upload_success">실패 데이터를 클라우드에 업로드했습니다</string>
-    <string name="cloud_sync_upload_failed">업로드 실패, 나중에 다시 시도하세요</string>
-    <string name="cloud_sync_download_empty">이 더우반 계정의 클라우드 실패 데이터가 없습니다</string>
-    <string name="cloud_sync_download_local_newer">로컬 데이터가 더 최신이므로 클라우드 데이터를 무시했습니다</string>
-    <string name="cloud_sync_download_success">클라우드 실패 데이터 %1$d개를 다운로드하여 병합했습니다</string>
-    <string name="dialog_download_success_title">가져오기 성공</string>
-    <string name="dialog_download_success_message">클라우드에서 %1$d개의 실패 항목을 가져왔습니다. 동기화 실패 항목 페이지에서 확인할 수 있습니다.</string>
-    <string name="dialog_download_success_view">실패 항목 보기</string>
-    <string name="dialog_download_success_dismiss">닫기</string>
-    <string name="cloud_sync_download_failed">다운로드 실패, 나중에 다시 시도하세요</string>
-    <string name="cloud_sync_in_progress">동기화 중…</string>
     <string name="screen_douban_failures_empty_wish">관심목록 동기화가 모두 성공했습니다</string>
     <string name="screen_douban_failures_empty_collect">시청 목록 동기화가 모두 성공했습니다</string>
     <string name="screen_douban_failures_empty_all">동기화 실패 항목이 없습니다</string>
@@ -993,8 +957,8 @@
 
     <!-- 더우반 마크 양방향 쓰기 도움말 -->
     <string name="help_douban_writeback">더우반 마크 쓰기</string>
-    <string name="help_douban_writeback_b1">더우반 동기화 실패 항목 상세 페이지에서「보고 싶음 / 봄 / 마크 해제」를 더우반에 직접 쓸 수 있습니다.</string>
-    <string name="help_douban_writeback_b3">보고 싶음↔봄 전환은 실패 목록에 저장. 마크 해제는 실패 항목을 삭제합니다(확인 대화상자 포함).</string>
+    <string name="help_douban_writeback_b1">더우반 항목 상세 페이지에서「보고 싶음 / 봄 / 마크 해제」를 더우반에 직접 쓸 수 있습니다.</string>
+    <string name="help_douban_writeback_b3">보고 싶음↔봄 전환은 더우반 마크를 업데이트합니다. 마크 해제는 확인 후 삭제합니다.</string>
     <string name="help_consistency_check">상태 정합성 검사</string>
     <string name="help_consistency_intro">더우반과 Trakt 상태가 일치하지 않을 수 있습니다. 검사는「본 것이 보고 싶은 것보다 우선」원칙으로 양쪽을 통일합니다. 본 상태가 보고 싶음을 덮어쓰고, 본 쪽을 반대쪽에 다시 쓰므로 마크가 유실되지 않습니다. 또한 Trakt 측에서「보고 싶음」과「봄」에 동시에 존재하는 오래된 항목(구 데이터 잔재)을 정리하여 보고 싶음 표시를 자동으로 제거합니다. 아래 표는 모든 불일치 처리 방법입니다.</string>
     <string name="help_consistency_col_douban">더우반</string>
@@ -1020,7 +984,7 @@
     <string name="onboarding_step2_title">발견</string>
     <string name="onboarding_step2_desc">개인 맞춤 추천(더우반 로그인 후 생성) 및 기타 차트 탐색</string>
     <string name="onboarding_step3_title">마이</string>
-    <string name="onboarding_step3_desc">더우반에서 가져온 콘텐츠를 포함한 Trakt 관심목록 및 시청 목록 표시</string>
+    <string name="onboarding_step3_desc">Trakt와 더우반의 관심목록 및 시청 목록을 한곳에서 표시</string>
 
     <!-- Common UI -->
     <string name="common_retry">재시도</string>
@@ -1294,22 +1258,19 @@
     <string name="watched_empty_trakt_only">시청 목록이 비어 있습니다. 더우반에 로그인해 마크를 가져오거나 발견에서 작품을 찾아보세요.</string>
     <string name="watchlist_empty_douban_not_imported">더우반 마크를 가져오면 이 목록에 표시됩니다.</string>
     <string name="watched_empty_douban_not_imported">더우반 마크를 가져오면 시청 목록에 표시됩니다.</string>
-    <string name="watchlist_empty_imported_failures">더우반 마크 %1$d개를 가져오지 못했습니다. 설정에서 실패 항목을 확인하세요.</string>
-    <string name="watched_empty_imported_failures">더우반 마크 %1$d개를 가져오지 못했습니다. 설정에서 실패 항목을 확인하세요.</string>
     <string name="watchlist_empty_imported_empty">더우반 마크를 가져왔지만 이 목록은 아직 비어 있습니다.</string>
     <string name="watched_empty_imported_empty">더우반 마크를 가져왔지만 시청 목록은 아직 비어 있습니다.</string>
     <string name="watchlist_empty_login_trakt">Trakt 로그인</string>
     <string name="watchlist_empty_login_douban">더우반 로그인 및 가져오기</string>
     <string name="watchlist_empty_start_douban_import">더우반 마크 가져오기</string>
-    <string name="watchlist_empty_view_failures">실패 항목 보기</string>
 
     <!-- Douban Sync Help -->
     <string name="help_data_douban_title">더우반 마크 동기화</string>
-    <string name="help_data_douban_b1">로그인 페이지에서 \"또는 더우반에서 가져오기\"를 탭하고 WebView로 더우반에 로그인하면, 더우반의 보고싶다/봤어요 마크를 자동으로 크롤링하여 Trakt에 동기화합니다.</string>
+    <string name="help_data_douban_b1">로그인 페이지에서 \"또는 더우반에서 가져오기\"를 탭하고 WebView로 더우반에 로그인하면, 더우반의 보고싶다/봤어요 마크를 자동으로 크롤링하여 Watchlist에 표시합니다. Trakt에 연결하면 Trakt에도 동기화할 수 있습니다.</string>
     <string name="help_data_douban_b2">설정 → 데이터 관리에서 \"더우반 동기화\"를 탭하여 동기화할 수 있습니다.</string>
-    <string name="help_data_douban_b3">동기화 전략: 더우반 \"봤어요\"는 Trakt \"보고싶다\"를 덮어씀; 더우반 \"보고싶다\"는 Trakt \"봤어요\"를 덮어쓰지 않음; 평점은 더우반 기준 (5스타 → 10점 변환).</string>
-    <string name="help_data_douban_b4">동기화 실패한 항목은 로컬에 저장됩니다. 설정 → 데이터 관리에서 \"동기화 실패 항목 보기\"를 탭하여 확인할 수 있습니다. 미디어 타입 표시, 부제목 편집, 리소스 검색, 재동기화, 삭제를 지원합니다.</string>
-    <string name="help_data_douban_b5">크로스 디바이스: 설정 → 데이터 관리의 \"실패 항목 다시 시도\" 대화상자 또는 \"동기화 실패 항목 보기\" 페이지에서 \"JSON에서 실패 항목 가져오기\"를 선택하여 다른 기기에서 내보낸 실패 항목 JSON 파일을 가져와 로컬에서 볼 수 있습니다.</string>
+    <string name="help_data_douban_b3">Trakt에 연결된 경우의 충돌 전략: 더우반 \"봤어요\"는 Trakt \"보고싶다\"를 덮어씀; 더우반 \"보고싶다\"는 Trakt \"봤어요\"를 덮어쓰지 않음; 평점은 더우반 기준 (5스타 → 10점 변환).</string>
+    <string name="help_data_douban_b4">가져온 더우반 마크는 모두 Watchlist에 표시됩니다. IMDb ID가 있는 항목은 일반 상세 페이지를, 없는 항목은 더우반 상세 페이지를 사용합니다.</string>
+    <string name="help_data_douban_b5">더우반 가져오기는 자동으로 재개하고 다시 시도할 수 있습니다. 처리 중 기술 오류가 발생해도 가져온 마크가 Watchlist에서 사라지지 않습니다.</string>
     <string name="help_data_table_title">데이터 가져오기/내보내기 개요</string>
     <string name="help_dc_export_t">표시 데이터 내보내기</string>
     <string name="help_dc_export_entry">설정 → 데이터 관리</string>
@@ -1319,22 +1280,10 @@
     <string name="help_dc_imdb_entry">설정 → 데이터 관리</string>
     <string name="help_dc_imdb_fmt">CSV</string>
     <string name="help_dc_imdb_desc">IMDb 관심목록 가져오기, 제목으로 검색하여 Trakt에 동기화</string>
-    <string name="help_dc_upload_t">실패 데이터 클라우드 업로드</string>
-    <string name="help_dc_upload_entry">설정 → 데이터 관리</string>
-    <string name="help_dc_upload_fmt">암호화 JSON</string>
-    <string name="help_dc_upload_desc">Douban 동기화 실패 항목을 클라우드에 업로드, AES 암호화 저장</string>
-    <string name="help_dc_download_t">클라우드에서 실패 데이터 가져오기</string>
-    <string name="help_dc_download_entry">설정 → 데이터 관리</string>
-    <string name="help_dc_download_fmt">암호화 JSON</string>
-    <string name="help_dc_download_desc">클라우드에서 실패 항목을 가져오고, 복호화하여 로컬에 병합</string>
     <string name="help_dc_douban_t">Douban 마크 동기화</string>
     <string name="help_dc_douban_entry">로그인 페이지 / 설정</string>
     <string name="help_dc_douban_fmt">Douban 계정</string>
-    <string name="help_dc_douban_desc">Douban에 로그인하여 보고싶음/봤음 마크를 가져와 Trakt에 동기화</string>
-    <string name="help_dc_failures_t">실패 항목 JSON 가져오기</string>
-    <string name="help_dc_failures_entry">실패 항목 보기 페이지</string>
-    <string name="help_dc_failures_fmt">JSON</string>
-    <string name="help_dc_failures_desc">다른 기기에서 내보낸 실패 항목 JSON 파일을 로컬로 가져오기</string>
+    <string name="help_dc_douban_desc">Douban에 로그인하여 관심/시청 마크를 Watchlist로 가져오고, Trakt 연결 시 동기화</string>
     <string name="help_dc_cooldown">쿨다운: 더우반에는 안티 크롤링 메커니즘이 있어, 잦은 반복 크롤링 시 IP 주소가 블랙리스트에 등록될 수 있습니다. 전체 크롤링 후 7일 쿨다운을 설정해 요청 빈도를 낮춥니다. 쿨다운 중 증분 동기화는 클라우드 데이터를 재사용하며 재크롤링하지 않습니다. 본인 책임하에 강제 동기화 가능.</string>
     <string name="help_custom_source">사용자 정의 검색 소스</string>
     <string name="help_custom_source_b1">설정 → 검색 소스 → 사용자 정의 검색 소스 → 검색 소스 추가</string>
@@ -1460,7 +1409,7 @@
     <string name="douban_logout_confirm_title">Douban에서 로그아웃</string>
     <string name="douban_logout_confirm_message">로그아웃하면 로컬의 %1$d개 Douban 마크가 삭제됩니다. 계속하시겠습니까?</string>
     <string name="douban_logout_sync_in_progress_warning">동기화가 진행 중입니다. 로그아웃하면 동기화가 중단되고 로컬 데이터가 삭제됩니다.</string>
-    <string name="settings_douban_login_hint">로그인하여豆瓣 마크를 Trakt에 동기화</string>
+    <string name="settings_douban_login_hint">로그인하여 더우반 마크를 Watchlist에서 확인하고, Trakt 연결 시 Trakt에도 동기화</string>
     <string name="settings_guest_login_hint">Trakt에 로그인하여 관심목록, 시청완료, 평가 등의 기능 사용</string>
     <!-- 豆瓣 스파이더 테스트（마크 되돌리기） -->
     <string name="douban_spider_test_mark_section">마크 되돌리기 테스트</string>
@@ -1478,20 +1427,6 @@
     <string name="douban_spider_test_copy_result">결과 복사</string>
     <string name="douban_spider_test_mark_copied">복사되었습니다</string>
     <string name="statistics_info_wordcloud">Q: 리뷰 워드클라우드란?\nA: Douban 한줄평에서 자주 나오는 단어를 추출해 워드클라우드로 보여줍니다. 글자가 클수록 더 자주 등장하여 시청 소감을 빠르게 떠올릴 수 있습니다.</string>
-    <string name="cloud_sync_dialog_no_time">없음</string>
-    <string name="cloud_sync_dialog_title_overwrite">클라우드 데이터가 최신</string>
-    <string name="cloud_sync_dialog_title_local_newer">로컬 데이터가 최신</string>
-    <string name="cloud_sync_dialog_title_upload_skip">업로드 불필요</string>
-    <string name="cloud_sync_dialog_title_upload_done">클라우드에 업로드됨</string>
-    <string name="cloud_sync_dialog_title_download_empty">클라우드 데이터 다운로드됨</string>
-    <string name="cloud_sync_dialog_local_time">로컬: %1$s</string>
-    <string name="cloud_sync_dialog_cloud_time">클라우드: %1$s</string>
-    <string name="cloud_sync_dialog_overwrite_message">클라우드에 실패 항목 %1$d개가 있습니다(위 시간에 업데이트). 로컬 데이터를 덮어씁니다. 계속할까요?</string>
-    <string name="cloud_sync_dialog_local_newer_message">로컬 실패 데이터가 최신이므로 로컬을 유지하고 클라우드에서 다운로드하지 않았습니다.</string>
-    <string name="cloud_sync_dialog_upload_skip_message">로컬 데이터가 클라우드보다 새롭지 않아 업로드를 건너뛰고 클라우드를 유지했습니다.</string>
-    <string name="cloud_sync_dialog_upload_done_message">로컬 실패 데이터를 클라우드에 암호화 업로드했습니다.</string>
-    <string name="cloud_sync_dialog_download_empty_message">클라우드 실패 항목 %1$d개를 다운로드해 로컬에 병합했습니다.</string>
-    <string name="cloud_sync_dialog_overwrite_confirm">로컬 덮어쓰기</string>
 
     <!-- 표시 기록 -->
     <string name="mark_records_title">표시 기록</string>
@@ -1600,7 +1535,7 @@
     <string name="douban_sync_substage_writing_target">Trakt에 쓰는 중</string>
     <string name="douban_sync_substage_writing_local">로컬 데이터를 저장하는 중</string>
     <string name="douban_sync_substage_status_changes">상태 변경을 적용하는 중</string>
-    <string name="douban_sync_substage_retrying_failures">실패 항목을 재시도하는 중</string>
+    <string name="douban_sync_substage_retrying_items">항목을 재시도하는 중</string>
     <string name="douban_sync_substage_waiting_delay">다음 시도를 기다리는 중</string>
     <string name="douban_sync_recent_items">최근 가져온 항목</string>
     <string name="douban_sync_preview_status_wish">보고 싶음</string>

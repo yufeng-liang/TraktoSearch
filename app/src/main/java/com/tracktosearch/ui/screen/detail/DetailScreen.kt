@@ -114,6 +114,7 @@ fun DetailScreen(
     traktRating: Double = 0.0,
     initialInWatchlist: Boolean = false,
     initialIsWatched: Boolean = false,
+    doubanId: String? = null,
     onBack: (watchlistChanged: Boolean, watchedChanged: Boolean) -> Unit = { _, _ -> },
     onPersonClick: (personId: Int, personName: String, profileUrl: String?, avatarColor: Color?) -> Unit = { _, _, _, _ -> },
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit = { _, _, _, _, _ -> },
@@ -133,8 +134,19 @@ fun DetailScreen(
         onBack(uiState.watchlistChanged, uiState.watchedChanged)
     }
 
-    LaunchedEffect(traktId, tmdbId, title) {
-        viewModel.loadDetail(traktId, tmdbId, title, mediaType, year, imdbId, traktRating, inWatchlist = initialInWatchlist, isWatched = initialIsWatched)
+    LaunchedEffect(traktId, tmdbId, title, doubanId) {
+        viewModel.loadDetail(
+            traktId,
+            tmdbId,
+            title,
+            mediaType,
+            year,
+            imdbId,
+            traktRating,
+            inWatchlist = initialInWatchlist,
+            isWatched = initialIsWatched,
+            doubanId = doubanId
+        )
     }
 
     // 豆瓣同步 Toast 提示（成功/失败/ID未就绪）

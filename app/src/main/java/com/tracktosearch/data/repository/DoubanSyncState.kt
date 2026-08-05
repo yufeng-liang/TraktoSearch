@@ -76,6 +76,7 @@ class DoubanSyncPreviewBuffer(private val maxSize: Int = 5) {
 
 /** 将批处理内部的旧子阶段名称收敛为稳定 ID。 */
 internal fun subStageFromLegacy(value: String): DoubanSyncSubStage = when (value) {
+    DoubanSyncSubStage.PULLING_CLOUD.name -> DoubanSyncSubStage.PULLING_CLOUD
     "详情页" -> DoubanSyncSubStage.FETCHING_DETAIL
     "Trakt 查询" -> DoubanSyncSubStage.LOOKING_UP_TRAKT
     "写入 Trakt" -> DoubanSyncSubStage.WRITING_TARGET
@@ -89,6 +90,7 @@ internal fun subStageFromLegacy(value: String): DoubanSyncSubStage = when (value
 internal fun stageFromSubStage(subStage: DoubanSyncSubStage): DoubanSyncStage = when (subStage) {
     DoubanSyncSubStage.FETCHING_WISH_LIST,
     DoubanSyncSubStage.FETCHING_COLLECT_LIST -> DoubanSyncStage.FETCHING_LIST
+    DoubanSyncSubStage.PULLING_CLOUD,
     DoubanSyncSubStage.FETCHING_DETAIL,
     DoubanSyncSubStage.LOOKING_UP_TRAKT,
     DoubanSyncSubStage.RETRYING_FAILURES -> DoubanSyncStage.PARSING_DATA
@@ -136,7 +138,7 @@ fun DoubanSyncSubStage.labelRes(): Int? = when (this) {
     DoubanSyncSubStage.WRITING_TARGET -> R.string.douban_sync_substage_writing_target
     DoubanSyncSubStage.WRITING_LOCAL -> R.string.douban_sync_substage_writing_local
     DoubanSyncSubStage.STATUS_CHANGES -> R.string.douban_sync_substage_status_changes
-    DoubanSyncSubStage.RETRYING_FAILURES -> R.string.douban_sync_substage_retrying_failures
+    DoubanSyncSubStage.RETRYING_FAILURES -> R.string.douban_sync_substage_retrying_items
     DoubanSyncSubStage.WAITING_DELAY -> R.string.douban_sync_substage_waiting_delay
 }
 

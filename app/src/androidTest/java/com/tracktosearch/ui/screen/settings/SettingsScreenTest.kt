@@ -22,10 +22,7 @@ import com.tracktosearch.data.local.DoubanUserProfile
 import com.tracktosearch.data.remote.panhub.PanHubConfig
 import com.tracktosearch.data.remote.trakt.dto.TraktUserProfileResponse
 import com.tracktosearch.data.repository.ConsistencyCheckResult
-import com.tracktosearch.data.repository.RetryState
 import com.tracktosearch.data.repository.UpdateInfo
-import com.tracktosearch.ui.screen.douban.CloudSyncEvent
-import com.tracktosearch.ui.screen.douban.DoubanRetryViewModel
 import com.tracktosearch.ui.theme.MonetAccent
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
@@ -44,8 +41,6 @@ import org.junit.runner.RunWith
  * - 使用 `createAndroidComposeRule<HiltTestActivity>()`:HiltTestActivity 被
  *   `@AndroidEntryPoint` 注解(位于 debug source set,不会进入 release APK),
  *   满足 `hiltViewModel()` 对承载 Activity 实现 `GeneratedComponentManager` 的要求。
- * - SettingsScreen 内部通过 `hiltViewModel<DoubanRetryViewModel>()` 注入 ViewModel,
- *   通过预填充 activity 的 ViewModelStore 绕过 Hilt 工厂。
  * - SettingsViewModel 通过参数直接传入 mock,不走 hiltViewModel()。
  * - SettingsScreen 使用 LazyColumn 惰性渲染,不可见 item 不会被组合,
  *   查找节点前需用 `performScrollToNode` 滚动到目标。
@@ -349,32 +344,13 @@ class SettingsScreenTest {
         composeRule.onNode(hasScrollAction()).performScrollToNode(hasText(text))
     }
 
-    /**
-     * 设置 Compose 内容,预填充 activity 的 ViewModelStore 中的 DoubanRetryViewModel mock,
-     * 使 SettingsScreen 内部的 `hiltViewModel<DoubanRetryViewModel>()` 命中缓存。
-     *
-     * 原理:`hiltViewModel()` 内部调用 `viewModel()` → `ViewModelProvider(store, factory).get(key)`:
-     *   1. 先查 ViewModelStore,key = "androidx.lifecycle.ViewModelProvider.DefaultKey:" + canonicalName
-     *   2. 命中则直接返回,不调用 factory
-     *
-     * 预填充后步骤 2 命中,绕过 HiltViewModelFactory.create() 对真实依赖的需求。
-     * HiltViewModelFactory 构造时仍会执行(检查 activity 实现 GeneratedComponentManager),
-     * 但 HiltTestActivity 被 @AndroidEntryPoint 注解,满足此要求。
-     *
-     * @param settingsViewModel 可选,传入后预填充到 ViewModelStore,供 ConsistencyCheckDialog
-     *        内部的 `hiltViewModel<SettingsViewModel>()` 命中(避免 Hilt 创建真实 VM)
-     */
+    /** 设置 Compose 内容,可选预填充 SettingsViewModel 供一致性检查对话框复用。 */
     private inline fun setContentWithMockedViewModels(
         settingsViewModel: SettingsViewModel? = null,
         crossinline content: @androidx.compose.runtime.Composable () -> Unit
     ) {
-        val mockDoubanRetryVM = createMockDoubanRetryViewModel()
         val factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                if (modelClass == DoubanRetryViewModel::class.java) {
-                    @Suppress("UNCHECKED_CAST")
-                    return mockDoubanRetryVM as T
-                }
                 if (modelClass == SettingsViewModel::class.java && settingsViewModel != null) {
                     @Suppress("UNCHECKED_CAST")
                     return settingsViewModel as T
@@ -382,8 +358,6 @@ class SettingsScreenTest {
                 throw IllegalArgumentException("Unknown ViewModel: $modelClass")
             }
         }
-        // 预填充:通过 activity 的 ViewModelStore 将 mock 放入 store
-        ViewModelProvider(composeRule.activity, factory).get(DoubanRetryViewModel::class.java)
         if (settingsViewModel != null) {
             ViewModelProvider(composeRule.activity, factory).get(SettingsViewModel::class.java)
         }
@@ -391,18 +365,6 @@ class SettingsScreenTest {
         composeRule.setContent {
             content()
         }
-    }
-
-    /**
-     * 创建 DoubanRetryViewModel 的 relaxed mock,显式 mock 渲染期读取的 StateFlow。
-     */
-    private fun createMockDoubanRetryViewModel(): DoubanRetryViewModel {
-        val mock = mockk<DoubanRetryViewModel>(relaxed = true)
-        every { mock.retryState } returns MutableStateFlow(RetryState())
-        every { mock.cloudSyncLoading } returns MutableStateFlow(false)
-        every { mock.cloudSyncEvent } returns MutableStateFlow<CloudSyncEvent?>(null)
-        every { mock.cloudSyncDialog } returns MutableStateFlow<DoubanRetryViewModel.CloudSyncCompareInfo?>(null)
-        return mock
     }
 
     /**

@@ -142,7 +142,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.repository.BatchRemovalPhase
 import com.tracktosearch.data.repository.DoubanSyncLoginTarget
 import com.tracktosearch.data.repository.DoubanSyncSubStage
-import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.data.repository.WatchlistMediaType
 import com.tracktosearch.data.repository.labelRes
 import com.tracktosearch.ui.animation.EnterMode
 import com.tracktosearch.ui.animation.cardEnter
@@ -192,14 +192,13 @@ import java.time.temporal.ChronoUnit
 fun WatchlistScreen(
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
-    // 豆瓣模式: 无 imdb 条目(traktId=0, tmdbId=0, doubanId 非空)跳转失败项详情页
-    onDoubanFailureClick: (doubanId: String) -> Unit = {},
+    // 豆瓣条目需要保留 doubanId 和真实 mediaType，由上层统一决定详情路由。
+    onMediaItemClick: ((item: MediaUiItem, inWatchlist: Boolean, isWatched: Boolean) -> Unit)? = null,
     onSearchClick: (keyword: String) -> Unit,
     onTraktSearch: (type: String, query: String) -> Unit,
     onDiscoverClick: () -> Unit = {},
     onNavigateToDoubanLogin: () -> Unit = {},
     onNavigateToLogin: () -> Unit = {},
-    onDoubanFailures: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: WatchlistViewModel = hiltViewModel()
 ) {
@@ -215,8 +214,7 @@ fun WatchlistScreen(
     val emptyState = resolveWatchlistEmptyState(
         traktConnected = isTraktConnected,
         doubanLoggedIn = isDoubanLoggedIn,
-        doubanImported = uiState.doubanImported,
-        failureCount = uiState.doubanFailureCount
+        doubanImported = uiState.doubanImported
     )
     var showFilterSheet by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -232,6 +230,7 @@ fun WatchlistScreen(
     LaunchedEffect(Unit) {
         viewModel.loadMovies()
         viewModel.loadShows()
+        viewModel.loadOthers()
     }
 
     LaunchedEffect(isCurrentTab) {
@@ -308,6 +307,7 @@ fun WatchlistScreen(
             1 -> {
                 viewModel.loadHistoryMovies()
                 viewModel.loadHistoryShows()
+                viewModel.loadHistoryOthers()
             }
         }
     }
@@ -369,20 +369,24 @@ fun WatchlistScreen(
     val hazeState = remember { HazeState() }
     val hazeStyle = HazeMaterials.thin()
     val isDark = isAppDarkTheme()
-    // 为4种 (mode, tab) 组合各自创建独立的 gridState，彻底隔离滚动位置，
+    // 为6种 (mode, tab) 组合各自创建独立的 gridState，彻底隔离滚动位置，
     // 避免切 tab 时列表位置互相影响
     val movieGridState = rememberLazyGridState()        // mode=0, tab=0 想看电影
     val showGridState = rememberLazyGridState()         // mode=0, tab=1 想看电视剧
+    val otherGridState = rememberLazyGridState()        // mode=0, tab=2 想看其他
     val historyMovieGridState = rememberLazyGridState() // mode=1, tab=0 已看电影
     val historyShowGridState = rememberLazyGridState()  // mode=1, tab=1 已看电视剧
+    val historyOtherGridState = rememberLazyGridState() // mode=1, tab=2 已看其他
     val scrollToTopProvider = LocalScrollToTopProvider.current
 
     // 根据 selectedMode 和 selectedTab 选择对应的 gridState
     val currentGridState = when {
         selectedMode == 0 && selectedTab == 0 -> movieGridState
         selectedMode == 0 && selectedTab == 1 -> showGridState
+        selectedMode == 0 && selectedTab == 2 -> otherGridState
         selectedMode == 1 && selectedTab == 0 -> historyMovieGridState
-        else -> historyShowGridState
+        selectedMode == 1 && selectedTab == 1 -> historyShowGridState
+        else -> historyOtherGridState
     }
     val hasContentUnderTopBar by remember(currentGridState) {
         derivedStateOf {
@@ -435,27 +439,37 @@ fun WatchlistScreen(
     val filteredShows = remember(uiState.shows, searchQuery, filterState) {
         applyFilterAndSort(uiState.shows, searchQuery, filterState)
     }
+    val filteredOthers = remember(uiState.others, searchQuery, filterState) {
+        applyFilterAndSort(uiState.others, searchQuery, filterState)
+    }
     val filteredHistoryMovies = remember(uiState.historyMovies, searchQuery, filterState) {
         applyFilterAndSort(uiState.historyMovies, searchQuery, filterState)
     }
     val filteredHistoryShows = remember(uiState.historyShows, searchQuery, filterState) {
         applyFilterAndSort(uiState.historyShows, searchQuery, filterState)
     }
+    val filteredHistoryOthers = remember(uiState.historyOthers, searchQuery, filterState) {
+        applyFilterAndSort(uiState.historyOthers, searchQuery, filterState)
+    }
 
     // 获取当前 tab 对应的 items（用于多选操作）
     val currentItems = when {
         selectedMode == 0 && selectedTab == 0 -> filteredMovies
         selectedMode == 0 && selectedTab == 1 -> filteredShows
+        selectedMode == 0 && selectedTab == 2 -> filteredOthers
         selectedMode == 1 && selectedTab == 0 -> filteredHistoryMovies
-        else -> filteredHistoryShows
+        selectedMode == 1 && selectedTab == 1 -> filteredHistoryShows
+        else -> filteredHistoryOthers
     }
 
     // 当前列表是否正在加载
     val isCurrentLoading = when {
         selectedMode == 0 && selectedTab == 0 -> uiState.isLoadingMovies
         selectedMode == 0 && selectedTab == 1 -> uiState.isLoadingShows
+        selectedMode == 0 && selectedTab == 2 -> uiState.isLoadingOthers
         selectedMode == 1 && selectedTab == 0 -> uiState.isLoadingHistoryMovies
-        else -> uiState.isLoadingHistoryShows
+        selectedMode == 1 && selectedTab == 1 -> uiState.isLoadingHistoryShows
+        else -> uiState.isLoadingHistoryOthers
     }
 
     // 接近列表末尾时加载下一页，避免 watchlist 超过 200 条后停在第一页
@@ -467,7 +481,10 @@ fun WatchlistScreen(
             layoutInfo.totalItemsCount > 0 && lastVisibleIndex >= layoutInfo.totalItemsCount - 6
         }.collect { nearEnd ->
             if (!nearEnd) return@collect
-            if (selectedTab == 0) viewModel.loadMoreMovies() else viewModel.loadMoreShows()
+            when (selectedTab) {
+                0 -> viewModel.loadMoreMovies()
+                1 -> viewModel.loadMoreShows()
+            }
         }
     }
 
@@ -479,8 +496,10 @@ fun WatchlistScreen(
             when {
                 selectedMode == 0 && selectedTab == 0 -> uiState.isLoadingMovies
                 selectedMode == 0 && selectedTab == 1 -> uiState.isLoadingShows
+                selectedMode == 0 && selectedTab == 2 -> uiState.isLoadingOthers
                 selectedMode == 1 && selectedTab == 0 -> uiState.isLoadingHistoryMovies
-                else -> uiState.isLoadingHistoryShows
+                selectedMode == 1 && selectedTab == 1 -> uiState.isLoadingHistoryShows
+                else -> uiState.isLoadingHistoryOthers
             }
         }
             .dropWhile { !it }
@@ -617,11 +636,6 @@ fun WatchlistScreen(
                                                 if (selectedMode == 0) R.string.watchlist_empty_douban_not_imported
                                                 else R.string.watched_empty_douban_not_imported
                                             )
-                                            WatchlistEmptyState.IMPORTED_WITH_FAILURES -> stringResource(
-                                                if (selectedMode == 0) R.string.watchlist_empty_imported_failures
-                                                else R.string.watched_empty_imported_failures,
-                                                uiState.doubanFailureCount
-                                            )
                                             WatchlistEmptyState.IMPORTED_EMPTY -> stringResource(
                                                 if (selectedMode == 0) R.string.watchlist_empty_imported_empty
                                                 else R.string.watched_empty_imported_empty
@@ -659,11 +673,6 @@ fun WatchlistScreen(
                                                 Text(stringResource(R.string.watchlist_empty_start_douban_import))
                                             }
                                         }
-                                        WatchlistEmptyState.IMPORTED_WITH_FAILURES -> {
-                                            TextButton(onClick = onDoubanFailures) {
-                                                Text(stringResource(R.string.watchlist_empty_view_failures))
-                                            }
-                                        }
                                         WatchlistEmptyState.IMPORTED_EMPTY -> {
                                             TextButton(onClick = onDiscoverClick) {
                                                 Text(stringResource(R.string.watchlist_empty_go_discover))
@@ -698,7 +707,7 @@ fun WatchlistScreen(
                             val item = items[index]
                             val isSelected = selectedItems[item.selectionKey] == true
                             val isResolving = isRemoving && isSelected
-                            Box(modifier = Modifier.cardEnter(item.traktId.toLong(), index, enterMode, animatedIds)) {
+                            Box(modifier = Modifier.cardEnter(item.selectionKey.hashCode().toLong(), index, enterMode, animatedIds)) {
                                 WatchlistPosterCard(
                                     item = item,
                                     isInWatchlist = selectedMode == 0,
@@ -714,13 +723,31 @@ fun WatchlistScreen(
                                         } else {
                                             val inWatchlist = selectedMode == 0
                                             val isWatched = selectedMode == 1
-                                            // 豆瓣模式无 imdb 条目(traktId=0, tmdbId=0, doubanId 非空) → 跳失败项详情页
-                                            if (item.doubanId != null && item.traktId == 0 && item.tmdbId == 0) {
-                                                onDoubanFailureClick(item.doubanId)
-                                            } else if (selectedTab == 0) {
-                                                onMovieClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, inWatchlist, isWatched)
+                                            if (onMediaItemClick != null) {
+                                                onMediaItemClick(item, inWatchlist, isWatched)
                                             } else {
-                                                onShowClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, inWatchlist, isWatched)
+                                                // 兼容旧调用方；OTHER 不应因所在 tab 被误判为剧集。
+                                                when (item.mediaType) {
+                                                    WatchlistMediaType.SHOW -> onShowClick(
+                                                        item.traktId,
+                                                        item.tmdbId,
+                                                        item.title,
+                                                        item.imdbId,
+                                                        item.traktRating,
+                                                        inWatchlist,
+                                                        isWatched
+                                                    )
+                                                    WatchlistMediaType.MOVIE,
+                                                    WatchlistMediaType.OTHER -> onMovieClick(
+                                                        item.traktId,
+                                                        item.tmdbId,
+                                                        item.title,
+                                                        item.imdbId,
+                                                        item.traktRating,
+                                                        inWatchlist,
+                                                        isWatched
+                                                    )
+                                                }
                                             }
                                         }
                                     },
@@ -849,8 +876,12 @@ fun WatchlistScreen(
                                             onSearch = {
                                                 focusManager.clearFocus()
                                                 if (searchQuery.isNotBlank() && selectedMode == 0) {
-                                                    val noResults = if (selectedTab == 0) filteredMovies.isEmpty() else filteredShows.isEmpty()
-                                                    if (noResults) {
+                                                    val noResults = when (selectedTab) {
+                                                        0 -> filteredMovies.isEmpty()
+                                                        1 -> filteredShows.isEmpty()
+                                                        else -> filteredOthers.isEmpty()
+                                                    }
+                                                    if (noResults && selectedTab != 2) {
                                                         onTraktSearch(if (selectedTab == 0) "movie" else "show", searchQuery)
                                                     }
                                                 }
@@ -923,6 +954,11 @@ fun WatchlistScreen(
                             } else {
                                 uiState.showTotalCount ?: if (uiState.showsLoaded) filteredShows.size else 0
                             }
+                            val otherCount = if (selectedMode == 1 || isDoubanMode || hasLocalFilter) {
+                                if (selectedMode == 1) filteredHistoryOthers.size else filteredOthers.size
+                            } else {
+                                uiState.otherTotalCount ?: if (uiState.othersLoaded) filteredOthers.size else 0
+                            }
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -931,7 +967,8 @@ fun WatchlistScreen(
                             ) {
                                 listOf(
                                     stringResource(R.string.watchlist_tab_movies) to movieCount,
-                                    stringResource(R.string.watchlist_tab_shows) to showCount
+                                    stringResource(R.string.watchlist_tab_shows) to showCount,
+                                    stringResource(R.string.detail_disk_type_other) to otherCount
                                 ).forEachIndexed { index, (label, count) ->
                                     val selected = selectedTab == index
                                     Column(
@@ -1048,7 +1085,7 @@ fun WatchlistScreen(
                                                 ) {
                                                     stringResource(R.string.douban_sync_trakt_login_required_banner)
                                                 } else if (syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.FAILED) {
-                                                    stringResource(R.string.douban_sync_failed_banner, syncProgress.failedCount)
+                                                    stringResource(R.string.douban_sync_stage_failed)
                                                 } else if (syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.CANCELLING) {
                                                     stringResource(R.string.douban_sync_cancelled_banner)
                                                 } else if (syncProgress.isComplete) {
@@ -1355,7 +1392,11 @@ fun WatchlistScreen(
                                                 isRemoving = true
                                                 // 豆瓣模式无 traktId 条目也需正确移除,改用 selectionKey 匹配出完整 MediaUiItem
                                                 val selectedItemsList = currentItems.filter { it.selectionKey in selectedItems.keys }
-                                                val type = if (selectedTab == 0) MediaType.MOVIE else MediaType.SHOW
+                                                val type = when (selectedTab) {
+                                                    0 -> WatchlistMediaType.MOVIE
+                                                    1 -> WatchlistMediaType.SHOW
+                                                    else -> WatchlistMediaType.OTHER
+                                                }
                                                 tabScope.launch {
                                                     val hasFailure = if (selectedMode == 0) {
                                                         viewModel.batchRemoveFromWatchlist(selectedItemsList, type)
@@ -1410,11 +1451,17 @@ fun WatchlistScreen(
     
                 // 骨架屏：首次加载且列表为空时显示（避免 TMDB 富化过程中部分卡片已显示但骨架仍叠加）
                 val isLoading = if (selectedMode == 0) {
-                    if (selectedTab == 0) uiState.isLoadingMovies && !uiState.moviesLoaded && uiState.movies.isEmpty()
-                    else uiState.isLoadingShows && !uiState.showsLoaded && uiState.shows.isEmpty()
+                    when (selectedTab) {
+                        0 -> uiState.isLoadingMovies && !uiState.moviesLoaded && uiState.movies.isEmpty()
+                        1 -> uiState.isLoadingShows && !uiState.showsLoaded && uiState.shows.isEmpty()
+                        else -> uiState.isLoadingOthers && !uiState.othersLoaded && uiState.others.isEmpty()
+                    }
                 } else {
-                    if (selectedTab == 0) uiState.isLoadingHistoryMovies && !uiState.historyMoviesLoaded && uiState.historyMovies.isEmpty()
-                    else uiState.isLoadingHistoryShows && !uiState.historyShowsLoaded && uiState.historyShows.isEmpty()
+                    when (selectedTab) {
+                        0 -> uiState.isLoadingHistoryMovies && !uiState.historyMoviesLoaded && uiState.historyMovies.isEmpty()
+                        1 -> uiState.isLoadingHistoryShows && !uiState.historyShowsLoaded && uiState.historyShows.isEmpty()
+                        else -> uiState.isLoadingHistoryOthers && !uiState.historyOthersLoaded && uiState.historyOthers.isEmpty()
+                    }
                 }
                 if (isLoading) {
                     WatchlistSkeletonGrid(

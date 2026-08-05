@@ -27,6 +27,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
@@ -516,6 +517,16 @@ class DoubanSyncManagerLifecycleTest {
         assertThat(readWakeLockField()).isNull()
     }
 
+    @Test
+    fun 新同步开始和结束时恢复详情池下载() = runBlocking {
+        manager.startSync()
+        waitForCondition { manager.progress.value.isComplete && !manager.isRunning() }
+
+        verify(atLeast = 1) {
+            cloudDetailsPoolManager.resetDownloadSuppression()
+        }
+    }
+
     // ============================================================
     // 辅助函数
     // ============================================================
@@ -535,18 +546,23 @@ class DoubanSyncManagerLifecycleTest {
     )
 
     /**
-     * 反射调用 private suspend fun persistFailures(failures, isRetry)。
+     * 反射调用 private suspend fun persistFailures(failures, isRetry, preservedFailures)。
      *
      * suspend 方法 JVM 签名多一个 Continuation 参数,返回值为
      * COROUTINE_SUSPENDED(挂起)或实际结果(同步完成)。
      * 用 CountDownLatch 兼容两种完成路径:挂起时由 continuation.resumeWith 唤醒,
      * 同步完成时由主线程直接 countDown。
      */
-    private fun invokePersistFailures(failures: List<DoubanSyncFailure>, isRetry: Boolean) {
+    private fun invokePersistFailures(
+        failures: List<DoubanSyncFailure>,
+        isRetry: Boolean,
+        preservedFailures: List<DoubanSyncFailure> = emptyList()
+    ) {
         val method = DoubanSyncManager::class.java.getDeclaredMethod(
             "persistFailures",
             List::class.java,
             Boolean::class.javaPrimitiveType,
+            List::class.java,
             Continuation::class.java
         )
         method.isAccessible = true
@@ -561,7 +577,7 @@ class DoubanSyncManagerLifecycleTest {
             }
         }
 
-        val result = method.invoke(manager, failures, isRetry, continuation)
+        val result = method.invoke(manager, failures, isRetry, preservedFailures, continuation)
         // 同步完成时 result != COROUTINE_SUSPENDED,continuation 不会被调用,主动 countDown
         if (result != COROUTINE_SUSPENDED) {
             latch.countDown()

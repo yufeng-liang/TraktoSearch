@@ -245,10 +245,10 @@
 
     <!-- Douban Sync -->
     <string name="douban_login_title">Login to Douban</string>
-    <string name="douban_login_hint">Login to your Douban account below. Your marks will be synced to Trakt automatically.</string>
+    <string name="douban_login_hint">Log in to Douban to view your wish/watched marks in Watchlist; connect Trakt to sync them there.</string>
     <string name="douban_login_privacy_short">This page is used to log in to Douban to read your public marks (wishlist/watched). Credentials are used only for this sync and are not uploaded to any third-party server.</string>
     <string name="douban_login_privacy_detail_title">Details</string>
-    <string name="douban_login_privacy_detail">• Why login: to read your Douban marks (wishlist, watched, ratings)\n• What is stored: only Cookie and userId (for this crawl), NOT your Douban password\n• Cookie usage: only for requesting movie.douban.com/people/{userId}/wish|collect pages\n• After sync: you can clear Douban credentials anytime in Settings\n• Data flow: Douban → App → Trakt, no intermediate servers</string>
+    <string name="douban_login_privacy_detail">• Why login: to read your Douban marks (wishlist, watched, ratings)\n• What is stored: only Cookie and userId (for this crawl), NOT your Douban password\n• Cookie usage: only for requesting movie.douban.com/people/{userId}/wish|collect pages\n• After sync: you can clear Douban credentials anytime in Settings\n• Data flow: Douban → App; when Trakt is connected, marks can also sync to Trakt</string>
     <string name="douban_login_privacy_expand">View details</string>
     <string name="douban_login_privacy_collapse">Collapse</string>
     <string name="douban_login_success_snackbar">Douban login successful</string>
@@ -266,19 +266,15 @@
     <string name="douban_sync_douban_login_required_banner">Douban login required, tap to log in</string>
     <string name="douban_sync_trakt_login_required_banner">Trakt login required, tap to log in</string>
     <string name="douban_sync_complete_banner">Sync complete, %1$d items added</string>
-    <string name="douban_sync_failed_banner">Sync failed, %1$d items failed</string>
     <string name="douban_sync_cancelled_banner">Sync cancelled</string>
     <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
-    <string name="douban_sync_result_format">Success %1$d, Failed %2$d</string>
     <string name="douban_sync_error_detail">Error: %1$s</string>
-    <string name="douban_sync_failed_list_label">Failed:</string>
-    <string name="douban_sync_failed_more_format">...%1$d items failed in total</string>
     <string name="douban_sync_eta_format">about %1$s remaining</string>
     <string name="douban_sync_delay_format">Waiting %1$d sec (%2$s)</string>
     <string name="douban_sync_delay_detail_crawl">Douban anti-crawl delay</string>
     <string name="douban_sync_delay_list_crawl">List page crawl delay</string>
     <string name="douban_sync_delay_retry">Retry backoff</string>
-    <string name="douban_sync_summary_format">Success %1$d · Skipped %2$d · Cached %3$d · Failed %4$d</string>
+    <string name="douban_sync_summary_format">Success %1$d · Skipped %2$d · Cached %3$d</string>
 
     <!-- Douban sync failure retry -->
     <string name="douban_retry_title">Retry Douban Sync Failures</string>
@@ -307,21 +303,12 @@
     <string name="douban_failure_reason_no_imdb_id">No IMDb ID</string>
     <string name="douban_failure_reason_detail_fetch_failed">Detail page fetch failed</string>
     <string name="douban_failure_reason_trakt_not_found">Trakt entry not found</string>
+    <string name="douban_failure_reason_trakt_search_failed">Trakt search failed</string>
     <string name="douban_failure_reason_trakt_write_timeout">Trakt write timeout</string>
     <string name="douban_failure_reason_trakt_write_failed">Trakt write failed</string>
 
     <!-- Sync result dialog -->
-    <string name="douban_sync_failed_group_recoverable">Recoverable (%1$d)</string>
-    <string name="douban_sync_failed_group_non_recoverable">Non-recoverable (%1$d)</string>
-    <string name="douban_sync_failed_export">Export failures</string>
-    <string name="douban_sync_failed_export_nothing">No failures to export</string>
-    <string name="douban_sync_failed_export_success">Exported %1$d failure items</string>
-    <string name="douban_sync_failed_export_failed">Export failed</string>
-    <string name="douban_sync_failed_export_chooser_title">Share failures JSON</string>
-    <string name="douban_sync_failed_show_all">Show all %1$d items</string>
-    <string name="douban_sync_failed_collapse">Collapse</string>
     <string name="douban_sync_current_processing">Processing: %1$s</string>
-    <string name="douban_sync_recent_failures">Recent failures:</string>
     <string name="douban_sync_retry_complete_banner">Retry complete, %1$d items succeeded</string>
 
     <!-- Douban sync resume (after cancel) -->
@@ -398,7 +385,12 @@
     <string name="detail_info_countries">Country</string>
     <string name="detail_info_directors">Director</string>
     <string name="detail_info_genres">Genre</string>
+    <string name="detail_info_imdb_rating">IMDb</string>
+    <string name="detail_info_imdb_id">IMDb ID</string>
     <string name="detail_info_douban_rating">Douban</string>
+    <string name="detail_info_metacritic_rating">MTC</string>
+    <string name="detail_info_tmdb_rating">TMDB</string>
+    <string name="detail_info_rotten_tomatoes_rating">RT</string>
     <string name="detail_info_rating_count">(%1$d ratings)</string>
     <string name="detail_info_aka">Also Known As</string>
     <string name="detail_info_runtime">Runtime</string>
@@ -599,11 +591,11 @@
     <string name="help_import_src_imdb_how">Log in to IMDb → Your Watchlist → Menu → Export to download CSV</string>
     <string name="help_import_src_imdb_effect">Search by title and sync to Trakt watchlist</string>
     <string name="help_data_douban_title">Douban Marks Sync</string>
-    <string name="help_data_douban_b1">On the login page, tap \"Or import from Douban\" and log in via WebView. The app crawls your Douban wish/collect marks and syncs them to Trakt automatically.</string>
+    <string name="help_data_douban_b1">On the login page, tap \"Or import from Douban\" and log in via WebView. The app crawls your Douban wish/collect marks and displays them in Watchlist; when Trakt is connected, it can also sync them to Trakt.</string>
     <string name="help_data_douban_b2">In Settings → Data Management, tap \"Re-sync Douban\" to re-sync Douban marks.</string>
-    <string name="help_data_douban_b3">Conflict strategy: Douban \"watched\" overrides Trakt \"watchlist\"; Douban \"wish\" does NOT override Trakt \"watched\"; ratings follow Douban (5-star → 10-point).</string>
-    <string name="help_data_douban_b4">Failed items are saved locally. In Settings → Data Management, tap \"View Sync Failures\" to review them, mark movie/show type, edit subtitle, search resources, retry sync, or delete.</string>
-    <string name="help_data_douban_b5">Cross-device: In Settings → Data Management, use the \"Retry failures\" dialog or the \"View Sync Failures\" page and choose \"Import failures from JSON\" to import a failures JSON file exported from another device and view them locally.</string>
+    <string name="help_data_douban_b3">When Trakt is connected, the conflict strategy is: Douban \"watched\" overrides Trakt \"watchlist\"; Douban \"wish\" does NOT override Trakt \"watched\"; ratings follow Douban (5-star → 10-point).</string>
+    <string name="help_data_douban_b4">All imported Douban marks appear in Watchlist. Items with an IMDb ID use the normal detail page; items without one use the Douban detail page.</string>
+    <string name="help_data_douban_b5">Douban imports can resume and retry automatically. Technical processing errors do not remove imported marks from Watchlist.</string>
     <string name="help_data_table_title">Data Import/Export Overview</string>
     <string name="help_dc_export_t">Export Marks</string>
     <string name="help_dc_export_entry">Settings → Data Management</string>
@@ -613,22 +605,10 @@
     <string name="help_dc_imdb_entry">Settings → Data Management</string>
     <string name="help_dc_imdb_fmt">CSV</string>
     <string name="help_dc_imdb_desc">Import IMDb watchlist, search by title and sync to Trakt watchlist</string>
-    <string name="help_dc_upload_t">Upload Failures to Cloud</string>
-    <string name="help_dc_upload_entry">Settings → Data Management</string>
-    <string name="help_dc_upload_fmt">Encrypted JSON</string>
-    <string name="help_dc_upload_desc">Upload Douban sync failures to cloud with AES encryption</string>
-    <string name="help_dc_download_t">Download Failures from Cloud</string>
-    <string name="help_dc_download_entry">Settings → Data Management</string>
-    <string name="help_dc_download_fmt">Encrypted JSON</string>
-    <string name="help_dc_download_desc">Download failures from cloud, decrypt and merge to local</string>
     <string name="help_dc_douban_t">Douban Marks Sync</string>
     <string name="help_dc_douban_entry">Login Page / Settings</string>
     <string name="help_dc_douban_fmt">Douban Account</string>
-    <string name="help_dc_douban_desc">Log in to Douban, crawl wish/collect marks and sync to Trakt</string>
-    <string name="help_dc_failures_t">Import Failures JSON</string>
-    <string name="help_dc_failures_entry">Failures Viewer Page</string>
-    <string name="help_dc_failures_fmt">JSON</string>
-    <string name="help_dc_failures_desc">Import failures JSON exported from another device to view locally</string>
+    <string name="help_dc_douban_desc">Log in to Douban and import wish/watched marks into Watchlist; optionally sync them to Trakt</string>
     <string name="help_dc_cooldown">Cooldown: Douban has anti-crawl measures. Frequent repeated crawls may get your IP blacklisted. A 7-day cooldown after a full crawl reduces request frequency. During cooldown, incremental sync reuses cloud data without re-crawling; you can force sync at your own risk.</string>
     <string name="help_custom_source">Custom Search Sources</string>
     <string name="help_custom_source_b1">Settings → Search Sources → Custom Sources → Add Source</string>
@@ -720,8 +700,8 @@ Config:
 
     <!-- Douban mark bidirectional write-back help -->
     <string name="help_douban_writeback">Douban Mark Write-back</string>
-    <string name="help_douban_writeback_b1">On the Douban sync-failure item detail page, you can directly write &quot;Want to watch&quot;/&quot;Watched&quot;/&quot;Remove mark&quot; back to Douban.</string>
-    <string name="help_douban_writeback_b3">Switching Wish/Collected persists the new status to the failure list. Removing the mark deletes the failure item (with a second confirmation).</string>
+    <string name="help_douban_writeback_b1">On a Douban item detail page, you can directly write &quot;Want to watch&quot;/&quot;Watched&quot;/&quot;Remove mark&quot; back to Douban.</string>
+    <string name="help_douban_writeback_b3">Switching Wish/Collected updates the Douban mark. Removing the mark deletes it after confirmation.</string>
     <string name="help_consistency_check">Status Consistency Check</string>
     <string name="help_consistency_intro">Douban and Trakt statuses may diverge. The check unifies both sides by the rule &quot;Watched takes priority over Want-to-watch&quot;: the watched status overrides wishlist, and the side that is watched is written back to the other, so no mark is ever lost. It also cleans up legacy items that are both in Want-to-watch and Watched on Trakt (leftover from old data), automatically removing their Want-to-watch mark. The table below lists how every mismatch is handled.</string>
     <string name="help_consistency_col_douban">Douban</string>
@@ -747,7 +727,7 @@ Config:
     <string name="onboarding_step2_title">Discover</string>
     <string name="onboarding_step2_desc">Browse personalized recommendations (generated after Douban login) and other charts</string>
     <string name="onboarding_step3_title">My List</string>
-    <string name="onboarding_step3_desc">View your Trakt watchlist and watched lists, including content imported from Douban</string>
+    <string name="onboarding_step3_desc">View your Trakt and Douban wish/watched lists in one place</string>
     <string name="settings_licenses">Open Source Licenses</string>
     <string name="settings_cache">Cache</string>
     <string name="settings_cache_clear">Clear</string>
@@ -808,7 +788,6 @@ Config:
     <string name="cooldown_guidance_message">List crawling was synced within 7 days. Incremental sync will be skipped (data comes from cloud). Force sync to re-crawl the Douban list?\n\nDouban has anti-crawl measures. Frequent repeated crawls may get your IP blacklisted. Force sync at your own risk.</string>
     <string name="cooldown_force_sync">Force sync</string>
     <string name="cooldown_skip">Skip</string>
-    <string name="settings_douban_retry_failures">Retry last failed items</string>
 
     <!-- Douban sync mode picker -->
     <string name="douban_sync_mode_picker_title">Choose Re-sync Mode</string>
@@ -827,8 +806,6 @@ Config:
     <string name="douban_retry_option_export_desc">Save as JSON file for backup or sharing</string>
 
     <!-- Douban failures viewer -->
-    <string name="settings_douban_view_failures">View sync failures</string>
-    <string name="settings_douban_view_failures_desc">%1$d Douban items failed to sync</string>
     <string name="settings_douban_status_consistency">Check Status Consistency</string>
     <string name="settings_douban_status_consistency_desc">Check if Douban and Trakt watchlist/watched statuses match</string>
     <string name="settings_douban_status_consistency_checking">Checking…</string>
@@ -892,51 +869,12 @@ Config:
     <string name="consistency_check_time_minutes_ago">%1$d minutes ago</string>
     <string name="consistency_check_time_hours_ago">%1$d hours ago</string>
     <string name="consistency_check_time_days_ago">%1$d days ago</string>
-    <string name="settings_douban_import_failures">Import failures from JSON</string>
-    <string name="settings_douban_import_failures_desc">Import a failures JSON file exported from another device to view here</string>
     <string name="screen_douban_failures_title">Sync failures</string>
     <string name="share_failures_json">Share failures JSON</string>
 
     <!-- Cloud failure sync -->
-    <string name="cloud_failures_detected_title">Cloud failures detected</string>
-    <string name="cloud_failures_detected_desc">Found %1$d synced failure items in the cloud for your Douban account. Download to view them locally?</string>
-    <string name="cloud_failures_download">Download</string>
-    <string name="cloud_failures_dismiss">Not now</string>
-    <string name="cloud_failures_downloaded">Cloud failures downloaded and merged</string>
-    <string name="cloud_failures_downloaded_with_count">Downloaded and merged %1$d cloud failure items, replacing local data</string>
 
     <!-- Manual cloud sync (settings page) -->
-    <string name="settings_douban_upload_cloud">Upload failures</string>
-    <string name="settings_douban_upload_cloud_desc">Upload local failures to Gitee cloud for cross-device viewing (requires Douban login)</string>
-    <string name="settings_douban_download_cloud">Pull failures</string>
-    <string name="settings_douban_download_cloud_desc">Download cloud failures for this Douban account and merge locally</string>
-    <string name="cloud_sync_no_login">Please login to Douban first</string>
-    <string name="cloud_sync_no_local_failures">No local failures, skipped upload</string>
-    <string name="cloud_sync_upload_success">Failures uploaded to cloud</string>
-    <string name="cloud_sync_upload_failed">Upload failed, please try again later</string>
-    <string name="cloud_sync_download_empty">No cloud failures for this Douban account</string>
-    <string name="cloud_sync_download_local_newer">Local data is newer, cloud data ignored</string>
-    <string name="cloud_sync_download_success">Downloaded and merged %1$d cloud failures</string>
-    <string name="dialog_download_success_title">Import Successful</string>
-    <string name="dialog_download_success_message">Imported %1$d failure items from cloud. You can view them in the sync failures page.</string>
-    <string name="dialog_download_success_view">View Failures</string>
-    <string name="dialog_download_success_dismiss">Close</string>
-    <string name="cloud_sync_download_failed">Download failed, please try again later</string>
-    <string name="cloud_sync_dialog_no_time">N/A</string>
-    <string name="cloud_sync_dialog_title_overwrite">Cloud data is newer</string>
-    <string name="cloud_sync_dialog_title_local_newer">Local data is newer</string>
-    <string name="cloud_sync_dialog_title_upload_skip">No upload needed</string>
-    <string name="cloud_sync_dialog_title_upload_done">Uploaded to cloud</string>
-    <string name="cloud_sync_dialog_title_download_empty">Cloud data downloaded</string>
-    <string name="cloud_sync_dialog_local_time">Local: %1$s</string>
-    <string name="cloud_sync_dialog_cloud_time">Cloud: %1$s</string>
-    <string name="cloud_sync_dialog_overwrite_message">Cloud has %1$d failure items (updated at the time above). This will overwrite local data. Continue?</string>
-    <string name="cloud_sync_dialog_local_newer_message">Local failure data is newer; kept local, cloud not downloaded.</string>
-    <string name="cloud_sync_dialog_upload_skip_message">Local data is not newer than cloud; upload skipped, cloud unchanged.</string>
-    <string name="cloud_sync_dialog_upload_done_message">Local failure data uploaded to cloud (encrypted).</string>
-    <string name="cloud_sync_dialog_download_empty_message">Downloaded and merged %1$d cloud failure items to local.</string>
-    <string name="cloud_sync_dialog_overwrite_confirm">Overwrite local</string>
-    <string name="cloud_sync_in_progress">Syncing…</string>
     <string name="screen_douban_failures_empty_wish">Wishlist sync all succeeded</string>
     <string name="screen_douban_failures_empty_collect">Watched list sync all succeeded</string>
     <string name="screen_douban_failures_empty_all">No sync failures</string>
@@ -1430,14 +1368,11 @@ Config:
     <string name="watched_empty_trakt_only">Your watched list is empty. Sign in to Douban to import your marks, or discover something new.</string>
     <string name="watchlist_empty_douban_not_imported">Your Douban marks are ready. Import them to fill this list.</string>
     <string name="watched_empty_douban_not_imported">Your Douban marks are ready. Import them to fill this watched list.</string>
-    <string name="watchlist_empty_imported_failures">%1$d Douban marks could not be imported. View the failed items in Settings.</string>
-    <string name="watched_empty_imported_failures">%1$d Douban marks could not be imported. View the failed items in Settings.</string>
     <string name="watchlist_empty_imported_empty">Your Douban marks have been imported, but this list is empty.</string>
     <string name="watched_empty_imported_empty">Your Douban marks have been imported, but this watched list is empty.</string>
     <string name="watchlist_empty_login_trakt">Sign in to Trakt</string>
     <string name="watchlist_empty_login_douban">Sign in to Douban and import</string>
     <string name="watchlist_empty_start_douban_import">Import Douban marks</string>
-    <string name="watchlist_empty_view_failures">View failed items</string>
 
     <!-- Easter Egg Messages (9 animations × 3 messages) -->
     <string name="easter_msg_shy_1">You poked me, it tickles!</string>
@@ -1478,7 +1413,7 @@ Config:
     <string name="douban_logout_confirm_title">Log out of Douban</string>
     <string name="douban_logout_confirm_message">Logging out will clear %1$d local Douban marks. Continue?</string>
     <string name="douban_logout_sync_in_progress_warning">Sync is in progress. Logging out will interrupt it and clear local data.</string>
-    <string name="settings_douban_login_hint">Login to sync Douban wish/watched marks to Trakt</string>
+    <string name="settings_douban_login_hint">Log in to view Douban wish/watched marks in Watchlist; connect Trakt to sync them there</string>
     <string name="settings_guest_login_hint">Login to Trakt to use watchlist, watched, ratings and more</string>
     <string name="statistics_info_wordcloud">Q: What is the review word cloud?\nA: It extracts high-frequency words from your Douban short reviews and renders them as a word cloud. Larger words appear more often, helping you quickly recall your viewing impressions.</string>
 
@@ -1588,7 +1523,7 @@ Config:
     <string name="douban_sync_substage_writing_target">Writing Trakt</string>
     <string name="douban_sync_substage_writing_local">Saving local data</string>
     <string name="douban_sync_substage_status_changes">Applying status changes</string>
-    <string name="douban_sync_substage_retrying_failures">Retrying failures</string>
+    <string name="douban_sync_substage_retrying_items">Retrying items</string>
     <string name="douban_sync_substage_waiting_delay">Waiting before retry</string>
     <string name="douban_sync_recent_items">Recently fetched</string>
     <string name="douban_sync_preview_status_wish">Wish list</string>

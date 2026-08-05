@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.douban
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,9 +38,7 @@ import com.tracktosearch.R
  * 1. 继续同步:跳过列表爬取,直接处理已爬到的数据(走 startResume)
  * 2. 完整同步:清空未处理数据,从头开始(走 startSync)
  *
- * 优先级:pending items 优先于 failures 重试。
  * - 有 pending items → 弹此对话框
- * - 无 pending items 但有 failures → 弹失败重试对话框
  * - 都没有 → 正常流程
  */
 @Composable
@@ -67,10 +66,7 @@ fun DoubanPendingItemsDialog(
                     icon = Icons.Rounded.PlayArrow,
                     title = stringResource(R.string.douban_resume_continue),
                     subtitle = stringResource(R.string.douban_resume_continue_desc),
-                    onClick = {
-                        onDismiss()
-                        onContinue()
-                    },
+                    onClick = onContinue,
                     isRecommended = true
                 )
 
@@ -81,10 +77,7 @@ fun DoubanPendingItemsDialog(
                     icon = Icons.Rounded.Refresh,
                     title = stringResource(R.string.douban_resume_full),
                     subtitle = stringResource(R.string.douban_resume_full_desc),
-                    onClick = {
-                        onDismiss()
-                        onFullSync()
-                    }
+                    onClick = onFullSync
                 )
             }
         },
@@ -106,7 +99,6 @@ fun DoubanPendingItemsDialog(
  * 1. 恢复标记:将被删除的标记重新添加到 Trakt(推荐)
  * 2. 不恢复:放弃恢复,标记将永久丢失
  *
- * 优先级:rollback 优先于 pending items 和 failures 重试。
  */
 @Composable
 fun DoubanRollbackDialog(
@@ -183,7 +175,8 @@ private fun ResumeOptionItem(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp),
+            .padding(vertical = 2.dp)
+            .clickable(onClick = onClick),
         color = containerColor,
         shape = MaterialTheme.shapes.small
     ) {

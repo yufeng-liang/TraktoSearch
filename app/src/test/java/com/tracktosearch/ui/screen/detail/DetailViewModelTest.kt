@@ -10,8 +10,10 @@ import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.dto.DiskType
+import com.tracktosearch.data.remote.trakt.dto.TraktSyncResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktEpisode
 import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.data.repository.MultiRatings
 import com.tracktosearch.data.repository.RatingsRepository
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.repository.TmdbRepository
@@ -166,6 +168,34 @@ class DetailViewModelTest {
         method.invoke(viewModel)
         advanceUntilIdle()
 
+        coVerify(exactly = 0) { traktRepository.getUserRating(any(), any()) }
+    }
+
+    @Test
+    fun `缓存恢复时无效Trakt ID不读取本地或远程用户评分`() = runTest {
+        every {
+            ratingsRepository.fetchRatingsStream(any(), any(), any())
+        } returns flowOf(MultiRatings())
+        coEvery { viewedItemStorage.getViewedUrls() } returns emptySet()
+
+        viewModel.loadDetail(
+            traktId = 0,
+            tmdbId = 0,
+            title = "Cached fallback",
+            mediaType = MediaType.MOVIE
+        )
+        advanceUntilIdle()
+
+        setPrivateField("currentDetailCacheKey", null)
+        viewModel.loadDetail(
+            traktId = 0,
+            tmdbId = 0,
+            title = "Cached fallback",
+            mediaType = MediaType.MOVIE
+        )
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { userReviewRepository.getReview(any()) }
         coVerify(exactly = 0) { traktRepository.getUserRating(any(), any()) }
     }
 
@@ -750,5 +780,80 @@ class DetailViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { traktRepository.getSeasonEpisodes(any(), any()) }
+    }
+
+    @Test
+    fun `loadMoreComments_无效TraktId不请求Trakt评论`() = runTest {
+        setupLoggedInState(traktId = 0)
+        setPrivateField("currentSessionMode", SessionMode.TRAKT)
+        setUiState { it.copy(hasMoreComments = true, commentPage = 1, tmdbCommentPage = 0) }
+
+        viewModel.loadMoreComments()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { traktRepository.getComments(any(), any(), any(), any()) }
+        assertThat(viewModel.uiState.value.isLoadingMoreComments).isFalse()
+    }
+
+    @Test
+    fun `invalid trakt id without douban id short circuits every trakt write entry`() = runTest {
+        setupLoggedInState(traktId = 0, mediaType = MediaType.SHOW)
+        setPrivateField("currentDoubanId", null)
+        setPrivateField("currentSessionMode", SessionMode.TRAKT)
+        setUiState {
+            it.copy(
+                userRating = 8,
+                isMarkedWatched = true,
+                isMarkedWatchlist = true,
+                watchedEpisodeNumbers = mapOf(1 to setOf(1))
+            )
+        }
+
+        coEvery { traktRepository.addRating(any(), any(), any()) } returns Result.success(Unit)
+        coEvery { traktRepository.postComment(any(), any(), any()) } returns Result.success(mockk(relaxed = true))
+        coEvery { traktRepository.removeRating(any(), any()) } returns Result.success(Unit)
+        coEvery { traktRepository.removeWatched(any(), any(), any()) } returns Result.success(TraktSyncResponse())
+        coEvery { traktRepository.markAsWatched(any(), any()) } returns Result.success(TraktSyncResponse())
+        coEvery { traktRepository.addToWatchlist(any(), any(), any()) } returns Result.success(TraktSyncResponse())
+        coEvery { traktRepository.removeFromWatchlist(any(), any(), any()) } returns Result.success(TraktSyncResponse())
+        coEvery { traktRepository.markEpisodesWatched(any(), any(), any()) } returns Result.success(Unit)
+        coEvery { traktRepository.markEpisodeWatched(any()) } returns Result.success(Unit)
+        coEvery {
+            traktRepository.unmarkEpisodeWatched(any(), any(), any(), any(), any(), any())
+        } returns Result.success(Unit)
+        coEvery { traktRepository.getSeasonEpisodes(any(), any()) } returns Result.success(emptyList())
+
+        viewModel.setRating(7)
+        viewModel.setRatingWithComment(7, "comment")
+        viewModel.removeRating()
+        setUiState { it.copy(isMarkedWatched = false) }
+        viewModel.toggleWatched()
+        setUiState { it.copy(isMarkedWatchlist = false) }
+        viewModel.toggleWatchlist()
+        setUiState { it.copy(watchedEpisodeNumbers = emptyMap()) }
+        viewModel.toggleEpisodeWatched(1, 2, 102)
+        setUiState { it.copy(watchedEpisodeNumbers = mapOf(1 to setOf(1))) }
+        viewModel.toggleEpisodeWatched(1, 1, 101)
+        viewModel.submitMarkWatched(listOf(101, 102))
+        viewModel.toggleSeason(2)
+        viewModel.loadEpisodesForMarkWatched(2)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { traktRepository.addRating(any(), any(), any()) }
+        coVerify(exactly = 0) { traktRepository.postComment(any(), any(), any()) }
+        coVerify(exactly = 0) { traktRepository.removeRating(any(), any()) }
+        coVerify(exactly = 0) { traktRepository.removeWatched(any(), any(), any()) }
+        coVerify(exactly = 0) { traktRepository.markAsWatched(any(), any()) }
+        coVerify(exactly = 0) { traktRepository.addToWatchlist(any(), any(), any()) }
+        coVerify(exactly = 0) { traktRepository.removeFromWatchlist(any(), any(), any()) }
+        coVerify(exactly = 0) { traktRepository.markEpisodesWatched(any(), any(), any()) }
+        coVerify(exactly = 0) { traktRepository.markEpisodeWatched(any()) }
+        coVerify(exactly = 0) {
+            traktRepository.unmarkEpisodeWatched(any(), any(), any(), any(), any(), any())
+        }
+        coVerify(exactly = 0) { traktRepository.getSeasonEpisodes(any(), any()) }
+        assertThat(viewModel.uiState.value.userRating).isEqualTo(8)
+        assertThat(viewModel.uiState.value.isMarkedWatched).isFalse()
+        assertThat(viewModel.uiState.value.isMarkedWatchlist).isFalse()
     }
 }

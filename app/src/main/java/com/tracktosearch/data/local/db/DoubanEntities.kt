@@ -1,6 +1,7 @@
 package com.tracktosearch.data.local.db
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.Insert
@@ -8,6 +9,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 
 /**
  * 豆瓣→Trakt 同步记录。
@@ -38,7 +40,12 @@ data class DoubanSyncedItem(
     val genres: String? = null,         // 类型,TMDB 富化
     val posterUrl: String? = null,      // 海报,TMDB 富化
     val listedAt: String? = null,       // 豆瓣标记时间（区别于 syncedAt 同步时间）
-    val pendingSync: Boolean = false    // 豆瓣 API 失败时乐观更新标记,下次同步重试
+    val pendingSync: Boolean = false,   // 豆瓣 API 失败时乐观更新标记,下次同步重试
+    // 豆瓣快照字段：即使没有 IMDb/TMDB/Trakt，也可以直接渲染详情。
+    val doubanUrl: String? = null,
+    val comment: String? = null,
+    val markedAt: String? = null,
+    val subtitle: String? = null
 )
 
 @Dao
@@ -53,7 +60,7 @@ interface DoubanSyncedItemDao {
     @Query("SELECT doubanId FROM douban_synced_items")
     suspend fun getAllSyncedDoubanIds(): List<String>
 
-    @Query("SELECT * FROM douban_synced_items")
+    @Query("SELECT * FROM douban_synced_items ORDER BY syncedAt DESC")
     suspend fun getAllSyncedItems(): List<DoubanSyncedItem>
 
     // —— 豆瓣独立模式专用查询（v12 新增）——
@@ -92,7 +99,7 @@ interface DoubanSyncedItemDao {
 
     /** 失败项详情页 fallback 数据源场景: 用户手动标注媒体类型时同步更新本地表（与 douban_sync_failures 双写） */
     @Query("UPDATE douban_synced_items SET mediaType = :mediaType WHERE doubanId = :doubanId")
-    suspend fun updateMediaType(doubanId: String, mediaType: String?)
+    suspend fun updateMediaType(doubanId: String, mediaType: String)
 
     /** 重试成功后清除 pendingSync 标记 */
     @Query("UPDATE douban_synced_items SET pendingSync = 0 WHERE doubanId = :doubanId")
@@ -101,8 +108,27 @@ interface DoubanSyncedItemDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(items: List<DoubanSyncedItem>)
 
+    /** 按豆瓣 ID 覆盖写入一条完整快照。 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(item: DoubanSyncedItem)
+
+    /** 按豆瓣 ID 覆盖写入多条完整快照。 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(items: List<DoubanSyncedItem>)
+
+    /** 仅更新已存在的完整快照，不会因 ID 不存在而插入意外记录。 */
+    @Update
+    suspend fun update(item: DoubanSyncedItem)
+
+    /** 删除指定快照；ID 不存在时无副作用。 */
+    @Delete
+    suspend fun delete(item: DoubanSyncedItem)
+
     @Query("DELETE FROM douban_synced_items")
     suspend fun clearAll()
+
+    @Query("DELETE FROM douban_synced_items WHERE doubanId NOT IN (:doubanIds)")
+    suspend fun deleteNotInDoubanIds(doubanIds: List<String>)
 
     @Query("SELECT COUNT(*) FROM douban_synced_items")
     suspend fun count(): Int

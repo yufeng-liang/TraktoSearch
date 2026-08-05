@@ -204,9 +204,9 @@ class DoubanRetryManager @Inject constructor(
         title = title,
         posterUrl = posterUrl,
         rating = rating,
-        comment = null,  // synced_items 表无 comment 字段
-        markedAt = listedAt ?: "",  // 用豆瓣标记时间兜底
-        doubanUrl = "https://movie.douban.com/subject/$doubanId/",  // 豆瓣电影 URL 固定模板
+        comment = comment,
+        markedAt = markedAt ?: listedAt ?: "",
+        doubanUrl = doubanUrl ?: "https://movie.douban.com/subject/$doubanId/",
         status = DoubanMarkStatus.fromString(status),
         failureReason = FailureReason.NO_IMDB_ID,  // 进入 fallback 路径的主因是无 imdbId
         failedAt = syncedAt,
@@ -214,7 +214,7 @@ class DoubanRetryManager @Inject constructor(
         attemptCount = 0,
         mediaType = mediaType,
         mediaTypeCleared = false,
-        subtitle = null
+        subtitle = subtitle
     )
 
     /**
@@ -273,7 +273,8 @@ class DoubanRetryManager @Inject constructor(
     suspend fun updateMediaType(doubanId: String, mediaType: String?) = withContext(Dispatchers.IO) {
         doubanSyncFailureDao.updateMediaType(doubanId, mediaType)
         // 豆瓣独立模式 fallback 数据源场景: 同步双写本地表(保持两表 mediaType 一致)
-        runCatching { doubanSyncedItemDao.updateMediaType(doubanId, mediaType) }
+        // 统一 Watchlist 的媒体分类不能为空；清除手动标注时归入 OTHER。
+        runCatching { doubanSyncedItemDao.updateMediaType(doubanId, mediaType ?: "other") }
         // 标注(含清除标注null)均异步上传到全局池强覆盖,供其他用户同步
         runCatching {
             cloudDetailsPoolManager.uploadUserMarkedMediaType(doubanId, mediaType)
@@ -315,6 +316,9 @@ class DoubanRetryManager @Inject constructor(
         // trim 后空串转 null,避免空子标题触发搜索
         val normalized = subtitle?.trim()?.takeIf { it.isNotBlank() }
         doubanSyncFailureDao.updateSubtitle(doubanId, normalized)
+        doubanSyncedItemDao.getByDoubanId(doubanId)?.let { existing ->
+            doubanSyncedItemDao.update(existing.copy(subtitle = normalized))
+        }
     }
 
     /** 删除单条失败项(用户在详情页删除,不同于 clearAll)。同时删除本地表对应记录,保持双表一致 */

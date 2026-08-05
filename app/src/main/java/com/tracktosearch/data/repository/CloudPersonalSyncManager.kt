@@ -1,6 +1,7 @@
 package com.tracktosearch.data.repository
 
 import android.util.Log
+import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.DoubanSyncMetaStorage
 import com.tracktosearch.data.local.UserProfileStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItem
@@ -29,7 +30,7 @@ import javax.inject.Singleton
  * - A 手机导入豆瓣后，B 手机登录同 trakt 账号选择增量同步 → 智能跳过已同步数据，避免全量爬取豆瓣
  * - A 手机中途取消，B 手机选择增量同步 → 接续 A 的进度（pending items）
  *
- * 云端路径（按 trakt username 隔离，SHA-256 前 16 字节做文件名）：
+ * 云端路径（按个人同步身份隔离，SHA-256 前 16 字节做文件名）：
  * - `personal/{hash}/synced_items.json` - 已同步条目（doubanId → traktId/imdbId 映射）
  * - `personal/{hash}/pending_items.json` - 断点续传 pending（A 中途取消时上传）
  * - `personal/{hash}/id_mappings.json` - IMDb→Trakt ID 映射（避免重复查询 Trakt API）
@@ -39,8 +40,8 @@ import javax.inject.Singleton
  *
  * 失败处理：上传/下载失败只记录日志，不阻塞主同步流程。
  *
- * 隔离说明：用 trakt username 而非 douban userId，因为豆瓣同步的前提是已登录 trakt，
- * 且同一 trakt 账号可能换豆瓣账号导入，trakt username 是更稳定的账号标识。
+ * 隔离说明：优先使用 trakt username；豆瓣独立登录且没有 trakt username 时回退到 douban userId。
+ * 同一 trakt 账号可能换豆瓣账号导入，因此双登录时仍以 trakt username 作为更稳定的账号标识。
  * （username 理论上可改，但极少改；改了需重新完整同步，可接受）
  */
 @Singleton
@@ -49,6 +50,7 @@ class CloudPersonalSyncManager @Inject constructor(
     private val doubanSyncedItemDao: DoubanSyncedItemDao,
     private val doubanSyncPendingItemDao: DoubanSyncPendingItemDao,
     private val userProfileStorage: UserProfileStorage,
+    private val doubanAuthStorage: DoubanAuthStorage,
     private val doubanSyncMetaStorage: DoubanSyncMetaStorage,
     private val traktRepository: TraktRepository,
     private val json: Json
@@ -92,7 +94,18 @@ class CloudPersonalSyncManager @Inject constructor(
         val status: String,
         val rating: Int?,
         val syncedAt: Long,
-        val mediaType: String
+        val mediaType: String,
+        val tmdbId: Int? = null,
+        val displayTitle: String? = null,
+        val year: Int? = null,
+        val genres: String? = null,
+        val posterUrl: String? = null,
+        val listedAt: String? = null,
+        val pendingSync: Boolean = false,
+        val doubanUrl: String? = null,
+        val comment: String? = null,
+        val markedAt: String? = null,
+        val subtitle: String? = null
     )
 
     @Serializable
@@ -137,13 +150,22 @@ class CloudPersonalSyncManager @Inject constructor(
     // ===== 工具方法 =====
 
     /**
-     * 获取当前 trakt username 的哈希（用于云端文件隔离）。
-     * @return 哈希字符串，未登录 trakt 返回 null
+     * 获取当前个人同步身份的哈希（用于云端文件隔离）。
+     * Trakt username 优先；没有 Trakt username 时回退到豆瓣 userId。
+     * @return 哈希字符串，没有可用登录身份时返回 null
      */
     private suspend fun getUserHash(): String? {
-        val profile = userProfileStorage.getProfile() ?: return null
-        if (profile.username.isBlank()) return null
-        return AesCrypto.hashUserId(profile.username)
+        val traktUsername = userProfileStorage.getProfile()
+            ?.username
+            ?.takeIf { it.isNotBlank() }
+        if (traktUsername != null) {
+            return AesCrypto.hashUserId(traktUsername)
+        }
+
+        return doubanAuthStorage.getCredentials()
+            ?.userId
+            ?.takeIf { it.isNotBlank() }
+            ?.let(AesCrypto::hashUserId)
     }
 
     private fun buildPath(userHash: String, fileName: String): String =
@@ -242,7 +264,7 @@ class CloudPersonalSyncManager @Inject constructor(
         uploadIdMappings: Boolean = false
     ): Boolean = withContext(Dispatchers.IO) {
         val userHash = getUserHash() ?: run {
-            Log.d(TAG, "未登录 trakt，跳过上传")
+            Log.d(TAG, "没有可用的个人同步身份，跳过上传")
             return@withContext false
         }
 
@@ -262,7 +284,18 @@ class CloudPersonalSyncManager @Inject constructor(
                         status = it.status,
                         rating = it.rating,
                         syncedAt = it.syncedAt,
-                        mediaType = it.mediaType
+                        mediaType = it.mediaType,
+                        tmdbId = it.tmdbId,
+                        displayTitle = it.displayTitle,
+                        year = it.year,
+                        genres = it.genres,
+                        posterUrl = it.posterUrl,
+                        listedAt = it.listedAt,
+                        pendingSync = it.pendingSync,
+                        doubanUrl = it.doubanUrl,
+                        comment = it.comment,
+                        markedAt = it.markedAt,
+                        subtitle = it.subtitle
                     )
                 }
             )
@@ -374,7 +407,7 @@ class CloudPersonalSyncManager @Inject constructor(
     // ===== 下载 API =====
 
     /**
-     * 检测云端是否有当前 trakt 用户的个人数据（仅查 sync_meta 是否存在）。
+     * 检测云端是否有当前个人同步身份的数据（仅查 sync_meta 是否存在）。
      * 用于决定是否触发拉取流程。
      * @return SyncMetaPayload 或 null（云端无数据或检测失败）
      */
@@ -468,7 +501,18 @@ class CloudPersonalSyncManager @Inject constructor(
                                 status = dto.status,
                                 rating = dto.rating,
                                 syncedAt = dto.syncedAt,
-                                mediaType = dto.mediaType
+                                mediaType = dto.mediaType,
+                                tmdbId = dto.tmdbId,
+                                displayTitle = dto.displayTitle,
+                                year = dto.year,
+                                genres = dto.genres,
+                                posterUrl = dto.posterUrl,
+                                listedAt = dto.listedAt,
+                                pendingSync = dto.pendingSync,
+                                doubanUrl = dto.doubanUrl,
+                                comment = dto.comment,
+                                markedAt = dto.markedAt,
+                                subtitle = dto.subtitle
                             )
                         } else null
                     }

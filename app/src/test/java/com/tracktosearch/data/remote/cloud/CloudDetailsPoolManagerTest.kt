@@ -10,6 +10,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -22,6 +23,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import retrofit2.Response
+import java.io.IOException
 
 /**
  * CloudDetailsPoolManager 单元测试。
@@ -104,6 +106,13 @@ class CloudDetailsPoolManagerTest {
         val resp = mockk<Response<kotlinx.serialization.json.JsonElement>>()
         every { resp.isSuccessful } returns false
         every { resp.code() } returns 404
+        return resp
+    }
+
+    private fun mockServerErrorResponse(code: Int = 503): Response<kotlinx.serialization.json.JsonElement> {
+        val resp = mockk<Response<kotlinx.serialization.json.JsonElement>>()
+        every { resp.isSuccessful } returns false
+        every { resp.code() } returns code
         return resp
     }
 
@@ -221,6 +230,87 @@ class CloudDetailsPoolManagerTest {
         val result = manager.downloadDetail("000001")
 
         assertThat(result).isNull()
+    }
+
+    @Test
+    fun downloadDetail_serverUnavailable_shortCircuitsLaterRequests() = runTest {
+        coEvery {
+            giteeApi.getFileContent(any(), any(), any(), any())
+        } returns mockServerErrorResponse()
+
+        assertThat(manager.downloadDetail("server-error-001")).isNull()
+        assertThat(manager.downloadDetail("server-error-002")).isNull()
+
+        coVerify(exactly = 1) {
+            giteeApi.getFileContent(any(), any(), any(), any())
+        }
+    }
+
+    @Test
+    fun downloadDetail_networkFailure_shortCircuitsLaterRequests() = runTest {
+        coEvery {
+            giteeApi.getFileContent(any(), any(), any(), any())
+        } throws IOException("DNS failure")
+
+        assertThat(manager.downloadDetail("network-error-001")).isNull()
+        assertThat(manager.downloadDetail("network-error-002")).isNull()
+
+        coVerify(exactly = 1) {
+            giteeApi.getFileContent(any(), any(), any(), any())
+        }
+    }
+
+    @Test
+    fun downloadDetail_cancellationException_isRethrown() = runTest {
+        coEvery {
+            giteeApi.getFileContent(any(), any(), any(), any())
+        } throws CancellationException("download cancelled")
+
+        val thrown = runCatching {
+            manager.downloadDetail("cancelled-download-001")
+        }.exceptionOrNull()
+
+        assertThat(thrown).isInstanceOf(CancellationException::class.java)
+    }
+
+    @Test
+    fun downloadSuppression_blocksPrefetch_butUploadStillWorks_andResetRestoresDownloads() = runTest {
+        val downloadId = "suppressed-download-001"
+        val uploadId = "suppressed-upload-001"
+        val entry = DoubanDetailCacheEntry(
+            imdbId = "tt-suppressed",
+            isTvShow = false,
+            title = "抑制测试"
+        )
+        val detailCache = mockk<PersistentTtlCache<DoubanDetailCacheEntry>>(relaxed = true)
+        every { detailCache.get(any()) } returns null
+
+        coEvery {
+            giteeApi.getFileContent(any(), any(), any(), any())
+        } returns mockSuccessResponse(buildCloudResponseJson(mapOf(downloadId to entry), "sha-suppressed"))
+
+        manager.suspendDownloadsForCurrentSync()
+
+        assertThat(manager.fetchAndMergeToLocal(listOf(downloadId), detailCache)).isEqualTo(0)
+        coVerify(exactly = 0) {
+            giteeApi.getFileContent(any(), any(), any(), any())
+        }
+
+        // 下载抑制只作用于下载/预取，完成同步后的上传仍可执行。
+        coEvery {
+            giteeApi.getFileContent(any(), any(), any(), any())
+        } returns mockNotFoundResponse()
+        coEvery {
+            giteeApi.createFileContent(any(), any(), any(), any())
+        } returns mockSuccessUpdateResponse()
+        assertThat(manager.uploadDetailEntry(uploadId, entry)).isTrue()
+
+        manager.resetDownloadSuppression()
+        coEvery {
+            giteeApi.getFileContent(any(), any(), any(), any())
+        } returns mockSuccessResponse(buildCloudResponseJson(mapOf(downloadId to entry), "sha-restored"))
+
+        assertThat(manager.downloadDetail(downloadId)).isEqualTo(entry)
     }
 
     // ============================================================
@@ -385,6 +475,7 @@ class CloudDetailsPoolManagerTest {
         val written = manager.fetchAndMergeToLocal(listOf(doubanId), detailCache)
 
         assertThat(written).isEqualTo(1)
+        coVerify { detailCache.awaitLoaded() }
         verify { detailCache.put(doubanId, entry) }
     }
 
@@ -406,6 +497,7 @@ class CloudDetailsPoolManagerTest {
         val written = manager.fetchAndMergeToLocal(listOf(doubanId), detailCache)
 
         assertThat(written).isEqualTo(0)
+        coVerify { detailCache.awaitLoaded() }
         coVerify(exactly = 0) {
             giteeApi.getFileContent(any(), any(), any(), any())
         }

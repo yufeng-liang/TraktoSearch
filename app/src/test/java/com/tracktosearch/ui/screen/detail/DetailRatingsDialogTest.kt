@@ -1,0 +1,103 @@
+package com.tracktosearch.ui.screen.detail
+
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
+import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.R
+import com.tracktosearch.data.repository.MultiRatings
+import androidx.test.core.app.ApplicationProvider
+import android.content.Context
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import java.util.Locale
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33], application = android.app.Application::class)
+class DetailRatingsDialogTest {
+
+    @get:Rule
+    val composeRule = createComposeRule()
+
+    @Test
+    fun doubanPublicRatingReplacesMetacriticInTheFirstRow() {
+        composeRule.setContent {
+            MaterialTheme {
+                RatingsRow(
+                    MultiRatings(
+                        imdbRating = "8.0",
+                        metacritic = "88%",
+                        doubanRating = 9.2
+                    )
+                )
+            }
+        }
+
+        val doubanLabel = ApplicationProvider.getApplicationContext<Context>()
+            .getString(R.string.detail_info_douban_rating)
+        composeRule.onNodeWithText(doubanLabel).assertIsDisplayed()
+        composeRule.onNodeWithText("9.2").assertIsDisplayed()
+        assertThat(composeRule.onAllNodesWithText("MTC").fetchSemanticsNodes()).isEmpty()
+    }
+
+    @Test
+    fun traktOnlyRatingStillShowsMetacritic() {
+        composeRule.setContent {
+            MaterialTheme {
+                RatingsRow(
+                    MultiRatings(
+                        imdbRating = "8.0",
+                        metacritic = "88%"
+                    )
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("MTC").assertIsDisplayed()
+        assertThat(
+            composeRule.onAllNodesWithText(
+                ApplicationProvider.getApplicationContext<Context>()
+                    .getString(R.string.detail_info_douban_rating)
+            ).fetchSemanticsNodes()
+        ).isEmpty()
+    }
+
+    @Test
+    fun `豆瓣条目没有公开评分时不回退显示MTC`() {
+        composeRule.setContent {
+            MaterialTheme {
+                RatingsRow(
+                    MultiRatings(
+                        imdbRating = "8.0",
+                        metacritic = "88%"
+                    ),
+                    isDoubanItem = true
+                )
+            }
+        }
+
+        assertThat(composeRule.onAllNodesWithText("MTC").fetchSemanticsNodes()).isEmpty()
+    }
+
+    @Test
+    fun doubanRatingUsesActiveLocaleForDecimalSeparator() {
+        val previousLocale = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.GERMANY)
+            composeRule.setContent {
+                MaterialTheme {
+                    RatingsRow(MultiRatings(doubanRating = 9.2))
+                }
+            }
+
+            composeRule.onNodeWithText("9,2").assertIsDisplayed()
+        } finally {
+            Locale.setDefault(previousLocale)
+        }
+    }
+}

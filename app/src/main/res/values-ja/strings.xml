@@ -148,10 +148,10 @@
 
     <!-- Douban Sync -->
     <string name="douban_login_title">豆瓣にログイン</string>
-    <string name="douban_login_hint">下で豆瓣アカウントにログインすると、マークがTraktに自動同期されます</string>
+    <string name="douban_login_hint">豆瓣にログインすると、見たい/見たマークをWatchlistで確認できます。Traktに接続するとTraktにも同期できます。</string>
     <string name="douban_login_privacy_short">このページは公開マーク（見たい/見た）を読み取るため豆瓣にログインします。認証情報は今回の同期にのみ使用され、第三者サーバーにアップロードされません。</string>
     <string name="douban_login_privacy_detail_title">詳細</string>
-    <string name="douban_login_privacy_detail">• ログインの理由：豆瓣マーク（見たい、見た、評価）を読み取るため\n• 保存内容：CookieとuserId（今回のクロール用）のみ、豆瓣パスワードは保存しません\n• Cookieの用途：movie.douban.com/people/{userId}/wish|collectページのリクエストのみ\n• 同期完了後：設定で豆瓣認証情報をいつでも削除可能\n• データフロー：豆瓣 → アプリ → Trakt、中間サーバーなし</string>
+    <string name="douban_login_privacy_detail">• ログインの理由：豆瓣マーク（見たい、見た、評価）を読み取るため\n• 保存内容：CookieとuserId（今回のクロール用）のみ、豆瓣パスワードは保存しません\n• Cookieの用途：movie.douban.com/people/{userId}/wish|collectページのリクエストのみ\n• 同期完了後：設定で豆瓣認証情報をいつでも削除可能\n• データフロー：豆瓣 → アプリ。Traktに接続するとTraktにも同期できます。</string>
     <string name="douban_login_privacy_expand">詳細を表示</string>
     <string name="douban_login_privacy_collapse">折りたたむ</string>
     <string name="douban_login_success_snackbar">豆瓣ログイン成功</string>
@@ -169,19 +169,15 @@
     <string name="douban_sync_douban_login_required_banner">Douban にログインしてください。タップしてログイン</string>
     <string name="douban_sync_trakt_login_required_banner">Trakt にログインしてください。タップしてログイン</string>
     <string name="douban_sync_complete_banner">同期完了、%1$d件追加</string>
-    <string name="douban_sync_failed_banner">同期失敗、%1$d件失敗</string>
     <string name="douban_sync_cancelled_banner">同期をキャンセルしました</string>
     <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
-    <string name="douban_sync_result_format">成功 %1$d 件、失敗 %2$d 件</string>
     <string name="douban_sync_error_detail">エラー：%1$s</string>
-    <string name="douban_sync_failed_list_label">失敗項目：</string>
-    <string name="douban_sync_failed_more_format">...合計 %1$d 項目失敗</string>
     <string name="douban_sync_eta_format">残り約 %1$s</string>
     <string name="douban_sync_delay_format">%1$d 秒待機中（%2$s）</string>
     <string name="douban_sync_delay_detail_crawl">Douban アンチクロール遅延</string>
     <string name="douban_sync_delay_list_crawl">リストページクロール遅延</string>
     <string name="douban_sync_delay_retry">リトライ待機</string>
-    <string name="douban_sync_summary_format">成功 %1$d · スキップ %2$d · キャッシュ %3$d · 失敗 %4$d</string>
+    <string name="douban_sync_summary_format">成功 %1$d · スキップ %2$d · キャッシュ %3$d</string>
 
     <!-- 豆瓣同期失敗項目リトライ -->
     <string name="douban_retry_title">Douban同期失敗項目をリトライ</string>
@@ -210,21 +206,12 @@
     <string name="douban_failure_reason_no_imdb_id">IMDb IDなし</string>
     <string name="douban_failure_reason_detail_fetch_failed">詳細ページの取得に失敗</string>
     <string name="douban_failure_reason_trakt_not_found">Traktにエントリが見つかりません</string>
+    <string name="douban_failure_reason_trakt_search_failed">Trakt検索に失敗</string>
     <string name="douban_failure_reason_trakt_write_timeout">Trakt書き込みタイムアウト</string>
     <string name="douban_failure_reason_trakt_write_failed">Trakt書き込み失敗</string>
 
     <!-- 同期結果ダイアログ -->
-    <string name="douban_sync_failed_group_recoverable">リカバリ可能 (%1$d)</string>
-    <string name="douban_sync_failed_group_non_recoverable">リカバリ不可 (%1$d)</string>
-    <string name="douban_sync_failed_export">失敗項目をエクスポート</string>
-    <string name="douban_sync_failed_export_nothing">エクスポートする失敗項目がありません</string>
-    <string name="douban_sync_failed_export_success">%1$d 項目の失敗データをエクスポート</string>
-    <string name="douban_sync_failed_export_failed">エクスポートに失敗</string>
-    <string name="douban_sync_failed_export_chooser_title">失敗項目 JSON を共有</string>
-    <string name="douban_sync_failed_show_all">すべて %1$d 項目を表示</string>
-    <string name="douban_sync_failed_collapse">折りたたむ</string>
     <string name="douban_sync_current_processing">処理中：%1$s</string>
-    <string name="douban_sync_recent_failures">最近の失敗：</string>
     <string name="douban_sync_retry_complete_banner">リトライ完了、%1$d 項目が成功</string>
 
     <!-- 豆瓣同期レジューム(キャンセル後の復元) -->
@@ -538,7 +525,12 @@
     <string name="detail_info_countries">製作国/地域</string>
     <string name="detail_info_directors">監督</string>
     <string name="detail_info_genres">ジャンル</string>
+    <string name="detail_info_imdb_rating">IMDb</string>
+    <string name="detail_info_imdb_id">IMDb ID</string>
     <string name="detail_info_douban_rating">豆瓣</string>
+    <string name="detail_info_metacritic_rating">MTC</string>
+    <string name="detail_info_tmdb_rating">TMDB</string>
+    <string name="detail_info_rotten_tomatoes_rating">RT</string>
     <string name="detail_info_rating_count">(%1$d 件の評価)</string>
     <string name="detail_info_aka">別名</string>
     <string name="detail_info_runtime">上映時間</string>
@@ -686,7 +678,6 @@
     <string name="cooldown_guidance_message">7日以内にリストクロールを同期済みです。増分同期はスキップされます(データはクラウドから)。強制同期で豆瓣リストを再クロールしますか?\n\n豆瓣にはアンチクロール機構があり、頻繁なクロールでIPアドレスがブラックリストに登録される可能性があります。強制同期は自己責任で。</string>
     <string name="cooldown_force_sync">強制同期</string>
     <string name="cooldown_skip">スキップ</string>
-    <string name="settings_douban_retry_failures">前回の失敗項目を再試行</string>
 
     <!-- Douban sync mode picker -->
     <string name="douban_sync_mode_picker_title">再同期モードを選択</string>
@@ -705,8 +696,6 @@
     <string name="douban_retry_option_export_desc">JSONファイルとして保存、バックアップや共有に使用</string>
 
     <!-- Douban failures viewer -->
-    <string name="settings_douban_view_failures">同期失敗項目を表示</string>
-    <string name="settings_douban_view_failures_desc">%1$d件の豆瓣項目が同期失敗</string>
     <string name="settings_douban_status_consistency">ステータス一貫性チェック</string>
     <string name="settings_douban_status_consistency_desc">豆瓣とTraktのウォッチリスト/視聴済みステータスが一致するか確認</string>
     <string name="settings_douban_status_consistency_checking">確認中…</string>
@@ -770,37 +759,12 @@
     <string name="consistency_check_time_minutes_ago">%1$d 分前</string>
     <string name="consistency_check_time_hours_ago">%1$d 時間前</string>
     <string name="consistency_check_time_days_ago">%1$d 日前</string>
-    <string name="settings_douban_import_failures">JSONから失敗項目をインポート</string>
-    <string name="settings_douban_import_failures_desc">他のデバイスからエクスポートした失敗項目JSONファイルをインポートしてここで表示</string>
     <string name="screen_douban_failures_title">同期失敗項目</string>
     <string name="share_failures_json">失敗項目 JSON を共有</string>
 
     <!-- クラウド失敗データ同期 -->
-    <string name="cloud_failures_detected_title">クラウドに失敗データを検出</string>
-    <string name="cloud_failures_detected_desc">クラウドにこの豆瓣アカウントの失敗データ %1$d 件があります。ローカルにダウンロードして表示しますか?</string>
-    <string name="cloud_failures_download">ダウンロード</string>
-    <string name="cloud_failures_dismiss">後で</string>
-    <string name="cloud_failures_downloaded">クラウド失敗データをダウンロードしてマージしました</string>
-    <string name="cloud_failures_downloaded_with_count">クラウドの失敗データ %1$d 件をダウンロードしてマージし、ローカルデータを置き換えました</string>
 
     <!-- Manual cloud sync (settings page) -->
-    <string name="settings_douban_upload_cloud">失敗データをアップロード</string>
-    <string name="settings_douban_upload_cloud_desc">ローカルの失敗項目を Gitee クラウドにアップロードして他のデバイスで表示(豆瓣ログイン必須)</string>
-    <string name="settings_douban_download_cloud">失敗データを取得</string>
-    <string name="settings_douban_download_cloud_desc">この豆瓣アカウントのクラウド失敗データをダウンロードしてローカルにマージ</string>
-    <string name="cloud_sync_no_login">先に豆瓣アカウントにログインしてください</string>
-    <string name="cloud_sync_no_local_failures">ローカルに失敗項目がないため、アップロードをスキップ</string>
-    <string name="cloud_sync_upload_success">失敗データをクラウドにアップロードしました</string>
-    <string name="cloud_sync_upload_failed">アップロード失敗、後でもう一度お試しください</string>
-    <string name="cloud_sync_download_empty">この豆瓣アカウントのクラウド失敗データはありません</string>
-    <string name="cloud_sync_download_local_newer">ローカルデータがより新しいため、クラウドデータを無視しました</string>
-    <string name="cloud_sync_download_success">クラウド失敗データ %1$d 件をダウンロードしてマージしました</string>
-    <string name="dialog_download_success_title">インポート成功</string>
-    <string name="dialog_download_success_message">クラウドから %1$d 件の失敗項目をインポートしました。同期失敗項目ページで確認できます。</string>
-    <string name="dialog_download_success_view">失敗項目を表示</string>
-    <string name="dialog_download_success_dismiss">閉じる</string>
-    <string name="cloud_sync_download_failed">ダウンロード失敗、後でもう一度お試しください</string>
-    <string name="cloud_sync_in_progress">同期中…</string>
     <string name="screen_douban_failures_empty_wish">ウォッチリストの同期が全て成功しました</string>
     <string name="screen_douban_failures_empty_collect">視聴済みリストの同期が全て成功しました</string>
     <string name="screen_douban_failures_empty_all">同期失敗項目はありません</string>
@@ -993,8 +957,8 @@
 
     <!-- 豆瓣マーク双方向書き戻しヘルプ -->
     <string name="help_douban_writeback">豆瓣マーク書き戻し</string>
-    <string name="help_douban_writeback_b1">豆瓣同期失敗アイテム詳細ページで、「見たい/見た/マーク解除」を直接豆瓣に書き戻せます。</string>
-    <string name="help_douban_writeback_b3">見たい↔見たの切り替えは失敗リストに保存。マーク解除は失敗アイテムを削除します(確認ダイアログ付き)。</string>
+    <string name="help_douban_writeback_b1">豆瓣アイテムの詳細ページで、「見たい/見た/マーク解除」を直接豆瓣に書き戻せます。</string>
+    <string name="help_douban_writeback_b3">見たい↔見たの切り替えで豆瓣のマークを更新します。マーク解除は確認後に削除します。</string>
     <string name="help_consistency_check">状態整合性チェック</string>
     <string name="help_consistency_intro">豆瓣とTraktの状態が不一致になることがあります。チェックは「見た方を見たいより優先」の原則で両方を統一します。見た状態が見たいを上書きし、見た側をもう片方に書き戻すため、マークが失われることはありません。また、Trakt側で「見たい」と「見た」の両方に存在する古いデータの項目を整理し、見たいマークを自動的に削除します。以下の表はすべての不一致の処理方法です。</string>
     <string name="help_consistency_col_douban">豆瓣</string>
@@ -1020,7 +984,7 @@
     <string name="onboarding_step2_title">発見</string>
     <string name="onboarding_step2_desc">パーソナライズされたおすすめ（豆瓣ログイン後に生成）と各種ランキングを閲覧</string>
     <string name="onboarding_step3_title">マイ</string>
-    <string name="onboarding_step3_desc">豆瓣からインポートした作品を含む、Traktの見たいリストと視聴済みリストを表示</string>
+    <string name="onboarding_step3_desc">Traktと豆瓣の見たいリスト・視聴済みリストを一か所で表示</string>
 
     <!-- Common UI -->
     <string name="common_retry">再試行</string>
@@ -1294,22 +1258,19 @@
     <string name="watched_empty_trakt_only">視聴済みリストは空です。豆瓣にログインしてマークをインポートするか、発見ページで作品を探しましょう。</string>
     <string name="watchlist_empty_douban_not_imported">豆瓣のマークをインポートすると、このリストに表示できます。</string>
     <string name="watched_empty_douban_not_imported">豆瓣のマークをインポートすると、視聴済みリストに表示できます。</string>
-    <string name="watchlist_empty_imported_failures">豆瓣の %1$d 件をインポートできませんでした。設定で失敗項目を確認できます。</string>
-    <string name="watched_empty_imported_failures">豆瓣の %1$d 件をインポートできませんでした。設定で失敗項目を確認できます。</string>
     <string name="watchlist_empty_imported_empty">豆瓣のマークはインポート済みですが、このリストはまだ空です。</string>
     <string name="watched_empty_imported_empty">豆瓣のマークはインポート済みですが、視聴済みリストはまだ空です。</string>
     <string name="watchlist_empty_login_trakt">Trakt にログイン</string>
     <string name="watchlist_empty_login_douban">豆瓣にログインしてインポート</string>
     <string name="watchlist_empty_start_douban_import">豆瓣のマークをインポート</string>
-    <string name="watchlist_empty_view_failures">失敗項目を確認</string>
 
     <!-- Douban Sync Help -->
     <string name="help_data_douban_title">豆瓣マーク同期</string>
-    <string name="help_data_douban_b1">ログインページで「または豆瓣からインポート」をタップし、WebViewで豆瓣にログインすると、豆瓣の「見たい」「見た」マークを自動的にクロールしてTraktに同期します。</string>
+    <string name="help_data_douban_b1">ログインページで「または豆瓣からインポート」をタップし、WebViewで豆瓣にログインすると、豆瓣の「見たい」「見た」マークを自動的にクロールしてWatchlistに表示します。Traktに接続するとTraktにも同期できます。</string>
     <string name="help_data_douban_b2">設定 → データ管理で「豆瓣を同期」をタップすると同期できます。</string>
-    <string name="help_data_douban_b3">同期戦略：豆瓣「見た」はTrakt「見たい」を上書き；豆瓣「見たい」はTrakt「見た」を上書きしない；評価は豆瓣に従う（5スター→10点制に変換）。</string>
-    <string name="help_data_douban_b4">同期失敗したアイテムはローカルに保存されます。設定 → データ管理で「同期失敗項目を表示」をタップして確認できます。メディアタイプの标注、サブタイトル編集、リソース検索、再同期、削除に対応しています。</string>
-    <string name="help_data_douban_b5">クロスデバイス:設定 → データ管理の「失敗項目を再試行」ダイアログまたは「同期失敗項目を表示」ページから「JSONから失敗項目をインポート」を選び、他のデバイスからエクスポートした失敗項目JSONファイルをインポートしてローカルで表示できます。</string>
+    <string name="help_data_douban_b3">Traktに接続している場合の競合戦略：豆瓣「見た」はTrakt「見たい」を上書き；豆瓣「見たい」はTrakt「見た」を上書きしない；評価は豆瓣に従う（5スター→10点制に変換）。</string>
+    <string name="help_data_douban_b4">インポートした豆瓣のマークはすべてWatchlistに表示されます。IMDb IDがある項目は通常の詳細ページ、ない項目は豆瓣詳細ページを使用します。</string>
+    <string name="help_data_douban_b5">豆瓣のインポートは自動的に再開・再試行できます。処理中の技術的なエラーで、インポート済みのマークがWatchlistから消えることはありません。</string>
     <string name="help_data_table_title">データインポート/エクスポート概览</string>
     <string name="help_dc_export_t">マークデータをエクスポート</string>
     <string name="help_dc_export_entry">設定 → データ管理</string>
@@ -1319,22 +1280,10 @@
     <string name="help_dc_imdb_entry">設定 → データ管理</string>
     <string name="help_dc_imdb_fmt">CSV</string>
     <string name="help_dc_imdb_desc">IMDbウォッチリストをインポート、タイトルで検索してTraktに同期</string>
-    <string name="help_dc_upload_t">失敗データをクラウドにアップロード</string>
-    <string name="help_dc_upload_entry">設定 → データ管理</string>
-    <string name="help_dc_upload_fmt">暗号化JSON</string>
-    <string name="help_dc_upload_desc">Douban同期失敗項目をクラウドにアップロード、AES暗号化保存</string>
-    <string name="help_dc_download_t">クラウドから失敗データを取得</string>
-    <string name="help_dc_download_entry">設定 → データ管理</string>
-    <string name="help_dc_download_fmt">暗号化JSON</string>
-    <string name="help_dc_download_desc">クラウドから失敗項目を取得、復号してローカルにマージ</string>
     <string name="help_dc_douban_t">Doubanマーク同期</string>
     <string name="help_dc_douban_entry">ログインページ / 設定</string>
     <string name="help_dc_douban_fmt">Doubanアカウント</string>
-    <string name="help_dc_douban_desc">Doubanにログインしてウィッシュ/収集マークを取得、Traktに同期</string>
-    <string name="help_dc_failures_t">失敗項目JSONインポート</string>
-    <string name="help_dc_failures_entry">失敗項目表示ページ</string>
-    <string name="help_dc_failures_fmt">JSON</string>
-    <string name="help_dc_failures_desc">他のデバイスからエクスポートした失敗項目JSONファイルをローカルにインポート</string>
+    <string name="help_dc_douban_desc">Doubanにログインしてウィッシュ/視聴済みマークをWatchlistに取り込み、Trakt接続時は同期</string>
     <string name="help_dc_cooldown">クールダウン：豆瓣にはアンチクロール機構があり、頻繁なクロールでIPアドレスがブラックリストに登録される可能性があります。完全クロール後に7日間のクールダウンを設けリクエスト頻度を下げます。クールダウン中の増分同期はクラウドデータを再利用し再クロールしません。自己責任で強制同期可能。</string>
     <string name="help_custom_source">カスタム検索ソース</string>
     <string name="help_custom_source_b1">設定 → 検索ソース → カスタム検索ソース → 検索ソースを追加</string>
@@ -1460,7 +1409,7 @@
     <string name="douban_logout_confirm_title">Douban からログアウト</string>
     <string name="douban_logout_confirm_message">ログアウトするとローカルの %1$d 件の Douban マークが削除されます。続行しますか？</string>
     <string name="douban_logout_sync_in_progress_warning">同期が進行中です。ログアウトすると同期が中断され、ローカルデータが削除されます。</string>
-    <string name="settings_douban_login_hint">ログインして豆瓣のマークを Trakt に同期</string>
+    <string name="settings_douban_login_hint">ログインして豆瓣のマークをWatchlistで確認。Traktに接続するとTraktにも同期できます</string>
     <string name="settings_guest_login_hint">Trakt にログインしてウォッチリスト、視聴済み、評価などの機能を利用</string>
     <!-- 豆瓣スパイダーテスト（マーク書き戻し） -->
     <string name="douban_spider_test_mark_section">マーク書き戻しテスト</string>
@@ -1478,20 +1427,6 @@
     <string name="douban_spider_test_copy_result">結果をコピー</string>
     <string name="douban_spider_test_mark_copied">コピーしました</string>
     <string name="statistics_info_wordcloud">Q：レビュー単語クラウドとは？\nA：Doubanの短評から頻出単語を抽出し、ワードクラウドとして表示します。文字が大きいほど出現回数が多く、視聴した感想を手軽に振り返れます。</string>
-    <string name="cloud_sync_dialog_no_time">なし</string>
-    <string name="cloud_sync_dialog_title_overwrite">クラウドの方が新しい</string>
-    <string name="cloud_sync_dialog_title_local_newer">ローカルの方が新しい</string>
-    <string name="cloud_sync_dialog_title_upload_skip">アップロード不要</string>
-    <string name="cloud_sync_dialog_title_upload_done">クラウドにアップロード済み</string>
-    <string name="cloud_sync_dialog_title_download_empty">クラウドデータをダウンロード</string>
-    <string name="cloud_sync_dialog_local_time">ローカル：%1$s</string>
-    <string name="cloud_sync_dialog_cloud_time">クラウド：%1$s</string>
-    <string name="cloud_sync_dialog_overwrite_message">クラウドに失敗データが %1$d 件あります（上記時刻に更新）。ローカルデータを上書きします。続行しますか？</string>
-    <string name="cloud_sync_dialog_local_newer_message">ローカルの失敗データの方が新しいため、ローカルを保持しクラウドはダウンロードしませんでした。</string>
-    <string name="cloud_sync_dialog_upload_skip_message">ローカルデータはクラウドより新しくないため、アップロードをスキップしクラウドは変更しませんでした。</string>
-    <string name="cloud_sync_dialog_upload_done_message">ローカルの失敗データをクラウドに暗号化アップロードしました。</string>
-    <string name="cloud_sync_dialog_download_empty_message">クラウドの失敗データ %1$d 件をダウンロードしてローカルに統合しました。</string>
-    <string name="cloud_sync_dialog_overwrite_confirm">ローカルを上書き</string>
 
     <!-- マーク記録 -->
     <string name="mark_records_title">マーク記録</string>
@@ -1600,7 +1535,7 @@
     <string name="douban_sync_substage_writing_target">Trakt に書き込み中</string>
     <string name="douban_sync_substage_writing_local">ローカルデータを保存中</string>
     <string name="douban_sync_substage_status_changes">状態の変更を適用中</string>
-    <string name="douban_sync_substage_retrying_failures">失敗項目を再試行中</string>
+    <string name="douban_sync_substage_retrying_items">項目を再試行中</string>
     <string name="douban_sync_substage_waiting_delay">次の試行を待機中</string>
     <string name="douban_sync_recent_items">最近取得した項目</string>
     <string name="douban_sync_preview_status_wish">見たい</string>

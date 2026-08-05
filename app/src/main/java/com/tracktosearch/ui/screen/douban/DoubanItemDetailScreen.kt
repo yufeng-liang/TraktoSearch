@@ -123,6 +123,10 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.local.DoubanAuthStorage
+import com.tracktosearch.data.local.db.DoubanSyncedItem
+import com.tracktosearch.data.local.db.DoubanSyncedItemDao
+import com.tracktosearch.data.remote.douban.DoubanCelebrity
+import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
 import com.tracktosearch.data.remote.douban.DoubanDetailInfo
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
 import com.tracktosearch.data.remote.douban.DoubanRepository
@@ -187,6 +191,8 @@ enum class DetailLoadPhase { IDLE, FETCHING, DONE, FAILED }
 data class DoubanItemDetailUiState(
     val isLoading: Boolean = true,
     val failure: DoubanSyncFailure? = null,
+    /** true 表示仅为兼容旧技术失败记录，false 表示同步表/豆瓣快照中的正常条目。 */
+    val isLegacyFailure: Boolean = false,
     val error: String? = null,
     // 资源搜索
     val searchResults: List<ResourceItem> = emptyList(),
@@ -216,6 +222,12 @@ data class DoubanItemDetailUiState(
     val marking: Boolean = false
 )
 
+/** 豆瓣详情页返回时需要通知 Watchlist 重读的标记变更。 */
+data class DoubanDetailMarkChanges(
+    val watchlistChanged: Boolean = false,
+    val watchedChanged: Boolean = false
+)
+
 /**
  * 豆瓣条目详情页 ViewModel。
  *
@@ -234,11 +246,15 @@ class DoubanItemDetailViewModel @Inject constructor(
     private val resourceRepository: ResourceRepository,
     private val doubanRepository: DoubanRepository,
     private val doubanAuthStorage: DoubanAuthStorage,
+    private val doubanSyncedItemDao: DoubanSyncedItemDao,
     val posterColorExtractor: PosterColorExtractor
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DoubanItemDetailUiState())
     val uiState: StateFlow<DoubanItemDetailUiState> = _uiState.asStateFlow()
+
+    private val _markChanges = MutableStateFlow(DoubanDetailMarkChanges())
+    val markChanges: StateFlow<DoubanDetailMarkChanges> = _markChanges.asStateFlow()
 
     // 一次性 Toast 事件(传 R.string 资源 ID),用 extraBufferCapacity 避免背压丢消息
     private val _toastEvent = MutableSharedFlow<Int>(extraBufferCapacity = 4)
@@ -254,30 +270,55 @@ class DoubanItemDetailViewModel @Inject constructor(
     // 用于"仅显示高相关"过滤，避免重复打分；query 为空时为空 map（不过滤）
     private var currentScoreMap: Map<String, Int> = emptyMap()
 
-    /** 加载指定豆瓣条目的失败项数据 */
+    /** 累积本次详情页内的状态变更，直到返回 Watchlist 时一次性传递。 */
+    private fun recordMarkChange(
+        previousStatus: DoubanMarkStatus,
+        currentStatus: DoubanMarkStatus?
+    ) {
+        if (previousStatus == currentStatus) return
+        val current = _markChanges.value
+        _markChanges.value = current.copy(
+            // wish 条目属于 Watchlist；collect 条目属于已看历史。
+            watchlistChanged = current.watchlistChanged ||
+                previousStatus == DoubanMarkStatus.WISH || currentStatus == DoubanMarkStatus.WISH,
+            watchedChanged = current.watchedChanged ||
+                previousStatus == DoubanMarkStatus.COLLECT || currentStatus == DoubanMarkStatus.COLLECT
+        )
+    }
+
+    /**
+     * 加载指定豆瓣条目。
+     *
+     * 豆瓣同步表和详情快照是正常条目的主数据源；旧失败表只负责兼容历史技术失败。
+     */
     fun loadFailure(doubanId: String) {
         if (currentDoubanId == doubanId && _uiState.value.failure != null) return
         currentDoubanId = doubanId
         _uiState.value = DoubanItemDetailUiState(isLoading = true)
         viewModelScope.launch {
             try {
-                val failure = doubanRetryManager.getFailure(doubanId)
-                if (failure == null) {
+                val source = loadDetailSource(doubanId)
+                if (source == null) {
                     // 条目已被删除或不存在,UI 层检测 failure==null 后自动 onBack
                     _uiState.value = DoubanItemDetailUiState(isLoading = false, failure = null)
                     return@launch
                 }
                 _uiState.value = DoubanItemDetailUiState(
                     isLoading = false,
-                    failure = failure,
+                    failure = source.failure,
+                    isLegacyFailure = source.isLegacyFailure,
                     // 默认开启「同时用子标题搜索」(subtitle 非空,或 title 含 "/" 可拆出外文标题时生效)
-                    searchWithSubtitle = !failure.subtitle.isNullOrBlank() ||
-                        failure.title.split("/").map { it.trim() }.filter { it.isNotBlank() }.size > 1
+                    searchWithSubtitle = !source.failure.subtitle.isNullOrBlank() ||
+                        source.failure.title.split("/").map { it.trim() }.filter { it.isNotBlank() }.size > 1,
+                    detailInfo = source.detailInfo,
+                    detailLoadPhase = if (source.detailInfo != null) DetailLoadPhase.DONE else DetailLoadPhase.IDLE
                 )
                 // 尽早从缓存预查海报主色,让沉浸背景在海报图片加载前显示
-                prefetchPosterColor(failure.posterUrl)
-                // 异步加载豆瓣详情补充信息(年份/国家/导演/类型),命中缓存秒回
-                loadDetailInfo(failure)
+                prefetchPosterColor(source.failure.posterUrl)
+                // 只有旧失败记录才需要兼容原有的详情爬取流程。
+                if (source.isLegacyFailure) {
+                    loadDetailInfo(source.failure)
+                }
                 // 资源搜索延迟到用户切换到资源搜索 Tab 时才触发,避免进入页面瞬间 12+ 并发网络请求
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -286,6 +327,43 @@ class DoubanItemDetailViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    private data class DetailSource(
+        val failure: DoubanSyncFailure,
+        val detailInfo: DoubanDetailInfo?,
+        val isLegacyFailure: Boolean
+    )
+
+    /** 按同步表 → 详情快照 → 历史失败表的顺序解析详情页数据源。 */
+    private suspend fun loadDetailSource(doubanId: String): DetailSource? {
+        val syncedItem = runCatching {
+            doubanSyncedItemDao.getByDoubanId(doubanId)
+        }.getOrNull()
+        val detailEntry = runCatching {
+            doubanRepository.getDetailSnapshot()[doubanId]
+        }.getOrNull()
+
+        if (syncedItem != null || detailEntry != null) {
+            val detailInfo = detailEntry?.toDetailInfo(syncedItem)
+            val displayItem = syncedItem?.toDisplayFailure(detailInfo)
+                ?: detailEntry!!.toDisplayFailure(doubanId)
+            return DetailSource(
+                failure = displayItem,
+                detailInfo = detailInfo,
+                isLegacyFailure = false
+            )
+        }
+
+        return runCatching { doubanRetryManager.getFailure(doubanId) }
+            .getOrNull()
+            ?.let { failure ->
+                DetailSource(
+                    failure = failure,
+                    detailInfo = null,
+                    isLegacyFailure = true
+                )
+            }
     }
 
     /**
@@ -358,6 +436,7 @@ class DoubanItemDetailViewModel @Inject constructor(
 
     /** 重试加载豆瓣详情(详情Tab失败时用户点击重试按钮触发) */
     fun retryLoadDetailInfo() {
+        if (!_uiState.value.isLegacyFailure) return
         val failure = _uiState.value.failure ?: return
         loadDetailInfo(failure)
     }
@@ -647,6 +726,7 @@ class DoubanItemDetailViewModel @Inject constructor(
      * - false:同步正在运行(防重入),UI Toast 提示
      */
     fun retrySingle() {
+        if (!_uiState.value.isLegacyFailure) return
         val failure = _uiState.value.failure ?: return
         val started = doubanSyncManager.startRetry(
             failures = listOf(failure),
@@ -666,6 +746,7 @@ class DoubanItemDetailViewModel @Inject constructor(
 
     /** 强制重新爬取豆瓣详情(跳过缓存和全局池,直接爬取豆瓣) */
     fun retryFetchDetail() {
+        if (!_uiState.value.isLegacyFailure) return
         val current = _uiState.value.failure ?: return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(detailLoadPhase = DetailLoadPhase.FETCHING)
@@ -757,6 +838,7 @@ class DoubanItemDetailViewModel @Inject constructor(
                 if (res.success) {
                     doubanRetryManager.updateStatus(failure.doubanId, status)
                     val refreshed = doubanRetryManager.getFailure(failure.doubanId)
+                    recordMarkChange(failure.status, status)
                     _uiState.value = _uiState.value.copy(
                         marking = false,
                         failure = refreshed ?: failure.copy(status = status)
@@ -796,6 +878,7 @@ class DoubanItemDetailViewModel @Inject constructor(
                 val res = doubanRepository.removeMark(failure.doubanId, credentials.cookie, ck)
                 if (res.success) {
                     doubanRetryManager.deleteFailure(failure.doubanId)
+                    recordMarkChange(failure.status, null)
                     _uiState.value = _uiState.value.copy(marking = false, failure = null)
                     MarkWriteOutcome.Removed
                 } else {
@@ -848,17 +931,105 @@ class DoubanItemDetailViewModel @Inject constructor(
     }
 }
 
+/** 将同步表条目映射为详情页现有展示模型，保留完整豆瓣 ID/标记信息。 */
+private fun DoubanSyncedItem.toDisplayFailure(detailInfo: DoubanDetailInfo?): DoubanSyncFailure =
+    DoubanSyncFailure(
+        doubanId = doubanId,
+        title = displayTitle?.takeIf { it.isNotBlank() }
+            ?: detailInfo?.title?.takeIf { it.isNotBlank() }
+            ?: title.ifBlank { doubanId },
+        posterUrl = posterUrl ?: detailInfo?.posterUrl,
+        rating = rating,
+        comment = comment,
+        markedAt = markedAt ?: listedAt.orEmpty(),
+        doubanUrl = doubanUrl?.takeIf { it.isNotBlank() }
+            ?: "https://movie.douban.com/subject/$doubanId/",
+        status = DoubanMarkStatus.fromString(status),
+        // 复用旧模型字段，但正常同步条目由 isLegacyFailure=false 区分，不会展示失败语义。
+        failureReason = FailureReason.NO_IMDB_ID,
+        failedAt = syncedAt,
+        mediaType = mediaType.takeIf { it.isNotBlank() }
+            ?: detailInfo?.let { if (it.isTvShow) "show" else "movie" },
+        subtitle = subtitle
+    )
+
+/** 仅有详情快照时也能构造最小可展示条目。 */
+private fun DoubanDetailCacheEntry.toDisplayFailure(doubanId: String): DoubanSyncFailure =
+    DoubanSyncFailure(
+        doubanId = doubanId,
+        title = title?.takeIf { it.isNotBlank() } ?: doubanId,
+        posterUrl = posterUrl,
+        rating = null,
+        comment = null,
+        markedAt = "",
+        doubanUrl = "https://movie.douban.com/subject/$doubanId/",
+        status = DoubanMarkStatus.WISH,
+        failureReason = FailureReason.NO_IMDB_ID,
+        failedAt = 0L,
+        mediaType = mediaType ?: if (isTvShow) "show" else "movie"
+    )
+
+/** 将持久化详情快照转换为页面详情模型，并用同步表中的富化字段兜底。 */
+private fun DoubanDetailCacheEntry.toDetailInfo(item: DoubanSyncedItem?): DoubanDetailInfo {
+    val resolvedMediaType = mediaType ?: item?.mediaType
+    val resolvedIsTvShow = when (resolvedMediaType) {
+        "movie" -> false
+        "show", "variety", "documentary" -> true
+        else -> isTvShow
+    }
+    val resolvedGenres = genres.ifEmpty {
+        item?.genres.orEmpty()
+            .split(",", "·")
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+    }
+    return DoubanDetailInfo(
+        imdbId = imdbId?.takeIf { it.isNotBlank() }
+            ?: item?.imdbId?.takeIf { it.isNotBlank() },
+        isTvShow = resolvedIsTvShow,
+        title = title?.takeIf { it.isNotBlank() }
+            ?: item?.displayTitle?.takeIf { it.isNotBlank() }
+            ?: item?.title?.takeIf { it.isNotBlank() },
+        posterUrl = posterUrl?.takeIf { it.isNotBlank() } ?: item?.posterUrl,
+        genres = resolvedGenres,
+        year = year?.takeIf { it.isNotBlank() } ?: item?.year?.toString(),
+        countries = countries,
+        directors = directors,
+        doubanRating = doubanRating,
+        ratingCount = ratingCount,
+        summary = summary,
+        episodeCount = episodeCount,
+        episodeDuration = episodeDuration,
+        aka = aka,
+        runtime = runtime,
+        writers = writers,
+        cast = cast,
+        languages = languages,
+        initialReleaseDates = initialReleaseDates,
+        ratingDistribution = ratingDistribution,
+        celebrities = celebrities.map {
+            DoubanCelebrity(
+                name = it.name,
+                doubanPersonageUrl = it.doubanPersonageUrl,
+                avatarUrl = it.avatarUrl,
+                role = it.role
+            )
+        }
+    )
+}
+
 // ==================== Composable ====================
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun DoubanItemDetailScreen(
     doubanId: String,
-    onBack: () -> Unit,
+    onBack: (watchlistChanged: Boolean, watchedChanged: Boolean) -> Unit,
     onRetryStarted: () -> Unit,
     viewModel: DoubanItemDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val markChanges by viewModel.markChanges.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val openDoubanToast = stringResource(R.string.screen_douban_item_detail_open_douban)
     val copiedToast = stringResource(R.string.screen_douban_item_detail_copied)
@@ -866,6 +1037,9 @@ fun DoubanItemDetailScreen(
     val listState = rememberLazyListState()
     val hazeState = remember { HazeState() }
     val isDarkTheme = isAppDarkTheme()
+    val handleBack = {
+        onBack(markChanges.watchlistChanged, markChanges.watchedChanged)
+    }
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showPosterFullscreen by remember { mutableStateOf(false) }
@@ -896,7 +1070,7 @@ fun DoubanItemDetailScreen(
 
     // 拦截系统返回手势
     BackHandler(enabled = true) {
-        onBack()
+        handleBack()
     }
 
     // doubanId 变化时重新加载
@@ -910,7 +1084,7 @@ fun DoubanItemDetailScreen(
     // 加载完成后若 failure == null(条目已被删除/不存在),自动返回
     LaunchedEffect(uiState.failure, uiState.isLoading) {
         if (!uiState.isLoading && uiState.failure == null && uiState.error == null) {
-            onBack()
+            handleBack()
         }
     }
 
@@ -1015,6 +1189,7 @@ fun DoubanItemDetailScreen(
                     item(key = "header") {
                         DoubanItemHeader(
                             failure = failure,
+                            isLegacyFailure = uiState.isLegacyFailure,
                             detailInfo = uiState.detailInfo,
                             posterColor = uiState.posterDominantColor,
                             onPosterClick = { showPosterFullscreen = true },
@@ -1175,6 +1350,7 @@ fun DoubanItemDetailScreen(
                                 Box(modifier = Modifier.alpha(contentAlpha)) {
                                     DoubanDetailInfoTab(
                                         failure = failure,
+                                        isLegacyFailure = uiState.isLegacyFailure,
                                         detailInfo = uiState.detailInfo,
                                         detailLoadPhase = uiState.detailLoadPhase,
                                         onOpenDouban = {
@@ -1213,7 +1389,7 @@ fun DoubanItemDetailScreen(
                             color = MaterialTheme.colorScheme.error
                         )
                         Spacer(modifier = Modifier.height(12.dp))
-                        OutlinedButton(onClick = { onBack() }) {
+                        OutlinedButton(onClick = { handleBack() }) {
                             Text(stringResource(R.string.douban_retry_cancel))
                         }
                     }
@@ -1222,7 +1398,7 @@ fun DoubanItemDetailScreen(
 
             // 返回按钮：使用与正常详情页一致的拟态玻璃和 ultraThin Haze。
             NeumorphicIconButton(
-                onClick = { view.performHaptic(HapticType.TICK); onBack() },
+                onClick = { view.performHaptic(HapticType.TICK); handleBack() },
                 isDark = isDarkTheme,
                 modifier = Modifier
                     .statusBarsPadding()
@@ -1608,6 +1784,7 @@ private fun DoubanWritebackActions(
 @Composable
 private fun DoubanItemHeader(
     failure: DoubanSyncFailure,
+    isLegacyFailure: Boolean,
     detailInfo: DoubanDetailInfo?,
     posterColor: Color?,
     onPosterClick: () -> Unit,
@@ -1758,7 +1935,8 @@ private fun DoubanItemHeader(
                     DoubanMarkStatus.COLLECT -> stringResource(R.string.watchlist_mode_watched)
                 }
                 Text(
-                    text = "${failure.markedAt} · $statusText",
+                    text = listOfNotNull(failure.markedAt.takeIf { it.isNotBlank() }, statusText)
+                        .joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = onPosterVariantColor,
                     maxLines = 1,
@@ -1768,11 +1946,13 @@ private fun DoubanItemHeader(
                 // 占位将失败原因栏推到底部,与海报底部对齐
                 Spacer(modifier = Modifier.weight(1f))
 
-                // 失败原因栏(从 header 之后的独立 banner 移入此处)
-                DoubanFailureBanner(
-                    failure = failure,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                // 历史技术失败才展示失败原因；正常同步条目不出现失败项概念。
+                if (isLegacyFailure) {
+                    DoubanFailureBanner(
+                        failure = failure,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         }
 
@@ -1906,6 +2086,7 @@ private fun FailureReason.toLocalizedString(): String = when (this) {
     FailureReason.NO_IMDB_ID -> stringResource(R.string.douban_failure_reason_no_imdb_id)
     FailureReason.DETAIL_FETCH_FAILED -> stringResource(R.string.douban_failure_reason_detail_fetch_failed)
     FailureReason.TRAKT_NOT_FOUND -> stringResource(R.string.douban_failure_reason_trakt_not_found)
+    FailureReason.TRAKT_SEARCH_FAILED -> stringResource(R.string.douban_failure_reason_trakt_search_failed)
     FailureReason.TRAKT_WRITE_TIMEOUT -> stringResource(R.string.douban_failure_reason_trakt_write_timeout)
     FailureReason.TRAKT_WRITE_FAILED -> stringResource(R.string.douban_failure_reason_trakt_write_failed)
 }
@@ -2157,6 +2338,7 @@ private fun DoubanEmptyState(onRetry: () -> Unit) {
 @Composable
 private fun DoubanDetailInfoTab(
     failure: DoubanSyncFailure,
+    isLegacyFailure: Boolean,
     detailInfo: DoubanDetailInfo?,
     detailLoadPhase: DetailLoadPhase,
     onOpenDouban: () -> Unit,
@@ -2170,7 +2352,7 @@ private fun DoubanDetailInfoTab(
     Column(modifier = Modifier.padding(16.dp)) {
         // 操作按钮区
         // 仅可恢复原因才显示「重新尝试同步」(单独一行)
-        if (failure.failureReason.recoverable) {
+        if (isLegacyFailure && failure.failureReason.recoverable) {
             Button(
                 onClick = {
                     view.performHaptic(HapticType.CLICK)
@@ -2185,7 +2367,7 @@ private fun DoubanDetailInfoTab(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // 打开豆瓣页面 + 重新爬取(同一行分散对齐)
+        // 打开豆瓣页面；只有历史技术失败才显示重新爬取按钮。
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -2201,80 +2383,83 @@ private fun DoubanDetailInfoTab(
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(stringResource(R.string.screen_douban_item_detail_open_douban))
             }
-            OutlinedButton(
-                onClick = {
-                    view.performHaptic(HapticType.CLICK)
-                    onRetryFetch()
-                },
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(stringResource(R.string.screen_douban_item_detail_refetch))
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 失败元信息卡片
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            )
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                // 失败时间(左) + 尝试次数(右) 同一行
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    // 左:失败时间
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.screen_douban_item_detail_meta_failed_at),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = formatTimestamp(failure.failedAt),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                    // 右:尝试次数(右对齐)
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment = Alignment.End
-                    ) {
-                        Text(
-                            text = stringResource(R.string.screen_douban_item_detail_meta_attempt_count),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.End
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = failure.attemptCount.toString(),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontWeight = FontWeight.Medium,
-                            textAlign = TextAlign.End
-                        )
-                    }
+            if (isLegacyFailure) {
+                OutlinedButton(
+                    onClick = {
+                        view.performHaptic(HapticType.CLICK)
+                        onRetryFetch()
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(stringResource(R.string.screen_douban_item_detail_refetch))
                 }
-                Spacer(modifier = Modifier.height(6.dp))
-                MetaRow(
-                    label = stringResource(R.string.screen_douban_item_detail_meta_douban_id),
-                    value = failure.doubanId,
-                    copyable = true
-                )
             }
         }
 
-        // 豆瓣详情加载状态(仅 detailInfo == null 时显示,有详情时字段卡片自身展示)
-        if (detailInfo == null) {
-            when (detailLoadPhase) {
+        if (isLegacyFailure) {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 历史技术失败才显示失败元信息。
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    // 失败时间(左) + 尝试次数(右) 同一行
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        // 左:失败时间
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.screen_douban_item_detail_meta_failed_at),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = formatTimestamp(failure.failedAt),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        // 右:尝试次数(右对齐)
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.End
+                        ) {
+                            Text(
+                                text = stringResource(R.string.screen_douban_item_detail_meta_attempt_count),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.End
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = failure.attemptCount.toString(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.Medium,
+                                textAlign = TextAlign.End
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    MetaRow(
+                        label = stringResource(R.string.screen_douban_item_detail_meta_douban_id),
+                        value = failure.doubanId,
+                        copyable = true
+                    )
+                }
+            }
+
+            // 历史失败的详情加载状态(正常同步条目不显示失败/重试语义)。
+            if (detailInfo == null) {
+                when (detailLoadPhase) {
                 DetailLoadPhase.FETCHING -> {
                     Spacer(modifier = Modifier.height(12.dp))
                     Card(
@@ -2342,6 +2527,7 @@ private fun DoubanDetailInfoTab(
                 }
             }
         }
+        }
 
         // 详情字段卡片(仅在 detailInfo 不为空且有可展示字段时显示)
         if (detailInfo != null) {
@@ -2370,7 +2556,7 @@ private fun DoubanDetailInfoTab(
                     Column(modifier = Modifier.padding(16.dp)) {
                         if (!detailInfo.imdbId.isNullOrBlank()) {
                             MetaRow(
-                                label = "IMDb ID",
+                                label = stringResource(R.string.detail_info_imdb_id),
                                 value = detailInfo.imdbId,
                                 copyable = true
                             )

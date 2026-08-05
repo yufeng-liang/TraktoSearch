@@ -292,9 +292,13 @@ class DoubanRepository(
             // 本地缓存未命中 → 查全局池(减少豆瓣爬取次数,用户A爬过的条目用户B直接复用)
             val pool = cloudDetailsPoolManager
             if (pool != null) {
-                val cloudEntry = runCatching {
+                val cloudEntry = try {
                     pool.downloadDetail(doubanId)
-                }.getOrNull()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null
+                }
                 if (cloudEntry != null && !cloudEntry.title.isNullOrBlank()) {
                     // 全局池命中(标题非空=字段完善),写入本地缓存(永久),后续直接命中本地
                     detailCache.put(doubanId, cloudEntry)
@@ -364,7 +368,13 @@ class DoubanRepository(
                 // 异步上传到全局池,供其他用户复用(失败不阻塞主流程)
                 cloudDetailsPoolManager?.let { p ->
                     GlobalScope.launch(Dispatchers.IO) {
-                        runCatching { p.uploadDetailEntry(doubanId, entry) }
+                        try {
+                            p.uploadDetailEntry(doubanId, entry)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            // 上传失败不影响详情页主流程。
+                        }
                     }
                 }
                 onProgress("done", title)
@@ -505,9 +515,13 @@ class DoubanRepository(
             .header("X-Requested-With", "XMLHttpRequest")
             .post(formBuilder.build())
             .build()
-        runCatching {
+        try {
             client.newCall(request).execute().use { response -> response.isSuccessful }
-        }.getOrDefault(false)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            false
+        }
     }
 
     /** 便捷: 标记想看 */
@@ -541,9 +555,13 @@ class DoubanRepository(
             .header("X-Requested-With", "XMLHttpRequest")
             .post(body.toRequestBody(mediaType))
             .build()
-        runCatching {
+        try {
             client.newCall(request).execute().use { response -> response.isSuccessful }
-        }.getOrDefault(false)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            false
+        }
     }
 
     // 移动端 UA(测试页用)
@@ -617,6 +635,8 @@ class DoubanRepository(
                 it.optString("title").takeIf { t -> t.isNotBlank() }?.let { titles.add(it) }
             }
             Pair<Int?, List<String>>(arr.length(), titles)
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             Pair(null, emptyList())
         }
@@ -734,12 +754,16 @@ class DoubanRepository(
             .header("User-Agent", mobileUa)
             .header("Referer", "https://m.douban.com/")
             .build()
-        runCatching {
+        try {
             client.newCall(request).execute().use { response ->
                 val html = response.body?.string() ?: ""
                 DoubanSpider.parseSearchByImdb(html).firstOrNull()?.doubanId
             }
-        }.getOrNull()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
     }
 
     /**
@@ -1094,6 +1118,8 @@ class DoubanRepository(
                 nickname = nickname,
                 avatarUrl = avatarUrl
             )
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             null
         }

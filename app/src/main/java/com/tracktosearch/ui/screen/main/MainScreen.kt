@@ -94,6 +94,7 @@ import com.tracktosearch.ui.screen.settings.AccentColorDialog
 import com.tracktosearch.ui.screen.settings.SettingsScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchViewModel
+import com.tracktosearch.ui.screen.watchlist.MediaUiItem
 import com.tracktosearch.ui.screen.watchlist.WatchlistScreen
 import com.tracktosearch.ui.navigation.NotificationNavigator
 import com.tracktosearch.ui.util.HapticType
@@ -148,8 +149,8 @@ fun MainScreen(
     isDoubanMode: Boolean = false,
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
-    // 豆瓣模式: 无 imdb 条目跳转失败项详情页
-    onDoubanFailureClick: (doubanId: String) -> Unit = {},
+    // Watchlist 条目统一回调，保留豆瓣 ID 和媒体类型。
+    onMediaItemClick: ((item: MediaUiItem, inWatchlist: Boolean, isWatched: Boolean) -> Unit)? = null,
     onSearchClick: (keyword: String) -> Unit,
     onNavigateToLogin: () -> Unit,
     onTraktLogin: () -> Unit = { onNavigateToLogin() },
@@ -163,7 +164,6 @@ fun MainScreen(
     onRestartOnboarding: () -> Unit,
     onFilterDiscoverClick: () -> Unit = {},
     onDoubanResync: () -> Unit = {},
-    onDoubanFailures: () -> Unit = {},
     onNavigateToDoubanLogin: () -> Unit = {},
     onSpiderTest: () -> Unit = {},
     onFeedbackClick: () -> Unit = {},
@@ -442,13 +442,12 @@ fun MainScreen(
                         WatchlistScreen(
                             onMovieClick = onMovieClick,
                             onShowClick = onShowClick,
-                            onDoubanFailureClick = onDoubanFailureClick,
+                            onMediaItemClick = onMediaItemClick,
                             onSearchClick = onSearchClick,
                             onTraktSearch = onTraktSearch,
                             onDiscoverClick = { scope.launch { pagerState.scrollToPage(1) } },
                             onNavigateToDoubanLogin = onNavigateToDoubanLogin,
                             onNavigateToLogin = onNavigateToLogin,
-                            onDoubanFailures = onDoubanFailures,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -466,7 +465,6 @@ fun MainScreen(
                             com.tracktosearch.service.DoubanSyncService.start(context)
                             scope.launch { pagerState.scrollToPage(2) }
                         },
-                        onDoubanFailures = onDoubanFailures,
                         onNavigateToDoubanLogin = onNavigateToDoubanLogin,
                         onNavigateToLogin = onNavigateToLogin,
                         onStatisticsClick = onStatisticsClick,

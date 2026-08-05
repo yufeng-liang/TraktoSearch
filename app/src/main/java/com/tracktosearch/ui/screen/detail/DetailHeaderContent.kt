@@ -308,7 +308,10 @@ internal fun DetailHeaderContent(
                 Spacer(modifier = Modifier.height(8.dp))
                 Box(modifier = Modifier.height(46.dp)) {
                     if (uiState.ratings != null) {
-                        RatingsRow(uiState.ratings)
+                        RatingsRow(
+                            ratings = uiState.ratings,
+                            isDoubanItem = !uiState.doubanIdForSync.isNullOrBlank()
+                        )
                     } else {
                         // 骨架占位
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

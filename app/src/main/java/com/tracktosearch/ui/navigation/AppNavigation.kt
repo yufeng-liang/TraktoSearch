@@ -45,6 +45,7 @@ import com.tracktosearch.data.remote.trakt.TraktConnectionState
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.SyncMode
+import com.tracktosearch.data.repository.WatchlistMediaType
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.UpdateDialog
@@ -55,7 +56,6 @@ import com.tracktosearch.ui.screen.feedback.NewFeedbackScreen
 import com.tracktosearch.ui.screen.feedback.FeedbackDetailScreen
 import com.tracktosearch.ui.screen.feedback.FeedbackViewModel
 import com.tracktosearch.ui.screen.messages.MessagesScreen
-import com.tracktosearch.ui.screen.douban.DoubanFailuresScreen
 import com.tracktosearch.ui.screen.douban.DoubanItemDetailScreen
 import com.tracktosearch.ui.screen.douban.DoubanLoginScreen
 import com.tracktosearch.ui.screen.douban.DoubanSpiderTestScreen
@@ -112,7 +112,7 @@ interface DoubanAuthStorageEntryPoint {
 object Routes {
     const val LOGIN = "login"
     const val MAIN = "main"
-    const val DETAIL = "detail/{type}/{traktId}/{tmdbId}/{title}/{imdbId}/{traktRating}?inWatchlist={inWatchlist}&isWatched={isWatched}"
+    const val DETAIL = "detail/{type}/{traktId}/{tmdbId}/{title}/{imdbId}/{traktRating}?inWatchlist={inWatchlist}&isWatched={isWatched}&doubanId={doubanId}"
     const val SEARCH = "search/{keyword}"
     const val PERSON = "person/{personId}/{personName}/{profileUrl}"
     const val STATISTICS = "statistics"
@@ -121,7 +121,6 @@ object Routes {
     const val LIST_DETAIL = "listDetail/{listId}/{listName}"
     const val DISCOVER_FILTER = "discoverFilter"
     const val DOUBAN_LOGIN = "doubanLogin"
-    const val DOUBAN_FAILURES = "doubanFailures"
     const val DOUBAN_ITEM_DETAIL = "doubanItemDetail/{doubanId}"
     const val DOUBAN_SPIDER_TEST = "doubanSpiderTest"
     const val MARK_RECORDS = "markRecords"
@@ -145,14 +144,16 @@ object Routes {
         return "traktSearch/$type/$encodedQuery"
     }
 
-    fun detailRoute(type: String, traktId: Int, tmdbId: Int, title: String, imdbId: String = "", traktRating: Double = 0.0, inWatchlist: Boolean = false, isWatched: Boolean = false): String {
+    fun detailRoute(type: String, traktId: Int, tmdbId: Int, title: String, imdbId: String = "", traktRating: Double = 0.0, inWatchlist: Boolean = false, isWatched: Boolean = false, doubanId: String? = null): String {
         val encodedTitle = java.net.URLEncoder.encode(title, "UTF-8")
         val encodedImdbId = java.net.URLEncoder.encode(imdbId, "UTF-8")
+        val encodedDoubanId = doubanId?.let { java.net.URLEncoder.encode(it, "UTF-8") }
         var route = "detail/$type/$traktId/$tmdbId/$encodedTitle/$encodedImdbId/$traktRating"
-        if (inWatchlist || isWatched) {
+        if (inWatchlist || isWatched || encodedDoubanId != null) {
             val params = mutableListOf<String>()
             if (inWatchlist) params.add("inWatchlist=true")
             if (isWatched) params.add("isWatched=true")
+            encodedDoubanId?.let { params.add("doubanId=$it") }
             route += "?${params.joinToString("&")}"
         }
         return route
@@ -174,13 +175,16 @@ object Routes {
 private fun NavBackStackEntry.propagateMarkChangesTo(
     target: NavBackStackEntry?,
     watchlistChanged: Boolean = false,
-    watchedChanged: Boolean = false
+    watchedChanged: Boolean = false,
+    doubanWatchlistRefreshRequested: Boolean = false
 ) {
     val sourceWatchlistChanged = savedStateHandle.get<Boolean>("watchlist_changed") ?: false
     val sourceWatchedChanged = savedStateHandle.get<Boolean>("watched_changed") ?: false
     if (target != null) {
         val targetWatchlistChanged = target.savedStateHandle.get<Boolean>("watchlist_changed") ?: false
         val targetWatchedChanged = target.savedStateHandle.get<Boolean>("watched_changed") ?: false
+        val targetDoubanWatchlistRefreshRequested =
+            target.savedStateHandle.get<Boolean>("douban_watchlist_refresh_requested") ?: false
         target.savedStateHandle.set(
             "watchlist_changed",
             targetWatchlistChanged || sourceWatchlistChanged || watchlistChanged
@@ -189,9 +193,14 @@ private fun NavBackStackEntry.propagateMarkChangesTo(
             "watched_changed",
             targetWatchedChanged || sourceWatchedChanged || watchedChanged
         )
+        target.savedStateHandle.set(
+            "douban_watchlist_refresh_requested",
+            targetDoubanWatchlistRefreshRequested || doubanWatchlistRefreshRequested
+        )
     }
     savedStateHandle["watchlist_changed"] = false
     savedStateHandle["watched_changed"] = false
+    savedStateHandle["douban_watchlist_refresh_requested"] = false
 }
 
 class AuthStateHolder @Inject constructor(
@@ -421,6 +430,9 @@ fun AppNavigation(
                         val savedState = backStackEntry.savedStateHandle
                         val watchlistChanged by savedState.getStateFlow("watchlist_changed", false).collectAsStateWithLifecycle()
                         val watchedChanged by savedState.getStateFlow("watched_changed", false).collectAsStateWithLifecycle()
+                        val doubanWatchlistRefreshRequested by savedState
+                            .getStateFlow("douban_watchlist_refresh_requested", false)
+                            .collectAsStateWithLifecycle()
                         val watchlistViewModel: WatchlistViewModel = hiltViewModel()
                         LaunchedEffect(watchlistChanged) {
                             if (watchlistChanged) {
@@ -435,12 +447,19 @@ fun AppNavigation(
                                 savedState.set("watched_changed", false)
                             }
                         }
+                        LaunchedEffect(doubanWatchlistRefreshRequested) {
+                            if (doubanWatchlistRefreshRequested) {
+                                // 豆瓣详情写回只更新本地 DAO，需复用 WatchlistViewModel 的本地重读入口。
+                                watchlistViewModel.refreshWatchlist()
+                                savedState.set("douban_watchlist_refresh_requested", false)
+                            }
+                        }
 
                         // 豆瓣同步续传检测:App 启动时检测是否有未处理完的 pending items
-                        // 优先级:rollback > pending items > failures 重试
+                        // 优先级:rollback > pending items
                         // - 有 rollback → 弹回滚恢复对话框(恢复标记/不恢复)
                         // - 有 pending items → 弹续传对话框(继续同步/完整同步)
-                        // - 无 pending items 但有 failures → 弹失败重试对话框(由 SettingsScreen 处理)
+                        // - 无 pending items → 不显示同步恢复对话框
                         val doubanSyncManager = hiltViewModel<DoubanSyncViewModel>().doubanSyncManager
 
                         // 回滚检测(最高优先级:用户标记数据安全)
@@ -519,8 +538,33 @@ fun AppNavigation(
                             onShowClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
                                 navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))
                             },
-                            onDoubanFailureClick = { doubanId ->
-                                navController.navigate(Routes.doubanItemDetailRoute(doubanId))
+                            onMediaItemClick = { item, inWatchlist, isWatched ->
+                                val doubanId = item.doubanId
+                                if (shouldUseDoubanItemDetail(
+                                        doubanId = doubanId,
+                                        imdbId = item.imdbId,
+                                        mediaType = item.mediaType,
+                                        traktId = item.traktId,
+                                        tmdbId = item.tmdbId
+                                    )) {
+                                    navController.navigate(Routes.doubanItemDetailRoute(requireNotNull(doubanId)))
+                                } else {
+                                    // DetailScreen 目前只接受电影/剧集媒体类型；已知类型之外的豆瓣条目走豆瓣详情框架。
+                                    val type = if (item.mediaType == WatchlistMediaType.SHOW) "show" else "movie"
+                                    navController.navigate(
+                                        Routes.detailRoute(
+                                            type = type,
+                                            traktId = item.traktId,
+                                            tmdbId = item.tmdbId,
+                                            title = item.title,
+                                            imdbId = item.imdbId,
+                                            traktRating = item.traktRating,
+                                            inWatchlist = inWatchlist,
+                                            isWatched = isWatched,
+                                            doubanId = doubanId
+                                        )
+                                    )
+                                }
                             },
                             onSearchClick = { keyword ->
                                 // 调试入口:搜索框输入特定数字串进入豆瓣爬取测试页(仅 DEBUG 构建可用)
@@ -583,9 +627,6 @@ fun AppNavigation(
                                 // 不再导航到 DoubanLoginScreen
                                 // MainScreen 内部会切换到 Watchlist tab 显示同步横幅
                             },
-                            onDoubanFailures = {
-                                navController.navigate(Routes.DOUBAN_FAILURES)
-                            },
                             onNavigateToDoubanLogin = {
                                 navController.navigate(Routes.DOUBAN_LOGIN)
                             },
@@ -615,7 +656,8 @@ fun AppNavigation(
                         navArgument("imdbId") { type = NavType.StringType; defaultValue = "" },
                         navArgument("traktRating") { type = NavType.FloatType; defaultValue = 0.0f },
                         navArgument("inWatchlist") { type = NavType.BoolType; defaultValue = false },
-                        navArgument("isWatched") { type = NavType.BoolType; defaultValue = false }
+                         navArgument("isWatched") { type = NavType.BoolType; defaultValue = false },
+                         navArgument("doubanId") { type = NavType.StringType; defaultValue = "" }
                     ),
                     // 详情页转场:用纯 fade 替代默认的 fadeIn+slideIn,去掉水平偏移
                     // slide 每帧都需重新计算详情页所有子节点的水平位置(转场期间放大开销)。
@@ -633,8 +675,9 @@ fun AppNavigation(
                         val title = java.net.URLDecoder.decode(backStackEntry.arguments?.getString("title") ?: "", "UTF-8")
                         val imdbId = java.net.URLDecoder.decode(backStackEntry.arguments?.getString("imdbId") ?: "", "UTF-8")
                         val traktRating = backStackEntry.arguments?.getFloat("traktRating")?.toDouble() ?: 0.0
-                        val inWatchlist = backStackEntry.arguments?.getBoolean("inWatchlist") ?: false
-                        val isWatched = backStackEntry.arguments?.getBoolean("isWatched") ?: false
+                         val inWatchlist = backStackEntry.arguments?.getBoolean("inWatchlist") ?: false
+                         val isWatched = backStackEntry.arguments?.getBoolean("isWatched") ?: false
+                         val doubanId = backStackEntry.arguments?.getString("doubanId")?.takeIf { it.isNotBlank() }
 
                         // 用于在标记已看/想看后通知上级列表页刷新
                         // 同时检查从子详情页（推荐跳转）传递回来的变更标记
@@ -651,8 +694,9 @@ fun AppNavigation(
                             mediaType = if (type == "show") MediaType.SHOW else MediaType.MOVIE,
                             imdbId = imdbId,
                             traktRating = traktRating,
-                            initialInWatchlist = inWatchlist,
-                            initialIsWatched = isWatched,
+                             initialInWatchlist = inWatchlist,
+                             initialIsWatched = isWatched,
+                             doubanId = doubanId,
                             onBack = { wlChanged, wChanged -> goBack(wlChanged, wChanged) },
                             onPersonClick = { personId, personName, profileUrl, avatarColor ->
                                 navController.navigate(Routes.personRoute(personId, personName, profileUrl ?: ""))
@@ -863,17 +907,6 @@ fun AppNavigation(
                     }
                 }
 
-                composable(Routes.DOUBAN_FAILURES) {
-                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
-                        DoubanFailuresScreen(
-                            onBack = { navController.popBackStack() },
-                            onItemClick = { doubanId ->
-                                navController.navigate(Routes.doubanItemDetailRoute(doubanId))
-                            }
-                        )
-                    }
-                }
-
                 composable(
                     route = Routes.DOUBAN_ITEM_DETAIL,
                     arguments = listOf(
@@ -883,11 +916,19 @@ fun AppNavigation(
                     val doubanId = backStackEntry.arguments?.getString("doubanId") ?: return@composable
                     DoubanItemDetailScreen(
                         doubanId = doubanId,
-                        onBack = { navController.popBackStack() },
+                        onBack = { watchlistChanged, watchedChanged ->
+                            backStackEntry.propagateMarkChangesTo(
+                                target = navController.previousBackStackEntry,
+                                watchlistChanged = watchlistChanged,
+                                watchedChanged = watchedChanged,
+                                doubanWatchlistRefreshRequested = watchlistChanged
+                            )
+                            navController.popBackStack()
+                        },
                         onRetryStarted = {
                             // 重试启动后跳转到豆瓣同步进度对话框页(沿用现有导航)
                             // 实际上同步进度通过 DoubanSyncManager.progress StateFlow 暴露
-                            // 这里仅 popUp 到失败项查看页,让用户返回查看进度
+                            // 这里返回上一页,同步进度由 DoubanSyncManager.progress 暴露
                             navController.popBackStack()
                         }
                     )

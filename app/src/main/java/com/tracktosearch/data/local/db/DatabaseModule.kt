@@ -229,6 +229,89 @@ object DatabaseModule {
         }
     }
 
+    internal val MIGRATION_12_13 = object : Migration(12, 13) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // v12 -> v13：让同步表保存完整的豆瓣快照，旧数据使用可空列兼容。
+            db.execSQL("ALTER TABLE douban_synced_items ADD COLUMN doubanUrl TEXT")
+            db.execSQL("ALTER TABLE douban_synced_items ADD COLUMN comment TEXT")
+            db.execSQL("ALTER TABLE douban_synced_items ADD COLUMN markedAt TEXT")
+            db.execSQL("ALTER TABLE douban_synced_items ADD COLUMN subtitle TEXT")
+
+            // 失败表继续保留供重试；同时把历史失败快照纳入统一 watchlist 数据源。
+            db.execSQL(
+                """
+                INSERT INTO douban_synced_items (
+                    doubanId, imdbId, traktId, title, status, rating, syncedAt, mediaType,
+                    tmdbId, displayTitle, year, genres, posterUrl, listedAt, pendingSync,
+                    doubanUrl, comment, markedAt, subtitle
+                )
+                SELECT
+                    f.doubanId, NULL, NULL, f.title, f.status, f.rating, f.failedAt,
+                    COALESCE(f.mediaType, 'other'), NULL, f.title, NULL, NULL,
+                    f.posterUrl, f.markedAt, 0, f.doubanUrl, f.comment, f.markedAt, f.subtitle
+                FROM douban_sync_failures AS f
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM douban_synced_items AS s WHERE s.doubanId = f.doubanId
+                )
+                """.trimIndent()
+            )
+
+            // 同一 doubanId 已存在于同步表时，用失败表补齐快照字段，但保留已有的外部 ID 和 TMDB 富化结果。
+            db.execSQL(
+                """
+                UPDATE douban_synced_items AS s
+                SET
+                    title = (SELECT f.title FROM douban_sync_failures AS f WHERE f.doubanId = s.doubanId),
+                    status = (SELECT f.status FROM douban_sync_failures AS f WHERE f.doubanId = s.doubanId),
+                    rating = (SELECT f.rating FROM douban_sync_failures AS f WHERE f.doubanId = s.doubanId),
+                    posterUrl = COALESCE(
+                        s.posterUrl,
+                        (SELECT f.posterUrl FROM douban_sync_failures AS f WHERE f.doubanId = s.doubanId)
+                    ),
+                    listedAt = COALESCE(
+                        s.listedAt,
+                        (SELECT f.markedAt FROM douban_sync_failures AS f WHERE f.doubanId = s.doubanId)
+                    ),
+                    doubanUrl = COALESCE(
+                        s.doubanUrl,
+                        (SELECT f.doubanUrl FROM douban_sync_failures AS f WHERE f.doubanId = s.doubanId)
+                    ),
+                    comment = COALESCE(
+                        s.comment,
+                        (SELECT f.comment FROM douban_sync_failures AS f WHERE f.doubanId = s.doubanId)
+                    ),
+                    markedAt = COALESCE(
+                        s.markedAt,
+                        (SELECT f.markedAt FROM douban_sync_failures AS f WHERE f.doubanId = s.doubanId)
+                    ),
+                    subtitle = COALESCE(
+                        s.subtitle,
+                        (SELECT f.subtitle FROM douban_sync_failures AS f WHERE f.doubanId = s.doubanId)
+                    ),
+                    displayTitle = COALESCE(
+                        s.displayTitle,
+                        (SELECT f.title FROM douban_sync_failures AS f WHERE f.doubanId = s.doubanId)
+                    ),
+                    mediaType = CASE
+                        WHEN s.mediaType IS NULL OR s.mediaType = 'other'
+                        THEN COALESCE(
+                            (SELECT f.mediaType FROM douban_sync_failures AS f WHERE f.doubanId = s.doubanId),
+                            'other'
+                        )
+                        ELSE s.mediaType
+                    END,
+                    syncedAt = MAX(
+                        s.syncedAt,
+                        (SELECT f.failedAt FROM douban_sync_failures AS f WHERE f.doubanId = s.doubanId)
+                    )
+                WHERE EXISTS (
+                    SELECT 1 FROM douban_sync_failures AS f WHERE f.doubanId = s.doubanId
+                )
+                """.trimIndent()
+            )
+        }
+    }
+
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -250,7 +333,7 @@ object DatabaseModule {
             "tracktosearch.db"
         )
             .openHelperFactory(factory)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
             .build()
     }
 

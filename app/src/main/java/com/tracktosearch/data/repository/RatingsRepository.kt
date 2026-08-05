@@ -12,6 +12,7 @@ import javax.inject.Singleton
 data class MultiRatings(
     val tmdbRating: Double = 0.0,
     val traktRating: Double = 0.0,
+    val doubanRating: Double? = null,
     val imdbRating: String = "",
     val rottenTomatoes: String = "",
     val metacritic: String = "",

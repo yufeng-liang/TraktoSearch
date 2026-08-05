@@ -28,6 +28,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
@@ -44,6 +45,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -80,6 +82,192 @@ data class DoubanSyncProgress(
     val delayInfo: DelayInfo? = null,  // 当前延时信息(豆瓣反爬/重试等待,UI 做倒计时展示)
     val isCancelling: Boolean = false  // true=用户已点击取消,正在停止中的中间态
 )
+
+internal data class DoubanBatchProgress(
+    val current: Int,
+    val etaSeconds: Long
+)
+
+/**
+ * 统一处理单批次进度和 ETA。
+ * 首次回调可能已经包含断点续传跳过的条目，因此 ETA 使用首次进度作为基线，
+ * 显示进度仍保留整批条目口径。
+ */
+internal class DoubanBatchProgressTracker(
+    private val total: Int,
+    timeProvider: DoubanSyncTimeProvider = DoubanSyncTimeProvider {
+        System.nanoTime() / 1_000_000L
+    }
+) {
+    private val etaEstimator = DoubanSyncEtaEstimator(timeProvider)
+    private var baseline: Int? = null
+    private var lastCurrent = 0
+    private var etaStarted = false
+
+    /**
+     * 处理同步进度。云端预取和断点跳过只更新显示进度，不进入吞吐样本；
+     * 第一个「详情页」回调才开始计时，避免云端等待时间污染 ETA。
+     */
+    @Synchronized
+    fun update(rawCurrent: Int, subPhase: String): DoubanBatchProgress {
+        if (subPhase == DoubanSyncSubStage.PULLING_CLOUD.name || subPhase == "断点续传跳过") {
+            return updateBeforeEta(rawCurrent)
+        }
+
+        if (subPhase == "详情页" && !etaStarted) {
+            etaStarted = true
+            etaEstimator.reset()
+        }
+        return updateWithEta(rawCurrent)
+    }
+
+    private fun updateBeforeEta(rawCurrent: Int): DoubanBatchProgress {
+        val safeTotal = total.coerceAtLeast(0)
+        val current = rawCurrent.coerceIn(lastCurrent, safeTotal)
+        // 预取结束前最后一次准备阶段进度就是本批次的跳过基线。
+        if (!etaStarted) baseline = current
+        lastCurrent = current
+
+        val relativeTotal = (safeTotal - (baseline ?: current)).coerceAtLeast(0)
+        return DoubanBatchProgress(
+            current = current,
+            etaSeconds = if (relativeTotal == 0) {
+                0L
+            } else {
+                DoubanSyncEtaEstimator.UNKNOWN_ETA_SECONDS
+            }
+        )
+    }
+
+    private fun updateWithEta(rawCurrent: Int): DoubanBatchProgress {
+        val safeTotal = total.coerceAtLeast(0)
+        val current = rawCurrent.coerceIn(lastCurrent, safeTotal)
+        val start = baseline ?: current.also { baseline = it }
+        lastCurrent = current
+
+        val relativeTotal = (safeTotal - start).coerceAtLeast(0)
+        val relativeCurrent = (current - start).coerceAtLeast(0)
+        val eta = if (relativeTotal == 0) {
+            0L
+        } else {
+            etaEstimator.update(
+                current = relativeCurrent,
+                total = relativeTotal,
+                isComplete = relativeCurrent >= relativeTotal
+            )
+        }
+        return DoubanBatchProgress(current = current, etaSeconds = eta)
+    }
+}
+
+/**
+ * 串行发布一批同步的进度事件。
+ *
+ * 详情页和 Trakt 查询会并发回调；若先计算 ETA 的旧事件晚于新事件写入 StateFlow，
+ * UI 会回退到旧的进度、标题或 ETA。这里将计算、失败缓存和状态发布放入同一临界区，
+ * 并丢弃已经落后的回调。
+ */
+internal class DoubanSyncProgressPublisher(
+    private val progress: MutableStateFlow<DoubanSyncProgress>,
+    private val isCancelled: () -> Boolean
+) {
+    private val lock = Any()
+
+    fun createBatchProgressCallback(
+        tracker: DoubanBatchProgressTracker,
+        recentFailures: ArrayDeque<DoubanSyncFailure>
+    ): (Int, String, Int, String?, DoubanSyncFailure?) -> Unit {
+        val eventSequence = AtomicLong()
+        var latestPublishedSequence = 0L
+        var latestPublishedCurrent = 0
+
+        return { current, subPhase, cacheHit, currentTitle, recentFailure ->
+            val sequence = eventSequence.incrementAndGet()
+            synchronized(lock) {
+                if (isCancelled() || progress.value.isCancelling) {
+                    return@synchronized
+                }
+                if (sequence < latestPublishedSequence) {
+                    if (recentFailure != null) {
+                        recentFailures.addLast(recentFailure)
+                        while (recentFailures.size > 5) recentFailures.removeFirst()
+                        progress.value = progress.value.copy(
+                            recentFailures = recentFailures.toList()
+                        )
+                    }
+                    return@synchronized
+                }
+
+                val isPreparationPhase = subPhase == DoubanSyncSubStage.PULLING_CLOUD.name ||
+                    subPhase == "断点续传跳过"
+                // 普通阶段的迟到回调不能覆盖较新条目的进度、阶段、标题或 ETA。
+                if (!isPreparationPhase && current < latestPublishedCurrent) {
+                    if (recentFailure != null) {
+                        recentFailures.addLast(recentFailure)
+                        while (recentFailures.size > 5) recentFailures.removeFirst()
+                        progress.value = progress.value.copy(
+                            recentFailures = recentFailures.toList()
+                        )
+                    }
+                    return@synchronized
+                }
+
+                val batchProgress = tracker.update(current, subPhase)
+                if (recentFailure != null) {
+                    recentFailures.addLast(recentFailure)
+                    while (recentFailures.size > 5) recentFailures.removeFirst()
+                }
+
+                val currentProgress = progress.value
+                val mappedSubStage = subStageFromLegacy(subPhase)
+                progress.value = currentProgress.copy(
+                    current = batchProgress.current,
+                    stage = if (mappedSubStage == DoubanSyncSubStage.NONE) {
+                        currentProgress.stage
+                    } else {
+                        stageFromSubStage(mappedSubStage)
+                    },
+                    subStage = mappedSubStage,
+                    subPhase = subPhase,
+                    cacheHitCount = currentProgress.cacheHitCount + cacheHit,
+                    etaSeconds = batchProgress.etaSeconds,
+                    currentTitle = currentTitle,
+                    recentFailures = recentFailures.toList()
+                )
+                latestPublishedSequence = sequence
+                latestPublishedCurrent = batchProgress.current
+            }
+        }
+    }
+
+    fun publishDelay(delayInfo: DelayInfo?) {
+        synchronized(lock) {
+            if (isCancelled() || progress.value.isCancelling) return
+            progress.value = progress.value.copy(delayInfo = delayInfo)
+        }
+    }
+
+    fun publishCancelling() {
+        synchronized(lock) {
+            progress.value = progress.value.copy(
+                isCancelling = true,
+                stage = DoubanSyncStage.CANCELLING,
+                subStage = DoubanSyncSubStage.NONE,
+                phase = "正在取消...",
+                subPhase = "",
+                delayInfo = null
+            )
+        }
+    }
+
+    fun publishFinal(build: (DoubanSyncProgress, Boolean) -> DoubanSyncProgress) {
+        synchronized(lock) {
+            val currentProgress = progress.value
+            val wasCancelled = isCancelled()
+            progress.value = build(currentProgress, wasCancelled)
+        }
+    }
+}
 
 /**
  * 豆瓣→Trakt 同步协调器。
@@ -121,6 +309,10 @@ class DoubanSyncManager @Inject constructor(
     private val tmdbRepository: TmdbRepository,
     @ApplicationContext private val appContext: Context
 ) {
+    private companion object {
+        private const val CLOUD_DETAILS_PREFETCH_TIMEOUT_MS = 5 * 60 * 1000L
+    }
+
     private val _progress = MutableStateFlow(DoubanSyncProgress())
     val progress: StateFlow<DoubanSyncProgress> = _progress.asStateFlow()
 
@@ -131,6 +323,17 @@ class DoubanSyncManager @Inject constructor(
 
     /** Application scope：同步协程在此运行，Activity/Service 销毁不影响 */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    @Volatile
+    private var syncJob: Job? = null
+
+    @Volatile
+    private var cancelled = false
+
+    private val progressPublisher = DoubanSyncProgressPublisher(
+        progress = _progress,
+        isCancelled = { cancelled }
+    )
 
     /**
      * 当前是否豆瓣独立模式（已激活网关 + 已登录豆瓣 + 未连 trakt）。
@@ -150,18 +353,13 @@ class DoubanSyncManager @Inject constructor(
         // UI 层基于 delayInfo(startMs + totalSeconds)做倒计时展示
         appScope.launch {
             doubanRepository.delayEvent.collect { info ->
-                _progress.value = _progress.value.copy(delayInfo = info)
+                progressPublisher.publishDelay(info)
             }
         }
     }
 
-    @Volatile
-    private var syncJob: Job? = null
-
-    @Volatile
-    private var cancelled = false
-
     private fun prepareForNewSync() {
+        cloudDetailsPoolManager.resetDownloadSuppression()
         recentPreviewBuffer.clear()
         _progress.value = _progress.value.copy(
             isCancelling = false,
@@ -171,7 +369,8 @@ class DoubanSyncManager @Inject constructor(
             recentItems = emptyList(),
             errorMessage = null,
             loginTarget = null,
-            cookieExpired = false
+            cookieExpired = false,
+            etaSeconds = DoubanSyncEtaEstimator.UNKNOWN_ETA_SECONDS
         )
     }
 
@@ -218,14 +417,7 @@ class DoubanSyncManager @Inject constructor(
     fun cancel() {
         cancelled = true
         // 同步状态更新到 isCancelling 中间态:UI 立即禁用取消按钮 + 显示"正在取消..." 文案
-        _progress.value = _progress.value.copy(
-            isCancelling = true,
-            stage = DoubanSyncStage.CANCELLING,
-            subStage = DoubanSyncSubStage.NONE,
-            phase = "正在取消...",
-            subPhase = "",
-            delayInfo = null
-        )
+        progressPublisher.publishCancelling()
         // 异步上传当前进度（不阻塞取消，失败只记日志）
         appScope.launch {
             // 等待同步作业退出后再上传，避免 dirtyDetailIds toList/clear 竞态导致数据丢失
@@ -329,6 +521,7 @@ class DoubanSyncManager @Inject constructor(
                     phase = "同步异常: ${e.message}"
                 )
             } finally {
+                cloudDetailsPoolManager.resetDownloadSuppression()
                 releaseWakeLock()
             }
         }
@@ -365,6 +558,7 @@ class DoubanSyncManager @Inject constructor(
                     phase = "同步异常: ${e.message}"
                 )
             } finally {
+                cloudDetailsPoolManager.resetDownloadSuppression()
                 releaseWakeLock()
             }
         }
@@ -406,6 +600,7 @@ class DoubanSyncManager @Inject constructor(
                     phase = "同步异常: ${e.message}"
                 )
             } finally {
+                cloudDetailsPoolManager.resetDownloadSuppression()
                 releaseWakeLock()
             }
         }
@@ -565,6 +760,7 @@ class DoubanSyncManager @Inject constructor(
                     phase = "同步异常: ${e.message}"
                 )
             } finally {
+                cloudDetailsPoolManager.resetDownloadSuppression()
                 releaseWakeLock()
             }
         }
@@ -652,6 +848,7 @@ class DoubanSyncManager @Inject constructor(
 
         val allFailed = mutableListOf<DoubanSyncFailure>()
         val recentFailuresBuffer = ArrayDeque<DoubanSyncFailure>()
+        val crawledDoubanIds = mutableSetOf<String>()
         var totalSuccess = 0
         var totalSkipped = 0
         var totalCacheHit = 0
@@ -659,6 +856,7 @@ class DoubanSyncManager @Inject constructor(
         // 先爬「想看」再爬「看过」
         for (status in listOf(DoubanMarkStatus.WISH, DoubanMarkStatus.COLLECT)) {
             if (cancelled) break
+
             val phaseName = if (status == DoubanMarkStatus.WISH) "爬取想看列表" else "爬取看过列表"
             val listSubStage = if (status == DoubanMarkStatus.WISH) {
                 DoubanSyncSubStage.FETCHING_WISH_LIST
@@ -672,6 +870,7 @@ class DoubanSyncManager @Inject constructor(
                 phase = phaseName,
                 total = 0,
                 current = 0,
+                etaSeconds = DoubanSyncEtaEstimator.UNKNOWN_ETA_SECONDS,
                 subPhase = "",
                 currentTitle = null
             )
@@ -724,6 +923,8 @@ class DoubanSyncManager @Inject constructor(
 
             if (cancelled) break
 
+            crawledDoubanIds += pageItems.map { it.doubanId }
+
             // 同步到 Trakt（批量）
             val syncPhase = if (status == DoubanMarkStatus.WISH) "同步想看到 Trakt" else "同步看过到 Trakt"
             _progress.value = _progress.value.copy(
@@ -731,43 +932,21 @@ class DoubanSyncManager @Inject constructor(
                 subStage = DoubanSyncSubStage.FETCHING_DETAIL,
                 phase = syncPhase,
                 total = pageItems.size,
-                current = 0
+                current = 0,
+                etaSeconds = DoubanSyncEtaEstimator.UNKNOWN_ETA_SECONDS
             )
 
+            val batchProgressTracker = DoubanBatchProgressTracker(pageItems.size)
             val result = syncBatchToTrakt(
                 items = pageItems,
                 status = status,
                 cookie = creds.cookie,
                 syncedIds = syncedIds,
                 watchlistWatchedIds = watchlistWatchedIds,
-                onProgress = { cur, subPhase, cacheHit, currentTitle, recentFailure ->
-                    // 计算预计剩余时间
-                    val elapsed = (System.currentTimeMillis() - startTime) / 1000
-                    val eta = if (cur > 0 && _progress.value.total > 0) {
-                        (elapsed * (_progress.value.total - cur) / cur).coerceAtLeast(0)
-                    } else -1L
-                    // 更新最近失败滚动列表
-                    if (recentFailure != null) {
-                        recentFailuresBuffer.addLast(recentFailure)
-                        while (recentFailuresBuffer.size > 5) recentFailuresBuffer.removeFirst()
-                    }
-                    _progress.value = _progress.value.copy(
-                        current = cur,
-                        stage = subStageFromLegacy(subPhase).let { mappedSubStage ->
-                            if (mappedSubStage == DoubanSyncSubStage.NONE) {
-                                _progress.value.stage
-                            } else {
-                                stageFromSubStage(mappedSubStage)
-                            }
-                        },
-                        subStage = subStageFromLegacy(subPhase),
-                        subPhase = subPhase,
-                        cacheHitCount = _progress.value.cacheHitCount + cacheHit,
-                        etaSeconds = eta,
-                        currentTitle = currentTitle,
-                        recentFailures = recentFailuresBuffer.toList()
-                    )
-                }
+                onProgress = progressPublisher.createBatchProgressCallback(
+                    tracker = batchProgressTracker,
+                    recentFailures = recentFailuresBuffer
+                )
             )
             allFailed.addAll(result.failed)
             totalSuccess += result.success
@@ -779,30 +958,41 @@ class DoubanSyncManager @Inject constructor(
             }
         }
 
+        // 全量同步只在两个列表都成功抓取后清理已从豆瓣移除的本地条目。
+        // 独立登录和双登录都以豆瓣列表为数据源；详情抓取或后续富化失败仍保留当前条目的最低限度快照，避免 Watchlist 消失。
+        if (forceOverwrite && !cancelled) {
+            if (crawledDoubanIds.isEmpty()) {
+                doubanSyncedItemDao.clearAll()
+            } else {
+                doubanSyncedItemDao.deleteNotInDoubanIds(crawledDoubanIds.toList())
+            }
+        }
+
         // 同步完成后:持久化失败项到 douban_sync_failures 表(按 status 精细化覆盖)
         persistFailures(allFailed)
 
-        val finalProgress = DoubanSyncProgress(
-            isRunning = false,
-            isComplete = true,
-            stage = if (cancelled) DoubanSyncStage.CANCELLING else DoubanSyncStage.COMPLETED,
-            subStage = DoubanSyncSubStage.NONE,
-            recentItems = recentPreviewBuffer.snapshot(),
-            current = _progress.value.current,
-            total = _progress.value.total,
-            successCount = totalSuccess,
-            failedCount = allFailed.size,
-            skippedCount = totalSkipped,
-            cacheHitCount = totalCacheHit,
-            failedItems = allFailed,
-            phase = if (cancelled) "已取消" else "同步完成",
-            startTimeMs = startTime,
-            etaSeconds = 0,
-            recentFailures = recentFailuresBuffer.toList(),
-            isRetry = false,
-            isCancelling = _progress.value.isCancelling
-        )
-        _progress.value = finalProgress
+        progressPublisher.publishFinal { currentProgress, wasCancelled ->
+            DoubanSyncProgress(
+                isRunning = false,
+                isComplete = true,
+                stage = if (wasCancelled) DoubanSyncStage.CANCELLING else DoubanSyncStage.COMPLETED,
+                subStage = DoubanSyncSubStage.NONE,
+                recentItems = recentPreviewBuffer.snapshot(),
+                current = currentProgress.current,
+                total = currentProgress.total,
+                successCount = totalSuccess,
+                failedCount = allFailed.size,
+                skippedCount = totalSkipped,
+                cacheHitCount = totalCacheHit,
+                failedItems = allFailed,
+                phase = if (wasCancelled) "已取消" else "同步完成",
+                startTimeMs = startTime,
+                etaSeconds = 0,
+                recentFailures = recentFailuresBuffer.toList(),
+                isRetry = false,
+                isCancelling = currentProgress.isCancelling || wasCancelled
+            )
+        }
         // 取消场景下由 cancel() 方法统一执行 uploadAll(lastSyncMode="CANCELLED"),此处跳过避免双重上传
         if (cancelled) return
         // 同步完成后:上传个人数据到云端（跨设备同步，失败不阻塞）
@@ -885,18 +1075,21 @@ class DoubanSyncManager @Inject constructor(
         var totalSkipped = 0
         var totalCacheHit = 0
         var totalStatusChanged = 0
+        val crawledDoubanIds = mutableSetOf<String>()
+        var wishListFetched = false
+        var collectListFetched = false
 
         // 增量同步跳过已知失败项:不可恢复失败(NO_IMDB_ID/TRAKT_NOT_FOUND) + 重试超限(attemptCount>=3)的可恢复失败
         // 避免每次增量都重爬已知查不到 imdb/trakt 的条目,节省 API 调用
-        val skipFailuresIds = runCatching {
+        val skippedFailures = runCatching {
             doubanSyncFailureDao.getAll()
                 .filter { entity ->
                     val reason = FailureReason.fromString(entity.failureReason)
                     !reason.recoverable || entity.attemptCount >= 3
                 }
-                .map { it.doubanId }
-                .toSet()
-        }.getOrDefault(emptySet())
+                .map { DoubanSyncFailure.fromEntity(it) }
+        }.getOrDefault(emptyList())
+        val skipFailuresIds = skippedFailures.map { it.doubanId }.toSet()
         if (skipFailuresIds.isNotEmpty()) {
             android.util.Log.i("DoubanSyncManager", "增量同步跳过 ${skipFailuresIds.size} 条已知失败项")
         }
@@ -916,6 +1109,7 @@ class DoubanSyncManager @Inject constructor(
                 phase = phaseName,
                 total = 0,
                 current = 0,
+                etaSeconds = DoubanSyncEtaEstimator.UNKNOWN_ETA_SECONDS,
                 subPhase = "",
                 currentTitle = null
             )
@@ -966,6 +1160,13 @@ class DoubanSyncManager @Inject constructor(
 
             if (cancelled) break
 
+            crawledDoubanIds += pageItems.map { it.doubanId }
+            if (status == DoubanMarkStatus.WISH) {
+                wishListFetched = true
+            } else {
+                collectListFetched = true
+            }
+
             // 模式 B:先处理状态变化项
             if (includeStatusChanges) {
                 val changedItems = pageItems.filter { item ->
@@ -989,41 +1190,21 @@ class DoubanSyncManager @Inject constructor(
                 subStage = DoubanSyncSubStage.FETCHING_DETAIL,
                 phase = syncPhase,
                 total = pageItems.size,
-                current = 0
+                current = 0,
+                etaSeconds = DoubanSyncEtaEstimator.UNKNOWN_ETA_SECONDS
             )
 
+            val batchProgressTracker = DoubanBatchProgressTracker(pageItems.size)
             val result = syncBatchToTrakt(
                 items = pageItems,
                 status = status,
                 cookie = creds.cookie,
                 syncedIds = syncedIds,
                 watchlistWatchedIds = watchlistWatchedIds,
-                onProgress = { cur, subPhase, cacheHit, currentTitle, recentFailure ->
-                    val elapsed = (System.currentTimeMillis() - startTime) / 1000
-                    val eta = if (cur > 0 && _progress.value.total > 0) {
-                        (elapsed * (_progress.value.total - cur) / cur).coerceAtLeast(0)
-                    } else -1L
-                    if (recentFailure != null) {
-                        recentFailuresBuffer.addLast(recentFailure)
-                        while (recentFailuresBuffer.size > 5) recentFailuresBuffer.removeFirst()
-                    }
-                    _progress.value = _progress.value.copy(
-                        current = cur,
-                        stage = subStageFromLegacy(subPhase).let { mappedSubStage ->
-                            if (mappedSubStage == DoubanSyncSubStage.NONE) {
-                                _progress.value.stage
-                            } else {
-                                stageFromSubStage(mappedSubStage)
-                            }
-                        },
-                        subStage = subStageFromLegacy(subPhase),
-                        subPhase = subPhase,
-                        cacheHitCount = _progress.value.cacheHitCount + cacheHit,
-                        etaSeconds = eta,
-                        currentTitle = currentTitle,
-                        recentFailures = recentFailuresBuffer.toList()
-                    )
-                },
+                onProgress = progressPublisher.createBatchProgressCallback(
+                    tracker = batchProgressTracker,
+                    recentFailures = recentFailuresBuffer
+                ),
                 skipFailuresIds = skipFailuresIds
             )
             allFailed.addAll(result.failed)
@@ -1035,31 +1216,39 @@ class DoubanSyncManager @Inject constructor(
             }
         }
 
-        persistFailures(allFailed)
+        persistFailures(allFailed, preservedFailures = skippedFailures)
 
-        val finalProgress = DoubanSyncProgress(
-            isRunning = false,
-            isComplete = true,
-            stage = if (cancelled) DoubanSyncStage.CANCELLING else DoubanSyncStage.COMPLETED,
-            subStage = DoubanSyncSubStage.NONE,
-            recentItems = recentPreviewBuffer.snapshot(),
-            current = _progress.value.current,
-            total = _progress.value.total,
-            successCount = totalSuccess,
-            failedCount = allFailed.size,
-            skippedCount = totalSkipped,
-            cacheHitCount = totalCacheHit,
-            failedItems = allFailed,
-            phase = if (cancelled) "已取消" else "$modeLabel 完成",
-            startTimeMs = startTime,
-            etaSeconds = 0,
-            recentFailures = recentFailuresBuffer.toList(),
-            isRetry = false,
-            isCancelling = _progress.value.isCancelling
-        )
-        _progress.value = finalProgress
+        progressPublisher.publishFinal { currentProgress, wasCancelled ->
+            DoubanSyncProgress(
+                isRunning = false,
+                isComplete = true,
+                stage = if (wasCancelled) DoubanSyncStage.CANCELLING else DoubanSyncStage.COMPLETED,
+                subStage = DoubanSyncSubStage.NONE,
+                recentItems = recentPreviewBuffer.snapshot(),
+                current = currentProgress.current,
+                total = currentProgress.total,
+                successCount = totalSuccess,
+                failedCount = allFailed.size,
+                skippedCount = totalSkipped,
+                cacheHitCount = totalCacheHit,
+                failedItems = allFailed,
+                phase = if (wasCancelled) "已取消" else "$modeLabel 完成",
+                startTimeMs = startTime,
+                etaSeconds = 0,
+                recentFailures = recentFailuresBuffer.toList(),
+                isRetry = false,
+                isCancelling = currentProgress.isCancelling || wasCancelled
+            )
+        }
         // 取消场景下由 cancel() 方法统一执行 uploadAll(lastSyncMode="CANCELLED"),此处跳过避免双重上传
         if (cancelled) return
+        if (shouldCleanupRemovedDoubanSnapshots(wishListFetched, collectListFetched, cancelled)) {
+            if (crawledDoubanIds.isEmpty()) {
+                doubanSyncedItemDao.clearAll()
+            } else {
+                doubanSyncedItemDao.deleteNotInDoubanIds(crawledDoubanIds.toList())
+            }
+        }
         // 同步完成后:上传个人数据到云端（跨设备同步，失败不阻塞）
         val mode = "INCREMENTAL_WITH_CHANGES"
         uploadToCloudAfterSync(mode = mode, isFullComplete = !cancelled)
@@ -1075,6 +1264,13 @@ class DoubanSyncManager @Inject constructor(
      *
      * @return 成功处理的状态变化数
      */
+    /** 只有两张豆瓣列表都完整抓取且同步未取消时，才允许删除旧快照。 */
+    private fun shouldCleanupRemovedDoubanSnapshots(
+        wishListFetched: Boolean,
+        collectListFetched: Boolean,
+        wasCancelled: Boolean
+    ): Boolean = wishListFetched && collectListFetched && !wasCancelled
+
     private suspend fun processStatusChanges(
         changedItems: List<DoubanMarkItem>,
         newStatus: DoubanMarkStatus,
@@ -1082,14 +1278,15 @@ class DoubanSyncManager @Inject constructor(
         watchlistWatchedIds: TraktRepository.WatchlistWatchedIds?
     ): Int {
         var successCount = 0
+        val isDoubanMode = isDoubanMode()
         changedItems.forEachIndexed { idx, item ->
             if (cancelled) return successCount
             val synced = syncedItemsMap[item.doubanId] ?: return@forEachIndexed
-            val traktId = synced.traktId ?: return@forEachIndexed
+            val traktId = synced.traktId
             val mediaType = when (synced.mediaType) {
                 "movie" -> MediaType.MOVIE
                 "show" -> MediaType.SHOW
-                else -> return@forEachIndexed
+                else -> null
             }
 
             _progress.value = _progress.value.copy(
@@ -1099,6 +1296,18 @@ class DoubanSyncManager @Inject constructor(
             )
 
             try {
+                // 没有 Trakt 映射或属于豆瓣独有类型时，仍需先更新本地豆瓣状态。
+                // 这类条目没有可调用的 Trakt API，但不能因此在下一次同步中反复被判定为状态变化。
+                if (isDoubanMode || traktId == null || traktId <= 0 || mediaType == null) {
+                    doubanSyncedItemDao.updateStatusAndPendingSync(
+                        doubanId = item.doubanId,
+                        status = newStatus.path,
+                        pendingSync = false
+                    )
+                    successCount++
+                    return@forEachIndexed
+                }
+
                 val movieIds = if (mediaType == MediaType.MOVIE) listOf(traktId) else emptyList()
                 val showIds = if (mediaType == MediaType.SHOW) listOf(traktId) else emptyList()
 
@@ -1172,17 +1381,16 @@ class DoubanSyncManager @Inject constructor(
                 return
             }
 
-        // 豆瓣独立模式:跳过 trakt batch remove + rollback,直接清本地表 + 重新同步
-        // (未连 trakt,batchRemoveFromWatchlist/Watched 会失败;豆瓣模式全量重写=清本地表+重爬豆瓣)
+        // 豆瓣独立模式:跳过 trakt batch remove + rollback，重新抓取并在成功后清理过期快照。
+        // 不能在抓取前清空本地表，否则 Cookie 过期、网络失败或用户取消都会造成数据丢失。
         if (isDoubanMode()) {
             val startTime = System.currentTimeMillis()
             _progress.value = DoubanSyncProgress(
                 isRunning = true, startTimeMs = startTime,
                 stage = DoubanSyncStage.UPDATING_LIST,
                 subStage = DoubanSyncSubStage.WRITING_LOCAL,
-                phase = "清空本地标记", isRetry = false, currentTitle = null
+                phase = "准备重新同步", isRetry = false, currentTitle = null
             )
-            doubanSyncedItemDao.clearAll()
             _progress.value = _progress.value.copy(
                 stage = DoubanSyncStage.PREPARING,
                 subStage = DoubanSyncSubStage.CONNECTING,
@@ -1210,7 +1418,7 @@ class DoubanSyncManager @Inject constructor(
         val collectMovieIds = mutableListOf<Int>()
         val collectShowIds = mutableListOf<Int>()
         for (item in allSynced) {
-            val traktId = item.traktId ?: continue
+            val traktId = item.traktId?.takeIf { it > 0 } ?: continue
             when (item.status) {
                 "wish" -> when (item.mediaType) {
                     "movie" -> wishMovieIds.add(traktId)
@@ -1225,7 +1433,7 @@ class DoubanSyncManager @Inject constructor(
 
         // 保存回滚快照:记录即将删除的标记,同步失败时用于恢复
         val rollbackItems = allSynced.mapNotNull { item ->
-            val traktId = item.traktId ?: return@mapNotNull null
+            val traktId = item.traktId?.takeIf { it > 0 } ?: return@mapNotNull null
             DoubanSyncRollbackEntity(
                 doubanId = item.doubanId,
                 traktId = traktId,
@@ -1357,41 +1565,21 @@ class DoubanSyncManager @Inject constructor(
                 phase = phaseName,
                 total = items.size,
                 current = 0,
+                etaSeconds = DoubanSyncEtaEstimator.UNKNOWN_ETA_SECONDS,
                 currentTitle = null
             )
 
+            val batchProgressTracker = DoubanBatchProgressTracker(items.size)
             val result = syncBatchToTrakt(
                 items = items,
                 status = status,
                 cookie = creds.cookie,
                 syncedIds = syncedIds,
                 watchlistWatchedIds = watchlistWatchedIds,
-                onProgress = { cur, subPhase, cacheHit, currentTitle, recentFailure ->
-                    val elapsed = (System.currentTimeMillis() - startTime) / 1000
-                    val eta = if (cur > 0 && _progress.value.total > 0) {
-                        (elapsed * (_progress.value.total - cur) / cur).coerceAtLeast(0)
-                    } else -1L
-                    if (recentFailure != null) {
-                        recentFailuresBuffer.addLast(recentFailure)
-                        while (recentFailuresBuffer.size > 5) recentFailuresBuffer.removeFirst()
-                    }
-                    _progress.value = _progress.value.copy(
-                        current = cur,
-                        stage = subStageFromLegacy(subPhase).let { mappedSubStage ->
-                            if (mappedSubStage == DoubanSyncSubStage.NONE) {
-                                _progress.value.stage
-                            } else {
-                                stageFromSubStage(mappedSubStage)
-                            }
-                        },
-                        subStage = subStageFromLegacy(subPhase),
-                        subPhase = subPhase,
-                        cacheHitCount = _progress.value.cacheHitCount + cacheHit,
-                        etaSeconds = eta,
-                        currentTitle = currentTitle,
-                        recentFailures = recentFailuresBuffer.toList()
-                    )
-                }
+                onProgress = progressPublisher.createBatchProgressCallback(
+                    tracker = batchProgressTracker,
+                    recentFailures = recentFailuresBuffer
+                )
             )
 
             allFailed.addAll(result.failed)
@@ -1407,27 +1595,28 @@ class DoubanSyncManager @Inject constructor(
         // 持久化失败项
         persistFailures(allFailed)
 
-        val finalProgress = DoubanSyncProgress(
-            isRunning = false,
-            isComplete = true,
-            stage = if (cancelled) DoubanSyncStage.CANCELLING else DoubanSyncStage.COMPLETED,
-            subStage = DoubanSyncSubStage.NONE,
-            recentItems = recentPreviewBuffer.snapshot(),
-            current = _progress.value.current,
-            total = _progress.value.total,
-            successCount = totalSuccess,
-            failedCount = allFailed.size,
-            skippedCount = totalSkipped,
-            cacheHitCount = totalCacheHit,
-            failedItems = allFailed,
-            phase = if (cancelled) "已取消" else "续传完成",
-            startTimeMs = startTime,
-            etaSeconds = 0,
-            recentFailures = recentFailuresBuffer.toList(),
-            isRetry = false,
-            isCancelling = _progress.value.isCancelling
-        )
-        _progress.value = finalProgress
+        progressPublisher.publishFinal { currentProgress, wasCancelled ->
+            DoubanSyncProgress(
+                isRunning = false,
+                isComplete = true,
+                stage = if (wasCancelled) DoubanSyncStage.CANCELLING else DoubanSyncStage.COMPLETED,
+                subStage = DoubanSyncSubStage.NONE,
+                recentItems = recentPreviewBuffer.snapshot(),
+                current = currentProgress.current,
+                total = currentProgress.total,
+                successCount = totalSuccess,
+                failedCount = allFailed.size,
+                skippedCount = totalSkipped,
+                cacheHitCount = totalCacheHit,
+                failedItems = allFailed,
+                phase = if (wasCancelled) "已取消" else "续传完成",
+                startTimeMs = startTime,
+                etaSeconds = 0,
+                recentFailures = recentFailuresBuffer.toList(),
+                isRetry = false,
+                isCancelling = currentProgress.isCancelling || wasCancelled
+            )
+        }
         // 取消场景下由 cancel() 方法统一执行 uploadAll(lastSyncMode="CANCELLED"),此处跳过避免双重上传
         if (cancelled) return
         // 同步完成后:上传个人数据到云端（跨设备同步，失败不阻塞）
@@ -1477,20 +1666,16 @@ class DoubanSyncManager @Inject constructor(
         // 按 selectedReasons 过滤,转回 DoubanMarkItem 用于复用 syncBatchToTrakt
         val filteredFailures = failures.filter { it.failureReason in selectedReasons }
 
-        // 数据一致性修复:清理已同步表中的失败项。
-        // 这些失败项的 doubanId 已经在 douban_synced_items 表中(曾经同步成功过,常见于
-        // 从云端拉取 synced_items 后与本地 failures 表重合),不需要重试。
-        // 从 douban_sync_failures 表删除,避免下次重试时 pending 为空导致统计全为 0。
-        val (alreadySyncedFailures, toRetryFailures) = filteredFailures.partition { it.doubanId in syncedIds }
-        for (failure in alreadySyncedFailures) {
-            doubanSyncFailureDao.deleteByDoubanId(failure.doubanId)
-        }
+        // 快照表与失败表的职责不同：同步失败时会先写入最低限度快照，供 Watchlist 展示，
+        // 因此不能再用 douban_synced_items 的存在性判断失败项已完成。被用户选中的失败项
+        // 必须真正进入重试链；只有重试成功后才由 allRetrySuccess 删除失败记录。
+        val toRetryFailures = filteredFailures
 
         // 按 status 分组重试(wish/collect 分别走)
         val allStillFailed = mutableListOf<DoubanSyncFailure>()
         val allRetrySuccess = mutableListOf<String>()  // 重试成功的 doubanId
         var totalSuccess = 0
-        var totalSkipped = alreadySyncedFailures.size  // 已同步表跳过的失败项
+        var totalSkipped = 0
         var totalCacheHit = 0
         val recentFailuresBuffer = ArrayDeque<DoubanSyncFailure>()
 
@@ -1506,9 +1691,11 @@ class DoubanSyncManager @Inject constructor(
                 phase = phaseName,
                 total = statusFailures.size,
                 current = 0,
+                etaSeconds = DoubanSyncEtaEstimator.UNKNOWN_ETA_SECONDS,
                 currentTitle = null
             )
 
+            val batchProgressTracker = DoubanBatchProgressTracker(statusFailures.size)
             // 转回 DoubanMarkItem,沿用现有 syncBatchToTrakt 流程
             val items = statusFailures.map { it.toMarkItem() }
 
@@ -1516,34 +1703,12 @@ class DoubanSyncManager @Inject constructor(
                 items = items,
                 status = status,
                 cookie = creds.cookie,
-                syncedIds = syncedIds,  // 重试成功的项如果在已同步表里,会跳过(实际上不会,因为之前失败了)
+                syncedIds = syncedIds,  // 失败项 ID 会由 existingFailures 从已完成集合中排除
                 watchlistWatchedIds = watchlistWatchedIds,
-                onProgress = { cur, subPhase, cacheHit, currentTitle, recentFailure ->
-                    val elapsed = (System.currentTimeMillis() - startTime) / 1000
-                    val eta = if (cur > 0 && _progress.value.total > 0) {
-                        (elapsed * (_progress.value.total - cur) / cur).coerceAtLeast(0)
-                    } else -1L
-                    if (recentFailure != null) {
-                        recentFailuresBuffer.addLast(recentFailure)
-                        while (recentFailuresBuffer.size > 5) recentFailuresBuffer.removeFirst()
-                    }
-                    _progress.value = _progress.value.copy(
-                        current = cur,
-                        stage = subStageFromLegacy(subPhase).let { mappedSubStage ->
-                            if (mappedSubStage == DoubanSyncSubStage.NONE) {
-                                _progress.value.stage
-                            } else {
-                                stageFromSubStage(mappedSubStage)
-                            }
-                        },
-                        subStage = subStageFromLegacy(subPhase),
-                        subPhase = subPhase,
-                        cacheHitCount = _progress.value.cacheHitCount + cacheHit,
-                        etaSeconds = eta,
-                        currentTitle = currentTitle,
-                        recentFailures = recentFailuresBuffer.toList()
-                    )
-                },
+                onProgress = progressPublisher.createBatchProgressCallback(
+                    tracker = batchProgressTracker,
+                    recentFailures = recentFailuresBuffer
+                ),
                 existingFailures = statusFailures  // 传入原失败项,用于 attemptCount 累加
             )
 
@@ -1569,27 +1734,28 @@ class DoubanSyncManager @Inject constructor(
         // 先前用 items - result.failed 推算 allRetrySuccess,但 failed 仅含各阶段显式捕获的失败,
         // 阶段 4 写入失败的项会被错误计入 success → 误删仍有失败的记录。
         // 改用 BatchSyncResult.successDoubanIds(阶段 4 实际写入 Trakt 的项)做精确删除。
-        val finalProgress = DoubanSyncProgress(
-            isRunning = false,
-            isComplete = true,
-            stage = if (cancelled) DoubanSyncStage.CANCELLING else DoubanSyncStage.COMPLETED,
-            subStage = DoubanSyncSubStage.NONE,
-            recentItems = recentPreviewBuffer.snapshot(),
-            current = _progress.value.current,
-            total = _progress.value.total,
-            successCount = totalSuccess,
-            failedCount = allStillFailed.size,
-            skippedCount = totalSkipped,
-            cacheHitCount = totalCacheHit,
-            failedItems = allStillFailed,
-            phase = if (cancelled) "已取消" else "重试完成",
-            startTimeMs = startTime,
-            etaSeconds = 0,
-            recentFailures = recentFailuresBuffer.toList(),
-            isRetry = true,
-            isCancelling = _progress.value.isCancelling
-        )
-        _progress.value = finalProgress
+        progressPublisher.publishFinal { currentProgress, wasCancelled ->
+            DoubanSyncProgress(
+                isRunning = false,
+                isComplete = true,
+                stage = if (wasCancelled) DoubanSyncStage.CANCELLING else DoubanSyncStage.COMPLETED,
+                subStage = DoubanSyncSubStage.NONE,
+                recentItems = recentPreviewBuffer.snapshot(),
+                current = currentProgress.current,
+                total = currentProgress.total,
+                successCount = totalSuccess,
+                failedCount = allStillFailed.size,
+                skippedCount = totalSkipped,
+                cacheHitCount = totalCacheHit,
+                failedItems = allStillFailed,
+                phase = if (wasCancelled) "已取消" else "重试完成",
+                startTimeMs = startTime,
+                etaSeconds = 0,
+                recentFailures = recentFailuresBuffer.toList(),
+                isRetry = true,
+                isCancelling = currentProgress.isCancelling || wasCancelled
+            )
+        }
         // 取消场景下由 cancel() 方法统一执行 uploadAll(lastSyncMode="CANCELLED"),此处跳过避免双重上传
         if (cancelled) return
         // 同步完成后:上传个人数据到云端（跨设备同步，失败不阻塞）
@@ -1623,7 +1789,8 @@ class DoubanSyncManager @Inject constructor(
      */
     private suspend fun persistFailures(
         failures: List<DoubanSyncFailure>,
-        isRetry: Boolean = false
+        isRetry: Boolean = false,
+        preservedFailures: List<DoubanSyncFailure> = emptyList()
     ) {
         if (isRetry) {
             // 重试模式:用 REPLACE 语义覆盖仍然失败的项,不影响未重试的项
@@ -1633,7 +1800,12 @@ class DoubanSyncManager @Inject constructor(
         } else {
             // 正常同步:对两个 status 都执行 replaceByStatus
             // 即使 failures 为空也清空对应 status 的旧失败项记录
-            val byStatus = failures.groupBy { it.status }
+            // 被跳过的技术失败没有进入 allFailed,但仍需保留以支持内部重试和详情查看。
+            // 同一条目本次重新失败时,以本次结果覆盖旧记录。
+            val byStatus = (preservedFailures + failures)
+                .associateBy { it.doubanId }
+                .values
+                .groupBy { it.status }
             for (status in listOf(DoubanMarkStatus.WISH, DoubanMarkStatus.COLLECT)) {
                 val items = byStatus[status] ?: emptyList()
                 doubanSyncFailureDao.replaceByStatus(status.path, items.map { it.toEntity() })
@@ -1790,7 +1962,8 @@ class DoubanSyncManager @Inject constructor(
         val traktId: Int,
         val mediaType: MediaType,
         val inferredMediaType: String? = null,  // 从详情推断的细分类型(movie/show/variety/documentary),用于失败项标注
-        val originalFailure: DoubanSyncFailure? = null  // 重试模式下传入,用于 attemptCount 累加
+        val originalFailure: DoubanSyncFailure? = null,  // 重试模式下传入,用于 attemptCount 累加
+        val traktSearchFailed: Boolean = false
     )
 
     /**
@@ -1807,6 +1980,45 @@ class DoubanSyncManager @Inject constructor(
         val tmdbId: Int? = null,
         val detail: DoubanDetailInfo? = null
     )
+
+    /** 基于豆瓣列表建立可直接展示的快照，后续详情/匹配结果只覆盖已知字段。 */
+    private fun buildDoubanSnapshot(
+        item: DoubanMarkItem,
+        status: DoubanMarkStatus,
+        detail: DoubanDetailInfo? = null,
+        imdbId: String? = detail?.imdbId,
+        traktId: Int? = null,
+        tmdbId: Int? = null,
+        mediaType: String? = null,
+        displayTitle: String? = null,
+        year: Int? = null,
+        genres: String? = null,
+        posterUrl: String? = null
+    ): DoubanSyncedItem {
+        val detailTitle = detail?.title?.takeIf { it.isNotBlank() }
+        val detailPoster = detail?.posterUrl?.takeIf { it.isNotBlank() }
+        val detailGenres = detail?.genres?.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+        return DoubanSyncedItem(
+            doubanId = item.doubanId,
+            imdbId = imdbId?.takeIf { it.isNotBlank() },
+            traktId = traktId?.takeIf { it > 0 },
+            title = detailTitle ?: item.title,
+            status = status.path,
+            rating = item.rating,
+            syncedAt = System.currentTimeMillis(),
+            mediaType = mediaType ?: detail?.let(::inferMediaTypeFromDetail) ?: "other",
+            tmdbId = tmdbId,
+            displayTitle = displayTitle ?: detailTitle ?: item.title,
+            year = year ?: detail?.year?.toIntOrNull(),
+            genres = genres ?: detailGenres,
+            posterUrl = posterUrl ?: detailPoster ?: item.posterUrl,
+            listedAt = item.markedAt,
+            pendingSync = false,
+            doubanUrl = item.doubanUrl,
+            comment = item.comment,
+            markedAt = item.markedAt
+        )
+    }
 
     private data class BatchSyncResult(
         val success: Int,
@@ -1832,6 +2044,52 @@ class DoubanSyncManager @Inject constructor(
      *
      * @param existingFailures 重试模式下传入原失败项,用于 attemptCount 累加(同步模式下为 null)
      */
+    private suspend fun loadRetryableFailures(
+        itemIds: Set<String>,
+        existingFailures: List<DoubanSyncFailure>?
+    ): Map<String, DoubanSyncFailure> {
+        if (existingFailures != null) {
+            return existingFailures.associateBy { it.doubanId }
+        }
+        return runCatching {
+            doubanSyncFailureDao.getAll()
+                .filter { entity ->
+                    entity.doubanId in itemIds &&
+                        FailureReason.fromString(entity.failureReason).recoverable &&
+                        entity.attemptCount < 3
+                }
+                .associate { entity ->
+                    entity.doubanId to DoubanSyncFailure.fromEntity(entity)
+                }
+        }.getOrDefault(emptyMap())
+    }
+
+    /**
+     * 批量详情抓取前优先从全局池补齐本地缓存；云池不可用或超时后继续豆瓣详情流程。
+     * 此处必须重抛取消异常，避免超时或用户取消被当作普通云池失败吞掉。
+     */
+    private suspend fun prefetchCloudDetails(
+        doubanIds: List<String>,
+        onProgress: (current: Int, subPhase: String, cacheHitDelta: Int, currentTitle: String?, recentFailure: DoubanSyncFailure?) -> Unit
+    ) {
+        if (doubanIds.isEmpty()) return
+
+        onProgress(0, DoubanSyncSubStage.PULLING_CLOUD.name, 0, null, null)
+        try {
+            withTimeout(CLOUD_DETAILS_PREFETCH_TIMEOUT_MS) {
+                cloudDetailsPoolManager.fetchAndMergeToLocal(doubanIds, doubanDetailCache)
+            }
+        } catch (e: TimeoutCancellationException) {
+            cloudDetailsPoolManager.suspendDownloadsForCurrentSync()
+            android.util.Log.w("DoubanSync", "Cloud details prefetch timed out after $CLOUD_DETAILS_PREFETCH_TIMEOUT_MS ms")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("DoubanSync", "Cloud details prefetch failed: ${e.message}")
+        }
+        onProgress(0, "详情页", 0, null, null)
+    }
+
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private suspend fun syncBatchToTrakt(
         items: List<DoubanMarkItem>,
@@ -1856,11 +2114,56 @@ class DoubanSyncManager @Inject constructor(
             )
         }
 
+        val itemIds = items.map(DoubanMarkItem::doubanId).toSet()
         val failed = mutableListOf<DoubanSyncFailure>()
-        val existingMap = existingFailures?.associateBy { it.doubanId } ?: emptyMap()
+        val existingMap = loadRetryableFailures(itemIds, existingFailures)
+        val existingSyncedItems = runCatching {
+            doubanSyncedItemDao.getAllSyncedItems()
+                .filter { it.doubanId in itemIds }
+        }.getOrDefault(emptyList())
+        val existingSyncedById = existingSyncedItems.associateBy { it.doubanId }
+        val incompleteSyncedIds = existingSyncedItems
+            .filter { it.mediaType == "other" }
+            .map { it.doubanId }
+            .toSet()
+        val retryableFailureIds = existingMap.keys
+        val completedSyncedIds = syncedIds - incompleteSyncedIds - retryableFailureIds
+
+        // 先落最低限度快照，后续任何外部匹配或写入失败都不能让条目消失。
+        val snapshotCandidates = items.filter { it.doubanId !in completedSyncedIds }
+        var localWriteFailed = false
+        try {
+            if (snapshotCandidates.isNotEmpty()) {
+                doubanSyncedItemDao.insertAll(snapshotCandidates.map { item ->
+                    existingSyncedById[item.doubanId]?.copy(
+                        status = status.path,
+                        rating = item.rating,
+                        syncedAt = System.currentTimeMillis(),
+                        listedAt = item.markedAt,
+                        pendingSync = false,
+                        doubanUrl = item.doubanUrl,
+                        comment = item.comment,
+                        markedAt = item.markedAt
+                    ) ?: buildDoubanSnapshot(item, status)
+                })
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val snapshotFailures = snapshotCandidates.map { item ->
+                buildFailure(item, status, FailureReason.TRAKT_WRITE_FAILED, existingMap)
+            }
+            failed.addAll(snapshotFailures)
+            return BatchSyncResult(
+                success = 0,
+                failed = failed,
+                skipped = items.size - snapshotCandidates.size,
+                cacheHit = 0
+            )
+        }
 
         // 跳过已同步 + 已知失败项(增量同步场景:不可恢复失败 + 重试超限的可恢复失败)
-        val pending = items.filter { it.doubanId !in syncedIds && it.doubanId !in skipFailuresIds }
+        val pending = items.filter { it.doubanId !in completedSyncedIds && it.doubanId !in skipFailuresIds }
         val skippedCount = items.size - pending.size
 
         if (pending.isEmpty()) {
@@ -1871,10 +2174,11 @@ class DoubanSyncManager @Inject constructor(
         // ===== 全局详情池前置查询：批量从云端拉取本批次 doubanId 的详情，写入本地缓存（不覆盖已有） =====
         // 这样阶段 1 的 fetchDetail 会命中本地缓存秒回，避免对豆瓣的反爬爬取。
         // 失败不阻塞主流程（最坏情况是阶段1重新爬取豆瓣详情页）。
-        runCatching {
-            val pendingDoubanIds = pending.map { it.doubanId }
-            cloudDetailsPoolManager.fetchAndMergeToLocal(pendingDoubanIds, doubanDetailCache)
-        }
+        onProgress(skippedCount, "断点续传跳过", 0, null, null)
+        prefetchCloudDetails(
+            doubanIds = pending.map { it.doubanId },
+            onProgress = onProgress
+        )
 
         // 用 Channel 连接阶段 1(详情页)→ 阶段 2(Trakt 查询)
         val detailChannel = Channel<SyncResolve>(capacity = pending.size)
@@ -1883,6 +2187,9 @@ class DoubanSyncManager @Inject constructor(
         val completedCount = AtomicInteger(0)
         val detailCacheHit = AtomicInteger(0)
         val resolvedTraktList = mutableListOf<SyncResolve>()
+        val resolvedWithoutTrakt = mutableListOf<SyncResolve>()
+        val noImdbDetails = mutableListOf<Pair<DoubanMarkItem, DoubanDetailInfo>>()
+        val detailByDoubanId = mutableMapOf<String, DoubanDetailInfo>()
 
         coroutineScope {
             // ===== 阶段 1: 详情页爬取(生产者,并发度 3) =====
@@ -1903,25 +2210,27 @@ class DoubanSyncManager @Inject constructor(
                             val failure = buildFailure(item, status, FailureReason.DETAIL_FETCH_FAILED, existingMap)
                             synchronized(failed) { failed.add(failure) }
                             val done = completedCount.incrementAndGet()
-                            onProgress(done, "详情页", 0, item.title, failure)
+                            onProgress(skippedCount + done, "详情页", 0, item.title, failure)
                             return@async
                         }
                         val imdbId = detail.imdbId
                         if (imdbId.isNullOrEmpty()) {
-                            val failure = buildFailure(item, status, FailureReason.NO_IMDB_ID, existingMap, inferMediaTypeFromDetail(detail))
-                            synchronized(failed) { failed.add(failure) }
+                            synchronized(noImdbDetails) { noImdbDetails.add(item to detail) }
                             val done = completedCount.incrementAndGet()
-                            onProgress(done, "详情页", 0, item.title, failure)
+                            onProgress(skippedCount + done, "详情页", 0, item.title, null)
                             return@async
                         }
                         val mediaType = if (detail.isTvShow) MediaType.SHOW else MediaType.MOVIE
                         val inferredType = inferMediaTypeFromDetail(detail)
+                        synchronized(detailByDoubanId) { detailByDoubanId[item.doubanId] = detail }
                         detailChannel.send(SyncResolve(item, imdbId, traktId = 0, mediaType = mediaType, inferredMediaType = inferredType, originalFailure = existingMap[item.doubanId]))
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         val failure = buildFailure(item, status, FailureReason.DETAIL_FETCH_FAILED, existingMap)
                         synchronized(failed) { failed.add(failure) }
                         val done = completedCount.incrementAndGet()
-                        onProgress(done, "详情页", 0, item.title, failure)
+                        onProgress(skippedCount + done, "详情页", 0, item.title, failure)
                     }
                 }
             }
@@ -1932,29 +2241,41 @@ class DoubanSyncManager @Inject constructor(
                     for (r in detailChannel) {
                         if (cancelled) break
                         var traktId = traktRepository.getCachedTraktIdByImdb(r.imdbId, r.mediaType)
+                        var traktSearchFailed = false
                         if (traktId == null) {
                             traktId = traktSemaphore.withPermit {
                                 if (cancelled) null
                                 else try {
-                                    traktRepository.searchByImdb(r.imdbId, r.mediaType).getOrNull()
-                                        ?.firstOrNull()?.let { result ->
+                                    val result = traktRepository.searchByImdb(r.imdbId, r.mediaType)
+                                    if (result.isFailure) {
+                                        traktSearchFailed = true
+                                        null
+                                    } else {
+                                        result.getOrNull()?.firstOrNull()?.let { resultItem ->
                                             when (r.mediaType) {
-                                                MediaType.MOVIE -> result.movie?.ids?.trakt
-                                                MediaType.SHOW -> result.show?.ids?.trakt
+                                                MediaType.MOVIE -> resultItem.movie?.ids?.trakt
+                                                MediaType.SHOW -> resultItem.show?.ids?.trakt
                                                 else -> null
                                             }
                                         }
-                                } catch (e: Exception) { null }
+                                    }
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    traktSearchFailed = true
+                                    null
+                                }
                             }
                         }
                         val done = completedCount.incrementAndGet()
                         if (traktId == null || traktId <= 0) {
-                            val failure = buildFailure(r.item, status, FailureReason.TRAKT_NOT_FOUND, existingMap, r.inferredMediaType)
-                            synchronized(failed) { failed.add(failure) }
-                            onProgress(done, "Trakt 查询", 0, r.item.title, failure)
+                            synchronized(resolvedWithoutTrakt) {
+                                resolvedWithoutTrakt.add(r.copy(traktSearchFailed = traktSearchFailed))
+                            }
+                            onProgress(skippedCount + done, "Trakt 查询", 0, r.item.title, null)
                         } else {
                             synchronized(resolvedTraktList) { resolvedTraktList.add(r.copy(traktId = traktId)) }
-                            onProgress(done, "Trakt 查询", 0, r.item.title, null)
+                            onProgress(skippedCount + done, "Trakt 查询", 0, r.item.title, null)
                         }
                     }
                 }
@@ -1972,7 +2293,7 @@ class DoubanSyncManager @Inject constructor(
         val withTraktId = resolvedTraktList
         val cacheHit = detailCacheHit.get()
         if (cacheHit > 0) {
-            onProgress(completedCount.get(), "详情页", cacheHit, null, null)
+            onProgress(skippedCount + completedCount.get(), "详情页", cacheHit, null, null)
         }
 
         // ===== 阶段 3：冲突分类（按豆瓣优先覆盖策略） =====
@@ -1988,8 +2309,6 @@ class DoubanSyncManager @Inject constructor(
         val showRatings = mutableListOf<Triple<Int, Int, String?>>()
         val batchToInsert = mutableListOf<DoubanSyncedItem>()
         // 记录成功写入 Trakt 的 doubanId(初始为全部 withTraktId,阶段 4 失败时移除)
-        val successDoubanIds = withTraktId.map { it.item.doubanId }.toMutableSet()
-
         for (r in withTraktId) {
             val isInWatchlist = watchlistWatchedIds?.isInWatchlist(r.traktId, null, r.mediaType) == true
             val isWatched = watchlistWatchedIds?.isWatched(r.traktId, null, r.mediaType) == true
@@ -2035,21 +2354,73 @@ class DoubanSyncManager @Inject constructor(
             }
 
             batchToInsert.add(
-                DoubanSyncedItem(
-                    doubanId = r.item.doubanId,
+                buildDoubanSnapshot(
+                    item = r.item,
+                    status = status,
+                    detail = detailByDoubanId[r.item.doubanId],
                     imdbId = r.imdbId,
                     traktId = r.traktId,
-                    title = r.item.title,
-                    status = status.path,
-                    rating = r.item.rating,
-                    syncedAt = System.currentTimeMillis(),
                     mediaType = r.mediaType.name.lowercase()
                 )
             )
         }
 
+        batchToInsert.addAll(resolvedWithoutTrakt.map { r ->
+            buildDoubanSnapshot(
+                item = r.item,
+                status = status,
+                detail = detailByDoubanId[r.item.doubanId],
+                imdbId = r.imdbId,
+                mediaType = r.mediaType.name.lowercase()
+            )
+        })
+        failed.addAll(
+            resolvedWithoutTrakt
+                .filter { it.traktSearchFailed }
+                .map {
+                    buildFailure(
+                        it.item,
+                        status,
+                        FailureReason.TRAKT_SEARCH_FAILED,
+                        existingMap,
+                        it.inferredMediaType
+                    )
+                }
+        )
+        batchToInsert.addAll(noImdbDetails.map { (item, detail) ->
+            buildDoubanSnapshot(item, status, detail = detail, imdbId = null)
+        })
+
+        val successfulWithoutTrakt = resolvedWithoutTrakt.filterNot { it.traktSearchFailed }
+        val successDoubanIds = (
+            withTraktId.map { it.item.doubanId } +
+                successfulWithoutTrakt.map { it.item.doubanId } +
+                noImdbDetails.map { it.first.doubanId }
+            ).toMutableSet()
+        val localOnlySuccessIds = (
+            successfulWithoutTrakt.map { it.item.doubanId } +
+                noImdbDetails.map { it.first.doubanId }
+            ).toSet()
+
+        // 豆瓣快照必须先于 Trakt 写入，Trakt 失败时仍保留 Watchlist 数据。
+        try {
+            if (batchToInsert.isNotEmpty()) {
+                doubanSyncedItemDao.insertAll(batchToInsert)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            localWriteFailed = true
+            val localWriteFailures = batchToInsert.map { snapshot ->
+                val item = items.first { it.doubanId == snapshot.doubanId }
+                buildFailure(item, status, FailureReason.TRAKT_WRITE_FAILED, existingMap)
+            }
+            synchronized(failed) { failed.addAll(localWriteFailures) }
+            successDoubanIds.clear()
+        }
+
         // ===== 阶段 4：批量 POST Trakt =====
-        onProgress(withTraktId.size, "写入 Trakt", 0, null, null)
+        onProgress(items.size, "写入 Trakt", 0, null, null)
         if (cancelled) return BatchSyncResult(0, failed, skippedCount, cacheHit)
         var writeFailedCount = 0
         try {
@@ -2076,9 +2447,6 @@ class DoubanSyncManager @Inject constructor(
                     checkTraktResult(result, operation)
                 }
 
-                if (batchToInsert.isNotEmpty()) {
-                    doubanSyncedItemDao.insertAll(batchToInsert)
-                }
             }
         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
             writeFailedCount = withTraktId.size
@@ -2086,19 +2454,23 @@ class DoubanSyncManager @Inject constructor(
                 buildFailure(r.item, status, FailureReason.TRAKT_WRITE_TIMEOUT, existingMap)
             }
             synchronized(failed) { failed.addAll(timeoutFailures) }
-            successDoubanIds.clear()
+            successDoubanIds.retainAll(localOnlySuccessIds)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             writeFailedCount = withTraktId.size
             val writeFailures = withTraktId.map { r ->
                 buildFailure(r.item, status, FailureReason.TRAKT_WRITE_FAILED, existingMap)
             }
             synchronized(failed) { failed.addAll(writeFailures) }
-            successDoubanIds.clear()
+            successDoubanIds.retainAll(localOnlySuccessIds)
         }
 
         // successCount = 成功写入 Trakt 的数量 = 有 Trakt ID 的数量 - 写入失败的数量
         // (failed 列表包含阶段1详情页失败项,不能直接用 withTraktId.size - failed.size)
-        val successCount = withTraktId.size - writeFailedCount
+        val successCount = if (localWriteFailed) 0 else {
+            localOnlySuccessIds.size + withTraktId.size - writeFailedCount
+        }
         return BatchSyncResult(success = successCount, failed = failed, skipped = skippedCount, cacheHit = cacheHit, successDoubanIds = successDoubanIds.toSet())
     }
 
@@ -2144,13 +2516,63 @@ class DoubanSyncManager @Inject constructor(
         skipFailuresIds: Set<String> = emptySet()
     ): BatchSyncResult {
         // 同步开始时重试上次乐观更新失败的豆瓣 API 标记（幂等：pending 为空时直接返回）
-        runCatching { retryPendingSyncItems(cookie) }
+        try {
+            retryPendingSyncItems(cookie)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("DoubanSync", "retryPendingSyncItems failed: ${e.message}")
+        }
 
+        val itemIds = items.map(DoubanMarkItem::doubanId).toSet()
         val failed = mutableListOf<DoubanSyncFailure>()
-        val existingMap = existingFailures?.associateBy { it.doubanId } ?: emptyMap()
+        val existingMap = loadRetryableFailures(itemIds, existingFailures)
+        val existingSyncedItems = runCatching {
+            doubanSyncedItemDao.getAllSyncedItems()
+                .filter { it.doubanId in itemIds }
+        }.getOrDefault(emptyList())
+        val existingSyncedById = existingSyncedItems.associateBy { it.doubanId }
+        val incompleteSyncedIds = existingSyncedItems
+            .filter { it.mediaType == "other" }
+            .map { it.doubanId }
+            .toSet()
+        val retryableFailureIds = existingMap.keys
+        val completedSyncedIds = syncedIds - incompleteSyncedIds - retryableFailureIds
+
+        // 先落最低限度快照，详情和 TMDB 富化失败时仍可由 Watchlist 直接展示。
+        val snapshotCandidates = items.filter { it.doubanId !in completedSyncedIds }
+        try {
+            if (snapshotCandidates.isNotEmpty()) {
+                doubanSyncedItemDao.insertAll(snapshotCandidates.map { item ->
+                    existingSyncedById[item.doubanId]?.copy(
+                        status = status.path,
+                        rating = item.rating,
+                        syncedAt = System.currentTimeMillis(),
+                        listedAt = item.markedAt,
+                        pendingSync = false,
+                        doubanUrl = item.doubanUrl,
+                        comment = item.comment,
+                        markedAt = item.markedAt
+                    ) ?: buildDoubanSnapshot(item, status)
+                })
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val snapshotFailures = snapshotCandidates.map { item ->
+                buildFailure(item, status, FailureReason.TRAKT_WRITE_FAILED, existingMap)
+            }
+            failed.addAll(snapshotFailures)
+            return BatchSyncResult(
+                success = 0,
+                failed = failed,
+                skipped = items.size - snapshotCandidates.size,
+                cacheHit = 0
+            )
+        }
 
         // 跳过已同步 + 已知失败项（与 trakt 模式一致）
-        val pending = items.filter { it.doubanId !in syncedIds && it.doubanId !in skipFailuresIds }
+        val pending = items.filter { it.doubanId !in completedSyncedIds && it.doubanId !in skipFailuresIds }
         val skippedCount = items.size - pending.size
 
         if (pending.isEmpty()) {
@@ -2158,11 +2580,13 @@ class DoubanSyncManager @Inject constructor(
             return BatchSyncResult(0, emptyList(), skippedCount, 0)
         }
 
+        onProgress(skippedCount, "断点续传跳过", 0, null, null)
+
         // 全局详情池前置查询（与 trakt 模式一致，减少豆瓣爬取）
-        runCatching {
-            val pendingDoubanIds = pending.map { it.doubanId }
-            cloudDetailsPoolManager.fetchAndMergeToLocal(pendingDoubanIds, doubanDetailCache)
-        }
+        prefetchCloudDetails(
+            doubanIds = pending.map { it.doubanId },
+            onProgress = onProgress
+        )
 
         // 阶段 1(详情页) → Channel → 阶段 2(searchByImdb 拿 traktId+tmdbId)
         val detailChannel = Channel<DoubanLocalResolve>(capacity = pending.size)
@@ -2191,44 +2615,27 @@ class DoubanSyncManager @Inject constructor(
                             val failure = buildFailure(item, status, FailureReason.DETAIL_FETCH_FAILED, existingMap)
                             synchronized(failed) { failed.add(failure) }
                             val done = completedCount.incrementAndGet()
-                            onProgress(done, "详情页", 0, item.title, failure)
+                            onProgress(skippedCount + done, "详情页", 0, item.title, failure)
                             return@async
                         }
                         val imdbId = detail.imdbId
                         if (imdbId.isNullOrEmpty()) {
-                            // 豆瓣模式: 无 imdbId 不记失败,直接构造本地表记录
-                            // (imdbId/traktId/tmdbId 留 null,year/genres 留 null,
-                            //  posterUrl/displayTitle 用豆瓣列表兜底,mediaType 按详情页 isTvShow 推断)
-                            // 跳过 searchByImdb/TMDB 富化阶段,进 noImdbBatch 统一写入
-                            val noImdbItem = DoubanSyncedItem(
-                                doubanId = item.doubanId,
-                                imdbId = null,
-                                traktId = null,
-                                title = item.title,
-                                status = status.path,
-                                rating = item.rating,
-                                syncedAt = System.currentTimeMillis(),
-                                mediaType = if (detail.isTvShow) "show" else "movie",
-                                tmdbId = null,
-                                displayTitle = item.title,
-                                year = null,
-                                genres = null,
-                                posterUrl = item.posterUrl,
-                                listedAt = item.markedAt,
-                                pendingSync = false
-                            )
+                            // 豆瓣模式: 无 imdbId 不记失败,直接保留详情快照。
+                            val noImdbItem = buildDoubanSnapshot(item, status, detail = detail, imdbId = null)
                             synchronized(noImdbBatch) { noImdbBatch.add(item to noImdbItem) }
                             val done = completedCount.incrementAndGet()
-                            onProgress(done, "详情页", 0, item.title, null)
+                            onProgress(skippedCount + done, "详情页", 0, item.title, null)
                             return@async
                         }
                         val mediaType = if (detail.isTvShow) MediaType.SHOW else MediaType.MOVIE
-                        detailChannel.send(DoubanLocalResolve(item, imdbId, mediaType))
+                        detailChannel.send(DoubanLocalResolve(item, imdbId, mediaType, detail = detail))
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         val failure = buildFailure(item, status, FailureReason.DETAIL_FETCH_FAILED, existingMap)
                         synchronized(failed) { failed.add(failure) }
                         val done = completedCount.incrementAndGet()
-                        onProgress(done, "详情页", 0, item.title, failure)
+                        onProgress(skippedCount + done, "详情页", 0, item.title, failure)
                     }
                 }
             }
@@ -2244,6 +2651,8 @@ class DoubanSyncManager @Inject constructor(
                             if (cancelled) null
                             else try {
                                 traktRepository.searchByImdb(r.imdbId, r.mediaType).getOrNull()
+                            } catch (e: CancellationException) {
+                                throw e
                             } catch (e: Exception) { null }
                         }
                         var traktId: Int? = null
@@ -2266,7 +2675,7 @@ class DoubanSyncManager @Inject constructor(
                             resolvedList.add(r.copy(traktId = traktId, tmdbId = tmdbId))
                         }
                         val done = completedCount.incrementAndGet()
-                        onProgress(done, "Trakt 查询", 0, r.item.title, null)
+                        onProgress(skippedCount + done, "Trakt 查询", 0, r.item.title, null)
                     }
                 }
             }
@@ -2280,11 +2689,11 @@ class DoubanSyncManager @Inject constructor(
 
         val cacheHit = detailCacheHit.get()
         if (cacheHit > 0) {
-            onProgress(completedCount.get(), "详情页", cacheHit, null, null)
+            onProgress(skippedCount + completedCount.get(), "详情页", cacheHit, null, null)
         }
 
         // ===== 阶段 3+4: TMDB 富化 + 写本地表（跳过 trakt 写入） =====
-        onProgress(resolvedList.size, "写入本地", 0, null, null)
+        onProgress(items.size, "写入本地", 0, null, null)
         if (cancelled) return BatchSyncResult(0, failed, skippedCount, cacheHit)
 
         val batchToInsert = mutableListOf<DoubanSyncedItem>()
@@ -2315,6 +2724,8 @@ class DoubanSyncManager @Inject constructor(
                         }
                         else -> {}
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     // TMDB 富化失败不阻断,字段留 null
                     android.util.Log.w("DoubanSync", "TMDB enrich failed for tmdbId=$tmdbId: ${e.message}")
@@ -2325,22 +2736,18 @@ class DoubanSyncManager @Inject constructor(
             if (displayTitle == null) displayTitle = r.item.title
 
             batchToInsert.add(
-                DoubanSyncedItem(
-                    doubanId = r.item.doubanId,
+                buildDoubanSnapshot(
+                    item = r.item,
+                    status = status,
+                    detail = r.detail,
                     imdbId = r.imdbId,
                     traktId = r.traktId,
-                    title = r.item.title,
-                    status = status.path,
-                    rating = r.item.rating,
-                    syncedAt = System.currentTimeMillis(),
                     mediaType = r.mediaType.name.lowercase(),
                     tmdbId = r.tmdbId,
                     displayTitle = displayTitle,
                     year = year,
                     genres = genres,
-                    posterUrl = posterUrl,
-                    listedAt = r.item.markedAt,  // 豆瓣标记时间（区别于 syncedAt 同步时间）
-                    pendingSync = false  // 主同步成功,无待重试标记
+                    posterUrl = posterUrl
                 )
             )
             successDoubanIds.add(r.item.doubanId)
@@ -2358,6 +2765,8 @@ class DoubanSyncManager @Inject constructor(
             if (batchToInsert.isNotEmpty()) {
                 doubanSyncedItemDao.insertAll(batchToInsert)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             writeFailedCount = batchToInsert.size
             val writeFailures = resolvedList.map { r ->
@@ -2401,6 +2810,8 @@ class DoubanSyncManager @Inject constructor(
                 if (ok) {
                     doubanSyncedItemDao.clearPendingSync(item.doubanId)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 // 重试失败,保留 pendingSync=true,下次同步再试
                 android.util.Log.w("DoubanSync", "retryPendingSyncItems failed for ${item.doubanId}: ${e.message}")

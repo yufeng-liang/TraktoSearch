@@ -11,8 +11,7 @@ class WatchlistEmptyStateTest {
             resolveWatchlistEmptyState(
                 traktConnected = false,
                 doubanLoggedIn = false,
-                doubanImported = false,
-                failureCount = 0
+                doubanImported = false
             )
         ).isEqualTo(WatchlistEmptyState.NO_ACCOUNTS)
     }
@@ -23,8 +22,7 @@ class WatchlistEmptyStateTest {
             resolveWatchlistEmptyState(
                 traktConnected = true,
                 doubanLoggedIn = false,
-                doubanImported = false,
-                failureCount = 0
+                doubanImported = false
             )
         ).isEqualTo(WatchlistEmptyState.TRAKT_ONLY)
     }
@@ -35,22 +33,20 @@ class WatchlistEmptyStateTest {
             resolveWatchlistEmptyState(
                 traktConnected = false,
                 doubanLoggedIn = true,
-                doubanImported = false,
-                failureCount = 0
+                doubanImported = false
             )
         ).isEqualTo(WatchlistEmptyState.DOUBAN_NOT_IMPORTED)
     }
 
     @Test
-    fun `完整导入后有失败项时优先显示失败入口`() {
+    fun `完整导入后仍有内部重试记录时不显示失败入口`() {
         assertThat(
             resolveWatchlistEmptyState(
                 traktConnected = true,
                 doubanLoggedIn = true,
-                doubanImported = true,
-                failureCount = 2
+                doubanImported = true
             )
-        ).isEqualTo(WatchlistEmptyState.IMPORTED_WITH_FAILURES)
+        ).isEqualTo(WatchlistEmptyState.IMPORTED_EMPTY)
     }
 
     @Test
@@ -59,8 +55,7 @@ class WatchlistEmptyStateTest {
             resolveWatchlistEmptyState(
                 traktConnected = false,
                 doubanLoggedIn = true,
-                doubanImported = true,
-                failureCount = 0
+                doubanImported = true
             )
         ).isEqualTo(WatchlistEmptyState.IMPORTED_EMPTY)
     }
@@ -71,8 +66,7 @@ class WatchlistEmptyStateTest {
             resolveWatchlistEmptyState(
                 traktConnected = false,
                 doubanLoggedIn = false,
-                doubanImported = true,
-                failureCount = 0
+                doubanImported = true
             )
         ).isEqualTo(WatchlistEmptyState.IMPORTED_EMPTY)
     }

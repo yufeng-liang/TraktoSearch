@@ -112,6 +112,7 @@ enum class FailureReason(val displayKey: String, val recoverable: Boolean) {
     NO_IMDB_ID("no_imdb_id", recoverable = false),
     DETAIL_FETCH_FAILED("detail_fetch_failed", recoverable = true),
     TRAKT_NOT_FOUND("trakt_not_found", recoverable = false),
+    TRAKT_SEARCH_FAILED("trakt_search_failed", recoverable = true),
     TRAKT_WRITE_TIMEOUT("trakt_write_timeout", recoverable = true),
     TRAKT_WRITE_FAILED("trakt_write_failed", recoverable = true);
 

@@ -8,6 +8,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.spyk
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -312,6 +313,23 @@ class DoubanRepositoryTest {
         assertThat(info?.title).isEqualTo("情书")
         // 爬取成功后应写本地缓存
         coVerify(atLeast = 1) { detailCache.put("123", any()) }
+    }
+
+    @Test
+    fun fetchDetail_全局池取消_向上传播且不降级爬豆瓣(): Unit = runBlocking {
+        coEvery { detailCache.get("123") } returns null
+        coEvery { cloudPool.downloadDetail("123") } throws CancellationException("pool download cancelled")
+        mockWebServer.enqueue(MockResponse().setBody(detailHtml()))
+
+        val thrown = runCatching {
+            repository.fetchDetail(
+                doubanUrl = "https://movie.douban.com/subject/123/",
+                cookie = "testcookie"
+            )
+        }.exceptionOrNull()
+
+        assertThat(thrown).isInstanceOf(CancellationException::class.java)
+        assertThat(mockWebServer.requestCount).isEqualTo(0)
     }
 
     @Test

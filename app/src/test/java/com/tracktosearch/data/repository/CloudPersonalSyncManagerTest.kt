@@ -2,6 +2,8 @@ package com.tracktosearch.data.repository
 
 import android.util.Base64
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.data.local.DoubanAuthStorage
+import com.tracktosearch.data.local.DoubanCredentials
 import com.tracktosearch.data.local.DoubanSyncMetaStorage
 import com.tracktosearch.data.local.UserProfileStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItem
@@ -63,6 +65,7 @@ class CloudPersonalSyncManagerTest {
     private val giteeContentsApi = mockk<GiteeContentsApi>(relaxed = true)
     private val doubanSyncedItemDao = mockk<DoubanSyncedItemDao>(relaxed = true)
     private val doubanSyncPendingItemDao = mockk<DoubanSyncPendingItemDao>(relaxed = true)
+    private val doubanAuthStorage = mockk<DoubanAuthStorage>(relaxed = true)
     private val userProfileStorage = mockk<UserProfileStorage>(relaxed = true)
     private val doubanSyncMetaStorage = mockk<DoubanSyncMetaStorage>(relaxed = true)
     private val traktRepository = mockk<TraktRepository>(relaxed = true)
@@ -73,11 +76,12 @@ class CloudPersonalSyncManagerTest {
     fun setUp() {
         // 清除前序测试的 stub 和调用记录，确保 coVerify(exactly = 0) 不受干扰
         clearMocks(giteeContentsApi, doubanSyncedItemDao, doubanSyncPendingItemDao,
-            userProfileStorage, doubanSyncMetaStorage, traktRepository)
+            doubanAuthStorage, userProfileStorage, doubanSyncMetaStorage, traktRepository)
+        every { doubanAuthStorage.getCredentials() } returns null
         // 每个测试方法用新的 manager 实例，避免节流状态在测试间相互污染
         manager = CloudPersonalSyncManager(
             giteeContentsApi, doubanSyncedItemDao, doubanSyncPendingItemDao,
-            userProfileStorage, doubanSyncMetaStorage, traktRepository, json
+            userProfileStorage, doubanAuthStorage, doubanSyncMetaStorage, traktRepository, json
         )
     }
 
@@ -94,7 +98,18 @@ class CloudPersonalSyncManagerTest {
         status: String = "wish",
         rating: Int? = 5,
         syncedAt: Long = 1000L,
-        mediaType: String = "movie"
+        mediaType: String = "movie",
+        tmdbId: Int? = null,
+        displayTitle: String? = null,
+        year: Int? = null,
+        genres: String? = null,
+        posterUrl: String? = null,
+        listedAt: String? = null,
+        pendingSync: Boolean = false,
+        doubanUrl: String? = null,
+        comment: String? = null,
+        markedAt: String? = null,
+        subtitle: String? = null
     ): DoubanSyncedItem = DoubanSyncedItem(
         doubanId = doubanId,
         imdbId = imdbId,
@@ -103,7 +118,18 @@ class CloudPersonalSyncManagerTest {
         status = status,
         rating = rating,
         syncedAt = syncedAt,
-        mediaType = mediaType
+        mediaType = mediaType,
+        tmdbId = tmdbId,
+        displayTitle = displayTitle,
+        year = year,
+        genres = genres,
+        posterUrl = posterUrl,
+        listedAt = listedAt,
+        pendingSync = pendingSync,
+        doubanUrl = doubanUrl,
+        comment = comment,
+        markedAt = markedAt,
+        subtitle = subtitle
     )
 
     /** 构造本地 pending 条目，所有字段可定制 */
@@ -308,6 +334,26 @@ class CloudPersonalSyncManagerTest {
             giteeContentsApi.getFileContent(any(), any(), any(), any())
             giteeContentsApi.createFileContent(any(), any(), any(), any())
             giteeContentsApi.putFileContent(any(), any(), any(), any())
+        }
+    }
+
+    @Test
+    fun uploadAll_仅豆瓣登录_使用豆瓣userId作为云端身份() = runTest {
+        coEvery { userProfileStorage.getProfile() } returns null
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("douban-user", "cookie")
+        coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns emptyList()
+        coEvery { doubanSyncPendingItemDao.getAll() } returns emptyList()
+        coEvery { doubanSyncMetaStorage.getLastFullSyncAt() } returns 0L
+        coEvery { giteeContentsApi.getFileContent(any(), any(), any(), any()) } returns mockNotFoundResponse()
+        coEvery { giteeContentsApi.createFileContent(any(), any(), any(), any()) } returns mockSuccessUpdateResponse()
+
+        val result = manager.uploadAll(lastSyncMode = "FULL_REWRITE", isFullComplete = false)
+
+        assertThat(result).isTrue()
+        coVerify {
+            giteeContentsApi.createFileContent(
+                any(), any(), cloudPath("douban-user", "synced_items.json"), any()
+            )
         }
     }
 
@@ -570,6 +616,28 @@ class CloudPersonalSyncManagerTest {
     }
 
     @Test
+    fun downloadAndMerge_仅豆瓣登录_使用豆瓣userId作为云端身份() = runTest {
+        coEvery { userProfileStorage.getProfile() } returns null
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("douban-user", "cookie")
+        val cloudPath = cloudPath("douban-user", "synced_items.json")
+        val cloudBody = buildCloudResponseJson(
+            buildSyncedItemsPayloadJson(listOf(buildSyncedItem(doubanId = "douban-1"))),
+            "sha-douban"
+        )
+        coEvery { giteeContentsApi.getFileContent(any(), any(), any(), any()) } returns mockNotFoundResponse()
+        coEvery { giteeContentsApi.getFileContent(any(), any(), cloudPath, any()) } returns mockSuccessResponse(cloudBody)
+        coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns emptyList()
+        coEvery { doubanSyncedItemDao.insertAll(any()) } returns Unit
+
+        val result = manager.downloadAndMerge()
+
+        assertThat(result.syncedItems).isEqualTo(1)
+        coVerify(exactly = 1) {
+            giteeContentsApi.getFileContent(any(), any(), cloudPath, any())
+        }
+    }
+
+    @Test
     fun downloadAndMerge_云端syncedItems较新_合并到本地() = runTest {
         coEvery { userProfileStorage.getProfile() } returns TraktUserProfileResponse(username = "testuser")
         // 云端 syncedAt=2000（较新）
@@ -705,7 +773,18 @@ class CloudPersonalSyncManagerTest {
                 status = "wish",
                 rating = 5,
                 syncedAt = 1000L,
-                mediaType = "movie"
+                mediaType = "movie",
+                tmdbId = 100,
+                displayTitle = "往返中文标题",
+                year = 2024,
+                genres = "Drama / Mystery",
+                posterUrl = "https://img.example.com/round-trip.jpg",
+                listedAt = "2024-01-01T00:00:00Z",
+                pendingSync = true,
+                doubanUrl = "https://movie.douban.com/subject/rt-001/",
+                comment = "我的短评",
+                markedAt = "2024-01-02",
+                subtitle = "Original title"
             ),
             buildSyncedItem(
                 doubanId = "rt-002",
@@ -772,6 +851,17 @@ class CloudPersonalSyncManagerTest {
         assertThat(first.rating).isEqualTo(5)
         assertThat(first.syncedAt).isEqualTo(1000L)
         assertThat(first.mediaType).isEqualTo("movie")
+        assertThat(first.tmdbId).isEqualTo(100)
+        assertThat(first.displayTitle).isEqualTo("往返中文标题")
+        assertThat(first.year).isEqualTo(2024)
+        assertThat(first.genres).isEqualTo("Drama / Mystery")
+        assertThat(first.posterUrl).isEqualTo("https://img.example.com/round-trip.jpg")
+        assertThat(first.listedAt).isEqualTo("2024-01-01T00:00:00Z")
+        assertThat(first.pendingSync).isTrue()
+        assertThat(first.doubanUrl).isEqualTo("https://movie.douban.com/subject/rt-001/")
+        assertThat(first.comment).isEqualTo("我的短评")
+        assertThat(first.markedAt).isEqualTo("2024-01-02")
+        assertThat(first.subtitle).isEqualTo("Original title")
 
         // 第二条：nullable 字段为 null（往返后仍为 null）
         val second = downloaded[1]

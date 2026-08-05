@@ -232,6 +232,7 @@ class DoubanSyncManagerCancelTest {
         // 第一次同步(未登录豆瓣,立即完成)
         manager.startSync()
         waitForCondition { manager.progress.value.isComplete }
+        waitForCondition { !manager.isRunning() }
         assertThat(manager.progress.value.isComplete).isTrue()
         // 取消
         manager.cancel()

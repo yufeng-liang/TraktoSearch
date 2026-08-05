@@ -14,6 +14,7 @@ import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.local.db.UserReviewEntity
+import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
 import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
@@ -193,6 +194,46 @@ data class DetailSectionVisibility(
     val recommendations: Boolean = true
 )
 
+private data class DetailCacheKey(
+    val traktId: Int,
+    val tmdbId: Int,
+    val doubanId: String?,
+    val mediaType: MediaType
+)
+
+private data class DoubanDetailSupplement(
+    val doubanId: String,
+    val item: DoubanSyncedItem?,
+    val detail: DoubanDetailCacheEntry?
+) {
+    val imdbId: String?
+        get() = item?.imdbId?.takeIf { it.isNotBlank() } ?: detail?.imdbId?.takeIf { it.isNotBlank() }
+    val publicRating: Double?
+        get() = detail?.doubanRating?.takeIf { it > 0 }
+    val userRating: Int?
+        get() = item?.rating?.takeIf { it in 1..5 }?.times(2)
+    val title: String?
+        get() = item?.displayTitle?.takeIf { it.isNotBlank() }
+            ?: item?.title?.takeIf { it.isNotBlank() }
+            ?: detail?.title?.takeIf { it.isNotBlank() }
+    val genres: String?
+        get() = item?.genres?.takeIf { it.isNotBlank() }
+            ?: detail?.genres?.takeIf { it.isNotEmpty() }?.joinToString(" / ")
+    val year: Int?
+        get() = item?.year ?: detail?.year?.take(4)?.toIntOrNull()
+    val posterUrl: String?
+        get() = item?.posterUrl?.takeIf { it.isNotBlank() }
+            ?: detail?.posterUrl?.takeIf { it.isNotBlank() }
+    val overview: String?
+        get() = detail?.summary?.takeIf { it.isNotBlank() }
+    val country: String?
+        get() = detail?.countries?.takeIf { it.isNotEmpty() }?.joinToString(" / ")
+    val originalTitle: String?
+        get() = item?.subtitle?.takeIf { it.isNotBlank() }
+    val runtimeMinutes: Int?
+        get() = detail?.runtime?.let { Regex("\\d+").find(it)?.value?.toIntOrNull() }
+}
+
 @HiltViewModel
 class DetailViewModel @Inject constructor(
     private val tmdbRepository: TmdbRepository,
@@ -219,21 +260,21 @@ class DetailViewModel @Inject constructor(
     companion object {
         private const val CACHE_MAX_SIZE = 3
         @Suppress("UNCHECKED_CAST")
-        private val detailCache: MutableMap<Int, CachedDetailData> = java.util.Collections.synchronizedMap(
-            object : java.util.LinkedHashMap<Int, CachedDetailData>(CACHE_MAX_SIZE, 0.75f, true) {
-                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, CachedDetailData>?): Boolean = size > CACHE_MAX_SIZE
+        private val detailCache: MutableMap<DetailCacheKey, CachedDetailData> = java.util.Collections.synchronizedMap(
+            object : java.util.LinkedHashMap<DetailCacheKey, CachedDetailData>(CACHE_MAX_SIZE, 0.75f, true) {
+                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<DetailCacheKey, CachedDetailData>?): Boolean = size > CACHE_MAX_SIZE
             }
         )
 
-        private fun cachePut(key: Int, value: CachedDetailData) {
+        private fun cachePut(key: DetailCacheKey, value: CachedDetailData) {
             detailCache[key] = value  // removeEldestEntry auto-evict
         }
 
-        private fun cacheGet(key: Int): CachedDetailData? {
+        private fun cacheGet(key: DetailCacheKey): CachedDetailData? {
             return detailCache[key]
         }
 
-        private fun cacheRemove(key: Int) {
+        private fun cacheRemove(key: DetailCacheKey) {
             detailCache.remove(key)
         }
 
@@ -246,7 +287,8 @@ class DetailViewModel @Inject constructor(
             val currentTraktRating: Double,
             val currentTmdbId: Int,
             val currentMediaType: MediaType,
-            val currentCollectionId: Int = 0
+            val currentCollectionId: Int = 0,
+            val currentDoubanId: String? = null
         )
     }
 
@@ -283,7 +325,7 @@ class DetailViewModel @Inject constructor(
     init {
         // 尽早检查登录状态，避免 loadDetail 异步延迟导致 isLoggedIn 为 false
         viewModelScope.launch {
-            isLoggedIn = !tokenStorage.accessToken.first().isNullOrEmpty()
+            isLoggedIn = resolveLoginState()
             _uiState.value = _uiState.value.copy(isLoggedIn = isLoggedIn)
         }
         // 收集会话模式,供 toggleWatched/toggleWatchlist 同步判断豆瓣独立模式分支
@@ -291,6 +333,8 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             sessionModeManager.sessionMode.collect { mode ->
                 currentSessionMode = mode
+                isLoggedIn = resolveLoginState()
+                _uiState.value = _uiState.value.copy(isLoggedIn = isLoggedIn)
                 // 豆瓣模式: 强制隐藏评论 tab（trakt comments API 需要 trakt token）
                 if (mode == SessionMode.DOUBAN) {
                     val cur = _uiState.value.sectionVisible
@@ -332,6 +376,17 @@ class DetailViewModel @Inject constructor(
     private var currentTraktRating: Double = 0.0
     private var currentTmdbId: Int = 0
     private var currentCollectionId: Int = 0
+    private var currentDoubanId: String? = null
+    private var currentDoubanRating: Double? = null
+    private var currentDoubanUserRating: Int? = null
+
+    private suspend fun resolveLoginState(): Boolean =
+        if (currentSessionMode == SessionMode.DOUBAN) {
+            doubanAuthStorage.getCredentials() != null
+        } else {
+            !tokenStorage.accessToken.first().isNullOrEmpty()
+        }
+    private var currentDetailCacheKey: DetailCacheKey? = null
     private var detailLoaded: Boolean = false
     private var searchJob: Job? = null
     private var ratingsJob: Job? = null
@@ -345,13 +400,20 @@ class DetailViewModel @Inject constructor(
     // 初始 null:sessionMode flow 未发出首值前降级到 trakt 原逻辑,避免误判
     private var currentSessionMode: SessionMode? = null
 
-    suspend fun loadDetail(traktId: Int, tmdbId: Int, title: String, mediaType: MediaType, year: Int? = null, imdbId: String = "", traktRating: Double = 0.0, inWatchlist: Boolean = false, isWatched: Boolean = false) {
+    suspend fun loadDetail(traktId: Int, tmdbId: Int, title: String, mediaType: MediaType, year: Int? = null, imdbId: String = "", traktRating: Double = 0.0, inWatchlist: Boolean = false, isWatched: Boolean = false, doubanId: String? = null) {
+        val cacheKey = DetailCacheKey(
+            traktId = traktId,
+            tmdbId = tmdbId,
+            doubanId = doubanId?.takeIf { it.isNotBlank() },
+            mediaType = mediaType
+        )
         // 已加载相同影视则用缓存（从子详情页返回时不重新请求）
-        if (currentTraktId == traktId && detailLoaded) return
+        if (currentDetailCacheKey == cacheKey && detailLoaded) return
 
         // 尝试从静态缓存恢复
-        val cached = cacheGet(traktId)
+        val cached = cacheGet(cacheKey)
         if (cached != null) {
+            currentDetailCacheKey = cacheKey
             currentTraktId = traktId
             currentMediaType = cached.currentMediaType
             currentTitle = cached.uiState.title
@@ -361,6 +423,9 @@ class DetailViewModel @Inject constructor(
             currentTraktRating = cached.currentTraktRating
             currentTmdbId = cached.currentTmdbId
             currentCollectionId = cached.currentCollectionId
+            currentDoubanId = cached.currentDoubanId ?: cached.uiState.doubanIdForSync
+            currentDoubanRating = cached.uiState.ratings?.doubanRating
+            currentDoubanUserRating = cached.uiState.userRating.takeIf { currentDoubanId != null }
             detailLoaded = true
             allResources = cached.allResources
             // 从全局缓存获取真实的想看/已看状态，不依赖路由参数（从推荐列表进入时默认为 false）
@@ -390,7 +455,7 @@ class DetailViewModel @Inject constructor(
             if (visibility.videosImages && (cached.uiState.isLoadingVideosImages || (cached.uiState.videos.isEmpty() && cached.uiState.backdrops.isEmpty()))) fetchVideosAndImages()
             // 评分同步读取 Room DB（持久化缓存），命中则立即设置 userRating 消除"先 null 后有值"窗口
             // 未命中时降级到异步 fetchUserRating（走 Trakt 网络）
-            if (visibility.myRating && cached.uiState.userRating == null) {
+            if (visibility.myRating && currentTraktId > 0 && cached.uiState.userRating == null && currentDoubanUserRating == null) {
                 val localReview = withContext(Dispatchers.IO) {
                     runCatching { userReviewRepository.getReview(currentTraktId.toLong()) }.getOrNull()
                 }
@@ -416,12 +481,18 @@ class DetailViewModel @Inject constructor(
         }
 
         currentTraktId = traktId
+        currentDetailCacheKey = cacheKey
         currentMediaType = mediaType
         currentTitle = title
         currentKeyword = title
         currentImdbId = imdbId
         currentTraktRating = traktRating
         currentTmdbId = tmdbId
+        currentCollectionId = 0
+        currentOriginalTitle = ""
+        currentDoubanId = doubanId?.takeIf { it.isNotBlank() }
+        currentDoubanRating = null
+        currentDoubanUserRating = null
         detailLoaded = false
         allResources = emptyList()
 
@@ -433,12 +504,41 @@ class DetailViewModel @Inject constructor(
             year = year,
             isMarkedWatchlist = inWatchlist,
             isMarkedWatched = isWatched,
-            isLoadingVideosImages = true
+            isLoadingVideosImages = true,
+            doubanIdForSync = currentDoubanId
         )
 
         viewModelScope.launch {
+            val doubanSupplement = loadDoubanSupplement(currentDoubanId, currentImdbId)
+            if (doubanSupplement != null) {
+                currentDoubanId = doubanSupplement.doubanId
+                doubanSupplement.imdbId?.let { currentImdbId = it }
+                currentDoubanRating = doubanSupplement.publicRating
+                currentDoubanUserRating = doubanSupplement.userRating
+                val current = _uiState.value
+                _uiState.value = current.copy(
+                    title = doubanSupplement.title ?: current.title,
+                    displayTitle = doubanSupplement.title ?: current.displayTitle,
+                    originalTitle = doubanSupplement.originalTitle ?: current.originalTitle,
+                    year = doubanSupplement.year ?: current.year,
+                    overview = doubanSupplement.overview ?: current.overview,
+                    genres = doubanSupplement.genres ?: current.genres,
+                    country = doubanSupplement.country ?: current.country,
+                    posterUrl = doubanSupplement.posterUrl ?: current.posterUrl,
+                    runtime = doubanSupplement.runtimeMinutes ?: current.runtime,
+                    userRating = doubanSupplement.userRating ?: current.userRating,
+                    userComment = doubanSupplement.item?.comment ?: current.userComment,
+                    isRatingLoading = doubanSupplement.userRating == null && current.isRatingLoading,
+                    ratings = current.ratings?.copy(doubanRating = doubanSupplement.publicRating)
+                        ?: MultiRatings(doubanRating = doubanSupplement.publicRating),
+                    doubanIdForSync = doubanSupplement.doubanId
+                )
+            } else if (currentDoubanId != null) {
+                _uiState.value = _uiState.value.copy(doubanIdForSync = currentDoubanId)
+            }
+
             // 先检查登录状态
-            isLoggedIn = !tokenStorage.accessToken.first().isNullOrEmpty()
+            isLoggedIn = resolveLoginState()
             _uiState.value = _uiState.value.copy(isLoggedIn = isLoggedIn)
 
             // 从全局缓存校正想看/已看状态（路由参数从推荐列表进入时可能为 false）
@@ -452,7 +552,7 @@ class DetailViewModel @Inject constructor(
             var tmdbRating = 0.0
             var collectionId = 0
             if (tmdbId <= 0) {
-                _uiState.value = _uiState.value.copy(isLoading = false, displayTitle = title.replace("+", " "))
+                _uiState.value = _uiState.value.copy(isLoading = false)
                 detailLoaded = true
                 saveToCache()
                 startSearch()
@@ -484,9 +584,13 @@ class DetailViewModel @Inject constructor(
                     }
                 }.getOrNull()
 
-                val chineseTitle = enrichment?.chineseTitle?.takeIf { it.isNotEmpty() } ?: title
+                val chineseTitle = doubanSupplement?.title
+                    ?: enrichment?.chineseTitle?.takeIf { it.isNotEmpty() }
+                    ?: title
                 currentKeyword = chineseTitle
-                currentOriginalTitle = enrichment?.originalTitle?.takeIf { it.isNotEmpty() && it != chineseTitle } ?: ""
+                currentOriginalTitle = doubanSupplement?.originalTitle
+                    ?: enrichment?.originalTitle?.takeIf { it.isNotEmpty() && it != chineseTitle }
+                    ?: ""
                 val displayOriginalTitle = currentOriginalTitle.ifEmpty {
                     // 如果 TMDB 没返回 originalTitle 或与中文标题相同，使用 Trakt 原始标题
                     title.takeIf { it.isNotEmpty() && it != chineseTitle.replace("+", " ") } ?: ""
@@ -495,13 +599,13 @@ class DetailViewModel @Inject constructor(
                     isLoading = false,
                     displayTitle = chineseTitle.replace("+", " "),
                     originalTitle = displayOriginalTitle,
-                    overview = enrichment?.overview ?: "",
-                    genres = enrichment?.genres ?: "",
-                    country = enrichment?.country ?: "",
-                    posterUrl = enrichment?.posterUrl,
-                    year = enrichment?.year ?: year,
+                    overview = doubanSupplement?.overview ?: enrichment?.overview ?: "",
+                    genres = doubanSupplement?.genres ?: enrichment?.genres ?: "",
+                    country = doubanSupplement?.country ?: enrichment?.country ?: "",
+                    posterUrl = doubanSupplement?.posterUrl ?: enrichment?.posterUrl,
+                    year = doubanSupplement?.year ?: enrichment?.year ?: year,
                     releaseDate = enrichment?.releaseDate ?: "",
-                    runtime = enrichment?.runtime,
+                    runtime = doubanSupplement?.runtimeMinutes ?: enrichment?.runtime,
                     status = enrichment?.status ?: ""
                 )
                 // 拿到 posterUrl 后立即从缓存预查主色,让沉浸背景先于海报图片加载显示
@@ -520,7 +624,7 @@ class DetailViewModel @Inject constructor(
             fetchSeasons()
             if (visibility.cast) fetchCredits()
             if (visibility.videosImages) fetchVideosAndImages()
-            if (visibility.myRating) fetchUserRating()
+            if (visibility.myRating && currentDoubanUserRating == null) fetchUserRating()
 
             // 非首屏数据延迟加载，降低进入详情页时的网络请求峰值
             // 用 delayedLoadJob 持有，loadDetail 重入（如快速返回再进入新详情）时取消旧的延迟任务
@@ -540,7 +644,35 @@ class DetailViewModel @Inject constructor(
      * 预查 doubanId 链路:永久缓存 → 同步表 by imdbId → 详情缓存 → 网络搜索。
      * 结果存入 uiState.doubanIdForSync,用户标记时直接取用。
      */
+    private suspend fun loadDoubanSupplement(
+        doubanId: String?,
+        imdbId: String
+    ): DoubanDetailSupplement? {
+        val item = if (!doubanId.isNullOrBlank()) {
+            runCatching { doubanSyncedItemDao.getByDoubanId(doubanId) }.getOrNull()
+        } else if (imdbId.isNotBlank()) {
+            runCatching { doubanSyncedItemDao.getByImdbId(imdbId) }.getOrNull()
+        } else {
+            null
+        }
+        val resolvedDoubanId = doubanId?.takeIf { it.isNotBlank() } ?: item?.doubanId
+        if (resolvedDoubanId.isNullOrBlank()) return null
+
+        val detail = runCatching {
+            doubanRepository.getDetailSnapshot()[resolvedDoubanId]
+        }.getOrNull()
+        return DoubanDetailSupplement(
+            doubanId = resolvedDoubanId,
+            item = item,
+            detail = detail
+        )
+    }
+
     private fun prefetchDoubanId() {
+        currentDoubanId?.let { doubanId ->
+            _uiState.value = _uiState.value.copy(doubanIdForSync = doubanId)
+            return
+        }
         if (currentTraktId <= 0) return
         viewModelScope.launch {
             val mediaTypeStr = if (currentMediaType == MediaType.SHOW) "show" else "movie"
@@ -578,17 +710,25 @@ class DetailViewModel @Inject constructor(
         mediaType: MediaType,
         imdbId: String
     ): Pair<Boolean, Boolean> {
-        return if (currentSessionMode == SessionMode.DOUBAN) {
+        return if (currentSessionMode == SessionMode.DOUBAN || (traktId <= 0 && currentDoubanId != null)) {
             if (imdbId.isBlank()) {
-                Pair(false, false)
+                val syncedItem = currentDoubanId?.let {
+                    runCatching { doubanSyncedItemDao.getByDoubanId(it) }.getOrNull()
+                }
+                Pair(
+                    syncedItem?.status == "wish",
+                    syncedItem?.status == "collect"
+                )
             } else {
-                val syncedItem = runCatching { doubanSyncedItemDao.getByImdbId(imdbId) }.getOrNull()
+                val syncedItem = currentDoubanId?.let {
+                    runCatching { doubanSyncedItemDao.getByDoubanId(it) }.getOrNull()
+                } ?: runCatching { doubanSyncedItemDao.getByImdbId(imdbId) }.getOrNull()
                 Pair(
                     syncedItem?.status == "wish",
                     syncedItem?.status == "collect"
                 )
             }
-        } else if (!sessionModeManager.traktConnected.value) {
+        } else if (!sessionModeManager.traktConnected.value || traktId <= 0) {
             Pair(false, false)
         } else {
             Pair(
@@ -596,6 +736,20 @@ class DetailViewModel @Inject constructor(
                 traktRepository.checkWatched(traktId, mediaType)
             )
         }
+    }
+
+    /** 豆瓣条目优先走豆瓣标记接口；双登录时仅对没有有效 Trakt ID 的条目启用。 */
+    private fun isDoubanBackedItem(): Boolean {
+        if (currentSessionMode == SessionMode.DOUBAN) return true
+        val doubanId = currentDoubanId ?: _uiState.value.doubanIdForSync
+        return currentTraktId <= 0 && !doubanId.isNullOrBlank()
+    }
+
+    /** 普通详情没有有效 Trakt ID 时禁止把占位 ID 传给写接口。 */
+    private fun canWriteToTrakt(): Boolean {
+        if (currentTraktId > 0) return true
+        viewModelScope.launch { _toastEvent.emit(R.string.detail_load_error) }
+        return false
     }
 
     private fun fetchRatingsAsync(tmdbRating: Double) {
@@ -606,14 +760,17 @@ class DetailViewModel @Inject constructor(
                 tmdbRating = tmdbRating,
                 traktRating = currentTraktRating
             ).collect { ratings ->
-                _uiState.value = _uiState.value.copy(ratings = ratings, ratingsError = false)
+                _uiState.value = _uiState.value.copy(
+                    ratings = ratings.copy(doubanRating = currentDoubanRating),
+                    ratingsError = false
+                )
             }
         }
     }
 
     private fun fetchComments() {
         // 豆瓣模式: 无 trakt token,评论 tab 已隐藏,直接跳过避免 401 失败
-        if (currentSessionMode == SessionMode.DOUBAN) return
+        if (currentSessionMode == SessionMode.DOUBAN || !sessionModeManager.traktConnected.value || currentTraktId <= 0) return
         commentsJob?.cancel()
         commentsJob = viewModelScope.launch {
             try {
@@ -662,7 +819,11 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 // 判断是否还有更多 Trakt/TMDB 评论
-                val hasMoreTrakt = current.commentPage > 0 // 首页满 10 条时 commentPage=1，可以继续
+                val canLoadTraktComments =
+                    currentSessionMode != SessionMode.DOUBAN &&
+                        sessionModeManager.traktConnected.value &&
+                        currentTraktId > 0
+                val hasMoreTrakt = current.commentPage > 0 && canLoadTraktComments // 首页满 10 条时 commentPage=1，可以继续
                 val hasMoreTmdb = current.tmdbCommentPage > 0
 
                 val traktDeferred = async {
@@ -766,7 +927,7 @@ class DetailViewModel @Inject constructor(
     }
 
     private fun fetchSeasons() {
-        if (currentMediaType != MediaType.SHOW) return
+        if (currentMediaType != MediaType.SHOW || currentTraktId <= 0 || !sessionModeManager.traktConnected.value) return
         seasonsJob?.cancel()
         seasonsJob = viewModelScope.launch {
             val result = traktRepository.getShowSeasons(currentTraktId)
@@ -1099,7 +1260,7 @@ class DetailViewModel @Inject constructor(
         val current = _uiState.value
         if (current.isRating) return
         // 豆瓣独立模式:评分走豆瓣 markWatchedWithRating(豆瓣评分=看过耦合) + 写本地表
-        if (currentSessionMode == SessionMode.DOUBAN) {
+        if (isDoubanBackedItem()) {
             // 点击与当前评分相同 → 取消评分
             if (current.userRating == rating) {
                 removeRating()
@@ -1113,6 +1274,7 @@ class DetailViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(showLoginPrompt = true)
             return
         }
+        if (!canWriteToTrakt()) return
         // 点击与当前评分相同的星标 → 取消评分
         if (current.userRating == rating) {
             removeRating()
@@ -1151,7 +1313,7 @@ class DetailViewModel @Inject constructor(
         val current = _uiState.value
         if (current.isRating) return
         // 豆瓣独立模式:评分+短评走豆瓣 markWatchedWithRating + 写本地表
-        if (currentSessionMode == SessionMode.DOUBAN) {
+        if (isDoubanBackedItem()) {
             setRatingDouban(rating, comment = comment)
             return
         }
@@ -1159,6 +1321,7 @@ class DetailViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(showLoginPrompt = true)
             return
         }
+        if (!canWriteToTrakt()) return
         _uiState.value = current.copy(isRating = true, showRatingDialog = false, pendingDoubanAction = null)
         viewModelScope.launch {
             // 1. Trakt 评分
@@ -1233,7 +1396,7 @@ class DetailViewModel @Inject constructor(
         val current = _uiState.value
         if (current.isRating) return
         // 豆瓣独立模式:取消评分需重新 markCollect 不带 rating(豆瓣评分与看过耦合,清除评分保留看过)
-        if (currentSessionMode == SessionMode.DOUBAN) {
+        if (isDoubanBackedItem()) {
             removeRatingDouban()
             return
         }
@@ -1242,6 +1405,7 @@ class DetailViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(showLoginPrompt = true)
             return
         }
+        if (!canWriteToTrakt()) return
         _uiState.value = current.copy(isRating = true, showRatingDialog = false, pendingDoubanAction = null)
         viewModelScope.launch {
             traktRepository.removeRating(currentTraktId, currentMediaType)
@@ -1265,6 +1429,7 @@ class DetailViewModel @Inject constructor(
     }
 
     fun toggleSeason(seasonNumber: Int) {
+        if (currentTraktId <= 0) return
         val current = _uiState.value.expandedSeasons
         val newExpanded = if (seasonNumber in current) current - seasonNumber else current + seasonNumber
 
@@ -1293,6 +1458,7 @@ class DetailViewModel @Inject constructor(
 
     /** 为标记已看弹窗加载指定季的集信息（不修改展开状态） */
     fun loadEpisodesForMarkWatched(seasonNumber: Int) {
+        if (currentTraktId <= 0) return
         if (seasonNumber in _uiState.value.episodes) return
 
         viewModelScope.launch {
@@ -1314,12 +1480,12 @@ class DetailViewModel @Inject constructor(
         // 豆瓣独立模式: 剧集标记依赖 trakt API,豆瓣网页 API 不支持单集标记
         // 直接 return 避免触发 showLoginPrompt 错误引导用户去登录 Trakt
         if (currentSessionMode == SessionMode.DOUBAN) return
-
         // 未登录：弹出登录引导
         if (tokenStorage.getCachedAccessToken().isNullOrEmpty()) {
             _uiState.value = _uiState.value.copy(showLoginPrompt = true)
             return
         }
+        if (!canWriteToTrakt()) return
 
         val isWatched = episodeNumber in (current.watchedEpisodeNumbers[seasonNumber] ?: emptySet())
         _uiState.value = current.copy(togglingEpisode = Pair(seasonNumber, episodeNumber))
@@ -1705,16 +1871,16 @@ class DetailViewModel @Inject constructor(
         if (current.isMarkingWatched) return
 
         // 豆瓣独立模式:不检查 trakt token(网关已激活是豆瓣模式前提),走本地表 + 豆瓣 API
-        if (currentSessionMode == SessionMode.DOUBAN) {
+        if (isDoubanBackedItem()) {
             toggleWatchedDouban()
             return
         }
-
         // 未登录：弹出登录引导（使用 getCachedAccessToken 同步检查，避免异步时序问题）
         if (tokenStorage.getCachedAccessToken().isNullOrEmpty()) {
             _uiState.value = _uiState.value.copy(showLoginPrompt = true)
             return
         }
+        if (!canWriteToTrakt()) return
 
         // 如果已标记已看，则取消标记
         // removeWatched 会副操作添加到想看列表，因此同时标记 watchlistChanged 以触发返回后刷新想看列表
@@ -1793,6 +1959,15 @@ class DetailViewModel @Inject constructor(
 
     /** 提交勾选的季/集为已看 */
     fun submitMarkWatched(selectedEpisodeIds: List<Int>) {
+        // 豆瓣承载条目没有可用的 Trakt 剧集 ID，不能把剧集批量操作发给 Trakt。
+        if (isDoubanBackedItem()) {
+            _uiState.value = _uiState.value.copy(showMarkWatchedDialog = false)
+            return
+        }
+        if (!canWriteToTrakt()) {
+            _uiState.value = _uiState.value.copy(showMarkWatchedDialog = false)
+            return
+        }
         _uiState.value = _uiState.value.copy(
             showMarkWatchedDialog = false,
             isMarkingWatched = true,
@@ -1830,7 +2005,7 @@ class DetailViewModel @Inject constructor(
         if (current.isMarkingWatchlist) return
 
         // 豆瓣独立模式:不检查 trakt token(网关已激活是豆瓣模式前提),走本地表 + 豆瓣 API
-        if (currentSessionMode == SessionMode.DOUBAN) {
+        if (isDoubanBackedItem()) {
             toggleWatchlistDouban()
             return
         }
@@ -1840,6 +2015,7 @@ class DetailViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(showLoginPrompt = true)
             return
         }
+        if (!canWriteToTrakt()) return
 
         val targetState = !current.isMarkedWatchlist
         // 已看过时点击想看：标记 watched 正在变更（addToWatchlist 内部副操作会从 watched 移除）
@@ -2045,17 +2221,44 @@ class DetailViewModel @Inject constructor(
      * 字段从当前详情页状态填充(tmdbId/displayTitle/year/genres/posterUrl 来自 TMDB 富化),
      * 评分映射 Trakt 1-10 → 豆瓣 1-5(豆瓣模式评分暂未实现,通常为 null)。
      */
-    private suspend fun upsertDoubanSyncedItem(doubanId: String, status: String, pendingSync: Boolean) {
+    private suspend fun upsertDoubanSyncedItem(
+        doubanId: String,
+        status: String,
+        pendingSync: Boolean,
+        clearRating: Boolean = false
+    ) {
         val now = System.currentTimeMillis()
         val mediaTypeStr = if (currentMediaType == MediaType.SHOW) "show" else "movie"
         val state = _uiState.value
-        val item = DoubanSyncedItem(
+        val existing = runCatching { doubanSyncedItemDao.getByDoubanId(doubanId) }.getOrNull()
+        val rating = state.userRating?.let { Math.round(it / 2.0).toInt() }
+            ?: existing?.rating
+        val item = existing?.copy(
+            imdbId = currentImdbId.takeIf { it.isNotBlank() } ?: existing.imdbId,
+            traktId = currentTraktId.takeIf { it > 0 } ?: existing.traktId,
+            title = currentTitle.takeIf { it.isNotBlank() } ?: existing.title,
+            status = status,
+            rating = if (clearRating) null else rating,
+            syncedAt = now,
+            mediaType = existing.mediaType.takeIf { it.isNotBlank() } ?: mediaTypeStr,
+            tmdbId = currentTmdbId.takeIf { it > 0 } ?: existing.tmdbId,
+            displayTitle = state.displayTitle.takeIf { it.isNotBlank() } ?: existing.displayTitle,
+            year = state.year ?: existing.year,
+            genres = state.genres.takeIf { it.isNotBlank() } ?: existing.genres,
+            posterUrl = state.posterUrl ?: existing.posterUrl,
+            listedAt = existing.listedAt,
+            pendingSync = pendingSync,
+            doubanUrl = existing.doubanUrl,
+            comment = state.userComment ?: existing.comment,
+            markedAt = existing.markedAt,
+            subtitle = existing.subtitle
+        ) ?: DoubanSyncedItem(
             doubanId = doubanId,
             imdbId = currentImdbId.takeIf { it.isNotBlank() },
             traktId = currentTraktId.takeIf { it > 0 },
             title = currentTitle,
             status = status,
-            rating = state.userRating?.let { Math.round(it / 2.0).toInt() },
+            rating = if (clearRating) null else rating,
             syncedAt = now,
             mediaType = mediaTypeStr,
             tmdbId = currentTmdbId.takeIf { it > 0 },
@@ -2159,7 +2362,12 @@ class DetailViewModel @Inject constructor(
             )
             // 写本地表:rating 从 state 读取(此时已为 null),status 保留当前(应为 collect)
             val currentStatus = if (_uiState.value.isMarkedWatched) "collect" else "wish"
-            upsertDoubanSyncedItem(doubanId, status = currentStatus, pendingSync = !success)
+            upsertDoubanSyncedItem(
+                doubanId,
+                status = currentStatus,
+                pendingSync = !success,
+                clearRating = true
+            )
             if (!success) {
                 Log.w("DetailViewModel", "Douban markInterest(collect, no rating) failed for $doubanId, optimistic rating removal applied")
             }
@@ -2298,7 +2506,7 @@ class DetailViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         // 清理静态缓存对应条目，避免 VM 销毁后仍持有完整 UiState 导致内存泄漏
-        if (currentTraktId > 0) cacheRemove(currentTraktId)
+        currentDetailCacheKey?.let(::cacheRemove)
     }
 
     /** 使用 TMDB 季详情 API 获取本地化集标题，替换 Trakt 的英文标题 */
@@ -2343,8 +2551,8 @@ class DetailViewModel @Inject constructor(
     }
 
     private fun saveToCache() {
-        if (currentTraktId <= 0) return
-        cachePut(currentTraktId, CachedDetailData(
+        val cacheKey = currentDetailCacheKey ?: return
+        cachePut(cacheKey, CachedDetailData(
             uiState = _uiState.value,
             allResources = allResources,
             currentKeyword = currentKeyword,
@@ -2353,7 +2561,8 @@ class DetailViewModel @Inject constructor(
             currentTraktRating = currentTraktRating,
             currentTmdbId = currentTmdbId,
             currentMediaType = currentMediaType,
-            currentCollectionId = currentCollectionId
+            currentCollectionId = currentCollectionId,
+            currentDoubanId = currentDoubanId
         ))
     }
 

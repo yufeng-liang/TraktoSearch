@@ -35,9 +35,6 @@ import androidx.compose.material.icons.automirrored.rounded.EventNote
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.BrokenImage
-import androidx.compose.material.icons.rounded.CloudDownload
-import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Explore
@@ -54,7 +51,6 @@ import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.SyncAlt
@@ -105,14 +101,10 @@ import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
-import com.tracktosearch.data.repository.ImportResult
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.UpdateDialog
-import com.tracktosearch.ui.screen.douban.CloudSyncEvent
-import com.tracktosearch.ui.screen.douban.DoubanRetryDialog
-import com.tracktosearch.ui.screen.douban.DoubanRetryViewModel
 import com.tracktosearch.ui.screen.feedback.FeedbackViewModel
 import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
@@ -138,7 +130,6 @@ private enum class ConsistencyCheckBlocker {
     DOUBAN_SYNC_RUNNING,
     CHECK_RUNNING
 }
-
 private fun resolveConsistencyCheckBlocker(
     doubanLoggedIn: Boolean,
     traktConnected: Boolean,
@@ -153,7 +144,6 @@ private fun resolveConsistencyCheckBlocker(
     checkRunning -> ConsistencyCheckBlocker.CHECK_RUNNING
     else -> null
 }
-
 @OptIn(
     ExperimentalMaterial3Api::class,
     kotlinx.coroutines.FlowPreview::class,
@@ -171,7 +161,6 @@ fun SettingsScreen(
     onHelpClick: () -> Unit = {},
     onRestartOnboarding: () -> Unit = {},
     onDoubanResync: () -> Unit = {},
-    onDoubanFailures: () -> Unit = {},
     onNavigateToDoubanLogin: () -> Unit = {},
     onNavigateToLogin: () -> Unit = {},
     onStatisticsClick: () -> Unit = {},
@@ -183,6 +172,7 @@ fun SettingsScreen(
 ) {
     val settingsHazeState = remember { HazeState() }
     val feedbackViewModel: FeedbackViewModel = hiltViewModel()
+    val doubanSyncViewModel: DoubanSyncViewModel = hiltViewModel()
     val unreadCount by feedbackViewModel.unreadCount.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { feedbackViewModel.fetchUnreadCount() }
     val settingsHazeStyle = HazeMaterials.thin()
@@ -200,15 +190,6 @@ fun SettingsScreen(
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
-    // 豆瓣重试入口:检测 douban_sync_failures 表是否有数据
-    // 「重新同步豆瓣」按钮点击时,有失败则弹重试选择对话框,无失败直接走增量同步
-    val doubanRetryViewModel: DoubanRetryViewModel = hiltViewModel()
-    val doubanRetryState by doubanRetryViewModel.retryState.collectAsStateWithLifecycle()
-    val cloudSyncLoading by doubanRetryViewModel.cloudSyncLoading.collectAsStateWithLifecycle()
-    val cloudSyncEvent by doubanRetryViewModel.cloudSyncEvent.collectAsStateWithLifecycle()
-    // 云端失败项数量:用于「上传/拉取失败数据」入口可见性判断
-    // null=未登录豆瓣或检测失败,0=云端无数据,>0=云端有数据
-    val cloudFailureCount by doubanRetryViewModel.cloudFailureCount.collectAsStateWithLifecycle()
     // 豆瓣登录态:「重新同步豆瓣」点击前预检,未登录弹确认框引导登录
     val doubanLoggedIn by viewModel.doubanLoggedIn.collectAsStateWithLifecycle()
     // 增量同步冷却期状态(跨设备同步显示)
@@ -226,7 +207,6 @@ fun SettingsScreen(
     var showDoubanLoginPrompt by remember { mutableStateOf(false) }
     var showTraktLoginPrompt by remember { mutableStateOf(false) }
     var consistencyCheckBlocker by remember { mutableStateOf<ConsistencyCheckBlocker?>(null) }
-    var showDoubanRetryDialog by remember { mutableStateOf(false) }
     var showSyncModePicker by remember { mutableStateOf(false) }
     var showSyncProgressDialog by remember { mutableStateOf(false) }
     // 冷却期内点击增量同步时的引导对话框
@@ -234,7 +214,7 @@ fun SettingsScreen(
     var pendingCooldownMode by remember { mutableStateOf<com.tracktosearch.data.repository.SyncMode?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    // snackbarHostState 在 importFailuresLauncher 之前声明,供 launcher 回调内使用
+    // Snackbar 用于导入状态和账户操作反馈。
     val snackbarHostState = remember { SnackbarHostState() }
 
     fun openConsistencyCheckRequest() {
@@ -289,57 +269,14 @@ fun SettingsScreen(
         }
     }
 
-    val importDoneTemplate = stringResource(R.string.snackbar_import_done_json)
-    val invalidFormatMsg = stringResource(R.string.error_invalid_json_format)
-    val emptyMsg = stringResource(R.string.error_empty_csv)
-    val parseFailedTemplate = stringResource(R.string.error_parse_failed)
-    // 豆瓣失败项 JSON 导入 launcher:选文件 → importToRoom → 跳转查看页
-    // 用于跨设备查看:A 导出失败数据 → B 导入后在查看页显示
-    val importFailuresLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            scope.launch {
-                // 根据 ImportResult 显示不同 Snackbar;成功时刷新统计并跳转查看页
-                when (val result = doubanRetryViewModel.doubanFailureExporter.importToRoom(context, uri)) {
-                    is ImportResult.Success -> {
-                        doubanRetryViewModel.refreshRetryState()
-                        snackbarHostState.showSnackbar(
-                            importDoneTemplate.format(result.count)
-                        )
-                        onDoubanFailures()
-                    }
-                    is ImportResult.InvalidFormat -> {
-                        snackbarHostState.showSnackbar(invalidFormatMsg)
-                    }
-                    is ImportResult.Empty -> {
-                        snackbarHostState.showSnackbar(emptyMsg)
-                    }
-                    is ImportResult.Error -> {
-                        snackbarHostState.showSnackbar(
-                            parseFailedTemplate.format(result.message)
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    // 仅首次进入组合时刷新缓存信息和豆瓣失败项统计
-    // 不使用 LifecycleResumeEffect：导航到帮助页再返回时生命周期 STARTED→RESUMED 会重新触发，
-    // 导致缓存大小等数据更新引起 LazyColumn 项高度微调，滚动位置偏移
-    // 用 rememberSaveable 标记确保仅真正首次组合才刷新；重新组合(跨页面导航)后标记已存，避免重复刷新导致列表高度变化
-    // 注意:不在此处刷新冷却期状态。冷却期数据(跨设备 lastFullSyncAt)仅在以下时机请求 gitee:
-    // 1. 豆瓣登录后拉取云端数据时一并刷新 meta
-    // 2. 用户点击「重新同步豆瓣」弹出模式选择对话框前刷新一次
-    // 注意:必须用 var 而非 val，否则无法在 LaunchedEffect 内置 true，防重复刷新逻辑会失效
+    // 仅首次进入组合时刷新缓存信息。
+    // 不使用 LifecycleResumeEffect，避免返回设置页时列表高度和滚动位置发生微调。
     var cacheRefreshed by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (!cacheRefreshed) {
             cacheRefreshed = true
             viewModel.refreshCacheInfo()
-            doubanRetryViewModel.refreshRetryState()
-            // 仅从本地读取冷却期状态(不发网络请求),云端 meta 已在豆瓣登录后刷新
+            // 仅从本地读取冷却期状态，不发起网络请求。
             viewModel.loadCooldownStatusFromLocal()
         }
     }
@@ -354,17 +291,12 @@ fun SettingsScreen(
             viewModel.loadDoubanProfile()
         }
     }
-    // 豆瓣登录态变化时刷新失败项状态:登录后若云端失败数据已下载合并到本地,
-    // 返回设置页时 doubanLoggedIn 从 false→true 触发刷新,「查看同步失败项」入口卡片及时显示
-    // 同时首次豆瓣登录成功后自动弹出导入标记弹窗(showSyncModePicker)
+    // 首次豆瓣登录成功后自动弹出同步模式选择。
     var hasShownDoubanImportDialog by rememberSaveable { mutableStateOf(false) }
     // 记录上一次的 doubanLoggedIn 值，仅在实际登录跳变(false→true)时弹窗，
     // 避免从激活页登录后切到设置页首次组合时 doubanLoggedIn 已为 true 导致重复弹窗
     var previousDoubanLoggedIn by remember { mutableStateOf(doubanLoggedIn) }
     LaunchedEffect(doubanLoggedIn) {
-        doubanRetryViewModel.refreshRetryState()
-        // 豆瓣登录后检测云端失败项,用于「上传/拉取失败数据」入口可见性
-        doubanRetryViewModel.refreshCloudFailureCount()
         viewModel.loadCooldownStatusFromLocal()
         // 仅在设置页期间实际登录(false→true)时弹窗，首次组合时 doubanLoggedIn 已为 true 不弹
         if (!previousDoubanLoggedIn && doubanLoggedIn && !hasShownDoubanImportDialog) {
@@ -394,36 +326,6 @@ fun SettingsScreen(
             snackbarHostState.showSnackbar(it)
             viewModel.clearMessage()
         }
-    }
-
-    // 云端同步事件 → Snackbar 反馈(仅错误/前置校验类;比较类结果走对话框)
-    val cloudSyncNoLogin = stringResource(R.string.cloud_sync_no_login)
-    val cloudSyncNoLocalFailures = stringResource(R.string.cloud_sync_no_local_failures)
-    val cloudSyncUploadFailed = stringResource(R.string.cloud_sync_upload_failed)
-    val cloudSyncDownloadEmpty = stringResource(R.string.cloud_sync_download_empty)
-    val cloudSyncDownloadFailed = stringResource(R.string.cloud_sync_download_failed)
-    LaunchedEffect(cloudSyncEvent) {
-        val event = cloudSyncEvent ?: return@LaunchedEffect
-        val msg = when (event) {
-            is CloudSyncEvent.NotLoggedIn -> cloudSyncNoLogin
-            is CloudSyncEvent.NoLocalFailures -> cloudSyncNoLocalFailures
-            is CloudSyncEvent.UploadFailed -> cloudSyncUploadFailed
-            is CloudSyncEvent.CloudEmpty -> cloudSyncDownloadEmpty
-            is CloudSyncEvent.DownloadFailed -> cloudSyncDownloadFailed
-        }
-        if (msg != null) snackbarHostState.showSnackbar(msg)
-        doubanRetryViewModel.clearCloudSyncEvent()
-    }
-
-    // 云端同步时间戳比较对话框(信息展示 / 下载覆盖前确认)
-    val cloudSyncDialog by doubanRetryViewModel.cloudSyncDialog.collectAsStateWithLifecycle()
-    cloudSyncDialog?.let { info ->
-        CloudSyncCompareDialog(
-            info = info,
-            onDismiss = { doubanRetryViewModel.dismissCloudSyncDialog() },
-            onConfirmOverwrite = { doubanRetryViewModel.confirmCloudOverwrite() },
-            onViewFailures = onDoubanFailures
-        )
     }
 
     val exportJsonLauncher = rememberLauncherForActivityResult(
@@ -681,8 +583,7 @@ fun SettingsScreen(
                                 )
                             }
 
-                            // 数据流通卡片（导出 / 导入 IMDb / 上传云端 / 下载云端）
-                            // 「上传/拉取失败数据」入口仅在豆瓣已登录且(本地或云端存在失败数据)时显示
+                            // 数据流通卡片（导出 / 导入 IMDb）
                             // 豆瓣独立模式: 隐藏导出 JSON 和导入 IMDb（无 trakt token 无法读写 watchlist）
                             DataFlowGridItem(
                                 onExport = if (isDoubanMode) null else {
@@ -700,34 +601,10 @@ fun SettingsScreen(
                                         }
                                     }
                                 },
-                                onUploadCloud = { if (!cloudSyncLoading) doubanRetryViewModel.uploadToCloud() },
-                                onDownloadCloud = { if (!cloudSyncLoading) doubanRetryViewModel.downloadFromCloud() },
-                                showCloudActions = doubanLoggedIn &&
-                                    (doubanRetryState.hasFailures || (cloudFailureCount ?: 0) > 0),
                                 exportEnabled = !exportImportState.isExporting,
                                 importEnabled = !exportImportState.isImporting,
-                                cloudEnabled = !cloudSyncLoading,
                                 containerColor = Color.Transparent
                             )
-
-                            // 云端同步进行中:显示进度条(紧贴数据流通卡片,便于用户关联按钮状态)
-                            if (cloudSyncLoading) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                                ) {
-                                    LinearProgressIndicator(
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = stringResource(R.string.cloud_sync_in_progress),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
 
                             SettingsItemCard(
                                 icon = Icons.Rounded.Verified,
@@ -792,30 +669,6 @@ fun SettingsScreen(
                                 },
                                 containerColor = Color.Transparent
                             )
-                            if (doubanRetryState.hasFailures) {
-                                GroupDivider()
-                                SettingsItemCard(
-                                    icon = Icons.Rounded.Replay,
-                                    title = stringResource(R.string.settings_douban_retry_failures),
-                                    subtitle = stringResource(R.string.douban_retry_subtitle, doubanRetryState.totalFailures),
-                                    onClick = {
-                                        // 重试失败项:弹重试选择对话框
-                                        showDoubanRetryDialog = true
-                                    },
-                                    containerColor = Color.Transparent
-                                )
-                                GroupDivider()
-                                SettingsItemCard(
-                                    icon = Icons.Rounded.BrokenImage,
-                                    title = stringResource(R.string.settings_douban_view_failures),
-                                    subtitle = stringResource(
-                                        R.string.settings_douban_view_failures_desc,
-                                        doubanRetryState.totalFailures
-                                    ),
-                                    onClick = { onDoubanFailures() },
-                                    containerColor = Color.Transparent
-                                )
-                            }
                             // 豆瓣同步进行中或豆瓣独立模式下隐藏手动检查入口
                             // 同步进行中：同步后自动检查无需重复入口
                             // 豆瓣独立模式：无 Trakt 可对比，一致性检查无意义
@@ -1262,44 +1115,6 @@ fun SettingsScreen(
         )
     }
 
-    // 豆瓣重试入口:有失败项时弹选择对话框(重试上次失败/导入 JSON/导出失败记录)
-    if (showDoubanRetryDialog) {
-        val shareFailuresJsonTitle = stringResource(R.string.share_failures_json)
-        DoubanRetryDialog(
-            onDismiss = { showDoubanRetryDialog = false },
-            onRetryLocal = { selectedReasons ->
-                showDoubanRetryDialog = false
-                scope.launch {
-                    val started = doubanRetryViewModel.startRetryFromLocal(selectedReasons)
-                    if (started) {
-                        // 重试已启动,跳转到豆瓣同步进度对话框页(沿用原导航)
-                        onDoubanResync()
-                    }
-                }
-            },
-            onRetryFromJson = {
-                // JSON 导入:启动文件选择器,选中后 importToRoom + 跳转查看页
-                showDoubanRetryDialog = false
-                importFailuresLauncher.launch(arrayOf("application/json"))
-            },
-            onExportFailures = {
-                showDoubanRetryDialog = false
-                scope.launch {
-                    val uri = doubanRetryViewModel.doubanFailureExporter.exportFromLocal(context)
-                    if (uri != null) {
-                        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                            type = "application/json"
-                            putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        context.startActivity(android.content.Intent.createChooser(shareIntent, shareFailuresJsonTitle))
-                    }
-                }
-            },
-            viewModel = doubanRetryViewModel
-        )
-    }
-
     // 豆瓣重新同步模式选择:点「重新同步豆瓣」时弹模式选择对话框(A/B/C)
     if (showSyncModePicker) {
         DoubanSyncModePickerDialog(
@@ -1316,7 +1131,7 @@ fun SettingsScreen(
                     showCooldownGuidance = true
                 } else {
                     scope.launch {
-                        doubanRetryViewModel.doubanSyncManager.startSync(mode)
+                        doubanSyncViewModel.doubanSyncManager.startSync(mode)
                         onDoubanResync()
                     }
                 }
@@ -1342,7 +1157,7 @@ fun SettingsScreen(
                     if (mode != null) {
                         scope.launch {
                             // 强制同步:forceCrawl=true 跳过 7 天冷却
-                            doubanRetryViewModel.doubanSyncManager.startSync(mode, forceCrawl = true)
+                            doubanSyncViewModel.doubanSyncManager.startSync(mode, forceCrawl = true)
                             onDoubanResync()
                         }
                     }
@@ -1359,7 +1174,6 @@ fun SettingsScreen(
 
     // 同步进行中时点卡片:弹出同步进度弹窗
     if (showSyncProgressDialog) {
-        val doubanSyncViewModel: DoubanSyncViewModel = hiltViewModel()
         DoubanSyncDialog(
             onDismiss = {
                 showSyncProgressDialog = false
@@ -1497,7 +1311,6 @@ fun SettingsScreen(
         )
     }
 }
-
 /**
  * 搜索源分组 item：3 个内置源开关 + 自定义源列表 + 添加入口。
  * State 收集局部化到本函数，开关切换/测试结果/配置变更只重组本 item，不波及 LazyColumn 其他 item。
@@ -1966,14 +1779,11 @@ private fun NotificationItem(
 }
 
 /**
- * 数据流通卡片（导出 / 导入 IMDb / 上传云端 / 下载云端）。
+ * 数据流通卡片（导出 / 导入 IMDb）。
  * 抽取为独立函数，避免 item lambda 捕获过多外部状态。
  *
- * @param showCloudActions 是否显示第二行「上传/拉取失败数据」入口。
- *   仅当豆瓣已登录且(本地有失败项 或 云端有失败项)时为 true,避免无数据时暴露无效入口。
  * @param exportEnabled 导出按钮是否启用(导出进行中应禁用)
  * @param importEnabled 导入按钮是否启用(导入进行中应禁用)
- * @param cloudEnabled 云端按钮是否启用(云端同步进行中应禁用)
  * 豆瓣独立模式: [onImportImdb] 为 null 时隐藏导入 IMDb 卡片（无 trakt token 无法写入），
  * 导出卡片独占整行宽度。
  */
@@ -1981,12 +1791,8 @@ private fun NotificationItem(
 private fun DataFlowGridItem(
     onExport: (() -> Unit)?,
     onImportImdb: (() -> Unit)?,
-    onUploadCloud: () -> Unit,
-    onDownloadCloud: () -> Unit,
-    showCloudActions: Boolean = true,
     exportEnabled: Boolean = true,
     importEnabled: Boolean = true,
-    cloudEnabled: Boolean = true,
     containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     Row(
@@ -2011,29 +1817,6 @@ private fun DataFlowGridItem(
                 onClick = onImportImdb,
                 containerColor = containerColor,
                 enabled = importEnabled
-            )
-        }
-    }
-    if (showCloudActions) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            DataFlowCard(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Rounded.CloudUpload,
-                title = stringResource(R.string.settings_douban_upload_cloud),
-                onClick = onUploadCloud,
-                containerColor = containerColor,
-                enabled = cloudEnabled
-            )
-            DataFlowCard(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Rounded.CloudDownload,
-                title = stringResource(R.string.settings_douban_download_cloud),
-                onClick = onDownloadCloud,
-                containerColor = containerColor,
-                enabled = cloudEnabled
             )
         }
     }
@@ -2209,101 +1992,4 @@ private fun formatLastCheckTime(timestampMs: Long, context: android.content.Cont
             sdf.format(java.util.Date(timestampMs))
         }
     }
-}
-
-/** 将时间戳格式化为「yyyy-MM-dd HH:mm」(设备时区)，0 或负数返回空串 */
-private fun formatSyncTime(time: Long): String {
-    if (time <= 0L) return ""
-    val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-    return sdf.format(java.util.Date(time))
-}
-
-/**
- * 云端同步时间戳比较对话框。
- * - 下载覆盖(DOWNLOAD_OVERWRITE)：双按钮「取消 / 覆盖本地」，确认才落库
- * - 下载空(DOWNLOAD_LOCAL_EMPTY)：「查看失败项 / 关闭」
- * - 其余(本地较新 / 上传跳过 / 已上传)：单按钮「关闭」
- */
-@Composable
-private fun CloudSyncCompareDialog(
-    info: DoubanRetryViewModel.CloudSyncCompareInfo,
-    onDismiss: () -> Unit,
-    onConfirmOverwrite: () -> Unit,
-    onViewFailures: () -> Unit
-) {
-    val localText = if (info.localTime > 0) formatSyncTime(info.localTime) else stringResource(R.string.cloud_sync_dialog_no_time)
-    val cloudText = if (info.cloudTime > 0) formatSyncTime(info.cloudTime) else stringResource(R.string.cloud_sync_dialog_no_time)
-
-    val (titleRes, messageRes) = when (info.kind) {
-        DoubanRetryViewModel.CompareKind.DOWNLOAD_OVERWRITE ->
-            R.string.cloud_sync_dialog_title_overwrite to R.string.cloud_sync_dialog_overwrite_message
-        DoubanRetryViewModel.CompareKind.DOWNLOAD_LOCAL_NEWER ->
-            R.string.cloud_sync_dialog_title_local_newer to R.string.cloud_sync_dialog_local_newer_message
-        DoubanRetryViewModel.CompareKind.DOWNLOAD_LOCAL_EMPTY ->
-            R.string.cloud_sync_dialog_title_download_empty to R.string.cloud_sync_dialog_download_empty_message
-        DoubanRetryViewModel.CompareKind.UPLOAD_SKIPPED ->
-            R.string.cloud_sync_dialog_title_upload_skip to R.string.cloud_sync_dialog_upload_skip_message
-        DoubanRetryViewModel.CompareKind.UPLOAD_DONE ->
-            R.string.cloud_sync_dialog_title_upload_done to R.string.cloud_sync_dialog_upload_done_message
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        title = { Text(stringResource(titleRes)) },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (info.localTime > 0) {
-                    Text(stringResource(R.string.cloud_sync_dialog_local_time, localText))
-                }
-                if (info.cloudTime > 0) {
-                    Text(stringResource(R.string.cloud_sync_dialog_cloud_time, cloudText))
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(stringResource(messageRes, info.count))
-            }
-        },
-        confirmButton = {
-            when (info.kind) {
-                DoubanRetryViewModel.CompareKind.DOWNLOAD_OVERWRITE ->
-                    TextButton(onClick = onConfirmOverwrite) {
-                        Text(stringResource(R.string.cloud_sync_dialog_overwrite_confirm))
-                    }
-                DoubanRetryViewModel.CompareKind.DOWNLOAD_LOCAL_EMPTY ->
-                    TextButton(onClick = {
-                        onDismiss()
-                        onViewFailures()
-                    }) {
-                        Text(stringResource(R.string.dialog_download_success_view))
-                    }
-                else ->
-                    TextButton(onClick = onDismiss) {
-                        Text(stringResource(R.string.dialog_download_success_dismiss))
-                    }
-            }
-        },
-        dismissButton = if (
-            info.kind == DoubanRetryViewModel.CompareKind.DOWNLOAD_OVERWRITE ||
-            info.kind == DoubanRetryViewModel.CompareKind.DOWNLOAD_LOCAL_EMPTY
-        ) {
-            {
-                TextButton(onClick = onDismiss) {
-                    Text(
-                        stringResource(
-                            if (info.kind == DoubanRetryViewModel.CompareKind.DOWNLOAD_OVERWRITE) {
-                                R.string.permission_cancel
-                            } else {
-                                R.string.dialog_download_success_dismiss
-                            }
-                        )
-                    )
-                }
-            }
-        } else {
-            {}
-        }
-    )
 }

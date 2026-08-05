@@ -245,10 +245,10 @@
 
     <!-- Douban Sync -->
     <string name="douban_login_title">登录豆瓣</string>
-    <string name="douban_login_hint">请在下方登录豆瓣账号，登录成功后将自动同步您的标记到 Trakt</string>
+    <string name="douban_login_hint">登录豆瓣后，想看/看过标记会显示在 Watchlist；连接 Trakt 后还可以同步到 Trakt</string>
     <string name="douban_login_privacy_short">本页用于登录豆瓣以读取你的公开标记（想看/看过）。登录凭据仅用于本次同步，不会上传到任何第三方服务器。</string>
     <string name="douban_login_privacy_detail_title">详细说明</string>
-    <string name="douban_login_privacy_detail">• 为什么需要登录：读取你的豆瓣标记列表（想看、看过、评分）\n• 存储什么：仅存储 Cookie 和 userId（用于本次爬取），不存储豆瓣密码\n• Cookie 用途：仅用于请求 movie.douban.com/people/{userId}/wish|collect 页面\n• 同步完成后：可随时在设置页清除豆瓣凭据\n• 数据流向：豆瓣 → App → Trakt，不经过任何中间服务器</string>
+    <string name="douban_login_privacy_detail">• 为什么需要登录：读取你的豆瓣标记列表（想看、看过、评分）\n• 存储什么：仅存储 Cookie 和 userId（用于本次爬取），不存储豆瓣密码\n• Cookie 用途：仅用于请求 movie.douban.com/people/{userId}/wish|collect 页面\n• 同步完成后：可随时在设置页清除豆瓣凭据\n• 数据流向：豆瓣 → App；连接 Trakt 后可继续同步到 Trakt</string>
     <string name="douban_login_privacy_expand">查看详细说明</string>
     <string name="douban_login_privacy_collapse">收起</string>
     <string name="douban_login_success_snackbar">豆瓣登录成功</string>
@@ -266,19 +266,15 @@
     <string name="douban_sync_douban_login_required_banner">需要登录豆瓣，点此登录</string>
     <string name="douban_sync_trakt_login_required_banner">需要登录 Trakt，点此登录</string>
     <string name="douban_sync_complete_banner">同步完成，新增 %1$d 条</string>
-    <string name="douban_sync_failed_banner">同步失败，%1$d 条失败</string>
     <string name="douban_sync_cancelled_banner">同步已取消</string>
     <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
-    <string name="douban_sync_result_format">成功 %1$d 条，失败 %2$d 条</string>
     <string name="douban_sync_error_detail">错误：%1$s</string>
-    <string name="douban_sync_failed_list_label">失败项：</string>
-    <string name="douban_sync_failed_more_format">...共 %1$d 项失败</string>
     <string name="douban_sync_eta_format">预计剩余 %1$s</string>
     <string name="douban_sync_delay_format">等待 %1$d 秒（%2$s）</string>
     <string name="douban_sync_delay_detail_crawl">豆瓣反爬延迟</string>
     <string name="douban_sync_delay_list_crawl">列表页爬取延迟</string>
     <string name="douban_sync_delay_retry">重试前等待</string>
-    <string name="douban_sync_summary_format">成功 %1$d · 跳过 %2$d · 缓存命中 %3$d · 失败 %4$d</string>
+    <string name="douban_sync_summary_format">成功 %1$d · 跳过 %2$d · 缓存命中 %3$d</string>
 
     <!-- 豆瓣同步失败项重试 -->
     <string name="douban_retry_title">重试豆瓣同步失败项</string>
@@ -307,21 +303,12 @@
     <string name="douban_failure_reason_no_imdb_id">无 IMDb ID</string>
     <string name="douban_failure_reason_detail_fetch_failed">详情页访问失败</string>
     <string name="douban_failure_reason_trakt_not_found">Trakt 未找到此条目</string>
+    <string name="douban_failure_reason_trakt_search_failed">Trakt 搜索失败</string>
     <string name="douban_failure_reason_trakt_write_timeout">Trakt 写入超时</string>
     <string name="douban_failure_reason_trakt_write_failed">Trakt 写入失败</string>
 
     <!-- 同步结果对话框 -->
-    <string name="douban_sync_failed_group_recoverable">可恢复 (%1$d)</string>
-    <string name="douban_sync_failed_group_non_recoverable">不可恢复 (%1$d)</string>
-    <string name="douban_sync_failed_export">导出失败项</string>
-    <string name="douban_sync_failed_export_nothing">无失败项可导出</string>
-    <string name="douban_sync_failed_export_success">已导出 %1$d 项失败数据</string>
-    <string name="douban_sync_failed_export_failed">导出失败</string>
-    <string name="douban_sync_failed_export_chooser_title">分享失败项 JSON</string>
-    <string name="douban_sync_failed_show_all">显示全部 %1$d 项</string>
-    <string name="douban_sync_failed_collapse">收起</string>
     <string name="douban_sync_current_processing">正在处理：%1$s</string>
-    <string name="douban_sync_recent_failures">最近失败：</string>
     <string name="douban_sync_retry_complete_banner">重试完成，成功 %1$d 项</string>
 
     <!-- 豆瓣同步续传(取消后恢复) -->
@@ -398,7 +385,12 @@
     <string name="detail_info_countries">制片国家/地区</string>
     <string name="detail_info_directors">导演</string>
     <string name="detail_info_genres">类型</string>
+    <string name="detail_info_imdb_rating">IMDb</string>
+    <string name="detail_info_imdb_id">IMDb ID</string>
     <string name="detail_info_douban_rating">豆瓣</string>
+    <string name="detail_info_metacritic_rating">MTC</string>
+    <string name="detail_info_tmdb_rating">TMDB</string>
+    <string name="detail_info_rotten_tomatoes_rating">RT</string>
     <string name="detail_info_rating_count">(%1$d 人评价)</string>
     <string name="detail_info_aka">又名</string>
     <string name="detail_info_runtime">片长</string>
@@ -599,11 +591,11 @@
     <string name="help_import_src_imdb_how">登录 IMDb → Your Watchlist → 右上角菜单 → Export 下载 CSV</string>
     <string name="help_import_src_imdb_effect">通过标题搜索匹配并同步到 Trakt 想看列表</string>
     <string name="help_data_douban_title">豆瓣标记同步</string>
-    <string name="help_data_douban_b1">在登录页点击「或从豆瓣导入标记」，通过 WebView 登录豆瓣账号，App 会自动爬取您的想看和看过标记并同步到 Trakt</string>
+    <string name="help_data_douban_b1">在登录页点击「或从豆瓣导入标记」，通过 WebView 登录豆瓣账号，App 会自动爬取您的想看和看过标记并显示在 Watchlist；连接 Trakt 后还可以同步到 Trakt</string>
     <string name="help_data_douban_b2">在设置 → 数据管理点击「同步豆瓣」可同步豆瓣标记</string>
-    <string name="help_data_douban_b3">冲突策略：豆瓣「看过」覆盖 Trakt「想看」；豆瓣「想看」不覆盖 Trakt「看过」；评分以豆瓣为准（5 星制转 10 分制）</string>
-    <string name="help_data_douban_b4">同步失败的条目会保存在本地。在设置 → 数据管理点击「查看同步失败项」可查看失败项,支持手动标注电影/电视剧类型、编辑子标题、搜索资源、重试同步或删除</string>
-    <string name="help_data_douban_b5">跨设备查看:在设置 → 数据管理通过「重试失败项」弹窗或「失败查看页」选择「从 JSON 导入失败项」,可导入从其他设备导出的失败项 JSON 文件,在本地查看</string>
+    <string name="help_data_douban_b3">连接 Trakt 时的冲突策略：豆瓣「看过」覆盖 Trakt「想看」；豆瓣「想看」不覆盖 Trakt「看过」；评分以豆瓣为准（5 星制转 10 分制）</string>
+    <string name="help_data_douban_b4">所有导入的豆瓣标记都会显示在 Watchlist。带 IMDb ID 的条目使用正常详情页，不带 IMDb ID 的条目使用豆瓣详情页。</string>
+    <string name="help_data_douban_b5">豆瓣导入支持自动续传和重试。处理过程中的技术异常不会让已导入标记从 Watchlist 消失。</string>
     <string name="help_data_table_title">数据导入导出总览</string>
     <string name="help_dc_export_t">导出标记数据</string>
     <string name="help_dc_export_entry">设置页 → 数据管理</string>
@@ -613,22 +605,10 @@
     <string name="help_dc_imdb_entry">设置页 → 数据管理</string>
     <string name="help_dc_imdb_fmt">CSV</string>
     <string name="help_dc_imdb_desc">从 IMDb 观影列表导入,按标题搜索并同步到 Trakt</string>
-    <string name="help_dc_upload_t">上传失败数据到云端</string>
-    <string name="help_dc_upload_entry">设置页 → 数据管理</string>
-    <string name="help_dc_upload_fmt">加密JSON</string>
-    <string name="help_dc_upload_desc">上传豆瓣同步失败项到云端,AES加密存储</string>
-    <string name="help_dc_download_t">从云端拉取失败数据</string>
-    <string name="help_dc_download_entry">设置页 → 数据管理</string>
-    <string name="help_dc_download_fmt">加密JSON</string>
-    <string name="help_dc_download_desc">从云端拉取失败项,解密合并到本地查看</string>
     <string name="help_dc_douban_t">豆瓣标记同步</string>
     <string name="help_dc_douban_entry">登录页 / 设置页</string>
     <string name="help_dc_douban_fmt">豆瓣账号</string>
-    <string name="help_dc_douban_desc">登录豆瓣抓取想看/已看标记,同步到 Trakt</string>
-    <string name="help_dc_failures_t">失败项 JSON 导入</string>
-    <string name="help_dc_failures_entry">失败查看页</string>
-    <string name="help_dc_failures_fmt">JSON</string>
-    <string name="help_dc_failures_desc">从其他设备导出的失败项JSON文件导入本地查看</string>
+    <string name="help_dc_douban_desc">登录豆瓣抓取想看/已看标记并显示在 Watchlist；连接 Trakt 后可同步到 Trakt</string>
     <string name="help_dc_cooldown">冷却期：豆瓣有反爬机制，频繁多次爬取可能导致你的 IP 地址被列入黑名单。完整爬取后设置 7 天冷却期以降低请求频率。冷却期内增量同步复用云端数据，不再重新爬取；你可以自行承担风险强制同步。</string>
     <string name="help_custom_source">自定义搜索源</string>
     <string name="help_custom_source_b1">设置 → 搜索源 → 自定义搜索源 → 添加搜索源</string>
@@ -720,8 +700,8 @@
 
     <!-- 豆瓣标记双向写回帮助 -->
     <string name="help_douban_writeback">豆瓣标记双向写回</string>
-    <string name="help_douban_writeback_b1">在豆瓣同步失败条目详情页,可直接把「想看 / 已看 / 取消标记」写回豆瓣。</string>
-    <string name="help_douban_writeback_b3">想看↔已看切换后新状态持久化到失败列表;取消标记会删除该失败条目(需二次确认)。</string>
+    <string name="help_douban_writeback_b1">在豆瓣条目详情页，可直接把「想看 / 已看 / 取消标记」写回豆瓣。</string>
+    <string name="help_douban_writeback_b3">切换想看↔已看会更新豆瓣标记；取消标记会在确认后删除该标记。</string>
     <string name="help_consistency_check">状态一致性检查</string>
     <string name="help_consistency_intro">豆瓣与 Trakt 的影视状态可能不一致。检查按「已看过优先于想看」原则统一两边:已看状态覆盖想看状态,并以已看方为准回写另一方,标记永不丢失。检查还会清理 Trakt 侧同时处于「想看」与「已看」的历史条目(旧数据遗留),自动移除其想看标记。下表列出所有不一致情况的处理方式。</string>
     <string name="help_consistency_col_douban">豆瓣状态</string>
@@ -747,7 +727,7 @@
     <string name="onboarding_step2_title">发现</string>
     <string name="onboarding_step2_desc">浏览个性化推荐（豆瓣登录后生成）和其他榜单</string>
     <string name="onboarding_step3_title">我的</string>
-    <string name="onboarding_step3_desc">展示 Trakt 想看、已看列表（含从豆瓣导入内容）</string>
+    <string name="onboarding_step3_desc">在同一处展示 Trakt 与豆瓣的想看、已看列表</string>
     <string name="settings_licenses">开源许可证</string>
     <string name="settings_cache">缓存</string>
     <string name="settings_cache_clear">清除</string>
@@ -808,7 +788,6 @@
     <string name="cooldown_guidance_message">7 天内已同步过列表爬取,增量同步将被跳过(数据来自云端)。是否强制同步重新爬取豆瓣列表?\n\n豆瓣有反爬机制,频繁多次爬取可能导致你的 IP 地址被列入黑名单。强制同步请自行承担风险。</string>
     <string name="cooldown_force_sync">强制同步</string>
     <string name="cooldown_skip">跳过</string>
-    <string name="settings_douban_retry_failures">重试上次失败项</string>
 
     <!-- Douban sync mode picker -->
     <string name="douban_sync_mode_picker_title">选择重新同步模式</string>
@@ -827,8 +806,6 @@
     <string name="douban_retry_option_export_desc">保存为 JSON 文件,用于备份或分享</string>
 
     <!-- Douban failures viewer -->
-    <string name="settings_douban_view_failures">查看同步失败项</string>
-    <string name="settings_douban_view_failures_desc">%1$d 项豆瓣条目同步失败</string>
     <string name="settings_douban_status_consistency">检查状态一致性</string>
     <string name="settings_douban_status_consistency_desc">检查豆瓣与 Trakt 的想看/已看状态是否一致</string>
     <string name="settings_douban_status_consistency_checking">正在检查…</string>
@@ -892,37 +869,12 @@
     <string name="consistency_check_time_minutes_ago">%1$d 分钟前</string>
     <string name="consistency_check_time_hours_ago">%1$d 小时前</string>
     <string name="consistency_check_time_days_ago">%1$d 天前</string>
-    <string name="settings_douban_import_failures">从 JSON 导入失败项</string>
-    <string name="settings_douban_import_failures_desc">导入从其他设备导出的失败项 JSON 文件,在此查看</string>
     <string name="screen_douban_failures_title">同步失败项</string>
     <string name="share_failures_json">分享失败项 JSON</string>
 
     <!-- 云端失败数据同步 -->
-    <string name="cloud_failures_detected_title">检测到云端失败数据</string>
-    <string name="cloud_failures_detected_desc">云端有 %1$d 条该豆瓣账号的同步失败数据,是否下载到本地查看?</string>
-    <string name="cloud_failures_download">下载</string>
-    <string name="cloud_failures_dismiss">暂不</string>
-    <string name="cloud_failures_downloaded">云端失败数据已下载并合并</string>
-    <string name="cloud_failures_downloaded_with_count">已下载并合并云端 %1$d 条失败数据,已替换本地数据</string>
 
     <!-- Manual cloud sync (settings page) -->
-    <string name="settings_douban_upload_cloud">上传失败数据</string>
-    <string name="settings_douban_upload_cloud_desc">把本地失败项上传到 Gitee 云端,用于跨设备查看(需登录豆瓣)</string>
-    <string name="settings_douban_download_cloud">拉取失败数据</string>
-    <string name="settings_douban_download_cloud_desc">下载该豆瓣账号的云端失败数据并合并到本地</string>
-    <string name="cloud_sync_no_login">请先登录豆瓣账号</string>
-    <string name="cloud_sync_no_local_failures">本地无失败项,跳过上传</string>
-    <string name="cloud_sync_upload_success">失败数据已上传到云端</string>
-    <string name="cloud_sync_upload_failed">上传失败,请稍后重试</string>
-    <string name="cloud_sync_download_empty">云端无该豆瓣账号的失败数据</string>
-    <string name="cloud_sync_download_local_newer">本地数据更新,已忽略云端数据</string>
-    <string name="cloud_sync_download_success">已下载并合并 %1$d 条云端失败数据</string>
-    <string name="dialog_download_success_title">导入成功</string>
-    <string name="dialog_download_success_message">已从云端导入 %1$d 条失败项,可进入查看同步失败项页面查看</string>
-    <string name="dialog_download_success_view">查看失败项</string>
-    <string name="dialog_download_success_dismiss">关闭</string>
-    <string name="cloud_sync_download_failed">下载失败,请稍后重试</string>
-    <string name="cloud_sync_in_progress">同步中…</string>
     <string name="screen_douban_failures_empty_wish">想看列表同步全部成功</string>
     <string name="screen_douban_failures_empty_collect">已看列表同步全部成功</string>
     <string name="screen_douban_failures_empty_all">没有同步失败项</string>
@@ -1416,14 +1368,11 @@
     <string name="watched_empty_trakt_only">已看列表为空。登录豆瓣导入标记，或去发现页探索更多影视。</string>
     <string name="watchlist_empty_douban_not_imported">豆瓣标记已准备好，导入后即可填充此列表。</string>
     <string name="watched_empty_douban_not_imported">豆瓣标记已准备好，导入后即可填充已看列表。</string>
-    <string name="watchlist_empty_imported_failures">%1$d 条豆瓣标记未能导入，请前往设置查看失败数据。</string>
-    <string name="watched_empty_imported_failures">%1$d 条豆瓣标记未能导入，请前往设置查看失败数据。</string>
     <string name="watchlist_empty_imported_empty">豆瓣标记已导入，但当前列表还没有内容。</string>
     <string name="watched_empty_imported_empty">豆瓣标记已导入，但已看列表还没有内容。</string>
     <string name="watchlist_empty_login_trakt">登录 Trakt</string>
     <string name="watchlist_empty_login_douban">登录豆瓣并导入</string>
     <string name="watchlist_empty_start_douban_import">导入豆瓣标记</string>
-    <string name="watchlist_empty_view_failures">查看失败数据</string>
 
     <!-- 彩蛋文案（9 个动画 × 3 条文案） -->
     <string name="easter_msg_shy_1">你戳到我了，好痒！</string>
@@ -1464,23 +1413,9 @@
     <string name="douban_logout_confirm_title">退出豆瓣账号</string>
     <string name="douban_logout_confirm_message">退出后将清除本地 %1$d 条豆瓣标记，是否继续？</string>
     <string name="douban_logout_sync_in_progress_warning">同步正在进行中，退出将中断同步并清除本地数据。</string>
-    <string name="settings_douban_login_hint">登录后可同步豆瓣想看/已看标记到 Trakt</string>
+    <string name="settings_douban_login_hint">登录后可在 Watchlist 查看豆瓣想看/已看标记；连接 Trakt 后可同步到 Trakt</string>
     <string name="settings_guest_login_hint">登录 Trakt 后可使用想看、已看、评分等功能</string>
     <string name="statistics_info_wordcloud">Q：短评词云是什么？\nA：提取你豆瓣短评中的高频词汇，按出现频率生成词云，词越大表示出现越多，帮你快速回顾观影感受。</string>
-    <string name="cloud_sync_dialog_no_time">无</string>
-    <string name="cloud_sync_dialog_title_overwrite">云端数据较新</string>
-    <string name="cloud_sync_dialog_title_local_newer">本地数据较新</string>
-    <string name="cloud_sync_dialog_title_upload_skip">无需上传</string>
-    <string name="cloud_sync_dialog_title_upload_done">已上传到云端</string>
-    <string name="cloud_sync_dialog_title_download_empty">已下载云端数据</string>
-    <string name="cloud_sync_dialog_local_time">本地：%1$s</string>
-    <string name="cloud_sync_dialog_cloud_time">云端：%1$s</string>
-    <string name="cloud_sync_dialog_overwrite_message">云端有 %1$d 条失败数据（更新于上方时间）。将覆盖本地现有数据，是否继续？</string>
-    <string name="cloud_sync_dialog_local_newer_message">本地失败数据较新，已保留本地，未从云端下载。</string>
-    <string name="cloud_sync_dialog_upload_skip_message">本地失败数据不比云端新，已跳过上传，云端保持不变。</string>
-    <string name="cloud_sync_dialog_upload_done_message">本地失败数据已加密上传到云端。</string>
-    <string name="cloud_sync_dialog_download_empty_message">已将云端 %1$d 条失败数据下载并合并到本地。</string>
-    <string name="cloud_sync_dialog_overwrite_confirm">覆盖本地</string>
 
     <!-- 标记记录（临时，任务 9 会补充完整 4 语言） -->
     <string name="mark_records_action_add_watchlist">加入想看</string>
@@ -1588,7 +1523,7 @@
     <string name="douban_sync_substage_writing_target">正在写入 Trakt</string>
     <string name="douban_sync_substage_writing_local">正在保存本地数据</string>
     <string name="douban_sync_substage_status_changes">正在应用状态变化</string>
-    <string name="douban_sync_substage_retrying_failures">正在重试失败项</string>
+    <string name="douban_sync_substage_retrying_items">正在重试条目</string>
     <string name="douban_sync_substage_waiting_delay">等待下一次尝试</string>
     <string name="douban_sync_recent_items">最近获取</string>
     <string name="douban_sync_preview_status_wish">想看</string>

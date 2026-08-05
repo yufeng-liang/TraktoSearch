@@ -3,6 +3,7 @@ package com.tracktosearch.data.repository
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.local.db.DoubanSyncFailureDao
 import com.tracktosearch.data.local.db.DoubanSyncFailureEntity
+import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
 import com.tracktosearch.data.remote.douban.DoubanDetailInfo
@@ -104,6 +105,32 @@ class DoubanRetryManagerTest {
         attemptCount = attemptCount,
         mediaType = mediaType,
         mediaTypeCleared = mediaTypeCleared,
+        subtitle = subtitle
+    )
+
+    /** 构造包含完整豆瓣快照字段的同步条目。 */
+    private fun buildSyncedItem(
+        doubanId: String = "db-synced-001",
+        subtitle: String? = "原始子标题"
+    ): DoubanSyncedItem = DoubanSyncedItem(
+        doubanId = doubanId,
+        imdbId = "tt1234567",
+        traktId = 314,
+        title = "快照电影",
+        status = "collect",
+        rating = 4,
+        syncedAt = 2000L,
+        mediaType = "movie",
+        tmdbId = 2718,
+        displayTitle = "快照电影显示标题",
+        year = 2024,
+        genres = "剧情",
+        posterUrl = "https://img.example.com/snapshot.jpg",
+        listedAt = "2024-02-03",
+        pendingSync = true,
+        doubanUrl = "https://movie.douban.com/subject/$doubanId/",
+        comment = "原始短评",
+        markedAt = "2024-02-02 12:34:56",
         subtitle = subtitle
     )
 
@@ -295,6 +322,27 @@ class DoubanRetryManagerTest {
         assertThat(result).isNull()
     }
 
+    @Test
+    fun getFailure_fallbackPreservesSyncedItemSnapshotFields() = runTest {
+        val item = buildSyncedItem()
+        coEvery { doubanSyncFailureDao.getById(item.doubanId) } returns null
+        coEvery { doubanSyncedItemDao.getByDoubanId(item.doubanId) } returns item
+
+        val result = manager.getFailure(item.doubanId)
+
+        assertThat(result).isNotNull()
+        assertThat(result!!.doubanId).isEqualTo(item.doubanId)
+        assertThat(result.title).isEqualTo(item.title)
+        assertThat(result.posterUrl).isEqualTo(item.posterUrl)
+        assertThat(result.rating).isEqualTo(item.rating)
+        assertThat(result.status.path).isEqualTo(item.status)
+        assertThat(result.mediaType).isEqualTo(item.mediaType)
+        assertThat(result.doubanUrl).isEqualTo(item.doubanUrl)
+        assertThat(result.comment).isEqualTo(item.comment)
+        assertThat(result.markedAt).isEqualTo(item.markedAt)
+        assertThat(result.subtitle).isEqualTo(item.subtitle)
+    }
+
     // ============================================================
     // inferMediaTypeFromDetail 测试（重点，逻辑复杂）
     // ============================================================
@@ -479,6 +527,9 @@ class DoubanRetryManagerTest {
     @Test
     fun updateSubtitle_空串_转为Null存储() = runTest {
         // subtitle=" " → trim 后为 "" → isNotBlank 为 false → takeIf 返回 null → 存储 null
+        val existing = buildSyncedItem(doubanId = "db-1")
+        coEvery { doubanSyncedItemDao.getByDoubanId("db-1") } returns existing
+
         manager.updateSubtitle("db-1", " ")
 
         // 验证调用 updateSubtitle 时 subtitle 参数为 null
@@ -486,15 +537,24 @@ class DoubanRetryManagerTest {
         coVerify(exactly = 1) {
             doubanSyncFailureDao.updateSubtitle("db-1", null as String?, any())
         }
+        coVerify(exactly = 1) {
+            doubanSyncedItemDao.update(existing.copy(subtitle = null))
+        }
     }
 
     @Test
     fun updateSubtitle_非空_trim后存储() = runTest {
         // subtitle=" 标题 " → trim 后为 "标题" → isNotBlank 为 true → 存储 "标题"
+        val existing = buildSyncedItem(doubanId = "db-1")
+        coEvery { doubanSyncedItemDao.getByDoubanId("db-1") } returns existing
+
         manager.updateSubtitle("db-1", " 标题 ")
 
         coVerify(exactly = 1) {
             doubanSyncFailureDao.updateSubtitle("db-1", "标题", any())
+        }
+        coVerify(exactly = 1) {
+            doubanSyncedItemDao.update(existing.copy(subtitle = "标题"))
         }
     }
 

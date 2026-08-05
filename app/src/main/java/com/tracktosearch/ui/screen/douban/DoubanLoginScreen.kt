@@ -26,7 +26,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -43,7 +42,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,15 +68,12 @@ import javax.inject.Inject
  * 豆瓣登录页 ViewModel：
  * - 监听 WebView 抓到的 dbcl2 cookie，解析出 userId
  * - 登录成功后保存凭据（不自动同步，由用户手动选择增量同步）
- * - 检测云端是否有该豆瓣账号的失败数据（用于跨设备查看）
  */
 @HiltViewModel
 class DoubanLoginViewModel @Inject constructor(
     val doubanAuthStorage: DoubanAuthStorage,
     val doubanSyncManager: DoubanSyncManager,
-    val cloudFailureSyncManager: com.tracktosearch.data.repository.CloudFailureSyncManager,
-    private val cloudPersonalSyncManager: com.tracktosearch.data.repository.CloudPersonalSyncManager,
-    private val doubanRetryManager: com.tracktosearch.data.repository.DoubanRetryManager
+    private val cloudPersonalSyncManager: com.tracktosearch.data.repository.CloudPersonalSyncManager
 ) : ViewModel() {
 
     val progress = doubanSyncManager.progress
@@ -86,55 +81,15 @@ class DoubanLoginViewModel @Inject constructor(
     private val _loginSuccess = MutableStateFlow(false)
     val loginSuccess: StateFlow<Boolean> = _loginSuccess
 
-    // 云端失败数据检测结果(null=未检测/检测失败,>0=云端有 N 条失败数据)
-    private val _cloudFailureCount = MutableStateFlow<Int?>(null)
-    val cloudFailureCount: StateFlow<Int?> = _cloudFailureCount
-
     fun onLoginSuccess(userId: String, cookie: String) {
         doubanAuthStorage.saveCredentials(userId, cookie)
         _loginSuccess.value = true
         // 不自动同步：由用户在设置页或 Watchlist 页手动选择增量同步
         // 增量同步会自动拉取云端进度，接续上次同步，避免全量爬取豆瓣
-        // 检测云端是否有该豆瓣账号的失败数据(用于跨设备查看)
-        checkCloudFailures()
         // 登录后刷新云端 sync_meta,确保跨设备冷却期(lastFullSyncAt)最新
         viewModelScope.launch { runCatching { cloudPersonalSyncManager.refreshMetaOnly() } }
     }
 
-    /** 检测云端是否有当前豆瓣账号的失败数据 */
-    private fun checkCloudFailures() {
-        viewModelScope.launch {
-            _cloudFailureCount.value = cloudFailureSyncManager.checkCloudFailures()
-        }
-    }
-
-    /** 下载结果一次性事件(成功时携带数量,供 UI 显示带数量的 Snackbar) */
-    private val _cloudDownloadResult = MutableStateFlow<Int?>(null)
-    val cloudDownloadResult: StateFlow<Int?> = _cloudDownloadResult
-
-    /** 用户确认后下载云端失败数据并合并到本地 */
-    fun downloadCloudFailures() {
-        viewModelScope.launch {
-            val result = cloudFailureSyncManager.downloadAndMerge()
-            // 云端更新且替换成功 → 刷新失败项统计,让设置页/Watchlist 页显示最新数量
-            if (result is com.tracktosearch.data.repository.DownloadResult.Success) {
-                doubanRetryManager.refreshRetryState()
-                // 暴露下载数量给 UI,触发带数量的 Snackbar 提示
-                _cloudDownloadResult.value = result.count
-            }
-            _cloudFailureCount.value = null
-        }
-    }
-
-    /** UI 显示完 Snackbar 后清除事件 */
-    fun consumeCloudDownloadResult() {
-        _cloudDownloadResult.value = null
-    }
-
-    /** 用户忽略云端数据 */
-    fun dismissCloudFailures() {
-        _cloudFailureCount.value = null
-    }
 }
 
 /**
@@ -159,10 +114,7 @@ fun DoubanLoginScreen(
     viewModel: DoubanLoginViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val cloudDownloadedWithCountMsg = stringResource(R.string.cloud_failures_downloaded_with_count)
-    val isLoggedIn by viewModel.doubanAuthStorage.isLoggedIn.collectAsStateWithLifecycle()
     val loginSuccess by viewModel.loginSuccess.collectAsStateWithLifecycle()
-    val scope = rememberCoroutineScope()
 
     // Snackbar 状态：登录成功时显示提示
     val snackbarHostState = remember { SnackbarHostState() }
@@ -199,44 +151,6 @@ fun DoubanLoginScreen(
             // 否则沿用 onBack 返回上一页
             if (onLoginSuccess != null) onLoginSuccess() else onBack()
         }
-    }
-
-    // 云端失败数据检测弹窗:登录后发现云端有同豆瓣账号的失败数据,提示下载查看
-    val cloudCount by viewModel.cloudFailureCount.collectAsStateWithLifecycle()
-    cloudCount?.let { count ->
-        if (count > 0) {
-            AlertDialog(
-                onDismissRequest = { viewModel.dismissCloudFailures() },
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                title = { Text(stringResource(R.string.cloud_failures_detected_title)) },
-                text = {
-                    Text(stringResource(R.string.cloud_failures_detected_desc, count))
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        viewModel.downloadCloudFailures()
-                    }) {
-                        Text(stringResource(R.string.cloud_failures_download))
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { viewModel.dismissCloudFailures() }) {
-                        Text(stringResource(R.string.cloud_failures_dismiss))
-                    }
-                }
-        )
-        }
-    }
-
-    // 监听云端下载结果:成功时显示带数量的 Snackbar,提示本地数据已被替换
-    val cloudDownloadResult by viewModel.cloudDownloadResult.collectAsStateWithLifecycle()
-    LaunchedEffect(cloudDownloadResult) {
-        val count = cloudDownloadResult ?: return@LaunchedEffect
-        snackbarHostState.showSnackbar(
-            message = cloudDownloadedWithCountMsg.format(count),
-            duration = androidx.compose.material3.SnackbarDuration.Short
-        )
-        viewModel.consumeCloudDownloadResult()
     }
 
     // WebView 加载状态：null=空闲，"loading"=加载中，其他字符串=错误信息

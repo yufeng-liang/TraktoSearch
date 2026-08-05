@@ -175,9 +175,14 @@ class DoubanSyncService : Service() {
                 null -> stageLabel
             }
             progress.isComplete && progress.stage == DoubanSyncStage.COMPLETED ->
-                getString(R.string.douban_sync_result_format, progress.successCount, progress.failedCount)
+                getString(
+                    R.string.douban_sync_summary_format,
+                    progress.successCount,
+                    progress.skippedCount,
+                    progress.cacheHitCount
+                )
             progress.isComplete && progress.stage == DoubanSyncStage.FAILED ->
-                getString(R.string.douban_sync_failed_banner, progress.failedCount)
+                getString(R.string.douban_sync_stage_failed)
             progress.isComplete && progress.stage == DoubanSyncStage.CANCELLING ->
                 getString(R.string.douban_sync_cancelled_banner)
             progress.total > 0 && targetLabel != null -> getString(

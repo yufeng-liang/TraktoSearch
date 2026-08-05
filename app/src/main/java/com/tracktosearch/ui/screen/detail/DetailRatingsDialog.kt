@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,27 +50,83 @@ import com.tracktosearch.R
 import com.tracktosearch.data.repository.MultiRatings
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
+import java.util.Locale
 
 // ==================== 评分行 ====================
 
+private enum class RatingSource {
+    IMDb,
+    Douban,
+    Metacritic,
+    TMDB,
+    RottenTomatoes
+}
+
+private data class RatingBadgeData(
+    val source: RatingSource,
+    val label: String,
+    val color: Color,
+    val value: String
+)
+
 @Composable
-internal fun RatingsRow(ratings: MultiRatings) {
-    // 第一行：IMDb, MTC
-    val row1 = mutableListOf<Triple<String, Color, String>>()
+internal fun RatingsRow(
+    ratings: MultiRatings,
+    isDoubanItem: Boolean = false
+) {
+    // 第一行：IMDb，以及豆瓣评分或 MTC（二者只显示一个）
+    val row1 = mutableListOf<RatingBadgeData>()
     if (ratings.imdbRating.isNotEmpty()) {
-        row1.add(Triple("IMDb", Color(0xFFF5C518), ratings.imdbRating))
+        row1.add(
+            RatingBadgeData(
+                source = RatingSource.IMDb,
+                label = stringResource(R.string.detail_info_imdb_rating),
+                color = Color(0xFFF5C518),
+                value = ratings.imdbRating
+            )
+        )
     }
-    if (ratings.metacritic.isNotEmpty()) {
-        row1.add(Triple("MTC", Color(0xFFFF9500), ratings.metacritic))
+    if (ratings.doubanRating != null) {
+        row1.add(
+            RatingBadgeData(
+                source = RatingSource.Douban,
+                label = stringResource(R.string.detail_info_douban_rating),
+                color = Color(0xFF2E963D),
+                value = String.format(Locale.getDefault(), "%.1f", ratings.doubanRating)
+            )
+        )
+    } else if (!isDoubanItem && ratings.metacritic.isNotEmpty()) {
+        row1.add(
+            RatingBadgeData(
+                source = RatingSource.Metacritic,
+                label = stringResource(R.string.detail_info_metacritic_rating),
+                color = Color(0xFFFF9500),
+                value = ratings.metacritic
+            )
+        )
     }
 
     // 第二行：TMDB, RT
-    val row2 = mutableListOf<Triple<String, Color, String>>()
+    val row2 = mutableListOf<RatingBadgeData>()
     if (ratings.tmdbRating > 0) {
-        row2.add(Triple("TMDB", Color(0xFFF5C518), String.format("%.1f", ratings.tmdbRating)))
+        row2.add(
+            RatingBadgeData(
+                source = RatingSource.TMDB,
+                label = stringResource(R.string.detail_info_tmdb_rating),
+                color = Color(0xFFF5C518),
+                value = String.format(Locale.getDefault(), "%.1f", ratings.tmdbRating)
+            )
+        )
     }
     if (ratings.rottenTomatoes.isNotEmpty()) {
-        row2.add(Triple("RT", Color(0xFFFF4444), ratings.rottenTomatoes))
+        row2.add(
+            RatingBadgeData(
+                source = RatingSource.RottenTomatoes,
+                label = stringResource(R.string.detail_info_rotten_tomatoes_rating),
+                color = Color(0xFFFF4444),
+                value = ratings.rottenTomatoes
+            )
+        )
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -80,8 +137,8 @@ internal fun RatingsRow(ratings: MultiRatings) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (row1.isNotEmpty()) {
-                for ((label, color, value) in row1) {
-                    RatingBadge(label = label, color = color, value = value, modifier = Modifier.weight(1f))
+                for (badge in row1) {
+                    RatingBadge(badge = badge, modifier = Modifier.weight(1f))
                 }
                 if (row1.size == 1) Spacer(modifier = Modifier.weight(1f))
             } else {
@@ -96,8 +153,8 @@ internal fun RatingsRow(ratings: MultiRatings) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (row2.isNotEmpty()) {
-                for ((label, color, value) in row2) {
-                    RatingBadge(label = label, color = color, value = value, modifier = Modifier.weight(1f))
+                for (badge in row2) {
+                    RatingBadge(badge = badge, modifier = Modifier.weight(1f))
                 }
                 if (row2.size == 1) Spacer(modifier = Modifier.weight(1f))
             } else {
@@ -110,23 +167,24 @@ internal fun RatingsRow(ratings: MultiRatings) {
 
 /** 单个评分项：无背景填充，各平台专属图标 */
 @Composable
-internal fun RatingBadge(label: String, color: Color, value: String, modifier: Modifier = Modifier) {
+private fun RatingBadge(badge: RatingBadgeData, modifier: Modifier = Modifier) {
+    val source = badge.source
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        when (label) {
-            "TMDB" -> Icon(
+        when (source) {
+            RatingSource.TMDB -> Icon(
                 Icons.Rounded.Star, contentDescription = null,
-                modifier = Modifier.size(14.dp), tint = color
+                modifier = Modifier.size(14.dp), tint = badge.color
             )
-            "IMDb" -> Surface(
+            RatingSource.IMDb -> Surface(
                 shape = RoundedCornerShape(2.dp),
-                color = color
+                color = badge.color
             ) {
                 Text(
-                    text = label,
+                    text = badge.label,
                     style = MaterialTheme.typography.titleSmall.copy(
                         fontSize = 11.sp, fontWeight = FontWeight.Bold
                     ),
@@ -134,21 +192,26 @@ internal fun RatingBadge(label: String, color: Color, value: String, modifier: M
                     modifier = Modifier.padding(horizontal = 3.dp, vertical = 0.dp)
                 )
             }
-            "RT" -> Text(
+            RatingSource.RottenTomatoes -> Text(
                 text = "🍅",
                 fontSize = 14.sp,
                 modifier = Modifier.offset(y = -1.dp)
             )
-            "MTC" -> Text(
+            RatingSource.Douban -> androidx.compose.foundation.Image(
+                painter = painterResource(com.tracktosearch.R.drawable.ic_douban_logo),
+                contentDescription = stringResource(R.string.detail_info_douban_rating),
+                modifier = Modifier.size(14.dp)
+            )
+            RatingSource.Metacritic -> Text(
                 text = "🎯",
                 fontSize = 14.sp,
                 modifier = Modifier.offset(y = -1.dp)
             )
         }
 
-        if (label != "IMDb") {
+        if (source != RatingSource.IMDb) {
             Text(
-                text = label,
+                text = badge.label,
                 style = MaterialTheme.typography.titleSmall.copy(fontSize = 12.sp),
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
@@ -156,7 +219,7 @@ internal fun RatingBadge(label: String, color: Color, value: String, modifier: M
         }
 
         Text(
-            text = value,
+            text = badge.value,
             style = MaterialTheme.typography.titleSmall.copy(fontSize = 12.sp),
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,

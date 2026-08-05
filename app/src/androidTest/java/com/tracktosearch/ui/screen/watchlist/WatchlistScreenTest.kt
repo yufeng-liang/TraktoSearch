@@ -16,6 +16,7 @@ import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.HiltTestActivity
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.DoubanSyncProgress
+import com.tracktosearch.data.repository.WatchlistMediaType
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import io.mockk.every
@@ -262,6 +263,53 @@ class WatchlistScreenTest {
         // 多数据项渲染不崩溃,滚动到最后一项验证
         scrollToText("多数据项三")
         composeRule.onAllNodesWithText("多数据项三").onFirst().assertIsDisplayed()
+    }
+
+    @Test
+    fun `豆瓣only条目使用独立动画状态`() {
+        val firstTitle = "豆瓣only条目一"
+        val secondTitle = "豆瓣only条目二"
+        composeRule.setContent {
+            WatchlistScreen(
+                onMovieClick = { _, _, _, _, _, _, _ -> },
+                onShowClick = { _, _, _, _, _, _, _ -> },
+                onSearchClick = {},
+                onTraktSearch = { _, _ -> },
+                viewModel = createMockWatchlistViewModel(
+                    uiState = WatchlistUiState(
+                        movies = listOf(
+                            MediaUiItem(
+                                traktId = 0,
+                                tmdbId = 0,
+                                title = firstTitle,
+                                displayTitle = firstTitle,
+                                year = 2024,
+                                genres = "剧情",
+                                posterUrl = null,
+                                doubanId = "db-animation-1",
+                                mediaType = WatchlistMediaType.MOVIE
+                            ),
+                            MediaUiItem(
+                                traktId = 0,
+                                tmdbId = 0,
+                                title = secondTitle,
+                                displayTitle = secondTitle,
+                                year = 2023,
+                                genres = "喜剧",
+                                posterUrl = null,
+                                doubanId = "db-animation-2",
+                                mediaType = WatchlistMediaType.MOVIE
+                            )
+                        ),
+                        moviesLoaded = true
+                    )
+                )
+            )
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(firstTitle).assertIsDisplayed()
+        composeRule.onNodeWithText(secondTitle).assertIsDisplayed()
     }
 
     @Test

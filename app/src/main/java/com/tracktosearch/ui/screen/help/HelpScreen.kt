@@ -24,12 +24,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.CloudDownload
-import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.FileDownload
-import androidx.compose.material.icons.rounded.FileOpen
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -176,7 +173,7 @@ fun HelpScreen(
                     ) {
                         HelpSubtitle(stringResource(R.string.help_data_table_title))
                         Spacer(modifier = Modifier.height(4.dp))
-                        // 6 个图标卡片,放在圆角背景容器内
+                        // 3 个图标卡片,放在圆角背景容器内
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -202,35 +199,11 @@ fun HelpScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             HelpDataCard(
-                                icon = Icons.Rounded.CloudUpload,
-                                title = stringResource(R.string.help_dc_upload_t),
-                                entry = stringResource(R.string.help_dc_upload_entry),
-                                format = stringResource(R.string.help_dc_upload_fmt),
-                                description = stringResource(R.string.help_dc_upload_desc)
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            HelpDataCard(
-                                icon = Icons.Rounded.CloudDownload,
-                                title = stringResource(R.string.help_dc_download_t),
-                                entry = stringResource(R.string.help_dc_download_entry),
-                                format = stringResource(R.string.help_dc_download_fmt),
-                                description = stringResource(R.string.help_dc_download_desc)
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            HelpDataCard(
                                 icon = Icons.Rounded.Sync,
                                 title = stringResource(R.string.help_dc_douban_t),
                                 entry = stringResource(R.string.help_dc_douban_entry),
                                 format = stringResource(R.string.help_dc_douban_fmt),
                                 description = stringResource(R.string.help_dc_douban_desc)
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            HelpDataCard(
-                                icon = Icons.Rounded.FileOpen,
-                                title = stringResource(R.string.help_dc_failures_t),
-                                entry = stringResource(R.string.help_dc_failures_entry),
-                                format = stringResource(R.string.help_dc_failures_fmt),
-                                description = stringResource(R.string.help_dc_failures_desc)
                             )
                         }
                         Spacer(modifier = Modifier.height(8.dp))

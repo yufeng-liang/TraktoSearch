@@ -4,11 +4,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
-import com.tracktosearch.data.repository.DoubanFailureExporter
 import com.tracktosearch.data.repository.DoubanSyncFailure
 import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.DoubanSyncProgress
@@ -50,7 +51,6 @@ class DoubanSyncDialogTest {
 
     private lateinit var progressFlow: MutableStateFlow<DoubanSyncProgress>
     private lateinit var mockManager: DoubanSyncManager
-    private lateinit var mockExporter: DoubanFailureExporter
     private lateinit var viewModel: DoubanSyncViewModel
 
     @Before
@@ -58,8 +58,7 @@ class DoubanSyncDialogTest {
         progressFlow = MutableStateFlow(DoubanSyncProgress())
         mockManager = mockk(relaxed = true)
         every { mockManager.progress } returns progressFlow
-        mockExporter = mockk(relaxed = true)
-        viewModel = DoubanSyncViewModel(mockManager, mockExporter)
+        viewModel = DoubanSyncViewModel(mockManager)
     }
 
     /** 推送新的进度状态到 flow */
@@ -262,8 +261,49 @@ class DoubanSyncDialogTest {
             )
         )
         setContent()
-        // douban_sync_summary_format = "Success %1$d · Skipped %2$d · Cached %3$d · Failed %4$d"
-        composeRule.onNodeWithText("Success 50 · Skipped 5 · Cached 10 · Failed 5").assertIsDisplayed()
+        // 导入完成后对话框只展示通用处理统计，不再把条目分类为失败项。
+        composeRule.onNodeWithText("Success 50 · Skipped 5 · Cached 10").assertIsDisplayed()
+    }
+
+    @Test
+    fun `完成状态不显示失败统计列表或导出入口`() {
+        val failedItems = listOf(
+            DoubanSyncFailure(
+                "db-failure",
+                "Failed Movie",
+                null,
+                null,
+                null,
+                "2024-01-01",
+                "url",
+                DoubanMarkStatus.WISH,
+                FailureReason.DETAIL_FETCH_FAILED,
+                1000L,
+                1000L,
+                1,
+                null,
+                false,
+                null
+            )
+        )
+        emit(
+            DoubanSyncProgress(
+                isComplete = true,
+                stage = DoubanSyncStage.COMPLETED,
+                successCount = 50,
+                failedCount = 1,
+                skippedCount = 5,
+                cacheHitCount = 10,
+                failedItems = failedItems
+            )
+        )
+        setContent()
+
+        composeRule.onNodeWithText("Success 50 · Skipped 5 · Cached 10").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Failed 1", substring = true).assertCountEquals(0)
+        composeRule.onAllNodesWithText("Failed:").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Failed Movie").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Export failures").assertCountEquals(0)
     }
 
     @Test
@@ -299,8 +339,9 @@ class DoubanSyncDialogTest {
             )
         )
         setContent()
-        // 不可恢复组标题默认展开 → 显示
-        composeRule.onNodeWithText("Non-recoverable (2)").assertIsDisplayed()
+        // 完成对话框不再展示失败项分组，所有导入数据由 Watchlist 承载。
+        composeRule.onNodeWithText("Non-recoverable (2)").assertDoesNotExist()
+        composeRule.onNodeWithText("No IMDb Movie").assertDoesNotExist()
     }
 
     @Test
@@ -321,8 +362,9 @@ class DoubanSyncDialogTest {
             )
         )
         setContent()
-        // 可恢复组标题默认展开 → 显示
-        composeRule.onNodeWithText("Recoverable (2)").assertIsDisplayed()
+        // 完成对话框不再展示失败项分组，所有导入数据由 Watchlist 承载。
+        composeRule.onNodeWithText("Recoverable (2)").assertDoesNotExist()
+        composeRule.onNodeWithText("Detail Fetch Failed Movie").assertDoesNotExist()
     }
 
     @Test

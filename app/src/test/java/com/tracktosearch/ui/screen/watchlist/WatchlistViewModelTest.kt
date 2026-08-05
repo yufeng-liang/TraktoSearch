@@ -8,7 +8,7 @@ import com.tracktosearch.data.local.DoubanCredentials
 import com.tracktosearch.data.local.DoubanSyncMetaStorage
 import com.tracktosearch.data.local.db.MediaItemEntity
 import com.tracktosearch.data.local.db.OfflineCacheManager
-import com.tracktosearch.data.local.db.DoubanSyncFailureDao
+import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.remote.trakt.dto.TraktIds
 import com.tracktosearch.data.remote.trakt.dto.TraktMovie
@@ -26,6 +26,7 @@ import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.SyncMode
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.repository.WatchlistMediaType
 import com.tracktosearch.data.session.SessionMode
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.test.MainDispatcherRule
@@ -85,7 +86,6 @@ class WatchlistViewModelTest {
     private lateinit var doubanBatchRemovalManager: DoubanBatchRemovalManager
     private lateinit var sessionModeManager: SessionModeManager
     private lateinit var doubanSyncedItemDao: DoubanSyncedItemDao
-    private lateinit var doubanSyncFailureDao: DoubanSyncFailureDao
     private lateinit var context: Context
 
     private lateinit var viewModel: WatchlistViewModel
@@ -107,7 +107,6 @@ class WatchlistViewModelTest {
         doubanBatchRemovalManager = mockk(relaxed = true)
         sessionModeManager = mockk(relaxed = true)
         doubanSyncedItemDao = mockk(relaxed = true)
-        doubanSyncFailureDao = mockk(relaxed = true)
         context = RuntimeEnvironment.getApplication()
 
         // init 块副作用 stub
@@ -122,7 +121,6 @@ class WatchlistViewModelTest {
         every { doubanAuthStorage.getCredentials() } returns null
         every { traktRepository.watchlistMutations } returns watchlistMutationFlow
         coEvery { doubanSyncMetaStorage.getCooldownStatus(any()) } returns CooldownStatus(neverSynced = false)
-        coEvery { doubanSyncFailureDao.count() } returns 0
 
         coEvery { offlineCacheManager.getMediaItems(any()) } returns emptyList()
         every { traktRepository.getLocallyWatchedOnlyTraktIds(any()) } returns emptySet()
@@ -141,7 +139,7 @@ class WatchlistViewModelTest {
             traktRepository, tmdbRepository, offlineCacheManager,
             doubanSyncManager, doubanAuthStorage, doubanSyncMetaStorage,
             statusConsistencyChecker, doubanBatchRemovalManager,
-            sessionModeManager, doubanSyncedItemDao, doubanSyncFailureDao, context
+            sessionModeManager, doubanSyncedItemDao, context
         )
     }
 
@@ -487,6 +485,89 @@ class WatchlistViewModelTest {
     }
 
     @Test
+    fun `豆瓣独立模式按真实类型承载电影剧集和其他条目`() = runTest {
+        every { sessionModeManager.sessionMode } returns MutableStateFlow(SessionMode.DOUBAN)
+        val items = listOf(
+            makeDoubanItem("movie-1", mediaType = "movie", title = "电影"),
+            makeDoubanItem("show-1", mediaType = "show", title = "剧集"),
+            makeDoubanItem("variety-1", mediaType = "variety", title = "综艺")
+        )
+        coEvery { doubanSyncedItemDao.getByStatus("wish") } returns items
+
+        viewModel.loadMovies()
+        viewModel.loadShows()
+        viewModel.loadOthers()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.movies.map { it.displayTitle })
+            .containsExactly("电影")
+        assertThat(viewModel.uiState.value.shows.map { it.displayTitle })
+            .containsExactly("剧集")
+        assertThat(viewModel.uiState.value.others.map { it.displayTitle })
+            .containsExactly("综艺")
+        coVerify(exactly = 0) { traktRepository.getMovieWatchlist(any(), any(), any()) }
+        coVerify(exactly = 0) { traktRepository.getShowWatchlist(any(), any(), any()) }
+    }
+
+    @Test
+    fun `Trakt和豆瓣按IMDb合并且Trakt条目优先保留无IMDb豆瓣条目`() = runTest {
+        every { sessionModeManager.sessionMode } returns MutableStateFlow(SessionMode.TRAKT)
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user", "cookie")
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(7, "Trakt title", "tt-match")) to 1)
+        coEvery { doubanSyncedItemDao.getByStatus("wish") } returns listOf(
+            makeDoubanItem("douban-match", mediaType = "movie", imdbId = " TT-MATCH ", title = "豆瓣 title"),
+            makeDoubanItem("douban-other", mediaType = "documentary", imdbId = null, title = "豆瓣 other")
+        )
+
+        viewModel.loadMovies()
+        viewModel.loadOthers()
+        advanceUntilIdle()
+
+        val movies = viewModel.uiState.value.movies
+        assertThat(movies).hasSize(1)
+        assertThat(movies.single().traktId).isEqualTo(7)
+        assertThat(movies.single().title).isEqualTo("Trakt title")
+        assertThat(movies.single().doubanId).isEqualTo("douban-match")
+        assertThat(viewModel.uiState.value.others.map { it.doubanId })
+            .containsExactly("douban-other")
+    }
+
+    @Test
+    fun `豆瓣collect与Trakt历史按IMDb合并不重复`() = runTest {
+        every { sessionModeManager.sessionMode } returns MutableStateFlow(SessionMode.TRAKT)
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user", "cookie")
+        coEvery { traktRepository.getMovieHistory(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(8, "Trakt watched", "tt-watched")) to 1)
+        coEvery { doubanSyncedItemDao.getByStatus("collect") } returns listOf(
+            makeDoubanItem("douban-watched", status = "collect", imdbId = "tt-watched", title = "豆瓣 watched")
+        )
+
+        viewModel.loadHistoryMovies()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.historyMovies).hasSize(1)
+        assertThat(viewModel.uiState.value.historyMovies.single().traktId).isEqualTo(8)
+        assertThat(viewModel.uiState.value.historyMovies.single().doubanId).isEqualTo("douban-watched")
+    }
+
+    @Test
+    fun `豆瓣独立模式其他条目沿用批量删除流程`() = runTest {
+        every { sessionModeManager.sessionMode } returns MutableStateFlow(SessionMode.DOUBAN)
+        val item = makeDoubanItem("douban-other", mediaType = "variety", title = "综艺")
+        coEvery { doubanSyncedItemDao.getByStatus("wish") } returns listOf(item)
+        every { doubanBatchRemovalManager.startRemoval(any(), any()) } returns true
+
+        viewModel.loadOthers()
+        advanceUntilIdle()
+        val uiItem = viewModel.uiState.value.others.single()
+        viewModel.batchRemoveFromWatchlist(listOf(uiItem), WatchlistMediaType.OTHER)
+
+        coVerify { doubanSyncedItemDao.deleteByDoubanId("douban-other") }
+        assertThat(viewModel.uiState.value.others).isEmpty()
+    }
+
+    @Test
     fun `startDoubanSync_调用doubanSyncManager的startSync`() = runTest {
         every { doubanSyncManager.startSync(any<SyncMode>(), any()) } returns true
 
@@ -519,6 +600,30 @@ class WatchlistViewModelTest {
         viewModel.clearDoubanSyncResult()
         assertThat(viewModel.uiState.value.doubanSyncProgress).isNull()
         verify { doubanSyncManager.resetProgress() }
+    }
+
+    @Test
+    fun `豆瓣同步完成但成功数为零时仍刷新已写入的最低限度快照`() = runTest {
+        every { sessionModeManager.sessionMode } returns MutableStateFlow(SessionMode.DOUBAN)
+        var syncedItems = emptyList<DoubanSyncedItem>()
+        coEvery { doubanSyncedItemDao.getByStatus("wish") } answers { syncedItems }
+
+        viewModel.loadMovies()
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.movies).isEmpty()
+
+        syncedItems = listOf(
+            makeDoubanItem("douban-minimum", imdbId = null, title = "最低快照")
+        )
+        syncProgressFlow.value = DoubanSyncProgress(
+            isComplete = true,
+            stage = com.tracktosearch.data.repository.DoubanSyncStage.COMPLETED,
+            successCount = 0
+        )
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.movies.map { it.doubanId })
+            .containsExactly("douban-minimum")
     }
 
     @Test
@@ -870,4 +975,27 @@ class WatchlistViewModelTest {
         assertThat(viewModel.uiState.value.movieTotalCount).isEqualTo(2)
         coVerify(exactly = 1) { traktRepository.getMovieWatchlist(any(), any(), any()) }
     }
+
+    private fun makeDoubanItem(
+        doubanId: String,
+        mediaType: String = "movie",
+        status: String = "wish",
+        imdbId: String? = "tt-$doubanId",
+        title: String = "Douban $doubanId"
+    ) = DoubanSyncedItem(
+        doubanId = doubanId,
+        imdbId = imdbId,
+        traktId = null,
+        title = title,
+        status = status,
+        rating = 4,
+        syncedAt = 1L,
+        mediaType = mediaType,
+        tmdbId = null,
+        displayTitle = title,
+        year = 2024,
+        genres = "Drama",
+        posterUrl = null,
+        listedAt = "2024-01-01T00:00:00Z"
+    )
 }

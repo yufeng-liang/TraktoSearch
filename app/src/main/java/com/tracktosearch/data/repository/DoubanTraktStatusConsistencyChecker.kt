@@ -26,6 +26,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -136,7 +137,7 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         // 监听 DoubanRepository 的延时事件，合并到 checkProgress.delayInfo
         appScope.launch {
             doubanRepository.delayEvent.collect { info ->
-                _checkProgress.value = _checkProgress.value.copy(delayInfo = info)
+                _checkProgress.update { progress -> progress.copy(delayInfo = info) }
             }
         }
     }

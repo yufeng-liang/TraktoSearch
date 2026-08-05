@@ -8,12 +8,14 @@ import com.tracktosearch.data.remote.cloud.GiteeContentsApi
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
 import com.tracktosearch.data.util.PersistentTtlCache
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -48,6 +50,7 @@ class CloudDetailsPoolManager @Inject constructor(
         private const val FILE_SUFFIX = ".json"
         private const val SHARD_HASH_LENGTH = 3  // SHA-256 前 3 个十六进制字符 = 4096 分片
         private const val MAX_RETRY = 3
+        private const val SERVER_FAILURE_COOLDOWN_MS = 5 * 60 * 1000L
     }
 
     @Serializable
@@ -61,6 +64,41 @@ class CloudDetailsPoolManager @Inject constructor(
     /** 分片上传互斥锁（同一分片串行上传，避免并发 PUT 互相覆盖） */
     private val shardLocks = mutableMapOf<String, Mutex>()
     private val shardLocksLock = Mutex()
+
+    /** 网关出现 5xx/429 或网络不可达时暂时熔断，避免同步期间重复请求不可用的云池。 */
+    @Volatile
+    private var cloudUnavailableUntilMs = 0L
+
+    /** 当前同步的详情池下载/预取抑制开关；上传路径不读取此开关。 */
+    @Volatile
+    private var downloadsSuppressedForCurrentSync = false
+
+    /** 暂停当前同步余下的详情池下载与预取。 */
+    fun suspendDownloadsForCurrentSync() {
+        downloadsSuppressedForCurrentSync = true
+    }
+
+    /** 恢复详情池下载与预取。 */
+    fun resetDownloadSuppression() {
+        downloadsSuppressedForCurrentSync = false
+    }
+
+    private fun isCloudUnavailable(): Boolean =
+        System.currentTimeMillis() < cloudUnavailableUntilMs
+
+    private fun isDownloadSuppressed(): Boolean = downloadsSuppressedForCurrentSync
+
+    private fun isServerUnavailableCode(code: Int): Boolean = code == 429 || code in 500..599
+
+    private fun markCloudUnavailable() {
+        cloudUnavailableUntilMs = System.currentTimeMillis() + SERVER_FAILURE_COOLDOWN_MS
+    }
+
+    private fun markCloudUnavailable(code: Int) {
+        if (isServerUnavailableCode(code)) {
+            markCloudUnavailable()
+        }
+    }
 
     private suspend fun getShardLock(shard: String): Mutex {
         return shardLocksLock.withLock {
@@ -81,6 +119,8 @@ class CloudDetailsPoolManager @Inject constructor(
         if (element !is JsonObject) return null
         return try {
             json.decodeFromJsonElement(GiteeContentResponse.serializer(), element)
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             null
         }
@@ -94,13 +134,14 @@ class CloudDetailsPoolManager @Inject constructor(
      * @return 实际上传的分片数（用于日志统计）
      */
     suspend fun uploadDetails(entries: Map<String, DoubanDetailCacheEntry>): Int = withContext(Dispatchers.IO) {
-        if (entries.isEmpty()) return@withContext 0
+        if (entries.isEmpty() || isCloudUnavailable()) return@withContext 0
 
         // 按分片聚合
         val byShard = entries.entries.groupBy { shardPrefix(it.key) }
         var uploadedShards = 0
 
         for ((shard, shardEntries) in byShard) {
+            if (isCloudUnavailable()) break
             if (shardEntries.isEmpty()) continue
             val lock = getShardLock(shard)
             val success = lock.withLock {
@@ -119,9 +160,11 @@ class CloudDetailsPoolManager @Inject constructor(
      * - 冲突（sha 不匹配）→ 重试 GET + 合并 + PUT
      */
     private suspend fun uploadShardWithRetry(shard: String, newEntries: Map<String, DoubanDetailCacheEntry>): Boolean {
+        if (isCloudUnavailable()) return false
         val path = buildPath(shard)
         var attempt = 0
         while (attempt < MAX_RETRY) {
+            if (isCloudUnavailable()) return false
             attempt++
             try {
                 // 1. GET 云端已有
@@ -143,7 +186,16 @@ class CloudDetailsPoolManager @Inject constructor(
                                 existingEntries = parseShardPayload(plaintext)
                             }
                         }
+                    } else if (isServerUnavailableCode(resp.code())) {
+                        markCloudUnavailable(resp.code())
+                        return false
                     }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: IOException) {
+                    markCloudUnavailable()
+                    Log.w(TAG, "分片 $shard GET 网络异常: ${e.message}")
+                    return false
                 } catch (_: Exception) {
                     // GET 失败，视为文件不存在
                 }
@@ -190,12 +242,20 @@ class CloudDetailsPoolManager @Inject constructor(
                     Log.d(TAG, "分片 $shard 上传成功: +${newEntries.size} (total ${merged.size})")
                     return true
                 }
+                markCloudUnavailable(resp.code())
+                if (isCloudUnavailable()) return false
                 // 409 / 422 等冲突错误 → 重试
                 if (resp.code() !in setOf(409, 422)) {
                     Log.w(TAG, "分片 $shard 上传失败: ${resp.code()} ${resp.message()}")
                     return false
                 }
                 Log.w(TAG, "分片 $shard 冲突，重试 $attempt/$MAX_RETRY")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: IOException) {
+                markCloudUnavailable()
+                Log.w(TAG, "分片 $shard 上传网络异常 (attempt=$attempt): ${e.message}")
+                return false
             } catch (e: Exception) {
                 Log.w(TAG, "分片 $shard 上传异常 (attempt=$attempt): ${e.message}")
             }
@@ -210,6 +270,8 @@ class CloudDetailsPoolManager @Inject constructor(
             payload.entries.mapValues { (_, v) ->
                 json.decodeFromString(DoubanDetailCacheEntry.serializer(), v)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             emptyMap()
         }
@@ -222,12 +284,13 @@ class CloudDetailsPoolManager @Inject constructor(
      * @return doubanId → DoubanDetailCacheEntry（仅包含命中的）
      */
     suspend fun downloadDetails(doubanIds: List<String>): Map<String, DoubanDetailCacheEntry> = withContext(Dispatchers.IO) {
-        if (doubanIds.isEmpty()) return@withContext emptyMap()
+        if (doubanIds.isEmpty() || isDownloadSuppressed() || isCloudUnavailable()) return@withContext emptyMap()
         val result = mutableMapOf<String, DoubanDetailCacheEntry>()
 
         // 按分片聚合
         val byShard = doubanIds.groupBy { shardPrefix(it) }
         for ((shard, ids) in byShard) {
+            if (isDownloadSuppressed() || isCloudUnavailable()) break
             val idSet = ids.toSet()
             val shardEntries = downloadShard(shard) ?: continue
             for (id in idSet) {
@@ -240,22 +303,28 @@ class CloudDetailsPoolManager @Inject constructor(
 
     /** 下载单条详情 */
     suspend fun downloadDetail(doubanId: String): DoubanDetailCacheEntry? = withContext(Dispatchers.IO) {
+        if (isDownloadSuppressed() || isCloudUnavailable()) return@withContext null
         val shard = shardPrefix(doubanId)
         val shardEntries = downloadShard(shard) ?: return@withContext null
         shardEntries[doubanId]
     }
 
     private suspend fun downloadShard(shard: String): Map<String, DoubanDetailCacheEntry>? {
+        if (isDownloadSuppressed()) return null
         // 持分片锁,避免与 uploadShardWithRetry 并发导致乐观锁 409 放大
         val lock = getShardLock(shard)
-        return lock.withLock { downloadShardUnlocked(shard) }
+        return lock.withLock {
+            if (isDownloadSuppressed()) null else downloadShardUnlocked(shard)
+        }
     }
 
     private suspend fun downloadShardUnlocked(shard: String): Map<String, DoubanDetailCacheEntry>? {
+        if (isCloudUnavailable()) return null
         val path = buildPath(shard)
         return try {
             val resp = giteeContentsApi.getFileContent(OWNER, REPO, path)
             if (!resp.isSuccessful) {
+                markCloudUnavailable(resp.code())
                 if (resp.code() != 404) Log.w(TAG, "下载分片 $shard 失败: ${resp.code()}")
                 return null
             }
@@ -267,6 +336,12 @@ class CloudDetailsPoolManager @Inject constructor(
                 Charsets.UTF_8
             )
             parseShardPayload(plaintext)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: IOException) {
+            markCloudUnavailable()
+            Log.w(TAG, "下载分片 $shard 网络异常: ${e.message}")
+            null
         } catch (e: Exception) {
             Log.w(TAG, "下载分片 $shard 异常: ${e.message}")
             null
@@ -289,6 +364,7 @@ class CloudDetailsPoolManager @Inject constructor(
      * @return 是否上传成功
      */
     suspend fun uploadUserMarkedMediaType(doubanId: String, mediaType: String?): Boolean = withContext(Dispatchers.IO) {
+        if (isCloudUnavailable()) return@withContext false
         val shard = shardPrefix(doubanId)
         val lock = getShardLock(shard)
         lock.withLock {
@@ -335,6 +411,7 @@ class CloudDetailsPoolManager @Inject constructor(
      * @return 是否上传成功
      */
     suspend fun uploadDetailEntry(doubanId: String, entry: DoubanDetailCacheEntry): Boolean = withContext(Dispatchers.IO) {
+        if (isCloudUnavailable()) return@withContext false
         val shard = shardPrefix(doubanId)
         val lock = getShardLock(shard)
         lock.withLock {
@@ -415,7 +492,10 @@ class CloudDetailsPoolManager @Inject constructor(
         doubanIds: List<String>,
         detailCache: PersistentTtlCache<DoubanDetailCacheEntry>
     ): Int = withContext(Dispatchers.IO) {
-        if (doubanIds.isEmpty()) return@withContext 0
+        if (doubanIds.isEmpty() || isDownloadSuppressed()) return@withContext 0
+        // 先等待持久化缓存加载完成，避免启动竞态把磁盘已有详情误判为未命中。
+        detailCache.awaitLoaded()
+        if (isDownloadSuppressed()) return@withContext 0
         // 过滤掉本地已有的（避免不必要的分片 GET）
         val needFetch = doubanIds.filter { detailCache.get(it) == null }
         if (needFetch.isEmpty()) return@withContext 0
