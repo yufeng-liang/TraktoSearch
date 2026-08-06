@@ -4,17 +4,19 @@
 // 现改为走网关 /api/gitee/* ，由 worker 注入 GITEE_ACCESS_TOKEN，
 // 避免密钥编译进 APK 被反编译泄露。
 //
-// 云端同步加密：details_pool/、failures/、personal/ 路径下的文件内容
+// 云端同步加密：私有 meta-data 仓库中 details_pool/、failures/、personal/ 路径下的文件内容
 // 原由客户端 AesCrypto（硬编码 key）加密/解密，现改由 worker 用
 // CLOUD_SYNC_AES_KEY Secret 在服务端透明加密/解密，密钥不再编译进 APK。
+// 公共池 meta-data-public 仓库沿用部分相同的分片路径，但必须保持明文 JSON。
 //
 // 透明转发：路径、query、请求体保持原语义，仅替换鉴权头 + 加解密 content 字段。
 
-import { Env } from '../index';
-import { AppError } from '../util/errors';
+import type { Env } from '../index';
+import { AppError } from '../util/errors.ts';
 
 const GITEE_BASE_URL = 'https://gitee.com/api/v5';
 const GITEE_PREFIX = '/api/gitee/';
+const PUBLIC_GITEE_REPO = 'yufeng-liang/meta-data-public';
 
 // 需要服务端加解密的云同步路径前缀
 const CLOUD_SYNC_PATH_PREFIXES = ['details_pool/', 'failures/', 'personal/'];
@@ -71,12 +73,19 @@ export async function handleGiteeProxy(
 
 /** 判断 Gitee API 路径是否为云同步路径 */
 function isCloudSyncPath(giteePath: string): boolean {
+    if (isPublicGiteePoolPath(giteePath)) return false;
+
     // 路径格式: repos/{owner}/{repo}/contents/{path}
     // 提取 contents/ 后的文件路径
     const contentsMatch = giteePath.match(/\/contents\/(.+)$/);
     if (!contentsMatch) return false;
     const filePath = decodeURIComponent(contentsMatch[1]);
     return CLOUD_SYNC_PATH_PREFIXES.some(prefix => filePath.startsWith(prefix));
+}
+
+/** 公共池仓库内的数据全部以明文 JSON 传输，不能触发云端同步加密。 */
+function isPublicGiteePoolPath(giteePath: string): boolean {
+    return giteePath.startsWith(`repos/${PUBLIC_GITEE_REPO}/contents/`);
 }
 
 /**
