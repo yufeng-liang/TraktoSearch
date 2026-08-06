@@ -46,7 +46,34 @@ class DetailRatingsDialogTest {
     }
 
     @Test
-    fun traktOnlyRatingStillShowsMetacritic() {
+    fun emptyNormalDetailKeepsFourFixedSlotsAndFourPlaceholders() {
+        composeRule.setContent {
+            MaterialTheme {
+                RatingsRow(MultiRatings())
+            }
+        }
+
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        listOf(
+            R.string.detail_info_imdb_rating,
+            R.string.detail_info_metacritic_rating,
+            R.string.detail_info_tmdb_rating,
+            R.string.detail_info_rotten_tomatoes_rating
+        ).forEach { resourceId ->
+            composeRule.onNodeWithText(context.getString(resourceId)).assertIsDisplayed()
+        }
+        assertThat(
+            composeRule.onAllNodesWithText("—").fetchSemanticsNodes()
+        ).hasSize(4)
+        assertThat(
+            composeRule.onAllNodesWithText(
+                context.getString(R.string.detail_info_douban_rating)
+            ).fetchSemanticsNodes()
+        ).isEmpty()
+    }
+
+    @Test
+    fun normalDetailWithoutDoubanRatingUsesMetacriticSlot() {
         composeRule.setContent {
             MaterialTheme {
                 RatingsRow(
@@ -59,6 +86,7 @@ class DetailRatingsDialogTest {
         }
 
         composeRule.onNodeWithText("MTC").assertIsDisplayed()
+        composeRule.onNodeWithText("88%").assertIsDisplayed()
         assertThat(
             composeRule.onAllNodesWithText(
                 ApplicationProvider.getApplicationContext<Context>()
@@ -73,7 +101,6 @@ class DetailRatingsDialogTest {
             MaterialTheme {
                 RatingsRow(
                     MultiRatings(
-                        imdbRating = "8.0",
                         metacritic = "88%"
                     ),
                     isDoubanItem = true
@@ -81,7 +108,47 @@ class DetailRatingsDialogTest {
             }
         }
 
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        listOf(
+            R.string.detail_info_imdb_rating,
+            R.string.detail_info_douban_rating,
+            R.string.detail_info_tmdb_rating,
+            R.string.detail_info_rotten_tomatoes_rating
+        ).forEach { resourceId ->
+            composeRule.onNodeWithText(context.getString(resourceId)).assertIsDisplayed()
+        }
+        assertThat(
+            composeRule.onAllNodesWithText("—").fetchSemanticsNodes()
+        ).hasSize(4)
         assertThat(composeRule.onAllNodesWithText("MTC").fetchSemanticsNodes()).isEmpty()
+        assertThat(composeRule.onAllNodesWithText("88%").fetchSemanticsNodes()).isEmpty()
+    }
+
+    @Test
+    fun tenPointRatingTiersRenderValuesInFixedSlots() {
+        composeRule.setContent {
+            MaterialTheme {
+                RatingsRow(
+                    MultiRatings(
+                        imdbRating = "5.9",
+                        doubanRating = 6.0,
+                        tmdbRating = 7.5
+                    )
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("IMDb").assertIsDisplayed()
+        composeRule.onNodeWithText(
+            ApplicationProvider.getApplicationContext<Context>()
+                .getString(R.string.detail_info_douban_rating)
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText("TMDB").assertIsDisplayed()
+        composeRule.onNodeWithText("RT").assertIsDisplayed()
+        composeRule.onNodeWithText("5.9").assertIsDisplayed()
+        composeRule.onNodeWithText(String.format(Locale.getDefault(), "%.1f", 6.0)).assertIsDisplayed()
+        composeRule.onNodeWithText(String.format(Locale.getDefault(), "%.1f", 7.5)).assertIsDisplayed()
+        assertThat(composeRule.onAllNodesWithText("—").fetchSemanticsNodes()).hasSize(1)
     }
 
     @Test

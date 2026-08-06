@@ -391,6 +391,7 @@
     <string name="detail_info_metacritic_rating">MTC</string>
     <string name="detail_info_tmdb_rating">TMDB</string>
     <string name="detail_info_rotten_tomatoes_rating">RT</string>
+    <string name="detail_info_rating_missing">—</string>
     <string name="detail_info_rating_count">(%1$d ratings)</string>
     <string name="detail_info_aka">Also Known As</string>
     <string name="detail_info_runtime">Runtime</string>
