@@ -11,6 +11,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import retrofit2.Response
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
@@ -39,7 +44,19 @@ data class DoubanRexxarDetail(
     val ratingCount: Int? = null,
     val year: String? = null,
     val genres: List<String> = emptyList(),
-    val poster: DoubanRexxarImage? = null
+    val poster: DoubanRexxarImage? = null,
+    val originalTitle: String? = null,
+    val countries: List<String> = emptyList(),
+    val directors: List<String> = emptyList(),
+    val writers: List<String> = emptyList(),
+    val cast: List<String> = emptyList(),
+    val summary: String? = null,
+    val languages: List<String> = emptyList(),
+    val initialReleaseDates: List<String> = emptyList(),
+    val durations: List<String> = emptyList(),
+    val runtime: String? = null,
+    val aka: List<String> = emptyList(),
+    val imdbId: String? = null
 )
 
 @Serializable
@@ -241,6 +258,8 @@ class DoubanRexxarRepository(
         requestedId: String,
         requestedType: DoubanRexxarMediaType
     ): DoubanRexxarDetail {
+        val releaseDates = (dto.pubdate + extractStringValues(dto.releaseDate)).distinct()
+        val durations = (extractStringValues(dto.durations) + listOfNotNull(dto.duration)).distinct()
         val type = when (dto.type ?: dto.subtype) {
             "tv", "show" -> DoubanRexxarMediaType.TV
             "movie" -> DoubanRexxarMediaType.MOVIE
@@ -250,13 +269,55 @@ class DoubanRexxarRepository(
             doubanId = dto.id.ifBlank { requestedId },
             title = dto.title,
             type = type,
-            score = dto.rating?.value,
+            score = dto.rating?.value ?: dto.rating?.average,
             ratingCount = dto.rating?.count,
             year = extractYear(dto.year, dto.pubdate, dto.cardSubtitle),
             genres = dto.genres,
-            poster = mapImage(dto.cover?.image, dto.pic)
+            poster = mapImage(dto.cover?.image, dto.pic),
+            originalTitle = dto.originalTitle,
+            countries = extractStringValues(dto.countries, dto.region),
+            directors = extractStringValues(dto.directors, dto.director),
+            writers = extractStringValues(dto.writers, dto.writer),
+            cast = extractStringValues(dto.casts, dto.cast, dto.actors, dto.actor),
+            summary = dto.summary ?: dto.intro,
+            languages = extractStringValues(dto.languages, dto.language),
+            initialReleaseDates = releaseDates,
+            durations = durations,
+            runtime = dto.duration ?: durations.firstOrNull(),
+            aka = extractStringValues(dto.aka, dto.alias),
+            imdbId = dto.imdb ?: dto.imdbId
         )
     }
+
+    /** 将 Rexxar 的字符串、数组及演职员对象统一转换成字符串列表。 */
+    private fun extractStringValues(vararg elements: JsonElement?): List<String> {
+        return elements
+            .asSequence()
+            .filterNotNull()
+            .flatMap { extractStringValues(it).asSequence() }
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .distinct()
+            .toList()
+    }
+
+    private fun extractStringValues(element: JsonElement): List<String> = when (element) {
+        is JsonArray -> element.flatMap(::extractStringValues)
+        is JsonObject -> listOfNotNull(
+            "name",
+            "value",
+            "title",
+            "text"
+        ).asSequence()
+            .mapNotNull { key -> element[key]?.asStringOrNull() }
+            .firstOrNull()
+            ?.let(::listOf)
+            ?: emptyList()
+        is JsonPrimitive -> element.contentOrNull?.let(::listOf) ?: emptyList()
+    }
+
+    private fun JsonElement.asStringOrNull(): String? =
+        (this as? JsonPrimitive)?.contentOrNull
 
     private fun mapImage(
         image: DoubanRexxarImageDto?,

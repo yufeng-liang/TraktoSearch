@@ -97,7 +97,8 @@ object DoubanModule {
             maxSize = 500,
             dataStore = context.doubanRexxarCacheStore,
             json = json,
-            keyPrefix = "douban_rexxar_detail_v1",
+            // v2：详情模型补充演职员、简介、地区、语言、片长、别名和 IMDb，旧缓存字段不完整。
+            keyPrefix = "douban_rexxar_detail_v2",
             scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         )
     }

@@ -29,12 +29,14 @@ class DoubanRexxarRequestInterceptor : Interceptor {
 /** 豆瓣移动端 Rexxar 内部 API。 */
 interface DoubanRexxarApiService {
 
+    /** 详情响应同时携带海报（cover/pic）；不需要单独的海报请求。 */
     @GET("{type}/{id}")
     suspend fun getDetail(
         @Path("type") type: String,
         @Path("id") id: String
     ): retrofit2.Response<DoubanRexxarDetailDto>
 
+    /** 独立接口只用于剧照分页，不能用详情里的海报替代。 */
     @GET("{type}/{id}/photos")
     suspend fun getPhotos(
         @Path("type") type: String,

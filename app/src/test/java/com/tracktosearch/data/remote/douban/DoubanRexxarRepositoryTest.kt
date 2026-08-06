@@ -72,16 +72,7 @@ class DoubanRexxarRepositoryTest {
                 """.trimIndent()
             )
         )
-        val service = Retrofit.Builder()
-            .baseUrl(server.url("/").toString())
-            .client(
-                okhttp3.OkHttpClient.Builder()
-                    .addInterceptor(DoubanRexxarRequestInterceptor())
-                    .build()
-            )
-            .addConverterFactory(json.asConverterFactory(mediaType))
-            .build()
-            .create(DoubanRexxarApiService::class.java)
+        val service = createApiService(server)
 
         val response = service.getDetail("movie", "1295644")
         val request = server.takeRequest()
@@ -93,15 +84,107 @@ class DoubanRexxarRepositoryTest {
     }
 
     @Test
+    fun getDetail_decodesActualActorsAndIntroFieldsFromJson() = runTest {
+        val server = MockWebServer().also {
+            it.start()
+            mockWebServer = it
+        }
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                {
+                  "id":"1295644",
+                  "title":"这个杀手不太冷",
+                  "original_title":"Léon",
+                  "type":"movie",
+                  "year":"1994",
+                  "genres":["剧情","动作","犯罪"],
+                  "directors":[{"name":"吕克·贝松"}],
+                  "writers":[{"name":"吕克·贝松"}],
+                  "actors":[{"name":"让·雷诺"},{"name":"娜塔莉·波特曼"}],
+                  "intro":"里昂是一名职业杀手。",
+                  "countries":["法国","美国"],
+                  "languages":["英语","意大利语","法语"],
+                  "durations":["110分钟"],
+                  "aka":["终极追杀令(台)"],
+                  "imdb":"tt0110413",
+                  "pic":{"large":"https://img.example/poster.jpg"},
+                  "rating":{"value":9.4,"count":2568677,"max":10}
+                }
+                """.trimIndent()
+            )
+        )
+
+        val detail = createRepository(createApiService(server))
+            .getDetail("1295644", DoubanRexxarMediaType.MOVIE)
+            .getOrThrow()
+        val request = server.takeRequest()
+
+        assertThat(request.path).isEqualTo("/movie/1295644")
+        assertThat(detail.originalTitle).isEqualTo("Léon")
+        assertThat(detail.directors).containsExactly("吕克·贝松")
+        assertThat(detail.writers).containsExactly("吕克·贝松")
+        assertThat(detail.cast).containsExactly("让·雷诺", "娜塔莉·波特曼").inOrder()
+        assertThat(detail.summary).isEqualTo("里昂是一名职业杀手。")
+        assertThat(detail.countries).containsExactly("法国", "美国").inOrder()
+        assertThat(detail.languages).containsExactly("英语", "意大利语", "法语").inOrder()
+        assertThat(detail.runtime).isEqualTo("110分钟")
+        assertThat(detail.aka).containsExactly("终极追杀令(台)")
+        assertThat(detail.imdbId).isEqualTo("tt0110413")
+        assertThat(detail.poster?.largeUrl).isEqualTo("https://img.example/poster.jpg")
+    }
+
+    @Test
+    fun apiService_usesPhotoPathAndPagination() = runTest {
+        val server = MockWebServer().also {
+            it.start()
+            mockWebServer = it
+        }
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                {
+                  "total":3,
+                  "start":2,
+                  "count":1,
+                  "photos":[
+                    {"id":"p3","image":{"large":{"url":"https://img.example/p3.jpg"}}}
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val response = createApiService(server).getPhotos("movie", "1295644", start = 2, count = 1)
+        val request = server.takeRequest()
+
+        assertThat(response.isSuccessful).isTrue()
+        assertThat(request.path).isEqualTo("/movie/1295644/photos?start=2&count=1")
+        assertThat(response.body()?.photos?.single()?.id).isEqualTo("p3")
+        assertThat(response.body()?.photos?.single()?.image?.large?.url)
+            .isEqualTo("https://img.example/p3.jpg")
+    }
+
+    @Test
     fun getDetail_mapsScoreYearGenresAndPoster() = runTest {
         val repository = createRepository(FakeRexxarService().apply {
             detailResponses += Response.success(
                 DoubanRexxarDetailDto(
                     id = "1295644",
                     title = "这个杀手不太冷",
+                    originalTitle = "Léon",
                     type = "movie",
                     pubdate = listOf("1994-09-14"),
                     genres = listOf("剧情", "动作"),
+                    directors = json.parseToJsonElement("""[{"name":"吕克·贝松"}]"""),
+                    writers = json.parseToJsonElement("""[{"name":"吕克·贝松"}]"""),
+                    casts = json.parseToJsonElement("""[{"name":"让·雷诺"},{"name":"娜塔莉·波特曼"}]"""),
+                    summary = "里昂是一名职业杀手。",
+                    countries = json.parseToJsonElement("""["法国","美国"]"""),
+                    languages = json.parseToJsonElement("""["英语","意大利语","法语"]"""),
+                    durations = json.parseToJsonElement("""["110分钟","133分钟(中国大陆)"]"""),
+                    aka = json.parseToJsonElement("""["终极追杀令(台)","杀手莱昂"]"""),
+                    imdb = "tt0110413",
                     rating = DoubanRexxarRatingDto(value = 9.4, count = 2568677, max = 10),
                     cover = DoubanRexxarCoverDto(
                         image = DoubanRexxarImageDto(
@@ -120,14 +203,62 @@ class DoubanRexxarRepositoryTest {
         val detail = result.getOrThrow()
         assertThat(detail.doubanId).isEqualTo("1295644")
         assertThat(detail.title).isEqualTo("这个杀手不太冷")
+        assertThat(detail.originalTitle).isEqualTo("Léon")
         assertThat(detail.type).isEqualTo(DoubanRexxarMediaType.MOVIE)
         assertThat(detail.score).isEqualTo(9.4)
         assertThat(detail.ratingCount).isEqualTo(2568677)
         assertThat(detail.year).isEqualTo("1994")
         assertThat(detail.genres).containsExactly("剧情", "动作").inOrder()
+        assertThat(detail.directors).containsExactly("吕克·贝松")
+        assertThat(detail.writers).containsExactly("吕克·贝松")
+        assertThat(detail.cast).containsExactly("让·雷诺", "娜塔莉·波特曼").inOrder()
+        assertThat(detail.summary).isEqualTo("里昂是一名职业杀手。")
+        assertThat(detail.countries).containsExactly("法国", "美国").inOrder()
+        assertThat(detail.languages).containsExactly("英语", "意大利语", "法语").inOrder()
+        assertThat(detail.initialReleaseDates).containsExactly("1994-09-14")
+        assertThat(detail.durations).containsExactly("110分钟", "133分钟(中国大陆)").inOrder()
+        assertThat(detail.runtime).isEqualTo("110分钟")
+        assertThat(detail.aka).containsExactly("终极追杀令(台)", "杀手莱昂").inOrder()
+        assertThat(detail.imdbId).isEqualTo("tt0110413")
         assertThat(detail.poster?.largeUrl).isEqualTo("https://img.example/large.jpg")
         assertThat(detail.poster?.normalUrl).isEqualTo("https://img.example/normal.jpg")
         assertThat(detail.poster?.smallUrl).isEqualTo("https://img.example/small.jpg")
+    }
+
+    @Test
+    fun getDetail_mapsSingularStringFallbackFields() = runTest {
+        val repository = createRepository(FakeRexxarService().apply {
+            detailResponses += Response.success(
+                DoubanRexxarDetailDto(
+                    id = "100",
+                    title = "测试条目",
+                    director = json.parseToJsonElement("\"导演\""),
+                    writer = json.parseToJsonElement("\"编剧\""),
+                    cast = json.parseToJsonElement("\"演员\""),
+                    region = json.parseToJsonElement("\"中国大陆\""),
+                    language = json.parseToJsonElement("\"汉语普通话\""),
+                    duration = "120分钟",
+                    alias = json.parseToJsonElement("\"别名\""),
+                    releaseDate = json.parseToJsonElement("\"2025-01-01\""),
+                    imdbId = "tt1234567",
+                    rating = DoubanRexxarRatingDto(average = 8.8, count = 12)
+                )
+            )
+        })
+
+        val detail = repository.getDetail("100", DoubanRexxarMediaType.MOVIE).getOrThrow()
+
+        assertThat(detail.score).isEqualTo(8.8)
+        assertThat(detail.directors).containsExactly("导演")
+        assertThat(detail.writers).containsExactly("编剧")
+        assertThat(detail.cast).containsExactly("演员")
+        assertThat(detail.countries).containsExactly("中国大陆")
+        assertThat(detail.languages).containsExactly("汉语普通话")
+        assertThat(detail.durations).containsExactly("120分钟")
+        assertThat(detail.runtime).isEqualTo("120分钟")
+        assertThat(detail.aka).containsExactly("别名")
+        assertThat(detail.initialReleaseDates).containsExactly("2025-01-01")
+        assertThat(detail.imdbId).isEqualTo("tt1234567")
     }
 
     @Test
@@ -388,7 +519,7 @@ class DoubanRexxarRepositoryTest {
     }
 
     private fun createRepository(
-        service: FakeRexxarService,
+        service: DoubanRexxarApiService,
         photosCache: PersistentTtlCache<DoubanRexxarPhotoCacheEntry>? = null
     ): DoubanRexxarRepository {
         val context = RuntimeEnvironment.getApplication().applicationContext
@@ -421,6 +552,17 @@ class DoubanRexxarRepositoryTest {
             retryDelay = {}
         )
     }
+
+    private fun createApiService(server: MockWebServer): DoubanRexxarApiService = Retrofit.Builder()
+        .baseUrl(server.url("/").toString())
+        .client(
+            okhttp3.OkHttpClient.Builder()
+                .addInterceptor(DoubanRexxarRequestInterceptor())
+                .build()
+        )
+        .addConverterFactory(json.asConverterFactory(mediaType))
+        .build()
+        .create(DoubanRexxarApiService::class.java)
 
     private fun photoDto(id: String): DoubanRexxarPhotoDto = DoubanRexxarPhotoDto(
         id = id,
