@@ -124,6 +124,30 @@ class PersistentTtlCache<T>(
         loadedDeferred.await()
     }
 
+    /** 导入外部缓存时保留原始 expireAt，避免命中公共池后重新计算完整 TTL。 */
+    fun putWithExpireAt(key: String, value: T, expireAt: Long) {
+        if (expireAt != Long.MAX_VALUE && expireAt <= System.currentTimeMillis()) return
+        withGenerationLock {
+            markKeyWrittenDuringLoad(key)
+            putInternal(key, value, expireAt)
+            val writeGeneration = currentGeneration()
+            scope.launch {
+                try {
+                    diskMutationMutex.withLock {
+                        if (!isCurrentGeneration(writeGeneration)) return@withLock
+                        val jsonStr = json.encodeToString(serializer, value)
+                        dataStore.edit { prefs ->
+                            prefs[stringPreferencesKey("$keyPrefix:$key")] = jsonStr
+                            prefs[longPreferencesKey("$keyPrefix:$key:exp")] = expireAt
+                        }
+                    }
+                } catch (e: CancellationException) { throw e } catch (_: Exception) {
+                    // 磁盘写入失败不影响内存缓存
+                }
+            }
+        }
+    }
+
     override fun put(key: String, value: T) {
         withGenerationLock {
             markKeyWrittenDuringLoad(key)

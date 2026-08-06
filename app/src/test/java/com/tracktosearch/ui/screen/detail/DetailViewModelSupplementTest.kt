@@ -620,6 +620,7 @@ class DetailViewModelSupplementTest {
         setPrivateField("currentTraktId", 100)
         setPrivateField("currentMediaType", MediaType.MOVIE)
         setPrivateField("currentImdbId", "tt1234567")
+        setPrivateField("currentTmdbId", 42)
         setUiState {
             it.copy(
                 pendingDoubanAction = DoubanSyncAction.WISH,
@@ -627,7 +628,7 @@ class DetailViewModelSupplementTest {
             )
         }
         coEvery { doubanSyncedItemDao.getByImdbId(any()) } returns null
-        coEvery { doubanRepository.findDoubanId(100, "tt1234567", "movie") } returns "9999999"
+        coEvery { doubanRepository.findDoubanId(100, "tt1234567", "movie", 42) } returns "9999999"
         every { doubanAuthStorage.getCredentials() } returns null
 
         viewModel.retryDoubanSync()
@@ -635,7 +636,7 @@ class DetailViewModelSupplementTest {
 
         assertThat(viewModel.uiState.value.doubanIdForSync).isEqualTo("9999999")
         assertThat(viewModel.uiState.value.ratingSource).isEqualTo(DetailRatingSource.DOUBAN)
-        coVerify(exactly = 1) { doubanRepository.findDoubanId(100, "tt1234567", "movie") }
+        coVerify(exactly = 1) { doubanRepository.findDoubanId(100, "tt1234567", "movie", 42) }
     }
 
     @Test

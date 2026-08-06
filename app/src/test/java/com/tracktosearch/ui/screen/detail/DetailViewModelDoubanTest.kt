@@ -28,6 +28,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -188,6 +189,8 @@ class DetailViewModelDoubanTest {
     fun missingTmdbAndTraktIdsDoNotTriggerInvalidRequests() = runTest {
         coEvery { doubanRepository.getDetailSnapshot() } returns emptyMap()
         coEvery { doubanSyncedItemDao.getByDoubanId(any()) } returns null
+        coEvery { doubanSyncedItemDao.getByImdbId("tt1234567") } returns null
+        coEvery { doubanRepository.findDoubanId(0, "tt1234567", "movie", 0) } returns null
 
         viewModel.loadDetail(
             traktId = 0,
@@ -209,6 +212,74 @@ class DetailViewModelDoubanTest {
     }
 
     @Test
+    fun imdbMappingIsResolvedWhenTraktIdIsZero() = runTest {
+        val detail = DoubanDetailCacheEntry(
+            imdbId = "tt7654321",
+            isTvShow = false,
+            title = "IMDb-only Douban title",
+            doubanRating = 8.6
+        )
+        coEvery { doubanSyncedItemDao.getByImdbId("tt7654321") } returns null
+        coEvery { doubanRepository.findDoubanId(0, "tt7654321", "movie", 0) } returns "db-imdb-only"
+        coEvery { doubanRepository.getDetailSnapshot() } returns mapOf("db-imdb-only" to detail)
+
+        viewModel.loadDetail(
+            traktId = 0,
+            tmdbId = 0,
+            title = "Fallback title",
+            mediaType = MediaType.MOVIE,
+            imdbId = "tt7654321"
+        )
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.doubanIdForSync).isEqualTo("db-imdb-only")
+        assertThat(viewModel.uiState.value.ratingSource).isEqualTo(DetailRatingSource.DOUBAN)
+        assertThat(viewModel.uiState.value.ratings?.doubanRating).isEqualTo(8.6)
+        coVerify(exactly = 1) { doubanRepository.findDoubanId(0, "tt7654321", "movie", 0) }
+    }
+
+    @Test
+    fun lateDoubanIdResolutionFromPreviousDetailDoesNotOverwriteCurrentDetail() = runTest {
+        val releaseFirstLookup = CompletableDeferred<Unit>()
+        coEvery { doubanSyncedItemDao.getByImdbId(any()) } returns null
+        coEvery { doubanRepository.getDetailSnapshot() } returns emptyMap()
+        coEvery { traktRepository.getRelatedMovies(any()) } returns Result.success(emptyList())
+        coEvery {
+            doubanRepository.findDoubanId(1, "tt-first", "movie", 0)
+        } coAnswers {
+            releaseFirstLookup.await()
+            "db-first"
+        }
+        coEvery {
+            doubanRepository.findDoubanId(2, "tt-second", "movie", 0)
+        } returns "db-second"
+
+        viewModel.loadDetail(
+            traktId = 1,
+            tmdbId = 0,
+            title = "First",
+            mediaType = MediaType.MOVIE,
+            imdbId = "tt-first"
+        )
+        advanceUntilIdle()
+
+        viewModel.loadDetail(
+            traktId = 2,
+            tmdbId = 0,
+            title = "Second",
+            mediaType = MediaType.MOVIE,
+            imdbId = "tt-second"
+        )
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.doubanIdForSync).isEqualTo("db-second")
+
+        releaseFirstLookup.complete(Unit)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.doubanIdForSync).isEqualTo("db-second")
+    }
+
+    @Test
     fun lateDoubanIdResolutionLoadsPublicRatingFromSnapshot() = runTest {
         val detail = DoubanDetailCacheEntry(
             imdbId = "tt7654321",
@@ -216,7 +287,7 @@ class DetailViewModelDoubanTest {
             doubanRating = 8.8
         )
         coEvery { doubanSyncedItemDao.getByImdbId("tt7654321") } returns null
-        coEvery { doubanRepository.findDoubanId(100, "tt7654321", "movie") } returns "db-2"
+        coEvery { doubanRepository.findDoubanId(100, "tt7654321", "movie", 0) } returns "db-2"
         coEvery { doubanRepository.getDetailSnapshot() } returns mapOf("db-2" to detail)
         coEvery { traktRepository.getRelatedMovies(100) } returns Result.success(emptyList())
         every {

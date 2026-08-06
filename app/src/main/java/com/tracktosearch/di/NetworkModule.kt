@@ -9,6 +9,7 @@ import com.tracktosearch.data.auth.AuthInterceptor
 import com.tracktosearch.data.remote.douban.DoubanHotApiService
 import com.tracktosearch.data.remote.douban.DoubanRexxarApiService
 import com.tracktosearch.data.remote.douban.DoubanRexxarRequestInterceptor
+import com.tracktosearch.data.remote.cloud.GiteePublicRawApi
 import com.tracktosearch.data.remote.omdb.OmdbApiService
 import com.tracktosearch.data.remote.panhub.PanHubApiService
 import com.tracktosearch.data.remote.pansou.PanSouApiService
@@ -491,6 +492,45 @@ object NetworkModule {
             .addConverterFactory(giteeJson.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(com.tracktosearch.data.remote.cloud.GiteeContentsApi::class.java)
+    }
+
+    /**
+     * 公共数据池 Raw 直读客户端：匿名访问 Gitee 静态内容，不带网关鉴权，避免消耗网关额度。
+     * 上传仍使用上面的 Gitee Contents API。
+     */
+    @Provides
+    @Singleton
+    @Named("giteePublic")
+    fun provideGiteePublicOkHttpClient(
+        baseClient: OkHttpClient,
+        loggingInterceptor: HttpLoggingInterceptor,
+        cache: Cache
+    ): OkHttpClient {
+        return baseClient.newBuilder()
+            .cache(cache)
+            .addInterceptor(Interceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .header("User-Agent", USER_AGENT)
+                    .build()
+                chain.proceed(request)
+            })
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .callTimeout(25, TimeUnit.SECONDS)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideGiteePublicRawApi(
+        @Named("giteePublic") okHttpClient: OkHttpClient
+    ): GiteePublicRawApi {
+        return Retrofit.Builder()
+            .baseUrl("https://gitee.com/yufeng-liang/meta-data-public/raw/master/")
+            .client(okHttpClient)
+            .build()
+            .create(GiteePublicRawApi::class.java)
     }
 
     @Provides

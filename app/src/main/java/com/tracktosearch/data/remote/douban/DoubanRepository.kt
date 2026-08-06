@@ -4,10 +4,14 @@ import com.tracktosearch.data.local.DoubanUserProfile
 import com.tracktosearch.data.remote.douban.dto.DoubanRecommendItem
 import com.tracktosearch.data.remote.douban.dto.DoubanRecommendResponse
 import com.tracktosearch.data.repository.CloudDetailsPoolManager
+import com.tracktosearch.data.repository.DoubanPublicDataPoolManager
 import com.tracktosearch.data.util.PersistentTtlCache
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +29,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.random.Random
 
 /** 豆瓣 Cookie 过期异常（401/403 或响应为登录页）。
@@ -126,13 +131,20 @@ data class DoubanCelebrityCacheEntry(
  *
  * 使用独立的 OkHttpClient（不走 Trakt 拦截器），设置豆瓣所需的 Cookie/UA/Referer。
  */
+private const val NEGATIVE_DOUBAN_MAPPING_TTL_MILLIS = 5 * 60 * 1000L
+
 class DoubanRepository(
     private val detailCache: PersistentTtlCache<DoubanDetailCacheEntry>,
     private val cloudDetailsPoolManager: CloudDetailsPoolManager? = null,
     private val json: Json = Json { ignoreUnknownKeys = true; coerceInputValues = true },
     /** traktId→doubanId 永久映射缓存，详情页预查用 */
-    private val idMappingCache: PersistentTtlCache<String>? = null
+    private val idMappingCache: PersistentTtlCache<String>? = null,
+    /** IMDb/Trakt/TMDB→豆瓣 ID 公共映射池，仅负责直读和异步上传公开映射。 */
+    private val publicDataPoolManager: DoubanPublicDataPoolManager? = null
 ) {
+    private val publicUploadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val findDoubanIdFlights = ConcurrentHashMap<String, CompletableDeferred<String?>>()
+    private val negativeFindDoubanIdUntil = ConcurrentHashMap<String, Long>()
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
@@ -769,43 +781,106 @@ class DoubanRepository(
     /**
      * 详情页预查 doubanId 的完整链路(内存缓存 → 同步表 → 详情缓存 → 网络搜索)。
      *
-     * @param traktId Trakt ID
+     * @param traktId Trakt ID，可为 0（允许仅凭 IMDb ID 查询）
      * @param imdbId IMDb ID(可能为 null,此时只查缓存和同步表)
      * @param mediaType "movie" 或 "show"
+     * @param tmdbId TMDB ID，可选，用于公共映射池和本地永久缓存
      * @return 匹配到的 doubanId,未匹配返回 null
      */
     suspend fun findDoubanId(
         traktId: Int,
         imdbId: String?,
-        mediaType: String
+        mediaType: String,
+        tmdbId: Int = 0
     ): String? {
-        val cacheKey = "${traktId}_$mediaType"
+        val lookupKey = mappingLookupKey(traktId, imdbId, tmdbId, mediaType)
+            ?: return findDoubanIdUncached(traktId, imdbId, mediaType, tmdbId)
+        val now = System.currentTimeMillis()
+        negativeFindDoubanIdUntil[lookupKey]?.let { expiresAt ->
+            if (now < expiresAt) return null
+            negativeFindDoubanIdUntil.remove(lookupKey, expiresAt)
+        }
 
-        // 1. 查 traktId→doubanId 永久缓存
-        idMappingCache?.get(cacheKey)?.let { return it }
-        // 等磁盘加载完成再查一次,避免 loadFromDisk 未完成时误判
-        idMappingCache?.awaitLoaded()
-        idMappingCache?.get(cacheKey)?.let { return it }
+        val candidate = CompletableDeferred<String?>()
+        val existing = findDoubanIdFlights.putIfAbsent(lookupKey, candidate)
+        if (existing != null) return existing.await()
+
+        return try {
+            val result = findDoubanIdUncached(traktId, imdbId, mediaType, tmdbId)
+            if (result == null) {
+                negativeFindDoubanIdUntil[lookupKey] =
+                    System.currentTimeMillis() + NEGATIVE_DOUBAN_MAPPING_TTL_MILLIS
+            } else {
+                negativeFindDoubanIdUntil.remove(lookupKey)
+            }
+            candidate.complete(result)
+            result
+        } catch (e: CancellationException) {
+            candidate.completeExceptionally(e)
+            throw e
+        } catch (e: Exception) {
+            candidate.completeExceptionally(e)
+            throw e
+        } finally {
+            findDoubanIdFlights.remove(lookupKey, candidate)
+        }
+    }
+
+    private suspend fun findDoubanIdUncached(
+        traktId: Int,
+        imdbId: String?,
+        mediaType: String,
+        tmdbId: Int = 0
+    ): String? {
+        val legacyCacheKey = "${traktId}_$mediaType".takeIf { traktId > 0 }
+        val publicKeys = buildPublicMappingKeys(traktId, imdbId, tmdbId, mediaType)
+
+        // 1. 先兼容旧 traktId key，再查新版本 IMDb/Trakt/TMDB key。
+        if (idMappingCache != null) {
+            legacyCacheKey?.let { key ->
+                idMappingCache.get(key)?.let { return it }
+            }
+            idMappingCache.awaitLoaded()
+            legacyCacheKey?.let { key ->
+                idMappingCache.get(key)?.let { return it }
+            }
+            publicKeys.forEach { key ->
+                idMappingCache.get(key)?.let { doubanId ->
+                    legacyCacheKey?.let { idMappingCache.put(it, doubanId) }
+                    return doubanId
+                }
+            }
+        }
 
         // 2. 查 douban_synced_items 表 by imdbId(调用方 DAO 查询)
         // 此处不直接查 DAO,由 ViewModel 层查询后传入,避免 Repository 依赖 DAO
 
-        // 3. 遍历 DoubanDetailCache by imdbId
+        // 3. 查 Gitee 公共映射池（直连 Raw，不经过网关）。
+        if (publicKeys.isNotEmpty()) {
+            publicDataPoolManager?.getMappings(publicKeys)?.let { mappings ->
+                publicKeys.firstNotNullOfOrNull { key -> mappings[key] }?.let { doubanId ->
+                    persistDoubanMapping(legacyCacheKey, publicKeys, doubanId)
+                    return doubanId
+                }
+            }
+        }
+
+        // 4. 遍历 DoubanDetailCache by imdbId
         if (!imdbId.isNullOrBlank()) {
             getDetailSnapshot().entries.firstOrNull { (_, entry) ->
                 entry.imdbId == imdbId
             }?.key?.let { doubanId ->
                 // 命中详情缓存,写入映射缓存
-                idMappingCache?.put(cacheKey, doubanId)
+                persistDoubanMapping(legacyCacheKey, publicKeys, doubanId)
                 return doubanId
             }
         }
 
-        // 4. 网络搜索 m.douban.com/search/?query={imdbId}
+        // 5. 网络搜索 m.douban.com/search/?query={imdbId}
         if (!imdbId.isNullOrBlank()) {
             val doubanId = searchDoubanIdByImdb(imdbId)
             if (doubanId != null) {
-                idMappingCache?.put(cacheKey, doubanId)
+                persistDoubanMapping(legacyCacheKey, publicKeys, doubanId)
             }
             return doubanId
         }
@@ -814,10 +889,61 @@ class DoubanRepository(
     }
 
     /**
-     * 写入 traktId→doubanId 映射到永久缓存(供豆瓣导入成功后调用)。
+     * 写入外部 ID→doubanId 映射到永久缓存(供豆瓣导入成功后调用)。
      */
-    fun putDoubanIdMapping(traktId: Int, mediaType: String, doubanId: String) {
-        idMappingCache?.put("${traktId}_$mediaType", doubanId)
+    fun putDoubanIdMapping(
+        traktId: Int,
+        mediaType: String,
+        doubanId: String,
+        imdbId: String? = null,
+        tmdbId: Int = 0
+    ) {
+        val legacyKey = "${traktId}_$mediaType".takeIf { traktId > 0 }
+        val publicKeys = buildPublicMappingKeys(traktId, imdbId, tmdbId, mediaType)
+        persistDoubanMapping(legacyKey, publicKeys, doubanId)
+    }
+
+    private fun buildPublicMappingKeys(
+        traktId: Int,
+        imdbId: String?,
+        tmdbId: Int,
+        mediaType: String
+    ): List<String> = buildList {
+        imdbId?.trim()?.takeIf { it.isNotEmpty() }?.let { add("imdb:${it.lowercase()}:$mediaType") }
+        if (traktId > 0) add("trakt:$traktId:$mediaType")
+        if (tmdbId > 0) add("tmdb:$tmdbId:$mediaType")
+    }
+
+    private fun mappingLookupKey(
+        traktId: Int,
+        imdbId: String?,
+        tmdbId: Int,
+        mediaType: String
+    ): String? {
+        val legacyKey = "${traktId}_$mediaType".takeIf { traktId > 0 }
+        val publicKeys = buildPublicMappingKeys(traktId, imdbId, tmdbId, mediaType)
+        return (listOfNotNull(legacyKey) + publicKeys)
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString("|")
+    }
+
+    private fun persistDoubanMapping(
+        legacyKey: String?,
+        publicKeys: Collection<String>,
+        doubanId: String
+    ) {
+        legacyKey?.let { idMappingCache?.put(it, doubanId) }
+        publicKeys.forEach { key -> idMappingCache?.put(key, doubanId) }
+        negativeFindDoubanIdUntil.entries.removeIf { entry ->
+            publicKeys.any { key -> entry.key.contains(key) }
+        }
+        if (publicKeys.isNotEmpty()) {
+            publicDataPoolManager?.let { pool ->
+                publicUploadScope.launch {
+                    runCatching { pool.uploadMappings(publicKeys.associateWith { doubanId }) }
+                }
+            }
+        }
     }
 
     /**

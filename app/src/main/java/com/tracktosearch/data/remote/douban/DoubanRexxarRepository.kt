@@ -5,9 +5,11 @@ import com.tracktosearch.data.remote.douban.dto.DoubanRexxarImageDto
 import com.tracktosearch.data.remote.douban.dto.DoubanRexxarInterestDto
 import com.tracktosearch.data.remote.douban.dto.DoubanRexxarPhotoDto
 import com.tracktosearch.data.remote.douban.dto.DoubanRexxarPhotoPageDto
+import com.tracktosearch.data.repository.DoubanPublicDataPoolManager
 import com.tracktosearch.data.util.PersistentTtlCache
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
@@ -133,9 +135,13 @@ class DoubanRexxarRepository(
     private val detailCache: PersistentTtlCache<DoubanRexxarDetail>,
     private val photosCache: PersistentTtlCache<DoubanRexxarPhotoCacheEntry>,
     private val commentsCache: PersistentTtlCache<DoubanRexxarShortCommentPage>,
-    private val retryDelay: suspend (Long) -> Unit = { delay(it) }
+    private val retryDelay: suspend (Long) -> Unit = { delay(it) },
+    private val publicDataPoolManager: DoubanPublicDataPoolManager? = null
 ) {
     private val photoLocks = ConcurrentHashMap<String, Mutex>()
+    private val publicUploadScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
+    )
 
     suspend fun getDetail(
         doubanId: String,
@@ -148,9 +154,22 @@ class DoubanRexxarRepository(
             detailCache.get(key)?.let { return Result.success(it) }
         }
         val detail = detailCache.getOrAwait(key, skipCache = forceRefresh) {
-            requestWithRetry {
+            val publicDetail = if (!forceRefresh) {
+                publicDataPoolManager?.getDetail(doubanId, mediaType)
+            } else {
+                null
+            }
+            publicDetail ?: requestWithRetry {
                 service.getDetail(mediaType.path, doubanId)
-            }.let { mapDetail(it, doubanId, mediaType) }
+            }.let { response ->
+                mapDetail(response, doubanId, mediaType).also { freshDetail ->
+                    publicDataPoolManager?.let { pool ->
+                        publicUploadScope.launch {
+                            runCatching { pool.uploadDetail(freshDetail) }
+                        }
+                    }
+                }
+            }
         }
         Result.success(detail)
     } catch (e: CancellationException) {
@@ -175,10 +194,20 @@ class DoubanRexxarRepository(
         val key = subjectKey(doubanId, mediaType)
         val lock = photoLocks.computeIfAbsent(key) { Mutex() }
         lock.withLock {
-            val existing = photosCache.get(key)
+            var existing = photosCache.get(key)
             val now = System.currentTimeMillis()
             if (!forceRefresh && existing != null && existing.isFresh(now) && existing.satisfies(start, count)) {
                 return@withLock Result.success(existing.toPage(start, count))
+            }
+            if (!forceRefresh) {
+                val publicPhotos = publicDataPoolManager?.getPhotos(doubanId, mediaType)
+                if (publicPhotos != null) {
+                    existing = mergePhotoEntries(existing, publicPhotos)
+                    photosCache.put(key, existing!!)
+                    if (existing!!.isFresh(now) && existing!!.satisfies(start, count)) {
+                        return@withLock Result.success(existing!!.toPage(start, count))
+                    }
+                }
             }
             val page = requestWithRetry {
                 service.getPhotos(mediaType.path, doubanId, start, count)
@@ -189,6 +218,11 @@ class DoubanRexxarRepository(
                 fetchedAt = System.currentTimeMillis()
             )
             photosCache.put(key, merged)
+            publicDataPoolManager?.let { pool ->
+                publicUploadScope.launch {
+                    runCatching { pool.uploadPhotos(doubanId, mediaType, merged) }
+                }
+            }
             Result.success(page)
         }
     } catch (e: CancellationException) {
@@ -210,10 +244,35 @@ class DoubanRexxarRepository(
         if (!forceRefresh) {
             commentsCache.get(key)?.let { return Result.success(it) }
         }
+        if (!forceRefresh) {
+            val publicComments = publicDataPoolManager?.getComments(doubanId, mediaType, start, count)
+            val fetchedAt = publicComments?.fetchedAt ?: 0L
+            if (publicComments != null &&
+                fetchedAt > 0L &&
+                System.currentTimeMillis() - fetchedAt in 0..COMMENTS_TTL_MILLIS
+            ) {
+                commentsCache.putWithExpireAt(
+                    key = key,
+                    value = publicComments.page,
+                    expireAt = fetchedAt + COMMENTS_TTL_MILLIS
+                )
+                return Result.success(publicComments.page)
+            }
+        }
         val page = commentsCache.getOrAwait(key, skipCache = forceRefresh) {
             requestWithRetry {
                 service.getInterests(mediaType.path, doubanId, start, count)
-            }.let { mapComments(it) }
+            }.let { response ->
+                mapComments(response).also { freshPage ->
+                    publicDataPoolManager?.let { pool ->
+                        publicUploadScope.launch {
+                            runCatching {
+                                pool.uploadComments(doubanId, mediaType, start, count, freshPage)
+                            }
+                        }
+                    }
+                }
+            }
         }
         Result.success(page)
     } catch (e: CancellationException) {
@@ -395,6 +454,22 @@ class DoubanRexxarRepository(
         )
     }
 
+    private fun mergePhotoEntries(
+        existing: DoubanRexxarPhotoCacheEntry?,
+        incoming: DoubanRexxarPhotoCacheEntry
+    ): DoubanRexxarPhotoCacheEntry {
+        val merged = LinkedHashMap<String, DoubanRexxarPhoto>()
+        existing?.photos?.forEach { merged[it.id] = it }
+        incoming.photos.forEach { photo ->
+            if (photo.id.isNotBlank()) merged[photo.id] = photo
+        }
+        return DoubanRexxarPhotoCacheEntry(
+            total = maxOf(existing?.total ?: 0, incoming.total, merged.size),
+            photos = merged.values.toList(),
+            lastFetchedAt = maxOf(existing?.lastFetchedAt ?: 0L, incoming.lastFetchedAt)
+        )
+    }
+
     private fun extractYear(
         explicitYear: String?,
         pubdates: List<String>,
@@ -464,6 +539,7 @@ class DoubanRexxarRepository(
     private companion object {
         const val DEFAULT_PAGE_SIZE = 20
         const val MAX_PAGE_SIZE = 100
+        const val COMMENTS_TTL_MILLIS = 6 * 60 * 60 * 1000L
         const val MIN_RETRY_DELAY = 2_000L
         const val MAX_RETRY_DELAY = 4_000L
         const val PHOTO_REFRESH_INTERVAL = 24 * 60 * 60 * 1000L

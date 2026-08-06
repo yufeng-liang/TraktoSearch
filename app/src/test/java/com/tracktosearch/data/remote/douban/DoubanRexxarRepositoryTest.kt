@@ -2,6 +2,9 @@ package com.tracktosearch.data.remote.douban
 
 import androidx.datastore.preferences.preferencesDataStore
 import com.google.common.truth.Truth.assertThat
+import androidx.datastore.preferences.core.longPreferencesKey
+import com.tracktosearch.data.repository.DoubanPublicCommentsDocument
+import com.tracktosearch.data.repository.DoubanPublicDataPoolManager
 import com.tracktosearch.data.remote.douban.dto.DoubanRexxarDetailDto
 import com.tracktosearch.data.remote.douban.dto.DoubanRexxarCoverDto
 import com.tracktosearch.data.remote.douban.dto.DoubanRexxarImageDto
@@ -20,7 +23,11 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.mockk
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.mockwebserver.MockResponse
@@ -282,6 +289,128 @@ class DoubanRexxarRepositoryTest {
     }
 
     @Test
+    fun getDetail_readsPublicPoolBeforeRexxar() = runTest {
+        val publicPool = mockk<DoubanPublicDataPoolManager>()
+        val cachedDetail = DoubanRexxarDetail(
+            doubanId = "public-detail",
+            title = "公共池详情",
+            type = DoubanRexxarMediaType.MOVIE,
+            score = 9.1
+        )
+        coEvery {
+            publicPool.getDetail("public-detail", DoubanRexxarMediaType.MOVIE)
+        } returns cachedDetail
+        val service = FakeRexxarService()
+
+        val result = createRepository(service, publicDataPoolManager = publicPool)
+            .getDetail("public-detail", DoubanRexxarMediaType.MOVIE)
+
+        assertThat(result).isEqualTo(Result.success(cachedDetail))
+        assertThat(service.detailCallCount).isEqualTo(0)
+        coVerify(exactly = 1) {
+            publicPool.getDetail("public-detail", DoubanRexxarMediaType.MOVIE)
+        }
+    }
+
+    @Test
+    fun getPhotos_readsPublicPoolBeforeRexxar() = runTest {
+        val publicPool = mockk<DoubanPublicDataPoolManager>()
+        val cachedPhotos = DoubanRexxarPhotoCacheEntry(
+            total = 2,
+            lastFetchedAt = System.currentTimeMillis(),
+            photos = listOf(
+                DoubanRexxarPhoto(id = "public-p1", position = 0),
+                DoubanRexxarPhoto(id = "public-p2", position = 1)
+            )
+        )
+        coEvery {
+            publicPool.getPhotos("public-photos", DoubanRexxarMediaType.MOVIE)
+        } returns cachedPhotos
+        val service = FakeRexxarService()
+
+        val result = createRepository(service, publicDataPoolManager = publicPool)
+            .getPhotos("public-photos", DoubanRexxarMediaType.MOVIE, start = 0, count = 2)
+
+        assertThat(result.getOrThrow().photos.map { it.id })
+            .containsExactly("public-p1", "public-p2")
+            .inOrder()
+        assertThat(service.photoCallCount).isEqualTo(0)
+        coVerify(exactly = 1) {
+            publicPool.getPhotos("public-photos", DoubanRexxarMediaType.MOVIE)
+        }
+    }
+
+    @Test
+    fun getShortComments_readsFreshPublicPoolBeforeRexxar() = runTest {
+        val publicPool = mockk<DoubanPublicDataPoolManager>()
+        val publicPage = DoubanRexxarShortCommentPage(
+            total = 1,
+            start = 0,
+            count = 1,
+            comments = listOf(DoubanRexxarShortComment(id = "public-comment", text = "公共短评"))
+        )
+        coEvery {
+            publicPool.getComments("public-comments", DoubanRexxarMediaType.MOVIE, 0, 20)
+        } returns DoubanPublicCommentsDocument(
+            page = publicPage,
+            fetchedAt = System.currentTimeMillis()
+        )
+        val service = FakeRexxarService()
+
+        val result = createRepository(service, publicDataPoolManager = publicPool)
+            .getShortComments("public-comments", DoubanRexxarMediaType.MOVIE, start = 0, count = 20)
+
+        assertThat(result.getOrThrow()).isEqualTo(publicPage)
+        coVerify(exactly = 1) {
+            publicPool.getComments("public-comments", DoubanRexxarMediaType.MOVIE, 0, 20)
+        }
+    }
+
+    @Test
+    fun getShortComments_preservesPublicFetchedAtAsPersistentExpiry() = runTest {
+        val context = RuntimeEnvironment.getApplication().applicationContext
+        val prefix = "test_comments_expiry_${System.nanoTime()}"
+        val commentsCache = persistentTtlCache<DoubanRexxarShortCommentPage>(
+            ttlMillis = 6 * 60 * 60 * 1000L,
+            maxSize = 100,
+            dataStore = context.rexxarTestDataStore,
+            json = json,
+            keyPrefix = prefix,
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined)
+        )
+        val publicPool = mockk<DoubanPublicDataPoolManager>()
+        val commentsTtlMillis = 6 * 60 * 60 * 1000L
+        val fetchedAt = System.currentTimeMillis() - commentsTtlMillis / 2
+        coEvery {
+            publicPool.getComments("public-comments", DoubanRexxarMediaType.MOVIE, 0, 20)
+        } returns DoubanPublicCommentsDocument(
+            page = DoubanRexxarShortCommentPage(
+                total = 1,
+                start = 0,
+                count = 1,
+                comments = listOf(DoubanRexxarShortComment(id = "public-comment"))
+            ),
+            fetchedAt = fetchedAt
+        )
+
+        val result = createRepository(
+            service = FakeRexxarService(),
+            commentsCache = commentsCache,
+            publicDataPoolManager = publicPool
+        ).getShortComments("public-comments", DoubanRexxarMediaType.MOVIE, 0, 20)
+
+        assertThat(result.isSuccess).isTrue()
+        coVerify(exactly = 1) {
+            publicPool.getComments("public-comments", DoubanRexxarMediaType.MOVIE, 0, 20)
+        }
+        Thread.sleep(100)
+        val preferences = context.rexxarTestDataStore.data.first()
+        val expireAt = preferences[longPreferencesKey("$prefix:movie:public-comments:0:20:exp")]
+        assertThat(expireAt).isNotNull()
+        assertThat(expireAt!!).isAtMost(fetchedAt + commentsTtlMillis + 1_000L)
+    }
+
+    @Test
     fun getPhotos_mergesLaterPageIntoPersistentUrlSet() = runTest {
         val service = FakeRexxarService().apply {
             photoResponses += Response.success(
@@ -520,7 +649,9 @@ class DoubanRexxarRepositoryTest {
 
     private fun createRepository(
         service: DoubanRexxarApiService,
-        photosCache: PersistentTtlCache<DoubanRexxarPhotoCacheEntry>? = null
+        photosCache: PersistentTtlCache<DoubanRexxarPhotoCacheEntry>? = null,
+        commentsCache: PersistentTtlCache<DoubanRexxarShortCommentPage>? = null,
+        publicDataPoolManager: DoubanPublicDataPoolManager? = null
     ): DoubanRexxarRepository {
         val context = RuntimeEnvironment.getApplication().applicationContext
         return DoubanRexxarRepository(
@@ -541,7 +672,7 @@ class DoubanRexxarRepositoryTest {
                 keyPrefix = "test_photos_${System.nanoTime()}",
                 scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined)
             ),
-            commentsCache = persistentTtlCache(
+            commentsCache = commentsCache ?: persistentTtlCache(
                 ttlMillis = 6 * 60 * 60 * 1000L,
                 maxSize = 100,
                 dataStore = context.rexxarTestDataStore,
@@ -549,7 +680,8 @@ class DoubanRexxarRepositoryTest {
                 keyPrefix = "test_comments_${System.nanoTime()}",
                 scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined)
             ),
-            retryDelay = {}
+            retryDelay = {},
+            publicDataPoolManager = publicDataPoolManager
         )
     }
 

@@ -401,6 +401,7 @@ class DetailViewModel @Inject constructor(
     private var commentsJob: Job? = null
     private var seasonsJob: Job? = null
     private var delayedLoadJob: Job? = null
+    private var doubanIdPrefetchJob: Job? = null
     // 全量结果（未按 filter 过滤）
     private var allResources: List<ResourceItem> = emptyList()
     private var isLoggedIn: Boolean = false
@@ -417,6 +418,7 @@ class DetailViewModel @Inject constructor(
         )
         // 已加载相同影视则用缓存（从子详情页返回时不重新请求）
         if (currentDetailCacheKey == cacheKey && detailLoaded) return
+        doubanIdPrefetchJob?.cancel()
 
         // 尝试从静态缓存恢复
         val cached = cacheGet(cacheKey)
@@ -710,35 +712,52 @@ class DetailViewModel @Inject constructor(
         )
     }
 
-    private fun prefetchDoubanId() {
-        currentDoubanId?.let { doubanId ->
-            viewModelScope.launch {
+    private fun prefetchDoubanId(expectedKey: DetailCacheKey? = currentDetailCacheKey) {
+        if (expectedKey == null || currentDetailCacheKey != expectedKey) return
+        doubanIdPrefetchJob?.cancel()
+        val requestTraktId = currentTraktId
+        val requestMediaType = currentMediaType
+        val requestImdbId = currentImdbId.takeIf { it.isNotBlank() }
+        val requestTmdbId = currentTmdbId
+        val existingDoubanId = currentDoubanId
+        existingDoubanId?.let { doubanId ->
+            doubanIdPrefetchJob = viewModelScope.launch {
+                if (currentDetailCacheKey != expectedKey) return@launch
                 setResolvedDoubanId(doubanId)
-                saveToCache()
+                if (currentDetailCacheKey == expectedKey) saveToCache()
             }
             return
         }
-        if (currentTraktId <= 0) {
-            _uiState.value = _uiState.value.copy(ratingSource = DetailRatingSource.NORMAL)
-            saveToCache()
-            return
-        }
-        viewModelScope.launch {
-            val mediaTypeStr = if (currentMediaType == MediaType.SHOW) "show" else "movie"
+        doubanIdPrefetchJob = viewModelScope.launch {
+            if (currentDetailCacheKey != expectedKey) return@launch
+            val mediaTypeStr = if (requestMediaType == MediaType.SHOW) "show" else "movie"
             // 先查同步表（O(1)，零网络）
-            val imdbId = currentImdbId.takeIf { it.isNotBlank() }
+            val imdbId = requestImdbId
             if (imdbId != null) {
                 val syncedItem = runCatching { doubanSyncedItemDao.getByImdbId(imdbId) }.getOrNull()
                 if (syncedItem != null) {
+                    if (currentDetailCacheKey != expectedKey) return@launch
                     setResolvedDoubanId(syncedItem.doubanId)
                     // 顺带写入映射缓存
-                    doubanRepository.putDoubanIdMapping(currentTraktId, mediaTypeStr, syncedItem.doubanId)
-                    saveToCache()
+                    doubanRepository.putDoubanIdMapping(
+                        traktId = requestTraktId,
+                        mediaType = mediaTypeStr,
+                        doubanId = syncedItem.doubanId,
+                        imdbId = imdbId,
+                        tmdbId = requestTmdbId
+                    )
+                    if (currentDetailCacheKey == expectedKey) saveToCache()
                     return@launch
                 }
             }
             // 再走 Repository 的完整链路（缓存 → 详情缓存 → 网络搜索）
-            val doubanId = doubanRepository.findDoubanId(currentTraktId, imdbId, mediaTypeStr)
+            val doubanId = doubanRepository.findDoubanId(
+                traktId = requestTraktId,
+                imdbId = imdbId,
+                mediaType = mediaTypeStr,
+                tmdbId = requestTmdbId
+            )
+            if (currentDetailCacheKey != expectedKey) return@launch
             if (doubanId != null) {
                 setResolvedDoubanId(doubanId)
             } else {
@@ -2507,7 +2526,12 @@ class DetailViewModel @Inject constructor(
                     runCatching { doubanSyncedItemDao.getByImdbId(imdbId) }.getOrNull()
                 } else null
                 val doubanId = syncedItem?.doubanId
-                    ?: doubanRepository.findDoubanId(currentTraktId, imdbId, mediaTypeStr)
+                    ?: doubanRepository.findDoubanId(
+                        traktId = currentTraktId,
+                        imdbId = imdbId,
+                        mediaType = mediaTypeStr,
+                        tmdbId = currentTmdbId
+                    )
                 if (doubanId != null) {
                     setResolvedDoubanId(doubanId)
                     saveToCache()

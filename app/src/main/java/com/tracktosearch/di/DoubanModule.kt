@@ -12,6 +12,7 @@ import com.tracktosearch.data.remote.douban.DoubanRexxarPhotoCacheEntry
 import com.tracktosearch.data.remote.douban.DoubanRexxarRepository
 import com.tracktosearch.data.remote.douban.DoubanRexxarShortCommentPage
 import com.tracktosearch.data.remote.douban.dto.DoubanRecommendItem
+import com.tracktosearch.data.repository.DoubanPublicDataPoolManager
 import com.tracktosearch.data.repository.CloudDetailsPoolManager
 import com.tracktosearch.data.repository.DoubanFailureExporter
 import com.tracktosearch.data.util.PersistentTtlCache
@@ -81,8 +82,15 @@ object DoubanModule {
         detailCache: PersistentTtlCache<DoubanDetailCacheEntry>,
         cloudDetailsPoolManager: CloudDetailsPoolManager,
         @DoubanIdMapping idMappingCache: PersistentTtlCache<String>,
-        json: Json
-    ): DoubanRepository = DoubanRepository(detailCache, cloudDetailsPoolManager, json, idMappingCache)
+        json: Json,
+        publicDataPoolManager: DoubanPublicDataPoolManager
+    ): DoubanRepository = DoubanRepository(
+        detailCache = detailCache,
+        cloudDetailsPoolManager = cloudDetailsPoolManager,
+        json = json,
+        idMappingCache = idMappingCache,
+        publicDataPoolManager = publicDataPoolManager
+    )
 
     /** Rexxar 详情缓存：详情字段和海报 URL 基本不变，跨重启永久保留以减少重复请求。 */
     @Provides
@@ -145,12 +153,14 @@ object DoubanModule {
         service: DoubanRexxarApiService,
         @DoubanRexxarDetailCache detailCache: PersistentTtlCache<DoubanRexxarDetail>,
         @DoubanRexxarPhotosCache photosCache: PersistentTtlCache<DoubanRexxarPhotoCacheEntry>,
-        @DoubanRexxarCommentsCache commentsCache: PersistentTtlCache<DoubanRexxarShortCommentPage>
+        @DoubanRexxarCommentsCache commentsCache: PersistentTtlCache<DoubanRexxarShortCommentPage>,
+        publicDataPoolManager: DoubanPublicDataPoolManager
     ): DoubanRexxarRepository = DoubanRexxarRepository(
         service = service,
         detailCache = detailCache,
         photosCache = photosCache,
-        commentsCache = commentsCache
+        commentsCache = commentsCache,
+        publicDataPoolManager = publicDataPoolManager
     )
 
     /**

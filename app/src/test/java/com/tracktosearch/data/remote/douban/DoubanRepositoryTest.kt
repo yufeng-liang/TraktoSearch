@@ -2,6 +2,7 @@ package com.tracktosearch.data.remote.douban
 
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.repository.CloudDetailsPoolManager
+import com.tracktosearch.data.repository.DoubanPublicDataPoolManager
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.test.MainDispatcherRule
 import io.mockk.coEvery
@@ -10,6 +11,7 @@ import io.mockk.mockk
 import io.mockk.spyk
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -58,6 +60,7 @@ class DoubanRepositoryTest {
 
     private val detailCache = mockk<PersistentTtlCache<DoubanDetailCacheEntry>>(relaxed = true)
     private val cloudPool = mockk<CloudDetailsPoolManager>(relaxed = true)
+    private val publicPool = mockk<DoubanPublicDataPoolManager>(relaxed = true)
     private val idMappingCache = mockk<PersistentTtlCache<String>>(relaxed = true)
     private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
     private lateinit var repository: DoubanRepository
@@ -69,7 +72,7 @@ class DoubanRepositoryTest {
         mockWebServer.start()
 
         repository = spyk(
-            DoubanRepository(detailCache, cloudPool, json, idMappingCache),
+            DoubanRepository(detailCache, cloudPool, json, idMappingCache, publicPool),
             recordPrivateCalls = true
         )
 
@@ -106,6 +109,13 @@ class DoubanRepositoryTest {
         // detailCache 默认 awaitLoaded 不挂起
         coEvery { detailCache.awaitLoaded() } returns Unit
         coEvery { idMappingCache.awaitLoaded() } returns Unit
+        coEvery {
+            idMappingCache.get(match { key ->
+                key.startsWith("imdb:") ||
+                    key.startsWith("trakt:") ||
+                    key.startsWith("tmdb:")
+            })
+        } returns null
     }
 
     @After
@@ -670,6 +680,81 @@ class DoubanRepositoryTest {
         assertThat(result).isNull()
     }
 
+    @Test
+    fun findDoubanId_traktId为零_公共池按IMDb命中_不搜索豆瓣(): Unit = runBlocking {
+        coEvery { idMappingCache.get(any()) } returns null
+        coEvery { publicPool.getMappings(listOf("imdb:tt0000001:movie")) } returns
+            mapOf("imdb:tt0000001:movie" to "789")
+
+        val result = repository.findDoubanId(
+            traktId = 0,
+            imdbId = "tt0000001",
+            mediaType = "movie"
+        )
+
+        assertThat(result).isEqualTo("789")
+        coVerify(exactly = 1) { publicPool.getMappings(listOf("imdb:tt0000001:movie")) }
+        coVerify(exactly = 0) { detailCache.snapshotFromDisk() }
+        coVerify(exactly = 0) { idMappingCache.get("0_movie") }
+    }
+
+    @Test
+    fun findDoubanId_noMatch_isNegativeCached(): Unit = runBlocking {
+        coEvery { idMappingCache.get(any()) } returns null
+        coEvery { publicPool.getMappings(any()) } returns emptyMap()
+        coEvery { detailCache.snapshotFromDisk() } returns emptyMap()
+        mockWebServer.enqueue(MockResponse().setBody("<html><body>no results</body></html>"))
+
+        val first = repository.findDoubanId(0, "tt-no-match", "movie", tmdbId = 0)
+        val second = repository.findDoubanId(0, "tt-no-match", "movie", tmdbId = 0)
+
+        assertThat(first).isNull()
+        assertThat(second).isNull()
+        assertThat(mockWebServer.requestCount).isEqualTo(1)
+        coVerify(exactly = 1) { publicPool.getMappings(any()) }
+    }
+
+    @Test
+    fun findDoubanId_concurrentMisses_shareSearchRequest(): Unit = runBlocking {
+        coEvery { idMappingCache.get(any()) } returns null
+        coEvery { publicPool.getMappings(any()) } returns emptyMap()
+        coEvery { detailCache.snapshotFromDisk() } returns emptyMap()
+        mockWebServer.enqueue(
+            MockResponse()
+                .setBody("<html><body>no results</body></html>")
+                .setBodyDelay(150, TimeUnit.MILLISECONDS)
+        )
+
+        val first = async {
+            repository.findDoubanId(0, "tt-concurrent", "movie", tmdbId = 0)
+        }
+        val second = async {
+            repository.findDoubanId(0, "tt-concurrent", "movie", tmdbId = 0)
+        }
+
+        assertThat(first.await()).isNull()
+        assertThat(second.await()).isNull()
+        assertThat(mockWebServer.requestCount).isEqualTo(1)
+    }
+
+    @Test
+    fun findDoubanId_仅TMDBId_公共池命中并持久化映射(): Unit = runBlocking {
+        coEvery { idMappingCache.get(any()) } returns null
+        coEvery { publicPool.getMappings(listOf("tmdb:42:show")) } returns
+            mapOf("tmdb:42:show" to "900")
+
+        val result = repository.findDoubanId(
+            traktId = 0,
+            imdbId = null,
+            mediaType = "show",
+            tmdbId = 42
+        )
+
+        assertThat(result).isEqualTo("900")
+        coVerify { idMappingCache.put("tmdb:42:show", "900") }
+        coVerify(exactly = 1) { publicPool.getMappings(listOf("tmdb:42:show")) }
+    }
+
     // ==================== putDoubanIdMapping ====================
 
     @Test
@@ -684,6 +769,22 @@ class DoubanRepositoryTest {
         repository.putDoubanIdMapping(traktId = 200, mediaType = "show", doubanId = "456")
 
         coVerify { idMappingCache.put("200_show", "456") }
+    }
+
+    @Test
+    fun putDoubanIdMapping_traktId为零_只写有效公共外部Id() {
+        repository.putDoubanIdMapping(
+            traktId = 0,
+            mediaType = "movie",
+            doubanId = "789",
+            imdbId = "tt0000001",
+            tmdbId = 42
+        )
+
+        coVerify { idMappingCache.put("imdb:tt0000001:movie", "789") }
+        coVerify { idMappingCache.put("tmdb:42:movie", "789") }
+        coVerify(exactly = 0) { idMappingCache.put("0_movie", any()) }
+        coVerify(exactly = 0) { idMappingCache.put("trakt:0:movie", any()) }
     }
 
     // ==================== getDetailSnapshot ====================
