@@ -53,6 +53,8 @@ class AuthManagerTest {
         every { storage.getCachedAccessToken() } returns "old-access"
         coEvery { storage.isTokenValid() } returns false
         coEvery { storage.getRefreshToken() } returns "refresh-token"
+        coEvery { storage.getRefreshAttemptId() } returns null
+        coEvery { storage.saveRefreshAttemptId(any()) } returns Unit
         every { continuityManager.getAndroidId() } returns "android-id"
         every { keyManager.sign(any()) } returns ByteArray(64)
         coEvery { storage.saveSession(any(), any(), any(), any(), any(), any()) } returns Unit
@@ -150,6 +152,8 @@ class AuthManagerTest {
         every { storage.getCachedAccessToken() } returns "old-access"
         coEvery { storage.isTokenValid() } returns false
         coEvery { storage.getRefreshToken() } returns "refresh-token"
+        coEvery { storage.getRefreshAttemptId() } returns null
+        coEvery { storage.saveRefreshAttemptId(any()) } returns Unit
         every { continuityManager.getAndroidId() } returns "android-id"
         every { keyManager.sign(any()) } returns ByteArray(64)
         coEvery { storage.saveSession(any(), any(), any(), any(), any(), any()) } returns Unit
@@ -202,6 +206,7 @@ class AuthManagerTest {
         every { storage.getCachedDeviceId() } returns "device-id"
         every { storage.getCachedNextCheckAt() } answers { cachedNextCheckAt }
         every { storage.getCachedLastOnlineAt() } returns 1_000L
+        every { storage.getCachedAccessToken() } returns "access-token"
         coEvery { storage.isTokenValid() } returns true
         coEvery { storage.saveSessionMetadata(any(), any(), any()) } answers {
             cachedNextCheckAt = arg(2)
@@ -235,6 +240,60 @@ class AuthManagerTest {
     }
 
     @Test
+    fun concurrentExpiredChecksOnlyRotateRefreshSessionOnce() = runTest {
+        val api = mockk<AuthApiService>()
+        val keyManager = mockk<DeviceKeyManager>()
+        val continuityManager = mockk<DeviceContinuityManager>()
+        val storage = mockk<TokenStorage>()
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, traktRepositoryProvider)
+        val bothChecksStarted = CompletableDeferred<Unit>()
+        var checkCalls = 0
+        var cachedAccessToken = "old-access"
+
+        coEvery { storage.ensureCacheLoaded() } returns Unit
+        every { storage.getCachedDeviceId() } returns "device-id"
+        every { storage.getCachedNextCheckAt() } returns System.currentTimeMillis() / 1000 + 3_600
+        every { storage.getCachedLastOnlineAt() } returns System.currentTimeMillis() / 1000
+        coEvery { storage.isTokenValid() } returns true
+        every { storage.getCachedAccessToken() } answers { cachedAccessToken }
+        coEvery { storage.getRefreshToken() } returns "refresh-token"
+        coEvery { storage.getRefreshAttemptId() } returns null
+        coEvery { storage.saveRefreshAttemptId(any()) } returns Unit
+        coEvery { storage.saveSessionMetadata(any(), any(), any()) } returns Unit
+        coEvery { storage.saveSession(any(), any(), any(), any(), any(), any()) } coAnswers {
+            cachedAccessToken = firstArg()
+        }
+        every { continuityManager.getAndroidId() } returns "android-id"
+        every { keyManager.sign(any()) } returns ByteArray(64)
+        coEvery { api.check(CheckRequest("android-id")) } coAnswers {
+            checkCalls++
+            if (checkCalls == 2) bothChecksStarted.complete(Unit)
+            bothChecksStarted.await()
+            Response.error(401, "expired".toResponseBody())
+        }
+        coEvery { api.challenge(ChallengeRequest("device-id")) } returns Response.success(
+            GatewayResponse("SUCCESS", "OK", data = ChallengeResponse("nonce", 2_000L))
+        )
+        coEvery { api.refresh(any()) } returns Response.success(
+            GatewayResponse(
+                "SUCCESS",
+                "OK",
+                data = RefreshResponse("new-access", "new-refresh", 2_000L, 3_000L)
+            )
+        )
+
+        manager.initialize()
+        val first = async { manager.check() }
+        val second = async { manager.check() }
+
+        first.await()
+        second.await()
+
+        coVerify(exactly = 1) { api.refresh(any()) }
+        assertThat(cachedAccessToken).isEqualTo("new-access")
+    }
+
+    @Test
     fun check_forbidden_clearsTraktAccountCaches() = runTest {
         val api = mockk<AuthApiService>()
         val keyManager = mockk<DeviceKeyManager>()
@@ -243,6 +302,7 @@ class AuthManagerTest {
         val manager = AuthManager(api, keyManager, continuityManager, storage, Json, traktRepositoryProvider)
 
         every { continuityManager.getAndroidId() } returns "android-id"
+        every { storage.getCachedAccessToken() } returns "access-token"
         coEvery { api.check(CheckRequest("android-id")) } returns
             Response.error(403, "forbidden".toResponseBody())
         coEvery { storage.clearTokens() } returns Unit
@@ -269,6 +329,8 @@ class AuthManagerTest {
         every { storage.getCachedAccessToken() } returns "old-access"
         coEvery { storage.isTokenValid() } returns false
         coEvery { storage.getRefreshToken() } returns "refresh-token"
+        coEvery { storage.getRefreshAttemptId() } returns null
+        coEvery { storage.saveRefreshAttemptId(any()) } returns Unit
         every { keyManager.sign(any()) } returns ByteArray(64)
         coEvery { storage.clearTokens() } returns Unit
         coEvery { api.challenge(ChallengeRequest("device-id")) } returns Response.success(

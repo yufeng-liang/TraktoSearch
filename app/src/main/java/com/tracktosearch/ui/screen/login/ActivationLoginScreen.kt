@@ -64,7 +64,10 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.OAuthCallback
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.DoubanLogo
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.theme.monetDoubanGreen
+import com.tracktosearch.ui.theme.onMonetDoubanGreen
 import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.blurEffect
@@ -253,27 +256,16 @@ fun ActivationLoginScreen(
                     )
                 }
 
-                TextButton(
-                    onClick = onGuestMode,
-                    enabled = canUseActions,
-                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                        contentColor = loginTextColor,
-                        disabledContentColor = loginTextColor.copy(alpha = 0.38f)
-                    ),
+                ActivationSecondaryActions(
+                    guestEnabled = canUseActions,
+                    doubanEnabled = canUseActions &&
+                        loginState != LoginState.AUTHORIZING &&
+                        loginState != LoginState.CONNECTING,
+                    guestContentColor = loginTextColor,
+                    onDoubanLogin = onDoubanLogin,
+                    onGuestMode = onGuestMode,
                     modifier = Modifier.fillMaxWidth()
-                ) { Text(stringResource(R.string.login_guest)) }
-
-                // 豆瓣登录入口：与 Trakt 登录按钮协调的次级 TextButton，
-                // 用于进入豆瓣独立模式（不连 trakt 也能用 watchlist 等核心功能）
-                TextButton(
-                    onClick = onDoubanLogin,
-                    enabled = canUseActions && loginState != LoginState.AUTHORIZING && loginState != LoginState.CONNECTING,
-                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                        contentColor = if (isDarkTheme) Color(0xFF6B4632) else MaterialTheme.colorScheme.primary,
-                        disabledContentColor = loginTextColor.copy(alpha = 0.38f)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text(stringResource(R.string.login_douban)) }
+                )
                 Spacer(modifier = Modifier.height(20.dp))
             }
         }
@@ -296,6 +288,58 @@ fun ActivationLoginScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+internal fun ActivationSecondaryActions(
+    guestEnabled: Boolean,
+    doubanEnabled: Boolean = guestEnabled,
+    guestContentColor: Color,
+    onDoubanLogin: () -> Unit,
+    onGuestMode: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val doubanGreen = MaterialTheme.colorScheme.monetDoubanGreen()
+    Column(
+        modifier = modifier.padding(start = 18.dp, top = 8.dp, end = 18.dp)
+    ) {
+        Button(
+            onClick = onDoubanLogin,
+            enabled = doubanEnabled,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = doubanGreen,
+                contentColor = MaterialTheme.colorScheme.onMonetDoubanGreen(),
+                disabledContainerColor = doubanGreen.copy(alpha = 0.38f),
+                disabledContentColor = MaterialTheme.colorScheme.onMonetDoubanGreen().copy(alpha = 0.38f)
+            )
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                DoubanLogo(
+                    contentDescription = stringResource(R.string.settings_account_douban),
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(stringResource(R.string.login_douban))
+            }
+        }
+        TextButton(
+            onClick = onGuestMode,
+            enabled = guestEnabled,
+            colors = ButtonDefaults.textButtonColors(
+                contentColor = guestContentColor,
+                disabledContentColor = guestContentColor.copy(alpha = 0.38f)
+            ),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(stringResource(R.string.login_guest))
+        }
     }
 }
 

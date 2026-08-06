@@ -38,13 +38,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.AdaptiveSingleLineText
+import com.tracktosearch.ui.component.DoubanLogo
+import com.tracktosearch.ui.component.TraktLogo
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 
@@ -121,7 +122,7 @@ fun VersionItem(
 }
 
 /**
- * 账户行：左标签 + 头像 + 主名称（含可选 ID 小字）+ 登出按钮。
+ * 账户行：左 logo + 头像 + 主名称（含可选 ID 小字）+ 登出按钮。
  * 用于账户卡片中 Trakt / 豆瓣两行，统一行结构。
  *
  * - avatarUrl 为空且 showAvatar=true 时显示占位图标（未登录或加载失败）
@@ -130,7 +131,7 @@ fun VersionItem(
  */
 @Composable
 internal fun AccountRow(
-    accountLabel: String,
+    brandLogo: @Composable () -> Unit,
     avatarUrl: String,
     primaryName: String?,
     secondaryName: String?,
@@ -145,14 +146,13 @@ internal fun AccountRow(
             .padding(horizontal = 6.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 账户标签：固定宽度让 Trakt/豆瓣两行的头像起点对齐
-        Text(
-            text = accountLabel,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        // 账户 logo：固定宽度让 Trakt/豆瓣两行的头像起点对齐
+        Box(
             modifier = Modifier.width(40.dp),
-            textAlign = TextAlign.Center
-        )
+            contentAlignment = Alignment.Center
+        ) {
+            brandLogo()
+        }
         Spacer(modifier = Modifier.width(8.dp))
         // 头像：仅在 showAvatar=true 时展示（豆瓣未登录时无头像）
         if (showAvatar) {
@@ -297,14 +297,16 @@ internal fun DoubanLoginPromptRow(
             .padding(horizontal = 6.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 账户标签：与 AccountRow 固定 40dp 宽度对齐
-        Text(
-            text = stringResource(R.string.settings_account_douban),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        // 账户 logo：与 AccountRow 固定 40dp 宽度对齐
+        Box(
             modifier = Modifier.width(40.dp),
-            textAlign = TextAlign.Center
-        )
+            contentAlignment = Alignment.Center
+        ) {
+            DoubanLogo(
+                contentDescription = stringResource(R.string.settings_account_douban),
+                modifier = Modifier.size(24.dp)
+            )
+        }
         Spacer(modifier = Modifier.width(8.dp))
         // 登录用途说明文字
         Text(
@@ -344,12 +346,15 @@ internal fun TraktLoginPromptRow(
             .padding(horizontal = 6.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = stringResource(R.string.settings_account_trakt_label),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(40.dp)
-        )
+        Box(
+            modifier = Modifier.width(40.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            TraktLogo(
+                contentDescription = stringResource(R.string.settings_account_trakt_label),
+                modifier = Modifier.size(24.dp)
+            )
+        }
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = stringResource(R.string.settings_guest_login_hint),

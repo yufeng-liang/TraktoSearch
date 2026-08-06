@@ -114,7 +114,8 @@ data class RefreshRequest(
     val deviceId: String,
     val refreshToken: String,
     val nonce: String,
-    val signature: String
+    val signature: String,
+    val attemptId: String,
 )
 
 @Serializable

@@ -21,6 +21,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.decodeFromString
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
@@ -134,6 +135,7 @@ class AuthManager @Inject constructor(
      */
     suspend fun check(): Result<CheckResponse> {
         return try {
+            val failedAccessToken = tokenStorage.getCachedAccessToken().orEmpty()
             val response = authApiService.check(CheckRequest(deviceContinuityManager.getAndroidId()))
             if (response.isSuccessful) {
                 val body = response.body()?.data ?: return Result.failure(Exception(response.errorMessage("Empty response")))
@@ -146,7 +148,7 @@ class AuthManager @Inject constructor(
                 Result.success(body)
             } else if (response.code() == 401) {
                 // 令牌失效，尝试刷新
-                refreshAfterCheck()
+                refreshAfterCheck(failedAccessToken)
             } else if (response.code() == 403) {
                 invalidateSession()
                 Result.failure(Exception(response.errorMessage("Check failed: ${response.code()}")))
@@ -187,6 +189,9 @@ class AuthManager @Inject constructor(
         return try {
             val currentDeviceId = deviceId ?: return Result.failure(Exception("No device ID"))
             val refreshToken = tokenStorage.getRefreshToken() ?: return Result.failure(Exception("No refresh token"))
+            val attemptId = tokenStorage.getRefreshAttemptId()
+                ?.takeIf { it.isNotBlank() }
+                ?: UUID.randomUUID().toString().also { tokenStorage.saveRefreshAttemptId(it) }
 
             // 获取挑战码
             val challengeResponse = authApiService.challenge(ChallengeRequest(currentDeviceId))
@@ -208,7 +213,8 @@ class AuthManager @Inject constructor(
                     deviceId = currentDeviceId,
                     refreshToken = refreshToken,
                     nonce = challenge,
-                    signature = signatureBase64
+                    signature = signatureBase64,
+                    attemptId = attemptId,
                 )
             )
             if (refreshResponse.isSuccessful) {
@@ -246,9 +252,14 @@ class AuthManager @Inject constructor(
     /**
      * 处理网络异常（离线宽限）
      */
-    private suspend fun refreshAfterCheck(): Result<CheckResponse> {
-        val result = refresh()
-        return if (result.isSuccess) {
+    private suspend fun refreshAfterCheck(failedAccessToken: String): Result<CheckResponse> {
+        val refreshed = refreshCoordinator.refreshIfNeeded(
+            failedAccessToken = failedAccessToken,
+            currentAccessToken = tokenStorage::getCachedAccessToken,
+        ) {
+            refreshLocked().isSuccess
+        }
+        return if (refreshed) {
             Result.success(CheckResponse(
                 authorized = true,
                 friendId = "",
@@ -259,7 +270,7 @@ class AuthManager @Inject constructor(
                 configVersion = 1
             ))
         } else {
-            Result.failure(result.exceptionOrNull() ?: Exception("Refresh failed"))
+            Result.failure(Exception("Refresh failed"))
         }
     }
 

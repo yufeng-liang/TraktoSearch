@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
@@ -200,9 +201,8 @@ class SettingsScreenTest {
             )
         }
         composeRule.waitForIdle()
-        val doubanLabel = context.getString(R.string.settings_account_douban)
-        scrollToText(doubanLabel)
-        composeRule.onNodeWithText(doubanLabel).assertIsDisplayed()
+        val doubanLogoDescription = context.getString(R.string.settings_account_douban)
+        composeRule.onNodeWithContentDescription(doubanLogoDescription).assertIsDisplayed()
     }
 
     @Test
@@ -218,6 +218,22 @@ class SettingsScreenTest {
         val doubanLoginText = context.getString(R.string.settings_account_douban_login)
         scrollToText(doubanLoginText)
         composeRule.onNodeWithText(doubanLoginText).assertIsDisplayed()
+        val doubanLogoDescription = context.getString(R.string.settings_account_douban)
+        composeRule.onNodeWithContentDescription(doubanLogoDescription).assertIsDisplayed()
+    }
+
+    @Test
+    fun `Trakt账户行显示logo`() {
+        setContentWithMockedViewModels {
+            SettingsScreen(
+                isLoggedIn = true,
+                onLogout = {},
+                viewModel = createMockSettingsViewModel()
+            )
+        }
+        composeRule.waitForIdle()
+        val traktLogoDescription = context.getString(R.string.settings_account_trakt_label)
+        composeRule.onNodeWithContentDescription(traktLogoDescription).assertIsDisplayed()
     }
 
     // ============ 检查一致性交互测试 ============

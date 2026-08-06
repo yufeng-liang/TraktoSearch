@@ -58,6 +58,9 @@ class TokenStorage @Inject constructor(
     private var cachedNextCheckAt: Long = 0L
 
     @Volatile
+    private var cachedRefreshAttemptId: String? = null
+
+    @Volatile
     private var cacheLoaded: Boolean = false
 
     private val _accessTokenFlow = MutableStateFlow<String?>(null)
@@ -77,6 +80,7 @@ class TokenStorage @Inject constructor(
             cachedDeviceId = p.getString(KEY_DEVICE_ID, null)
             cachedLastOnlineAt = p.getLong(KEY_LAST_ONLINE_AT, 0L)
             cachedNextCheckAt = p.getLong(KEY_NEXT_CHECK_AT, 0L)
+            cachedRefreshAttemptId = p.getString(KEY_REFRESH_ATTEMPT_ID, null)
             cachedAccessToken = token
             cachedExpiresAt = expiresAt
             cacheLoaded = true
@@ -117,12 +121,14 @@ class TokenStorage @Inject constructor(
             .putLong(KEY_EXPIRES_AT, expiresAt)
             .putString(KEY_DEVICE_ID, deviceId)
             .putLong(KEY_LAST_ONLINE_AT, lastOnlineAt)
-            .putLong(KEY_NEXT_CHECK_AT, nextCheckAt))
+            .putLong(KEY_NEXT_CHECK_AT, nextCheckAt)
+            .remove(KEY_REFRESH_ATTEMPT_ID))
         cachedAccessToken = accessToken
         cachedExpiresAt = expiresAt
         cachedDeviceId = deviceId
         cachedLastOnlineAt = lastOnlineAt
         cachedNextCheckAt = nextCheckAt
+        cachedRefreshAttemptId = null
         cacheLoaded = true
         _accessTokenFlow.value = accessToken
         _isLoggedInState.value = true
@@ -133,6 +139,19 @@ class TokenStorage @Inject constructor(
     fun getCachedLastOnlineAt(): Long = cachedLastOnlineAt
 
     fun getCachedNextCheckAt(): Long = cachedNextCheckAt
+
+    suspend fun getRefreshAttemptId(): String? {
+        ensureCacheLoaded()
+        return cachedRefreshAttemptId
+    }
+
+    suspend fun saveRefreshAttemptId(attemptId: String) {
+        val normalized = attemptId.trim()
+        require(normalized.isNotEmpty()) { "Refresh attempt ID must not be blank" }
+        ensureCacheLoaded()
+        commit(prefs().edit().putString(KEY_REFRESH_ATTEMPT_ID, normalized))
+        cachedRefreshAttemptId = normalized
+    }
 
     suspend fun saveTokens(accessToken: String, refreshToken: String, expiresIn: Long) {
         val expiresAt = System.currentTimeMillis() / 1000 + expiresIn
@@ -185,12 +204,14 @@ class TokenStorage @Inject constructor(
             .remove(KEY_EXPIRES_AT)
             .remove(KEY_DEVICE_ID)
             .remove(KEY_LAST_ONLINE_AT)
-            .remove(KEY_NEXT_CHECK_AT))
+            .remove(KEY_NEXT_CHECK_AT)
+            .remove(KEY_REFRESH_ATTEMPT_ID))
         cachedAccessToken = null
         cachedExpiresAt = 0L
         cachedDeviceId = null
         cachedLastOnlineAt = 0L
         cachedNextCheckAt = 0L
+        cachedRefreshAttemptId = null
         cacheLoaded = false
         _accessTokenFlow.value = null
         _isLoggedInState.value = false
@@ -209,5 +230,6 @@ class TokenStorage @Inject constructor(
         private const val KEY_DEVICE_ID = "device_id"
         private const val KEY_LAST_ONLINE_AT = "last_online_at"
         private const val KEY_NEXT_CHECK_AT = "next_check_at"
+        private const val KEY_REFRESH_ATTEMPT_ID = "refresh_attempt_id"
     }
 }
