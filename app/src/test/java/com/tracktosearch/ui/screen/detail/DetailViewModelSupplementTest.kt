@@ -611,6 +611,7 @@ class DetailViewModelSupplementTest {
 
         // 同步表命中后 doubanIdForSync 被设置，但未登录豆瓣 → retryable=true
         assertThat(viewModel.uiState.value.doubanIdForSync).isEqualTo("7654321")
+        assertThat(viewModel.uiState.value.ratingSource).isEqualTo(DetailRatingSource.DOUBAN)
         assertThat(viewModel.uiState.value.doubanSyncRetryable).isTrue()
     }
 
@@ -633,6 +634,7 @@ class DetailViewModelSupplementTest {
         advanceUntilIdle()
 
         assertThat(viewModel.uiState.value.doubanIdForSync).isEqualTo("9999999")
+        assertThat(viewModel.uiState.value.ratingSource).isEqualTo(DetailRatingSource.DOUBAN)
         coVerify(exactly = 1) { doubanRepository.findDoubanId(100, "tt1234567", "movie") }
     }
 
@@ -826,6 +828,23 @@ class DetailViewModelSupplementTest {
         coVerify { doubanRepository.markWish("db-1", "fake_cookie") }
         coVerify(exactly = 0) { traktRepository.addToWatchlist(any(), any(), any()) }
         coVerify(exactly = 0) { traktRepository.removeFromWatchlist(any(), any(), any()) }
+    }
+
+    @Test
+    fun dualLoginDoubanItem_removeWishFailure_keepsRetryAction() = runTest {
+        setupDoubanBackedTraktDetail()
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user", "fake_cookie")
+        coEvery { doubanSyncedItemDao.deleteByDoubanId("db-1") } returns Unit
+        coEvery { doubanRepository.removeInterest("db-1", "fake_cookie") } returns false
+        setUiState { it.copy(isMarkedWatchlist = true) }
+
+        viewModel.toggleWatchlist()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.isMarkedWatchlist).isFalse()
+        assertThat(viewModel.uiState.value.doubanSyncRetryable).isTrue()
+        assertThat(viewModel.uiState.value.pendingDoubanAction).isEqualTo(DoubanSyncAction.REMOVE_WISH)
+        coVerify(exactly = 1) { doubanRepository.removeInterest("db-1", "fake_cookie") }
     }
 
     @Test

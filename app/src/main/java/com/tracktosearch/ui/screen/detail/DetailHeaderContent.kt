@@ -306,46 +306,18 @@ internal fun DetailHeaderContent(
                 }
                 // 多平台评分（固定高度区域）
                 Spacer(modifier = Modifier.height(8.dp))
-                Box(modifier = Modifier.height(46.dp)) {
-                    if (uiState.ratings != null) {
+                Box(modifier = Modifier.height(60.dp)) {
+                    if (
+                        uiState.ratings != null &&
+                        uiState.ratingSource != DetailRatingSource.UNKNOWN
+                    ) {
                         RatingsRow(
                             ratings = uiState.ratings,
-                            isDoubanItem = !uiState.doubanIdForSync.isNullOrBlank()
+                            ratingSource = uiState.ratingSource,
+                            immersionColor = posterColor
                         )
                     } else {
-                        // 骨架占位
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                    modifier = Modifier.weight(1f).height(20.dp)
-                                ) {}
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                    modifier = Modifier.weight(1f).height(20.dp)
-                                ) {}
-                            }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                    modifier = Modifier.weight(1f).height(20.dp)
-                                ) {}
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                    modifier = Modifier.weight(1f).height(20.dp)
-                                ) {}
-                            }
-                        }
+                        RatingsLoadingPlaceholder(immersionColor = posterColor)
                     }
                 }
                 // 操作按钮组：想看 / 已看 / 评分

@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.detail
 import com.tracktosearch.ui.theme.RatingGold
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
@@ -8,6 +9,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -39,11 +41,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
@@ -53,6 +57,10 @@ import com.tracktosearch.ui.util.performHaptic
 import java.util.Locale
 
 // ==================== 评分行 ====================
+
+internal const val RATING_CARD_TEST_TAG = "detail_ratings_card"
+
+private val LEFT_RATING_LABEL_SLOT_WIDTH = 44.dp
 
 private enum class RatingSource {
     IMDb,
@@ -65,123 +73,214 @@ private enum class RatingSource {
 private data class RatingBadgeData(
     val source: RatingSource,
     val label: String,
-    val color: Color,
-    val value: String
+    val brandColor: Color,
+    val value: String,
+    val normalizedScore: Double?
 )
 
 @Composable
 internal fun RatingsRow(
     ratings: MultiRatings,
-    isDoubanItem: Boolean = false
+    isDoubanItem: Boolean = false,
+    ratingSource: DetailRatingSource = if (isDoubanItem) {
+        DetailRatingSource.DOUBAN
+    } else {
+        DetailRatingSource.NORMAL
+    },
+    immersionColor: Color? = null
 ) {
-    // 第一行：IMDb，以及豆瓣评分或 MTC（二者只显示一个）
-    val row1 = mutableListOf<RatingBadgeData>()
-    if (ratings.imdbRating.isNotEmpty()) {
-        row1.add(
-            RatingBadgeData(
-                source = RatingSource.IMDb,
-                label = stringResource(R.string.detail_info_imdb_rating),
-                color = Color(0xFFF5C518),
-                value = ratings.imdbRating
-            )
-        )
+    if (ratingSource == DetailRatingSource.UNKNOWN) {
+        RatingsLoadingPlaceholder(immersionColor = immersionColor)
+        return
     }
-    if (ratings.doubanRating != null) {
-        row1.add(
-            RatingBadgeData(
-                source = RatingSource.Douban,
-                label = stringResource(R.string.detail_info_douban_rating),
-                color = Color(0xFF2E963D),
-                value = String.format(Locale.getDefault(), "%.1f", ratings.doubanRating)
-            )
-        )
-    } else if (!isDoubanItem && ratings.metacritic.isNotEmpty()) {
-        row1.add(
-            RatingBadgeData(
-                source = RatingSource.Metacritic,
-                label = stringResource(R.string.detail_info_metacritic_rating),
-                color = Color(0xFFFF9500),
-                value = ratings.metacritic
-            )
-        )
+    val missingValue = stringResource(R.string.detail_info_rating_missing)
+    val normalizedDoubanRating = normalizeTenPointRating(ratings.doubanRating)
+    val showDoubanRating = when (ratingSource) {
+        DetailRatingSource.DOUBAN -> true
+        DetailRatingSource.NORMAL -> normalizedDoubanRating != null
+        DetailRatingSource.UNKNOWN -> false
     }
-
-    // 第二行：TMDB, RT
-    val row2 = mutableListOf<RatingBadgeData>()
-    if (ratings.tmdbRating > 0) {
-        row2.add(
-            RatingBadgeData(
-                source = RatingSource.TMDB,
-                label = stringResource(R.string.detail_info_tmdb_rating),
-                color = Color(0xFFF5C518),
-                value = String.format(Locale.getDefault(), "%.1f", ratings.tmdbRating)
-            )
+    val row1Second = if (showDoubanRating) {
+        RatingBadgeData(
+            source = RatingSource.Douban,
+            label = stringResource(R.string.detail_info_douban_rating),
+            brandColor = Color(0xFF2E963D),
+            value = ratings.doubanRating?.takeIf { normalizedDoubanRating != null }?.let {
+                String.format(Locale.getDefault(), "%.1f", it)
+            } ?: missingValue,
+            normalizedScore = normalizedDoubanRating
         )
-    }
-    if (ratings.rottenTomatoes.isNotEmpty()) {
-        row2.add(
-            RatingBadgeData(
-                source = RatingSource.RottenTomatoes,
-                label = stringResource(R.string.detail_info_rotten_tomatoes_rating),
-                color = Color(0xFFFF4444),
-                value = ratings.rottenTomatoes
-            )
+    } else {
+        RatingBadgeData(
+            source = RatingSource.Metacritic,
+            label = stringResource(R.string.detail_info_metacritic_rating),
+            brandColor = Color(0xFFFF9500),
+            value = displayRating(ratings.metacritic, missingValue),
+            normalizedScore = normalizePercentRating(ratings.metacritic)
         )
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        // 第一行：始终渲染，无数据时用透明占位保持高度
-        Row(
-            modifier = Modifier.fillMaxWidth().height(20.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (row1.isNotEmpty()) {
-                for (badge in row1) {
-                    RatingBadge(badge = badge, modifier = Modifier.weight(1f))
+    val row1 = listOf(
+        RatingBadgeData(
+            source = RatingSource.IMDb,
+            label = stringResource(R.string.detail_info_imdb_rating),
+            brandColor = Color(0xFFF5C518),
+            value = displayTenPointRating(ratings.imdbRating, missingValue),
+            normalizedScore = parseTenPointRating(ratings.imdbRating)
+        ),
+        row1Second
+    )
+    val row2 = listOf(
+        RatingBadgeData(
+            source = RatingSource.TMDB,
+            label = stringResource(R.string.detail_info_tmdb_rating),
+            brandColor = Color(0xFFF5C518),
+            value = displayTenPointRating(
+                ratings.tmdbRating.takeIf { it > 0.0 },
+                missingValue
+            ),
+            normalizedScore = ratings.tmdbRating.takeIf { it > 0.0 }
+                ?.let(::normalizeTenPointRating)
+        ),
+        RatingBadgeData(
+            source = RatingSource.RottenTomatoes,
+            label = stringResource(R.string.detail_info_rotten_tomatoes_rating),
+            brandColor = Color(0xFFFF4444),
+            value = displayRating(ratings.rottenTomatoes, missingValue),
+            normalizedScore = normalizePercentRating(ratings.rottenTomatoes)
+        )
+    )
+
+    RatingCard(immersionColor = immersionColor) { cardColor ->
+        RatingBadgeRow(row1, cardColor)
+        RatingBadgeRow(row2, cardColor)
+    }
+}
+
+@Composable
+internal fun RatingsLoadingPlaceholder(immersionColor: Color? = null) {
+    RatingCard(immersionColor = immersionColor) {
+        repeat(2) {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(22.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                repeat(2) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.weight(1f).height(22.dp)
+                    ) {}
                 }
-                if (row1.size == 1) Spacer(modifier = Modifier.weight(1f))
-            } else {
-                Spacer(modifier = Modifier.weight(1f))
-                Spacer(modifier = Modifier.weight(1f))
-            }
-        }
-        // 第二行：始终渲染，无数据时用透明占位保持高度
-        Row(
-            modifier = Modifier.fillMaxWidth().height(20.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (row2.isNotEmpty()) {
-                for (badge in row2) {
-                    RatingBadge(badge = badge, modifier = Modifier.weight(1f))
-                }
-                if (row2.size == 1) Spacer(modifier = Modifier.weight(1f))
-            } else {
-                Spacer(modifier = Modifier.weight(1f))
-                Spacer(modifier = Modifier.weight(1f))
             }
         }
     }
 }
 
-/** 单个评分项：无背景填充，各平台专属图标 */
 @Composable
-private fun RatingBadge(badge: RatingBadgeData, modifier: Modifier = Modifier) {
+private fun RatingCard(
+    immersionColor: Color?,
+    content: @Composable ColumnScope.(Color) -> Unit
+) {
+    val darkTheme = isSystemInDarkTheme()
+    val baseColor = immersionColor ?: MaterialTheme.colorScheme.surface
+    val cardColor = ratingCardColor(baseColor, darkTheme)
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(64.dp)
+            .testTag(RATING_CARD_TEST_TAG),
+        shape = RoundedCornerShape(12.dp),
+        color = cardColor,
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+        shadowElevation = 0.dp,
+        tonalElevation = 0.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            content = { content(cardColor) }
+        )
+    }
+}
+
+@Composable
+private fun RatingBadgeRow(badges: List<RatingBadgeData>, cardColor: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth().height(22.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        badges.forEachIndexed { index, badge ->
+            RatingBadge(
+                badge = badge,
+                cardColor = cardColor,
+                labelSlotWidth = if (index == 0) {
+                    LEFT_RATING_LABEL_SLOT_WIDTH
+                } else {
+                    null
+                },
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+private fun displayRating(value: String, missingValue: String): String {
+    return value.takeIf { normalizePercentRating(it) != null }?.trim() ?: missingValue
+}
+
+private fun parseTenPointRating(value: String): Double? {
+    return value.trim()
+        .replace(',', '.')
+        .toDoubleOrNull()
+        ?.let(::normalizeTenPointRating)
+}
+
+private fun displayTenPointRating(value: String, missingValue: String): String {
+    return value.takeIf { parseTenPointRating(it) != null }?.trim() ?: missingValue
+}
+
+private fun displayTenPointRating(value: Double?, missingValue: String): String {
+    return value
+        ?.takeIf { normalizeTenPointRating(it) != null }
+        ?.let { String.format(Locale.getDefault(), "%.1f", it) }
+        ?: missingValue
+}
+
+/** 单个评分项：平台识别使用品牌色，评分数字使用分档色。 */
+@Composable
+private fun RatingBadge(
+    badge: RatingBadgeData,
+    cardColor: Color,
+    labelSlotWidth: Dp?,
+    modifier: Modifier = Modifier
+) {
     val source = badge.source
+    val scoreColor = ratingBandColor(
+        band = ratingBand(badge.normalizedScore),
+        surfaceColor = cardColor,
+        unavailableColor = MaterialTheme.colorScheme.onSurfaceVariant
+    )
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(3.dp)
+        horizontalArrangement = if (labelSlotWidth == null) {
+            Arrangement.SpaceBetween
+        } else {
+            Arrangement.Start
+        }
     ) {
+        Row(
+            modifier = labelSlotWidth?.let { Modifier.width(it) } ?: Modifier,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
         when (source) {
-            RatingSource.TMDB -> Icon(
-                Icons.Rounded.Star, contentDescription = null,
-                modifier = Modifier.size(14.dp), tint = badge.color
-            )
+            RatingSource.TMDB -> Unit
             RatingSource.IMDb -> Surface(
                 shape = RoundedCornerShape(2.dp),
-                color = badge.color
+                color = badge.brandColor
             ) {
                 Text(
                     text = badge.label,
@@ -214,15 +313,17 @@ private fun RatingBadge(badge: RatingBadgeData, modifier: Modifier = Modifier) {
                 text = badge.label,
                 style = MaterialTheme.typography.titleSmall.copy(fontSize = 12.sp),
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = badge.brandColor
             )
+        }
         }
 
         Text(
             text = badge.value,
-            style = MaterialTheme.typography.titleSmall.copy(fontSize = 12.sp),
+            modifier = Modifier.padding(start = 4.dp),
+            style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp),
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = scoreColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )

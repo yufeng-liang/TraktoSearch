@@ -244,6 +244,8 @@ class WatchlistViewModel @Inject constructor(
         viewModelScope.launch {
             // 未登录豆瓣 → 不需要引导
             if (doubanAuthStorage.getCredentials() == null) return@launch
+            // 已有同步任务运行时，续传/后台恢复会自行展示进度，不再弹首次导入引导
+            if (doubanSyncManager.isRunning()) return@launch
             // 已登录但从未同步过 → 需要引导
             val status = doubanSyncMetaStorage.getCooldownStatus()
             if (status.neverSynced) {
@@ -353,6 +355,8 @@ class WatchlistViewModel @Inject constructor(
         viewModelScope.launch {
             doubanSyncManager.progress.collect { progress: DoubanSyncProgress ->
                 if (progress.isRunning) {
+                    // 续传可能在首次引导已经显示后才启动，清除剩余的引导状态
+                    _needFirstSyncGuide.value = false
                     doubanSyncBannerHideJob?.cancel()
                     _uiState.update {
                         it.copy(
@@ -1311,9 +1315,13 @@ class WatchlistViewModel @Inject constructor(
         doubanItems: List<DoubanSyncedItem>
     ): Int {
         val loadedTraktImdbIds = loadedTraktItems.mapNotNull { normalizeWatchlistImdbId(it.imdbId) }.toSet()
+        val loadedTraktIds = loadedTraktItems.mapNotNull { it.traktId.takeIf { id -> id > 0 } }.toSet()
         val doubanOnlyCount = doubanItems.count {
             val imdbId = normalizeWatchlistImdbId(it.imdbId)
-            imdbId == null || imdbId !in loadedTraktImdbIds
+            val traktId = it.traktId?.takeIf { id -> id > 0 }
+            val matchesLoadedTraktId = traktId != null && traktId in loadedTraktIds
+            val matchesLoadedImdbId = imdbId != null && imdbId in loadedTraktImdbIds
+            !matchesLoadedTraktId && !matchesLoadedImdbId
         }
         return (traktTotalCount + doubanOnlyCount).coerceAtLeast(loadedTraktItems.size + doubanOnlyCount)
     }

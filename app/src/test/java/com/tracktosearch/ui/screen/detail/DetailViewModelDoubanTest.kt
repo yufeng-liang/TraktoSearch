@@ -176,6 +176,7 @@ class DetailViewModelDoubanTest {
         assertThat(state.userRating).isEqualTo(8)
         assertThat(state.userComment).isEqualTo("My note")
         assertThat(state.doubanIdForSync).isEqualTo("db-1")
+        assertThat(state.ratingSource).isEqualTo(DetailRatingSource.DOUBAN)
         assertThat(state.isMarkedWatchlist).isTrue()
         assertThat(state.isMarkedWatched).isFalse()
         coVerify(exactly = 0) { tmdbRepository.enrichMovie(any(), any(), any()) }
@@ -199,11 +200,40 @@ class DetailViewModelDoubanTest {
 
         assertThat(viewModel.uiState.value.isLoading).isFalse()
         assertThat(viewModel.uiState.value.displayTitle).isEqualTo("Fallback title")
+        assertThat(viewModel.uiState.value.ratingSource).isEqualTo(DetailRatingSource.NORMAL)
         coVerify(exactly = 0) { tmdbRepository.enrichMovie(any(), any(), any()) }
         coVerify(exactly = 0) { traktRepository.getComments(any(), any(), any(), any()) }
         coVerify(exactly = 0) { traktRepository.getShowSeasons(any()) }
         coVerify(exactly = 0) { traktRepository.checkInWatchlist(any(), any()) }
         coVerify(exactly = 0) { traktRepository.checkWatched(any(), any()) }
+    }
+
+    @Test
+    fun lateDoubanIdResolutionLoadsPublicRatingFromSnapshot() = runTest {
+        val detail = DoubanDetailCacheEntry(
+            imdbId = "tt7654321",
+            isTvShow = false,
+            doubanRating = 8.8
+        )
+        coEvery { doubanSyncedItemDao.getByImdbId("tt7654321") } returns null
+        coEvery { doubanRepository.findDoubanId(100, "tt7654321", "movie") } returns "db-2"
+        coEvery { doubanRepository.getDetailSnapshot() } returns mapOf("db-2" to detail)
+        coEvery { traktRepository.getRelatedMovies(100) } returns Result.success(emptyList())
+        every {
+            ratingsRepository.fetchRatingsStream(any(), any(), any())
+        } returns flowOf(MultiRatings(imdbRating = "8.0"))
+
+        viewModel.loadDetail(
+            traktId = 100,
+            tmdbId = 0,
+            title = "Late Douban mapping",
+            mediaType = MediaType.MOVIE,
+            imdbId = "tt7654321"
+        )
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.ratingSource).isEqualTo(DetailRatingSource.DOUBAN)
+        assertThat(viewModel.uiState.value.ratings?.doubanRating).isEqualTo(8.8)
     }
 
     @Test
