@@ -261,6 +261,13 @@ fun WatchlistScreen(
     var showFirstSyncGuide by remember { mutableStateOf(false) }
     // 模式选择弹窗（引导弹窗确认后弹出）
     var showSyncModePicker by remember { mutableStateOf(false) }
+    val isDoubanSyncRunning = uiState.doubanSyncProgress?.isRunning == true
+    // 续传可能在首次同步引导已经入队后才启动，避免引导遮挡正在运行的同步。
+    LaunchedEffect(isDoubanSyncRunning) {
+        if (isDoubanSyncRunning) {
+            showFirstSyncGuide = false
+        }
+    }
     // 监听首次同步引导状态
     LaunchedEffect(Unit) {
         viewModel.needFirstSyncGuide.collect { need ->
@@ -1516,7 +1523,7 @@ fun WatchlistScreen(
             }
     
             // 首次同步引导弹窗（已登录豆瓣但从未同步过时自动弹出）
-            if (showFirstSyncGuide) {
+            if (showFirstSyncGuide && !isDoubanSyncRunning) {
                 DoubanFirstSyncGuideDialog(
                     onDismiss = { showFirstSyncGuide = false },
                     onStartImport = {

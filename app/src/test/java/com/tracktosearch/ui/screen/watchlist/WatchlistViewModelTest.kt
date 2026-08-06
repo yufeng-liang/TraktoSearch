@@ -578,6 +578,42 @@ class WatchlistViewModelTest {
     }
 
     @Test
+    fun `同步开始后不再显示首次同步引导`() = runTest {
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user", "cookie")
+        coEvery { doubanSyncMetaStorage.getCooldownStatus(any()) } returns CooldownStatus(neverSynced = true)
+        every { doubanSyncManager.isRunning() } returns false
+        viewModel = WatchlistViewModel(
+            traktRepository, tmdbRepository, offlineCacheManager,
+            doubanSyncManager, doubanAuthStorage, doubanSyncMetaStorage,
+            statusConsistencyChecker, doubanBatchRemovalManager,
+            sessionModeManager, doubanSyncedItemDao, context
+        )
+        advanceUntilIdle()
+        assertThat(viewModel.needFirstSyncGuide.value).isTrue()
+
+        syncProgressFlow.value = DoubanSyncProgress(isRunning = true)
+        advanceUntilIdle()
+
+        assertThat(viewModel.needFirstSyncGuide.value).isFalse()
+    }
+
+    @Test
+    fun `已有运行中的同步不触发首次同步引导`() = runTest {
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user", "cookie")
+        coEvery { doubanSyncMetaStorage.getCooldownStatus(any()) } returns CooldownStatus(neverSynced = true)
+        every { doubanSyncManager.isRunning() } returns true
+        viewModel = WatchlistViewModel(
+            traktRepository, tmdbRepository, offlineCacheManager,
+            doubanSyncManager, doubanAuthStorage, doubanSyncMetaStorage,
+            statusConsistencyChecker, doubanBatchRemovalManager,
+            sessionModeManager, doubanSyncedItemDao, context
+        )
+        advanceUntilIdle()
+
+        assertThat(viewModel.needFirstSyncGuide.value).isFalse()
+    }
+
+    @Test
     fun `同步完成后横幅可隐藏但结果状态保留到用户关闭`() = runTest {
         syncProgressFlow.value = DoubanSyncProgress(
             isRunning = true,
