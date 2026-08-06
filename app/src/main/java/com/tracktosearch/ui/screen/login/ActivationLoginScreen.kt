@@ -301,7 +301,9 @@ internal fun ActivationSecondaryActions(
     modifier: Modifier = Modifier
 ) {
     val doubanGreen = MaterialTheme.colorScheme.monetDoubanGreen()
-    Column(modifier = modifier) {
+    Column(
+        modifier = modifier.padding(horizontal = 18.dp)
+    ) {
         Button(
             onClick = onDoubanLogin,
             enabled = doubanEnabled,
