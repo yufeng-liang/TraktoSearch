@@ -6,6 +6,11 @@ import androidx.datastore.preferences.core.Preferences
 import com.tracktosearch.data.local.db.DoubanSyncFailureDao
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
 import com.tracktosearch.data.remote.douban.DoubanRepository
+import com.tracktosearch.data.remote.douban.DoubanRexxarApiService
+import com.tracktosearch.data.remote.douban.DoubanRexxarDetail
+import com.tracktosearch.data.remote.douban.DoubanRexxarPhotoCacheEntry
+import com.tracktosearch.data.remote.douban.DoubanRexxarRepository
+import com.tracktosearch.data.remote.douban.DoubanRexxarShortCommentPage
 import com.tracktosearch.data.remote.douban.dto.DoubanRecommendItem
 import com.tracktosearch.data.repository.CloudDetailsPoolManager
 import com.tracktosearch.data.repository.DoubanFailureExporter
@@ -26,6 +31,15 @@ import javax.inject.Singleton
 /** 限定符:区分 traktId→doubanId 映射缓存与其他 PersistentTtlCache<String> */
 @Qualifier
 annotation class DoubanIdMapping
+
+@Qualifier
+annotation class DoubanRexxarDetailCache
+
+@Qualifier
+annotation class DoubanRexxarPhotosCache
+
+@Qualifier
+annotation class DoubanRexxarCommentsCache
 
 /**
  * 豆瓣相关依赖注入模块。
@@ -69,6 +83,74 @@ object DoubanModule {
         @DoubanIdMapping idMappingCache: PersistentTtlCache<String>,
         json: Json
     ): DoubanRepository = DoubanRepository(detailCache, cloudDetailsPoolManager, json, idMappingCache)
+
+    /** Rexxar 详情缓存，跨重启保留 7 天，并使用 PersistentTtlCache 保存原始过期时间。 */
+    @Provides
+    @Singleton
+    @DoubanRexxarDetailCache
+    fun provideDoubanRexxarDetailCache(
+        @ApplicationContext context: Context,
+        json: Json
+    ): PersistentTtlCache<DoubanRexxarDetail> {
+        return persistentTtlCache(
+            ttlMillis = 7 * 24 * 60 * 60 * 1000L,
+            maxSize = 500,
+            dataStore = context.doubanRexxarCacheStore,
+            json = json,
+            keyPrefix = "douban_rexxar_detail_v1",
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        )
+    }
+
+    /** Rexxar 剧照 URL 集合永久缓存，每 24 小时通过条目时间戳刷新接口并合并新增分页。 */
+    @Provides
+    @Singleton
+    @DoubanRexxarPhotosCache
+    fun provideDoubanRexxarPhotosCache(
+        @ApplicationContext context: Context,
+        json: Json
+    ): PersistentTtlCache<DoubanRexxarPhotoCacheEntry> {
+        return persistentTtlCache(
+            ttlMillis = Long.MAX_VALUE,
+            maxSize = 500,
+            dataStore = context.doubanRexxarCacheStore,
+            json = json,
+            keyPrefix = "douban_rexxar_photos_v2",
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        )
+    }
+
+    /** Rexxar 公开短评分页缓存，跨重启保留 6 小时。 */
+    @Provides
+    @Singleton
+    @DoubanRexxarCommentsCache
+    fun provideDoubanRexxarCommentsCache(
+        @ApplicationContext context: Context,
+        json: Json
+    ): PersistentTtlCache<DoubanRexxarShortCommentPage> {
+        return persistentTtlCache(
+            ttlMillis = 6 * 60 * 60 * 1000L,
+            maxSize = 500,
+            dataStore = context.doubanRexxarCacheStore,
+            json = json,
+            keyPrefix = "douban_rexxar_comments_v1",
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        )
+    }
+
+    @Provides
+    @Singleton
+    fun provideDoubanRexxarRepository(
+        service: DoubanRexxarApiService,
+        @DoubanRexxarDetailCache detailCache: PersistentTtlCache<DoubanRexxarDetail>,
+        @DoubanRexxarPhotosCache photosCache: PersistentTtlCache<DoubanRexxarPhotoCacheEntry>,
+        @DoubanRexxarCommentsCache commentsCache: PersistentTtlCache<DoubanRexxarShortCommentPage>
+    ): DoubanRexxarRepository = DoubanRexxarRepository(
+        service = service,
+        detailCache = detailCache,
+        photosCache = photosCache,
+        commentsCache = commentsCache
+    )
 
     /**
      * DoubanFailureExporter 需要 DoubanSyncFailureDao + Json,显式 provide 以便注入 Json 实例。
@@ -141,3 +223,6 @@ private val Context.doubanRecommendCacheStore: DataStore<Preferences> by android
 
 /** traktId→doubanId 映射缓存 DataStore */
 private val Context.doubanIdMappingCacheStore: DataStore<Preferences> by androidx.datastore.preferences.preferencesDataStore(name = "douban_id_mapping_cache")
+
+/** Rexxar 详情、剧照 URL、短评分页缓存共用的 DataStore */
+private val Context.doubanRexxarCacheStore: DataStore<Preferences> by androidx.datastore.preferences.preferencesDataStore(name = "douban_rexxar_cache")

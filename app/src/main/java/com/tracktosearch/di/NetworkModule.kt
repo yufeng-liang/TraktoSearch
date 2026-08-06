@@ -7,6 +7,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.auth.AuthInterceptor
 import com.tracktosearch.data.remote.douban.DoubanHotApiService
+import com.tracktosearch.data.remote.douban.DoubanRexxarApiService
+import com.tracktosearch.data.remote.douban.DoubanRexxarRequestInterceptor
 import com.tracktosearch.data.remote.omdb.OmdbApiService
 import com.tracktosearch.data.remote.panhub.PanHubApiService
 import com.tracktosearch.data.remote.pansou.PanSouApiService
@@ -49,6 +51,7 @@ private val Context.doubanPersistentCacheStore: DataStore<Preferences> by prefer
 object NetworkModule {
 
     private const val CACHE_SIZE = 10L * 1024 * 1024 // 10 MB
+    private const val DOUBAN_REXXAR_BASE_URL = "https://m.douban.com/rexxar/api/v2/"
     const val USER_AGENT = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
 
     private val json = Json {
@@ -292,6 +295,37 @@ object NetworkModule {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(DoubanHotApiService::class.java)
+    }
+
+    /** Rexxar 直连客户端：不带网关鉴权，只添加移动端 UA 和 Referer。 */
+    @Provides
+    @Singleton
+    @Named("doubanRexxar")
+    fun provideDoubanRexxarOkHttpClient(
+        baseClient: OkHttpClient,
+        loggingInterceptor: HttpLoggingInterceptor
+    ): OkHttpClient {
+        return baseClient.newBuilder()
+            .addInterceptor(DoubanRexxarRequestInterceptor())
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideDoubanRexxarApiService(
+        @Named("doubanRexxar") okHttpClient: OkHttpClient,
+        json: Json
+    ): DoubanRexxarApiService {
+        return Retrofit.Builder()
+            .baseUrl(DOUBAN_REXXAR_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(DoubanRexxarApiService::class.java)
     }
 
     /** 豆瓣热榜专用 OkHttpClient（带 API Key） */

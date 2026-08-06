@@ -1,0 +1,411 @@
+package com.tracktosearch.data.remote.douban
+
+import com.tracktosearch.data.remote.douban.dto.DoubanRexxarDetailDto
+import com.tracktosearch.data.remote.douban.dto.DoubanRexxarImageDto
+import com.tracktosearch.data.remote.douban.dto.DoubanRexxarInterestDto
+import com.tracktosearch.data.remote.douban.dto.DoubanRexxarPhotoDto
+import com.tracktosearch.data.remote.douban.dto.DoubanRexxarPhotoPageDto
+import com.tracktosearch.data.util.PersistentTtlCache
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.Serializable
+import retrofit2.Response
+import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.random.Random
+
+/** Rexxar 支持的公开媒体类型。 */
+@Serializable
+enum class DoubanRexxarMediaType(val path: String) {
+    MOVIE("movie"),
+    TV("tv")
+}
+
+@Serializable
+data class DoubanRexxarImage(
+    val largeUrl: String? = null,
+    val normalUrl: String? = null,
+    val smallUrl: String? = null
+)
+
+@Serializable
+data class DoubanRexxarDetail(
+    val doubanId: String,
+    val title: String? = null,
+    val type: DoubanRexxarMediaType,
+    val score: Double? = null,
+    val ratingCount: Int? = null,
+    val year: String? = null,
+    val genres: List<String> = emptyList(),
+    val poster: DoubanRexxarImage? = null
+)
+
+@Serializable
+data class DoubanRexxarPhoto(
+    val id: String,
+    val largeUrl: String? = null,
+    val normalUrl: String? = null,
+    val smallUrl: String? = null,
+    val position: Int? = null
+)
+
+@Serializable
+data class DoubanRexxarPhotoPage(
+    val total: Int = 0,
+    val start: Int = 0,
+    val count: Int = 0,
+    val photos: List<DoubanRexxarPhoto> = emptyList()
+)
+
+/** 剧照 URL 集合的持久化条目，新的分页结果会按剧照 ID 合并进去。 */
+@Serializable
+data class DoubanRexxarPhotoCacheEntry(
+    val total: Int = 0,
+    val photos: List<DoubanRexxarPhoto> = emptyList(),
+    val lastFetchedAt: Long = 0L
+)
+
+@Serializable
+data class DoubanRexxarShortComment(
+    val id: String,
+    val authorName: String? = null,
+    val ratingStars: Int? = null,
+    val text: String? = null,
+    val createdAt: String? = null
+)
+
+@Serializable
+data class DoubanRexxarShortCommentPage(
+    val total: Int = 0,
+    val start: Int = 0,
+    val count: Int = 0,
+    val comments: List<DoubanRexxarShortComment> = emptyList()
+)
+
+/** Rexxar 请求失败。message 保持英文，供 ViewModel 记录和分类。 */
+open class DoubanRexxarException(
+    message: String,
+    cause: Throwable? = null
+) : IOException(message, cause)
+
+class DoubanRexxarHttpException(
+    val statusCode: Int,
+    message: String = "Douban Rexxar request failed with HTTP $statusCode"
+) : DoubanRexxarException(message)
+
+class DoubanRexxarNetworkException(
+    message: String = "Douban Rexxar network request failed",
+    cause: Throwable? = null
+) : DoubanRexxarException(message, cause)
+
+class DoubanRexxarResponseException(
+    message: String = "Douban Rexxar returned an empty response",
+    cause: Throwable? = null
+) : DoubanRexxarException(message, cause)
+
+/**
+ * 通过 Rexxar 获取公开影视数据。
+ *
+ * 详情、剧照 URL 集合和短评页分别使用独立的持久化 TTL 缓存；缓存本身保存 expireAt，
+ * 因此应用重启后会继续沿用原 TTL，而不会从零开始计时。
+ */
+class DoubanRexxarRepository(
+    private val service: DoubanRexxarApiService,
+    private val detailCache: PersistentTtlCache<DoubanRexxarDetail>,
+    private val photosCache: PersistentTtlCache<DoubanRexxarPhotoCacheEntry>,
+    private val commentsCache: PersistentTtlCache<DoubanRexxarShortCommentPage>,
+    private val retryDelay: suspend (Long) -> Unit = { delay(it) }
+) {
+    private val photoLocks = ConcurrentHashMap<String, Mutex>()
+
+    suspend fun getDetail(
+        doubanId: String,
+        mediaType: DoubanRexxarMediaType,
+        forceRefresh: Boolean = false
+    ): Result<DoubanRexxarDetail> = try {
+        detailCache.awaitLoaded()
+        val key = subjectKey(doubanId, mediaType)
+        if (!forceRefresh) {
+            detailCache.get(key)?.let { return Result.success(it) }
+        }
+        val detail = detailCache.getOrAwait(key, skipCache = forceRefresh) {
+            requestWithRetry {
+                service.getDetail(mediaType.path, doubanId)
+            }.let { mapDetail(it, doubanId, mediaType) }
+        }
+        Result.success(detail)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
+    /**
+     * 获取剧照分页。URL 集合本身永久保留，后续分页按剧照 ID 合并；lastFetchedAt 控制
+     * 每 24 小时重新向 Rexxar 查询一次，图片文件仍由现有 Coil 磁盘缓存管理。
+     */
+    suspend fun getPhotos(
+        doubanId: String,
+        mediaType: DoubanRexxarMediaType,
+        start: Int = 0,
+        count: Int = DEFAULT_PAGE_SIZE,
+        forceRefresh: Boolean = false
+    ): Result<DoubanRexxarPhotoPage> = try {
+        requireValidPage(start, count)
+        photosCache.awaitLoaded()
+        val key = subjectKey(doubanId, mediaType)
+        val lock = photoLocks.computeIfAbsent(key) { Mutex() }
+        lock.withLock {
+            val existing = photosCache.get(key)
+            val now = System.currentTimeMillis()
+            if (!forceRefresh && existing != null && existing.isFresh(now) && existing.satisfies(start, count)) {
+                return@withLock Result.success(existing.toPage(start, count))
+            }
+            val page = requestWithRetry {
+                service.getPhotos(mediaType.path, doubanId, start, count)
+            }.let(::mapPhotoPage)
+            val merged = mergePhotos(
+                existing = photosCache.get(key) ?: existing,
+                page = page,
+                fetchedAt = System.currentTimeMillis()
+            )
+            photosCache.put(key, merged)
+            Result.success(page)
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
+    suspend fun getShortComments(
+        doubanId: String,
+        mediaType: DoubanRexxarMediaType,
+        start: Int = 0,
+        count: Int = DEFAULT_PAGE_SIZE,
+        forceRefresh: Boolean = false
+    ): Result<DoubanRexxarShortCommentPage> = try {
+        requireValidPage(start, count)
+        commentsCache.awaitLoaded()
+        val key = pageKey(doubanId, mediaType, start, count)
+        if (!forceRefresh) {
+            commentsCache.get(key)?.let { return Result.success(it) }
+        }
+        val page = commentsCache.getOrAwait(key, skipCache = forceRefresh) {
+            requestWithRetry {
+                service.getInterests(mediaType.path, doubanId, start, count)
+            }.let { mapComments(it) }
+        }
+        Result.success(page)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
+    private suspend fun <T> requestWithRetry(
+        request: suspend () -> Response<T>
+    ): T {
+        var retryUsed = false
+        while (true) {
+            val response = try {
+                request()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: IOException) {
+                if (!retryUsed) {
+                    retryUsed = true
+                    retryDelay(randomRetryDelay())
+                    continue
+                }
+                throw DoubanRexxarNetworkException(cause = e)
+            }
+
+            if (response.isSuccessful) {
+                return response.body()
+                    ?: throw DoubanRexxarResponseException()
+            }
+            if (response.code() in 500..599 && !retryUsed) {
+                retryUsed = true
+                retryDelay(randomRetryDelay())
+                continue
+            }
+            throw DoubanRexxarHttpException(response.code())
+        }
+    }
+
+    private fun mapDetail(
+        dto: DoubanRexxarDetailDto,
+        requestedId: String,
+        requestedType: DoubanRexxarMediaType
+    ): DoubanRexxarDetail {
+        val type = when (dto.type ?: dto.subtype) {
+            "tv", "show" -> DoubanRexxarMediaType.TV
+            "movie" -> DoubanRexxarMediaType.MOVIE
+            else -> requestedType
+        }
+        return DoubanRexxarDetail(
+            doubanId = dto.id.ifBlank { requestedId },
+            title = dto.title,
+            type = type,
+            score = dto.rating?.value,
+            ratingCount = dto.rating?.count,
+            year = extractYear(dto.year, dto.pubdate, dto.cardSubtitle),
+            genres = dto.genres,
+            poster = mapImage(dto.cover?.image, dto.pic)
+        )
+    }
+
+    private fun mapImage(
+        image: DoubanRexxarImageDto?,
+        pic: com.tracktosearch.data.remote.douban.dto.DoubanRexxarPicDto?
+    ): DoubanRexxarImage? {
+        val result = DoubanRexxarImage(
+            largeUrl = image?.large?.url ?: pic?.large,
+            normalUrl = image?.normal?.url ?: pic?.normal,
+            smallUrl = image?.small?.url ?: pic?.small
+        )
+        return result.takeIf {
+            it.largeUrl != null || it.normalUrl != null || it.smallUrl != null
+        }
+    }
+
+    private fun mapPhoto(dto: DoubanRexxarPhotoDto, position: Int): DoubanRexxarPhoto {
+        return DoubanRexxarPhoto(
+            id = dto.id,
+            largeUrl = dto.image?.large?.url,
+            normalUrl = dto.image?.normal?.url,
+            smallUrl = dto.image?.small?.url,
+            position = position
+        )
+    }
+
+    private fun mapPhotoPage(dto: DoubanRexxarPhotoPageDto): DoubanRexxarPhotoPage {
+        return DoubanRexxarPhotoPage(
+            total = dto.total,
+            start = dto.start,
+            count = dto.count,
+            photos = dto.photos.mapIndexed { index, photo -> mapPhoto(photo, dto.start + index) }
+        )
+    }
+
+    private fun mapComments(dto: com.tracktosearch.data.remote.douban.dto.DoubanRexxarInterestPageDto): DoubanRexxarShortCommentPage {
+        return DoubanRexxarShortCommentPage(
+            total = dto.total,
+            start = dto.start,
+            count = dto.count,
+            comments = dto.interests.map(::mapComment)
+        )
+    }
+
+    private fun mapComment(dto: DoubanRexxarInterestDto): DoubanRexxarShortComment {
+        val rating = dto.rating?.value?.let { value ->
+            val max = dto.rating.max ?: 5
+            val stars = if (max > 5) value / max * 5.0 else value
+            stars.toInt().coerceIn(1, 5)
+        }
+        return DoubanRexxarShortComment(
+            id = dto.id,
+            authorName = dto.user?.name,
+            ratingStars = rating,
+            text = dto.comment,
+            createdAt = dto.createTime
+        )
+    }
+
+    private fun mergePhotos(
+        existing: DoubanRexxarPhotoCacheEntry?,
+        page: DoubanRexxarPhotoPage,
+        fetchedAt: Long
+    ): DoubanRexxarPhotoCacheEntry {
+        val merged = LinkedHashMap<String, DoubanRexxarPhoto>()
+        existing?.photos?.forEach { merged[it.id] = it }
+        page.photos.forEach { photo ->
+            if (photo.id.isNotBlank()) {
+                merged[photo.id] = photo
+            }
+        }
+        return DoubanRexxarPhotoCacheEntry(
+            total = maxOf(existing?.total ?: 0, page.total, merged.size),
+            photos = merged.values.toList(),
+            lastFetchedAt = fetchedAt
+        )
+    }
+
+    private fun extractYear(
+        explicitYear: String?,
+        pubdates: List<String>,
+        cardSubtitle: String?
+    ): String? {
+        val candidates = buildList {
+            explicitYear?.let(::add)
+            addAll(pubdates)
+            cardSubtitle?.let(::add)
+        }
+        return candidates.asSequence()
+            .mapNotNull { YEAR_PATTERN.find(it)?.value }
+            .firstOrNull()
+    }
+
+    private fun subjectKey(doubanId: String, mediaType: DoubanRexxarMediaType): String =
+        "${mediaType.path}:$doubanId"
+
+    private fun pageKey(
+        doubanId: String,
+        mediaType: DoubanRexxarMediaType,
+        start: Int,
+        count: Int
+    ): String = "${subjectKey(doubanId, mediaType)}:$start:$count"
+
+    private fun requireValidPage(start: Int, count: Int) {
+        require(start >= 0) { "start must be non-negative" }
+        require(count in 1..MAX_PAGE_SIZE) { "count must be between 1 and $MAX_PAGE_SIZE" }
+    }
+
+    private fun randomRetryDelay(): Long = Random.nextLong(MIN_RETRY_DELAY, MAX_RETRY_DELAY + 1)
+
+    private fun DoubanRexxarPhotoCacheEntry.satisfies(start: Int, count: Int): Boolean {
+        if (total > 0 && start >= total) return true
+        if (photos.all { it.position != null }) {
+            val end = if (total > 0) minOf(start + count, total) else start + count
+            return (start until end).all { position ->
+                photos.any { it.position == position }
+            }
+        }
+        return start + count <= photos.size
+    }
+
+    private fun DoubanRexxarPhotoCacheEntry.isFresh(now: Long): Boolean {
+        return lastFetchedAt > 0L && now >= lastFetchedAt && now - lastFetchedAt < PHOTO_REFRESH_INTERVAL
+    }
+
+    private fun DoubanRexxarPhotoCacheEntry.toPage(start: Int, count: Int): DoubanRexxarPhotoPage {
+        val pagePhotos = if (photos.all { it.position != null }) {
+            photos
+                .asSequence()
+                .filter { photo -> photo.position in start until (start + count) }
+                .sortedBy { it.position }
+                .toList()
+        } else {
+            val end = minOf(start + count, photos.size)
+            if (start >= end) emptyList() else photos.subList(start, end)
+        }
+        return DoubanRexxarPhotoPage(
+            total = total,
+            start = start,
+            count = pagePhotos.size,
+            photos = pagePhotos
+        )
+    }
+
+    private companion object {
+        const val DEFAULT_PAGE_SIZE = 20
+        const val MAX_PAGE_SIZE = 100
+        const val MIN_RETRY_DELAY = 2_000L
+        const val MAX_RETRY_DELAY = 4_000L
+        const val PHOTO_REFRESH_INTERVAL = 24 * 60 * 60 * 1000L
+        val YEAR_PATTERN = Regex("(?<!\\d)(?:19|20)\\d{2}(?!\\d)")
+    }
+}
