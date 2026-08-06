@@ -92,6 +92,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.NeumorphicIconButton
+import com.tracktosearch.ui.component.DoubanLogo
+import com.tracktosearch.ui.component.TraktLogo
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.hasListScrolled
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -1935,7 +1937,12 @@ private fun AccountItem(
         Column(modifier = Modifier.fillMaxWidth()) {
             if (isTraktLoggedIn) {
                 AccountRow(
-                    accountLabel = stringResource(R.string.settings_account_trakt_label),
+                    brandLogo = {
+                        TraktLogo(
+                            contentDescription = stringResource(R.string.settings_account_trakt_label),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    },
                     avatarUrl = userProfile?.images?.avatar?.full ?: "",
                     primaryName = userProfile?.username,
                     secondaryName = null,
@@ -1950,7 +1957,12 @@ private fun AccountItem(
             val doubanCreds = doubanProfile
             if (doubanLoggedIn) {
                 AccountRow(
-                    accountLabel = stringResource(R.string.settings_account_douban),
+                    brandLogo = {
+                        DoubanLogo(
+                            contentDescription = stringResource(R.string.settings_account_douban),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    },
                     avatarUrl = doubanCreds?.avatarUrl ?: "",
                     primaryName = doubanCreds?.nickname ?: doubanCreds?.userId,
                     secondaryName = doubanCreds?.userId?.let { "ID: $it" },

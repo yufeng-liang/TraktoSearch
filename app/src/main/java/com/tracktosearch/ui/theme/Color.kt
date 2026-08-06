@@ -1,7 +1,10 @@
 package com.tracktosearch.ui.theme
 
 import androidx.annotation.StringRes
+import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import com.tracktosearch.R
 
 // Primary - 深红色系 (Trakt 品牌)
@@ -61,3 +64,14 @@ val Frost = Color(0xFF1E1E3A)       // 搜索栏玻璃底色
 
 val RatingGold = Color(0xFFFFD54F)
 val RatingGoldDim = Color(0xFFFFD54F).copy(alpha = 0.7f)
+
+private val MonetDoubanGreenLight = Color(0xFF5E916A)
+private val MonetDoubanGreenDark = Color(0xFF78A985)
+
+/** 豆瓣按钮专用色：保留绿色识别，同时轻微吸收当前莫奈主题主色。 */
+fun ColorScheme.monetDoubanGreen(): Color {
+    val base = if (background.luminance() < 0.5f) MonetDoubanGreenDark else MonetDoubanGreenLight
+    return lerp(base, primary, 0.14f)
+}
+
+fun ColorScheme.onMonetDoubanGreen(): Color = Color.White
