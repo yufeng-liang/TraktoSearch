@@ -84,7 +84,7 @@ object DoubanModule {
         json: Json
     ): DoubanRepository = DoubanRepository(detailCache, cloudDetailsPoolManager, json, idMappingCache)
 
-    /** Rexxar 详情缓存，跨重启保留 7 天，并使用 PersistentTtlCache 保存原始过期时间。 */
+    /** Rexxar 详情缓存：详情字段和海报 URL 基本不变，跨重启永久保留以减少重复请求。 */
     @Provides
     @Singleton
     @DoubanRexxarDetailCache
@@ -93,12 +93,12 @@ object DoubanModule {
         json: Json
     ): PersistentTtlCache<DoubanRexxarDetail> {
         return persistentTtlCache(
-            ttlMillis = 7 * 24 * 60 * 60 * 1000L,
+            ttlMillis = Long.MAX_VALUE,
             maxSize = 500,
             dataStore = context.doubanRexxarCacheStore,
             json = json,
-            // v2：详情模型补充演职员、简介、地区、语言、片长、别名和 IMDb，旧缓存字段不完整。
-            keyPrefix = "douban_rexxar_detail_v2",
+            // v3：详情模型扩展后隔离旧格式及其仍带 7 天 TTL 的历史条目。
+            keyPrefix = "douban_rexxar_detail_v3",
             scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         )
     }
