@@ -77,6 +77,13 @@ data class RecommendationItem(
     val isWatched: Boolean = false
 )
 
+/** 详情评分第二槽位的数据来源，解析完成前不渲染可能错误的平台。 */
+enum class DetailRatingSource {
+    UNKNOWN,
+    NORMAL,
+    DOUBAN
+}
+
 @Immutable
 data class DetailUiState(
     val isLoading: Boolean = false,
@@ -115,6 +122,7 @@ data class DetailUiState(
     val error: String? = null,
     val searchAttempted: Boolean = false,
     val ratings: MultiRatings? = null,
+    val ratingSource: DetailRatingSource = DetailRatingSource.UNKNOWN,
     val viewedUrls: Set<String> = emptySet(),
     val comments: List<TraktComment> = emptyList(),
     val translatedComments: List<TraktComment> = emptyList(),
@@ -431,9 +439,18 @@ class DetailViewModel @Inject constructor(
             // 从全局缓存获取真实的想看/已看状态，不依赖路由参数（从推荐列表进入时默认为 false）
             // 豆瓣独立模式从本地 douban_synced_items 表读取,其他模式走 trakt API
             val (realInWatchlist, realWatched) = resolveWatchStates(traktId, cached.currentMediaType, cached.currentImdbId)
+            val restoredRatingSource = if (
+                cached.uiState.ratingSource == DetailRatingSource.UNKNOWN &&
+                !currentDoubanId.isNullOrBlank()
+            ) {
+                DetailRatingSource.DOUBAN
+            } else {
+                cached.uiState.ratingSource
+            }
             _uiState.value = cached.uiState.copy(
                 isMarkedWatchlist = realInWatchlist,
-                isMarkedWatched = realWatched
+                isMarkedWatched = realWatched,
+                ratingSource = restoredRatingSource
             )
             // 从存储拉取最新 viewedUrls 覆盖缓存旧值，避免跨页面返回后丢失状态
             val latestViewed = withContext(Dispatchers.IO) { viewedItemStorage.getViewedUrls() }
@@ -444,6 +461,9 @@ class DetailViewModel @Inject constructor(
             // startSearch 内部会重新设置 isSearching=true 并发起新的搜索流程
             if (cached.uiState.isSearching) {
                 startSearch()
+            }
+            if (_uiState.value.ratingSource == DetailRatingSource.UNKNOWN) {
+                prefetchDoubanId()
             }
             // 按需补启附属 fetch:缓存可能是在附属请求完成前被写入的(用户中途返回),
             // 此时 ratings/comments/credits/videos/seasons 等字段为空,需要重新拉取避免永久卡在骨架状态
@@ -505,7 +525,12 @@ class DetailViewModel @Inject constructor(
             isMarkedWatchlist = inWatchlist,
             isMarkedWatched = isWatched,
             isLoadingVideosImages = true,
-            doubanIdForSync = currentDoubanId
+            doubanIdForSync = currentDoubanId,
+            ratingSource = if (currentDoubanId != null) {
+                DetailRatingSource.DOUBAN
+            } else {
+                DetailRatingSource.UNKNOWN
+            }
         )
 
         viewModelScope.launch {
@@ -531,10 +556,14 @@ class DetailViewModel @Inject constructor(
                     isRatingLoading = doubanSupplement.userRating == null && current.isRatingLoading,
                     ratings = current.ratings?.copy(doubanRating = doubanSupplement.publicRating)
                         ?: MultiRatings(doubanRating = doubanSupplement.publicRating),
-                    doubanIdForSync = doubanSupplement.doubanId
+                    doubanIdForSync = doubanSupplement.doubanId,
+                    ratingSource = DetailRatingSource.DOUBAN
                 )
             } else if (currentDoubanId != null) {
-                _uiState.value = _uiState.value.copy(doubanIdForSync = currentDoubanId)
+                _uiState.value = _uiState.value.copy(
+                    doubanIdForSync = currentDoubanId,
+                    ratingSource = DetailRatingSource.DOUBAN
+                )
             }
 
             // 先检查登录状态
@@ -668,12 +697,32 @@ class DetailViewModel @Inject constructor(
         )
     }
 
+    private suspend fun setResolvedDoubanId(doubanId: String) {
+        val publicRating = runCatching {
+            doubanRepository.getDetailSnapshot()[doubanId]?.doubanRating?.takeIf { it > 0.0 }
+        }.getOrNull()
+        currentDoubanId = doubanId
+        currentDoubanRating = publicRating
+        _uiState.value = _uiState.value.copy(
+            doubanIdForSync = doubanId,
+            ratingSource = DetailRatingSource.DOUBAN,
+            ratings = _uiState.value.ratings?.copy(doubanRating = publicRating)
+        )
+    }
+
     private fun prefetchDoubanId() {
         currentDoubanId?.let { doubanId ->
-            _uiState.value = _uiState.value.copy(doubanIdForSync = doubanId)
+            viewModelScope.launch {
+                setResolvedDoubanId(doubanId)
+                saveToCache()
+            }
             return
         }
-        if (currentTraktId <= 0) return
+        if (currentTraktId <= 0) {
+            _uiState.value = _uiState.value.copy(ratingSource = DetailRatingSource.NORMAL)
+            saveToCache()
+            return
+        }
         viewModelScope.launch {
             val mediaTypeStr = if (currentMediaType == MediaType.SHOW) "show" else "movie"
             // 先查同步表（O(1)，零网络）
@@ -681,17 +730,25 @@ class DetailViewModel @Inject constructor(
             if (imdbId != null) {
                 val syncedItem = runCatching { doubanSyncedItemDao.getByImdbId(imdbId) }.getOrNull()
                 if (syncedItem != null) {
-                    _uiState.value = _uiState.value.copy(doubanIdForSync = syncedItem.doubanId)
+                    setResolvedDoubanId(syncedItem.doubanId)
                     // 顺带写入映射缓存
                     doubanRepository.putDoubanIdMapping(currentTraktId, mediaTypeStr, syncedItem.doubanId)
+                    saveToCache()
                     return@launch
                 }
             }
             // 再走 Repository 的完整链路（缓存 → 详情缓存 → 网络搜索）
             val doubanId = doubanRepository.findDoubanId(currentTraktId, imdbId, mediaTypeStr)
             if (doubanId != null) {
-                _uiState.value = _uiState.value.copy(doubanIdForSync = doubanId)
+                setResolvedDoubanId(doubanId)
+            } else {
+                currentDoubanId = null
+                _uiState.value = _uiState.value.copy(
+                    doubanIdForSync = null,
+                    ratingSource = DetailRatingSource.NORMAL
+                )
             }
+            saveToCache()
         }
     }
 
@@ -2452,7 +2509,8 @@ class DetailViewModel @Inject constructor(
                 val doubanId = syncedItem?.doubanId
                     ?: doubanRepository.findDoubanId(currentTraktId, imdbId, mediaTypeStr)
                 if (doubanId != null) {
-                    _uiState.value = _uiState.value.copy(doubanIdForSync = doubanId)
+                    setResolvedDoubanId(doubanId)
+                    saveToCache()
                 } else {
                     _toastEvent.emit(R.string.detail_douban_sync_id_not_ready)
                     return@launch

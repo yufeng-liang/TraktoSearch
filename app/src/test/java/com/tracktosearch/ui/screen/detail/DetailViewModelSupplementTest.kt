@@ -611,6 +611,7 @@ class DetailViewModelSupplementTest {
 
         // 同步表命中后 doubanIdForSync 被设置，但未登录豆瓣 → retryable=true
         assertThat(viewModel.uiState.value.doubanIdForSync).isEqualTo("7654321")
+        assertThat(viewModel.uiState.value.ratingSource).isEqualTo(DetailRatingSource.DOUBAN)
         assertThat(viewModel.uiState.value.doubanSyncRetryable).isTrue()
     }
 
@@ -633,6 +634,7 @@ class DetailViewModelSupplementTest {
         advanceUntilIdle()
 
         assertThat(viewModel.uiState.value.doubanIdForSync).isEqualTo("9999999")
+        assertThat(viewModel.uiState.value.ratingSource).isEqualTo(DetailRatingSource.DOUBAN)
         coVerify(exactly = 1) { doubanRepository.findDoubanId(100, "tt1234567", "movie") }
     }
 

@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.detail
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 
 /** 评分展示分档，所有来源先统一到百分制。 */
 internal enum class RatingBand {
@@ -13,8 +14,8 @@ internal enum class RatingBand {
 internal fun normalizeTenPointRating(value: Double?): Double? {
     return value
         ?.takeIf { it.isFinite() }
+        ?.takeIf { it in 0.0..10.0 }
         ?.times(10.0)
-        ?.coerceIn(0.0, 100.0)
 }
 
 internal fun normalizePercentRating(value: String): Double? {
@@ -54,3 +55,6 @@ internal fun ratingBandColor(
         RatingBand.HIGH -> if (isDarkTheme) Color(0xFFE2BE88) else Color(0xFF9A7538)
     }
 }
+
+internal fun ratingCardColor(baseColor: Color, isDarkTheme: Boolean): Color =
+    lerp(baseColor, Color.White, if (isDarkTheme) 0.20f else 0.33f)

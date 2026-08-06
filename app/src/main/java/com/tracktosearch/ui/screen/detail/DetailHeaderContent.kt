@@ -307,10 +307,13 @@ internal fun DetailHeaderContent(
                 // 多平台评分（固定高度区域）
                 Spacer(modifier = Modifier.height(8.dp))
                 Box(modifier = Modifier.height(60.dp)) {
-                    if (uiState.ratings != null) {
+                    if (
+                        uiState.ratings != null &&
+                        uiState.ratingSource != DetailRatingSource.UNKNOWN
+                    ) {
                         RatingsRow(
                             ratings = uiState.ratings,
-                            isDoubanItem = !uiState.doubanIdForSync.isNullOrBlank(),
+                            ratingSource = uiState.ratingSource,
                             immersionColor = posterColor
                         )
                     } else {

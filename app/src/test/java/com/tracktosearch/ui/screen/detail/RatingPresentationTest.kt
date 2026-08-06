@@ -13,6 +13,12 @@ class RatingPresentationTest {
     }
 
     @Test
+    fun normalizeTenPointRating_rejectsValuesOutsideTenPointRange() {
+        assertThat(normalizeTenPointRating(-1.0)).isNull()
+        assertThat(normalizeTenPointRating(88.0)).isNull()
+    }
+
+    @Test
     fun normalizePercentRating_parsesPercentAndFractionAndClampsToPercentRange() {
         assertThat(normalizePercentRating("88%")).isEqualTo(88.0)
         assertThat(normalizePercentRating("88/100")).isEqualTo(88.0)
@@ -65,5 +71,15 @@ class RatingPresentationTest {
             .isEqualTo(unavailableColor)
         assertThat(ratingBandColor(RatingBand.NONE, isDarkTheme = true, unavailableColor))
             .isEqualTo(unavailableColor)
+    }
+
+    @Test
+    fun ratingCardColor_blendsImmersionColorWithWhiteByTheme() {
+        val light = ratingCardColor(Color.Black, isDarkTheme = false)
+        val dark = ratingCardColor(Color.Black, isDarkTheme = true)
+
+        assertThat(light.red).isGreaterThan(dark.red)
+        assertThat(dark.red).isGreaterThan(0f)
+        assertThat(light.red).isLessThan(1f)
     }
 }

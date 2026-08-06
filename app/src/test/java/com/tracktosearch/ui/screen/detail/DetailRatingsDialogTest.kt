@@ -1,10 +1,13 @@
 package com.tracktosearch.ui.screen.detail
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.MultiRatings
@@ -166,5 +169,79 @@ class DetailRatingsDialogTest {
         } finally {
             Locale.setDefault(previousLocale)
         }
+    }
+
+    @Test
+    fun invalidRatingsRenderMissingValueInsteadOfRawValues() {
+        composeRule.setContent {
+            MaterialTheme {
+                RatingsRow(
+                    MultiRatings(
+                        imdbRating = "88",
+                        metacritic = "88",
+                        tmdbRating = 88.0,
+                        rottenTomatoes = "88"
+                    )
+                )
+            }
+        }
+
+        assertThat(composeRule.onAllNodesWithText("88").fetchSemanticsNodes()).isEmpty()
+        assertThat(composeRule.onAllNodesWithText("—").fetchSemanticsNodes()).hasSize(4)
+    }
+
+    @Test
+    fun invalidDoubanRatingDoesNotSuppressValidMetacriticSlot() {
+        composeRule.setContent {
+            MaterialTheme {
+                RatingsRow(
+                    MultiRatings(doubanRating = 88.0, metacritic = "88%")
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("MTC").assertIsDisplayed()
+        composeRule.onNodeWithText("88%").assertIsDisplayed()
+        assertThat(
+            composeRule.onAllNodesWithText(
+                ApplicationProvider.getApplicationContext<Context>()
+                    .getString(R.string.detail_info_douban_rating)
+            ).fetchSemanticsNodes()
+        ).isEmpty()
+    }
+
+    @Test
+    fun unknownRatingSourceKeepsPlatformSlotInLoadingState() {
+        composeRule.setContent {
+            MaterialTheme {
+                RatingsRow(
+                    ratings = MultiRatings(metacritic = "88%"),
+                    ratingSource = DetailRatingSource.UNKNOWN
+                )
+            }
+        }
+
+        assertThat(composeRule.onAllNodesWithText("MTC").fetchSemanticsNodes()).isEmpty()
+        composeRule.onNodeWithTag(RATING_CARD_TEST_TAG).assertHeightIsEqualTo(60.dp)
+    }
+
+    @Test
+    fun ratingsCardAndLoadingPlaceholderKeepFixedHeight() {
+        composeRule.setContent {
+            MaterialTheme {
+                RatingsRow(MultiRatings())
+            }
+        }
+        composeRule.onNodeWithTag(RATING_CARD_TEST_TAG).assertHeightIsEqualTo(60.dp)
+    }
+
+    @Test
+    fun loadingPlaceholderKeepsFixedHeight() {
+        composeRule.setContent {
+            MaterialTheme {
+                RatingsLoadingPlaceholder()
+            }
+        }
+        composeRule.onNodeWithTag(RATING_CARD_TEST_TAG).assertHeightIsEqualTo(60.dp)
     }
 }

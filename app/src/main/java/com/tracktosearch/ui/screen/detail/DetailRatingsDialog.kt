@@ -40,8 +40,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -56,6 +56,8 @@ import com.tracktosearch.ui.util.performHaptic
 import java.util.Locale
 
 // ==================== 评分行 ====================
+
+internal const val RATING_CARD_TEST_TAG = "detail_ratings_card"
 
 private enum class RatingSource {
     IMDb,
@@ -77,18 +79,33 @@ private data class RatingBadgeData(
 internal fun RatingsRow(
     ratings: MultiRatings,
     isDoubanItem: Boolean = false,
+    ratingSource: DetailRatingSource = if (isDoubanItem) {
+        DetailRatingSource.DOUBAN
+    } else {
+        DetailRatingSource.NORMAL
+    },
     immersionColor: Color? = null
 ) {
+    if (ratingSource == DetailRatingSource.UNKNOWN) {
+        RatingsLoadingPlaceholder(immersionColor = immersionColor)
+        return
+    }
     val missingValue = stringResource(R.string.detail_info_rating_missing)
-    val row1Second = if (isDoubanItem || ratings.doubanRating != null) {
+    val normalizedDoubanRating = normalizeTenPointRating(ratings.doubanRating)
+    val showDoubanRating = when (ratingSource) {
+        DetailRatingSource.DOUBAN -> true
+        DetailRatingSource.NORMAL -> normalizedDoubanRating != null
+        DetailRatingSource.UNKNOWN -> false
+    }
+    val row1Second = if (showDoubanRating) {
         RatingBadgeData(
             source = RatingSource.Douban,
             label = stringResource(R.string.detail_info_douban_rating),
             brandColor = Color(0xFF2E963D),
-            value = ratings.doubanRating?.let {
+            value = ratings.doubanRating?.takeIf { normalizedDoubanRating != null }?.let {
                 String.format(Locale.getDefault(), "%.1f", it)
             } ?: missingValue,
-            normalizedScore = normalizeTenPointRating(ratings.doubanRating)
+            normalizedScore = normalizedDoubanRating
         )
     } else {
         RatingBadgeData(
@@ -105,7 +122,7 @@ internal fun RatingsRow(
             source = RatingSource.IMDb,
             label = stringResource(R.string.detail_info_imdb_rating),
             brandColor = Color(0xFFF5C518),
-            value = displayRating(ratings.imdbRating, missingValue),
+            value = displayTenPointRating(ratings.imdbRating, missingValue),
             normalizedScore = parseTenPointRating(ratings.imdbRating)
         ),
         row1Second
@@ -115,11 +132,10 @@ internal fun RatingsRow(
             source = RatingSource.TMDB,
             label = stringResource(R.string.detail_info_tmdb_rating),
             brandColor = Color(0xFFF5C518),
-            value = if (ratings.tmdbRating > 0.0) {
-                String.format(Locale.getDefault(), "%.1f", ratings.tmdbRating)
-            } else {
+            value = displayTenPointRating(
+                ratings.tmdbRating.takeIf { it > 0.0 },
                 missingValue
-            },
+            ),
             normalizedScore = ratings.tmdbRating.takeIf { it > 0.0 }
                 ?.let(::normalizeTenPointRating)
         ),
@@ -166,9 +182,12 @@ private fun RatingCard(
     val darkTheme = isSystemInDarkTheme()
     val baseColor = immersionColor ?: MaterialTheme.colorScheme.surface
     Surface(
-        modifier = Modifier.fillMaxWidth().height(60.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(60.dp)
+            .testTag(RATING_CARD_TEST_TAG),
         shape = RoundedCornerShape(12.dp),
-        color = lerp(baseColor, Color.White, if (darkTheme) 0.20f else 0.33f),
+        color = ratingCardColor(baseColor, darkTheme),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
         shadowElevation = 0.dp,
         tonalElevation = 0.dp
@@ -195,7 +214,7 @@ private fun RatingBadgeRow(badges: List<RatingBadgeData>) {
 }
 
 private fun displayRating(value: String, missingValue: String): String {
-    return value.takeIf { it.isNotBlank() && !it.equals("N/A", ignoreCase = true) } ?: missingValue
+    return value.takeIf { normalizePercentRating(it) != null }?.trim() ?: missingValue
 }
 
 private fun parseTenPointRating(value: String): Double? {
@@ -203,6 +222,17 @@ private fun parseTenPointRating(value: String): Double? {
         .replace(',', '.')
         .toDoubleOrNull()
         ?.let(::normalizeTenPointRating)
+}
+
+private fun displayTenPointRating(value: String, missingValue: String): String {
+    return value.takeIf { parseTenPointRating(it) != null }?.trim() ?: missingValue
+}
+
+private fun displayTenPointRating(value: Double?, missingValue: String): String {
+    return value
+        ?.takeIf { normalizeTenPointRating(it) != null }
+        ?.let { String.format(Locale.getDefault(), "%.1f", it) }
+        ?: missingValue
 }
 
 /** 单个评分项：平台识别使用品牌色，评分数字使用分档色。 */
