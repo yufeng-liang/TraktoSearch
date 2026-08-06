@@ -173,7 +173,7 @@ fun ResourceItemCard(
                         colors = gradientColors
                     )
                 )
-                .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 12.dp)
+                .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 8.dp)
                 .alpha(contentAlpha)
         ) {
             // 左侧品牌色强调条
@@ -300,12 +300,12 @@ fun ResourceItemCard(
                     text = item.name,
                     style = MaterialTheme.typography.bodyLarge.copy(
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 15.sp,
+                        fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurface
                     ),
-                    maxFontSize = 15.sp,
-                    minFontSize = 13.sp,
-                    modifier = Modifier.padding(top = 8.dp)
+                    maxFontSize = 14.sp,
+                    minFontSize = 12.sp,
+                    modifier = Modifier.padding(top = 6.dp)
                 )
 
                 // 文件数
