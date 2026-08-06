@@ -44,32 +44,32 @@ class RatingPresentationTest {
     }
 
     @Test
-    fun ratingBandColor_returnsLightThemeDesignColors() {
-        assertThat(ratingBandColor(RatingBand.LOW, isDarkTheme = false, Color.Black))
-            .isEqualTo(Color(0xFF5F7080))
-        assertThat(ratingBandColor(RatingBand.MEDIUM, isDarkTheme = false, Color.Black))
-            .isEqualTo(Color(0xFF866F85))
-        assertThat(ratingBandColor(RatingBand.HIGH, isDarkTheme = false, Color.Black))
-            .isEqualTo(Color(0xFF9A7538))
+    fun ratingBandColor_returnsBrightColorsForDarkRatingCard() {
+        assertThat(ratingBandColor(RatingBand.LOW, surfaceColor = Color.Black, Color.Black))
+            .isEqualTo(Color(0xFFB4E5F5))
+        assertThat(ratingBandColor(RatingBand.MEDIUM, surfaceColor = Color.Black, Color.Black))
+            .isEqualTo(Color(0xFFF1BEE4))
+        assertThat(ratingBandColor(RatingBand.HIGH, surfaceColor = Color.Black, Color.Black))
+            .isEqualTo(Color(0xFFFFD27E))
     }
 
     @Test
-    fun ratingBandColor_returnsDarkThemeDesignColors() {
-        assertThat(ratingBandColor(RatingBand.LOW, isDarkTheme = true, Color.White))
-            .isEqualTo(Color(0xFFA8BECC))
-        assertThat(ratingBandColor(RatingBand.MEDIUM, isDarkTheme = true, Color.White))
-            .isEqualTo(Color(0xFFD1BDD0))
-        assertThat(ratingBandColor(RatingBand.HIGH, isDarkTheme = true, Color.White))
-            .isEqualTo(Color(0xFFE2BE88))
+    fun ratingBandColor_returnsDeepColorsForLightRatingCard() {
+        assertThat(ratingBandColor(RatingBand.LOW, surfaceColor = Color.White, Color.White))
+            .isEqualTo(Color(0xFF1B6E8A))
+        assertThat(ratingBandColor(RatingBand.MEDIUM, surfaceColor = Color.White, Color.White))
+            .isEqualTo(Color(0xFF8E3C83))
+        assertThat(ratingBandColor(RatingBand.HIGH, surfaceColor = Color.White, Color.White))
+            .isEqualTo(Color(0xFF9C6A10))
     }
 
     @Test
     fun ratingBandColor_usesUnavailableColorForNoneInBothThemes() {
         val unavailableColor = Color(0xFF7A7A7A)
 
-        assertThat(ratingBandColor(RatingBand.NONE, isDarkTheme = false, unavailableColor))
+        assertThat(ratingBandColor(RatingBand.NONE, surfaceColor = Color.Black, unavailableColor))
             .isEqualTo(unavailableColor)
-        assertThat(ratingBandColor(RatingBand.NONE, isDarkTheme = true, unavailableColor))
+        assertThat(ratingBandColor(RatingBand.NONE, surfaceColor = Color.White, unavailableColor))
             .isEqualTo(unavailableColor)
     }
 

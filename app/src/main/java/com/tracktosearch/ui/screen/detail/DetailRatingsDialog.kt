@@ -47,6 +47,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
@@ -58,6 +59,8 @@ import java.util.Locale
 // ==================== 评分行 ====================
 
 internal const val RATING_CARD_TEST_TAG = "detail_ratings_card"
+
+private val LEFT_RATING_LABEL_SLOT_WIDTH = 44.dp
 
 private enum class RatingSource {
     IMDb,
@@ -148,9 +151,9 @@ internal fun RatingsRow(
         )
     )
 
-    RatingCard(immersionColor = immersionColor) {
-        RatingBadgeRow(row1)
-        RatingBadgeRow(row2)
+    RatingCard(immersionColor = immersionColor) { cardColor ->
+        RatingBadgeRow(row1, cardColor)
+        RatingBadgeRow(row2, cardColor)
     }
 }
 
@@ -159,14 +162,14 @@ internal fun RatingsLoadingPlaceholder(immersionColor: Color? = null) {
     RatingCard(immersionColor = immersionColor) {
         repeat(2) {
             Row(
-                modifier = Modifier.fillMaxWidth().height(20.dp),
+                modifier = Modifier.fillMaxWidth().height(22.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 repeat(2) {
                     Surface(
                         shape = RoundedCornerShape(4.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.weight(1f).height(20.dp)
+                        modifier = Modifier.weight(1f).height(22.dp)
                     ) {}
                 }
             }
@@ -177,17 +180,18 @@ internal fun RatingsLoadingPlaceholder(immersionColor: Color? = null) {
 @Composable
 private fun RatingCard(
     immersionColor: Color?,
-    content: @Composable ColumnScope.() -> Unit
+    content: @Composable ColumnScope.(Color) -> Unit
 ) {
     val darkTheme = isSystemInDarkTheme()
     val baseColor = immersionColor ?: MaterialTheme.colorScheme.surface
+    val cardColor = ratingCardColor(baseColor, darkTheme)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(60.dp)
+            .height(64.dp)
             .testTag(RATING_CARD_TEST_TAG),
         shape = RoundedCornerShape(12.dp),
-        color = ratingCardColor(baseColor, darkTheme),
+        color = cardColor,
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
         shadowElevation = 0.dp,
         tonalElevation = 0.dp
@@ -195,20 +199,29 @@ private fun RatingCard(
         Column(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
-            content = content
+            content = { content(cardColor) }
         )
     }
 }
 
 @Composable
-private fun RatingBadgeRow(badges: List<RatingBadgeData>) {
+private fun RatingBadgeRow(badges: List<RatingBadgeData>, cardColor: Color) {
     Row(
-        modifier = Modifier.fillMaxWidth().height(20.dp),
+        modifier = Modifier.fillMaxWidth().height(22.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        badges.forEach { badge ->
-            RatingBadge(badge = badge, modifier = Modifier.weight(1f))
+        badges.forEachIndexed { index, badge ->
+            RatingBadge(
+                badge = badge,
+                cardColor = cardColor,
+                labelSlotWidth = if (index == 0) {
+                    LEFT_RATING_LABEL_SLOT_WIDTH
+                } else {
+                    null
+                },
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }
@@ -237,23 +250,34 @@ private fun displayTenPointRating(value: Double?, missingValue: String): String 
 
 /** 单个评分项：平台识别使用品牌色，评分数字使用分档色。 */
 @Composable
-private fun RatingBadge(badge: RatingBadgeData, modifier: Modifier = Modifier) {
+private fun RatingBadge(
+    badge: RatingBadgeData,
+    cardColor: Color,
+    labelSlotWidth: Dp?,
+    modifier: Modifier = Modifier
+) {
     val source = badge.source
     val scoreColor = ratingBandColor(
         band = ratingBand(badge.normalizedScore),
-        isDarkTheme = isSystemInDarkTheme(),
+        surfaceColor = cardColor,
         unavailableColor = MaterialTheme.colorScheme.onSurfaceVariant
     )
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(3.dp)
+        horizontalArrangement = if (labelSlotWidth == null) {
+            Arrangement.SpaceBetween
+        } else {
+            Arrangement.Start
+        }
     ) {
+        Row(
+            modifier = labelSlotWidth?.let { Modifier.width(it) } ?: Modifier,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
         when (source) {
-            RatingSource.TMDB -> Icon(
-                Icons.Rounded.Star, contentDescription = null,
-                modifier = Modifier.size(14.dp), tint = badge.brandColor
-            )
+            RatingSource.TMDB -> Unit
             RatingSource.IMDb -> Surface(
                 shape = RoundedCornerShape(2.dp),
                 color = badge.brandColor
@@ -292,10 +316,12 @@ private fun RatingBadge(badge: RatingBadgeData, modifier: Modifier = Modifier) {
                 color = badge.brandColor
             )
         }
+        }
 
         Text(
             text = badge.value,
-            style = MaterialTheme.typography.titleSmall.copy(fontSize = 12.sp),
+            modifier = Modifier.padding(start = 4.dp),
+            style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp),
             fontWeight = FontWeight.Bold,
             color = scoreColor,
             maxLines = 1,

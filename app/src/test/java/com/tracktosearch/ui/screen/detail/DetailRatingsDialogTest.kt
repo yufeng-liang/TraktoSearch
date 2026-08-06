@@ -222,7 +222,7 @@ class DetailRatingsDialogTest {
         }
 
         assertThat(composeRule.onAllNodesWithText("MTC").fetchSemanticsNodes()).isEmpty()
-        composeRule.onNodeWithTag(RATING_CARD_TEST_TAG).assertHeightIsEqualTo(60.dp)
+        composeRule.onNodeWithTag(RATING_CARD_TEST_TAG).assertHeightIsEqualTo(64.dp)
     }
 
     @Test
@@ -232,7 +232,7 @@ class DetailRatingsDialogTest {
                 RatingsRow(MultiRatings())
             }
         }
-        composeRule.onNodeWithTag(RATING_CARD_TEST_TAG).assertHeightIsEqualTo(60.dp)
+        composeRule.onNodeWithTag(RATING_CARD_TEST_TAG).assertHeightIsEqualTo(64.dp)
     }
 
     @Test
@@ -242,6 +242,6 @@ class DetailRatingsDialogTest {
                 RatingsLoadingPlaceholder()
             }
         }
-        composeRule.onNodeWithTag(RATING_CARD_TEST_TAG).assertHeightIsEqualTo(60.dp)
+        composeRule.onNodeWithTag(RATING_CARD_TEST_TAG).assertHeightIsEqualTo(64.dp)
     }
 }
