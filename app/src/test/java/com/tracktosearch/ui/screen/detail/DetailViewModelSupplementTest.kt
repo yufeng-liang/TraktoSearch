@@ -829,6 +829,23 @@ class DetailViewModelSupplementTest {
     }
 
     @Test
+    fun dualLoginDoubanItem_removeWishFailure_keepsRetryAction() = runTest {
+        setupDoubanBackedTraktDetail()
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user", "fake_cookie")
+        coEvery { doubanSyncedItemDao.deleteByDoubanId("db-1") } returns Unit
+        coEvery { doubanRepository.removeInterest("db-1", "fake_cookie") } returns false
+        setUiState { it.copy(isMarkedWatchlist = true) }
+
+        viewModel.toggleWatchlist()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.isMarkedWatchlist).isFalse()
+        assertThat(viewModel.uiState.value.doubanSyncRetryable).isTrue()
+        assertThat(viewModel.uiState.value.pendingDoubanAction).isEqualTo(DoubanSyncAction.REMOVE_WISH)
+        coVerify(exactly = 1) { doubanRepository.removeInterest("db-1", "fake_cookie") }
+    }
+
+    @Test
     fun dualLoginDoubanItemWithoutTraktId_usesDoubanForWatched() = runTest {
         setupDoubanBackedTraktDetail()
         every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user", "fake_cookie")

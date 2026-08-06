@@ -335,7 +335,7 @@ class DoubanRetryManager @Inject constructor(
      */
     suspend fun updateStatus(doubanId: String, status: DoubanMarkStatus) = withContext(Dispatchers.IO) {
         doubanSyncFailureDao.updateStatus(doubanId, status.path)
-        // 豆瓣独立模式: 同步更新本地表 status + pendingSync=true(下次同步重试豆瓣 API)
-        runCatching { doubanSyncedItemDao.updateStatusAndPendingSync(doubanId, status.path, true) }
+        // 豆瓣写回已经成功，本地状态与远端一致，不应再次加入下次同步重试队列。
+        runCatching { doubanSyncedItemDao.updateStatusAndPendingSync(doubanId, status.path, false) }
     }
 }

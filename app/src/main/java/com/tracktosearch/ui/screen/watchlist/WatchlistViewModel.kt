@@ -1315,9 +1315,13 @@ class WatchlistViewModel @Inject constructor(
         doubanItems: List<DoubanSyncedItem>
     ): Int {
         val loadedTraktImdbIds = loadedTraktItems.mapNotNull { normalizeWatchlistImdbId(it.imdbId) }.toSet()
+        val loadedTraktIds = loadedTraktItems.mapNotNull { it.traktId.takeIf { id -> id > 0 } }.toSet()
         val doubanOnlyCount = doubanItems.count {
             val imdbId = normalizeWatchlistImdbId(it.imdbId)
-            imdbId == null || imdbId !in loadedTraktImdbIds
+            val traktId = it.traktId?.takeIf { id -> id > 0 }
+            val matchesLoadedTraktId = traktId != null && traktId in loadedTraktIds
+            val matchesLoadedImdbId = imdbId != null && imdbId in loadedTraktImdbIds
+            !matchesLoadedTraktId && !matchesLoadedImdbId
         }
         return (traktTotalCount + doubanOnlyCount).coerceAtLeast(loadedTraktItems.size + doubanOnlyCount)
     }

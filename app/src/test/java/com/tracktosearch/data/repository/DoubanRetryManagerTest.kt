@@ -569,6 +569,14 @@ class DoubanRetryManagerTest {
         coVerify(exactly = 1) {
             doubanSyncFailureDao.updateStatus("db-1", "wish", any())
         }
+        coVerify(exactly = 1) {
+            doubanSyncedItemDao.updateStatusAndPendingSync(
+                doubanId = "db-1",
+                status = "wish",
+                pendingSync = false,
+                now = any()
+            )
+        }
     }
 
     @Test

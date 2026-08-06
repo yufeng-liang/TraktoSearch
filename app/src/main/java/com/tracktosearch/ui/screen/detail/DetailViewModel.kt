@@ -2120,16 +2120,21 @@ class DetailViewModel @Inject constructor(
                 if (targetState) {
                     upsertDoubanSyncedItem(doubanId, status = "wish", pendingSync = true)
                 } else {
-                    // 取消失败:乐观删除本地记录(UI 立即反映);pendingSync 信息随删除丢失,
-                    // 豆瓣侧仍保留标记,下次全量同步会纠正
+                    // 取消失败仍保持乐观删除，但保留即时重试动作，避免豆瓣侧标记无法撤销。
                     runCatching { doubanSyncedItemDao.deleteByDoubanId(doubanId) }
+                    _uiState.value = _uiState.value.copy(
+                        doubanSyncRetryable = true,
+                        pendingDoubanAction = DoubanSyncAction.REMOVE_WISH
+                    )
                     Log.w("DetailViewModel", "Douban removeInterest failed for $doubanId, optimistic delete applied")
                 }
             }
 
             _uiState.value = _uiState.value.copy(
                 isMarkedWatchlist = targetState,
-                isMarkingWatchlist = false
+                isMarkingWatchlist = false,
+                doubanSyncRetryable = if (success) false else _uiState.value.doubanSyncRetryable,
+                pendingDoubanAction = if (success) null else _uiState.value.pendingDoubanAction
             )
             saveToCache()
         }

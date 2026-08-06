@@ -534,6 +534,24 @@ class WatchlistViewModelTest {
     }
 
     @Test
+    fun `Trakt和豆瓣共享TraktId且都无IMDb时总数不重复`() = runTest {
+        every { sessionModeManager.sessionMode } returns MutableStateFlow(SessionMode.TRAKT)
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user", "cookie")
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(42, "Trakt item", imdbId = "")) to 1)
+        every { traktRepository.getMovieWatchlistTotalCount(1, 200) } returns 1
+        coEvery { doubanSyncedItemDao.getByStatus("wish") } returns listOf(
+            makeDoubanItem("douban-42", imdbId = null).copy(traktId = 42)
+        )
+
+        viewModel.loadMovies()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.movies).hasSize(1)
+        assertThat(viewModel.uiState.value.movieTotalCount).isEqualTo(1)
+    }
+
+    @Test
     fun `豆瓣collect与Trakt历史按IMDb合并不重复`() = runTest {
         every { sessionModeManager.sessionMode } returns MutableStateFlow(SessionMode.TRAKT)
         every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user", "cookie")
