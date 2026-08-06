@@ -55,6 +55,10 @@ assertThat(ratingBand(75.0)).isEqualTo(RatingBand.HIGH)
 **文件：**
 - 修改：`app/src/main/java/com/tracktosearch/ui/screen/detail/DetailRatingsDialog.kt`
 - 修改：`app/src/main/java/com/tracktosearch/ui/screen/detail/DetailHeaderContent.kt`
+- 修改：`app/src/main/res/values/strings.xml`
+- 修改：`app/src/main/res/values-zh/strings.xml`
+- 修改：`app/src/main/res/values-ja/strings.xml`
+- 修改：`app/src/main/res/values-ko/strings.xml`
 
 - [ ] **步骤 1：保留现有评分语义并重构槽位数据**
 
@@ -67,6 +71,8 @@ assertThat(ratingBand(75.0)).isEqualTo(RatingBand.HIGH)
 - [ ] **步骤 3：应用颜色职责**
 
 平台图标与名称保留品牌色；评分数字根据归一化值使用低/中/高分档色，`—` 使用 `onSurfaceVariant`。不修改数值格式、Locale 小数显示或用户评分控件。
+
+缺失评分符号通过新增的 `detail_info_rating_missing` 在四套 `strings.xml` 中同步提供，生产代码不硬编码用户可见文字。
 
 - [ ] **步骤 4：同步详情头部的固定高度和加载态**
 
@@ -151,7 +157,7 @@ git diff --cached --check
 git diff --cached --name-only
 git commit -m "feat(detail): 增加评分分档展示逻辑"
 
-git add app/src/main/java/com/tracktosearch/ui/screen/detail/DetailRatingsDialog.kt app/src/main/java/com/tracktosearch/ui/screen/detail/DetailHeaderContent.kt app/src/test/java/com/tracktosearch/ui/screen/detail/DetailRatingsDialogTest.kt
+git add app/src/main/java/com/tracktosearch/ui/screen/detail/DetailRatingsDialog.kt app/src/main/java/com/tracktosearch/ui/screen/detail/DetailHeaderContent.kt app/src/main/res/values/strings.xml app/src/main/res/values-zh/strings.xml app/src/main/res/values-ja/strings.xml app/src/main/res/values-ko/strings.xml app/src/test/java/com/tracktosearch/ui/screen/detail/DetailRatingsDialogTest.kt
 git diff --cached --check
 git diff --cached --name-only
 git commit -m "style(detail): 优化四平台评分卡片"
