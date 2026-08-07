@@ -270,10 +270,13 @@ fun AppNavigation(
     // 场景: onLoginSuccess 设置 mainInitialTab=2(老用户进我的页) 后,
     // storedDefaultTab 从默认值 0 加载为磁盘真实值(如 1=发现页),LaunchedEffect 会覆盖登录意图
     var loginTabOverride by remember { mutableStateOf(false) }
+    // Widget 启动请求优先进入搜索页，不能被用户保存的默认页覆盖。
+    val searchRequested by SearchNavigator.pending.collectAsStateWithLifecycle()
+    val widgetSearchInitialTabOverride = remember { SearchNavigator.pending.value }
     // 监听默认启动页设置变化
     LaunchedEffect(storedDefaultTab) {
         // 登录后设置的 tab 仅生效一次，不被 storedDefaultTab 覆盖
-        if (!loginTabOverride) {
+        if (!loginTabOverride && !widgetSearchInitialTabOverride) {
             mainInitialTab = storedDefaultTab
         }
     }
@@ -338,6 +341,28 @@ fun AppNavigation(
     // MainScreen 的 isLoggedIn：trakt 已连 OR 豆瓣已登录（非 GUEST 模式才显示 WatchlistScreen）
     val isLoggedIn = isTraktConnected || isDoubanLoggedIn
 
+    // Widget 从详情等子页面触发时，先回到 MainScreen，再由 MainScreen 消费搜索请求。
+    LaunchedEffect(searchRequested, currentStartDest) {
+        if (!searchRequested) return@LaunchedEffect
+
+        val currentRoute = navController.currentDestination?.route ?: return@LaunchedEffect
+        val hasMainAccess = currentStartDest == Routes.MAIN ||
+            currentAuthState == AuthState.AUTHORIZED ||
+            currentAuthState == AuthState.OFFLINE
+        val isDoubanActivationLogin = currentRoute == Routes.DOUBAN_LOGIN &&
+            navController.previousBackStackEntry?.destination?.route == Routes.LOGIN
+        if (!hasMainAccess || currentRoute == Routes.MAIN ||
+            currentRoute == Routes.LOGIN || isDoubanActivationLogin
+        ) {
+            return@LaunchedEffect
+        }
+
+        navController.navigate(Routes.MAIN) {
+            popUpTo(Routes.MAIN) { inclusive = false }
+            launchSingleTop = true
+        }
+    }
+
     LaunchedEffect(currentAuthState) {
         if (currentAuthState == AuthState.OFFLINE) {
             Toast.makeText(context, context.getString(R.string.auth_offline_mode), Toast.LENGTH_LONG).show()
@@ -395,8 +420,12 @@ fun AppNavigation(
                                 // 新用户（未完成新手引导）登录后默认进搜索页(0)，避免我的页无谓加载 watchlist
                                 // 老用户默认进我的页(2)查看 watchlist
                                 scope.launch {
-                                    val onboardingCompleted = OnboardingStorage(context).isCompleted.first()
-                                    mainInitialTab = if (onboardingCompleted) 2 else 0
+                                    if (SearchNavigator.pending.value) {
+                                        mainInitialTab = 0
+                                    } else {
+                                        val onboardingCompleted = OnboardingStorage(context).isCompleted.first()
+                                        mainInitialTab = if (onboardingCompleted) 2 else 0
+                                    }
                                     loginTabOverride = true  // 阻止 storedDefaultTab 覆盖登录意图
                                     currentStartDest = Routes.MAIN
                                     navController.navigate(Routes.MAIN) {
@@ -413,6 +442,10 @@ fun AppNavigation(
                                 // 持久化访客模式状态，跨 App 重启保留
                                 val guestModeStorage = EntryPointAccessors.fromApplication(context, GuestModeEntryPoint::class.java).guestModeStorage()
                                 scope.launch { guestModeStorage.setGuestMode(true) }
+                                if (SearchNavigator.pending.value) {
+                                    mainInitialTab = 0
+                                    loginTabOverride = true
+                                }
                                 currentStartDest = Routes.MAIN
                                 navController.navigate(Routes.MAIN) {
                                     popUpTo(0) { inclusive = true }
@@ -893,8 +926,12 @@ fun AppNavigation(
                                 val guestModeStorage = EntryPointAccessors.fromApplication(context, GuestModeEntryPoint::class.java).guestModeStorage()
                                 scope.launch {
                                     guestModeStorage.setGuestMode(false)
-                                    val onboardingCompleted = OnboardingStorage(context).isCompleted.first()
-                                    mainInitialTab = if (onboardingCompleted) 2 else 0
+                                    if (SearchNavigator.pending.value) {
+                                        mainInitialTab = 0
+                                    } else {
+                                        val onboardingCompleted = OnboardingStorage(context).isCompleted.first()
+                                        mainInitialTab = if (onboardingCompleted) 2 else 0
+                                    }
                                     loginTabOverride = true  // 阻止 storedDefaultTab 覆盖登录意图
                                     currentStartDest = Routes.MAIN
                                     navController.navigate(Routes.MAIN) {
