@@ -30,6 +30,7 @@ import androidx.navigation.NavType
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.tracktosearch.BuildConfig
@@ -248,6 +249,7 @@ fun AppNavigation(
     onLoginSuccess: () -> Unit = {}
 ) {
     val navController = rememberNavController()
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val context = LocalContext.current
     // 页面变化追踪（错误日志上下文）
     navController.addOnDestinationChangedListener { _, destination, _ ->
@@ -342,17 +344,18 @@ fun AppNavigation(
     val isLoggedIn = isTraktConnected || isDoubanLoggedIn
 
     // Widget 从详情等子页面触发时，先回到 MainScreen，再由 MainScreen 消费搜索请求。
-    LaunchedEffect(searchRequested, currentStartDest) {
+    val currentRoute = currentBackStackEntry?.destination?.route
+    LaunchedEffect(searchRequested, currentStartDest, currentRoute) {
         if (!searchRequested) return@LaunchedEffect
 
-        val currentRoute = navController.currentDestination?.route ?: return@LaunchedEffect
+        val route = currentRoute ?: return@LaunchedEffect
         val hasMainAccess = currentStartDest == Routes.MAIN ||
             currentAuthState == AuthState.AUTHORIZED ||
             currentAuthState == AuthState.OFFLINE
-        val isDoubanActivationLogin = currentRoute == Routes.DOUBAN_LOGIN &&
+        val isDoubanActivationLogin = route == Routes.DOUBAN_LOGIN &&
             navController.previousBackStackEntry?.destination?.route == Routes.LOGIN
-        if (!hasMainAccess || currentRoute == Routes.MAIN ||
-            currentRoute == Routes.LOGIN || isDoubanActivationLogin
+        if (!hasMainAccess || route == Routes.MAIN ||
+            route == Routes.LOGIN || isDoubanActivationLogin
         ) {
             return@LaunchedEffect
         }
