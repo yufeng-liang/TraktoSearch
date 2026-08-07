@@ -224,29 +224,49 @@ class CloudPersonalSyncManager @Inject constructor(
         }
     }
 
+    /** 下载结果：区分云端文件不存在和真实下载/解析失败。 */
+    private data class DownloadResult(
+        val content: String?,
+        val missing: Boolean,
+        val successful: Boolean
+    )
+
     /**
      * 下载云端文件（网关服务端已解密）。
-     * @return 明文 JSON 字符串，文件不存在或失败返回 null
+     * 404 是正常的“该账号尚未创建该文件”，其他失败必须保留给同步决策层。
      */
-    private suspend fun downloadDecrypted(path: String): String? {
+    private suspend fun downloadDecryptedResult(path: String): DownloadResult {
         return try {
             val resp = giteeContentsApi.getFileContent(OWNER, REPO, path)
             if (!resp.isSuccessful) {
-                if (resp.code() != 404) Log.w(TAG, "下载失败: ${resp.code()} | path=$path")
-                return null
+                if (resp.code() == 404) {
+                    return DownloadResult(content = null, missing = true, successful = true)
+                }
+                Log.w(TAG, "下载失败: ${resp.code()} | path=$path")
+                return DownloadResult(content = null, missing = false, successful = false)
             }
-            val body = parseContentResponse(resp.body()) ?: return null
-            val base64Content = body.content ?: return null
+            val body = parseContentResponse(resp.body())
+                ?: return DownloadResult(content = null, missing = false, successful = false)
+            val base64Content = body.content
+                ?: return DownloadResult(content = null, missing = false, successful = false)
             // 网关服务端已解密，content 为 base64(明文 JSON)
-            String(
-                android.util.Base64.decode(base64Content, android.util.Base64.NO_WRAP),
-                Charsets.UTF_8
+            DownloadResult(
+                content = String(
+                    android.util.Base64.decode(base64Content, android.util.Base64.NO_WRAP),
+                    Charsets.UTF_8
+                ),
+                missing = false,
+                successful = true
             )
         } catch (e: Exception) {
             Log.w(TAG, "下载异常: path=$path | ${e.message}")
-            null
+            DownloadResult(content = null, missing = false, successful = false)
         }
     }
+
+    /** 兼容只需要内容的轻量元数据读取。 */
+    private suspend fun downloadDecrypted(path: String): String? =
+        downloadDecryptedResult(path).content
 
     // ===== 上传 API =====
 
@@ -375,7 +395,9 @@ class CloudPersonalSyncManager @Inject constructor(
             val totalPending = doubanSyncPendingItemDao.count()
             val lastFullSyncAt = doubanSyncMetaStorage.getLastFullSyncAt()
             val now = System.currentTimeMillis()
-            val effectiveLastFull = if (isFullComplete) now else lastFullSyncAt
+            // 只有完整同步所需的前置文件全部上传成功，才推进冷却窗口；
+            // 否则即使 sync_meta 自身上传成功，也不能把未完成的数据宣称为完整同步。
+            val effectiveLastFull = if (isFullComplete && allSuccess) now else lastFullSyncAt
 
             val metaPayload = SyncMetaPayload(
                 lastFullSyncAt = effectiveLastFull,
@@ -481,10 +503,13 @@ class CloudPersonalSyncManager @Inject constructor(
         var pendingCount = 0
         var mappingsCount = 0
         var metaApplied = false
+        var hasFailures = false
 
         // 1. 下载并合并 synced_items（按 syncedAt 比较，仅云端较新才覆盖）
         try {
-            val jsonStr = downloadDecrypted(buildPath(userHash, FILE_SYNCED))
+            val download = downloadDecryptedResult(buildPath(userHash, FILE_SYNCED))
+            if (!download.successful) hasFailures = true
+            val jsonStr = download.content
             if (jsonStr != null) {
                 val payload = json.decodeFromString(SyncedItemsPayload.serializer(), jsonStr)
                 if (payload.items.isNotEmpty()) {
@@ -523,15 +548,22 @@ class CloudPersonalSyncManager @Inject constructor(
                     } else {
                         Log.d(TAG, "synced_items 本地均较新，跳过 ${payload.items.size} 条")
                     }
+                } else {
+                    // synced_items 是完整快照；云端明确上传空列表时必须清理本地旧快照。
+                    doubanSyncedItemDao.clearAll()
+                    Log.d(TAG, "云端 synced_items 为空，已清理本地同步快照")
                 }
             }
         } catch (e: Exception) {
             Log.w(TAG, "下载合并 synced_items 异常: ${e.message}")
+            hasFailures = true
         }
 
         // 2. 下载并合并 pending_items（按 crawledAt 比较，仅云端较新才覆盖）
         try {
-            val jsonStr = downloadDecrypted(buildPath(userHash, FILE_PENDING))
+            val download = downloadDecryptedResult(buildPath(userHash, FILE_PENDING))
+            if (!download.successful) hasFailures = true
+            val jsonStr = download.content
             if (jsonStr != null) {
                 val payload = json.decodeFromString(PendingItemsPayload.serializer(), jsonStr)
                 if (payload.items.isNotEmpty()) {
@@ -557,15 +589,22 @@ class CloudPersonalSyncManager @Inject constructor(
                         pendingCount = toInsert.size
                         Log.d(TAG, "合并 pending_items: $pendingCount 条（云端较新）")
                     }
+                } else {
+                    // pending_items 同样是完整快照；空列表代表没有遗留待处理条目。
+                    doubanSyncPendingItemDao.clearAll()
+                    Log.d(TAG, "云端 pending_items 为空，已清理本地待处理条目")
                 }
             }
         } catch (e: Exception) {
             Log.w(TAG, "下载合并 pending_items 异常: ${e.message}")
+            hasFailures = true
         }
 
         // 3. 下载并合并 id_mappings（不覆盖本地已有）
         try {
-            val jsonStr = downloadDecrypted(buildPath(userHash, FILE_ID_MAPPINGS))
+            val download = downloadDecryptedResult(buildPath(userHash, FILE_ID_MAPPINGS))
+            if (!download.successful) hasFailures = true
+            val jsonStr = download.content
             if (jsonStr != null) {
                 val payload = json.decodeFromString(IdMappingsPayload.serializer(), jsonStr)
                 if (payload.mappings.isNotEmpty()) {
@@ -581,11 +620,14 @@ class CloudPersonalSyncManager @Inject constructor(
             }
         } catch (e: Exception) {
             Log.w(TAG, "下载合并 id_mappings 异常: ${e.message}")
+            hasFailures = true
         }
 
         // 4. 下载并应用 sync_meta
         try {
-            val jsonStr = downloadDecrypted(buildPath(userHash, FILE_META))
+            val download = downloadDecryptedResult(buildPath(userHash, FILE_META))
+            if (!download.successful) hasFailures = true
+            val jsonStr = download.content
             if (jsonStr != null) {
                 val payload = json.decodeFromString(SyncMetaPayload.serializer(), jsonStr)
                 doubanSyncMetaStorage.updateFromCloud(
@@ -598,13 +640,15 @@ class CloudPersonalSyncManager @Inject constructor(
             }
         } catch (e: Exception) {
             Log.w(TAG, "下载应用 sync_meta 异常: ${e.message}")
+            hasFailures = true
         }
 
         PullResult(
             syncedItems = syncedCount,
             pendingItems = pendingCount,
             idMappings = mappingsCount,
-            metaApplied = metaApplied
+            metaApplied = metaApplied,
+            hasFailures = hasFailures
         )
     }
 
@@ -613,7 +657,8 @@ class CloudPersonalSyncManager @Inject constructor(
         val syncedItems: Int = 0,
         val pendingItems: Int = 0,
         val idMappings: Int = 0,
-        val metaApplied: Boolean = false
+        val metaApplied: Boolean = false,
+        val hasFailures: Boolean = false
     ) {
         val hasAnyData: Boolean get() = syncedItems > 0 || pendingItems > 0 || idMappings > 0 || metaApplied
     }

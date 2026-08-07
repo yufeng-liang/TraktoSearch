@@ -172,6 +172,10 @@ class DoubanSyncProgressPublisherTest {
 
         assertThat(progress.value.stage).isEqualTo(DoubanSyncStage.UPLOADING)
         assertThat(progress.value.subStage).isEqualTo(DoubanSyncSubStage.PREPARING_UPLOAD)
+        assertThat(progress.value.current).isEqualTo(0)
+        assertThat(progress.value.total).isEqualTo(0)
+        assertThat(progress.value.etaSeconds).isEqualTo(DoubanSyncEtaEstimator.UNKNOWN_ETA_SECONDS)
+        assertThat(progress.value.currentTitle).isNull()
         assertThat(progress.value.phase).isEqualTo("准备上传")
     }
 

@@ -1514,6 +1514,7 @@
     <string name="douban_sync_stage_fetching_list">목록 가져오는 중</string>
     <string name="douban_sync_stage_parsing_data">데이터 분석 중</string>
     <string name="douban_sync_stage_updating_list">목록 업데이트 중</string>
+    <string name="douban_sync_stage_uploading">데이터 업로드 중</string>
     <string name="douban_sync_stage_completed">동기화 완료</string>
     <string name="douban_sync_stage_login_required">로그인 필요</string>
     <string name="douban_sync_stage_cancelling">취소 중</string>
@@ -1523,6 +1524,7 @@
     <string name="douban_sync_compact_fetching_list">목록</string>
     <string name="douban_sync_compact_parsing_data">분석 중</string>
     <string name="douban_sync_compact_updating_list">업데이트 중</string>
+    <string name="douban_sync_compact_uploading">업로드</string>
     <string name="douban_sync_compact_completed">완료</string>
     <string name="douban_sync_compact_login_required">로그인 필요</string>
     <string name="douban_sync_compact_cancelling">취소 중</string>
@@ -1538,7 +1540,17 @@
     <string name="douban_sync_substage_status_changes">상태 변경을 적용하는 중</string>
     <string name="douban_sync_substage_retrying_items">항목을 재시도하는 중</string>
     <string name="douban_sync_substage_waiting_delay">다음 시도를 기다리는 중</string>
+    <string name="douban_sync_substage_preparing_upload">업로드 준비 중</string>
+    <string name="douban_sync_substage_checking_consistency">일관성 확인 중</string>
+    <string name="douban_sync_substage_uploading_personal_data">개인 데이터 업로드 중</string>
+    <string name="douban_sync_substage_uploading_failures">실패 항목 업로드 중</string>
+    <string name="douban_sync_substage_uploading_details">상세 정보 업로드 중</string>
+    <string name="douban_sync_substage_filling_media_type">미디어 유형 보완 중</string>
     <string name="douban_sync_recent_items">최근 가져온 항목</string>
+    <string name="douban_sync_processing_items">처리 중</string>
+    <string name="douban_sync_pending_items">대기 중</string>
+    <string name="douban_sync_pending_count">%1$d개 더 대기 중</string>
+    <string name="douban_sync_empty_batch">현재 배치에 항목이 없습니다</string>
     <string name="douban_sync_preview_status_wish">보고 싶음</string>
     <string name="douban_sync_preview_status_collect">시청함</string>
     <string name="douban_sync_preview_rating_format">%1$d/5</string>

@@ -177,8 +177,7 @@ fun DoubanSyncStage.compactLabelRes(): Int = when (this) {
     DoubanSyncStage.FETCHING_LIST -> R.string.douban_sync_compact_fetching_list
     DoubanSyncStage.PARSING_DATA -> R.string.douban_sync_compact_parsing_data
     DoubanSyncStage.UPDATING_LIST -> R.string.douban_sync_compact_updating_list
-    // 上传专用资源由后续 UI 任务补齐，模型阶段复用稳定的更新文案资源。
-    DoubanSyncStage.UPLOADING -> R.string.douban_sync_compact_updating_list
+    DoubanSyncStage.UPLOADING -> R.string.douban_sync_compact_uploading
     DoubanSyncStage.COMPLETED -> R.string.douban_sync_compact_completed
     DoubanSyncStage.LOGIN_REQUIRED -> R.string.douban_sync_compact_login_required
     DoubanSyncStage.CANCELLING -> R.string.douban_sync_compact_cancelling
@@ -192,7 +191,7 @@ fun DoubanSyncStage.labelRes(): Int = when (this) {
     DoubanSyncStage.FETCHING_LIST -> R.string.douban_sync_stage_fetching_list
     DoubanSyncStage.PARSING_DATA -> R.string.douban_sync_stage_parsing_data
     DoubanSyncStage.UPDATING_LIST -> R.string.douban_sync_stage_updating_list
-    DoubanSyncStage.UPLOADING -> R.string.douban_sync_stage_updating_list
+    DoubanSyncStage.UPLOADING -> R.string.douban_sync_stage_uploading
     DoubanSyncStage.COMPLETED -> R.string.douban_sync_stage_completed
     DoubanSyncStage.LOGIN_REQUIRED -> R.string.douban_sync_stage_login_required
     DoubanSyncStage.CANCELLING -> R.string.douban_sync_stage_cancelling
@@ -213,13 +212,12 @@ fun DoubanSyncSubStage.labelRes(): Int? = when (this) {
     DoubanSyncSubStage.STATUS_CHANGES -> R.string.douban_sync_substage_status_changes
     DoubanSyncSubStage.RETRYING_FAILURES -> R.string.douban_sync_substage_retrying_items
     DoubanSyncSubStage.WAITING_DELAY -> R.string.douban_sync_substage_waiting_delay
-    // 上传专用资源由后续 UI 任务补齐，先沿用现有可用的阶段资源。
-    DoubanSyncSubStage.PREPARING_UPLOAD,
-    DoubanSyncSubStage.CHECKING_CONSISTENCY,
-    DoubanSyncSubStage.UPLOADING_PERSONAL_DATA,
-    DoubanSyncSubStage.UPLOADING_FAILURES,
-    DoubanSyncSubStage.UPLOADING_DETAILS,
-    DoubanSyncSubStage.FILLING_MEDIA_TYPE -> R.string.douban_sync_substage_writing_local
+    DoubanSyncSubStage.PREPARING_UPLOAD -> R.string.douban_sync_substage_preparing_upload
+    DoubanSyncSubStage.CHECKING_CONSISTENCY -> R.string.douban_sync_substage_checking_consistency
+    DoubanSyncSubStage.UPLOADING_PERSONAL_DATA -> R.string.douban_sync_substage_uploading_personal_data
+    DoubanSyncSubStage.UPLOADING_FAILURES -> R.string.douban_sync_substage_uploading_failures
+    DoubanSyncSubStage.UPLOADING_DETAILS -> R.string.douban_sync_substage_uploading_details
+    DoubanSyncSubStage.FILLING_MEDIA_TYPE -> R.string.douban_sync_substage_filling_media_type
 }
 
 /** 通知和横幅展示的次级阶段；列表阶段由「想看/看过」标签承载，避免重复。 */

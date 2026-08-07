@@ -27,7 +27,9 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -204,7 +206,7 @@ class DoubanSyncManagerBatchPipelineTest {
         assertThat(resultFailed(result)).isEmpty()
         // pending 为空,不会调用 fetchDetail
         coVerify(exactly = 0) {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         }
     }
 
@@ -223,7 +225,7 @@ class DoubanSyncManagerBatchPipelineTest {
         )
         // fetchDetail 返回 null,让所有 pending 项都进入 DETAIL_FETCH_FAILED 分支
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } returns Pair(null, false)
 
         val result = invokeSyncBatchToTrakt(
@@ -235,7 +237,7 @@ class DoubanSyncManagerBatchPipelineTest {
         assertThat(resultSkipped(result)).isEqualTo(1)
         // fetchDetail 只被调用 2 次(doubanId=1,3)
         coVerify(exactly = 2) {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         }
         // 失败项 2 个(doubanId=1,3)
         assertThat(resultFailed(result)).hasSize(2)
@@ -247,7 +249,7 @@ class DoubanSyncManagerBatchPipelineTest {
     fun 部分跳过时进度仍覆盖本批全部条目() {
         val items = listOf(buildMarkItem("1"), buildMarkItem("2"), buildMarkItem("3"))
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } returns Pair(null, false)
         val progressCalls = mutableListOf<ProgressCall>()
 
@@ -267,7 +269,7 @@ class DoubanSyncManagerBatchPipelineTest {
     fun 详情池预取显示拉取云端阶段后进入详情抓取() {
         val items = listOf(buildMarkItem("cloud-prefetch"))
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } returns Pair(null, false)
 
         val progressCalls = mutableListOf<ProgressCall>()
@@ -295,7 +297,7 @@ class DoubanSyncManagerBatchPipelineTest {
             }
         }
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } returns Pair(null, false)
 
         invokeSyncBatchToTrakt(
@@ -311,7 +313,7 @@ class DoubanSyncManagerBatchPipelineTest {
     @Test
     fun Trakt详情流水线不吞取消异常() {
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } throws kotlinx.coroutines.CancellationException("test cancellation")
 
         val thrown = runCatching {
@@ -330,7 +332,7 @@ class DoubanSyncManagerBatchPipelineTest {
             sessionModeManager.sessionMode
         } returns kotlinx.coroutines.flow.flowOf(com.tracktosearch.data.session.SessionMode.DOUBAN)
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } throws kotlinx.coroutines.CancellationException("test cancellation")
 
         val thrown = runCatching {
@@ -356,7 +358,7 @@ class DoubanSyncManagerBatchPipelineTest {
     fun 详情页爬取失败标记DETAIL_FETCH_FAILED() {
         val items = listOf(buildMarkItem("1"))
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } returns Pair(null, false)
 
         val progressCalls = mutableListOf<ProgressCall>()
@@ -375,12 +377,123 @@ class DoubanSyncManagerBatchPipelineTest {
         assertThat(resultSuccess(result)).isEqualTo(0)
     }
 
+    @Test
+    fun Trakt批次按pending条目发布独立队列并在各条目完成后移除() {
+        val failedItem = buildMarkItem("queue-failed")
+        val successItem = buildMarkItem("queue-success")
+        val queuedItem = buildMarkItem("queue-pending-1")
+        val queuedItem2 = buildMarkItem("queue-pending-2")
+        val startedStates = mutableListOf<DoubanSyncProgress>()
+        val failedStates = mutableListOf<DoubanSyncProgress>()
+        val queriedStates = mutableListOf<DoubanSyncProgress>()
+        val firstWorkersStarted = CountDownLatch(3)
+        val releaseDetails = CompletableDeferred<Unit>()
+
+        coEvery {
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
+        } coAnswers {
+            synchronized(startedStates) {
+                startedStates += manager.progress.value
+            }
+            firstWorkersStarted.countDown()
+            if (firstWorkersStarted.count == 0L) {
+                releaseDetails.complete(Unit)
+            }
+            releaseDetails.await()
+            if ((args[0] as String).contains("queue-failed")) {
+                Pair(null, false)
+            } else {
+                Pair(buildDetail(imdbId = "tt-queue-success"), false)
+            }
+        }
+        every { traktRepository.getCachedTraktIdByImdb(any(), any()) } returns 100
+        coEvery { traktRepository.batchAddToWatchlist(any(), any()) } returns Result.success(TraktSyncResponse())
+        coEvery { traktRepository.batchAddRatingsAt(any(), any()) } returns Result.success(Unit)
+
+        val result = invokeSyncBatchToTrakt(
+            items = listOf(failedItem, successItem, queuedItem, queuedItem2),
+            status = DoubanMarkStatus.WISH,
+            onProgress = { _, subPhase, _, title, failure ->
+                if (subPhase == "详情页" && failure != null && title == failedItem.title) {
+                    failedStates += manager.progress.value
+                }
+                if (subPhase == "Trakt 查询" && title == successItem.title) {
+                    queriedStates += manager.progress.value
+                }
+            }
+        )
+
+        assertThat(startedStates).isNotEmpty()
+        assertThat(startedStates.any { progress ->
+            progress.processingItems.isNotEmpty() && progress.pendingItemCount >= 1
+        }).isTrue()
+        assertThat(failedStates).isNotEmpty()
+        assertThat(failedStates.last().processingItems.map { it.doubanId })
+            .doesNotContain(failedItem.doubanId)
+        assertThat(failedStates.last().pendingItems.map { it.doubanId })
+            .doesNotContain(failedItem.doubanId)
+        assertThat(queriedStates).isNotEmpty()
+        assertThat(queriedStates.last().processingItems.map { it.doubanId })
+            .doesNotContain(successItem.doubanId)
+        assertThat(queriedStates.last().pendingItems.map { it.doubanId })
+            .doesNotContain(successItem.doubanId)
+        assertThat(manager.progress.value.processingItems).isEmpty()
+        assertThat(manager.progress.value.pendingItems).isEmpty()
+        assertThat(manager.progress.value.pendingItemCount).isEqualTo(0)
+        assertThat(manager.progress.value.currentTitle).isNull()
+        assertThat(resultFailed(result)).hasSize(1)
+    }
+
+    @Test
+    fun 豆瓣独立批次发布队列并在无IMDB和写入前清空() {
+        every { sessionModeManager.sessionMode } returns
+            kotlinx.coroutines.flow.flowOf(com.tracktosearch.data.session.SessionMode.DOUBAN)
+        val item = buildMarkItem("queue-douban")
+        val startedStates = mutableListOf<DoubanSyncProgress>()
+        val completedStates = mutableListOf<DoubanSyncProgress>()
+        val releaseDetail = CompletableDeferred<Unit>()
+
+        coEvery {
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
+        } coAnswers {
+            startedStates += manager.progress.value
+            releaseDetail.complete(Unit)
+            Pair(buildDetail(imdbId = null), false)
+        }
+        coEvery { doubanSyncedItemDao.insertAll(any()) } coAnswers {
+            if (startedStates.isNotEmpty()) {
+                completedStates += manager.progress.value
+            }
+        }
+
+        val progressCalls = mutableListOf<ProgressCall>()
+        invokeSyncBatchToDoubanLocal(
+            items = listOf(item),
+            status = DoubanMarkStatus.WISH,
+            onProgress = { current, subPhase, cacheHit, title, failure ->
+                progressCalls += ProgressCall(current, subPhase, cacheHit, title, failure)
+            }
+        )
+
+        assertThat(releaseDetail.isCompleted).isTrue()
+        assertThat(startedStates.single().processingItems.map { it.doubanId })
+            .containsExactly(item.doubanId)
+        assertThat(startedStates.single().pendingItemCount).isEqualTo(0)
+        assertThat(progressCalls.any { it.subPhase == "详情页" && it.failure == null }).isTrue()
+        assertThat(completedStates.last().processingItems).isEmpty()
+        assertThat(completedStates.last().pendingItems).isEmpty()
+        assertThat(completedStates.last().currentTitle).isNull()
+        assertThat(manager.progress.value.processingItems).isEmpty()
+        assertThat(manager.progress.value.pendingItems).isEmpty()
+        assertThat(manager.progress.value.currentTitle).isNull()
+    }
+
     /** 无 IMDb ID 时仍写入可展示的豆瓣快照，不再形成用户可见失败项。 */
     @Test
     fun 详情页无IMDB_ID保留豆瓣快照() {
         val items = listOf(buildMarkItem("1"))
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } returns Pair(buildDetail(imdbId = null, isTvShow = false), false)
         val syncedItemsSlot = slot<List<DoubanSyncedItem>>()
         coEvery { doubanSyncedItemDao.insertAll(capture(syncedItemsSlot)) } returns Unit
@@ -410,7 +523,7 @@ class DoubanSyncManagerBatchPipelineTest {
     fun Trakt查询未命中保留豆瓣快照() {
         val items = listOf(buildMarkItem("1"))
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } returns Pair(buildDetail(imdbId = "tt12345", isTvShow = false), false)
         every { traktRepository.getCachedTraktIdByImdb(any(), any()) } returns null
         coEvery { traktRepository.searchByImdb(any(), any()) } returns Result.success(emptyList())
@@ -437,7 +550,7 @@ class DoubanSyncManagerBatchPipelineTest {
     fun Trakt查询ResultFailure保留豆瓣快照并生成TRAKT_SEARCH_FAILED() {
         val items = listOf(buildMarkItem("search-failed"))
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } returns Pair(buildDetail(imdbId = "tt-search-failed", isTvShow = false), false)
         every { traktRepository.getCachedTraktIdByImdb(any(), any()) } returns null
         coEvery {
@@ -487,7 +600,7 @@ class DoubanSyncManagerBatchPipelineTest {
     fun 完整流水线成功写入Trakt() {
         val items = listOf(buildMarkItem("1"))
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } returns Pair(buildDetail(imdbId = "tt12345", isTvShow = false), false)
         every { traktRepository.getCachedTraktIdByImdb(any(), any()) } returns 12345
 
@@ -553,7 +666,7 @@ class DoubanSyncManagerBatchPipelineTest {
             posterUrl = null
         )
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } returns Pair(buildDetail(imdbId = "tt67890", isTvShow = true), false)
         every { traktRepository.getCachedTraktIdByImdb(any(), any()) } returns 67890
 
@@ -601,7 +714,7 @@ class DoubanSyncManagerBatchPipelineTest {
         )
         coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns listOf(existingSnapshot)
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } returns Pair(buildDetail(imdbId = "tt-retried", isTvShow = false), false)
         every { traktRepository.getCachedTraktIdByImdb(any(), any()) } returns null
         coEvery { traktRepository.searchByImdb(any(), any()) } returns Result.success(emptyList())
@@ -623,7 +736,7 @@ class DoubanSyncManagerBatchPipelineTest {
         assertThat(resultFailed(result)).isEmpty()
         assertThat(syncedItemsSlot.captured.single().imdbId).isEqualTo("tt-retried")
         coVerify(exactly = 1) {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         }
         coVerify(exactly = 1) {
             traktRepository.searchByImdb("tt-retried", MediaType.MOVIE)
@@ -671,7 +784,7 @@ class DoubanSyncManagerBatchPipelineTest {
             doubanSyncedItemDao.getPendingSyncItems()
         }
         coVerify(exactly = 0) {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         }
     }
 
@@ -687,7 +800,7 @@ class DoubanSyncManagerBatchPipelineTest {
     @Test
     fun Trakt批量写入失败时仍保留本地豆瓣快照() {
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } returns Pair(buildDetail(imdbId = "tt-write-failed", isTvShow = false), false)
         every { traktRepository.getCachedTraktIdByImdb(any(), any()) } returns 12345
         coEvery {
@@ -712,7 +825,7 @@ class DoubanSyncManagerBatchPipelineTest {
     @Test
     fun 豆瓣已看状态移除Trakt想看失败时仍保留本地快照() {
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } returns Pair(buildDetail(imdbId = "tt-collect", isTvShow = false), false)
         every { traktRepository.getCachedTraktIdByImdb(any(), any()) } returns 67890
         coEvery {
@@ -778,7 +891,7 @@ class DoubanSyncManagerBatchPipelineTest {
         coEvery { doubanSyncFailureDao.getAll() } returns listOf(existingFailure.toEntity())
         coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns emptyList()
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } returns Pair(null, false)
 
         val result = invokeSyncBatchToTrakt(
@@ -802,7 +915,7 @@ class DoubanSyncManagerBatchPipelineTest {
         coEvery { doubanSyncedItemDao.getPendingSyncItems() } returns emptyList()
         coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns emptyList()
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } returns Pair(null, false)
 
         val result = invokeSyncBatchToDoubanLocal(
@@ -820,6 +933,46 @@ class DoubanSyncManagerBatchPipelineTest {
         assertThat(invokeShouldCleanupRemovedDoubanSnapshots(false, true, false)).isFalse()
         assertThat(invokeShouldCleanupRemovedDoubanSnapshots(true, false, false)).isFalse()
         assertThat(invokeShouldCleanupRemovedDoubanSnapshots(true, true, true)).isFalse()
+    }
+
+    @Test
+    fun pendingSync存在时不得跳过豆瓣列表爬取() = runBlocking {
+        coEvery { doubanSyncPendingItemDao.count() } returns 0
+        coEvery { doubanSyncedItemDao.getPendingSyncItems() } returns listOf(
+            DoubanSyncedItem(
+                doubanId = "pending-api",
+                imdbId = null,
+                traktId = null,
+                title = "待重试豆瓣标记",
+                status = DoubanMarkStatus.WISH.path,
+                rating = null,
+                syncedAt = 1L,
+                mediaType = "movie",
+                pendingSync = true
+            )
+        )
+        coEvery { doubanSyncMetaStorage.canSkipListCrawl() } returns true
+
+        assertThat(invokeCheckSkipListCrawl()).isFalse()
+        coVerify(exactly = 0) { doubanSyncMetaStorage.canSkipListCrawl() }
+    }
+
+    @Test
+    fun 云端个人数据拉取失败时不得跳过豆瓣列表爬取() {
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("uid", "cookie")
+        coEvery { cloudPersonalSyncManager.downloadAndMerge() } throws
+            IllegalStateException("cloud pull failed")
+        coEvery { doubanSyncPendingItemDao.count() } returns 0
+        coEvery { doubanSyncedItemDao.getAllSyncedDoubanIds() } returns emptyList()
+        coEvery { doubanSyncMetaStorage.canSkipListCrawl() } returns true
+        coEvery { doubanRepository.fetchMarkList(any(), any(), any(), any(), any(), any()) } returns true
+        coEvery { cloudPersonalSyncManager.uploadAll(any(), any(), any()) } returns true
+
+        invokeRunSyncLegacy(forceOverwrite = false)
+
+        coVerify(exactly = 2) {
+            doubanRepository.fetchMarkList(any(), any(), any(), any(), any(), any())
+        }
     }
 
     @Test
@@ -889,6 +1042,41 @@ class DoubanSyncManagerBatchPipelineTest {
     }
 
     @Test
+    fun 豆瓣独立模式状态变化不得清除待重试标记() {
+        every {
+            sessionModeManager.sessionMode
+        } returns kotlinx.coroutines.flow.flowOf(com.tracktosearch.data.session.SessionMode.DOUBAN)
+
+        val synced = DoubanSyncedItem(
+            doubanId = "douban-pending-status",
+            imdbId = "tt-douban-pending-status",
+            traktId = 24680,
+            title = "豆瓣待重试状态",
+            status = DoubanMarkStatus.WISH.path,
+            rating = null,
+            syncedAt = 1L,
+            mediaType = "movie",
+            pendingSync = true
+        )
+
+        val result = invokeProcessStatusChanges(
+            changedItems = listOf(buildMarkItem(synced.doubanId)),
+            newStatus = DoubanMarkStatus.COLLECT,
+            syncedItemsMap = mapOf(synced.doubanId to synced)
+        )
+
+        assertThat(result).isEqualTo(1)
+        coVerify(exactly = 1) {
+            doubanSyncedItemDao.updateStatusAndPendingSync(
+                doubanId = synced.doubanId,
+                status = DoubanMarkStatus.COLLECT.path,
+                pendingSync = true,
+                now = any()
+            )
+        }
+    }
+
+    @Test
     fun traktIdZeroSkipsTraktAndUpdatesLocalStatus() {
         val synced = DoubanSyncedItem(
             doubanId = "douban-only-status",
@@ -931,7 +1119,7 @@ class DoubanSyncManagerBatchPipelineTest {
     fun existingFailures累加attemptCount() {
         val items = listOf(buildMarkItem("1"))
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } returns Pair(null, false)
 
         val existing = listOf(
@@ -960,7 +1148,7 @@ class DoubanSyncManagerBatchPipelineTest {
     fun 无existingFailures时attemptCount默认为1() {
         val items = listOf(buildMarkItem("1"))
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } returns Pair(null, false)
 
         val result = invokeSyncBatchToTrakt(
@@ -999,7 +1187,7 @@ class DoubanSyncManagerBatchPipelineTest {
             true
         }
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } returns Pair(buildDetail(imdbId = "tt-current"), false)
         every { traktRepository.getCachedTraktIdByImdb(any(), any()) } returns 100
         coEvery { traktRepository.batchAddToWatchlist(any(), any()) } returns mockk(relaxed = true)
@@ -1321,6 +1509,37 @@ class DoubanSyncManagerBatchPipelineTest {
         }
         error?.let { throw it }
         return resultValue as Int
+    }
+
+    private fun invokeCheckSkipListCrawl(): Boolean {
+        val method = DoubanSyncManager::class.java.getDeclaredMethod(
+            "checkSkipListCrawl",
+            Continuation::class.java
+        )
+        method.isAccessible = true
+
+        val latch = CountDownLatch(1)
+        var error: Throwable? = null
+        var resultValue: Any? = null
+        val continuation = object : Continuation<Any?> {
+            override val context: CoroutineContext = EmptyCoroutineContext
+            override fun resumeWith(result: Result<Any?>) {
+                result.onSuccess { resultValue = it }
+                    .onFailure { error = it }
+                latch.countDown()
+            }
+        }
+
+        val rawResult = method.invoke(manager, continuation)
+        if (rawResult != COROUTINE_SUSPENDED) {
+            resultValue = rawResult
+            latch.countDown()
+        }
+        if (!latch.await(15, TimeUnit.SECONDS)) {
+            throw AssertionError("checkSkipListCrawl 在 15 秒内未完成")
+        }
+        error?.let { throw it }
+        return resultValue as Boolean
     }
 
     /** 反射读取 BatchSyncResult(private 嵌套 data class)的字段 */

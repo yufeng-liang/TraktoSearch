@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -35,8 +37,10 @@ import com.tracktosearch.data.remote.douban.DelayType
 import com.tracktosearch.data.repository.DoubanSyncLoginTarget
 import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.DoubanSyncStage
+import com.tracktosearch.data.repository.DoubanSyncSubStage
 import com.tracktosearch.data.repository.labelRes
 import com.tracktosearch.service.DoubanSyncService
+import com.tracktosearch.ui.screen.watchlist.hasLiveCountProgress
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import javax.inject.Inject
@@ -93,9 +97,22 @@ fun DoubanSyncDialog(
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.douban_sync_title)) },
         text = {
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 val stageLabel = stringResource(p.stage.labelRes())
                 val subStageLabel = p.subStage.labelRes()?.let { stringResource(it) }
+                val showRecentItems = p.stage == DoubanSyncStage.FETCHING_LIST
+                val showProcessingQueue = when {
+                    p.stage == DoubanSyncStage.PARSING_DATA -> when (p.subStage) {
+                        DoubanSyncSubStage.FETCHING_DETAIL,
+                        DoubanSyncSubStage.LOOKING_UP_TRAKT,
+                        DoubanSyncSubStage.RETRYING_FAILURES -> true
+                        else -> false
+                    }
+                    p.stage == DoubanSyncStage.UPDATING_LIST &&
+                        p.subStage == DoubanSyncSubStage.STATUS_CHANGES -> true
+                    else -> false
+                }
+                val showProgressCount = p.hasLiveCountProgress()
                 val etaLabel = when {
                     p.etaSeconds < 0 -> null
                     p.etaSeconds < 60 -> stringResource(R.string.douban_sync_eta_seconds, p.etaSeconds)
@@ -110,7 +127,7 @@ fun DoubanSyncDialog(
                     )
                 }
 
-                if (p.isComplete) {
+                if (!showProgressCount) {
                     Text(stageLabel, style = MaterialTheme.typography.bodyMedium)
                 } else {
                     Text(stringResource(R.string.douban_sync_progress_format, stageLabel, p.current, p.total))
@@ -142,7 +159,7 @@ fun DoubanSyncDialog(
                     )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
-                if (p.total > 0) {
+                if (p.hasLiveCountProgress()) {
                     LinearProgressIndicator(
                         progress = { (p.current.toFloat() / p.total).coerceIn(0f, 1f) },
                         modifier = Modifier.fillMaxWidth()
@@ -164,7 +181,7 @@ fun DoubanSyncDialog(
                     )
                 }
 
-                if (p.recentItems.isNotEmpty()) {
+                if (showRecentItems && p.recentItems.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
                         stringResource(R.string.douban_sync_recent_items),
@@ -212,6 +229,81 @@ fun DoubanSyncDialog(
                                     )
                                 }
                             }
+                        }
+                    }
+                }
+
+                if (showProcessingQueue) {
+                    val processingItems = p.processingItems.take(3)
+                    val pendingItems = p.pendingItems.take(5)
+                    val remainingPendingCount = (p.pendingItemCount - pendingItems.size).coerceAtLeast(0)
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        stringResource(R.string.douban_sync_processing_items),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    if (processingItems.isEmpty() && pendingItems.isEmpty() && p.pendingItemCount == 0) {
+                        Text(
+                            stringResource(R.string.douban_sync_empty_batch),
+                            modifier = Modifier.padding(top = 4.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        processingItems.forEach { item ->
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                tonalElevation = 1.dp,
+                                shape = MaterialTheme.shapes.small
+                            ) {
+                                Text(
+                                    item.title,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+
+                    if (pendingItems.isNotEmpty() || remainingPendingCount > 0) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            stringResource(R.string.douban_sync_pending_items),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        pendingItems.forEach { item ->
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                tonalElevation = 1.dp,
+                                shape = MaterialTheme.shapes.small
+                            ) {
+                                Text(
+                                    item.title,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        if (remainingPendingCount > 0) {
+                            Text(
+                                stringResource(R.string.douban_sync_pending_count, remainingPendingCount),
+                                modifier = Modifier.padding(top = 4.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }

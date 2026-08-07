@@ -72,4 +72,33 @@ class DoubanSyncInteractionTest {
             ).bannerSubStageRes()
         ).isEqualTo(R.string.douban_sync_substage_fetching_detail)
     }
+
+    @Test
+    fun `涓婁紶鍜屽彇娑堟樉绀烘棤鎵规鏁伴噺`() {
+        assertThat(
+            DoubanSyncProgress(
+                isRunning = true,
+                stage = DoubanSyncStage.UPLOADING,
+                total = 461
+            ).hasLiveCountProgress()
+        ).isFalse()
+        assertThat(
+            DoubanSyncProgress(
+                isRunning = true,
+                stage = DoubanSyncStage.CANCELLING,
+                total = 461
+            ).hasLiveCountProgress()
+        ).isFalse()
+    }
+
+    @Test
+    fun `瑙ｆ瀽闃舵鏈夋壒娆℃暟閲忔椂鏄剧ず鏁伴噺`() {
+        assertThat(
+            DoubanSyncProgress(
+                isRunning = true,
+                stage = DoubanSyncStage.PARSING_DATA,
+                total = 461
+            ).hasLiveCountProgress()
+        ).isTrue()
+    }
 }

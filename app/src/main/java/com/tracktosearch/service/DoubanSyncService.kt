@@ -148,111 +148,14 @@ class DoubanSyncService : Service() {
     }
 
     /** 构建通知：状态栏使用短阶段名，通知内容补充子阶段、数量、ETA 和当前条目。 */
-    private fun buildNotification(progress: DoubanSyncProgress): Notification {
-        val contentIntent = PendingIntent.getActivity(
-            this, 0,
-            Intent(this, MainActivity::class.java).putExtra("navigate_to", "douban_sync"),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        val cancelIntent = PendingIntent.getService(
-            this, 1,
-            Intent(this, DoubanSyncService::class.java).setAction(ACTION_CANCEL),
-            PendingIntent.FLAG_IMMUTABLE
-        )
-        val stageLabel = getString(progress.stage.labelRes())
-        val compactLabel = getString(progress.stage.compactLabelRes())
-        val subStageLabel = progress.subStage.secondaryLabelRes()?.let(::getString)
-        val targetLabel = when (progress.subStage) {
-            DoubanSyncSubStage.FETCHING_WISH_LIST -> getString(R.string.douban_sync_preview_status_wish)
-            DoubanSyncSubStage.FETCHING_COLLECT_LIST -> getString(R.string.douban_sync_preview_status_collect)
-            else -> null
-        }
-        val contentText = when {
-            progress.cookieExpired -> getString(R.string.douban_sync_cookie_expired_banner)
-            progress.isComplete && progress.stage == DoubanSyncStage.LOGIN_REQUIRED -> when (progress.loginTarget) {
-                DoubanSyncLoginTarget.DOUBAN -> getString(R.string.douban_sync_douban_login_required_banner)
-                DoubanSyncLoginTarget.TRAKT -> getString(R.string.douban_sync_trakt_login_required_banner)
-                null -> stageLabel
-            }
-            progress.isComplete && progress.stage == DoubanSyncStage.COMPLETED ->
-                getString(
-                    R.string.douban_sync_summary_format,
-                    progress.successCount,
-                    progress.skippedCount,
-                    progress.cacheHitCount
-                )
-            progress.isComplete && progress.stage == DoubanSyncStage.FAILED ->
-                getString(R.string.douban_sync_stage_failed)
-            progress.isComplete && progress.stage == DoubanSyncStage.CANCELLING ->
-                getString(R.string.douban_sync_cancelled_banner)
-            progress.total > 0 && targetLabel != null -> getString(
-                R.string.douban_sync_notification_progress_format,
-                stageLabel,
-                targetLabel,
-                progress.current,
-                progress.total
-            )
-            progress.total > 0 && subStageLabel != null -> getString(
-                R.string.douban_sync_notification_progress_format,
-                stageLabel,
-                subStageLabel,
-                progress.current,
-                progress.total
-            )
-            progress.total > 0 -> getString(
-                R.string.douban_sync_progress_format,
-                stageLabel,
-                progress.current,
-                progress.total
-            )
-            subStageLabel != null -> getString(
-                R.string.douban_sync_notification_stage_format,
-                stageLabel,
-                subStageLabel
-            )
-            else -> stageLabel
-        }
-        val expandedParts = buildList {
-            progress.currentTitle?.takeIf { it.isNotBlank() }?.let {
-                add(getString(R.string.douban_sync_notification_current, it))
-            } ?: progress.recentItems.firstOrNull()?.title?.takeIf { it.isNotBlank() }?.let {
-                add(getString(R.string.douban_sync_notification_latest, it))
-            }
-            if (progress.isRunning && progress.etaSeconds >= 0) {
-                add(getString(R.string.douban_sync_eta_format, formatEta(progress.etaSeconds)))
-            }
-            progress.errorMessage?.takeIf { it.isNotBlank() }?.let {
-                add(getString(R.string.douban_sync_error_detail, it))
-            }
-        }
-        val expandedText = expandedParts.joinToString(" · ").ifBlank { contentText }
-
-        return LiveUpdateNotificationBuilder.build(
-            context = this,
-            channelId = CHANNEL_ID,
-            title = getString(R.string.douban_sync_title),
-            phase = compactLabel,
-            current = progress.current,
-            total = progress.total,
-            contentIntent = contentIntent,
-            cancelIntent = cancelIntent,
-            cancelText = getString(R.string.douban_sync_cancel),
-            contentText = contentText,
-            expandedText = expandedText,
-            publicText = getString(R.string.douban_sync_notification_public, stageLabel),
-            isTerminal = progress.isComplete
-        )
-    }
-
-    private fun formatEta(seconds: Long): String = when {
-        seconds < 60 -> getString(R.string.douban_sync_eta_seconds, seconds)
-        seconds < 3600 -> getString(R.string.douban_sync_eta_minutes, seconds / 60)
-        else -> getString(R.string.douban_sync_eta_hours, seconds / 3600, (seconds % 3600) / 60)
-    }
+    private fun buildNotification(progress: DoubanSyncProgress): Notification =
+        buildDoubanSyncNotification(this, progress)
 
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
-            CHANNEL_ID, getString(R.string.douban_sync_title), NotificationManager.IMPORTANCE_LOW
+            CHANNEL_ID,
+            getString(R.string.douban_sync_title),
+            NotificationManager.IMPORTANCE_LOW
         ).apply {
             description = getString(R.string.douban_sync_notification_channel_description)
             setLockscreenVisibility(Notification.VISIBILITY_PRIVATE)
@@ -266,4 +169,125 @@ class DoubanSyncService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+}
+
+internal fun buildDoubanSyncNotification(context: Context, progress: DoubanSyncProgress): Notification {
+        val contentIntent = PendingIntent.getActivity(
+            context, 0,
+            Intent(context, MainActivity::class.java).putExtra("navigate_to", "douban_sync"),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val cancelIntent = PendingIntent.getService(
+            context, 1,
+            Intent(context, DoubanSyncService::class.java).setAction(DoubanSyncService.ACTION_CANCEL),
+            PendingIntent.FLAG_IMMUTABLE
+        )
+        val stageLabel = context.getString(progress.stage.labelRes())
+        val compactLabel = context.getString(progress.stage.compactLabelRes())
+        val subStageLabel = progress.subStage.secondaryLabelRes()?.let(context::getString)
+        val targetLabel = when (progress.subStage) {
+            DoubanSyncSubStage.FETCHING_WISH_LIST -> context.getString(R.string.douban_sync_preview_status_wish)
+            DoubanSyncSubStage.FETCHING_COLLECT_LIST -> context.getString(R.string.douban_sync_preview_status_collect)
+            else -> null
+        }
+        val isUploading = progress.stage == DoubanSyncStage.UPLOADING
+        val contentText = when {
+            progress.cookieExpired -> context.getString(R.string.douban_sync_cookie_expired_banner)
+            progress.isComplete && progress.stage == DoubanSyncStage.LOGIN_REQUIRED -> when (progress.loginTarget) {
+                DoubanSyncLoginTarget.DOUBAN -> context.getString(R.string.douban_sync_douban_login_required_banner)
+                DoubanSyncLoginTarget.TRAKT -> context.getString(R.string.douban_sync_trakt_login_required_banner)
+                null -> stageLabel
+            }
+            progress.isComplete && progress.stage == DoubanSyncStage.COMPLETED ->
+                context.getString(
+                    R.string.douban_sync_summary_format,
+                    progress.successCount,
+                    progress.skippedCount,
+                    progress.cacheHitCount
+                )
+            progress.isComplete && progress.stage == DoubanSyncStage.FAILED ->
+                context.getString(R.string.douban_sync_stage_failed)
+            progress.isComplete && progress.stage == DoubanSyncStage.CANCELLING ->
+                context.getString(R.string.douban_sync_cancelled_banner)
+            isUploading && subStageLabel != null -> context.getString(
+                R.string.douban_sync_notification_stage_format,
+                stageLabel,
+                subStageLabel
+            )
+            isUploading -> stageLabel
+            progress.total > 0 && targetLabel != null -> context.getString(
+                R.string.douban_sync_notification_progress_format,
+                stageLabel,
+                targetLabel,
+                progress.current,
+                progress.total
+            )
+            progress.total > 0 && subStageLabel != null -> context.getString(
+                R.string.douban_sync_notification_progress_format,
+                stageLabel,
+                subStageLabel,
+                progress.current,
+                progress.total
+            )
+            progress.total > 0 -> context.getString(
+                R.string.douban_sync_progress_format,
+                stageLabel,
+                progress.current,
+                progress.total
+            )
+            subStageLabel != null -> context.getString(
+                R.string.douban_sync_notification_stage_format,
+                stageLabel,
+                subStageLabel
+            )
+            else -> stageLabel
+        }
+        val liveTitle = if (progress.isRunning || progress.isCancelling) {
+            progress.currentTitle?.takeIf { it.isNotBlank() }
+                ?: progress.processingItems.firstOrNull()?.title?.takeIf { it.isNotBlank() }
+        } else {
+            null
+        }
+        val historicalTitle = if (!progress.isRunning && !progress.isCancelling) {
+            progress.recentItems.firstOrNull()?.title?.takeIf { it.isNotBlank() }
+        } else {
+            null
+        }
+        val expandedParts = buildList {
+            liveTitle?.let {
+                add(context.getString(R.string.douban_sync_notification_current, it))
+            }
+            historicalTitle?.let {
+                add(context.getString(R.string.douban_sync_notification_latest, it))
+            }
+            if (progress.isRunning && progress.etaSeconds >= 0) {
+                add(context.getString(R.string.douban_sync_eta_format, formatDoubanSyncEta(context, progress.etaSeconds)))
+            }
+            progress.errorMessage?.takeIf { it.isNotBlank() }?.let {
+                add(context.getString(R.string.douban_sync_error_detail, it))
+            }
+        }
+        val expandedText = expandedParts.joinToString(" · ").ifBlank { contentText }
+
+        return LiveUpdateNotificationBuilder.build(
+            context = context,
+            channelId = DoubanSyncService.CHANNEL_ID,
+            title = context.getString(R.string.douban_sync_title),
+            phase = compactLabel,
+            current = if (isUploading) 0 else progress.current,
+            total = if (isUploading) 0 else progress.total,
+            contentIntent = contentIntent,
+            cancelIntent = cancelIntent,
+            cancelText = context.getString(R.string.douban_sync_cancel),
+            contentText = contentText,
+            expandedText = expandedText,
+            publicText = context.getString(R.string.douban_sync_notification_public, stageLabel),
+            isTerminal = progress.isComplete
+        )
+}
+
+private fun formatDoubanSyncEta(context: Context, seconds: Long): String = when {
+    seconds < 60 -> context.getString(R.string.douban_sync_eta_seconds, seconds)
+    seconds < 3600 -> context.getString(R.string.douban_sync_eta_minutes, seconds / 60)
+    else -> context.getString(R.string.douban_sync_eta_hours, seconds / 3600, (seconds % 3600) / 60)
 }

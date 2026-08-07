@@ -297,6 +297,14 @@ class CloudPersonalSyncManagerTest {
         return resp
     }
 
+    /** 构造云端服务异常响应。 */
+    private fun mockServerErrorResponse(): Response<JsonElement> {
+        val resp = mockk<Response<JsonElement>>()
+        every { resp.isSuccessful } returns false
+        every { resp.code() } returns 500
+        return resp
+    }
+
     /** 构造上传成功响应（201） */
     private fun mockSuccessUpdateResponse(): Response<GiteeContentUpdateResponse> {
         val resp = mockk<Response<GiteeContentUpdateResponse>>(relaxed = true)
@@ -512,6 +520,40 @@ class CloudPersonalSyncManagerTest {
         coVerify(exactly = 3) { giteeContentsApi.createFileContent(any(), any(), any(), any()) }
     }
 
+    @Test
+    fun uploadAll_完整同步个人数据上传失败_云端meta不得刷新完整同步时间() = runTest {
+        coEvery { userProfileStorage.getProfile() } returns TraktUserProfileResponse(username = "testuser")
+        coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns emptyList()
+        coEvery { doubanSyncPendingItemDao.getAll() } returns emptyList()
+        coEvery { doubanSyncedItemDao.count() } returns 0
+        coEvery { doubanSyncPendingItemDao.count() } returns 0
+        val previousFullSyncAt = 1234567890L
+        coEvery { doubanSyncMetaStorage.getLastFullSyncAt() } returns previousFullSyncAt
+        coEvery { giteeContentsApi.getFileContent(any(), any(), any(), any()) } returns mockNotFoundResponse()
+
+        val capturedPaths = mutableListOf<String>()
+        val capturedRequests = mutableListOf<GiteeContentRequest>()
+        coEvery {
+            giteeContentsApi.createFileContent(any(), any(), capture(capturedPaths), capture(capturedRequests))
+        } returnsMany listOf(
+            mockFailedUpdateResponse(),
+            mockSuccessUpdateResponse(),
+            mockSuccessUpdateResponse()
+        )
+
+        val result = manager.uploadAll(lastSyncMode = "FULL_REWRITE", isFullComplete = true)
+
+        assertThat(result).isFalse()
+        val metaIndex = capturedPaths.indexOfLast { it.contains("sync_meta.json") }
+        assertThat(metaIndex).isAtLeast(0)
+        val payload = json.decodeFromString(
+            JsonObject.serializer(),
+            decryptRequestContent(capturedRequests[metaIndex])
+        )
+        assertThat(payload["lastFullSyncAt"]!!.jsonPrimitive.content.toLong())
+            .isEqualTo(previousFullSyncAt)
+    }
+
     // ============================================================
     // refreshMetaOnly 测试
     // ============================================================
@@ -685,6 +727,38 @@ class CloudPersonalSyncManagerTest {
         // 云端较旧 → 不覆盖本地，syncedItems=0，不调用 insertAll
         assertThat(result.syncedItems).isEqualTo(0)
         coVerify(exactly = 0) { doubanSyncedItemDao.insertAll(any()) }
+    }
+
+    @Test
+    fun downloadAndMerge_云端syncedItems为空_清理本地完整快照() = runTest {
+        coEvery { userProfileStorage.getProfile() } returns TraktUserProfileResponse(username = "testuser")
+        coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns listOf(buildSyncedItem())
+        val syncedPath = cloudPath("testuser", "synced_items.json")
+        val emptyPayload = buildCloudResponseJson(
+            buildSyncedItemsPayloadJson(emptyList()),
+            "sha-empty"
+        )
+        coEvery { giteeContentsApi.getFileContent(any(), any(), any(), any()) } returns mockNotFoundResponse()
+        coEvery { giteeContentsApi.getFileContent(any(), any(), syncedPath, any()) } returns
+            mockSuccessResponse(emptyPayload)
+
+        val result = manager.downloadAndMerge()
+
+        assertThat(result.syncedItems).isEqualTo(0)
+        coVerify(exactly = 1) { doubanSyncedItemDao.clearAll() }
+    }
+
+    @Test
+    fun downloadAndMerge_云端服务异常_标记拉取失败() = runTest {
+        coEvery { userProfileStorage.getProfile() } returns TraktUserProfileResponse(username = "testuser")
+        coEvery { giteeContentsApi.getFileContent(any(), any(), any(), any()) } returns
+            mockServerErrorResponse()
+
+        val result = manager.downloadAndMerge()
+
+        val hasFailuresField = result.javaClass.getDeclaredField("hasFailures")
+        hasFailuresField.isAccessible = true
+        assertThat(hasFailuresField.getBoolean(result)).isTrue()
     }
 
     @Test

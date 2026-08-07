@@ -53,7 +53,9 @@ data class DoubanCelebrity(
 /** 列表页解析结果（条目列表 + 总条目数，总数解析失败时为 null） */
 data class DoubanMarkListPage(
     val items: List<DoubanMarkItem>,
-    val totalCount: Int?
+    val totalCount: Int?,
+    /** 页面具备豆瓣列表结构；false 通常表示反爬/错误页面，不能当作空列表。 */
+    val isValid: Boolean = true
 )
 
 /**
@@ -130,7 +132,14 @@ object DoubanSpider {
 
         // 解析总条目数：豆瓣列表页通常在标题或分页区显示「共 255 条」/「(共255部)」等
         val totalCount = Regex("""(?:共|全部|总计)\s*[:(（]?\s*(\d+)\s*[)）部条]?\s*(?:条|部)?""").find(html)?.groupValues?.get(1)?.toIntOrNull()
-        return DoubanMarkListPage(items, totalCount)
+        // 空列表是合法结果，但必须确认响应仍是豆瓣标记列表页面，避免把反爬/网关错误页当成空列表。
+        val hasListStructure = items.isNotEmpty() ||
+            totalCount != null ||
+            doc.selectFirst("div.paginator") != null ||
+            doc.selectFirst(".grid-view") != null ||
+            doc.title().contains("想看") ||
+            doc.title().contains("看过")
+        return DoubanMarkListPage(items, totalCount, isValid = hasListStructure)
     }
 
     /** 解析详情页 HTML，提取 imdbId、类型、年份、国家、导演、评分、简介、集数等 */

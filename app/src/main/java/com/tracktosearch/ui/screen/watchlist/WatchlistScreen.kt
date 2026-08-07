@@ -1078,6 +1078,7 @@ fun WatchlistScreen(
                                             }
                                             val subStageLabel = syncProgress.bannerSubStageRes()
                                                 ?.let { stringResource(it) }
+                                            val hasLiveCountProgress = syncProgress.hasLiveCountProgress()
                                             Text(
                                                 text = if (syncProgress.cookieExpired) {
                                                     stringResource(R.string.douban_sync_cookie_expired_banner)
@@ -1097,7 +1098,7 @@ fun WatchlistScreen(
                                                     stringResource(R.string.douban_sync_cancelled_banner)
                                                 } else if (syncProgress.isComplete) {
                                                     stringResource(R.string.douban_sync_complete_banner, syncProgress.successCount)
-                                                } else if (syncProgress.total > 0 && targetLabel != null) {
+                                                } else if (hasLiveCountProgress && targetLabel != null) {
                                                     stringResource(
                                                         R.string.douban_sync_notification_progress_format,
                                                         stageLabel,
@@ -1105,7 +1106,7 @@ fun WatchlistScreen(
                                                         syncProgress.current,
                                                         syncProgress.total
                                                     )
-                                                } else if (syncProgress.total > 0 && subStageLabel != null) {
+                                                } else if (hasLiveCountProgress && subStageLabel != null) {
                                                     stringResource(
                                                         R.string.douban_sync_notification_progress_format,
                                                         stageLabel,
@@ -1113,7 +1114,7 @@ fun WatchlistScreen(
                                                         syncProgress.current,
                                                         syncProgress.total
                                                     )
-                                                } else if (syncProgress.total > 0) {
+                                                } else if (hasLiveCountProgress) {
                                                     stringResource(
                                                         R.string.douban_sync_progress_format,
                                                         stageLabel,
@@ -1133,12 +1134,15 @@ fun WatchlistScreen(
                                                 color = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
                                                     else Color.White
                                             )
-                                            if (syncProgress.isRunning && syncProgress.total > 0) {
+                                            if (hasLiveCountProgress) {
                                                 Spacer(modifier = Modifier.height(4.dp))
                                                 LinearProgressIndicator(
                                                     progress = { (syncProgress.current.toFloat() / syncProgress.total).coerceIn(0f, 1f) },
                                                     modifier = Modifier.fillMaxWidth()
                                                 )
+                                            } else if (syncProgress.isRunning) {
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                                             }
                                         }
                                         if (syncProgress.cookieExpired) {

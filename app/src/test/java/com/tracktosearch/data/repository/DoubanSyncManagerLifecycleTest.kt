@@ -151,27 +151,39 @@ class DoubanSyncManagerLifecycleTest {
     fun 列表页回调实时发布预览条目和统一阶段() = runBlocking {
         every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("uid", "cookie")
         val listGate = CompletableDeferred<Unit>()
+        val detailStarted = CompletableDeferred<Unit>()
+        val detailGate = CompletableDeferred<Unit>()
         coEvery {
             doubanRepository.fetchMarkList(any(), any(), any(), any(), any(), any())
         } coAnswers {
             @Suppress("UNCHECKED_CAST")
+            val status = args[2] as DoubanMarkStatus
             val onPage = args[3] as suspend (List<DoubanMarkItem>, Int) -> Unit
-            onPage(
-                listOf(
-                    DoubanMarkItem(
-                        doubanId = "preview-1",
-                        title = "实时条目",
-                        rating = 4,
-                        comment = "短评",
-                        markedAt = "2024-06-01",
-                        doubanUrl = "https://movie.douban.com/subject/preview-1/",
-                        posterUrl = null
-                    )
-                ),
-                1
-            )
-            listGate.await()
+            if (status == DoubanMarkStatus.WISH) {
+                onPage(
+                    listOf(
+                        DoubanMarkItem(
+                            doubanId = "preview-1",
+                            title = "实时条目",
+                            rating = 4,
+                            comment = "短评",
+                            markedAt = "2024-06-01",
+                            doubanUrl = "https://movie.douban.com/subject/preview-1/",
+                            posterUrl = null
+                        )
+                    ),
+                    1
+                )
+                listGate.await()
+            }
             true
+        }
+        coEvery {
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
+        } coAnswers {
+            detailStarted.complete(Unit)
+            detailGate.await()
+            Pair(null, false)
         }
 
         manager.startSync()
@@ -190,6 +202,11 @@ class DoubanSyncManagerLifecycleTest {
         )
 
         listGate.complete(Unit)
+        detailStarted.await()
+        waitForCondition { manager.progress.value.stage == DoubanSyncStage.PARSING_DATA }
+        assertThat(manager.progress.value.recentItems).isEmpty()
+        assertThat(manager.progress.value.processingItems).isNotEmpty()
+        detailGate.complete(Unit)
         waitForCondition { manager.progress.value.isComplete }
     }
 
@@ -323,7 +340,7 @@ class DoubanSyncManagerLifecycleTest {
         coEvery { doubanSyncPendingItemDao.getByStatus("wish") } returns listOf(pendingItem)
         coEvery { doubanSyncPendingItemDao.getByStatus("collect") } returns emptyList()
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } returns Pair(DoubanDetailInfo(
             imdbId = "tt-resume-failed",
             isTvShow = false,
@@ -361,22 +378,42 @@ class DoubanSyncManagerLifecycleTest {
         )
         val fetchStarted = CompletableDeferred<Unit>()
         val releaseFetch = CompletableDeferred<Pair<DoubanDetailInfo?, Boolean>>()
+        val cancellationUploadStarted = CompletableDeferred<Unit>()
+        val releaseCancellationUpload = CompletableDeferred<Unit>()
         coEvery { doubanSyncedItemDao.getAllSyncedDoubanIds() } returns emptyList()
         coEvery { doubanSyncPendingItemDao.getByStatus("wish") } returns listOf(pendingItem)
         coEvery { doubanSyncPendingItemDao.getByStatus("collect") } returns emptyList()
         coEvery {
-            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any(), any())
         } coAnswers {
             fetchStarted.complete(Unit)
             releaseFetch.await()
+        }
+        coEvery {
+            cloudPersonalSyncManager.uploadAll(
+                lastSyncMode = "CANCELLED",
+                isFullComplete = false,
+                uploadIdMappings = false
+            )
+        } coAnswers {
+            cancellationUploadStarted.complete(Unit)
+            releaseCancellationUpload.await()
+            true
         }
 
         manager.startResume()
         fetchStarted.await()
         manager.cancel()
         releaseFetch.complete(Pair(null, false))
+        cancellationUploadStarted.await()
+        assertThat(manager.progress.value.isComplete).isFalse()
+        assertThat(manager.progress.value.stage).isEqualTo(DoubanSyncStage.CANCELLING)
+        assertThat(manager.isRunning()).isTrue()
+        releaseCancellationUpload.complete(Unit)
         waitForCondition { manager.progress.value.isComplete && !manager.isRunning() }
 
+        assertThat(manager.progress.value.isComplete).isTrue()
+        assertThat(manager.progress.value.stage).isEqualTo(DoubanSyncStage.CANCELLING)
         coVerify(exactly = 0) { doubanSyncPendingItemDao.deleteByDoubanIds(any()) }
     }
 
@@ -612,12 +649,21 @@ class DoubanSyncManagerLifecycleTest {
         coEvery {
             statusConsistencyChecker.checkAndUnify()
         } returns ConsistencyCheckResult(isComplete = true, errors = 1)
+        val uploadStages = mutableListOf<DoubanSyncSubStage>()
+        coEvery {
+            cloudPersonalSyncManager.uploadAll(any(), any(), any())
+        } coAnswers {
+            uploadStages += manager.progress.value.subStage
+            assertThat(manager.progress.value.stage).isNotEqualTo(DoubanSyncStage.COMPLETED)
+            true
+        }
 
         manager.startSync(SyncMode.INCREMENTAL_WITH_CHANGES)
         waitForCondition { manager.progress.value.isComplete && !manager.isRunning() }
 
         assertThat(manager.progress.value.stage).isEqualTo(DoubanSyncStage.COMPLETED)
         coVerify(exactly = 0) { statusConsistencyChecker.checkAndUnify() }
+        assertThat(uploadStages).containsExactly(DoubanSyncSubStage.UPLOADING_PERSONAL_DATA)
         coVerify(exactly = 1) {
             cloudPersonalSyncManager.uploadAll(
                 lastSyncMode = "INCREMENTAL_WITH_CHANGES",

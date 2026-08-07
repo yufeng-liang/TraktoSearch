@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.repository.DoubanSyncFailure
@@ -15,6 +16,7 @@ import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.DoubanSyncProgress
 import com.tracktosearch.data.repository.DoubanSyncLoginTarget
 import com.tracktosearch.data.repository.DoubanSyncPreviewItem
+import com.tracktosearch.data.repository.DoubanSyncQueueItem
 import com.tracktosearch.data.repository.DoubanSyncStage
 import com.tracktosearch.data.repository.DoubanSyncSubStage
 import com.tracktosearch.data.repository.FailureReason
@@ -249,6 +251,143 @@ class DoubanSyncDialogTest {
     }
 
     @Test
+    fun `解析阶段显示处理和待处理而不显示最近获取`() {
+        emit(
+            DoubanSyncProgress(
+                isRunning = true,
+                current = 1,
+                total = 7,
+                stage = DoubanSyncStage.PARSING_DATA,
+                subStage = DoubanSyncSubStage.FETCHING_DETAIL,
+                recentItems = listOf(preview("old", "Old recently fetched")),
+                processingItems = listOf(
+                    DoubanSyncQueueItem("processing-1", "Processing one"),
+                    DoubanSyncQueueItem("processing-2", "Processing two"),
+                    DoubanSyncQueueItem("processing-3", "Processing three"),
+                    DoubanSyncQueueItem("processing-4", "Processing four")
+                ),
+                pendingItems = (1..6).map { DoubanSyncQueueItem("pending-$it", "Pending $it") },
+                pendingItemCount = 7
+            )
+        )
+        setContent()
+
+        composeRule.onNodeWithText("Processing").assertIsDisplayed()
+        composeRule.onNodeWithText("Processing one").assertIsDisplayed()
+        composeRule.onNodeWithText("Processing three").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Processing four").assertCountEquals(0)
+        composeRule.onNodeWithText("Pending").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Pending 5").performScrollTo().assertIsDisplayed()
+        composeRule.onAllNodesWithText("Pending 6").assertCountEquals(0)
+        composeRule.onNodeWithText("2 more pending").performScrollTo().assertIsDisplayed()
+        composeRule.onAllNodesWithText("Recently fetched").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Old recently fetched").assertCountEquals(0)
+    }
+
+    @Test
+    fun `列表阶段显示最近获取而不显示处理队列`() {
+        emit(
+            DoubanSyncProgress(
+                isRunning = true,
+                stage = DoubanSyncStage.FETCHING_LIST,
+                subStage = DoubanSyncSubStage.FETCHING_WISH_LIST,
+                recentItems = listOf(preview("recent", "Recent movie")),
+                processingItems = listOf(DoubanSyncQueueItem("processing", "Queue movie")),
+                pendingItems = listOf(DoubanSyncQueueItem("pending", "Pending movie")),
+                pendingItemCount = 1
+            )
+        )
+        setContent()
+
+        composeRule.onNodeWithText("Recently fetched").assertIsDisplayed()
+        composeRule.onNodeWithText("Recent movie").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Processing").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Pending").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Queue movie").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Pending movie").assertCountEquals(0)
+    }
+
+    @Test
+    fun `写入阶段隐藏所有旧列表和队列条目`() {
+        emit(
+            DoubanSyncProgress(
+                isRunning = true,
+                stage = DoubanSyncStage.UPDATING_LIST,
+                subStage = DoubanSyncSubStage.WRITING_TARGET,
+                recentItems = listOf(preview("recent", "Old recent movie")),
+                processingItems = listOf(DoubanSyncQueueItem("processing", "Old processing movie")),
+                pendingItems = listOf(DoubanSyncQueueItem("pending", "Old pending movie")),
+                pendingItemCount = 1
+            )
+        )
+        setContent()
+
+        composeRule.onNodeWithText("Updating list").assertIsDisplayed()
+        composeRule.onNodeWithText("Writing Trakt").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Recently fetched").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Processing").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Pending").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Old recent movie").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Old processing movie").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Old pending movie").assertCountEquals(0)
+    }
+
+    @Test
+    fun `状态变化阶段显示处理和待处理条目`() {
+        emit(
+            DoubanSyncProgress(
+                isRunning = true,
+                current = 1,
+                total = 3,
+                stage = DoubanSyncStage.UPDATING_LIST,
+                subStage = DoubanSyncSubStage.STATUS_CHANGES,
+                recentItems = listOf(preview("recent", "Old recent movie")),
+                processingItems = listOf(DoubanSyncQueueItem("processing", "Changed movie")),
+                pendingItems = listOf(DoubanSyncQueueItem("pending", "Next changed movie")),
+                pendingItemCount = 1
+            )
+        )
+        setContent()
+
+        composeRule.onNodeWithText("Processing").assertIsDisplayed()
+        composeRule.onNodeWithText("Changed movie").assertIsDisplayed()
+        composeRule.onNodeWithText("Pending").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Next changed movie").performScrollTo().assertIsDisplayed()
+        composeRule.onAllNodesWithText("Recently fetched").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Old recent movie").assertCountEquals(0)
+    }
+
+    @Test
+    fun `上传阶段显示专用阶段文案并隐藏所有旧列表和队列条目`() {
+        emit(
+            DoubanSyncProgress(
+                isRunning = true,
+                current = 12,
+                total = 461,
+                stage = DoubanSyncStage.UPLOADING,
+                subStage = DoubanSyncSubStage.UPLOADING_DETAILS,
+                etaSeconds = 120,
+                recentItems = listOf(preview("recent", "Old recent movie")),
+                processingItems = listOf(DoubanSyncQueueItem("processing", "Old processing movie")),
+                pendingItems = listOf(DoubanSyncQueueItem("pending", "Old pending movie")),
+                pendingItemCount = 1
+            )
+        )
+        setContent()
+
+        composeRule.onNodeWithText("Uploading data").assertIsDisplayed()
+        composeRule.onAllNodesWithText("12/461", substring = true).assertCountEquals(0)
+        composeRule.onNodeWithText("Uploading details").assertIsDisplayed()
+        composeRule.onNodeWithText("about 2 min remaining").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Recently fetched").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Processing").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Pending").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Old recent movie").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Old processing movie").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Old pending movie").assertCountEquals(0)
+    }
+
+    @Test
     fun `完成状态显示统计文案`() {
         emit(
             DoubanSyncProgress(
@@ -264,6 +403,14 @@ class DoubanSyncDialogTest {
         // 导入完成后对话框只展示通用处理统计，不再把条目分类为失败项。
         composeRule.onNodeWithText("Success 50 · Skipped 5 · Cached 10").assertIsDisplayed()
     }
+
+    private fun preview(id: String, title: String) = DoubanSyncPreviewItem(
+        doubanId = id,
+        title = title,
+        status = DoubanMarkStatus.WISH,
+        rating = 4,
+        markedAt = "2024-01-01"
+    )
 
     @Test
     fun `完成状态不显示失败统计列表或导出入口`() {
