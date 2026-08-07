@@ -459,6 +459,21 @@ class WatchlistViewModel @Inject constructor(
         if (_uiState.value.isLoadingMovies) return  // 防止并发重复请求
         val page = _uiState.value.moviePage
         loadMoviesJob = viewModelScope.launch {
+            // 访客模式（GUEST）：未连 trakt 未登豆瓣，不展示任何 watchlist 数据，
+            // 直接清空并跳过网络与缓存读取，避免读到旧登录态遗留的离线缓存。
+            if (sessionModeManager.sessionMode.first() == SessionMode.GUEST) {
+                _uiState.update {
+                    it.copy(
+                        isLoadingMovies = false,
+                        moviesLoaded = false,
+                        movies = emptyList(),
+                        moviesError = null,
+                        movieTotalCount = null,
+                        hasMoreMovies = false
+                    )
+                }
+                return@launch
+            }
             // 豆瓣独立模式：直接读本地 douban_synced_items 表，跳过 trakt API
             if (sessionModeManager.sessionMode.first() == SessionMode.DOUBAN) {
                 loadMoviesFromDouban(forceReload, silent)
@@ -567,6 +582,20 @@ class WatchlistViewModel @Inject constructor(
         if (_uiState.value.isLoadingShows) return  // 防止并发重复请求
         val page = _uiState.value.showPage
         loadShowsJob = viewModelScope.launch {
+            // 访客模式（GUEST）：清空跳过，不展示旧缓存，参考 loadMovies。
+            if (sessionModeManager.sessionMode.first() == SessionMode.GUEST) {
+                _uiState.update {
+                    it.copy(
+                        isLoadingShows = false,
+                        showsLoaded = false,
+                        shows = emptyList(),
+                        showsError = null,
+                        showTotalCount = null,
+                        hasMoreShows = false
+                    )
+                }
+                return@launch
+            }
             // 豆瓣独立模式：直接读本地 douban_synced_items 表，跳过 trakt API
             if (sessionModeManager.sessionMode.first() == SessionMode.DOUBAN) {
                 loadShowsFromDouban(forceReload, silent)
@@ -716,6 +745,18 @@ class WatchlistViewModel @Inject constructor(
         }
         if (_uiState.value.isLoadingHistoryMovies) return
         loadHistoryMoviesJob = viewModelScope.launch {
+            // 访客模式（GUEST）：清空跳过，不展示旧缓存历史，参考 loadMovies。
+            if (sessionModeManager.sessionMode.first() == SessionMode.GUEST) {
+                _uiState.update {
+                    it.copy(
+                        isLoadingHistoryMovies = false,
+                        historyMoviesLoaded = false,
+                        historyMovies = emptyList(),
+                        historyMoviesError = null
+                    )
+                }
+                return@launch
+            }
             // 豆瓣独立模式：直接读本地 douban_synced_items 表，跳过 trakt API
             if (sessionModeManager.sessionMode.first() == SessionMode.DOUBAN) {
                 loadHistoryMoviesFromDouban(forceReload)
@@ -779,6 +820,18 @@ class WatchlistViewModel @Inject constructor(
         }
         if (_uiState.value.isLoadingHistoryShows) return
         loadHistoryShowsJob = viewModelScope.launch {
+            // 访客模式（GUEST）：清空跳过，不展示旧缓存历史，参考 loadMovies.
+            if (sessionModeManager.sessionMode.first() == SessionMode.GUEST) {
+                _uiState.update {
+                    it.copy(
+                        isLoadingHistoryShows = false,
+                        historyShowsLoaded = false,
+                        historyShows = emptyList(),
+                        historyShowsError = null
+                    )
+                }
+                return@launch
+            }
             // 豆瓣独立模式：直接读本地 douban_synced_items 表，跳过 trakt API
             if (sessionModeManager.sessionMode.first() == SessionMode.DOUBAN) {
                 loadHistoryShowsFromDouban(forceReload)
