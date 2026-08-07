@@ -192,29 +192,17 @@ class DoubanSyncManagerCancelTest {
     }
 
     /**
-     * cancel 后 uploadAll 以 "CANCELLED" 模式被调用。
+     * 没有活跃同步时 cancel 不应启动云端收尾任务。
      *
-     * 流程: cancel() → appScope.launch { syncJob?.join(); uploadAll("CANCELLED", false); ... }
-     * syncJob 为 null(未调用 startSync),join() 立即完成,随后 uploadAll 被调用。
-     *
-     * 字段验证补强:精确匹配 isFullComplete=false(取消是部分完成,不是完整同步完成)。
-     * 回归场景:若 cancel 后误传 isFullComplete=true,会更新 lastFullSyncAt 时间戳,
-     * 导致 UI 误显示"上次完整同步时间"为取消时间,且会触发不必要的 id_mappings 上传。
+     * 登出等流程会无条件调用 cancel(),但此时没有需要上传的部分同步结果；
+     * 若仍创建收尾 Job,会阻塞 resetProgress() 和下一次同步启动。
      */
     @Test
-    fun cancel后uploadAllCancelled被调用() = runBlocking {
-        // 不需要 startSync,syncJob 为 null,syncJob?.join() 立即完成
-        // cancel() 在 IO 线程异步调用 uploadAll("CANCELLED", false)
+    fun 无活跃同步时cancel不启动云端收尾() = runBlocking {
         manager.cancel()
-        // 等待 IO 协程执行 uploadAll(syncJob 为 null,join 立即完成,uploadAll 紧随其后)
-        Thread.sleep(1000)
-        // 精确匹配 isFullComplete=false(取消不是完整同步完成)
-        coVerify(atLeast = 1) {
-            cloudPersonalSyncManager.uploadAll("CANCELLED", false, any())
-        }
-        // 反向验证:从未以 isFullComplete=true 调用
+        assertThat(manager.isRunning()).isFalse()
         coVerify(exactly = 0) {
-            cloudPersonalSyncManager.uploadAll("CANCELLED", true, any())
+            cloudPersonalSyncManager.uploadAll(any(), any(), any())
         }
     }
 

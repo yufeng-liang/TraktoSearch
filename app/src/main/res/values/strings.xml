@@ -1504,6 +1504,7 @@ Config:
     <string name="douban_sync_stage_fetching_list">Fetching list</string>
     <string name="douban_sync_stage_parsing_data">Parsing data</string>
     <string name="douban_sync_stage_updating_list">Updating list</string>
+    <string name="douban_sync_stage_uploading">Uploading data</string>
     <string name="douban_sync_stage_completed">Sync complete</string>
     <string name="douban_sync_stage_login_required">Login required</string>
     <string name="douban_sync_stage_cancelling">Cancelling</string>
@@ -1513,6 +1514,7 @@ Config:
     <string name="douban_sync_compact_fetching_list">List</string>
     <string name="douban_sync_compact_parsing_data">Parsing</string>
     <string name="douban_sync_compact_updating_list">Updating</string>
+    <string name="douban_sync_compact_uploading">Upload</string>
     <string name="douban_sync_compact_completed">Done</string>
     <string name="douban_sync_compact_login_required">Login</string>
     <string name="douban_sync_compact_cancelling">Cancel</string>
@@ -1528,7 +1530,17 @@ Config:
     <string name="douban_sync_substage_status_changes">Applying status changes</string>
     <string name="douban_sync_substage_retrying_items">Retrying items</string>
     <string name="douban_sync_substage_waiting_delay">Waiting before retry</string>
+    <string name="douban_sync_substage_preparing_upload">Preparing upload</string>
+    <string name="douban_sync_substage_checking_consistency">Checking consistency</string>
+    <string name="douban_sync_substage_uploading_personal_data">Uploading personal data</string>
+    <string name="douban_sync_substage_uploading_failures">Uploading failures</string>
+    <string name="douban_sync_substage_uploading_details">Uploading details</string>
+    <string name="douban_sync_substage_filling_media_type">Filling media type</string>
     <string name="douban_sync_recent_items">Recently fetched</string>
+    <string name="douban_sync_processing_items">Processing</string>
+    <string name="douban_sync_pending_items">Pending</string>
+    <string name="douban_sync_pending_count">%1$d more pending</string>
+    <string name="douban_sync_empty_batch">No items in current batch</string>
     <string name="douban_sync_preview_status_wish">Wish list</string>
     <string name="douban_sync_preview_status_collect">Watched</string>
     <string name="douban_sync_preview_rating_format">%1$d/5</string>

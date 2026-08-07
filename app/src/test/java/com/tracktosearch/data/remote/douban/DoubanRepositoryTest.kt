@@ -227,6 +227,28 @@ class DoubanRepositoryTest {
         assertThat(mockWebServer.requestCount).isEqualTo(1)
     }
 
+    @Test
+    fun fetchMarkList_200页面无法解析_抛出网络异常(): Unit = runBlocking {
+        mockWebServer.enqueue(
+            MockResponse().setBody("<html><head><title>稍后再试</title></head><body>challenge</body></html>")
+        )
+
+        var thrown: Throwable? = null
+        try {
+            repository.fetchMarkList(
+                userId = "user123",
+                cookie = "testcookie",
+                status = DoubanMarkStatus.WISH,
+                onPage = { _, _ -> }
+            )
+        } catch (e: Throwable) {
+            thrown = e
+        }
+
+        assertThat(thrown).isInstanceOf(DoubanNetworkException::class.java)
+        assertThat(mockWebServer.requestCount).isEqualTo(1)
+    }
+
     private val loginPageHtml: String =
         """<html><head><title>登录豆瓣</title></head><body><form id="lzform"></form></body></html>"""
 
@@ -361,6 +383,24 @@ class DoubanRepositoryTest {
         // 异步上传全局池（等待异步执行）
         Thread.sleep(200)
         coVerify(atLeast = 1) { cloudPool.uploadDetailEntry("123", any()) }
+    }
+
+    @Test
+    fun fetchDetail_同步调用关闭即时详情池上传(): Unit = runBlocking {
+        coEvery { detailCache.get("123") } returns null
+        coEvery { cloudPool.downloadDetail("123") } returns null
+        mockWebServer.enqueue(MockResponse().setBody(detailHtml()))
+
+        val (info, cached) = repository.fetchDetail(
+            doubanUrl = "https://movie.douban.com/subject/123/",
+            cookie = "testcookie",
+            uploadToCloudPool = false
+        )
+
+        assertThat(cached).isFalse()
+        assertThat(info?.title).isEqualTo("情书")
+        Thread.sleep(200)
+        coVerify(exactly = 0) { cloudPool.uploadDetailEntry("123", any()) }
     }
 
     @Test

@@ -232,6 +232,9 @@ class DoubanRepository(
             }
             if (DoubanSpider.isLoginPage(html)) return false
             val page = DoubanSpider.parseMarkListPage(html)
+            if (!page.isValid) {
+                throw DoubanNetworkException("Douban mark list page parsing failed")
+            }
             if (page.items.isEmpty()) break
 
             // 第一页拿到总数后贯穿整个爬取过程
@@ -262,6 +265,7 @@ class DoubanRepository(
      *   - phase="fetching": 正在爬取详情页
      *   - phase="done": 此条目处理完成
      *   - phase="failed": 此条目处理失败
+     * @param uploadToCloudPool 是否在详情抓取成功后立即异步上传全局详情池；同步批处理传 false，统一在收尾阶段批量上传
      * @return Pair<详情, 是否命中缓存>,详情为 null 表示失败
      */
     suspend fun fetchDetail(
@@ -269,6 +273,7 @@ class DoubanRepository(
         cookie: String,
         title: String? = null,
         forceRefresh: Boolean = false,
+        uploadToCloudPool: Boolean = true,
         onProgress: (phase: String, title: String?) -> Unit = { _, _ -> }
     ): Pair<DoubanDetailInfo?, Boolean> {
         // 从 URL 解析 doubanId 作为缓存 key
@@ -378,14 +383,16 @@ class DoubanRepository(
                 )
                 detailCache.put(doubanId, entry)
                 // 异步上传到全局池,供其他用户复用(失败不阻塞主流程)
-                cloudDetailsPoolManager?.let { p ->
-                    GlobalScope.launch(Dispatchers.IO) {
-                        try {
-                            p.uploadDetailEntry(doubanId, entry)
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (_: Exception) {
-                            // 上传失败不影响详情页主流程。
+                if (uploadToCloudPool) {
+                    cloudDetailsPoolManager?.let { p ->
+                        GlobalScope.launch(Dispatchers.IO) {
+                            try {
+                                p.uploadDetailEntry(doubanId, entry)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (_: Exception) {
+                                // 上传失败不影响详情页主流程。
+                            }
                         }
                     }
                 }

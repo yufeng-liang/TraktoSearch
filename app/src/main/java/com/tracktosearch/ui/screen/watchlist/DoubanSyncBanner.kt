@@ -28,3 +28,11 @@ fun DoubanSyncProgress.bannerClickAction(): DoubanSyncBannerAction {
 }
 
 fun DoubanSyncProgress.bannerSubStageRes(): Int? = subStage.secondaryLabelRes()
+
+/** 只有仍在处理且拥有真实批次总数时，才显示可比较的条目进度。 */
+fun DoubanSyncProgress.hasLiveCountProgress(): Boolean =
+    isRunning &&
+        !isComplete &&
+        total > 0 &&
+        stage != DoubanSyncStage.UPLOADING &&
+        stage != DoubanSyncStage.CANCELLING
