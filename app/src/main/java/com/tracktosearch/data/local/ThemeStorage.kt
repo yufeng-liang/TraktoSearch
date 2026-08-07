@@ -6,8 +6,11 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.glance.appwidget.updateAll
 import com.tracktosearch.ui.theme.MonetAccent
+import com.tracktosearch.widget.QuickSearchWidget
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -51,10 +54,21 @@ class ThemeStorage @Inject constructor(
     }
 
     suspend fun setAccentColor(accent: MonetAccent?) {
+        val previousAccent = _accentColor.value
         context.themeDataStore.edit { prefs ->
             prefs[KEY_ACCENT_COLOR] = accent?.name ?: DYNAMIC_ACCENT
         }
         _accentColor.value = accent
+        if (previousAccent != accent) {
+            // Widget 刷新是附加效果，不能让主题设置因桌面组件状态异常而失败。
+            try {
+                QuickSearchWidget().updateAll(context.applicationContext)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // 未添加 Widget 或启动器暂时不可用时，主题设置仍然有效。
+            }
+        }
     }
 
     suspend fun readAccentColorSnapshot(): MonetAccent? {
