@@ -3,9 +3,6 @@ package com.tracktosearch.data.util
 import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.longPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -53,13 +50,9 @@ class PersistentTtlCache<T>(
     private val loadedDeferred = CompletableDeferred<Unit>()
 
     /** putAll 批量写入互斥：避免并发 putAll 同一 key 双写（#30） */
-    private val putAllMutex = Mutex()
+    private val putAllMutex = kotlinx.coroutines.sync.Mutex()
 
-    /**
-     * 串行化 DataStore 写入与 clearAll 删除。
-     * clearAll 先切换 generation，再持有该锁删除；旧代次写入要么在删除前完成，要么被跳过。
-     */
-    private val diskMutationMutex = Mutex()
+    private val diskStore = CacheDiskStore(dataStore, json, serializer, keyPrefix)
 
     /** 同一缓存只允许一次磁盘回填，期间记录前台写入，避免旧快照覆盖新值。 */
     private val loadMutex = Mutex()
@@ -80,28 +73,8 @@ class PersistentTtlCache<T>(
             val loadId = beginDiskLoad()
             withContext(Dispatchers.IO) {
                 try {
-                    val prefs = dataStore.data.first()
-                    val now = System.currentTimeMillis()
-                    prefs.asMap().forEach { (key, value) ->
-                        val keyStr = key.name
-                        if (!keyStr.startsWith("$keyPrefix:")) return@forEach
-                        // 跳过 expireAt 元数据 key（格式: {prefix}:{cacheKey}:exp）
-                        if (keyStr.endsWith(":exp")) return@forEach
-                        val cacheKey = keyStr.removePrefix("$keyPrefix:")
-                        val jsonStr = value as? String ?: return@forEach
-                        try {
-                            val item = json.decodeFromString(serializer, jsonStr)
-                            // 读取持久化的 expireAt，恢复原始过期时间（避免重启后 TTL 被重置导致缓存永不过期）
-                            val expireAt = prefs[longPreferencesKey("$keyStr:exp")]
-                            if (expireAt != null && expireAt != Long.MAX_VALUE && now > expireAt) {
-                                // 已过期，跳过（不加载到内存）
-                                return@forEach
-                            }
-                            putDiskValueIfCurrent(loadId, cacheKey, item, expireAt)
-                        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-                            // 反序列化失败（数据格式变更），跳过该条目
-                            Log.w("PersistentTtlCache", "loadFromDisk decode failed for key=$keyStr: ${e.message}")
-                        }
+                    diskStore.readEntries().forEach { entry ->
+                        putDiskValueIfCurrent(loadId, entry.key, entry.value, entry.expireAt)
                     }
                 } catch (e: CancellationException) { throw e } catch (e: Exception) {
                     // 磁盘读取失败不阻塞应用启动
@@ -133,13 +106,8 @@ class PersistentTtlCache<T>(
             val writeGeneration = currentGeneration()
             scope.launch {
                 try {
-                    diskMutationMutex.withLock {
-                        if (!isCurrentGeneration(writeGeneration)) return@withLock
-                        val jsonStr = json.encodeToString(serializer, value)
-                        dataStore.edit { prefs ->
-                            prefs[stringPreferencesKey("$keyPrefix:$key")] = jsonStr
-                            prefs[longPreferencesKey("$keyPrefix:$key:exp")] = expireAt
-                        }
+                    diskStore.write(CacheDiskWrite(key, value, expireAt)) {
+                        isCurrentGeneration(writeGeneration)
                     }
                 } catch (e: CancellationException) { throw e } catch (_: Exception) {
                     // 磁盘写入失败不影响内存缓存
@@ -157,13 +125,8 @@ class PersistentTtlCache<T>(
             val expireAt = getExpireAt(key) ?: return@withGenerationLock
             scope.launch {
                 try {
-                    diskMutationMutex.withLock {
-                        if (!isCurrentGeneration(writeGeneration)) return@withLock
-                        val jsonStr = json.encodeToString(serializer, value)
-                        dataStore.edit { prefs ->
-                            prefs[stringPreferencesKey("$keyPrefix:$key")] = jsonStr
-                            prefs[longPreferencesKey("$keyPrefix:$key:exp")] = expireAt
-                        }
+                    diskStore.write(CacheDiskWrite(key, value, expireAt)) {
+                        isCurrentGeneration(writeGeneration)
                     }
                 } catch (e: CancellationException) { throw e } catch (e: Exception) {
                     // 磁盘写入失败静默处理，不影响内存缓存
@@ -181,12 +144,7 @@ class PersistentTtlCache<T>(
         clear()
         // 清 DataStore 中本前缀的所有 key
         try {
-            diskMutationMutex.withLock {
-                dataStore.edit { prefs ->
-                    val keysToRemove = prefs.asMap().keys.filter { it.name.startsWith("$keyPrefix:") }
-                    keysToRemove.forEach { prefs.remove(it) }
-                }
-            }
+            diskStore.clearAll()
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
             // DataStore 删除失败静默处理
         }
@@ -203,29 +161,7 @@ class PersistentTtlCache<T>(
      * @return key → value 映射；磁盘读取失败返回空 Map
      */
     suspend fun snapshotFromDisk(): Map<String, T> {
-        return try {
-            val prefs = dataStore.data.first()
-            val now = System.currentTimeMillis()
-            val result = mutableMapOf<String, T>()
-            prefs.asMap().forEach { (key, value) ->
-                val keyStr = key.name
-                if (!keyStr.startsWith("$keyPrefix:")) return@forEach
-                if (keyStr.endsWith(":exp")) return@forEach
-                val cacheKey = keyStr.removePrefix("$keyPrefix:")
-                val jsonStr = value as? String ?: return@forEach
-                // 检查持久化的 expireAt；已过期条目不导出，避免同步过期数据到其他设备（#29）
-                val expireAt = prefs[longPreferencesKey("$keyStr:exp")]
-                if (expireAt != null && expireAt != Long.MAX_VALUE && now > expireAt) return@forEach
-                try {
-                    result[cacheKey] = json.decodeFromString(serializer, jsonStr)
-                } catch (e: CancellationException) { throw e } catch (_: Exception) {
-                    // 反序列化失败跳过
-                }
-            }
-            result
-        } catch (e: CancellationException) { throw e } catch (_: Exception) {
-            emptyMap()
-        }
+        return diskStore.snapshot()
     }
 
     /**
@@ -256,19 +192,11 @@ class PersistentTtlCache<T>(
             }
             // 批量写入 DataStore（一次事务）
             try {
-                diskMutationMutex.withLock {
-                    if (!isCurrentGeneration(writeGeneration)) return@withLock
-                    dataStore.edit { prefs ->
-                        toWrite.forEach { (key, value) ->
-                            val jsonStr = json.encodeToString(serializer, value)
-                            prefs[stringPreferencesKey("$keyPrefix:$key")] = jsonStr
-                            val expireAt = getExpireAt(key)
-                            if (expireAt != null) {
-                                prefs[longPreferencesKey("$keyPrefix:$key:exp")] = expireAt
-                            }
-                            written++
-                        }
-                    }
+                val diskWrites = toWrite.mapNotNull { (key, value) ->
+                    getExpireAt(key)?.let { expireAt -> CacheDiskWrite(key, value, expireAt) }
+                }
+                if (diskStore.writeAll(diskWrites) { isCurrentGeneration(writeGeneration) }) {
+                    written = diskWrites.size
                 }
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 // 磁盘写入失败静默
@@ -283,21 +211,7 @@ class PersistentTtlCache<T>(
      * 用于设置页「缓存管理」展示各项大小。
      */
     suspend fun getSizeBytes(): Long {
-        return try {
-            val prefs = dataStore.data.first()
-            var total = 0L
-            prefs.asMap().forEach { (key, value) ->
-                if (!key.name.startsWith("$keyPrefix:")) return@forEach
-                val jsonStr = value as? String ?: return@forEach
-                // UTF-8 字节数近似（中文字符占 3 字节，String.length 是 char 数）
-                // 粗略估算：JSON 字符串字节数 ≈ char 数 × 1.5（保守估计）
-                total += jsonStr.toByteArray(Charsets.UTF_8).size.toLong()
-            }
-            total
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            Log.w("PersistentTtlCache", "getSizeBytes failed for prefix=$keyPrefix: ${e.message}")
-            0L
-        }
+        return diskStore.sizeBytes()
     }
 
     override fun clear() {
