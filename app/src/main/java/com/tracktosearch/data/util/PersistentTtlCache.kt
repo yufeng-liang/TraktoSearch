@@ -192,12 +192,11 @@ class PersistentTtlCache<T>(
             }
             // 批量写入 DataStore（一次事务）
             try {
-                val diskWrites = toWrite.mapNotNull { (key, value) ->
-                    getExpireAt(key)?.let { expireAt -> CacheDiskWrite(key, value, expireAt) }
-                }
-                if (diskStore.writeAll(diskWrites) { isCurrentGeneration(writeGeneration) }) {
-                    written = diskWrites.size
-                }
+                written = diskStore.writeAll(
+                    entries = toWrite,
+                    expireAt = ::getExpireAt,
+                    shouldWrite = { isCurrentGeneration(writeGeneration) }
+                )
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 // 磁盘写入失败静默
                 Log.w("PersistentTtlCache", "putAll DataStore write failed for prefix=$keyPrefix: ${e.message}")

@@ -180,6 +180,29 @@ class PersistentTtlCacheTest {
         assertThat(cache.get("k1")).isEqualTo(PersistentTestItem("original", 0))
     }
 
+    @Test
+    fun putAll_readsExpireAt_insideDataStoreTransaction() = runTest {
+        lateinit var cache: PersistentTtlCache<PersistentTestItem>
+        var trigger = true
+        var newerWriteAt = 0L
+        val dataStore = RecordingDataStore {
+            if (trigger) {
+                trigger = false
+                newerWriteAt = System.currentTimeMillis()
+                cache.put("k1", PersistentTestItem("newer", 2))
+            }
+        }
+        cache = createCache(dataStore, "v8b", backgroundScope)
+
+        cache.putAll(mapOf("k1" to PersistentTestItem("batch", 1)))
+
+        val persisted = checkNotNull(dataStore.lastTransformed)
+        val persistedValue = persisted[stringPreferencesKey("v8b:k1")]
+        val persistedExpireAt = checkNotNull(persisted[longPreferencesKey("v8b:k1:exp")])
+        assertThat(persistedValue).isEqualTo("{\"name\":\"batch\",\"value\":1}")
+        assertThat(persistedExpireAt).isAtLeast(newerWriteAt + 60_000L - 1_000L)
+    }
+
     // ==================== 9. clearAll 清空内存与磁盘 ====================
 
     @Test
@@ -309,6 +332,24 @@ class PersistentTtlCacheTest {
         override suspend fun updateData(transform: suspend (t: Preferences) -> Preferences): Preferences {
             current = transform(current)
             return current
+        }
+    }
+
+    private class RecordingDataStore(
+        private val beforeUpdate: () -> Unit
+    ) : DataStore<Preferences> {
+        private var current: Preferences = emptyPreferences()
+        var lastTransformed: Preferences? = null
+            private set
+
+        override val data: Flow<Preferences> = flow { emit(current) }
+
+        override suspend fun updateData(transform: suspend (t: Preferences) -> Preferences): Preferences {
+            beforeUpdate()
+            val updated = transform(current)
+            lastTransformed = updated
+            current = updated
+            return updated
         }
     }
 

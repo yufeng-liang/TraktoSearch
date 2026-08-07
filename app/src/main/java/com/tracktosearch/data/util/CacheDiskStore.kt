@@ -95,16 +95,23 @@ internal class CacheDiskStore<T>(
 
     /** 在一次 DataStore transaction 中批量写入条目。 */
     suspend fun writeAll(
-        entries: List<CacheDiskWrite<T>>,
+        entries: List<Pair<String, T>>,
+        expireAt: (String) -> Long?,
         shouldWrite: () -> Boolean = { true }
-    ): Boolean {
-        if (entries.isEmpty()) return false
+    ): Int {
+        if (entries.isEmpty()) return 0
         return mutationMutex.withLock {
-            if (!shouldWrite()) return@withLock false
+            if (!shouldWrite()) return@withLock 0
+            var written = 0
             dataStore.edit { prefs ->
-                entries.forEach { entry -> putValue(prefs, entry) }
+                entries.forEach { (key, value) ->
+                    expireAt(key)?.let { valueExpireAt ->
+                        putValue(prefs, CacheDiskWrite(key, value, valueExpireAt))
+                        written++
+                    }
+                }
             }
-            true
+            written
         }
     }
 
