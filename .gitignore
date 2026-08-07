@@ -88,6 +88,11 @@ privacy-security-report.html
 /nul
 /%SystemDrive%/
 
+# Root-level Wrangler local state and dependencies
+/.wrangler/
+/node_modules/
+/qa-*.png
+
 # Local verification screenshots and reports
 verification-artifacts/
 
