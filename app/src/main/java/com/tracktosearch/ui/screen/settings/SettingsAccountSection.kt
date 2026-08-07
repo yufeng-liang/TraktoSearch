@@ -151,7 +151,7 @@ internal fun AccountRow(
     ) {
         // 账户 logo：固定宽度让 Trakt/豆瓣两行的头像起点对齐
         Box(
-            modifier = Modifier.width(40.dp),
+            modifier = Modifier.width(24.dp),
             contentAlignment = Alignment.Center
         ) {
             brandLogo()
@@ -300,9 +300,9 @@ internal fun DoubanLoginPromptRow(
             .padding(horizontal = 6.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 账户 logo：与 AccountRow 固定 40dp 宽度对齐
+        // 账户 logo：与 AccountRow 固定宽度对齐
         Box(
-            modifier = Modifier.width(40.dp),
+            modifier = Modifier.width(24.dp),
             contentAlignment = Alignment.Center
         ) {
             DoubanLogo(
@@ -364,7 +364,7 @@ internal fun TraktLoginPromptRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier = Modifier.width(40.dp),
+            modifier = Modifier.width(24.dp),
             contentAlignment = Alignment.Center
         ) {
             TraktLogo(

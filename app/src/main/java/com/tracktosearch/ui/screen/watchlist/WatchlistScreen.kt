@@ -199,6 +199,8 @@ fun WatchlistScreen(
     onDiscoverClick: () -> Unit = {},
     onNavigateToDoubanLogin: () -> Unit = {},
     onNavigateToLogin: () -> Unit = {},
+    // 直接发起 Trakt 授权（CustomTabs 打开授权页）；未提供时回退到导航激活登录页
+    onTraktLogin: () -> Unit = onNavigateToLogin,
     modifier: Modifier = Modifier,
     viewModel: WatchlistViewModel = hiltViewModel()
 ) {
@@ -655,7 +657,7 @@ fun WatchlistScreen(
                                     Spacer(modifier = Modifier.height(12.dp))
                                     when (emptyState) {
                                         WatchlistEmptyState.NO_ACCOUNTS -> {
-                                            TextButton(onClick = onNavigateToLogin) {
+                                            TextButton(onClick = onTraktLogin) {
                                                 Text(stringResource(R.string.watchlist_empty_login_trakt))
                                             }
                                             TextButton(onClick = onNavigateToDoubanLogin) {
@@ -1033,7 +1035,7 @@ fun WatchlistScreen(
                                                 }
                                                 DoubanSyncBannerAction.NAVIGATE_TO_TRAKT_LOGIN -> {
                                                     viewModel.clearDoubanSyncResult()
-                                                    onNavigateToLogin()
+                                                    onTraktLogin()
                                                 }
                                             }
                                         },
@@ -1506,7 +1508,7 @@ fun WatchlistScreen(
                     onTraktLogin = {
                         showSyncDialog = false
                         viewModel.clearDoubanSyncResult()
-                        onNavigateToLogin()
+                        onTraktLogin()
                     }
                 )
             }
