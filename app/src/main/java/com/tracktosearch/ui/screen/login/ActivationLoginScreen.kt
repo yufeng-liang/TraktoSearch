@@ -276,6 +276,7 @@ fun ActivationLoginScreen(
     if (showWhatIsTraktDialog) {
         AlertDialog(
             onDismissRequest = { showWhatIsTraktDialog = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.login_what_is_trakt_title)) },
             text = { Text(stringResource(R.string.login_what_is_trakt_desc)) },
             confirmButton = {
