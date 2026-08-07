@@ -137,6 +137,14 @@ class DetailViewModelDoubanTest {
     }
 
     @Test
+    fun doubanModeKeepsCommentsSectionVisible() = runTest {
+        sessionMode.value = SessionMode.DOUBAN
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.sectionVisible.comments).isTrue()
+    }
+
+    @Test
     fun suppliedDoubanIdLoadsSnapshotAndCachedDoubanDetailForBasicDetails() = runTest {
         val item = DoubanSyncedItem(
             doubanId = "db-1",

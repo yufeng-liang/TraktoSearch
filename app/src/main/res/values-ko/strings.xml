@@ -431,6 +431,8 @@
     <string name="detail_save">저장</string>
     <string name="detail_comment_source">(출처: %s)</string>
 
+    <string name="detail_comment_source_douban">Douban</string>
+
     <!-- Resource Item Card -->
     <string name="resource_viewed">조회함</string>
     <string name="resource_scan">스캔</string>

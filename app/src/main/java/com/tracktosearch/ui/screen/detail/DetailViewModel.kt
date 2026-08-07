@@ -19,6 +19,7 @@ import com.tracktosearch.data.remote.douban.DoubanDetailPresentation
 import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.douban.DoubanRexxarMediaType
 import com.tracktosearch.data.remote.douban.DoubanRexxarRepository
+import com.tracktosearch.data.remote.douban.DoubanRexxarShortComment
 import com.tracktosearch.data.remote.douban.mergeDoubanDetail
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
@@ -88,6 +89,13 @@ enum class DetailRatingSource {
     DOUBAN
 }
 
+enum class CommentSource {
+    DOUBAN,
+    FALLBACK
+}
+
+const val DOUBAN_COMMENT_SOURCE = "Douban"
+
 @Immutable
 data class DetailUiState(
     val isLoading: Boolean = false,
@@ -130,12 +138,14 @@ data class DetailUiState(
     val viewedUrls: Set<String> = emptySet(),
     val comments: List<TraktComment> = emptyList(),
     val translatedComments: List<TraktComment> = emptyList(),
+    val commentSource: CommentSource = CommentSource.FALLBACK,
     val isTranslating: Boolean = false,
     val translatingCommentId: Int? = null,  // 正在翻译的单条评论ID
     /** 批量翻译进度文案（如 "3/10"），null 表示未在翻译 */
     val translationProgress: String? = null,
     val commentPage: Int = 1,              // 当前 Trakt 评论页码
     val tmdbCommentPage: Int = 1,          // 当前 TMDB 评论页码
+    val doubanCommentPage: Int = 1,        // 当前豆瓣评论页码
     val hasMoreComments: Boolean = false,   // 是否还有更多评论
     val isLoadingMoreComments: Boolean = false,  // 是否正在加载更多评论
     val seasons: List<TraktSeason> = emptyList(),
@@ -272,6 +282,7 @@ class DetailViewModel @Inject constructor(
 
     companion object {
         private const val CACHE_MAX_SIZE = 3
+        private const val COMMENT_PAGE_SIZE = 10
         @Suppress("UNCHECKED_CAST")
         private val detailCache: MutableMap<DetailCacheKey, CachedDetailData> = java.util.Collections.synchronizedMap(
             object : java.util.LinkedHashMap<DetailCacheKey, CachedDetailData>(CACHE_MAX_SIZE, 0.75f, true) {
@@ -348,26 +359,17 @@ class DetailViewModel @Inject constructor(
                 currentSessionMode = mode
                 isLoggedIn = resolveLoginState()
                 _uiState.value = _uiState.value.copy(isLoggedIn = isLoggedIn)
-                // 豆瓣模式: 强制隐藏评论 tab（trakt comments API 需要 trakt token）
-                if (mode == SessionMode.DOUBAN) {
-                    val cur = _uiState.value.sectionVisible
-                    _uiState.value = _uiState.value.copy(
-                        sectionVisible = cur.copy(comments = false)
-                    )
-                }
             }
         }
         // 监听详情页模块可见性设置
         viewModelScope.launch {
             detailSectionStorage.sectionConfigs.collect { configs ->
-                val isDouban = currentSessionMode == SessionMode.DOUBAN
                 val visibility = DetailSectionVisibility(
                     cast = configs.find { it.id == "cast" }?.visible ?: true,
                     videosImages = configs.find { it.id == "videos-images" }?.visible ?: true,
                     overview = configs.find { it.id == "overview" }?.visible ?: true,
                     myRating = configs.find { it.id == "my-rating" }?.visible ?: true,
-                    // 豆瓣模式: 强制隐藏评论 tab（依赖 trakt API，无 trakt token 时无法加载）
-                    comments = if (isDouban) false else (configs.find { it.id == "comments" }?.visible ?: true),
+                    comments = configs.find { it.id == "comments" }?.visible ?: true,
                     recommendations = configs.find { it.id == "recommendations" }?.visible ?: true
                 )
                 _uiState.value = _uiState.value.copy(sectionVisible = visibility)
@@ -720,6 +722,9 @@ class DetailViewModel @Inject constructor(
             ratings = _uiState.value.ratings?.copy(doubanRating = publicRating)
         )
         currentDetailCacheKey?.let { startDoubanRexxarLoad(it, doubanId) }
+        if (_uiState.value.sectionVisible.comments && _uiState.value.comments.isEmpty()) {
+            fetchComments()
+        }
     }
 
     /** Rexxar 的公开数据只做增量补充，网络失败时不清空已有详情或剧照。 */
@@ -965,15 +970,52 @@ class DetailViewModel @Inject constructor(
     }
 
     private fun fetchComments() {
-        // 豆瓣模式: 无 trakt token,评论 tab 已隐藏,直接跳过避免 401 失败
-        if (currentSessionMode == SessionMode.DOUBAN || !sessionModeManager.traktConnected.value || currentTraktId <= 0) return
         commentsJob?.cancel()
         commentsJob = viewModelScope.launch {
             try {
+                val doubanType = when (currentMediaType) {
+                    MediaType.MOVIE -> DoubanRexxarMediaType.MOVIE
+                    MediaType.SHOW -> DoubanRexxarMediaType.TV
+                    MediaType.PERSON, MediaType.DISK -> null
+                }
+                val doubanPage = currentDoubanId?.let { doubanId ->
+                    doubanType?.let { type ->
+                        doubanRexxarRepository.getShortComments(
+                            doubanId,
+                            type,
+                            start = 0,
+                            count = COMMENT_PAGE_SIZE
+                        ).getOrNull()
+                    }
+                }
+                val doubanComments = doubanPage?.comments
+                    ?.map { it.toTraktComment() }
+                    .orEmpty()
+                if (doubanPage != null && doubanComments.isNotEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        comments = doubanComments,
+                        translatedComments = emptyList(),
+                        commentSource = CommentSource.DOUBAN,
+                        commentPage = 0,
+                        tmdbCommentPage = 0,
+                        doubanCommentPage = 1,
+                        hasMoreComments = doubanPage.start + doubanComments.size < doubanPage.total,
+                        commentsError = false
+                    )
+                    return@launch
+                }
+
                 // 并行加载 Trakt 和 TMDB 评论（首页各取少量）
                 val traktDeferred = async {
-                    traktRepository.getComments(currentTraktId, currentMediaType, limit = 10, page = 1)
-                        .getOrDefault(emptyList())
+                    if (currentSessionMode != SessionMode.DOUBAN &&
+                        sessionModeManager.traktConnected.value &&
+                        currentTraktId > 0
+                    ) {
+                        traktRepository.getComments(currentTraktId, currentMediaType, limit = COMMENT_PAGE_SIZE, page = 1)
+                            .getOrDefault(emptyList())
+                    } else {
+                        emptyList()
+                    }
                 }
                 val tmdbDeferred = async {
                     if (currentTmdbId > 0) {
@@ -992,8 +1034,10 @@ class DetailViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     comments = allComments,
                     translatedComments = emptyList(),
+                    commentSource = CommentSource.FALLBACK,
                     commentPage = 1,
                     tmdbCommentPage = 1,
+                    doubanCommentPage = 0,
                     hasMoreComments = hasMoreTrakt || hasMoreTmdb,
                     commentsError = false
                 )
@@ -1007,6 +1051,11 @@ class DetailViewModel @Inject constructor(
     fun loadMoreComments() {
         val current = _uiState.value
         if (!current.hasMoreComments || current.isLoadingMoreComments) return
+
+        if (current.commentSource == CommentSource.DOUBAN) {
+            loadMoreDoubanComments(current)
+            return
+        }
 
         val nextTraktPage = current.commentPage + 1
         val nextTmdbPage = current.tmdbCommentPage + 1
@@ -1024,7 +1073,7 @@ class DetailViewModel @Inject constructor(
 
                 val traktDeferred = async {
                     if (hasMoreTrakt) {
-                        traktRepository.getComments(currentTraktId, currentMediaType, limit = 10, page = nextTraktPage)
+                        traktRepository.getComments(currentTraktId, currentMediaType, limit = COMMENT_PAGE_SIZE, page = nextTraktPage)
                             .getOrDefault(emptyList())
                     } else emptyList()
                 }
@@ -1051,6 +1100,49 @@ class DetailViewModel @Inject constructor(
                     tmdbCommentPage = if (newTmdbComments.isNotEmpty()) nextTmdbPage else current.tmdbCommentPage,
                     hasMoreComments = newHasMoreTrakt || newHasMoreTmdb,
                     isLoadingMoreComments = false
+                )
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(isLoadingMoreComments = false)
+            }
+        }
+    }
+
+    private fun loadMoreDoubanComments(current: DetailUiState) {
+        val doubanId = currentDoubanId ?: _uiState.value.doubanIdForSync
+        val doubanType = when (currentMediaType) {
+            MediaType.MOVIE -> DoubanRexxarMediaType.MOVIE
+            MediaType.SHOW -> DoubanRexxarMediaType.TV
+            MediaType.PERSON, MediaType.DISK -> null
+        }
+        if (doubanId.isNullOrBlank() || doubanType == null) {
+            _uiState.value = current.copy(isLoadingMoreComments = false, hasMoreComments = false)
+            return
+        }
+
+        val nextStart = current.doubanCommentPage.coerceAtLeast(1) * COMMENT_PAGE_SIZE
+        _uiState.value = current.copy(isLoadingMoreComments = true)
+        viewModelScope.launch {
+            try {
+                val page = doubanRexxarRepository.getShortComments(
+                    doubanId,
+                    doubanType,
+                    start = nextStart,
+                    count = COMMENT_PAGE_SIZE
+                ).getOrNull()
+                if (page == null) {
+                    _uiState.value = _uiState.value.copy(isLoadingMoreComments = false)
+                    return@launch
+                }
+                val newComments = page.comments.map { it.toTraktComment() }
+                val existingIds = _uiState.value.comments.map { it.id }.toSet()
+                val uniqueNew = newComments.filter { it.id !in existingIds }
+                val hasMore = page.start + newComments.size < page.total
+                _uiState.value = _uiState.value.copy(
+                    comments = _uiState.value.comments + uniqueNew,
+                    doubanCommentPage = current.doubanCommentPage.coerceAtLeast(1) + 1,
+                    hasMoreComments = hasMore,
+                    isLoadingMoreComments = false,
+                    commentsError = false
                 )
             } catch (_: Exception) {
                 _uiState.value = _uiState.value.copy(isLoadingMoreComments = false)
@@ -2815,6 +2907,20 @@ class DetailViewModel @Inject constructor(
             runCatching { userReviewRepository.deleteReview(currentTraktId.toLong()) }
         }
     }
+}
+
+/** 将豆瓣短评适配为现有评论 UI 使用的统一模型。 */
+private fun DoubanRexxarShortComment.toTraktComment(): TraktComment {
+    val stableId = (id.hashCode().toLong() and 0x7fff_ffffL).toInt().coerceAtLeast(1)
+    val author = authorName.orEmpty()
+    return TraktComment(
+        id = stableId,
+        comment = text.orEmpty(),
+        created_at = createdAt.orEmpty(),
+        user_rating = ratingStars?.times(2.0),
+        user = TraktCommentUser(username = author, name = author),
+        source = DOUBAN_COMMENT_SOURCE
+    )
 }
 
 /** 将 TMDB Review 转换为统一的 TraktComment 格式 */

@@ -431,6 +431,8 @@
     <string name="detail_save">保存</string>
     <string name="detail_comment_source">(出典: %s)</string>
 
+    <string name="detail_comment_source_douban">豆瓣</string>
+
     <!-- Resource Item Card -->
     <string name="resource_viewed">閲覧済み</string>
     <string name="resource_scan">スキャン</string>

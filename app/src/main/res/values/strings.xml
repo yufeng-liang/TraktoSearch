@@ -199,6 +199,8 @@
     <string name="detail_save">Save</string>
     <string name="detail_comment_source">(Source: %s)</string>
 
+    <string name="detail_comment_source_douban">Douban</string>
+
     <!-- Resource Item Card -->
     <string name="resource_viewed">Viewed</string>
     <string name="resource_scan">Scan</string>
