@@ -1412,7 +1412,8 @@
     <string name="douban_logout_confirm_title">Douban에서 로그아웃</string>
     <string name="douban_logout_confirm_message">로그아웃하면 로컬의 %1$d개 Douban 마크가 삭제됩니다. 계속하시겠습니까?</string>
     <string name="douban_logout_sync_in_progress_warning">동기화가 진행 중입니다. 로그아웃하면 동기화가 중단되고 로컬 데이터가 삭제됩니다.</string>
-    <string name="settings_douban_login_hint">로그인하여 더우반 마크를 Watchlist에서 확인하고, Trakt 연결 시 Trakt에도 동기화</string>
+    <string name="settings_douban_login_hint">로그인하여 더우반 마크를 내 페이지에서 확인하고, Trakt 연결 시 Trakt에도 동기화</string>
+    <string name="settings_douban_my_page_label">내 페이지</string>
     <string name="settings_guest_login_hint">Trakt에 로그인하여 관심목록, 시청완료, 평가 등의 기능 사용</string>
     <!-- 豆瓣 스파이더 테스트（마크 되돌리기） -->
     <string name="douban_spider_test_mark_section">마크 되돌리기 테스트</string>

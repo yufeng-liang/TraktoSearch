@@ -1412,7 +1412,8 @@
     <string name="douban_logout_confirm_title">Douban からログアウト</string>
     <string name="douban_logout_confirm_message">ログアウトするとローカルの %1$d 件の Douban マークが削除されます。続行しますか？</string>
     <string name="douban_logout_sync_in_progress_warning">同期が進行中です。ログアウトすると同期が中断され、ローカルデータが削除されます。</string>
-    <string name="settings_douban_login_hint">ログインして豆瓣のマークをWatchlistで確認。Traktに接続するとTraktにも同期できます</string>
+    <string name="settings_douban_login_hint">ログインして豆瓣のマークをマイページで確認。Traktに接続するとTraktにも同期できます</string>
+    <string name="settings_douban_my_page_label">マイページ</string>
     <string name="settings_guest_login_hint">Trakt にログインしてウォッチリスト、視聴済み、評価などの機能を利用</string>
     <!-- 豆瓣スパイダーテスト（マーク書き戻し） -->
     <string name="douban_spider_test_mark_section">マーク書き戻しテスト</string>

@@ -1416,7 +1416,8 @@ Config:
     <string name="douban_logout_confirm_title">Log out of Douban</string>
     <string name="douban_logout_confirm_message">Logging out will clear %1$d local Douban marks. Continue?</string>
     <string name="douban_logout_sync_in_progress_warning">Sync is in progress. Logging out will interrupt it and clear local data.</string>
-    <string name="settings_douban_login_hint">Log in to view Douban wish/watched marks in Watchlist; connect Trakt to sync them there</string>
+    <string name="settings_douban_login_hint">Log in to view Douban wish/watched marks in My Page; connect Trakt to sync them there</string>
+    <string name="settings_douban_my_page_label">My Page</string>
     <string name="settings_guest_login_hint">Login to Trakt to use watchlist, watched, ratings and more</string>
     <string name="statistics_info_wordcloud">Q: What is the review word cloud?\nA: It extracts high-frequency words from your Douban short reviews and renders them as a word cloud. Larger words appear more often, helping you quickly recall your viewing impressions.</string>
 

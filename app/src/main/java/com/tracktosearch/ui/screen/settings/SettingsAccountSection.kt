@@ -38,7 +38,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
@@ -309,8 +312,22 @@ internal fun DoubanLoginPromptRow(
         }
         Spacer(modifier = Modifier.width(8.dp))
         // 登录用途说明文字
+        val loginHint = stringResource(R.string.settings_douban_login_hint)
+        val myPageLabel = stringResource(R.string.settings_douban_my_page_label)
+        val annotatedHint = buildAnnotatedString {
+            val startIndex = loginHint.indexOf(myPageLabel)
+            if (startIndex >= 0) {
+                append(loginHint.substring(0, startIndex))
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
+                    append(myPageLabel)
+                }
+                append(loginHint.substring(startIndex + myPageLabel.length))
+            } else {
+                append(loginHint)
+            }
+        }
         Text(
-            text = stringResource(R.string.settings_douban_login_hint),
+            text = annotatedHint,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f)
