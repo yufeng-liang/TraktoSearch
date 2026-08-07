@@ -12,8 +12,13 @@ import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.remote.douban.DoubanRepository
+import com.tracktosearch.data.remote.douban.DoubanRexxarMediaType
+import com.tracktosearch.data.remote.douban.DoubanRexxarRepository
+import com.tracktosearch.data.remote.douban.DoubanRexxarShortComment
+import com.tracktosearch.data.remote.douban.DoubanRexxarShortCommentPage
 import com.tracktosearch.data.remote.douban.MarkWriteResult
 import com.tracktosearch.data.remote.dto.DiskType
+import com.tracktosearch.data.remote.tmdb.dto.TmdbReview
 import com.tracktosearch.data.remote.tmdb.dto.TmdbReviewsResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
 import com.tracktosearch.data.repository.MediaType
@@ -76,6 +81,7 @@ class DetailViewModelSupplementTest {
     private lateinit var detailSectionStorage: DetailSectionStorage
     private lateinit var languageStorage: LanguageStorage
     private lateinit var doubanRepository: DoubanRepository
+    private lateinit var doubanRexxarRepository: DoubanRexxarRepository
     private lateinit var doubanAuthStorage: DoubanAuthStorage
     private lateinit var doubanSyncedItemDao: DoubanSyncedItemDao
     private lateinit var sessionModeManager: SessionModeManager
@@ -103,6 +109,7 @@ class DetailViewModelSupplementTest {
         detailSectionStorage = mockk(relaxed = true)
         languageStorage = mockk(relaxed = true)
         doubanRepository = mockk(relaxed = true)
+        doubanRexxarRepository = mockk(relaxed = true)
         doubanAuthStorage = mockk(relaxed = true)
         doubanSyncedItemDao = mockk(relaxed = true)
         sessionModeManager = mockk(relaxed = true)
@@ -116,12 +123,18 @@ class DetailViewModelSupplementTest {
         every { detailSectionStorage.sectionConfigs } returns MutableStateFlow(emptyList())
         every { doubanAuthStorage.getCredentials() } returns null
         every { languageStorage.language } returns MutableStateFlow(LanguageStorage.LANGUAGE_ENGLISH)
+        coEvery {
+            doubanRexxarRepository.getDetail(any(), any(), any())
+        } returns Result.failure(IllegalStateException("Rexxar not stubbed"))
+        coEvery {
+            doubanRexxarRepository.getPhotos(any(), any(), any(), any(), any())
+        } returns Result.failure(IllegalStateException("Rexxar photos not stubbed"))
         every { resourceRepository.filterItems(any(), any(), any()) } returns emptyList()
 
         viewModel = DetailViewModel(
             tmdbRepository, traktRepository, resourceRepository, ratingsRepository,
             viewedItemStorage, commentTranslator, tokenStorage, detailSectionStorage,
-            languageStorage, doubanRepository, doubanAuthStorage, doubanSyncedItemDao,
+            languageStorage, doubanRepository, doubanRexxarRepository, doubanAuthStorage, doubanSyncedItemDao,
             sessionModeManager,
             posterColorExtractor, userReviewRepository
         )
@@ -154,6 +167,12 @@ class DetailViewModelSupplementTest {
 
     private fun callOnCleared() {
         val method = androidx.lifecycle.ViewModel::class.java.getDeclaredMethod("onCleared")
+        method.isAccessible = true
+        method.invoke(viewModel)
+    }
+
+    private fun invokeFetchComments() {
+        val method = DetailViewModel::class.java.getDeclaredMethod("fetchComments")
         method.isAccessible = true
         method.invoke(viewModel)
     }
@@ -220,6 +239,108 @@ class DetailViewModelSupplementTest {
         viewModel.toggleShowHighRelevanceOnly()
 
         assertThat(viewModel.uiState.value.showHighRelevanceOnly).isFalse()
+    }
+
+    @Test
+    fun fetchComments_doubanResultsArePrimaryAndSkipFallbackSources() = runTest {
+        setPrivateField("currentSessionMode", SessionMode.DOUBAN)
+        setPrivateField("currentDoubanId", "db-1")
+        setPrivateField("currentMediaType", MediaType.MOVIE)
+        setPrivateField("currentTraktId", 0)
+        setPrivateField("currentTmdbId", 0)
+        coEvery {
+            doubanRexxarRepository.getShortComments("db-1", DoubanRexxarMediaType.MOVIE, 0, 10, false)
+        } returns Result.success(
+            DoubanRexxarShortCommentPage(
+                total = 1,
+                start = 0,
+                count = 1,
+                comments = listOf(
+                    DoubanRexxarShortComment(
+                        id = "douban-comment-1",
+                        authorName = "豆瓣用户",
+                        ratingStars = 4,
+                        text = "豆瓣短评",
+                        createdAt = "2024-01-01"
+                    )
+                )
+            )
+        )
+
+        invokeFetchComments()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.comments).hasSize(1)
+        assertThat(viewModel.uiState.value.comments.single().source).isEqualTo("Douban")
+        assertThat(viewModel.uiState.value.comments.single().comment).isEqualTo("豆瓣短评")
+        assertThat(viewModel.uiState.value.commentSource).isEqualTo(CommentSource.DOUBAN)
+        coVerify(exactly = 0) { traktRepository.getComments(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { tmdbRepository.getReviews(any(), any(), any()) }
+    }
+
+    @Test
+    fun fetchComments_emptyDoubanResultFallsBackToTraktAndTmdb() = runTest {
+        setPrivateField("currentSessionMode", SessionMode.TRAKT)
+        setPrivateField("currentDoubanId", "db-empty")
+        setPrivateField("currentMediaType", MediaType.MOVIE)
+        setPrivateField("currentTraktId", 100)
+        setPrivateField("currentTmdbId", 200)
+        traktConnected.value = true
+        coEvery {
+            doubanRexxarRepository.getShortComments("db-empty", DoubanRexxarMediaType.MOVIE, 0, 10, false)
+        } returns Result.success(DoubanRexxarShortCommentPage())
+        coEvery {
+            traktRepository.getComments(100, MediaType.MOVIE, limit = 10, page = 1)
+        } returns Result.success(listOf(TraktComment(id = 1, comment = "Trakt comment")))
+        coEvery {
+            tmdbRepository.getReviews(200, MediaType.MOVIE, page = 1)
+        } returns TmdbReviewsResponse(
+            results = listOf(TmdbReview(id = "tmdb-1", author = "TMDB user", content = "TMDB comment"))
+        )
+
+        invokeFetchComments()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.comments).hasSize(2)
+        assertThat(viewModel.uiState.value.comments.map { it.source })
+            .containsExactly("Trakt", "TMDB")
+        assertThat(viewModel.uiState.value.commentSource).isEqualTo(CommentSource.FALLBACK)
+    }
+
+    @Test
+    fun loadMoreComments_doubanSourceUsesDoubanStartOffset() = runTest {
+        setPrivateField("currentSessionMode", SessionMode.DOUBAN)
+        setPrivateField("currentDoubanId", "db-page")
+        setPrivateField("currentMediaType", MediaType.MOVIE)
+        setPrivateField("currentTraktId", 0)
+        setPrivateField("currentTmdbId", 0)
+        setUiState {
+            it.copy(
+                comments = listOf(TraktComment(id = 1, comment = "第一页", source = "Douban")),
+                commentSource = CommentSource.DOUBAN,
+                doubanCommentPage = 1,
+                hasMoreComments = true
+            )
+        }
+        coEvery {
+            doubanRexxarRepository.getShortComments("db-page", DoubanRexxarMediaType.MOVIE, 10, 10, false)
+        } returns Result.success(
+            DoubanRexxarShortCommentPage(
+                total = 2,
+                start = 10,
+                count = 1,
+                comments = listOf(DoubanRexxarShortComment(id = "douban-comment-2", text = "第二页"))
+            )
+        )
+
+        viewModel.loadMoreComments()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.comments).hasSize(2)
+        assertThat(viewModel.uiState.value.comments.last().source).isEqualTo("Douban")
+        assertThat(viewModel.uiState.value.doubanCommentPage).isEqualTo(2)
+        assertThat(viewModel.uiState.value.hasMoreComments).isFalse()
+        coVerify(exactly = 0) { traktRepository.getComments(any(), any(), any(), any()) }
     }
 
     // ==================== translateComments ====================

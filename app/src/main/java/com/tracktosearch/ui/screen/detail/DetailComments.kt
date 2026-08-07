@@ -52,6 +52,11 @@ internal fun CommentItem(
 
     val displayText = if (showOriginal) comment.comment else (translatedText ?: comment.comment)
     val isDark = isAppDarkTheme()
+    val sourceLabel = if (comment.source == DOUBAN_COMMENT_SOURCE) {
+        stringResource(R.string.detail_comment_source_douban)
+    } else {
+        comment.source
+    }
 
     NeumorphicFrostedSurface(
         modifier = Modifier
@@ -82,7 +87,7 @@ internal fun CommentItem(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = stringResource(R.string.detail_comment_source, comment.source),
+                    text = stringResource(R.string.detail_comment_source, sourceLabel),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

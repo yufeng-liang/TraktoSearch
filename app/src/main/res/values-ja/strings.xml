@@ -431,6 +431,8 @@
     <string name="detail_save">保存</string>
     <string name="detail_comment_source">(出典: %s)</string>
 
+    <string name="detail_comment_source_douban">豆瓣</string>
+
     <!-- Resource Item Card -->
     <string name="resource_viewed">閲覧済み</string>
     <string name="resource_scan">スキャン</string>
@@ -933,16 +935,16 @@
 
     <!-- Statistics (追加) -->
     <string name="statistics_info">統計の説明</string>
-    <string name="statistics_info_overview">Q：上部の数字は何ですか？\nA：総視聴数（映画+ドラマ）、今月の視聴数、今年の視聴数を表示しています。データはTraktの視聴履歴に基づきます。</string>
+    <string name="statistics_info_overview">Q：上部の数字は何ですか？\nA：Traktの視聴履歴とDoubanの視聴済み記録を統合します。Doubanのドラマはキャッシュ済みのエピソード数を視聴エピソードとして加算します。</string>
     <string name="statistics_info_heatmap">Q：視聴ヒートマップとは？\nA：GitHubのコントリビューショングラフと同様に、各マス目は1日を表します。色が濃いほどその日の視聴が多いことを示し、過去1年分をカバーします。</string>
-    <string name="statistics_info_genre_distribution">Q：ジャンル分布の円グラフとは？\nA：視聴履歴における各ジャンルの割合を表示します。各スライスをタップすると正確な数とパーセンテージが表示されます。</string>
+    <string name="statistics_info_genre_distribution">Q：ジャンル分布の円グラフとは？\nA：Traktの視聴履歴とDoubanの視聴済み作品に含まれるジャンルの割合を表示します。各スライスをタップすると正確な数とパーセンテージが表示されます。</string>
     <string name="statistics_info_genre_ranking">Q：トップジャンルランキングとは？\nA：視聴数に基づいてジャンルをランキング表示します。上位3つは金、銀、銅のメダルでマークされます。</string>
-    <string name="statistics_info_watch_time">Q：視聴時間はどのように計算されますか？\nA：視聴した各映画とエピソードの上映時間を合計し、時間単位で表示します。</string>
-    <string name="statistics_info_ratings">Q：評価統計とは？\nA：Traktでの評価数、平均評価、評価分布を表示します。評価した作品のみカウントされます。</string>
+    <string name="statistics_info_watch_time">Q：視聴時間はどのように計算されますか？\nA：Traktの視聴時間に、キャッシュ済みのDouban映画の上映時間とドラマのエピソード数×1話の長さを加算します。詳細キャッシュがない作品は推定しません。</string>
+    <string name="statistics_info_ratings">Q：評価統計とは？\nA：TraktとDoubanの評価数、平均評価、評価分布を表示します。Doubanの1〜5星評価は10点満点に換算します。</string>
 
     <!-- Help Statistics -->
     <string name="help_statistics_b1">「設定」ページの先頭行から統計にアクセス</string>
-    <string name="help_statistics_b2">視聴概要（合計、今月、今年）、視聴時間、評価統計を確認</string>
+    <string name="help_statistics_b2">TraktとDoubanを統合した視聴概要（合計、今月、今年）、視聴時間、評価統計を確認</string>
     <string name="help_statistics_b3">ジャンル分布の円グラフとランキングで視聴嗜好を表示</string>
     <string name="help_statistics_b4">ヒートマップで過去1年間の毎日の視聴活動を表示</string>
     <string name="help_notification_b1">通知を有効にすると新作公開や新シーズンを自動通知</string>

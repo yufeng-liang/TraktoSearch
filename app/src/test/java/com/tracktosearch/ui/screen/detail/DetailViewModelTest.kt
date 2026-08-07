@@ -9,6 +9,7 @@ import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.remote.douban.DoubanRepository
+import com.tracktosearch.data.remote.douban.DoubanRexxarRepository
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.trakt.dto.TraktSyncResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktEpisode
@@ -73,6 +74,7 @@ class DetailViewModelTest {
     private lateinit var detailSectionStorage: DetailSectionStorage
     private lateinit var languageStorage: LanguageStorage
     private lateinit var doubanRepository: DoubanRepository
+    private lateinit var doubanRexxarRepository: DoubanRexxarRepository
     private lateinit var doubanAuthStorage: DoubanAuthStorage
     private lateinit var doubanSyncedItemDao: DoubanSyncedItemDao
     private lateinit var sessionModeManager: SessionModeManager
@@ -101,6 +103,7 @@ class DetailViewModelTest {
         detailSectionStorage = mockk(relaxed = true)
         languageStorage = mockk(relaxed = true)
         doubanRepository = mockk(relaxed = true)
+        doubanRexxarRepository = mockk(relaxed = true)
         doubanAuthStorage = mockk(relaxed = true)
         doubanSyncedItemDao = mockk(relaxed = true)
         sessionModeManager = mockk(relaxed = true)
@@ -117,6 +120,12 @@ class DetailViewModelTest {
         // localizeEpisodeTitles 会调用 languageStorage.language.first()，
         // relaxed mock 的 Flow 调用 first() 会抛异常，全局 stub 为英文让该方法提前 return
         every { languageStorage.language } returns MutableStateFlow(LanguageStorage.LANGUAGE_ENGLISH)
+        coEvery {
+            doubanRexxarRepository.getDetail(any(), any(), any())
+        } returns Result.failure(IllegalStateException("Rexxar not stubbed"))
+        coEvery {
+            doubanRexxarRepository.getPhotos(any(), any(), any(), any(), any())
+        } returns Result.failure(IllegalStateException("Rexxar photos not stubbed"))
 
         // 4. resourceRepository.filterItems 默认返回空列表
         every { resourceRepository.filterItems(any(), any(), any()) } returns emptyList()
@@ -124,7 +133,7 @@ class DetailViewModelTest {
         viewModel = DetailViewModel(
             tmdbRepository, traktRepository, resourceRepository, ratingsRepository,
             viewedItemStorage, commentTranslator, tokenStorage, detailSectionStorage,
-            languageStorage, doubanRepository, doubanAuthStorage, doubanSyncedItemDao,
+            languageStorage, doubanRepository, doubanRexxarRepository, doubanAuthStorage, doubanSyncedItemDao,
             sessionModeManager,
             posterColorExtractor, userReviewRepository
         )

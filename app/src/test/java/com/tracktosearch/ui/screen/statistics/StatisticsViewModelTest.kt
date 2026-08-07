@@ -1,7 +1,11 @@
 package com.tracktosearch.ui.screen.statistics
 
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.data.local.db.DoubanSyncedItem
+import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.local.db.UserReviewEntity
+import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
+import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.trakt.dto.*
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.UserReviewRepository
@@ -50,7 +54,10 @@ class StatisticsViewModelTest {
 
     private val traktRepository = mockk<TraktRepository>(relaxed = true)
     private val userReviewRepository = mockk<UserReviewRepository>(relaxed = true)
+    private val doubanSyncedItemDao = mockk<DoubanSyncedItemDao>(relaxed = true)
+    private val doubanRepository = mockk<DoubanRepository>(relaxed = true)
     private val traktConnected = MutableStateFlow(true)
+    private val doubanMode = MutableStateFlow(false)
     private val sessionModeManager = mockk<SessionModeManager>(relaxed = true)
     private lateinit var viewModel: StatisticsViewModel
 
@@ -69,6 +76,167 @@ class StatisticsViewModelTest {
     }
 
     // ==================== 测试数据 ====================
+
+    @Test
+    fun doubanMode_usesLocalCollectRatingsCommentsAndMarkedAtWithoutTraktRequests() = runTest {
+        val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+        doubanMode.value = true
+        traktConnected.value = false
+        coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns listOf(
+            DoubanSyncedItem(
+                doubanId = "db-movie",
+                imdbId = "tt-douban-movie",
+                traktId = null,
+                title = "豆瓣电影",
+                displayTitle = "豆瓣电影",
+                status = "collect",
+                rating = 4,
+                syncedAt = 1L,
+                mediaType = "movie",
+                year = 2024,
+                genres = "action / drama",
+                comment = "dragon adventure",
+                markedAt = today
+            ),
+            DoubanSyncedItem(
+                doubanId = "db-show",
+                imdbId = "tt-douban-show",
+                traktId = null,
+                title = "豆瓣剧集",
+                displayTitle = "豆瓣剧集",
+                status = "collect",
+                rating = null,
+                syncedAt = 2L,
+                mediaType = "show",
+                year = 2024,
+                genres = "drama",
+                markedAt = today
+            ),
+            DoubanSyncedItem(
+                doubanId = "db-wish",
+                imdbId = "tt-douban-wish",
+                traktId = null,
+                title = "只想看",
+                status = "wish",
+                rating = 5,
+                syncedAt = 3L,
+                mediaType = "movie",
+                comment = "should not count",
+                markedAt = today
+            )
+        )
+        coEvery { userReviewRepository.getAllReviews() } returns emptyList()
+        coEvery { doubanRepository.getDetailSnapshot() } returns mapOf(
+            "db-movie" to DoubanDetailCacheEntry(
+                imdbId = "tt-douban-movie",
+                isTvShow = false,
+                genres = listOf("action", "drama"),
+                runtime = "120分钟"
+            ),
+            "db-show" to DoubanDetailCacheEntry(
+                imdbId = "tt-douban-show",
+                isTvShow = true,
+                genres = listOf("drama", "mystery"),
+                episodeCount = 8,
+                episodeDuration = "45分钟"
+            )
+        )
+
+        viewModel.loadStatistics()
+        waitForLoadComplete()
+
+        val state = viewModel.uiState.value
+        assertThat(state.totalMovieCount).isEqualTo(1)
+        assertThat(state.totalShowCount).isEqualTo(1)
+        assertThat(state.totalEpisodeCount).isEqualTo(8)
+        assertThat(state.totalWatchMinutes).isEqualTo(480)
+        assertThat(state.genreDistribution).isEqualTo(mapOf("drama" to 2, "action" to 1, "mystery" to 1))
+        assertThat(state.totalRatings).isEqualTo(1)
+        assertThat(state.averageRating).isEqualTo(8.0)
+        assertThat(state.thisYearWatched).isEqualTo(2)
+        assertThat(state.heatmapData.values.sum()).isEqualTo(2)
+        assertThat(state.wordCloud.map { it.word }).contains("dragon")
+        coVerify(exactly = 0) { traktRepository.getAllMovieHistory(any()) }
+        coVerify(exactly = 0) { traktRepository.getAllShowHistory(any()) }
+        coVerify(exactly = 0) { traktRepository.getWatchedShowsWithEpisodes() }
+        coVerify(exactly = 0) { traktRepository.getUserStats() }
+        coVerify(exactly = 0) { traktRepository.getAllUserRatings() }
+    }
+
+    @Test
+    fun traktAndDoubanCollect_mergeByImdbAndPreferDoubanRating() = runTest {
+        val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+        val networkMovie = TraktMovie(
+            title = "重复电影",
+            ids = TraktIds(imdb = "tt-duplicate"),
+            runtime = 100
+        )
+        stubAllSuccess(
+            movies = listOf(TraktWatchlistMovieItem(watched_at = "${today}T12:00:00Z", movie = networkMovie)),
+            ratings = listOf(TraktRatingItem(rating = 7, movie = networkMovie))
+        )
+        coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns listOf(
+            DoubanSyncedItem(
+                doubanId = "db-duplicate",
+                imdbId = "tt-duplicate",
+                traktId = null,
+                title = "重复电影",
+                status = "collect",
+                rating = 4,
+                syncedAt = 1L,
+                mediaType = "movie",
+                genres = "drama",
+                comment = "dragon duplicate",
+                markedAt = today
+            ),
+            DoubanSyncedItem(
+                doubanId = "db-new",
+                imdbId = "tt-new",
+                traktId = null,
+                title = "豆瓣新电影",
+                status = "collect",
+                rating = 5,
+                syncedAt = 2L,
+                mediaType = "movie",
+                genres = "action",
+                comment = "unique adventure",
+                markedAt = today
+            ),
+            DoubanSyncedItem(
+                doubanId = "db-wish-only",
+                imdbId = "tt-wish-only",
+                traktId = null,
+                title = "未观看",
+                status = "wish",
+                rating = 5,
+                syncedAt = 3L,
+                mediaType = "movie",
+                markedAt = today
+            )
+        )
+        coEvery { doubanRepository.getDetailSnapshot() } returns mapOf(
+            "db-new" to DoubanDetailCacheEntry(
+                imdbId = "tt-new",
+                isTvShow = false,
+                runtime = "90分钟"
+            )
+        )
+        coEvery { traktRepository.getUserStats() } returns Result.success(
+            TraktUserStatsResponse(movies = TraktStatsDetail(minutes = 300))
+        )
+
+        viewModel.loadStatistics()
+        waitForLoadComplete()
+
+        val state = viewModel.uiState.value
+        assertThat(state.totalMovieCount).isEqualTo(2)
+        assertThat(state.totalRatings).isEqualTo(2)
+        assertThat(state.ratingDistribution).isEqualTo(mapOf(8 to 1, 10 to 1))
+        assertThat(state.averageRating).isEqualTo(9.0)
+        assertThat(state.totalWatchMinutes).isEqualTo(390)
+        assertThat(state.heatmapData.values.sum()).isEqualTo(2)
+        assertThat(state.wordCloud.map { it.word }).containsAtLeast("dragon", "unique")
+    }
 
     private val testMovies = listOf(
         TraktWatchlistMovieItem(
@@ -135,12 +303,18 @@ class StatisticsViewModelTest {
 
     @Before
     fun setup() {
-        clearMocks(traktRepository, userReviewRepository)
+        clearMocks(traktRepository, userReviewRepository, doubanSyncedItemDao, doubanRepository)
         traktConnected.value = true
+        doubanMode.value = false
         every { sessionModeManager.traktConnected } returns traktConnected
+        every { sessionModeManager.isDoubanMode } returns doubanMode
+        coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns emptyList()
+        coEvery { doubanRepository.getDetailSnapshot() } returns emptyMap()
         viewModel = StatisticsViewModel(
             traktRepository,
             userReviewRepository,
+            doubanSyncedItemDao,
+            doubanRepository,
             sessionModeManager,
             RuntimeEnvironment.getApplication()
         )
