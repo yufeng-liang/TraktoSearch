@@ -24,10 +24,14 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -284,6 +288,89 @@ class TraktRepositoryTest {
     }
 
     @Test
+    fun `旧会话的watchlist请求完成后不得回写总条数`() = runTest {
+        val requestStarted = CompletableDeferred<Unit>()
+        val oldResponse = CompletableDeferred<Response<List<TraktWatchlistMovieItem>>>()
+        val oldHeaders = Headers.headersOf(
+            "X-Pagination-Item-Count", "701",
+            "X-Pagination-Page-Count", "1"
+        )
+        val currentHeaders = Headers.headersOf(
+            "X-Pagination-Item-Count", "702",
+            "X-Pagination-Page-Count", "1"
+        )
+        var requestCount = 0
+        coEvery { traktApiService.getWatchlist(any(), any(), any(), any()) } coAnswers {
+            if (requestCount++ == 0) {
+                requestStarted.complete(Unit)
+                oldResponse.await()
+            } else {
+                Response.success(emptyList(), currentHeaders)
+            }
+        }
+
+        val oldRequest = async { repository.getMovieWatchlist(page = 1, limit = 200) }
+        requestStarted.await()
+        repository.clearTraktAccountCaches()
+        oldResponse.complete(Response.success(emptyList(), oldHeaders))
+
+        val oldResult = runCatching { oldRequest.await() }
+        assertThat(oldResult.getOrThrow().exceptionOrNull()).isInstanceOf(CancellationException::class.java)
+        assertThat(repository.getMovieWatchlistTotalCount(page = 1, limit = 200)).isNull()
+
+        repository.getMovieWatchlist(page = 1, limit = 200).getOrThrow()
+        assertThat(repository.getMovieWatchlistTotalCount(page = 1, limit = 200)).isEqualTo(702)
+    }
+
+    @Test
+    fun `旧会话的history请求完成后不得填充聚合缓存`() = runTest {
+        val requestStarted = CompletableDeferred<Unit>()
+        val oldResponse = CompletableDeferred<Response<List<TraktWatchlistMovieItem>>>()
+        val headers = Headers.headersOf("X-Pagination-Page-Count", "1")
+        var requestCount = 0
+        coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } coAnswers {
+            if (requestCount++ == 0) {
+                requestStarted.complete(Unit)
+                oldResponse.await()
+            } else {
+                Response.success(emptyList(), headers)
+            }
+        }
+
+        val oldRequest = async { repository.getAllMovieHistory() }
+        requestStarted.await()
+        repository.clearTraktAccountCaches()
+        oldResponse.complete(Response.success(emptyList(), headers))
+
+        val oldResult = runCatching { oldRequest.await() }
+        assertThat(oldResult.exceptionOrNull()).isInstanceOf(CancellationException::class.java)
+
+        repository.getAllMovieHistory().getOrThrow()
+        coVerify(exactly = 2) { traktApiService.getMovieHistory(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `单独清理用户资料后旧请求不得回写资料`() = runTest {
+        val requestStarted = CompletableDeferred<Unit>()
+        val oldResponse = CompletableDeferred<Response<TraktUserProfileResponse>>()
+        val oldProfile = TraktUserProfileResponse(username = "old-account")
+        coEvery { userProfileStorage.getProfile() } returns null
+        coEvery { traktApiService.getUserProfile() } coAnswers {
+            requestStarted.complete(Unit)
+            oldResponse.await()
+        }
+
+        val oldRequest = async { repository.getUserProfile() }
+        requestStarted.await()
+        repository.clearUserProfileCache()
+        oldResponse.complete(Response.success(oldProfile))
+
+        val oldResult = runCatching { oldRequest.await() }
+        assertThat(oldResult.exceptionOrNull()).isInstanceOf(CancellationException::class.java)
+        coVerify(exactly = 0) { userProfileStorage.saveProfile(any()) }
+    }
+
+    @Test
     fun `checkTraktConnection_成功时复用已获取的用户资料`() = runTest {
         val profile = TraktUserProfileResponse(username = "yuhu", name = "yufeng liang")
         coEvery { traktApiService.getUserProfile() } returns Response.success(profile)
@@ -294,6 +381,19 @@ class TraktRepositoryTest {
         assertThat(cachedResult.getOrNull()).isEqualTo(profile)
         coVerify(exactly = 1) { traktApiService.getUserProfile() }
         coVerify(exactly = 1) { userProfileStorage.saveProfile(profile) }
+    }
+
+    @Test
+    fun `watchHistory缓存命中时收集器触发清理不得死锁`() = runTest {
+        repository.fetchWatchHistory(1).toList()
+
+        withContext(Dispatchers.Default.limitedParallelism(1)) {
+            withTimeout(1_000L) {
+                repository.fetchWatchHistory(1).collect {
+                    repository.clearTraktAccountCaches()
+                }
+            }
+        }
     }
 
     @Test

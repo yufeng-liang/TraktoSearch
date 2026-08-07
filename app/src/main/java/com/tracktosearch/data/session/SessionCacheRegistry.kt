@@ -62,4 +62,13 @@ class SessionCacheRegistry {
         block: () -> T
     ): T = withCurrentGeneration(capturedGeneration, block)
         ?: throw SessionCacheInvalidatedException()
+
+    /** 在失效锁内执行可挂起的缓存提交；下游回调不得放入该临界区。 */
+    suspend fun <T> requireCurrentGenerationSuspend(
+        capturedGeneration: Long,
+        block: suspend () -> T
+    ): T = invalidationMutex.withLock {
+        if (!isCurrent(capturedGeneration)) throw SessionCacheInvalidatedException()
+        block()
+    }
 }

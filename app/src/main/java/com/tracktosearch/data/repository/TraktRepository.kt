@@ -200,6 +200,7 @@ class TraktRepository @Inject constructor(
             register { watchlistWatchedIdsCache.clearAll() }
             register { recommendationsCache.clearAll() }
             register { showRecommendationsCache.clearAll() }
+            register { clearUserProfileCacheInternal() }
         }
     }
 
@@ -305,10 +306,45 @@ class TraktRepository @Inject constructor(
         notFoundImdbIds.clear()
     }
 
+    /** 清除用户资料的内存与持久化副本；由会话缓存注册表串行调用。 */
+    private suspend fun clearUserProfileCacheInternal() {
+        userProfileCache = null
+        _userProfile.value = null
+        userProfileStorage.clear()
+    }
+
+    /** 只允许当前会话读取或提交内存缓存结果。 */
+    private suspend fun <T> requireCurrentSessionValue(
+        sessionGeneration: Long,
+        value: T
+    ): T = sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) { value }
+
+    /** 在会话失效锁内写入私有缓存，阻止旧请求在切换账号后回填。 */
+    private suspend fun <T> putSessionCache(
+        sessionGeneration: Long,
+        cache: TtlCache<T>,
+        key: String,
+        value: T
+    ): T = sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) {
+        cache.put(key, value)
+        value
+    }
+
+    /** 更新当前会话的用户资料及其持久化副本，避免旧账号资料在切换后回写。 */
+    private suspend fun cacheUserProfileForSession(
+        sessionGeneration: Long,
+        profile: TraktUserProfileResponse,
+        persist: Boolean
+    ): TraktUserProfileResponse = sessionCacheRegistry.requireCurrentGenerationSuspend(sessionGeneration) {
+        userProfileCache = profile
+        _userProfile.value = profile
+        if (persist) userProfileStorage.saveProfile(profile)
+        profile
+    }
+
     /** 清理当前 Trakt 账号的全部本地数据，切换账号或重新授权后必须调用。 */
     suspend fun clearTraktAccountCaches() {
         clearWatchlistWatchedCache()
-        clearUserProfileCache()
     }
 
     /** 将当前内存中的 watchlistWatchedIds 异步写回持久化缓存（增删后调用以保持一致） */
@@ -592,6 +628,7 @@ class TraktRepository @Inject constructor(
     }
 
     suspend fun searchByTmdb(tmdbId: Int, type: MediaType): Result<List<TraktSearchResult>> {
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
         val key = "${tmdbId}_${type.name}"
         // 启动期间磁盘未加载完时等待加载完成,避免绕过缓存发网络请求
         searchByTmdbCache.awaitLoaded()
@@ -616,7 +653,11 @@ class TraktRepository @Inject constructor(
                         }
                         id != null && id > 0
                     }
-                    if (!hasValid) notFoundTmdbIds.add(key)
+                    if (!hasValid) {
+                        sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) {
+                            notFoundTmdbIds.add(key)
+                        }
+                    }
                     Result.success(body)
                 } else {
                     Result.failure(Exception("Failed to search by tmdb: ${response.code()}"))
@@ -628,6 +669,7 @@ class TraktRepository @Inject constructor(
 
     /** 通过 imdbId 反查 Trakt 条目（用于豆瓣→Trakt 同步）。仅支持 movie/show */
     suspend fun searchByImdb(imdbId: String, type: MediaType): Result<List<TraktSearchResult>> {
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
         val key = "${imdbId}_${type.name}"
         // 启动期间磁盘未加载完时等待加载完成,避免绕过缓存发网络请求
         searchByImdbCache.awaitLoaded()
@@ -650,7 +692,11 @@ class TraktRepository @Inject constructor(
                     }
                     id != null && id > 0
                 }
-                if (!hasValid) notFoundImdbIds.add(key)
+                if (!hasValid) {
+                    sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) {
+                        notFoundImdbIds.add(key)
+                    }
+                }
                 Result.success(body)
             } else {
                 Result.failure(Exception("Failed to search by imdb: ${response.code()}"))
@@ -661,9 +707,10 @@ class TraktRepository @Inject constructor(
     }
 
     suspend fun getMovieWatchlist(page: Int = 1, limit: Int = 50, forceRefresh: Boolean = false): Result<Pair<List<TraktWatchlistMovieItem>, Int>> {
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
         val cacheKey = "p${page}_$limit"
         return runCatching {
-            movieWatchlistCache.getOrAwait(cacheKey, skipCache = forceRefresh) {
+            val result = movieWatchlistCache.getOrAwait(cacheKey, skipCache = forceRefresh) {
                 val response = traktApiService.getWatchlist(
                     type = "movies",
                     extended = "full",
@@ -674,19 +721,23 @@ class TraktRepository @Inject constructor(
                     val items = response.body() ?: emptyList()
                     val totalPages = response.headers()["X-Pagination-Page-Count"]?.toIntOrNull() ?: 1
                     val totalCount = response.headers()["X-Pagination-Item-Count"]?.toIntOrNull() ?: items.size
-                    movieWatchlistTotalCountCache.put(cacheKey, totalCount)
+                    sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) {
+                        movieWatchlistTotalCountCache.put(cacheKey, totalCount)
+                    }
                     Pair(items, totalPages)
                 } else {
                     throw Exception("Failed to fetch movie watchlist: ${response.code()}")
                 }
             }
+            requireCurrentSessionValue(sessionGeneration, result)
         }
     }
 
     suspend fun getShowWatchlist(page: Int = 1, limit: Int = 50, forceRefresh: Boolean = false): Result<Pair<List<TraktWatchlistShowItem>, Int>> {
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
         val cacheKey = "p${page}_$limit"
         return runCatching {
-            showWatchlistCache.getOrAwait(cacheKey, skipCache = forceRefresh) {
+            val result = showWatchlistCache.getOrAwait(cacheKey, skipCache = forceRefresh) {
                 val response = traktApiService.getShowWatchlist(
                     type = "shows",
                     extended = "full",
@@ -697,12 +748,15 @@ class TraktRepository @Inject constructor(
                     val items = response.body() ?: emptyList()
                     val totalPages = response.headers()["X-Pagination-Page-Count"]?.toIntOrNull() ?: 1
                     val totalCount = response.headers()["X-Pagination-Item-Count"]?.toIntOrNull() ?: items.size
-                    showWatchlistTotalCountCache.put(cacheKey, totalCount)
+                    sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) {
+                        showWatchlistTotalCountCache.put(cacheKey, totalCount)
+                    }
                     Pair(items, totalPages)
                 } else {
                     throw Exception("Failed to fetch show watchlist: ${response.code()}")
                 }
             }
+            requireCurrentSessionValue(sessionGeneration, result)
         }
     }
 
@@ -749,9 +803,12 @@ class TraktRepository @Inject constructor(
         extended: String = "full",
         forceRefresh: Boolean = false
     ): Result<List<TraktWatchlistMovieItem>> {
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
         val cacheKey = "all_$extended"
         if (!forceRefresh) {
-            movieHistoryCache.get(cacheKey)?.let { return Result.success(it) }
+            movieHistoryCache.get(cacheKey)?.let { cached ->
+                return Result.success(requireCurrentSessionValue(sessionGeneration, cached))
+            }
         }
         val allItems = mutableListOf<TraktWatchlistMovieItem>()
         var page = 1
@@ -766,8 +823,7 @@ class TraktRepository @Inject constructor(
             }
             page++
         }
-        movieHistoryCache.put(cacheKey, allItems)
-        return Result.success(allItems)
+        return Result.success(putSessionCache(sessionGeneration, movieHistoryCache, cacheKey, allItems))
     }
 
     /** 获取全部电视剧观看历史（跨页拉取），用于统计。带 5 分钟 TTL 缓存 */
@@ -775,9 +831,12 @@ class TraktRepository @Inject constructor(
         extended: String = "min",
         forceRefresh: Boolean = false
     ): Result<List<TraktWatchlistShowItem>> {
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
         val cacheKey = "all_$extended"
         if (!forceRefresh) {
-            showHistoryCache.get(cacheKey)?.let { return Result.success(it) }
+            showHistoryCache.get(cacheKey)?.let { cached ->
+                return Result.success(requireCurrentSessionValue(sessionGeneration, cached))
+            }
         }
         val allItems = mutableListOf<TraktWatchlistShowItem>()
         var page = 1
@@ -792,19 +851,20 @@ class TraktRepository @Inject constructor(
             }
             page++
         }
-        showHistoryCache.put(cacheKey, allItems)
-        return Result.success(allItems)
+        return Result.success(putSessionCache(sessionGeneration, showHistoryCache, cacheKey, allItems))
     }
 
     /** 获取已看电视剧列表（含每部剧的已看集数），用于统计。带 5 分钟 TTL 缓存 */
     suspend fun getWatchedShowsWithEpisodes(): Result<List<TraktWatchedShow>> {
-        watchedShowsCache.get("all")?.let { return Result.success(it) }
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
+        watchedShowsCache.get("all")?.let { cached ->
+            return Result.success(requireCurrentSessionValue(sessionGeneration, cached))
+        }
         return try {
             val response = traktApiService.getWatchedShows()
             if (response.isSuccessful) {
                 val shows = response.body() ?: emptyList()
-                watchedShowsCache.put("all", shows)
-                Result.success(shows)
+                Result.success(putSessionCache(sessionGeneration, watchedShowsCache, "all", shows))
             } else {
                 Result.failure(Exception("Failed to get watched shows: ${response.code()}"))
             }
@@ -850,8 +910,11 @@ class TraktRepository @Inject constructor(
     }
 
     suspend fun getComments(traktId: Int, type: MediaType, limit: Int = 5, page: Int = 1): Result<List<TraktComment>> {
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
         val key = "${traktId}_${type.name}_${limit}_$page"
-        commentsCache.get(key)?.let { return Result.success(it) }
+        commentsCache.get(key)?.let { cached ->
+            return Result.success(requireCurrentSessionValue(sessionGeneration, cached))
+        }
         return try {
             val response = when (type) {
                 MediaType.MOVIE -> traktApiService.getMovieComments(traktId.toString(), limit, page)
@@ -861,8 +924,7 @@ class TraktRepository @Inject constructor(
             }
             if (response.isSuccessful) {
                 val body = response.body() ?: emptyList()
-                commentsCache.put(key, body)
-                Result.success(body)
+                Result.success(putSessionCache(sessionGeneration, commentsCache, key, body))
             } else {
                 Result.failure(Exception("Failed to fetch comments: ${response.code()}"))
             }
@@ -1012,8 +1074,11 @@ class TraktRepository @Inject constructor(
     }
 
     fun fetchWatchHistory(page: Int): Flow<WatchHistoryEmit> = flow {
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
         val cacheKey = "watch_history_page_$page"
         watchHistoryCache.get(cacheKey)?.let {
+            // 下游 emit 可重入地触发登出，不能在失效锁内执行挂起回调。
+            sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) { }
             emit(WatchHistoryEmit(items = it.items, isComplete = true))
             return@flow
         }
@@ -1072,11 +1137,15 @@ class TraktRepository @Inject constructor(
                     emittedCount++
                     if (emittedCount % EMIT_BATCH_SIZE == 0) {
                         val batch = enriched.sortedByDescending { it.watchedAt }
+                        sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) { }
                         emit(WatchHistoryEmit(items = batch, isComplete = false))
                     }
                 }
                 val finalItems = enriched.sortedByDescending { it.watchedAt }
-                watchHistoryCache.put(cacheKey, WatchHistoryPage(finalItems, page, totalPages, totalCount))
+                sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) {
+                    watchHistoryCache.put(cacheKey, WatchHistoryPage(finalItems, page, totalPages, totalCount))
+                }
+                sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) { }
                 emit(WatchHistoryEmit(items = finalItems, isComplete = true))
             }
         } catch (e: CancellationException) {
@@ -1312,14 +1381,16 @@ class TraktRepository @Inject constructor(
     }
 
     suspend fun getRelatedMovies(traktId: Int, limit: Int = 10): Result<List<TraktMovie>> {
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
         val key = "${traktId}_${limit}"
-        relatedMoviesCache.get(key)?.let { return Result.success(it) }
+        relatedMoviesCache.get(key)?.let { cached ->
+            return Result.success(requireCurrentSessionValue(sessionGeneration, cached))
+        }
         return try {
             val response = traktApiService.getRelatedMovies(traktId, limit = limit)
             if (response.isSuccessful) {
                 val body = response.body() ?: emptyList()
-                relatedMoviesCache.put(key, body)
-                Result.success(body)
+                Result.success(putSessionCache(sessionGeneration, relatedMoviesCache, key, body))
             } else {
                 Result.failure(Exception("Failed to fetch related movies: ${response.code()}"))
             }
@@ -1329,14 +1400,16 @@ class TraktRepository @Inject constructor(
     }
 
     suspend fun getRelatedShows(traktId: Int, limit: Int = 10): Result<List<TraktShow>> {
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
         val key = "${traktId}_${limit}"
-        relatedShowsCache.get(key)?.let { return Result.success(it) }
+        relatedShowsCache.get(key)?.let { cached ->
+            return Result.success(requireCurrentSessionValue(sessionGeneration, cached))
+        }
         return try {
             val response = traktApiService.getRelatedShows(traktId, limit = limit)
             if (response.isSuccessful) {
                 val body = response.body() ?: emptyList()
-                relatedShowsCache.put(key, body)
-                Result.success(body)
+                Result.success(putSessionCache(sessionGeneration, relatedShowsCache, key, body))
             } else {
                 Result.failure(Exception("Failed to fetch related shows: ${response.code()}"))
             }
@@ -2154,49 +2227,43 @@ class TraktRepository @Inject constructor(
     }
 
     suspend fun getUserProfile(): Result<TraktUserProfileResponse> {
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
         // 1. 内存缓存
         userProfileCache?.let { cached ->
             if (cached.hasAvatarUrl()) {
-                _userProfile.value = cached
-                return Result.success(cached)
+                return Result.success(cacheUserProfileForSession(sessionGeneration, cached, persist = false))
             }
             val enriched = enrichUserProfileAvatar(cached)
-            userProfileCache = enriched
-            _userProfile.value = enriched
-            if (enriched.hasAvatarUrl()) userProfileStorage.saveProfile(enriched)
-            return Result.success(enriched)
+            return Result.success(
+                cacheUserProfileForSession(sessionGeneration, enriched, persist = enriched.hasAvatarUrl())
+            )
         }
         // 2. DataStore 持久化缓存（重启 app 后仍可用）
         val persisted = userProfileStorage.getProfile()
         if (persisted != null) {
             val enriched = enrichUserProfileAvatar(persisted)
-            userProfileCache = enriched
-            _userProfile.value = enriched
-            if (enriched.hasAvatarUrl()) userProfileStorage.saveProfile(enriched)
-            return Result.success(enriched)
+            return Result.success(
+                cacheUserProfileForSession(sessionGeneration, enriched, persist = enriched.hasAvatarUrl())
+            )
         }
         // 3. 网络请求
         return try {
             val response = traktApiService.getUserProfile()
             if (response.isSuccessful) {
                 val profile = enrichUserProfileAvatar(response.body() ?: TraktUserProfileResponse())
-                userProfileCache = profile
-                _userProfile.value = profile
-                userProfileStorage.saveProfile(profile)
-                Result.success(profile)
+                Result.success(cacheUserProfileForSession(sessionGeneration, profile, persist = true))
             } else Result.failure(Exception("HTTP ${response.code()}"))
         } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
     /** 只读取本地 profile 缓存，不发起网络请求，供启动阶段先展示上次数据。 */
     suspend fun getCachedUserProfile(): TraktUserProfileResponse? {
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
         userProfileCache?.let {
-            _userProfile.value = it
-            return it
+            return cacheUserProfileForSession(sessionGeneration, it, persist = false)
         }
-        return userProfileStorage.getProfile()?.also {
-            userProfileCache = it
-            _userProfile.value = it
+        return userProfileStorage.getProfile()?.let {
+            cacheUserProfileForSession(sessionGeneration, it, persist = false)
         }
     }
 
@@ -2207,6 +2274,7 @@ class TraktRepository @Inject constructor(
      * 不能因为上一个账号留下的本地资料缓存就误判当前账号已登录。
      */
     suspend fun checkTraktConnectionResult(): TraktConnectionCheckResult {
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
         return try {
             val response = traktApiService.getUserProfile()
             if (!response.isSuccessful) {
@@ -2219,9 +2287,7 @@ class TraktRepository @Inject constructor(
 
             // 启动检查本身已经拿到了当前账号资料，直接写入后续页面共用的缓存，避免再次请求。
             val profile = enrichUserProfileAvatar(response.body() ?: TraktUserProfileResponse())
-            userProfileCache = profile
-            _userProfile.value = profile
-            userProfileStorage.saveProfile(profile)
+            cacheUserProfileForSession(sessionGeneration, profile, persist = true)
             TraktConnectionCheckResult.CONNECTED
         } catch (e: CancellationException) {
             throw e
@@ -2234,19 +2300,19 @@ class TraktRepository @Inject constructor(
         checkTraktConnectionResult() == TraktConnectionCheckResult.CONNECTED
 
     suspend fun clearUserProfileCache() {
-        userProfileCache = null
-        _userProfile.value = null
-        userProfileStorage.clear()
+        sessionCacheRegistry.invalidateAll()
     }
 
     suspend fun getUserStats(): Result<TraktUserStatsResponse> {
-        userStatsCache.get("me")?.let { return Result.success(it) }
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
+        userStatsCache.get("me")?.let { cached ->
+            return Result.success(requireCurrentSessionValue(sessionGeneration, cached))
+        }
         return try {
             val response = traktApiService.getUserStats()
             if (response.isSuccessful) {
                 val stats = response.body() ?: TraktUserStatsResponse()
-                userStatsCache.put("me", stats)
-                Result.success(stats)
+                Result.success(putSessionCache(sessionGeneration, userStatsCache, "me", stats))
             }
             else Result.failure(Exception("HTTP ${response.code()}"))
         } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
@@ -2272,7 +2338,10 @@ class TraktRepository @Inject constructor(
 
     // 合并全量评分（并行请求）。带 5 分钟 TTL 缓存
     suspend fun getAllUserRatings(): Result<List<TraktRatingItem>> {
-        userRatingsCache.get("all")?.let { return Result.success(it) }
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
+        userRatingsCache.get("all")?.let { cached ->
+            return Result.success(requireCurrentSessionValue(sessionGeneration, cached))
+        }
         return try {
             coroutineScope {
                 val movieDeferred = async { getAllMovieRatings() }
@@ -2280,8 +2349,7 @@ class TraktRepository @Inject constructor(
                 val movieRatings = movieDeferred.await().getOrDefault(emptyList())
                 val showRatings = showDeferred.await().getOrDefault(emptyList())
                 val combined = movieRatings + showRatings
-                userRatingsCache.put("all", combined)
-                Result.success(combined)
+                Result.success(putSessionCache(sessionGeneration, userRatingsCache, "all", combined))
             }
         } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
