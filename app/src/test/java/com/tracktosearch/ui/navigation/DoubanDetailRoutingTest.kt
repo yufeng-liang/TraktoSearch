@@ -16,7 +16,7 @@ class DoubanDetailRoutingTest {
                 traktId = 0,
                 tmdbId = 0
             )
-        ).isTrue()
+        ).isFalse()
     }
 
     @Test
@@ -68,7 +68,7 @@ class DoubanDetailRoutingTest {
                 traktId = 123,
                 tmdbId = 0
             )
-        ).isTrue()
+        ).isFalse()
     }
 
     @Test
@@ -81,7 +81,7 @@ class DoubanDetailRoutingTest {
                 traktId = 0,
                 tmdbId = 456
             )
-        ).isTrue()
+        ).isFalse()
     }
 
     @Test

@@ -3,8 +3,8 @@ package com.tracktosearch.ui.navigation
 import com.tracktosearch.data.repository.WatchlistMediaType
 
 /**
- * 所有缺少 IMDb 的豆瓣条目使用豆瓣详情页。
- * 未知媒体类型不能静默按电影处理，否则综艺、纪录片会请求错误的详情链路。
+ * 已知电影/剧集统一进入普通详情页，让 DetailViewModel 复用 Rexxar 与现有备用数据链路。
+ * 只有媒体类型未知时才进入豆瓣专属详情页，避免把综艺、纪录片按电影或剧集请求。
  */
 internal fun shouldUseDoubanItemDetail(
     doubanId: String?,
@@ -12,5 +12,4 @@ internal fun shouldUseDoubanItemDetail(
     mediaType: WatchlistMediaType,
     traktId: Int,
     tmdbId: Int
-): Boolean = !doubanId.isNullOrBlank() &&
-    (mediaType == WatchlistMediaType.OTHER || imdbId.isBlank())
+): Boolean = !doubanId.isNullOrBlank() && mediaType == WatchlistMediaType.OTHER
