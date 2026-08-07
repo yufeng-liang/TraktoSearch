@@ -39,12 +39,7 @@ class ThemeStorage @Inject constructor(
         scope.launch {
             val prefs = context.themeDataStore.data.first()
             _themeMode.value = prefs[KEY_THEME_MODE] ?: MODE_SYSTEM
-            _accentColor.value = when (val name = prefs[KEY_ACCENT_COLOR]) {
-                DYNAMIC_ACCENT -> null
-                null -> MonetAccent.VINTAGE_TICKET
-                else -> runCatching { MonetAccent.valueOf(name) }
-                    .getOrElse { MonetAccent.VINTAGE_TICKET }
-            }
+            _accentColor.value = decodeAccentName(prefs[KEY_ACCENT_COLOR])
         }
     }
 
@@ -60,6 +55,20 @@ class ThemeStorage @Inject constructor(
             prefs[KEY_ACCENT_COLOR] = accent?.name ?: DYNAMIC_ACCENT
         }
         _accentColor.value = accent
+    }
+
+    suspend fun readAccentColorSnapshot(): MonetAccent? {
+        val prefs = context.themeDataStore.data.first()
+        return decodeAccentName(prefs[KEY_ACCENT_COLOR])
+    }
+
+    private fun decodeAccentName(name: String?): MonetAccent? {
+        return when (name) {
+            DYNAMIC_ACCENT -> null
+            null -> MonetAccent.VINTAGE_TICKET
+            else -> runCatching { MonetAccent.valueOf(name) }
+                .getOrElse { MonetAccent.VINTAGE_TICKET }
+        }
     }
 
     companion object {
