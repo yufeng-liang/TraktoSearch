@@ -15,7 +15,11 @@ import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.local.db.UserReviewEntity
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
+import com.tracktosearch.data.remote.douban.DoubanDetailPresentation
 import com.tracktosearch.data.remote.douban.DoubanRepository
+import com.tracktosearch.data.remote.douban.DoubanRexxarMediaType
+import com.tracktosearch.data.remote.douban.DoubanRexxarRepository
+import com.tracktosearch.data.remote.douban.mergeDoubanDetail
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
@@ -255,6 +259,7 @@ class DetailViewModel @Inject constructor(
     private val languageStorage: LanguageStorage,
     // 豆瓣双向同步依赖
     private val doubanRepository: DoubanRepository,
+    private val doubanRexxarRepository: DoubanRexxarRepository,
     private val doubanAuthStorage: DoubanAuthStorage,
     private val doubanSyncedItemDao: DoubanSyncedItemDao,
     // 会话模式管理器(豆瓣独立模式分支判断)
@@ -402,6 +407,7 @@ class DetailViewModel @Inject constructor(
     private var seasonsJob: Job? = null
     private var delayedLoadJob: Job? = null
     private var doubanIdPrefetchJob: Job? = null
+    private var doubanRexxarJob: Job? = null
     // 全量结果（未按 filter 过滤）
     private var allResources: List<ResourceItem> = emptyList()
     private var isLoggedIn: Boolean = false
@@ -467,6 +473,7 @@ class DetailViewModel @Inject constructor(
             if (_uiState.value.ratingSource == DetailRatingSource.UNKNOWN) {
                 prefetchDoubanId()
             }
+            currentDoubanId?.let { startDoubanRexxarLoad(cacheKey, it) }
             // 按需补启附属 fetch:缓存可能是在附属请求完成前被写入的(用户中途返回),
             // 此时 ratings/comments/credits/videos/seasons 等字段为空,需要重新拉取避免永久卡在骨架状态
             val visibility = cached.uiState.sectionVisible
@@ -567,6 +574,8 @@ class DetailViewModel @Inject constructor(
                     ratingSource = DetailRatingSource.DOUBAN
                 )
             }
+
+            currentDoubanId?.let { startDoubanRexxarLoad(cacheKey, it) }
 
             // 先检查登录状态
             isLoggedIn = resolveLoginState()
@@ -710,6 +719,117 @@ class DetailViewModel @Inject constructor(
             ratingSource = DetailRatingSource.DOUBAN,
             ratings = _uiState.value.ratings?.copy(doubanRating = publicRating)
         )
+        currentDetailCacheKey?.let { startDoubanRexxarLoad(it, doubanId) }
+    }
+
+    /** Rexxar 的公开数据只做增量补充，网络失败时不清空已有详情或剧照。 */
+    private fun startDoubanRexxarLoad(expectedKey: DetailCacheKey, doubanId: String) {
+        val rexxarType = when (currentMediaType) {
+            MediaType.MOVIE -> DoubanRexxarMediaType.MOVIE
+            MediaType.SHOW -> DoubanRexxarMediaType.TV
+            MediaType.PERSON, MediaType.DISK -> return
+        }
+        doubanRexxarJob?.cancel()
+        doubanRexxarJob = viewModelScope.launch {
+            val detailDeferred = async {
+                doubanRexxarRepository.getDetail(doubanId, rexxarType)
+            }
+            val photosDeferred = async {
+                doubanRexxarRepository.getPhotos(doubanId, rexxarType, start = 0, count = 20)
+            }
+            val detailResult = detailDeferred.await()
+            val photosResult = photosDeferred.await()
+
+            if (currentDetailCacheKey != expectedKey || currentDoubanId != doubanId) return@launch
+
+            detailResult.getOrNull()?.let { rexxarDetail ->
+                val supplement = loadDoubanSupplement(doubanId, currentImdbId)
+                val merged = mergeDoubanDetail(
+                    rexxar = rexxarDetail,
+                    html = supplement?.detail,
+                    snapshot = supplement?.item,
+                    existing = currentDoubanPresentation()
+                )
+                currentImdbId = merged.imdbId ?: currentImdbId
+                currentDoubanRating = merged.score ?: currentDoubanRating
+                applyDoubanPresentation(merged, doubanId)
+
+                val largePosterUrl = rexxarDetail.poster?.largeUrl?.takeIf { it.isNotBlank() }
+                if (largePosterUrl != null) {
+                    runCatching {
+                        doubanSyncedItemDao.updatePosterUrl(doubanId, largePosterUrl)
+                    }
+                }
+            }
+
+            photosResult.getOrNull()?.let { photoPage ->
+                val urls = photoPage.photos.mapNotNull { photo ->
+                    photo.largeUrl?.takeIf { it.isNotBlank() }
+                        ?: photo.normalUrl?.takeIf { it.isNotBlank() }
+                        ?: photo.smallUrl?.takeIf { it.isNotBlank() }
+                }.distinct().take(20)
+                if (urls.isNotEmpty() && currentDetailCacheKey == expectedKey && currentDoubanId == doubanId) {
+                    _uiState.value = _uiState.value.copy(backdrops = urls)
+                }
+            }
+            saveToCache()
+        }
+    }
+
+    private fun currentDoubanPresentation(): DoubanDetailPresentation {
+        val state = _uiState.value
+        val genres = state.genres
+            .split(Regex("\\s*(?:/|·)\\s*"))
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+        return DoubanDetailPresentation(
+            doubanId = currentDoubanId,
+            mediaType = when (currentMediaType) {
+                MediaType.MOVIE -> DoubanRexxarMediaType.MOVIE
+                MediaType.SHOW -> DoubanRexxarMediaType.TV
+                MediaType.PERSON, MediaType.DISK -> null
+            },
+            title = state.displayTitle.takeIf { it.isNotBlank() },
+            originalTitle = state.originalTitle.takeIf { it.isNotBlank() },
+            year = state.year,
+            releaseDates = listOfNotNull(state.releaseDate.takeIf { it.isNotBlank() }),
+            genres = genres,
+            countries = listOfNotNull(state.country.takeIf { it.isNotBlank() }),
+            overview = state.overview.takeIf { it.isNotBlank() },
+            score = currentDoubanRating ?: state.ratings?.doubanRating,
+            runtime = state.runtime?.toString(),
+            imdbId = currentImdbId.takeIf { it.isNotBlank() },
+            posterUrl = state.posterUrl
+        )
+    }
+
+    private fun applyDoubanPresentation(presentation: DoubanDetailPresentation, doubanId: String) {
+        val current = _uiState.value
+        val title = presentation.title ?: current.displayTitle
+        val genres = presentation.genres.takeIf { it.isNotEmpty() }?.joinToString(" / ")
+        val country = presentation.countries.takeIf { it.isNotEmpty() }?.joinToString(" / ")
+        val runtime = presentation.runtime?.let { Regex("\\d+").find(it)?.value?.toIntOrNull() }
+        val ratings = presentation.score?.let { score ->
+            (current.ratings ?: MultiRatings()).copy(doubanRating = score)
+        } ?: current.ratings
+        currentKeyword = title
+        currentOriginalTitle = presentation.originalTitle ?: currentOriginalTitle
+        _uiState.value = current.copy(
+            title = title,
+            displayTitle = title,
+            originalTitle = presentation.originalTitle ?: current.originalTitle,
+            year = presentation.year ?: current.year,
+            releaseDate = presentation.releaseDates.firstOrNull() ?: current.releaseDate,
+            overview = presentation.overview ?: current.overview,
+            genres = genres ?: current.genres,
+            country = country ?: current.country,
+            posterUrl = presentation.posterUrl ?: current.posterUrl,
+            runtime = runtime ?: current.runtime,
+            ratings = ratings,
+            doubanIdForSync = doubanId,
+            ratingSource = DetailRatingSource.DOUBAN
+        )
+        prefetchPosterColor(_uiState.value.posterUrl)
     }
 
     private fun prefetchDoubanId(expectedKey: DetailCacheKey? = currentDetailCacheKey) {
@@ -1141,9 +1261,14 @@ class DetailViewModel @Inject constructor(
                     .filter { url -> backdropUrls.none { it.contains(url.substringAfterLast("/").substringBefore(".")) } }
                 backdropUrls.addAll(traktFanartUrls)
 
+                val currentDoubanBackdrops = _uiState.value.backdrops
                 _uiState.value = _uiState.value.copy(
                     videos = allVideos,
-                    backdrops = backdropUrls.take(20),
+                    backdrops = if (currentDoubanId != null && currentDoubanBackdrops.isNotEmpty()) {
+                        currentDoubanBackdrops
+                    } else {
+                        backdropUrls.take(20)
+                    },
                     isLoadingVideosImages = false
                 )
             } catch (_: Exception) {

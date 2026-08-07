@@ -11,6 +11,12 @@ import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
 import com.tracktosearch.data.remote.douban.DoubanRepository
+import com.tracktosearch.data.remote.douban.DoubanRexxarDetail
+import com.tracktosearch.data.remote.douban.DoubanRexxarImage
+import com.tracktosearch.data.remote.douban.DoubanRexxarMediaType
+import com.tracktosearch.data.remote.douban.DoubanRexxarPhoto
+import com.tracktosearch.data.remote.douban.DoubanRexxarPhotoPage
+import com.tracktosearch.data.remote.douban.DoubanRexxarRepository
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.MultiRatings
 import com.tracktosearch.data.repository.RatingsRepository
@@ -59,6 +65,7 @@ class DetailViewModelDoubanTest {
     private lateinit var detailSectionStorage: DetailSectionStorage
     private lateinit var languageStorage: LanguageStorage
     private lateinit var doubanRepository: DoubanRepository
+    private lateinit var doubanRexxarRepository: DoubanRexxarRepository
     private lateinit var doubanAuthStorage: DoubanAuthStorage
     private lateinit var doubanSyncedItemDao: DoubanSyncedItemDao
     private lateinit var sessionModeManager: SessionModeManager
@@ -84,6 +91,7 @@ class DetailViewModelDoubanTest {
         detailSectionStorage = mockk(relaxed = true)
         languageStorage = mockk(relaxed = true)
         doubanRepository = mockk(relaxed = true)
+        doubanRexxarRepository = mockk(relaxed = true)
         doubanAuthStorage = mockk(relaxed = true)
         doubanSyncedItemDao = mockk(relaxed = true)
         sessionModeManager = mockk(relaxed = true)
@@ -101,6 +109,12 @@ class DetailViewModelDoubanTest {
         every {
             ratingsRepository.fetchRatingsStream(any(), any(), any())
         } returns flowOf(MultiRatings())
+        coEvery {
+            doubanRexxarRepository.getDetail(any(), any(), any())
+        } returns Result.failure(IllegalStateException("Rexxar not stubbed"))
+        coEvery {
+            doubanRexxarRepository.getPhotos(any(), any(), any(), any(), any())
+        } returns Result.failure(IllegalStateException("Rexxar photos not stubbed"))
 
         viewModel = DetailViewModel(
             tmdbRepository,
@@ -113,6 +127,7 @@ class DetailViewModelDoubanTest {
             detailSectionStorage,
             languageStorage,
             doubanRepository,
+            doubanRexxarRepository,
             doubanAuthStorage,
             doubanSyncedItemDao,
             sessionModeManager,
@@ -359,5 +374,160 @@ class DetailViewModelDoubanTest {
         assertThat(persisted.markedAt).isEqualTo(snapshot.markedAt)
         assertThat(persisted.subtitle).isEqualTo(snapshot.subtitle)
         assertThat(persisted.posterUrl).isEqualTo(snapshot.posterUrl)
+    }
+
+    @Test
+    fun knownDoubanIdLoadsRexxarAndReplacesBasicDetailsAndPhotos() = runTest {
+        val snapshot = DoubanSyncedItem(
+            doubanId = "db-rexxar",
+            imdbId = "tt-rexxar",
+            traktId = null,
+            title = "Snapshot title",
+            status = "wish",
+            rating = null,
+            syncedAt = 100L,
+            mediaType = "movie",
+            displayTitle = "Snapshot display",
+            year = 1994,
+            genres = "Drama",
+            posterUrl = "https://img.example/snapshot.jpg"
+        )
+        val html = DoubanDetailCacheEntry(
+            imdbId = "tt-rexxar",
+            isTvShow = false,
+            title = "HTML title",
+            summary = "HTML summary",
+            posterUrl = "https://img.example/html.jpg"
+        )
+        val rexxar = DoubanRexxarDetail(
+            doubanId = "db-rexxar",
+            type = DoubanRexxarMediaType.MOVIE,
+            title = "Rexxar title",
+            score = 9.2,
+            ratingCount = 1234,
+            poster = DoubanRexxarImage(largeUrl = "https://img.example/rexxar-large.jpg"),
+            summary = "Rexxar summary"
+        )
+        coEvery { doubanSyncedItemDao.getByDoubanId("db-rexxar") } returns snapshot
+        coEvery { doubanRepository.getDetailSnapshot() } returns mapOf("db-rexxar" to html)
+        coEvery {
+            doubanRexxarRepository.getDetail("db-rexxar", DoubanRexxarMediaType.MOVIE, false)
+        } returns Result.success(rexxar)
+        coEvery {
+            doubanRexxarRepository.getPhotos("db-rexxar", DoubanRexxarMediaType.MOVIE, 0, 20, false)
+        } returns Result.success(
+            DoubanRexxarPhotoPage(
+                total = 1,
+                start = 0,
+                count = 1,
+                photos = listOf(
+                    DoubanRexxarPhoto(
+                        id = "photo-1",
+                        largeUrl = "https://img.example/still-large.jpg"
+                    )
+                )
+            )
+        )
+
+        viewModel.loadDetail(
+            traktId = 0,
+            tmdbId = 0,
+            title = "Route fallback",
+            mediaType = MediaType.MOVIE,
+            imdbId = "tt-rexxar",
+            doubanId = "db-rexxar"
+        )
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.displayTitle).isEqualTo("Rexxar title")
+        assertThat(state.overview).isEqualTo("Rexxar summary")
+        assertThat(state.posterUrl).isEqualTo("https://img.example/rexxar-large.jpg")
+        assertThat(state.ratings?.doubanRating).isEqualTo(9.2)
+        assertThat(state.backdrops).containsExactly("https://img.example/still-large.jpg")
+        coVerify(exactly = 1) {
+            doubanSyncedItemDao.updatePosterUrl("db-rexxar", "https://img.example/rexxar-large.jpg")
+        }
+    }
+
+    @Test
+    fun rexxarFailureKeepsCachedDoubanValues() = runTest {
+        val snapshot = DoubanSyncedItem(
+            doubanId = "db-failed",
+            imdbId = "tt-failed",
+            traktId = null,
+            title = "Snapshot title",
+            status = "wish",
+            rating = null,
+            syncedAt = 100L,
+            mediaType = "movie",
+            displayTitle = "Snapshot display",
+            posterUrl = "https://img.example/snapshot.jpg"
+        )
+        val html = DoubanDetailCacheEntry(
+            imdbId = "tt-failed",
+            isTvShow = false,
+            title = "HTML title",
+            summary = "HTML summary",
+            posterUrl = "https://img.example/html.jpg"
+        )
+        coEvery { doubanSyncedItemDao.getByDoubanId("db-failed") } returns snapshot
+        coEvery { doubanRepository.getDetailSnapshot() } returns mapOf("db-failed" to html)
+        coEvery {
+            doubanRexxarRepository.getDetail("db-failed", DoubanRexxarMediaType.MOVIE, false)
+        } returns Result.failure(IllegalStateException("rexxar unavailable"))
+        coEvery {
+            doubanRexxarRepository.getPhotos("db-failed", DoubanRexxarMediaType.MOVIE, 0, 20, false)
+        } returns Result.failure(IllegalStateException("photos unavailable"))
+
+        viewModel.loadDetail(
+            traktId = 0,
+            tmdbId = 0,
+            title = "Route fallback",
+            mediaType = MediaType.MOVIE,
+            imdbId = "tt-failed",
+            doubanId = "db-failed"
+        )
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.displayTitle).isEqualTo("Snapshot display")
+        assertThat(state.overview).isEqualTo("HTML summary")
+        assertThat(state.posterUrl).isEqualTo("https://img.example/snapshot.jpg")
+        assertThat(state.backdrops).isEmpty()
+        coVerify(exactly = 0) { doubanSyncedItemDao.updatePosterUrl(any(), any()) }
+    }
+
+    @Test
+    fun resolvedImdbMappingStartsRexxarDetailLoad() = runTest {
+        coEvery { doubanSyncedItemDao.getByImdbId("tt-late") } returns null
+        coEvery { doubanRepository.findDoubanId(0, "tt-late", "movie", 0) } returns "db-late"
+        coEvery { doubanRepository.getDetailSnapshot() } returns emptyMap()
+        coEvery {
+            doubanRexxarRepository.getDetail("db-late", DoubanRexxarMediaType.MOVIE, false)
+        } returns Result.success(
+            DoubanRexxarDetail(
+                doubanId = "db-late",
+                type = DoubanRexxarMediaType.MOVIE,
+                title = "Late Rexxar title"
+            )
+        )
+        coEvery {
+            doubanRexxarRepository.getPhotos("db-late", DoubanRexxarMediaType.MOVIE, 0, 20, false)
+        } returns Result.failure(IllegalStateException("no photos"))
+
+        viewModel.loadDetail(
+            traktId = 0,
+            tmdbId = 0,
+            title = "Fallback title",
+            mediaType = MediaType.MOVIE,
+            imdbId = "tt-late"
+        )
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.displayTitle).isEqualTo("Late Rexxar title")
+        coVerify(exactly = 1) {
+            doubanRexxarRepository.getDetail("db-late", DoubanRexxarMediaType.MOVIE, false)
+        }
     }
 }

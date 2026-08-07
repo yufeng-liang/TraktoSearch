@@ -93,6 +93,10 @@ interface DoubanSyncedItemDao {
         listedAt: String?
     )
 
+    /** 详情页拿到 Rexxar 大图后只更新已有同步记录，避免意外插入个人数据。 */
+    @Query("UPDATE douban_synced_items SET posterUrl = :posterUrl WHERE doubanId = :doubanId")
+    suspend fun updatePosterUrl(doubanId: String, posterUrl: String)
+
     /** 豆瓣模式标记操作后更新状态 + pendingSync 标记，同步刷新 syncedAt */
     @Query("UPDATE douban_synced_items SET status = :status, pendingSync = :pendingSync, syncedAt = :now WHERE doubanId = :doubanId")
     suspend fun updateStatusAndPendingSync(doubanId: String, status: String, pendingSync: Boolean, now: Long = System.currentTimeMillis())

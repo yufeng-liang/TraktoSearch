@@ -12,6 +12,7 @@ import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.remote.douban.DoubanRepository
+import com.tracktosearch.data.remote.douban.DoubanRexxarRepository
 import com.tracktosearch.data.remote.douban.MarkWriteResult
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.tmdb.dto.TmdbReviewsResponse
@@ -76,6 +77,7 @@ class DetailViewModelSupplementTest {
     private lateinit var detailSectionStorage: DetailSectionStorage
     private lateinit var languageStorage: LanguageStorage
     private lateinit var doubanRepository: DoubanRepository
+    private lateinit var doubanRexxarRepository: DoubanRexxarRepository
     private lateinit var doubanAuthStorage: DoubanAuthStorage
     private lateinit var doubanSyncedItemDao: DoubanSyncedItemDao
     private lateinit var sessionModeManager: SessionModeManager
@@ -103,6 +105,7 @@ class DetailViewModelSupplementTest {
         detailSectionStorage = mockk(relaxed = true)
         languageStorage = mockk(relaxed = true)
         doubanRepository = mockk(relaxed = true)
+        doubanRexxarRepository = mockk(relaxed = true)
         doubanAuthStorage = mockk(relaxed = true)
         doubanSyncedItemDao = mockk(relaxed = true)
         sessionModeManager = mockk(relaxed = true)
@@ -116,12 +119,18 @@ class DetailViewModelSupplementTest {
         every { detailSectionStorage.sectionConfigs } returns MutableStateFlow(emptyList())
         every { doubanAuthStorage.getCredentials() } returns null
         every { languageStorage.language } returns MutableStateFlow(LanguageStorage.LANGUAGE_ENGLISH)
+        coEvery {
+            doubanRexxarRepository.getDetail(any(), any(), any())
+        } returns Result.failure(IllegalStateException("Rexxar not stubbed"))
+        coEvery {
+            doubanRexxarRepository.getPhotos(any(), any(), any(), any(), any())
+        } returns Result.failure(IllegalStateException("Rexxar photos not stubbed"))
         every { resourceRepository.filterItems(any(), any(), any()) } returns emptyList()
 
         viewModel = DetailViewModel(
             tmdbRepository, traktRepository, resourceRepository, ratingsRepository,
             viewedItemStorage, commentTranslator, tokenStorage, detailSectionStorage,
-            languageStorage, doubanRepository, doubanAuthStorage, doubanSyncedItemDao,
+            languageStorage, doubanRepository, doubanRexxarRepository, doubanAuthStorage, doubanSyncedItemDao,
             sessionModeManager,
             posterColorExtractor, userReviewRepository
         )
