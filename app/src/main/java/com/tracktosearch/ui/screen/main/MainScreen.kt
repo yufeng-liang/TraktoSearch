@@ -448,6 +448,7 @@ fun MainScreen(
                             onDiscoverClick = { scope.launch { pagerState.scrollToPage(1) } },
                             onNavigateToDoubanLogin = onNavigateToDoubanLogin,
                             onNavigateToLogin = onNavigateToLogin,
+                            onTraktLogin = onTraktLogin,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -467,6 +468,7 @@ fun MainScreen(
                         },
                         onNavigateToDoubanLogin = onNavigateToDoubanLogin,
                         onNavigateToLogin = onNavigateToLogin,
+                        onTraktLogin = onTraktLogin,
                         onStatisticsClick = onStatisticsClick,
                         onMarkRecordsClick = onMarkRecordsClick,
                         onFeedbackClick = onFeedbackClick,

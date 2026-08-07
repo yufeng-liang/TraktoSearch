@@ -165,6 +165,8 @@ fun SettingsScreen(
     onDoubanResync: () -> Unit = {},
     onNavigateToDoubanLogin: () -> Unit = {},
     onNavigateToLogin: () -> Unit = {},
+    // 直接发起 Trakt 授权（CustomTabs 打开授权页）；未提供时回退到导航激活登录页
+    onTraktLogin: () -> Unit = onNavigateToLogin,
     onStatisticsClick: () -> Unit = {},
     onMarkRecordsClick: () -> Unit = {},
     onFeedbackClick: () -> Unit = {},
@@ -734,7 +736,7 @@ fun SettingsScreen(
                         // 用 Trakt 连接态(而非综合 isLoggedIn)判断 Trakt 行,
                         // 避免豆瓣单独登录时 isLoggedIn=true 导致 Trakt 行误显示为已登录
                         isTraktLoggedIn = isTraktConnected,
-                        onTraktLogin = onNavigateToLogin,
+                        onTraktLogin = onTraktLogin,
                         onTraktLogout = { showLogoutDialog = true },
                         onDoubanLogin = { onNavigateToDoubanLogin() },
                         onDoubanLogout = {
@@ -1191,7 +1193,7 @@ fun SettingsScreen(
             onTraktLogin = {
                 showSyncProgressDialog = false
                 doubanSyncViewModel.doubanSyncManager.resetProgress()
-                onNavigateToLogin()
+                onTraktLogin()
             },
             viewModel = doubanSyncViewModel
         )
@@ -1278,7 +1280,7 @@ fun SettingsScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showTraktLoginPrompt = false
-                    onNavigateToLogin()
+                    onTraktLogin()
                 }) { Text(stringResource(R.string.consistency_check_trakt_required_login)) }
             },
             dismissButton = {
