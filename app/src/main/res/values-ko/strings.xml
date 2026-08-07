@@ -935,16 +935,16 @@
 
     <!-- Statistics (추가) -->
     <string name="statistics_info">통계 설명</string>
-    <string name="statistics_info_overview">Q: 상단의 숫자는 무엇인가요?\nA: 총 시청 수 (영화+드라마), 이번 달 시청 수, 올해 시청 수를 표시합니다. 데이터는 Trakt 시청 기록을 기반으로 합니다.</string>
+    <string name="statistics_info_overview">Q: 상단의 숫자는 무엇인가요?\nA: Trakt 시청 기록과 Douban의 ‘시청함’ 표시를 합산합니다. Douban 드라마는 캐시된 에피소드 수를 시청 에피소드로 더합니다.</string>
     <string name="statistics_info_heatmap">Q: 시청 히트맵이란?\nA: GitHub의 기여 그래프와 유사하게 각 사각형은 하루를 나타냅니다. 색상이 진할수록 해당 날짜에 더 많이 시청했음을 의미하며, 지난 1년을 포함합니다.</string>
-    <string name="statistics_info_genre_distribution">Q: 장르 분포 파이 차트란?\nA: 시청 기록에서 각 장르의 비율을 표시합니다. 각 조각을 탭하여 정확한 수와 백분율을 확인할 수 있습니다.</string>
+    <string name="statistics_info_genre_distribution">Q: 장르 분포 파이 차트란?\nA: Trakt 시청 기록과 Douban ‘시청함’ 작품의 장르 비율을 표시합니다. 각 조각을 탭하여 정확한 수와 백분율을 확인할 수 있습니다.</string>
     <string name="statistics_info_genre_ranking">Q: 인기 장르 순위란?\nA: 시청 수에 따라 장르를 순위별로 표시합니다. 상위 3개는 금, 은, 동 메달로 표시됩니다.</string>
-    <string name="statistics_info_watch_time">Q: 시청 시간은 어떻게 계산되나요?\nA: 시청한 각 영화와 에피소드의 상영 시간을 합산하여 시간 단위로 표시합니다.</string>
-    <string name="statistics_info_ratings">Q: 평점 통계란?\nA: Trakt에서의 평점 수, 평균 평점, 평점 분포를 표시합니다. 평점이 매겨진 작품만 카운트됩니다.</string>
+    <string name="statistics_info_watch_time">Q: 시청 시간은 어떻게 계산되나요?\nA: Trakt 시청 시간에 캐시된 Douban 영화 상영 시간과 Douban 드라마의 에피소드 수×회당 시간을 더합니다. 상세 캐시가 없는 작품은 추정하지 않습니다.</string>
+    <string name="statistics_info_ratings">Q: 평점 통계란?\nA: Trakt와 Douban의 평점 수, 평균 평점, 평점 분포를 표시합니다. Douban 1~5점 평점은 10점 척도로 변환합니다.</string>
 
     <!-- Help Statistics -->
     <string name="help_statistics_b1">"설정" 페이지 첫 번째 행에서 통계에 접근</string>
-    <string name="help_statistics_b2">시청 개요 (전체, 이번 달, 올해), 시청 시간, 평가 통계 확인</string>
+    <string name="help_statistics_b2">Trakt와 Douban을 합친 시청 개요 (전체, 이번 달, 올해), 시청 시간, 평가 통계 확인</string>
     <string name="help_statistics_b3">장르 분포 파이 차트와 순위로 시청 취향 표시</string>
     <string name="help_statistics_b4">히트맵으로 지난 1년간의 매일 시청 활동 표시</string>
     <string name="help_notification_b1">알림을 켜면 신작 개봉과 새 시즌을 자동 알림</string>

@@ -577,7 +577,7 @@
     <string name="help_watchlist_b3">Mark as watched supports checking episodes by season, specials (season 0) placed last</string>
     <string name="help_watchlist_b4">TV show count: requires watching all episodes of a full season</string>
     <string name="help_statistics_b1">Access statistics from the first row of \"Settings\" page</string>
-    <string name="help_statistics_b2">View overview (total, this month, this year), watch time, and rating stats</string>
+    <string name="help_statistics_b2">View overview (total, this month, this year), watch time, and rating stats from Trakt and Douban</string>
     <string name="help_statistics_b3">Genre pie chart and ranking show your viewing preferences</string>
     <string name="help_statistics_b4">Heatmap shows daily viewing activity over the past year</string>
     <string name="help_notification_b1">Enable notifications to get reminders for new releases and new seasons</string>
@@ -1082,12 +1082,12 @@ Config:
     <string name="statistics_less">Less</string>
     <string name="statistics_more">More</string>
     <string name="statistics_info">Statistics Guide</string>
-    <string name="statistics_info_overview">Q: What do the numbers above mean?\nA: They show your total watched count (movies + shows), this month\'s watched count, and this year\'s watched count, based on your Trakt history.</string>
+    <string name="statistics_info_overview">Q: What do the numbers above mean?\nA: They combine Trakt watch history with Douban watched marks. For Douban shows, the cached episode count is added to watched episodes.</string>
     <string name="statistics_info_heatmap">Q: What is the watching heatmap?\nA: Similar to GitHub\'s contribution graph, each square represents one day. The darker the color, the more you watched that day. It covers the past year.</string>
-    <string name="statistics_info_genre_distribution">Q: What is the genre distribution pie chart?\nA: It shows the proportion of each genre in your watched history. Tap a slice to see the exact count and percentage.</string>
+    <string name="statistics_info_genre_distribution">Q: What is the genre distribution pie chart?\nA: It shows genres from your Trakt history and Douban watched titles. Tap a slice to see the exact count and percentage.</string>
     <string name="statistics_info_genre_ranking">Q: What is the top genres ranking?\nA: Your most-watched genres ranked by count. The top three are marked with gold, silver, and bronze medals.</string>
-    <string name="statistics_info_watch_time">Q: How is watch time calculated?\nA: It sums up the runtime of every movie and episode you watched, displayed in hours.</string>
-    <string name="statistics_info_ratings">Q: What are rating statistics?\nA: Shows your total number of ratings, average rating, and rating distribution on Trakt. Only rated titles are counted.</string>
+    <string name="statistics_info_watch_time">Q: How is watch time calculated?\nA: It combines Trakt watch time with cached Douban movie runtimes and Douban show episode count × episode runtime. Missing cached details are not estimated.</string>
+    <string name="statistics_info_ratings">Q: What are rating statistics?\nA: Shows ratings from Trakt and Douban, including the total, average, and distribution. Douban 1-5 star ratings are converted to the 10-point scale.</string>
 
     <!-- Common UI -->
     <string name="common_retry">Retry</string>
