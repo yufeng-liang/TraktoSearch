@@ -12,6 +12,7 @@ import com.tracktosearch.data.local.db.MarkActionType
 import com.tracktosearch.data.remote.trakt.TraktApiService
 import com.tracktosearch.data.remote.trakt.TraktConnectionCheckResult
 import com.tracktosearch.data.remote.trakt.dto.*
+import com.tracktosearch.data.session.SessionCacheRegistry
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.TtlCache
 import com.tracktosearch.data.util.UserActionTracker
@@ -189,30 +190,52 @@ class TraktRepository @Inject constructor(
     /** loadWatchlistWatchedIds 并发去重,避免多个调用方同时触发网络全量拉取 */
     private val loadWatchlistMutex = Mutex()
 
+    /**
+     * Trakt 会话私有缓存的统一失效 module。
+     * 公共趋势、ID 映射和详情缓存不注册在这里，登出时继续跨会话复用。
+     */
+    private val sessionCacheRegistry by lazy {
+        SessionCacheRegistry().apply {
+            register { clearSessionMemoryCaches() }
+            register { watchlistWatchedIdsCache.clearAll() }
+            register { recommendationsCache.clearAll() }
+            register { showRecommendationsCache.clearAll() }
+        }
+    }
+
     /** 加载全局想看/已看 ID 缓存（登录后调用，仅加载一次）。
      *  优先读持久化缓存（6h TTL，跨 App 重启复用），未命中或过期时走网络全量拉取并写回持久化缓存。
      *  并发去重：多个调用方共享同一次网络加载，避免重复发 4 个 sync 请求 */
     suspend fun loadWatchlistWatchedIds(forceRefresh: Boolean = false): WatchlistWatchedIds {
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
         if (!forceRefresh) {
-            watchlistWatchedIds?.let { return it }
+            watchlistWatchedIds?.let { cached ->
+                return sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) { cached }
+            }
         }
         // 先尝试持久化缓存（避免每次启动都发 4 个 /sync/* 请求）
         val cacheKey = "watchlist_watched_ids"
         if (!forceRefresh) {
             watchlistWatchedIdsCache.awaitLoaded()
             watchlistWatchedIdsCache.get(cacheKey)?.let { cached ->
-                synchronized(watchlistWatchedIdsLock) { watchlistWatchedIds = cached }
-                return cached
+                return sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) {
+                    synchronized(watchlistWatchedIdsLock) { watchlistWatchedIds = cached }
+                    cached
+                }
             }
         }
         // 并发去重:同一时刻只允许一个网络全量拉取,其他调用方等待结果
         return loadWatchlistMutex.withLock {
             // double-check:等待期间可能已被其他协程填充
             if (!forceRefresh) {
-                watchlistWatchedIds?.let { return it }
+                watchlistWatchedIds?.let { cached ->
+                    return sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) { cached }
+                }
                 watchlistWatchedIdsCache.get(cacheKey)?.let { cached ->
-                    synchronized(watchlistWatchedIdsLock) { watchlistWatchedIds = cached }
-                    return cached
+                    return sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) {
+                        synchronized(watchlistWatchedIdsLock) { watchlistWatchedIds = cached }
+                        cached
+                    }
                 }
             }
             try {
@@ -237,9 +260,11 @@ class TraktRepository @Inject constructor(
                         movieTmdbToTrakt = (movieWatchlist + movieHistory).associate { it.movie.ids.tmdb to it.movie.ids.trakt }.filterKeys { it > 0 },
                         showTmdbToTrakt = (showWatchlist + showHistory).associate { it.show.ids.tmdb to it.show.ids.trakt }.filterKeys { it > 0 }
                     )
-                    synchronized(watchlistWatchedIdsLock) { watchlistWatchedIds = ids }
-                    // 写回持久化缓存（异步落盘，6h TTL）
-                    watchlistWatchedIdsCache.put(cacheKey, ids)
+                    sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) {
+                        synchronized(watchlistWatchedIdsLock) { watchlistWatchedIds = ids }
+                        // 写回持久化缓存（异步落盘，6h TTL）
+                        watchlistWatchedIdsCache.put(cacheKey, ids)
+                    }
                     ids
                 }
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
@@ -255,6 +280,11 @@ class TraktRepository @Inject constructor(
 
     /** 清除全局想看/已看缓存及所有用户私有内存缓存（退出登录时调用） */
     suspend fun clearWatchlistWatchedCache() {
+        sessionCacheRegistry.invalidateAll()
+    }
+
+    /** 清除 Trakt 会话私有的一级内存缓存。 */
+    private fun clearSessionMemoryCaches() {
         synchronized(watchlistWatchedIdsLock) { watchlistWatchedIds = null }
         // 清除所有用户私有内存缓存，避免下一用户看到上一用户的历史/评分/想看列表
         commentsCache.clear()
@@ -273,8 +303,6 @@ class TraktRepository @Inject constructor(
         // 清除负缓存，避免下一用户继承上一用户的"未找到"标记
         notFoundTmdbIds.clear()
         notFoundImdbIds.clear()
-        // 等待持久化删除完成，避免下一会话先读到旧账号数据。
-        try { watchlistWatchedIdsCache.clearAll() } catch (e: CancellationException) { throw e } catch (_: Exception) {}
     }
 
     /** 清理当前 Trakt 账号的全部本地数据，切换账号或重新授权后必须调用。 */
@@ -286,8 +314,13 @@ class TraktRepository @Inject constructor(
     /** 将当前内存中的 watchlistWatchedIds 异步写回持久化缓存（增删后调用以保持一致） */
     private fun persistWatchlistWatchedIds() {
         val current = watchlistWatchedIds ?: return
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
         persistentScope.launch {
-            try { watchlistWatchedIdsCache.put("watchlist_watched_ids", current) } catch (e: CancellationException) { throw e } catch (_: Exception) {}
+            try {
+                sessionCacheRegistry.withCurrentGeneration(sessionGeneration) {
+                    watchlistWatchedIdsCache.put("watchlist_watched_ids", current)
+                }
+            } catch (e: CancellationException) { throw e } catch (_: Exception) {}
         }
     }
 
@@ -1831,13 +1864,21 @@ class TraktRepository @Inject constructor(
     /** 个性化推荐（已登录用户） */
     suspend fun getRecommendations(limit: Int = 10): Result<List<TraktMovie>> {
         val key = "recommendations_${limit}"
-        recommendationsCache.get(key)?.let { return Result.success(it) }
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
+        recommendationsCache.get(key)?.let { cached ->
+            return Result.success(
+                sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) { cached }
+            )
+        }
         return try {
             val response = traktApiService.getMovieRecommendations(limit = limit)
             if (response.isSuccessful) {
                 val body = response.body() ?: emptyList()
-                recommendationsCache.put(key, body)
-                Result.success(body)
+                val acceptedBody = sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) {
+                    recommendationsCache.put(key, body)
+                    body
+                }
+                Result.success(acceptedBody)
             } else {
                 Result.failure(Exception("Failed to fetch recommendations: ${response.code()}"))
             }
@@ -1924,13 +1965,21 @@ class TraktRepository @Inject constructor(
 
     suspend fun getShowRecommendations(limit: Int = 10): Result<List<TraktRecommendationShowResponse>> {
         val key = "${limit}"
-        showRecommendationsCache.get(key)?.let { return Result.success(it) }
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
+        showRecommendationsCache.get(key)?.let { cached ->
+            return Result.success(
+                sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) { cached }
+            )
+        }
         return try {
             val response = traktApiService.getShowRecommendations(limit = limit)
             if (response.isSuccessful) {
                 val result = response.body() ?: emptyList()
-                showRecommendationsCache.put(key, result)
-                Result.success(result)
+                val acceptedResult = sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) {
+                    showRecommendationsCache.put(key, result)
+                    result
+                }
+                Result.success(acceptedResult)
             } else Result.failure(Exception("HTTP ${response.code()}"))
         } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }

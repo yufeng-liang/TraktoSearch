@@ -22,7 +22,10 @@ import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -206,6 +209,78 @@ class TraktRepositoryTest {
             .isEqualTo("https://walter.trakt.tv/images/users/yuhu/avatar.jpg")
         coVerify(exactly = 1) { traktApiService.getUserByUsername("yuhu", "full") }
         coVerify(exactly = 1) { userProfileStorage.saveProfile(refreshed) }
+    }
+
+    @Test
+    fun `clearTraktAccountCaches_清理个性化电影推荐缓存`() = runTest {
+        val limit = 97
+        val first = listOf(TraktMovie(title = "first account"))
+        val second = listOf(TraktMovie(title = "second account"))
+        coEvery { traktApiService.getMovieRecommendations(limit, "full") } returns
+            Response.success(first) andThen Response.success(second)
+
+        repository.clearTraktAccountCaches()
+        assertThat(repository.getRecommendations(limit).getOrThrow()).isEqualTo(first)
+
+        repository.clearTraktAccountCaches()
+        assertThat(repository.getRecommendations(limit).getOrThrow()).isEqualTo(second)
+        coVerify(exactly = 2) { traktApiService.getMovieRecommendations(limit, "full") }
+    }
+
+    @Test
+    fun `旧会话中的推荐请求完成后不得重新写入缓存`() = runTest {
+        val limit = 98
+        val requestStarted = CompletableDeferred<Unit>()
+        val oldResponse = CompletableDeferred<Response<List<TraktMovie>>>()
+        val old = listOf(TraktMovie(title = "old account"))
+        val current = listOf(TraktMovie(title = "current account"))
+        var requestCount = 0
+        coEvery { traktApiService.getMovieRecommendations(limit, "full") } coAnswers {
+            if (requestCount++ == 0) {
+                requestStarted.complete(Unit)
+                oldResponse.await()
+            } else {
+                Response.success(current)
+            }
+        }
+
+        val oldRequest = async { repository.getRecommendations(limit) }
+        requestStarted.await()
+        repository.clearTraktAccountCaches()
+        oldResponse.complete(Response.success(old))
+        val oldResult = runCatching { oldRequest.await() }
+
+        assertThat(oldResult.exceptionOrNull()).isInstanceOf(CancellationException::class.java)
+        assertThat(repository.getRecommendations(limit).getOrThrow()).isEqualTo(current)
+        coVerify(exactly = 2) { traktApiService.getMovieRecommendations(limit, "full") }
+    }
+
+    @Test
+    fun `旧会话中的watchlist请求完成后不得向调用方返回旧快照`() = runTest {
+        val requestStarted = CompletableDeferred<Unit>()
+        val oldResponse = CompletableDeferred<Response<List<TraktWatchlistMovieItem>>>()
+        val headers = Headers.headersOf("X-Pagination-Page-Count", "1")
+        val oldMovie = TraktWatchlistMovieItem(
+            movie = TraktMovie(ids = TraktIds(trakt = 701, tmdb = 1701))
+        )
+        coEvery { traktApiService.getWatchlist(any(), any(), any(), any()) } coAnswers {
+            requestStarted.complete(Unit)
+            oldResponse.await()
+        }
+        coEvery { traktApiService.getShowWatchlist(any(), any(), any(), any()) } returns
+            Response.success(emptyList(), headers)
+        coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns
+            Response.success(emptyList(), headers)
+        coEvery { traktApiService.getShowHistory(any(), any(), any(), any()) } returns
+            Response.success(emptyList(), headers)
+
+        val oldRequest = async { repository.loadWatchlistWatchedIds() }
+        requestStarted.await()
+        repository.clearTraktAccountCaches()
+        oldResponse.complete(Response.success(listOf(oldMovie), headers))
+        val oldResult = runCatching { oldRequest.await() }
+
+        assertThat(oldResult.exceptionOrNull()).isInstanceOf(CancellationException::class.java)
     }
 
     @Test
