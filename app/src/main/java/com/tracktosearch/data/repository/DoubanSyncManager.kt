@@ -80,7 +80,10 @@ data class DoubanSyncProgress(
     val recentFailures: List<DoubanSyncFailure> = emptyList(), // 最近 5 条失败(滚动展示)
     val isRetry: Boolean = false,   // true=重试模式(从失败项数据走,不爬列表)
     val delayInfo: DelayInfo? = null,  // 当前延时信息(豆瓣反爬/重试等待,UI 做倒计时展示)
-    val isCancelling: Boolean = false  // true=用户已点击取消,正在停止中的中间态
+    val isCancelling: Boolean = false, // true=用户已点击取消,正在停止中的中间态
+    val processingItems: List<DoubanSyncQueueItem> = emptyList(),
+    val pendingItems: List<DoubanSyncQueueItem> = emptyList(),
+    val pendingItemCount: Int = 0
 )
 
 internal data class DoubanBatchProgress(
@@ -173,6 +176,9 @@ internal class DoubanSyncProgressPublisher(
 ) {
     private val lock = Any()
 
+    private fun isRuntimeUpdateRejected(): Boolean =
+        isCancelled() || progress.value.isCancelling
+
     fun createBatchProgressCallback(
         tracker: DoubanBatchProgressTracker,
         recentFailures: ArrayDeque<DoubanSyncFailure>
@@ -184,7 +190,7 @@ internal class DoubanSyncProgressPublisher(
         return { current, subPhase, cacheHit, currentTitle, recentFailure ->
             val sequence = eventSequence.incrementAndGet()
             synchronized(lock) {
-                if (isCancelled() || progress.value.isCancelling) {
+                if (isRuntimeUpdateRejected()) {
                     return@synchronized
                 }
                 if (sequence < latestPublishedSequence) {
@@ -231,7 +237,8 @@ internal class DoubanSyncProgressPublisher(
                     subPhase = subPhase,
                     cacheHitCount = currentProgress.cacheHitCount + cacheHit,
                     etaSeconds = batchProgress.etaSeconds,
-                    currentTitle = currentTitle,
+                    currentTitle = currentTitle
+                        ?: currentProgress.processingItems.firstOrNull()?.title,
                     recentFailures = recentFailures.toList()
                 )
                 latestPublishedSequence = sequence
@@ -242,8 +249,44 @@ internal class DoubanSyncProgressPublisher(
 
     fun publishDelay(delayInfo: DelayInfo?) {
         synchronized(lock) {
-            if (isCancelled() || progress.value.isCancelling) return
+            if (isRuntimeUpdateRejected()) return
             progress.value = progress.value.copy(delayInfo = delayInfo)
+        }
+    }
+
+    fun publishQueue(snapshot: DoubanSyncQueueSnapshot, currentTitle: String? = null) {
+        synchronized(lock) {
+            if (isRuntimeUpdateRejected()) return
+            progress.value = progress.value.copy(
+                processingItems = snapshot.processingItems.toList(),
+                pendingItems = snapshot.pendingItems.toList(),
+                pendingItemCount = snapshot.pendingItemCount,
+                currentTitle = currentTitle ?: snapshot.processingItems.firstOrNull()?.title
+            )
+        }
+    }
+
+    fun clearQueue() {
+        synchronized(lock) {
+            if (isRuntimeUpdateRejected()) return
+            progress.value = progress.value.copy(
+                processingItems = emptyList(),
+                pendingItems = emptyList(),
+                pendingItemCount = 0,
+                currentTitle = null
+            )
+        }
+    }
+
+    fun publishStage(stage: DoubanSyncStage, subStage: DoubanSyncSubStage, phase: String) {
+        synchronized(lock) {
+            if (isRuntimeUpdateRejected()) return
+            progress.value = progress.value.copy(
+                stage = stage,
+                subStage = subStage,
+                phase = phase,
+                subPhase = ""
+            )
         }
     }
 
@@ -255,7 +298,11 @@ internal class DoubanSyncProgressPublisher(
                 subStage = DoubanSyncSubStage.NONE,
                 phase = "正在取消...",
                 subPhase = "",
-                delayInfo = null
+                delayInfo = null,
+                processingItems = emptyList(),
+                pendingItems = emptyList(),
+                pendingItemCount = 0,
+                currentTitle = null
             )
         }
     }

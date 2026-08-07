@@ -3,6 +3,8 @@ package com.tracktosearch.data.repository
 import androidx.annotation.StringRes
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
+import java.util.LinkedHashMap
+import java.util.LinkedHashSet
 
 /** 豆瓣同步的稳定主阶段，不承载数量、标题或错误文本。 */
 enum class DoubanSyncStage(val isTerminal: Boolean = false) {
@@ -11,6 +13,7 @@ enum class DoubanSyncStage(val isTerminal: Boolean = false) {
     FETCHING_LIST,
     PARSING_DATA,
     UPDATING_LIST,
+    UPLOADING,
     COMPLETED(isTerminal = true),
     LOGIN_REQUIRED(isTerminal = true),
     CANCELLING(isTerminal = true),
@@ -36,7 +39,13 @@ enum class DoubanSyncSubStage {
     WRITING_LOCAL,
     STATUS_CHANGES,
     RETRYING_FAILURES,
-    WAITING_DELAY
+    WAITING_DELAY,
+    PREPARING_UPLOAD,
+    CHECKING_CONSISTENCY,
+    UPLOADING_PERSONAL_DATA,
+    UPLOADING_FAILURES,
+    UPLOADING_DETAILS,
+    FILLING_MEDIA_TYPE
 }
 
 /** 对话框中展示的最近一条豆瓣列表数据。 */
@@ -74,6 +83,61 @@ class DoubanSyncPreviewBuffer(private val maxSize: Int = 5) {
     }
 }
 
+data class DoubanSyncQueueItem(val doubanId: String, val title: String)
+
+data class DoubanSyncQueueSnapshot(
+    val processingItems: List<DoubanSyncQueueItem> = emptyList(),
+    val pendingItems: List<DoubanSyncQueueItem> = emptyList(),
+    val pendingItemCount: Int = 0
+)
+
+/** 跟踪单批次条目的活动状态，并为 UI 提供有界且稳定顺序的快照。 */
+class DoubanSyncQueueTracker(items: List<DoubanSyncQueueItem>) {
+    private companion object {
+        private const val MAX_PROCESSING_ITEMS = 3
+        private const val MAX_PENDING_ITEMS = 5
+    }
+
+    private val itemsById = LinkedHashMap<String, DoubanSyncQueueItem>()
+    private val pendingIds = LinkedHashSet<String>()
+    private val processingIds = LinkedHashSet<String>()
+
+    init {
+        items.forEach { item ->
+            if (itemsById.putIfAbsent(item.doubanId, item) == null) {
+                pendingIds += item.doubanId
+            }
+        }
+    }
+
+    @Synchronized
+    fun start(doubanId: String) {
+        if (pendingIds.remove(doubanId)) {
+            processingIds += doubanId
+        }
+    }
+
+    @Synchronized
+    fun complete(doubanId: String) {
+        pendingIds.remove(doubanId)
+        processingIds.remove(doubanId)
+    }
+
+    @Synchronized
+    fun snapshot(): DoubanSyncQueueSnapshot {
+        val orderedProcessing = orderedItems(processingIds)
+        val orderedPending = orderedItems(pendingIds)
+        return DoubanSyncQueueSnapshot(
+            processingItems = orderedProcessing.take(MAX_PROCESSING_ITEMS),
+            pendingItems = orderedPending.take(MAX_PENDING_ITEMS),
+            pendingItemCount = orderedPending.size
+        )
+    }
+
+    private fun orderedItems(ids: Set<String>): List<DoubanSyncQueueItem> =
+        itemsById.values.filter { it.doubanId in ids }
+}
+
 /** 将批处理内部的旧子阶段名称收敛为稳定 ID。 */
 internal fun subStageFromLegacy(value: String): DoubanSyncSubStage = when (value) {
     DoubanSyncSubStage.PULLING_CLOUD.name -> DoubanSyncSubStage.PULLING_CLOUD
@@ -97,6 +161,12 @@ internal fun stageFromSubStage(subStage: DoubanSyncSubStage): DoubanSyncStage = 
     DoubanSyncSubStage.WRITING_TARGET,
     DoubanSyncSubStage.WRITING_LOCAL,
     DoubanSyncSubStage.STATUS_CHANGES -> DoubanSyncStage.UPDATING_LIST
+    DoubanSyncSubStage.PREPARING_UPLOAD,
+    DoubanSyncSubStage.CHECKING_CONSISTENCY,
+    DoubanSyncSubStage.UPLOADING_PERSONAL_DATA,
+    DoubanSyncSubStage.UPLOADING_FAILURES,
+    DoubanSyncSubStage.UPLOADING_DETAILS,
+    DoubanSyncSubStage.FILLING_MEDIA_TYPE -> DoubanSyncStage.UPLOADING
     else -> DoubanSyncStage.PREPARING
 }
 
@@ -107,6 +177,8 @@ fun DoubanSyncStage.compactLabelRes(): Int = when (this) {
     DoubanSyncStage.FETCHING_LIST -> R.string.douban_sync_compact_fetching_list
     DoubanSyncStage.PARSING_DATA -> R.string.douban_sync_compact_parsing_data
     DoubanSyncStage.UPDATING_LIST -> R.string.douban_sync_compact_updating_list
+    // 上传专用资源由后续 UI 任务补齐，模型阶段复用稳定的更新文案资源。
+    DoubanSyncStage.UPLOADING -> R.string.douban_sync_compact_updating_list
     DoubanSyncStage.COMPLETED -> R.string.douban_sync_compact_completed
     DoubanSyncStage.LOGIN_REQUIRED -> R.string.douban_sync_compact_login_required
     DoubanSyncStage.CANCELLING -> R.string.douban_sync_compact_cancelling
@@ -120,6 +192,7 @@ fun DoubanSyncStage.labelRes(): Int = when (this) {
     DoubanSyncStage.FETCHING_LIST -> R.string.douban_sync_stage_fetching_list
     DoubanSyncStage.PARSING_DATA -> R.string.douban_sync_stage_parsing_data
     DoubanSyncStage.UPDATING_LIST -> R.string.douban_sync_stage_updating_list
+    DoubanSyncStage.UPLOADING -> R.string.douban_sync_stage_updating_list
     DoubanSyncStage.COMPLETED -> R.string.douban_sync_stage_completed
     DoubanSyncStage.LOGIN_REQUIRED -> R.string.douban_sync_stage_login_required
     DoubanSyncStage.CANCELLING -> R.string.douban_sync_stage_cancelling
@@ -140,6 +213,13 @@ fun DoubanSyncSubStage.labelRes(): Int? = when (this) {
     DoubanSyncSubStage.STATUS_CHANGES -> R.string.douban_sync_substage_status_changes
     DoubanSyncSubStage.RETRYING_FAILURES -> R.string.douban_sync_substage_retrying_items
     DoubanSyncSubStage.WAITING_DELAY -> R.string.douban_sync_substage_waiting_delay
+    // 上传专用资源由后续 UI 任务补齐，先沿用现有可用的阶段资源。
+    DoubanSyncSubStage.PREPARING_UPLOAD,
+    DoubanSyncSubStage.CHECKING_CONSISTENCY,
+    DoubanSyncSubStage.UPLOADING_PERSONAL_DATA,
+    DoubanSyncSubStage.UPLOADING_FAILURES,
+    DoubanSyncSubStage.UPLOADING_DETAILS,
+    DoubanSyncSubStage.FILLING_MEDIA_TYPE -> R.string.douban_sync_substage_writing_local
 }
 
 /** 通知和横幅展示的次级阶段；列表阶段由「想看/看过」标签承载，避免重复。 */
