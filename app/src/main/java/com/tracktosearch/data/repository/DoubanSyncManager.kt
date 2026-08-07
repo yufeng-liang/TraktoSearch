@@ -383,6 +383,9 @@ class DoubanSyncManager @Inject constructor(
     @Volatile
     private var syncJob: Job? = null
 
+    /** 串行化四个公开同步入口，避免并发调用同时通过 isRunning() 检查。 */
+    private val syncStartLock = Any()
+
     @Volatile
     private var cancelled = false
 
@@ -603,47 +606,56 @@ class DoubanSyncManager @Inject constructor(
     }
 
     /**
+     * 统一编排同步任务的生命周期。
+     * 业务入口只提供具体 run block，公共的状态重置、Trakt 检查、异常处理和资源收尾在此完成。
+     */
+    private fun startManagedSync(work: suspend () -> Unit): Boolean {
+        synchronized(syncStartLock) {
+            if (isRunning()) return false
+            cancelled = false
+            prepareForNewSync()
+            dirtyDetailIds.clear()
+            // 同步入口立即持有唤醒锁，覆盖检查、抓取、写入和云端上传的完整生命周期。
+            acquireWakeLock()
+            syncJob = appScope.launch {
+                try {
+                    if (!checkTraktAvailable()) {
+                        if (cancelled) scheduleCancellationFinalization()
+                        return@launch
+                    }
+                    work()
+                    if (cancelled) scheduleCancellationFinalization()
+                } catch (e: CancellationException) {
+                    if (cancelled) scheduleCancellationFinalization() else throw e
+                } catch (e: Exception) {
+                    if (cancelled) {
+                        scheduleCancellationFinalization()
+                    } else {
+                        _progress.value = _progress.value.copy(
+                            isRunning = false,
+                            isComplete = true,
+                            stage = DoubanSyncStage.FAILED,
+                            subStage = DoubanSyncSubStage.NONE,
+                            errorMessage = e.message,
+                            phase = "同步异常: ${e.message}"
+                        )
+                    }
+                } finally {
+                    cloudDetailsPoolManager.resetDownloadSuppression()
+                    releaseWakeLock()
+                }
+            }
+            return true
+        }
+    }
+
+    /**
      * 启动同步（非 suspend，立即返回，进度通过 progress StateFlow 暴露）。
      * @param forceOverwrite true=强制重新同步已同步过的条目；false=跳过已同步条目（断点续传）
      * @return true=已启动；false=已有同步在运行（防重入）
      */
-    fun startSync(forceOverwrite: Boolean = false): Boolean {
-        if (isRunning()) return false
-        cancelled = false
-        prepareForNewSync()
-        dirtyDetailIds.clear()
-        // 同步入口立即 acquire WakeLock,覆盖整个同步生命周期(爬取→写入→一致性检查→云端上传)
-        acquireWakeLock()
-        syncJob = appScope.launch {
-            try {
-                if (!checkTraktAvailable()) {
-                    if (cancelled) scheduleCancellationFinalization()
-                    return@launch
-                }
-                runSyncLegacy(forceOverwrite)
-                if (cancelled) scheduleCancellationFinalization()
-            } catch (e: CancellationException) {
-                if (cancelled) scheduleCancellationFinalization() else throw e
-            } catch (e: Exception) {
-                if (cancelled) {
-                    scheduleCancellationFinalization()
-                } else {
-                    _progress.value = _progress.value.copy(
-                        isRunning = false,
-                        isComplete = true,
-                        stage = DoubanSyncStage.FAILED,
-                        subStage = DoubanSyncSubStage.NONE,
-                        errorMessage = e.message,
-                        phase = "同步异常: ${e.message}"
-                    )
-                }
-            } finally {
-                cloudDetailsPoolManager.resetDownloadSuppression()
-                releaseWakeLock()
-            }
-        }
-        return true
-    }
+    fun startSync(forceOverwrite: Boolean = false): Boolean =
+        startManagedSync { runSyncLegacy(forceOverwrite) }
 
     /**
      * 启动同步(指定模式,非 suspend,立即返回)。
@@ -652,43 +664,8 @@ class DoubanSyncManager @Inject constructor(
      *
      * @param forceCrawl true=强制爬取豆瓣列表,忽略 7 天冷却期(用户在冷却期内选择「强制同步」时用)
      */
-    fun startSync(mode: SyncMode, forceCrawl: Boolean = false): Boolean {
-        if (isRunning()) return false
-        cancelled = false
-        prepareForNewSync()
-        dirtyDetailIds.clear()
-        // 同步入口立即 acquire WakeLock,覆盖整个同步生命周期(爬取→写入→一致性检查→云端上传)
-        acquireWakeLock()
-        syncJob = appScope.launch {
-            try {
-                if (!checkTraktAvailable()) {
-                    if (cancelled) scheduleCancellationFinalization()
-                    return@launch
-                }
-                runSync(mode, forceCrawl)
-                if (cancelled) scheduleCancellationFinalization()
-            } catch (e: CancellationException) {
-                if (cancelled) scheduleCancellationFinalization() else throw e
-            } catch (e: Exception) {
-                if (cancelled) {
-                    scheduleCancellationFinalization()
-                } else {
-                    _progress.value = _progress.value.copy(
-                        isRunning = false,
-                        isComplete = true,
-                        stage = DoubanSyncStage.FAILED,
-                        subStage = DoubanSyncSubStage.NONE,
-                        errorMessage = e.message,
-                        phase = "同步异常: ${e.message}"
-                    )
-                }
-            } finally {
-                cloudDetailsPoolManager.resetDownloadSuppression()
-                releaseWakeLock()
-            }
-        }
-        return true
-    }
+    fun startSync(mode: SyncMode, forceCrawl: Boolean = false): Boolean =
+        startManagedSync { runSync(mode, forceCrawl) }
 
     /**
      * 启动续传同步(非 suspend,立即返回)。
@@ -702,43 +679,7 @@ class DoubanSyncManager @Inject constructor(
      *
      * @return true=已启动;false=已有同步在运行(防重入)或无 pending items
      */
-    fun startResume(): Boolean {
-        if (isRunning()) return false
-        cancelled = false
-        prepareForNewSync()
-        dirtyDetailIds.clear()
-        // 同步入口立即 acquire WakeLock,覆盖整个同步生命周期(爬取→写入→一致性检查→云端上传)
-        acquireWakeLock()
-        syncJob = appScope.launch {
-            try {
-                if (!checkTraktAvailable()) {
-                    if (cancelled) scheduleCancellationFinalization()
-                    return@launch
-                }
-                runResume()
-                if (cancelled) scheduleCancellationFinalization()
-            } catch (e: CancellationException) {
-                if (cancelled) scheduleCancellationFinalization() else throw e
-            } catch (e: Exception) {
-                if (cancelled) {
-                    scheduleCancellationFinalization()
-                } else {
-                    _progress.value = _progress.value.copy(
-                        isRunning = false,
-                        isComplete = true,
-                        stage = DoubanSyncStage.FAILED,
-                        subStage = DoubanSyncSubStage.NONE,
-                        errorMessage = e.message,
-                        phase = "同步异常: ${e.message}"
-                    )
-                }
-            } finally {
-                cloudDetailsPoolManager.resetDownloadSuppression()
-                releaseWakeLock()
-            }
-        }
-        return true
-    }
+    fun startResume(): Boolean = startManagedSync { runResume() }
 
     /**
      * 清空 pending items 表(用户选择「完整同步」时调用)。
@@ -870,43 +811,7 @@ class DoubanSyncManager @Inject constructor(
     fun startRetry(
         failures: List<DoubanSyncFailure>,
         selectedReasons: Set<FailureReason>
-    ): Boolean {
-        if (isRunning()) return false
-        cancelled = false
-        prepareForNewSync()
-        dirtyDetailIds.clear()
-        // 同步入口立即 acquire WakeLock,覆盖整个同步生命周期(爬取→写入→一致性检查→云端上传)
-        acquireWakeLock()
-        syncJob = appScope.launch {
-            try {
-                if (!checkTraktAvailable()) {
-                    if (cancelled) scheduleCancellationFinalization()
-                    return@launch
-                }
-                runRetry(failures, selectedReasons)
-                if (cancelled) scheduleCancellationFinalization()
-            } catch (e: CancellationException) {
-                if (cancelled) scheduleCancellationFinalization() else throw e
-            } catch (e: Exception) {
-                if (cancelled) {
-                    scheduleCancellationFinalization()
-                } else {
-                    _progress.value = _progress.value.copy(
-                        isRunning = false,
-                        isComplete = true,
-                        stage = DoubanSyncStage.FAILED,
-                        subStage = DoubanSyncSubStage.NONE,
-                        errorMessage = e.message,
-                        phase = "同步异常: ${e.message}"
-                    )
-                }
-            } finally {
-                cloudDetailsPoolManager.resetDownloadSuppression()
-                releaseWakeLock()
-            }
-        }
-        return true
-    }
+    ): Boolean = startManagedSync { runRetry(failures, selectedReasons) }
 
     private suspend fun runSync(mode: SyncMode, forceCrawl: Boolean = false) {
         when (mode) {
