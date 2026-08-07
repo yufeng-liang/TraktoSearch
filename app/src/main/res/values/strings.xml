@@ -1332,7 +1332,9 @@ Config:
     <string name="status_ended">Ended</string>
 
     <!-- Widget -->
-    <string name="widget_quick_search_hint">Tap to open app search</string>
+    <string name="widget_quick_search_title">Quick search</string>
+    <string name="widget_quick_search_scope">Movies · Shows · Resources</string>
+    <string name="widget_quick_search_content_description">Quick search, opens the unified search page</string>
 
     <!-- Notification Channel -->
     <string name="notification_channel_release">Release Reminders</string>
