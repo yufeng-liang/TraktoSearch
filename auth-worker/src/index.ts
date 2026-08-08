@@ -39,6 +39,9 @@ import { handleCrashLogProxy } from './proxy/crash-logs';
 import { handleConfigProxy } from './proxy/config';
 import { handlePublicUpdateReleaseProxy, isPublicUpdateReleasePath } from './proxy/update';
 import { handleInviteRequest, handleInviteResend, handleInviteVerification } from './invitations';
+import { handleLegalRequest } from './legal-requests';
+import { closeLegalRequest, listLegalRequests } from './admin/legal-requests';
+import { cleanupRetention } from './retention';
 
 export interface Env {
     DB: D1Database;
@@ -135,7 +138,10 @@ export default {
     },
 
     async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-        await refreshPublicDoubanLists(env, ctx);
+        await Promise.all([
+            refreshPublicDoubanLists(env, ctx),
+            cleanupRetention(env),
+        ]);
     },
 };
 
@@ -175,6 +181,9 @@ async function handleAuthApi(
     }
     if (path === '/api/invite-requests/verify' && request.method === 'GET') {
         return handleInviteVerification(request, env, requestId);
+    }
+    if (path === '/api/legal-requests' && request.method === 'POST') {
+        return handleLegalRequest(request, env, requestId, ctx);
     }
     if (path === '/api/auth/activate' && request.method === 'POST') {
         return handleActivate(request, env, requestId);
@@ -365,6 +374,15 @@ async function handleAdminApi(
     // 审计日志
     if (path === '/admin/audit-logs' && request.method === 'GET') {
         return listAuditLogs(request, env, requestId);
+    }
+
+    // 法律与隐私请求
+    if (path === '/admin/legal-requests' && request.method === 'GET') {
+        return listLegalRequests(request, env, requestId);
+    }
+    const legalRequestCloseMatch = path.match(/^\/admin\/legal-requests\/([^/]+)\/close$/);
+    if (legalRequestCloseMatch && request.method === 'POST') {
+        return closeLegalRequest(request, env, requestId, legalRequestCloseMatch[1]);
     }
 
     // 健康检查
