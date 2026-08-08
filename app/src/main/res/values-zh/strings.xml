@@ -1332,7 +1332,9 @@
     <string name="status_ended">已完结</string>
 
     <!-- Widget -->
-    <string name="widget_quick_search_hint">点击打开应用搜索</string>
+    <string name="widget_quick_search_title">快速搜索</string>
+    <string name="widget_quick_search_scope">电影 · 剧集 · 资源</string>
+    <string name="widget_quick_search_content_description">快速搜索，打开统一搜索页</string>
 
     <!-- 通知渠道 -->
     <string name="notification_channel_release">上映提醒</string>

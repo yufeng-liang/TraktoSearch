@@ -97,6 +97,7 @@ import com.tracktosearch.ui.screen.traktsearch.TraktSearchViewModel
 import com.tracktosearch.ui.screen.watchlist.MediaUiItem
 import com.tracktosearch.ui.screen.watchlist.WatchlistScreen
 import com.tracktosearch.ui.navigation.NotificationNavigator
+import com.tracktosearch.ui.navigation.SearchNavigator
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.showToast
@@ -284,6 +285,17 @@ fun MainScreen(
             if (target != null) {
                 pagerState.animateScrollToPage(2)
                 selectedTab = 2
+            }
+        }
+    }
+
+    // Widget 点击只保留一个待处理请求，进入主页后切到统一搜索页并消费。
+    LaunchedEffect(Unit) {
+        SearchNavigator.pending.collect { pending ->
+            if (pending) {
+                pagerState.scrollToPage(0)
+                selectedTab = 0
+                SearchNavigator.consume()
             }
         }
     }

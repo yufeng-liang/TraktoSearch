@@ -39,6 +39,7 @@ import com.tracktosearch.ui.navigation.AppNavigation
 import com.tracktosearch.ui.navigation.NotificationNavigator
 import com.tracktosearch.ui.navigation.NotificationTarget
 import com.tracktosearch.ui.navigation.Routes
+import com.tracktosearch.ui.navigation.SearchNavigator
 import com.tracktosearch.ui.theme.TraktoSearchTheme
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.ScrollToTopProvider
@@ -179,6 +180,7 @@ class MainActivity : AppCompatActivity() {
 
         var startDest by mutableStateOf(Routes.LOGIN)
         var initialTab by mutableStateOf(0)
+        val opensSearchFromWidget = SearchNavigator.isOpenSearchIntent(intent)
         val notificationOpensWatchlist = intent?.getStringExtra("navigate_to") in setOf(
             "douban_sync",
             "consistency_check"
@@ -219,7 +221,9 @@ class MainActivity : AppCompatActivity() {
                 else -> Routes.LOGIN
             }
             // 根据 Trakt 连接状态选择默认标签页
-            initialTab = if (notificationOpensWatchlist) {
+            initialTab = if (opensSearchFromWidget) {
+                0
+            } else if (notificationOpensWatchlist) {
                 2
             } else if (isAuthorized) {
                 StartupTrace.measure("local.default_tab") {
@@ -396,6 +400,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
+        if (SearchNavigator.isOpenSearchIntent(intent)) {
+            SearchNavigator.request()
+        }
         // 处理 OAuth 回调
         intent?.data?.let { uri ->
             if (uri.scheme == "tracktosearch" && uri.host == "oauth") {

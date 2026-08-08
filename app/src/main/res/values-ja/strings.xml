@@ -1228,7 +1228,9 @@
     <string name="status_rumored">噂</string>
     <string name="status_canceled">打ち切り</string>
     <string name="status_ended">終了</string>
-    <string name="widget_quick_search_hint">タップしてアプリ検索を開く</string>
+    <string name="widget_quick_search_title">クイック検索</string>
+    <string name="widget_quick_search_scope">映画 · ドラマ · リソース</string>
+    <string name="widget_quick_search_content_description">クイック検索。統合検索ページを開きます</string>
     <string name="notification_channel_release">公開リマインダー</string>
     <string name="notification_channel_new_season">新シーズンリマインダー</string>
     <string name="notification_channel_release_desc">見たいリストの作品が公開/配信された際に通知</string>

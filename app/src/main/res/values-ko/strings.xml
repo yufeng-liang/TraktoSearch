@@ -1228,7 +1228,9 @@
     <string name="status_rumored">소문</string>
     <string name="status_canceled">취소됨</string>
     <string name="status_ended">종료</string>
-    <string name="widget_quick_search_hint">탭하여 앱 검색 열기</string>
+    <string name="widget_quick_search_title">빠른 검색</string>
+    <string name="widget_quick_search_scope">영화 · 시리즈 · 리소스</string>
+    <string name="widget_quick_search_content_description">빠른 검색, 통합 검색 페이지 열기</string>
     <string name="notification_channel_release">개봉 알림</string>
     <string name="notification_channel_new_season">새 시즌 알림</string>
     <string name="notification_channel_release_desc">관심목록의 작품이 개봉/공개될 때 알림</string>
