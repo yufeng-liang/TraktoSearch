@@ -1,11 +1,14 @@
-// Cron：清理 30 天前的 R2 截图
+// Cron：清理过期截图和已关闭反馈
 
 interface Env {
     SCREENSHOTS: R2Bucket;
+    DB: D1Database;
 }
 
-const MAX_AGE_DAYS = 30;
-const MAX_AGE_MS = MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+export const SCREENSHOT_MAX_AGE_DAYS = 90;
+export const FEEDBACK_RETENTION_DAYS = 180;
+const MAX_AGE_MS = SCREENSHOT_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+const FEEDBACK_RETENTION_MS = FEEDBACK_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
 export async function handleCleanupScreenshots(env: Env): Promise<void> {
     const cutoff = new Date(Date.now() - MAX_AGE_MS);
@@ -25,5 +28,34 @@ export async function handleCleanupScreenshots(env: Env): Promise<void> {
         cursor = listed.cursor;
     }
 
-    console.log(`[cleanup] deleted ${deleted} screenshots older than ${MAX_AGE_DAYS} days`);
+    const feedbackCutoff = Math.floor((Date.now() - FEEDBACK_RETENTION_MS) / 1000);
+    const feedbackCleanup = await env.DB.batch([
+        env.DB.prepare(`
+            DELETE FROM feedback_conversations
+            WHERE feedback_id IN (
+                SELECT id FROM feedbacks
+                WHERE status = 'CLOSED' AND closed_at IS NOT NULL AND closed_at < ?
+            )
+        `).bind(feedbackCutoff),
+        env.DB.prepare(`
+            DELETE FROM feedback_replies
+            WHERE feedback_id IN (
+                SELECT id FROM feedbacks
+                WHERE status = 'CLOSED' AND closed_at IS NOT NULL AND closed_at < ?
+            )
+        `).bind(feedbackCutoff),
+        env.DB.prepare(`
+            DELETE FROM feedbacks
+            WHERE status = 'CLOSED' AND closed_at IS NOT NULL AND closed_at < ?
+        `).bind(feedbackCutoff),
+    ]);
+    const deletedFeedbacks = Number(feedbackCleanup[2]?.meta.changes || 0);
+
+    console.log(JSON.stringify({
+        event: 'feedback_retention_cleanup_completed',
+        deletedScreenshots: deleted,
+        screenshotRetentionDays: SCREENSHOT_MAX_AGE_DAYS,
+        deletedFeedbacks,
+        feedbackRetentionDays: FEEDBACK_RETENTION_DAYS,
+    }));
 }

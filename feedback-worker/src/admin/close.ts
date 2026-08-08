@@ -1,6 +1,7 @@
 // POST /admin/close — 关闭反馈
 
 import { AppError, successResponse, readJson } from '../util/errors';
+import { now } from '../util/errors';
 
 interface Env {
     DB: D1Database;
@@ -21,8 +22,9 @@ export async function handleAdminClose(
     }
 
     const result = await env.DB.prepare(`
-        UPDATE feedbacks SET status = 'CLOSED' WHERE id = ?
-    `).bind(body.feedbackId).run();
+        UPDATE feedbacks SET status = 'CLOSED', closed_at = ?
+        WHERE id = ? AND status != 'CLOSED'
+    `).bind(now(), body.feedbackId).run();
 
     if (!result.success || result.meta.changes !== 1) {
         throw new AppError('NOT_FOUND', 'Feedback not found', 404);
