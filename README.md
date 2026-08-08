@@ -307,6 +307,14 @@ app/src/main/java/com/tracktosearch/
 
 部署与发布细节见各子目录的 `README.md` / `wrangler.toml`，以及本文档「贡献指南」、根目录 `AGENTS.md`。
 
+## 许可证与素材边界
+
+本项目自有原创代码采用 GNU GPLv3，完整文本见根目录 `LICENSE`。GPLv3 不自动覆盖第三方依赖、影视数据、海报、Logo、第三方服务返回内容、AI 生成角色素材或外部链接；发布 APK 或服务时还必须遵守各自的许可证、归属要求和服务条款。
+
+- `THIRD-PARTY-NOTICES.md`：Android / Worker 依赖、外部服务和归属说明。
+- `ASSET-LICENSES.md`：图标、启动页、Lottie 动画、截图、AI 生成角色和第三方标识清单。
+- 官网的使用边界、TMDB 非背书声明、资源链接责任和公开法律/隐私请求入口位于官网的「使用与权利」章节。
+
 ## 贡献指南
 
 欢迎 Issue 与 PR！提交前请阅读以下约定（更完整的工程规范见 `AGENTS.md`）。
