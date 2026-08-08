@@ -392,7 +392,7 @@ internal fun PersonHeaderContent(
                         Icon(
                             painter = painterResource(id = R.drawable.ic_wikipedia),
                             contentDescription = "Wikipedia",
-                            tint = Color(0xFF636466),
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
