@@ -113,14 +113,17 @@ data class DiscoverUiState(
     val popularAllPage: Int = 1,
     val popularAllHasMore: Boolean = true,
     val isLoadingPopularAll: Boolean = false,
+    val popularAllError: String? = null,
     val upcomingAllItems: List<TmdbSearchResult> = emptyList(),
     val upcomingAllPage: Int = 1,
     val upcomingAllHasMore: Boolean = true,
     val isLoadingUpcomingAll: Boolean = false,
+    val upcomingAllError: String? = null,
     val recommendationsAllItems: List<TraktMovie> = emptyList(),
     val recommendationsAllPage: Int = 1,
     val recommendationsAllHasMore: Boolean = true,
     val isLoadingRecommendationsAll: Boolean = false,
+    val recommendationsAllError: String? = null,
     // 豆瓣「猜你喜欢」状态
     val doubanRecommendState: DoubanRecommendState = DoubanRecommendState.NotLoggedIn,
     /** 当前正在解析的豆瓣推荐条目 ID（用于卡片转圈遮罩） */
@@ -253,6 +256,8 @@ class DiscoverViewModel @Inject constructor(
                 // cookie 过期，清除登录态，显示引导卡片
                 doubanAuthStorage.clearCredentials()
                 _uiState.value = _uiState.value.copy(doubanRecommendState = DoubanRecommendState.NotLoggedIn)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     doubanRecommendState = DoubanRecommendState.Error(e.message ?: "加载失败")
@@ -468,6 +473,8 @@ class DiscoverViewModel @Inject constructor(
                     )
                     _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 val updated = _uiState.value.doubanHotCategories.toMutableList()
                 if (index < updated.size) {
@@ -650,6 +657,8 @@ class DiscoverViewModel @Inject constructor(
                 if (page == 1) {
                     sharedDoubanHotCache.put(cacheKey, response.data)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 val updated = _uiState.value.doubanHotCategories.toMutableList()
                 if (idx >= 0) {
@@ -674,6 +683,8 @@ class DiscoverViewModel @Inject constructor(
                     isLoadingPopular = false,
                     popularError = if (movies.isEmpty()) context.getString(R.string.error_no_data) else null
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoadingPopular = false,
@@ -750,6 +761,8 @@ class DiscoverViewModel @Inject constructor(
                 }.onFailure {
                     fallbackToTopRated()
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 fallbackToTopRated()
             }
@@ -852,6 +865,8 @@ class DiscoverViewModel @Inject constructor(
                     traktShowRecommendationsError = showRecsError,
                     isLoadingTrakt = false
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoadingTrakt = false,
@@ -882,6 +897,8 @@ class DiscoverViewModel @Inject constructor(
                         trendingListsError = e.message ?: context.getString(R.string.error_load_failed)
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoadingTraktLists = false,
@@ -904,6 +921,8 @@ class DiscoverViewModel @Inject constructor(
                     posterPath = detail.poster_path
                 )
             } else movie
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) { movie }
     }
 
@@ -918,6 +937,8 @@ class DiscoverViewModel @Inject constructor(
                 year = enrichment.year ?: show.year,
                 posterPath = enrichment.posterUrl
             )
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) { show }
     }
 
@@ -937,6 +958,8 @@ class DiscoverViewModel @Inject constructor(
                     } else {
                         movie
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (_: Exception) {
                     movie
                 }
@@ -966,6 +989,8 @@ class DiscoverViewModel @Inject constructor(
                 isLoadingRecommendations = false,
                 recommendationsError = if (traktMovies.isEmpty()) context.getString(R.string.error_no_data) else null
             )
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             _uiState.value = _uiState.value.copy(
                 isLoadingRecommendations = false,
@@ -1019,6 +1044,8 @@ class DiscoverViewModel @Inject constructor(
                         _toastEvent.emit(R.string.card_resolve_not_found)
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 // 忽略
             } finally {
@@ -1092,6 +1119,8 @@ class DiscoverViewModel @Inject constructor(
                             onNavigate(traktId, tmdbId, show.title, imdbId, show.rating, inWl, isW)
                         }
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (_: Exception) {
                     // 忽略
                 } finally {
@@ -1366,7 +1395,8 @@ class DiscoverViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(
                 popularAllItems = emptyList(),
                 popularAllPage = 1,
-                popularAllHasMore = true
+                popularAllHasMore = true,
+                popularAllError = null
             )
         }
         // page 1 且非 forceReload 时，如果已有横向卡片数据，先预填充避免空白转圈
@@ -1375,10 +1405,11 @@ class DiscoverViewModel @Inject constructor(
                 popularAllItems = _uiState.value.tmdbPopularMovies,
                 popularAllPage = 1,
                 popularAllHasMore = true,
-                isLoadingPopularAll = false
+                isLoadingPopularAll = false,
+                popularAllError = null
             )
         }
-        _uiState.value = _uiState.value.copy(isLoadingPopularAll = true)
+        _uiState.value = _uiState.value.copy(isLoadingPopularAll = true, popularAllError = null)
         viewModelScope.launch {
             try {
                 val timeWindow = _uiState.value.trendingTimeWindow
@@ -1391,10 +1422,18 @@ class DiscoverViewModel @Inject constructor(
                     popularAllItems = existing + newItems,
                     popularAllPage = page,
                     popularAllHasMore = movies.size >= 20,
-                    isLoadingPopularAll = false
+                    isLoadingPopularAll = false,
+                    popularAllError = null
                 )
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(isLoadingPopularAll = false)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // 失败时停止 loading，记录错误并置 hasMore=false 避免 snapshotFlow 反复触发必失败的请求
+                _uiState.value = _uiState.value.copy(
+                    isLoadingPopularAll = false,
+                    popularAllHasMore = false,
+                    popularAllError = context.getString(R.string.error_load_more_failed)
+                )
             }
         }
     }
@@ -1408,10 +1447,11 @@ class DiscoverViewModel @Inject constructor(
                 upcomingAllItems = _uiState.value.tmdbUpcomingMovies,
                 upcomingAllPage = 1,
                 upcomingAllHasMore = true,
-                isLoadingUpcomingAll = false
+                isLoadingUpcomingAll = false,
+                upcomingAllError = null
             )
         }
-        _uiState.value = _uiState.value.copy(isLoadingUpcomingAll = true)
+        _uiState.value = _uiState.value.copy(isLoadingUpcomingAll = true, upcomingAllError = null)
         viewModelScope.launch {
             try {
                 val movies = tmdbRepository.getUpcomingMovies(page = page)
@@ -1423,10 +1463,17 @@ class DiscoverViewModel @Inject constructor(
                     upcomingAllItems = existing + newItems,
                     upcomingAllPage = page,
                     upcomingAllHasMore = movies.size >= 20,
-                    isLoadingUpcomingAll = false
+                    isLoadingUpcomingAll = false,
+                    upcomingAllError = null
                 )
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(isLoadingUpcomingAll = false)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoadingUpcomingAll = false,
+                    upcomingAllHasMore = false,
+                    upcomingAllError = context.getString(R.string.error_load_more_failed)
+                )
             }
         }
     }
@@ -1439,7 +1486,8 @@ class DiscoverViewModel @Inject constructor(
                 recommendationsAllItems = emptyList(),
                 recommendationsAllPage = 0,
                 recommendationsAllHasMore = false,
-                isLoadingRecommendationsAll = false
+                isLoadingRecommendationsAll = false,
+                recommendationsAllError = null
             )
             return
         }
@@ -1449,10 +1497,11 @@ class DiscoverViewModel @Inject constructor(
                 recommendationsAllItems = _uiState.value.traktRecommendations,
                 recommendationsAllPage = 1,
                 recommendationsAllHasMore = true,
-                isLoadingRecommendationsAll = false
+                isLoadingRecommendationsAll = false,
+                recommendationsAllError = null
             )
         }
-        _uiState.value = _uiState.value.copy(isLoadingRecommendationsAll = true)
+        _uiState.value = _uiState.value.copy(isLoadingRecommendationsAll = true, recommendationsAllError = null)
         viewModelScope.launch {
             try {
                 // 尝试 Trakt 推荐（分页）
@@ -1469,7 +1518,8 @@ class DiscoverViewModel @Inject constructor(
                             recommendationsAllItems = existing + newItems,
                             recommendationsAllPage = page,
                             recommendationsAllHasMore = recommendations.size >= 20,
-                            isLoadingRecommendationsAll = false
+                            isLoadingRecommendationsAll = false,
+                            recommendationsAllError = null
                         )
                     } else {
                         fallbackToTopRatedAll(page)
@@ -1477,6 +1527,8 @@ class DiscoverViewModel @Inject constructor(
                 }.onFailure {
                     fallbackToTopRatedAll(page)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 fallbackToTopRatedAll(page)
             }
@@ -1505,10 +1557,17 @@ class DiscoverViewModel @Inject constructor(
                 recommendationsAllItems = existing + newItems,
                 recommendationsAllPage = page,
                 recommendationsAllHasMore = traktMovies.size >= 20,
-                isLoadingRecommendationsAll = false
+                isLoadingRecommendationsAll = false,
+                recommendationsAllError = null
             )
-        } catch (e: Exception) {
-            _uiState.value = _uiState.value.copy(isLoadingRecommendationsAll = false)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            _uiState.value = _uiState.value.copy(
+                isLoadingRecommendationsAll = false,
+                recommendationsAllHasMore = false,
+                recommendationsAllError = context.getString(R.string.error_load_more_failed)
+            )
         }
     }
 }

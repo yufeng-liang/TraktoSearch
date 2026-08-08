@@ -511,7 +511,7 @@ internal fun DoubanRecommendSection(
                 text = stringResource(R.string.discover_douban_recommend),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (isAppDarkTheme()) Color.White else Color(0xFF1A1A2E)
+                color = MaterialTheme.colorScheme.onBackground
             )
             if (state is DoubanRecommendState.Success) {
                 CapsuleTabSelector(
@@ -658,7 +658,7 @@ internal fun CapsuleTabSelector(
     onTabSelected: (Int) -> Unit,
     sizeMultiplier: Float = 1f
 ) {
-    require(tabs.isNotEmpty()) { "tabs 不能为空" }
+    if (tabs.isEmpty()) return
     val tabPadding = (12 * sizeMultiplier).dp
     val tabHeight = (31 * sizeMultiplier).dp
     val fontSize = (13 * sizeMultiplier).sp
@@ -758,9 +758,8 @@ internal fun CapsuleTabSelector(
                             fontSize = 13.sp,
                             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
                         ),
-                        color = if (selected) Color.White
-                        else if (isDark) Color.White.copy(alpha = 0.65f)
-                        else Color(0xFF6B6B8A)
+                        color = if (selected) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }

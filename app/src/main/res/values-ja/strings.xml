@@ -1006,6 +1006,7 @@
     <string name="common_open_failed">このリンクを開けません</string>
     <string name="common_done">完了</string>
     <string name="error_load_failed">読み込み失敗</string>
+    <string name="error_load_more_failed">追加読み込み失敗、タップして再試行</string>
     <string name="error_network_timeout">ネットワークリクエストがタイムアウトしました。再試行してください</string>
     <string name="error_search_failed">検索失敗</string>
     <string name="error_search_timeout">検索がタイムアウトしました。ネットワーク接続を確認してから再試行してください</string>

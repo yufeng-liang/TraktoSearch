@@ -161,7 +161,7 @@ fun DoubanSyncDialog(
                 Spacer(modifier = Modifier.height(12.dp))
                 if (p.hasLiveCountProgress()) {
                     LinearProgressIndicator(
-                        progress = { (p.current.toFloat() / p.total).coerceIn(0f, 1f) },
+                        progress = { if (p.total > 0) (p.current.toFloat() / p.total).coerceIn(0f, 1f) else 0f },
                         modifier = Modifier.fillMaxWidth()
                     )
                 } else if (p.isRunning) {

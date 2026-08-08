@@ -13,6 +13,7 @@ import com.tracktosearch.data.remote.cloud.GiteeContentRequest
 import com.tracktosearch.data.remote.cloud.GiteeContentResponse
 import com.tracktosearch.data.remote.cloud.GiteeContentsApi
 import com.tracktosearch.data.remote.trakt.dto.TraktSearchResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -176,6 +177,8 @@ class CloudPersonalSyncManager @Inject constructor(
         if (element !is JsonObject) return null
         return try {
             json.decodeFromJsonElement(GiteeContentResponse.serializer(), element)
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             null
         }
@@ -198,6 +201,8 @@ class CloudPersonalSyncManager @Inject constructor(
             val existingSha = try {
                 val resp = giteeContentsApi.getFileContent(OWNER, REPO, path)
                 if (resp.isSuccessful) parseContentResponse(resp.body())?.sha else null
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 null
             }
@@ -218,6 +223,8 @@ class CloudPersonalSyncManager @Inject constructor(
                 Log.w(TAG, "上传失败: ${resp.code()} ${resp.message()} | path=$path")
                 false
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "上传异常: path=$path | ${e.message}")
             false
@@ -258,6 +265,8 @@ class CloudPersonalSyncManager @Inject constructor(
                 missing = false,
                 successful = true
             )
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "下载异常: path=$path | ${e.message}")
             DownloadResult(content = null, missing = false, successful = false)
@@ -325,6 +334,8 @@ class CloudPersonalSyncManager @Inject constructor(
                 syncedJson,
                 "sync synced_items: ${syncedItems.size} items"
             ) && allSuccess
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "上传 synced_items 异常: ${e.message}")
             allSuccess = false
@@ -355,6 +366,8 @@ class CloudPersonalSyncManager @Inject constructor(
                 pendingJson,
                 "sync pending_items: ${pendingItems.size} items"
             ) && allSuccess
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "上传 pending_items 异常: ${e.message}")
             allSuccess = false
@@ -383,6 +396,8 @@ class CloudPersonalSyncManager @Inject constructor(
                         "sync id_mappings: ${mappingsMap.size} entries"
                     ) && allSuccess
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "上传 id_mappings 异常: ${e.message}")
                 allSuccess = false
@@ -413,6 +428,8 @@ class CloudPersonalSyncManager @Inject constructor(
                 metaJson,
                 "sync meta: mode=$lastSyncMode synced=$totalSynced pending=$totalPending"
             ) && allSuccess
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "上传 sync_meta 异常: ${e.message}")
             allSuccess = false
@@ -438,6 +455,8 @@ class CloudPersonalSyncManager @Inject constructor(
         val metaJson = downloadDecrypted(buildPath(userHash, FILE_META)) ?: return@withContext null
         try {
             json.decodeFromString(SyncMetaPayload.serializer(), metaJson)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "解析 sync_meta 失败: ${e.message}")
             null
@@ -480,6 +499,8 @@ class CloudPersonalSyncManager @Inject constructor(
             )
             Log.d(TAG, "refreshMetaOnly: 已合并云端 meta lastFull=${payload.lastFullSyncAt}")
             true
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "refreshMetaOnly 合并失败: ${e.message}")
             false
@@ -554,6 +575,8 @@ class CloudPersonalSyncManager @Inject constructor(
                     Log.d(TAG, "云端 synced_items 为空，已清理本地同步快照")
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "下载合并 synced_items 异常: ${e.message}")
             hasFailures = true
@@ -595,6 +618,8 @@ class CloudPersonalSyncManager @Inject constructor(
                     Log.d(TAG, "云端 pending_items 为空，已清理本地待处理条目")
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "下载合并 pending_items 异常: ${e.message}")
             hasFailures = true
@@ -618,6 +643,8 @@ class CloudPersonalSyncManager @Inject constructor(
                     Log.d(TAG, "合并 id_mappings: $mappingsCount 条（云端 ${payload.mappings.size} 条）")
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "下载合并 id_mappings 异常: ${e.message}")
             hasFailures = true
@@ -638,6 +665,8 @@ class CloudPersonalSyncManager @Inject constructor(
                 metaApplied = true
                 Log.d(TAG, "应用 sync_meta: lastFull=${payload.lastFullSyncAt} mode=${payload.lastSyncMode}")
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "下载应用 sync_meta 异常: ${e.message}")
             hasFailures = true

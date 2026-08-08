@@ -137,7 +137,7 @@ class CustomSearchService @Inject constructor(
             val date = resultObj["date"]?.jsonPrimitive?.contentOrNull ?: ""
             val linksElement = resultObj["links"]
             if (linksElement is JsonArray && linksElement.isNotEmpty()) {
-                val firstLink = linksElement[0].jsonObject
+                val firstLink = linksElement.getOrNull(0)?.jsonObject ?: continue
                 val url = firstLink["url"]?.jsonPrimitive?.contentOrNull ?: ""
                 val type = firstLink["type"]?.jsonPrimitive?.contentOrNull ?: ""
                 val fullUrl = if (url.startsWith("http")) url else "https://zreso.cn$url"

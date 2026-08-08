@@ -120,7 +120,9 @@ internal fun TmdbAllSheet(
     onTimeWindowChange: ((String) -> Unit)? = null,
     onItemClick: (TmdbSearchResult) -> Unit,
     onLoadMore: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    errorMessage: String? = null,
+    onRetry: (() -> Unit)? = null
 ) {
     val listState = rememberLazyGridState()
     // 滚动到底部时自动加载更多
@@ -130,7 +132,8 @@ internal fun TmdbAllSheet(
                 if (lastVisibleIndex != null &&
                     lastVisibleIndex >= items.size - 5 &&
                     hasMore &&
-                    !isLoading
+                    !isLoading &&
+                    errorMessage == null
                 ) {
                     onLoadMore()
                 }
@@ -205,6 +208,24 @@ internal fun TmdbAllSheet(
                         }
                     }
                 }
+                // 加载更多失败：显示可点击的重试提示
+                if (errorMessage != null && !isLoading) {
+                    item(span = { GridItemSpan(3) }) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onRetry?.invoke() }
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = errorMessage,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -222,7 +243,9 @@ internal fun TraktMovieAllSheet(
     watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
     onItemClick: (TraktMovie) -> Unit,
     onLoadMore: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    errorMessage: String? = null,
+    onRetry: (() -> Unit)? = null
 ) {
     val listState = rememberLazyGridState()
     LaunchedEffect(listState, items.size) {
@@ -231,7 +254,8 @@ internal fun TraktMovieAllSheet(
                 if (lastVisibleIndex != null &&
                     lastVisibleIndex >= items.size - 5 &&
                     hasMore &&
-                    !isLoading
+                    !isLoading &&
+                    errorMessage == null
                 ) {
                     onLoadMore()
                 }
@@ -287,6 +311,24 @@ internal fun TraktMovieAllSheet(
                             contentAlignment = Alignment.Center
                         ) {
                             CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        }
+                    }
+                }
+                // 加载更多失败：显示可点击的重试提示
+                if (errorMessage != null && !isLoading) {
+                    item(span = { GridItemSpan(3) }) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onRetry?.invoke() }
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = errorMessage,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
                         }
                     }
                 }
@@ -478,8 +520,8 @@ internal fun TrendingListsAllSheet(
                         elevation = 6.dp,
                         blurRadius = 16.dp,
                         shadowOffset = 5.dp,
-                        backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.65f),
-                        borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color(0xFFD0D5DC).copy(alpha = 0.9f),
+                        backgroundColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                        borderColor = if (isDark) MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.9f),
                         darkShadowAlpha = if (isDark) 0.25f else 0.16f,
                         lightShadowAlpha = if (isDark) 0.08f else 0.65f,
                         hazeState = null

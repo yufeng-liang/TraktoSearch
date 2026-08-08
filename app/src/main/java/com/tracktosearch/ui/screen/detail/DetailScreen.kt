@@ -222,7 +222,9 @@ fun DetailScreen(
     val initialCount = 30
     var displayedCount by remember { mutableIntStateOf(initialCount.coerceAtMost(uiState.resources.size)) }
     LaunchedEffect(uiState.resources.size) {
-        if (uiState.resources.isNotEmpty() && displayedCount < uiState.resources.size) {
+        if (displayedCount > uiState.resources.size) {
+            displayedCount = uiState.resources.size
+        } else if (uiState.resources.isNotEmpty() && displayedCount < uiState.resources.size) {
             // 数据增长时，至少显示 initialCount 条（避免先到源只有少量结果导致卡住）
             displayedCount = maxOf(displayedCount, initialCount).coerceAtMost(uiState.resources.size)
         }
@@ -335,6 +337,13 @@ fun DetailScreen(
             val onBackdropClick = remember { { index: Int -> selectedBackdropIndex = index } }
             val onShowAllVideos = remember { { showAllVideos = true } }
             val onCollectionMovieClick = remember(onMovieClick) { { movieTmdbId: Int, movieTitle: String -> onMovieClick(0, movieTmdbId, movieTitle, "", 0.0) } }
+            // Tab 数量计算（置于 LazyColumn 之前的 @Composable 上下文，并用副作用修正 selectedTab 范围）
+            val showCommentsTab = uiState.sectionVisible.comments
+            val showRecommendationsTab = uiState.sectionVisible.recommendations
+            val tabCount = 1 + (if (showCommentsTab) 1 else 0) + (if (showRecommendationsTab) 1 else 0)
+            LaunchedEffect(tabCount) {
+                if (selectedTab > tabCount - 1) selectedTab = tabCount - 1
+            }
             // 单 LazyColumn：头部(item) + TabRow(stickyHeader) + 内容(根据Tab切换)
             // 通过 LocalContentColor 把 tabContentColor 传下去,内部搜索源/网盘类型/找到xx个资源等文字可自适应
             androidx.compose.runtime.CompositionLocalProvider(
@@ -383,14 +392,7 @@ fun DetailScreen(
                 // 首帧只组合 header(海报+标题+按钮),大幅降低转场期间首帧工作量。
                 // contentReady 由 posterDominantColor 就绪或 400ms 兜底触发,转场结束后即 true。
                 if (contentReady) {
-
                 // Tab 行（吸顶，共用同一个）
-                val showCommentsTab = uiState.sectionVisible.comments
-                val showRecommendationsTab = uiState.sectionVisible.recommendations
-                val tabCount = 1 + (if (showCommentsTab) 1 else 0) + (if (showRecommendationsTab) 1 else 0)
-                // 修正 selectedTab 范围
-                val effectiveTab = selectedTab.coerceAtMost(tabCount - 1)
-                if (effectiveTab != selectedTab) selectedTab = effectiveTab
                 stickyHeader(key = "tab_row") {
                     // isPinned / tabContainerColor / tabContentColor 在 LazyColumn 外已计算
                     // 吸顶时 Tab 栏使用实色背景,indicator 保持主题色
@@ -878,7 +880,7 @@ fun DetailScreen(
             }
 
             // YouTube 内置播放器（用 Dialog 包裹以确保覆盖在 ModalBottomSheet 之上）
-            if (playingVideoKey != null) {
+            playingVideoKey?.let { key ->
                 Dialog(
                     onDismissRequest = { playingVideoKey = null },
                     properties = DialogProperties(
@@ -887,7 +889,7 @@ fun DetailScreen(
                     )
                 ) {
                     YouTubePlayerOverlay(
-                        videoKey = playingVideoKey!!,
+                        videoKey = key,
                         videoTitle = "",
                         onDismiss = { playingVideoKey = null }
                     )

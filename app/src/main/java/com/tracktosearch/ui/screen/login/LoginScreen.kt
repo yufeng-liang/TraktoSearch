@@ -176,14 +176,18 @@ fun LoginScreen(
         }
     }
 
-    // 登录成功时通知外部
+    // 登录成功时通知外部（用 LaunchedEffect 包裹，避免在组合体内直接调副作用导致重复触发）
     // 如果是「从豆瓣导入」引导的 OAuth 流程,成功后自动跳豆瓣登录页
-    if (loginState == LoginState.SUCCESS) {
-        if (pendingDoubanImportAfterLogin) {
-            pendingDoubanImportAfterLogin = false
-            onDoubanImport()
-        } else {
-            onLoginSuccess()
+    LaunchedEffect(loginState) {
+        if (loginState == LoginState.SUCCESS) {
+            // 触发后立即 reset，避免 SUCCESS 状态残留导致重复触发导航
+            viewModel.reset()
+            if (pendingDoubanImportAfterLogin) {
+                pendingDoubanImportAfterLogin = false
+                onDoubanImport()
+            } else {
+                onLoginSuccess()
+            }
         }
     }
 

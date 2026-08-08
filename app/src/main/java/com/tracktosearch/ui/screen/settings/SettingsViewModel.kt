@@ -57,6 +57,7 @@ import com.tracktosearch.data.util.VerifyResult
 import androidx.compose.runtime.Immutable
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -310,6 +311,8 @@ class SettingsViewModel @Inject constructor(
                     isExporting = false,
                     message = context.getString(R.string.snackbar_export_success)
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     isExporting = false,
@@ -341,6 +344,8 @@ class SettingsViewModel @Inject constructor(
                     isExporting = false,
                     message = message
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     isExporting = false,
@@ -433,6 +438,8 @@ class SettingsViewModel @Inject constructor(
                         } else {
                             failed++
                         }
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (_: Exception) {
                         failed++
                     }
@@ -447,6 +454,8 @@ class SettingsViewModel @Inject constructor(
                     syncFailed = failed,
                     message = context.getString(R.string.snackbar_import_done_imdb, success, failed)
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     isImporting = false,
@@ -473,6 +482,8 @@ class SettingsViewModel @Inject constructor(
                 _exportImportState.value = _exportImportState.value.copy(
                     message = context.getString(R.string.snackbar_cache_cleared)
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     message = context.getString(R.string.snackbar_cache_clear_failed)
@@ -530,6 +541,8 @@ class SettingsViewModel @Inject constructor(
                 _exportImportState.value = _exportImportState.value.copy(
                     message = context.getString(R.string.snackbar_cache_cleared)
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     message = context.getString(R.string.snackbar_cache_clear_failed)
@@ -666,6 +679,8 @@ class SettingsViewModel @Inject constructor(
             val creds = doubanAuthStorage.getCredentials() ?: return@launch
             val profile = try {
                 doubanRepository.fetchUserProfile(creds.userId, creds.cookie)
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) { null }
             if (profile != null) {
                 doubanAuthStorage.saveUserProfile(profile.nickname, profile.avatarUrl)
@@ -708,6 +723,8 @@ class SettingsViewModel @Inject constructor(
                     httpBytes = offlineCacheManager.getHttpCacheSizeBytes(),
                     databaseBytes = offlineCacheManager.getDatabaseSizeBytes()
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 _cacheBreakdown.value = CacheBreakdown()
             }
@@ -748,6 +765,8 @@ class SettingsViewModel @Inject constructor(
             _isLoadingChangelog.value = true
             try {
                 _changelog.value = updateRepository.fetchAllChangelogs()
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 if (_changelog.value == null) _changelog.value = ""
             } finally {
@@ -799,6 +818,8 @@ class SettingsViewModel @Inject constructor(
                         message = context.getString(R.string.snackbar_check_update_failed)
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     message = context.getString(R.string.snackbar_check_update_failed)

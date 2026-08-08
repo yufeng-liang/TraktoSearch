@@ -1060,7 +1060,7 @@ fun WatchlistScreen(
                                             imageVector = if (syncProgress.isRunning) Icons.Rounded.Sync else Icons.Rounded.CheckCircle,
                                             contentDescription = null,
                                             tint = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
-                                                else Color.White,
+                                                else MaterialTheme.colorScheme.onPrimary,
                                             modifier = Modifier
                                                 .size(18.dp)
                                                 .then(
@@ -1134,7 +1134,7 @@ fun WatchlistScreen(
                                                 },
                                                 style = MaterialTheme.typography.labelMedium,
                                                 color = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
-                                                    else Color.White
+                                                    else MaterialTheme.colorScheme.onPrimary
                                             )
                                             if (hasLiveCountProgress) {
                                                 Spacer(modifier = Modifier.height(4.dp))
@@ -1197,7 +1197,7 @@ fun WatchlistScreen(
                                                 else Icons.Rounded.CheckCircle,
                                             contentDescription = null,
                                             tint = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
-                                                else Color.White,
+                                                else MaterialTheme.colorScheme.onPrimary,
                                             modifier = Modifier
                                                 .size(18.dp)
                                                 .then(
@@ -1244,7 +1244,7 @@ fun WatchlistScreen(
                                                 },
                                                 style = MaterialTheme.typography.labelMedium,
                                                 color = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
-                                                    else Color.White
+                                                    else MaterialTheme.colorScheme.onPrimary
                                             )
                                             if (checkProgress.isRunning && checkProgress.total > 0) {
                                                 Spacer(modifier = Modifier.height(4.dp))
@@ -1779,7 +1779,7 @@ private fun WatchlistPosterCard(
                                     .clip(CircleShape)
                                     .background(Color.Transparent)
                                     .border(
-                                        BorderStroke(2.dp, Color.White.copy(alpha = 0.7f)),
+                                        BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)),
                                         CircleShape
                                     )
                             }

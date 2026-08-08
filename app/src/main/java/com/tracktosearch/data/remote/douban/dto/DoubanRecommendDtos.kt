@@ -55,7 +55,7 @@ data class DoubanRecommendItem(
                 // 每项是数组：[类型, id/参数, {tags: [...]}]
                 val arr: JsonArray = item.jsonArray
                 if (arr.size >= 3) {
-                    val meta = arr[2]
+                    val meta = arr.getOrNull(2)
                     if (meta is JsonObject) {
                         val tagsArr = meta["tags"]?.jsonArray
                         if (tagsArr != null) {

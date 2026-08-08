@@ -1006,6 +1006,7 @@
     <string name="common_open_failed">이 링크를 열 수 없습니다</string>
     <string name="common_done">완료</string>
     <string name="error_load_failed">로드 실패</string>
+    <string name="error_load_more_failed">더 불러오기 실패, 탭하여 재시도</string>
     <string name="error_network_timeout">네트워크 요청 시간이 초과되었습니다. 다시 시도해 주세요</string>
     <string name="error_search_failed">검색 실패</string>
     <string name="error_search_timeout">검색 시간이 초과되었습니다. 네트워크 연결을 확인한 후 다시 시도해 주세요</string>

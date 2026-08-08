@@ -18,6 +18,7 @@ import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.TtlCache
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -142,6 +143,8 @@ class SearchViewModel @Inject constructor(
                 }.take(8)
                 _hotSearches.value = titles
                 hotSearchCache.put("hot_searches_v2", titles)
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 // 失败兜底：尝试从 v2 缓存取数据(发现页新片榜可能已加载成功)
                 try {
@@ -155,6 +158,8 @@ class SearchViewModel @Inject constructor(
                             hotSearchCache.put("hot_searches_v2", titles)
                         }
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (_: Exception) {}
             }
         }
@@ -181,8 +186,7 @@ class SearchViewModel @Inject constructor(
             val cacheKey = "${categoryId}_1_10_v3"
             try {
                 val data = sharedDoubanHotCache.getOrAwait(cacheKey, skipCache = skipCache) {
-                    try {
-                        when (categoryId) {
+                    when (categoryId) {
                             "douban-movie" -> {
                                 val response = doubanHotApi.getChart()
                                 com.tracktosearch.data.remote.douban.dto.DoubanHotData(
@@ -269,9 +273,6 @@ class SearchViewModel @Inject constructor(
                             }
                             else -> com.tracktosearch.data.remote.douban.dto.DoubanHotData()
                         }
-                    } catch (e: Exception) {
-                        throw e
-                    }
                 }
                 val updated = _uiState.value.doubanHotCategories.toMutableList()
                 if (index < updated.size) {
@@ -283,6 +284,8 @@ class SearchViewModel @Inject constructor(
                     )
                     _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 val updated = _uiState.value.doubanHotCategories.toMutableList()
                 if (index < updated.size) {
@@ -473,6 +476,8 @@ class SearchViewModel @Inject constructor(
                 if (page == 1) {
                     sharedDoubanHotCache.put(cacheKey, response.data)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 val updated = _uiState.value.doubanHotCategories.toMutableList()
                 if (idx >= 0) {
@@ -530,6 +535,8 @@ class SearchViewModel @Inject constructor(
                 if (_uiState.value.resources.isEmpty()) {
                     _uiState.value = _uiState.value.copy(isLoading = false)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -619,6 +626,8 @@ class SearchViewModel @Inject constructor(
                     }
                 }
                 _uiState.value = _uiState.value.copy(resolvingItemId = null)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(resolvingItemId = null)
             }

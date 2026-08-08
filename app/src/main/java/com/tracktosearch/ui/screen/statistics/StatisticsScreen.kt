@@ -133,7 +133,8 @@ fun StatisticsScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            if (uiState.error != null && !uiState.watchTimeReady && !uiState.overviewReady) {
+            val errorMsg = uiState.error
+            if (errorMsg != null && !uiState.watchTimeReady && !uiState.overviewReady) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -142,7 +143,7 @@ fun StatisticsScreen(
                     verticalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = uiState.error!!,
+                        text = errorMsg,
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
@@ -966,6 +967,7 @@ private fun HeatmapChart(heatmapData: Map<String, Int>, isVisible: Boolean = tru
     val primary = MaterialTheme.colorScheme.primary
     val emptyColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val selectedBorderColor = MaterialTheme.colorScheme.primary
 
     val textMeasurer = rememberTextMeasurer()
     val weekdayStyle = TextStyle(fontSize = 10.sp, color = labelColor)
@@ -1153,7 +1155,7 @@ private fun HeatmapChart(heatmapData: Map<String, Int>, isVisible: Boolean = tru
                             val x = labelWidthPx + weekIdx * slotPx
                             val y = monthLabelHeightPx + dayIdx * slotPx
                             drawRoundRect(
-                                color = Color.Black,
+                                color = selectedBorderColor,
                                 topLeft = Offset(x, y),
                                 size = Size(cellSizePx, cellSizePx),
                                 cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),

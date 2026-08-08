@@ -159,6 +159,7 @@ import com.tracktosearch.ui.util.showToast
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -320,6 +321,8 @@ class DoubanItemDetailViewModel @Inject constructor(
                     loadDetailInfo(source.failure)
                 }
                 // 资源搜索延迟到用户切换到资源搜索 Tab 时才触发,避免进入页面瞬间 12+ 并发网络请求
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -347,7 +350,8 @@ class DoubanItemDetailViewModel @Inject constructor(
         if (syncedItem != null || detailEntry != null) {
             val detailInfo = detailEntry?.toDetailInfo(syncedItem)
             val displayItem = syncedItem?.toDisplayFailure(detailInfo)
-                ?: detailEntry!!.toDisplayFailure(doubanId)
+                ?: detailEntry?.toDisplayFailure(doubanId)
+                ?: return null
             return DetailSource(
                 failure = displayItem,
                 detailInfo = detailInfo,
@@ -608,6 +612,8 @@ class DoubanItemDetailViewModel @Inject constructor(
                     isSearching = false,
                     searchAttempted = true
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isSearching = false,
@@ -750,34 +756,41 @@ class DoubanItemDetailViewModel @Inject constructor(
         val current = _uiState.value.failure ?: return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(detailLoadPhase = DetailLoadPhase.FETCHING)
-            val cookie = getDoubanCookie()
-            val result = doubanRepository.fetchDetail(
-                doubanUrl = current.doubanUrl,
-                cookie = cookie ?: "",
-                title = current.title,
-                forceRefresh = true,
-                onProgress = { phase, _ ->
-                    when (phase) {
-                        "fetching" -> {
-                            _uiState.value = _uiState.value.copy(detailLoadPhase = DetailLoadPhase.FETCHING)
+            try {
+                val cookie = getDoubanCookie()
+                val result = doubanRepository.fetchDetail(
+                    doubanUrl = current.doubanUrl,
+                    cookie = cookie ?: "",
+                    title = current.title,
+                    forceRefresh = true,
+                    onProgress = { phase, _ ->
+                        when (phase) {
+                            "fetching" -> {
+                                _uiState.value = _uiState.value.copy(detailLoadPhase = DetailLoadPhase.FETCHING)
+                            }
                         }
                     }
-                }
-            )
-            result.first?.let { info ->
-                _uiState.value = _uiState.value.copy(detailInfo = info, detailLoadPhase = DetailLoadPhase.DONE)
-                // 强制重新爬取成功后推断媒体类型
-                val inferred = runCatching {
-                    doubanRetryManager.inferMediaTypeFromDetail(current.doubanId, info)
-                }.getOrDefault(false)
-                if (inferred) {
-                    val refreshed = doubanRetryManager.getFailure(current.doubanId)
-                    if (refreshed != null) {
-                        _uiState.value = _uiState.value.copy(failure = refreshed)
+                )
+                result.first?.let { info ->
+                    _uiState.value = _uiState.value.copy(detailInfo = info, detailLoadPhase = DetailLoadPhase.DONE)
+                    // 强制重新爬取成功后推断媒体类型
+                    val inferred = runCatching {
+                        doubanRetryManager.inferMediaTypeFromDetail(current.doubanId, info)
+                    }.getOrDefault(false)
+                    if (inferred) {
+                        val refreshed = doubanRetryManager.getFailure(current.doubanId)
+                        if (refreshed != null) {
+                            _uiState.value = _uiState.value.copy(failure = refreshed)
+                        }
                     }
+                    _toastEvent.tryEmit(R.string.douban_detail_updated_and_synced)
+                } ?: run {
+                    _uiState.value = _uiState.value.copy(detailLoadPhase = DetailLoadPhase.FAILED)
                 }
-                _toastEvent.tryEmit(R.string.douban_detail_updated_and_synced)
-            } ?: run {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // 网络错误、解析异常等，避免 UI 永久卡在 FETCHING
                 _uiState.value = _uiState.value.copy(detailLoadPhase = DetailLoadPhase.FAILED)
             }
         }
@@ -849,6 +862,8 @@ class DoubanItemDetailViewModel @Inject constructor(
                     MarkWriteOutcome.Failed(res.message)
                 }
             }.getOrDefault(MarkWriteOutcome.Failed(null))
+            // 确保所有分支（含 LoginRequired/CookieExpired/CkFailed/异常）都重置 marking，避免按钮永久禁用
+            _uiState.value = _uiState.value.copy(marking = false)
             emitWritebackToast(result)
         }
     }
@@ -886,6 +901,8 @@ class DoubanItemDetailViewModel @Inject constructor(
                     MarkWriteOutcome.Failed(res.message)
                 }
             }.getOrDefault(MarkWriteOutcome.Failed(null))
+            // 确保所有分支（含 LoginRequired/CookieExpired/CkFailed/异常）都重置 marking，避免按钮永久禁用
+            _uiState.value = _uiState.value.copy(marking = false)
             emitWritebackToast(result)
         }
     }

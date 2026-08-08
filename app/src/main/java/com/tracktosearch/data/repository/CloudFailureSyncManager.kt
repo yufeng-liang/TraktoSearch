@@ -8,6 +8,7 @@ import com.tracktosearch.data.remote.cloud.AesCrypto
 import com.tracktosearch.data.remote.cloud.GiteeContentRequest
 import com.tracktosearch.data.remote.cloud.GiteeContentResponse
 import com.tracktosearch.data.remote.cloud.GiteeContentsApi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -155,6 +156,8 @@ class CloudFailureSyncManager @Inject constructor(
                         }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 // GET 失败不阻塞上传(无法比较时间戳时保守上传)
                 Log.d(TAG, "GET 云端失败,跳过时间戳比较: ${e.message}")
@@ -229,6 +232,8 @@ class CloudFailureSyncManager @Inject constructor(
                 Log.w(TAG, "上传失败: ${putResp.code()} ${putResp.message()} | path=$path | error=$errorBody")
                 UploadResult.Failed
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "上传异常: ${e.message}")
             UploadResult.Failed
@@ -263,6 +268,8 @@ class CloudFailureSyncManager @Inject constructor(
             )
             val payload = json.decodeFromString(CloudPayload.serializer(), jsonStr)
             payload.totalFailures
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "检测云端异常: ${e.message}")
             null
@@ -353,6 +360,8 @@ class CloudFailureSyncManager @Inject constructor(
             cloudFailureSyncMetaStorage.recordSyncedUploadedAt(payload.uploadedAt)
             Log.d(TAG, "云端数据替换本地成功: ${entities.size} 条 (cloudUploadedAt=${payload.uploadedAt}, localNewest=$localNewest)")
             DownloadResult.Success(count = entities.size, cloudTime = payload.uploadedAt, localTime = localNewest)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "下载合并异常: ${e.message}")
             DownloadResult.Failed

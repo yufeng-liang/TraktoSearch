@@ -956,15 +956,21 @@ class DetailViewModel @Inject constructor(
     private fun fetchRatingsAsync(tmdbRating: Double) {
         ratingsJob?.cancel()
         ratingsJob = viewModelScope.launch {
-            ratingsRepository.fetchRatingsStream(
-                imdbId = currentImdbId,
-                tmdbRating = tmdbRating,
-                traktRating = currentTraktRating
-            ).collect { ratings ->
-                _uiState.value = _uiState.value.copy(
-                    ratings = ratings.copy(doubanRating = currentDoubanRating),
-                    ratingsError = false
-                )
+            try {
+                ratingsRepository.fetchRatingsStream(
+                    imdbId = currentImdbId,
+                    tmdbRating = tmdbRating,
+                    traktRating = currentTraktRating
+                ).collect { ratings ->
+                    _uiState.value = _uiState.value.copy(
+                        ratings = ratings.copy(doubanRating = currentDoubanRating),
+                        ratingsError = false
+                    )
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(ratingsError = true)
             }
         }
     }
@@ -1041,6 +1047,8 @@ class DetailViewModel @Inject constructor(
                     hasMoreComments = hasMoreTrakt || hasMoreTmdb,
                     commentsError = false
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(commentsError = true)
             }
@@ -1101,6 +1109,8 @@ class DetailViewModel @Inject constructor(
                     hasMoreComments = newHasMoreTrakt || newHasMoreTmdb,
                     isLoadingMoreComments = false
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (_: Exception) {
                 _uiState.value = _uiState.value.copy(isLoadingMoreComments = false)
             }
@@ -1144,6 +1154,8 @@ class DetailViewModel @Inject constructor(
                     isLoadingMoreComments = false,
                     commentsError = false
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (_: Exception) {
                 _uiState.value = _uiState.value.copy(isLoadingMoreComments = false)
             }
@@ -1181,6 +1193,8 @@ class DetailViewModel @Inject constructor(
                     isTranslating = false,
                     translationProgress = null
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e("DetailVM", "Translation failed", e)
                 _uiState.value = _uiState.value.copy(
@@ -1207,6 +1221,8 @@ class DetailViewModel @Inject constructor(
                     translatedComments = updated.toList(),
                     translatingCommentId = null
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e("DetailVM", "Single comment translation failed", e)
                 _uiState.value = _uiState.value.copy(translatingCommentId = null)
@@ -1247,7 +1263,7 @@ class DetailViewModel @Inject constructor(
                     }
                 }
                 _uiState.value = _uiState.value.copy(watchedEpisodeNumbers = watchedMap)
-            }
+            }.onFailure { Log.w("DetailViewModel", "fetchWatchedProgress failed", it) }
         }
     }
 
@@ -1269,6 +1285,8 @@ class DetailViewModel @Inject constructor(
                         creditsError = false
                     )
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(creditsError = true)
             }
@@ -1363,6 +1381,8 @@ class DetailViewModel @Inject constructor(
                     },
                     isLoadingVideosImages = false
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (_: Exception) {
                 // 加载失败不影响页面正常显示
                 _uiState.value = _uiState.value.copy(isLoadingVideosImages = false)
@@ -1510,6 +1530,8 @@ class DetailViewModel @Inject constructor(
                         isLoadingRecommendations = false
                     )
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoadingRecommendations = false,
@@ -1542,6 +1564,8 @@ class DetailViewModel @Inject constructor(
                     userRating = rating,
                     isRatingLoading = false
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isRatingLoading = false)
             }

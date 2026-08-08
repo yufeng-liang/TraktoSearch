@@ -68,7 +68,7 @@ fun GlassSearchBar(
     val interactionSource = remember { MutableInteractionSource() }
     val isEditable = onValueChange != null
 
-    val containerColor = Color.LightGray.copy(alpha = 0.30f)
+    val containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f)
     val contentColor = MaterialTheme.colorScheme.onSurface
     val hintColor = contentColor.copy(alpha = 0.55f)
     val hazeStyle = HazeMaterials.thin(MaterialTheme.colorScheme.background)
@@ -78,7 +78,7 @@ fun GlassSearchBar(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(28.dp))
-            .border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(28.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(28.dp))
             .then(
                 if (hazeState != null) {
                     Modifier.hazeEffect(state = hazeState) {

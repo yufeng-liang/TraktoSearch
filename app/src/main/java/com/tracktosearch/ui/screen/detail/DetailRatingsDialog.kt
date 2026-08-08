@@ -192,7 +192,7 @@ private fun RatingCard(
             .testTag(RATING_CARD_TEST_TAG),
         shape = RoundedCornerShape(12.dp),
         color = cardColor,
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         shadowElevation = 0.dp,
         tonalElevation = 0.dp
     ) {

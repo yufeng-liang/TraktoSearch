@@ -203,9 +203,11 @@ class DoubanRexxarRepository(
                 val publicPhotos = publicDataPoolManager?.getPhotos(doubanId, mediaType)
                 if (publicPhotos != null) {
                     existing = mergePhotoEntries(existing, publicPhotos)
-                    photosCache.put(key, existing!!)
-                    if (existing!!.isFresh(now) && existing!!.satisfies(start, count)) {
-                        return@withLock Result.success(existing!!.toPage(start, count))
+                    if (existing != null) {
+                        photosCache.put(key, existing)
+                        if (existing.isFresh(now) && existing.satisfies(start, count)) {
+                            return@withLock Result.success(existing.toPage(start, count))
+                        }
                     }
                 }
             }

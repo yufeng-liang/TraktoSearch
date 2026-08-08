@@ -69,9 +69,9 @@ import com.tracktosearch.ui.util.performHaptic
 @Composable
 internal fun SeasonBadge(seasonNumber: Int) {
     val (text, bgColor, textColor) = if (seasonNumber == 0) {
-        Triple("SP", Color(0xFFFFF3E0), Color(0xFFE65100))
+        Triple("SP", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
     } else {
-        Triple("S$seasonNumber", Color(0xFFE3F2FD), Color(0xFF1565C0))
+        Triple("S$seasonNumber", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
     }
     Surface(
         shape = RoundedCornerShape(6.dp),

@@ -142,7 +142,8 @@ class AuthManager @Inject constructor(
                 deviceId = body.deviceId.ifBlank { deviceId }
                 lastOnlineAt = System.currentTimeMillis() / 1000
                 nextCheckAt = body.nextCheckAt
-                if (deviceId != null) tokenStorage.saveSessionMetadata(deviceId!!, lastOnlineAt, nextCheckAt)
+                val did = deviceId
+                if (did != null) tokenStorage.saveSessionMetadata(did, lastOnlineAt, nextCheckAt)
                 _authState.value = AuthState.AUTHORIZED
                 _nickname.value = body.nickname.takeIf { it.isNotBlank() }
                 Result.success(body)

@@ -141,16 +141,16 @@ fun DiscoverScreen(
         viewModel.refreshDoubanRecommendOnResume()
         onPauseOrDispose { }
     }
-    var showDoubanAllDialog by remember { mutableStateOf<String?>(null) }
-    var showPopularAll by remember { mutableStateOf(false) }
-    var showUpcomingAll by remember { mutableStateOf(false) }
-    var showRecommendationsAll by remember { mutableStateOf(false) }
-    var showTrendingMoviesAll by remember { mutableStateOf(false) }
-    var showTrendingShowsAll by remember { mutableStateOf(false) }
-    var showAnticipatedAll by remember { mutableStateOf(false) }
-    var showShowRecsAll by remember { mutableStateOf(false) }
-    var showTrendingListsAll by remember { mutableStateOf(false) }
-    var showDiscoverSectionsDialog by remember { mutableStateOf(false) }
+    var showDoubanAllDialog by rememberSaveable { mutableStateOf<String?>(null) }
+    var showPopularAll by rememberSaveable { mutableStateOf(false) }
+    var showUpcomingAll by rememberSaveable { mutableStateOf(false) }
+    var showRecommendationsAll by rememberSaveable { mutableStateOf(false) }
+    var showTrendingMoviesAll by rememberSaveable { mutableStateOf(false) }
+    var showTrendingShowsAll by rememberSaveable { mutableStateOf(false) }
+    var showAnticipatedAll by rememberSaveable { mutableStateOf(false) }
+    var showShowRecsAll by rememberSaveable { mutableStateOf(false) }
+    var showTrendingListsAll by rememberSaveable { mutableStateOf(false) }
+    var showDiscoverSectionsDialog by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(showDoubanAllDialog) {
         val catId = showDoubanAllDialog ?: return@LaunchedEffect
@@ -419,7 +419,7 @@ fun DiscoverScreen(
                                             text = stringResource(R.string.discover_trending),
                                             fontSize = 18.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = if (isDark) Color.White else Color(0xFF1A1A2E)
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Spacer(modifier = Modifier.width(12.dp))
                                         // 今日/本周切换条（统一组件）
@@ -665,8 +665,8 @@ fun DiscoverScreen(
                                                         elevation = 6.dp,
                                                         blurRadius = 16.dp,
                                                         shadowOffset = 5.dp,
-                                                        backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.65f),
-                                                        borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color(0xFFD0D5DC).copy(alpha = 0.9f),
+                                                        backgroundColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                                                        borderColor = if (isDark) MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.9f),
                                                         darkShadowAlpha = if (isDark) 0.25f else 0.16f,
                                                         lightShadowAlpha = if (isDark) 0.08f else 0.65f,
                                                         hazeState = null
@@ -680,14 +680,14 @@ fun DiscoverScreen(
                                                                 Text(
                                                                     text = listResponse.list.name,
                                                                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                                                                    color = if (isDark) Color.White else Color(0xFF1A1A2E),
+                                                                    color = MaterialTheme.colorScheme.onSurface,
                                                                     maxLines = 1,
                                                                     overflow = TextOverflow.Ellipsis
                                                                 )
                                                                 Text(
                                                                     text = stringResource(R.string.discover_list_meta, listResponse.list.item_count, listResponse.list.user?.username ?: "", listResponse.like_count),
                                                                     style = MaterialTheme.typography.bodySmall,
-                                                                    color = if (isDark) Color.White.copy(alpha = 0.65f) else Color(0xFF8A8AAA)
+                                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                                                 )
                                                             }
                                                         }
@@ -838,7 +838,7 @@ fun DiscoverScreen(
                             Icon(
                                 Icons.Rounded.FilterList,
                                 contentDescription = stringResource(R.string.discover_filter_title),
-                                tint = if (isDark) Color.White else Color(0xFF2D2D4A)
+                                tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         Spacer(modifier = Modifier.width(8.dp))
@@ -850,7 +850,7 @@ fun DiscoverScreen(
                             Icon(
                                 Icons.Rounded.FormatListNumbered,
                                 contentDescription = stringResource(R.string.settings_discover_sections),
-                                tint = if (isDark) Color.White else Color(0xFF2D2D4A)
+                                tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
@@ -905,7 +905,9 @@ fun DiscoverScreen(
                 }
             },
             onLoadMore = { viewModel.loadPopularAll(page = uiState.popularAllPage + 1) },
-            onDismiss = { showPopularAll = false }
+            onDismiss = { showPopularAll = false },
+            errorMessage = uiState.popularAllError,
+            onRetry = { viewModel.loadPopularAll(page = uiState.popularAllPage + 1) }
         )
     }
 
@@ -925,7 +927,9 @@ fun DiscoverScreen(
                 }
             },
             onLoadMore = { viewModel.loadUpcomingAll(page = uiState.upcomingAllPage + 1) },
-            onDismiss = { showUpcomingAll = false }
+            onDismiss = { showUpcomingAll = false },
+            errorMessage = uiState.upcomingAllError,
+            onRetry = { viewModel.loadUpcomingAll(page = uiState.upcomingAllPage + 1) }
         )
     }
 
@@ -945,7 +949,9 @@ fun DiscoverScreen(
                 }
             },
             onLoadMore = { viewModel.loadRecommendationsAll(page = uiState.recommendationsAllPage + 1) },
-            onDismiss = { showRecommendationsAll = false }
+            onDismiss = { showRecommendationsAll = false },
+            errorMessage = uiState.recommendationsAllError,
+            onRetry = { viewModel.loadRecommendationsAll(page = uiState.recommendationsAllPage + 1) }
         )
     }
 

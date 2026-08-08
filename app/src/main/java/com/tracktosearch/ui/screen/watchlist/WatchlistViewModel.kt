@@ -36,6 +36,7 @@ import com.tracktosearch.data.session.SessionMode
 import com.tracktosearch.data.session.SessionModeManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -1750,13 +1751,15 @@ private suspend fun <T> retryIO(times: Int, block: suspend () -> T): T {
     while (currentAttempt <= times) {
         try {
             return block()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             lastException = e
             currentAttempt++
             if (currentAttempt <= times) delay(1000L * currentAttempt)
         }
     }
-    throw lastException!!
+    throw lastException ?: IllegalStateException("retryIO failed without exception")
 }
 
 // ========== 离线缓存转换扩展 ==========

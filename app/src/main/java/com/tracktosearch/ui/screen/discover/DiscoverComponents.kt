@@ -237,7 +237,7 @@ internal fun MovieCard(
                             imageVector = Icons.Rounded.Bookmark,
                             contentDescription = stringResource(R.string.cd_watchlist_badge),
                             modifier = Modifier.size(10.dp),
-                            tint = Color.White
+                            tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
                 }

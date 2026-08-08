@@ -25,7 +25,7 @@ private val Context.posterColorDataStore by preferencesDataStore(name = "poster_
 class PosterColorCache @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private val memoryCache = mutableMapOf<String, Long>()
+    private val memoryCache = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     /**
      * 启动时一次性全量加载 DataStore 到内存，消除冷启动 IO。

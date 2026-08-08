@@ -5,6 +5,7 @@ import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.remote.translate.TranslateApiService
 import com.tracktosearch.data.remote.translate.TranslateRequest
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -142,6 +143,8 @@ class CommentTranslator @Inject constructor(
                     comment.copy(comment = result)
                 } else comment
             } ?: comment
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("CommentTranslator", "Translation error: ${e.message}", e)
             comment

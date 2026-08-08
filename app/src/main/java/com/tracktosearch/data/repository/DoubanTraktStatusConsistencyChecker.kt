@@ -225,6 +225,8 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         try {
             val allItems = try {
                 doubanSyncedItemDao.getAllSyncedItems()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 return@withContext failureResult(e)
             }

@@ -1,7 +1,9 @@
 package com.tracktosearch.ui.component
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -365,7 +367,18 @@ fun UpdateDialog(
     val context = LocalContext.current
     val downloadFailedMsg = stringResource(R.string.update_download_failed)
     val signatureInvalidMsg = stringResource(R.string.update_signature_invalid)
+    val openFailedMsg = stringResource(R.string.common_open_failed)
     val scope = rememberCoroutineScope()
+
+    // 统一封装浏览器跳转：设备无可用浏览器时显示 Toast,避免崩溃
+    fun openUrl(url: String) {
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            onDismiss()
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(context, openFailedMsg, Toast.LENGTH_SHORT).show()
+        }
+    }
     // 下载状态用 rememberSaveable 保留旋屏后的状态（Completed/Error 不丢失）；
     // Downloading 状态旋屏后 job 丢失，下方 LaunchedEffect 会重置为 Idle
     var downloadState by rememberSaveable(stateSaver = DownloadStateSaver) { mutableStateOf(DownloadState.Idle) }
@@ -392,6 +405,9 @@ fun UpdateDialog(
                 ApkInstaller.installApk(context, (downloadState as DownloadState.Completed).file)
             } catch (e: SecurityException) {
                 downloadState = DownloadState.Error(signatureInvalidMsg)
+            } catch (_: Exception) {
+                // 文件被清理/FileProvider 异常/无安装器等，避免崩溃
+                downloadState = DownloadState.Error(downloadFailedMsg)
             }
         }
     }
@@ -462,9 +478,7 @@ fun UpdateDialog(
                             )
                             Spacer(Modifier.height(8.dp))
                             Button(onClick = {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(RELEASE_PAGE_URL))
-                                context.startActivity(intent)
-                                onDismiss()
+                                openUrl(RELEASE_PAGE_URL)
                             }, modifier = Modifier.fillMaxWidth()) {
                                 Text(stringResource(R.string.update_release_page))
                             }
@@ -496,9 +510,7 @@ fun UpdateDialog(
                             }
                             Spacer(Modifier.height(4.dp))
                             OutlinedButton(onClick = {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(updateInfo.downloadUrl))
-                                context.startActivity(intent)
-                                onDismiss()
+                                openUrl(updateInfo.downloadUrl)
                             }, modifier = Modifier.fillMaxWidth()) {
                                 Text(stringResource(R.string.update_download_browser))
                             }
@@ -525,6 +537,9 @@ fun UpdateDialog(
                                 onDismiss()
                             } catch (e: SecurityException) {
                                 downloadState = DownloadState.Error(signatureInvalidMsg)
+                            } catch (_: Exception) {
+                                // 文件被清理/FileProvider 异常/无安装器等,避免崩溃
+                                downloadState = DownloadState.Error(downloadFailedMsg)
                             }
                         }, modifier = Modifier.fillMaxWidth()) {
                             Text(stringResource(R.string.update_download))
@@ -544,9 +559,7 @@ fun UpdateDialog(
                         }
                         Spacer(Modifier.height(4.dp))
                         OutlinedButton(onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(updateInfo.downloadUrl))
-                            context.startActivity(intent)
-                            onDismiss()
+                            openUrl(updateInfo.downloadUrl)
                         }, modifier = Modifier.fillMaxWidth()) {
                             Text(stringResource(R.string.update_download_browser))
                         }

@@ -282,6 +282,8 @@ class TmdbRepository @Inject constructor(
             } else {
                 fallbackMovie(originalTitle, year)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             android.util.Log.w("TmdbRepo", "enrichMovie($tmdbId) failed: ${e.message}")
             fallbackMovie(originalTitle, year)
@@ -358,6 +360,8 @@ class TmdbRepository @Inject constructor(
             } else {
                 fallbackTv(originalName, year)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             android.util.Log.w("TmdbRepo", "enrichTv($tmdbId) failed: ${e.message}")
             fallbackTv(originalName, year)

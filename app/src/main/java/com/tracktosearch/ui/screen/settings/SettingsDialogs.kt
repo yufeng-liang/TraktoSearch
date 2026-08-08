@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -132,6 +133,13 @@ internal fun AccentColorDialog(
         title = { Text(dialogTitle ?: stringResource(R.string.settings_accent_color)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 动态壁纸取色项渐变色与勾选图标对比色
+                val dynamicColors = listOf(
+                    Color(0xFF7B68AE), Color(0xFFE8915A), Color(0xFF5A8F6B),
+                    Color(0xFF6B7FA0), Color(0xFFC4A94D), Color(0xFFD4748A),
+                    Color(0xFF4A7FB5), Color(0xFF7B68AE)
+                )
+                val dynamicCheckTint = if (dynamicColors.map { it.luminance() }.average() > 0.5) Color.Black else Color.White
                 // 动态壁纸取色选项（带渐变色块）
                 Row(
                     modifier = Modifier
@@ -148,11 +156,7 @@ internal fun AccentColorDialog(
                             .clip(CircleShape)
                             .background(
                                 brush = androidx.compose.ui.graphics.Brush.sweepGradient(
-                                    colors = listOf(
-                                        Color(0xFF7B68AE), Color(0xFFE8915A), Color(0xFF5A8F6B),
-                                        Color(0xFF6B7FA0), Color(0xFFC4A94D), Color(0xFFD4748A),
-                                        Color(0xFF4A7FB5), Color(0xFF7B68AE)
-                                    )
+                                    colors = dynamicColors
                                 )
                             )
                             .then(
@@ -163,7 +167,7 @@ internal fun AccentColorDialog(
                         contentAlignment = Alignment.Center
                     ) {
                         if (currentAccent == null) {
-                            Icon(Icons.Rounded.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Rounded.Check, contentDescription = null, tint = dynamicCheckTint, modifier = Modifier.size(20.dp))
                         }
                     }
                     Spacer(modifier = Modifier.width(10.dp))
@@ -198,7 +202,7 @@ internal fun AccentColorDialog(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     if (currentAccent == accent) {
-                                        Icon(Icons.Rounded.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                        Icon(Icons.Rounded.Check, contentDescription = null, tint = if (accent.light.luminance() > 0.5f) Color.Black else Color.White, modifier = Modifier.size(20.dp))
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))

@@ -185,6 +185,8 @@ class StatisticsViewModel @Inject constructor(
                         Result.success(
                             words
                         )
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (_: Exception) {
                         Result.failure(Exception("WORD_CLOUD_LOAD_FAILED"))
                     }
@@ -240,6 +242,8 @@ class StatisticsViewModel @Inject constructor(
                 // 评分（非致命）
                 allRatings = ratingsDeferred.await().getOrDefault(emptyList())
                 publish(movies, shows, watchedShows, userStats, allRatings, words, wordCloudReady, doubanItems, isDoubanMode, doubanDetails)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     initialLoading = false,

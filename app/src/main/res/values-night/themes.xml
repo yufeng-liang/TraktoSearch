@@ -1,13 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- 暗色模式：状态栏图标改为浅色，避免深色图标在深色背景上不可见 -->
     <style name="Theme.TraktoSearch" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <!-- 跟随主题：亮色模式白底、暗色模式跟随 colorBackground 深色，避免启动白屏闪烁 -->
+        <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowBackground">?android:attr/colorBackground</item>
     </style>
 
-    <!-- Android 12 以下的启动页主题：直接使用 App 主题，不显示系统 splash -->
     <style name="Theme.App.Starting" parent="Theme.TraktoSearch" />
 </resources>

@@ -310,7 +310,7 @@ internal fun FullVideosImagesSheet(
                 PrimaryTabRow(
                     selectedTabIndex = selectedTabIndex,
                     modifier = Modifier.fillMaxWidth(),
-                    containerColor = Color.Transparent
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
                 ) {
                     if (hasBackdrops) {
                         Tab(
@@ -676,7 +676,9 @@ internal fun BackdropPagerOverlay(
                 userScrollEnabled = zoomState.scale <= 1f,
                 modifier = Modifier.fillMaxSize()
             ) { page ->
-                val backdropUrl = backdrops[page].replace("/w780/", "/original/")
+                // 列表变化时 currentPage 可能短暂越界，用 getOrNull 防止 IndexOutOfBoundsException
+                val backdropUrl = backdrops.getOrNull(page)?.replace("/w780/", "/original/")
+                if (backdropUrl == null) return@HorizontalPager
                 AsyncImage(
                     model = remember(backdropUrl) {
                         ImageRequest.Builder(context)
@@ -746,7 +748,8 @@ internal fun BackdropPagerOverlay(
                     context.showToast(alreadySavedToast)
                     return@IconButton
                 }
-                val currentUrl = backdrops[currentIndex].replace("/w780/", "/original/")
+                val currentUrl = backdrops.getOrNull(currentIndex)?.replace("/w780/", "/original/")
+                if (currentUrl == null) return@IconButton
                 val fileName = "TrackToSearch_backdrop_${currentIndex}.jpg"
                 savePosterToGallery(context, scope, currentUrl, fileName) {
                     savedBackdrops.value += currentIndex

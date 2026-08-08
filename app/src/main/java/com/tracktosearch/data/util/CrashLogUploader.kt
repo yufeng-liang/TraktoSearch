@@ -5,6 +5,7 @@ import android.os.Build
 import com.tracktosearch.data.local.CrashLogStorage
 import com.tracktosearch.data.remote.crash.CrashLogApiService
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -72,6 +73,8 @@ class CrashLogUploader @Inject constructor(
                     } else {
                         allOk = false
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (_: Exception) {
                     allOk = false
                 }
@@ -126,6 +129,8 @@ class CrashLogUploader @Inject constructor(
             // ResponseBody 读取后即视为成功（worker 返回 2xx）
             try { response.close() } catch (_: Exception) {}
             true
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             false
         }

@@ -2,6 +2,7 @@ package com.tracktosearch.ui.component
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -99,7 +100,7 @@ fun OnboardingOverlay(
         val screenWidthPx = maxWidth.value * density.density
         val screenHeightPx = maxHeight.value * density.density
 
-        val bubbleTopPx: Float
+        var bubbleTopPx: Float
 
         if (isInfoStep) {
             // 信息步骤：居中显示
@@ -114,15 +115,15 @@ fun OnboardingOverlay(
                 highlightRect.bottom + bubbleGapPx
             }
 
-            // 安全边界
-            bubbleTopPx.coerceIn(16f, screenHeightPx - estimatedBubbleHeightPx - 16f)
+            // 安全边界（赋值给变量，否则 coerceIn 结果被丢弃）
+            bubbleTopPx = bubbleTopPx.coerceIn(16f, (screenHeightPx - estimatedBubbleHeightPx - 16f).coerceAtLeast(16f))
         }
 
         // 半透明遮罩 + 挖洞（拦截触摸事件，防止穿透点击）
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(Unit) {}
+                .pointerInput(Unit) { detectTapGestures { } }
         ) {
             val scrimColor = Color.Black.copy(alpha = 0.6f)
 
@@ -167,14 +168,14 @@ fun OnboardingOverlay(
                     .padding(16.dp)
             ) {
                 Text(
-                    text = titles[currentStep],
+                    text = titles.getOrNull(currentStep) ?: "",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = descriptions[currentStep],
+                    text = descriptions.getOrNull(currentStep) ?: "",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )

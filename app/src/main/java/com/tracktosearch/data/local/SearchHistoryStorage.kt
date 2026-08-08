@@ -120,10 +120,12 @@ class SearchHistoryStorage private constructor(
 
     private fun parseJoined(joined: String): List<SearchHistoryItem> {
         if (joined.isBlank()) return emptyList()
-        return joined.split(SEPARATOR).filter { it.isNotBlank() }.map { raw ->
+        return joined.split(SEPARATOR).filter { it.isNotBlank() }.mapNotNull { raw ->
             if (raw.contains("::")) {
                 val parts = raw.split("::", limit = 2)
-                SearchHistoryItem(keyword = parts[1], type = parts[0])
+                val type = parts.getOrNull(0) ?: return@mapNotNull null
+                val keyword = parts.getOrNull(1) ?: return@mapNotNull null
+                SearchHistoryItem(keyword = keyword, type = type)
             } else {
                 SearchHistoryItem(keyword = raw, type = "disk")
             }
