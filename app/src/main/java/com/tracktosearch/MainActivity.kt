@@ -481,9 +481,11 @@ class MainActivity : AppCompatActivity() {
                         lifecycleScope.launch {
                             crashLogStorage.setEnabled(true)
                             crashLogStorage.setPrompted(true)
-                            // 用户刚同意，立即触发上传
-                            crashLogUploader.uploadPendingLogs()
-                            CrashHandler.clearCrashLogs(this@MainActivity)
+                            // 用户刚同意，立即触发上传；失败时保留本地日志下次再试
+                            val ok = crashLogUploader.uploadPendingLogs()
+                            if (ok) {
+                                CrashHandler.clearCrashLogs(this@MainActivity)
+                            }
                         }
                     }
                     .setNegativeButton(getString(R.string.crash_auth_dialog_decline)) { dialog: DialogInterface, _: Int ->

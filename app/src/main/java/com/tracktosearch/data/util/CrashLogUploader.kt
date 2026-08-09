@@ -40,17 +40,24 @@ class CrashLogUploader @Inject constructor(
     private val _uploadResult = CompletableDeferred<Boolean>()
     val uploadResult: Deferred<Boolean> = _uploadResult
 
+    /** 幂等完成：TraktSearchApp 启动与用户点击同意可能都触发上传，避免二次 complete 崩溃 */
+    private fun completeUploadResult(ok: Boolean) {
+        if (!_uploadResult.isCompleted) {
+            _uploadResult.complete(ok)
+        }
+    }
+
     /** Called at app start — waits for current upload, returns true if all files uploaded OK. */
     suspend fun uploadPendingLogs(): Boolean {
         // 隐私授权：用户未同意上报时直接返回（视为成功，不触发邮件兜底弹窗）
         if (!crashLogStorage.enabled.first()) {
-            _uploadResult.complete(true)
+            completeUploadResult(true)
             return true
         }
 
         val dir = File(context.filesDir, CRASH_DIR)
         if (!dir.exists()) {
-            _uploadResult.complete(true)
+            completeUploadResult(true)
             return true
         }
 
@@ -58,7 +65,7 @@ class CrashLogUploader @Inject constructor(
             ?.filter { it.name.endsWith(".log") }
             ?.sortedBy { it.name }
         if (files.isNullOrEmpty()) {
-            _uploadResult.complete(true)
+            completeUploadResult(true)
             return true
         }
 
@@ -80,7 +87,7 @@ class CrashLogUploader @Inject constructor(
                 }
             }
         }
-        _uploadResult.complete(allOk)
+        completeUploadResult(allOk)
         return allOk
     }
 

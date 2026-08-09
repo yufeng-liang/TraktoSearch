@@ -279,7 +279,8 @@ async function handleAuthApi(
     if (path.startsWith('/api/translate/')) {
         return handleTranslateProxy(request, env, path, ctx);
     }
-    if (path === '/api/crash-logs' && request.method === 'POST') {
+    // 兼容客户端 Retrofit baseUrl 尾斜杠拼出的 /api/crash-logs/ 路径
+    if ((path === '/api/crash-logs' || path === '/api/crash-logs/') && request.method === 'POST') {
         return handleCrashLogProxy(request, env);
     }
 
