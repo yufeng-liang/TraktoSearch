@@ -1,4 +1,13 @@
 import java.util.Properties
+import java.io.File
+import java.io.FileInputStream
+import java.security.KeyStore
+import java.security.MessageDigest
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.TaskAction
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.gradle.api.tasks.testing.Test
 
@@ -7,6 +16,11 @@ val properties = Properties()
 if (localProps.exists()) {
     properties.load(localProps.inputStream())
 }
+
+val releaseStoreFilePath = properties.getProperty("release.store.file", "").trim()
+val releaseStorePassword = properties.getProperty("release.store.password", "")
+val releaseKeyAlias = properties.getProperty("release.key.alias", "").trim()
+val releaseKeyPassword = properties.getProperty("release.key.password", "")
 
 plugins {
     alias(libs.plugins.android.application)
@@ -45,13 +59,12 @@ android {
             // 使用默认 debug 签名
         }
         // 仅在配置了 release 签名信息时创建，避免空属性导致配置阶段报错
-        val releaseStoreFile = properties.getProperty("release.store.file", "")
-        if (releaseStoreFile.isNotBlank()) {
+        if (releaseStoreFilePath.isNotBlank()) {
             create("release") {
-                storeFile = file(releaseStoreFile)
-                storePassword = properties.getProperty("release.store.password", "")
-                keyAlias = properties.getProperty("release.key.alias", "")
-                keyPassword = properties.getProperty("release.key.password", "")
+                storeFile = file(releaseStoreFilePath)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
             }
         }
     }
@@ -94,6 +107,70 @@ android {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
         resources.excludes += "/META-INF/LICENSE.md"
         resources.excludes += "/META-INF/LICENSE-notice.md"
+    }
+}
+
+abstract class VerifyReleaseSigningTask : DefaultTask() {
+    @get:Internal
+    abstract val projectDirectory: DirectoryProperty
+
+    @get:Internal
+    abstract val localPropertiesFile: RegularFileProperty
+
+    @TaskAction
+    fun verify() {
+        val signingProperties = Properties()
+        val propertiesFile = localPropertiesFile.get().asFile
+        if (propertiesFile.isFile) {
+            FileInputStream(propertiesFile).use { input ->
+                signingProperties.load(input)
+            }
+        }
+
+        val storeFilePath = signingProperties.getProperty("release.store.file", "").trim()
+        val storePassword = signingProperties.getProperty("release.store.password", "")
+        val keyAlias = signingProperties.getProperty("release.key.alias", "").trim()
+        val keyPassword = signingProperties.getProperty("release.key.password", "")
+        check(storeFilePath.isNotBlank()) {
+            "Release signing is required. Configure release.store.file in local.properties."
+        }
+        check(storePassword.isNotBlank() && keyAlias.isNotBlank() && keyPassword.isNotBlank()) {
+            "Release signing credentials are incomplete in local.properties."
+        }
+
+        val configuredStoreFile = File(storeFilePath)
+        val keystoreFile = if (configuredStoreFile.isAbsolute) {
+            configuredStoreFile
+        } else {
+            File(projectDirectory.get().asFile, storeFilePath)
+        }
+        check(keystoreFile.isFile) {
+            "Release keystore does not exist: ${keystoreFile.absolutePath}"
+        }
+
+        val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
+        FileInputStream(keystoreFile).use { input ->
+            keyStore.load(input, storePassword.toCharArray())
+        }
+        val certificate = keyStore.getCertificate(keyAlias)
+            ?: error("Release certificate alias does not exist: $keyAlias")
+        val actualFingerprint = MessageDigest.getInstance("SHA-256")
+            .digest(certificate.encoded)
+            .joinToString("") { byte -> "%02x".format(byte) }
+        check(actualFingerprint.equals("5ece267c52985b64bd23f40f5be6a8732e5689b10248fa7846e9e16f8cf5adb8", ignoreCase = true)) {
+            "Unexpected release certificate fingerprint: $actualFingerprint"
+        }
+    }
+}
+
+val verifyReleaseSigning = tasks.register<VerifyReleaseSigningTask>("verifyReleaseSigning") {
+    projectDirectory.set(layout.projectDirectory)
+    localPropertiesFile.set(rootProject.layout.projectDirectory.file("local.properties"))
+}
+
+tasks.configureEach {
+    if (name == "preReleaseBuild" || name == "assembleRelease" || name == "bundleRelease") {
+        dependsOn(verifyReleaseSigning)
     }
 }
 
