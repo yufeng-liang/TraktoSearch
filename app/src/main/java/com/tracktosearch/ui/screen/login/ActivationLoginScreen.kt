@@ -263,6 +263,7 @@ fun ActivationLoginScreen(
                     doubanEnabled = canUseActions &&
                         loginState != LoginState.AUTHORIZING &&
                         loginState != LoginState.CONNECTING,
+                    hazeState = hazeState,
                     guestContentColor = loginTextColor,
                     onDoubanLogin = onDoubanLogin,
                     onGuestMode = onGuestMode,
@@ -298,12 +299,17 @@ fun ActivationLoginScreen(
 internal fun ActivationSecondaryActions(
     guestEnabled: Boolean,
     doubanEnabled: Boolean = guestEnabled,
+    hazeState: HazeState,
     guestContentColor: Color,
     onDoubanLogin: () -> Unit,
     onGuestMode: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val doubanGreen = MaterialTheme.colorScheme.monetDoubanGreen()
+    val doubanButtonShape = RoundedCornerShape(14.dp)
+    val doubanHazeStyle = HazeMaterials.thin(
+        doubanGreen.copy(alpha = if (doubanEnabled) 0.72f else 0.24f)
+    )
     Column(
         modifier = modifier.padding(start = 18.dp, top = 8.dp, end = 18.dp)
     ) {
@@ -312,12 +318,18 @@ internal fun ActivationSecondaryActions(
             enabled = doubanEnabled,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp),
-            shape = RoundedCornerShape(14.dp),
+                .height(48.dp)
+                .clip(doubanButtonShape)
+                .hazeBlur(
+                    input = HazeInput.Sources(hazeState),
+                    style = doubanHazeStyle,
+                    sampling = HazeSampling.Adaptive
+                ),
+            shape = doubanButtonShape,
             colors = ButtonDefaults.buttonColors(
-                containerColor = doubanGreen,
+                containerColor = Color.Transparent,
                 contentColor = MaterialTheme.colorScheme.onMonetDoubanGreen(),
-                disabledContainerColor = doubanGreen.copy(alpha = 0.38f),
+                disabledContainerColor = Color.Transparent,
                 disabledContentColor = MaterialTheme.colorScheme.onMonetDoubanGreen().copy(alpha = 0.38f)
             )
         ) {
