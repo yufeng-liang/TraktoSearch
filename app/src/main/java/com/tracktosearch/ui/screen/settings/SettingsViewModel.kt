@@ -30,6 +30,7 @@ import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.local.db.OfflineCacheManager
 import com.tracktosearch.data.notification.NotificationScheduler
 import com.tracktosearch.data.session.SessionModeManager
+import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.data.remote.custom.CustomSearchService
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
 import com.tracktosearch.data.remote.douban.DoubanRepository
@@ -122,6 +123,8 @@ class SettingsViewModel @Inject constructor(
 
     val accentColor: StateFlow<com.tracktosearch.ui.theme.MonetAccent?> = themeStorage.accentColor
 
+    val visualEffectMode: StateFlow<VisualEffectMode> = themeStorage.visualEffectMode
+
     val defaultTab: StateFlow<Int> = defaultTabStorage.defaultTab
 
     val language: StateFlow<String> = languageStorage.language
@@ -150,6 +153,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setAccentColor(accent: com.tracktosearch.ui.theme.MonetAccent?) {
         viewModelScope.launch { themeStorage.setAccentColor(accent) }
+    }
+
+    fun setVisualEffectMode(mode: VisualEffectMode) {
+        viewModelScope.launch { themeStorage.setVisualEffectMode(mode) }
     }
 
     fun setDefaultTab(tab: Int) {

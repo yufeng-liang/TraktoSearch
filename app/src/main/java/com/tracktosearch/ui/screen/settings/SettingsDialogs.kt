@@ -53,6 +53,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
+import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.component.AdaptiveSingleLineText
 import com.tracktosearch.ui.component.StickyHeaderChangelogContent
 import com.tracktosearch.ui.theme.appSwitchColors
@@ -93,6 +94,68 @@ internal fun ThemeSelectionDialog(
         },
         confirmButton = {}
     )
+}
+
+/** 视觉材质选择对话框。Glass 明确标记为实验性，避免用户误以为两种模式完全等价。 */
+@Composable
+internal fun VisualEffectSelectionDialog(
+    currentMode: VisualEffectMode,
+    onModeSelected: (VisualEffectMode) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        title = { Text(stringResource(R.string.settings_visual_effect)) },
+        text = {
+            Column {
+                VisualEffectOptionRow(
+                    label = stringResource(R.string.settings_visual_effect_blur),
+                    description = stringResource(R.string.settings_visual_effect_blur_desc),
+                    selected = currentMode == VisualEffectMode.BLUR,
+                    onClick = { onModeSelected(VisualEffectMode.BLUR) }
+                )
+                VisualEffectOptionRow(
+                    label = stringResource(R.string.settings_visual_effect_glass),
+                    description = stringResource(R.string.settings_visual_effect_glass_desc),
+                    selected = currentMode == VisualEffectMode.GLASS,
+                    onClick = { onModeSelected(VisualEffectMode.GLASS) }
+                )
+            }
+        },
+        confirmButton = {}
+    )
+}
+
+@Composable
+private fun VisualEffectOptionRow(
+    label: String,
+    description: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val view = LocalView.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { view.performHaptic(HapticType.TICK); onClick() }
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = { view.performHaptic(HapticType.TICK); onClick() }
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label)
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }
 
 @Composable

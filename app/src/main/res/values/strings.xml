@@ -471,6 +471,13 @@
     <string name="theme_dark">Dark</string>
     <string name="theme_light">Light</string>
 
+    <!-- Visual Effect -->
+    <string name="settings_visual_effect">Visual Effect</string>
+    <string name="settings_visual_effect_blur">Blur</string>
+    <string name="settings_visual_effect_blur_desc">Haze frosted blur with subtle grain</string>
+    <string name="settings_visual_effect_glass">Glass (Experimental)</string>
+    <string name="settings_visual_effect_glass_desc">Refraction-driven optics with highlights and interaction lighting</string>
+
     <!-- Accent Color -->
     <string name="settings_accent_color">Accent Color</string>
     <string name="settings_accent_dynamic">Dynamic</string>
@@ -697,6 +704,7 @@ Config:
     <string name="help_tips_b8">Person page supports horizontal swipe to view multiple images, tap for fullscreen and save</string>
     <string name="help_tips_b9">Online search supports Chinese name search (powered by TMDB), auto-populates related movies/shows when searching for a person</string>
     <string name="help_tips_b10">Quickly customize discover page sections from the toolbar icon</string>
+    <string name="help_tips_b11">In Settings &gt; Appearance, choose Blur or experimental Glass; some devices may simplify advanced optical details automatically</string>
     <string name="help_vpn">VPN Notice</string>
     <string name="help_vpn_b1">Some features require access to overseas services. VPN may be needed for normal access</string>
     <string name="help_vpn_b2">Affected features: Trailer thumbnails (YouTube), Trakt data (trending/recommendations), TMDB data (movie details/posters)</string>

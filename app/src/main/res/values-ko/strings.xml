@@ -245,6 +245,13 @@
     <string name="theme_dark">다크</string>
     <string name="theme_light">라이트</string>
 
+    <!-- 시각 효과 -->
+    <string name="settings_visual_effect">시각 효과</string>
+    <string name="settings_visual_effect_blur">블러</string>
+    <string name="settings_visual_effect_blur_desc">미세한 입자가 포함된 Haze 반투명 블러</string>
+    <string name="settings_visual_effect_glass">Glass(실험적)</string>
+    <string name="settings_visual_effect_glass_desc">하이라이트와 상호작용 조명을 제공하는 굴절 기반 광학 효과</string>
+
     <!-- Accent Color -->
     <string name="settings_accent_color">액센트 색상</string>
     <string name="settings_accent_dynamic">다이나믹</string>
@@ -1375,6 +1382,7 @@
     <string name="help_tips_b8">인물 상세 페이지에서 좌우 스와이프로 여러 사진 보기, 사진 탭하여 전체 화면 보기 및 앨범에 저장</string>
     <string name="help_tips_b9">온라인 검색은 중국어 인물명 검색 지원(TMDB 기반), 인물 검색 시 자동으로 관련 작품 표시</string>
     <string name="help_tips_b10">발견 페이지 제목 표시줄 오른쪽을 탭하여 섹션 빠르게 사용자 정의</string>
+    <string name="help_tips_b11">설정 &gt; 외관 &gt; 시각 효과에서 블러 또는 실험적 Glass를 선택할 수 있으며, 일부 기기에서는 고급 광학 효과가 자동으로 단순화됩니다</string>
 
     <!-- 이스터에그 메시지 (9애니메이션 × 3메시지) -->
     <string name="easter_msg_shy_1">찔렀어요, 간지러워!</string>
