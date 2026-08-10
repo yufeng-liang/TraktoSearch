@@ -199,6 +199,8 @@ class WatchlistViewModel @Inject constructor(
     private var loadHistoryMoviesJob: Job? = null
     private var loadHistoryShowsJob: Job? = null
     private var loadHistoryOthersJob: Job? = null
+    // 最近一次已加载的会话模式，避免页面重新进入组合时重复重置列表触发骨架屏
+    private var loadedSessionKey: SessionMode? = null
     private var doubanSyncBannerHideJob: Job? = null
     private val pendingWatchlistMutations = mutableListOf<TraktRepository.WatchlistMutation>()
     private val loadedTraktMovies = mutableListOf<MediaUiItem>()
@@ -1428,8 +1430,10 @@ class WatchlistViewModel @Inject constructor(
         reloadForSession(forceReload = true)
     }
 
-    /** 会话模式发生变化时重新读取当前账号的数据，避免沿用旧会话的空状态或列表。 */
-    fun onSessionModeChanged() {
+    /** 会话模式发生变化时重新读取当前账号的数据；同一会话重复调用不重置列表，避免返回页面时骨架屏闪烁。 */
+    fun onSessionModeChanged(sessionKey: SessionMode) {
+        if (loadedSessionKey == sessionKey) return
+        loadedSessionKey = sessionKey
         reloadForSession(forceReload = false)
     }
 

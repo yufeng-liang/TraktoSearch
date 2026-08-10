@@ -235,7 +235,7 @@ fun WatchlistScreen(
     }
 
     LaunchedEffect(sessionKey) {
-        viewModel.onSessionModeChanged()
+        viewModel.onSessionModeChanged(sessionKey)
     }
 
     LaunchedEffect(isCurrentTab) {

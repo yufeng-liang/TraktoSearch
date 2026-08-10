@@ -191,7 +191,7 @@ class WatchlistViewModelTest {
         coVerify(exactly = 0) { traktRepository.getShowWatchlist(any(), any(), any()) }
 
         sessionMode.value = SessionMode.TRAKT
-        viewModel.onSessionModeChanged()
+        viewModel.onSessionModeChanged(SessionMode.TRAKT)
         advanceUntilIdle()
 
         assertThat(viewModel.uiState.value.movies.map { it.title }).containsExactly("登录后的电影")
@@ -216,11 +216,34 @@ class WatchlistViewModelTest {
         coVerify(exactly = 0) { doubanSyncedItemDao.getByStatus("wish") }
 
         sessionMode.value = SessionMode.DOUBAN
-        viewModel.onSessionModeChanged()
+        viewModel.onSessionModeChanged(SessionMode.DOUBAN)
         advanceUntilIdle()
 
         assertThat(viewModel.uiState.value.movies.map { it.title }).containsExactly("登录后的豆瓣电影")
         assertThat(viewModel.uiState.value.shows.map { it.title }).containsExactly("登录后的豆瓣剧集")
+    }
+
+    @Test
+    fun `会话未变化时重复进入页面不重新加载列表`() = runTest {
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(1, "已有电影")) to 1)
+        coEvery { traktRepository.getShowWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistShow(2, "已有剧集")) to 1)
+
+        viewModel.onSessionModeChanged(SessionMode.TRAKT)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.movies.map { it.title }).containsExactly("已有电影")
+        assertThat(viewModel.uiState.value.shows.map { it.title }).containsExactly("已有剧集")
+        coVerify(exactly = 1) { traktRepository.getMovieWatchlist(any(), any(), any()) }
+
+        // 模拟从详情页返回：同一会话再次调用不应重置列表也不重新请求
+        viewModel.onSessionModeChanged(SessionMode.TRAKT)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.movies.map { it.title }).containsExactly("已有电影")
+        assertThat(viewModel.uiState.value.shows.map { it.title }).containsExactly("已有剧集")
+        coVerify(exactly = 1) { traktRepository.getMovieWatchlist(any(), any(), any()) }
     }
 
     @Test
