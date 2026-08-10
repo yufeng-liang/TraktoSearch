@@ -1,3 +1,5 @@
+@file:OptIn(dev.chrisbanes.haze.ExperimentalHazeApi::class)
+
 package com.tracktosearch.ui.screen.person
 
 import androidx.activity.compose.BackHandler
@@ -57,16 +59,16 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
+import com.tracktosearch.ui.component.AppGlassStyles
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.SectionHeader
+import com.tracktosearch.ui.component.appVisualEffect
 import com.tracktosearch.ui.util.ToastEffect
 import dev.chrisbanes.haze.HazeInput
-import dev.chrisbanes.haze.HazeSampling
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
-import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 
 @Composable
@@ -372,20 +374,25 @@ fun PersonScreen(
                     }
 
                     // 返回按钮
+                    val backInteractionSource = remember { MutableInteractionSource() }
                     Box(
                         modifier = Modifier
                             .statusBarsPadding()
                             .padding(start = 12.dp, top = 4.dp)
                             .size(40.dp)
                             .clip(CircleShape)
-                            .hazeBlur(
+                            .appVisualEffect(
                                 input = HazeInput.Sources(hazeState),
-                                style = HazeBlurStyle {
+                                hazeStyle = HazeBlurStyle {
                                     backgroundColor(hazeSurface.copy(alpha = 0.6f))
                                     blurRadius(20.dp)
                                     noiseFactor(0f)
                                 },
-                                sampling = HazeSampling.Adaptive
+                                glassStyle = AppGlassStyles.circularControl(
+                                    tint = hazeSurface.copy(alpha = 0.6f)
+                                ),
+                                blurSampling = dev.chrisbanes.haze.HazeSampling.Adaptive,
+                                interactionSource = backInteractionSource
                             )
                             .background(
                                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
@@ -397,7 +404,7 @@ fun PersonScreen(
                                 shape = CircleShape
                             )
                             .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
+                                interactionSource = backInteractionSource,
                                 indication = null,
                                 onClick = { onBack() }
                             ),

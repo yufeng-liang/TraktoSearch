@@ -1,13 +1,18 @@
+@file:OptIn(dev.chrisbanes.haze.ExperimentalHazeApi::class)
+
 package com.tracktosearch.ui.screen.main
 
 import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -80,11 +86,15 @@ import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.ui.component.LocalIsCurrentTab
+import com.tracktosearch.ui.component.AppGlassStyles
+import com.tracktosearch.ui.component.appVisualEffect
 import com.tracktosearch.ui.component.NeumorphicActiveTab
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.OnboardingOverlay
 import com.tracktosearch.ui.component.PageBackground
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.screen.discover.DiscoverScreen
 import com.tracktosearch.ui.screen.feedback.FeedbackViewModel
 import com.tracktosearch.ui.screen.search.CloudThemeProvider
@@ -105,6 +115,8 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazeSampling
 import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -523,6 +535,12 @@ fun MainScreen(
                 lightShadowAlpha = 0f,
                 hazeState = hazeState,
                 hazeStyle = navHazeStyle,
+                glassStyle = AppGlassStyles.bottomNavigation(
+                    tint = MaterialTheme.colorScheme.surface.copy(
+                        alpha = if (isDark) 0.10f else 0.06f
+                    ),
+                    shape = navBarShape
+                ),
                 hazeBlurRadius = 40.dp,
                 // 底部导航自身作为 zIndex=1 的 source，effect 只采样 zIndex=0 的页面内容，
                 // 避免导航栏模糊自身导致重复模糊与无谓开销（Haze 最重的叠加场景）
@@ -580,6 +598,7 @@ fun MainScreen(
                             labelRes = tab.labelRes,
                             selected = isSelected,
                             weight = 1f,
+                            hazeState = hazeState,
                             avatarUrl = avatarUrl,
                             badgeCount = if (index == 3) unreadCount else 0,
                             onClick = {
@@ -663,13 +682,26 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
     selected: Boolean,
     weight: Float,
     onClick: () -> Unit,
+    hazeState: HazeState,
     avatarUrl: String? = null,
     badgeCount: Int = 0,
     onPositioned: (Rect) -> Unit = {}
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val density = LocalDensity.current
     val context = LocalContext.current
+    val visualEffectMode = LocalVisualEffectMode.current
+    val isHovered by interactionSource.collectIsHoveredAsState()
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val selectedScale by animateFloatAsState(
+        targetValue = when {
+            visualEffectMode != VisualEffectMode.GLASS -> 1f
+            selected -> 1.06f
+            isHovered || isFocused -> 1.04f
+            else -> 1f
+        },
+        animationSpec = tween(durationMillis = 180),
+        label = "navTabScale"
+    )
     // 浅色模式下 primary 偏暗（Red700），选中态提亮饱和度与亮度，提升鲜亮感
     val selectedColor = if (selected) {
         val isLight = MaterialTheme.colorScheme.surface.luminance() > 0.5f
@@ -714,10 +746,32 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
         modifier = Modifier
             .weight(weight)
             .fillMaxSize()
+            .scale(selectedScale)
             .onGloballyPositioned { coordinates ->
                 val bounds = coordinates.boundsInWindow()
                 onPositioned(bounds)
             }
+            .clip(RoundedCornerShape(24.dp))
+            .then(
+                if (visualEffectMode == VisualEffectMode.GLASS) {
+                    Modifier.appVisualEffect(
+                        input = HazeInput.Sources(
+                            state = hazeState,
+                            selection = HazeSourceSelection.Behind.where { source -> source.zIndex < 1f }
+                        ),
+                        hazeStyle = HazeMaterials.thin(),
+                        glassStyle = AppGlassStyles.bottomNavigationItem(
+                            tint = MaterialTheme.colorScheme.surface.copy(
+                                alpha = if (selected) 0.08f else 0.03f
+                            )
+                        ),
+                        blurSampling = HazeSampling.Adaptive,
+                        interactionSource = interactionSource
+                    )
+                } else {
+                    Modifier
+                }
+            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

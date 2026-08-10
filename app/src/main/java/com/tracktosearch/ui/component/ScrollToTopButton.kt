@@ -1,3 +1,5 @@
+@file:OptIn(dev.chrisbanes.haze.ExperimentalHazeApi::class)
+
 package com.tracktosearch.ui.component
 
 import androidx.compose.animation.AnimatedVisibility
@@ -39,7 +41,6 @@ import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeSampling
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
-import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.launch
 
@@ -155,6 +156,7 @@ private fun ScrollToTopButtonContent(
     val view = LocalView.current
     val arrowTint = MaterialTheme.colorScheme.primary
     val onClickWithHaptic = { view.performHaptic(HapticType.TICK); onClick() }
+    val interactionSource = remember { MutableInteractionSource() }
     if (hazeState != null) {
         val resolvedHazeStyle = resolveScrollToTopHazeStyle(
             hazeStyle = hazeStyle,
@@ -165,10 +167,14 @@ private fun ScrollToTopButtonContent(
             modifier = Modifier
                 .size(HAZE_BUTTON_SIZE)
                 .clip(CircleShape)
-                .hazeBlur(
+                .appVisualEffect(
                     input = HazeInput.Sources(hazeState),
-                    style = resolvedHazeStyle,
-                    sampling = HazeSampling.Adaptive
+                    hazeStyle = resolvedHazeStyle,
+                    glassStyle = AppGlassStyles.circularControl(
+                        tint = MaterialTheme.colorScheme.surface.copy(alpha = 0.18f)
+                    ),
+                    blurSampling = HazeSampling.Adaptive,
+                    interactionSource = interactionSource
                 )
                 .border(
                     width = 1.dp,
@@ -176,7 +182,7 @@ private fun ScrollToTopButtonContent(
                     shape = CircleShape
                 )
                 .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
+                    interactionSource = interactionSource,
                     indication = null,
                     onClick = onClickWithHaptic
                 ),
