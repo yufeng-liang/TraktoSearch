@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.chrisbanes.haze.HazeState
@@ -42,7 +43,8 @@ import dev.chrisbanes.haze.HazeState
 fun ActionButtonRow(
     actions: List<ActionItem>,
     hazeState: HazeState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    verticalPadding: Dp = 5.dp
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -98,7 +100,7 @@ fun ActionButtonRow(
                         onClick = action.onClick
                     )
                     .alpha(contentAlpha)
-                    .padding(vertical = 5.dp)
+                    .padding(vertical = verticalPadding)
             ) {
                 if (action.isLoading) {
                     CircularProgressIndicator(
@@ -117,6 +119,7 @@ fun ActionButtonRow(
                     text = action.label,
                     color = contentColor,
                     fontSize = 12.sp,
+                    lineHeight = 12.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
