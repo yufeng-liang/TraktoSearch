@@ -161,7 +161,7 @@ class PersonViewModelTest {
 
         val state = viewModel.uiState.value
         assertThat(state.error).isNotNull()
-        assertThat(state.error).isEqualTo("Failed to load person")
+        assertThat(state.error).isEqualTo("Load failed")
         assertThat(state.person).isNull()
     }
 

@@ -4,6 +4,7 @@ import com.tracktosearch.data.remote.trakt.TraktAuthManager
 import com.tracktosearch.data.repository.TraktRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
+import android.content.Context
 import io.mockk.mockk
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -18,7 +19,7 @@ class LoginViewModelTest {
         val traktRepository = mockk<TraktRepository>(relaxed = true)
         coEvery { authManager.exchangeCodeForToken("oauth-code") } returns Result.success(Unit)
 
-        val viewModel = LoginViewModel(authManager, traktRepository)
+        val viewModel = LoginViewModel(authManager, traktRepository, mockk<Context>(relaxed = true))
         viewModel.exchangeCodeForToken("oauth-code")
         advanceUntilIdle()
 

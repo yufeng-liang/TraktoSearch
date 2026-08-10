@@ -119,7 +119,7 @@ class PersonViewModel @Inject constructor(
                 // 渐进式渲染：人物基本信息先显示
                 val person = personDeferred.await()
                 if (person == null) {
-                    _uiState.value = PersonUiState(error = "Failed to load person")
+                    _uiState.value = PersonUiState(error = context.getString(R.string.error_load_failed))
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
@@ -158,7 +158,7 @@ class PersonViewModel @Inject constructor(
 
                 loaded = true
             } catch (_: Exception) {
-                _uiState.value = PersonUiState(error = "Failed to load person data")
+                _uiState.value = PersonUiState(error = context.getString(R.string.error_load_failed))
             }
         }
     }

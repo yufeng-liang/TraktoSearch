@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.discoverfilter
 
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
@@ -11,6 +12,7 @@ import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import android.content.Context
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,6 +55,7 @@ class DiscoverFilterViewModelTest {
     private val traktRepository = mockk<TraktRepository>(relaxed = true)
     private val sessionModeManager = mockk<SessionModeManager>(relaxed = true)
     private val posterColorExtractor = mockk<PosterColorExtractor>(relaxed = true)
+    private val context = mockk<Context>(relaxed = true)
     private lateinit var viewModel: DiscoverFilterViewModel
 
     @Test
@@ -64,7 +67,8 @@ class DiscoverFilterViewModelTest {
             tmdbRepository,
             traktRepository,
             sessionModeManager,
-            posterColorExtractor
+            posterColorExtractor,
+            context
         )
         advanceUntilIdle()
 
@@ -96,7 +100,8 @@ class DiscoverFilterViewModelTest {
             tmdbRepository,
             traktRepository,
             sessionModeManager,
-            posterColorExtractor
+            posterColorExtractor,
+            context
         )
         // 不在此处 advanceUntilIdle：StandardTestDispatcher 下 init 协程处于 pending，
         // 由各测试在 runTest 内按需 advanceUntilIdle 推进
@@ -269,6 +274,7 @@ class DiscoverFilterViewModelTest {
         advanceUntilIdle()
 
         coEvery { tmdbRepository.discover(any(), any()) } throws IOException("网络错误")
+        every { context.getString(R.string.error_network_unavailable) } returns "网络错误"
 
         viewModel.search()
         advanceUntilIdle()

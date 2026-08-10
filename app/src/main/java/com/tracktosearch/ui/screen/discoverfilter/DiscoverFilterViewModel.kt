@@ -1,14 +1,18 @@
 package com.tracktosearch.ui.screen.discoverfilter
 
+import android.content.Context
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.PosterColorExtractor
+import com.tracktosearch.ui.util.toUserMessage
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -44,7 +48,8 @@ class DiscoverFilterViewModel @Inject constructor(
     private val tmdbRepository: TmdbRepository,
     private val traktRepository: TraktRepository,
     private val sessionModeManager: SessionModeManager,
-    val posterColorExtractor: PosterColorExtractor
+    val posterColorExtractor: PosterColorExtractor,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DiscoverFilterUiState())
@@ -343,7 +348,7 @@ class DiscoverFilterViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isLoadingMore = false,
-                    error = e.message
+                    error = e.toUserMessage(context, R.string.error_search_failed)
                 )
             }
         }

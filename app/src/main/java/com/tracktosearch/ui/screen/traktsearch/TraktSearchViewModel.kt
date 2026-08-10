@@ -15,6 +15,7 @@ import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.session.SessionModeManager
+import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.async
@@ -349,7 +350,7 @@ class TraktSearchViewModel @Inject constructor(
                     } else {
                         updateTabState(searchType, SearchTabState(
                             isLoading = false,
-                            error = e.message ?: context.getString(R.string.error_search_failed),
+                            error = e.toUserMessage(context, R.string.error_search_failed),
                             hasSearched = true
                         ))
                     }
@@ -372,7 +373,7 @@ class TraktSearchViewModel @Inject constructor(
                 }.onFailure { e ->
                     updateTabState(searchType, SearchTabState(
                         isLoading = false,
-                        error = e.message ?: context.getString(R.string.error_search_failed),
+                        error = e.toUserMessage(context, R.string.error_search_failed),
                         hasSearched = true
                     ))
                 }
@@ -485,7 +486,7 @@ class TraktSearchViewModel @Inject constructor(
                         } else {
                             updateTabState(searchType, SearchTabState(
                                 isLoading = false,
-                                error = e.message ?: context.getString(R.string.error_search_failed),
+                                error = e.toUserMessage(context, R.string.error_search_failed),
                                 hasSearched = true
                             ))
                         }
@@ -508,7 +509,7 @@ class TraktSearchViewModel @Inject constructor(
                     }.onFailure { e ->
                         updateTabState(searchType, SearchTabState(
                             isLoading = false,
-                            error = e.message ?: context.getString(R.string.error_search_failed),
+                            error = e.toUserMessage(context, R.string.error_search_failed),
                             hasSearched = true
                         ))
                     }

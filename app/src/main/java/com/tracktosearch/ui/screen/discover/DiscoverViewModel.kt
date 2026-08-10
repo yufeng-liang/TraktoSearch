@@ -33,6 +33,7 @@ import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.TtlCache
 import com.tracktosearch.ui.screen.search.DoubanHotCategory
+import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -260,7 +261,7 @@ class DiscoverViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
-                    doubanRecommendState = DoubanRecommendState.Error(e.message ?: "加载失败")
+                    doubanRecommendState = DoubanRecommendState.Error(e.toUserMessage(context, R.string.error_load_failed))
                 )
             }
         }
@@ -480,7 +481,7 @@ class DiscoverViewModel @Inject constructor(
                 if (index < updated.size) {
                     updated[index] = updated[index].copy(
                         isLoading = false,
-                        error = e.message ?: context.getString(R.string.error_load_failed)
+                        error = e.toUserMessage(context, R.string.error_load_failed)
                     )
                     _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
                 }
@@ -664,7 +665,7 @@ class DiscoverViewModel @Inject constructor(
                 if (idx >= 0) {
                     updated[idx] = updated[idx].copy(
                         isLoading = false,
-                        error = e.message ?: context.getString(R.string.error_load_failed)
+                        error = e.toUserMessage(context, R.string.error_load_failed)
                     )
                     _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
                 }
@@ -688,7 +689,7 @@ class DiscoverViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoadingPopular = false,
-                    popularError = e.message ?: context.getString(R.string.error_load_failed)
+                    popularError = e.toUserMessage(context, R.string.error_load_failed)
                 )
             }
         }
@@ -720,7 +721,7 @@ class DiscoverViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoadingUpcoming = false,
-                    upcomingError = e.message ?: context.getString(R.string.error_load_failed)
+                    upcomingError = e.toUserMessage(context, R.string.error_load_failed)
                 )
             }
         }
@@ -842,15 +843,15 @@ class DiscoverViewModel @Inject constructor(
                 })
 
                 // 记录各栏目的错误信息（result 失败时记录）
-                val trendingMoviesError = trendingMoviesResult.exceptionOrNull()?.message
+                val trendingMoviesError = trendingMoviesResult.exceptionOrNull()?.toUserMessage(context, R.string.error_load_failed)
                     ?: context.getString(R.string.error_load_failed).takeIf { trendingMoviesResult.isFailure }
-                val trendingShowsError = trendingShowsResult.exceptionOrNull()?.message
+                val trendingShowsError = trendingShowsResult.exceptionOrNull()?.toUserMessage(context, R.string.error_load_failed)
                     ?: context.getString(R.string.error_load_failed).takeIf { trendingShowsResult.isFailure }
                 // 最受期待电影/剧集合并为一个 error（用电影的失败状态，或剧集的）
-                val anticipatedError = anticipatedMoviesResult.exceptionOrNull()?.message
-                    ?: anticipatedShowsResult.exceptionOrNull()?.message
+                val anticipatedError = anticipatedMoviesResult.exceptionOrNull()?.toUserMessage(context, R.string.error_load_failed)
+                    ?: anticipatedShowsResult.exceptionOrNull()?.toUserMessage(context, R.string.error_load_failed)
                     ?: context.getString(R.string.error_load_failed).takeIf { anticipatedMoviesResult.isFailure && anticipatedShowsResult.isFailure }
-                val showRecsError = showRecsResult?.exceptionOrNull()?.message
+                val showRecsError = showRecsResult?.exceptionOrNull()?.toUserMessage(context, R.string.error_load_failed)
                     ?: context.getString(R.string.error_load_failed).takeIf { showRecsResult != null && showRecsResult.isFailure && !isLoggedIn }
 
                 _uiState.value = _uiState.value.copy(
@@ -870,10 +871,10 @@ class DiscoverViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoadingTrakt = false,
-                    traktTrendingMoviesError = e.message ?: context.getString(R.string.error_load_failed),
-                    traktTrendingShowsError = e.message ?: context.getString(R.string.error_load_failed),
-                    traktAnticipatedError = e.message ?: context.getString(R.string.error_load_failed),
-                    traktShowRecommendationsError = e.message ?: context.getString(R.string.error_load_failed)
+                    traktTrendingMoviesError = e.toUserMessage(context, R.string.error_load_failed),
+                    traktTrendingShowsError = e.toUserMessage(context, R.string.error_load_failed),
+                    traktAnticipatedError = e.toUserMessage(context, R.string.error_load_failed),
+                    traktShowRecommendationsError = e.toUserMessage(context, R.string.error_load_failed)
                 )
             }
         }
@@ -894,7 +895,7 @@ class DiscoverViewModel @Inject constructor(
                 }.onFailure { e ->
                     _uiState.value = _uiState.value.copy(
                         isLoadingTraktLists = false,
-                        trendingListsError = e.message ?: context.getString(R.string.error_load_failed)
+                        trendingListsError = e.toUserMessage(context, R.string.error_load_failed)
                     )
                 }
             } catch (e: CancellationException) {
@@ -902,7 +903,7 @@ class DiscoverViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoadingTraktLists = false,
-                    trendingListsError = e.message ?: context.getString(R.string.error_load_failed)
+                    trendingListsError = e.toUserMessage(context, R.string.error_load_failed)
                 )
             }
         }
@@ -994,7 +995,7 @@ class DiscoverViewModel @Inject constructor(
         } catch (e: Exception) {
             _uiState.value = _uiState.value.copy(
                 isLoadingRecommendations = false,
-                recommendationsError = e.message ?: context.getString(R.string.error_load_failed)
+                recommendationsError = e.toUserMessage(context, R.string.error_load_failed)
             )
         }
     }

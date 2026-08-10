@@ -182,7 +182,7 @@ class DiscoverViewModelTest {
 
         assertThat(viewModel.uiState.value.isLoadingPopular).isFalse()
         assertThat(viewModel.uiState.value.popularError).isNotNull()
-        assertThat(viewModel.uiState.value.popularError).contains("network error")
+        assertThat(viewModel.uiState.value.popularError).contains("Network error")
     }
 
     @Test

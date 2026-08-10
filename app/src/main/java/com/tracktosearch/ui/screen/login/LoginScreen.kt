@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.login
 
+import android.content.Context
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.layout.Arrangement
@@ -46,6 +47,8 @@ import com.tracktosearch.OAuthCallback
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.trakt.TraktAuthManager
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.ui.util.toUserMessage
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -66,7 +69,8 @@ enum class LoginState {
 @HiltViewModel
 class LoginViewModel @Inject constructor(
     val authManager: TraktAuthManager,
-    private val traktRepository: TraktRepository
+    private val traktRepository: TraktRepository,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _loginState = MutableStateFlow(LoginState.IDLE)
@@ -91,7 +95,7 @@ class LoginViewModel @Inject constructor(
         val result = authManager.buildAuthorizationUrl()
         return result.getOrElse {
             _loginState.value = LoginState.ERROR
-            _errorMessage.value = it.message ?: "Authorization URL unavailable"
+            _errorMessage.value = it.toUserMessage(context, R.string.login_failed)
             null
         }
     }
@@ -106,7 +110,7 @@ class LoginViewModel @Inject constructor(
                 _loginState.value = LoginState.SUCCESS
             } else {
                 _loginState.value = LoginState.ERROR
-                _errorMessage.value = result.exceptionOrNull()?.message ?: ""
+                _errorMessage.value = result.exceptionOrNull()?.toUserMessage(context, R.string.login_failed) ?: ""
             }
         }
     }
