@@ -156,6 +156,8 @@ import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.showToast
+import com.tracktosearch.ui.util.toUserMessage
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
@@ -242,6 +244,7 @@ data class DoubanDetailMarkChanges(
  */
 @HiltViewModel
 class DoubanItemDetailViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val doubanRetryManager: DoubanRetryManager,
     private val doubanSyncManager: DoubanSyncManager,
     private val resourceRepository: ResourceRepository,
@@ -326,7 +329,7 @@ class DoubanItemDetailViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = e.message ?: "unknown error"
+                    error = e.toUserMessage(context, R.string.error_load_failed)
                 )
             }
         }
@@ -618,7 +621,7 @@ class DoubanItemDetailViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isSearching = false,
                     searchAttempted = true,
-                    searchError = e.message
+                    searchError = e.toUserMessage(context, R.string.error_search_failed)
                 )
             }
         }

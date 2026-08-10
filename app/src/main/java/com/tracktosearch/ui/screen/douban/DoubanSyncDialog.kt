@@ -41,6 +41,7 @@ import com.tracktosearch.data.repository.DoubanSyncSubStage
 import com.tracktosearch.data.repository.labelRes
 import com.tracktosearch.service.DoubanSyncService
 import com.tracktosearch.ui.screen.watchlist.hasLiveCountProgress
+import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import javax.inject.Inject
@@ -311,8 +312,10 @@ fun DoubanSyncDialog(
                 if (p.isComplete) {
                     Spacer(modifier = Modifier.height(12.dp))
                     p.errorMessage?.takeIf { it.isNotBlank() }?.let { errorMessage ->
+                        // errorMessage 为原始异常消息，先映射为友好本地化文案再展示
+                        val localizedError = Exception(errorMessage).toUserMessage(LocalContext.current, R.string.error_operation_failed)
                         Text(
-                            stringResource(R.string.douban_sync_error_detail, errorMessage),
+                            stringResource(R.string.douban_sync_error_detail, localizedError),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error
                         )

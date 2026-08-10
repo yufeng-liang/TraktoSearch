@@ -459,7 +459,7 @@ class StatisticsViewModelTest {
         val state = viewModel.uiState.value
         assertThat(state.initialLoading).isFalse()
         assertThat(state.error).isNotNull()
-        assertThat(state.error).isEqualTo("网络错误")
+        assertThat(state.error).contains("Network error")
     }
 
     /**
@@ -827,7 +827,7 @@ class StatisticsViewModelTest {
         // initialLoading 因 wordCloudReady 已退出骨架
         assertThat(state.initialLoading).isFalse()
         // error 来自电影失败
-        assertThat(state.error).isEqualTo("fail")
+        assertThat(state.error).contains("Network error")
     }
 
     /**
@@ -853,7 +853,7 @@ class StatisticsViewModelTest {
         // watchedShows 未到达 → overviewReady=false
         assertThat(state.overviewReady).isFalse()
         // error 来自剧集失败
-        assertThat(state.error).isEqualTo("show fail")
+        assertThat(state.error).contains("Network error")
     }
 
     /**
@@ -880,7 +880,7 @@ class StatisticsViewModelTest {
         // totalShowCount=0（watchedShows 未到达）
         assertThat(state.totalShowCount).isEqualTo(0)
         // error 来自 watchedShows 失败
-        assertThat(state.error).isEqualTo("ws fail")
+        assertThat(state.error).contains("Network error")
     }
 
     /**

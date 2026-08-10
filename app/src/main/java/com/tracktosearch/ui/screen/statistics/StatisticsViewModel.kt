@@ -14,6 +14,7 @@ import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.UserReviewRepository
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.remote.trakt.dto.*
+import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -216,21 +217,21 @@ class StatisticsViewModel @Inject constructor(
 
                 // 电影历史（致命）：到达后观影时长即用本地 runtime 兜底
                 movies = movieHistoryDeferred.await().getOrElse {
-                    _uiState.value = _uiState.value.copy(initialLoading = false, error = it.message ?: context.getString(R.string.error_load_failed))
+                    _uiState.value = _uiState.value.copy(initialLoading = false, error = it.toUserMessage(context, R.string.error_load_failed))
                     return@launch
                 }
                 publish(movies, shows, watchedShows, userStats, allRatings, words, wordCloudReady, doubanItems, isDoubanMode, doubanDetails)
 
                 // 剧集历史（致命）：+电影后热力图就绪
                 shows = showHistoryDeferred.await().getOrElse {
-                    _uiState.value = _uiState.value.copy(initialLoading = false, error = it.message ?: context.getString(R.string.error_load_failed))
+                    _uiState.value = _uiState.value.copy(initialLoading = false, error = it.toUserMessage(context, R.string.error_load_failed))
                     return@launch
                 }
                 publish(movies, shows, watchedShows, userStats, allRatings, words, wordCloudReady, doubanItems, isDoubanMode, doubanDetails)
 
                 // 已看剧（致命）：+电影+剧集后概览与类型分布就绪
                 watchedShows = watchedShowsDeferred.await().getOrElse {
-                    _uiState.value = _uiState.value.copy(initialLoading = false, error = it.message ?: context.getString(R.string.error_load_failed))
+                    _uiState.value = _uiState.value.copy(initialLoading = false, error = it.toUserMessage(context, R.string.error_load_failed))
                     return@launch
                 }
                 publish(movies, shows, watchedShows, userStats, allRatings, words, wordCloudReady, doubanItems, isDoubanMode, doubanDetails)
@@ -247,7 +248,7 @@ class StatisticsViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     initialLoading = false,
-                    error = e.message ?: context.getString(R.string.error_load_failed)
+                    error = e.toUserMessage(context, R.string.error_load_failed)
                 )
             }
         }

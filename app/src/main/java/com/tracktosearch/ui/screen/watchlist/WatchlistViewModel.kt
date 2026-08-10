@@ -34,6 +34,7 @@ import com.tracktosearch.data.repository.mapDoubanMediaType
 import com.tracktosearch.data.repository.normalizeWatchlistImdbId
 import com.tracktosearch.data.session.SessionMode
 import com.tracktosearch.data.session.SessionModeManager
+import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -564,7 +565,7 @@ class WatchlistViewModel @Inject constructor(
                     moviesLoaded = true,
                     movies = if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() } else _uiState.value.movies,
                     movieTotalCount = _uiState.value.movieTotalCount ?: cached.size.takeIf { it > 0 },
-                    moviesError = if (cached.isNotEmpty()) null else (e.message ?: context.getString(R.string.error_load_failed))
+                    moviesError = if (cached.isNotEmpty()) null else e.toUserMessage(context, R.string.error_load_failed)
                 )
             }
         }
@@ -690,7 +691,7 @@ class WatchlistViewModel @Inject constructor(
                     showsLoaded = true,
                     shows = if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() } else _uiState.value.shows,
                     showTotalCount = _uiState.value.showTotalCount ?: cached.size.takeIf { it > 0 },
-                    showsError = if (cached.isNotEmpty()) null else (e.message ?: context.getString(R.string.error_load_failed))
+                    showsError = if (cached.isNotEmpty()) null else e.toUserMessage(context, R.string.error_load_failed)
                 )
             }
         }
@@ -809,7 +810,7 @@ class WatchlistViewModel @Inject constructor(
                     isLoadingHistoryMovies = false,
                     historyMoviesLoaded = true,
                     historyMovies = if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() } else _uiState.value.historyMovies,
-                    historyMoviesError = if (cached.isNotEmpty()) null else (e.message ?: context.getString(R.string.error_load_failed))
+                    historyMoviesError = if (cached.isNotEmpty()) null else e.toUserMessage(context, R.string.error_load_failed)
                 )
             }
         }
@@ -883,7 +884,7 @@ class WatchlistViewModel @Inject constructor(
                     isLoadingHistoryShows = false,
                     historyShowsLoaded = true,
                     historyShows = if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() } else _uiState.value.historyShows,
-                    historyShowsError = if (cached.isNotEmpty()) null else (e.message ?: context.getString(R.string.error_load_failed))
+                    historyShowsError = if (cached.isNotEmpty()) null else e.toUserMessage(context, R.string.error_load_failed)
                 )
             }
         }
@@ -970,7 +971,7 @@ class WatchlistViewModel @Inject constructor(
                 movieTotalCount = merged.size.takeIf { it > 0 } ?: _uiState.value.movieTotalCount,
                 isLoadingMovies = false,
                 moviesLoaded = true,
-                moviesError = if (merged.isNotEmpty()) null else (error.message ?: context.getString(R.string.error_load_failed))
+                moviesError = if (merged.isNotEmpty()) null else error.toUserMessage(context, R.string.error_load_failed)
             )
         }
     }
@@ -1032,7 +1033,7 @@ class WatchlistViewModel @Inject constructor(
                 showTotalCount = merged.size.takeIf { it > 0 } ?: _uiState.value.showTotalCount,
                 isLoadingShows = false,
                 showsLoaded = true,
-                showsError = if (merged.isNotEmpty()) null else (error.message ?: context.getString(R.string.error_load_failed))
+                showsError = if (merged.isNotEmpty()) null else error.toUserMessage(context, R.string.error_load_failed)
             )
         }
     }
@@ -1079,7 +1080,7 @@ class WatchlistViewModel @Inject constructor(
                 historyMovies = if (merged.isNotEmpty()) merged else _uiState.value.historyMovies,
                 isLoadingHistoryMovies = false,
                 historyMoviesLoaded = true,
-                historyMoviesError = if (merged.isNotEmpty()) null else (error.message ?: context.getString(R.string.error_load_failed))
+                historyMoviesError = if (merged.isNotEmpty()) null else error.toUserMessage(context, R.string.error_load_failed)
             )
         }
     }
@@ -1126,7 +1127,7 @@ class WatchlistViewModel @Inject constructor(
                 historyShows = if (merged.isNotEmpty()) merged else _uiState.value.historyShows,
                 isLoadingHistoryShows = false,
                 historyShowsLoaded = true,
-                historyShowsError = if (merged.isNotEmpty()) null else (error.message ?: context.getString(R.string.error_load_failed))
+                historyShowsError = if (merged.isNotEmpty()) null else error.toUserMessage(context, R.string.error_load_failed)
             )
         }
     }

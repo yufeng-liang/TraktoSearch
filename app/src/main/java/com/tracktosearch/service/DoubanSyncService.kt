@@ -23,6 +23,7 @@ import com.tracktosearch.data.repository.DoubanSyncSubStage
 import com.tracktosearch.data.repository.compactLabelRes
 import com.tracktosearch.data.repository.labelRes
 import com.tracktosearch.data.repository.secondaryLabelRes
+import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -264,7 +265,8 @@ internal fun buildDoubanSyncNotification(context: Context, progress: DoubanSyncP
                 add(context.getString(R.string.douban_sync_eta_format, formatDoubanSyncEta(context, progress.etaSeconds)))
             }
             progress.errorMessage?.takeIf { it.isNotBlank() }?.let {
-                add(context.getString(R.string.douban_sync_error_detail, it))
+                // errorMessage 为原始异常消息，先映射为友好本地化文案再展示
+                add(context.getString(R.string.douban_sync_error_detail, Exception(it).toUserMessage(context, R.string.error_operation_failed)))
             }
         }
         val expandedText = expandedParts.joinToString(" · ").ifBlank { contentText }

@@ -48,6 +48,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.repository.UpdateInfo
 import com.tracktosearch.data.util.ApkDownloader
 import com.tracktosearch.data.util.ApkInstaller
+import com.tracktosearch.ui.util.toUserMessage
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.io.File
@@ -502,7 +503,7 @@ fun UpdateDialog(
                                         )
                                         downloadState = DownloadState.Completed(file)
                                     } catch (e: Exception) {
-                                        downloadState = DownloadState.Error(e.message ?: downloadFailedMsg)
+                                        downloadState = DownloadState.Error(e.toUserMessage(context, R.string.update_download_failed))
                                     }
                                 }
                             }, modifier = Modifier.fillMaxWidth()) {
