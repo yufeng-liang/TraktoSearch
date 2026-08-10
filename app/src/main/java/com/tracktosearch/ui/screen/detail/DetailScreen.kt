@@ -540,6 +540,8 @@ fun DetailScreen(
                 // ===== 评论 Tab 内容 =====
                 if (uiState.sectionVisible.comments && selectedTab == 1) {
                     val commentsToShow = uiState.comments
+                    // 豆瓣评论基本都是中文，无需翻译，只有存在非豆瓣评论时才显示全部翻译
+                    val translatableComments = commentsToShow.filter { it.source != DOUBAN_COMMENT_SOURCE }
                     item(key = "comments_header") {
                         Row(
                             modifier = Modifier
@@ -554,7 +556,7 @@ fun DetailScreen(
                                 color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.weight(1f)
                             )
-                            if (commentsToShow.isNotEmpty() && uiState.translatedComments.size < commentsToShow.size) {
+                            if (translatableComments.isNotEmpty() && uiState.translatedComments.size < translatableComments.size) {
                                 Surface(
                                     shape = RoundedCornerShape(16.dp),
                                     color = MaterialTheme.colorScheme.surfaceContainerLow,

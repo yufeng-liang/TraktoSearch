@@ -1164,7 +1164,8 @@ class DetailViewModel @Inject constructor(
 
     /** 用户点击翻译按钮时调用，按需翻译全部评论（流式更新，先翻完的先展示） */
     fun translateComments() {
-        val comments = _uiState.value.comments
+        // 豆瓣评论基本都是中文，无需翻译，全部翻译时跳过
+        val comments = _uiState.value.comments.filter { it.source != DOUBAN_COMMENT_SOURCE }
         if (comments.isEmpty()) return
         commentsJob?.cancel()
         commentsJob = viewModelScope.launch {
@@ -1208,6 +1209,8 @@ class DetailViewModel @Inject constructor(
     /** 用户点击单条评论的翻译按钮时调用 */
     fun translateSingleComment(commentId: Int) {
         val comment = _uiState.value.comments.find { it.id == commentId } ?: return
+        // 豆瓣评论基本都是中文，不需要翻译
+        if (comment.source == DOUBAN_COMMENT_SOURCE) return
         // 已翻译过则不重复
         if (_uiState.value.translatedComments.any { it.id == commentId }) return
 

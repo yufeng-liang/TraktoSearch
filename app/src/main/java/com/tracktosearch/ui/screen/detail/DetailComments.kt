@@ -107,7 +107,7 @@ internal fun CommentItem(
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 // 单条翻译按钮（剧透未揭示时不显示）
-                if (!comment.spoiler || spoilerRevealed) {
+                if ((!comment.spoiler || spoilerRevealed) && comment.source != DOUBAN_COMMENT_SOURCE) {
                     if (translatedText == null && !isThisTranslating) {
                         Text(
                             text = stringResource(R.string.detail_translate),
