@@ -195,6 +195,7 @@ class DetailViewModelDoubanTest {
         assertThat(state.overview).isEqualTo("Cached summary")
         assertThat(state.genres).isEqualTo("Drama / Mystery")
         assertThat(state.country).isEqualTo("China")
+        // 纯豆瓣条目(tmdbId=0)无 TMDB 海报，用豆瓣海报兜底
         assertThat(state.posterUrl).isEqualTo("https://img.example/snapshot.jpg")
         assertThat(state.ratings?.doubanRating).isEqualTo(8.7)
         assertThat(state.userRating).isEqualTo(8)
@@ -450,11 +451,12 @@ class DetailViewModelDoubanTest {
         val state = viewModel.uiState.value
         assertThat(state.displayTitle).isEqualTo("Rexxar title")
         assertThat(state.overview).isEqualTo("Rexxar summary")
-        assertThat(state.posterUrl).isEqualTo("https://img.example/rexxar-large.jpg")
+        // 纯豆瓣条目无 TMDB 海报，保留豆瓣海报（快照优先），rexxar 大图不再替换
+        assertThat(state.posterUrl).isEqualTo("https://img.example/snapshot.jpg")
         assertThat(state.ratings?.doubanRating).isEqualTo(9.2)
         assertThat(state.backdrops).containsExactly("https://img.example/still-large.jpg")
-        coVerify(exactly = 1) {
-            doubanSyncedItemDao.updatePosterUrl("db-rexxar", "https://img.example/rexxar-large.jpg")
+        coVerify(exactly = 0) {
+            doubanSyncedItemDao.updatePosterUrl(any(), any())
         }
     }
 
@@ -501,6 +503,7 @@ class DetailViewModelDoubanTest {
         val state = viewModel.uiState.value
         assertThat(state.displayTitle).isEqualTo("Snapshot display")
         assertThat(state.overview).isEqualTo("HTML summary")
+        // 纯豆瓣条目无 TMDB 海报，保留豆瓣海报（快照优先）
         assertThat(state.posterUrl).isEqualTo("https://img.example/snapshot.jpg")
         assertThat(state.backdrops).isEmpty()
         coVerify(exactly = 0) { doubanSyncedItemDao.updatePosterUrl(any(), any()) }
