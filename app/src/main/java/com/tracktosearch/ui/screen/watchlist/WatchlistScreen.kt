@@ -174,7 +174,6 @@ import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
 import dagger.hilt.android.EntryPointAccessors
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.Dispatchers
@@ -799,7 +798,7 @@ fun WatchlistScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column {
-                            // 毛玻璃吸顶标题栏（继承外层 Box 的 hazeEffect，不重复叠加避免变白）
+                            // 毛玻璃吸顶标题栏（继承外层 Blur，不重复叠加避免变白）
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()

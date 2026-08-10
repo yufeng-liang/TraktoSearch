@@ -131,10 +131,11 @@ import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
 import dagger.hilt.android.EntryPointAccessors
-import dev.chrisbanes.haze.HazeInputScale
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazeSampling
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.blur.blurEffect
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.launch
@@ -632,14 +633,15 @@ fun TraktSearchScreen(
                     modifier = Modifier
                         .size(58.dp)
                         .clip(CircleShape)
-                        .hazeEffect(state = hazeState) {
-                            inputScale = HazeInputScale.Auto
-                            blurEffect {
-                                backgroundColor = hazeSurface.copy(alpha = 0.6f)
-                                blurRadius = 20.dp
-                                noiseFactor = 0f
-                            }
-                        }
+                        .hazeBlur(
+                            input = HazeInput.Sources(hazeState),
+                            style = HazeBlurStyle {
+                                backgroundColor(hazeSurface.copy(alpha = 0.6f))
+                                blurRadius(20.dp)
+                                noiseFactor(0f)
+                            },
+                            sampling = HazeSampling.Adaptive
+                        )
                         .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), CircleShape)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },

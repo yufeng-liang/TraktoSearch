@@ -70,11 +70,11 @@ import com.tracktosearch.ui.component.DoubanLogo
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.monetDoubanGreen
 import com.tracktosearch.ui.theme.onMonetDoubanGreen
-import dev.chrisbanes.haze.HazeInputScale
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazeSampling
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.blur.blurEffect
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
@@ -422,21 +422,21 @@ private fun ActivationCard(
     }
     val hazeStyle = HazeMaterials.thin(
         MaterialTheme.colorScheme.surface.copy(alpha = 0.48f)
-    )
+    ).then {
+        blurRadius(36.dp)
+        noiseFactor(0f)
+        blurEnabled(true)
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
             .zIndex(1f)
-            .hazeEffect(state = hazeState) {
-                inputScale = HazeInputScale.Auto
-                blurEffect {
-                    style = hazeStyle
-                    blurRadius = 36.dp
-                    noiseFactor = 0f
-                    blurEnabled = true
-                }
-            }
+            .hazeBlur(
+                input = HazeInput.Sources(hazeState),
+                style = hazeStyle,
+                sampling = HazeSampling.Adaptive
+            )
             .background(Color.Transparent, shape)
             .border(BorderStroke(1.dp, accent.copy(alpha = 0.30f)), shape)
             .padding(horizontal = 18.dp, vertical = 16.dp)
