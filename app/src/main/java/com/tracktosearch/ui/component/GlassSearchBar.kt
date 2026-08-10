@@ -29,10 +29,10 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.chrisbanes.haze.HazeInputScale
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazeSampling
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.blur.blurEffect
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 
 /**
@@ -81,10 +81,11 @@ fun GlassSearchBar(
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(28.dp))
             .then(
                 if (hazeState != null) {
-                    Modifier.hazeEffect(state = hazeState) {
-                        inputScale = HazeInputScale.Auto
-                        blurEffect { style = hazeStyle }
-                    }
+                    Modifier.hazeBlur(
+                        input = HazeInput.Sources(hazeState),
+                        style = hazeStyle,
+                        sampling = HazeSampling.Adaptive
+                    )
                 } else Modifier
             )
             .background(containerColor)

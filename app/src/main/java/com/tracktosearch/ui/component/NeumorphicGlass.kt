@@ -30,11 +30,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.ColorUtils
-import dev.chrisbanes.haze.HazeInputScale
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazeSampling
+import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
-import dev.chrisbanes.haze.blur.blurEffect
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 
 const val MODAL_BOTTOM_SHEET_HEIGHT_FRACTION = 0.8f
@@ -56,13 +57,12 @@ fun Modifier.hazeTopBar(
     isContentUnderTopBar: Boolean = true
 ): Modifier {
     if (!isContentUnderTopBar) return this
-    return hazeEffect(state = state) {
+    return hazeBlur(
+        input = HazeInput.Sources(state),
+        style = style,
         // 渲染降采样：Haze 官方基准显示可降低 5-20% 开销，肉眼几乎不可见
-        inputScale = HazeInputScale.Auto
-        blurEffect {
-            this.style = style
-        }
-    }
+        sampling = HazeSampling.Adaptive
+    )
 }
 
 /** 底部抽屉恢复普通 surfaceVariant 填充，只裁剪顶部圆角以保持贴底布局。 */
@@ -264,7 +264,7 @@ fun NeumorphicActiveTab(
 
 /**
  * C方案拟态毛玻璃表面：外阴影 + clip + 毛玻璃 + 内阴影 + 顶部高光
- * 注意：clip 必须在 hazeEffect 之前，否则毛玻璃效果是矩形的，不会被裁成圆角
+ * 注意：clip 必须在 hazeBlur 之前，否则毛玻璃效果是矩形的，不会被裁成圆角
  */
 @Composable
 fun NeumorphicFrostedSurface(
@@ -283,21 +283,20 @@ fun NeumorphicFrostedSurface(
     hazeBlurRadius: Dp? = null,
     showHighlight: Boolean = true,
     // 可选：过滤参与模糊的源区域。底部导航等"自身既作 source 又作 effect"的场景
-    // 应传入 { area -> area.zIndex < 自身 zIndex } 排除自采样，避免重复模糊与无谓开销
-    canDrawArea: ((dev.chrisbanes.haze.HazeArea) -> Boolean)? = null,
+    // 应传入 Behind.where { source -> source.zIndex < 自身 zIndex } 排除自采样。
+    sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
     content: @Composable () -> Unit
 ) {
     val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin()
     val hazeModifier = if (hazeState != null) {
-        Modifier.hazeEffect(state = hazeState) {
-            inputScale = HazeInputScale.Auto
-            if (canDrawArea != null) {
-                this.canDrawArea = canDrawArea
-            }
-            blurEffect {
-                style = resolvedHazeStyle
-            }
-        }
+        Modifier.hazeBlur(
+            input = HazeInput.Sources(
+                state = hazeState,
+                selection = sourceSelection
+            ),
+            style = resolvedHazeStyle,
+            sampling = HazeSampling.Adaptive
+        )
     } else Modifier
 
     Box(
@@ -350,10 +349,11 @@ fun NeumorphicIconButton(
     val shape = CircleShape
     val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin()
     val hazeModifier = if (hazeState != null) {
-        Modifier.hazeEffect(state = hazeState) {
-            inputScale = HazeInputScale.Auto
-            blurEffect { style = resolvedHazeStyle }
-        }
+        Modifier.hazeBlur(
+            input = HazeInput.Sources(hazeState),
+            style = resolvedHazeStyle,
+            sampling = HazeSampling.Adaptive
+        )
     } else {
         Modifier
     }

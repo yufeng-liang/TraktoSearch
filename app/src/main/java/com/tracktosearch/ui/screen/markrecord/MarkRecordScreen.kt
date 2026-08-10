@@ -68,9 +68,7 @@ import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -214,7 +212,7 @@ fun MarkRecordScreen(
             }
         }
 
-        // ========== 吸顶栏（hazeEffect + 半透明背景） ==========
+        // ========== 吸顶栏（Blur + 半透明背景） ==========
         Column(
             modifier = Modifier
                 .fillMaxWidth()

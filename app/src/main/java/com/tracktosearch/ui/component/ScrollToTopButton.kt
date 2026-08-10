@@ -35,11 +35,11 @@ import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
-import dev.chrisbanes.haze.HazeInputScale
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazeSampling
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
-import dev.chrisbanes.haze.blur.blurEffect
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.launch
 
@@ -165,10 +165,11 @@ private fun ScrollToTopButtonContent(
             modifier = Modifier
                 .size(HAZE_BUTTON_SIZE)
                 .clip(CircleShape)
-                .hazeEffect(state = hazeState) {
-                    inputScale = HazeInputScale.Auto
-                    blurEffect { style = resolvedHazeStyle }
-                }
+                .hazeBlur(
+                    input = HazeInput.Sources(hazeState),
+                    style = resolvedHazeStyle,
+                    sampling = HazeSampling.Adaptive
+                )
                 .border(
                     width = 1.dp,
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),

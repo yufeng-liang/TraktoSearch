@@ -94,9 +94,7 @@ import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -248,7 +246,7 @@ fun DiscoverFilterScreen(
             hazeState = hazeState
         )
 
-        // ========== 吸顶栏（hazeEffect，透明底色） ==========
+        // ========== 吸顶栏（Blur，透明底色） ==========
         // 注意：不要在此 Column 上加 .scrollable(state=listState) —— 那会让高级面板内的拖拽
         // 被转发到 listState，触发 isScrollInProgress=true 进而 collapseAdvanced()，导致弹窗内滑动
         // 就关闭弹窗的 bug。结果列表的滚动由 LazyColumn 自己处理即可。

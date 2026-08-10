@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.login
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.remember
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -9,6 +10,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.R
+import dev.chrisbanes.haze.HazeState
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -29,6 +31,7 @@ class ActivationLoginActionsTest {
                 ActivationSecondaryActions(
                     guestEnabled = true,
                     doubanEnabled = true,
+                    hazeState = remember { HazeState() },
                     guestContentColor = MaterialTheme.colorScheme.onSurface,
                     onDoubanLogin = {},
                     onGuestMode = {}

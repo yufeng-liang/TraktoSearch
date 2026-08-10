@@ -70,11 +70,11 @@ import com.tracktosearch.ui.component.DoubanLogo
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.monetDoubanGreen
 import com.tracktosearch.ui.theme.onMonetDoubanGreen
-import dev.chrisbanes.haze.HazeInputScale
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazeSampling
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.blur.blurEffect
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
@@ -263,6 +263,7 @@ fun ActivationLoginScreen(
                     doubanEnabled = canUseActions &&
                         loginState != LoginState.AUTHORIZING &&
                         loginState != LoginState.CONNECTING,
+                    hazeState = hazeState,
                     guestContentColor = loginTextColor,
                     onDoubanLogin = onDoubanLogin,
                     onGuestMode = onGuestMode,
@@ -298,12 +299,17 @@ fun ActivationLoginScreen(
 internal fun ActivationSecondaryActions(
     guestEnabled: Boolean,
     doubanEnabled: Boolean = guestEnabled,
+    hazeState: HazeState,
     guestContentColor: Color,
     onDoubanLogin: () -> Unit,
     onGuestMode: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val doubanGreen = MaterialTheme.colorScheme.monetDoubanGreen()
+    val doubanButtonShape = RoundedCornerShape(14.dp)
+    val doubanHazeStyle = HazeMaterials.thin(
+        doubanGreen.copy(alpha = if (doubanEnabled) 0.72f else 0.24f)
+    )
     Column(
         modifier = modifier.padding(start = 18.dp, top = 8.dp, end = 18.dp)
     ) {
@@ -312,12 +318,18 @@ internal fun ActivationSecondaryActions(
             enabled = doubanEnabled,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp),
-            shape = RoundedCornerShape(14.dp),
+                .height(48.dp)
+                .clip(doubanButtonShape)
+                .hazeBlur(
+                    input = HazeInput.Sources(hazeState),
+                    style = doubanHazeStyle,
+                    sampling = HazeSampling.Adaptive
+                ),
+            shape = doubanButtonShape,
             colors = ButtonDefaults.buttonColors(
-                containerColor = doubanGreen,
+                containerColor = Color.Transparent,
                 contentColor = MaterialTheme.colorScheme.onMonetDoubanGreen(),
-                disabledContainerColor = doubanGreen.copy(alpha = 0.38f),
+                disabledContainerColor = Color.Transparent,
                 disabledContentColor = MaterialTheme.colorScheme.onMonetDoubanGreen().copy(alpha = 0.38f)
             )
         ) {
@@ -422,21 +434,21 @@ private fun ActivationCard(
     }
     val hazeStyle = HazeMaterials.thin(
         MaterialTheme.colorScheme.surface.copy(alpha = 0.48f)
-    )
+    ).then {
+        blurRadius(36.dp)
+        noiseFactor(0f)
+        blurEnabled(true)
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
             .zIndex(1f)
-            .hazeEffect(state = hazeState) {
-                inputScale = HazeInputScale.Auto
-                blurEffect {
-                    style = hazeStyle
-                    blurRadius = 36.dp
-                    noiseFactor = 0f
-                    blurEnabled = true
-                }
-            }
+            .hazeBlur(
+                input = HazeInput.Sources(hazeState),
+                style = hazeStyle,
+                sampling = HazeSampling.Adaptive
+            )
             .background(Color.Transparent, shape)
             .border(BorderStroke(1.dp, accent.copy(alpha = 0.30f)), shape)
             .padding(horizontal = 18.dp, vertical = 16.dp)

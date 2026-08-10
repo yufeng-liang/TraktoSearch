@@ -62,10 +62,11 @@ import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.SectionHeader
 import com.tracktosearch.ui.util.ToastEffect
-import dev.chrisbanes.haze.HazeInputScale
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazeSampling
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.blur.blurEffect
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 
 @Composable
@@ -377,14 +378,15 @@ fun PersonScreen(
                             .padding(start = 12.dp, top = 4.dp)
                             .size(40.dp)
                             .clip(CircleShape)
-                            .hazeEffect(state = hazeState) {
-                                inputScale = HazeInputScale.Auto
-                                blurEffect {
-                                    backgroundColor = hazeSurface.copy(alpha = 0.6f)
-                                    blurRadius = 20.dp
-                                    noiseFactor = 0f
-                                }
-                            }
+                            .hazeBlur(
+                                input = HazeInput.Sources(hazeState),
+                                style = HazeBlurStyle {
+                                    backgroundColor(hazeSurface.copy(alpha = 0.6f))
+                                    blurRadius(20.dp)
+                                    noiseFactor(0f)
+                                },
+                                sampling = HazeSampling.Adaptive
+                            )
                             .background(
                                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
                                 shape = CircleShape
