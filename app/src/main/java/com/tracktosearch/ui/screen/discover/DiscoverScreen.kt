@@ -1086,7 +1086,7 @@ private fun CategoryHeroCard(
     Box(
         modifier = modifier
             .width(160.dp)
-            .height(100.dp)
+            .height(75.dp)
             .scale(scale)
             .neumorphicOuterShadow(
                 shape = shape,
