@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 
 /**
  * 统一海报卡片
@@ -94,6 +96,7 @@ fun PosterCard(
     }
 
     val isDark = isAppDarkTheme()
+    val ratingHazeState = remember { HazeState() }
     Box(modifier = modifier.scale(scale)) {
         Box(
             modifier = Modifier
@@ -138,7 +141,15 @@ fun PosterCard(
                 model = model,
                 contentDescription = title,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (rating != null) {
+                            Modifier.hazeSource(state = ratingHazeState)
+                        } else {
+                            Modifier
+                        }
+                    )
             )
             // 类型标签（左上角）
             if (!genres.isNullOrBlank()) {
@@ -163,7 +174,8 @@ fun PosterCard(
                     rating = rating,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(4.dp)
+                        .padding(2.dp),
+                    hazeState = ratingHazeState
                 )
             }
             val showYear = !year.isNullOrBlank() && year != "0"

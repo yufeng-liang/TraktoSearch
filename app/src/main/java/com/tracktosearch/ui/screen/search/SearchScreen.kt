@@ -1572,6 +1572,7 @@ fun DoubanHotCard(
     val displayTitle = item.title
         .replace(Regex("【\\d+\\.?\\d*】\\s*"), "")
         .replace(Regex("^#\\d+\\s*"), "")
+    val ratingHazeState = remember { HazeState() }
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -1609,13 +1610,28 @@ fun DoubanHotCard(
                 coil.compose.AsyncImage(
                     model = imageRequest,
                     contentDescription = displayTitle,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(
+                            if (rating != null) {
+                                Modifier.hazeSource(state = ratingHazeState)
+                            } else {
+                                Modifier
+                            }
+                        ),
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop
                 )
             } else {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .then(
+                            if (rating != null) {
+                                Modifier.hazeSource(state = ratingHazeState)
+                            } else {
+                                Modifier
+                            }
+                        )
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1632,7 +1648,8 @@ fun DoubanHotCard(
                     rating = rating,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(4.dp)
+                        .padding(2.dp),
+                    hazeState = ratingHazeState
                 )
             }
             if (isResolving) {
@@ -1744,6 +1761,7 @@ private fun DoubanHotGridItem(
     val displayTitle = item.title
         .replace(Regex("【\\d+\\.?\\d*】\\s*"), "")
         .replace(Regex("^#\\d+\\s*"), "")
+    val ratingHazeState = remember { HazeState() }
 
     Card(
         modifier = Modifier.clickable(enabled = !isResolving) { onClick() },
@@ -1771,12 +1789,28 @@ private fun DoubanHotGridItem(
                     coil.compose.AsyncImage(
                         model = imageRequest,
                         contentDescription = displayTitle,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .then(
+                                if (rating != null) {
+                                    Modifier.hazeSource(state = ratingHazeState)
+                                } else {
+                                    Modifier
+                                }
+                            ),
                         contentScale = androidx.compose.ui.layout.ContentScale.Crop
                     )
                 } else {
                     Box(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .then(
+                                if (rating != null) {
+                                    Modifier.hazeSource(state = ratingHazeState)
+                                } else {
+                                    Modifier
+                                }
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -1792,7 +1826,8 @@ private fun DoubanHotGridItem(
                         rating = rating,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(4.dp)
+                            .padding(2.dp),
+                        hazeState = ratingHazeState
                     )
                 }
                 if (isResolving) {
