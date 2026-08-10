@@ -13,4 +13,9 @@ class ThemeTest {
         assertThat(vintageTicketColorScheme(dark = true).onSurfaceVariant)
             .isEqualTo(Color(0xFFE0E0E0))
     }
+
+    @Test
+    fun appHazeDefaultNoiseFactor_usesRequestedValue() {
+        assertThat(AppHazeDefaultNoiseFactor).isEqualTo(0.10f)
+    }
 }

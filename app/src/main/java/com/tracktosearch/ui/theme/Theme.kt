@@ -11,11 +11,20 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.LocalHazeBlurStyle
+
+internal const val AppHazeDefaultNoiseFactor = 0.10f
+
+private val AppHazeDefaultBlurStyle = HazeBlurStyle {
+    noiseFactor(AppHazeDefaultNoiseFactor)
+}
 
 /**
  * 统一的 Switch 颜色配置：关闭态轨道/边框用主题色透明度，确保关闭态颜色统一跟随主题色。
@@ -197,6 +206,11 @@ fun TraktoSearchTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
-        content = content
-    )
+    ) {
+        // 统一覆盖 Haze 未显式设置时的噪点默认值，显式 noiseFactor(0f) 仍然优先。
+        CompositionLocalProvider(
+            LocalHazeBlurStyle provides AppHazeDefaultBlurStyle,
+            content = content
+        )
+    }
 }
