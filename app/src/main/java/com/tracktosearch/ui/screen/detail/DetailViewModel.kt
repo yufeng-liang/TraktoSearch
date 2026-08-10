@@ -462,6 +462,18 @@ class DetailViewModel @Inject constructor(
                 isMarkedWatched = realWatched,
                 ratingSource = restoredRatingSource
             )
+            // 海报 TMDB 优先：旧缓存若残留豆瓣海报 URL 且条目有 TMDB(tmdbId>0)，异步补拉 TMDB 海报替换；
+            // 纯豆瓣条目(tmdbId=0)无 TMDB 海报，保留豆瓣海报
+            val cachedPoster = cached.uiState.posterUrl
+            if (cachedPoster != null && isDoubanPosterUrl(cachedPoster) && cached.currentTmdbId > 0) {
+                viewModelScope.launch {
+                    val tmdbPoster = fetchTmdbPosterUrl(cached.currentTmdbId, cached.uiState.title, cached.uiState.year)
+                    if (tmdbPoster != null && currentDetailCacheKey == cacheKey) {
+                        _uiState.value = _uiState.value.copy(posterUrl = tmdbPoster)
+                        saveToCache()
+                    }
+                }
+            }
             // 从存储拉取最新 viewedUrls 覆盖缓存旧值，避免跨页面返回后丢失状态
             val latestViewed = withContext(Dispatchers.IO) { viewedItemStorage.getViewedUrls() }
             _uiState.value = _uiState.value.copy(viewedUrls = latestViewed)
@@ -560,7 +572,8 @@ class DetailViewModel @Inject constructor(
                     overview = doubanSupplement.overview ?: current.overview,
                     genres = doubanSupplement.genres ?: current.genres,
                     country = doubanSupplement.country ?: current.country,
-                    posterUrl = doubanSupplement.posterUrl ?: current.posterUrl,
+                    // 海报先以豆瓣兜底，后续 TMDB enrichment 存在时覆盖为 TMDB（TMDB 优先）
+                    posterUrl = current.posterUrl ?: doubanSupplement.posterUrl,
                     runtime = doubanSupplement.runtimeMinutes ?: current.runtime,
                     userRating = doubanSupplement.userRating ?: current.userRating,
                     userComment = doubanSupplement.item?.comment ?: current.userComment,
@@ -594,6 +607,7 @@ class DetailViewModel @Inject constructor(
             var tmdbRating = 0.0
             var collectionId = 0
             if (tmdbId <= 0) {
+                // 纯豆瓣条目(tmdbId=0)：无 TMDB 海报，保持 supplement 已填入的豆瓣海报
                 _uiState.value = _uiState.value.copy(isLoading = false)
                 detailLoaded = true
                 saveToCache()
@@ -644,7 +658,8 @@ class DetailViewModel @Inject constructor(
                     overview = doubanSupplement?.overview ?: enrichment?.overview ?: "",
                     genres = doubanSupplement?.genres ?: enrichment?.genres ?: "",
                     country = doubanSupplement?.country ?: enrichment?.country ?: "",
-                    posterUrl = doubanSupplement?.posterUrl ?: enrichment?.posterUrl,
+                    // 海报 TMDB 优先；纯豆瓣条目(tmdbId=0 无 TMDB 海报)时用豆瓣海报兜底
+                    posterUrl = enrichment?.posterUrl ?: doubanSupplement?.posterUrl,
                     year = doubanSupplement?.year ?: enrichment?.year ?: year,
                     releaseDate = enrichment?.releaseDate ?: "",
                     runtime = doubanSupplement?.runtimeMinutes ?: enrichment?.runtime,
@@ -758,13 +773,6 @@ class DetailViewModel @Inject constructor(
                 currentImdbId = merged.imdbId ?: currentImdbId
                 currentDoubanRating = merged.score ?: currentDoubanRating
                 applyDoubanPresentation(merged, doubanId)
-
-                val largePosterUrl = rexxarDetail.poster?.largeUrl?.takeIf { it.isNotBlank() }
-                if (largePosterUrl != null) {
-                    runCatching {
-                        doubanSyncedItemDao.updatePosterUrl(doubanId, largePosterUrl)
-                    }
-                }
             }
 
             photosResult.getOrNull()?.let { photoPage ->
@@ -828,7 +836,8 @@ class DetailViewModel @Inject constructor(
             overview = presentation.overview ?: current.overview,
             genres = genres ?: current.genres,
             country = country ?: current.country,
-            posterUrl = presentation.posterUrl ?: current.posterUrl,
+            // 海报保持当前值（TMDB 优先，纯豆瓣为豆瓣图），rexxar 合并不再替换为豆瓣图
+            posterUrl = current.posterUrl ?: presentation.posterUrl,
             runtime = runtime ?: current.runtime,
             ratings = ratings,
             doubanIdForSync = doubanId,
@@ -951,6 +960,21 @@ class DetailViewModel @Inject constructor(
         if (currentTraktId > 0) return true
         viewModelScope.launch { _toastEvent.emit(R.string.detail_load_error) }
         return false
+    }
+
+    /** 判断海报 URL 是否来自豆瓣，用于识别旧缓存中的豆瓣海报并回退到 TMDB。 */
+    private fun isDoubanPosterUrl(url: String): Boolean = url.contains("doubanio.com") || url.contains("douban.com")
+
+    /** 从 TMDB 重新拉取海报 URL（走 TtlCache，通常命中缓存不触发网络）。 */
+    private suspend fun fetchTmdbPosterUrl(tmdbId: Int, title: String?, year: Int?): String? {
+        if (tmdbId <= 0) return null
+        return runCatching {
+            when (currentMediaType) {
+                MediaType.MOVIE -> tmdbRepository.enrichMovie(tmdbId, title.orEmpty(), year).posterUrl
+                MediaType.SHOW -> tmdbRepository.enrichTv(tmdbId, title.orEmpty(), year).posterUrl
+                else -> null
+            }
+        }.getOrNull()
     }
 
     private fun fetchRatingsAsync(tmdbRating: Double) {
