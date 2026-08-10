@@ -2,9 +2,7 @@ package com.tracktosearch.ui.screen.person
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,7 +21,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -46,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,14 +57,17 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
+import com.tracktosearch.ui.component.NeumorphicIconButton
+import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.SectionHeader
+import com.tracktosearch.ui.component.detailTopBarIconColor
+import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.ToastEffect
-import dev.chrisbanes.haze.HazeInput
-import dev.chrisbanes.haze.HazeSampling
+import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.blur.HazeBlurStyle
-import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
 
 @Composable
@@ -93,7 +94,7 @@ fun PersonScreen(
 
     val listState = rememberLazyListState()
     val hazeState = remember { HazeState() }
-    val hazeSurface = MaterialTheme.colorScheme.surface
+    val view = LocalView.current
     // 全部作品展开状态
     var showAllMovies by rememberSaveable { mutableStateOf(false) }
     var showAllTvShows by rememberSaveable { mutableStateOf(false) }
@@ -371,42 +372,26 @@ fun PersonScreen(
                         }
                     }
 
-                    // 返回按钮
-                    Box(
+                    // 返回按钮：与影视详情页统一使用拟态玻璃 + Haze 背景采样
+                    val personIsDark = isAppDarkTheme()
+                    NeumorphicIconButton(
+                        onClick = {
+                            view.performHaptic(HapticType.TICK)
+                            onBack()
+                        },
+                        isDark = personIsDark,
                         modifier = Modifier
                             .statusBarsPadding()
-                            .padding(start = 12.dp, top = 4.dp)
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .hazeBlur(
-                                input = HazeInput.Sources(hazeState),
-                                style = HazeBlurStyle {
-                                    backgroundColor(hazeSurface.copy(alpha = 0.6f))
-                                    blurRadius(20.dp)
-                                    noiseFactor(0f)
-                                },
-                                sampling = HazeSampling.Adaptive
-                            )
-                            .background(
-                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
-                                shape = CircleShape
-                            )
-                            .border(
-                                width = 1.dp,
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                                shape = CircleShape
-                            )
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = { onBack() }
-                            ),
-                        contentAlignment = Alignment.Center
+                            .padding(start = 12.dp, top = 4.dp),
+                        hazeState = hazeState,
+                        hazeStyle = HazeMaterials.ultraThin(),
+                        size = 40.dp,
+                        buttonStyle = NeumorphicIconButtonStyle.DetailTopBar
                     ) {
                         Icon(
                             Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = stringResource(R.string.detail_back),
-                            tint = MaterialTheme.colorScheme.onSurface,
+                            tint = detailTopBarIconColor(),
                             modifier = Modifier.size(24.dp)
                         )
                     }
