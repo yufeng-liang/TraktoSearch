@@ -1647,8 +1647,7 @@ fun DoubanHotCard(
                     rating = rating,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(2.dp),
-                    hazeState = ratingHazeState
+                        .padding(2.dp)
                 )
             }
             if (isResolving) {
@@ -1825,8 +1824,7 @@ private fun DoubanHotGridItem(
                         rating = rating,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(2.dp),
-                        hazeState = ratingHazeState
+                            .padding(2.dp)
                     )
                 }
                 if (isResolving) {

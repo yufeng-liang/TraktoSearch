@@ -267,14 +267,12 @@ internal fun MovieCard(
                 if (isDoubanRating) {
                     DoubanRatingBadge(
                         rating = ratingValue,
-                        modifier = badgeModifier,
-                        hazeState = ratingHazeState
+                        modifier = badgeModifier
                     )
                 } else {
                     RatingBadge(
                         rating = ratingValue,
-                        modifier = badgeModifier,
-                        hazeState = ratingHazeState
+                        modifier = badgeModifier
                     )
                 }
             }
