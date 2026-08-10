@@ -409,6 +409,18 @@ fun WatchlistScreen(
         }
     }
 
+    // 筛选条件或搜索词变化时回到顶部：筛选是纯客户端过滤，只改变列表内容而 gridState 引用不变，
+    // Compose 锚点机制在旧 key 大量消失时会错误地把滚动位置推到新列表末尾（跳到底部）。
+    // 统一滚动到顶部保证筛选后从列表头部看结果。
+    LaunchedEffect(filterState, searchQuery) {
+        listOf(
+            movieGridState, showGridState, otherGridState,
+            historyMovieGridState, historyShowGridState, historyOtherGridState
+        ).forEach { gridState ->
+            gridState.scrollToItem(0)
+        }
+    }
+
     // key 必须同时包含 selectedMode 和 selectedTab：
     // currentGridState 由两者共同决定，缺任一 key 都会导致切 tab 后回调里仍持有旧的 gridState，
     // 「回到顶部」操作滚到不可见列表上
