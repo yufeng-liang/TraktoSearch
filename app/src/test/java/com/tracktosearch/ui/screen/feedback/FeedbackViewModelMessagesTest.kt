@@ -11,6 +11,7 @@ import com.tracktosearch.data.repository.FeedbackRepository
 import com.tracktosearch.test.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.every
+import android.content.Context
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CompletableDeferred
@@ -31,12 +32,13 @@ class FeedbackViewModelMessagesTest {
     private val authManager = mockk<AuthManager>()
     private val userProfileStorage = mockk<UserProfileStorage>()
     private val doubanAuthStorage = mockk<DoubanAuthStorage>()
+    private val context = mockk<Context>(relaxed = true)
 
     private fun createViewModel(): FeedbackViewModel {
         every { authManager.nickname } returns MutableStateFlow(null)
         coEvery { userProfileStorage.getProfile() } returns null
         every { doubanAuthStorage.doubanProfile } returns MutableStateFlow(null)
-        return FeedbackViewModel(feedbackRepository, cacheStore, authManager, userProfileStorage, doubanAuthStorage)
+        return FeedbackViewModel(feedbackRepository, cacheStore, authManager, userProfileStorage, doubanAuthStorage, context)
     }
 
     private fun message(id: String, unread: Boolean): MessageItem = MessageItem(

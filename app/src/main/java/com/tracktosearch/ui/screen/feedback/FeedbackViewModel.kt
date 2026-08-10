@@ -1,9 +1,11 @@
 package com.tracktosearch.ui.screen.feedback
 
+import android.content.Context
 import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.BuildConfig
+import com.tracktosearch.R
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.UserProfileStorage
@@ -15,12 +17,14 @@ import com.tracktosearch.data.remote.feedback.UnreadCountResponse
 import com.tracktosearch.data.repository.FeedbackCacheStore
 import com.tracktosearch.data.repository.FeedbackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.tracktosearch.ui.util.toUserMessage
 import javax.inject.Inject
 
 /**
@@ -34,7 +38,8 @@ class FeedbackViewModel @Inject constructor(
     private val cacheStore: FeedbackCacheStore,
     private val authManager: AuthManager,
     private val userProfileStorage: UserProfileStorage,
-    private val doubanAuthStorage: DoubanAuthStorage
+    private val doubanAuthStorage: DoubanAuthStorage,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     sealed interface ListState {
@@ -130,14 +135,14 @@ class FeedbackViewModel @Inject constructor(
                     _listState.value = ListState.Success(items, response.hasMore, offset + response.feedbacks.size)
                 }.onFailure { e ->
                     if (_listState.value !is ListState.Success) {
-                        _listState.value = ListState.Error(e.message ?: "LOAD_FAILED")
+                        _listState.value = ListState.Error(e.toUserMessage(context, R.string.error_load_failed))
                     }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 if (_listState.value !is ListState.Success) {
-                    _listState.value = ListState.Error(e.message ?: "LOAD_FAILED")
+                    _listState.value = ListState.Error(e.toUserMessage(context, R.string.error_load_failed))
                 }
             }
         }
@@ -164,7 +169,7 @@ class FeedbackViewModel @Inject constructor(
                 result.onSuccess { _detailState.value = DetailState.Success(it) }
                     .onFailure { e ->
                         if (_detailState.value !is DetailState.Success) {
-                            _detailState.value = DetailState.Error(e.message ?: "LOAD_FAILED")
+                            _detailState.value = DetailState.Error(e.toUserMessage(context, R.string.error_load_failed))
                         } else {
                             _detailState.value = (_detailState.value as DetailState.Success)
                                 .copy(isRefreshing = false)
@@ -174,7 +179,7 @@ class FeedbackViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 if (_detailState.value !is DetailState.Success) {
-                    _detailState.value = DetailState.Error(e.message ?: "LOAD_FAILED")
+                    _detailState.value = DetailState.Error(e.toUserMessage(context, R.string.error_load_failed))
                 } else {
                     _detailState.value = (_detailState.value as DetailState.Success)
                         .copy(isRefreshing = false)
@@ -202,7 +207,7 @@ class FeedbackViewModel @Inject constructor(
                     val keyResult = feedbackRepository.uploadScreenshot(bytes, mimeType)
                     keyResult.onSuccess { screenshotKeys.add(it) }
                         .onFailure {
-                            _submitState.value = SubmitState.Error("SCREENSHOT_UPLOAD_FAILED: ${it.message}")
+                            _submitState.value = SubmitState.Error(it.toUserMessage(context, R.string.feedback_submit_failed))
                             return@launch
                         }
                 }
@@ -232,11 +237,11 @@ class FeedbackViewModel @Inject constructor(
                     deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}"
                 )
                 result.onSuccess { _submitState.value = SubmitState.Success(it.id) }
-                    .onFailure { _submitState.value = SubmitState.Error(it.message ?: "SUBMIT_FAILED") }
+                    .onFailure { _submitState.value = SubmitState.Error(it.toUserMessage(context, R.string.feedback_submit_failed)) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _submitState.value = SubmitState.Error(e.message ?: "SUBMIT_FAILED")
+                _submitState.value = SubmitState.Error(e.toUserMessage(context, R.string.feedback_submit_failed))
             }
         }
     }
@@ -316,12 +321,12 @@ class FeedbackViewModel @Inject constructor(
                     _messagesState.value = MessagesState.Success(applyFilter(allMessages, _messagesFilter.value), response.hasMore, offset + response.messages.size)
                 }.onFailure { e ->
                     if (_messagesState.value !is MessagesState.Success) {
-                        _messagesState.value = MessagesState.Error(e.message ?: "LOAD_FAILED")
+                        _messagesState.value = MessagesState.Error(e.toUserMessage(context, R.string.error_load_failed))
                     }
                 }
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 if (_messagesState.value !is MessagesState.Success) {
-                    _messagesState.value = MessagesState.Error(e.message ?: "LOAD_FAILED")
+                    _messagesState.value = MessagesState.Error(e.toUserMessage(context, R.string.error_load_failed))
                 }
             }
         }
@@ -356,15 +361,15 @@ class FeedbackViewModel @Inject constructor(
                     val mimeType = screenshotMimeTypes.getOrNull(index) ?: "image/jpeg"
                     val keyResult = feedbackRepository.uploadScreenshot(bytes, mimeType)
                     keyResult.onSuccess { keys.add(it) }.onFailure {
-                        _replyState.value = ReplyState.Error("SCREENSHOT_UPLOAD_FAILED: ${it.message}")
+                        _replyState.value = ReplyState.Error(it.toUserMessage(context, R.string.error_operation_failed))
                         return@launch
                     }
                 }
                 _replyState.value = ReplyState.Sending
                 val result = feedbackRepository.reply(feedbackId, content.trim(), keys)
-                result.onSuccess { _replyState.value = ReplyState.Success(it.reply_id) }.onFailure { _replyState.value = ReplyState.Error(it.message ?: "REPLY_FAILED") }
+                result.onSuccess { _replyState.value = ReplyState.Success(it.reply_id) }.onFailure { _replyState.value = ReplyState.Error(it.toUserMessage(context, R.string.error_operation_failed)) }
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
-                _replyState.value = ReplyState.Error(e.message ?: "REPLY_FAILED")
+                _replyState.value = ReplyState.Error(e.toUserMessage(context, R.string.error_operation_failed))
             }
         }
     }
