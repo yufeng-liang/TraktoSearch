@@ -267,6 +267,9 @@ dependencies {
     // 中文分词
     implementation(libs.jieba.analysis)
 
+    // 中文转拼音（看单搜索拼音匹配）
+    implementation(libs.pinyin4j)
+
     // 单元测试
     testImplementation(libs.junit)
     testImplementation(libs.mockk)

@@ -2179,9 +2179,7 @@ private fun applyFilterAndSort(
 ): List<MediaUiItem> {
     val filtered = items.filter { item ->
         // 搜索
-        val matchesSearch = searchQuery.isBlank() ||
-            item.displayTitle.contains(searchQuery, ignoreCase = true) ||
-            item.title.contains(searchQuery, ignoreCase = true)
+        val matchesSearch = searchQuery.isBlank() || matchesSearchQuery(item, searchQuery)
         if (!matchesSearch) return@filter false
         // 类型多选（按 `,` 或 `·` 分隔）
         val matchesGenres = filter.selectedGenres.isEmpty() ||
@@ -2210,6 +2208,22 @@ private fun applyFilterAndSort(
     } else {
         filtered.sortedBy { it.listedAt }
     }
+}
+
+/**
+ * 看单搜索匹配：
+ * - 直接匹配：displayTitle（中文名）/ title（原句）包含关键词（忽略大小写）
+ * - 拼音匹配：查询为纯 ASCII 字母时，用中文名的拼音匹配
+ *   - 全拼：如 "花束般的恋爱" → "huashubandelianai"，输入 "huashu" 命中
+ *   - 首字母缩写：如 "hsbdla"，输入 "hsbd" 命中
+ *   拼音匹配仅在查询不含汉字时启用，避免干扰中文直接匹配
+ */
+private fun matchesSearchQuery(item: MediaUiItem, query: String): Boolean {
+    if (item.displayTitle.contains(query, ignoreCase = true) ||
+        item.title.contains(query, ignoreCase = true)
+    ) return true
+    // 查询纯 ASCII（拼音输入）时启用拼音匹配
+    return PinyinSearch.matches(item.displayTitle, query)
 }
 
 /** 判断 ISO 时间字符串是否在最近 N 天内（解析失败返回 false） */

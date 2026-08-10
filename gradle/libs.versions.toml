@@ -34,6 +34,7 @@ profileinstaller = "1.4.1"
 securityCrypto = "1.1.0"
 sqlcipher = "4.5.4"
 jieba-analysis = "1.0.2"
+pinyin4j = "2.5.1"
 junit = "4.13.2"
 mockk = "1.14.11"
 turbine = "1.2.1"
@@ -140,6 +141,9 @@ sqlcipher = { group = "net.zetetic", name = "android-database-sqlcipher", versio
 
 # 中文分词（词云/评论统计）
 jieba-analysis = { module = "com.huaban:jieba-analysis", version.ref = "jieba-analysis" }
+
+# 中文转拼音（看单搜索拼音匹配）
+pinyin4j = { group = "com.belerweb", name = "pinyin4j", version.ref = "pinyin4j" }
 
 # Unit Test
 junit = { group = "junit", name = "junit", version.ref = "junit" }
