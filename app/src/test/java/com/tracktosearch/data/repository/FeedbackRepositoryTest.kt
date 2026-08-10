@@ -1,5 +1,6 @@
 package com.tracktosearch.data.repository
 
+import com.tracktosearch.data.remote.feedback.FeedbackApiException
 import com.tracktosearch.data.remote.feedback.FeedbackApiService
 import com.tracktosearch.data.remote.feedback.FeedbackDetailResponse
 import com.tracktosearch.data.remote.feedback.FeedbackResponse
@@ -106,7 +107,7 @@ class FeedbackRepositoryTest {
         val repo = FeedbackRepository(api, cacheStore)
         val result = repo.uploadScreenshot(byteArrayOf(1, 2, 3), "image/jpeg")
         assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is IllegalStateException)
+        assertTrue(result.exceptionOrNull() is FeedbackApiException)
         assertTrue(result.exceptionOrNull()?.message?.contains("413") == true)
     }
 

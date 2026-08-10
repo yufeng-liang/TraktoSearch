@@ -1,8 +1,10 @@
 package com.tracktosearch.ui.screen.search
 
+import android.content.Context
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tracktosearch.R
 import com.tracktosearch.data.local.SearchHistoryItem
 import com.tracktosearch.data.local.SearchHistoryStorage
 import com.tracktosearch.data.local.ViewedItemStorage
@@ -17,6 +19,8 @@ import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.TtlCache
+import com.tracktosearch.ui.util.toUserMessage
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -60,7 +64,8 @@ class SearchViewModel @Inject constructor(
     private val doubanHotApi: DoubanHotApiService,
     private val tmdbRepository: TmdbRepository,
     private val traktRepository: TraktRepository,
-    private val sharedDoubanHotCache: PersistentTtlCache<DoubanHotData>
+    private val sharedDoubanHotCache: PersistentTtlCache<DoubanHotData>,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SearchUiState())
@@ -291,7 +296,7 @@ class SearchViewModel @Inject constructor(
                 if (index < updated.size) {
                     updated[index] = updated[index].copy(
                         isLoading = false,
-                        error = e.message ?: "Failed to load"
+                        error = e.toUserMessage(context, R.string.error_search_failed)
                     )
                     _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
                 }
@@ -483,7 +488,7 @@ class SearchViewModel @Inject constructor(
                 if (idx >= 0) {
                     updated[idx] = updated[idx].copy(
                         isLoading = false,
-                        error = e.message ?: "Failed to load"
+                        error = e.toUserMessage(context, R.string.error_search_failed)
                     )
                     _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
                 }
@@ -540,7 +545,7 @@ class SearchViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = e.message ?: "Failed to load"
+                    error = e.toUserMessage(context, R.string.error_search_failed)
                 )
             }
         }

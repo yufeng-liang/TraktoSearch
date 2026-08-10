@@ -1,6 +1,8 @@
 package com.tracktosearch.ui.screen.feedback
 
+import android.content.Context
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.R
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.UserProfileStorage
@@ -37,6 +39,7 @@ class FeedbackViewModelTest {
     private val authManager = mockk<AuthManager>()
     private val userProfileStorage = mockk<UserProfileStorage>()
     private val doubanAuthStorage = mockk<DoubanAuthStorage>()
+    private val context = mockk<Context>(relaxed = true)
 
     private fun createViewModel(): FeedbackViewModel {
         every { authManager.nickname } returns MutableStateFlow(null)
@@ -45,7 +48,10 @@ class FeedbackViewModelTest {
         every { cacheStore.getCachedList() } returns null
         coEvery { cacheStore.getCachedDetail(any()) } returns null
         every { doubanAuthStorage.doubanProfile } returns MutableStateFlow(null)
-        return FeedbackViewModel(feedbackRepository, cacheStore, authManager, userProfileStorage, doubanAuthStorage)
+                every { context.getString(R.string.error_load_failed) } returns "Load failed"
+        every { context.getString(R.string.feedback_submit_failed) } returns "Submit failed"
+        every { context.getString(R.string.error_operation_failed) } returns "Operation failed"
+        return FeedbackViewModel(feedbackRepository, cacheStore, authManager, userProfileStorage, doubanAuthStorage, context)
     }
 
     @Test
@@ -99,7 +105,7 @@ class FeedbackViewModelTest {
 
         val state = viewModel.listState.value
         assertThat(state).isInstanceOf(FeedbackViewModel.ListState.Error::class.java)
-        assertThat((state as FeedbackViewModel.ListState.Error).message).isEqualTo("LOAD_FAILED")
+        assertThat((state as FeedbackViewModel.ListState.Error).message).isEqualTo("Load failed")
     }
 
     @Test
@@ -190,7 +196,7 @@ class FeedbackViewModelTest {
 
         val state = viewModel.submitState.value
         assertThat(state).isInstanceOf(FeedbackViewModel.SubmitState.Error::class.java)
-        assertThat((state as FeedbackViewModel.SubmitState.Error).message).contains("SCREENSHOT_UPLOAD_FAILED")
+        assertThat((state as FeedbackViewModel.SubmitState.Error).message).isEqualTo("Submit failed")
     }
 
     @Test

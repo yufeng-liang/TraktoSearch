@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tracktosearch.R
 import com.tracktosearch.data.remote.trakt.dto.TraktMovie
 import com.tracktosearch.data.repository.TraktRepository.WatchlistWatchedIds
 import com.tracktosearch.data.remote.trakt.dto.TraktShow
@@ -11,6 +12,7 @@ import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.session.SessionModeManager
+import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.async
@@ -167,7 +169,7 @@ class TraktListDetailViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isLoadingMore = false,
-                    error = e.message
+                    error = e.toUserMessage(context, R.string.error_load_failed)
                 )
             }
         }

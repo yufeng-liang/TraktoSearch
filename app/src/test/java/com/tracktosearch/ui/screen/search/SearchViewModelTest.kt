@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.search
 
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.R
 import com.tracktosearch.data.local.SearchHistoryItem
 import com.tracktosearch.data.local.SearchHistoryStorage
 import com.tracktosearch.data.local.ViewedItemStorage
@@ -19,6 +20,7 @@ import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import android.content.Context
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -69,6 +71,7 @@ class SearchViewModelTest {
     private val tmdbRepository = mockk<TmdbRepository>(relaxed = true)
     private val traktRepository = mockk<TraktRepository>(relaxed = true)
     private val sharedDoubanHotCache = mockk<PersistentTtlCache<DoubanHotData>>(relaxed = true)
+    private val context = mockk<Context>(relaxed = true)
     private lateinit var viewModel: SearchViewModel
 
     /** 搜索历史 Flow，各测试可动态修改 */
@@ -128,7 +131,8 @@ class SearchViewModelTest {
             doubanHotApi = doubanHotApi,
             tmdbRepository = tmdbRepository,
             traktRepository = traktRepository,
-            sharedDoubanHotCache = sharedDoubanHotCache
+            sharedDoubanHotCache = sharedDoubanHotCache,
+            context = context
         )
     }
 
@@ -409,6 +413,7 @@ class SearchViewModelTest {
         } returns flow<List<ResourceItem>> {
             throw IOException("网络错误")
         }
+        every { context.getString(R.string.error_network_unavailable) } returns "网络错误"
 
         viewModel = createViewModel()
         advanceUntilIdle()

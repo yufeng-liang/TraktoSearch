@@ -463,7 +463,7 @@ class DoubanSyncDialogTest {
             )
         )
         setContent()
-        composeRule.onNodeWithText("Error: Network unavailable").assertIsDisplayed()
+        composeRule.onNodeWithText("Error: Network error", substring = true).assertIsDisplayed()
     }
 
     // ==================== 失败项展示 ====================

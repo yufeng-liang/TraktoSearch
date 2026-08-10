@@ -1564,4 +1564,8 @@
     <string name="douban_sync_notification_latest">取得済み：%1$s</string>
     <string name="douban_sync_notification_public">豆瓣同期：%1$s</string>
     <string name="douban_sync_notification_channel_description">豆瓣の同期進捗を表示</string>
+    <string name="error_rate_limited">送信が多すぎます。少し待ってから再試行してください</string>
+    <string name="error_network_unavailable">ネットワークエラーです。接続を確認して再試行してください</string>
+    <string name="error_server_error">サーバーが混み合っています。後でもう一度お試しください</string>
+    <string name="error_operation_failed">操作に失敗しました。もう一度お試しください</string>
 </resources>

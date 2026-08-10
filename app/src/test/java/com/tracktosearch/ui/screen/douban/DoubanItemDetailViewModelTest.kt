@@ -18,6 +18,7 @@ import com.tracktosearch.data.util.PosterColorExtractor
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import android.content.Context
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -41,6 +42,7 @@ class DoubanItemDetailViewModelTest {
     private lateinit var authStorage: DoubanAuthStorage
     private lateinit var syncedItemDao: DoubanSyncedItemDao
     private lateinit var posterColorExtractor: PosterColorExtractor
+    private val context = mockk<Context>(relaxed = true)
     private lateinit var viewModel: DoubanItemDetailViewModel
 
     @Before
@@ -55,6 +57,7 @@ class DoubanItemDetailViewModelTest {
         every { authStorage.getCredentials() } returns null
 
         viewModel = DoubanItemDetailViewModel(
+            context,
             retryManager,
             syncManager,
             resourceRepository,

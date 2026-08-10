@@ -183,7 +183,7 @@ class TraktListDetailViewModelTest {
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertThat(state.error).isEqualTo("网络错误")
+        assertThat(state.error).contains("Network error")
         assertThat(state.isLoading).isFalse()
         assertThat(state.items).isEmpty()
     }

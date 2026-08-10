@@ -54,6 +54,7 @@ import com.tracktosearch.data.util.ParseResult
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.ImportItem
 import androidx.compose.runtime.Immutable
+import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -252,7 +253,7 @@ class SettingsViewModel @Inject constructor(
                     }
                 }
                 is CustomSearchService.TestResult.Error -> {
-                    TestResultState(source.id, isTesting = false, success = false, message = result.message)
+                    TestResultState(source.id, isTesting = false, success = false, message = Exception(result.message).toUserMessage(context, R.string.error_unknown))
                 }
             }
             _testResults.value = _testResults.value + (source.id to state)

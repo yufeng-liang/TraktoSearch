@@ -198,7 +198,7 @@ class TraktSearchViewModelTest {
         advanceUntilIdle()
 
         val state = viewModel.uiState.value.movieState
-        assertThat(state.error).isEqualTo("网络错误")
+        assertThat(state.error).contains("Network error")
         assertThat(state.results).isEmpty()
         assertThat(state.isLoading).isFalse()
         assertThat(state.hasSearched).isTrue()
