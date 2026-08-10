@@ -31,14 +31,14 @@ export async function handleUserReply(
     payload: JWTPayload,
     feedbackId: string
 ): Promise<Response> {
-    // 限流：复用 submit 配额（每分钟 1 条 + 每天 10 条）
-    const minuteKey = `feedback:submit:${payload.sub}:minute`;
-    if (!await checkRateLimit(env, minuteKey, 1, 60)) {
-        throw new AppError('RATE_LIMITED', 'Too many submissions, try again later', 429);
+    // 限流：回复与提交分开计数（每分钟 10 条 + 每天 100 条），避免连续回复误触提交限流
+    const minuteKey = `feedback:reply:${payload.sub}:minute`;
+    if (!await checkRateLimit(env, minuteKey, 10, 60)) {
+        throw new AppError('RATE_LIMITED', 'Too many replies, try again later', 429);
     }
-    const dayKey = `feedback:submit:${payload.sub}:day`;
-    if (!await checkRateLimit(env, dayKey, 10, 86400)) {
-        throw new AppError('RATE_LIMITED', 'Daily limit reached', 429);
+    const dayKey = `feedback:reply:${payload.sub}:day`;
+    if (!await checkRateLimit(env, dayKey, 100, 86400)) {
+        throw new AppError('RATE_LIMITED', 'Daily reply limit reached', 429);
     }
 
     const body = await readJson<ReplyRequest>(request);
