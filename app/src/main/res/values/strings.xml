@@ -1117,13 +1117,6 @@ Config:
     <string name="snackbar_test_empty">Connected, but no results parsed</string>
     <string name="snackbar_export_success">Export successful</string>
     <string name="snackbar_export_failed">Export failed: unknown error</string>
-    <string name="export_verify_valid">Signature valid ✓ Watchlist %1$d items, Watched %2$d items</string>
-    <string name="export_verify_invalid">Signature invalid ✗ File may have been tampered</string>
-    <string name="export_verify_no_signature">No signature found (legacy format)</string>
-    <string name="export_verify_parse_error">Parse failed: %1$s</string>
-    <string name="export_verify_failed">Verify failed: %1$s</string>
-    <string name="settings_export_verify">Verify export file</string>
-    <string name="settings_export_verify_subtitle">Check HMAC signature integrity</string>
     <string name="snackbar_import_no_data">No valid records found</string>
     <string name="snackbar_sync_progress">Syncing %1$d/%2$d: %3$s</string>
     <string name="snackbar_import_done_imdb">IMDb import done: %1$d matched, %2$d unmatched</string>
