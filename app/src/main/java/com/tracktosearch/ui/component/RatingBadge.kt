@@ -24,11 +24,12 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.ui.theme.RatingGold
-import dev.chrisbanes.haze.HazeInputScale
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazeSampling
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.HazeColorEffect
-import dev.chrisbanes.haze.blur.blurEffect
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.blur.hazeBlur
 
 /** 评分玻璃芯片统一规格：保持紧凑，减少对海报内容的遮挡。 */
 private val RatingCorner = RoundedCornerShape(7.dp)
@@ -51,15 +52,14 @@ fun RatingBadge(
     hazeState: HazeState? = null
 ) {
     val hazeModifier = if (hazeState != null) {
-        Modifier.hazeEffect(state = hazeState) {
-            inputScale = HazeInputScale.Auto
-            blurEffect {
-                blurRadius = 14.dp
-                colorEffects = listOf(
-                    HazeColorEffect.tint(Color.Black.copy(alpha = 0.42f))
-                )
-            }
-        }
+        Modifier.hazeBlur(
+            input = HazeInput.Sources(state = hazeState),
+            style = HazeBlurStyle {
+                blurRadius(14.dp)
+                colorEffects(listOf(HazeColorEffect.tint(Color.Black.copy(alpha = 0.42f))))
+            },
+            sampling = HazeSampling.Adaptive
+        )
     } else {
         Modifier
     }
