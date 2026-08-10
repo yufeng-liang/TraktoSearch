@@ -144,6 +144,7 @@ import com.tracktosearch.data.repository.DoubanSyncLoginTarget
 import com.tracktosearch.data.repository.DoubanSyncSubStage
 import com.tracktosearch.data.repository.WatchlistMediaType
 import com.tracktosearch.data.repository.labelRes
+import com.tracktosearch.data.session.SessionMode
 import com.tracktosearch.ui.animation.EnterMode
 import com.tracktosearch.ui.animation.cardEnter
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
@@ -211,6 +212,11 @@ fun WatchlistScreen(
     val isTraktConnected by viewModel.isTraktConnected.collectAsStateWithLifecycle()
     val isDoubanMode by viewModel.isDoubanMode.collectAsStateWithLifecycle()
     val isDoubanLoggedIn by viewModel.isDoubanLoggedInFlow.collectAsStateWithLifecycle()
+    val sessionKey = when {
+        isDoubanMode -> SessionMode.DOUBAN
+        isTraktConnected -> SessionMode.TRAKT
+        else -> SessionMode.GUEST
+    }
     val isCurrentTab = LocalIsCurrentTab.current
     var hasBeenVisible by remember { mutableStateOf(false) }
     val emptyState = resolveWatchlistEmptyState(
@@ -229,10 +235,8 @@ fun WatchlistScreen(
         context.startActivity(intent)
     }
 
-    LaunchedEffect(Unit) {
-        viewModel.loadMovies()
-        viewModel.loadShows()
-        viewModel.loadOthers()
+    LaunchedEffect(sessionKey) {
+        viewModel.onSessionModeChanged()
     }
 
     LaunchedEffect(isCurrentTab) {

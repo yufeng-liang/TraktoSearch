@@ -173,6 +173,57 @@ class WatchlistViewModelTest {
     )
 
     @Test
+    fun `从访客切换到Trakt后重新加载看单`() = runTest {
+        val sessionMode = MutableStateFlow(SessionMode.GUEST)
+        every { sessionModeManager.sessionMode } returns sessionMode
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(1, "登录后的电影")) to 1)
+        coEvery { traktRepository.getShowWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistShow(2, "登录后的剧集")) to 1)
+
+        viewModel.loadMovies()
+        viewModel.loadShows()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.movies).isEmpty()
+        assertThat(viewModel.uiState.value.shows).isEmpty()
+        coVerify(exactly = 0) { traktRepository.getMovieWatchlist(any(), any(), any()) }
+        coVerify(exactly = 0) { traktRepository.getShowWatchlist(any(), any(), any()) }
+
+        sessionMode.value = SessionMode.TRAKT
+        viewModel.onSessionModeChanged()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.movies.map { it.title }).containsExactly("登录后的电影")
+        assertThat(viewModel.uiState.value.shows.map { it.title }).containsExactly("登录后的剧集")
+    }
+
+    @Test
+    fun `从访客切换到豆瓣后重新加载本地看单`() = runTest {
+        val sessionMode = MutableStateFlow(SessionMode.GUEST)
+        every { sessionModeManager.sessionMode } returns sessionMode
+        coEvery { doubanSyncedItemDao.getByStatus("wish") } returns listOf(
+            makeDoubanItem("movie-1", title = "登录后的豆瓣电影"),
+            makeDoubanItem("show-1", mediaType = "show", title = "登录后的豆瓣剧集")
+        )
+
+        viewModel.loadMovies()
+        viewModel.loadShows()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.movies).isEmpty()
+        assertThat(viewModel.uiState.value.shows).isEmpty()
+        coVerify(exactly = 0) { doubanSyncedItemDao.getByStatus("wish") }
+
+        sessionMode.value = SessionMode.DOUBAN
+        viewModel.onSessionModeChanged()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.movies.map { it.title }).containsExactly("登录后的豆瓣电影")
+        assertThat(viewModel.uiState.value.shows.map { it.title }).containsExactly("登录后的豆瓣剧集")
+    }
+
+    @Test
     fun `loadWatchlist_uses_server_total_count`() = runTest {
         coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
             Result.success(listOf(makeWatchlistMovie(1)) to 2)

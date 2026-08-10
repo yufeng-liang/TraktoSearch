@@ -1425,6 +1425,15 @@ class WatchlistViewModel @Inject constructor(
     }
 
     fun refresh() {
+        reloadForSession(forceReload = true)
+    }
+
+    /** 会话模式发生变化时重新读取当前账号的数据，避免沿用旧会话的空状态或列表。 */
+    fun onSessionModeChanged() {
+        reloadForSession(forceReload = false)
+    }
+
+    private fun reloadForSession(forceReload: Boolean) {
         // 取消所有正在进行的加载协程,避免旧协程完成后覆盖刚重置的新数据
         loadMoviesJob?.cancel()
         loadShowsJob?.cancel()
@@ -1441,13 +1450,13 @@ class WatchlistViewModel @Inject constructor(
         loadedTraktHistoryShows.clear()
         _uiState.value = WatchlistUiState()
         refreshDoubanEmptyState()
-        loadMovies(forceReload = true)
-        loadShows(forceReload = true)
-        loadOthers(forceReload = true)
+        loadMovies(forceReload = forceReload)
+        loadShows(forceReload = forceReload)
+        loadOthers(forceReload = forceReload)
         if (wasHistoryLoaded) {
-            loadHistoryMovies(forceReload = true)
-            loadHistoryShows(forceReload = true)
-            loadHistoryOthers(forceReload = true)
+            loadHistoryMovies(forceReload = forceReload)
+            loadHistoryShows(forceReload = forceReload)
+            loadHistoryOthers(forceReload = forceReload)
         }
     }
 
