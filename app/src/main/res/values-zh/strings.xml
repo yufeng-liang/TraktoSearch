@@ -1117,13 +1117,6 @@
     <string name="snackbar_test_empty">连接成功，但未解析到结果</string>
     <string name="snackbar_export_success">导出成功</string>
     <string name="snackbar_export_failed">导出失败：未知错误</string>
-    <string name="export_verify_valid">签名验证通过 ✓ 想看 %1$d 条，看过 %2$d 条</string>
-    <string name="export_verify_invalid">签名验证失败 ✗ 文件可能被篡改</string>
-    <string name="export_verify_no_signature">文件未包含签名（旧版格式）</string>
-    <string name="export_verify_parse_error">文件解析失败：%1$s</string>
-    <string name="export_verify_failed">验证失败：%1$s</string>
-    <string name="settings_export_verify">验证导出文件</string>
-    <string name="settings_export_verify_subtitle">校验 HMAC 签名完整性</string>
     <string name="snackbar_import_no_data">未找到有效记录</string>
     <string name="snackbar_sync_progress">正在同步 %1$d/%2$d: %3$s</string>
     <string name="snackbar_import_done_imdb">IMDb 导入完成：成功 %1$d 条，未匹配 %2$d 条</string>

@@ -69,6 +69,8 @@ import com.tracktosearch.ui.component.RatingBadge
 import com.tracktosearch.ui.component.YearBadge
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.neumorphicOuterShadow
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 
 /** 通用电影卡片（复用豆瓣卡片样式） */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -117,6 +119,7 @@ internal fun MovieCard(
         label = "movie_card_scale"
     )
     val ratingValue = rating?.toDoubleOrNull()
+    val ratingHazeState = remember { HazeState() }
     val isDark = isAppDarkTheme()
     val posterShape = RoundedCornerShape(16.dp)
     // 缓存顶部高光渐变 Brush,避免每次重组创建新实例
@@ -184,13 +187,28 @@ internal fun MovieCard(
                 AsyncImage(
                     model = imageRequest,
                     contentDescription = title,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(
+                            if (ratingValue != null) {
+                                Modifier.hazeSource(state = ratingHazeState)
+                            } else {
+                                Modifier
+                            }
+                        ),
                     contentScale = ContentScale.Crop
                 )
             } else {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .then(
+                            if (ratingValue != null) {
+                                Modifier.hazeSource(state = ratingHazeState)
+                            } else {
+                                Modifier
+                            }
+                        )
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
@@ -245,11 +263,19 @@ internal fun MovieCard(
             if (ratingValue != null) {
                 val badgeModifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(4.dp)
+                    .padding(2.dp)
                 if (isDoubanRating) {
-                    DoubanRatingBadge(rating = ratingValue, modifier = badgeModifier)
+                    DoubanRatingBadge(
+                        rating = ratingValue,
+                        modifier = badgeModifier,
+                        hazeState = ratingHazeState
+                    )
                 } else {
-                    RatingBadge(rating = ratingValue, modifier = badgeModifier)
+                    RatingBadge(
+                        rating = ratingValue,
+                        modifier = badgeModifier,
+                        hazeState = ratingHazeState
+                    )
                 }
             }
             if (isResolving) {

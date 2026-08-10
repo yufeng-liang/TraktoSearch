@@ -344,12 +344,6 @@ fun SettingsScreen(
         uri?.let { viewModel.importFromImdb(it) }
     }
 
-    val verifyExportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        uri?.let { viewModel.verifyExportFile(it) }
-    }
-
     val openUrl: (String) -> Unit = { url ->
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -610,17 +604,6 @@ fun SettingsScreen(
                                 containerColor = Color.Transparent
                             )
 
-                            SettingsItemCard(
-                                icon = Icons.Rounded.Verified,
-                                title = stringResource(R.string.settings_export_verify),
-                                subtitle = stringResource(R.string.settings_export_verify_subtitle),
-                                onClick = {
-                                    if (!exportImportState.isExporting) {
-                                        verifyExportLauncher.launch(arrayOf("application/json", "text/*", "*/*"))
-                                    }
-                                },
-                                containerColor = Color.Transparent
-                            )
                             GroupDivider()
                             SettingsItemCard(
                                 icon = Icons.Rounded.Sync,

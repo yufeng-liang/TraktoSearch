@@ -1017,13 +1017,6 @@
     <string name="snackbar_test_empty">연결 성공, 결과 없음</string>
     <string name="snackbar_export_success">내보내기 성공</string>
     <string name="snackbar_export_failed">내보내기 실패</string>
-    <string name="export_verify_valid">서명 검증 성공 ✓ 관심 %1$d건, 시청 %2$d건</string>
-    <string name="export_verify_invalid">서명 검증 실패 ✗ 파일이 변조되었을 수 있음</string>
-    <string name="export_verify_no_signature">서명 없음 (이전 형식)</string>
-    <string name="export_verify_parse_error">파싱 실패: %1$s</string>
-    <string name="export_verify_failed">검증 실패: %1$s</string>
-    <string name="settings_export_verify">내보내기 파일 검증</string>
-    <string name="settings_export_verify_subtitle">HMAC 서명 무결성 확인</string>
     <string name="snackbar_import_no_data">유효한 레코드를 찾을 수 없음</string>
     <string name="snackbar_sync_progress">동기화 중 %1$d/%2$d: %3$s</string>
     <string name="snackbar_import_done_imdb">IMDb 가져오기 완료: %1$d 개 일치, %2$d 개 불일치</string>

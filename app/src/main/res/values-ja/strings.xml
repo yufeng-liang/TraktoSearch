@@ -1017,13 +1017,6 @@
     <string name="snackbar_test_empty">接続成功、結果なし</string>
     <string name="snackbar_export_success">エクスポート成功</string>
     <string name="snackbar_export_failed">エクスポート失敗</string>
-    <string name="export_verify_valid">署名検証成功 ✓ ウォッチリスト %1$d 件、視聴済み %2$d 件</string>
-    <string name="export_verify_invalid">署名検証失敗 ✗ ファイルが改ざんされた可能性</string>
-    <string name="export_verify_no_signature">署名なし（旧フォーマット）</string>
-    <string name="export_verify_parse_error">解析失敗：%1$s</string>
-    <string name="export_verify_failed">検証失敗：%1$s</string>
-    <string name="settings_export_verify">エクスポートファイルを検証</string>
-    <string name="settings_export_verify_subtitle">HMAC署名の整合性を確認</string>
     <string name="snackbar_import_no_data">有効なレコードが見つかりません</string>
     <string name="snackbar_sync_progress">同期中 %1$d/%2$d: %3$s</string>
     <string name="snackbar_import_done_imdb">IMDb インポート完了: %1$d 件一致、%2$d 件不一致</string>

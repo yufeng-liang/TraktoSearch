@@ -53,7 +53,6 @@ import com.tracktosearch.data.util.ExportItem
 import com.tracktosearch.data.util.ParseResult
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.ImportItem
-import com.tracktosearch.data.util.VerifyResult
 import androidx.compose.runtime.Immutable
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -317,39 +316,6 @@ class SettingsViewModel @Inject constructor(
                 _exportImportState.value = _exportImportState.value.copy(
                     isExporting = false,
                     message = context.getString(R.string.snackbar_export_failed)
-                )
-            }
-        }
-    }
-
-    /** 验证导出文件的 HMAC 签名,显示验证结果 */
-    fun verifyExportFile(uri: Uri) {
-        viewModelScope.launch {
-            _exportImportState.value = _exportImportState.value.copy(
-                isExporting = true, message = null
-            )
-            try {
-                val content = withContext(Dispatchers.IO) { readUriContent(uri) }
-                val message = when (val result = DataExportImport.verifyExportFile(content)) {
-                    is VerifyResult.Valid -> context.getString(
-                        R.string.export_verify_valid,
-                        result.data.watchlistMovies.size + result.data.watchlistShows.size,
-                        result.data.historyMovies.size + result.data.historyShows.size
-                    )
-                    VerifyResult.InvalidSignature -> context.getString(R.string.export_verify_invalid)
-                    VerifyResult.NoSignature -> context.getString(R.string.export_verify_no_signature)
-                    is VerifyResult.ParseError -> context.getString(R.string.export_verify_parse_error, result.message)
-                }
-                _exportImportState.value = _exportImportState.value.copy(
-                    isExporting = false,
-                    message = message
-                )
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _exportImportState.value = _exportImportState.value.copy(
-                    isExporting = false,
-                    message = context.getString(R.string.export_verify_failed, e.message ?: "")
                 )
             }
         }

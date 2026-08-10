@@ -47,20 +47,6 @@ sealed class ParseResult {
     data class Error(val message: String) : ParseResult()
 }
 
-/**
- * 导出文件验签结果。
- * - [Valid] 签名有效,返回解析后的 [ExportData]
- * - [InvalidSignature] 签名不匹配,文件可能被篡改
- * - [NoSignature] 文件不包含签名(旧版格式或未签名)
- * - [ParseError] JSON 解析失败
- */
-sealed class VerifyResult {
-    data class Valid(val data: ExportData) : VerifyResult()
-    object InvalidSignature : VerifyResult()
-    object NoSignature : VerifyResult()
-    data class ParseError(val message: String) : VerifyResult()
-}
-
 object DataExportImport {
 
     private val json = Json {
@@ -88,16 +74,6 @@ object DataExportImport {
         return raw.joinToString("") { "%02x".format(it) }
     }
 
-    /** 验证 content 与 signature 是否匹配(常量时间比较) */
-    fun verifySignature(content: String, signature: String): Boolean {
-        val expected = signExport(content)
-        // 使用 Java 标准库的常量时间比较，避免长度早期返回泄露信息
-        return MessageDigest.isEqual(
-            expected.toByteArray(Charsets.UTF_8),
-            signature.toByteArray(Charsets.UTF_8)
-        )
-    }
-
     /** 导出 JSON 并附加 HMAC 签名(双段格式:JSON + 分隔符 + 签名) */
     fun exportToJsonWithSignature(
         watchlistMovies: List<ExportItem>,
@@ -108,35 +84,6 @@ object DataExportImport {
         val content = exportToJson(watchlistMovies, watchlistShows, historyMovies, historyShows)
         val signature = signExport(content)
         return content + SIGNATURE_SEPARATOR + signature
-    }
-
-    /**
-     * 验证导出文件内容并解析数据。
-     * 支持带签名(双段格式)和不带签名(纯 JSON)的文件。
-     */
-    fun verifyExportFile(fileContent: String): VerifyResult {
-        val separatorIndex = fileContent.indexOf(SIGNATURE_SEPARATOR)
-        return if (separatorIndex >= 0) {
-            // 带签名的文件
-            val content = fileContent.substring(0, separatorIndex)
-            val signature = fileContent.substring(separatorIndex + SIGNATURE_SEPARATOR.length).trim()
-            if (verifySignature(content, signature)) {
-                try {
-                    VerifyResult.Valid(json.decodeFromString<ExportData>(content))
-                } catch (e: Exception) {
-                    VerifyResult.ParseError(e.message ?: "Unknown error")
-                }
-            } else {
-                VerifyResult.InvalidSignature
-            }
-        } else {
-            // 不带签名的文件(旧版或未签名)
-            try {
-                VerifyResult.Valid(json.decodeFromString<ExportData>(fileContent.trim()))
-            } catch (e: Exception) {
-                VerifyResult.ParseError(e.message ?: "Unknown error")
-            }
-        }
     }
 
     fun exportToJson(
