@@ -2,12 +2,18 @@ package com.tracktosearch.data.ai
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
 import java.io.IOException
 import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 import retrofit2.Response
@@ -75,14 +81,7 @@ class AiRepository @Inject constructor(
 ) {
 
     suspend fun listCharacters(): Result<List<AiCharacter>> = runApi {
-        api.listCharacters().requireData().characters.map { it.toDomain() }
-    }
-
-    suspend fun recognizeActivation(
-        friendId: String,
-        request: AiAsrRequest
-    ): Result<AiActivationRecognition> = runForFriend(friendId) {
-        api.recognizeActivation(request).requireData().toDomain()
+        api.listCharacters().requirePayload().data.characters.map { it.toDomain() }
     }
 
     suspend fun activate(
@@ -102,72 +101,101 @@ class AiRepository @Inject constructor(
         if (request.audioDataUrl.isNullOrBlank() && normalized.isBlank()) {
             throw AiErrorMapper.exception("INVALID_REQUEST", "Activation name must not be blank", 400)
         }
-        api.activate(request.copy(spokenName = normalized)).requireData().toDomain()
+        val requestWithSession = request.copy(
+            spokenName = normalized,
+            sessionId = sessionIdFor(friendId, request.sessionId)
+        )
+        val payload = api.activate(requestWithSession).requirePayload()
+        payload.data.toDomain(payload.quota)
     }
 
     suspend fun getGreeting(
         friendId: String,
         characterId: String,
         forceRefresh: Boolean = false
-    ): Result<AiGreeting> = cachedRequest(
-        friendId = friendId,
-        feature = AiCacheFeature.GREETING,
-        forceRefresh = forceRefresh,
-        // 问候按角色区分缓存：缺 characterId 时第二个角色的问候会命中第一个角色的缓存
-        suffix = characterId,
-        serializer = AiGreeting.serializer()
-    ) {
-        api.getGreeting(
-            AiGreetingRequest(
-                characterId = characterId,
-                includeAudio = true,
-                forceRefresh = forceRefresh,
-                sessionId = "greeting"
-            )
-        ).requireData().toDomain()
+    ): Result<AiGreeting> {
+        val sessionId = sessionIdFor(friendId)
+        return cachedRequest(
+            friendId = friendId,
+            feature = AiCacheFeature.GREETING,
+            forceRefresh = forceRefresh,
+            // 问候按角色区分缓存：缺 characterId 时第二个角色的问候会命中第一个角色的缓存
+            suffix = characterId,
+            serializer = AiGreeting.serializer()
+        ) {
+            val payload = api.getGreeting(
+                AiGreetingRequest(
+                    characterId = characterId,
+                    includeAudio = true,
+                    forceRefresh = forceRefresh,
+                    sessionId = sessionId
+                )
+            ).requirePayload()
+            payload.data.toDomain(payload.quota)
+        }
     }
 
     suspend fun getTaste(
         friendId: String,
         request: AiTasteRequest,
         forceRefresh: Boolean = false
-    ): Result<AiTasteAnalysis> = cachedRequest(
-        friendId = friendId,
-        feature = AiCacheFeature.TASTE,
-        forceRefresh = forceRefresh,
-        serializer = AiTasteAnalysis.serializer()
-    ) {
-        api.getTaste(request.copy(watched = request.watched.take(MAX_WATCHED_ITEMS)))
-            .requireData()
-            .toDomain()
+    ): Result<AiTasteAnalysis> {
+        val watched = request.watched.take(MAX_WATCHED_ITEMS)
+        val refresh = forceRefresh || request.forceRefresh
+        val sessionId = sessionIdFor(friendId, request.sessionId)
+        val watchedDigest = watchedDigest(watched)
+        return cachedRequest(
+            friendId = friendId,
+            feature = AiCacheFeature.TASTE,
+            forceRefresh = refresh,
+            suffix = watchedDigest,
+            serializer = AiTasteAnalysis.serializer()
+        ) {
+            val payload = api.getTaste(
+                request.copy(
+                    watched = watched,
+                    forceRefresh = refresh,
+                    sessionId = sessionId
+                )
+            ).requirePayload()
+            payload.data.toDomain(payload.quota)
+        }
     }
 
     suspend fun getQuiz(
         friendId: String,
         request: AiQuizRequest = AiQuizRequest(),
         forceRefresh: Boolean = false
-    ): Result<AiQuiz> = cachedRequest(
-        friendId = friendId,
-        feature = AiCacheFeature.QUIZ,
-        forceRefresh = forceRefresh,
-        // 缓存 key 带会话 ID：每次进入精灵中心会话都拿新题包，避免重做上一局"开卷考"
-        suffix = request.sessionId,
-        serializer = AiQuiz.serializer()
-    ) {
-        val quiz = api.getQuiz(request.copy(watched = request.watched.take(MAX_WATCHED_ITEMS)))
-            .requireData()
-            .toDomainOrNull()
-        if (quiz == null || !quiz.isThirteenQuestionStructure) {
-            throw AiErrorMapper.exception("INVALID_RESPONSE", "Quiz must contain 13 valid questions", 200)
+    ): Result<AiQuiz> {
+        val watched = request.watched.take(MAX_WATCHED_ITEMS)
+        val refresh = forceRefresh
+        val sessionId = sessionIdFor(friendId, request.sessionId)
+        return cachedRequest(
+            friendId = friendId,
+            feature = AiCacheFeature.QUIZ,
+            forceRefresh = refresh,
+            // 缓存 key 带会话 ID：每次进入精灵中心会话都拿新题包，避免重做上一局"开卷考"
+            suffix = sessionId,
+            serializer = AiQuiz.serializer()
+        ) {
+            val payload = api.getQuiz(
+                request.copy(watched = watched, sessionId = sessionId)
+            ).requirePayload()
+            val quiz = payload.data.toDomainOrNull(payload.quota)
+            if (quiz == null || !quiz.isThirteenQuestionStructure) {
+                throw AiErrorMapper.exception("INVALID_RESPONSE", "Quiz must contain 13 valid questions", 200)
+            }
+            quiz
         }
-        quiz
     }
 
     suspend fun submitQuiz(
         friendId: String,
         request: AiSubmitQuizRequest
     ): Result<AiQuizResult> = runForFriend(friendId) {
-        api.submitQuiz(request).requireData().toDomain()
+        val sessionId = sessionIdFor(friendId, request.sessionId)
+        val payload = api.submitQuiz(request.copy(sessionId = sessionId)).requirePayload()
+        payload.data.toDomain(payload.quota)
     }
 
     suspend fun submitQuiz(
@@ -178,20 +206,31 @@ class AiRepository @Inject constructor(
         friendId,
         AiSubmitQuizRequest(
             quizId = quizId,
-            answers = answers.map { AiQuizAnswerDto(it.questionId, it.selectedOptionIds, it.textAnswer) }
+            answers = answers.map { AiQuizAnswerDto(it.questionId, it.selectedOptionIds, it.textAnswer) },
+            sessionId = sessionIdFor(friendId)
         )
     )
 
     suspend fun getDailyKnowledge(
         friendId: String,
         forceRefresh: Boolean = false
-    ): Result<AiDailyKnowledge> = cachedRequest(
-        friendId = friendId,
-        feature = AiCacheFeature.DAILY_KNOWLEDGE,
-        forceRefresh = forceRefresh,
-        serializer = AiDailyKnowledge.serializer()
-    ) {
-        api.getDailyKnowledge().requireData().toDomain()
+    ): Result<AiDailyKnowledge> {
+        val sessionId = sessionIdFor(friendId)
+        return cachedRequest(
+            friendId = friendId,
+            feature = AiCacheFeature.DAILY_KNOWLEDGE,
+            forceRefresh = forceRefresh,
+            suffix = currentUtcDate(),
+            serializer = AiDailyKnowledge.serializer()
+        ) {
+            val payload = api.getDailyKnowledge(
+                AiDailyRequest(
+                    sessionId = sessionId,
+                    forceRefresh = forceRefresh
+                )
+            ).requirePayload()
+            payload.data.toDomain(payload.quota)
+        }
     }
 
     /** 读取闯关历史（离线可浏览最近/最高成绩）。 */
@@ -216,14 +255,18 @@ class AiRepository @Inject constructor(
     suspend fun playTts(
         friendId: String,
         request: AiTtsRequest
-    ): Result<AiAudio> = cachedRequest(
-        friendId = friendId,
-        feature = AiCacheFeature.TTS,
-        forceRefresh = false,
-        suffix = request.cacheSuffix(),
-        serializer = AiAudio.serializer()
-    ) {
-        api.playTts(request).requireData().toDomain()
+    ): Result<AiAudio> {
+        val sessionId = sessionIdFor(friendId, request.sessionId)
+        return cachedRequest(
+            friendId = friendId,
+            feature = AiCacheFeature.TTS,
+            forceRefresh = false,
+            suffix = request.cacheSuffix(),
+            serializer = AiAudio.serializer()
+        ) {
+            val payload = api.playTts(request.copy(sessionId = sessionId)).requirePayload()
+            payload.data.toDomain(payload.quota)
+        }
     }
 
     suspend fun playTts(
@@ -232,6 +275,12 @@ class AiRepository @Inject constructor(
         text: String,
         style: String? = null
     ): Result<AiAudio> = playTts(friendId, AiTtsRequest(characterId, text, style))
+
+    /** 访客角色试听：不读写 friendId、授权状态或本地 AI 缓存。 */
+    suspend fun playGuestTts(request: AiTtsRequest): Result<AiAudio> = runApi {
+        val payload = api.playTts(request).requirePayload()
+        payload.data.toDomain(payload.quota)
+    }
 
     private suspend fun <T> runForFriend(friendId: String, block: suspend () -> T): Result<T> {
         if (friendId.trim().isEmpty()) {
@@ -302,12 +351,39 @@ class AiRepository @Inject constructor(
             .joinToString("") { "%02x".format(it) }
     }
 
+    private val spriteSessions = ConcurrentHashMap<String, String>()
+
+    private fun sessionIdFor(friendId: String, requestedSessionId: String? = null): String {
+        val requested = requestedSessionId?.trim()
+        if (!requested.isNullOrBlank() && requested !in DEFAULT_SESSION_IDS) {
+            spriteSessions[friendId] = requested
+            return requested
+        }
+        return spriteSessions[friendId] ?: "sprite-${UUID.randomUUID()}".also { generated ->
+            spriteSessions[friendId] = generated
+        }
+    }
+
+    private fun watchedDigest(watched: List<AiWatchedTitleDto>): String =
+        jsonForCacheKeys.encodeToString(ListSerializer(AiWatchedTitleDto.serializer()), watched).sha256Hex()
+
+    private fun currentUtcDate(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }.format(Date())
+
     private companion object {
         const val MAX_WATCHED_ITEMS = 60
+        val DEFAULT_SESSION_IDS = setOf("activation", "greeting", "taste", "quiz", "daily", "default")
+        val jsonForCacheKeys = Json { encodeDefaults = true }
     }
 }
 
-private fun <T> Response<AiApiResponse<T>>.requireData(): T {
+private data class AiResponsePayload<T>(
+    val data: T,
+    val quota: AiQuotaDto?
+)
+
+private fun <T> Response<AiApiResponse<T>>.requirePayload(): AiResponsePayload<T> {
     val envelope = body()
     val code = envelope?.code
     if (!isSuccessful || code == null || code.uppercase(Locale.ROOT) !in AI_SUCCESS_CODES) {
@@ -317,5 +393,8 @@ private fun <T> Response<AiApiResponse<T>>.requireData(): T {
             httpCode = code()
         )
     }
-    return envelope.data ?: throw AiErrorMapper.exception("EMPTY_RESPONSE", "AI response data is empty", code())
+    return AiResponsePayload(
+        data = envelope.data ?: throw AiErrorMapper.exception("EMPTY_RESPONSE", "AI response data is empty", code()),
+        quota = envelope.quota
+    )
 }

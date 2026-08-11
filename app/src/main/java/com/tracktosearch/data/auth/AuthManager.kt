@@ -1,5 +1,6 @@
 package com.tracktosearch.data.auth
 
+import com.tracktosearch.data.ai.AiStorage
 import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.util.StartupTrace
@@ -54,6 +55,7 @@ class AuthManager @Inject constructor(
     private val deviceContinuityManager: DeviceContinuityManager,
     private val tokenStorage: TokenStorage,
     private val json: Json,
+    private val aiStorage: AiStorage,
     private val traktRepositoryProvider: Provider<TraktRepository>
 ) {
     companion object {
@@ -121,6 +123,7 @@ class AuthManager @Inject constructor(
                     lastOnlineAt = now,
                     nextCheckAt = body.nextCheckAt,
                 )
+                clearAiIdentity()
                 deviceId = body.deviceId
                 nextCheckAt = body.nextCheckAt
                 lastOnlineAt = now
@@ -148,8 +151,8 @@ class AuthManager @Inject constructor(
                 nextCheckAt = body.nextCheckAt
                 val did = deviceId
                 if (did != null) tokenStorage.saveSessionMetadata(did, lastOnlineAt, nextCheckAt)
+                updateFriendIdentity(body.friendId)
                 _authState.value = AuthState.AUTHORIZED
-                _friendId.value = body.friendId.takeIf { it.isNotBlank() }
                 _nickname.value = body.nickname.takeIf { it.isNotBlank() }
                 Result.success(body)
             } else if (response.code() == 401) {
@@ -332,6 +335,7 @@ class AuthManager @Inject constructor(
         deviceId = tokenStorage.getCachedDeviceId()
         nextCheckAt = tokenStorage.getCachedNextCheckAt()
         lastOnlineAt = tokenStorage.getCachedLastOnlineAt()
+        _friendId.value = readPersistedFriendId()
     }
 
     private suspend fun initializeLocked(forceNetworkCheck: Boolean) {
@@ -352,6 +356,7 @@ class AuthManager @Inject constructor(
                 }
             } else {
                 _authState.value = AuthState.UNAUTHORIZED
+                clearAiIdentity()
             }
             if (_authState.value == AuthState.UNAUTHORIZED) {
                 recoverSilently()
@@ -381,10 +386,70 @@ class AuthManager @Inject constructor(
     private suspend fun invalidateSession() {
         tokenStorage.clearTokens()
         traktRepositoryProvider.get().clearTraktAccountCaches()
+        clearAiIdentity()
         deviceId = null
         _authState.value = AuthState.UNAUTHORIZED
         _nickname.value = null
+    }
+
+    /** 从加密缓存恢复当前账号，并在服务端账号发生切换时清理旧账号数据。 */
+    private suspend fun updateFriendIdentity(rawFriendId: String) {
+        val nextFriendId = rawFriendId.trim().takeIf { it.isNotEmpty() }
+        val previousFriendId = _friendId.value ?: readPersistedFriendId()
+        if (previousFriendId != null && previousFriendId != nextFriendId) {
+            clearFriendAiCache(previousFriendId)
+        }
+        if (nextFriendId != null) {
+            persistFriendId(nextFriendId)
+        } else {
+            clearPersistedFriendId()
+        }
+        _friendId.value = nextFriendId
+    }
+
+    private suspend fun clearAiIdentity() {
+        val currentFriendId = _friendId.value ?: readPersistedFriendId()
+        if (currentFriendId != null) clearFriendAiCache(currentFriendId)
+        clearPersistedFriendId()
         _friendId.value = null
+    }
+
+    private suspend fun clearFriendAiCache(friendId: String) {
+        try {
+            aiStorage.clearFriend(friendId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // 缓存清理失败不应阻断令牌失效和重新授权流程。
+        }
+    }
+
+    private suspend fun persistFriendId(friendId: String) {
+        try {
+            aiStorage.saveCurrentFriendId(friendId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // 内存状态仍以本次在线校验为准，下一次启动会再次尝试恢复。
+        }
+    }
+
+    private suspend fun readPersistedFriendId(): String? = try {
+        aiStorage.readCurrentFriendId()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        null
+    }
+
+    private suspend fun clearPersistedFriendId() {
+        try {
+            aiStorage.clearCurrentFriendId()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // 允许授权状态机继续完成登出/撤销。
+        }
     }
 
     private suspend fun recoverSilently(): Result<ActivateResponse> {

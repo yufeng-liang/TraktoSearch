@@ -1,21 +1,26 @@
 package com.tracktosearch.data.ai
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.io.File
-import java.security.MessageDigest
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private val Context.aiDataStore: DataStore<Preferences> by preferencesDataStore(name = "ai_cache")
+// 旧版本明文缓存仅用于一次性迁移，迁移完成后立即清空。
+private val Context.legacyAiDataStore: DataStore<Preferences> by preferencesDataStore(name = "ai_cache")
 
 enum class AiCacheFeature(val wireName: String) {
     CHARACTERS("characters"),
@@ -47,95 +52,158 @@ object AiStorageKey {
 }
 
 /**
- * AI 缓存：小 JSON 存 DataStore preferences；大内容（问候/TTS 的 base64 音频，可数百 KB）
- * 落到 cacheDir 文件，prefs 只存 `file:<key>` 标记，避免 DataStore 把整图常驻内存且每次 edit 全量重写文件。
- * 登出清理由上层在会话生命周期中调用 clearFriend。
+ * AI 私有缓存统一存入 EncryptedSharedPreferences。
+ *
+ * 旧版本把小 JSON 存入明文 DataStore、大音频存入明文 cacheDir 文件；初始化时会把旧值读出
+ * 写入加密 prefs，并清空旧 DataStore 与目录。新实现不再把 AI JSON 或音频 data URL 写入明文文件。
  */
 @Singleton
-class AiStorage @Inject constructor(
-    @ApplicationContext private val context: Context
+class AiStorage private constructor(
+    private val context: Context,
+    private val preferencesFactory: () -> SharedPreferences
 ) {
-    private val cacheDir: File
-        get() = File(context.cacheDir, "ai_cache").apply { mkdirs() }
+    @Inject
+    constructor(@ApplicationContext context: Context) : this(context, {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        EncryptedSharedPreferences.create(
+            context,
+            PREFS_NAME,
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    })
 
-    private val FILE_MARKER_PREFIX = "file:"
+    /** Robolectric 无 Android Keystore 时使用隔离的测试 prefs，不影响生产 Hilt 构造。 */
+    internal constructor(context: Context, preferences: SharedPreferences) : this(context, { preferences })
 
-    /** 超过该字节数的缓存内容落到文件（主要是音频 dataUrl）。 */
-    private val FILE_THRESHOLD_BYTES = 64 * 1024
-
-    suspend fun read(friendId: String, feature: AiCacheFeature, suffix: String? = null): String? {
-        val raw = context.aiDataStore.data.first()[stringPreferencesKey(AiStorageKey.forFriend(friendId, feature, suffix))]
-            ?: return null
-        return resolveStored(raw)
+    companion object {
+        private const val PREFS_NAME = "ai_cache_encrypted"
+        private const val MIGRATED_KEY = "ai_cache_migrated_v3"
+        private const val CURRENT_FRIEND_ID_KEY = "ai_current_friend_id"
+        private const val FILE_MARKER_PREFIX = "file:"
     }
+
+    private val migrationMutex = Mutex()
+
+    @Volatile
+    private var migrationComplete = false
+
+    private val encryptedPreferences: SharedPreferences by lazy(preferencesFactory)
+
+    private val legacyCacheDir: File
+        get() = File(context.cacheDir, "ai_cache")
+
+    suspend fun read(friendId: String, feature: AiCacheFeature, suffix: String? = null): String? =
+        withSecurePreferences { preferences ->
+            preferences.getString(AiStorageKey.forFriend(friendId, feature, suffix), null)
+        }
 
     suspend fun write(friendId: String, feature: AiCacheFeature, json: String, suffix: String? = null) {
         require(json.isNotBlank()) { "AI cache JSON must not be blank" }
-        val key = stringPreferencesKey(AiStorageKey.forFriend(friendId, feature, suffix))
-        if (json.length > FILE_THRESHOLD_BYTES) {
-            val fileKey = fileKeyFor(friendId, feature, suffix)
-            withContext(Dispatchers.IO) {
-                cacheDir.resolve("$fileKey.json").writeText(json)
-            }
-            context.aiDataStore.edit { preferences -> preferences[key] = "$FILE_MARKER_PREFIX$fileKey" }
-        } else {
-            context.aiDataStore.edit { preferences -> preferences[key] = json }
+        withSecurePreferences { preferences ->
+            val committed = preferences.edit()
+                .putString(AiStorageKey.forFriend(friendId, feature, suffix), json)
+                .commit()
+            check(committed) { "Unable to persist encrypted AI cache" }
         }
     }
 
     suspend fun remove(friendId: String, feature: AiCacheFeature, suffix: String? = null) {
-        val key = stringPreferencesKey(AiStorageKey.forFriend(friendId, feature, suffix))
-        val stored = context.aiDataStore.data.first()[key]
-        if (stored != null && stored.startsWith(FILE_MARKER_PREFIX)) {
-            deleteFileQuietly(stored.removePrefix(FILE_MARKER_PREFIX))
+        withSecurePreferences { preferences ->
+            val committed = preferences.edit()
+                .remove(AiStorageKey.forFriend(friendId, feature, suffix))
+                .commit()
+            check(committed) { "Unable to remove encrypted AI cache" }
         }
-        context.aiDataStore.edit { preferences -> preferences.remove(key) }
     }
 
     suspend fun clearFriend(friendId: String) {
-        val encodedFriendId = AiStorageKey.encodeFriendId(friendId)
-        val featurePrefixes = AiCacheFeature.entries.map { feature ->
-            "ai_v${AiStorageKey.SCHEMA_VERSION}_${feature.wireName}_${encodedFriendId}"
-        }
-        val matches = context.aiDataStore.data.first().asMap().filterKeys { key ->
-            featurePrefixes.any { prefix -> key.name == prefix || key.name.startsWith("${prefix}_") }
-        }
-        // 该用户名下的大内容文件一并清理，再移除 prefs 条目
-        val fileKeys = matches.values.mapNotNull { value ->
-            (value as? String)?.takeIf { it.startsWith(FILE_MARKER_PREFIX) }?.removePrefix(FILE_MARKER_PREFIX)
-        }
-        if (fileKeys.isNotEmpty()) {
-            withContext(Dispatchers.IO) {
-                fileKeys.forEach { fileKey -> cacheDir.resolve("$fileKey.json").delete() }
+        val normalizedFriendId = friendId.trim()
+        if (normalizedFriendId.isEmpty()) return
+        withSecurePreferences { preferences ->
+            val encodedFriendId = AiStorageKey.encodeFriendId(normalizedFriendId)
+            val prefixes = AiCacheFeature.entries.map { feature ->
+                "ai_v${AiStorageKey.SCHEMA_VERSION}_${feature.wireName}_${encodedFriendId}"
             }
+            val editor = preferences.edit()
+            preferences.all.keys
+                .filter { key -> prefixes.any { prefix -> key == prefix || key.startsWith("${prefix}_") } }
+                .forEach { key -> editor.remove(key) }
+            if (preferences.getString(CURRENT_FRIEND_ID_KEY, null) == normalizedFriendId) {
+                editor.remove(CURRENT_FRIEND_ID_KEY)
+            }
+            check(editor.commit()) { "Unable to clear encrypted AI cache" }
         }
-        context.aiDataStore.edit { preferences ->
-            matches.keys.forEach { key ->
-                @Suppress("UNCHECKED_CAST")
-                preferences.remove(key as Preferences.Key<Any>)
+    }
+
+    suspend fun saveCurrentFriendId(friendId: String) {
+        val normalizedFriendId = friendId.trim()
+        require(normalizedFriendId.isNotEmpty()) { "friendId must not be blank" }
+        withSecurePreferences { preferences ->
+            check(
+                preferences.edit()
+                    .putString(CURRENT_FRIEND_ID_KEY, normalizedFriendId)
+                    .commit()
+            ) { "Unable to persist current friendId" }
+        }
+    }
+
+    suspend fun readCurrentFriendId(): String? = withSecurePreferences { preferences ->
+        preferences.getString(CURRENT_FRIEND_ID_KEY, null)?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
+    suspend fun clearCurrentFriendId() {
+        withSecurePreferences { preferences ->
+            check(preferences.edit().remove(CURRENT_FRIEND_ID_KEY).commit()) {
+                "Unable to clear current friendId"
             }
         }
     }
 
-    private suspend fun resolveStored(raw: String): String? {
+    private suspend fun <T> withSecurePreferences(block: (SharedPreferences) -> T): T {
+        ensureMigrated()
+        return withContext(Dispatchers.IO) { block(encryptedPreferences) }
+    }
+
+    /** 串行完成迁移，避免启动时多个 AI 请求各自读取旧明文 DataStore。 */
+    private suspend fun ensureMigrated() {
+        if (migrationComplete) return
+        migrationMutex.withLock {
+            if (migrationComplete) return
+            withContext(Dispatchers.IO) {
+                if (!encryptedPreferences.getBoolean(MIGRATED_KEY, false)) {
+                    val legacyPreferences = context.legacyAiDataStore.data.first()
+                    val editor = encryptedPreferences.edit()
+                    legacyPreferences.asMap().forEach { (key, value) ->
+                        val raw = value as? String ?: return@forEach
+                        val migrated = resolveLegacyValue(raw)
+                        if (migrated != null) editor.putString(key.name, migrated)
+                    }
+                    check(editor.putBoolean(MIGRATED_KEY, true).commit()) {
+                        "Unable to migrate encrypted AI cache"
+                    }
+                }
+                // 即使迁移标记已经存在，也清掉可能残留的旧明文目录。
+                try {
+                    context.legacyAiDataStore.edit { preferences -> preferences.clear() }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // 清理失败不影响新缓存；下次初始化仍会再次尝试删除旧目录。
+                }
+                runCatching { legacyCacheDir.deleteRecursively() }
+                migrationComplete = true
+            }
+        }
+    }
+
+    private fun resolveLegacyValue(raw: String): String? {
         if (!raw.startsWith(FILE_MARKER_PREFIX)) return raw
         val fileKey = raw.removePrefix(FILE_MARKER_PREFIX)
-        return withContext(Dispatchers.IO) {
-            val file = cacheDir.resolve("$fileKey.json")
-            if (file.exists()) file.readText() else null
-        }
-    }
-
-    private fun fileKeyFor(friendId: String, feature: AiCacheFeature, suffix: String?): String {
-        // 文件名只需唯一且文件系统安全：用完整 key 的 SHA-256 前缀，避免原始 key 中 friendId 的非法字符
-        val rawKey = AiStorageKey.forFriend(friendId, feature, suffix)
-        return MessageDigest.getInstance("SHA-256")
-            .digest(rawKey.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it) }
-            .take(32)
-    }
-
-    private fun deleteFileQuietly(fileKey: String) {
-        runCatching { cacheDir.resolve("$fileKey.json").delete() }
+        val file = legacyCacheDir.resolve("$fileKey.json")
+        return if (file.isFile) runCatching { file.readText() }.getOrNull() else null
     }
 }

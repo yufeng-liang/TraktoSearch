@@ -48,4 +48,25 @@ class AiApiServiceTest {
 
         assertThat(server.takeRequest().path).isEqualTo("/api/ai/characters")
     }
+
+    @Test
+    fun api_doesNotExposeDeadActivationAsrRoute() {
+        assertThat(AiApiService::class.java.methods.any { it.name == "recognizeActivation" }).isFalse()
+    }
+
+    @Test
+    fun dailyKnowledge_usesPostRouteWithSessionBody() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody("""{"code":"SUCCESS","data":{"id":"daily-1"}}""")
+        )
+
+        api.getDailyKnowledge(AiDailyRequest(sessionId = "sprite-session"))
+
+        val request = server.takeRequest()
+        assertThat(request.method).isEqualTo("POST")
+        assertThat(request.path).isEqualTo("/api/ai/daily")
+        assertThat(request.body.readUtf8()).contains("sprite-session")
+    }
 }

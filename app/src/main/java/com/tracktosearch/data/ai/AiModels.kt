@@ -1,6 +1,10 @@
 package com.tracktosearch.data.ai
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 import java.util.Locale
 
 /** 网关统一返回包装。API Key 只存在服务端，客户端只接收这个业务响应。 */
@@ -71,27 +75,6 @@ data class AiActivation(
 )
 
 @Serializable
-data class AiAsrRequest(
-    val characterId: String,
-    val audioDataUrl: String,
-    val locale: String = "zh-CN"
-)
-
-@Serializable
-data class AiActivationRecognitionDto(
-    val text: String = "",
-    val matched: Boolean = false,
-    val confidence: Float? = null
-)
-
-@Serializable
-data class AiActivationRecognition(
-    val text: String,
-    val matched: Boolean,
-    val confidence: Float?
-)
-
-@Serializable
 data class AiGreetingRequest(
     val characterId: String,
     val includeAudio: Boolean = true,
@@ -116,7 +99,7 @@ data class AiGreeting(
     val nicknameMeaning: String,
     val comment: String,
     val audio: AiAudio?,
-    val quota: AiQuota?
+    val quota: AiQuota? = null
 )
 
 @Serializable
@@ -205,7 +188,7 @@ data class AiTasteAnalysis(
     val tasteProfile: String,
     val highlights: List<String>,
     val recommendations: List<AiRecommendation>,
-    val quota: AiQuota?
+    val quota: AiQuota? = null
 )
 
 @Serializable
@@ -299,7 +282,8 @@ data class AiQuizAnswer(
 @Serializable
 data class AiSubmitQuizRequest(
     val quizId: String,
-    val answers: List<AiQuizAnswerDto>
+    val answers: List<AiQuizAnswerDto>,
+    val sessionId: String = "quiz"
 )
 
 @Serializable
@@ -307,7 +291,10 @@ data class AiQuizQuestionResultDto(
     val questionId: String,
     val score: Int = 0,
     val correct: Boolean = false,
-    val explanation: String = ""
+    val explanation: String = "",
+    val correctOptionIds: List<String> = emptyList(),
+    /** Worker 对简答题返回文本，对多选题返回字符串数组。 */
+    val correctAnswer: JsonElement? = null
 )
 
 @Serializable
@@ -315,7 +302,9 @@ data class AiQuizQuestionResult(
     val questionId: String,
     val score: Int,
     val correct: Boolean,
-    val explanation: String
+    val explanation: String,
+    val correctOptionIds: List<String> = emptyList(),
+    val correctAnswer: String? = null
 )
 
 @Serializable
@@ -327,7 +316,8 @@ data class AiQuizResultDto(
     val totalQuestions: Int = 13,
     val summary: String = "",
     val dimensionScores: Map<String, Int> = emptyMap(),
-    val questionResults: List<AiQuizQuestionResultDto> = emptyList()
+    val questionResults: List<AiQuizQuestionResultDto> = emptyList(),
+    val quota: AiQuotaDto? = null
 )
 
 @Serializable
@@ -339,7 +329,8 @@ data class AiQuizResult(
     val totalQuestions: Int,
     val summary: String,
     val dimensionScores: Map<String, Int>,
-    val questionResults: List<AiQuizQuestionResult>
+    val questionResults: List<AiQuizQuestionResult>,
+    val quota: AiQuota? = null
 )
 
 /** 闯关历史（离线可浏览）：最近一次结果 + 历史最高分。按 friendId 分区持久化。 */
@@ -358,7 +349,14 @@ data class AiDailyKnowledgeDto(
     val sourceName: String = "",
     val sourceUrl: String = "",
     val publishedAt: Long? = null,
-    val characterLine: String? = null
+    val characterLine: String? = null,
+    val quota: AiQuotaDto? = null
+)
+
+@Serializable
+data class AiDailyRequest(
+    val sessionId: String = "daily",
+    val forceRefresh: Boolean = false
 )
 
 @Serializable
@@ -370,7 +368,8 @@ data class AiDailyKnowledge(
     val sourceName: String,
     val sourceUrl: String,
     val publishedAt: Long?,
-    val characterLine: String?
+    val characterLine: String?,
+    val quota: AiQuota? = null
 )
 
 @Serializable
@@ -388,7 +387,8 @@ data class AiAudioDto(
     val mimeType: String = "audio/mpeg",
     val durationMs: Long? = null,
     val cacheKey: String? = null,
-    val transcript: String? = null
+    val transcript: String? = null,
+    val quota: AiQuotaDto? = null
 )
 
 @Serializable
@@ -398,48 +398,63 @@ data class AiAudio(
     val mimeType: String,
     val durationMs: Long?,
     val cacheKey: String?,
-    val transcript: String?
+    val transcript: String?,
+    val quota: AiQuota? = null
 )
 
 fun AiQuotaDto.toDomain(): AiQuota = AiQuota(sessionUsed, sessionLimit, dailyUsed, dailyLimit, resetAt)
 
-fun AiAudioDto.toDomain(): AiAudio = AiAudio(audioDataUrl, audioUrl, mimeType, durationMs, cacheKey, transcript)
-
-fun AiGreetingDto.toDomain(): AiGreeting = AiGreeting(
-    nickname = nickname,
-    greeting = greeting,
-    nicknameMeaning = nicknameMeaning,
-    comment = comment,
-    audio = audio?.toDomain(),
-    quota = quota?.toDomain()
+fun AiAudioDto.toDomain(outerQuota: AiQuotaDto? = null): AiAudio = AiAudio(
+    audioDataUrl = audioDataUrl,
+    audioUrl = audioUrl,
+    mimeType = mimeType,
+    durationMs = durationMs,
+    cacheKey = cacheKey,
+    transcript = transcript,
+    quota = (outerQuota ?: quota)?.toDomain()
 )
 
-fun AiTasteDto.toDomain(): AiTasteAnalysis = AiTasteAnalysis(
-    roast = roast,
-    tasteProfile = tasteProfile.ifBlank { taste.joinToString("、") },
-    highlights = highlights.ifEmpty { taste },
-    recommendations = recommendations.map { recommendation ->
-        AiRecommendation(
-            id = recommendation.id.ifBlank {
-                recommendation.mediaIds?.traktId
-                    ?: recommendation.mediaIds?.tmdbId?.toString()
-                    ?: recommendation.title
-            },
-            mediaType = recommendation.mediaType,
-            title = recommendation.title,
-            year = recommendation.year,
-            posterUrl = recommendation.posterUrl,
-            tmdbId = recommendation.tmdbId ?: recommendation.mediaIds?.tmdbId,
-            traktId = recommendation.traktId ?: recommendation.mediaIds?.traktId?.toIntOrNull(),
-            imdbId = recommendation.imdbId ?: recommendation.mediaIds?.imdbId,
-            doubanId = recommendation.doubanId ?: recommendation.mediaIds?.doubanId,
-            reason = recommendation.reason
-        )
-    },
-    quota = quota?.toDomain()
-)
+fun AiGreetingDto.toDomain(outerQuota: AiQuotaDto? = null): AiGreeting {
+    val effectiveQuota = outerQuota ?: quota
+    return AiGreeting(
+        nickname = nickname,
+        greeting = greeting,
+        nicknameMeaning = nicknameMeaning,
+        comment = comment,
+        audio = audio?.toDomain(effectiveQuota),
+        quota = effectiveQuota?.toDomain()
+    )
+}
 
-fun AiQuizDto.toDomainOrNull(): AiQuiz? {
+fun AiTasteDto.toDomain(outerQuota: AiQuotaDto? = null): AiTasteAnalysis {
+    val effectiveQuota = outerQuota ?: quota
+    return AiTasteAnalysis(
+        roast = roast,
+        tasteProfile = tasteProfile.ifBlank { taste.joinToString("、") },
+        highlights = highlights.ifEmpty { taste },
+        recommendations = recommendations.map { recommendation ->
+            AiRecommendation(
+                id = recommendation.id.ifBlank {
+                    recommendation.mediaIds?.traktId
+                        ?: recommendation.mediaIds?.tmdbId?.toString()
+                        ?: recommendation.title
+                },
+                mediaType = recommendation.mediaType,
+                title = recommendation.title,
+                year = recommendation.year,
+                posterUrl = recommendation.posterUrl,
+                tmdbId = recommendation.tmdbId ?: recommendation.mediaIds?.tmdbId,
+                traktId = recommendation.traktId ?: recommendation.mediaIds?.traktId?.toIntOrNull(),
+                imdbId = recommendation.imdbId ?: recommendation.mediaIds?.imdbId,
+                doubanId = recommendation.doubanId ?: recommendation.mediaIds?.doubanId,
+                reason = recommendation.reason
+            )
+        },
+        quota = effectiveQuota?.toDomain()
+    )
+}
+
+fun AiQuizDto.toDomainOrNull(outerQuota: AiQuotaDto? = null): AiQuiz? {
     val mappedQuestions = mutableListOf<AiQuizQuestion>()
     for (question in questions) {
         val type = when (question.type.trim().lowercase(Locale.ROOT)) {
@@ -465,11 +480,11 @@ fun AiQuizDto.toDomainOrNull(): AiQuiz? {
         mediaTitles = mediaTitles.ifEmpty { movies.map { it.title } },
         questions = mappedQuestions,
         totalScore = totalScore,
-        quota = quota?.toDomain()
+        quota = (outerQuota ?: quota)?.toDomain()
     )
 }
 
-fun AiQuizResultDto.toDomain(): AiQuizResult = AiQuizResult(
+fun AiQuizResultDto.toDomain(outerQuota: AiQuotaDto? = null): AiQuizResult = AiQuizResult(
     quizId = quizId,
     score = score,
     totalScore = totalScore,
@@ -478,27 +493,61 @@ fun AiQuizResultDto.toDomain(): AiQuizResult = AiQuizResult(
     summary = summary,
     dimensionScores = dimensionScores,
     questionResults = questionResults.map {
-        AiQuizQuestionResult(it.questionId, it.score, it.correct, it.explanation)
+        AiQuizQuestionResult(
+            questionId = it.questionId,
+            score = it.score,
+            correct = it.correct,
+            explanation = it.explanation,
+            correctOptionIds = it.correctOptionIds.ifEmpty { it.correctAnswer.toOptionIds() },
+            correctAnswer = it.correctAnswer.toAnswerText()
+        )
+    },
+    quota = (outerQuota ?: quota)?.toDomain()
+)
+
+fun AiDailyKnowledgeDto.toDomain(outerQuota: AiQuotaDto? = null): AiDailyKnowledge = AiDailyKnowledge(
+    id = id,
+    title = title,
+    fact = fact,
+    explanation = explanation,
+    sourceName = sourceName,
+    sourceUrl = sourceUrl,
+    publishedAt = publishedAt,
+    characterLine = characterLine,
+    quota = (outerQuota ?: quota)?.toDomain()
+)
+
+fun AiActivationDto.toDomain(outerQuota: AiQuotaDto? = null): AiActivation {
+    val effectiveQuota = outerQuota ?: quota
+    return AiActivation(
+        activated = activated,
+        activationPhrase = activationPhrase,
+        character = character?.toDomain()
+            ?: AiCharacterCatalog.all.firstOrNull { it.id == characterId }?.let { base ->
+                base.copy(
+                    name = characterName.ifBlank { base.name },
+                    isAvailable = voiceStatus == "ready"
+                )
+            },
+        quota = effectiveQuota?.toDomain(),
+        greeting = greeting?.toDomain(effectiveQuota),
+        audio = audio?.toDomain(effectiveQuota)
+    )
+}
+
+private fun JsonElement?.toAnswerText(): String? = when (this) {
+    null, JsonNull -> null
+    is JsonPrimitive -> content
+    is JsonArray -> joinToString("、") { it.toAnswerText().orEmpty() }
+    else -> toString()
+}
+
+private fun JsonElement?.toOptionIds(): List<String> = when (this) {
+    is JsonPrimitive -> content.takeIf { it.matches(OPTION_ID_PATTERN) }?.let(::listOf).orEmpty()
+    is JsonArray -> mapNotNull { element ->
+        (element as? JsonPrimitive)?.content?.takeIf { it.matches(OPTION_ID_PATTERN) }
     }
-)
+    else -> emptyList()
+}
 
-fun AiDailyKnowledgeDto.toDomain(): AiDailyKnowledge = AiDailyKnowledge(
-    id, title, fact, explanation, sourceName, sourceUrl, publishedAt, characterLine
-)
-
-fun AiActivationDto.toDomain(): AiActivation = AiActivation(
-    activated = activated,
-    activationPhrase = activationPhrase,
-    character = character?.toDomain()
-        ?: AiCharacterCatalog.all.firstOrNull { it.id == characterId }?.let { base ->
-            base.copy(
-                name = characterName.ifBlank { base.name },
-                isAvailable = voiceStatus == "ready"
-            )
-        },
-    quota = quota?.toDomain(),
-    greeting = greeting?.toDomain(),
-    audio = audio?.toDomain()
-)
-
-fun AiActivationRecognitionDto.toDomain(): AiActivationRecognition = AiActivationRecognition(text, matched, confidence)
+private val OPTION_ID_PATTERN = Regex("[A-Za-z0-9._:-]{1,32}")

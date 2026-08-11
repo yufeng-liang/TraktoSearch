@@ -2,6 +2,7 @@ package com.tracktosearch.data.auth
 
 import android.util.Base64
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.data.ai.AiStorage
 import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.repository.TraktRepository
 import io.mockk.every
@@ -44,7 +45,7 @@ class AuthManagerTest {
         val keyManager = mockk<DeviceKeyManager>()
         val continuityManager = mockk<DeviceContinuityManager>()
         val storage = mockk<TokenStorage>()
-        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, traktRepositoryProvider)
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, mockk<AiStorage>(relaxed = true), traktRepositoryProvider)
 
         coEvery { storage.ensureCacheLoaded() } returns Unit
         every { storage.getCachedDeviceId() } returns "device-id"
@@ -82,7 +83,7 @@ class AuthManagerTest {
         val keyManager = mockk<DeviceKeyManager>()
         val continuityManager = mockk<DeviceContinuityManager>()
         val storage = mockk<TokenStorage>()
-        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, traktRepositoryProvider)
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, mockk<AiStorage>(relaxed = true), traktRepositoryProvider)
 
         coEvery { storage.ensureCacheLoaded() } returns Unit
         every { storage.getCachedDeviceId() } returns "device-id"
@@ -102,7 +103,7 @@ class AuthManagerTest {
         val keyManager = mockk<DeviceKeyManager>()
         val continuityManager = mockk<DeviceContinuityManager>()
         val storage = mockk<TokenStorage>()
-        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, traktRepositoryProvider)
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, mockk<AiStorage>(relaxed = true), traktRepositoryProvider)
         val now = System.currentTimeMillis() / 1000
 
         coEvery { storage.ensureCacheLoaded() } returns Unit
@@ -141,7 +142,7 @@ class AuthManagerTest {
         val keyManager = mockk<DeviceKeyManager>()
         val continuityManager = mockk<DeviceContinuityManager>()
         val storage = mockk<TokenStorage>()
-        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, traktRepositoryProvider)
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, mockk<AiStorage>(relaxed = true), traktRepositoryProvider)
         val refreshStarted = CompletableDeferred<Unit>()
         val releaseRefresh = CompletableDeferred<Unit>()
 
@@ -198,7 +199,7 @@ class AuthManagerTest {
         val keyManager = mockk<DeviceKeyManager>()
         val continuityManager = mockk<DeviceContinuityManager>()
         val storage = mockk<TokenStorage>()
-        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, traktRepositoryProvider)
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, mockk<AiStorage>(relaxed = true), traktRepositoryProvider)
         var cachedNextCheckAt = 0L
         val futureNextCheckAt = System.currentTimeMillis() + 60_000L
 
@@ -245,7 +246,7 @@ class AuthManagerTest {
         val keyManager = mockk<DeviceKeyManager>()
         val continuityManager = mockk<DeviceContinuityManager>()
         val storage = mockk<TokenStorage>()
-        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, traktRepositoryProvider)
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, mockk<AiStorage>(relaxed = true), traktRepositoryProvider)
         val bothChecksStarted = CompletableDeferred<Unit>()
         var checkCalls = 0
         var cachedAccessToken = "old-access"
@@ -299,7 +300,7 @@ class AuthManagerTest {
         val keyManager = mockk<DeviceKeyManager>()
         val continuityManager = mockk<DeviceContinuityManager>()
         val storage = mockk<TokenStorage>()
-        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, traktRepositoryProvider)
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, mockk<AiStorage>(relaxed = true), traktRepositoryProvider)
 
         every { continuityManager.getAndroidId() } returns "android-id"
         every { storage.getCachedAccessToken() } returns "access-token"
@@ -320,7 +321,7 @@ class AuthManagerTest {
         val keyManager = mockk<DeviceKeyManager>()
         val continuityManager = mockk<DeviceContinuityManager>()
         val storage = mockk<TokenStorage>()
-        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, traktRepositoryProvider)
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, mockk<AiStorage>(relaxed = true), traktRepositoryProvider)
 
         coEvery { storage.ensureCacheLoaded() } returns Unit
         every { storage.getCachedDeviceId() } returns "device-id"

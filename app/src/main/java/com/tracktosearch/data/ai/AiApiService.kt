@@ -10,9 +10,6 @@ interface AiApiService {
     @GET("characters")
     suspend fun listCharacters(): Response<AiApiResponse<AiCharactersDto>>
 
-    @POST("activation/asr")
-    suspend fun recognizeActivation(@Body request: AiAsrRequest): Response<AiApiResponse<AiActivationRecognitionDto>>
-
     @POST("activate")
     suspend fun activate(@Body request: AiActivateRequest): Response<AiApiResponse<AiActivationDto>>
 
@@ -28,8 +25,8 @@ interface AiApiService {
     @POST("quiz/submit")
     suspend fun submitQuiz(@Body request: AiSubmitQuizRequest): Response<AiApiResponse<AiQuizResultDto>>
 
-    @GET("daily")
-    suspend fun getDailyKnowledge(): Response<AiApiResponse<AiDailyKnowledgeDto>>
+    @POST("daily")
+    suspend fun getDailyKnowledge(@Body request: AiDailyRequest): Response<AiApiResponse<AiDailyKnowledgeDto>>
 
     @POST("tts")
     suspend fun playTts(@Body request: AiTtsRequest): Response<AiApiResponse<AiAudioDto>>
