@@ -112,6 +112,15 @@ fun ActivationLoginScreen(
     var showWhatIsTraktDialog by remember { mutableStateOf(false) }
 
     val isActivated = authState.activated
+    var showCelebration by remember { mutableStateOf(false) }
+    var observedActivated by remember { mutableStateOf(isActivated) }
+
+    LaunchedEffect(isActivated) {
+        if (shouldShowActivationCelebration(observedActivated, isActivated)) {
+            showCelebration = true
+        }
+        observedActivated = isActivated
+    }
 
     fun launchAuthorization() {
         scope.launch {
@@ -274,6 +283,16 @@ fun ActivationLoginScreen(
                 )
                 Spacer(modifier = Modifier.height(20.dp))
             }
+
+            ActivationCelebration(
+                visible = showCelebration,
+                onFinished = { showCelebration = false },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .padding(top = 174.dp)
+                    .zIndex(0.5f)
+            )
         }
     }
 
