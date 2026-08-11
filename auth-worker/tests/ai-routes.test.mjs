@@ -37,8 +37,9 @@ async function call(path, {
     authorized = true,
     friendId = 'friend-1',
     deviceId = 'device-1',
+    headers: extraHeaders = {},
 } = {}) {
-    const headers = {};
+    const headers = { ...extraHeaders };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     const request = new Request(`https://gateway.test${path}`, {
         method,
@@ -59,6 +60,39 @@ async function call(path, {
     if (!response) throw new Error('Unauthorized calls must be tested through the main router');
     const json = await response.json();
     return { response, json };
+}
+
+function createAudioBucket({ failPut = false } = {}) {
+    const objects = new Map();
+    return {
+        objects,
+        async head(key) {
+            const object = objects.get(key);
+            return object ? { key, size: object.bytes.byteLength, customMetadata: object.customMetadata } : null;
+        },
+        async put(key, value, options = {}) {
+            if (failPut) throw new Error('R2 write failed');
+            const bytes = new Uint8Array(await new Response(value).arrayBuffer());
+            objects.set(key, {
+                bytes,
+                contentType: options.httpMetadata?.contentType || 'application/octet-stream',
+                customMetadata: options.customMetadata || {},
+            });
+            return { key, size: bytes.byteLength };
+        },
+        async get(key) {
+            const object = objects.get(key);
+            if (!object) return null;
+            return {
+                body: new Blob([object.bytes]).stream(),
+                arrayBuffer: async () => object.bytes.slice().buffer,
+                writeHttpMetadata(headers) {
+                    headers.set('Content-Type', object.contentType);
+                },
+                httpEtag: '"test-etag"',
+            };
+        },
+    };
 }
 
 function movies() {
@@ -84,6 +118,8 @@ test('AI character catalog is public through the main router', async () => {
     assert.equal(response.status, 200);
     assert.equal(json.code, 'SUCCESS');
     assert.equal(json.data.characters.length, 7);
+    assert.equal(json.data.sessionLimit, 14);
+    assert.equal(json.data.dailyLimit, 80);
 });
 
 test('AI protected routes still reject missing JWT', async () => {
@@ -221,6 +257,217 @@ test('authenticated TTS goes through the quota path instead of the guest path', 
     const json = await response.json();
     assert.equal(response.status, 200);
     assert.equal(json.quota.sessionUsed, 1);
+});
+
+test('TTS stores MP3 in R2, single-flights MiMo, and does not charge cache hits', async () => {
+    const originalFetch = globalThis.fetch;
+    let upstreamCalls = 0;
+    globalThis.fetch = async () => {
+        upstreamCalls += 1;
+        return new Response(JSON.stringify({
+            choices: [{ message: { audio: { data: 'AQI=', transcript: '到！' } } }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+
+    try {
+        const env = createTestEnv({
+            MIMO_API_KEY: 'test-mimo-key',
+            AI_TEST_VOICE_DESIGN_READY: true,
+            AI_AUDIO_CACHE: createAudioBucket(),
+            JWT_SIGNING_KEY: 'test-jwt-secret',
+        });
+        const request = {
+            method: 'POST',
+            body: {
+                action: 'tts',
+                characterId: 'usagi',
+                text: '到！',
+                scene: 'ACTIVATION_ACK',
+                sessionId: 'cached-tts-session',
+            },
+            env,
+        };
+        const first = await call('/api/ai/tts', request);
+        const second = await call('/api/ai/tts', request);
+
+        assert.equal(first.response.status, 200);
+        assert.equal(second.response.status, 200);
+        assert.match(first.json.data.audioUrl, /^https:\/\/gateway\.test\/api\/ai\/audio\/[^/]+$/);
+        assert.equal(first.json.data.audioDataUrl, null);
+        assert.equal(second.json.data.audioDataUrl, null);
+        assert.equal(upstreamCalls, 1);
+        assert.equal(first.json.quota.sessionUsed, 1);
+        assert.equal(second.json.quota, undefined);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('signed TTS audio validates scope, expiry, signature, and object existence', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({
+        choices: [{ message: { audio: { data: 'AQI=', transcript: '到！' } } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+    try {
+        const bucket = createAudioBucket();
+        const env = createTestEnv({
+            MIMO_API_KEY: 'test-mimo-key',
+            AI_TEST_VOICE_DESIGN_READY: true,
+            AI_AUDIO_CACHE: bucket,
+            JWT_SIGNING_KEY: 'test-jwt-secret',
+        });
+        const generated = await call('/api/ai/tts', {
+            method: 'POST',
+            body: { action: 'tts', characterId: 'usagi', text: '到！', scene: 'AUDITION' },
+            env,
+        });
+        const worker = await loadMainWorker();
+        const audioUrl = generated.json.data.audioUrl;
+        const valid = await worker.default.fetch(new Request(audioUrl), env, { waitUntil() {} });
+        assert.equal(valid.status, 200);
+        assert.equal(valid.headers.get('content-type'), 'audio/mpeg');
+        assert.deepEqual(Array.from(new Uint8Array(await valid.arrayBuffer())), [1, 2]);
+
+        const tampered = audioUrl.slice(0, -1) + (audioUrl.endsWith('a') ? 'b' : 'a');
+        const tamperedResponse = await worker.default.fetch(new Request(tampered), env, { waitUntil() {} });
+        assert.equal(tamperedResponse.status, 403);
+
+        const expiredToken = await signAccessToken(
+            'test-jwt-secret',
+            'audio',
+            [...bucket.objects.keys()][0],
+            ['audio'],
+            -1,
+        );
+        const expired = await worker.default.fetch(
+            new Request(`https://gateway.test/api/ai/audio/${expiredToken}`),
+            env,
+            { waitUntil() {} },
+        );
+        assert.equal(expired.status, 403);
+
+        const unknownToken = await signAccessToken(
+            'test-jwt-secret',
+            'audio',
+            'tts-vd-v1/ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff.mp3',
+            ['audio'],
+            600,
+        );
+        const unknown = await worker.default.fetch(
+            new Request(`https://gateway.test/api/ai/audio/${unknownToken}`),
+            env,
+            { waitUntil() {} },
+        );
+        assert.equal(unknown.status, 404);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('TTS falls back to a data URL when R2 cannot write', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({
+        choices: [{ message: { audio: { data: 'AQI=', transcript: '到！' } } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+    try {
+        const { response, json } = await call('/api/ai/tts', {
+            method: 'POST',
+            body: { action: 'tts', characterId: 'usagi', text: '到！', scene: 'AUDITION' },
+            env: createTestEnv({
+                MIMO_API_KEY: 'test-mimo-key',
+                AI_TEST_VOICE_DESIGN_READY: true,
+                AI_AUDIO_CACHE: createAudioBucket({ failPut: true }),
+            }),
+        });
+        assert.equal(response.status, 200);
+        assert.equal(json.data.audioDataUrl, 'data:audio/mpeg;base64,AQI=');
+        assert.equal(json.data.audioUrl, null);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('TTS cache keys separate scenes for the same spoken text', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({
+        choices: [{ message: { audio: { data: 'AQI=', transcript: '到！' } } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+    try {
+        const bucket = createAudioBucket();
+        const env = createTestEnv({
+            MIMO_API_KEY: 'test-mimo-key',
+            AI_TEST_VOICE_DESIGN_READY: true,
+            AI_AUDIO_CACHE: bucket,
+            JWT_SIGNING_KEY: 'test-jwt-secret',
+        });
+        await call('/api/ai/tts', {
+            method: 'POST',
+            body: { action: 'tts', characterId: 'usagi', text: '到！', scene: 'AUDITION' },
+            env,
+        });
+        await call('/api/ai/tts', {
+            method: 'POST',
+            body: { action: 'tts', characterId: 'usagi', text: '到！', scene: 'GREETING' },
+            env,
+        });
+        const keys = [...bucket.objects.keys()];
+        assert.equal(keys.length, 2);
+        assert.notEqual(keys[0], keys[1]);
+        assert.ok(keys.every(key => /^tts-vd-v1\/[a-f0-9]{64}\.mp3$/.test(key)));
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('TTS limits each IP to 20 requests and 5 cache misses per ten minutes', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({
+        choices: [{ message: { audio: { data: 'AQI=', transcript: '到！' } } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+    try {
+        const missLimitedEnv = createTestEnv({
+            AI_TEST_VOICE_DESIGN_READY: true,
+            AI_TEST_RATE_LIMIT: new Map(),
+        });
+        const missRequest = {
+            method: 'POST',
+            body: { action: 'tts', characterId: 'usagi', text: '到！', scene: 'AUDITION' },
+            env: missLimitedEnv,
+            headers: { 'CF-Connecting-IP': '198.51.100.10' },
+        };
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+            assert.equal((await call('/api/ai/tts', missRequest)).response.status, 200);
+        }
+        const sixthMiss = await call('/api/ai/tts', missRequest);
+        assert.equal(sixthMiss.response.status, 429);
+        assert.equal(sixthMiss.json.code, 'RATE_LIMITED');
+
+        const totalLimitedEnv = createTestEnv({
+            MIMO_API_KEY: 'test-mimo-key',
+            AI_TEST_VOICE_DESIGN_READY: true,
+            AI_AUDIO_CACHE: createAudioBucket(),
+            JWT_SIGNING_KEY: 'test-jwt-secret',
+            AI_TEST_RATE_LIMIT: new Map(),
+        });
+        const totalRequest = {
+            method: 'POST',
+            body: { action: 'tts', characterId: 'usagi', text: '到！', scene: 'AUDITION' },
+            env: totalLimitedEnv,
+            headers: { 'CF-Connecting-IP': '198.51.100.11' },
+        };
+        for (let attempt = 0; attempt < 20; attempt += 1) {
+            assert.equal((await call('/api/ai/tts', totalRequest)).response.status, 200);
+        }
+        const twentyFirst = await call('/api/ai/tts', totalRequest);
+        assert.equal(twentyFirst.response.status, 429);
+        assert.equal(twentyFirst.json.code, 'RATE_LIMITED');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
 });
 
 test('AI route rejects malformed JSON with a stable error', async () => {
@@ -554,9 +801,9 @@ test('upstream failure is retried once and returned as a stable error', async ()
     }
 });
 
-test('session quota stops the eighth uncached interaction', async () => {
+test('session quota stops the fifteenth uncached interaction', async () => {
     const env = createTestEnv();
-    for (let attempt = 0; attempt < 7; attempt += 1) {
+    for (let attempt = 0; attempt < 14; attempt += 1) {
         const result = await call('/api/ai/greeting', {
             method: 'POST',
             body: {
@@ -578,9 +825,9 @@ test('session quota stops the eighth uncached interaction', async () => {
     assert.equal(exhausted.json.code, 'AI_SESSION_QUOTA_EXCEEDED');
 });
 
-test('tts consumes quota and stops on the eighth call', async () => {
+test('tts consumes the doubled session quota and stops on the fifteenth call', async () => {
     const env = createTestEnv({ AI_TEST_VOICE_DESIGN_READY: true });
-    for (let attempt = 0; attempt < 7; attempt += 1) {
+    for (let attempt = 0; attempt < 14; attempt += 1) {
         const result = await call('/api/ai/tts', {
             method: 'POST',
             body: { characterId: 'usagi', text: '到！', sessionId: 'tts-quota-session' },
@@ -629,9 +876,20 @@ test('quiz honors a client-provided quizId on the second call', async () => {
     assert.deepEqual(second.json.data.questions, first.json.data.questions);
 });
 
-test('cached interactions still consume the shared seven-call session quota', async () => {
+test('cached interactions do not consume the shared session quota', async () => {
     const env = createTestEnv();
-    for (let attempt = 0; attempt < 7; attempt += 1) {
+    const first = await call('/api/ai/greeting', {
+        method: 'POST',
+        body: {
+            characterId: 'usagi',
+            sessionId: 'shared-sprite-session',
+        },
+        env,
+    });
+    assert.equal(first.response.status, 200);
+    assert.equal(first.json.quota.sessionUsed, 1);
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
         const result = await call('/api/ai/greeting', {
             method: 'POST',
             body: {
@@ -641,18 +899,51 @@ test('cached interactions still consume the shared seven-call session quota', as
             env,
         });
         assert.equal(result.response.status, 200);
+        assert.equal(result.json.quota, undefined);
     }
+    const usage = env.AI_TEST_QUOTA.get(`friend-1:${new Date().toISOString().slice(0, 10)}`);
+    assert.equal(usage.sessionCount, 1);
+    assert.equal(usage.dailyCount, 1);
+});
 
-    const exhausted = await call('/api/ai/greeting', {
+test('taste, quiz, and daily cache hits do not consume AI quota', async () => {
+    const env = createTestEnv();
+    const tasteRequest = {
         method: 'POST',
-        body: {
-            characterId: 'usagi',
-            sessionId: 'shared-sprite-session',
-        },
+        body: { action: 'taste', watched: movies(), sessionId: 'cache-hit-session' },
         env,
-    });
-    assert.equal(exhausted.response.status, 429);
-    assert.equal(exhausted.json.code, 'AI_SESSION_QUOTA_EXCEEDED');
+    };
+    const tasteFirst = await call('/api/ai/taste', tasteRequest);
+    const tasteSecond = await call('/api/ai/taste', tasteRequest);
+    assert.equal(tasteFirst.response.status, 200);
+    assert.equal(tasteSecond.response.status, 200);
+    assert.equal(tasteSecond.json.quota, undefined);
+
+    const quizRequest = {
+        method: 'POST',
+        body: { action: 'quiz', quizId: 'cache-hit-quiz', watched: movies(), sessionId: 'cache-hit-session' },
+        env,
+    };
+    const quizFirst = await call('/api/ai/quiz', quizRequest);
+    const quizSecond = await call('/api/ai/quiz', quizRequest);
+    assert.equal(quizFirst.response.status, 200);
+    assert.equal(quizSecond.response.status, 200);
+    assert.equal(quizSecond.json.quota, undefined);
+
+    const dailyRequest = {
+        method: 'POST',
+        body: { action: 'daily', sessionId: 'cache-hit-session' },
+        env,
+    };
+    const dailyFirst = await call('/api/ai/daily', dailyRequest);
+    const dailySecond = await call('/api/ai/daily', dailyRequest);
+    assert.equal(dailyFirst.response.status, 200);
+    assert.equal(dailySecond.response.status, 200);
+    assert.equal(dailySecond.json.quota, undefined);
+
+    const usage = env.AI_TEST_QUOTA.get(`friend-1:${new Date().toISOString().slice(0, 10)}`);
+    assert.equal(usage.sessionCount, 3);
+    assert.equal(usage.dailyCount, 3);
 });
 
 test('daily cache is isolated by friend and UTC date', async () => {
