@@ -2,6 +2,7 @@ package com.tracktosearch.ui.screen.ai
 
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.ai.AiCharacter
+import com.tracktosearch.data.ai.AiTtsRequest
 import com.tracktosearch.data.ai.AiQuizAnswer
 import com.tracktosearch.data.ai.AiQuizOption
 import com.tracktosearch.data.ai.AiQuizQuestion
@@ -12,6 +13,37 @@ import kotlin.random.Random
 import org.junit.Test
 
 class AiUiLogicTest {
+
+    @Test
+    fun auditionRequest_usesStaticTextAndAuditionScene() {
+        val character = AiCharacter(
+            id = "usagi",
+            name = "乌萨奇",
+            activationWord = "乌萨奇",
+            auditionText = "到！",
+        )
+
+        val request = buildAuditionTtsRequest(character, "sprite-test")
+
+        assertThat(request).isEqualTo(
+            AiTtsRequest(
+                characterId = "usagi",
+                text = "到！",
+                sessionId = "sprite-test",
+                scene = "AUDITION",
+            )
+        )
+    }
+
+    @Test
+    fun auditionPlaybackRoute_separatesGuestAuthorizedAndUnavailableCharacters() {
+        assertThat(auditionPlaybackRoute(isAuthorized = false, isAvailable = true))
+            .isEqualTo(AiAuditionPlaybackRoute.GUEST_TTS)
+        assertThat(auditionPlaybackRoute(isAuthorized = true, isAvailable = true))
+            .isEqualTo(AiAuditionPlaybackRoute.AUTHORIZED_TTS)
+        assertThat(auditionPlaybackRoute(isAuthorized = false, isAvailable = false))
+            .isEqualTo(AiAuditionPlaybackRoute.SYSTEM_TTS)
+    }
 
     @Test
     fun activationAllowsTwoRetriesAndStopsAtThirdAttempt() {

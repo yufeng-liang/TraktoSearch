@@ -14,7 +14,6 @@ import com.tracktosearch.data.ai.AiQuizAnswer
 import com.tracktosearch.data.ai.AiQuizQuestionType
 import com.tracktosearch.data.ai.AiQuizResult
 import com.tracktosearch.data.ai.AiTasteAnalysis
-import com.tracktosearch.data.ai.AiTtsRequest
 import com.tracktosearch.data.ai.AiWatchedTitleDto
 import com.tracktosearch.data.ai.AiMediaIdsDto
 import com.tracktosearch.data.ai.AiDailyKnowledge
@@ -32,6 +31,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -116,17 +116,27 @@ class AiSpriteViewModel @Inject constructor(
     )
     val audioEvents: SharedFlow<AiAudio> = _audioEvents.asSharedFlow()
 
+    private val _guestPreviewFallbackEvents = MutableSharedFlow<String>(
+        replay = 0,
+        extraBufferCapacity = 2,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val guestPreviewFallbackEvents: SharedFlow<String> = _guestPreviewFallbackEvents.asSharedFlow()
+
     private var initialized = false
     private var previewJob: Job? = null
     private var requestJob: Job? = null
     private var recentQuizIds = emptyList<String>()
     private var quizCandidates = emptyList<AiWatchedTitleDto>()
-    // 一次精灵中心会话共用一个会话 ID：让服务端"单会话最多 7 轮"真正生效。
-    // 若每次请求都发新 UUID，会话配额形同虚设，只剩每日 40 上限。
+    // 一次精灵中心会话共用一个会话 ID，让服务端会话配额按一次打开的精灵中心计算。
+    // 若每次请求都发新 UUID，会话配额形同虚设，只剩每日上限。
     private val spriteSessionId = "sprite-${UUID.randomUUID()}"
 
     fun ensureLoaded() {
-        if (initialized) return
+        if (initialized) {
+            scheduleCharacterPreview()
+            return
+        }
         initialized = true
         viewModelScope.launch {
             launch {
@@ -145,6 +155,7 @@ class AiSpriteViewModel @Inject constructor(
                 }
             }
             loadCharacters()
+            scheduleCharacterPreview()
             loadQuizHistory()
         }
     }
@@ -170,11 +181,7 @@ class AiSpriteViewModel @Inject constructor(
                 activationAttempt = 0
             )
         }
-        previewJob?.cancel()
-        previewJob = viewModelScope.launch {
-            kotlinx.coroutines.delay(350)
-            previewSelectedCharacter()
-        }
+        scheduleCharacterPreview()
     }
 
     fun activate(context: Context) {
@@ -427,8 +434,6 @@ class AiSpriteViewModel @Inject constructor(
     }
 
     private suspend fun loadCharacters() {
-        val friendId = authManager.friendId.value.orEmpty()
-        if (friendId.isBlank()) return
         aiRepository.listCharacters().onSuccess { remote ->
             val remoteById = remote.associateBy { it.id }
             _uiState.update { state ->
@@ -440,19 +445,46 @@ class AiSpriteViewModel @Inject constructor(
     /** 试听请求挂在本预览 Job 内执行：取消 previewJob 会一并取消 TTS，避免快速切换角色时旧请求后完成、播放上一个角色的声音。 */
     private suspend fun previewSelectedCharacter() {
         val character = _uiState.value.selectedCharacter ?: return
-        if (!isAuthorized()) return
-        // 音色未就绪的角色不试听（避免白耗配额 + 拿到空音频报错）
-        if (!character.isAvailable) return
-        aiRepository.playTts(
-            authManager.friendId.value.orEmpty(),
-            AiTtsRequest(
-                characterId = character.id,
-                text = character.auditionText,
-                style = character.personalityPrompt,
-                sessionId = spriteSessionId
-            )
-        ).onSuccess { _audioEvents.emit(it) }
+        val authorized = isAuthorized()
+        val request = buildAuditionTtsRequest(character, spriteSessionId)
+        when (auditionPlaybackRoute(authorized, character.isAvailable)) {
+            AiAuditionPlaybackRoute.SYSTEM_TTS -> {
+                if (!authorized) emitGuestPreviewFallback(character)
+            }
+            AiAuditionPlaybackRoute.GUEST_TTS -> {
+                aiRepository.playGuestTts(request).fold(
+                    onSuccess = { audio ->
+                        if (audio.hasPlayableSource()) _audioEvents.emit(audio)
+                        else emitGuestPreviewFallback(character)
+                    },
+                    onFailure = { emitGuestPreviewFallback(character) }
+                )
+            }
+            AiAuditionPlaybackRoute.AUTHORIZED_TTS -> {
+                aiRepository.playTts(authManager.friendId.value.orEmpty(), request)
+                    .onSuccess { audio ->
+                        if (audio.hasPlayableSource()) _audioEvents.emit(audio)
+                    }
+            }
+        }
     }
+
+    private fun scheduleCharacterPreview() {
+        previewJob?.cancel()
+        previewJob = viewModelScope.launch {
+            delay(350)
+            previewSelectedCharacter()
+        }
+    }
+
+    private suspend fun emitGuestPreviewFallback(character: AiCharacter) {
+        character.auditionText.takeIf { it.isNotBlank() }?.let { text ->
+            _guestPreviewFallbackEvents.emit(text)
+        }
+    }
+
+    private fun AiAudio.hasPlayableSource(): Boolean =
+        !audioDataUrl.isNullOrBlank() || !audioUrl.isNullOrBlank()
 
     private fun loadGreeting(characterId: String, forceRefresh: Boolean = false) {
         runFeature(AiFeature.GREETING) {

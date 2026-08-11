@@ -1648,7 +1648,7 @@
     <string name="help_ai_sprite_b3">AI 会使用授权账号中的昵称和你的已看历史</string>
     <string name="help_ai_sprite_b4">目前有昵称欢迎、看单锐评、影视闯关和每日冷知识四项能力</string>
     <string name="help_ai_sprite_b5">AI 请求有每日配额，离线时不能发起新请求，但已缓存内容仍可查看</string>
-    <string name="help_ai_sprite_b6">音频样本保存在私有服务中，不会下载到 App</string>
+    <string name="help_ai_sprite_b6">V1 使用角色与场景的音色设计提示词；试听失败时回退到系统语音</string>
     <string name="help_weather_data">天气数据</string>
     <string name="help_weather_data_b1">动态主题只使用小米天气 wtr-v3 接口，不直接请求 AccuWeather，也不叠加其他天气 API。</string>
     <string name="help_weather_data_b2">App 会先将定位坐标交给小米接口反查为 weathercn: 或 accu: 城市标识，再请求同一接口的当前天气。</string>
