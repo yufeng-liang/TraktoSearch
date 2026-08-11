@@ -74,6 +74,9 @@ fun FeedbackDetailScreen(
 
     var fullscreenUrls by remember { mutableStateOf<List<String>>(emptyList()) }
     var fullscreenIndex by remember { mutableStateOf<Int?>(null) }
+    // 当前全屏图片来源前缀：原帖/回复气泡共用同一 fullscreen overlay，
+    // 点击时记录来源，确保全屏端 sharedElement key 与缩略图源配对
+    var fullscreenKeyPrefix by remember { mutableStateOf("fb-conv-$feedbackId") }
 
     var replyText by remember { mutableStateOf("") }
     var replyScreenshots by remember { mutableStateOf<List<Pair<ByteArray, String>>>(emptyList()) }
@@ -175,7 +178,7 @@ fun FeedbackDetailScreen(
                         contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        item(key = "original") { OriginalFeedbackCard(feedback = feedback, sharedKeyPrefix = "fb-conv-$feedbackId", onScreenshotClick = { urls, index -> fullscreenUrls = urls; fullscreenIndex = index }) }
+                        item(key = "original") { OriginalFeedbackCard(feedback = feedback, sharedKeyPrefix = "fb-conv-$feedbackId", onScreenshotClick = { urls, index -> fullscreenKeyPrefix = "fb-conv-$feedbackId"; fullscreenUrls = urls; fullscreenIndex = index }) }
                         if (replies.isNotEmpty() || state.isRefreshing) {
                             item(key = "conv_title") {
                                 Row(
@@ -198,7 +201,7 @@ fun FeedbackDetailScreen(
                                 }
                             }
                         }
-                        items(replies, key = { it.id }) { reply -> ConversationBubble(reply = reply, sharedKeyPrefix = "fb-reply-${reply.id}", highlight = highlightReplyId == reply.id, onHighlightDone = { if (highlightReplyId == reply.id) highlightReplyId = null }, onScreenshotClick = { urls, index -> fullscreenUrls = urls; fullscreenIndex = index }) }
+                        items(replies, key = { it.id }) { reply -> ConversationBubble(reply = reply, sharedKeyPrefix = "fb-reply-${reply.id}", highlight = highlightReplyId == reply.id, onHighlightDone = { if (highlightReplyId == reply.id) highlightReplyId = null }, onScreenshotClick = { urls, index -> fullscreenKeyPrefix = "fb-reply-${reply.id}"; fullscreenUrls = urls; fullscreenIndex = index }) }
                     }
                     if (isClosed) {
                         Surface(
@@ -223,12 +226,12 @@ fun FeedbackDetailScreen(
         }
     }
 
-    // 原帖截图全屏
+    // 原帖截图全屏（fullscreenKeyPrefix 由点击来源决定：原帖 "fb-conv-$feedbackId" 或回复气泡 "fb-reply-${reply.id}"）
     ZoomableImageOverlay(
         visible = fullscreenIndex != null && fullscreenUrls.isNotEmpty(),
         images = fullscreenUrls,
         initialIndex = fullscreenIndex?.coerceIn(0, fullscreenUrls.size - 1) ?: 0,
-        sharedKeyPrefix = "fb-conv-$feedbackId",
+        sharedKeyPrefix = fullscreenKeyPrefix,
         onDismiss = { fullscreenIndex = null }
     )
     // 回复框预览全屏
