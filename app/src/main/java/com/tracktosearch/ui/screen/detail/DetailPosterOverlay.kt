@@ -79,8 +79,9 @@ internal fun PosterFullscreenOverlay(
     val scope = rememberCoroutineScope()
     var isSaved by remember { mutableStateOf<Boolean?>(null) } // null=未检查, true=已保存, false=未保存
 
-    // 进入时检查是否已保存
-    LaunchedEffect(posterUrl, title) {
+    // 进入时检查是否已保存（仅打开大图时查询，避免每次进详情页都跑 MediaStore 查询）
+    LaunchedEffect(visible, posterUrl, title) {
+        if (!visible) return@LaunchedEffect
         val safeName = title.replace(Regex("[^a-zA-Z0-9\\u4e00-\\u9fa5]"), "_")
         val filename = "TrackToSearch_${safeName}.jpg"
         val relativePath = Environment.DIRECTORY_PICTURES + "/TrackToSearch"
