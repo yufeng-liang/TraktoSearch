@@ -205,6 +205,7 @@ fun ActivationLoginScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .zIndex(1f)
                     .verticalScroll(scrollState)
                     .imePadding()
                     .navigationBarsPadding()

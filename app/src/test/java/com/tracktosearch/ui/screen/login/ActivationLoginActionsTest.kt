@@ -59,4 +59,11 @@ class ActivationLoginActionsTest {
         assertThat(shouldShowActivationCelebration(true, true)).isFalse()
         assertThat(shouldShowActivationCelebration(false, false)).isFalse()
     }
+
+    @Test
+    fun `礼花结束回调仅在当前显示周期首次触发`() {
+        assertThat(shouldFinishActivationCelebration(visible = true, hasFinished = false)).isTrue()
+        assertThat(shouldFinishActivationCelebration(visible = true, hasFinished = true)).isFalse()
+        assertThat(shouldFinishActivationCelebration(visible = false, hasFinished = false)).isFalse()
+    }
 }
