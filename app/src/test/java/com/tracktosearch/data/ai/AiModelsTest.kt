@@ -1,9 +1,54 @@
 package com.tracktosearch.data.ai
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Test
 
 class AiModelsTest {
+
+    @Test
+    fun quota_defaults_matchCurrentAiLimits() {
+        val quota = AiQuotaDto()
+
+        assertThat(quota.sessionLimit).isEqualTo(14)
+        assertThat(quota.dailyLimit).isEqualTo(80)
+    }
+
+    @Test
+    fun greeting_keepsDisplayTextSeparateFromSpokenText() {
+        val greeting = AiGreetingDto(
+            greeting = "你好呀",
+            spokenText = "你好呀，今天也一起看电影吧！",
+        ).toDomain()
+
+        assertThat(greeting.greeting).isEqualTo("你好呀")
+        assertThat(greeting.spokenText).isEqualTo("你好呀，今天也一起看电影吧！")
+    }
+
+    @Test
+    fun greeting_fallsBackToDisplayTextWhenSpokenTextIsMissing() {
+        assertThat(AiGreetingDto(greeting = "到！").toDomain().spokenText).isEqualTo("到！")
+    }
+
+    @Test
+    fun ttsRequest_serializesSceneWithoutChangingLegacyFields() {
+        val request = AiTtsRequest(
+            characterId = "usagi",
+            text = "到——！",
+            style = "旧客户端风格",
+            sessionId = "sprite-session",
+            scene = "ACTIVATION_ACK",
+        )
+        val body = Json { encodeDefaults = true }
+            .encodeToJsonElement(AiTtsRequest.serializer(), request)
+            .jsonObject
+
+        assertThat(body["style"]?.jsonPrimitive?.content).isEqualTo("旧客户端风格")
+        assertThat(body["sessionId"]?.jsonPrimitive?.content).isEqualTo("sprite-session")
+        assertThat(body["scene"]?.jsonPrimitive?.content).isEqualTo("ACTIVATION_ACK")
+    }
 
     @Test
     fun characterCatalog_containsAllSevenCharactersInStableOrder() {

@@ -27,9 +27,9 @@ data class AiErrorDto(
 @Serializable
 data class AiQuotaDto(
     val sessionUsed: Int = 0,
-    val sessionLimit: Int = 7,
+    val sessionLimit: Int = 14,
     val dailyUsed: Int = 0,
-    val dailyLimit: Int = 40,
+    val dailyLimit: Int = 80,
     val resetAt: Long? = null
 )
 
@@ -86,6 +86,7 @@ data class AiGreetingRequest(
 data class AiGreetingDto(
     val nickname: String = "",
     val greeting: String = "",
+    val spokenText: String? = null,
     val nicknameMeaning: String = "",
     val comment: String = "",
     val audio: AiAudioDto? = null,
@@ -96,6 +97,7 @@ data class AiGreetingDto(
 data class AiGreeting(
     val nickname: String,
     val greeting: String,
+    val spokenText: String = greeting,
     val nicknameMeaning: String,
     val comment: String,
     val audio: AiAudio?,
@@ -377,7 +379,8 @@ data class AiTtsRequest(
     val characterId: String,
     val text: String,
     val style: String? = null,
-    val sessionId: String = "default"
+    val sessionId: String = "default",
+    val scene: String? = null
 )
 
 @Serializable
@@ -419,6 +422,7 @@ fun AiGreetingDto.toDomain(outerQuota: AiQuotaDto? = null): AiGreeting {
     return AiGreeting(
         nickname = nickname,
         greeting = greeting,
+        spokenText = spokenText?.takeIf { it.isNotBlank() } ?: greeting,
         nicknameMeaning = nicknameMeaning,
         comment = comment,
         audio = audio?.toDomain(effectiveQuota),

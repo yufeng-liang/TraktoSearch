@@ -80,9 +80,9 @@ class AiRepositoryTest {
         val storage = mockk<AiStorage>(relaxed = true)
         val expectedQuota = AiQuotaDto(
             sessionUsed = 3,
-            sessionLimit = 7,
+            sessionLimit = 14,
             dailyUsed = 11,
-            dailyLimit = 40,
+            dailyLimit = 80,
             resetAt = 1_234L,
         )
         coEvery { api.getGreeting(any()) } returns Response.success(
@@ -222,10 +222,44 @@ class AiRepositoryTest {
     }
 
     @Test
+    fun ttsCacheIdentity_includesSceneAndIgnoresLegacyStyle() = runTest {
+        val api = mockk<AiApiService>()
+        val storage = mockk<AiStorage>(relaxed = true)
+        coEvery { api.playTts(any()) } returns Response.success(
+            AiApiResponse(
+                code = "SUCCESS",
+                data = AiAudioDto(audioDataUrl = "data:audio/mpeg;base64,AA=="),
+            )
+        )
+        val suffixes = mutableListOf<String?>()
+        coEvery { storage.write(any(), any(), any(), any()) } coAnswers {
+            suffixes += arg<String?>(3)
+        }
+        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+
+        repository.playTts(
+            "friend-a",
+            AiTtsRequest("usagi", "到——！", style = "style-a", scene = "GREETING"),
+        ).getOrThrow()
+        repository.playTts(
+            "friend-a",
+            AiTtsRequest("usagi", "到——！", style = "style-b", scene = "GREETING"),
+        ).getOrThrow()
+        repository.playTts(
+            "friend-a",
+            AiTtsRequest("usagi", "到——！", style = "style-a", scene = "ACTIVATION_ACK"),
+        ).getOrThrow()
+
+        assertThat(suffixes).hasSize(3)
+        assertThat(suffixes[0]).isEqualTo(suffixes[1])
+        assertThat(suffixes[0]).isNotEqualTo(suffixes[2])
+    }
+
+    @Test
     fun quizResult_retainsCorrectAnswerFieldsAndOuterQuota() = runTest {
         val api = mockk<AiApiService>()
         val storage = mockk<AiStorage>(relaxed = true)
-        val expectedQuota = AiQuotaDto(2, 7, 8, 40, 2_000L)
+        val expectedQuota = AiQuotaDto(2, 14, 8, 80, 2_000L)
         val dto = Json { ignoreUnknownKeys = true }.decodeFromString<AiQuizResultDto>(
             """
             {

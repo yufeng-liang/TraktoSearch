@@ -342,7 +342,7 @@ class AiRepository @Inject constructor(
     private fun AiTtsRequest.cacheSuffix(): String {
         // 32 位 hashCode 会碰撞且跨 JVM 不稳定，可能把不同文本/角色的音频串给错误请求；
         // 改用 SHA-256 hex 作缓存键。
-        return listOf(characterId, style.orEmpty(), text).joinToString("|").sha256Hex()
+        return listOf(characterId, scene.orEmpty(), text).joinToString("|").sha256Hex()
     }
 
     private fun String.sha256Hex(): String {
