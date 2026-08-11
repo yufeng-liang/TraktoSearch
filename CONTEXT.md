@@ -1,4 +1,4 @@
-# TrackToSearch
+# TraktoSearch
 
 影视搜索、观影清单和个人同步数据的 Android 应用上下文。
 

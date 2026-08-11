@@ -11,9 +11,9 @@ license: MIT
 
 ## 仓库信息
 
-- GitHub: `yufeng-liang/TrackToSearch`（origin，私有，版本检测主用）
-- Gitee 主仓库: `yufeng-liang/TrackToSearch`（gitee，私有，版本检测降级）
-- Gitee 公开仓库: `yufeng-liang/TrackToSearch-release`（公开，APK 下载）
+- GitHub: `yufeng-liang/TraktoSearch`（origin，私有，版本检测主用）
+- Gitee 主仓库: `yufeng-liang/TraktoSearch`（gitee，私有，版本检测降级）
+- Gitee 公开仓库: `yufeng-liang/TraktoSearch-release`（公开，APK 下载）
 
 ## 前置条件
 

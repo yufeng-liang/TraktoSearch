@@ -589,10 +589,10 @@ export function buildInvitationEmail(input: {
                 <img src="${imageUrl}" alt="吉伊" width="180" style="display:block;width:180px;max-width:100%;height:auto;margin:0 auto;border:0;">
             </div>
             <p style="margin:0 0 12px;color:#6D685F;line-height:1.7;">邀请码有效期至 ${expiry}，只能使用一次，请不要转发给他人。</p>
-            <p style="margin:0 0 24px;color:#6D685F;line-height:1.7;">如果你愿意，欢迎把使用体验、反馈和建议提交到 <a href="https://github.com/yufeng-liang/TrackToSearch" style="color:#D95532;">GitHub 仓库</a>，也可以通过 App 内的反馈与建议提交，这会直接帮助我改进后续版本。</p>
+            <p style="margin:0 0 24px;color:#6D685F;line-height:1.7;">如果你愿意，欢迎把使用体验、反馈和建议提交到 <a href="https://github.com/yufeng-liang/TraktoSearch" style="color:#D95532;">GitHub 仓库</a>，也可以通过 App 内的反馈与建议提交，这会直接帮助我改进后续版本。</p>
             <p style="margin:0;color:#9B9588;font-size:13px;line-height:1.7;">也可以打开 <a href="${url}" style="color:#D95532;">TraktoSearch 官网</a>，查看最新说明和下载入口。</p>
         `, false, 'TraktoSearch 激活码已准备好，请打开邮件查看。'),
-        text: `你好，${input.nickname}：\n\n欢迎加入 TraktoSearch！感谢你下载并体验 TraktoSearch，请在 App 激活页面输入下列激活码。\n\n${input.inviteCode}\n\n邀请码有效期至 ${expiry}，只能使用一次，请不要转发给他人。欢迎把使用体验、反馈和建议提交到 GitHub：https://github.com/yufeng-liang/TrackToSearch，也可以通过 App 内的反馈与建议提交，这会直接帮助我改进后续版本。\n\n官网：${siteUrl}`,
+        text: `你好，${input.nickname}：\n\n欢迎加入 TraktoSearch！感谢你下载并体验 TraktoSearch，请在 App 激活页面输入下列激活码。\n\n${input.inviteCode}\n\n邀请码有效期至 ${expiry}，只能使用一次，请不要转发给他人。欢迎把使用体验、反馈和建议提交到 GitHub：https://github.com/yufeng-liang/TraktoSearch，也可以通过 App 内的反馈与建议提交，这会直接帮助我改进后续版本。\n\n官网：${siteUrl}`,
     };
 }
 

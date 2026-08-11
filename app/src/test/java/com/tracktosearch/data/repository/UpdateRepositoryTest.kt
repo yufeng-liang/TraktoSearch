@@ -158,7 +158,7 @@ class UpdateRepositoryTest {
         )
         // mock 公开仓库返回 APK 下载链接
         coEvery {
-            giteeApi.getLatestRelease("yufeng-liang", "TrackToSearch-release")
+            giteeApi.getLatestRelease("yufeng-liang", "TraktoSearch-release")
         } returns listOf(
             buildGiteeRelease(
                 tagName = "v99.0.0",
@@ -178,7 +178,7 @@ class UpdateRepositoryTest {
         assertThat(result.latestVersion).isEqualTo("99.0.0")
         assertThat(result.downloadUrl).isEqualTo("https://gitee.com/download/v99.0.0.apk")
         // 验证调用了公开仓库获取下载链接
-        coVerify { giteeApi.getLatestRelease("yufeng-liang", "TrackToSearch-release") }
+        coVerify { giteeApi.getLatestRelease("yufeng-liang", "TraktoSearch-release") }
     }
 
     @Test
@@ -197,7 +197,7 @@ class UpdateRepositoryTest {
         assertThat(result.latestVersion).isEqualTo(currentVersion)
         // 版本相同时不调用 fetchDownloadUrl
         coVerify(exactly = 0) {
-            giteeApi.getLatestRelease("yufeng-liang", "TrackToSearch-release")
+            giteeApi.getLatestRelease("yufeng-liang", "TraktoSearch-release")
         }
     }
 
@@ -206,7 +206,7 @@ class UpdateRepositoryTest {
         coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
         coEvery { gitHubApi.getLatestRelease(any(), any()) } throws RuntimeException("GitHub 网络错误")
         coEvery {
-            giteeApi.getLatestRelease("yufeng-liang", "TrackToSearch-release")
+            giteeApi.getLatestRelease("yufeng-liang", "TraktoSearch-release")
         } returnsMany listOf(
             listOf(buildGiteeRelease(tagName = "v99.0.0", body = "Gitee 更新内容")),
             listOf(buildGiteeRelease(
@@ -277,7 +277,7 @@ class UpdateRepositoryTest {
             tagName = "v99.0.0"  // 3段，明显大于当前版本
         )
         coEvery {
-            giteeApi.getLatestRelease("yufeng-liang", "TrackToSearch-release")
+            giteeApi.getLatestRelease("yufeng-liang", "TraktoSearch-release")
         } returns emptyList()
 
         val result = repository.checkForUpdate()
@@ -293,7 +293,7 @@ class UpdateRepositoryTest {
             tagName = "v99.0.0.1"  // 4段版本号
         )
         coEvery {
-            giteeApi.getLatestRelease("yufeng-liang", "TrackToSearch-release")
+            giteeApi.getLatestRelease("yufeng-liang", "TraktoSearch-release")
         } returns emptyList()
 
         val result = repository.checkForUpdate()
@@ -326,7 +326,7 @@ class UpdateRepositoryTest {
         coEvery { gitHubApi.getLatestRelease(any(), any()) } returns buildGitHubRelease(tagName = "v99.0.0")
         // 公开仓库返回多个 APK，含多个 TraktoSearch-*.apk
         coEvery {
-            giteeApi.getLatestRelease("yufeng-liang", "TrackToSearch-release")
+            giteeApi.getLatestRelease("yufeng-liang", "TraktoSearch-release")
         } returns listOf(
             buildGiteeRelease(
                 tagName = "v99.0.0",
@@ -352,7 +352,7 @@ class UpdateRepositoryTest {
         coEvery { gitHubApi.getLatestRelease(any(), any()) } returns buildGitHubRelease(tagName = "v99.0.0")
         // 公开仓库返回不含 APK 的 release
         coEvery {
-            giteeApi.getLatestRelease("yufeng-liang", "TrackToSearch-release")
+            giteeApi.getLatestRelease("yufeng-liang", "TraktoSearch-release")
         } returns listOf(
             buildGiteeRelease(
                 tagName = "v99.0.0",

@@ -79,10 +79,9 @@
 
 ## 下载
 
-前往 [GitHub Releases](https://github.com/yufeng-liang/TrackToSearch/releases) 下载最新版本 APK。
+前往公开的 [Gitee Releases](https://gitee.com/yufeng-liang/TraktoSearch-release/releases) 下载最新版本 APK。
 
-国内用户也可通过 Gitee 镜像下载：
-- [Gitee Releases](https://gitee.com/yufeng-liang/TrackToSearch-release/releases)
+GitHub 仓库为私有仓库，拥有访问权限的协作者也可从 [GitHub Releases](https://github.com/yufeng-liang/TraktoSearch/releases) 查看发布记录并下载 APK。
 
 ## 构建与开发
 
@@ -104,11 +103,11 @@
 
 ```bash
 # GitHub（主仓库）
-git clone https://github.com/yufeng-liang/TrackToSearch.git
-cd TrackToSearch
+git clone https://github.com/yufeng-liang/TraktoSearch.git
+cd TraktoSearch
 
 # 或 Gitee（国内镜像）
-git clone https://gitee.com/yufeng-liang/TrackToSearch.git
+git clone https://gitee.com/yufeng-liang/TraktoSearch.git
 ```
 
 ### 2. 配置构建密钥
@@ -193,8 +192,8 @@ Release 构建会开启 R8 混淆与资源压缩（`isMinifyEnabled = true`、`i
 ### 常见问题
 
 - **`BUILD FAILED: Could not resolve`**：多为网络/代理问题，检查 `gradle.properties` 代理设置或切换网络。
-- **KSP / Hilt 编译报错**：确认 Kotlin 2.4.0、Hilt 2.60、KSP 2.3.9 版本匹配，并执行 `./gradlew clean` 后重新构建。
-- **Git worktree 分支无法构建**：`local.properties` 不在版本库，新 worktree 需手动从 `F:\trae-project\local.properties` 复制。
+- **KSP / Hilt 编译报错**：确认 Kotlin 2.4.0、Hilt 2.60.1、KSP 2.3.9 版本匹配，并执行 `./gradlew clean` 后重新构建。
+- **Git worktree 分支无法构建**：`local.properties` 不在版本库，新 worktree 需从已有主工作区复制该文件。
 
 ## 使用示例
 

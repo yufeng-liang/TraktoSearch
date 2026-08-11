@@ -11,7 +11,7 @@ license: MIT
 
 ## 仓库
 
-- GitHub: `yufeng-liang/TrackToSearch`（origin，私有，版本检测主用）
+- GitHub: `yufeng-liang/TraktoSearch`（origin，私有，版本检测主用）
 
 ## 前置（由 release skill 保证）
 
@@ -27,7 +27,7 @@ gh release create v{versionName} {apk_path} --title "v{versionName}" --notes-fil
 ```
 
 降级（gh 未装）：GitHub REST API
-1. `POST https://api.github.com/repos/yufeng-liang/TrackToSearch/releases`
+1. `POST https://api.github.com/repos/yufeng-liang/TraktoSearch/releases`
    Body: `{ tag_name, name, body, target_commitish: "master" }`
 2. 用返回 `upload_url` 上传 APK 二进制
 

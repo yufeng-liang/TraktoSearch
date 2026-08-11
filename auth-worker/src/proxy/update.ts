@@ -1,8 +1,8 @@
 import type { Env } from '../index';
 import { AppError } from '../util/errors.ts';
 
-const PUBLIC_UPDATE_RELEASE_PATH = '/api/gitee/repos/yufeng-liang/TrackToSearch-release/releases';
-const GITEE_RELEASE_URL = 'https://gitee.com/api/v5/repos/yufeng-liang/TrackToSearch-release/releases';
+const PUBLIC_UPDATE_RELEASE_PATH = '/api/gitee/repos/yufeng-liang/TraktoSearch-release/releases';
+const GITEE_RELEASE_URL = 'https://gitee.com/api/v5/repos/yufeng-liang/TraktoSearch-release/releases';
 const ALLOWED_QUERY_PARAMS = ['per_page', 'direction', 'page'] as const;
 
 export function isPublicUpdateReleasePath(path: string): boolean {

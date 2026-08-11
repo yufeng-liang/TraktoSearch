@@ -53,7 +53,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.io.File
 
-private const val RELEASE_PAGE_URL = "https://gitee.com/yufeng-liang/TrackToSearch-release/releases"
+private const val RELEASE_PAGE_URL = "https://gitee.com/yufeng-liang/TraktoSearch-release/releases"
 
 private sealed class DownloadState {
     object Idle : DownloadState()

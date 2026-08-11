@@ -11,8 +11,8 @@ license: MIT
 
 ## 仓库
 
-- Gitee 主仓库：`yufeng-liang/TrackToSearch`（私有，版本检测降级用）
-- Gitee 公开仓库：`yufeng-liang/TrackToSearch-release`（公开，APK 下载）
+- Gitee 主仓库：`yufeng-liang/TraktoSearch`（私有，版本检测降级用）
+- Gitee 公开仓库：`yufeng-liang/TraktoSearch-release`（公开，APK 下载）
 
 ## 前置（由 release skill 保证）
 
@@ -35,11 +35,11 @@ license: MIT
 
 - 主仓库：
   ```
-  curl.exe -X POST "https://gitee.com/api/v5/repos/yufeng-liang/TrackToSearch/releases/{release_id}/attach_files?access_token={token}" -F "file=@{apk_path};filename=TraktoSearch-v{versionName}.apk"
+  curl.exe -X POST "https://gitee.com/api/v5/repos/yufeng-liang/TraktoSearch/releases/{release_id}/attach_files?access_token={token}" -F "file=@{apk_path};filename=TraktoSearch-v{versionName}.apk"
   ```
 - 公开仓库：
   ```
-  curl.exe -X POST "https://gitee.com/api/v5/repos/yufeng-liang/TrackToSearch-release/releases/{release_id}/attach_files?access_token={token}" -F "file=@{apk_path};filename=TraktoSearch-v{versionName}.apk"
+  curl.exe -X POST "https://gitee.com/api/v5/repos/yufeng-liang/TraktoSearch-release/releases/{release_id}/attach_files?access_token={token}" -F "file=@{apk_path};filename=TraktoSearch-v{versionName}.apk"
   ```
 - **绝不用 PowerShell multipart 拼接**，否则 APK 被 UTF-8 重编码损坏
 
