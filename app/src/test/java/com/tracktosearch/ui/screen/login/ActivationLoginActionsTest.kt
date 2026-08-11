@@ -52,4 +52,11 @@ class ActivationLoginActionsTest {
             .onNodeWithContentDescription(context.getString(R.string.settings_account_douban))
             .assertIsDisplayed()
     }
+
+    @Test
+    fun `only false to true activation shows celebration`() {
+        assertThat(shouldShowActivationCelebration(false, true)).isTrue()
+        assertThat(shouldShowActivationCelebration(true, true)).isFalse()
+        assertThat(shouldShowActivationCelebration(false, false)).isFalse()
+    }
 }
