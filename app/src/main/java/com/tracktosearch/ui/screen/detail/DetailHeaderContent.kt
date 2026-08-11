@@ -464,7 +464,8 @@ internal fun DetailHeaderContent(
                     backdrops = uiState.backdrops,
                     onVideoClick = onVideoClick,
                     onBackdropClick = onBackdropClick,
-                    onShowAll = onShowAllVideos
+                    onShowAll = onShowAllVideos,
+                    sharedKeyPrefix = "backdrop-zoom-$tmdbId"
                 )
             } else {
                 // 骨架屏占位，防止加载后内容跳变
