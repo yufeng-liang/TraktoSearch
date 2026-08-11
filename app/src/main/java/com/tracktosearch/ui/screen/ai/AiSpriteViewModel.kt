@@ -75,6 +75,9 @@ data class AiSpriteUiState(
     val greeting: AiGreeting? = null,
     val taste: AiTasteAnalysis? = null,
     val quiz: AiQuiz? = null,
+    val quizPreviewMovies: List<AiWatchedTitleDto> = emptyList(),
+    val quizReplacementCount: Int = 0,
+    val quizStarted: Boolean = false,
     val quizIndex: Int = 0,
     val quizAnswers: Map<String, AiQuizAnswer> = emptyMap(),
     val quizResult: AiQuizResult? = null,
@@ -117,6 +120,7 @@ class AiSpriteViewModel @Inject constructor(
     private var previewJob: Job? = null
     private var requestJob: Job? = null
     private var recentQuizIds = emptyList<String>()
+    private var quizCandidates = emptyList<AiWatchedTitleDto>()
     // 一次精灵中心会话共用一个会话 ID：让服务端"单会话最多 7 轮"真正生效。
     // 若每次请求都发新 UUID，会话配额形同虚设，只剩每日 40 上限。
     private val spriteSessionId = "sprite-${UUID.randomUUID()}"
@@ -154,6 +158,7 @@ class AiSpriteViewModel @Inject constructor(
     }
 
     fun selectCharacter(characterId: String) {
+        if (!shouldResetActivationAttempt(_uiState.value.selectedCharacterId, characterId)) return
         if (_uiState.value.characters.none { it.id == characterId }) return
         _uiState.update {
             it.copy(
@@ -178,11 +183,30 @@ class AiSpriteViewModel @Inject constructor(
             setError("AUTH_REQUIRED")
             return
         }
-        if (!canRetryActivation(state.activationAttempt) && state.activationAttempt > 0) {
+        val character = state.selectedCharacter ?: return
+        if (!character.isAvailable) {
+            setError("CHARACTER_UNAVAILABLE")
+            return
+        }
+        when (activationRequestMode(state.activationAttempt)) {
+            AiActivationRequestMode.TEXT -> {
+                activateByText()
+                return
+            }
+            AiActivationRequestMode.NONE -> {
+                setError("ACTIVATION_RETRY_LIMIT")
+                return
+            }
+            AiActivationRequestMode.VOICE -> Unit
+        }
+        if (!canActivateCharacter(character, state) && state.activationAttempt > 0) {
             setError("ACTIVATION_RETRY_LIMIT")
             return
         }
-        val character = state.selectedCharacter ?: return
+        if (!canActivateCharacter(character, state)) {
+            setError("ACTIVATION_UNAVAILABLE")
+            return
+        }
         val attempt = state.activationAttempt + 1
         _uiState.update {
             it.copy(
@@ -234,9 +258,28 @@ class AiSpriteViewModel @Inject constructor(
             return
         }
         val character = state.selectedCharacter ?: return
+        if (!character.isAvailable) {
+            setError("CHARACTER_UNAVAILABLE")
+            return
+        }
+        if (activationRequestMode(state.activationAttempt) == AiActivationRequestMode.VOICE) {
+            setError("VOICE_ACTIVATION_REQUIRED")
+            return
+        }
+        if (!canActivateCharacter(character, state)) {
+            setError("ACTIVATION_RETRY_LIMIT")
+            return
+        }
+        val attempt = state.activationAttempt + 1
         requestJob?.cancel()
         requestJob = viewModelScope.launch {
-            _uiState.update { it.copy(activationState = AiActivationState.VERIFYING, errorCode = null) }
+            _uiState.update {
+                it.copy(
+                    activationAttempt = attempt,
+                    activationState = AiActivationState.VERIFYING,
+                    errorCode = null
+                )
+            }
             aiRepository.activate(
                 authManager.friendId.value.orEmpty(),
                 AiActivateRequest(
@@ -267,7 +310,7 @@ class AiSpriteViewModel @Inject constructor(
         when (feature) {
             AiFeature.GREETING -> loadGreeting(_uiState.value.activatedCharacterId ?: _uiState.value.selectedCharacterId)
             AiFeature.TASTE -> loadTaste()
-            AiFeature.QUIZ -> loadQuiz(forceRefresh = false)
+            AiFeature.QUIZ -> prepareQuizPreview()
             AiFeature.DAILY -> loadDaily()
         }
     }
@@ -280,7 +323,7 @@ class AiSpriteViewModel @Inject constructor(
         when (_uiState.value.activeFeature) {
             AiFeature.GREETING -> loadGreeting(_uiState.value.selectedCharacterId, forceRefresh = true)
             AiFeature.TASTE -> loadTaste(forceRefresh = true)
-            AiFeature.QUIZ -> loadQuiz(forceRefresh = true)
+            AiFeature.QUIZ -> prepareQuizPreview()
             AiFeature.DAILY -> loadDaily(forceRefresh = true)
             null -> Unit
         }
@@ -312,7 +355,7 @@ class AiSpriteViewModel @Inject constructor(
 
     fun submitQuiz() {
         val state = _uiState.value
-        val quiz = state.quiz ?: return
+        val quiz = state.quiz?.takeIf { state.quizStarted } ?: return
         requestJob?.cancel()
         requestJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorCode = null) }
@@ -337,8 +380,46 @@ class AiSpriteViewModel @Inject constructor(
     }
 
     fun replayQuiz() {
-        _uiState.update { it.copy(quizResult = null, quizIndex = 0, quizAnswers = emptyMap()) }
-        loadQuiz(forceRefresh = true)
+        _uiState.update {
+            it.copy(
+                quiz = null,
+                quizResult = null,
+                quizStarted = false,
+                quizIndex = 0,
+                quizAnswers = emptyMap(),
+                quizReplacementCount = 0,
+                quizPreviewMovies = emptyList()
+            )
+        }
+        quizCandidates = emptyList()
+        prepareQuizPreview()
+    }
+
+    fun startQuiz() {
+        val preview = _uiState.value.quizPreviewMovies
+        if (preview.size < 7) {
+            setError("NOT_ENOUGH_MOVIES")
+            return
+        }
+        loadQuiz(preview, forceRefresh = false)
+    }
+
+    fun replaceQuizMovie(index: Int) {
+        val state = _uiState.value
+        val next = replaceQuizPreview(
+            current = state.quizPreviewMovies,
+            candidates = quizCandidates,
+            index = index,
+            replacementCount = state.quizReplacementCount
+        )
+        if (next != state.quizPreviewMovies) {
+            _uiState.update {
+                it.copy(
+                    quizPreviewMovies = next,
+                    quizReplacementCount = it.quizReplacementCount + 1
+                )
+            }
+        }
     }
 
     fun clearError() {
@@ -397,9 +478,27 @@ class AiSpriteViewModel @Inject constructor(
         }
     }
 
-    private fun loadQuiz(forceRefresh: Boolean) {
+    private fun prepareQuizPreview() {
         runFeature(AiFeature.QUIZ) {
             val watched = watchedTitles()
+            if (watched.size < 7) throw IllegalStateException("NOT_ENOUGH_MOVIES")
+            quizCandidates = watched
+            _uiState.update {
+                it.copy(
+                    quiz = null,
+                    quizResult = null,
+                    quizStarted = false,
+                    quizIndex = 0,
+                    quizAnswers = emptyMap(),
+                    quizPreviewMovies = selectQuizPreview(watched),
+                    quizReplacementCount = 0
+                )
+            }
+        }
+    }
+
+    private fun loadQuiz(watched: List<AiWatchedTitleDto>, forceRefresh: Boolean) {
+        runFeature(AiFeature.QUIZ) {
             if (watched.size < 7) throw IllegalStateException("NOT_ENOUGH_MOVIES")
             aiRepository.getQuiz(
                 authManager.friendId.value.orEmpty(),
@@ -412,7 +511,16 @@ class AiSpriteViewModel @Inject constructor(
                 forceRefresh
             ).onSuccess { quiz ->
                 recentQuizIds = (listOf(quiz.quizId) + recentQuizIds).take(3)
-                _uiState.update { it.copy(quiz = quiz, quizIndex = 0, quizAnswers = emptyMap(), quizResult = null, quota = quiz.quota ?: it.quota) }
+                _uiState.update {
+                    it.copy(
+                        quiz = quiz,
+                        quizStarted = true,
+                        quizIndex = 0,
+                        quizAnswers = emptyMap(),
+                        quizResult = null,
+                        quota = quiz.quota ?: it.quota
+                    )
+                }
             }.getOrElse { throw it }
         }
     }

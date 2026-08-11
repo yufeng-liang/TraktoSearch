@@ -2,6 +2,7 @@ package com.tracktosearch.ui.screen.ai
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.LinearProgressIndicator
@@ -33,6 +35,9 @@ import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiQuizQuestion
 import com.tracktosearch.data.ai.AiQuizQuestionType
 import com.tracktosearch.data.ai.AiQuizResult
+import com.tracktosearch.data.ai.AiQuiz
+import com.tracktosearch.data.ai.AiQuizAnswer
+import com.tracktosearch.data.ai.AiWatchedTitleDto
 
 @Composable
 fun AiQuizScreen(
@@ -41,7 +46,23 @@ fun AiQuizScreen(
 ) {
     val result = state.quizResult
     if (result != null) {
-        QuizResultScreen(result = result, onReplay = viewModel::replayQuiz)
+        QuizResultScreen(
+            result = result,
+            quiz = state.quiz,
+            answers = state.quizAnswers,
+            onReplay = viewModel::replayQuiz
+        )
+        return
+    }
+
+    if (!state.quizStarted) {
+        QuizPreviewScreen(
+            movies = state.quizPreviewMovies,
+            replacementCount = state.quizReplacementCount,
+            isLoading = state.isLoading,
+            onReplace = viewModel::replaceQuizMovie,
+            onStart = viewModel::startQuiz
+        )
         return
     }
 
@@ -124,6 +145,91 @@ fun AiQuizScreen(
             }
         }
         item { Spacer(Modifier.height(8.dp)) }
+    }
+}
+
+@Composable
+private fun QuizPreviewScreen(
+    movies: List<AiWatchedTitleDto>,
+    replacementCount: Int,
+    isLoading: Boolean,
+    onReplace: (Int) -> Unit,
+    onStart: () -> Unit
+) {
+    if (movies.isEmpty()) {
+        QuizUnavailable()
+        return
+    }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Text(
+                stringResource(R.string.ai_quiz_preview_title),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.ExtraBold
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                stringResource(R.string.ai_quiz_preview_count, movies.size),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        itemsIndexed(movies, key = { _, movie -> "${movie.mediaType}:${movie.mediaId}" }) { index, movie ->
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                tonalElevation = 1.dp
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Surface(
+                        modifier = Modifier.size(42.dp),
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("${index + 1}", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(movie.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        movie.year?.let {
+                            Text(it.toString(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { onReplace(index) },
+                        enabled = replacementCount < 2 && !isLoading
+                    ) {
+                        Text(stringResource(R.string.ai_quiz_replace))
+                    }
+                }
+            }
+        }
+        item {
+            Text(
+                stringResource(R.string.ai_quiz_replace_remaining, (2 - replacementCount).coerceAtLeast(0)),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        item {
+            Button(
+                onClick = onStart,
+                enabled = movies.size == 7 && !isLoading,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.ai_quiz_start))
+            }
+        }
     }
 }
 
@@ -232,7 +338,12 @@ private fun ChoiceRow(
 }
 
 @Composable
-private fun QuizResultScreen(result: AiQuizResult, onReplay: () -> Unit) {
+private fun QuizResultScreen(
+    result: AiQuizResult,
+    quiz: AiQuiz?,
+    answers: Map<String, AiQuizAnswer>,
+    onReplay: () -> Unit
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -268,6 +379,16 @@ private fun QuizResultScreen(result: AiQuizResult, onReplay: () -> Unit) {
             }
         }
         items(result.questionResults, key = { it.questionId }) { item ->
+            val question = quiz?.questions?.firstOrNull { it.id == item.questionId }
+            val answer = answers[item.questionId]
+            val selectedLabels = if (question != null) quizAnswerLabels(question, answer) else emptyList()
+            val userAnswerText = when {
+                selectedLabels.isNotEmpty() -> selectedLabels.joinToString("、")
+                !answer?.textAnswer.isNullOrBlank() -> answer.textAnswer.trim()
+                else -> null
+            }
+            val correctAnswerText = quizCorrectAnswerText(question, item)
+                ?: userAnswerText?.takeIf { item.correct }
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
@@ -279,8 +400,30 @@ private fun QuizResultScreen(result: AiQuizResult, onReplay: () -> Unit) {
                         style = MaterialTheme.typography.labelLarge,
                         color = if (item.correct) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                     )
+                    Text(
+                        stringResource(R.string.ai_quiz_answer_review),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    correctAnswerText?.let { text ->
+                        Text(
+                            stringResource(R.string.ai_quiz_correct_answer, text),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    if (userAnswerText != null && userAnswerText != correctAnswerText) {
+                        Text(
+                            stringResource(R.string.ai_quiz_your_answer, userAnswerText),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    } else if (userAnswerText == null) {
+                        Text(stringResource(R.string.ai_quiz_unanswered), style = MaterialTheme.typography.bodyMedium)
+                    }
                     if (item.explanation.isNotBlank()) {
-                        Text(item.explanation, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            stringResource(R.string.ai_quiz_explanation_format, item.explanation),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                     }
                 }
             }

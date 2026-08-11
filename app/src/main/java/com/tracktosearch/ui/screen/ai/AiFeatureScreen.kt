@@ -70,7 +70,8 @@ fun AiFeatureScreen(
     onRefresh: () -> Unit,
     onPlayAudio: (AiAudio) -> Unit,
     onMovieClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit,
-    onShowClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit
+    onShowClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit,
+    onRecommendationClick: ((AiRecommendation) -> Unit)? = null
 ) {
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -116,7 +117,8 @@ fun AiFeatureScreen(
                 AiFeature.TASTE -> TasteFeature(
                     taste = state.taste,
                     onMovieClick = onMovieClick,
-                    onShowClick = onShowClick
+                    onShowClick = onShowClick,
+                    onRecommendationClick = onRecommendationClick
                 )
                 AiFeature.QUIZ -> AiQuizScreen(state = state, viewModel = viewModel)
                 AiFeature.DAILY -> DailyFeature(daily = state.dailyKnowledge)
@@ -242,7 +244,8 @@ private fun MeaningSection(title: String, text: String) {
 private fun TasteFeature(
     taste: AiTasteAnalysis?,
     onMovieClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit,
-    onShowClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit
+    onShowClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit,
+    onRecommendationClick: ((AiRecommendation) -> Unit)?
 ) {
     if (taste == null) {
         FeatureUnavailable()
@@ -312,12 +315,22 @@ private fun TasteFeature(
                 RecommendationCard(
                     recommendation = recommendation,
                     onOpen = {
-                        val traktId = recommendation.traktId ?: 0
-                        val tmdbId = recommendation.tmdbId ?: 0
-                        if (recommendation.mediaType.lowercase() == "show") {
-                            onShowClick(traktId, tmdbId, recommendation.title, recommendation.imdbId.orEmpty(), 0.0, false, false)
+                        if (onRecommendationClick != null) {
+                            onRecommendationClick(recommendation)
                         } else {
-                            onMovieClick(traktId, tmdbId, recommendation.title, recommendation.imdbId.orEmpty(), 0.0, false, false)
+                            val hasNativeId = (recommendation.traktId ?: 0) > 0 || (recommendation.tmdbId ?: 0) > 0
+                            val imdbOrNavigationKey = if (hasNativeId) {
+                                recommendation.imdbId.orEmpty()
+                            } else {
+                                recommendationNavigationKey(recommendation).orEmpty()
+                            }
+                            val traktId = recommendation.traktId ?: 0
+                            val tmdbId = recommendation.tmdbId ?: 0
+                            if (recommendation.mediaType.lowercase() == "show") {
+                                onShowClick(traktId, tmdbId, recommendation.title, imdbOrNavigationKey, 0.0, false, false)
+                            } else {
+                                onMovieClick(traktId, tmdbId, recommendation.title, imdbOrNavigationKey, 0.0, false, false)
+                            }
                         }
                     }
                 )
@@ -329,7 +342,7 @@ private fun TasteFeature(
 
 @Composable
 private fun RecommendationCard(recommendation: AiRecommendation, onOpen: () -> Unit) {
-    val hasMediaId = (recommendation.traktId ?: 0) > 0 || (recommendation.tmdbId ?: 0) > 0
+    val hasMediaId = recommendationHasDetailRoute(recommendation)
     val mediaIcon = if (recommendation.mediaType.lowercase() == "show") Icons.Rounded.LiveTv else Icons.Rounded.Movie
     Surface(
         modifier = Modifier

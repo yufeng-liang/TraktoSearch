@@ -38,6 +38,7 @@ import com.tracktosearch.DeepLinkNavigator
 import com.tracktosearch.OAuthCallback
 import com.tracktosearch.R
 import com.tracktosearch.data.local.OnboardingStorage
+import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
 import com.tracktosearch.data.local.DoubanAuthStorage
@@ -68,6 +69,7 @@ import com.tracktosearch.ui.screen.main.MainScreen
 import com.tracktosearch.ui.screen.markrecord.MarkRecordScreen
 import com.tracktosearch.ui.screen.person.PersonScreen
 import com.tracktosearch.ui.screen.search.SearchScreen
+import com.tracktosearch.ui.screen.ai.AI_DOUBAN_NAV_PREFIX
 import com.tracktosearch.ui.screen.statistics.StatisticsScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchScreen
 import com.tracktosearch.ui.screen.watchlist.WatchlistViewModel
@@ -169,6 +171,46 @@ object Routes {
         val encodedName = java.net.URLEncoder.encode(personName, "UTF-8")
         val encodedProfileUrl = java.net.URLEncoder.encode(profileUrl, "UTF-8")
         return "person/$personId/$encodedName/$encodedProfileUrl"
+    }
+}
+
+private fun navigateAiRecommendation(
+    navController: androidx.navigation.NavHostController,
+    recommendation: AiRecommendation
+) {
+    val doubanId = recommendation.doubanId?.takeIf { it.isNotBlank() }
+    if (doubanId != null && (recommendation.traktId ?: 0) <= 0 && (recommendation.tmdbId ?: 0) <= 0) {
+        navController.navigate(Routes.doubanItemDetailRoute(doubanId))
+        return
+    }
+    val type = if (recommendation.mediaType.lowercase() == "show") "show" else "movie"
+    navController.navigate(
+        Routes.detailRoute(
+            type = type,
+            traktId = recommendation.traktId ?: 0,
+            tmdbId = recommendation.tmdbId ?: 0,
+            title = recommendation.title,
+            imdbId = recommendation.imdbId.orEmpty(),
+            doubanId = doubanId
+        )
+    )
+}
+
+private fun navigateAiLegacyMediaClick(
+    navController: androidx.navigation.NavHostController,
+    type: String,
+    traktId: Int,
+    tmdbId: Int,
+    title: String,
+    imdbId: String,
+    traktRating: Double,
+    inWatchlist: Boolean = false,
+    isWatched: Boolean = false
+) {
+    if (imdbId.startsWith(AI_DOUBAN_NAV_PREFIX)) {
+        navController.navigate(Routes.doubanItemDetailRoute(imdbId.removePrefix(AI_DOUBAN_NAV_PREFIX)))
+    } else {
+        navController.navigate(Routes.detailRoute(type, traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))
     }
 }
 
@@ -569,10 +611,10 @@ fun AppNavigation(
                             isTraktConnected = isTraktConnected,
                             isDoubanMode = isDoubanMode,
                             onMovieClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
-                                navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))
+                                navigateAiLegacyMediaClick(navController, "movie", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched)
                             },
                             onShowClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
-                                navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))
+                                navigateAiLegacyMediaClick(navController, "show", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched)
                             },
                             onMediaItemClick = { item, inWatchlist, isWatched ->
                                 val doubanId = item.doubanId
@@ -770,10 +812,18 @@ fun AppNavigation(
                                 navController.popBackStack()
                             },
                             onMovieClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
-                                navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))
+                                navigateAiLegacyMediaClick(navController, "movie", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched)
                             },
                             onShowClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
-                                navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))
+                                navigateAiLegacyMediaClick(navController, "show", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched)
+                            },
+                            onNavigateToLogin = {
+                                navController.navigate(Routes.LOGIN) {
+                                    popUpTo(Routes.MAIN) { inclusive = false }
+                                }
+                            },
+                            onRecommendationClick = { recommendation ->
+                                navigateAiRecommendation(navController, recommendation)
                             }
                         )
                     }

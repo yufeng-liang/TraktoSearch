@@ -1567,6 +1567,7 @@
     <!-- AI 精灵 -->
     <string name="ai_sprite_center_title">精灵中心</string>
     <string name="ai_sprite_center_subtitle">选一只陪你看电影的 AI 精灵</string>
+    <string name="ai_sprite_character_selection">%1$s · %2$s</string>
     <string name="ai_sprite_long_press_hint">长按搜索页上方的云朵图标进入</string>
     <string name="ai_sprite_activate">喊「%1$s」来激活</string>
     <string name="ai_sprite_activating">正在听你喊「%1$s」…</string>
@@ -1574,13 +1575,18 @@
     <string name="ai_sprite_activation_success">到！</string>
     <string name="ai_sprite_preparing">准备中</string>
     <string name="ai_sprite_guest_hint">登录后才能激活精灵并使用 AI</string>
+    <string name="ai_sprite_login">去登录</string>
     <string name="ai_sprite_try_again">再试一次</string>
     <string name="ai_sprite_text_fallback">改用文字激活</string>
+    <string name="ai_sprite_text_fallback_hint">改为输入角色名，不再录音</string>
     <string name="ai_sprite_quota">今日 %1$d/%2$d · 本轮 %3$d/%4$d</string>
     <string name="ai_sprite_greeting_title">精灵给你的话</string>
     <string name="ai_sprite_welcome">%1$s，%2$s来啦</string>
     <string name="ai_sprite_name_meaning">解读我的昵称</string>
     <string name="ai_sprite_close">关闭精灵中心</string>
+    <string name="ai_sprite_cloud_description">AI 精灵云朵入口</string>
+    <string name="ai_sprite_overlay_message">%1$s有话想说</string>
+    <string name="ai_sprite_overlay_hint">挑一个小小的影视挑战吧</string>
     <string name="ai_audio_play">播放语音</string>
     <string name="ai_feature_greeting">昵称欢迎</string>
     <string name="ai_feature_taste">锐评我的看单</string>
@@ -1595,6 +1601,10 @@
     <string name="ai_quiz_title">你真的看懂这些影视了吗</string>
     <string name="ai_quiz_spoiler">本轮会涉及：%1$s，包含剧透</string>
     <string name="ai_quiz_start">开始本轮闯关</string>
+    <string name="ai_quiz_preview_title">先挑选本轮影视</string>
+    <string name="ai_quiz_preview_count">本轮会从 %1$d 部已看影视出题</string>
+    <string name="ai_quiz_replace">换一部</string>
+    <string name="ai_quiz_replace_remaining">还可以替换：%1$d 次</string>
     <string name="ai_quiz_submit">提交答案</string>
     <string name="ai_quiz_next">下一题</string>
     <string name="ai_quiz_finish">查看结果</string>
@@ -1602,6 +1612,7 @@
     <string name="ai_quiz_replay">重新抽一轮</string>
     <string name="ai_quiz_short_answer_optional">简答题（可选）</string>
     <string name="ai_quiz_explanation">解析</string>
+    <string name="ai_quiz_explanation_format">解析：%1$s</string>
     <string name="ai_daily_title">今日影视冷知识</string>
     <string name="ai_daily_source">来源</string>
     <string name="ai_feature_back">返回</string>
@@ -1626,6 +1637,10 @@
     <string name="ai_quiz_result_title">本轮完成</string>
     <string name="ai_quiz_correct_count">%1$d/%2$d 答对</string>
     <string name="ai_quiz_question_score">%1$d 分</string>
+    <string name="ai_quiz_answer_review">答案复盘</string>
+    <string name="ai_quiz_correct_answer">正确答案：%1$s</string>
+    <string name="ai_quiz_your_answer">你的答案：%1$s</string>
+    <string name="ai_quiz_unanswered">未作答</string>
     <string name="ai_error">精灵正在休息，请稍后再试。</string>
     <string name="help_ai_sprite">AI 精灵</string>
     <string name="help_ai_sprite_b1">短按云朵保留原彩蛋，长按云朵进入精灵中心</string>

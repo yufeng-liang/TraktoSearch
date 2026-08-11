@@ -78,14 +78,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiCharacter
 import com.tracktosearch.data.ai.AiQuizQuestionType
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 
 @Composable
 fun AiSpriteCenter(
     visible: Boolean,
     onDismiss: () -> Unit,
+    onNavigateToLogin: () -> Unit = {},
     onMovieClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
     onShowClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
+    onRecommendationClick: ((com.tracktosearch.data.ai.AiRecommendation) -> Unit)? = null,
     viewModel: AiSpriteViewModel = hiltViewModel()
 ) {
     if (!visible) return
@@ -104,6 +107,15 @@ fun AiSpriteCenter(
     LaunchedEffect(Unit) {
         viewModel.ensureLoaded()
         viewModel.audioEvents.collectLatest { audio -> audioPlayer.play(audio) }
+    }
+    LaunchedEffect(state.selectedCharacterId, state.isAuthorized) {
+        audioPlayer.stop()
+        if (!state.isAuthorized) {
+            state.selectedCharacter?.let { character ->
+                delay(350)
+                audioPlayer.playText(character.auditionText)
+            }
+        }
     }
     DisposableEffect(Unit) {
         onDispose { audioPlayer.stop() }
@@ -126,19 +138,27 @@ fun AiSpriteCenter(
                 onRefresh = viewModel::refreshFeature,
                 onPlayAudio = { audioPlayer.play(it) },
                 onMovieClick = onMovieClick,
-                onShowClick = onShowClick
+                onShowClick = onShowClick,
+                onRecommendationClick = onRecommendationClick
             )
         } else {
             SpriteCenterHome(
                 state = state,
                 onDismiss = onDismiss,
+                onNavigateToLogin = onNavigateToLogin,
                 onSelectCharacter = viewModel::selectCharacter,
                 onActivate = {
-                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                        viewModel.activate(context)
-                    } else if (!permissionRequested) {
-                        permissionRequested = true
-                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    when (activationRequestMode(state.activationAttempt)) {
+                        AiActivationRequestMode.VOICE -> {
+                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                                viewModel.activate(context)
+                            } else if (!permissionRequested) {
+                                permissionRequested = true
+                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }
+                        }
+                        AiActivationRequestMode.TEXT -> viewModel.activateByText()
+                        AiActivationRequestMode.NONE -> viewModel.clearError()
                     }
                 },
                 onTextActivate = viewModel::activateByText,
@@ -154,6 +174,7 @@ fun AiSpriteCenter(
 private fun SpriteCenterHome(
     state: AiSpriteUiState,
     onDismiss: () -> Unit,
+    onNavigateToLogin: () -> Unit,
     onSelectCharacter: (String) -> Unit,
     onActivate: () -> Unit,
     onTextActivate: () -> Unit,
@@ -200,8 +221,13 @@ private fun SpriteCenterHome(
             onPlayAudio = onPlayAudio
         )
 
+        val characterLabel = stringResource(
+            R.string.ai_sprite_character_selection,
+            character.name,
+            character.personalityPrompt
+        )
         Text(
-            text = characterSelectionLabel(state),
+            text = characterLabel,
             modifier = Modifier.padding(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 8.dp),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -243,7 +269,15 @@ private fun SpriteCenterHome(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Icon(Icons.Rounded.Lock, contentDescription = null)
-                    Text(stringResource(R.string.ai_sprite_guest_hint), style = MaterialTheme.typography.bodyMedium)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.ai_sprite_guest_hint), style = MaterialTheme.typography.bodyMedium)
+                        TextButton(
+                            onClick = onNavigateToLogin,
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                        ) {
+                            Text(stringResource(R.string.ai_sprite_login))
+                        }
+                    }
                 }
             }
         }
@@ -403,6 +437,7 @@ private fun ActivationPanel(
     onClearError: () -> Unit
 ) {
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        val requestMode = activationRequestMode(state.activationAttempt)
         val activationText = when (state.activationState) {
             AiActivationState.RECORDING -> stringResource(R.string.ai_sprite_activating, character.activationWord)
             AiActivationState.VERIFYING -> stringResource(R.string.ai_sprite_activating, character.activationWord)
@@ -411,17 +446,25 @@ private fun ActivationPanel(
         }
         Text(activationText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text(
-            text = stringResource(R.string.ai_sprite_listening),
+            text = if (requestMode == AiActivationRequestMode.VOICE) {
+                stringResource(R.string.ai_sprite_listening)
+            } else {
+                stringResource(R.string.ai_sprite_text_fallback_hint)
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp)
         )
         Spacer(Modifier.height(10.dp))
         Button(
-            onClick = onActivate,
-            enabled = character.isAvailable &&
-                state.activationState != AiActivationState.RECORDING && state.activationState != AiActivationState.VERIFYING &&
-                (state.activationAttempt == 0 || canRetryActivation(state.activationAttempt)),
+            onClick = {
+                if (requestMode == AiActivationRequestMode.TEXT) {
+                    onTextActivate()
+                } else {
+                    onActivate()
+                }
+            },
+            enabled = canActivateCharacter(character, state),
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
             contentPadding = ButtonDefaults.ContentPadding
@@ -429,10 +472,23 @@ private fun ActivationPanel(
             if (state.activationState == AiActivationState.RECORDING || state.activationState == AiActivationState.VERIFYING) {
                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
             } else {
-                Icon(Icons.Rounded.Mic, contentDescription = null)
+                Icon(
+                    imageVector = if (requestMode == AiActivationRequestMode.VOICE) {
+                        Icons.Rounded.Mic
+                    } else {
+                        Icons.Rounded.AutoAwesome
+                    },
+                    contentDescription = null
+                )
             }
             Spacer(Modifier.size(8.dp))
-            Text(if (state.activationAttempt == 0) stringResource(R.string.ai_sprite_activate, character.activationWord) else stringResource(R.string.ai_sprite_try_again))
+            Text(
+                when (requestMode) {
+                    AiActivationRequestMode.VOICE -> stringResource(R.string.ai_sprite_activate, character.activationWord)
+                    AiActivationRequestMode.TEXT -> stringResource(R.string.ai_sprite_text_fallback)
+                    AiActivationRequestMode.NONE -> stringResource(R.string.ai_sprite_try_again)
+                }
+            )
         }
         if (state.errorCode != null) {
             Text(
@@ -441,14 +497,6 @@ private fun ActivationPanel(
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 8.dp)
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (state.activationAttempt > 0 && canRetryActivation(state.activationAttempt)) {
-                    TextButton(onClick = onActivate) { Text(stringResource(R.string.ai_sprite_try_again)) }
-                }
-                TextButton(onClick = { onClearError(); onTextActivate() }) {
-                    Text(stringResource(R.string.ai_sprite_text_fallback))
-                }
-            }
         }
         state.quota?.let { quota ->
             Text(
@@ -547,6 +595,3 @@ private fun characterTint(character: AiCharacter): Color = when (character.id) {
     "kurimanju" -> Color(0xFFB68C69)
     else -> Color(0xFFAED9C2)
 }
-
-private fun characterSelectionLabel(state: AiSpriteUiState): String =
-    state.selectedCharacter?.let { "${it.name} · ${it.personalityPrompt}" } ?: ""

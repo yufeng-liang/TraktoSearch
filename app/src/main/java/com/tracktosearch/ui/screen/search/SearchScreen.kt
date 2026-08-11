@@ -112,6 +112,8 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.TextStyle
@@ -132,6 +134,7 @@ import com.airbnb.lottie.compose.LottieAnimation
 import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.rememberLottieComposition
 import com.tracktosearch.R
+import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.data.local.CloudPermissionStorage
 import com.tracktosearch.ui.theme.DesignToken
 import com.tracktosearch.data.local.SearchHistoryItem
@@ -142,6 +145,12 @@ import com.tracktosearch.ui.component.CloudEasterEgg
 import com.tracktosearch.ui.component.CloudOverlay
 import com.tracktosearch.ui.component.CloudThemeManager
 import com.tracktosearch.ui.screen.ai.AiSpriteCenter
+import com.tracktosearch.ui.screen.ai.AiFeature
+import com.tracktosearch.ui.screen.ai.AiSpriteOverlay
+import com.tracktosearch.ui.screen.ai.AiSpriteOverlayPolicy
+import com.tracktosearch.ui.screen.ai.AiSpriteOverlayTrigger
+import com.tracktosearch.ui.screen.ai.AiSpriteViewModel
+import com.tracktosearch.ui.screen.ai.nextAiSpriteOverlayTrigger
 import com.tracktosearch.ui.component.DiscoverModalBottomSheet
 import com.tracktosearch.ui.component.DoubanRatingBadge
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
@@ -163,6 +172,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -188,14 +201,18 @@ fun SearchScreen(
     onSpiderTest: (() -> Unit)? = null,
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
+    onNavigateToLogin: (() -> Unit)? = null,
+    onRecommendationClick: ((AiRecommendation) -> Unit)? = null,
     searchSourceType: SearchSourceType = SearchSourceType.DISK,
     onSearchSourceTypeChange: ((SearchSourceType) -> Unit)? = null,
     modifier: Modifier = Modifier,
-    viewModel: SearchViewModel = hiltViewModel()
+    viewModel: SearchViewModel = hiltViewModel(),
+    spriteViewModel: AiSpriteViewModel = hiltViewModel()
 ) {
     val isDark = isAppDarkTheme()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val hotSearches by viewModel.hotSearches.collectAsStateWithLifecycle()
+    val spriteState by spriteViewModel.uiState.collectAsStateWithLifecycle()
     // 页面重新可见时(ON_RESUME)，若热门搜索为空则重新加载(新片榜重试后可拿到数据)
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -259,11 +276,86 @@ fun SearchScreen(
     val showPermissionDialog by cloudThemeManager.showPermissionDialog.collectAsStateWithLifecycle()
     val easterEggRes by cloudThemeManager.easterEggRes.collectAsStateWithLifecycle()
     val easterMessageRes by cloudThemeManager.easterMessageRes.collectAsStateWithLifecycle()
+    val aiSpriteCloudDescription = stringResource(R.string.ai_sprite_cloud_description)
     var showAiSpriteCenter by rememberSaveable { mutableStateOf(false) }
+    var showAiSpriteOverlay by rememberSaveable { mutableStateOf(false) }
+    var overlayEntryHandled by rememberSaveable { mutableStateOf(false) }
+    var wasSearchLoading by remember { mutableStateOf(false) }
+    val overlayPreferences = remember(context.applicationContext) {
+        context.applicationContext.getSharedPreferences("ai_sprite_overlay_quota_v1", android.content.Context.MODE_PRIVATE)
+    }
+    val overlayPolicy = remember(overlayPreferences) {
+        AiSpriteOverlayPolicy(
+            readDailyCount = { dayKey ->
+                if (overlayPreferences.getString("day_key", null) == dayKey) {
+                    overlayPreferences.getInt("daily_count", 0)
+                } else {
+                    0
+                }
+            },
+            writeDailyCount = { dayKey, count ->
+                overlayPreferences.edit()
+                    .putString("day_key", dayKey)
+                    .putInt("daily_count", count)
+                    .apply()
+            }
+        )
+    }
+    var overlayDayKey by remember {
+        mutableStateOf(
+            SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
+        )
+    }
 
+    LaunchedEffect(Unit) {
+        while (true) {
+            val now = Calendar.getInstance()
+            val nextDay = (now.clone() as Calendar).apply {
+                add(Calendar.DAY_OF_YEAR, 1)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            delay((nextDay.timeInMillis - now.timeInMillis).coerceAtLeast(1_000L))
+            overlayDayKey = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        spriteViewModel.ensureLoaded()
+    }
     // 搜索框焦点状态，用于控制搜索历史展开
     var isSearchFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(
+        spriteState.activatedCharacterId,
+        uiState.isLoading,
+        uiState.resources.size,
+        isSearchFocused,
+        searchQuery,
+        overlayDayKey
+    ) {
+        val trigger = nextAiSpriteOverlayTrigger(
+            entryHandled = overlayEntryHandled,
+            wasSearchLoading = wasSearchLoading,
+            isSearchLoading = uiState.isLoading,
+            hasResults = uiState.resources.isNotEmpty(),
+            isSearchFocused = isSearchFocused,
+            searchQuery = searchQuery,
+            activated = spriteState.activatedCharacterId != null
+        )
+        if (trigger != null) {
+            if (trigger == AiSpriteOverlayTrigger.FIRST_ENTRY) {
+                overlayEntryHandled = true
+            }
+            if (overlayPolicy.tryConsume(true, trigger, overlayDayKey)) {
+                showAiSpriteOverlay = true
+            }
+        }
+        wasSearchLoading = uiState.isLoading
+    }
 
     // Haze 毛玻璃状态
     val hazeState = remember { HazeState() }
@@ -344,9 +436,13 @@ fun SearchScreen(
         CloudIconWithAnimation(
             cloudThemeManager = cloudThemeManager,
             isActive = isActive,
-            onLongClick = { showAiSpriteCenter = true },
+            onLongClick = {
+                showAiSpriteOverlay = false
+                showAiSpriteCenter = true
+            },
             modifier = Modifier
                 .size(cloudIconSize)
+                .semantics { contentDescription = aiSpriteCloudDescription }
                 .align(Alignment.TopCenter)
                 .offset(
                     y = targetSearchBoxY - cloudIconSize - 16.dp
@@ -551,11 +647,28 @@ fun SearchScreen(
             onDismiss = { cloudThemeManager.onEasterDismissed() }
         )
 
+        AiSpriteOverlay(
+            visible = showAiSpriteOverlay && !showAiSpriteCenter,
+            character = spriteState.activatedCharacter,
+            onDismiss = { showAiSpriteOverlay = false },
+            onOpenFeature = { feature ->
+                showAiSpriteOverlay = false
+                showAiSpriteCenter = true
+                spriteViewModel.openFeature(feature)
+            }
+        )
+
         AiSpriteCenter(
             visible = showAiSpriteCenter,
-            onDismiss = { showAiSpriteCenter = false },
+            onDismiss = {
+                showAiSpriteCenter = false
+                spriteViewModel.closeFeature()
+            },
+            onNavigateToLogin = { onNavigateToLogin?.invoke() },
             onMovieClick = onMovieClick,
-            onShowClick = onShowClick
+            onShowClick = onShowClick,
+            onRecommendationClick = onRecommendationClick,
+            viewModel = spriteViewModel
         )
     }
 }

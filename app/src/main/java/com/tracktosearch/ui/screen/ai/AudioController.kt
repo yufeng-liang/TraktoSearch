@@ -9,6 +9,7 @@ import android.media.AudioTrack
 import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.net.Uri
+import android.speech.tts.TextToSpeech
 import android.util.Base64
 import androidx.core.content.ContextCompat
 import com.tracktosearch.data.ai.AiAudio
@@ -18,6 +19,7 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.util.Locale
 
 /** 一次性采集短语音；录音结束后立即释放麦克风，不做常驻监听。 */
 object AiAudioRecorder {
@@ -101,6 +103,7 @@ object AiAudioRecorder {
 class AiAudioPlayer(private val context: Context) {
     private var player: MediaPlayer? = null
     private var temporaryFile: File? = null
+    private var textToSpeech: TextToSpeech? = null
 
     // 每次 play 递增的代号。MediaPlayer 回调在独立线程派发，旧播放的延迟
     // onCompletion/onError/onPrepared 可能在新播放建立后才到达；代号不匹配则忽略，
@@ -148,8 +151,28 @@ class AiAudioPlayer(private val context: Context) {
         }
     }
 
+    /** 访客试听没有网关身份时使用系统中文语音，只用于浏览阶段的即时反馈。 */
+    fun playText(text: String) {
+        if (text.isBlank()) return
+        stop()
+        val epoch = ++playEpoch
+        val engine = TextToSpeech(context) { status ->
+            if (status != TextToSpeech.SUCCESS || playEpoch != epoch) return@TextToSpeech
+            val tts = textToSpeech ?: return@TextToSpeech
+            tts.language = Locale.SIMPLIFIED_CHINESE
+            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "ai_preview_$epoch")
+        }
+        textToSpeech = engine
+    }
+
     fun stop() {
+        playEpoch++
         cleanup()
+        textToSpeech?.let { tts ->
+            runCatching { tts.stop() }
+            runCatching { tts.shutdown() }
+        }
+        textToSpeech = null
     }
 
     private fun cleanup() {

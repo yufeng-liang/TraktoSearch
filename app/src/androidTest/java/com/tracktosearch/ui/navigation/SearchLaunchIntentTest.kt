@@ -10,28 +10,28 @@ import org.junit.runner.RunWith
 class SearchLaunchIntentTest {
 
     @Test
-    fun `显式 true extra 识别为打开搜索`() {
+    fun explicitTrueExtraIsRecognizedAsOpenSearch() {
         val intent = Intent().putExtra(SearchNavigator.EXTRA_OPEN_SEARCH, true)
 
         assertThat(SearchNavigator.isOpenSearchIntent(intent)).isTrue()
     }
 
     @Test
-    fun `空 Intent 不打开搜索`() {
+    fun emptyIntentDoesNotOpenSearch() {
         val intent = Intent()
 
         assertThat(SearchNavigator.isOpenSearchIntent(intent)).isFalse()
     }
 
     @Test
-    fun `显式 false extra 不打开搜索`() {
+    fun explicitFalseExtraDoesNotOpenSearch() {
         val intent = Intent().putExtra(SearchNavigator.EXTRA_OPEN_SEARCH, false)
 
         assertThat(SearchNavigator.isOpenSearchIntent(intent)).isFalse()
     }
 
     @Test
-    fun `null Intent 不打开搜索`() {
+    fun nullIntentDoesNotOpenSearch() {
         assertThat(SearchNavigator.isOpenSearchIntent(null)).isFalse()
     }
 }

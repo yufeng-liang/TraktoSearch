@@ -1567,6 +1567,7 @@ Config:
     <!-- AI Sprite -->
     <string name="ai_sprite_center_title">AI Sprite Center</string>
     <string name="ai_sprite_center_subtitle">Choose a companion for your movie journey</string>
+    <string name="ai_sprite_character_selection">%1$s · %2$s</string>
     <string name="ai_sprite_long_press_hint">Long-press the cloud icon to open</string>
     <string name="ai_sprite_activate">Call %1$s to activate</string>
     <string name="ai_sprite_activating">Listening for %1$s…</string>
@@ -1574,13 +1575,18 @@ Config:
     <string name="ai_sprite_activation_success">Activated!</string>
     <string name="ai_sprite_preparing">Preparing</string>
     <string name="ai_sprite_guest_hint">Sign in to activate a sprite and use AI</string>
+    <string name="ai_sprite_login">Sign in to continue</string>
     <string name="ai_sprite_try_again">Try again</string>
     <string name="ai_sprite_text_fallback">Use text activation</string>
+    <string name="ai_sprite_text_fallback_hint">Activation now uses text; no microphone is needed</string>
     <string name="ai_sprite_quota">Today %1$d/%2$d · Session %3$d/%4$d</string>
     <string name="ai_sprite_greeting_title">A note from your sprite</string>
     <string name="ai_sprite_welcome">%1$s, %2$s is here</string>
     <string name="ai_sprite_name_meaning">Decode my nickname</string>
     <string name="ai_sprite_close">Close sprite center</string>
+    <string name="ai_sprite_cloud_description">AI sprite cloud</string>
+    <string name="ai_sprite_overlay_message">%1$s has a thought</string>
+    <string name="ai_sprite_overlay_hint">Pick a small movie challenge</string>
     <string name="ai_audio_play">Play voice</string>
     <string name="ai_feature_greeting">Nickname welcome</string>
     <string name="ai_feature_taste">Roast my watchlist</string>
@@ -1595,6 +1601,10 @@ Config:
     <string name="ai_quiz_title">Did you really understand these films?</string>
     <string name="ai_quiz_spoiler">This round contains spoilers for: %1$s</string>
     <string name="ai_quiz_start">Start this round</string>
+    <string name="ai_quiz_preview_title">Choose this round’s films</string>
+    <string name="ai_quiz_preview_count">%1$d watched films will enter this round</string>
+    <string name="ai_quiz_replace">Replace</string>
+    <string name="ai_quiz_replace_remaining">Replacements remaining: %1$d</string>
     <string name="ai_quiz_submit">Submit answer</string>
     <string name="ai_quiz_next">Next question</string>
     <string name="ai_quiz_finish">See result</string>
@@ -1602,6 +1612,7 @@ Config:
     <string name="ai_quiz_replay">Draw another round</string>
     <string name="ai_quiz_short_answer_optional">Short answer (optional)</string>
     <string name="ai_quiz_explanation">Explanation</string>
+    <string name="ai_quiz_explanation_format">Explanation: %1$s</string>
     <string name="ai_feature_back">Back</string>
     <string name="ai_feature_refresh">Refresh</string>
     <string name="ai_feature_loading">Preparing your answer</string>
@@ -1624,6 +1635,10 @@ Config:
     <string name="ai_quiz_result_title">Round complete</string>
     <string name="ai_quiz_correct_count">%1$d/%2$d correct</string>
     <string name="ai_quiz_question_score">%1$d points</string>
+    <string name="ai_quiz_answer_review">Answer review</string>
+    <string name="ai_quiz_correct_answer">Correct answer: %1$s</string>
+    <string name="ai_quiz_your_answer">Your answer: %1$s</string>
+    <string name="ai_quiz_unanswered">No answer submitted</string>
     <string name="ai_daily_title">Today’s film fact</string>
     <string name="ai_daily_source">Source</string>
     <string name="ai_error">The sprite is taking a break. Please try again.</string>

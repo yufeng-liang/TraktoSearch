@@ -11,11 +11,16 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.R
+import com.tracktosearch.data.ai.AiAudio
+import com.tracktosearch.data.ai.AiCharacter
 import com.tracktosearch.data.local.SearchHistoryItem
+import com.tracktosearch.ui.screen.ai.AiSpriteUiState
+import com.tracktosearch.ui.screen.ai.AiSpriteViewModel
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Before
 import org.junit.Rule
@@ -188,6 +193,31 @@ class SearchScreenTest {
         }
         composeRule.waitForIdle()
         composeRule.onNodeWithText("测试电影").assertIsDisplayed()
+    }
+
+    @Test
+    fun `已激活精灵在搜索页空闲时显示互动浮层`() {
+        val spriteViewModel = mockk<AiSpriteViewModel>(relaxed = true)
+        every { spriteViewModel.uiState } returns MutableStateFlow(
+            AiSpriteUiState(
+                characters = listOf(AiCharacter("usagi", "乌萨奇", "乌萨奇", isAvailable = true)),
+                selectedCharacterId = "usagi",
+                activatedCharacterId = "usagi"
+            )
+        )
+        every { spriteViewModel.audioEvents } returns MutableSharedFlow<AiAudio>()
+
+        composeRule.setContent {
+            SearchScreen(
+                onBack = {},
+                onSearchClick = {},
+                viewModel = createMockViewModel(),
+                spriteViewModel = spriteViewModel
+            )
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("乌萨奇").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.ai_feature_quiz)).assertIsDisplayed()
     }
 
     private fun createMockViewModel(

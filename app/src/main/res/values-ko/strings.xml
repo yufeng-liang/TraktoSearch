@@ -1579,6 +1579,7 @@
     <!-- AI 스프라이트 -->
     <string name="ai_sprite_center_title">AI 스프라이트 센터</string>
     <string name="ai_sprite_center_subtitle">영화 여정을 함께할 동료를 선택하세요</string>
+    <string name="ai_sprite_character_selection">%1$s · %2$s</string>
     <string name="ai_sprite_long_press_hint">검색 화면 위 구름 아이콘을 길게 눌러 열기</string>
     <string name="ai_sprite_activate">“%1$s”라고 불러 활성화</string>
     <string name="ai_sprite_activating">“%1$s”를 듣는 중…</string>
@@ -1586,13 +1587,18 @@
     <string name="ai_sprite_activation_success">활성화됐어요!</string>
     <string name="ai_sprite_preparing">준비 중</string>
     <string name="ai_sprite_guest_hint">로그인하면 스프라이트와 AI를 사용할 수 있습니다</string>
+    <string name="ai_sprite_login">로그인하기</string>
     <string name="ai_sprite_try_again">다시 시도</string>
     <string name="ai_sprite_text_fallback">텍스트로 활성화</string>
+    <string name="ai_sprite_text_fallback_hint">문자 입력으로 활성화하며 녹음하지 않습니다</string>
     <string name="ai_sprite_quota">오늘 %1$d/%2$d · 세션 %3$d/%4$d</string>
     <string name="ai_sprite_greeting_title">스프라이트의 메시지</string>
     <string name="ai_sprite_welcome">%1$s, %2$s가 왔어요</string>
     <string name="ai_sprite_name_meaning">닉네임 해석</string>
     <string name="ai_sprite_close">스프라이트 센터 닫기</string>
+    <string name="ai_sprite_cloud_description">AI 스프라이트 구름 입구</string>
+    <string name="ai_sprite_overlay_message">%1$s가 할 말이 있어요</string>
+    <string name="ai_sprite_overlay_hint">작은 영화 도전을 골라 보세요</string>
     <string name="ai_audio_play">음성 재생</string>
     <string name="ai_feature_greeting">닉네임 인사</string>
     <string name="ai_feature_taste">내 시청 목록 평론</string>
@@ -1607,6 +1613,10 @@
     <string name="ai_quiz_title">정말 이 영화를 이해했나요?</string>
     <string name="ai_quiz_spoiler">이번 라운드: %1$s (스포일러 포함)</string>
     <string name="ai_quiz_start">라운드 시작</string>
+    <string name="ai_quiz_preview_title">이번 라운드 작품 고르기</string>
+    <string name="ai_quiz_preview_count">이번 라운드는 본 영화 %1$d편에서 출제됩니다</string>
+    <string name="ai_quiz_replace">바꾸기</string>
+    <string name="ai_quiz_replace_remaining">남은 교체 횟수: %1$d</string>
     <string name="ai_quiz_submit">답변 제출</string>
     <string name="ai_quiz_next">다음 문제</string>
     <string name="ai_quiz_finish">결과 보기</string>
@@ -1614,6 +1624,7 @@
     <string name="ai_quiz_replay">새 라운드 뽑기</string>
     <string name="ai_quiz_short_answer_optional">단답형 (선택)</string>
     <string name="ai_quiz_explanation">해설</string>
+    <string name="ai_quiz_explanation_format">해설: %1$s</string>
     <string name="ai_daily_title">오늘의 영화 상식</string>
     <string name="ai_daily_source">출처</string>
     <string name="ai_feature_back">뒤로</string>
@@ -1638,6 +1649,10 @@
     <string name="ai_quiz_result_title">라운드 완료</string>
     <string name="ai_quiz_correct_count">%1$d/%2$d 정답</string>
     <string name="ai_quiz_question_score">%1$d점</string>
+    <string name="ai_quiz_answer_review">답변 복습</string>
+    <string name="ai_quiz_correct_answer">정답: %1$s</string>
+    <string name="ai_quiz_your_answer">내 답변: %1$s</string>
+    <string name="ai_quiz_unanswered">답하지 않음</string>
     <string name="ai_error">스프라이트가 잠시 쉬고 있습니다. 나중에 다시 시도해 주세요.</string>
     <string name="help_ai_sprite">AI 스프라이트</string>
     <string name="help_ai_sprite_b1">구름을 짧게 누르면 기존 이스터 에그, 길게 누르면 스프라이트 센터가 열립니다</string>
