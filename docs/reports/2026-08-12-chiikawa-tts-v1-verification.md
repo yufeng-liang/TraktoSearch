@@ -1,6 +1,6 @@
 # Chiikawa 音色设计 TTS V1 验证报告
 
-日期：2026-08-12  
+日期：2026-08-12
 当前提交：`0b4becb`（detached HEAD）
 
 ## 结论
