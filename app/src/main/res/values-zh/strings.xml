@@ -471,6 +471,13 @@
     <string name="theme_dark">深色</string>
     <string name="theme_light">浅色</string>
 
+    <!-- 视觉效果 -->
+    <string name="settings_visual_effect">视觉效果</string>
+    <string name="settings_visual_effect_blur">模糊</string>
+    <string name="settings_visual_effect_blur_desc">Haze 毛玻璃模糊与细微颗粒</string>
+    <string name="settings_visual_effect_glass">玻璃（实验性）</string>
+    <string name="settings_visual_effect_glass_desc">基于折射的光学效果，包含高光和交互光照</string>
+
     <!-- Accent Color -->
     <string name="settings_accent_color">应用色调</string>
     <string name="settings_accent_dynamic">跟随壁纸取色</string>
@@ -697,6 +704,7 @@
     <string name="help_tips_b8">人物详情页可横向滑动查看多张图片，点击图片可全屏查看并保存到相册</string>
     <string name="help_tips_b9">在线搜索支持中文人名搜索（基于 TMDB），搜索人物时自动填充相关影视作品</string>
     <string name="help_tips_b10">发现页标题栏右侧可点击快速自定义栏目</string>
+    <string name="help_tips_b11">在设置 &gt; 外观 &gt; 视觉效果中可选择 Haze 模糊或实验性 Glass 玻璃；部分设备会自动简化高级光学细节</string>
     <string name="help_vpn">VPN 说明</string>
     <string name="help_vpn_b1">本应用部分功能需要访问国外服务，不开启VPN可能无法正常访问</string>
     <string name="help_vpn_b2">涉及功能：预告片缩略图（YouTube）、Trakt 数据（热门/推荐/期待榜）、TMDB 数据（影视详情/海报）</string>

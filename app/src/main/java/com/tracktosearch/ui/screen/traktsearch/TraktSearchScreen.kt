@@ -1,3 +1,5 @@
+@file:OptIn(dev.chrisbanes.haze.ExperimentalHazeApi::class)
+
 package com.tracktosearch.ui.screen.traktsearch
 
 import androidx.compose.animation.AnimatedVisibility
@@ -110,6 +112,7 @@ import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.util.PersonAvatarColorStore
 import com.tracktosearch.ui.component.EmptyView
+import com.tracktosearch.ui.component.AppGlassStyles
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
@@ -121,6 +124,7 @@ import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.appVisualEffect
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ResourceItemCard
@@ -135,7 +139,6 @@ import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeSampling
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
-import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.launch
@@ -629,22 +632,27 @@ fun TraktSearchScreen(
                     .padding(bottom = 100.dp, end = 16.dp)
             ) {
                 val scrollScope = rememberCoroutineScope()
+                val interactionSource = remember { MutableInteractionSource() }
                 Box(
                     modifier = Modifier
                         .size(58.dp)
                         .clip(CircleShape)
-                        .hazeBlur(
+                        .appVisualEffect(
                             input = HazeInput.Sources(hazeState),
-                            style = HazeBlurStyle {
+                            hazeStyle = HazeBlurStyle {
                                 backgroundColor(hazeSurface.copy(alpha = 0.6f))
                                 blurRadius(20.dp)
                                 noiseFactor(0f)
                             },
-                            sampling = HazeSampling.Adaptive
+                            glassStyle = AppGlassStyles.circularControl(
+                                tint = hazeSurface.copy(alpha = 0.6f)
+                            ),
+                            blurSampling = HazeSampling.Adaptive,
+                            interactionSource = interactionSource
                         )
                         .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), CircleShape)
                         .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
+                            interactionSource = interactionSource,
                             indication = null,
                             onClick = {
                                 view.performHaptic(HapticType.TICK)

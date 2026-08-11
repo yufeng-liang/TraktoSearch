@@ -234,6 +234,7 @@ dependencies {
     implementation(libs.haze)
     implementation(libs.haze.blur)
     implementation(libs.haze.blur.materials)
+    implementation(libs.haze.glass)
 
     // Markdown
     implementation(libs.richtext.commonmark)

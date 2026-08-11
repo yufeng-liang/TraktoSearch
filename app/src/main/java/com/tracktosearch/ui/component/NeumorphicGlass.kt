@@ -1,3 +1,5 @@
+@file:OptIn(dev.chrisbanes.haze.ExperimentalHazeApi::class)
+
 package com.tracktosearch.ui.component
 
 import androidx.compose.foundation.background
@@ -35,8 +37,8 @@ import dev.chrisbanes.haze.HazeSampling
 import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
-import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import dev.chrisbanes.haze.glass.GlassStyle
 
 const val MODAL_BOTTOM_SHEET_HEIGHT_FRACTION = 0.8f
 
@@ -57,11 +59,12 @@ fun Modifier.hazeTopBar(
     isContentUnderTopBar: Boolean = true
 ): Modifier {
     if (!isContentUnderTopBar) return this
-    return hazeBlur(
+    return appVisualEffect(
         input = HazeInput.Sources(state),
-        style = style,
+        hazeStyle = style,
+        glassStyle = AppGlassStyles.topBar(),
         // 渲染降采样：Haze 官方基准显示可降低 5-20% 开销，肉眼几乎不可见
-        sampling = HazeSampling.Adaptive
+        blurSampling = HazeSampling.Adaptive
     )
 }
 
@@ -280,6 +283,7 @@ fun NeumorphicFrostedSurface(
     lightShadowAlpha: Float = if (isDark) 0.10f else 0.85f,
     hazeState: HazeState? = null,
     hazeStyle: HazeBlurStyle? = null,
+    glassStyle: GlassStyle? = null,
     hazeBlurRadius: Dp? = null,
     showHighlight: Boolean = true,
     // 可选：过滤参与模糊的源区域。底部导航等"自身既作 source 又作 effect"的场景
@@ -289,13 +293,18 @@ fun NeumorphicFrostedSurface(
 ) {
     val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin()
     val hazeModifier = if (hazeState != null) {
-        Modifier.hazeBlur(
+        Modifier.appVisualEffect(
             input = HazeInput.Sources(
                 state = hazeState,
                 selection = sourceSelection
             ),
-            style = resolvedHazeStyle,
-            sampling = HazeSampling.Adaptive
+            hazeStyle = resolvedHazeStyle,
+            glassStyle = glassStyle ?: AppGlassStyles.surface(
+                tint = backgroundColor.takeIf { it.alpha > 0f }
+                    ?: MaterialTheme.colorScheme.surface.copy(alpha = 0.16f),
+                shape = shape as? RoundedCornerShape ?: RoundedCornerShape(16.dp)
+            ),
+            blurSampling = HazeSampling.Adaptive
         )
     } else Modifier
 
@@ -340,6 +349,8 @@ fun NeumorphicIconButton(
     size: Dp = 42.dp,
     hazeState: HazeState? = null,
     hazeStyle: HazeBlurStyle? = null,
+    glassStyle: GlassStyle? = null,
+    interactionSource: MutableInteractionSource? = null,
     enabled: Boolean = true,
     lightBorderAlpha: Float = 0.55f,
     buttonStyle: NeumorphicIconButtonStyle = NeumorphicIconButtonStyle.Default,
@@ -348,11 +359,19 @@ fun NeumorphicIconButton(
     val isDetailTopBar = buttonStyle == NeumorphicIconButtonStyle.DetailTopBar
     val shape = CircleShape
     val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin()
+    val resolvedInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
     val hazeModifier = if (hazeState != null) {
-        Modifier.hazeBlur(
+        Modifier.appVisualEffect(
             input = HazeInput.Sources(hazeState),
-            style = resolvedHazeStyle,
-            sampling = HazeSampling.Adaptive
+            hazeStyle = resolvedHazeStyle,
+            glassStyle = glassStyle ?: AppGlassStyles.circularControl(
+                tint = MaterialTheme.colorScheme.surface.copy(
+                    alpha = if (isDetailTopBar) 0.10f else 0.18f
+                ),
+                interactive = enabled
+            ),
+            blurSampling = HazeSampling.Adaptive,
+            interactionSource = resolvedInteractionSource
         )
     } else {
         Modifier
@@ -394,7 +413,7 @@ fun NeumorphicIconButton(
                 shape = shape
             )
             .clickable(
-                interactionSource = remember { MutableInteractionSource() },
+                interactionSource = resolvedInteractionSource,
                 indication = null,
                 enabled = enabled,
                 onClick = onClick

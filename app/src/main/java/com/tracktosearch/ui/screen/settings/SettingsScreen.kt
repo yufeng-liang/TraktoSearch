@@ -112,6 +112,7 @@ import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
 import com.tracktosearch.ui.theme.appSwitchColors
+import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
@@ -182,6 +183,7 @@ fun SettingsScreen(
     val view = LocalView.current
     val currentTheme by viewModel.themeMode.collectAsStateWithLifecycle()
     val currentAccent by viewModel.accentColor.collectAsStateWithLifecycle()
+    val currentVisualEffectMode by viewModel.visualEffectMode.collectAsStateWithLifecycle()
     val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
     val currentDefaultTab by viewModel.defaultTab.collectAsStateWithLifecycle()
     // 共享元素转场动画开关:读 AppNavigation 顶层 collect 的值(App 启动即开始收集,
@@ -310,6 +312,7 @@ fun SettingsScreen(
     val exportImportState by viewModel.exportImportState.collectAsStateWithLifecycle()
     var showThemeDialog by remember { mutableStateOf(false) }
     var showAccentColorDialog by remember { mutableStateOf(false) }
+    var showVisualEffectDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showDefaultTabDialog by remember { mutableStateOf(false) }
     var showChangelogDialog by remember { mutableStateOf(false) }
@@ -447,6 +450,10 @@ fun SettingsScreen(
                     }
                     val accentName = currentAccent?.let { stringResource(it.labelResId) }
                         ?: stringResource(R.string.settings_accent_dynamic)
+                    val visualEffectName = when (currentVisualEffectMode) {
+                        VisualEffectMode.GLASS -> stringResource(R.string.settings_visual_effect_glass)
+                        VisualEffectMode.BLUR -> stringResource(R.string.settings_visual_effect_blur)
+                    }
                     val languageName = when (currentLanguage) {
                         LanguageStorage.LANGUAGE_CHINESE -> stringResource(R.string.language_chinese)
                         LanguageStorage.LANGUAGE_ENGLISH -> stringResource(R.string.language_english)
@@ -481,6 +488,21 @@ fun SettingsScreen(
                             onClick = { showAccentColorDialog = true },
                             containerColor = Color.Transparent
                         )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SettingsCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Rounded.AutoAwesome,
+                            title = stringResource(R.string.settings_visual_effect),
+                            subtitle = visualEffectName,
+                            mergeTitleAndSubtitle = true,
+                            onClick = { showVisualEffectDialog = true },
+                            containerColor = Color.Transparent
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
@@ -882,6 +904,17 @@ fun SettingsScreen(
             currentAccent = currentAccent,
             onAccentSelected = { viewModel.setAccentColor(it); showAccentColorDialog = false },
             onDismiss = { showAccentColorDialog = false }
+        )
+    }
+
+    if (showVisualEffectDialog) {
+        VisualEffectSelectionDialog(
+            currentMode = currentVisualEffectMode,
+            onModeSelected = {
+                viewModel.setVisualEffectMode(it)
+                showVisualEffectDialog = false
+            },
+            onDismiss = { showVisualEffectDialog = false }
         )
     }
 

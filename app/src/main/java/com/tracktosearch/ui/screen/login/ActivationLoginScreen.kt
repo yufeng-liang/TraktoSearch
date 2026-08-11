@@ -1,3 +1,5 @@
+@file:OptIn(dev.chrisbanes.haze.ExperimentalHazeApi::class)
+
 package com.tracktosearch.ui.screen.login
 
 import android.net.Uri
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -66,14 +69,14 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.OAuthCallback
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.AppGlassStyles
 import com.tracktosearch.ui.component.DoubanLogo
+import com.tracktosearch.ui.component.appVisualEffect
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.monetDoubanGreen
 import com.tracktosearch.ui.theme.onMonetDoubanGreen
 import dev.chrisbanes.haze.HazeInput
-import dev.chrisbanes.haze.HazeSampling
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.flow.filter
@@ -307,6 +310,7 @@ internal fun ActivationSecondaryActions(
 ) {
     val doubanGreen = MaterialTheme.colorScheme.monetDoubanGreen()
     val doubanButtonShape = RoundedCornerShape(14.dp)
+    val doubanInteractionSource = remember { MutableInteractionSource() }
     val doubanHazeStyle = HazeMaterials.thin(
         doubanGreen.copy(alpha = if (doubanEnabled) 0.72f else 0.24f)
     )
@@ -320,10 +324,15 @@ internal fun ActivationSecondaryActions(
                 .fillMaxWidth()
                 .height(48.dp)
                 .clip(doubanButtonShape)
-                .hazeBlur(
+                .appVisualEffect(
                     input = HazeInput.Sources(hazeState),
-                    style = doubanHazeStyle,
-                    sampling = HazeSampling.Adaptive
+                    hazeStyle = doubanHazeStyle,
+                    glassStyle = AppGlassStyles.control(
+                        tint = doubanGreen.copy(alpha = if (doubanEnabled) 0.72f else 0.24f),
+                        shape = doubanButtonShape,
+                        interactive = doubanEnabled
+                    ),
+                    interactionSource = doubanInteractionSource
                 ),
             shape = doubanButtonShape,
             colors = ButtonDefaults.buttonColors(
@@ -331,7 +340,8 @@ internal fun ActivationSecondaryActions(
                 contentColor = MaterialTheme.colorScheme.onMonetDoubanGreen(),
                 disabledContainerColor = Color.Transparent,
                 disabledContentColor = MaterialTheme.colorScheme.onMonetDoubanGreen().copy(alpha = 0.38f)
-            )
+            ),
+            interactionSource = doubanInteractionSource
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -444,10 +454,16 @@ private fun ActivationCard(
             .fillMaxWidth()
             .clip(shape)
             .zIndex(1f)
-            .hazeBlur(
+            .appVisualEffect(
                 input = HazeInput.Sources(hazeState),
-                style = hazeStyle,
-                sampling = HazeSampling.Adaptive
+                hazeStyle = hazeStyle,
+                glassStyle = AppGlassStyles.surface(
+                    tint = MaterialTheme.colorScheme.surface.copy(alpha = 0.48f),
+                    shape = shape,
+                    edgeSoftness = 8.dp,
+                    specularIntensity = 0.46f,
+                    ambientResponse = 0.50f
+                )
             )
             .background(Color.Transparent, shape)
             .border(BorderStroke(1.dp, accent.copy(alpha = 0.30f)), shape)

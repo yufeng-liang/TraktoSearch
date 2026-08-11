@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.glance.appwidget.updateAll
 import com.tracktosearch.ui.theme.MonetAccent
+import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.widget.QuickSearchWidget
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -37,12 +38,16 @@ class ThemeStorage @Inject constructor(
     private val _accentColor = MutableStateFlow<MonetAccent?>(MonetAccent.VINTAGE_TICKET)
     val accentColor: StateFlow<MonetAccent?> = _accentColor.asStateFlow()
 
+    private val _visualEffectMode = MutableStateFlow(VisualEffectMode.BLUR)
+    val visualEffectMode: StateFlow<VisualEffectMode> = _visualEffectMode.asStateFlow()
+
     init {
         // 预加载:从 DataStore 读取首值填入 StateFlow,消除 stateIn 默认值跳变
         scope.launch {
             val prefs = context.themeDataStore.data.first()
             _themeMode.value = prefs[KEY_THEME_MODE] ?: MODE_SYSTEM
             _accentColor.value = decodeAccentName(prefs[KEY_ACCENT_COLOR])
+            _visualEffectMode.value = VisualEffectMode.fromStorageValue(prefs[KEY_VISUAL_EFFECT_MODE])
         }
     }
 
@@ -71,6 +76,13 @@ class ThemeStorage @Inject constructor(
         }
     }
 
+    suspend fun setVisualEffectMode(mode: VisualEffectMode) {
+        context.themeDataStore.edit { prefs ->
+            prefs[KEY_VISUAL_EFFECT_MODE] = mode.storageValue
+        }
+        _visualEffectMode.value = mode
+    }
+
     suspend fun readAccentColorSnapshot(): MonetAccent? {
         val prefs = context.themeDataStore.data.first()
         return decodeAccentName(prefs[KEY_ACCENT_COLOR])
@@ -92,5 +104,6 @@ class ThemeStorage @Inject constructor(
         private const val DYNAMIC_ACCENT = "dynamic"
         private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
         private val KEY_ACCENT_COLOR = stringPreferencesKey("accent_color")
+        private val KEY_VISUAL_EFFECT_MODE = stringPreferencesKey("visual_effect_mode")
     }
 }

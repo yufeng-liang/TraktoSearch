@@ -1,3 +1,5 @@
+@file:OptIn(dev.chrisbanes.haze.ExperimentalHazeApi::class)
+
 package com.tracktosearch.ui.component
 
 import androidx.compose.foundation.background
@@ -32,7 +34,6 @@ import androidx.compose.ui.unit.sp
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeSampling
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 
 /**
@@ -81,10 +82,16 @@ fun GlassSearchBar(
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(28.dp))
             .then(
                 if (hazeState != null) {
-                    Modifier.hazeBlur(
+                    Modifier.appVisualEffect(
                         input = HazeInput.Sources(hazeState),
-                        style = hazeStyle,
-                        sampling = HazeSampling.Adaptive
+                        hazeStyle = hazeStyle,
+                        glassStyle = AppGlassStyles.control(
+                            tint = containerColor,
+                            shape = RoundedCornerShape(28.dp),
+                            interactive = true
+                        ),
+                        blurSampling = HazeSampling.Adaptive,
+                        interactionSource = interactionSource
                     )
                 } else Modifier
             )
@@ -93,7 +100,11 @@ fun GlassSearchBar(
                 if (isEditable) {
                     Modifier
                 } else {
-                    Modifier.clickable(onClick = onClick)
+                    Modifier.clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = onClick
+                    )
                 }
             )
             .padding(horizontal = 16.dp, vertical = 12.dp)

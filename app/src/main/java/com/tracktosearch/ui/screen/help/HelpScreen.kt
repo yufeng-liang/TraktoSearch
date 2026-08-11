@@ -288,6 +288,7 @@ fun HelpScreen(
                         HelpBullet(stringResource(R.string.help_tips_b8))
                         HelpBullet(stringResource(R.string.help_tips_b9))
                         HelpBullet(stringResource(R.string.help_tips_b10))
+                        HelpBullet(stringResource(R.string.help_tips_b11))
                     }
                 }
 

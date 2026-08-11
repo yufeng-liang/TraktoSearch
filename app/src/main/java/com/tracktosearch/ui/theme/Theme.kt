@@ -167,6 +167,7 @@ private fun monetColorScheme(seed: Color, dark: Boolean): androidx.compose.mater
 fun TraktoSearchTheme(
     themeMode: String = "system",
     accentColor: MonetAccent? = null,
+    visualEffectMode: VisualEffectMode = VisualEffectMode.BLUR,
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (themeMode) {
@@ -210,6 +211,7 @@ fun TraktoSearchTheme(
         // 统一覆盖 Haze 未显式设置时的噪点默认值，显式 noiseFactor(0f) 仍然优先。
         CompositionLocalProvider(
             LocalHazeBlurStyle provides AppHazeDefaultBlurStyle,
+            LocalVisualEffectMode provides visualEffectMode,
             content = content
         )
     }
