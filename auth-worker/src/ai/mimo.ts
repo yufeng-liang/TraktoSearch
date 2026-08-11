@@ -9,6 +9,7 @@ export const MIMO_MODELS = [
     'mimo-v2.5-pro',
     'mimo-v2.5-asr',
     'mimo-v2.5-tts',
+    'mimo-v2.5-tts-voicedesign',
     'mimo-v2.5-tts-voiceclone',
 ] as const;
 
@@ -63,15 +64,22 @@ export async function callMimoJson(
 
 export async function callMimoAudio(
     env: MimoEnvironment,
-    model: Extract<MimoModel, 'mimo-v2.5-tts' | 'mimo-v2.5-tts-voiceclone'>,
+    model: Extract<MimoModel, 'mimo-v2.5-tts' | 'mimo-v2.5-tts-voicedesign' | 'mimo-v2.5-tts-voiceclone'>,
     messages: MimoMessage[],
-    audio: { format: 'wav' | 'mp3'; voice?: string },
+    audio: { format: 'wav' | 'mp3'; voice?: string; optimizeTextPreview?: boolean },
 ): Promise<MimoAudioResult | null> {
     validateMimoModel(model);
+    const audioPayload: Record<string, unknown> = { format: audio.format };
+    if (model !== 'mimo-v2.5-tts-voicedesign' && audio.voice) {
+        audioPayload.voice = audio.voice;
+    }
+    if (audio.optimizeTextPreview !== undefined) {
+        audioPayload.optimize_text_preview = audio.optimizeTextPreview;
+    }
     const payload = await callMimoPayload(env, {
         model,
         messages,
-        audio,
+        audio: audioPayload,
         stream: false,
     });
     if (!payload) return null;

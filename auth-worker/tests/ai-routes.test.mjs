@@ -105,11 +105,16 @@ test('AI protected routes still reject missing JWT', async () => {
     }
 });
 
-test('guest can audition a ready character through the main router without consuming quota', async () => {
+test('guest audition uses voicedesign MP3 request without consuming quota', async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async (_input, init) => {
         const requestBody = JSON.parse(init.body);
-        assert.equal(requestBody.model, 'mimo-v2.5-tts-voiceclone');
+        assert.equal(requestBody.model, 'mimo-v2.5-tts-voicedesign');
+        assert.equal(requestBody.audio.format, 'mp3');
+        assert.equal(requestBody.audio.optimize_text_preview, false);
+        assert.match(requestBody.messages[0].content, /角色|场景|指导/);
+        assert.equal(requestBody.messages[1].role, 'assistant');
+        assert.equal(requestBody.messages[1].content, '到！你的片单有点东西。');
         return new Response(JSON.stringify({
             choices: [{ message: { audio: { data: 'AA==', transcript: '到！' } } }],
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -125,19 +130,59 @@ test('guest can audition a ready character through the main router without consu
                     action: 'tts',
                     characterId: 'usagi',
                     text: '到！你的片单有点东西。',
+                    scene: 'AUDITION',
                     sessionId: 'guest-audition-session',
                 }),
             }),
             createTestEnv({
                 MIMO_API_KEY: 'test-mimo-key',
-                AI_TEST_VOICE_SAMPLE_USAGI: 'data:audio/wav;base64,AA==',
+                AI_TEST_VOICE_DESIGN_READY: true,
             }),
             { waitUntil() {} },
         );
         const json = await response.json();
         assert.equal(response.status, 200);
-        assert.equal(json.data.audioDataUrl, 'data:audio/wav;base64,AA==');
+        assert.equal(json.data.audioDataUrl, 'data:audio/mpeg;base64,AA==');
         assert.equal(json.quota, undefined);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('guest TTS rejects an unknown scene and ignores legacy style override', async () => {
+    const env = createTestEnv({
+        MIMO_API_KEY: 'test-mimo-key',
+        AI_TEST_VOICE_DESIGN_READY: true,
+    });
+    const invalid = await call('/api/ai/tts', {
+        method: 'POST',
+        body: { action: 'tts', characterId: 'usagi', text: '到！你的片单有点东西。', scene: 'UNKNOWN' },
+        env,
+    });
+    assert.equal(invalid.response.status, 400);
+    assert.equal(invalid.json.code, 'INVALID_SCENE');
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (_input, init) => {
+        const requestBody = JSON.parse(init.body);
+        assert.doesNotMatch(JSON.stringify(requestBody.messages), /这是用户自定义的音色/);
+        return new Response(JSON.stringify({
+            choices: [{ message: { audio: { data: 'AA==', transcript: '到！你的片单有点东西。' } } }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+    try {
+        const valid = await call('/api/ai/tts', {
+            method: 'POST',
+            body: {
+                action: 'tts',
+                characterId: 'usagi',
+                text: '到！你的片单有点东西。',
+                scene: 'AUDITION',
+                style: '这是用户自定义的音色',
+            },
+            env,
+        });
+        assert.equal(valid.response.status, 200);
     } finally {
         globalThis.fetch = originalFetch;
     }
@@ -151,7 +196,7 @@ test('guest TTS only accepts the character audition text', async () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'tts', characterId: 'usagi', text: '任意文本' }),
         }),
-        createTestEnv({ AI_TEST_VOICE_SAMPLE_USAGI: 'data:audio/wav;base64,AA==' }),
+        createTestEnv({ AI_TEST_VOICE_DESIGN_READY: true }),
         { waitUntil() {} },
     );
     const json = await response.json();
@@ -170,7 +215,7 @@ test('authenticated TTS goes through the quota path instead of the guest path', 
             },
             body: JSON.stringify({ action: 'tts', characterId: 'usagi', text: '到！', sessionId: 'auth-tts-session' }),
         }),
-        createTestEnv({ AI_TEST_VOICE_SAMPLE_USAGI: 'data:audio/wav;base64,AA==' }),
+        createTestEnv({ AI_TEST_VOICE_DESIGN_READY: true }),
         { waitUntil() {} },
     );
     const json = await response.json();
@@ -203,7 +248,7 @@ test('AI route rejects malformed JSON with a stable error', async () => {
     assert.equal(json.code, 'INVALID_JSON');
 });
 
-test('character catalog contains all seven spirits and marks unbound voices as preparing', async () => {
+test('character catalog contains all seven spirits and hides full voice design prompts', async () => {
     const { response, json } = await call('/api/ai/characters', { env: createTestEnv() });
 
     assert.equal(response.status, 200);
@@ -213,26 +258,17 @@ test('character catalog contains all seven spirits and marks unbound voices as p
         ['chiikawa', 'hachiware', 'usagi', 'flying-squirrel', 'shisa', 'kurimanju', 'rakko'],
     );
     assert.ok(json.data.characters.every(character => character.voiceStatus === 'preparing'));
+    assert.ok(json.data.characters.every(character => character.voiceDesignPrompt === undefined));
 });
 
-test('character readiness checks the matching R2 object instead of only the binding', async () => {
-    const bucket = {
-        async head(key) {
-            return key === 'usagi.wav' ? { size: 3 } : null;
-        },
-        async get() {
-            return null;
-        },
-    };
+test('character readiness follows MiMo voicedesign configuration without voice samples', async () => {
     const { response, json } = await call('/api/ai/characters', {
-        env: createTestEnv({ AI_VOICE_SAMPLES: bucket }),
+        env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
     });
 
     assert.equal(response.status, 200);
     const statuses = Object.fromEntries(json.data.characters.map(character => [character.id, character.voiceStatus]));
-    assert.equal(statuses.usagi, 'ready');
-    assert.equal(statuses.chiikawa, 'preparing');
-    assert.equal(statuses.rakko, 'preparing');
+    assert.ok(Object.values(statuses).every(status => status === 'ready'));
 });
 
 test('production mode ignores test-only voice samples when checking readiness', async () => {
@@ -330,12 +366,15 @@ test('activation consumes one recording and returns the role confirmation', asyn
             sessionId: 'activation-session',
             audioDataUrl: 'data:audio/wav;base64,AA==',
         },
-        env: createTestEnv({ AI_TEST_VOICE_SAMPLE_USAGI: 'data:audio/wav;base64,AA==' }),
+        env: createTestEnv({
+            AI_TEST_VOICE_DESIGN_READY: true,
+            AI_TEST_TRANSCRIPT: '乌萨奇',
+        }),
     });
 
     assert.equal(response.status, 200);
     assert.equal(json.data.activated, true);
-    assert.equal(json.data.activationPhrase, '到！');
+    assert.equal(json.data.activationPhrase, '到——！');
     assert.equal(json.data.voiceStatus, 'ready');
 });
 
@@ -540,8 +579,7 @@ test('session quota stops the eighth uncached interaction', async () => {
 });
 
 test('tts consumes quota and stops on the eighth call', async () => {
-    // 测试样本是唯一允许绕过 R2 对象检查的测试例外。
-    const env = createTestEnv({ AI_TEST_VOICE_SAMPLE_USAGI: 'data:audio/wav;base64,AA==' });
+    const env = createTestEnv({ AI_TEST_VOICE_DESIGN_READY: true });
     for (let attempt = 0; attempt < 7; attempt += 1) {
         const result = await call('/api/ai/tts', {
             method: 'POST',

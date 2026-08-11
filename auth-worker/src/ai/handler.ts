@@ -6,8 +6,9 @@ import {
     characterVoiceStatus,
     findCharacter,
     matchesActivationName,
-    readVoiceSample,
+    TTS_SCENES,
     type CharacterConfig,
+    type TtsScene,
 } from './characters.ts';
 import {
     callMimoAudio,
@@ -177,12 +178,12 @@ async function handleActivate(
         }, requestId);
     }
 
-    const audio = await synthesizeShortReply(env, character, '到！');
+    const audio = await synthesizeShortReply(env, character, character.activationPhrase, 'ACTIVATION_ACK');
     return successResponse({
         activated: true,
         characterId: character.id,
         characterName: character.name,
-        activationPhrase: '到！',
+        activationPhrase: character.activationPhrase,
         voiceStatus,
         audio: toPublicAudio(audio),
         quota: publicQuota(quota),
@@ -198,6 +199,7 @@ async function handleTts(
     const character = requireCharacter(body);
     const text = requiredText(body, ['text', 'content'], 'TTS text');
     if (text.length > 500) throw new AppError('INVALID_REQUEST', 'TTS text is too long', 400);
+    const scene = readTtsScene(body.scene, payload ? 'GREETING' : 'AUDITION');
     if (!payload && text !== character.previewText) {
         throw new AppError('FORBIDDEN', 'Guest TTS is limited to the audition text', 403);
     }
@@ -208,12 +210,9 @@ async function handleTts(
     const quota = payload
         ? await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body))
         : null;
-    const audio = await synthesizeShortReply(
-        env,
-        character,
-        text,
-        typeof body.style === 'string' ? body.style.slice(0, 300) : undefined,
-    );
+    // style 仅为旧客户端兼容保留，不能覆盖服务端的角色声线和场景指导。
+    void body.style;
+    const audio = await synthesizeShortReply(env, character, text, scene);
     return successResponse(toPublicAudio(audio), requestId, quota ? publicQuota(quota) : undefined);
 }
 
@@ -242,11 +241,17 @@ async function handleGreeting(
         characterName: character.name,
         nickname,
         greeting: generated.greeting,
+        spokenText: buildGreetingSpokenText(character, generated.greeting),
         nicknameMeaning: generated.nicknameMeaning,
         comment: generated.comment,
         text: `${generated.greeting} ${generated.nicknameMeaning} ${generated.comment}`,
         audio: includeAudio
-            ? toPublicAudio(await synthesizeShortReply(env, character, generated.greeting))
+            ? toPublicAudio(await synthesizeShortReply(
+                env,
+                character,
+                buildGreetingSpokenText(character, generated.greeting),
+                'GREETING',
+            ))
             : null,
     };
     await writeAiCache(env, cacheKey, response, 30 * 24 * 60 * 60, payload.sub, 'greeting');
@@ -448,18 +453,39 @@ async function synthesizeShortReply(
     env: AiEnvironment,
     character: CharacterConfig,
     text: string,
-    style?: string,
+    scene: TtsScene,
 ): Promise<MimoAudioResult | null> {
     if (await characterVoiceStatus(env, character) !== 'ready') return null;
-    const voice = await readVoiceSample(env, character);
-    if (!voice) return null;
-    return callMimoAudio(env, 'mimo-v2.5-tts-voiceclone', [
+    return callMimoAudio(env, 'mimo-v2.5-tts-voicedesign', [
         {
             role: 'user',
-            content: style || `请用自然、符合${character.name}设定的中文语气说话：${character.personality}`,
+            content: buildVoiceDesignPrompt(character, scene),
         },
         { role: 'assistant', content: text },
-    ], { format: 'wav', voice });
+    ], { format: 'mp3', optimizeTextPreview: false });
+}
+
+function buildVoiceDesignPrompt(character: CharacterConfig, scene: TtsScene): string {
+    return [
+        `角色：${character.name}`,
+        `基础音色：${character.voiceDesignPrompt}`,
+        `场景：${scene}`,
+        `场景指导：${character.sceneGuidance[scene]}`,
+        '固定指导：使用中文普通话；保持角色基础声线不变；只朗读 assistant 消息中的原文，不增词、不删词、不解释提示词。',
+    ].join('。');
+}
+
+function buildGreetingSpokenText(character: CharacterConfig, greeting: string): string {
+    const catchphrase = character.greetingCatchphrase.trim();
+    return catchphrase ? `${greeting.trim()} ${catchphrase}`.trim() : greeting.trim();
+}
+
+function readTtsScene(value: unknown, fallback: TtsScene): TtsScene {
+    if (value === undefined || value === null || value === '') return fallback;
+    if (typeof value !== 'string' || !TTS_SCENES.includes(value as TtsScene)) {
+        throw new AppError('INVALID_SCENE', 'Unsupported TTS scene', 400);
+    }
+    return value as TtsScene;
 }
 
 function toPublicAudio(audio: MimoAudioResult | null): Record<string, unknown> | null {
