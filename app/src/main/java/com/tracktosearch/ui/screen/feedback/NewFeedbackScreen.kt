@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.feedback
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -35,6 +36,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.ZoomableImageOverlay
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -169,6 +174,7 @@ fun NewFeedbackScreen(
             ScreenshotRow(
                 screenshots = screenshots,
                 enabled = !isSubmitting,
+                sharedKeyPrefix = "fb-new",
                 onAddClick = { pickImageLauncher.launch("image/*") },
                 onRemoveClick = { index -> screenshots = screenshots.toMutableList().apply { removeAt(index) } },
                 onImageClick = { index -> fullscreenIndex = index },
@@ -237,25 +243,25 @@ fun NewFeedbackScreen(
     }
 
     // 截图全屏查看
-    fullscreenIndex?.let { index ->
-        if (screenshots.isNotEmpty()) {
-            ScreenshotFullscreenOverlay(
-                images = screenshots.map { it.first },
-                initialIndex = index.coerceIn(0, screenshots.size - 1),
-                onDismiss = { fullscreenIndex = null }
-            )
-        }
-    }
+    ZoomableImageOverlay(
+        visible = fullscreenIndex != null && screenshots.isNotEmpty(),
+        images = screenshots.map { it.first },
+        initialIndex = fullscreenIndex?.coerceIn(0, screenshots.size - 1) ?: 0,
+        sharedKeyPrefix = "fb-new",
+        onDismiss = { fullscreenIndex = null }
+    )
 }
 
 /**
  * 截图行：支持添加、删除、点击查看大图、长按拖动排序（跟随手指 + 插入动画）。
  * 使用 sh.calvin.reorderable 库实现：被拖项跟随手指平移，其他项通过 animateItem 平滑插入。
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun ScreenshotRow(
     screenshots: List<Pair<ByteArray, String>>,
     enabled: Boolean,
+    sharedKeyPrefix: String? = null,
     onAddClick: () -> Unit,
     onRemoveClick: (Int) -> Unit,
     onImageClick: (Int) -> Unit,
@@ -305,7 +311,19 @@ private fun ScreenshotRow(
                         },
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(80.dp)
+                        modifier = Modifier
+                            .size(80.dp)
+                            .then(
+                                if (sharedKeyPrefix != null && LocalSharedTransitionScope.current != null && LocalAnimatedVisibilityScope.current != null && LocalSharedTransitionEnabled.current) {
+                                    val scope = LocalSharedTransitionScope.current
+                                    with(scope!!) {
+                                        Modifier.sharedElement(
+                                            rememberSharedContentState(key = "$sharedKeyPrefix-$index"),
+                                            animatedVisibilityScope = LocalAnimatedVisibilityScope.current!!
+                                        )
+                                    }
+                                } else Modifier
+                            )
                     )
                     // 右上角删除按钮
                     if (enabled) {

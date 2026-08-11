@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.feedback
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.repeatable
@@ -45,6 +46,10 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.feedback.FeedbackReply
 import com.tracktosearch.data.remote.feedback.screenshotUrl
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.ZoomableImageOverlay
 
 private const val MAX_REPLY_SCREENSHOTS = 5
 
@@ -170,7 +175,7 @@ fun FeedbackDetailScreen(
                         contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        item(key = "original") { OriginalFeedbackCard(feedback = feedback, onScreenshotClick = { urls, index -> fullscreenUrls = urls; fullscreenIndex = index }) }
+                        item(key = "original") { OriginalFeedbackCard(feedback = feedback, sharedKeyPrefix = "fb-conv-$feedbackId", onScreenshotClick = { urls, index -> fullscreenUrls = urls; fullscreenIndex = index }) }
                         if (replies.isNotEmpty() || state.isRefreshing) {
                             item(key = "conv_title") {
                                 Row(
@@ -193,7 +198,7 @@ fun FeedbackDetailScreen(
                                 }
                             }
                         }
-                        items(replies, key = { it.id }) { reply -> ConversationBubble(reply = reply, highlight = highlightReplyId == reply.id, onHighlightDone = { if (highlightReplyId == reply.id) highlightReplyId = null }, onScreenshotClick = { urls, index -> fullscreenUrls = urls; fullscreenIndex = index }) }
+                        items(replies, key = { it.id }) { reply -> ConversationBubble(reply = reply, sharedKeyPrefix = "fb-reply-${reply.id}", highlight = highlightReplyId == reply.id, onHighlightDone = { if (highlightReplyId == reply.id) highlightReplyId = null }, onScreenshotClick = { urls, index -> fullscreenUrls = urls; fullscreenIndex = index }) }
                     }
                     if (isClosed) {
                         Surface(
@@ -211,19 +216,34 @@ fun FeedbackDetailScreen(
                             )
                         }
                     } else {
-                        ReplyBar(text = replyText, onTextChange = { if (it.length <= 2000) replyText = it }, screenshots = replyScreenshots, enabled = !isReplying, onAddScreenshot = { pickImageLauncher.launch("image/*") }, onRemoveScreenshot = { idx -> replyScreenshots = replyScreenshots.toMutableList().apply { removeAt(idx) } }, onScreenshotClick = { idx -> replyFullscreenIndex = idx }, onSend = { if (replyText.isNotBlank()) { viewModel.reply(feedbackId = feedbackId, content = replyText, screenshotBytes = replyScreenshots.map { it.first }, screenshotMimeTypes = replyScreenshots.map { it.second }) } }, isSending = isReplying, replyState = replyState)
+                        ReplyBar(text = replyText, onTextChange = { if (it.length <= 2000) replyText = it }, screenshots = replyScreenshots, sharedKeyPrefix = "fb-compose", enabled = !isReplying, onAddScreenshot = { pickImageLauncher.launch("image/*") }, onRemoveScreenshot = { idx -> replyScreenshots = replyScreenshots.toMutableList().apply { removeAt(idx) } }, onScreenshotClick = { idx -> replyFullscreenIndex = idx }, onSend = { if (replyText.isNotBlank()) { viewModel.reply(feedbackId = feedbackId, content = replyText, screenshotBytes = replyScreenshots.map { it.first }, screenshotMimeTypes = replyScreenshots.map { it.second }) } }, isSending = isReplying, replyState = replyState)
                     }
                 }
             }
         }
     }
 
-    fullscreenIndex?.let { index -> if (fullscreenUrls.isNotEmpty()) { ScreenshotFullscreenOverlay(images = fullscreenUrls, initialIndex = index, onDismiss = { fullscreenIndex = null }) } }
-    replyFullscreenIndex?.let { index -> if (replyScreenshots.isNotEmpty()) { ScreenshotFullscreenOverlay(images = replyScreenshots.map { it.first }, initialIndex = index.coerceIn(0, replyScreenshots.size - 1), onDismiss = { replyFullscreenIndex = null }) } }
+    // 原帖截图全屏
+    ZoomableImageOverlay(
+        visible = fullscreenIndex != null && fullscreenUrls.isNotEmpty(),
+        images = fullscreenUrls,
+        initialIndex = fullscreenIndex?.coerceIn(0, fullscreenUrls.size - 1) ?: 0,
+        sharedKeyPrefix = "fb-conv-$feedbackId",
+        onDismiss = { fullscreenIndex = null }
+    )
+    // 回复框预览全屏
+    ZoomableImageOverlay(
+        visible = replyFullscreenIndex != null && replyScreenshots.isNotEmpty(),
+        images = replyScreenshots.map { it.first },
+        initialIndex = replyFullscreenIndex?.coerceIn(0, replyScreenshots.size - 1) ?: 0,
+        sharedKeyPrefix = "fb-compose",
+        onDismiss = { replyFullscreenIndex = null }
+    )
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun OriginalFeedbackCard(feedback: com.tracktosearch.data.remote.feedback.FeedbackDetail, onScreenshotClick: (urls: List<String>, index: Int) -> Unit) {
+private fun OriginalFeedbackCard(feedback: com.tracktosearch.data.remote.feedback.FeedbackDetail, sharedKeyPrefix: String? = null, onScreenshotClick: (urls: List<String>, index: Int) -> Unit) {
     val context = LocalContext.current
     val screenshots = parseScreenshots(feedback.screenshots)
 
@@ -274,6 +294,16 @@ private fun OriginalFeedbackCard(feedback: com.tracktosearch.data.remote.feedbac
                     items(screenshots, key = { it }) { key ->
                         val index = screenshots.indexOf(key)
                         val url = screenshotUrl(key)
+                        // sharedKeyPrefix 非空且共享转场开启时,与全屏端 "$sharedKeyPrefix-$page" 配对,实现缩放转场
+                        val sharedModifier = if (sharedKeyPrefix != null && LocalSharedTransitionScope.current != null && LocalAnimatedVisibilityScope.current != null && LocalSharedTransitionEnabled.current) {
+                            val scope = LocalSharedTransitionScope.current
+                            with(scope!!) {
+                                Modifier.sharedElement(
+                                    rememberSharedContentState(key = "$sharedKeyPrefix-$index"),
+                                    animatedVisibilityScope = LocalAnimatedVisibilityScope.current!!
+                                )
+                            }
+                        } else Modifier
                         Box(
                             modifier = Modifier
                                 .width(112.dp)
@@ -291,7 +321,7 @@ private fun OriginalFeedbackCard(feedback: com.tracktosearch.data.remote.feedbac
                                 },
                                 contentDescription = stringResource(R.string.feedback_screenshots),
                                 contentScale = ContentScale.Fit,
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier.fillMaxSize().then(sharedModifier)
                             )
                         }
                     }
@@ -341,8 +371,9 @@ private fun OriginalFeedbackCard(feedback: com.tracktosearch.data.remote.feedbac
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun ConversationBubble(reply: FeedbackReply, highlight: Boolean, onHighlightDone: () -> Unit, onScreenshotClick: (urls: List<String>, index: Int) -> Unit) {
+private fun ConversationBubble(reply: FeedbackReply, sharedKeyPrefix: String? = null, highlight: Boolean, onHighlightDone: () -> Unit, onScreenshotClick: (urls: List<String>, index: Int) -> Unit) {
     val context = LocalContext.current
     val isDeveloper = reply.author_role == "developer"
     val arrangement = if (isDeveloper) Arrangement.Start else Arrangement.End
@@ -397,6 +428,16 @@ private fun ConversationBubble(reply: FeedbackReply, highlight: Boolean, onHighl
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             items(screenshots, key = { it }) { key ->
                                 val url = screenshotUrl(key)
+                                // sharedKeyPrefix 非空且共享转场开启时,与全屏端 "$sharedKeyPrefix-$page" 配对,实现缩放转场
+                                val sharedModifier = if (sharedKeyPrefix != null && LocalSharedTransitionScope.current != null && LocalAnimatedVisibilityScope.current != null && LocalSharedTransitionEnabled.current) {
+                                    val scope = LocalSharedTransitionScope.current
+                                    with(scope!!) {
+                                        Modifier.sharedElement(
+                                            rememberSharedContentState(key = "$sharedKeyPrefix-${screenshots.indexOf(key)}"),
+                                            animatedVisibilityScope = LocalAnimatedVisibilityScope.current!!
+                                        )
+                                    }
+                                } else Modifier
                                 AsyncImage(
                                     model = remember(url) {
                                         ImageRequest.Builder(context).data(url).crossfade(true).build()
@@ -407,6 +448,7 @@ private fun ConversationBubble(reply: FeedbackReply, highlight: Boolean, onHighl
                                         .size(64.dp)
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.4f))
+                                        .then(sharedModifier)
                                         .clickable {
                                             onScreenshotClick(screenshots.map(::screenshotUrl), screenshots.indexOf(key))
                                         }
@@ -442,8 +484,9 @@ private fun ConversationBubble(reply: FeedbackReply, highlight: Boolean, onHighl
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun ReplyBar(text: String, onTextChange: (String) -> Unit, screenshots: List<Pair<ByteArray, String>>, enabled: Boolean, onAddScreenshot: () -> Unit, onRemoveScreenshot: (Int) -> Unit, onScreenshotClick: (Int) -> Unit, onSend: () -> Unit, isSending: Boolean, replyState: FeedbackViewModel.ReplyState) {
+private fun ReplyBar(text: String, onTextChange: (String) -> Unit, screenshots: List<Pair<ByteArray, String>>, sharedKeyPrefix: String? = null, enabled: Boolean, onAddScreenshot: () -> Unit, onRemoveScreenshot: (Int) -> Unit, onScreenshotClick: (Int) -> Unit, onSend: () -> Unit, isSending: Boolean, replyState: FeedbackViewModel.ReplyState) {
     val context = LocalContext.current
     Surface(
         modifier = Modifier
@@ -459,6 +502,16 @@ private fun ReplyBar(text: String, onTextChange: (String) -> Unit, screenshots: 
             if (screenshots.isNotEmpty()) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     itemsIndexed(screenshots, key = { _, pair -> pair.first }) { index, (bytes, _) ->
+                        // sharedKeyPrefix 非空且共享转场开启时,与全屏端 "$sharedKeyPrefix-$page" 配对,实现缩放转场
+                        val sharedModifier = if (sharedKeyPrefix != null && LocalSharedTransitionScope.current != null && LocalAnimatedVisibilityScope.current != null && LocalSharedTransitionEnabled.current) {
+                            val scope = LocalSharedTransitionScope.current
+                            with(scope!!) {
+                                Modifier.sharedElement(
+                                    rememberSharedContentState(key = "$sharedKeyPrefix-$index"),
+                                    animatedVisibilityScope = LocalAnimatedVisibilityScope.current!!
+                                )
+                            }
+                        } else Modifier
                         Box(
                             modifier = Modifier
                                 .size(64.dp)
@@ -472,7 +525,7 @@ private fun ReplyBar(text: String, onTextChange: (String) -> Unit, screenshots: 
                                 },
                                 contentDescription = stringResource(R.string.feedback_screenshots),
                                 contentScale = ContentScale.Fit,
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier.fillMaxSize().then(sharedModifier)
                             )
                             if (enabled) {
                                 IconButton(
