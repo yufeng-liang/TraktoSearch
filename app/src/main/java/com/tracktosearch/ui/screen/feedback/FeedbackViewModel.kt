@@ -192,7 +192,6 @@ class FeedbackViewModel @Inject constructor(
     fun submit(
         type: String,
         content: String,
-        contact: String?,
         screenshotBytes: List<ByteArray>,
         screenshotMimeTypes: List<String>
     ) {
@@ -227,7 +226,6 @@ class FeedbackViewModel @Inject constructor(
                 val result = feedbackRepository.submit(
                     type = type,
                     content = content,
-                    contact = contact,
                     screenshots = screenshotKeys,
                     friendNickname = friendNickname,
                     traktUsername = traktUsername,

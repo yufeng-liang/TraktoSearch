@@ -173,12 +173,12 @@ class FeedbackViewModelTest {
 
     @Test
     fun `submit success updates submitState to Success`() = runTest {
-        coEvery { feedbackRepository.submit(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns Result.success(
+        coEvery { feedbackRepository.submit(any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns Result.success(
             SubmitFeedbackResponse("fb-new", 1700000000L)
         )
         val viewModel = createViewModel()
 
-        viewModel.submit("BUG", "test content", null, emptyList(), emptyList())
+        viewModel.submit("BUG", "test content", emptyList(), emptyList())
         advanceUntilIdle()
 
         val state = viewModel.submitState.value
@@ -191,7 +191,7 @@ class FeedbackViewModelTest {
         coEvery { feedbackRepository.uploadScreenshot(any(), any(), any()) } returns Result.failure(Exception("too large"))
         val viewModel = createViewModel()
 
-        viewModel.submit("BUG", "test content", null, listOf(byteArrayOf(1, 2)), listOf("image/jpeg"))
+        viewModel.submit("BUG", "test content", listOf(byteArrayOf(1, 2)), listOf("image/jpeg"))
         advanceUntilIdle()
 
         val state = viewModel.submitState.value
@@ -201,10 +201,10 @@ class FeedbackViewModelTest {
 
     @Test
     fun `submit main call failure updates submitState to Error`() = runTest {
-        coEvery { feedbackRepository.submit(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns Result.failure(Exception("SUBMIT_FAILED"))
+        coEvery { feedbackRepository.submit(any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns Result.failure(Exception("SUBMIT_FAILED"))
         val viewModel = createViewModel()
 
-        viewModel.submit("BUG", "test content", null, emptyList(), emptyList())
+        viewModel.submit("BUG", "test content", emptyList(), emptyList())
         advanceUntilIdle()
 
         val state = viewModel.submitState.value
