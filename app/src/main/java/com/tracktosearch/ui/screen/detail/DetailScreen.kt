@@ -873,10 +873,12 @@ fun DetailScreen(
 
             // 海报大图查看
             val posterUrl = uiState.posterUrl
-            if (showPosterFullscreen && posterUrl != null) {
+            if (posterUrl != null) {
                 PosterFullscreenOverlay(
+                    visible = showPosterFullscreen,
                     posterUrl = posterUrl,
                     title = uiState.displayTitle,
+                    sharedKeyPrefix = "poster-zoom-bounds-$tmdbId",
                     onDismiss = { showPosterFullscreen = false }
                 )
             }

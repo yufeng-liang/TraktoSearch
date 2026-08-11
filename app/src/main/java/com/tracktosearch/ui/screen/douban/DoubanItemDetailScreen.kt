@@ -1587,8 +1587,10 @@ fun DoubanItemDetailScreen(
             val posterUrl = posterFailure?.posterUrl
             if (showPosterFullscreen && posterUrl != null) {
                 PosterFullscreenOverlay(
+                    visible = showPosterFullscreen,
                     posterUrl = posterUrl,
                     title = posterFailure?.title.orEmpty(),
+                    sharedKeyPrefix = null, // Douban 页无配对源头,不启用 sharedBounds 转场
                     onDismiss = { showPosterFullscreen = false }
                 )
             }
