@@ -8,7 +8,6 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
@@ -48,27 +47,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.core.graphics.drawable.toBitmap
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -590,127 +584,123 @@ internal fun buildOverviewDisplayText(
     text: String,
     expanded: Boolean,
     collapsedContent: String?,
-    showAllLabel: String,
+    expandLabel: String,
     collapseLabel: String
 ): OverviewDisplayText {
     return when {
         expanded -> OverviewDisplayText(content = text, actionLabel = collapseLabel)
         collapsedContent != null -> OverviewDisplayText(
             content = collapsedContent,
-            actionLabel = showAllLabel
+            actionLabel = expandLabel
         )
         else -> OverviewDisplayText(content = text, actionLabel = null)
     }
 }
 
 @Composable
-internal fun ExpandableText(text: String, maxLines: Int = 3) {
+internal fun ExpandableText(
+    text: String,
+    maxLines: Int = 3,
+    fadeColor: Color? = null
+) {
     val effectiveMaxLines = maxLines.coerceAtLeast(1)
-    val showAllLabel = stringResource(R.string.detail_overview_show_all)
-    val collapseLabel = stringResource(R.string.detail_overview_collapse)
+    val expandLabel = stringResource(R.string.detail_text_expand)
+    val collapseLabel = stringResource(R.string.detail_text_collapse)
     val primaryColor = MaterialTheme.colorScheme.primary
+    val backgroundColor = fadeColor ?: MaterialTheme.colorScheme.background
+    val bodyColor = MaterialTheme.colorScheme.onSurfaceVariant
     val bodyStyle = MaterialTheme.typography.bodyMedium
     val textMeasurer = rememberTextMeasurer()
     var expanded by rememberSaveable(text, effectiveMaxLines) { mutableStateOf(false) }
+    var collapsedOverflowing by rememberSaveable(text, effectiveMaxLines) { mutableStateOf(false) }
+    var collapsedContent by rememberSaveable(text, effectiveMaxLines) { mutableStateOf<String?>(null) }
 
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        val maxWidthPx = with(LocalDensity.current) { (maxWidth.value * density).toInt() }
-        val collapsedPrefixLength = remember(
-            text,
-            effectiveMaxLines,
-            showAllLabel,
-            maxWidthPx
-        ) {
-            findCollapsedPrefixLength(
-                text = text,
-                showAllLabel = showAllLabel,
-                style = bodyStyle,
-                textMeasurer = textMeasurer,
-                maxWidthPx = maxWidthPx,
-                maxLines = effectiveMaxLines
-            )
-        }
-        val isOverflowing = collapsedPrefixLength != null
-        val display = buildOverviewDisplayText(
-            text = text,
-            expanded = expanded,
-            collapsedContent = collapsedPrefixLength?.let { text.take(it).trimEnd() },
-            showAllLabel = showAllLabel,
-            collapseLabel = collapseLabel
+    val fadeWidth = 48.dp
+    val actionGap = 4.dp
+    val actionTextWidthPx = remember(expandLabel, collapseLabel, bodyStyle) {
+        maxOf(
+            textMeasurer.measure(AnnotatedString(expandLabel), bodyStyle).size.width,
+            textMeasurer.measure(AnnotatedString(collapseLabel), bodyStyle).size.width
         )
-        val displayText = buildAnnotatedString {
-            append(display.content)
-            if (display.actionLabel != null) {
-                append(if (expanded) "  " else "... ")
-                withStyle(SpanStyle(color = primaryColor)) {
-                    append(display.actionLabel)
-                }
-            }
-        }
+    }
+    val actionTailWidth = with(LocalDensity.current) {
+        maxOf(96.dp, actionTextWidthPx.toDp() + fadeWidth + actionGap)
+    }
+    val actionLabel = when {
+        expanded -> collapseLabel
+        collapsedOverflowing -> expandLabel
+        else -> null
+    }
+    val display = buildOverviewDisplayText(
+        text = text,
+        expanded = expanded,
+        collapsedContent = collapsedContent,
+        expandLabel = expandLabel,
+        collapseLabel = collapseLabel
+    )
+    val toggleExpanded = { expanded = !expanded }
 
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                enabled = collapsedOverflowing || expanded,
+                onClick = toggleExpanded
+            )
+    ) {
         Text(
-            text = displayText,
+            text = display.content,
             style = bodyStyle,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = bodyColor,
             maxLines = if (expanded) Int.MAX_VALUE else effectiveMaxLines,
             overflow = TextOverflow.Clip,
             modifier = Modifier
-                .fillMaxWidth()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    enabled = isOverflowing || expanded
-                ) {
-                    expanded = !expanded
+                .fillMaxWidth(),
+            onTextLayout = { layoutResult ->
+                if (!expanded && !collapsedOverflowing) {
+                    val isOverflowing = layoutResult.hasVisualOverflow
+                    if (isOverflowing) {
+                        val lastVisibleLine = (effectiveMaxLines - 1)
+                            .coerceAtMost(layoutResult.lineCount - 1)
+                        val visibleEnd = layoutResult.getLineEnd(
+                            lineIndex = lastVisibleLine,
+                            visibleEnd = true
+                        )
+                        collapsedContent = text.take(visibleEnd).trimEnd()
+                        collapsedOverflowing = true
+                    }
                 }
+            }
         )
-    }
-}
-
-internal fun findCollapsedPrefixLength(
-    text: String,
-    showAllLabel: String,
-    style: TextStyle,
-    textMeasurer: TextMeasurer,
-    maxWidthPx: Int,
-    maxLines: Int
-): Int? {
-    if (maxWidthPx <= 0) return null
-
-    val constraints = Constraints(maxWidth = maxWidthPx)
-    val fullLayout = textMeasurer.measure(
-        text = AnnotatedString(text),
-        style = style,
-        maxLines = Int.MAX_VALUE,
-        overflow = TextOverflow.Clip,
-        constraints = constraints
-    )
-    if (fullLayout.lineCount <= maxLines) {
-        return null
-    }
-
-    val suffix = "... $showAllLabel"
-    var low = 0
-    var high = text.length
-    var bestLength = 0
-    while (low <= high) {
-        val candidateLength = (low + high) / 2
-        val candidate = text.take(candidateLength).trimEnd() + suffix
-        val candidateLayout = textMeasurer.measure(
-            text = AnnotatedString(candidate),
-            style = style,
-            maxLines = Int.MAX_VALUE,
-            overflow = TextOverflow.Clip,
-            constraints = constraints
-        )
-        if (candidateLayout.lineCount <= maxLines) {
-            bestLength = candidateLength
-            low = candidateLength + 1
-        } else {
-            high = candidateLength - 1
+        if (actionLabel != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .width(actionTailWidth)
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(Color.Transparent, backgroundColor)
+                        )
+                    ),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Text(
+                    text = actionLabel,
+                    style = bodyStyle,
+                    color = primaryColor,
+                    modifier = Modifier
+                        .padding(start = fadeWidth, end = actionGap)
+                        .clickable(
+                            interactionSource = remember(actionLabel) { MutableInteractionSource() },
+                            indication = null,
+                            onClick = toggleExpanded
+                        )
+                )
+            }
         }
     }
-    return bestLength
 }
 
 // ==================== 状态绑带 ====================
