@@ -372,6 +372,46 @@ test('session quota stops the eighth uncached interaction', async () => {
     assert.equal(exhausted.json.code, 'AI_SESSION_QUOTA_EXCEEDED');
 });
 
+test('tts consumes quota and stops on the eighth call', async () => {
+    const env = createTestEnv();
+    for (let attempt = 0; attempt < 7; attempt += 1) {
+        const result = await call('/api/ai/tts', {
+            method: 'POST',
+            body: { characterId: 'usagi', text: '到！', sessionId: 'tts-quota-session' },
+            env,
+        });
+        assert.equal(result.response.status, 200);
+    }
+
+    const exhausted = await call('/api/ai/tts', {
+        method: 'POST',
+        body: { characterId: 'usagi', text: '到！', sessionId: 'tts-quota-session' },
+        env,
+    });
+    assert.equal(exhausted.response.status, 429);
+    assert.equal(exhausted.json.code, 'AI_SESSION_QUOTA_EXCEEDED');
+});
+
+test('quiz honors a client-provided quizId on the second call', async () => {
+    const env = createTestEnv();
+    const first = await call('/api/ai/quiz', {
+        method: 'POST',
+        body: { sessionId: 'reuse-session', quizId: 'fixed-quiz-id', movies: movies() },
+        env,
+    });
+    assert.equal(first.response.status, 200);
+    assert.equal(first.json.data.quizId, 'fixed-quiz-id');
+
+    const second = await call('/api/ai/quiz', {
+        method: 'POST',
+        body: { sessionId: 'reuse-session-2', quizId: 'fixed-quiz-id', movies: movies() },
+        env,
+    });
+    assert.equal(second.response.status, 200);
+    assert.equal(second.json.data.quizId, 'fixed-quiz-id');
+    assert.deepEqual(second.json.data.questions, first.json.data.questions);
+});
+
 function errorResponse(error) {
     assert.equal(typeof error?.code, 'string');
     return new Response(JSON.stringify({

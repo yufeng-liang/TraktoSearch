@@ -23,9 +23,18 @@ class AiRepositoryTest {
         val first = AiStorageKey.forFriend("friend-a", AiCacheFeature.GREETING)
         val second = AiStorageKey.forFriend("friend-b", AiCacheFeature.GREETING)
 
-        assertThat(first).startsWith("ai_v1_greeting_")
+        assertThat(first).startsWith("ai_v2_greeting_")
         assertThat(first).contains("friend-a")
         assertThat(first).isNotEqualTo(second)
+    }
+
+    @Test
+    fun storageKey_lengthPrefixesFriendIdToAvoidSuffixCollision() {
+        // friendId "x_y" 不能与 friendId "x" + 后缀 "_y" 的 key 碰撞
+        val withUnderscore = AiStorageKey.forFriend("x_y", AiCacheFeature.GREETING)
+        val withSuffix = AiStorageKey.forFriend("x", AiCacheFeature.GREETING, "_y")
+
+        assertThat(withUnderscore).isNotEqualTo(withSuffix)
     }
 
     @Test

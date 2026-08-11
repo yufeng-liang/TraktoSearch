@@ -13,6 +13,7 @@ import android.util.Base64
 import androidx.core.content.ContextCompat
 import com.tracktosearch.data.ai.AiAudio
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -50,7 +51,8 @@ object AiAudioRecorder {
             try {
                 recorder.startRecording()
                 val deadline = System.nanoTime() + maxDurationMs.coerceAtMost(MAX_DURATION_MS) * 1_000_000
-                while (System.nanoTime() < deadline) {
+                // 协程取消时提前结束录音，尽早释放麦克风（activate 被新请求取消时）
+                while (System.nanoTime() < deadline && isActive) {
                     val count = recorder.read(buffer, 0, buffer.size)
                     if (count > 0) pcm.write(buffer, 0, count)
                 }
@@ -100,8 +102,15 @@ class AiAudioPlayer(private val context: Context) {
     private var player: MediaPlayer? = null
     private var temporaryFile: File? = null
 
+    // 每次 play 递增的代号。MediaPlayer 回调在独立线程派发，旧播放的延迟
+    // onCompletion/onError/onPrepared 可能在新播放建立后才到达；代号不匹配则忽略，
+    // 避免回调对新建的 player 执行 cleanup/release 后，其挂起的 onPrepared 再 start() 抛 IllegalStateException。
+    @Volatile
+    private var playEpoch = 0L
+
     fun play(audio: AiAudio, onFinished: () -> Unit = {}) {
         stop()
+        val epoch = ++playEpoch
         val mediaPlayer = MediaPlayer()
         player = mediaPlayer
         try {
@@ -121,17 +130,21 @@ class AiAudioPlayer(private val context: Context) {
                 return
             }
             mediaPlayer.setOnCompletionListener {
+                if (playEpoch != epoch) return@setOnCompletionListener
                 cleanup()
                 onFinished()
             }
             mediaPlayer.setOnErrorListener { _, _, _ ->
+                if (playEpoch != epoch) return@setOnErrorListener true
                 cleanup()
                 true
             }
             mediaPlayer.prepareAsync()
-            mediaPlayer.setOnPreparedListener { it.start() }
+            mediaPlayer.setOnPreparedListener { mp ->
+                if (playEpoch == epoch) mp.start()
+            }
         } catch (_: Exception) {
-            cleanup()
+            if (playEpoch == epoch) cleanup()
         }
     }
 

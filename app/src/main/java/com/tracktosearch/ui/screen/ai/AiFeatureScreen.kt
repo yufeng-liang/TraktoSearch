@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -306,7 +307,8 @@ private fun TasteFeature(
         if (taste.recommendations.isEmpty()) {
             item { Text(stringResource(R.string.ai_taste_no_recommendations), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         } else {
-            items(taste.recommendations, key = { it.id }) { recommendation ->
+            // id 可能为空（回退到 title），同名条目会重复 → 用 index 兜底保证 key 唯一
+            itemsIndexed(taste.recommendations, key = { index, recommendation -> "${recommendation.id}_$index" }) { _, recommendation ->
                 RecommendationCard(
                     recommendation = recommendation,
                     onOpen = {

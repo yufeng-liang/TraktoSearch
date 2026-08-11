@@ -51,7 +51,8 @@ export async function callMimoJson(
     const body: Record<string, unknown> = {
         model,
         messages,
-        max_completion_tokens: options.maxCompletionTokens || 1024,
+        // 输出 token 上限：默认 1024，测验这类长 JSON 必须显式给足，否则输出被截断导致 JSON 解析失败
+        max_completion_tokens: options.maxCompletionTokens ?? 1024,
         temperature: options.temperature ?? 0.7,
         stream: false,
     };
@@ -134,16 +135,33 @@ async function callMimoPayload(
                 },
                 body: JSON.stringify(body),
             });
-            if (!response.ok) continue;
+            // 仅在网络失败或服务端 5xx 时重试；4xx（含限流 429）属确定性错误，重试只会放大供应商费用
+            if (!response.ok) {
+                if (response.status >= 500 && attempt === 0) {
+                    await sleep(400);
+                    continue;
+                }
+                throw new AppError('AI_UPSTREAM_ERROR', 'AI provider request failed', 502);
+            }
             const payload: unknown = await response.json();
             if (!isRecord(payload)) continue;
             return payload;
-        } catch {
-            // 上游异常不暴露细节，下一轮只做一次有限重试。
+        } catch (error) {
+            // 网络异常：做一次有限重试；业务错误（AppError）直接上抛
+            if (error instanceof AppError) throw error;
+            if (attempt === 0) {
+                await sleep(400);
+                continue;
+            }
+            throw new AppError('AI_UPSTREAM_ERROR', 'AI provider request failed', 502);
         }
     }
 
     throw new AppError('AI_UPSTREAM_ERROR', 'AI provider request failed', 502);
+}
+
+function sleep(milliseconds: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
 
 function getAssistantMessage(payload: unknown): Record<string, unknown> | null {

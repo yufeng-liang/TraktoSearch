@@ -25,6 +25,7 @@ import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
 import com.tracktosearch.data.repository.TraktRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -146,7 +147,9 @@ class AiSpriteViewModel @Inject constructor(
                 selectedCharacterId = characterId,
                 activationState = if (it.activatedCharacterId == characterId) AiActivationState.SUCCESS else AiActivationState.IDLE,
                 activationMessage = null,
-                errorCode = null
+                errorCode = null,
+                // 换角色重置失败尝试计数，避免某角色语音激活 3 次失败后永久锁死所有角色
+                activationAttempt = 0
             )
         }
         previewJob?.cancel()
@@ -332,19 +335,18 @@ class AiSpriteViewModel @Inject constructor(
         }
     }
 
-    private fun previewSelectedCharacter() {
+    /** 试听请求挂在本预览 Job 内执行：取消 previewJob 会一并取消 TTS，避免快速切换角色时旧请求后完成、播放上一个角色的声音。 */
+    private suspend fun previewSelectedCharacter() {
         val character = _uiState.value.selectedCharacter ?: return
         if (!isAuthorized()) return
-        viewModelScope.launch {
-            aiRepository.playTts(
-                authManager.friendId.value.orEmpty(),
-                AiTtsRequest(
-                    characterId = character.id,
-                    text = character.auditionText,
-                    style = character.personalityPrompt
-                )
-            ).onSuccess { _audioEvents.emit(it) }
-        }
+        aiRepository.playTts(
+            authManager.friendId.value.orEmpty(),
+            AiTtsRequest(
+                characterId = character.id,
+                text = character.auditionText,
+                style = character.personalityPrompt
+            )
+        ).onSuccess { _audioEvents.emit(it) }
     }
 
     private fun loadGreeting(characterId: String, forceRefresh: Boolean = false) {
@@ -407,10 +409,16 @@ class AiSpriteViewModel @Inject constructor(
         requestJob?.cancel()
         requestJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, loadingFeature = feature, errorCode = null) }
-            runCatching { block() }.onFailure { error ->
-                _uiState.update { it.copy(errorCode = errorCode(error)) }
+            try {
+                block()
+            } catch (e: CancellationException) {
+                // 新请求（切换功能/提交/激活）取消旧请求时，不能走 onFailure 画假错误或翻转状态
+                throw e
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorCode = errorCode(e)) }
+            } finally {
+                _uiState.update { it.copy(isLoading = false, loadingFeature = null) }
             }
-            _uiState.update { it.copy(isLoading = false, loadingFeature = null) }
         }
     }
 

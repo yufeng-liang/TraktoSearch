@@ -74,9 +74,9 @@ object AiActivationNormalizer {
     }
 
     fun matches(character: AiCharacter, spoken: String): Boolean {
-        val target = canonicalName(character.activationWord)
-        return (listOf(character.activationWord) + character.aliases)
-            .any { canonicalName(it) == target && canonicalName(spoken) == target }
+        // 别名已由 canonicalName 归一：spoken 归一后等于角色标准名即命中，
+        // 无需再遍历别名（原来的 .any 循环恒等于该判断，是死代码）。
+        return canonicalName(spoken) == canonicalName(character.activationWord)
     }
 }
 

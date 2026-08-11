@@ -6,6 +6,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
 import java.io.IOException
+import java.security.MessageDigest
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -35,18 +36,22 @@ class AiApiException(
 
 object AiErrorMapper {
     fun map(serverCode: String?, httpCode: Int): AiErrorCode {
-        return when {
-            httpCode == 401 || httpCode == 403 -> AiErrorCode.UNAUTHORIZED
-            httpCode == 429 -> AiErrorCode.RATE_LIMITED
-            httpCode >= 500 -> AiErrorCode.SERVER
-            serverCode.normalized() in setOf("UNAUTHORIZED", "AUTH_REQUIRED", "TOKEN_EXPIRED", "INVALID_TOKEN") -> AiErrorCode.UNAUTHORIZED
-            serverCode.normalized() in setOf("QUOTA_EXCEEDED", "DAILY_QUOTA_EXCEEDED", "SESSION_QUOTA_EXCEEDED") -> AiErrorCode.QUOTA_EXCEEDED
-            serverCode.normalized() in setOf("RATE_LIMITED", "TOO_MANY_REQUESTS") -> AiErrorCode.RATE_LIMITED
-            serverCode.normalized() in setOf("CHARACTER_UNAVAILABLE", "VOICE_NOT_READY") -> AiErrorCode.CHARACTER_UNAVAILABLE
-            serverCode.normalized() in setOf("ACTIVATION_REQUIRED", "INVALID_ACTIVATION") -> AiErrorCode.ACTIVATION_REQUIRED
-            serverCode.normalized() in setOf("INVALID_REQUEST", "VALIDATION_ERROR") -> AiErrorCode.INVALID_REQUEST
-            serverCode.normalized() in setOf("EMPTY_RESPONSE", "INVALID_RESPONSE") -> AiErrorCode.INVALID_RESPONSE
-            else -> AiErrorCode.UNKNOWN
+        // 业务错误码优先：403+ACTIVATION_REQUIRED / 429+QUOTA_EXCEEDED 等服务端返回的业务语义
+        // 比 HTTP 状态码更精确，先匹配 code 再回退到 http 启发式。
+        return when (serverCode.normalized()) {
+            "UNAUTHORIZED", "AUTH_REQUIRED", "TOKEN_EXPIRED", "INVALID_TOKEN" -> AiErrorCode.UNAUTHORIZED
+            "QUOTA_EXCEEDED", "DAILY_QUOTA_EXCEEDED", "SESSION_QUOTA_EXCEEDED" -> AiErrorCode.QUOTA_EXCEEDED
+            "RATE_LIMITED", "TOO_MANY_REQUESTS" -> AiErrorCode.RATE_LIMITED
+            "CHARACTER_UNAVAILABLE", "VOICE_NOT_READY" -> AiErrorCode.CHARACTER_UNAVAILABLE
+            "ACTIVATION_REQUIRED", "INVALID_ACTIVATION" -> AiErrorCode.ACTIVATION_REQUIRED
+            "INVALID_REQUEST", "VALIDATION_ERROR" -> AiErrorCode.INVALID_REQUEST
+            "EMPTY_RESPONSE", "INVALID_RESPONSE" -> AiErrorCode.INVALID_RESPONSE
+            else -> when {
+                httpCode == 401 || httpCode == 403 -> AiErrorCode.UNAUTHORIZED
+                httpCode == 429 -> AiErrorCode.RATE_LIMITED
+                httpCode >= 500 -> AiErrorCode.SERVER
+                else -> AiErrorCode.UNKNOWN
+            }
         }
     }
 
@@ -108,6 +113,8 @@ class AiRepository @Inject constructor(
         friendId = friendId,
         feature = AiCacheFeature.GREETING,
         forceRefresh = forceRefresh,
+        // 问候按角色区分缓存：缺 characterId 时第二个角色的问候会命中第一个角色的缓存
+        suffix = characterId,
         serializer = AiGreeting.serializer()
     ) {
         api.getGreeting(
@@ -263,9 +270,15 @@ class AiRepository @Inject constructor(
     }
 
     private fun AiTtsRequest.cacheSuffix(): String {
-        return listOf(characterId, style.orEmpty(), text).joinToString("|")
-            .hashCode()
-            .toString()
+        // 32 位 hashCode 会碰撞且跨 JVM 不稳定，可能把不同文本/角色的音频串给错误请求；
+        // 改用 SHA-256 hex 作缓存键。
+        return listOf(characterId, style.orEmpty(), text).joinToString("|").sha256Hex()
+    }
+
+    private fun String.sha256Hex(): String {
+        return MessageDigest.getInstance("SHA-256")
+            .digest(toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
     }
 
     private companion object {
