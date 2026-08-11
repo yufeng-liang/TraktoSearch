@@ -605,6 +605,7 @@
     <string name="settings_feedback">フィードバック</string>
     <string name="settings_feedback_subtitle">開発者が営業中。アイデアやバグをどんどんどうぞ 🧑‍💻🍿</string>
     <string name="feedback_title">フィードバック</string>
+    <string name="feedback_intro">届いたフィードバックは、一つひとつ私が大切に読みます。ここは機能の願いごとボックスでもあります。いつか、あなたの願いが実現するかも〜</string>
     <string name="feedback_new">新規フィードバック</string>
     <string name="feedback_my_feedbacks">マイフィードバック</string>
     <string name="feedback_empty">まだフィードバックはありません</string>
@@ -619,8 +620,6 @@
     <string name="feedback_select_type">タイプを選択してください</string>
     <string name="feedback_screenshots">スクリーンショット（任意、最大5枚）</string>
     <string name="feedback_uploading">スクリーンショットをアップロード中（%1$d/%2$d）</string>
-    <string name="feedback_contact">連絡先（任意）</string>
-    <string name="feedback_contact_placeholder">メールまたはQQ</string>
     <string name="feedback_submit">送信</string>
     <string name="feedback_submitting">送信中…</string>
     <string name="feedback_submit_success">フィードバックを送信しました</string>
