@@ -528,8 +528,9 @@ function buildVoiceDesignPrompt(character: CharacterConfig, scene: TtsScene): st
 }
 
 function buildGreetingSpokenText(character: CharacterConfig, greeting: string): string {
-    const catchphrase = character.greetingCatchphrase.trim();
-    return catchphrase ? `${greeting.trim()} ${catchphrase}`.trim() : greeting.trim();
+    const normalizedGreeting = greeting.trim().replace(/\s+/g, ' ');
+    const catchphrase = character.greetingCatchphrase.trim().replace(/\s+/g, ' ');
+    return catchphrase ? `${normalizedGreeting} ${catchphrase}`.trim() : normalizedGreeting;
 }
 
 function resolveAudioPublicBaseUrl(request: Request, env: AiEnvironment): string {

@@ -278,7 +278,7 @@ function ttsAudioUrlExpiresAt(): number {
 
 function isExpiredTtsObject(metadata: Record<string, string> | undefined): boolean {
     const expiresAt = Number(metadata?.expiresAt);
-    return Number.isFinite(expiresAt) && expiresAt <= Math.floor(Date.now() / 1000);
+    return !Number.isFinite(expiresAt) || expiresAt <= Math.floor(Date.now() / 1000);
 }
 
 function toAudioDataUrl(data: string | ArrayBuffer, mimeType: string): string {

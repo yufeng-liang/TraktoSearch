@@ -121,7 +121,8 @@ class AiRepository @Inject constructor(
             forceRefresh = forceRefresh,
             // 问候按角色区分缓存：缺 characterId 时第二个角色的问候会命中第一个角色的缓存
             suffix = characterId,
-            serializer = AiGreeting.serializer()
+            serializer = AiGreeting.serializer(),
+            isCacheValid = ::isUsableGreetingCache,
         ) {
             val payload = api.getGreeting(
                 AiGreetingRequest(
@@ -341,6 +342,9 @@ class AiRepository @Inject constructor(
         val expiresAt = audio.audioUrlExpiresAt ?: return false
         return expiresAt > System.currentTimeMillis()
     }
+
+    private fun isUsableGreetingCache(greeting: AiGreeting): Boolean =
+        greeting.audio?.let(::isUsableTtsCache) ?: true
 
     private suspend fun <T> readCached(
         friendId: String,

@@ -76,7 +76,10 @@ function createAudioBucket({ failPut = false } = {}) {
             objects.set(key, {
                 bytes,
                 contentType: options.httpMetadata?.contentType || 'application/octet-stream',
-                customMetadata: options.customMetadata || {},
+                customMetadata: {
+                    expiresAt: String(Math.floor(Date.now() / 1000) + 86_400),
+                    ...(options.customMetadata || {}),
+                },
             });
             return { key, size: bytes.byteLength };
         },
@@ -449,6 +452,40 @@ test('TTS cache keys separate scenes for the same spoken text', async () => {
         assert.equal(keys.length, 2);
         assert.notEqual(keys[0], keys[1]);
         assert.ok(keys.every(key => /^tts-vd-v1\/[a-f0-9]{64}\.mp3$/.test(key)));
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('TTS regenerates an R2 object whose expiry metadata is missing', async () => {
+    const originalFetch = globalThis.fetch;
+    let upstreamCalls = 0;
+    globalThis.fetch = async () => {
+        upstreamCalls += 1;
+        return new Response(JSON.stringify({
+            choices: [{ message: { audio: { data: 'AQI=', transcript: '供应商文本' } } }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+
+    try {
+        const bucket = createAudioBucket();
+        const env = createTestEnv({
+            MIMO_API_KEY: 'test-mimo-key',
+            AI_TEST_VOICE_DESIGN_READY: true,
+            AI_AUDIO_CACHE: bucket,
+            JWT_SIGNING_KEY: 'test-jwt-secret',
+        });
+        const request = {
+            method: 'POST',
+            body: { action: 'tts', characterId: 'usagi', text: '到！', scene: 'AUDITION', sessionId: 'metadata-session' },
+            env,
+        };
+        assert.equal((await call('/api/ai/tts', request)).response.status, 200);
+        const cachedObject = [...bucket.objects.values()][0];
+        delete cachedObject.customMetadata.expiresAt;
+
+        assert.equal((await call('/api/ai/tts', request)).response.status, 200);
+        assert.equal(upstreamCalls, 2);
     } finally {
         globalThis.fetch = originalFetch;
     }
