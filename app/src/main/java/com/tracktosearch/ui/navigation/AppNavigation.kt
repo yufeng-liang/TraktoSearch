@@ -957,24 +957,28 @@ fun AppNavigation(
                     )
                 ) { backStackEntry ->
                     val doubanId = backStackEntry.arguments?.getString("doubanId") ?: return@composable
-                    DoubanItemDetailScreen(
-                        doubanId = doubanId,
-                        onBack = { watchlistChanged, watchedChanged ->
-                            backStackEntry.propagateMarkChangesTo(
-                                target = navController.previousBackStackEntry,
-                                watchlistChanged = watchlistChanged,
-                                watchedChanged = watchedChanged,
-                                doubanWatchlistRefreshRequested = watchlistChanged
-                            )
-                            navController.popBackStack()
-                        },
-                        onRetryStarted = {
-                            // 重试启动后跳转到豆瓣同步进度对话框页(沿用现有导航)
-                            // 实际上同步进度通过 DoubanSyncManager.progress StateFlow 暴露
-                            // 这里返回上一页,同步进度由 DoubanSyncManager.progress 暴露
-                            navController.popBackStack()
-                        }
-                    )
+                    // 提供共享转场作用域:豆瓣详情页海报源需要 LocalAnimatedVisibilityScope
+                    // 才能附加 sharedBounds,与全屏 overlay 配对实现海报缩放转场
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        DoubanItemDetailScreen(
+                            doubanId = doubanId,
+                            onBack = { watchlistChanged, watchedChanged ->
+                                backStackEntry.propagateMarkChangesTo(
+                                    target = navController.previousBackStackEntry,
+                                    watchlistChanged = watchlistChanged,
+                                    watchedChanged = watchedChanged,
+                                    doubanWatchlistRefreshRequested = watchlistChanged
+                                )
+                                navController.popBackStack()
+                            },
+                            onRetryStarted = {
+                                // 重试启动后跳转到豆瓣同步进度对话框页(沿用现有导航)
+                                // 实际上同步进度通过 DoubanSyncManager.progress StateFlow 暴露
+                                // 这里返回上一页,同步进度由 DoubanSyncManager.progress 暴露
+                                navController.popBackStack()
+                            }
+                        )
+                    }
                 }
 
                 // 豆瓣爬取测试页仅在 DEBUG 构建注册,避免 release 暴露调试入口

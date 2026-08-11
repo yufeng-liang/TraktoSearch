@@ -150,9 +150,9 @@ import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
-import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.screen.detail.PosterFullscreenOverlay
 import com.tracktosearch.ui.util.HapticType
