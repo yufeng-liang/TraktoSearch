@@ -16,11 +16,11 @@
 - 修改：`auth-worker/src/ai/mimo.ts`
 - 修改：`auth-worker/src/ai/handler.ts`
 
-- [ ] **步骤 1：编写失败测试**
+- [x] **步骤 1：编写失败测试**
 
 在 `ai-routes.test.mjs` 增加三个可执行断言：上游请求的 `model` 为 `mimo-v2.5-tts-voicedesign`、`audio.format` 为 `mp3`、`audio.optimize_text_preview` 为 `false`，第一条 `user` 消息含角色/场景指导，第二条 `assistant` 消息等于固定试听文本且角色目录不含完整基础音色提示词；`scene=UNKNOWN` 返回 `INVALID_SCENE` 且旧 `style` 中的自定义音色文本不出现在上游提示词；乌萨奇激活返回“到——！”且请求场景为 `ACTIVATION_ACK`。
 
-- [ ] **步骤 2：运行测试，确认它因旧模型/旧响应失败**
+- [x] **步骤 2：运行测试，确认它因旧模型/旧响应失败**
 
 运行：
 
@@ -31,7 +31,7 @@ node --experimental-strip-types --test tests/ai-routes.test.mjs
 
 预期：失败原因包括仍发送 `mimo-v2.5-tts-voiceclone`、WAV、样本就绪门槛，以及没有场景校验。
 
-- [ ] **步骤 3：实现最小契约**
+- [x] **步骤 3：实现最小契约**
 
 在 `characters.ts`：
 
@@ -52,11 +52,11 @@ node --experimental-strip-types --test tests/ai-routes.test.mjs
 - 激活应答使用角色静态 `activationPhrase` 与 `ACTIVATION_ACK`；欢迎语使用 `GREETING`。
 - `style` 只读取用于兼容而不覆盖服务端提示词。
 
-- [ ] **步骤 4：运行测试确认通过**
+- [x] **步骤 4：运行测试确认通过**
 
 运行同一条 `node --experimental-strip-types --test tests/ai-routes.test.mjs`，预期新增契约测试和既有非配额测试通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```bash
 git add auth-worker/tests/ai-routes.test.mjs auth-worker/src/ai/characters.ts auth-worker/src/ai/mimo.ts auth-worker/src/ai/handler.ts
@@ -74,11 +74,11 @@ git commit -m "feat(ai-tts): 接入角色音色设计提示词"
 - 修改：`auth-worker/tests/ai-routes.test.mjs`
 - 修改：`auth-worker/wrangler.toml`
 
-- [ ] **步骤 1：编写失败测试**
+- [x] **步骤 1：编写失败测试**
 
 增加最小 R2 fake bucket，并锁定五个行为：第二次相同角色/场景/文本只发生一次上游调用、返回 `/api/ai/audio/<token>` 且不带 `audioDataUrl`；签名 URL 返回 `audio/mpeg`，过期 token、篡改 token、未知对象分别拒绝；`put()` 抛错时仍返回 `data:audio/mpeg;base64,<encoded-bytes>`；同一文本的 `AUDITION` 与 `GREETING` 对象键不同，改变提示词版本也不命中；同一会话第 14 次未命中成功、第 15 次返回 `AI_SESSION_QUOTA_EXCEEDED`，缓存命中不增加测试配额计数。
 
-- [ ] **步骤 2：运行测试确认失败**
+- [x] **步骤 2：运行测试确认失败**
 
 运行：
 
@@ -89,7 +89,7 @@ node --experimental-strip-types --test tests/ai-routes.test.mjs
 
 预期：当前没有 `AI_AUDIO_CACHE`、签名音频路由、MP3 对象缓存，配额仍为 7/40，相关测试失败。
 
-- [ ] **步骤 3：实现 TTS 服务模块**
+- [x] **步骤 3：实现 TTS 服务模块**
 
 在 `tts.ts` 实现以下边界：
 
@@ -110,7 +110,7 @@ node --experimental-strip-types --test tests/ai-routes.test.mjs
 - 保留 `AI_VOICE_SAMPLES` 注释作为未来 voiceclone 配置说明。
 - 添加 `AI_AUDIO_CACHE` 的部署配置注释和私有桶要求；不在本地创建或生产绑定未知的 R2 桶。
 
-- [ ] **步骤 4：调整配额与 KV 限流**
+- [x] **步骤 4：调整配额与 KV 限流**
 
 在 `store.ts`：
 
@@ -124,7 +124,7 @@ node --experimental-strip-types --test tests/ai-routes.test.mjs
 - 欢迎文本缓存命中时不触发文本模型；欢迎音频失败时保留文字响应，音频为 null。
 - 激活的 ASR 交互仍计一次配额；激活确认音频命中或失败都不额外计数，失败不阻断 `activated: true`。
 
-- [ ] **步骤 5：运行 Worker 测试确认通过**
+- [x] **步骤 5：运行 Worker 测试确认通过**
 
 运行：
 
@@ -137,7 +137,7 @@ npm run typecheck
 
 预期：AI 路由测试覆盖新的 14/80、缓存、签名 URL、R2 回退和限流；完整 Worker 测试与类型检查通过。
 
-- [ ] **步骤 6：提交**
+- [x] **步骤 6：提交**
 
 ```bash
 git add auth-worker/src/ai/tts.ts auth-worker/src/ai/store.ts auth-worker/src/ai/handler.ts auth-worker/src/ai/mimo.ts auth-worker/src/index.ts auth-worker/tests/ai-routes.test.mjs auth-worker/wrangler.toml
@@ -152,13 +152,13 @@ git commit -m "feat(ai-tts): 增加音频缓存与签名播放"
 - 修改：`app/src/test/java/com/tracktosearch/data/ai/AiModelsTest.kt`
 - 修改：`app/src/test/java/com/tracktosearch/data/ai/AiRepositoryTest.kt`
 
-- [ ] **步骤 1：编写失败测试**
+- [x] **步骤 1：编写失败测试**
 
 增加三个具体断言：`AiGreetingDto(greeting = "干净文本", spokenText = "干净文本，呀哈！").toDomain()` 必须同时保留两个字段；`AiTtsRequest(characterId = "usagi", text = "到！", scene = "ACTIVATION_ACK")` 的 JSON 必须包含该场景；`AiQuotaDto()` 的 `sessionLimit`/`dailyLimit` 必须分别为 14/80。
 
 测试必须验证：`spokenText` 不覆盖 `greeting`；`scene` 区分本地 TTS 缓存键；旧 `style` 字段仍能反序列化但不参与服务端音色控制；默认配额为 14/80。
 
-- [ ] **步骤 2：运行 Android 定向测试确认失败**
+- [x] **步骤 2：运行 Android 定向测试确认失败**
 
 运行：
 
@@ -168,7 +168,7 @@ git commit -m "feat(ai-tts): 增加音频缓存与签名播放"
 
 预期：当前 DTO 没有 `spokenText`/`scene`，默认配额仍为 7/40，测试失败或无法编译。
 
-- [ ] **步骤 3：实现契约**
+- [x] **步骤 3：实现契约**
 
 在 `AiModels.kt`：
 
@@ -181,11 +181,11 @@ git commit -m "feat(ai-tts): 增加音频缓存与签名播放"
 - TTS 本地缓存摘要加入 `scene`，不把客户端自由 `style` 纳入角色音色身份。
 - 保留现有 `audioDataUrl`/`audioUrl` 播放兼容。
 
-- [ ] **步骤 4：运行定向测试确认通过**
+- [x] **步骤 4：运行定向测试确认通过**
 
 运行同一条 `:app:testDebugUnitTest` 命令，预期 AI Models/Repository 测试通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```bash
 git add app/src/main/java/com/tracktosearch/data/ai/AiModels.kt app/src/main/java/com/tracktosearch/data/ai/AiRepository.kt app/src/test/java/com/tracktosearch/data/ai/AiModelsTest.kt app/src/test/java/com/tracktosearch/data/ai/AiRepositoryTest.kt
@@ -204,7 +204,7 @@ git commit -m "feat(ai-tts): 扩展 Android 音频场景契约"
 - 修改：`app/src/main/res/values-ja/strings.xml`
 - 修改：`app/src/main/res/values-ko/strings.xml`
 
-- [ ] **步骤 1：先增加可验证的 ViewModel 预览行为**
+- [x] **步骤 1：先增加可验证的 ViewModel 预览行为**
 
 沿用现有 `audioEvents`，增加仅访客使用的文字回退事件流，并在 `AiUiLogic.kt` 抽取 `buildAuditionTtsRequest(character, sessionId)` 纯函数；在 `AiUiLogicTest.kt` 锁定以下行为：
 
@@ -212,7 +212,7 @@ git commit -m "feat(ai-tts): 扩展 Android 音频场景契约"
 - 记录预览分支规则：访客调用 `playGuestTts()`，授权用户调用 `playTts()`；成功只发音频事件，失败只发文字回退事件。
 - 角色目录暂不可用时，访客仍可使用当前角色的静态试听文本回退到系统 TTS。
 
-- [ ] **步骤 2：运行定向 Android 测试确认失败**
+- [x] **步骤 2：运行定向 Android 测试确认失败**
 
 运行：
 
@@ -222,7 +222,7 @@ git commit -m "feat(ai-tts): 扩展 Android 音频场景契约"
 
 预期：当前不存在 `buildAuditionTtsRequest` 和访客预览事件流，新增纯逻辑测试无法编译。
 
-- [ ] **步骤 3：实现 UI 链路**
+- [x] **步骤 3：实现 UI 链路**
 
 在 `AiSpriteViewModel.kt`：
 
@@ -241,7 +241,7 @@ git commit -m "feat(ai-tts): 扩展 Android 音频场景契约"
 - 更新帮助页关于“音频样本保存在私有服务”的旧说明，改为“V1 使用角色与场景的音色设计提示词，音频失败时试听回退系统语音”。
 - 保持所有用户可见文字走既有 `stringResource`，不在 Kotlin 中硬编码新文案。
 
-- [ ] **步骤 4：运行 Android 测试确认通过**
+- [x] **步骤 4：运行 Android 测试确认通过**
 
 运行：
 
@@ -250,7 +250,7 @@ git commit -m "feat(ai-tts): 扩展 Android 音频场景契约"
 ./gradlew :app:compileDebugKotlin
 ```
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```bash
 git add app/src/main/java/com/tracktosearch/ui/screen/ai/AiSpriteViewModel.kt app/src/main/java/com/tracktosearch/ui/screen/ai/AiUiLogic.kt app/src/main/java/com/tracktosearch/ui/screen/ai/AiSpriteCenter.kt app/src/test/java/com/tracktosearch/ui/screen/ai/AiUiLogicTest.kt app/src/main/res/values/strings.xml app/src/main/res/values-zh/strings.xml app/src/main/res/values-ja/strings.xml app/src/main/res/values-ko/strings.xml
@@ -259,7 +259,7 @@ git commit -m "feat(ai-tts): 接入访客角色试听回退"
 
 ## 任务 5：集成验证与上线前边界检查
 
-- [ ] **步骤 1：静态契约审查**
+- [x] **步骤 1：静态契约审查**
 
 检查以下内容：
 
@@ -269,7 +269,7 @@ git commit -m "feat(ai-tts): 接入访客角色试听回退"
 - `MIMO_API_KEY`、JWT Secret、音频内容未进入日志、源码或 APK。
 - R2 写入失败、MiMo 失败、访客回退和签名 URL 过期都有明确行为。
 
-- [ ] **步骤 2：运行全量本地验证**
+- [x] **步骤 2：运行全量本地验证**
 
 ```bash
 cd auth-worker
@@ -284,7 +284,7 @@ cd ..
 
 如果 Gradle 工具超时，先检查 Gradle 进程、测试 XML、报告和 APK/编译产物，再决定结果；不把工具层超时直接当作失败。
 
-- [ ] **步骤 3：检查 Git 范围**
+- [x] **步骤 3：检查 Git 范围**
 
 ```bash
 git status --short
@@ -293,6 +293,20 @@ git diff --name-only HEAD~4..HEAD
 
 只允许出现本计划涉及的 Worker、Android、四套字符串和已提交的 specs/plans 文档；不提交测试音频、R2 文件、构建产物、临时目录或密钥。
 
-- [ ] **步骤 4：保留部署前阻塞项**
+- [x] **步骤 4：保留部署前阻塞项**
 
 代码验证不等于生产上线。部署前必须单独配置私有 `AI_AUDIO_CACHE` R2 桶、确认 Wrangler Secret、执行 Worker 部署，并分别验证角色目录、访客试听、认证激活、欢迎音频、签名音频 URL、配额和回退。没有完整命令证据时不宣称已上线。
+
+## 执行回填（2026-08-12）
+
+- 任务 1-4 已实现并分别提交；最新修复提交为 `0b4becb`。
+- Worker 新鲜验证：`npm test` 为 108/108，`npm run typecheck` 通过，`wrangler deploy --dry-run` 通过。
+- Android 新鲜验证：全量 `:app:testDebugUnitTest` 为 1774/1774，`compileDebugKotlin` 通过。
+- 生产 Worker 已重新部署，版本为 `69edf722-4156-432d-8337-bb7b22d1f3fe`；公开目录、访客试听、签名音频 GET 和篡改签名拒绝已完成 smoke。
+- 42 条真实 MP3 候选和 21 条自动预选已保存在仓库外受控目录；评分明细见 [验证报告](../../reports/2026-08-12-chiikawa-tts-v1-verification.md)。
+
+仍保留的发布边界：
+
+- [ ] 21 条候选的角色辨识度、声线稳定度、破音与情绪体验尚未经过人耳复核；当前自动评分不可替代最终听感验收。
+- [ ] 未在真实 Android 设备上完成激活、欢迎、签名 URL 播放和系统 TTS 回退；当前环境没有在线 ADB 设备或 AVD。
+- [ ] 未使用真实认证账号执行生产激活/欢迎 smoke，避免在没有授权会话时伪造或修改生产数据。
