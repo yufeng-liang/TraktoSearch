@@ -7,9 +7,11 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
@@ -332,7 +334,7 @@ class WatchlistScreenTest {
     }
 
     @Test
-    fun `搜索框默认渲染不崩溃`() {
+    fun `搜索入口默认收起为图标`() {
         composeRule.setContent {
             WatchlistScreen(
                 onMovieClick = { _, _, _, _, _, _, _ -> },
@@ -343,9 +345,83 @@ class WatchlistScreenTest {
             )
         }
         composeRule.waitForIdle()
-        // 搜索框 placeholder 文字
+        val searchDescription = context.getString(R.string.watchlist_search)
+        composeRule.onNodeWithContentDescription(searchDescription).assertIsDisplayed()
         val searchPlaceholder = context.getString(R.string.watchlist_search_watchlist)
+        composeRule.onAllNodesWithText(searchPlaceholder).fetchSemanticsNodes().also {
+            assertThat(it.size).isEqualTo(0)
+        }
+    }
+
+    @Test
+    fun `点击搜索图标展开并保留查询`() {
+        composeRule.setContent {
+            WatchlistScreen(
+                onMovieClick = { _, _, _, _, _, _, _ -> },
+                onShowClick = { _, _, _, _, _, _, _ -> },
+                onSearchClick = {},
+                onTraktSearch = { _, _ -> },
+                viewModel = createMockWatchlistViewModel()
+            )
+        }
+        composeRule.waitForIdle()
+
+        val searchDescription = context.getString(R.string.watchlist_search)
+        val searchPlaceholder = context.getString(R.string.watchlist_search_watchlist)
+        composeRule.onNodeWithContentDescription(searchDescription).performClick()
+        composeRule.waitForIdle()
         composeRule.onNodeWithText(searchPlaceholder).assertIsDisplayed()
+
+        composeRule.onNodeWithTag("watchlist_search_input").performTextInput("星际")
+        composeRule.onNodeWithText("星际").assertIsDisplayed()
+    }
+
+    @Test
+    fun `展开搜索时点击分类会收起并切换分类`() {
+        composeRule.setContent {
+            WatchlistScreen(
+                onMovieClick = { _, _, _, _, _, _, _ -> },
+                onShowClick = { _, _, _, _, _, _, _ -> },
+                onSearchClick = {},
+                onTraktSearch = { _, _ -> },
+                viewModel = createMockWatchlistViewModel()
+            )
+        }
+        composeRule.waitForIdle()
+
+        val searchDescription = context.getString(R.string.watchlist_search)
+        val searchPlaceholder = context.getString(R.string.watchlist_search_watchlist)
+        composeRule.onNodeWithContentDescription(searchDescription).performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("watchlist_category_tab_1").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onAllNodesWithText(searchPlaceholder).fetchSemanticsNodes().also {
+            assertThat(it.size).isEqualTo(0)
+        }
+        composeRule.onNodeWithTag("watchlist_category_tab_1").assertIsDisplayed()
+    }
+
+    @Test
+    fun `分类Tab显示独立数量徽标和等宽触控区域`() {
+        composeRule.setContent {
+            WatchlistScreen(
+                onMovieClick = { _, _, _, _, _, _, _ -> },
+                onShowClick = { _, _, _, _, _, _, _ -> },
+                onSearchClick = {},
+                onTraktSearch = { _, _ -> },
+                viewModel = createMockWatchlistViewModel()
+            )
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(context.getString(R.string.watchlist_tab_movies)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.watchlist_tab_shows)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.detail_disk_type_other)).assertIsDisplayed()
+        assertThat(composeRule.onAllNodesWithText("0").fetchSemanticsNodes().size).isEqualTo(3)
+        composeRule.onNodeWithTag("watchlist_category_tab_0").assertIsDisplayed()
+        composeRule.onNodeWithTag("watchlist_category_tab_1").assertIsDisplayed()
+        composeRule.onNodeWithTag("watchlist_category_tab_2").assertIsDisplayed()
     }
 
     // ============ 豆瓣同步交互 ============
