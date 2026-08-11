@@ -1004,28 +1004,32 @@ fun AppNavigation(
                 }
 
                 composable(Routes.FEEDBACK) {
-                    val sharedViewModel: FeedbackViewModel = hiltViewModel(
-                        navController.getBackStackEntry(Routes.MAIN)
-                    )
-                    FeedbackScreen(
-                        onBack = { navController.popBackStack() },
-                        onNewFeedback = { navController.navigate(Routes.NEW_FEEDBACK) },
-                        onFeedbackClick = { id -> navController.navigate(Routes.feedbackDetailRoute(id)) },
-                        viewModel = sharedViewModel
-                    )
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        val sharedViewModel: FeedbackViewModel = hiltViewModel(
+                            navController.getBackStackEntry(Routes.MAIN)
+                        )
+                        FeedbackScreen(
+                            onBack = { navController.popBackStack() },
+                            onNewFeedback = { navController.navigate(Routes.NEW_FEEDBACK) },
+                            onFeedbackClick = { id -> navController.navigate(Routes.feedbackDetailRoute(id)) },
+                            viewModel = sharedViewModel
+                        )
+                    }
                 }
                 composable(Routes.NEW_FEEDBACK) {
-                    val sharedViewModel: FeedbackViewModel = hiltViewModel(
-                        navController.getBackStackEntry(Routes.MAIN)
-                    )
-                    NewFeedbackScreen(
-                        onBack = { navController.popBackStack() },
-                        onSuccess = {
-                            sharedViewModel.loadList(refresh = true)
-                            navController.popBackStack(Routes.FEEDBACK, inclusive = false)
-                        },
-                        viewModel = sharedViewModel
-                    )
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        val sharedViewModel: FeedbackViewModel = hiltViewModel(
+                            navController.getBackStackEntry(Routes.MAIN)
+                        )
+                        NewFeedbackScreen(
+                            onBack = { navController.popBackStack() },
+                            onSuccess = {
+                                sharedViewModel.loadList(refresh = true)
+                                navController.popBackStack(Routes.FEEDBACK, inclusive = false)
+                            },
+                            viewModel = sharedViewModel
+                        )
+                    }
                 }
                 composable(
                     route = Routes.FEEDBACK_DETAIL,
@@ -1035,17 +1039,19 @@ fun AppNavigation(
                     )
                 ) { backStackEntry ->
                     val feedbackId = backStackEntry.arguments?.getString("feedbackId") ?: return@composable
-                    val replyId = backStackEntry.arguments?.getString("replyId")?.takeIf { it.isNotBlank() }
-                    val sharedViewModel: FeedbackViewModel = hiltViewModel(
-                        navController.getBackStackEntry(Routes.MAIN)
-                    )
-                    FeedbackDetailScreen(
-                        feedbackId = feedbackId,
-                        replyId = replyId,
-                        onBack = { navController.popBackStack() },
-                        onNewFeedback = { navController.navigate(Routes.NEW_FEEDBACK) },
-                        viewModel = sharedViewModel
-                    )
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        val replyId = backStackEntry.arguments?.getString("replyId")?.takeIf { it.isNotBlank() }
+                        val sharedViewModel: FeedbackViewModel = hiltViewModel(
+                            navController.getBackStackEntry(Routes.MAIN)
+                        )
+                        FeedbackDetailScreen(
+                            feedbackId = feedbackId,
+                            replyId = replyId,
+                            onBack = { navController.popBackStack() },
+                            onNewFeedback = { navController.navigate(Routes.NEW_FEEDBACK) },
+                            viewModel = sharedViewModel
+                        )
+                    }
                 }
                 composable(Routes.MESSAGES) {
                     val sharedViewModel: FeedbackViewModel = hiltViewModel(
