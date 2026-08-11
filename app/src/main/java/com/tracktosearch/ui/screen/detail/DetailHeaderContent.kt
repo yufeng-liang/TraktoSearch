@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.detail
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope.OverlayClip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -169,40 +170,57 @@ internal fun DetailHeaderContent(
                         } else {
                             Modifier.fillMaxSize()
                         }
-                        AsyncImage(
-                            model = remember(uiState.posterUrl) {
-                                ImageRequest.Builder(context)
-                                    .data(uiState.posterUrl)
-                                    .size(264)
-                                    // 与 MovieCard 保持一致:转场时不要图片淡入叠加在
-                                    // sharedElement 容器动画上,避免双重动画看起来卡顿
-                                    .crossfade(false)
-                                    .listener(
-                                        onSuccess = { _, result ->
-                                            // 图片加载成功后提取主色调,用于沉浸式背景渐变
-                                            uiState.posterUrl.let { url ->
-                                                val bitmap = result.drawable.toBitmap()
-                                                scope.launch {
-                                                    val argb = posterColorExtractor.extractDominantColor(url, bitmap)
-                                                    if (argb != 0L) {
-                                                        onPosterColorExtracted(Color(argb))
+                        // 用 Box 承载全屏查看转场的 sharedBounds；AsyncImage 上保留导航用 sharedElement
+                        // （双 key 嵌套是文档支持的 sharedBounds+sharedElement 组合模式）
+                        val boundsModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
+                            with(sharedTransitionScope) {
+                                Modifier.sharedBounds(
+                                    rememberSharedContentState(key = "poster-zoom-bounds-$tmdbId"),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    clipInOverlayDuringTransition = OverlayClip(RoundedCornerShape(8.dp))
+                                )
+                            }
+                        } else Modifier
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(boundsModifier)
+                        ) {
+                            AsyncImage(
+                                model = remember(uiState.posterUrl) {
+                                    ImageRequest.Builder(context)
+                                        .data(uiState.posterUrl)
+                                        .size(264)
+                                        // 与 MovieCard 保持一致:转场时不要图片淡入叠加在
+                                        // sharedElement 容器动画上,避免双重动画看起来卡顿
+                                        .crossfade(false)
+                                        .listener(
+                                            onSuccess = { _, result ->
+                                                // 图片加载成功后提取主色调,用于沉浸式背景渐变
+                                                uiState.posterUrl.let { url ->
+                                                    val bitmap = result.drawable.toBitmap()
+                                                    scope.launch {
+                                                        val argb = posterColorExtractor.extractDominantColor(url, bitmap)
+                                                        if (argb != 0L) {
+                                                            onPosterColorExtracted(Color(argb))
+                                                        }
                                                     }
                                                 }
                                             }
+                                        )
+                                        .build()
+                                },
+                                contentDescription = uiState.displayTitle,
+                                contentScale = ContentScale.Crop,
+                                modifier = posterModifier
+                                    .graphicsLayer(scaleX = posterScale, scaleY = posterScale)
+                                    .pointerInput(Unit) {
+                                        detectTransformGestures { _, _, zoom, _ ->
+                                            posterScale = (posterScale * zoom).coerceIn(1f, 4f)
                                         }
-                                    )
-                                    .build()
-                            },
-                            contentDescription = uiState.displayTitle,
-                            contentScale = ContentScale.Crop,
-                            modifier = posterModifier
-                                .graphicsLayer(scaleX = posterScale, scaleY = posterScale)
-                                .pointerInput(Unit) {
-                                    detectTransformGestures { _, _, zoom, _ ->
-                                        posterScale = (posterScale * zoom).coerceIn(1f, 4f)
                                     }
-                                }
-                        )
+                            )
+                        }
                     } else {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                             Icon(
@@ -446,7 +464,8 @@ internal fun DetailHeaderContent(
                     backdrops = uiState.backdrops,
                     onVideoClick = onVideoClick,
                     onBackdropClick = onBackdropClick,
-                    onShowAll = onShowAllVideos
+                    onShowAll = onShowAllVideos,
+                    sharedKeyPrefix = "backdrop-zoom-$tmdbId"
                 )
             } else {
                 // 骨架屏占位，防止加载后内容跳变

@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.person
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -49,12 +50,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.NeumorphicIconButton
@@ -70,6 +72,7 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun PersonScreen(
     personId: Int,
@@ -100,6 +103,8 @@ fun PersonScreen(
     var showAllTvShows by rememberSaveable { mutableStateOf(false) }
     var showAllPersonImages by rememberSaveable { mutableStateOf(false) }
     var selectedPersonImageIndex by rememberSaveable { mutableIntStateOf(-1) }
+    // 当前全屏图片来源前缀：决定 sharedElement 与哪端缩略图配对
+    var personImageFullscreenKey by remember { mutableStateOf<String?>(null) }
     // 将 gridState 提升到屏幕级，使用 rememberSaveable 保留导航往返后的滚动位置
     val movieCreditsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
     val tvCreditsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
@@ -204,16 +209,29 @@ fun PersonScreen(
                                             contentPadding = PaddingValues(horizontal = 16.dp)
                                         ) {
                                             itemsIndexed(uiState.personImages, key = { index, url -> "person_img_$index" }, contentType = { _, _ -> "image" }) { index, url ->
+                                                val sharedModifier = if (LocalSharedTransitionScope.current != null && LocalAnimatedVisibilityScope.current != null && LocalSharedTransitionEnabled.current) {
+                                                    val scope = LocalSharedTransitionScope.current
+                                                    with(scope!!) {
+                                                        Modifier.sharedElement(
+                                                            rememberSharedContentState(key = "person-row-$personId-$index"),
+                                                            animatedVisibilityScope = LocalAnimatedVisibilityScope.current!!
+                                                        )
+                                                    }
+                                                } else Modifier
                                                 PosterCard(
                                                     imageUrl = url,
                                                     title = uiState.person?.name ?: personName,
-                                                    onClick = { selectedPersonImageIndex = index },
+                                                    onClick = {
+                                                        personImageFullscreenKey = "person-row-$personId"
+                                                        selectedPersonImageIndex = index
+                                                    },
                                                     modifier = Modifier
                                                         .width(110.dp)
                                                         .background(
                                                             MaterialTheme.colorScheme.surfaceVariant,
                                                             RoundedCornerShape(14.dp)
                                                         ),
+                                                    posterModifier = sharedModifier,
                                                     imageSize = 200
                                                 )
                                             }
@@ -434,33 +452,27 @@ fun PersonScreen(
                         )
                     }
 
-                    // 人物图片大图查看（用 Dialog 包裹以确保覆盖在 ModalBottomSheet 之上）
-                    if (selectedPersonImageIndex >= 0 && uiState.personImages.isNotEmpty()) {
-                        Dialog(
-                            onDismissRequest = { selectedPersonImageIndex = -1 },
-                            properties = DialogProperties(
-                                usePlatformDefaultWidth = false,
-                                decorFitsSystemWindows = false
-                            )
-                        ) {
-                            PersonImagePagerOverlay(
-                                images = uiState.personImages,
-                                initialIndex = selectedPersonImageIndex,
-                                onDismiss = { selectedPersonImageIndex = -1 }
-                            )
-                        }
-                    }
+                    // 人物图片大图查看（内联，共享转场需同 window）
+                    PersonImagePagerOverlay(
+                        visible = selectedPersonImageIndex >= 0 && uiState.personImages.isNotEmpty() && personImageFullscreenKey != null,
+                        images = uiState.personImages,
+                        initialIndex = selectedPersonImageIndex.coerceAtLeast(0),
+                        sharedKeyPrefix = personImageFullscreenKey,
+                        onDismiss = { selectedPersonImageIndex = -1 }
+                    )
 
-                    // 全部人物图片弹窗
-                    if (showAllPersonImages && uiState.personImages.isNotEmpty()) {
-                        AllPersonImagesSheet(
-                            images = uiState.personImages,
-                            onImageClick = { index ->
-                                selectedPersonImageIndex = index
-                            },
-                            onDismiss = { showAllPersonImages = false }
-                        )
-                    }
+                    // 全部人物图片面板（内联，替代原 ModalBottomSheet）
+                    AllPersonImagesPanel(
+                        visible = showAllPersonImages && uiState.personImages.isNotEmpty(),
+                        images = uiState.personImages,
+                        personId = personId,
+                        onImageClick = { index ->
+                            personImageFullscreenKey = "person-grid-$personId"
+                            selectedPersonImageIndex = index
+                            showAllPersonImages = false // 关闭面板，全屏从网格原位缩放飞出
+                        },
+                        onDismiss = { showAllPersonImages = false }
+                    )
                 }
             }
         }
@@ -539,4 +551,4 @@ private fun CreditPosterCard(
 // - PersonSkeletonContent.kt: PersonSkeletonContent
 // - PersonHeaderContent.kt: PersonHeaderContent
 // - PersonCreditCard.kt: CreditCard
-// - PersonImageOverlay.kt: PersonImagePagerOverlay, AllPersonImagesSheet
+// - PersonImageOverlay.kt: PersonImagePagerOverlay, AllPersonImagesPanel

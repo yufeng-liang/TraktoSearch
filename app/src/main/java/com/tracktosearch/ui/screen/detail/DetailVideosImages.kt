@@ -4,9 +4,9 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Environment
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,9 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.BrokenImage
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -56,9 +54,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -71,12 +67,14 @@ import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.ZoomableImageOverlay
 import com.tracktosearch.ui.component.queryExistingFile
 import com.tracktosearch.ui.component.savePosterToGallery
 import com.tracktosearch.ui.util.showToast
 import kotlinx.coroutines.launch
-import net.engawapg.lib.zoomable.rememberZoomState
-import net.engawapg.lib.zoomable.zoomable
 
 // ==================== 预告片与截图 ====================
 
@@ -86,7 +84,8 @@ internal fun VideosAndImagesSection(
     backdrops: List<String>,
     onVideoClick: (TmdbVideo) -> Unit = {},
     onBackdropClick: (Int) -> Unit = {},
-    onShowAll: () -> Unit = {}
+    onShowAll: () -> Unit = {},
+    sharedKeyPrefix: String? = null
 ) {
     val totalCount = videos.size + backdrops.size
     Column(modifier = Modifier.padding(bottom = 12.dp)) {
@@ -117,7 +116,9 @@ internal fun VideosAndImagesSection(
             itemsIndexed(backdrops, key = { index, url -> "backdrop_${index}_$url" }) { index, backdropUrl ->
                 BackdropCard(
                     backdropUrl = backdropUrl,
-                    onClick = { onBackdropClick(index) }
+                    onClick = { onBackdropClick(index) },
+                    sharedKeyPrefix = sharedKeyPrefix,
+                    index = index
                 )
             }
             itemsIndexed(videos, key = { index, video -> "video_${index}_${video.key}" }) { _, video ->
@@ -237,8 +238,14 @@ internal fun VideoCard(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-internal fun BackdropCard(backdropUrl: String, onClick: () -> Unit = {}) {
+internal fun BackdropCard(
+    backdropUrl: String,
+    onClick: () -> Unit = {},
+    sharedKeyPrefix: String? = null,
+    index: Int = 0
+) {
     Box(
         modifier = Modifier
             .width(240.dp)
@@ -246,11 +253,21 @@ internal fun BackdropCard(backdropUrl: String, onClick: () -> Unit = {}) {
             .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
     ) {
+        // sharedKeyPrefix 非空且共享转场开启时,与全屏端 "$sharedKeyPrefix-$page" 配对,实现缩放转场
+        val sharedModifier = if (sharedKeyPrefix != null && LocalSharedTransitionScope.current != null && LocalAnimatedVisibilityScope.current != null && LocalSharedTransitionEnabled.current) {
+            val scope = LocalSharedTransitionScope.current
+            with(scope!!) {
+                Modifier.sharedElement(
+                    rememberSharedContentState(key = "$sharedKeyPrefix-$index"),
+                    animatedVisibilityScope = LocalAnimatedVisibilityScope.current!!
+                )
+            }
+        } else Modifier
         AsyncImage(
             model = backdropUrl,
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize().then(sharedModifier)
         )
     }
 }
@@ -616,21 +633,25 @@ internal fun YouTubePlayerOverlay(
 
 @Composable
 internal fun BackdropPagerOverlay(
+    visible: Boolean,
     backdrops: List<String>,
     initialIndex: Int,
+    sharedKeyPrefix: String?,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     val alreadySavedToast = stringResource(R.string.poster_already_saved)
     val scope = rememberCoroutineScope()
-    val pagerState = rememberPagerState(initialPage = initialIndex, pageCount = { backdrops.size })
     // 追踪每张截图的保存状态
     val savedBackdrops = remember { mutableStateOf<Set<Int>>(emptySet()) }
-    val zoomState = rememberZoomState()
+    // 大图用 original 清晰度
+    val originalUrls = remember(backdrops) { backdrops.map { it.replace("/w780/", "/original/") } }
 
-    // 检查当前截图是否已保存
-    LaunchedEffect(pagerState.currentPage) {
-        val index = pagerState.currentPage
+    // 检查初始截图是否已保存（一次性检查，与原有按页检查语义近似）
+    // 键住 visible：详情页常驻组合时 initialIndex 恒为 0，未打开查看器不做磁盘查询
+    LaunchedEffect(visible, initialIndex) {
+        if (!visible) return@LaunchedEffect
+        val index = initialIndex
         if (index in savedBackdrops.value) return@LaunchedEffect
         val fileName = "TrackToSearch_backdrop_${index}.jpg"
         val relativePath = Environment.DIRECTORY_PICTURES + "/TrackToSearch"
@@ -640,147 +661,23 @@ internal fun BackdropPagerOverlay(
         }
     }
 
-    BackHandler(enabled = true) {
-        if (zoomState.scale > 1f) {
-            scope.launch { zoomState.changeScale(1f, Offset.Zero) }
-        } else {
-            onDismiss()
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.92f))
-            .statusBarsPadding()
-    ) {
-        // 图片区域（可点击背景退出）
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {
-                        if (zoomState.scale > 1f) {
-                            scope.launch { zoomState.changeScale(1f, Offset.Zero) }
-                        } else {
-                            onDismiss()
-                        }
-                    }
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            HorizontalPager(
-                state = pagerState,
-                userScrollEnabled = zoomState.scale <= 1f,
-                modifier = Modifier.fillMaxSize()
-            ) { page ->
-                // 列表变化时 currentPage 可能短暂越界，用 getOrNull 防止 IndexOutOfBoundsException
-                val backdropUrl = backdrops.getOrNull(page)?.replace("/w780/", "/original/")
-                if (backdropUrl == null) return@HorizontalPager
-                AsyncImage(
-                    model = remember(backdropUrl) {
-                        ImageRequest.Builder(context)
-                            .data(backdropUrl)
-                            .crossfade(false)
-                            .size(1080)
-                            .build()
-                    },
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .pointerInput(zoomState) {
-                            detectTapGestures(
-                                onDoubleTap = { tapOffset ->
-                                    // 双击切换放大/还原
-                                    if (zoomState.scale > 1f) {
-                                        // 已放大 → 还原
-                                        scope.launch { zoomState.changeScale(1f, Offset.Zero) }
-                                    } else {
-                                        // 未放大 → 放大到 2.5x,以双击位置为中心
-                                        scope.launch { zoomState.changeScale(2.5f, tapOffset) }
-                                    }
-                                }
-                            )
-                        }
-                        .zoomable(zoomState)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = {} // 阻止穿透到背景
-                        )
-                )
-            }
-        }
-
-        // 顶部按钮栏（关闭在左，保存在右）
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            // 关闭按钮（左侧）
-            IconButton(onClick = onDismiss) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(Color.Black.copy(alpha = 0.4f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Rounded.Close,
-                        contentDescription = stringResource(R.string.detail_back),
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp)
-                    )
+    // 图片展示与缩放逻辑委托给通用全屏组件，仅保留保存状态检查与保存逻辑
+    ZoomableImageOverlay(
+        visible = visible,
+        images = originalUrls,
+        initialIndex = initialIndex,
+        sharedKeyPrefix = sharedKeyPrefix,
+        onDismiss = onDismiss,
+        onSave = { idx ->
+            val url = originalUrls.getOrNull(idx) ?: return@ZoomableImageOverlay
+            if (idx in savedBackdrops.value) {
+                context.showToast(alreadySavedToast)
+            } else {
+                savePosterToGallery(context, scope, url, "TrackToSearch_backdrop_${idx}.jpg") {
+                    savedBackdrops.value += idx
                 }
             }
-
-            // 保存按钮（右侧，已保存显示打勾）
-            val currentIndex = pagerState.currentPage
-            val isSaved = currentIndex in savedBackdrops.value
-            IconButton(onClick = {
-                if (isSaved) {
-                    context.showToast(alreadySavedToast)
-                    return@IconButton
-                }
-                val currentUrl = backdrops.getOrNull(currentIndex)?.replace("/w780/", "/original/")
-                if (currentUrl == null) return@IconButton
-                val fileName = "TrackToSearch_backdrop_${currentIndex}.jpg"
-                savePosterToGallery(context, scope, currentUrl, fileName) {
-                    savedBackdrops.value += currentIndex
-                }
-            }) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(Color.Black.copy(alpha = 0.4f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        if (isSaved) Icons.Rounded.Check else Icons.Rounded.Download,
-                        contentDescription = if (isSaved) stringResource(R.string.detail_saved) else stringResource(R.string.detail_save),
-                        tint = if (isSaved) Color(0xFF4CAF50) else Color.White,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            }
-        }
-
-        // 页码
-        Text(
-            text = "${pagerState.currentPage + 1}/${backdrops.size}",
-            color = Color.White,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 32.dp)
-                .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                .padding(horizontal = 12.dp, vertical = 4.dp)
-        )
-    }
+        },
+        isSavedAt = { idx -> idx in savedBackdrops.value }
+    )
 }

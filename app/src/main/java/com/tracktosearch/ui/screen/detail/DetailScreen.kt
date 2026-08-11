@@ -873,10 +873,12 @@ fun DetailScreen(
 
             // 海报大图查看
             val posterUrl = uiState.posterUrl
-            if (showPosterFullscreen && posterUrl != null) {
+            if (posterUrl != null) {
                 PosterFullscreenOverlay(
+                    visible = showPosterFullscreen,
                     posterUrl = posterUrl,
                     title = uiState.displayTitle,
+                    sharedKeyPrefix = "poster-zoom-bounds-$tmdbId",
                     onDismiss = { showPosterFullscreen = false }
                 )
             }
@@ -898,22 +900,14 @@ fun DetailScreen(
                 }
             }
 
-            // 截图滑动查看（用 Dialog 包裹以确保覆盖在 ModalBottomSheet 之上）
-            if (selectedBackdropIndex >= 0 && uiState.backdrops.isNotEmpty()) {
-                Dialog(
-                    onDismissRequest = { selectedBackdropIndex = -1 },
-                    properties = DialogProperties(
-                        usePlatformDefaultWidth = false,
-                        decorFitsSystemWindows = false
-                    )
-                ) {
-                    BackdropPagerOverlay(
-                        backdrops = uiState.backdrops,
-                        initialIndex = selectedBackdropIndex,
-                        onDismiss = { selectedBackdropIndex = -1 }
-                    )
-                }
-            }
+            // 截图滑动查看（内联，不再用 Dialog，共享转场需同 window）
+            BackdropPagerOverlay(
+                visible = selectedBackdropIndex >= 0 && uiState.backdrops.isNotEmpty(),
+                backdrops = uiState.backdrops,
+                initialIndex = selectedBackdropIndex.coerceAtLeast(0),
+                sharedKeyPrefix = "backdrop-zoom-$tmdbId",
+                onDismiss = { selectedBackdropIndex = -1 }
+            )
 
             // 全部预告片与截图弹窗
             if (showAllVideos) {
@@ -926,6 +920,7 @@ fun DetailScreen(
                     },
                     onBackdropClick = { index ->
                         selectedBackdropIndex = index
+                        showAllVideos = false // 关闭 sheet，全屏淡入（sheet 内元素无法参与共享转场）
                     }
                 )
             }
