@@ -344,6 +344,19 @@ fun HelpScreen(
                         HelpBullet(stringResource(R.string.help_ai_sprite_b6))
                     }
                 }
+
+                // 天气数据说明
+                item {
+                    HelpSection(
+                        title = stringResource(R.string.help_weather_data),
+                        isExpanded = expandedIndex == 14,
+                        onToggle = { expandedIndex = if (expandedIndex == 14) -1 else 14 }
+                    ) {
+                        HelpBullet(stringResource(R.string.help_weather_data_b1))
+                        HelpBullet(stringResource(R.string.help_weather_data_b2))
+                        HelpBullet(stringResource(R.string.help_weather_data_b3))
+                    }
+                }
             }
 
             // TopAppBar（纯色背景，无共享元素转场）

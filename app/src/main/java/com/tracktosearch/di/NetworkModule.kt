@@ -18,7 +18,7 @@ import com.tracktosearch.data.remote.tmdb.TmdbApiService
 import com.tracktosearch.data.remote.trakt.TraktApiService
 import com.tracktosearch.data.remote.update.GitHubUpdateApiService
 import com.tracktosearch.data.remote.update.GiteeUpdateApiService
-import com.tracktosearch.data.remote.weather.OpenMeteoApi
+import com.tracktosearch.data.remote.weather.XiaomiWeatherApi
 import com.tracktosearch.data.remote.zreso.ZresoApiService
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.persistentTtlCache
@@ -588,19 +588,23 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideOpenMeteoApiService(
-        baseClient: OkHttpClient,
-        loggingInterceptor: HttpLoggingInterceptor
-    ): OpenMeteoApi {
+    fun provideXiaomiWeatherApiService(
+        baseClient: OkHttpClient
+    ): XiaomiWeatherApi {
         val client = baseClient.newBuilder()
-            .addInterceptor(loggingInterceptor)
+            .addInterceptor(Interceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .addHeader("User-Agent", USER_AGENT)
+                    .build()
+                chain.proceed(request)
+            })
             .build()
         return Retrofit.Builder()
-            .baseUrl("https://api.open-meteo.com/v1/")
+            .baseUrl("https://weatherapi.market.xiaomi.com/wtr-v3/")
             .client(client)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
-            .create(OpenMeteoApi::class.java)
+            .create(XiaomiWeatherApi::class.java)
     }
 
     @Provides

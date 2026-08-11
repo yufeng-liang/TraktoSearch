@@ -231,14 +231,20 @@ class CloudThemeManager @Inject constructor(
     }
 
     private fun weatherCodeToTheme(weather: WeatherInfo): CloudTheme {
-        return when (weather.weatherCode) {
-            0, 1 -> CloudTheme.SUNNY
-            2 -> CloudTheme.CLOUDY
-            3 -> CloudTheme.OVERCAST
-            45, 48 -> CloudTheme.MIST
-            in 51..67 -> CloudTheme.RAINY
-            in 71..86 -> CloudTheme.SNOWY
-            in 95..99 -> CloudTheme.THUNDER
+        return when {
+            weather.weatherCode == 0 || weather.weatherCode == 1 -> CloudTheme.SUNNY
+            weather.weatherCode == 2 -> CloudTheme.CLOUDY
+            weather.weatherCode == 3 -> CloudTheme.OVERCAST
+            weather.weatherCode in 4..10 || weather.weatherCode in setOf(19, 21, 22) ->
+                CloudTheme.RAINY
+            weather.weatherCode in 11..12 || weather.weatherCode in 23..25 ->
+                CloudTheme.THUNDER
+            weather.weatherCode in 13..17 || weather.weatherCode in 26..28 ->
+                CloudTheme.SNOWY
+            weather.weatherCode in 18..20 ||
+                weather.weatherCode in 29..32 ||
+                weather.weatherCode == 49 ||
+                weather.weatherCode in 53..58 -> CloudTheme.MIST
             else -> CloudTheme.SUNNY
         }
     }

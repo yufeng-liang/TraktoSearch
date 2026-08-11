@@ -1661,4 +1661,8 @@
     <string name="help_ai_sprite_b4">ニックネーム歓迎、視聴リスト批評、映画クイズ、毎日の豆知識を利用できます</string>
     <string name="help_ai_sprite_b5">AI には日次上限があります。オフラインでもキャッシュは読めます</string>
     <string name="help_ai_sprite_b6">音声サンプルはプライベートサービスに保存され、アプリにはダウンロードされません</string>
+    <string name="help_weather_data">天気データ</string>
+    <string name="help_weather_data_b1">動的テーマはXiaomi Weatherのwtr-v3エンドポイントのみを使用し、AccuWeatherや別の天気APIには直接アクセスしません。</string>
+    <string name="help_weather_data_b2">まず位置情報の座標をXiaomi APIでweathercn:またはaccu:の都市キーに解決し、そのキーで現在の天気を取得します。</string>
+    <string name="help_weather_data_b3">現在の天気は位置ごとに最大3時間キャッシュし、重複リクエストを減らします。正確性と可用性はXiaomi Weatherおよびデータ提供元に依存します。</string>
 </resources>
