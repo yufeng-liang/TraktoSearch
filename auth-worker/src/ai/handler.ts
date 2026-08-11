@@ -43,6 +43,7 @@ const QUIZ_QUESTION_COUNT = 13;
 export interface AiEnvironment extends MimoEnvironment, AiStoreEnvironment {
     AI_VOICE_SAMPLES?: R2Bucket;
     AI_AUDIO_CACHE?: R2Bucket;
+    AUDIO_PUBLIC_BASE_URL?: string;
     [key: string]: unknown;
 }
 
@@ -95,6 +96,8 @@ export async function handleAiApi(
     path: string,
     payload: AiJwtPayload | null,
 ): Promise<Response> {
+    const audioOrigin = resolveAudioPublicBaseUrl(request, env);
+
     if (path === '/api/ai/characters' && request.method === 'GET') {
         return successResponse({
             characters: await characterCatalog(env),
@@ -118,17 +121,17 @@ export async function handleAiApi(
     const body = await readJsonBody(request);
     if (path === '/api/ai/activate') {
         assertAction(body, 'activate');
-        return handleActivate(body, env, requestId, requireAiPayload(payload), new URL(request.url).origin);
+        return handleActivate(body, env, requestId, requireAiPayload(payload), audioOrigin);
     }
     if (path === '/api/ai/tts') {
         assertAction(body, 'tts');
-        return handleTts(request, body, env, requestId, payload);
+        return handleTts(request, body, env, requestId, payload, audioOrigin);
     }
 
     const authenticatedPayload = requireAiPayload(payload);
     if (path === '/api/ai/greeting') {
         assertAction(body, 'greeting');
-        return handleGreeting(body, env, requestId, authenticatedPayload, new URL(request.url).origin);
+        return handleGreeting(body, env, requestId, authenticatedPayload, audioOrigin);
     }
     if (path === '/api/ai/taste') {
         assertAction(body, 'taste');
@@ -209,6 +212,7 @@ async function handleTts(
     env: AiEnvironment,
     requestId: string,
     payload: AiJwtPayload | null,
+    audioOrigin: string,
 ): Promise<Response> {
     const character = requireCharacter(body);
     const text = requiredText(body, ['text', 'content'], 'TTS text');
@@ -222,7 +226,7 @@ async function handleTts(
     }
     // style 仅为旧客户端兼容保留，不能覆盖服务端的角色声线和场景指导。
     void body.style;
-    const input = buildTtsInput(character, scene, text, new URL(request.url).origin);
+    const input = buildTtsInput(character, scene, text, audioOrigin);
     const clientIp = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Real-IP') || 'unknown';
     await reserveAiTtsRequest(env, clientIp);
     const cached = await readCachedTtsAudio(env, input);
@@ -515,6 +519,23 @@ function buildVoiceDesignPrompt(character: CharacterConfig, scene: TtsScene): st
 function buildGreetingSpokenText(character: CharacterConfig, greeting: string): string {
     const catchphrase = character.greetingCatchphrase.trim();
     return catchphrase ? `${greeting.trim()} ${catchphrase}`.trim() : greeting.trim();
+}
+
+function resolveAudioPublicBaseUrl(request: Request, env: AiEnvironment): string {
+    const configured = typeof env.AUDIO_PUBLIC_BASE_URL === 'string'
+        ? env.AUDIO_PUBLIC_BASE_URL.trim()
+        : '';
+    if (configured) {
+        try {
+            const url = new URL(configured);
+            if (url.protocol === 'http:' || url.protocol === 'https:') {
+                return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+            }
+        } catch {
+            // 配置无效时保留请求原端的回退行为
+        }
+    }
+    return new URL(request.url).origin;
 }
 
 function readTtsScene(value: unknown, fallback: TtsScene): TtsScene {

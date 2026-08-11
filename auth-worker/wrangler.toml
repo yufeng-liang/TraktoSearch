@@ -51,14 +51,15 @@ id = "d6fc37992e6d47fc9fe45207923627a3"
 # BAIDU_API_KEY —— 百度翻译 AI API Bearer token
 # 崩溃日志现在由 auth-worker 直接写入共享 CRASH_LOGS KV，不再需要单独的上报 token。
 # AI_VOICE_SAMPLES（可选私有 R2 binding；音色样本仅由 Worker 读取，不返回客户端）
-# AI_AUDIO_CACHE（可选私有 R2 binding；部署前创建专用桶后取消注释，MP3 只通过签名 URL 播放）
-# [[r2_buckets]]
-# binding = "AI_AUDIO_CACHE"
-# bucket_name = "tracktosearch-ai-audio"
+# AI_AUDIO_CACHE：私有 R2 缓存桶，MP3 只通过签名 URL 播放
+[[r2_buckets]]
+binding = "AI_AUDIO_CACHE"
+bucket_name = "tracktosearch-ai-audio"
 
 [vars]
 ENVIRONMENT = "production"
 PUBLIC_SITE_ORIGIN = "https://tracktosearch.pages.dev"
+AUDIO_PUBLIC_BASE_URL = "https://tracktosearch-gateway.pages.dev/gateway-api"
 # Brevo 已验证的 Sender 地址
 EMAIL_FROM = "TraktoSearch <Yu-Fengliang@outlook.com>"
 EMAIL_REPLY_TO = "1577865546@qq.com"

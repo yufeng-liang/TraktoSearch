@@ -79,6 +79,7 @@ export interface Env {
     EMAIL_FROM: string;
     EMAIL_REPLY_TO?: string;
     PUBLIC_SITE_ORIGIN: string;
+    AUDIO_PUBLIC_BASE_URL?: string;
     INVITE_TEST_BYPASS_KEY?: string;
     // MiMo 仅由 Worker 读取，生产环境通过 wrangler secret 注入。
     MIMO_API_KEY?: string;

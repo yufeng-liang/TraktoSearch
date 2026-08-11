@@ -303,6 +303,30 @@ test('TTS stores MP3 in R2, single-flights MiMo, and does not charge cache hits'
     }
 });
 
+test('TTS uses the configured public API base for service-bound requests', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({
+        choices: [{ message: { audio: { data: 'AQI=', transcript: 'voice' } } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+    try {
+        const { response, json } = await call('/api/ai/tts', {
+            method: 'POST',
+            body: { action: 'tts', characterId: 'usagi', text: 'voice', scene: 'AUDITION' },
+            env: createTestEnv({
+                MIMO_API_KEY: 'test-mimo-key',
+                AI_TEST_VOICE_DESIGN_READY: true,
+                AI_AUDIO_CACHE: createAudioBucket(),
+                AUDIO_PUBLIC_BASE_URL: 'https://tracktosearch-gateway.pages.dev/gateway-api',
+            }),
+        });
+        assert.equal(response.status, 200);
+        assert.match(json.data.audioUrl, /^https:\/\/tracktosearch-gateway\.pages\.dev\/gateway-api\/api\/ai\/audio\/[^/]+$/);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
 test('signed TTS audio validates scope, expiry, signature, and object existence', async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async () => new Response(JSON.stringify({
