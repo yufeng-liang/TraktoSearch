@@ -12,6 +12,8 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope.OverlayClip
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -143,6 +145,9 @@ import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.ActionButtonRow
 import com.tracktosearch.ui.component.ActionItem
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
 import com.tracktosearch.ui.component.detailTopBarIconColor
@@ -1218,7 +1223,8 @@ fun DoubanItemDetailScreen(
                                 viewModel.showSubtitleDialog(true)
                             },
                             posterColorExtractor = viewModel.posterColorExtractor,
-                            onPosterColorExtracted = viewModel::updatePosterColor
+                            onPosterColorExtracted = viewModel::updatePosterColor,
+                            doubanId = doubanId
                         )
                     }
 
@@ -1585,12 +1591,13 @@ fun DoubanItemDetailScreen(
             // 海报大图查看(放在最后绘制,关闭/保存按钮不被顶部按钮遮住)
             val posterFailure = uiState.failure
             val posterUrl = posterFailure?.posterUrl
-            if (showPosterFullscreen && posterUrl != null) {
+            if (posterUrl != null) {
+                // 必须一直处于组合中(用 visible 控制显隐),保证与海报源 sharedBounds 同时组合,缩放转场才能生效
                 PosterFullscreenOverlay(
                     visible = showPosterFullscreen,
                     posterUrl = posterUrl,
                     title = posterFailure?.title.orEmpty(),
-                    sharedKeyPrefix = null, // Douban 页无配对源头,不启用 sharedBounds 转场
+                    sharedKeyPrefix = "douban-poster-zoom-bounds-$doubanId",
                     onDismiss = { showPosterFullscreen = false }
                 )
             }
@@ -1803,6 +1810,7 @@ private fun DoubanWritebackActions(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun DoubanItemHeader(
     failure: DoubanSyncFailure,
@@ -1812,7 +1820,9 @@ private fun DoubanItemHeader(
     onPosterClick: () -> Unit,
     onSubtitleClick: () -> Unit,
     posterColorExtractor: PosterColorExtractor,
-    onPosterColorExtracted: (Color) -> Unit
+    onPosterColorExtracted: (Color) -> Unit,
+    // 屏幕参数 doubanId,用于海报缩放转场的 sharedBounds key(与全屏 overlay 配对)
+    doubanId: String
 ) {
     val scope = rememberCoroutineScope()
     // 根据海报主色调亮度自适应文字颜色,增强沉浸背景下的可读性
@@ -1854,6 +1864,19 @@ private fun DoubanItemHeader(
             ) {
                 if (failure.posterUrl != null) {
                     val context = LocalContext.current
+                    // 海报缩放转场:读取共享转场作用域,与全屏 overlay 的 sharedBounds 配对
+                    // (doubanId 为屏幕参数,两个使用点必须用同一 key 才能配对)
+                    val sharedTransitionScope = LocalSharedTransitionScope.current
+                    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+                    val boundsModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
+                        with(sharedTransitionScope) {
+                            Modifier.sharedBounds(
+                                rememberSharedContentState(key = "douban-poster-zoom-bounds-$doubanId"),
+                                animatedVisibilityScope = animatedVisibilityScope,
+                                clipInOverlayDuringTransition = OverlayClip(RoundedCornerShape(8.dp))
+                            )
+                        }
+                    } else Modifier
                     AsyncImage(
                         model = remember(failure.posterUrl) {
                             ImageRequest.Builder(context)
@@ -1876,7 +1899,7 @@ private fun DoubanItemHeader(
                         },
                         contentDescription = displayTitle,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize().then(boundsModifier)
                     )
                 } else {
                     Box(
