@@ -22,6 +22,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import android.net.Uri
 import android.widget.Toast
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -293,6 +294,10 @@ fun AppNavigation(
     val navController = rememberNavController()
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val context = LocalContext.current
+    val loginFailedMessage = stringResource(R.string.login_failed)
+    val loginDeniedMessage = stringResource(R.string.login_denied)
+    val authOfflineMessage = stringResource(R.string.auth_offline_mode)
+    val syncAlreadyRunningMessage = stringResource(R.string.sync_already_running)
     // 页面变化追踪（错误日志上下文）
     navController.addOnDestinationChangedListener { _, destination, _ ->
         val route = destination.route ?: ""
@@ -341,7 +346,7 @@ fun AppNavigation(
                             sessionModeManager.setTraktConnectionState(TraktConnectionState.CONNECTED)
                             onLoginSuccess()
                         } else {
-                            Toast.makeText(context, context.getString(R.string.login_failed), Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, loginFailedMessage, Toast.LENGTH_SHORT).show()
                         }
                     }
             }
@@ -351,7 +356,7 @@ fun AppNavigation(
                     .collect {
                         OAuthCallback.setAuthDenied(false)
                         directTraktLoginActive = false
-                        Toast.makeText(context, context.getString(R.string.login_denied), Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, loginDeniedMessage, Toast.LENGTH_SHORT).show()
                     }
             }
         }
@@ -367,7 +372,7 @@ fun AppNavigation(
                 }
                 .onFailure {
                     directTraktLoginActive = false
-                    Toast.makeText(context, context.getString(R.string.login_failed), Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, loginFailedMessage, Toast.LENGTH_SHORT).show()
                 }
         }
     }
@@ -410,7 +415,7 @@ fun AppNavigation(
 
     LaunchedEffect(currentAuthState) {
         if (currentAuthState == AuthState.OFFLINE) {
-            Toast.makeText(context, context.getString(R.string.auth_offline_mode), Toast.LENGTH_LONG).show()
+            Toast.makeText(context, authOfflineMessage, Toast.LENGTH_LONG).show()
         }
         if ((currentAuthState == AuthState.UNAUTHORIZED || currentAuthState == AuthState.EXPIRED) &&
             navController.currentDestination?.route == Routes.MAIN
@@ -587,7 +592,7 @@ fun AppNavigation(
                                     pendingCount = 0
                                     val started = doubanSyncManager.startResume()
                                     if (!started) {
-                                        Toast.makeText(context, context.getString(R.string.sync_already_running), Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, syncAlreadyRunningMessage, Toast.LENGTH_SHORT).show()
                                     }
                                 },
                                 onFullSync = {
@@ -598,7 +603,7 @@ fun AppNavigation(
                                         doubanSyncManager.clearPendingItems()
                                         val started = doubanSyncManager.startSync(SyncMode.FULL_REWRITE)
                                         if (!started) {
-                                            Toast.makeText(context, context.getString(R.string.sync_already_running), Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, syncAlreadyRunningMessage, Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 }
@@ -1057,10 +1062,13 @@ fun AppNavigation(
                     }
                 }
 
-                composable(Routes.FEEDBACK) {
+                composable(Routes.FEEDBACK) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
-                        val sharedViewModel: FeedbackViewModel = hiltViewModel(
+                        val mainBackStackEntry = remember(backStackEntry) {
                             navController.getBackStackEntry(Routes.MAIN)
+                        }
+                        val sharedViewModel: FeedbackViewModel = hiltViewModel(
+                            mainBackStackEntry
                         )
                         FeedbackScreen(
                             onBack = { navController.popBackStack() },
@@ -1070,10 +1078,13 @@ fun AppNavigation(
                         )
                     }
                 }
-                composable(Routes.NEW_FEEDBACK) {
+                composable(Routes.NEW_FEEDBACK) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
-                        val sharedViewModel: FeedbackViewModel = hiltViewModel(
+                        val mainBackStackEntry = remember(backStackEntry) {
                             navController.getBackStackEntry(Routes.MAIN)
+                        }
+                        val sharedViewModel: FeedbackViewModel = hiltViewModel(
+                            mainBackStackEntry
                         )
                         NewFeedbackScreen(
                             onBack = { navController.popBackStack() },
@@ -1095,8 +1106,11 @@ fun AppNavigation(
                     val feedbackId = backStackEntry.arguments?.getString("feedbackId") ?: return@composable
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         val replyId = backStackEntry.arguments?.getString("replyId")?.takeIf { it.isNotBlank() }
-                        val sharedViewModel: FeedbackViewModel = hiltViewModel(
+                        val mainBackStackEntry = remember(backStackEntry) {
                             navController.getBackStackEntry(Routes.MAIN)
+                        }
+                        val sharedViewModel: FeedbackViewModel = hiltViewModel(
+                            mainBackStackEntry
                         )
                         FeedbackDetailScreen(
                             feedbackId = feedbackId,
@@ -1107,9 +1121,12 @@ fun AppNavigation(
                         )
                     }
                 }
-                composable(Routes.MESSAGES) {
-                    val sharedViewModel: FeedbackViewModel = hiltViewModel(
+                composable(Routes.MESSAGES) { backStackEntry ->
+                    val mainBackStackEntry = remember(backStackEntry) {
                         navController.getBackStackEntry(Routes.MAIN)
+                    }
+                    val sharedViewModel: FeedbackViewModel = hiltViewModel(
+                        mainBackStackEntry
                     )
                     MessagesScreen(
                         onBack = { navController.popBackStack() },

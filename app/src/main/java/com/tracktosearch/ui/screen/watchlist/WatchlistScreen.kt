@@ -225,6 +225,7 @@ fun WatchlistScreen(
     )
     var showFilterSheet by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val batchRemovePartialFailedMessage = stringResource(R.string.watchlist_batch_remove_partial_failed)
     val view = LocalView.current
     // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的卡片参与共享元素转场，避免跨页面重复海报 key 冲突
     var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
@@ -1442,7 +1443,7 @@ fun WatchlistScreen(
                                                     if (hasFailure) {
                                                         Toast.makeText(
                                                             context,
-                                                            context.getString(R.string.watchlist_batch_remove_partial_failed),
+                                                            batchRemovePartialFailedMessage,
                                                             Toast.LENGTH_LONG
                                                         ).show()
                                                     }
