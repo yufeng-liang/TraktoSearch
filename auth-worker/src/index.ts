@@ -42,8 +42,10 @@ import { handleInviteRequest, handleInviteResend, handleInviteVerification } fro
 import { handleLegalRequest } from './legal-requests';
 import { closeLegalRequest, listLegalRequests } from './admin/legal-requests';
 import { cleanupRetention } from './retention';
+import { handleAiApi } from './ai/handler';
 
 export interface Env {
+    [key: string]: unknown;
     DB: D1Database;
     KV: KVNamespace;
     CRASH_LOGS: KVNamespace;
@@ -77,6 +79,10 @@ export interface Env {
     EMAIL_REPLY_TO?: string;
     PUBLIC_SITE_ORIGIN: string;
     INVITE_TEST_BYPASS_KEY?: string;
+    // MiMo 仅由 Worker 读取，生产环境通过 wrangler secret 注入。
+    MIMO_API_KEY?: string;
+    // 私有 R2 音色样本，仅供 Worker 读取，不返回原始样本。
+    AI_VOICE_SAMPLES?: R2Bucket;
 }
 
 export default {
@@ -245,6 +251,11 @@ async function handleAuthApi(
     const payload = await verifyAccessToken(env.JWT_SIGNING_KEY, token);
     if (!payload) {
         throw new AppError('INVALID_TOKEN', 'Invalid or expired token', 401);
+    }
+
+    // AI 角色与能力统一由 Worker 代理，客户端不接触 MiMo 密钥或音色样本。
+    if (path === '/api/ai' || path.startsWith('/api/ai/')) {
+        return handleAiApi(request, env, requestId, path, payload);
     }
 
     if (path === '/api/auth/check' && request.method === 'POST') {

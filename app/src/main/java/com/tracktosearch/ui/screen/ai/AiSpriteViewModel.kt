@@ -1,0 +1,468 @@
+package com.tracktosearch.ui.screen.ai
+
+import android.content.Context
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.tracktosearch.data.ai.AiActivateRequest
+import com.tracktosearch.data.ai.AiAudio
+import com.tracktosearch.data.ai.AiCharacter
+import com.tracktosearch.data.ai.AiCharacterCatalog
+import com.tracktosearch.data.ai.AiErrorCode
+import com.tracktosearch.data.ai.AiGreeting
+import com.tracktosearch.data.ai.AiQuiz
+import com.tracktosearch.data.ai.AiQuizAnswer
+import com.tracktosearch.data.ai.AiQuizQuestionType
+import com.tracktosearch.data.ai.AiQuizResult
+import com.tracktosearch.data.ai.AiTasteAnalysis
+import com.tracktosearch.data.ai.AiTtsRequest
+import com.tracktosearch.data.ai.AiWatchedTitleDto
+import com.tracktosearch.data.ai.AiMediaIdsDto
+import com.tracktosearch.data.ai.AiDailyKnowledge
+import com.tracktosearch.data.ai.AiRepository
+import com.tracktosearch.data.auth.AuthManager
+import com.tracktosearch.data.auth.AuthState
+import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
+import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
+import com.tracktosearch.data.repository.TraktRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.UUID
+import javax.inject.Inject
+
+enum class AiFeature {
+    GREETING,
+    TASTE,
+    QUIZ,
+    DAILY
+}
+
+enum class AiActivationState {
+    IDLE,
+    RECORDING,
+    VERIFYING,
+    SUCCESS,
+    FAILED
+}
+
+data class AiSpriteUiState(
+    val characters: List<AiCharacter> = AiCharacterCatalog.all,
+    val selectedCharacterId: String = "usagi",
+    val activatedCharacterId: String? = null,
+    val authState: AuthState = AuthState.UNAUTHORIZED,
+    val nickname: String? = null,
+    val activationState: AiActivationState = AiActivationState.IDLE,
+    val activationAttempt: Int = 0,
+    val activationMessage: String? = null,
+    val quota: com.tracktosearch.data.ai.AiQuota? = null,
+    val isLoading: Boolean = false,
+    val loadingFeature: AiFeature? = null,
+    val activeFeature: AiFeature? = null,
+    val greeting: AiGreeting? = null,
+    val taste: AiTasteAnalysis? = null,
+    val quiz: AiQuiz? = null,
+    val quizIndex: Int = 0,
+    val quizAnswers: Map<String, AiQuizAnswer> = emptyMap(),
+    val quizResult: AiQuizResult? = null,
+    val dailyKnowledge: AiDailyKnowledge? = null,
+    val errorCode: String? = null
+) {
+    val isAuthorized: Boolean
+        get() = authState == AuthState.AUTHORIZED || authState == AuthState.OFFLINE
+
+    val selectedCharacter: AiCharacter?
+        get() = characters.firstOrNull { it.id == selectedCharacterId }
+
+    val activatedCharacter: AiCharacter?
+        get() = activatedCharacterId?.let { id -> characters.firstOrNull { it.id == id } }
+}
+
+@HiltViewModel
+class AiSpriteViewModel @Inject constructor(
+    private val aiRepository: AiRepository,
+    private val authManager: AuthManager,
+    private val traktRepository: TraktRepository
+) : ViewModel() {
+    private val _uiState = MutableStateFlow(
+        AiSpriteUiState(
+            authState = authManager.authState.value,
+            nickname = authManager.nickname.value
+        )
+    )
+    val uiState: StateFlow<AiSpriteUiState> = _uiState.asStateFlow()
+
+    private val _audioEvents = MutableSharedFlow<AiAudio>(
+        replay = 0,
+        extraBufferCapacity = 4,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val audioEvents: SharedFlow<AiAudio> = _audioEvents.asSharedFlow()
+
+    private var initialized = false
+    private var previewJob: Job? = null
+    private var requestJob: Job? = null
+    private var recentQuizIds = emptyList<String>()
+
+    fun ensureLoaded() {
+        if (initialized) return
+        initialized = true
+        viewModelScope.launch {
+            launch {
+                authManager.authState.collect { authState ->
+                    _uiState.update {
+                        it.copy(
+                            authState = authState,
+                            nickname = authManager.nickname.value
+                        )
+                    }
+                }
+            }
+            launch {
+                authManager.nickname.collect { nickname ->
+                    _uiState.update { it.copy(nickname = nickname) }
+                }
+            }
+            loadCharacters()
+        }
+    }
+
+    fun selectCharacter(characterId: String) {
+        if (_uiState.value.characters.none { it.id == characterId }) return
+        _uiState.update {
+            it.copy(
+                selectedCharacterId = characterId,
+                activationState = if (it.activatedCharacterId == characterId) AiActivationState.SUCCESS else AiActivationState.IDLE,
+                activationMessage = null,
+                errorCode = null
+            )
+        }
+        previewJob?.cancel()
+        previewJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(350)
+            previewSelectedCharacter()
+        }
+    }
+
+    fun activate(context: Context) {
+        val state = _uiState.value
+        if (!state.isAuthorized) {
+            setError("AUTH_REQUIRED")
+            return
+        }
+        if (!canRetryActivation(state.activationAttempt) && state.activationAttempt > 0) {
+            setError("ACTIVATION_RETRY_LIMIT")
+            return
+        }
+        val character = state.selectedCharacter ?: return
+        val attempt = state.activationAttempt + 1
+        _uiState.update {
+            it.copy(
+                activationAttempt = attempt,
+                activationState = AiActivationState.RECORDING,
+                activationMessage = null,
+                errorCode = null
+            )
+        }
+        requestJob?.cancel()
+        requestJob = viewModelScope.launch {
+            val audioDataUrl = AiAudioRecorder.recordOnce(context)
+            if (audioDataUrl.isNullOrBlank()) {
+                _uiState.update { it.copy(activationState = AiActivationState.FAILED, errorCode = "AUDIO_UNAVAILABLE") }
+                return@launch
+            }
+            _uiState.update { it.copy(activationState = AiActivationState.VERIFYING) }
+            aiRepository.activate(
+                friendId = authManager.friendId.value.orEmpty(),
+                request = AiActivateRequest(
+                    characterId = character.id,
+                    audioDataUrl = audioDataUrl,
+                    spokenName = character.activationWord,
+                    sessionId = "activation-${UUID.randomUUID()}"
+                )
+            ).onSuccess { activation ->
+                _uiState.update {
+                    it.copy(
+                        activatedCharacterId = if (activation.activated) character.id else it.activatedCharacterId,
+                        activationState = if (activation.activated) AiActivationState.SUCCESS else AiActivationState.FAILED,
+                        activationMessage = activation.activationPhrase.takeIf { activation.activated && it.isNotBlank() },
+                        quota = activation.quota ?: it.quota,
+                        errorCode = if (activation.activated) null else "ACTIVATION_NOT_MATCHED"
+                    )
+                }
+                activation.audio?.let { _audioEvents.emit(it) }
+                if (activation.activated) loadGreeting(character.id)
+            }.onFailure { error ->
+                _uiState.update { it.copy(activationState = AiActivationState.FAILED, errorCode = errorCode(error)) }
+            }
+        }
+    }
+
+    /** 麦克风权限被拒绝或设备没有输入源时，提供一次明确的文字兜底。 */
+    fun activateByText() {
+        val state = _uiState.value
+        if (!state.isAuthorized) {
+            setError("AUTH_REQUIRED")
+            return
+        }
+        val character = state.selectedCharacter ?: return
+        requestJob?.cancel()
+        requestJob = viewModelScope.launch {
+            _uiState.update { it.copy(activationState = AiActivationState.VERIFYING, errorCode = null) }
+            aiRepository.activate(
+                authManager.friendId.value.orEmpty(),
+                AiActivateRequest(
+                    characterId = character.id,
+                    spokenName = character.activationWord,
+                    sessionId = "activation-text-${UUID.randomUUID()}"
+                )
+            ).onSuccess { activation ->
+                _uiState.update {
+                    it.copy(
+                        activatedCharacterId = if (activation.activated) character.id else it.activatedCharacterId,
+                        activationState = if (activation.activated) AiActivationState.SUCCESS else AiActivationState.FAILED,
+                        activationMessage = activation.activationPhrase.takeIf { activation.activated && it.isNotBlank() },
+                        quota = activation.quota ?: it.quota,
+                        errorCode = if (activation.activated) null else "ACTIVATION_NOT_MATCHED"
+                    )
+                }
+                activation.audio?.let { _audioEvents.emit(it) }
+                if (activation.activated) loadGreeting(character.id)
+            }.onFailure { error ->
+                _uiState.update { it.copy(activationState = AiActivationState.FAILED, errorCode = errorCode(error)) }
+            }
+        }
+    }
+
+    fun openFeature(feature: AiFeature) {
+        _uiState.update { it.copy(activeFeature = feature, errorCode = null) }
+        when (feature) {
+            AiFeature.GREETING -> loadGreeting(_uiState.value.activatedCharacterId ?: _uiState.value.selectedCharacterId)
+            AiFeature.TASTE -> loadTaste()
+            AiFeature.QUIZ -> loadQuiz(forceRefresh = false)
+            AiFeature.DAILY -> loadDaily()
+        }
+    }
+
+    fun closeFeature() {
+        _uiState.update { it.copy(activeFeature = null, loadingFeature = null, errorCode = null) }
+    }
+
+    fun refreshFeature() {
+        when (_uiState.value.activeFeature) {
+            AiFeature.GREETING -> loadGreeting(_uiState.value.selectedCharacterId, forceRefresh = true)
+            AiFeature.TASTE -> loadTaste(forceRefresh = true)
+            AiFeature.QUIZ -> loadQuiz(forceRefresh = true)
+            AiFeature.DAILY -> loadDaily(forceRefresh = true)
+            null -> Unit
+        }
+    }
+
+    fun setQuizAnswer(questionId: String, optionIds: List<String>, textAnswer: String? = null) {
+        _uiState.update { state ->
+            state.copy(
+                quizAnswers = state.quizAnswers + (questionId to AiQuizAnswer(questionId, optionIds, textAnswer))
+            )
+        }
+    }
+
+    fun setQuizTextAnswer(questionId: String, textAnswer: String) {
+        val current = _uiState.value.quizAnswers[questionId]
+        setQuizAnswer(questionId, current?.selectedOptionIds.orEmpty(), textAnswer)
+    }
+
+    fun nextQuestion() {
+        _uiState.update { state ->
+            val lastIndex = (state.quiz?.questions?.size ?: 1) - 1
+            state.copy(quizIndex = (state.quizIndex + 1).coerceAtMost(lastIndex))
+        }
+    }
+
+    fun previousQuestion() {
+        _uiState.update { it.copy(quizIndex = (it.quizIndex - 1).coerceAtLeast(0)) }
+    }
+
+    fun submitQuiz() {
+        val state = _uiState.value
+        val quiz = state.quiz ?: return
+        requestJob?.cancel()
+        requestJob = viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorCode = null) }
+            aiRepository.submitQuiz(
+                authManager.friendId.value.orEmpty(),
+                quiz.quizId,
+                state.quizAnswers.values.toList()
+            ).onSuccess { result ->
+                _uiState.update { it.copy(isLoading = false, quizResult = result, quota = it.quota) }
+            }.onFailure { error ->
+                _uiState.update { it.copy(isLoading = false, errorCode = errorCode(error)) }
+            }
+        }
+    }
+
+    fun replayQuiz() {
+        _uiState.update { it.copy(quizResult = null, quizIndex = 0, quizAnswers = emptyMap()) }
+        loadQuiz(forceRefresh = true)
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(errorCode = null) }
+    }
+
+    private suspend fun loadCharacters() {
+        val friendId = authManager.friendId.value.orEmpty()
+        if (friendId.isBlank()) return
+        aiRepository.listCharacters().onSuccess { remote ->
+            val remoteById = remote.associateBy { it.id }
+            _uiState.update { state ->
+                state.copy(characters = state.characters.map { local -> remoteById[local.id] ?: local })
+            }
+        }
+    }
+
+    private fun previewSelectedCharacter() {
+        val character = _uiState.value.selectedCharacter ?: return
+        if (!isAuthorized()) return
+        viewModelScope.launch {
+            aiRepository.playTts(
+                authManager.friendId.value.orEmpty(),
+                AiTtsRequest(
+                    characterId = character.id,
+                    text = character.auditionText,
+                    style = character.personalityPrompt
+                )
+            ).onSuccess { _audioEvents.emit(it) }
+        }
+    }
+
+    private fun loadGreeting(characterId: String, forceRefresh: Boolean = false) {
+        runFeature(AiFeature.GREETING) {
+            aiRepository.getGreeting(authManager.friendId.value.orEmpty(), characterId, forceRefresh)
+                .onSuccess { greeting ->
+                    _uiState.update { it.copy(greeting = greeting, quota = greeting.quota ?: it.quota) }
+                    greeting.audio?.let { _audioEvents.emit(it) }
+                }
+                .getOrElse { throw it }
+        }
+    }
+
+    private fun loadTaste(forceRefresh: Boolean = false) {
+        runFeature(AiFeature.TASTE) {
+            val watched = watchedTitles()
+            if (watched.isEmpty()) throw IllegalStateException("WATCHED_LIST_EMPTY")
+            aiRepository.getTaste(
+                authManager.friendId.value.orEmpty(),
+                com.tracktosearch.data.ai.AiTasteRequest(watched = watched, forceRefresh = forceRefresh),
+                forceRefresh
+            ).onSuccess { taste -> _uiState.update { it.copy(taste = taste, quota = taste.quota ?: it.quota) } }
+                .getOrElse { throw it }
+        }
+    }
+
+    private fun loadQuiz(forceRefresh: Boolean) {
+        runFeature(AiFeature.QUIZ) {
+            val watched = watchedTitles()
+            if (watched.size < 7) throw IllegalStateException("NOT_ENOUGH_MOVIES")
+            aiRepository.getQuiz(
+                authManager.friendId.value.orEmpty(),
+                com.tracktosearch.data.ai.AiQuizRequest(
+                    watched = watched,
+                    excludedQuizIds = recentQuizIds,
+                    questionCount = 13,
+                    sessionId = "quiz-${UUID.randomUUID()}"
+                ),
+                forceRefresh
+            ).onSuccess { quiz ->
+                recentQuizIds = (listOf(quiz.quizId) + recentQuizIds).take(3)
+                _uiState.update { it.copy(quiz = quiz, quizIndex = 0, quizAnswers = emptyMap(), quizResult = null, quota = quiz.quota ?: it.quota) }
+            }.getOrElse { throw it }
+        }
+    }
+
+    private fun loadDaily(forceRefresh: Boolean = false) {
+        runFeature(AiFeature.DAILY) {
+            aiRepository.getDailyKnowledge(authManager.friendId.value.orEmpty(), forceRefresh)
+                .onSuccess { daily -> _uiState.update { it.copy(dailyKnowledge = daily) } }
+                .getOrElse { throw it }
+        }
+    }
+
+    private fun runFeature(feature: AiFeature, block: suspend () -> Unit) {
+        if (!isAuthorized()) {
+            setError("AUTH_REQUIRED")
+            return
+        }
+        requestJob?.cancel()
+        requestJob = viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, loadingFeature = feature, errorCode = null) }
+            runCatching { block() }.onFailure { error ->
+                _uiState.update { it.copy(errorCode = errorCode(error)) }
+            }
+            _uiState.update { it.copy(isLoading = false, loadingFeature = null) }
+        }
+    }
+
+    private suspend fun watchedTitles(): List<AiWatchedTitleDto> = withContext(Dispatchers.IO) {
+        val results = listOf(
+            async { traktRepository.getAllMovieHistory(extended = "full") },
+            async { traktRepository.getAllShowHistory(extended = "full") }
+        ).awaitAll()
+        val movies = (results[0].getOrNull() as? List<TraktWatchlistMovieItem>).orEmpty().map { it.toAiWatched() }
+        val shows = (results[1].getOrNull() as? List<TraktWatchlistShowItem>).orEmpty().map { it.toAiWatched() }
+        (movies + shows).sortedByDescending { it.watchedAt.orEmpty() }.take(60)
+    }
+
+    private fun isAuthorized(): Boolean =
+        _uiState.value.isAuthorized && !authManager.friendId.value.isNullOrBlank()
+
+    private fun setError(code: String) {
+        _uiState.update { it.copy(errorCode = code) }
+    }
+
+    private fun errorCode(error: Throwable): String {
+        val aiError = error as? com.tracktosearch.data.ai.AiApiException
+        return aiError?.errorCode?.name ?: error.message?.takeIf { it.isNotBlank() } ?: "UNKNOWN"
+    }
+}
+
+private fun TraktWatchlistMovieItem.toAiWatched(): AiWatchedTitleDto = AiWatchedTitleDto(
+    mediaId = movie.ids.trakt.takeIf { it > 0 }?.toString() ?: movie.ids.tmdb.toString(),
+    mediaType = "movie",
+    title = movie.title,
+    year = movie.year.takeIf { it > 0 },
+    genres = movie.genres,
+    publicRating = movie.rating,
+    watchedAt = watched_at.takeIf { it.isNotBlank() },
+    mediaIds = AiMediaIdsDto(
+        traktId = movie.ids.trakt.takeIf { it > 0 }?.toString(),
+        tmdbId = movie.ids.tmdb.takeIf { it > 0 },
+        imdbId = movie.ids.imdb.takeIf { it.isNotBlank() }
+    )
+)
+
+private fun TraktWatchlistShowItem.toAiWatched(): AiWatchedTitleDto = AiWatchedTitleDto(
+    mediaId = show.ids.trakt.takeIf { it > 0 }?.toString() ?: show.ids.tmdb.toString(),
+    mediaType = "show",
+    title = show.title,
+    year = show.year.takeIf { it > 0 },
+    genres = show.genres,
+    publicRating = show.rating,
+    watchedAt = watched_at.takeIf { it.isNotBlank() },
+    mediaIds = AiMediaIdsDto(
+        traktId = show.ids.trakt.takeIf { it > 0 }?.toString(),
+        tmdbId = show.ids.tmdb.takeIf { it > 0 },
+        imdbId = show.ids.imdb.takeIf { it.isNotBlank() }
+    )
+)

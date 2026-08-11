@@ -76,6 +76,10 @@ class AuthManager @Inject constructor(
     private val _nickname = MutableStateFlow<String?>(null)
     val nickname: StateFlow<String?> = _nickname.asStateFlow()
 
+    // AI 网关按 friendId 隔离缓存与配额；只由授权校验响应写入。
+    private val _friendId = MutableStateFlow<String?>(null)
+    val friendId: StateFlow<String?> = _friendId.asStateFlow()
+
     // 设备 ID（激活后缓存）。@Volatile：WorkManager 线程写入对主线程可见
     @Volatile
     private var deviceId: String? = null
@@ -145,6 +149,7 @@ class AuthManager @Inject constructor(
                 val did = deviceId
                 if (did != null) tokenStorage.saveSessionMetadata(did, lastOnlineAt, nextCheckAt)
                 _authState.value = AuthState.AUTHORIZED
+                _friendId.value = body.friendId.takeIf { it.isNotBlank() }
                 _nickname.value = body.nickname.takeIf { it.isNotBlank() }
                 Result.success(body)
             } else if (response.code() == 401) {
@@ -379,6 +384,7 @@ class AuthManager @Inject constructor(
         deviceId = null
         _authState.value = AuthState.UNAUTHORIZED
         _nickname.value = null
+        _friendId.value = null
     }
 
     private suspend fun recoverSilently(): Result<ActivateResponse> {

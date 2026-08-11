@@ -327,6 +327,22 @@ fun HelpScreen(
                         ConsistencyCheckTable()
                     }
                 }
+
+                // AI 精灵
+                item {
+                    HelpSection(
+                        title = stringResource(R.string.help_ai_sprite),
+                        isExpanded = expandedIndex == 13,
+                        onToggle = { expandedIndex = if (expandedIndex == 13) -1 else 13 }
+                    ) {
+                        HelpBullet(stringResource(R.string.help_ai_sprite_b1))
+                        HelpBullet(stringResource(R.string.help_ai_sprite_b2))
+                        HelpBullet(stringResource(R.string.help_ai_sprite_b3))
+                        HelpBullet(stringResource(R.string.help_ai_sprite_b4))
+                        HelpBullet(stringResource(R.string.help_ai_sprite_b5))
+                        HelpBullet(stringResource(R.string.help_ai_sprite_b6))
+                    }
+                }
             }
 
             // TopAppBar（纯色背景，无共享元素转场）

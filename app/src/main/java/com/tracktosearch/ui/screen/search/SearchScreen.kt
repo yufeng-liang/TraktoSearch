@@ -18,8 +18,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -139,6 +141,7 @@ import com.tracktosearch.ui.animation.fadeSlideIn
 import com.tracktosearch.ui.component.CloudEasterEgg
 import com.tracktosearch.ui.component.CloudOverlay
 import com.tracktosearch.ui.component.CloudThemeManager
+import com.tracktosearch.ui.screen.ai.AiSpriteCenter
 import com.tracktosearch.ui.component.DiscoverModalBottomSheet
 import com.tracktosearch.ui.component.DoubanRatingBadge
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
@@ -184,6 +187,7 @@ fun SearchScreen(
     onTraktSearch: ((SearchSourceType, String) -> Unit)? = null,
     onSpiderTest: (() -> Unit)? = null,
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
+    onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
     searchSourceType: SearchSourceType = SearchSourceType.DISK,
     onSearchSourceTypeChange: ((SearchSourceType) -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -255,6 +259,7 @@ fun SearchScreen(
     val showPermissionDialog by cloudThemeManager.showPermissionDialog.collectAsStateWithLifecycle()
     val easterEggRes by cloudThemeManager.easterEggRes.collectAsStateWithLifecycle()
     val easterMessageRes by cloudThemeManager.easterMessageRes.collectAsStateWithLifecycle()
+    var showAiSpriteCenter by rememberSaveable { mutableStateOf(false) }
 
     // 搜索框焦点状态，用于控制搜索历史展开
     var isSearchFocused by remember { mutableStateOf(false) }
@@ -339,6 +344,7 @@ fun SearchScreen(
         CloudIconWithAnimation(
             cloudThemeManager = cloudThemeManager,
             isActive = isActive,
+            onLongClick = { showAiSpriteCenter = true },
             modifier = Modifier
                 .size(cloudIconSize)
                 .align(Alignment.TopCenter)
@@ -543,6 +549,13 @@ fun SearchScreen(
             easterEggRes = easterEggRes,
             messageRes = easterMessageRes,
             onDismiss = { cloudThemeManager.onEasterDismissed() }
+        )
+
+        AiSpriteCenter(
+            visible = showAiSpriteCenter,
+            onDismiss = { showAiSpriteCenter = false },
+            onMovieClick = onMovieClick,
+            onShowClick = onShowClick
         )
     }
 }
@@ -1892,10 +1905,12 @@ private fun getLastKnownLocation(context: android.content.Context): Location? {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CloudIconWithAnimation(
     cloudThemeManager: CloudThemeManager,
     isActive: Boolean,
+    onLongClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val hasPermission by cloudThemeManager.hasLocationPermission.collectAsStateWithLifecycle()
@@ -1908,7 +1923,8 @@ private fun CloudIconWithAnimation(
         if (hasPermission) {
             CloudEasterEgg(
                 themeManager = cloudThemeManager,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                onLongClick = onLongClick
             )
         } else {
             Image(
@@ -1916,10 +1932,11 @@ private fun CloudIconWithAnimation(
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .clickable(
+                    .combinedClickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null,
-                        onClick = { cloudThemeManager.onCloudClicked() }
+                        onClick = { cloudThemeManager.onCloudClicked() },
+                        onLongClick = onLongClick
                     )
             )
         }

@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.tracktosearch.BuildConfig
+import com.tracktosearch.data.ai.AiApiService
 import com.tracktosearch.data.auth.AuthInterceptor
 import com.tracktosearch.data.remote.douban.DoubanHotApiService
 import com.tracktosearch.data.remote.douban.DoubanRexxarApiService
@@ -666,6 +667,34 @@ object NetworkModule {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
         return retrofit.create(com.tracktosearch.data.remote.feedback.FeedbackApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideAiApiService(
+        baseClient: OkHttpClient,
+        loggingInterceptor: HttpLoggingInterceptor,
+        authInterceptor: AuthInterceptor,
+        json: Json
+    ): AiApiService {
+        val client = baseClient.newBuilder()
+            .addInterceptor(authInterceptor)
+            .addInterceptor(Interceptor { chain ->
+                chain.proceed(
+                    chain.request().newBuilder()
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("User-Agent", USER_AGENT)
+                        .build()
+                )
+            })
+            .addInterceptor(loggingInterceptor)
+            .build()
+        return Retrofit.Builder()
+            .baseUrl("${BuildConfig.GATEWAY_BASE_URL.trimEnd('/')}/api/ai/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(AiApiService::class.java)
     }
 }
 

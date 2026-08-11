@@ -2,7 +2,8 @@ package com.tracktosearch.ui.component
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.size
@@ -34,7 +35,8 @@ fun CloudEasterEgg(
     themeManager: CloudThemeManager,
     size: Dp = 182.dp,
     modifier: Modifier = Modifier,
-    onCloudClicked: () -> Unit = { themeManager.onCloudClicked() }
+    onCloudClicked: () -> Unit = { themeManager.onCloudClicked() },
+    onLongClick: (() -> Unit)? = null
 ) {
     val theme by themeManager.currentTheme.collectAsStateWithLifecycle()
     val isNightAlternate by themeManager.isNightAlternate.collectAsStateWithLifecycle()
@@ -64,16 +66,20 @@ fun CloudEasterEgg(
         isPlaying = isCurrentTab
     )
 
+    @OptIn(ExperimentalFoundationApi::class)
+    fun Modifier.cloudGesture(): Modifier = combinedClickable(
+        interactionSource = interactionSource,
+        indication = null,
+        onClick = onCloudClicked,
+        onLongClick = onLongClick
+    )
+
     LottieAnimation(
         composition = composition,
         progress = { if (isCurrentTab) progress else 0f },
         modifier = modifier
             .size(size)
             .scale(scale)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onCloudClicked
-            )
+            .cloudGesture()
     )
 }

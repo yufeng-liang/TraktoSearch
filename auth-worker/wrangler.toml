@@ -29,6 +29,7 @@ id = "d6fc37992e6d47fc9fe45207923627a3"
 # Brevo transactional email sender
 # Secrets（通过 wrangler secret put 注入）
 # JWT_SIGNING_KEY
+# MIMO_API_KEY（MiMo 上游密钥；必须通过 wrangler secret put 注入，禁止写入源码）
 # BREVO_API_KEY
 # INVITE_TEST_BYPASS_KEY（仅供带测试请求头的邮件预览使用）
 # DEVICE_RECOVERY_HMAC_KEY
@@ -49,6 +50,7 @@ id = "d6fc37992e6d47fc9fe45207923627a3"
 # BAIDU_SECRET_KEY —— 百度翻译通用 API MD5 签名密钥
 # BAIDU_API_KEY —— 百度翻译 AI API Bearer token
 # 崩溃日志现在由 auth-worker 直接写入共享 CRASH_LOGS KV，不再需要单独的上报 token。
+# AI_VOICE_SAMPLES（可选私有 R2 binding；音色样本仅由 Worker 读取，不返回客户端）
 
 [vars]
 ENVIRONMENT = "production"
