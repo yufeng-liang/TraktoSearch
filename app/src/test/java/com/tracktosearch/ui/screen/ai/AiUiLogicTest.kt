@@ -2,6 +2,7 @@ package com.tracktosearch.ui.screen.ai
 
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.ai.AiCharacter
+import com.tracktosearch.data.ai.AiTtsScene
 import com.tracktosearch.data.ai.AiTtsRequest
 import com.tracktosearch.data.ai.AiQuizAnswer
 import com.tracktosearch.data.ai.AiQuizOption
@@ -30,7 +31,7 @@ class AiUiLogicTest {
                 characterId = "usagi",
                 text = "到！",
                 sessionId = "sprite-test",
-                scene = "AUDITION",
+                scene = AiTtsScene.AUDITION,
             )
         )
     }

@@ -39,7 +39,7 @@ class AiModelsTest {
             text = "到——！",
             style = "旧客户端风格",
             sessionId = "sprite-session",
-            scene = "ACTIVATION_ACK",
+            scene = AiTtsScene.ACTIVATION_ACK,
         )
         val body = Json { encodeDefaults = true }
             .encodeToJsonElement(AiTtsRequest.serializer(), request)
@@ -48,6 +48,13 @@ class AiModelsTest {
         assertThat(body["style"]?.jsonPrimitive?.content).isEqualTo("旧客户端风格")
         assertThat(body["sessionId"]?.jsonPrimitive?.content).isEqualTo("sprite-session")
         assertThat(body["scene"]?.jsonPrimitive?.content).isEqualTo("ACTIVATION_ACK")
+    }
+
+    @Test
+    fun ttsScenes_matchWorkerContract() {
+        assertThat(AiTtsScene.entries.map { it.name }).containsExactly(
+            "AUDITION", "ACTIVATION_ACK", "GREETING"
+        ).inOrder()
     }
 
     @Test

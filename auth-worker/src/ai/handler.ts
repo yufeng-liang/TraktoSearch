@@ -188,7 +188,7 @@ async function handleActivate(
         }, requestId);
     }
 
-    const audio = await synthesizeShortReply(
+    const audio = await synthesizeOptionalAudio(
         env,
         character,
         character.activationPhrase,
@@ -259,7 +259,7 @@ async function handleGreeting(
             const cachedResponse = requireRecord(cached, 'cached greeting');
             if (!includeAudio) return successResponse(cachedResponse, requestId);
             const cachedSpokenText = requiredText(cachedResponse, ['spokenText', 'greeting'], 'spokenText');
-            const cachedAudio = await synthesizeShortReply(
+            const cachedAudio = await synthesizeOptionalAudio(
                 env,
                 character,
                 cachedSpokenText,
@@ -274,24 +274,20 @@ async function handleGreeting(
     const nickname = await getFriendNickname(env, payload.sub);
     const upstream = await callMimoJson(env, model, greetingMessages(character, nickname));
     const generated = upstream ? normalizeGreeting(parseAssistantJson<unknown>(upstream)) : fallbackGreeting(character, nickname);
+    const spokenText = buildGreetingSpokenText(character, generated.greeting);
+    const audio = includeAudio
+        ? await synthesizeOptionalAudio(env, character, spokenText, 'GREETING', audioOrigin)
+        : null;
     const response = {
         characterId: character.id,
         characterName: character.name,
         nickname,
         greeting: generated.greeting,
-        spokenText: buildGreetingSpokenText(character, generated.greeting),
+        spokenText,
         nicknameMeaning: generated.nicknameMeaning,
         comment: generated.comment,
         text: `${generated.greeting} ${generated.nicknameMeaning} ${generated.comment}`,
-        audio: includeAudio
-            ? toPublicAudio(await synthesizeShortReply(
-                env,
-                character,
-                buildGreetingSpokenText(character, generated.greeting),
-                'GREETING',
-                audioOrigin,
-            ))
-            : null,
+        audio: toPublicAudio(audio),
     };
     await writeAiCache(
         env,
@@ -506,6 +502,21 @@ async function synthesizeShortReply(
     return synthesizeTtsAudio(env, buildTtsInput(character, scene, text, audioOrigin));
 }
 
+async function synthesizeOptionalAudio(
+    env: AiEnvironment,
+    character: CharacterConfig,
+    text: string,
+    scene: TtsScene,
+    audioOrigin: string,
+): Promise<TtsPublicAudio | null> {
+    try {
+        return await synthesizeShortReply(env, character, text, scene, audioOrigin);
+    } catch {
+        // 激活和欢迎的文字结果不能因音频供应商或缓存故障而失败。
+        return null;
+    }
+}
+
 function buildVoiceDesignPrompt(character: CharacterConfig, scene: TtsScene): string {
     return [
         `角色：${character.name}`,
@@ -572,6 +583,7 @@ function toPublicAudio(audio: TtsPublicAudio | null): Record<string, unknown> | 
     return {
         audioDataUrl: audio.audioDataUrl,
         audioUrl: audio.audioUrl,
+        audioUrlExpiresAt: audio.audioUrlExpiresAt,
         mimeType: audio.mimeType,
         durationMs: audio.durationMs,
         cacheKey: audio.cacheKey,

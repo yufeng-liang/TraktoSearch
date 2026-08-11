@@ -258,12 +258,13 @@ class AiRepository @Inject constructor(
     ): Result<AiAudio> {
         val sessionId = sessionIdFor(friendId, request.sessionId)
         return cachedRequest(
-            friendId = friendId,
-            feature = AiCacheFeature.TTS,
-            forceRefresh = false,
-            suffix = request.cacheSuffix(),
-            serializer = AiAudio.serializer()
-        ) {
+        friendId = friendId,
+        feature = AiCacheFeature.TTS,
+        forceRefresh = false,
+        suffix = request.cacheSuffix(),
+        serializer = AiAudio.serializer(),
+        isCacheValid = ::isUsableTtsCache,
+    ) {
             val payload = api.playTts(request.copy(sessionId = sessionId)).requirePayload()
             payload.data.toDomain(payload.quota)
         }
@@ -309,13 +310,16 @@ class AiRepository @Inject constructor(
         forceRefresh: Boolean,
         serializer: KSerializer<T>,
         suffix: String? = null,
+        isCacheValid: (T) -> Boolean = { true },
         block: suspend () -> T
     ): Result<T> {
         if (friendId.trim().isEmpty()) {
             return Result.failure(AiErrorMapper.exception("INVALID_REQUEST", "friendId must not be blank", 400))
         }
         if (!forceRefresh) {
-            readCached(friendId, feature, serializer, suffix)?.let { return Result.success(it) }
+            readCached(friendId, feature, serializer, suffix)
+                ?.takeIf(isCacheValid)
+                ?.let { return Result.success(it) }
         }
         return try {
             val value = block()
@@ -324,9 +328,18 @@ class AiRepository @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            readCached(friendId, feature, serializer, suffix)?.let { Result.success(it) }
+            readCached(friendId, feature, serializer, suffix)
+                ?.takeIf(isCacheValid)
+                ?.let { Result.success(it) }
                 ?: Result.failure(if (e is AiApiException) e else AiErrorMapper.fromThrowable(e))
         }
+    }
+
+    private fun isUsableTtsCache(audio: AiAudio): Boolean {
+        if (audio.audioDataUrl.isNullOrBlank() && audio.audioUrl.isNullOrBlank()) return false
+        if (audio.audioUrl.isNullOrBlank()) return true
+        val expiresAt = audio.audioUrlExpiresAt ?: return false
+        return expiresAt > System.currentTimeMillis()
     }
 
     private suspend fun <T> readCached(
@@ -342,7 +355,7 @@ class AiRepository @Inject constructor(
     private fun AiTtsRequest.cacheSuffix(): String {
         // 32 位 hashCode 会碰撞且跨 JVM 不稳定，可能把不同文本/角色的音频串给错误请求；
         // 改用 SHA-256 hex 作缓存键。
-        return listOf(characterId, scene.orEmpty(), text).joinToString("|").sha256Hex()
+        return listOf(characterId, scene?.name.orEmpty(), text).joinToString("|").sha256Hex()
     }
 
     private fun String.sha256Hex(): String {

@@ -6,6 +6,7 @@ import com.tracktosearch.data.ai.AiQuizQuestion
 import com.tracktosearch.data.ai.AiQuizQuestionType
 import com.tracktosearch.data.ai.AiQuizQuestionResult
 import com.tracktosearch.data.ai.AiRecommendation
+import com.tracktosearch.data.ai.AiTtsScene
 import com.tracktosearch.data.ai.AiTtsRequest
 import com.tracktosearch.data.ai.AiWatchedTitleDto
 import kotlin.random.Random
@@ -34,14 +35,12 @@ enum class AiAuditionPlaybackRoute {
     SYSTEM_TTS
 }
 
-const val AI_TTS_SCENE_AUDITION = "AUDITION"
-
 fun buildAuditionTtsRequest(character: AiCharacter, sessionId: String): AiTtsRequest =
     AiTtsRequest(
         characterId = character.id,
         text = character.auditionText,
         sessionId = sessionId,
-        scene = AI_TTS_SCENE_AUDITION
+        scene = AiTtsScene.AUDITION
     )
 
 fun auditionPlaybackRoute(isAuthorized: Boolean, isAvailable: Boolean): AiAuditionPlaybackRoute = when {

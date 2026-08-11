@@ -375,18 +375,26 @@ data class AiDailyKnowledge(
 )
 
 @Serializable
+enum class AiTtsScene {
+    AUDITION,
+    ACTIVATION_ACK,
+    GREETING,
+}
+
+@Serializable
 data class AiTtsRequest(
     val characterId: String,
     val text: String,
     val style: String? = null,
     val sessionId: String = "default",
-    val scene: String? = null
+    val scene: AiTtsScene? = null
 )
 
 @Serializable
 data class AiAudioDto(
     val audioDataUrl: String? = null,
     val audioUrl: String? = null,
+    val audioUrlExpiresAt: Long? = null,
     val mimeType: String = "audio/mpeg",
     val durationMs: Long? = null,
     val cacheKey: String? = null,
@@ -398,6 +406,7 @@ data class AiAudioDto(
 data class AiAudio(
     val audioDataUrl: String?,
     val audioUrl: String?,
+    val audioUrlExpiresAt: Long? = null,
     val mimeType: String,
     val durationMs: Long?,
     val cacheKey: String?,
@@ -410,6 +419,7 @@ fun AiQuotaDto.toDomain(): AiQuota = AiQuota(sessionUsed, sessionLimit, dailyUse
 fun AiAudioDto.toDomain(outerQuota: AiQuotaDto? = null): AiAudio = AiAudio(
     audioDataUrl = audioDataUrl,
     audioUrl = audioUrl,
+    audioUrlExpiresAt = audioUrlExpiresAt,
     mimeType = mimeType,
     durationMs = durationMs,
     cacheKey = cacheKey,

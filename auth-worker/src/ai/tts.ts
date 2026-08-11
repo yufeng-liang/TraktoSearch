@@ -27,6 +27,7 @@ export interface TtsSynthesisInput {
 export interface TtsPublicAudio {
     audioDataUrl: string | null;
     audioUrl: string | null;
+    audioUrlExpiresAt: number | null;
     mimeType: 'audio/mpeg';
     durationMs: number | null;
     cacheKey: string;
@@ -69,11 +70,11 @@ export async function readCachedTtsAudio(
     } catch {
         return null;
     }
-    if (!object) return null;
+    if (!object || isExpiredTtsObject(object.customMetadata)) return null;
     return await publicAudioFromResolution(env, input, {
         cacheKey,
         audioDataUrl: null,
-        transcript: readTranscript(object.customMetadata),
+        transcript: normalizeSpokenText(input.text),
         stored: true,
     });
 }
@@ -148,11 +149,11 @@ async function synthesizeUncached(
     if (bucket) {
         try {
             const object = await bucket.head(cacheKey);
-            if (object) {
+            if (object && !isExpiredTtsObject(object.customMetadata)) {
                 return {
                     cacheKey,
                     audioDataUrl: null,
-                    transcript: readTranscript(object.customMetadata),
+                    transcript: normalizeSpokenText(input.text),
                     stored: true,
                 };
             }
@@ -169,6 +170,7 @@ async function synthesizeUncached(
 
     const audioDataUrl = toAudioDataUrl(audio.data, audio.mimeType);
     const bytes = decodeAudioDataUrl(audioDataUrl);
+    const transcript = normalizeSpokenText(input.text);
     if (bucket) {
         try {
             const putResult = await bucket.put(cacheKey, bytes, {
@@ -176,13 +178,16 @@ async function synthesizeUncached(
                     contentType: 'audio/mpeg',
                     cacheControl: `private, max-age=${TTS_AUDIO_TTL_SECONDS}`,
                 },
-                customMetadata: audio.transcript ? { transcript: audio.transcript.slice(0, 1000) } : undefined,
+                customMetadata: {
+                    transcript,
+                    expiresAt: String(ttsAudioExpiresAt()),
+                },
             });
             if (putResult) {
                 return {
                     cacheKey,
                     audioDataUrl: null,
-                    transcript: audio.transcript,
+                    transcript,
                     stored: true,
                 };
             }
@@ -193,7 +198,7 @@ async function synthesizeUncached(
     return {
         cacheKey,
         audioDataUrl,
-        transcript: audio.transcript,
+        transcript,
         stored: false,
     };
 }
@@ -223,10 +228,11 @@ async function publicAudioFromResolution(
         return {
             audioDataUrl: null,
             audioUrl: `${input.origin}/api/ai/audio/${token}`,
+            audioUrlExpiresAt: ttsAudioUrlExpiresAt(),
             mimeType: 'audio/mpeg',
             durationMs: null,
             cacheKey: resolution.cacheKey,
-            transcript: resolution.transcript,
+            transcript: normalizeSpokenText(input.text),
         };
     }
     if (resolution.stored && env.AI_AUDIO_CACHE) {
@@ -236,10 +242,11 @@ async function publicAudioFromResolution(
                 return {
                     audioDataUrl: toAudioDataUrl(await object.arrayBuffer(), 'audio/mpeg'),
                     audioUrl: null,
+                    audioUrlExpiresAt: null,
                     mimeType: 'audio/mpeg',
                     durationMs: null,
                     cacheKey: resolution.cacheKey,
-                    transcript: resolution.transcript,
+                    transcript: normalizeSpokenText(input.text),
                 };
             }
         } catch {
@@ -249,15 +256,29 @@ async function publicAudioFromResolution(
     return {
         audioDataUrl: resolution.audioDataUrl,
         audioUrl: null,
+        audioUrlExpiresAt: null,
         mimeType: 'audio/mpeg',
         durationMs: null,
         cacheKey: resolution.cacheKey,
-        transcript: resolution.transcript,
+        transcript: normalizeSpokenText(input.text),
     };
 }
 
 function normalizeSpokenText(text: string): string {
     return text.trim().replace(/\s+/g, ' ');
+}
+
+function ttsAudioExpiresAt(): number {
+    return Math.floor(Date.now() / 1000) + TTS_AUDIO_TTL_SECONDS;
+}
+
+function ttsAudioUrlExpiresAt(): number {
+    return (Math.floor(Date.now() / 1000) + TTS_AUDIO_URL_TTL_SECONDS) * 1000;
+}
+
+function isExpiredTtsObject(metadata: Record<string, string> | undefined): boolean {
+    const expiresAt = Number(metadata?.expiresAt);
+    return Number.isFinite(expiresAt) && expiresAt <= Math.floor(Date.now() / 1000);
 }
 
 function toAudioDataUrl(data: string | ArrayBuffer, mimeType: string): string {
@@ -286,9 +307,4 @@ function toBase64(bytes: Uint8Array): string {
         binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
     }
     return btoa(binary);
-}
-
-function readTranscript(metadata: Record<string, string> | undefined): string | null {
-    const transcript = metadata?.transcript;
-    return typeof transcript === 'string' && transcript.trim() ? transcript : null;
 }

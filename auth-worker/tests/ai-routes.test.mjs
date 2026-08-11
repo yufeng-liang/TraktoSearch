@@ -179,6 +179,7 @@ test('guest audition uses voicedesign MP3 request without consuming quota', asyn
         const json = await response.json();
         assert.equal(response.status, 200);
         assert.equal(json.data.audioDataUrl, 'data:audio/mpeg;base64,AA==');
+        assert.equal(json.data.transcript, '到！你的片单有点东西。');
         assert.equal(json.quota, undefined);
     } finally {
         globalThis.fetch = originalFetch;
@@ -654,6 +655,69 @@ test('activation consumes one recording and returns the role confirmation', asyn
     assert.equal(json.data.activated, true);
     assert.equal(json.data.activationPhrase, '到——！');
     assert.equal(json.data.voiceStatus, 'ready');
+});
+
+test('activation keeps the text success when confirmation audio fails', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+        throw new Error('MiMo TTS unavailable');
+    };
+
+    try {
+        const { response, json } = await call('/api/ai/activate', {
+            method: 'POST',
+            body: {
+                characterId: 'usagi',
+                sessionId: 'activation-audio-failure-session',
+                audioDataUrl: 'data:audio/wav;base64,AA==',
+            },
+            env: createTestEnv({
+                MIMO_API_KEY: 'test-mimo-key',
+                AI_TEST_VOICE_DESIGN_READY: true,
+                AI_TEST_TRANSCRIPT: '乌萨奇',
+            }),
+        });
+
+        assert.equal(response.status, 200);
+        assert.equal(json.data.activated, true);
+        assert.equal(json.data.audio, null);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('greeting keeps the text result when welcome audio fails', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (_input, init) => {
+        const requestBody = JSON.parse(init.body);
+        if (requestBody.model === 'mimo-v2.5-tts-voicedesign') {
+            throw new Error('MiMo TTS unavailable');
+        }
+        return new Response(JSON.stringify({
+            choices: [{ message: { content: JSON.stringify({
+                greeting: '小明，欢迎回来。',
+                meaning: '名字很有精神。',
+                comment: '今天也来找一部好电影吧。',
+            }) } }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+
+    try {
+        const { response, json } = await call('/api/ai/greeting', {
+            method: 'POST',
+            body: { characterId: 'usagi', includeAudio: true, sessionId: 'greeting-audio-failure-session' },
+            env: createTestEnv({
+                MIMO_API_KEY: 'test-mimo-key',
+                AI_TEST_VOICE_DESIGN_READY: true,
+            }),
+        });
+
+        assert.equal(response.status, 200);
+        assert.equal(json.data.audio, null);
+        assert.match(json.data.spokenText, /呀哈/);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
 });
 
 test('activation rejects a character whose matching voice sample is missing', async () => {

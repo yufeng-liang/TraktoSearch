@@ -239,20 +239,55 @@ class AiRepositoryTest {
 
         repository.playTts(
             "friend-a",
-            AiTtsRequest("usagi", "到——！", style = "style-a", scene = "GREETING"),
+            AiTtsRequest("usagi", "到——！", style = "style-a", scene = AiTtsScene.GREETING),
         ).getOrThrow()
         repository.playTts(
             "friend-a",
-            AiTtsRequest("usagi", "到——！", style = "style-b", scene = "GREETING"),
+            AiTtsRequest("usagi", "到——！", style = "style-b", scene = AiTtsScene.GREETING),
         ).getOrThrow()
         repository.playTts(
             "friend-a",
-            AiTtsRequest("usagi", "到——！", style = "style-a", scene = "ACTIVATION_ACK"),
+            AiTtsRequest("usagi", "到——！", style = "style-a", scene = AiTtsScene.ACTIVATION_ACK),
         ).getOrThrow()
 
         assertThat(suffixes).hasSize(3)
         assertThat(suffixes[0]).isEqualTo(suffixes[1])
         assertThat(suffixes[0]).isNotEqualTo(suffixes[2])
+    }
+
+    @Test
+    fun expiredSignedAudioUrl_isRefetchedInsteadOfReadFromCache() = runTest {
+        val api = mockk<AiApiService>()
+        val storage = mockk<AiStorage>(relaxed = true)
+        val expired = AiAudio(
+            audioDataUrl = null,
+            audioUrl = "https://gateway.example/audio/expired",
+            audioUrlExpiresAt = System.currentTimeMillis() - 1,
+            mimeType = "audio/mpeg",
+            durationMs = null,
+            cacheKey = "tts-vd-v1/expired.mp3",
+            transcript = "到！",
+        )
+        coEvery { storage.read("friend-a", AiCacheFeature.TTS, any()) } returns
+            Json.encodeToString(AiAudio.serializer(), expired)
+        coEvery { api.playTts(any()) } returns Response.success(
+            AiApiResponse(
+                code = "SUCCESS",
+                data = AiAudioDto(
+                    audioUrl = "https://gateway.example/audio/fresh",
+                    audioUrlExpiresAt = System.currentTimeMillis() + 60_000,
+                ),
+            )
+        )
+        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+
+        val audio = repository.playTts(
+            "friend-a",
+            AiTtsRequest("usagi", "到！", scene = AiTtsScene.ACTIVATION_ACK),
+        ).getOrThrow()
+
+        assertThat(audio.audioUrl).isEqualTo("https://gateway.example/audio/fresh")
+        coVerify(exactly = 1) { api.playTts(any()) }
     }
 
     @Test
