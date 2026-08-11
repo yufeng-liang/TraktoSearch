@@ -90,31 +90,48 @@ export function findCharacter(id: unknown): CharacterConfig | null {
     return CHARACTERS.find(character => character.id === id) || null;
 }
 
-export function characterVoiceStatus(
+export async function characterVoiceStatus(
     env: { AI_VOICE_SAMPLES?: R2Bucket } & Record<string, unknown>,
     character: CharacterConfig,
-): 'ready' | 'preparing' {
-    const configured = env[`AI_VOICE_CLONE_${character.voiceSampleKey}`];
-    return (typeof configured === 'string' && configured.trim()) || env.AI_VOICE_SAMPLES
-        ? 'ready'
-        : 'preparing';
+): Promise<'ready' | 'preparing'> {
+    const testSample = isTestMode(env)
+        ? env[`AI_TEST_VOICE_SAMPLE_${character.voiceSampleKey}`]
+        : undefined;
+    if (isUsableVoiceSample(testSample)) return 'ready';
+
+    const bucket = env.AI_VOICE_SAMPLES;
+    if (!bucket) return 'preparing';
+    try {
+        const key = voiceObjectKey(character);
+        if (typeof bucket.head === 'function') {
+            const metadata = await bucket.head(key);
+            return metadata && metadata.size > 0 ? 'ready' : 'preparing';
+        }
+        const object = await bucket.get(key);
+        return object ? 'ready' : 'preparing';
+    } catch {
+        return 'preparing';
+    }
 }
 
-export function characterCatalog(
+export async function characterCatalog(
     env: { AI_VOICE_SAMPLES?: R2Bucket } & Record<string, unknown>,
-) {
-    return CHARACTERS.map(character => ({
-        id: character.id,
-        name: character.name,
-        activationWord: character.activationText,
-        aliases: character.aliases,
-        available: characterVoiceStatus(env, character) === 'ready',
-        personalityPrompt: character.personality,
-        auditionText: character.previewText,
-        personality: character.personality,
-        activationName: character.activationText,
-        previewText: character.previewText,
-        voiceStatus: characterVoiceStatus(env, character),
+): Promise<Array<Record<string, unknown>>> {
+    return Promise.all(CHARACTERS.map(async character => {
+        const voiceStatus = await characterVoiceStatus(env, character);
+        return {
+            id: character.id,
+            name: character.name,
+            activationWord: character.activationText,
+            aliases: character.aliases,
+            available: voiceStatus === 'ready',
+            personalityPrompt: character.personality,
+            auditionText: character.previewText,
+            personality: character.personality,
+            activationName: character.activationText,
+            previewText: character.previewText,
+            voiceStatus,
+        };
     }));
 }
 
@@ -130,13 +147,15 @@ export async function readVoiceSample(
     env: { AI_VOICE_SAMPLES?: R2Bucket } & Record<string, unknown>,
     character: CharacterConfig,
 ): Promise<string | null> {
-    const testSample = env[`AI_TEST_VOICE_SAMPLE_${character.voiceSampleKey}`];
-    if (typeof testSample === 'string' && testSample.startsWith('data:audio/')) return testSample;
+    const testSample = isTestMode(env)
+        ? env[`AI_TEST_VOICE_SAMPLE_${character.voiceSampleKey}`]
+        : undefined;
+    if (isUsableVoiceSample(testSample)) return testSample;
 
     const bucket = env.AI_VOICE_SAMPLES;
     if (!bucket) return null;
     try {
-        const object = await bucket.get(`${character.voiceSampleKey.toLowerCase()}.wav`);
+        const object = await bucket.get(voiceObjectKey(character));
         if (!object) return null;
         const bytes = new Uint8Array(await object.arrayBuffer());
         if (bytes.byteLength === 0 || bytes.byteLength > 10 * 1024 * 1024) return null;
@@ -144,6 +163,18 @@ export async function readVoiceSample(
     } catch {
         return null;
     }
+}
+
+function voiceObjectKey(character: CharacterConfig): string {
+    return `${character.voiceSampleKey.toLowerCase()}.wav`;
+}
+
+function isUsableVoiceSample(value: unknown): value is string {
+    return typeof value === 'string' && /^data:audio\/[\w.+-]+;base64,[A-Za-z0-9+/=]+$/i.test(value);
+}
+
+function isTestMode(env: Record<string, unknown>): boolean {
+    return env.AI_TEST_MODE === true || env.AI_TEST_MODE === 'true';
 }
 
 function toBase64(bytes: Uint8Array): string {

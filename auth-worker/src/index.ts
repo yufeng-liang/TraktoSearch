@@ -207,6 +207,14 @@ async function handleAuthApi(
         return handleRefresh(request, env, requestId);
     }
 
+    // AI 角色目录和试听是公开体验入口；真正激活和四项能力仍在下方统一校验 JWT。
+    if (
+        (path === '/api/ai/characters' && request.method === 'GET')
+        || (path === '/api/ai/tts' && request.method === 'POST' && !request.headers.has('Authorization'))
+    ) {
+        return handleAiApi(request, env, requestId, path, null);
+    }
+
     // Trakt 的 client_id 本身是公开标识；授权地址不依赖用户凭据。
     // 将该入口保持公开，避免 access token 过期时连登录页都无法重新打开。
     if (path === '/api/trakt/oauth/authorize' && request.method === 'GET') {

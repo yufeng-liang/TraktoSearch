@@ -144,7 +144,6 @@ async function callMimoPayload(
                 throw new AppError('AI_UPSTREAM_ERROR', 'AI provider request failed', 502);
             }
             const payload: unknown = await response.json();
-            if (!isRecord(payload)) continue;
             return payload;
         } catch (error) {
             // 网络异常：做一次有限重试；业务错误（AppError）直接上抛
