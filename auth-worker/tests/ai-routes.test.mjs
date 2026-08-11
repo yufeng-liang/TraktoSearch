@@ -329,7 +329,14 @@ test('signed TTS audio validates scope, expiry, signature, and object existence'
         assert.equal(valid.headers.get('content-type'), 'audio/mpeg');
         assert.deepEqual(Array.from(new Uint8Array(await valid.arrayBuffer())), [1, 2]);
 
-        const tampered = audioUrl.slice(0, -1) + (audioUrl.endsWith('a') ? 'b' : 'a');
+        const token = audioUrl.slice(audioUrl.lastIndexOf('/') + 1);
+        const tokenParts = token.split('.');
+        const base64UrlAlphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+        const lastSignatureIndex = base64UrlAlphabet.indexOf(tokenParts[2].at(-1));
+        assert.equal(lastSignatureIndex % 4, 0);
+        // 32 字节 HMAC 的末尾有两个未使用 bit；这是同一签名字节的非规范编码。
+        tokenParts[2] = tokenParts[2].slice(0, -1) + base64UrlAlphabet[lastSignatureIndex + 1];
+        const tampered = audioUrl.slice(0, audioUrl.lastIndexOf('/') + 1) + tokenParts.join('.');
         const tamperedResponse = await worker.default.fetch(new Request(tampered), env, { waitUntil() {} });
         assert.equal(tamperedResponse.status, 403);
 

@@ -18,10 +18,17 @@ function base64urlEncode(data: Uint8Array): string {
 }
 
 function base64urlDecode(str: string): Uint8Array {
+    if (!/^[A-Za-z0-9_-]*$/.test(str) || str.length % 4 === 1) {
+        throw new Error('Invalid base64url segment');
+    }
     const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
     const pad = base64.length % 4 === 0 ? '' : '='.repeat(4 - base64.length % 4);
     const binary = atob(base64 + pad);
-    return Uint8Array.from(binary, c => c.charCodeAt(0));
+    const decoded = Uint8Array.from(binary, c => c.charCodeAt(0));
+    if (base64urlEncode(decoded) !== str) {
+        throw new Error('Non-canonical base64url segment');
+    }
+    return decoded;
 }
 
 async function importKey(secret: string): Promise<CryptoKey> {
