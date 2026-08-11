@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.person
 
 import android.os.Environment
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.tween
@@ -70,12 +71,17 @@ internal fun PersonImagePagerOverlay(
     val scope = rememberCoroutineScope()
     val savedImages = remember { mutableStateOf<Set<Int>>(emptySet()) }
 
-    // 已保存检查（按 initialIndex 一次性检查）
-    LaunchedEffect(Unit) {
-        val fileName = "TrackToSearch_person_${initialIndex}.webp"
+    // 已保存检查（按 initialIndex 一次性检查；键住 visible+initialIndex，
+    // 每次打开查看器时重新检查对应页，关闭时不查询）
+    LaunchedEffect(visible, initialIndex) {
+        if (!visible) return@LaunchedEffect
+        val index = initialIndex
+        if (index in savedImages.value) return@LaunchedEffect
+        val fileName = "TrackToSearch_person_${index}.webp"
         val relativePath = Environment.DIRECTORY_PICTURES + "/TrackToSearch"
-        if (queryExistingFile(context, fileName, relativePath) != null) {
-            savedImages.value += initialIndex
+        val exists = queryExistingFile(context, fileName, relativePath) != null
+        if (exists) {
+            savedImages.value += index
         }
     }
 
@@ -123,6 +129,8 @@ internal fun AllPersonImagesPanel(
         val sharedTransitionScope = LocalSharedTransitionScope.current
         val sharedEnabled = LocalSharedTransitionEnabled.current
         val animatedVisibilityScope = this
+        // 返回键关闭面板（内联后屏幕级 BackHandler 仍生效，需在此拦截）
+        BackHandler(enabled = true) { onDismiss() }
         Column(
             modifier = Modifier
                 .fillMaxSize()
