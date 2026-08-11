@@ -52,6 +52,11 @@ internal fun CommentItem(
 
     val displayText = if (showOriginal) comment.comment else (translatedText ?: comment.comment)
     val isDark = isAppDarkTheme()
+    val commentFadeColor = if (isDark) {
+        MaterialTheme.colorScheme.surface
+    } else {
+        Color.White
+    }
     val sourceLabel = if (comment.source == DOUBAN_COMMENT_SOURCE) {
         stringResource(R.string.detail_comment_source_douban)
     } else {
@@ -156,7 +161,7 @@ internal fun CommentItem(
                 }
             } else {
                 // 评论正文（折叠展开）
-                ExpandableText(text = displayText)
+                ExpandableText(text = displayText, fadeColor = commentFadeColor)
 
                 // 原文/译文切换
                 if (translatedText != null) {
