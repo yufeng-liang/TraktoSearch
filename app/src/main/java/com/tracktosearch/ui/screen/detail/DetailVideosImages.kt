@@ -648,7 +648,9 @@ internal fun BackdropPagerOverlay(
     val originalUrls = remember(backdrops) { backdrops.map { it.replace("/w780/", "/original/") } }
 
     // 检查初始截图是否已保存（一次性检查，与原有按页检查语义近似）
-    LaunchedEffect(initialIndex) {
+    // 键住 visible：详情页常驻组合时 initialIndex 恒为 0，未打开查看器不做磁盘查询
+    LaunchedEffect(visible, initialIndex) {
+        if (!visible) return@LaunchedEffect
         val index = initialIndex
         if (index in savedBackdrops.value) return@LaunchedEffect
         val fileName = "TrackToSearch_backdrop_${index}.jpg"

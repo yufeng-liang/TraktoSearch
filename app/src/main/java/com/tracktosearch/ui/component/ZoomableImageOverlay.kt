@@ -79,6 +79,16 @@ internal fun ZoomableImageOverlay(
     // 切页时重置缩放
     LaunchedEffect(pagerState.currentPage) { zoomState.reset() }
 
+    // 重开/目标页变化时复位到对应页：pagerState 创建于 AnimatedVisibility 之外并常驻组合,
+    // initialPage 仅在首次组合生效;Dialog 改内联后若不主动复位,重开会停留在上次滑动到的页。
+    // 同时键住 visible,保证"关闭→重开"即使目标页未变化也会复位;复位时同步重置缩放。
+    LaunchedEffect(visible, safeInitial) {
+        if (visible) {
+            pagerState.scrollToPage(safeInitial)
+            zoomState.reset()
+        }
+    }
+
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(animationSpec = tween(200)),
