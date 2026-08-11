@@ -77,7 +77,7 @@ internal fun PersonImagePagerOverlay(
         if (!visible) return@LaunchedEffect
         val index = initialIndex
         if (index in savedImages.value) return@LaunchedEffect
-        val fileName = "TrackToSearch_person_${index}.webp"
+        val fileName = "TrackToSearch_person_${index}.jpg"
         val relativePath = Environment.DIRECTORY_PICTURES + "/TrackToSearch"
         val exists = queryExistingFile(context, fileName, relativePath) != null
         if (exists) {
@@ -95,7 +95,7 @@ internal fun PersonImagePagerOverlay(
             if (idx in savedImages.value) {
                 context.showToast(alreadySavedToast)
             } else {
-                savePosterToGallery(context, scope, images[idx], "TrackToSearch_person_$idx.webp") {
+                savePosterToGallery(context, scope, images[idx], "person_$idx") {
                     savedImages.value += idx
                 }
             }

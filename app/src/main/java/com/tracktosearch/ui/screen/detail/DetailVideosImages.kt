@@ -673,7 +673,7 @@ internal fun BackdropPagerOverlay(
             if (idx in savedBackdrops.value) {
                 context.showToast(alreadySavedToast)
             } else {
-                savePosterToGallery(context, scope, url, "TrackToSearch_backdrop_${idx}.jpg") {
+                savePosterToGallery(context, scope, url, "backdrop_$idx") {
                     savedBackdrops.value += idx
                 }
             }
