@@ -71,12 +71,13 @@ export interface ApiResponse<T = unknown> {
     data?: T;
 }
 
-export function successResponse<T>(data: T, requestId: string): Response {
+export function successResponse<T>(data: T, requestId: string, quota?: unknown): Response {
     const body: ApiResponse<T> = {
         code: 'SUCCESS',
         message: 'OK',
         requestId,
         data,
+        ...(quota !== undefined ? { quota } : {}),
     };
     return new Response(JSON.stringify(body), {
         status: 200,

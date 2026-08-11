@@ -78,6 +78,7 @@ data class AiSpriteUiState(
     val quizIndex: Int = 0,
     val quizAnswers: Map<String, AiQuizAnswer> = emptyMap(),
     val quizResult: AiQuizResult? = null,
+    val quizHistory: com.tracktosearch.data.ai.AiQuizHistory? = null,
     val dailyKnowledge: AiDailyKnowledge? = null,
     val errorCode: String? = null
 ) {
@@ -116,6 +117,9 @@ class AiSpriteViewModel @Inject constructor(
     private var previewJob: Job? = null
     private var requestJob: Job? = null
     private var recentQuizIds = emptyList<String>()
+    // 一次精灵中心会话共用一个会话 ID：让服务端"单会话最多 7 轮"真正生效。
+    // 若每次请求都发新 UUID，会话配额形同虚设，只剩每日 40 上限。
+    private val spriteSessionId = "sprite-${UUID.randomUUID()}"
 
     fun ensureLoaded() {
         if (initialized) return
@@ -137,6 +141,15 @@ class AiSpriteViewModel @Inject constructor(
                 }
             }
             loadCharacters()
+            loadQuizHistory()
+        }
+    }
+
+    private suspend fun loadQuizHistory() {
+        val friendId = authManager.friendId.value.orEmpty()
+        if (friendId.isBlank()) return
+        aiRepository.readQuizHistory(friendId)?.let { history ->
+            _uiState.update { it.copy(quizHistory = history) }
         }
     }
 
@@ -193,7 +206,7 @@ class AiSpriteViewModel @Inject constructor(
                     characterId = character.id,
                     audioDataUrl = audioDataUrl,
                     spokenName = character.activationWord,
-                    sessionId = "activation-${UUID.randomUUID()}"
+                    sessionId = spriteSessionId
                 )
             ).onSuccess { activation ->
                 _uiState.update {
@@ -229,7 +242,7 @@ class AiSpriteViewModel @Inject constructor(
                 AiActivateRequest(
                     characterId = character.id,
                     spokenName = character.activationWord,
-                    sessionId = "activation-text-${UUID.randomUUID()}"
+                    sessionId = spriteSessionId
                 )
             ).onSuccess { activation ->
                 _uiState.update {
@@ -309,6 +322,14 @@ class AiSpriteViewModel @Inject constructor(
                 state.quizAnswers.values.toList()
             ).onSuccess { result ->
                 _uiState.update { it.copy(isLoading = false, quizResult = result, quota = it.quota) }
+                // 保存最近/最高成绩与错题（离线可浏览闯关历史）
+                val friendId = authManager.friendId.value.orEmpty()
+                if (friendId.isNotBlank()) {
+                    aiRepository.saveQuizHistory(friendId, result)
+                    aiRepository.readQuizHistory(friendId)?.let { history ->
+                        _uiState.update { it.copy(quizHistory = history) }
+                    }
+                }
             }.onFailure { error ->
                 _uiState.update { it.copy(isLoading = false, errorCode = errorCode(error)) }
             }
@@ -339,12 +360,15 @@ class AiSpriteViewModel @Inject constructor(
     private suspend fun previewSelectedCharacter() {
         val character = _uiState.value.selectedCharacter ?: return
         if (!isAuthorized()) return
+        // 音色未就绪的角色不试听（避免白耗配额 + 拿到空音频报错）
+        if (!character.isAvailable) return
         aiRepository.playTts(
             authManager.friendId.value.orEmpty(),
             AiTtsRequest(
                 characterId = character.id,
                 text = character.auditionText,
-                style = character.personalityPrompt
+                style = character.personalityPrompt,
+                sessionId = spriteSessionId
             )
         ).onSuccess { _audioEvents.emit(it) }
     }
@@ -383,7 +407,7 @@ class AiSpriteViewModel @Inject constructor(
                     watched = watched,
                     excludedQuizIds = recentQuizIds,
                     questionCount = 13,
-                    sessionId = "quiz-${UUID.randomUUID()}"
+                    sessionId = spriteSessionId
                 ),
                 forceRefresh
             ).onSuccess { quiz ->

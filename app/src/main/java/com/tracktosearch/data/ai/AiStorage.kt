@@ -23,6 +23,7 @@ enum class AiCacheFeature(val wireName: String) {
     TASTE("taste"),
     QUIZ("quiz"),
     DAILY_KNOWLEDGE("daily_knowledge"),
+    QUIZ_RESULT("quiz_result"),
     TTS("tts")
 }
 

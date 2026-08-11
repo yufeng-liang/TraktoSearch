@@ -342,6 +342,13 @@ data class AiQuizResult(
     val questionResults: List<AiQuizQuestionResult>
 )
 
+/** 闯关历史（离线可浏览）：最近一次结果 + 历史最高分。按 friendId 分区持久化。 */
+@Serializable
+data class AiQuizHistory(
+    val bestScore: Int = 0,
+    val lastResult: AiQuizResult? = null
+)
+
 @Serializable
 data class AiDailyKnowledgeDto(
     val id: String = "",
@@ -370,7 +377,8 @@ data class AiDailyKnowledge(
 data class AiTtsRequest(
     val characterId: String,
     val text: String,
-    val style: String? = null
+    val style: String? = null,
+    val sessionId: String = "default"
 )
 
 @Serializable

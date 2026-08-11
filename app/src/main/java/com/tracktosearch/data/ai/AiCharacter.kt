@@ -36,7 +36,8 @@ object AiCharacterCatalog {
         AiCharacter("chiikawa", "吉伊", "吉伊", listOf("鸡伊", "雞伊", "jiyi", "ji yi"), personalityPrompt = "胆小但认真，遇到困难会努力坚持。", auditionText = "今天也要加油呀！"),
         AiCharacter("hachiware", "小八", "小八", listOf("小巴", "xiaoba", "xiao ba"), personalityPrompt = "温柔乐观，善于鼓励和解释。", auditionText = "太好了，又见到你啦！"),
         AiCharacter("usagi", "乌萨奇", "乌萨奇", listOf("呜萨奇", "乌萨齐", "烏薩奇", "wusaqi", "wu sa qi"), personalityPrompt = "行动派、节奏跳脱，用短促有力的语气表达。", auditionText = "到！"),
-        AiCharacter("momonga", "飞鼠", "飞鼠", listOf("飛鼠", "fei shu", "feishu"), personalityPrompt = "可爱又爱撒娇，偶尔带一点小任性。", auditionText = "快来陪我玩嘛！"),
+        // 与服务端字符 ID 保持一致（服务端为 flying-squirrel）；不一致会导致远程可用态合并不上，角色永久"准备中"
+        AiCharacter("flying-squirrel", "飞鼠", "飞鼠", listOf("飛鼠", "fei shu", "feishu"), personalityPrompt = "可爱又爱撒娇，偶尔带一点小任性。", auditionText = "快来陪我玩嘛！"),
         AiCharacter("shisa", "狮萨", "狮萨", listOf("獅薩", "师萨", "shisa"), personalityPrompt = "认真勤奋，语气朴实而有生活感。", auditionText = "慢慢来，今天也要好好吃饭。"),
         AiCharacter("kurimanju", "栗子馒头", "栗子馒头", listOf("栗子饅頭", "栗子馒头", "lizi mantou"), personalityPrompt = "成熟淡定，喜欢用简短的话给出可靠建议。", auditionText = "先休息一下，再继续。"),
         AiCharacter("rakko", "獭师", "獭师", listOf("獺師", "塔师", "tashi", "lashi"), personalityPrompt = "沉着温和，像前辈一样观察并点拨。", auditionText = "做得不错，再想深一层。")

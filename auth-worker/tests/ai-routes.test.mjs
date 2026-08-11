@@ -373,7 +373,8 @@ test('session quota stops the eighth uncached interaction', async () => {
 });
 
 test('tts consumes quota and stops on the eighth call', async () => {
-    const env = createTestEnv();
+    // 音色就绪（提供 AI_VOICE_SAMPLES）才能通过 VOICE_NOT_READY 守卫走到配额路径
+    const env = createTestEnv({ AI_VOICE_SAMPLES: {} });
     for (let attempt = 0; attempt < 7; attempt += 1) {
         const result = await call('/api/ai/tts', {
             method: 'POST',
@@ -390,6 +391,17 @@ test('tts consumes quota and stops on the eighth call', async () => {
     });
     assert.equal(exhausted.response.status, 429);
     assert.equal(exhausted.json.code, 'AI_SESSION_QUOTA_EXCEEDED');
+});
+
+test('tts rejects voice-not-ready characters without spending quota', async () => {
+    const env = createTestEnv();
+    const result = await call('/api/ai/tts', {
+        method: 'POST',
+        body: { characterId: 'usagi', text: '到！', sessionId: 'tts-notready-session' },
+        env,
+    });
+    assert.equal(result.response.status, 400);
+    assert.equal(result.json.code, 'VOICE_NOT_READY');
 });
 
 test('quiz honors a client-provided quizId on the second call', async () => {

@@ -151,7 +151,7 @@ async function handleActivate(
     if (body.model !== undefined && validateMimoModel(body.model) !== 'mimo-v2.5-asr') {
         throw new AppError('INVALID_MODEL', 'Activation requires the ASR model', 400);
     }
-    await reserveAiQuota(env, payload.sub, payload.device, sessionId);
+    const quota = await reserveAiQuota(env, payload.sub, payload.device, sessionId);
 
     const transcript = audioData
         ? (isTestFallback(env)
@@ -163,6 +163,7 @@ async function handleActivate(
             activated: false,
             characterId: character.id,
             retryable: true,
+            quota: publicQuota(quota),
         }, requestId);
     }
 
@@ -174,6 +175,7 @@ async function handleActivate(
         activationPhrase: '到！',
         voiceStatus: characterVoiceStatus(env, character),
         audio: toPublicAudio(audio),
+        quota: publicQuota(quota),
     }, requestId);
 }
 
@@ -186,15 +188,18 @@ async function handleTts(
     const character = requireCharacter(body);
     const text = requiredText(body, ['text', 'content'], 'TTS text');
     if (text.length > 500) throw new AppError('INVALID_REQUEST', 'TTS text is too long', 400);
+    if (characterVoiceStatus(env, character) !== 'ready') {
+        throw new AppError('VOICE_NOT_READY', 'Voice for this character is not ready', 400);
+    }
     // TTS 计入配额（每会话 7 次 / 每天 40 次），避免音色克隆合成被无限调用
-    await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
+    const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
     const audio = await synthesizeShortReply(
         env,
         character,
         text,
         typeof body.style === 'string' ? body.style.slice(0, 300) : undefined,
     );
-    return successResponse(toPublicAudio(audio), requestId);
+    return successResponse(toPublicAudio(audio), requestId, publicQuota(quota));
 }
 
 async function handleGreeting(
@@ -213,7 +218,7 @@ async function handleGreeting(
         if (cached) return successResponse(cached, requestId);
     }
 
-    await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
+    const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
     const nickname = await getFriendNickname(env, payload.sub);
     const upstream = await callMimoJson(env, model, greetingMessages(character, nickname));
     const generated = upstream ? normalizeGreeting(parseAssistantJson<unknown>(upstream)) : fallbackGreeting(character, nickname);
@@ -230,7 +235,7 @@ async function handleGreeting(
             : null,
     };
     await writeAiCache(env, cacheKey, response, 30 * 24 * 60 * 60, payload.sub, 'greeting');
-    return successResponse(response, requestId);
+    return successResponse(response, requestId, publicQuota(quota));
 }
 
 async function handleTaste(
@@ -248,14 +253,14 @@ async function handleTaste(
         if (cached) return successResponse(cached, requestId);
     }
 
-    await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
+    const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
     const nickname = await getFriendNickname(env, payload.sub);
     const upstream = await callMimoJson(env, model, tasteMessages(nickname, movies));
     const response = upstream
         ? normalizeTaste(parseAssistantJson<unknown>(upstream), nickname)
         : fallbackTaste(nickname, movies);
     await writeAiCache(env, cacheKey, response, 7 * 24 * 60 * 60, payload.sub, 'taste');
-    return successResponse(response, requestId);
+    return successResponse(response, requestId, publicQuota(quota));
 }
 
 async function handleQuiz(
@@ -280,22 +285,24 @@ async function handleQuiz(
         }
     }
 
-    await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
-    const selectedMovies = selectQuizMovies(movies);
+    const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
+    // 最近三局尽量避免重复组合：读客户端上送的 excludedQuizIds，把前几局已用影片从本轮选题中优先排除
+    const avoidedMediaIds = await readAvoidedMediaIds(env, payload.sub, body.excludedQuizIds);
+    const selectedMovies = selectQuizMovies(movies, avoidedMediaIds);
     // 客户端显式传入 quizId 时沿用（重玩同一测验）；未传则每次生成新 id
     const requestedQuizId = body.quizId === undefined ? null : readOpaqueId(body.quizId, 'quizId');
     const cacheData = await generateQuiz(env, model, selectedMovies, requestedQuizId);
     if (cacheData) {
         const cacheKey = `ai:v1:quiz:${payload.sub}:${cacheData.quizId}`;
         await writeAiCache(env, cacheKey, cacheData, 24 * 60 * 60, payload.sub, 'quiz');
-        return successResponse(publicQuiz(cacheData), requestId);
+        return successResponse(publicQuiz(cacheData), requestId, publicQuota(quota));
     }
     // 生成失败（上游错误/解析失败/结构不符）：回退到确定性离线题库，不向用户抛错
     const fallbackId = requestedQuizId ?? crypto.randomUUID();
     const fallbackData: QuizCacheData = { quizId: fallbackId, movies: selectedMovies, questions: fallbackQuizQuestions(selectedMovies) };
     const fallbackKey = `ai:v1:quiz:${payload.sub}:${fallbackId}`;
     await writeAiCache(env, fallbackKey, fallbackData, 24 * 60 * 60, payload.sub, 'quiz');
-    return successResponse(publicQuiz(fallbackData), requestId);
+    return successResponse(publicQuiz(fallbackData), requestId, publicQuota(quota));
 }
 
 /**
@@ -336,6 +343,7 @@ async function handleQuizSubmit(
     if (!cached) throw new AppError('QUIZ_NOT_FOUND', 'Quiz session was not found', 404);
     const quiz = parseQuizCache(cached);
     const result = scoreQuiz(quiz, answers);
+    const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
     return successResponse({
         quizId,
         score: result.score,
@@ -343,14 +351,35 @@ async function handleQuizSubmit(
         correctCount: result.correctCount,
         totalQuestions: quiz.questions.length,
         summary: result.score >= 80 ? '你不只是看过，还真的留下了思考。' : '再回看一次，也许会发现新的入口。',
-        dimensionScores: {},
+        dimensionScores: dimensionScores(quiz, result),
         questionResults: result.results.map(item => ({
             questionId: item.questionId,
             score: item.score,
             correct: item.correct,
             explanation: item.explanation,
         })),
-    }, requestId);
+    }, requestId, publicQuota(quota));
+}
+
+/** 按题型聚合维度得分（single/multiple/short 各自得分 / 满分），兑现"知识维度表现"。 */
+function dimensionScores(
+    quiz: QuizCacheData,
+    result: ReturnType<typeof scoreQuiz>,
+): Record<string, number> {
+    const totals: Record<string, { earned: number; possible: number }> = {};
+    for (let index = 0; index < quiz.questions.length; index += 1) {
+        const question = quiz.questions[index];
+        const item = result.results[index];
+        const bucket = totals[question.type] ?? { earned: 0, possible: 0 };
+        bucket.earned += item?.score || 0;
+        bucket.possible += question.type === 'single' ? 7 : 10;
+        totals[question.type] = bucket;
+    }
+    const output: Record<string, number> = {};
+    for (const [key, value] of Object.entries(totals)) {
+        output[key] = value.possible > 0 ? Math.round((value.earned / value.possible) * 100) : 0;
+    }
+    return output;
 }
 
 async function handleDaily(
@@ -368,11 +397,11 @@ async function handleDaily(
         if (cached) return successResponse(cached, requestId);
     }
 
-    await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
+    const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
     const upstream = await callMimoJson(env, model, dailyMessages(day));
     const response = upstream ? normalizeDaily(parseAssistantJson<unknown>(upstream), day) : fallbackDaily(day);
     await writeAiCache(env, cacheKey, response, 2 * 24 * 60 * 60, null, 'daily');
-    return successResponse(response, requestId);
+    return successResponse(response, requestId, publicQuota(quota));
 }
 
 async function recognizeActivation(audioData: string, env: AiEnvironment): Promise<string> {
@@ -419,6 +448,19 @@ function toPublicAudio(audio: MimoAudioResult | null): Record<string, unknown> |
         durationMs: null,
         cacheKey: null,
         transcript: audio.transcript,
+    };
+}
+
+/** 将配额计数映射为客户端 AiQuotaDto 形状（sessionUsed/sessionLimit/dailyUsed/dailyLimit/resetAt）。 */
+function publicQuota(quota: { sessionCount: number; dailyCount: number; sessionLimit: number; dailyLimit: number }): Record<string, unknown> {
+    const resetAt = new Date();
+    resetAt.setUTCHours(24, 0, 0, 0);
+    return {
+        sessionUsed: quota.sessionCount,
+        sessionLimit: quota.sessionLimit,
+        dailyUsed: quota.dailyCount,
+        dailyLimit: quota.dailyLimit,
+        resetAt: resetAt.getTime(),
     };
 }
 
@@ -820,14 +862,50 @@ function readMovies(body: Record<string, unknown>): WatchMovie[] {
     });
 }
 
-function selectQuizMovies(movies: WatchMovie[]): WatchMovie[] {
+function selectQuizMovies(movies: WatchMovie[], avoidedMediaIds: Set<string> = new Set()): WatchMovie[] {
     const sorted = [...movies].sort((left, right) => (right.watchedAt || '').localeCompare(left.watchedAt || ''));
     const recent = sorted.slice(0, Math.min(3, sorted.length));
     const remaining = sorted.filter(movie => !recent.includes(movie));
-    secureShuffle(remaining);
-    const selected = [...recent, ...remaining].slice(0, 7);
+    // 已用影片优先排除：把最近三局出现过的影片排到候选取末尾，尽量选新组合
+    const avoidable = remaining.filter(movie => avoidedMediaIds.has(movieMediaKey(movie)));
+    const selectable = remaining.filter(movie => !avoidedMediaIds.has(movieMediaKey(movie)));
+    secureShuffle(avoidable);
+    secureShuffle(selectable);
+    const selected = [...recent, ...selectable, ...avoidable].slice(0, 7);
     secureShuffle(selected);
     return selected;
+}
+
+function movieMediaKey(movie: WatchMovie): string {
+    return movie.mediaIds.traktId
+        || movie.mediaIds.tmdbId?.toString()
+        || movie.mediaIds.imdbId
+        || movie.mediaIds.doubanId
+        || movie.title;
+}
+
+/** 读取客户端上送的最近 quizId 列表，收集这些局已用影片的 mediaKey 集合（校验白名单、最多 3 局）。 */
+async function readAvoidedMediaIds(
+    env: AiEnvironment,
+    friendId: string,
+    rawExcluded: unknown,
+): Promise<Set<string>> {
+    const avoided = new Set<string>();
+    if (!Array.isArray(rawExcluded)) return avoided;
+    const ids = rawExcluded
+        .filter((value): value is string => typeof value === 'string' && /^[A-Za-z0-9._:-]{1,96}$/.test(value))
+        .slice(0, 3);
+    for (const quizId of ids) {
+        const cached = await readAiCache(env, `ai:v1:quiz:${friendId}:${quizId}`);
+        if (!cached) continue;
+        try {
+            const quiz = parseQuizCache(cached);
+            quiz.movies.forEach(movie => avoided.add(movieMediaKey(movie)));
+        } catch {
+            // 单个缓存损坏不阻断本轮
+        }
+    }
+    return avoided;
 }
 
 function secureShuffle<T>(items: T[]): void {

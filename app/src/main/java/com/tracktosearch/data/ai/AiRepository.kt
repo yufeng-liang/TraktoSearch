@@ -150,6 +150,8 @@ class AiRepository @Inject constructor(
         friendId = friendId,
         feature = AiCacheFeature.QUIZ,
         forceRefresh = forceRefresh,
+        // 缓存 key 带会话 ID：每次进入精灵中心会话都拿新题包，避免重做上一局"开卷考"
+        suffix = request.sessionId,
         serializer = AiQuiz.serializer()
     ) {
         val quiz = api.getQuiz(request.copy(watched = request.watched.take(MAX_WATCHED_ITEMS)))
@@ -190,6 +192,25 @@ class AiRepository @Inject constructor(
         serializer = AiDailyKnowledge.serializer()
     ) {
         api.getDailyKnowledge().requireData().toDomain()
+    }
+
+    /** 读取闯关历史（离线可浏览最近/最高成绩）。 */
+    suspend fun readQuizHistory(friendId: String): AiQuizHistory? = runCatching {
+        storage.read(friendId, AiCacheFeature.QUIZ_RESULT)?.let { raw ->
+            json.decodeFromJsonElement(AiQuizHistory.serializer(), json.parseToJsonElement(raw))
+        }
+    }.getOrNull()
+
+    /** 保存闯关历史：合并更新最高分，保留最近一次结果。 */
+    suspend fun saveQuizHistory(friendId: String, result: AiQuizResult) {
+        val previous = readQuizHistory(friendId)
+        val history = AiQuizHistory(
+            bestScore = maxOf(previous?.bestScore ?: 0, result.score),
+            lastResult = result
+        )
+        runCatching {
+            storage.write(friendId, AiCacheFeature.QUIZ_RESULT, json.encodeToString(AiQuizHistory.serializer(), history))
+        }
     }
 
     suspend fun playTts(

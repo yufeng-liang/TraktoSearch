@@ -419,7 +419,8 @@ private fun ActivationPanel(
         Spacer(Modifier.height(10.dp))
         Button(
             onClick = onActivate,
-            enabled = state.activationState != AiActivationState.RECORDING && state.activationState != AiActivationState.VERIFYING &&
+            enabled = character.isAvailable &&
+                state.activationState != AiActivationState.RECORDING && state.activationState != AiActivationState.VERIFYING &&
                 (state.activationAttempt == 0 || canRetryActivation(state.activationAttempt)),
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
