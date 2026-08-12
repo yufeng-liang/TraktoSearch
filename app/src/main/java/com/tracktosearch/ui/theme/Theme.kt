@@ -168,6 +168,7 @@ fun TraktoSearchTheme(
     themeMode: String = "system",
     accentColor: MonetAccent? = null,
     visualEffectMode: VisualEffectMode = VisualEffectMode.BLUR,
+    glassVariant: GlassVariant = GlassVariant.CLEAR,
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (themeMode) {
@@ -212,6 +213,7 @@ fun TraktoSearchTheme(
         CompositionLocalProvider(
             LocalHazeBlurStyle provides AppHazeDefaultBlurStyle,
             LocalVisualEffectMode provides visualEffectMode,
+            LocalGlassVariant provides glassVariant,
             content = content
         )
     }

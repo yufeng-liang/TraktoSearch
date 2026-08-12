@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.glance.appwidget.updateAll
+import com.tracktosearch.ui.theme.GlassVariant
 import com.tracktosearch.ui.theme.MonetAccent
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.widget.QuickSearchWidget
@@ -34,20 +35,24 @@ class ThemeStorage @Inject constructor(
     private val _themeMode = MutableStateFlow(MODE_SYSTEM)
     val themeMode: StateFlow<String> = _themeMode.asStateFlow()
 
-    /** null = 用户主动选择动态壁纸取色；未配置时使用复古票根主题。 */
+    /** null = 用户主动选择动态壁纸取色；未配置时使用复古票根主题。*/
     private val _accentColor = MutableStateFlow<MonetAccent?>(MonetAccent.VINTAGE_TICKET)
     val accentColor: StateFlow<MonetAccent?> = _accentColor.asStateFlow()
 
     private val _visualEffectMode = MutableStateFlow(VisualEffectMode.BLUR)
     val visualEffectMode: StateFlow<VisualEffectMode> = _visualEffectMode.asStateFlow()
 
+    private val _glassVariant = MutableStateFlow(GlassVariant.CLEAR)
+    val glassVariant: StateFlow<GlassVariant> = _glassVariant.asStateFlow()
+
     init {
-        // 预加载:从 DataStore 读取首值填入 StateFlow,消除 stateIn 默认值跳变
+        // 预加载 DataStore 首值到 StateFlow，避免 stateIn 默认值抖动。
         scope.launch {
             val prefs = context.themeDataStore.data.first()
             _themeMode.value = prefs[KEY_THEME_MODE] ?: MODE_SYSTEM
             _accentColor.value = decodeAccentName(prefs[KEY_ACCENT_COLOR])
             _visualEffectMode.value = VisualEffectMode.fromStorageValue(prefs[KEY_VISUAL_EFFECT_MODE])
+            _glassVariant.value = GlassVariant.fromStorageValue(prefs[KEY_GLASS_VARIANT])
         }
     }
 
@@ -71,16 +76,30 @@ class ThemeStorage @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                // 未添加 Widget 或启动器暂时不可用时，主题设置仍然有效。
+                // 未安装 Widget 或启动器暂不可用时，主题设置仍然有效。
             }
         }
     }
 
     suspend fun setVisualEffectMode(mode: VisualEffectMode) {
+        val currentGlassVariant = _glassVariant.value
         context.themeDataStore.edit { prefs ->
             prefs[KEY_VISUAL_EFFECT_MODE] = mode.storageValue
+            prefs[KEY_GLASS_VARIANT] = currentGlassVariant.storageValue
         }
         _visualEffectMode.value = mode
+    }
+
+    suspend fun setVisualEffectSelection(
+        mode: VisualEffectMode,
+        glassVariant: GlassVariant
+    ) {
+        context.themeDataStore.edit { prefs ->
+            prefs[KEY_VISUAL_EFFECT_MODE] = mode.storageValue
+            prefs[KEY_GLASS_VARIANT] = glassVariant.storageValue
+        }
+        _visualEffectMode.value = mode
+        _glassVariant.value = glassVariant
     }
 
     suspend fun readAccentColorSnapshot(): MonetAccent? {
@@ -105,5 +124,6 @@ class ThemeStorage @Inject constructor(
         private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
         private val KEY_ACCENT_COLOR = stringPreferencesKey("accent_color")
         private val KEY_VISUAL_EFFECT_MODE = stringPreferencesKey("visual_effect_mode")
+        private val KEY_GLASS_VARIANT = stringPreferencesKey("glass_variant")
     }
 }
