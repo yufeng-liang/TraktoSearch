@@ -379,12 +379,13 @@ class ResourceRepository @Inject constructor(
     }
 
     /**
-     * 排序后的资源结果（items 已按相关度+次级规则排好，scoreMap 保留每条 url 的分值供后续过滤复用）。
+     * 排序后的资源结果。
      * 用 url 作为 key 而非对象引用，避免 ResourceItem 作为可变共享状态在跨影视缓存场景下产生竞态。
      */
     data class RankedResources(
         val items: List<ResourceItem>,
-        val scoreMap: Map<String, Int> // url -> relevanceScore（query 为空时为空 map）
+        val scoreMap: Map<String, Int>, // url -> relevanceScore（query 为空时为空 map）
+        val highRelevanceMap: Map<String, Boolean> // url -> high relevance（query 为空时为空 map）
     )
 
     /**
@@ -402,17 +403,21 @@ class ResourceRepository @Inject constructor(
             .thenByDescending { it.source == SOURCE_PANSOU }
 
     /**
-     * 按相关度（若有 query）排序，返回排好序的 items 与对应的 scoreMap。
-     * query 为空时 scoreMap 为空，沿用原排序规则（夸克/日期/多季）。
+     * 按相关度（若有 query）排序，返回排好序的 items 与分值/资格 map。
+     * query 为空时两个 map 都为空，沿用原排序规则（夸克/日期/多季）。
      */
     private fun rank(items: List<ResourceItem>, isShow: Boolean, query: ResourceQuery?): RankedResources {
         val distinct = items.distinctBy { it.url }
-        val scoreMap: Map<String, Int> = if (query != null) {
+        val relevanceMap = if (query != null) {
             val scorer = RelevanceScorerProvider.get()
-            distinct.associate { it.url to scorer.score(it, query) }
-        } else emptyMap()
+            distinct.associate { it.url to scorer.evaluate(it, query) }
+        } else {
+            emptyMap()
+        }
+        val scoreMap = relevanceMap.mapValues { it.value.score }
+        val highRelevanceMap = relevanceMap.mapValues { it.value.isHighRelevance }
         val sorted = distinct.sortedWith(resourceComparator(isShow, scoreMap))
-        return RankedResources(sorted, scoreMap)
+        return RankedResources(sorted, scoreMap, highRelevanceMap)
     }
 
     /**
