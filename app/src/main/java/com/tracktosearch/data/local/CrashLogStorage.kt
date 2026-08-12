@@ -54,8 +54,11 @@ class CrashLogStorage @Inject constructor(
     suspend fun setEnabled(enabled: Boolean) {
         context.crashLogDataStore.edit { prefs ->
             prefs[KEY_ENABLED] = enabled
+            // 开启即视为已授权引导，避免下次崩溃时再次弹首次授权弹窗（设置页开关=自动上报语义）
+            if (enabled) prefs[KEY_PROMPTED] = true
         }
         _enabled.value = enabled
+        if (enabled) _prompted.value = true
     }
 
     suspend fun setPrompted(prompted: Boolean) {
