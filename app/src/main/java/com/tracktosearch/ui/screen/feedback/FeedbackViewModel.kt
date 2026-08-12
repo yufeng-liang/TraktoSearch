@@ -39,6 +39,7 @@ class FeedbackViewModel @Inject constructor(
     private val authManager: AuthManager,
     private val userProfileStorage: UserProfileStorage,
     private val doubanAuthStorage: DoubanAuthStorage,
+    private val crashLogRecordStore: com.tracktosearch.data.local.CrashLogRecordStore,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -73,6 +74,10 @@ class FeedbackViewModel @Inject constructor(
 
     private val _unreadCount = MutableStateFlow(0)
     val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
+
+    /** 崩溃日志上传记录（本地，按崩溃时间倒序由 Store 保证） */
+    val crashLogRecords: StateFlow<List<com.tracktosearch.data.local.CrashLogRecord>> =
+        crashLogRecordStore.records
 
     private val _unreadItems = MutableStateFlow<List<com.tracktosearch.data.remote.feedback.UnreadItem>>(emptyList())
     val unreadItems: StateFlow<List<com.tracktosearch.data.remote.feedback.UnreadItem>> = _unreadItems.asStateFlow()

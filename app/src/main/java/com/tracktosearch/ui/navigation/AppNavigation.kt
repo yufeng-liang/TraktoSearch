@@ -1078,6 +1078,9 @@ fun AppNavigation(
                             onBack = { navController.popBackStack() },
                             onNewFeedback = { navController.navigate(Routes.NEW_FEEDBACK) },
                             onFeedbackClick = { id -> navController.navigate(Routes.feedbackDetailRoute(id)) },
+                            onCrashLogClick = { id ->
+                                navController.navigate(Routes.crashLogDetailRoute(id))
+                            },
                             viewModel = sharedViewModel
                         )
                     }
