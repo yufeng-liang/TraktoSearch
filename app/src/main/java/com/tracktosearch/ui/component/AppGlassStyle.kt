@@ -163,6 +163,19 @@ object AppGlassStyles {
         shape: RoundedCornerShape = RoundedCornerShape(16.dp),
         interactive: Boolean = true
     ): GlassStyle {
+        return searchField(
+            tint = tint,
+            shape = shape,
+            interactive = interactive
+        )
+    }
+
+    @Composable
+    fun searchField(
+        tint: Color = MaterialTheme.colorScheme.surface,
+        shape: RoundedCornerShape = RoundedCornerShape(16.dp),
+        interactive: Boolean = true
+    ): GlassStyle {
         return style(
             role = GlassSurfaceRole.SearchField,
             shape = shape,
@@ -218,23 +231,6 @@ object AppGlassStyles {
             role = GlassSurfaceRole.LoginSurface,
             shape = shape,
             tint = tint
-        )
-    }
-
-    /**
-     * 页面迁移到 AppVisualSurface 前的源兼容入口。
-     * 它不再提供独立 item 色散或独立光学参数，正式 Glass token 统一由 style 管理。
-     */
-    @Deprecated("Use AppVisualSurface with GlassSurfaceRole.BottomNavigation")
-    @Composable
-    fun bottomNavigationItem(
-        tint: Color = MaterialTheme.colorScheme.surface
-    ): GlassStyle {
-        return style(
-            role = GlassSurfaceRole.BottomNavigation,
-            shape = RoundedCornerShape(24.dp),
-            tint = tint,
-            interactive = true
         )
     }
 

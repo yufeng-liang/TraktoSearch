@@ -127,7 +127,7 @@ internal fun GlassSurfaceImpl(
     val style = AppGlassStyles.style(
         role = role,
         shape = shape,
-        tint = tint,
+        tint = tint.takeIf { it.alpha > 0f } ?: MaterialTheme.colorScheme.surface,
         interactive = interactionSource != null
     )
     Box(

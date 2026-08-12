@@ -13,11 +13,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.glass.GlassStyle
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 
@@ -36,12 +37,21 @@ fun AppVisualSurface(
     kind: VisualSurfaceKind,
     modifier: Modifier = Modifier,
     isDark: Boolean,
-    shape: Shape,
+    shape: RoundedCornerShape,
     hazeState: HazeState? = null,
     glassRole: GlassSurfaceRole = GlassSurfaceRole.TopBar,
     sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
     backgroundColor: Color,
     borderColor: Color,
+    elevation: Dp = 14.dp,
+    blurRadius: Dp? = null,
+    shadowOffset: Dp? = null,
+    hazeStyle: HazeBlurStyle? = null,
+    glassStyle: GlassStyle? = null,
+    hazeBlurRadius: Dp? = null,
+    darkShadowAlpha: Float? = null,
+    lightShadowAlpha: Float? = null,
+    showHighlight: Boolean = true,
     content: @Composable () -> Unit
 ) {
     when {
@@ -58,7 +68,7 @@ fun AppVisualSurface(
                 modifier = modifier,
                 hazeState = state,
                 role = glassRole,
-                shape = shape.asRoundedCornerShape(),
+                shape = shape,
                 sourceSelection = sourceSelection,
                 interactionSource = null,
                 tint = backgroundColor,
@@ -82,6 +92,16 @@ fun AppVisualSurface(
             backgroundColor = backgroundColor,
             borderColor = borderColor,
             hazeState = hazeState,
+            sourceSelection = sourceSelection,
+            hazeStyle = hazeStyle,
+            glassStyle = glassStyle,
+            hazeBlurRadius = hazeBlurRadius,
+            elevation = elevation,
+            blurRadius = blurRadius,
+            shadowOffset = shadowOffset,
+            darkShadowAlpha = darkShadowAlpha ?: if (isDark) 0.5f else 0.12f,
+            lightShadowAlpha = lightShadowAlpha ?: if (isDark) 0.10f else 0.85f,
+            showHighlight = showHighlight,
             content = content
         )
     }
@@ -133,7 +153,7 @@ fun AppIconButton(
 @Composable
 private fun PlainGlassSurface(
     modifier: Modifier,
-    shape: Shape,
+    shape: RoundedCornerShape,
     backgroundColor: Color,
     borderColor: Color,
     content: @Composable () -> Unit
@@ -151,7 +171,7 @@ private fun PlainGlassSurface(
 @Composable
 private fun ModalSurface(
     modifier: Modifier,
-    shape: Shape,
+    shape: RoundedCornerShape,
     borderColor: Color,
     content: @Composable () -> Unit
 ) {
@@ -164,8 +184,4 @@ private fun ModalSurface(
     ) {
         content()
     }
-}
-
-private fun Shape.asRoundedCornerShape(): RoundedCornerShape {
-    return this as? RoundedCornerShape ?: RoundedCornerShape(16.dp)
 }

@@ -300,16 +300,23 @@ fun NeumorphicFrostedSurface(
     // 可选：过滤参与模糊的源区域。底部导航等"自身既作 source 又作 effect"的场景
     // 应传入 Behind.where { source -> source.zIndex < 自身 zIndex } 排除自采样。
     sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
+    // 旧页面默认只保留普通表面；需要 Glass 采样时由页面显式声明语义角色。
+    glassRole: GlassSurfaceRole? = null,
     content: @Composable () -> Unit
 ) {
     if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
-        val roundedShape = shape as? RoundedCornerShape ?: RoundedCornerShape(16.dp)
-        if (hazeState != null) {
+        val roundedShape = if (glassRole != null) {
+            shape as? RoundedCornerShape
+                ?: error("Glass role $glassRole requires RoundedCornerShape")
+        } else {
+            null
+        }
+        if (hazeState != null && glassRole != null) {
             GlassSurfaceImpl(
                 modifier = modifier,
                 hazeState = hazeState,
-                role = GlassSurfaceRole.SearchField,
-                shape = roundedShape,
+                role = glassRole,
+                shape = roundedShape!!,
                 sourceSelection = sourceSelection,
                 interactionSource = null,
                 tint = backgroundColor,
@@ -319,9 +326,9 @@ fun NeumorphicFrostedSurface(
         } else {
             Box(
                 modifier = modifier
-                    .clip(roundedShape)
-                    .background(backgroundColor, roundedShape)
-                    .border(1.dp, borderColor, roundedShape),
+                    .clip(shape)
+                    .background(backgroundColor, shape)
+                    .border(1.dp, borderColor, shape),
             ) {
                 content()
             }
@@ -330,6 +337,7 @@ fun NeumorphicFrostedSurface(
     }
 
     val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin()
+    val roundedShape = shape as? RoundedCornerShape
     val hazeModifier = if (hazeState != null) {
         Modifier.appVisualEffect(
             input = HazeInput.Sources(
@@ -337,11 +345,13 @@ fun NeumorphicFrostedSurface(
                 selection = sourceSelection
             ),
             hazeStyle = resolvedHazeStyle,
-            glassStyle = glassStyle ?: AppGlassStyles.surface(
-                tint = backgroundColor.takeIf { it.alpha > 0f }
-                    ?: MaterialTheme.colorScheme.surface.copy(alpha = 0.16f),
-                shape = shape as? RoundedCornerShape ?: RoundedCornerShape(16.dp)
-            ),
+            glassStyle = glassStyle ?: roundedShape?.let {
+                AppGlassStyles.surface(
+                    tint = backgroundColor.takeIf { it.alpha > 0f }
+                        ?: MaterialTheme.colorScheme.surface.copy(alpha = 0.16f),
+                    shape = it
+                )
+            },
             blurSampling = HazeSampling.Adaptive
         )
     } else Modifier

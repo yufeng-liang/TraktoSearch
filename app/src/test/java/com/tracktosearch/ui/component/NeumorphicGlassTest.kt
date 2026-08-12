@@ -4,12 +4,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
@@ -26,6 +28,24 @@ class NeumorphicGlassTest {
 
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun legacy_surface_accepts_an_explicit_glass_role() {
+        composeRule.setContent {
+            CompositionLocalProvider(LocalVisualEffectMode provides VisualEffectMode.GLASS) {
+                MaterialTheme {
+                    NeumorphicFrostedSurface(
+                        isDark = false,
+                        shape = RoundedCornerShape(24.dp),
+                        glassRole = GlassSurfaceRole.BottomNavigation,
+                        hazeState = HazeState()
+                    ) {}
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+    }
 
     @Test
     fun disabled_icon_button_does_not_dispatch_click() {
