@@ -92,6 +92,8 @@ class CrashLogUploader @Inject constructor(
             deferred.complete(allOk)
             return allOk
         } catch (e: CancellationException) {
+            // 上传协程被取消（如旋转/退出）：复位状态避免宿主持久停在 Uploading 卡死
+            _uploadState.value = UploadState.Idle
             deferred.complete(false)
             throw e
         } catch (e: Exception) {
