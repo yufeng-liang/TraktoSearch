@@ -25,7 +25,12 @@ class CrashLogDetailViewModel @Inject constructor(
             .map { list -> list.find { it.id == id } }
             .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    /** 立即上传待传日志（成功后记录自动刷新为 SUCCESS） */
+    /**
+     * 立即上传待传日志（成功后记录自动刷新为 SUCCESS）。
+     *
+     * 注：正常流程下 PENDING/FAILED 记录对应的日志文件必然存在（上传失败保留文件、未授权不建记录），
+     * 故无文件时上传静默无操作属罕见边缘场景，不做额外提示。
+     */
     fun uploadNow() {
         viewModelScope.launch { crashLogUploader.uploadPendingLogs() }
     }

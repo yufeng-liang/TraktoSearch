@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -26,8 +27,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -52,6 +56,10 @@ fun CrashLogDetailScreen(
 ) {
     // remember 固定按 recordId 复用一个 StateFlow，避免重组时反复新建 stateIn 共享协程
     val record by remember(recordId) { viewModel.record(recordId) }.collectAsStateWithLifecycle()
+    // 本地加载态：Store 异步加载完成前 record 为 null，区分「加载中」与「记录不存在」；
+    // remember(recordId) 使 recordId 变化时自动重置，避免切到另一条记录时误用旧加载态
+    var loaded by remember(recordId) { mutableStateOf(false) }
+    LaunchedEffect(record) { if (record != null) loaded = true }
 
     Scaffold(
         topBar = {
@@ -71,8 +79,15 @@ fun CrashLogDetailScreen(
         val current = record
         when {
             current == null -> {
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    Text(stringResource(R.string.crash_detail_not_found), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // 加载态与不存在区分：Store 异步加载完成前显示加载中，加载完成后仍为 null 才是记录不存在
+                if (!loaded) {
+                    Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else {
+                    Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                        Text(stringResource(R.string.crash_detail_not_found), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
             else -> LazyColumn(
@@ -108,8 +123,10 @@ fun CrashLogDetailScreen(
                     current.status == CrashLogRecord.Status.FAILED
                 ) {
                     item {
+                        // 上传中禁用：记录刷新为 UPLOADING 后按钮通常随即隐藏，enabled 兜底防重复触发
                         Button(
                             onClick = { viewModel.uploadNow() },
+                            enabled = current.status != CrashLogRecord.Status.UPLOADING,
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(stringResource(R.string.crash_detail_upload_now)) }
                     }
@@ -127,7 +144,8 @@ private fun InfoCard(record: CrashLogRecord) {
         CrashLogRecord.Status.SUCCESS -> R.string.crash_record_status_success
         CrashLogRecord.Status.FAILED -> R.string.crash_record_status_failed
     }
-    val timeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+    // remember 复用时间格式化器，避免每次重组新建 SimpleDateFormat
+    val timeFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
     fun fmt(ts: Long): String = if (ts <= 0) "—" else timeFormat.format(Date(ts))
 
     Card(
