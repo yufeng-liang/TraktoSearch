@@ -39,6 +39,8 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.glass.GlassStyle
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.VisualEffectMode
 
 const val MODAL_BOTTOM_SHEET_HEIGHT_FRACTION = 0.8f
 
@@ -225,6 +227,15 @@ fun NeumorphicActiveTab(
     isDark: Boolean,
     shape: Shape = RoundedCornerShape(24.dp)
 ) {
+    if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
+        GlassTabIndicator(
+            modifier = modifier,
+            isDark = isDark,
+            shape = shape
+        )
+        return
+    }
+
     val darkColor = if (isDark) {
         Color.Black.copy(alpha = 0.25f)
     } else {
@@ -291,6 +302,33 @@ fun NeumorphicFrostedSurface(
     sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
     content: @Composable () -> Unit
 ) {
+    if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
+        val roundedShape = shape as? RoundedCornerShape ?: RoundedCornerShape(16.dp)
+        if (hazeState != null) {
+            GlassSurfaceImpl(
+                modifier = modifier,
+                hazeState = hazeState,
+                role = GlassSurfaceRole.SearchField,
+                shape = roundedShape,
+                sourceSelection = sourceSelection,
+                interactionSource = null,
+                tint = backgroundColor,
+                borderColor = borderColor,
+                content = content
+            )
+        } else {
+            Box(
+                modifier = modifier
+                    .clip(roundedShape)
+                    .background(backgroundColor, roundedShape)
+                    .border(1.dp, borderColor, roundedShape),
+            ) {
+                content()
+            }
+        }
+        return
+    }
+
     val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin()
     val hazeModifier = if (hazeState != null) {
         Modifier.appVisualEffect(
@@ -356,6 +394,24 @@ fun NeumorphicIconButton(
     buttonStyle: NeumorphicIconButtonStyle = NeumorphicIconButtonStyle.Default,
     content: @Composable () -> Unit
 ) {
+    if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
+        GlassIconButton(
+            onClick = onClick,
+            modifier = modifier,
+            size = size,
+            hazeState = hazeState ?: remember { HazeState() },
+            role = if (buttonStyle == NeumorphicIconButtonStyle.DetailTopBar) {
+                GlassSurfaceRole.DetailAction
+            } else {
+                GlassSurfaceRole.CircularControl
+            },
+            interactionSource = interactionSource,
+            enabled = enabled,
+            content = content
+        )
+        return
+    }
+
     val isDetailTopBar = buttonStyle == NeumorphicIconButtonStyle.DetailTopBar
     val shape = CircleShape
     val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin()
