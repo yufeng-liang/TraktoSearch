@@ -173,10 +173,10 @@ private fun ResumeOptionItem(
         MaterialTheme.colorScheme.onSurface
 
     Surface(
+        onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp)
-            .clickable(onClick = onClick),
+            .padding(vertical = 2.dp),
         color = containerColor,
         shape = MaterialTheme.shapes.small
     ) {

@@ -360,6 +360,7 @@ internal fun CollectionSection(
                 Column(
                     modifier = Modifier
                         .width(80.dp)
+                        .clip(RoundedCornerShape(6.dp))
                         .clickable(enabled = !isCurrent) { onMovieClick(part.id, part.title) },
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {

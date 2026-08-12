@@ -377,6 +377,35 @@ class WatchlistScreenTest {
     }
 
     @Test
+    fun `展开搜索时隐藏标题收起时恢复`() {
+        composeRule.setContent {
+            WatchlistScreen(
+                onMovieClick = { _, _, _, _, _, _, _ -> },
+                onShowClick = { _, _, _, _, _, _, _ -> },
+                onSearchClick = {},
+                onTraktSearch = { _, _ -> },
+                viewModel = createMockWatchlistViewModel()
+            )
+        }
+        composeRule.waitForIdle()
+
+        val titleText = context.getString(R.string.tab_me)
+        // 初始:标题可见
+        composeRule.onNodeWithText(titleText).assertIsDisplayed()
+
+        // 点击搜索图标展开:标题淡出后从组合树移除
+        val searchDescription = context.getString(R.string.watchlist_search)
+        composeRule.onNodeWithContentDescription(searchDescription).performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(titleText).assertDoesNotExist()
+
+        // 点击分类 Tab 收起搜索:标题恢复显示
+        composeRule.onNodeWithTag("watchlist_category_tab_1").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(titleText).assertIsDisplayed()
+    }
+
+    @Test
     fun `展开搜索时点击分类会收起并切换分类`() {
         composeRule.setContent {
             WatchlistScreen(

@@ -490,8 +490,7 @@ private fun CreditPosterCard(
 ) {
     Column(
         modifier = Modifier
-            .width(100.dp)
-            .clickable(enabled = !isResolving, onClick = onClick),
+            .width(100.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(modifier = Modifier.width(100.dp)) {
@@ -499,7 +498,7 @@ private fun CreditPosterCard(
                 imageUrl = posterUrl,
                 title = title,
                 year = year.takeIf { it.isNotEmpty() },
-                onClick = null,
+                onClick = if (isResolving) null else onClick,
                 modifier = Modifier
                     .width(100.dp)
                     .background(

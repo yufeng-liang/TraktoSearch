@@ -83,6 +83,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -150,6 +151,9 @@ private fun resolveConsistencyCheckBlocker(
     kotlinx.coroutines.FlowPreview::class,
     ExperimentalSharedTransitionApi::class,
 )
+// 视觉效果（毛玻璃/Glass）还在打磨中，暂时隐藏设置入口；调好后改回 true 即可恢复
+private const val SHOW_VISUAL_EFFECT_ENTRY = false
+
 @Composable
 fun SettingsScreen(
     onLogout: () -> Unit = {},
@@ -489,20 +493,22 @@ fun SettingsScreen(
                             containerColor = Color.Transparent
                         )
                     }
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        SettingsCard(
-                            modifier = Modifier.weight(1f),
-                            icon = Icons.Rounded.AutoAwesome,
-                            title = stringResource(R.string.settings_visual_effect),
-                            subtitle = visualEffectName,
-                            mergeTitleAndSubtitle = true,
-                            onClick = { showVisualEffectDialog = true },
-                            containerColor = Color.Transparent
-                        )
-                        Spacer(modifier = Modifier.weight(1f))
+                    if (SHOW_VISUAL_EFFECT_ENTRY) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            SettingsCard(
+                                modifier = Modifier.weight(1f),
+                                icon = Icons.Rounded.AutoAwesome,
+                                title = stringResource(R.string.settings_visual_effect),
+                                subtitle = visualEffectName,
+                                mergeTitleAndSubtitle = true,
+                                onClick = { showVisualEffectDialog = true },
+                                containerColor = Color.Transparent
+                            )
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
@@ -1490,6 +1496,7 @@ private fun MarkRecordsEntryCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(20.dp))
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
         isDark = isDark,
         shape = RoundedCornerShape(20.dp),

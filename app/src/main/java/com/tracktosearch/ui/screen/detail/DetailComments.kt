@@ -145,9 +145,9 @@ internal fun CommentItem(
             // 剧透遮罩
             if (comment.spoiler && !spoilerRevealed) {
                 Surface(
+                    onClick = { spoilerRevealed = true },
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { spoilerRevealed = true },
+                        .fillMaxWidth(),
                     shape = RoundedCornerShape(6.dp),
                     color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
                 ) {

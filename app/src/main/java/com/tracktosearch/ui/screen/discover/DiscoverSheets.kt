@@ -74,13 +74,13 @@ private fun SheetMediaCard(
     rating: Double? = null,
     onClick: () -> Unit
 ) {
-    Column(modifier = Modifier.clickable(onClick = onClick)) {
+    Column {
         PosterCard(
             imageUrl = imageUrl,
             title = title,
             year = year,
             rating = rating,
-            onClick = null
+            onClick = onClick
         )
         Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)) {
             AdaptiveTwoLineTitle(
