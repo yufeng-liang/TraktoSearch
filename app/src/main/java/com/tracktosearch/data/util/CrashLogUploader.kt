@@ -68,6 +68,8 @@ class CrashLogUploader @Inject constructor(
      * 未授权或无文件视为成功；在途上传复用其结果（不重复执行）。
      */
     suspend fun uploadPendingLogs(): Boolean {
+        // 等待授权状态加载完成：避免冷启动竞态下误判未授权而跳过自动上传（与 CrashReportDialogHost 一致）
+        crashLogStorage.loaded.first { it }
         // 隐私授权：用户未同意上报时直接跳过（不建记录不打扰）
         if (!crashLogStorage.enabled.first()) return true
         // 锁外快速路径：已有在途上传直接 await 复用结果（inflight 为 volatile，可见性安全）

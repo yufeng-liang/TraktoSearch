@@ -13,6 +13,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.ResponseBody
@@ -36,6 +37,7 @@ class CrashLogUploaderTest {
         crashDir.mkdirs()
         crashDir.listFiles()?.forEach { it.delete() }
         val storage = mockk<CrashLogStorage>(relaxed = true)
+        every { storage.loaded } returns MutableStateFlow(true)
         every { storage.enabled } returns MutableStateFlow(enabled)
         val recordStore = mockk<CrashLogRecordStore>(relaxed = true)
         every { recordStore.records } returns MutableStateFlow(emptyList())
@@ -89,6 +91,7 @@ class CrashLogUploaderTest {
         crashDir.mkdirs()
         crashDir.listFiles()?.forEach { it.delete() }
         val storage = mockk<CrashLogStorage>(relaxed = true)
+        every { storage.loaded } returns MutableStateFlow(true)
         every { storage.enabled } returns MutableStateFlow(true)
         val recordStore = mockk<CrashLogRecordStore>(relaxed = true)
         every { recordStore.records } returns MutableStateFlow(emptyList())
@@ -188,6 +191,7 @@ class CrashLogUploaderTest {
         crashDir.mkdirs()
         crashDir.listFiles()?.forEach { it.delete() }
         val storage = mockk<CrashLogStorage>(relaxed = true)
+        every { storage.loaded } returns MutableStateFlow(true)
         every { storage.enabled } returns MutableStateFlow(true)
         val recordStore = mockk<CrashLogRecordStore>(relaxed = true)
         every { recordStore.records } returns MutableStateFlow(emptyList())
@@ -222,5 +226,45 @@ class CrashLogUploaderTest {
         // sortedBy 顺序第一个文件失败保留，第二个成功删除
         val remaining = crashDir.listFiles()?.filter { it.name.endsWith(".log") } ?: emptyList()
         assertThat(remaining).hasSize(1)
+    }
+
+    @Test
+    fun notLoaded_等待授权状态加载后上传() = runTest {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        crashDir = File(context.filesDir, "crash_logs")
+        crashDir.mkdirs()
+        crashDir.listFiles()?.forEach { it.delete() }
+        val storage = mockk<CrashLogStorage>(relaxed = true)
+        val loadedFlow = MutableStateFlow(false)
+        every { storage.loaded } returns loadedFlow
+        every { storage.enabled } returns MutableStateFlow(true)
+        val recordStore = mockk<CrashLogRecordStore>(relaxed = true)
+        every { recordStore.records } returns MutableStateFlow(emptyList())
+        var captured: CrashLogRecord? = null
+        coEvery { recordStore.loadFromDisk() } returns Unit
+        coEvery { recordStore.getRecord(any()) } answers { captured }
+        coEvery { recordStore.upsert(any()) } answers { captured = firstArg<CrashLogRecord>() }
+        coEvery { recordStore.markUploading(any()) } returns Unit
+        coEvery { recordStore.markSuccess(any(), any()) } returns Unit
+        coEvery { recordStore.markFailed(any(), any()) } returns Unit
+        val api = mockk<CrashLogApiService>()
+        var uploadCalled = 0
+        coEvery { api.upload(any()) } answers {
+            uploadCalled++
+            "{}".toResponseBody("application/json".toMediaTypeOrNull())
+        }
+        val uploader = CrashLogUploader(context, api, storage, recordStore)
+        writeLogFile("crash_1.log")
+
+        // 授权状态未加载时 uploadPendingLogs 挂起等待 loaded，加载完成后继续上传（runTest 虚拟时间驱动）
+        launch {
+            delay(50)
+            loadedFlow.value = true
+        }
+        val ok = uploader.uploadPendingLogs()
+
+        assertThat(ok).isTrue()
+        assertThat(uploadCalled).isEqualTo(1)
+        assertThat(File(crashDir, "crash_1.log").exists()).isFalse()
     }
 }
