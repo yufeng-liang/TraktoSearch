@@ -52,6 +52,7 @@ import com.tracktosearch.data.repository.WatchlistMediaType
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.UpdateDialog
+import com.tracktosearch.ui.screen.crashlog.CrashLogDetailScreen
 import com.tracktosearch.ui.screen.detail.DetailScreen
 import com.tracktosearch.ui.screen.discoverfilter.DiscoverFilterScreen
 import com.tracktosearch.ui.screen.feedback.FeedbackScreen
@@ -131,10 +132,13 @@ object Routes {
     const val FEEDBACK = "feedback"
     const val FEEDBACK_DETAIL = "feedbackDetail/{feedbackId}?replyId={replyId}"
     const val NEW_FEEDBACK = "newFeedback"
+    const val CRASH_LOG_DETAIL = "crashLogDetail/{recordId}"
     const val MESSAGES = "messages"
 
     fun feedbackDetailRoute(feedbackId: String, replyId: String? = null): String =
         "feedbackDetail/$feedbackId?replyId=${replyId ?: ""}"
+
+    fun crashLogDetailRoute(recordId: String): String = "crashLogDetail/$recordId"
 
     fun doubanItemDetailRoute(doubanId: String): String = "doubanItemDetail/$doubanId"
 
@@ -1095,6 +1099,18 @@ fun AppNavigation(
                             viewModel = sharedViewModel
                         )
                     }
+                }
+                composable(
+                    route = Routes.CRASH_LOG_DETAIL,
+                    arguments = listOf(
+                        navArgument("recordId") { type = NavType.StringType }
+                    )
+                ) { backStackEntry ->
+                    val recordId = backStackEntry.arguments?.getString("recordId") ?: return@composable
+                    CrashLogDetailScreen(
+                        recordId = recordId,
+                        onBack = { navController.popBackStack() }
+                    )
                 }
                 composable(
                     route = Routes.FEEDBACK_DETAIL,
