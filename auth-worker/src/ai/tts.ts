@@ -7,7 +7,7 @@ import { callMimoAudio, type MimoEnvironment } from './mimo.ts';
 import type { TtsScene } from './characters.ts';
 
 export const TTS_CACHE_VERSION = 'tts-vd-v1';
-export const TTS_PROMPT_VERSION = 'characters-v1';
+export const TTS_PROMPT_VERSION = 'characters-v2';
 export const TTS_AUDIO_TTL_SECONDS = 30 * 24 * 60 * 60;
 export const TTS_AUDIO_URL_TTL_SECONDS = 10 * 60;
 

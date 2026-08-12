@@ -189,6 +189,65 @@ test('guest audition uses voicedesign MP3 request without consuming quota', asyn
     }
 });
 
+test('final character voice designs keep the approved child voices and delivery constraints', async () => {
+    const originalFetch = globalThis.fetch;
+    const requests = new Map();
+    globalThis.fetch = async (_input, init) => {
+        const requestBody = JSON.parse(init.body);
+        const characterMatch = requestBody.messages[0].content.match(/^角色：([^。]+)/);
+        requests.set(characterMatch?.[1] ?? 'unknown', requestBody);
+        return new Response(JSON.stringify({
+            choices: [{ message: { audio: { data: 'AA==', transcript: requestBody.messages[1].content } } }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+
+    const cases = [
+        ['吉伊', '女童', '今天也一起找一部好看的电影吧。', /1\.2倍/],
+        ['小八', '男童', '我发现了一点有意思的片单线索哦。', /奶声|幼儿园/],
+        ['乌萨奇', '男童', '到！你的片单有点东西。', /尖叫|音量比普通说话更大/],
+        ['飞鼠', '女童', '让我看看，今天有什么值得你发光的电影。', /只朗读一遍|严禁重复/],
+        ['狮萨', '女童', '欢迎回来，我帮你把片单整理得更清楚。', /明亮|片单/],
+        ['栗子馒头', '男童', '先坐下来，慢慢看看你的观影口味。', /发音清晰|逐字读/],
+        ['獭师', '男童', '准备好了吗？我们来认真拆一拆这份片单。', /幼儿园男孩|幼童男声/],
+    ];
+
+    try {
+        const env = createTestEnv({
+            MIMO_API_KEY: 'test-mimo-key',
+            AI_TEST_VOICE_DESIGN_READY: true,
+        });
+        for (const [name, gender, text, requiredDirection] of cases) {
+            const result = await call('/api/ai/tts', {
+                method: 'POST',
+                body: { action: 'tts', characterId: {
+                    吉伊: 'chiikawa',
+                    小八: 'hachiware',
+                    乌萨奇: 'usagi',
+                    飞鼠: 'flying-squirrel',
+                    狮萨: 'shisa',
+                    栗子馒头: 'kurimanju',
+                    獭师: 'rakko',
+                }[name], text, scene: 'AUDITION' },
+                env,
+            });
+            assert.equal(result.response.status, 200, name);
+            const requestBody = requests.get(name);
+            assert.ok(requestBody, name);
+            assert.match(requestBody.messages[0].content, new RegExp(`五到六岁${gender}`), name);
+            assert.match(requestBody.messages[0].content, /不能是成人声|不能是成人|明显稚嫩/, name);
+            assert.match(requestBody.messages[0].content, requiredDirection, name);
+            assert.equal(requestBody.messages[1].role, 'assistant');
+            assert.equal(requestBody.messages[1].content, text);
+        }
+
+        const usagiPrompt = requests.get('乌萨奇').messages[0].content;
+        assert.match(usagiPrompt, /“到”只发一个音节|只喊一次“到”/);
+        assert.doesNotMatch(usagiPrompt, /持续拉长[“”]?到|持续.*拉长[“”]?到/);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
 test('guest TTS rejects an unknown scene and ignores legacy style override', async () => {
     const env = createTestEnv({
         MIMO_API_KEY: 'test-mimo-key',
@@ -690,7 +749,7 @@ test('activation consumes one recording and returns the role confirmation', asyn
 
     assert.equal(response.status, 200);
     assert.equal(json.data.activated, true);
-    assert.equal(json.data.activationPhrase, '到——！');
+    assert.equal(json.data.activationPhrase, '到！');
     assert.equal(json.data.voiceStatus, 'ready');
 });
 
