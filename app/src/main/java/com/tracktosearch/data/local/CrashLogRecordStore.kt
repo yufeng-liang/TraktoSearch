@@ -1,6 +1,7 @@
 package com.tracktosearch.data.local
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -56,10 +58,12 @@ class CrashLogRecordStore @Inject constructor(
         val saved = prefs[KEY_RECORDS] ?: "[]"
         val restored = runCatching {
             json.decodeFromString(ListSerializer(CrashLogRecord.serializer()), saved)
-        }.getOrDefault(emptyList())
-        if (_records.value.isEmpty()) {
-            _records.value = restored
+        }.getOrElse {
+            Log.w(TAG, "崩溃日志记录解析失败，忽略损坏数据", it)
+            emptyList()
         }
+        // 原子读写：仅当内存尚无数据时应用磁盘内容；内存已有数据说明已有更新的写入，以内存为准
+        _records.update { if (it.isEmpty()) restored else it }
     }
 
     suspend fun getRecord(id: String): CrashLogRecord? =
@@ -87,7 +91,7 @@ class CrashLogRecordStore @Inject constructor(
 
     suspend fun markFailed(id: String, error: String) {
         val current = _records.value.find { it.id == id } ?: return
-        upsert(current.copy(status = CrashLogRecord.Status.FAILED, error = error))
+        upsert(current.copy(status = CrashLogRecord.Status.FAILED, error = error, uploadTime = 0L))
     }
 
     private suspend fun persist(records: List<CrashLogRecord>) {
@@ -97,6 +101,7 @@ class CrashLogRecordStore @Inject constructor(
     }
 
     companion object {
+        private const val TAG = "CrashLogRecordStore"
         private const val MAX_RECORDS = 20
         private val KEY_RECORDS = stringPreferencesKey("crash_log_records_v1")
     }

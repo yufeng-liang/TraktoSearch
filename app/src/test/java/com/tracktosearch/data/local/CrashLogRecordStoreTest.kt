@@ -31,13 +31,13 @@ class CrashLogRecordStoreTest {
     fun upsert_新增与更新记录_按崩溃时间倒序() = runTest {
         store = CrashLogRecordStore(appContext, json)
 
-        store.upsert(record("crash_2.log").copy(crashTime = 2000L))
-        store.upsert(record("crash_1.log").copy(crashTime = 1000L))
-        store.upsert(record("crash_2.log").copy(crashTime = 2000L, status = CrashLogRecord.Status.SUCCESS))
+        store.upsert(record("t1_crash_2.log").copy(crashTime = 2000L))
+        store.upsert(record("t1_crash_1.log").copy(crashTime = 1000L))
+        store.upsert(record("t1_crash_2.log").copy(crashTime = 2000L, status = CrashLogRecord.Status.SUCCESS))
 
         val records = store.records.first()
         assertThat(records).hasSize(2)
-        assertThat(records[0].id).isEqualTo("crash_2.log")
+        assertThat(records[0].id).isEqualTo("t1_crash_2.log")
         assertThat(records[0].status).isEqualTo(CrashLogRecord.Status.SUCCESS)
     }
 
@@ -46,19 +46,19 @@ class CrashLogRecordStoreTest {
         store = CrashLogRecordStore(appContext, json)
 
         for (i in 1..25) {
-            store.upsert(record("crash_$i.log").copy(crashTime = i * 1000L))
+            store.upsert(record("t2_crash_$i.log").copy(crashTime = i * 1000L))
         }
 
         val records = store.records.first()
         assertThat(records).hasSize(20)
-        // 最新 20 条保留（crash_6 ~ crash_25），最旧 5 条丢弃
+        // 最新 20 条保留（t2_crash_6 ~ t2_crash_25），最旧 5 条丢弃
         assertThat(records.minOf { it.crashTime }).isEqualTo(6_000L)
     }
 
     @Test
     fun loadFromDisk_跨实例恢复记录() = runTest {
         store = CrashLogRecordStore(appContext, json)
-        store.upsert(record("crash_1.log"))
+        store.upsert(record("t3_crash_1.log"))
 
         // 新实例模拟 App 重启后重新加载
         val restored = CrashLogRecordStore(appContext, json)
@@ -66,18 +66,18 @@ class CrashLogRecordStoreTest {
 
         val records = restored.records.first()
         assertThat(records).hasSize(1)
-        assertThat(records[0].id).isEqualTo("crash_1.log")
+        assertThat(records[0].id).isEqualTo("t3_crash_1.log")
         assertThat(records[0].logContent).contains("boom")
     }
 
     @Test
     fun markSuccess_更新状态与上传时间() = runTest {
         store = CrashLogRecordStore(appContext, json)
-        store.upsert(record("crash_1.log"))
+        store.upsert(record("t4_crash_1.log"))
 
-        store.markSuccess("crash_1.log", uploadTime = 9999L)
+        store.markSuccess("t4_crash_1.log", uploadTime = 9999L)
 
-        val r = store.getRecord("crash_1.log")
+        val r = store.getRecord("t4_crash_1.log")
         assertThat(r?.status).isEqualTo(CrashLogRecord.Status.SUCCESS)
         assertThat(r?.uploadTime).isEqualTo(9999L)
     }
@@ -85,11 +85,11 @@ class CrashLogRecordStoreTest {
     @Test
     fun markFailed_记录错误信息() = runTest {
         store = CrashLogRecordStore(appContext, json)
-        store.upsert(record("crash_1.log"))
+        store.upsert(record("t5_crash_1.log"))
 
-        store.markFailed("crash_1.log", error = "network timeout")
+        store.markFailed("t5_crash_1.log", error = "network timeout")
 
-        val r = store.getRecord("crash_1.log")
+        val r = store.getRecord("t5_crash_1.log")
         assertThat(r?.status).isEqualTo(CrashLogRecord.Status.FAILED)
         assertThat(r?.error).isEqualTo("network timeout")
     }
