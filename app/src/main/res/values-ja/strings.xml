@@ -1374,7 +1374,7 @@
     <string name="help_tips_b8">人物詳細ページで横スワイプして複数の写真を表示、写真をタップして全画面表示しアルバムに保存</string>
     <string name="help_tips_b9">オンライン検索は中国語人名検索に対応（TMDBベース）、人物検索時に自動的に関連作品を表示</string>
     <string name="help_tips_b10">発見ページのタイトルバー右側をタップしてセクションを素早くカスタマイズ</string>
-    <string name="help_tips_b11">設定 &gt; 外観 &gt; 視覚効果で、ぼかしまたは実験的な Glass を選択できます。一部の端末では高度な光学効果が自動的に簡略化されます</string>
+    <string name="help_tips_b11">視覚効果（Haze ぼかし / 実験的な Glass）は現在調整中です。近日中に提供予定です</string>
 
     <!-- 彩蛋メッセージ（9アニメ × 3メッセージ） -->
     <string name="easter_msg_shy_1">つつかれました、くすぐったい！</string>
