@@ -90,6 +90,7 @@ class SettingsViewModel @Inject constructor(
     private val notificationStorage: NotificationStorage,
     private val notificationScheduler: NotificationScheduler,
     private val crashLogStorage: com.tracktosearch.data.local.CrashLogStorage,
+    private val crashLogUploader: com.tracktosearch.data.util.CrashLogUploader,
     private val languageStorage: LanguageStorage,
     private val traktRepository: TraktRepository,
     private val tmdbRepository: TmdbRepository,
@@ -287,7 +288,13 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setCrashLogEnabled(enabled: Boolean) {
-        viewModelScope.launch { crashLogStorage.setEnabled(enabled) }
+        viewModelScope.launch {
+            crashLogStorage.setEnabled(enabled)
+            // 开启且有待传日志：立即触发上传（成功/失败反馈由主界面 CrashReportDialogHost 统一处理，避免双提示）
+            if (enabled && crashLogUploader.hasPendingLogs()) {
+                crashLogUploader.uploadPendingLogs()
+            }
+        }
     }
 
     fun exportData(uri: Uri) {
