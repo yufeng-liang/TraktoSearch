@@ -432,14 +432,7 @@
     <string name="trailer_youtube_restricted">YouTube is restricted in China\nPlease use VPN</string>
 
     <!-- Crash Dialog -->
-    <string name="crash_dialog_title">App Crash</string>
-    <string name="crash_dialog_message">The app has crashed %d time(s) recently. Send error logs to the developer?</string>
-    <string name="crash_dialog_send">Send logs</string>
     <string name="crash_dialog_cancel">Not now</string>
-    <string name="crash_email_subject">TrackToSearch Error Log</string>
-    <string name="crash_email_body">Here are the crash logs:</string>
-    <string name="crash_email_no_log">The app crashed but no detailed logs were found.</string>
-    <string name="crash_toast_copied">Logs copied. Please send to 1577865546@qq.com</string>
     <!-- Crash log authorization -->
     <string name="crash_auth_dialog_title">Crash Log Authorization</string>
     <string name="crash_auth_dialog_message">The app crashed recently. May we upload the crash log (including stack trace, app version, device model, and recent actions) to the developer via the gateway to help fix the issue? You can change this anytime in Settings.</string>

@@ -432,14 +432,7 @@
     <string name="trailer_youtube_restricted">YouTube在国内访问受限\n请使用VPN</string>
 
     <!-- Crash Dialog -->
-    <string name="crash_dialog_title">应用异常提醒</string>
-    <string name="crash_dialog_message">检测到应用近期发生了 %d 次异常退出，是否将错误日志发送给开发者以帮助修复问题？</string>
-    <string name="crash_dialog_send">发送日志</string>
     <string name="crash_dialog_cancel">暂不发送</string>
-    <string name="crash_email_subject">TrackToSearch 错误日志</string>
-    <string name="crash_email_body">以下是应用崩溃的错误日志：</string>
-    <string name="crash_email_no_log">应用发生了异常退出，但未找到详细的错误日志。</string>
-    <string name="crash_toast_copied">日志已复制到剪贴板，请手动发送至 1577865546@qq.com</string>
     <!-- 崩溃日志授权 -->
     <string name="crash_auth_dialog_title">崩溃日志授权</string>
     <string name="crash_auth_dialog_message">应用近期发生了崩溃。是否允许通过网关将崩溃日志（含堆栈、应用版本、设备型号、最近操作）上报给开发者以帮助修复问题？你随时可在设置中更改。</string>
