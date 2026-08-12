@@ -719,6 +719,7 @@ Config:
     <string name="help_tips_b9">Online search supports Chinese name search (powered by TMDB), auto-populates related movies/shows when searching for a person</string>
     <string name="help_tips_b10">Quickly customize discover page sections from the toolbar icon</string>
     <string name="help_tips_b11">In Settings &gt; Appearance, choose Blur or experimental Glass; some devices may simplify advanced optical details automatically</string>
+    <string name="help_tips_b12">Crash logs are auto-uploaded after a crash if enabled in Settings; upload history can be viewed on the Feedback page</string>
     <string name="help_vpn">VPN Notice</string>
     <string name="help_vpn_b1">Some features require access to overseas services. VPN may be needed for normal access</string>
     <string name="help_vpn_b2">Affected features: Trailer thumbnails (YouTube), Trakt data (trending/recommendations), TMDB data (movie details/posters)</string>
