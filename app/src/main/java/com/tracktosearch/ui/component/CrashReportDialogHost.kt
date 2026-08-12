@@ -2,10 +2,6 @@ package com.tracktosearch.ui.component
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.AlertDialog
@@ -21,8 +17,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -33,6 +27,7 @@ import com.tracktosearch.data.local.CrashLogStorage
 import com.tracktosearch.data.util.CrashLogUploader
 import com.tracktosearch.data.util.CrashPromptDecision
 import com.tracktosearch.data.util.UploadState
+import com.tracktosearch.data.util.UploadToastPolicy
 import com.tracktosearch.ui.util.showToast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -47,6 +42,9 @@ import kotlinx.coroutines.withContext
  * - 观察 [CrashLogUploader.uploadState]：Uploading 显示转圈；Success 弹成功 toast；
  *   Failed 弹失败 toast + 重试对话框（不关闭，可取消保留日志）
  * - toast 触发规则（避免误报）：状态转移（Uploading → 终态）或首次挂载即终态且本次会话有崩溃
+ *
+ * 已知取舍：旋转/进程重建后授权/失败/上传中对话框不恢复（崩溃计数已消费，重建后不重复打扰；
+ * 上传进行中由 [CrashLogUploader.uploadState] 状态驱动继续反馈）。
  */
 @Composable
 fun CrashReportDialogHost(
@@ -66,6 +64,8 @@ fun CrashReportDialogHost(
     // 启动决策：读崩溃计数与授权状态（一次性）
     LaunchedEffect(Unit) {
         crashCount = withContext(Dispatchers.IO) { CrashHandler.getAndResetCrashCount(context) }
+        // 等待 DataStore 初始值加载完成，避免对已授权用户误读默认值而弹授权框
+        crashLogStorage.loaded.first()
         val prompted = crashLogStorage.prompted.first()
         enabled = crashLogStorage.enabled.first()
         when (CrashPromptDecision.decide(crashCount, enabled, prompted)) {
@@ -89,7 +89,6 @@ fun CrashReportDialogHost(
         val state = uploadState
         val prev = lastUploadState
         lastUploadState = state
-        val fromUploading = prev is UploadState.Uploading
         when (state) {
             UploadState.Uploading -> {
                 dialogVisible = true
@@ -97,13 +96,13 @@ fun CrashReportDialogHost(
             }
             UploadState.Success -> {
                 // 手动触发（从 Uploading 转移）或启动自动上传完成（prev==null 且有崩溃）
-                if (fromUploading || (prev == null && crashCount > 0)) {
+                if (UploadToastPolicy.shouldNotify(prev, state, crashCount)) {
                     context.showToast(context.getString(R.string.crash_upload_success))
                 }
                 dialogVisible = false
             }
             is UploadState.Failed -> {
-                if (fromUploading || (prev == null && crashCount > 0)) {
+                if (UploadToastPolicy.shouldNotify(prev, state, crashCount)) {
                     context.showToast(context.getString(R.string.crash_upload_failed))
                 }
                 dialogVisible = true
@@ -123,10 +122,10 @@ fun CrashReportDialogHost(
             text = { Text(stringResource(R.string.crash_auth_dialog_message)) },
             confirmButton = {
                 TextButton(onClick = {
-                    dialogVisible = false
+                    // 乐观切换上传中，避免关闭后再弹的闪烁空窗
+                    dialogKind = DialogKind.Uploading
                     scope.launch {
                         crashLogStorage.setEnabled(true)
-                        enabled = true
                         crashLogUploader.uploadPendingLogs()
                     }
                 }) { Text(stringResource(R.string.crash_auth_dialog_agree)) }
@@ -144,14 +143,8 @@ fun CrashReportDialogHost(
         DialogKind.Uploading -> AlertDialog(
             onDismissRequest = { /* 上传中不可取消 */ },
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            title = { Text(stringResource(R.string.crash_auth_dialog_title)) },
-            text = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(Modifier.size(20.dp))
-                    Spacer(Modifier.width(16.dp))
-                    Text(stringResource(R.string.crash_uploading))
-                }
-            },
+            title = { Text(stringResource(R.string.crash_uploading)) },
+            text = { CircularProgressIndicator() },
             confirmButton = {},
         )
         is DialogKind.Retry -> AlertDialog(

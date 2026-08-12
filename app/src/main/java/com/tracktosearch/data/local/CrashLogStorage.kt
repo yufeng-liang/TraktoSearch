@@ -43,11 +43,16 @@ class CrashLogStorage @Inject constructor(
     private val _prompted = MutableStateFlow(false)
     val prompted: StateFlow<Boolean> = _prompted.asStateFlow()
 
+    /** DataStore 初始值是否已加载完成（host 启动决策前 await，避免误读默认值弹授权框） */
+    private val _loaded = MutableStateFlow(false)
+    val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
+
     init {
         scope.launch {
             val prefs = context.crashLogDataStore.data.first()
             _enabled.value = prefs[KEY_ENABLED] ?: false
             _prompted.value = prefs[KEY_PROMPTED] ?: false
+            _loaded.value = true
         }
     }
 
