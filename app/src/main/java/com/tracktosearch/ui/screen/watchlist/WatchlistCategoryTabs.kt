@@ -66,7 +66,7 @@ internal fun WatchlistCategoryTabs(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(52.dp)
+                    .height(44.dp)
                     .clip(selectedShape)
                     .testTag("watchlist_category_tab_$index")
                     .selectable(
@@ -128,7 +128,7 @@ private fun CategoryTabContent(
     ) {
         Text(
             text = tab.label,
-            fontSize = 16.sp,
+            fontSize = 14.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             color = if (selected) {
                 MaterialTheme.colorScheme.primary
@@ -146,7 +146,7 @@ private fun CategoryTabContent(
         ) {
             Text(
                 text = tab.count.toString(),
-                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (selected) {

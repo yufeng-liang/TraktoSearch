@@ -1,6 +1,8 @@
 package com.tracktosearch.ui.screen.watchlist
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -326,11 +328,14 @@ class WatchlistScreenTest {
             )
         }
         composeRule.waitForIdle()
+        composeRule.onNodeWithTag("watchlist_mode_tab_0").assertIsSelected()
+        composeRule.onNodeWithTag("watchlist_mode_tab_1").assertIsNotSelected()
+
         // 点击"已看"模式标签切换模式
-        val watchedLabel = context.getString(R.string.watchlist_mode_watched)
-        composeRule.onNodeWithText(watchedLabel).performClick()
+        composeRule.onNodeWithTag("watchlist_mode_tab_1").performClick()
         composeRule.waitForIdle()
-        // 点击不崩溃即通过(mode 切换后显示 watched_empty_title)
+        composeRule.onNodeWithTag("watchlist_mode_tab_0").assertIsNotSelected()
+        composeRule.onNodeWithTag("watchlist_mode_tab_1").assertIsSelected()
     }
 
     @Test

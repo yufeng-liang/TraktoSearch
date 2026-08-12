@@ -178,7 +178,6 @@ import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.rememberShimmerBrush
-import com.tracktosearch.ui.screen.discover.CapsuleTabSelector
 import com.tracktosearch.ui.screen.douban.DoubanFirstSyncGuideDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
@@ -1061,7 +1060,7 @@ fun WatchlistScreen(
                                             )
                                         }
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        CapsuleTabSelector(
+                                        WatchlistModeSelector(
                                             tabs = listOf(
                                                 stringResource(R.string.watchlist_mode_watchlist),
                                                 stringResource(R.string.watchlist_mode_watched)
@@ -1071,7 +1070,6 @@ fun WatchlistScreen(
                                                 collapseSearch()
                                                 selectedMode = it
                                             },
-                                            sizeMultiplier = 1.25f
                                         )
                                     }
                                     }
@@ -1096,7 +1094,7 @@ fun WatchlistScreen(
                                 uiState.otherTotalCount ?: if (uiState.othersLoaded) filteredOthers.size else 0
                             }
                             WatchlistCategoryTabs(
-                                modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+                                modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 2.dp),
                                 tabs = listOf(
                                     WatchlistCategoryTab(
                                         label = stringResource(R.string.watchlist_tab_movies),
