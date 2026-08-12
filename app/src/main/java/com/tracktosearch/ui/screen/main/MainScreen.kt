@@ -798,7 +798,7 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
         Spacer(modifier = Modifier.height(0.dp))
         Text(
             text = stringResource(labelRes),
-            fontSize = 10.sp,
+            fontSize = 12.sp,
             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
             color = selectedColor,
             maxLines = 1
