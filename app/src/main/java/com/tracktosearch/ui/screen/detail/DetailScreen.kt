@@ -558,11 +558,11 @@ fun DetailScreen(
                             )
                             if (translatableComments.isNotEmpty() && uiState.translatedComments.size < translatableComments.size) {
                                 Surface(
+                                    onClick = { viewModel.translateComments() },
+                                    enabled = !uiState.isTranslating,
                                     shape = RoundedCornerShape(16.dp),
                                     color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                                    modifier = Modifier
-                                        .clickable(enabled = !uiState.isTranslating) { viewModel.translateComments() }
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),

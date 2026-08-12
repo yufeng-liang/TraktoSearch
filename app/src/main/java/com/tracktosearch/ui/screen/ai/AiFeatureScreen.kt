@@ -347,6 +347,7 @@ private fun RecommendationCard(recommendation: AiRecommendation, onOpen: () -> U
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
             .then(if (hasMediaId) Modifier.clickable(onClick = onOpen) else Modifier),
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,

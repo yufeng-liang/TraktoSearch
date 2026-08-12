@@ -407,9 +407,9 @@ private fun CharacterStage(
 @Composable
 private fun CharacterChoice(character: AiCharacter, selected: Boolean, onClick: () -> Unit) {
     Surface(
+        onClick = onClick,
         modifier = Modifier
-            .size(width = 88.dp, height = 112.dp)
-            .clickable(onClick = onClick),
+            .size(width = 88.dp, height = 112.dp),
         shape = RoundedCornerShape(18.dp),
         color = if (selected) characterTint(character).copy(alpha = 0.24f) else MaterialTheme.colorScheme.surfaceVariant,
         tonalElevation = if (selected) 4.dp else 0.dp

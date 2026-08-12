@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
@@ -66,6 +67,7 @@ internal fun WatchlistCategoryTabs(
                 modifier = Modifier
                     .weight(1f)
                     .height(52.dp)
+                    .clip(selectedShape)
                     .testTag("watchlist_category_tab_$index")
                     .selectable(
                         selected = selected,

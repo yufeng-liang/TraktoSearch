@@ -558,6 +558,7 @@ internal fun SearchSourceAddCard(
     Surface(
         modifier = modifier
             .fillMaxSize()
+            .clip(RoundedCornerShape(12.dp))
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
         shape = RoundedCornerShape(12.dp),
         color = containerColor,
@@ -607,6 +608,7 @@ internal fun StatisticsCard(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(20.dp))
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
         isDark = isDark,
         shape = RoundedCornerShape(20.dp),

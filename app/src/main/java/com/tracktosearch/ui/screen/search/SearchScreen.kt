@@ -1888,7 +1888,8 @@ private fun DoubanHotGridItem(
     val ratingHazeState = remember { HazeState() }
 
     Card(
-        modifier = Modifier.clickable(enabled = !isResolving) { onClick() },
+        onClick = { onClick() },
+        enabled = !isResolving,
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
