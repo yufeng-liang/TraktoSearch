@@ -158,19 +158,6 @@ object AppGlassStyles {
     }
 
     @Composable
-    fun control(
-        tint: Color = MaterialTheme.colorScheme.surface,
-        shape: RoundedCornerShape = RoundedCornerShape(16.dp),
-        interactive: Boolean = true
-    ): GlassStyle {
-        return searchField(
-            tint = tint,
-            shape = shape,
-            interactive = interactive
-        )
-    }
-
-    @Composable
     fun searchField(
         tint: Color = MaterialTheme.colorScheme.surface,
         shape: RoundedCornerShape = RoundedCornerShape(16.dp),
@@ -212,11 +199,12 @@ object AppGlassStyles {
     @Composable
     fun detailAction(
         tint: Color = MaterialTheme.colorScheme.surface,
+        shape: RoundedCornerShape = RoundedCornerShape(50),
         interactive: Boolean = true
     ): GlassStyle {
         return style(
             role = GlassSurfaceRole.DetailAction,
-            shape = RoundedCornerShape(50),
+            shape = shape,
             tint = tint,
             interactive = interactive
         )
@@ -231,27 +219,6 @@ object AppGlassStyles {
             role = GlassSurfaceRole.LoginSurface,
             shape = shape,
             tint = tint
-        )
-    }
-
-    /** 旧 surface 调用点的兼容适配，避免 Blur 页面失去既有 Haze 参数入口。 */
-    @Composable
-    fun surface(
-        tint: Color = MaterialTheme.colorScheme.surface,
-        shape: RoundedCornerShape = RoundedCornerShape(16.dp),
-        edgeSoftness: Dp = 2.dp,
-        specularIntensity: Float = 0.40f,
-        ambientResponse: Float = 0.46f,
-        surfaceProfile: SurfaceProfile = SurfaceProfile.Squircle,
-        chromaticAberrationStrength: Float = 0f,
-        interactive: Boolean = false
-    ): GlassStyle {
-        // 这些参数仅为旧调用点保留签名；正式 Glass 光学值统一使用 role token。
-        return style(
-            role = GlassSurfaceRole.TopBar,
-            shape = shape,
-            tint = tint,
-            interactive = interactive
         )
     }
 }

@@ -37,4 +37,22 @@ class GlassTokenTest {
         assertThat(pressScale).isAtLeast(0.98f)
         assertThat(pressScale).isAtMost(1f)
     }
+
+    @Test
+    fun loginSurfaceUsesItsOwnRoleInsteadOfTopBarOrCircularControl() {
+        val login = glassToken(GlassSurfaceRole.LoginSurface, GlassVariant.CLEAR, false)
+        val topBar = glassToken(GlassSurfaceRole.TopBar, GlassVariant.CLEAR, false)
+        val circularControl = glassToken(
+            GlassSurfaceRole.CircularControl,
+            GlassVariant.CLEAR,
+            false
+        )
+        val detailAction = glassToken(GlassSurfaceRole.DetailAction, GlassVariant.CLEAR, false)
+        val searchField = glassToken(GlassSurfaceRole.SearchField, GlassVariant.CLEAR, false)
+
+        assertThat(login.tintAlpha).isGreaterThan(topBar.tintAlpha)
+        assertThat(login.edgeSoftness).isGreaterThan(topBar.edgeSoftness)
+        assertThat(login.surfaceProfile).isNotEqualTo(circularControl.surfaceProfile)
+        assertThat(detailAction.surfaceProfile).isNotEqualTo(searchField.surfaceProfile)
+    }
 }

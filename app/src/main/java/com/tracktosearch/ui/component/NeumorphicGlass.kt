@@ -337,7 +337,6 @@ fun NeumorphicFrostedSurface(
     }
 
     val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin()
-    val roundedShape = shape as? RoundedCornerShape
     val hazeModifier = if (hazeState != null) {
         Modifier.appVisualEffect(
             input = HazeInput.Sources(
@@ -345,13 +344,7 @@ fun NeumorphicFrostedSurface(
                 selection = sourceSelection
             ),
             hazeStyle = resolvedHazeStyle,
-            glassStyle = glassStyle ?: roundedShape?.let {
-                AppGlassStyles.surface(
-                    tint = backgroundColor.takeIf { it.alpha > 0f }
-                        ?: MaterialTheme.colorScheme.surface.copy(alpha = 0.16f),
-                    shape = it
-                )
-            },
+            glassStyle = glassStyle,
             blurSampling = HazeSampling.Adaptive
         )
     } else Modifier

@@ -38,7 +38,7 @@ fun Modifier.appVisualEffect(
 
         VisualEffectMode.GLASS -> hazeGlass(
             input = input,
-            style = glassStyle ?: AppGlassStyles.surface(),
+            style = glassStyle ?: AppGlassStyles.topBar(),
             // Glass 统一使用 alpha04 的默认采样；Blur 才接受调用点的降采样策略。
             sampling = HazeSampling.Default,
             interactionSource = interactionSource,

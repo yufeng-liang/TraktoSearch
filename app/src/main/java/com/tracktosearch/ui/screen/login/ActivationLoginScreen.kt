@@ -347,7 +347,7 @@ internal fun ActivationSecondaryActions(
                 .appVisualEffect(
                     input = HazeInput.Sources(hazeState),
                     hazeStyle = doubanHazeStyle,
-                    glassStyle = AppGlassStyles.control(
+                    glassStyle = AppGlassStyles.detailAction(
                         tint = doubanGreen.copy(alpha = if (doubanEnabled) 0.72f else 0.24f),
                         shape = doubanButtonShape,
                         interactive = doubanEnabled
@@ -477,12 +477,9 @@ private fun ActivationCard(
             .appVisualEffect(
                 input = HazeInput.Sources(hazeState),
                 hazeStyle = hazeStyle,
-                glassStyle = AppGlassStyles.surface(
+                glassStyle = AppGlassStyles.loginSurface(
                     tint = MaterialTheme.colorScheme.surface.copy(alpha = 0.48f),
-                    shape = shape,
-                    edgeSoftness = 8.dp,
-                    specularIntensity = 0.46f,
-                    ambientResponse = 0.50f
+                    shape = shape
                 )
             )
             .background(Color.Transparent, shape)
