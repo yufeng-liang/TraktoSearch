@@ -448,21 +448,36 @@
     <string name="detail_collection_title">コレクション：%s</string>
 
     <!-- Crash Dialog -->
-    <string name="crash_dialog_title">アプリクラッシュ</string>
-    <string name="crash_dialog_message">アプリが最近%d回クラッシュしました。開発者にログを送信しますか？</string>
-    <string name="crash_dialog_send">ログ送信</string>
     <string name="crash_dialog_cancel">後で</string>
-    <string name="crash_email_subject">TrackToSearch エラーログ</string>
-    <string name="crash_email_body">アプリクラッシュのログ：</string>
-    <string name="crash_email_no_log">クラッシュしましたが詳細ログが見つかりませんでした.</string>
-    <string name="crash_toast_copied">ログをコピーしました。1577865546@qq.com に送信してください</string>
     <!-- クラッシュログ認可 -->
     <string name="crash_auth_dialog_title">クラッシュログ認可</string>
     <string name="crash_auth_dialog_message">アプリが最近クラッシュしました。問題修正のため、ゲートウェイ経由でクラッシュログ（スタックトレース、アプリバージョン、デバイスモデル、最近の操作を含む）を開発者に送信してもよろしいですか？設定でいつでも変更できます。</string>
     <string name="crash_auth_dialog_agree">同意して送信</string>
     <string name="crash_auth_dialog_decline">拒否</string>
-    <string name="settings_crash_log_title">クラッシュログ送信</string>
-    <string name="settings_crash_log_subtitle">ゲートウェイ経由でクラッシュログを開発者に送信して問題修正を支援。デフォルトはオフ</string>
+    <string name="settings_crash_log_title">クラッシュログを自動アップロード</string>
+    <string name="settings_crash_log_subtitle">クラッシュログは次回起動時に自動的にアップロードされます</string>
+
+    <!-- クラッシュログのアップロードと記録 -->
+    <string name="crash_upload_success">クラッシュログのアップロードに成功しました</string>
+    <string name="crash_upload_failed">クラッシュログのアップロードに失敗しました。再試行できます</string>
+    <string name="crash_uploading">クラッシュログをアップロード中…</string>
+    <string name="crash_upload_retry">再試行</string>
+    <string name="crash_record_section_title">クラッシュログ</string>
+    <string name="crash_record_status_pending">アップロード待ち</string>
+    <string name="crash_record_status_uploading">アップロード中</string>
+    <string name="crash_record_status_success">アップロード済み</string>
+    <string name="crash_record_status_failed">アップロード失敗</string>
+    <string name="crash_detail_title">クラッシュログ詳細</string>
+    <string name="crash_detail_status">ステータス</string>
+    <string name="crash_detail_upload_time">アップロード時間</string>
+    <string name="crash_detail_fail_reason">失敗理由</string>
+    <string name="crash_detail_crash_time">クラッシュ時間</string>
+    <string name="crash_detail_app_version">アプリバージョン</string>
+    <string name="crash_detail_device">デバイスモデル</string>
+    <string name="crash_detail_log_content">ログ内容</string>
+    <string name="crash_detail_upload_now">今すぐアップロード</string>
+    <string name="crash_detail_not_found">レコードが見つかりません</string>
+    <string name="crash_upload_fail_hint">アップロードに失敗しました。再試行するか、ログを保持して次回起動時に再試行できます</string>
 
     <!-- Disk Type Labels -->
     <string name="disk_quark">Quark</string>
@@ -1375,6 +1390,7 @@
     <string name="help_tips_b9">オンライン検索は中国語人名検索に対応（TMDBベース）、人物検索時に自動的に関連作品を表示</string>
     <string name="help_tips_b10">発見ページのタイトルバー右側をタップしてセクションを素早くカスタマイズ</string>
     <string name="help_tips_b11">視覚効果（Haze ぼかし / 実験的な Glass）は現在調整中です。近日中に提供予定です</string>
+    <string name="help_tips_b12">設定で「クラッシュログを自動アップロード」を有効にすると、クラッシュログは次回起動時に自動的にアップロードされます。アップロード履歴はフィードバックページで確認できます</string>
 
     <!-- 彩蛋メッセージ（9アニメ × 3メッセージ） -->
     <string name="easter_msg_shy_1">つつかれました、くすぐったい！</string>

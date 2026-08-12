@@ -432,21 +432,36 @@
     <string name="trailer_youtube_restricted">YouTube is restricted in China\nPlease use VPN</string>
 
     <!-- Crash Dialog -->
-    <string name="crash_dialog_title">App Crash</string>
-    <string name="crash_dialog_message">The app has crashed %d time(s) recently. Send error logs to the developer?</string>
-    <string name="crash_dialog_send">Send logs</string>
     <string name="crash_dialog_cancel">Not now</string>
-    <string name="crash_email_subject">TrackToSearch Error Log</string>
-    <string name="crash_email_body">Here are the crash logs:</string>
-    <string name="crash_email_no_log">The app crashed but no detailed logs were found.</string>
-    <string name="crash_toast_copied">Logs copied. Please send to 1577865546@qq.com</string>
     <!-- Crash log authorization -->
     <string name="crash_auth_dialog_title">Crash Log Authorization</string>
     <string name="crash_auth_dialog_message">The app crashed recently. May we upload the crash log (including stack trace, app version, device model, and recent actions) to the developer via the gateway to help fix the issue? You can change this anytime in Settings.</string>
     <string name="crash_auth_dialog_agree">Agree and upload</string>
     <string name="crash_auth_dialog_decline">Decline</string>
-    <string name="settings_crash_log_title">Crash log upload</string>
-    <string name="settings_crash_log_subtitle">Upload crash logs to developer via gateway to help fix issues. Off by default.</string>
+    <string name="settings_crash_log_title">Auto-upload crash logs</string>
+    <string name="settings_crash_log_subtitle">Crash logs will be uploaded automatically on next launch</string>
+
+    <!-- Crash upload feedback and records -->
+    <string name="crash_upload_success">Crash log uploaded successfully</string>
+    <string name="crash_upload_failed">Crash log upload failed, you can retry</string>
+    <string name="crash_uploading">Uploading crash logs…</string>
+    <string name="crash_upload_retry">Retry</string>
+    <string name="crash_record_section_title">Crash Logs</string>
+    <string name="crash_record_status_pending">Pending upload</string>
+    <string name="crash_record_status_uploading">Uploading</string>
+    <string name="crash_record_status_success">Uploaded</string>
+    <string name="crash_record_status_failed">Upload failed</string>
+    <string name="crash_detail_title">Crash Log Detail</string>
+    <string name="crash_detail_status">Status</string>
+    <string name="crash_detail_upload_time">Upload time</string>
+    <string name="crash_detail_fail_reason">Fail reason</string>
+    <string name="crash_detail_crash_time">Crash time</string>
+    <string name="crash_detail_app_version">App version</string>
+    <string name="crash_detail_device">Device</string>
+    <string name="crash_detail_log_content">Log content</string>
+    <string name="crash_detail_upload_now">Upload now</string>
+    <string name="crash_detail_not_found">Record not found</string>
+    <string name="crash_upload_fail_hint">Upload failed. Retry or keep the log for the next launch.</string>
 
     <!-- Person Screen -->
     <string name="person_movie_credits">Movie Credits</string>
@@ -704,6 +719,7 @@ Config:
     <string name="help_tips_b9">Online search supports Chinese name search (powered by TMDB), auto-populates related movies/shows when searching for a person</string>
     <string name="help_tips_b10">Quickly customize discover page sections from the toolbar icon</string>
     <string name="help_tips_b11">Visual effects (Haze blur / experimental Glass) are still being polished — stay tuned</string>
+    <string name="help_tips_b12">Crash logs are auto-uploaded after a crash if enabled in Settings; upload history can be viewed on the Feedback page</string>
     <string name="help_vpn">VPN Notice</string>
     <string name="help_vpn_b1">Some features require access to overseas services. VPN may be needed for normal access</string>
     <string name="help_vpn_b2">Affected features: Trailer thumbnails (YouTube), Trakt data (trending/recommendations), TMDB data (movie details/posters)</string>

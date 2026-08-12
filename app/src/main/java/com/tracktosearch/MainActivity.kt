@@ -1,13 +1,9 @@
 package com.tracktosearch
 
-import android.app.AlertDialog
-import android.content.DialogInterface
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.ViewTreeObserver
-import android.widget.Toast
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -35,6 +31,7 @@ import com.tracktosearch.data.remote.trakt.TraktConnectionCheckResult
 import com.tracktosearch.data.remote.trakt.TraktConnectionState
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.StartupTrace
+import com.tracktosearch.ui.component.CrashReportDialogHost
 import com.tracktosearch.ui.navigation.AppNavigation
 import com.tracktosearch.ui.navigation.NotificationNavigator
 import com.tracktosearch.ui.navigation.NotificationTarget
@@ -43,7 +40,6 @@ import com.tracktosearch.ui.navigation.SearchNavigator
 import com.tracktosearch.ui.theme.TraktoSearchTheme
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.ScrollToTopProvider
-import com.tracktosearch.ui.util.showToast
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Job
@@ -297,10 +293,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         handleIntent(intent)
-        // 在后台线程检查崩溃日志并上传
-        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            checkCrashAndPrompt()
-        }
 
         // 配置状态栏点击滚动到顶部
         setupStatusBarTapListener()
@@ -336,6 +328,12 @@ class MainActivity : AppCompatActivity() {
                         }
                     )
                 }
+
+                // 崩溃上报对话框（授权/上传中/失败重试，状态驱动）
+                CrashReportDialogHost(
+                    crashLogStorage = crashLogStorage,
+                    crashLogUploader = crashLogUploader,
+                )
 
                 } // CompositionLocalProvider
             }
@@ -467,104 +465,5 @@ class MainActivity : AppCompatActivity() {
             resources.updateConfiguration(config, resources.displayMetrics)
         }
     }
-
-    private suspend fun checkCrashAndPrompt() {
-        val crashCount = CrashHandler.getAndResetCrashCount(this)
-        if (crashCount < 1) return
-
-        // 等待 CrashLogStorage 异步加载完成
-        val enabled = crashLogStorage.enabled.first()
-        val prompted = crashLogStorage.prompted.first()
-
-        // 首次崩溃且未弹过授权弹窗：显示授权询问
-        if (!prompted) {
-            runOnUiThread {
-                AlertDialog.Builder(this)
-                    .setTitle(getString(R.string.crash_auth_dialog_title))
-                    .setMessage(getString(R.string.crash_auth_dialog_message))
-                    .setPositiveButton(getString(R.string.crash_auth_dialog_agree)) { _: DialogInterface, _: Int ->
-                        lifecycleScope.launch {
-                            crashLogStorage.setEnabled(true)
-                            crashLogStorage.setPrompted(true)
-                            // 用户刚同意，立即触发上传；失败时保留本地日志下次再试
-                            val ok = crashLogUploader.uploadPendingLogs()
-                            if (ok) {
-                                CrashHandler.clearCrashLogs(this@MainActivity)
-                            }
-                        }
-                    }
-                    .setNegativeButton(getString(R.string.crash_auth_dialog_decline)) { dialog: DialogInterface, _: Int ->
-                        dialog.dismiss()
-                        lifecycleScope.launch {
-                            crashLogStorage.setPrompted(true)
-                            // 用户拒绝，清理本地日志不上报
-                            CrashHandler.clearCrashLogs(this@MainActivity)
-                        }
-                    }
-                    .setCancelable(false)
-                    .show()
-            }
-            return
-        }
-
-        // 已弹过授权弹窗但未授权：清理日志，不打扰用户
-        if (!enabled) {
-            CrashHandler.clearCrashLogs(this)
-            return
-        }
-
-        // 已授权：等待 TraktSearchApp 启动的上传结果，失败则弹邮件兜底
-        val uploadOk = kotlinx.coroutines.withTimeoutOrNull(8_000L) {
-            crashLogUploader.uploadResult.await()
-        } ?: false
-
-        if (uploadOk) {
-            CrashHandler.clearCrashLogs(this)
-            return
-        }
-
-        val logs = CrashHandler.getCrashLogs(this)
-        runOnUiThread {
-            AlertDialog.Builder(this)
-                .setTitle(getString(R.string.crash_dialog_title))
-                .setMessage(getString(R.string.crash_dialog_message, crashCount))
-                .setPositiveButton(getString(R.string.crash_dialog_send)) { _: DialogInterface, _: Int ->
-                    sendCrashEmail(logs)
-                    CrashHandler.clearCrashLogs(this)
-                }
-                .setNegativeButton(getString(R.string.crash_dialog_cancel)) { dialog: DialogInterface, _: Int ->
-                    dialog.dismiss()
-                    CrashHandler.clearCrashLogs(this)
-                }
-                .setCancelable(false)
-                .show()
-        }
-    }
-
-    private fun sendCrashEmail(logs: String) {
-        val subject = getString(R.string.crash_email_subject)
-        val body = if (logs.isNotEmpty()) {
-            getString(R.string.crash_email_body) + logs
-        } else {
-            getString(R.string.crash_email_no_log)
-        }
-
-        val intent = Intent(Intent.ACTION_SENDTO).apply {
-            data = Uri.parse("mailto:1577865546@qq.com")
-            putExtra(Intent.EXTRA_SUBJECT, subject)
-            putExtra(Intent.EXTRA_TEXT, body)
-        }
-
-        try {
-            startActivity(intent)
-        } catch (e: Exception) {
-            val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            clipboard.setPrimaryClip(
-                android.content.ClipData.newPlainText("Crash Log", body)
-            )
-            showToast(getString(R.string.crash_toast_copied), Toast.LENGTH_LONG)
-        }
-    }
-
 
 }

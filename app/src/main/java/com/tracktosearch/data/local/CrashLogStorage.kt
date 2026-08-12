@@ -43,19 +43,31 @@ class CrashLogStorage @Inject constructor(
     private val _prompted = MutableStateFlow(false)
     val prompted: StateFlow<Boolean> = _prompted.asStateFlow()
 
+    /** DataStore 初始值是否已加载完成（host 启动决策前 await，避免误读默认值弹授权框） */
+    private val _loaded = MutableStateFlow(false)
+    val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
+
     init {
         scope.launch {
-            val prefs = context.crashLogDataStore.data.first()
-            _enabled.value = prefs[KEY_ENABLED] ?: false
-            _prompted.value = prefs[KEY_PROMPTED] ?: false
+            try {
+                val prefs = context.crashLogDataStore.data.first()
+                _enabled.value = prefs[KEY_ENABLED] ?: false
+                _prompted.value = prefs[KEY_PROMPTED] ?: false
+            } finally {
+                // 读取失败时保持默认值 false，loaded 仍置位，避免 host 启动决策永久挂起
+                _loaded.value = true
+            }
         }
     }
 
     suspend fun setEnabled(enabled: Boolean) {
         context.crashLogDataStore.edit { prefs ->
             prefs[KEY_ENABLED] = enabled
+            // 开启即视为已授权引导，避免下次崩溃时再次弹首次授权弹窗（设置页开关=自动上报语义）
+            if (enabled) prefs[KEY_PROMPTED] = true
         }
         _enabled.value = enabled
+        if (enabled) _prompted.value = true
     }
 
     suspend fun setPrompted(prompted: Boolean) {

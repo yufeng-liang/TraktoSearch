@@ -39,6 +39,7 @@ class FeedbackViewModelTest {
     private val authManager = mockk<AuthManager>()
     private val userProfileStorage = mockk<UserProfileStorage>()
     private val doubanAuthStorage = mockk<DoubanAuthStorage>()
+    private val crashLogRecordStore = mockk<com.tracktosearch.data.local.CrashLogRecordStore>(relaxed = true)
     private val context = mockk<Context>(relaxed = true)
 
     private fun createViewModel(): FeedbackViewModel {
@@ -51,7 +52,7 @@ class FeedbackViewModelTest {
                 every { context.getString(R.string.error_load_failed) } returns "Load failed"
         every { context.getString(R.string.feedback_submit_failed) } returns "Submit failed"
         every { context.getString(R.string.error_operation_failed) } returns "Operation failed"
-        return FeedbackViewModel(feedbackRepository, cacheStore, authManager, userProfileStorage, doubanAuthStorage, context)
+        return FeedbackViewModel(feedbackRepository, cacheStore, authManager, userProfileStorage, doubanAuthStorage, crashLogRecordStore, context)
     }
 
     @Test

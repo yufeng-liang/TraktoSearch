@@ -33,6 +33,7 @@ import com.tracktosearch.data.repository.DoubanTraktStatusConsistencyChecker
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.UpdateRepository
+import com.tracktosearch.data.util.CrashLogUploader
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.test.MainDispatcherRule
@@ -61,6 +62,7 @@ import org.robolectric.annotation.Config
  * - setNotificationEnabled 启用/禁用时调度/取消周期检查
  * - dismissUpdateDialog / clearMessage 状态重置
  * - clearDoubanCredentials / isCheckRunning / cancelConsistencyCheck 同步委托
+ * - setCrashLogEnabled 开启时按待传日志情况触发/跳过上传
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -70,12 +72,13 @@ class SettingsViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    // 25 个 mock 依赖
+    // 26 个 mock 依赖
     private lateinit var themeStorage: ThemeStorage
     private lateinit var searchSourceStorage: SearchSourceStorage
     private lateinit var notificationStorage: NotificationStorage
     private lateinit var notificationScheduler: NotificationScheduler
     private lateinit var crashLogStorage: CrashLogStorage
+    private lateinit var crashLogUploader: CrashLogUploader
     private lateinit var languageStorage: LanguageStorage
     private lateinit var traktRepository: TraktRepository
     private lateinit var tmdbRepository: TmdbRepository
@@ -113,6 +116,7 @@ class SettingsViewModelTest {
         notificationStorage = mockk(relaxed = true)
         notificationScheduler = mockk(relaxed = true)
         crashLogStorage = mockk(relaxed = true)
+        crashLogUploader = mockk(relaxed = true)
         languageStorage = mockk(relaxed = true)
         traktRepository = mockk(relaxed = true)
         tmdbRepository = mockk(relaxed = true)
@@ -175,6 +179,7 @@ class SettingsViewModelTest {
             notificationStorage = notificationStorage,
             notificationScheduler = notificationScheduler,
             crashLogStorage = crashLogStorage,
+            crashLogUploader = crashLogUploader,
             languageStorage = languageStorage,
             traktRepository = traktRepository,
             tmdbRepository = tmdbRepository,
@@ -317,5 +322,35 @@ class SettingsViewModelTest {
         viewModel.clearMessage()
 
         assertThat(viewModel.exportImportState.value.message).isNull()
+    }
+
+    // ==================== 崩溃日志上报开关测试 ====================
+
+    /**
+     * 测试点11：setCrashLogEnabled(true) 开启且有待传日志时触发上传
+     */
+    @Test
+    fun `setCrashLogEnabled 开启且有待传日志时触发上传`() = runTest {
+        every { crashLogUploader.hasPendingLogs() } returns true
+        coEvery { crashLogUploader.uploadPendingLogs() } returns true
+
+        viewModel.setCrashLogEnabled(true)
+        advanceUntilIdle()
+
+        coVerify { crashLogStorage.setEnabled(true) }
+        coVerify { crashLogUploader.uploadPendingLogs() }
+    }
+
+    /**
+     * 测试点12：setCrashLogEnabled(true) 开启但无待传日志时不触发上传
+     */
+    @Test
+    fun `setCrashLogEnabled 开启但无待传日志时不触发上传`() = runTest {
+        // hasPendingLogs() 默认（relaxed mock）返回 false，无需额外 stub
+        viewModel.setCrashLogEnabled(true)
+        advanceUntilIdle()
+
+        coVerify { crashLogStorage.setEnabled(true) }
+        coVerify(exactly = 0) { crashLogUploader.uploadPendingLogs() }
     }
 }

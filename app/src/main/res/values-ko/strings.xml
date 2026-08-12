@@ -448,21 +448,36 @@
     <string name="detail_collection_title">시리즈: %s</string>
 
     <!-- Crash Dialog -->
-    <string name="crash_dialog_title">앱 크래시</string>
-    <string name="crash_dialog_message">앱이 최근 %d회 크래시되었습니다. 개발자에게 로그를 전송하시겠습니까?</string>
-    <string name="crash_dialog_send">로그 전송</string>
     <string name="crash_dialog_cancel">나중에</string>
-    <string name="crash_email_subject">TrackToSearch 오류 로그</string>
-    <string name="crash_email_body">앱 크래시 로그:\n\n</string>
-    <string name="crash_email_no_log">크래시되었으나 상세 로그를 찾을 수 없습니다.</string>
-    <string name="crash_toast_copied">로그가 복사되었습니다. 1577865546@qq.com 로 전송해주세요</string>
     <!-- 크래시 로그 인가 -->
     <string name="crash_auth_dialog_title">크래시 로그 인가</string>
     <string name="crash_auth_dialog_message">앱이 최근 크래시되었습니다. 문제 수정을 위해 게이트웨이를 통해 크래시 로그(스택 트레이스, 앱 버전, 기기 모델, 최근 작업 포함)를 개발자에게 전송해도 됩니까? 설정에서 언제든 변경할 수 있습니다.</string>
     <string name="crash_auth_dialog_agree">동의하고 전송</string>
     <string name="crash_auth_dialog_decline">거부</string>
-    <string name="settings_crash_log_title">크래시 로그 전송</string>
-    <string name="settings_crash_log_subtitle">게이트웨이를 통해 크래시 로그를 개발자에게 전송하여 문제 수정 지원. 기본값 꺼짐</string>
+    <string name="settings_crash_log_title">크래시 로그 자동 업로드</string>
+    <string name="settings_crash_log_subtitle">크래시 로그는 다음 실행 시 자동으로 업로드됩니다</string>
+
+    <!-- 크래시 로그 업로드 및 기록 -->
+    <string name="crash_upload_success">크래시 로그 업로드 성공</string>
+    <string name="crash_upload_failed">크래시 로그 업로드 실패, 재시도할 수 있습니다</string>
+    <string name="crash_uploading">크래시 로그 업로드 중…</string>
+    <string name="crash_upload_retry">재시도</string>
+    <string name="crash_record_section_title">크래시 로그</string>
+    <string name="crash_record_status_pending">업로드 대기 중</string>
+    <string name="crash_record_status_uploading">업로드 중</string>
+    <string name="crash_record_status_success">업로드 완료</string>
+    <string name="crash_record_status_failed">업로드 실패</string>
+    <string name="crash_detail_title">크래시 로그 상세</string>
+    <string name="crash_detail_status">상태</string>
+    <string name="crash_detail_upload_time">업로드 시간</string>
+    <string name="crash_detail_fail_reason">실패 원인</string>
+    <string name="crash_detail_crash_time">크래시 시간</string>
+    <string name="crash_detail_app_version">앱 버전</string>
+    <string name="crash_detail_device">기기 모델</string>
+    <string name="crash_detail_log_content">로그 내용</string>
+    <string name="crash_detail_upload_now">지금 업로드</string>
+    <string name="crash_detail_not_found">기록을 찾을 수 없습니다</string>
+    <string name="crash_upload_fail_hint">업로드에 실패했습니다. 재시도하거나 로그를 보관해 다음 실행 시 다시 시도하세요</string>
 
     <!-- Disk Type Labels -->
     <string name="disk_quark">Quark</string>
@@ -1375,6 +1390,7 @@
     <string name="help_tips_b9">온라인 검색은 중국어 인물명 검색 지원(TMDB 기반), 인물 검색 시 자동으로 관련 작품 표시</string>
     <string name="help_tips_b10">발견 페이지 제목 표시줄 오른쪽을 탭하여 섹션 빠르게 사용자 정의</string>
     <string name="help_tips_b11">시각 효과(Haze 블러 / 실험적 Glass)는 아직 다듬는 중입니다 — 기대해 주세요</string>
+    <string name="help_tips_b12">설정에서 「크래시 로그 자동 업로드」를 켜면 크래시 로그가 다음 실행 시 자동으로 업로드됩니다. 업로드 기록은 피드백 페이지에서 확인할 수 있습니다</string>
 
     <!-- 이스터에그 메시지 (9애니메이션 × 3메시지) -->
     <string name="easter_msg_shy_1">찔렀어요, 간지러워!</string>

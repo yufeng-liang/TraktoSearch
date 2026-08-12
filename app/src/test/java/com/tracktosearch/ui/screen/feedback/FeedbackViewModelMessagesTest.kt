@@ -33,12 +33,13 @@ class FeedbackViewModelMessagesTest {
     private val userProfileStorage = mockk<UserProfileStorage>()
     private val doubanAuthStorage = mockk<DoubanAuthStorage>()
     private val context = mockk<Context>(relaxed = true)
+    private val crashLogRecordStore = mockk<com.tracktosearch.data.local.CrashLogRecordStore>(relaxed = true)
 
     private fun createViewModel(): FeedbackViewModel {
         every { authManager.nickname } returns MutableStateFlow(null)
         coEvery { userProfileStorage.getProfile() } returns null
         every { doubanAuthStorage.doubanProfile } returns MutableStateFlow(null)
-        return FeedbackViewModel(feedbackRepository, cacheStore, authManager, userProfileStorage, doubanAuthStorage, context)
+        return FeedbackViewModel(feedbackRepository, cacheStore, authManager, userProfileStorage, doubanAuthStorage, crashLogRecordStore, context)
     }
 
     private fun message(id: String, unread: Boolean): MessageItem = MessageItem(
