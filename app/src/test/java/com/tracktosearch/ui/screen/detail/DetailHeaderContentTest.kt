@@ -4,12 +4,15 @@ import android.content.Context
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.tracktosearch.R
@@ -37,6 +40,15 @@ class DetailHeaderContentTest {
 
     private val longOverview = (1..5).joinToString("\n") { "Overview line $it" }
 
+    private fun getTextLayouts(marker: String): List<TextLayoutResult> {
+        val layouts = mutableListOf<TextLayoutResult>()
+        composeRule.onNodeWithText(marker, substring = true)
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { action ->
+                action(layouts)
+            }
+        return layouts
+    }
+
     @Test
     fun short_overview_does_not_show_expand_action() {
         composeRule.setContent {
@@ -50,20 +62,6 @@ class DetailHeaderContentTest {
     }
 
     @Test
-    fun short_overview_display_text_has_no_action() {
-        val display = buildOverviewDisplayText(
-            text = "A short overview.",
-            expanded = false,
-            collapsedContent = null,
-            expandLabel = expandLabel,
-            collapseLabel = collapseLabel
-        )
-
-        assertThat(display.content).isEqualTo("A short overview.")
-        assertThat(display.actionLabel).isNull()
-    }
-
-    @Test
     fun long_overview_shows_expand_action() {
         composeRule.setContent {
             MaterialTheme {
@@ -74,10 +72,8 @@ class DetailHeaderContentTest {
         }
 
         composeRule.onNodeWithText(expandLabel, substring = true).assertIsDisplayed()
-        assertThat(composeRule.onAllNodesWithText("Overview line 5", substring = true).fetchSemanticsNodes())
-            .isEmpty()
-        assertThat(composeRule.onAllNodesWithText("View all", substring = true).fetchSemanticsNodes())
-            .isEmpty()
+        // 折叠时只布局 3 行（第 4/5 行被截断，文本语义仍含全文）
+        assertThat(getTextLayouts(expandLabel).single().lineCount).isEqualTo(3)
     }
 
     @Test
@@ -90,36 +86,11 @@ class DetailHeaderContentTest {
             }
         }
 
-        composeRule.onNodeWithText(expandLabel, substring = true).performClick()
+        // 展开链接是 Text 流式内联的 LinkAnnotation，语义树中为带 OnClick 的子节点
+        composeRule.onAllNodes(hasClickAction(), useUnmergedTree = true)[0]
+            .performSemanticsAction(SemanticsActions.OnClick)
         composeRule.onNodeWithText(collapseLabel, substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("Overview line 5", substring = true).assertIsDisplayed()
-    }
-
-    @Test
-    fun collapsed_long_overview_display_text_shows_expand() {
-        val display = buildOverviewDisplayText(
-            text = "A long overview.",
-            expanded = false,
-            collapsedContent = "A long",
-            expandLabel = expandLabel,
-            collapseLabel = collapseLabel
-        )
-
-        assertThat(display.content).isEqualTo("A long")
-        assertThat(display.actionLabel).isEqualTo(expandLabel)
-    }
-
-    @Test
-    fun expanded_overview_display_text_shows_collapse() {
-        val display = buildOverviewDisplayText(
-            text = "A long overview.",
-            expanded = true,
-            collapsedContent = "A long",
-            expandLabel = expandLabel,
-            collapseLabel = collapseLabel
-        )
-
-        assertThat(display.content).isEqualTo("A long overview.")
-        assertThat(display.actionLabel).isEqualTo(collapseLabel)
+        // 展开后 5 行全部布局显示
+        assertThat(getTextLayouts(collapseLabel).single().lineCount).isEqualTo(5)
     }
 }

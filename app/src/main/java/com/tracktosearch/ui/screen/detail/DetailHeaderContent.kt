@@ -2,10 +2,12 @@ package com.tracktosearch.ui.screen.detail
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope.OverlayClip
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -58,14 +61,17 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.core.graphics.drawable.toBitmap
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.eygraber.seymour.SeymourText
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
 import com.tracktosearch.data.util.PosterColorExtractor
@@ -77,6 +83,8 @@ import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
+import kotlin.math.max
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 // ==================== 头部内容 ====================
@@ -575,28 +583,11 @@ internal fun DetailHeaderContent(
 
 // ==================== 折叠展开文本 ====================
 
-internal data class OverviewDisplayText(
-    val content: String,
-    val actionLabel: String?
-)
-
-internal fun buildOverviewDisplayText(
-    text: String,
-    expanded: Boolean,
-    collapsedContent: String?,
-    expandLabel: String,
-    collapseLabel: String
-): OverviewDisplayText {
-    return when {
-        expanded -> OverviewDisplayText(content = text, actionLabel = collapseLabel)
-        collapsedContent != null -> OverviewDisplayText(
-            content = collapsedContent,
-            actionLabel = expandLabel
-        )
-        else -> OverviewDisplayText(content = text, actionLabel = null)
-    }
-}
-
+/**
+ * 折叠/展开文本：折叠时在最后一行行尾显示「展开/收起」链接（流式内联，紧贴截断文字），
+ * 链接前的文字用横向渐变淡出融入背景；点击链接展开/收起，高度变化带动画。
+ * 截断与溢出处理由 seymour-text（SeymourText）完成。
+ */
 @Composable
 internal fun ExpandableText(
     text: String,
@@ -610,95 +601,80 @@ internal fun ExpandableText(
     val backgroundColor = fadeColor ?: MaterialTheme.colorScheme.background
     val bodyColor = MaterialTheme.colorScheme.onSurfaceVariant
     val bodyStyle = MaterialTheme.typography.bodyMedium
-    val textMeasurer = rememberTextMeasurer()
-    var expanded by rememberSaveable(text, effectiveMaxLines) { mutableStateOf(false) }
-    var collapsedOverflowing by rememberSaveable(text, effectiveMaxLines) { mutableStateOf(false) }
-    var collapsedContent by rememberSaveable(text, effectiveMaxLines) { mutableStateOf<String?>(null) }
+    val density = LocalDensity.current
 
-    val fadeWidth = 48.dp
-    val actionGap = 4.dp
-    val actionTextWidthPx = remember(expandLabel, collapseLabel, bodyStyle) {
+    var expanded by rememberSaveable(text, effectiveMaxLines) { mutableStateOf(false) }
+    // 折叠且溢出时显示渐隐遮罩（由 onTextLayout 驱动，展开时淡出）
+    var showFade by remember(text, effectiveMaxLines) { mutableStateOf(false) }
+    // 文本布局尺寸（px）：容器宽度、最后一行顶部与行高，用于渐变遮罩定位
+    var textWidthPx by remember(text, effectiveMaxLines) { mutableFloatStateOf(0f) }
+    var lineTopPx by remember(text, effectiveMaxLines) { mutableFloatStateOf(0f) }
+    var lineHeightPx by remember(text, effectiveMaxLines) { mutableFloatStateOf(0f) }
+
+    // 展开/收起链接宽度：链接紧贴最后一行行尾，渐变区右端 = 容器宽 - 链接宽
+    val textMeasurer = rememberTextMeasurer()
+    val linkWidthPx = remember(expandLabel, collapseLabel, bodyStyle) {
         maxOf(
             textMeasurer.measure(AnnotatedString(expandLabel), bodyStyle).size.width,
             textMeasurer.measure(AnnotatedString(collapseLabel), bodyStyle).size.width
         )
     }
-    val actionTailWidth = with(LocalDensity.current) {
-        maxOf(96.dp, actionTextWidthPx.toDp() + fadeWidth + actionGap)
-    }
-    val actionLabel = when {
-        expanded -> collapseLabel
-        collapsedOverflowing -> expandLabel
-        else -> null
-    }
-    val display = buildOverviewDisplayText(
-        text = text,
-        expanded = expanded,
-        collapsedContent = collapsedContent,
-        expandLabel = expandLabel,
-        collapseLabel = collapseLabel
+
+    val fadeWidth = 48.dp
+    val fadeWidthPx = with(density) { fadeWidth.toPx() }
+    val fadeAlpha by animateFloatAsState(
+        targetValue = if (showFade) 1f else 0f,
+        animationSpec = tween(durationMillis = 150),
+        label = "expandableTextFade"
     )
-    val toggleExpanded = { expanded = !expanded }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                enabled = collapsedOverflowing || expanded,
-                onClick = toggleExpanded
-            )
+            .animateContentSize()
     ) {
-        Text(
-            text = display.content,
+        SeymourText(
+            onSeeMoreChange = { expanded = it },
+            isSeeMoreExpanded = expanded,
+            text = text,
+            seeMoreText = expandLabel,
+            seeLessText = collapseLabel,
+            seeMoreMaxLines = effectiveMaxLines,
+            seeLessMaxLines = Int.MAX_VALUE,
             style = bodyStyle,
             color = bodyColor,
-            maxLines = if (expanded) Int.MAX_VALUE else effectiveMaxLines,
-            overflow = TextOverflow.Clip,
-            modifier = Modifier
-                .fillMaxWidth(),
+            seeMoreStyle = SpanStyle(color = primaryColor),
+            seeLessStyle = SpanStyle(color = primaryColor),
             onTextLayout = { layoutResult ->
-                if (!expanded && !collapsedOverflowing) {
-                    val isOverflowing = layoutResult.hasVisualOverflow
-                    if (isOverflowing) {
-                        val lastVisibleLine = (effectiveMaxLines - 1)
-                            .coerceAtMost(layoutResult.lineCount - 1)
-                        val visibleEnd = layoutResult.getLineEnd(
-                            lineIndex = lastVisibleLine,
-                            visibleEnd = true
-                        )
-                        collapsedContent = text.take(visibleEnd).trimEnd()
-                        collapsedOverflowing = true
-                    }
+                // 溢出检测（展开后无溢出，遮罩淡出）；行高取自任意一帧，首帧次帧一致
+                textWidthPx = layoutResult.size.width.toFloat()
+                showFade = !expanded && layoutResult.hasVisualOverflow
+                if (layoutResult.lineCount > 0) {
+                    val lastLine = (effectiveMaxLines - 1)
+                        .coerceAtMost(layoutResult.lineCount - 1)
+                    val lineTop = layoutResult.getLineTop(lastLine)
+                    val lineBottom = layoutResult.getLineBottom(lastLine)
+                    lineTopPx = lineTop
+                    lineHeightPx = lineBottom - lineTop
                 }
             }
         )
-        if (actionLabel != null) {
+        // 渐隐遮罩：只覆盖最后一行行尾、链接左侧一小段，文字渐变融入背景
+        if (showFade && textWidthPx > 0f && lineHeightPx > 0f) {
+            val fadeRight = textWidthPx - linkWidthPx
+            val fadeLeft = max(0f, fadeRight - fadeWidthPx)
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .width(actionTailWidth)
+                    .offset { IntOffset(fadeLeft.roundToInt(), lineTopPx.roundToInt()) }
+                    .width(with(density) { (fadeRight - fadeLeft).toDp() })
+                    .height(with(density) { lineHeightPx.toDp() })
+                    .graphicsLayer { alpha = fadeAlpha }
                     .background(
                         Brush.horizontalGradient(
                             colors = listOf(Color.Transparent, backgroundColor)
                         )
-                    ),
-                contentAlignment = Alignment.CenterEnd
-            ) {
-                Text(
-                    text = actionLabel,
-                    style = bodyStyle,
-                    color = primaryColor,
-                    modifier = Modifier
-                        .padding(start = fadeWidth, end = actionGap)
-                        .clickable(
-                            interactionSource = remember(actionLabel) { MutableInteractionSource() },
-                            indication = null,
-                            onClick = toggleExpanded
-                        )
-                )
-            }
+                    )
+            )
         }
     }
 }
