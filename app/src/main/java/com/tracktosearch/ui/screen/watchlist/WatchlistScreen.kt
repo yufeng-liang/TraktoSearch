@@ -894,14 +894,20 @@ fun WatchlistScreen(
                                             .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp)
                                             .height(42.dp)
                                     ) {
-                                        Text(
-                                            text = stringResource(R.string.tab_me),
-                                            modifier = Modifier.align(Alignment.CenterStart),
-                                            fontSize = 28.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            letterSpacing = (-0.5).sp,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
+                                        androidx.compose.animation.AnimatedVisibility(
+                                            visible = !isSearchExpanded,
+                                            enter = fadeIn(animationSpec = tween(240)),
+                                            exit = fadeOut(animationSpec = tween(240)),
+                                            modifier = Modifier.align(Alignment.CenterStart)
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.tab_me),
+                                                fontSize = 28.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                letterSpacing = (-0.5).sp,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
                                     val searchHintColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
                                     val searchPlaceholder = if (searchQuery.isBlank()) {
                                         when (selectedMode) {
