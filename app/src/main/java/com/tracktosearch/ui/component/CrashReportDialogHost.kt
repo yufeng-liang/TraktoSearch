@@ -64,8 +64,8 @@ fun CrashReportDialogHost(
     // 启动决策：读崩溃计数与授权状态（一次性）
     LaunchedEffect(Unit) {
         crashCount = withContext(Dispatchers.IO) { CrashHandler.getAndResetCrashCount(context) }
-        // 等待 DataStore 初始值加载完成，避免对已授权用户误读默认值而弹授权框
-        crashLogStorage.loaded.first()
+        // 挂起等待 DataStore 初始值加载完成，避免对已授权用户误读默认值而弹授权框
+        crashLogStorage.loaded.first { it }
         val prompted = crashLogStorage.prompted.first()
         enabled = crashLogStorage.enabled.first()
         when (CrashPromptDecision.decide(crashCount, enabled, prompted)) {

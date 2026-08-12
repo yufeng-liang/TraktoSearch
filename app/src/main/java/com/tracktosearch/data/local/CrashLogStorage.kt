@@ -49,10 +49,14 @@ class CrashLogStorage @Inject constructor(
 
     init {
         scope.launch {
-            val prefs = context.crashLogDataStore.data.first()
-            _enabled.value = prefs[KEY_ENABLED] ?: false
-            _prompted.value = prefs[KEY_PROMPTED] ?: false
-            _loaded.value = true
+            try {
+                val prefs = context.crashLogDataStore.data.first()
+                _enabled.value = prefs[KEY_ENABLED] ?: false
+                _prompted.value = prefs[KEY_PROMPTED] ?: false
+            } finally {
+                // 读取失败时保持默认值 false，loaded 仍置位，避免 host 启动决策永久挂起
+                _loaded.value = true
+            }
         }
     }
 
