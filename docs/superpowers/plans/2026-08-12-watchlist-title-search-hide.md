@@ -85,7 +85,7 @@
 替换为
 
 ```kotlin
-                                        AnimatedVisibility(
+                                        androidx.compose.animation.AnimatedVisibility(
                                             visible = !isSearchExpanded,
                                             enter = fadeIn(animationSpec = tween(240)),
                                             exit = fadeOut(animationSpec = tween(240)),
@@ -102,6 +102,8 @@
 ```
 
 说明:`fadeIn`/`fadeOut`/`tween`/`AnimatedVisibility` 均已 import(文件 8/16/17/18 行),无需新增 import;`isSearchExpanded` 是已有的 `rememberSaveable` 状态(397 行),所有收起路径(点击空白、Back、过滤按钮、切 Tab)都通过 `collapseSearch()` 置 false,标题随之淡入。
+
+**注意(实现期修正):** 该调用点位于两层 `ColumnScope` 内,裸名 `AnimatedVisibility` 会被解析为 `androidx.compose.animation` 包中的 `ColumnScope.AnimatedVisibility` 扩展(与顶层函数同包,import 顶层函数时扩展同时在作用域内),导致编译错误。必须使用全限定名 `androidx.compose.animation.AnimatedVisibility` 强制调用顶层函数。
 
 - [ ] **步骤 4:运行测试确认通过**
 
