@@ -445,8 +445,30 @@
     <string name="crash_auth_dialog_message">应用近期发生了崩溃。是否允许通过网关将崩溃日志（含堆栈、应用版本、设备型号、最近操作）上报给开发者以帮助修复问题？你随时可在设置中更改。</string>
     <string name="crash_auth_dialog_agree">同意并上报</string>
     <string name="crash_auth_dialog_decline">拒绝</string>
-    <string name="settings_crash_log_title">崩溃日志上报</string>
-    <string name="settings_crash_log_subtitle">通过网关将崩溃日志上报给开发者以修复问题，默认关闭</string>
+    <string name="settings_crash_log_title">自动上报崩溃日志</string>
+    <string name="settings_crash_log_subtitle">开启后崩溃日志将在下次启动时自动上传</string>
+
+    <!-- 崩溃上报反馈与记录 -->
+    <string name="crash_upload_success">崩溃日志上报成功</string>
+    <string name="crash_upload_failed">崩溃日志上报失败，可重试</string>
+    <string name="crash_uploading">正在上传崩溃日志…</string>
+    <string name="crash_upload_retry">重试</string>
+    <string name="crash_record_section_title">崩溃日志</string>
+    <string name="crash_record_status_pending">待上传</string>
+    <string name="crash_record_status_uploading">上传中</string>
+    <string name="crash_record_status_success">已上报</string>
+    <string name="crash_record_status_failed">上传失败</string>
+    <string name="crash_detail_title">崩溃日志详情</string>
+    <string name="crash_detail_status">状态</string>
+    <string name="crash_detail_upload_time">上传时间</string>
+    <string name="crash_detail_fail_reason">失败原因</string>
+    <string name="crash_detail_crash_time">崩溃时间</string>
+    <string name="crash_detail_app_version">应用版本</string>
+    <string name="crash_detail_device">设备型号</string>
+    <string name="crash_detail_log_content">日志内容</string>
+    <string name="crash_detail_upload_now">立即上传</string>
+    <string name="crash_detail_not_found">记录不存在</string>
+    <string name="crash_upload_fail_hint">上报失败，可重试或保留日志待下次启动再试</string>
 
     <!-- Person Screen -->
     <string name="person_movie_credits">参演电影</string>

@@ -445,8 +445,30 @@
     <string name="crash_auth_dialog_message">The app crashed recently. May we upload the crash log (including stack trace, app version, device model, and recent actions) to the developer via the gateway to help fix the issue? You can change this anytime in Settings.</string>
     <string name="crash_auth_dialog_agree">Agree and upload</string>
     <string name="crash_auth_dialog_decline">Decline</string>
-    <string name="settings_crash_log_title">Crash log upload</string>
-    <string name="settings_crash_log_subtitle">Upload crash logs to developer via gateway to help fix issues. Off by default.</string>
+    <string name="settings_crash_log_title">Auto-upload crash logs</string>
+    <string name="settings_crash_log_subtitle">Crash logs will be uploaded automatically on next launch</string>
+
+    <!-- Crash upload feedback and records -->
+    <string name="crash_upload_success">Crash log uploaded successfully</string>
+    <string name="crash_upload_failed">Crash log upload failed, you can retry</string>
+    <string name="crash_uploading">Uploading crash logs…</string>
+    <string name="crash_upload_retry">Retry</string>
+    <string name="crash_record_section_title">Crash Logs</string>
+    <string name="crash_record_status_pending">Pending upload</string>
+    <string name="crash_record_status_uploading">Uploading</string>
+    <string name="crash_record_status_success">Uploaded</string>
+    <string name="crash_record_status_failed">Upload failed</string>
+    <string name="crash_detail_title">Crash Log Detail</string>
+    <string name="crash_detail_status">Status</string>
+    <string name="crash_detail_upload_time">Upload time</string>
+    <string name="crash_detail_fail_reason">Fail reason</string>
+    <string name="crash_detail_crash_time">Crash time</string>
+    <string name="crash_detail_app_version">App version</string>
+    <string name="crash_detail_device">Device</string>
+    <string name="crash_detail_log_content">Log content</string>
+    <string name="crash_detail_upload_now">Upload now</string>
+    <string name="crash_detail_not_found">Record not found</string>
+    <string name="crash_upload_fail_hint">Upload failed. Retry or keep the log for the next launch.</string>
 
     <!-- Person Screen -->
     <string name="person_movie_credits">Movie Credits</string>
