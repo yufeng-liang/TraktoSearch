@@ -247,6 +247,21 @@ class RuleBasedRelevanceScorerTest {
     }
 
     @Test
+    fun releaseDate_isNotTreatedAsMovieYear() {
+        val query = ResourceQuery(
+            title = "测试电影",
+            year = 2025,
+            mediaType = MediaType.MOVIE
+        )
+
+        val result = scorer.evaluate(item("测试电影 2025.05.11"), query)
+
+        // 日期中的 2025 不参与年份加分，资源只保留强标题命中的 40 分。
+        assertThat(result.score).isEqualTo(40)
+        assertThat(result.hasYearConflict).isFalse()
+    }
+
+    @Test
     fun electronicLoveLetter_remainsWeakMatch() {
         val result = scorer.evaluate(item("电子情书 1080p"), queryLoveLetter)
 

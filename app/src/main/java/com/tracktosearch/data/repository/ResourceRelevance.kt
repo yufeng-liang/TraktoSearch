@@ -226,16 +226,11 @@ class RuleBasedRelevanceScorer : ResourceRelevanceScorer {
 
     private fun yearSignal(name: String, year: Int?): YearSignal {
         if (year == null) return YearSignal(0, false)
-        val allYears = YEAR_REGEX.findAll(name).map { it.value.toInt() }.toSet()
         val movieYears = extractMovieYears(name)
         if (year in movieYears) return YearSignal(15, false)
 
         return if (movieYears.isNotEmpty()) {
-            if (year in allYears) {
-                YearSignal(0, false)
-            } else {
-                YearSignal(-15, true)
-            }
+            YearSignal(-15, true)
         } else {
             YearSignal(0, false)
         }
