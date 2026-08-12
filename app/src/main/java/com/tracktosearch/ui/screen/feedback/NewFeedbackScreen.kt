@@ -57,7 +57,6 @@ fun NewFeedbackScreen(
 
     var selectedType by remember { mutableStateOf<String?>(null) }
     var content by remember { mutableStateOf("") }
-    var contact by remember { mutableStateOf("") }
     var screenshots by remember { mutableStateOf<List<Pair<ByteArray, String>>>(emptyList()) }
 
     // 截图全屏查看
@@ -185,17 +184,6 @@ fun NewFeedbackScreen(
                 }
             )
 
-            // 联系方式
-            OutlinedTextField(
-                value = contact,
-                onValueChange = { contact = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text(stringResource(R.string.feedback_contact_placeholder)) },
-                label = { Text(stringResource(R.string.feedback_contact)) },
-                enabled = !isSubmitting,
-                singleLine = true
-            )
-
             // 错误信息
             (submitState as? FeedbackViewModel.SubmitState.Error)?.let {
                 Text(it.message, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
@@ -208,7 +196,6 @@ fun NewFeedbackScreen(
                         viewModel.submit(
                             type = selectedType!!,
                             content = content.trim(),
-                            contact = contact.trim().ifEmpty { null },
                             screenshotBytes = screenshots.map { it.first },
                             screenshotMimeTypes = screenshots.map { it.second }
                         )

@@ -1,5 +1,6 @@
 package com.tracktosearch.data.repository
 
+import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.remote.feedback.FeedbackApiException
 import com.tracktosearch.data.remote.feedback.FeedbackApiService
 import com.tracktosearch.data.remote.feedback.FeedbackDetailResponse
@@ -30,13 +31,17 @@ class FeedbackRepositoryTest {
 
     @Test
     fun `submit success returns id`() = runTest {
+        var submittedRequest: com.tracktosearch.data.remote.feedback.SubmitFeedbackRequest? = null
         val api = object : TestFeedbackApi() {
             override suspend fun uploadScreenshot(file: MultipartBody.Part) = Response.success(
                 FeedbackResponse("SUCCESS", "OK", "r1", com.tracktosearch.data.remote.feedback.UploadScreenshotResponse("k1"))
             )
-            override suspend fun submit(request: com.tracktosearch.data.remote.feedback.SubmitFeedbackRequest) = Response.success(
-                FeedbackResponse("SUCCESS", "OK", "r1", SubmitFeedbackResponse("fb1", 1700000000L))
-            )
+            override suspend fun submit(request: com.tracktosearch.data.remote.feedback.SubmitFeedbackRequest): Response<FeedbackResponse<SubmitFeedbackResponse>> {
+                submittedRequest = request
+                return Response.success(
+                    FeedbackResponse("SUCCESS", "OK", "r1", SubmitFeedbackResponse("fb1", 1700000000L))
+                )
+            }
             override suspend fun getMine(limit: Int, offset: Int) = Response.success(
                 FeedbackResponse("SUCCESS", "OK", "r1", MineResponse(emptyList(), 20, 0, 0, false))
             )
@@ -51,7 +56,6 @@ class FeedbackRepositoryTest {
         val result = repo.submit(
             type = "BUG",
             content = "test content",
-            contact = null,
             screenshots = emptyList(),
             friendNickname = friendNickname,
             traktUsername = null,
@@ -62,6 +66,7 @@ class FeedbackRepositoryTest {
         )
         assertTrue(result.isSuccess)
         assertEquals("fb1", result.getOrNull()?.id)
+        assertThat(submittedRequest?.contact).isNull()
     }
 
     @Test
@@ -73,7 +78,7 @@ class FeedbackRepositoryTest {
             override suspend fun getDetail(id: String) = error("not used")
         }
         val repo = FeedbackRepository(api, cacheStore)
-        val result = repo.submit("BUG", "test", null, emptyList(), friendNickname, null, null, "1.0", "14", "Pixel")
+        val result = repo.submit("BUG", "test", emptyList(), friendNickname, null, null, "1.0", "14", "Pixel")
         assertTrue(result.isFailure)
     }
 

@@ -35,9 +35,30 @@ class FeedbackRepository(
         } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
-    suspend fun submit(type: String, content: String, contact: String?, screenshots: List<String>, friendNickname: String, traktUsername: String?, doubanUsername: String?, appVersion: String, osVersion: String, deviceModel: String): Result<SubmitFeedbackResponse> {
+    suspend fun submit(
+        type: String,
+        content: String,
+        screenshots: List<String>,
+        friendNickname: String,
+        traktUsername: String?,
+        doubanUsername: String?,
+        appVersion: String,
+        osVersion: String,
+        deviceModel: String
+    ): Result<SubmitFeedbackResponse> {
         return try {
-            val request = SubmitFeedbackRequest(type = type, content = content, contact = contact, screenshots = screenshots, friendNickname = friendNickname, traktUsername = traktUsername, doubanUsername = doubanUsername, appVersion = appVersion, osVersion = osVersion, deviceModel = deviceModel)
+            val request = SubmitFeedbackRequest(
+                type = type,
+                content = content,
+                contact = null,
+                screenshots = screenshots,
+                friendNickname = friendNickname,
+                traktUsername = traktUsername,
+                doubanUsername = doubanUsername,
+                appVersion = appVersion,
+                osVersion = osVersion,
+                deviceModel = deviceModel
+            )
             val response = api.submit(request)
             val data = response.body()?.data
             if (response.isSuccessful && data != null) Result.success(data) else Result.failure(response.toFeedbackError())

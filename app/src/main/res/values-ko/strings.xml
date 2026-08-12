@@ -605,6 +605,7 @@
     <string name="settings_feedback">피드백</string>
     <string name="settings_feedback_subtitle">개발자 영업 중! 아이디어와 버그를 마음껏 던져 주세요 🧑‍💻🍿</string>
     <string name="feedback_title">피드백</string>
+    <string name="feedback_intro">남겨 주신 피드백은 제가 하나하나 꼼꼼히 읽어요. 여기는 기능 소원함이기도 하니, 언젠가 당신의 바람이 이루어질지도 몰라요~</string>
     <string name="feedback_new">새 피드백</string>
     <string name="feedback_my_feedbacks">내 피드백</string>
     <string name="feedback_empty">피드백이 없습니다</string>
@@ -619,8 +620,6 @@
     <string name="feedback_select_type">유형을 선택하세요</string>
     <string name="feedback_screenshots">스크린샷 (선택, 최대 5장)</string>
     <string name="feedback_uploading">스크린샷 업로드 중 (%1$d/%2$d)</string>
-    <string name="feedback_contact">연락처 (선택)</string>
-    <string name="feedback_contact_placeholder">이메일 또는 QQ</string>
     <string name="feedback_submit">제출</string>
     <string name="feedback_submitting">제출 중…</string>
     <string name="feedback_submit_success">피드백 제출됨</string>
