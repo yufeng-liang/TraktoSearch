@@ -145,7 +145,7 @@ class CrashLogUploaderTest {
             "{}".toResponseBody("application/json".toMediaTypeOrNull())
         }
 
-        // 并发触发两次：第二个调用 await 在途结果，不重复上传
+        // 并发触发两次：第二个调用在锁外快速路径 join 在途上传（runTest 虚拟调度下覆盖锁外 join 路径），不重复上传
         val first = async { uploader.uploadPendingLogs() }
         val second = async { uploader.uploadPendingLogs() }
         val r1 = first.await()
@@ -155,6 +155,52 @@ class CrashLogUploaderTest {
         assertThat(r2).isTrue()
         assertThat(callCount).isEqualTo(1)
         assertThat(uploader.uploadState.first()).isEqualTo(UploadState.Success)
+    }
+
+    @Test
+    fun secondCallWhileUploading_不重复上传() = runTest {
+        val (uploader, api) = setup(enabled = true)
+        writeLogFile("crash_1.log")
+        var callCount = 0
+        coEvery { api.upload(any()) } coAnswers {
+            callCount++
+            delay(100)
+            "{}".toResponseBody("application/json".toMediaTypeOrNull())
+        }
+
+        // 第一个调用已进入上传（delay 100 在途），在途期间发起第二个调用：join 复用结果
+        val first = async { uploader.uploadPendingLogs() }
+        delay(20)
+        val second = async { uploader.uploadPendingLogs() }
+        val r1 = first.await()
+        val r2 = second.await()
+
+        assertThat(r1).isTrue()
+        assertThat(r2).isTrue()
+        assertThat(callCount).isEqualTo(1)
+        assertThat(uploader.uploadState.first()).isEqualTo(UploadState.Success)
+    }
+
+    @Test
+    fun storeLoadThrows_不抛异常_状态Failed返回false() = runTest {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        crashDir = File(context.filesDir, "crash_logs")
+        crashDir.mkdirs()
+        crashDir.listFiles()?.forEach { it.delete() }
+        val storage = mockk<CrashLogStorage>(relaxed = true)
+        every { storage.enabled } returns MutableStateFlow(true)
+        val recordStore = mockk<CrashLogRecordStore>(relaxed = true)
+        every { recordStore.records } returns MutableStateFlow(emptyList())
+        coEvery { recordStore.loadFromDisk() } throws RuntimeException("disk read failed")
+        val api = mockk<CrashLogApiService>()
+        val uploader = CrashLogUploader(context, api, storage, recordStore)
+        writeLogFile("crash_1.log")
+
+        val ok = uploader.uploadPendingLogs()
+
+        // C1 修复：DataStore 异常被吞掉转为 Failed 状态（不抛到启动协程，deferred 正常完成）
+        assertThat(ok).isFalse()
+        assertThat(uploader.uploadState.first()).isEqualTo(UploadState.Failed("disk read failed"))
     }
 
     @Test

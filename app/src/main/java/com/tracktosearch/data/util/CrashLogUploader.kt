@@ -53,7 +53,7 @@ class CrashLogUploader @Inject constructor(
     private val _uploadState = MutableStateFlow<UploadState>(UploadState.Idle)
     val uploadState: StateFlow<UploadState> = _uploadState.asStateFlow()
 
-    /** 在途上传的完成信号（非 null 表示正在上传，并发调用 await 复用结果） */
+    /** 在途上传的完成信号（非 null 表示正在上传，并发调用 await 复用结果）。锁内只置位/清空，doUpload 在锁外执行 */
     @Volatile
     private var inflight: CompletableDeferred<Boolean>? = null
 
@@ -72,23 +72,35 @@ class CrashLogUploader @Inject constructor(
         if (!crashLogStorage.enabled.first()) return true
         // 锁外快速路径：已有在途上传直接 await 复用结果（inflight 为 volatile，可见性安全）
         inflight?.let { return it.await() }
-        return mutex.withLock {
-            // 竞态窗口内（锁外检查后、取锁前）可能已有在途上传，锁内再查一次
-            inflight?.let { return@withLock it.await() }
-            _uploadState.value = UploadState.Uploading
-            val deferred = CompletableDeferred<Boolean>()
-            inflight = deferred
-            try {
-                val (allOk, lastError) = doUpload()
-                _uploadState.value = if (allOk) UploadState.Success else UploadState.Failed(lastError)
-                deferred.complete(allOk)
-                allOk
-            } catch (e: CancellationException) {
-                deferred.complete(false)
-                throw e
-            } finally {
-                inflight = null
+        // 锁内竞态窗口复查 + 置位：两个调用方同时过快速路径时，后取锁者 join 在途上传
+        var ownsUpload = false
+        val deferred: CompletableDeferred<Boolean> = mutex.withLock {
+            val existing = inflight
+            if (existing != null) return@withLock existing
+            ownsUpload = true
+            CompletableDeferred<Boolean>().also {
+                inflight = it
+                _uploadState.value = UploadState.Uploading
             }
+        }
+        // join 了在途上传（非自己创建的信号）：await 复用其结果，不重复执行
+        if (!ownsUpload) return deferred.await()
+
+        try {
+            val (allOk, lastError) = doUpload()
+            _uploadState.value = if (allOk) UploadState.Success else UploadState.Failed(lastError)
+            deferred.complete(allOk)
+            return allOk
+        } catch (e: CancellationException) {
+            deferred.complete(false)
+            throw e
+        } catch (e: Exception) {
+            // DataStore 读写等异常：不 rethrow（避免启动协程崩溃），记失败状态自愈，下次调用重试
+            _uploadState.value = UploadState.Failed(e.message ?: "unknown error")
+            deferred.complete(false)
+            return false
+        } finally {
+            inflight = null
         }
     }
 
