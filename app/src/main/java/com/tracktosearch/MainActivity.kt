@@ -513,9 +513,9 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // 已授权：等待 TraktSearchApp 启动的上传结果，失败则弹邮件兜底
+        // 已授权：等待在途上传结果（上传器状态机并发去重，在途则复用结果），失败则弹邮件兜底
         val uploadOk = kotlinx.coroutines.withTimeoutOrNull(8_000L) {
-            crashLogUploader.uploadResult.await()
+            crashLogUploader.uploadPendingLogs()
         } ?: false
 
         if (uploadOk) {
