@@ -35,6 +35,7 @@ securityCrypto = "1.1.0"
 sqlcipher = "4.5.4"
 jieba-analysis = "1.0.2"
 pinyin4j = "2.5.1"
+seymourText = "0.0.20"
 junit = "4.13.2"
 mockk = "1.14.11"
 turbine = "1.2.1"
@@ -145,6 +146,9 @@ jieba-analysis = { module = "com.huaban:jieba-analysis", version.ref = "jieba-an
 
 # 中文转拼音（看单搜索拼音匹配）
 pinyin4j = { group = "com.belerweb", name = "pinyin4j", version.ref = "pinyin4j" }
+
+# See More 展开收起文本（seymour-text，流式内联链接 + 溢出处理）
+seymour-text = { group = "com.eygraber", name = "seymour-text", version.ref = "seymourText" }
 
 # Unit Test
 junit = { group = "junit", name = "junit", version.ref = "junit" }
