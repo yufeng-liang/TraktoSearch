@@ -13,6 +13,7 @@ import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.widget.QuickSearchWidget
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,13 +25,25 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private val Context.themeDataStore: DataStore<Preferences> by preferencesDataStore(name = "theme")
+internal val Context.themeDataStore: DataStore<Preferences> by preferencesDataStore(name = "theme")
 
 @Singleton
-class ThemeStorage @Inject constructor(
-    @ApplicationContext private val context: Context
+class ThemeStorage private constructor(
+    private val context: Context,
+    private val dataStore: DataStore<Preferences>,
+    @Suppress("UNUSED_PARAMETER") constructorMarker: Unit
 ) {
+    @Inject
+    constructor(@ApplicationContext context: Context) : this(context, context.themeDataStore, Unit)
+
+    /** 为冷启动时序测试注入可控的 DataStore，生产构造仍使用应用级单例。 */
+    internal constructor(
+        context: Context,
+        dataStore: DataStore<Preferences>
+    ) : this(context, dataStore, Unit)
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val initializationComplete = CompletableDeferred<Unit>()
 
     private val _themeMode = MutableStateFlow(MODE_SYSTEM)
     val themeMode: StateFlow<String> = _themeMode.asStateFlow()
@@ -48,24 +61,31 @@ class ThemeStorage @Inject constructor(
     init {
         // 预加载 DataStore 首值到 StateFlow，避免 stateIn 默认值抖动。
         scope.launch {
-            val prefs = context.themeDataStore.data.first()
+            val prefs = dataStore.data.first()
             _themeMode.value = prefs[KEY_THEME_MODE] ?: MODE_SYSTEM
             _accentColor.value = decodeAccentName(prefs[KEY_ACCENT_COLOR])
             _visualEffectMode.value = VisualEffectMode.fromStorageValue(prefs[KEY_VISUAL_EFFECT_MODE])
             _glassVariant.value = GlassVariant.fromStorageValue(prefs[KEY_GLASS_VARIANT])
+            initializationComplete.complete(Unit)
+        }.invokeOnCompletion { throwable ->
+            if (throwable != null && !initializationComplete.isCompleted) {
+                initializationComplete.completeExceptionally(throwable)
+            }
         }
     }
 
     suspend fun setThemeMode(mode: String) {
-        context.themeDataStore.edit { prefs ->
+        initializationComplete.await()
+        dataStore.edit { prefs ->
             prefs[KEY_THEME_MODE] = mode
         }
         _themeMode.value = mode
     }
 
     suspend fun setAccentColor(accent: MonetAccent?) {
+        initializationComplete.await()
         val previousAccent = _accentColor.value
-        context.themeDataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[KEY_ACCENT_COLOR] = accent?.name ?: DYNAMIC_ACCENT
         }
         _accentColor.value = accent
@@ -82,8 +102,9 @@ class ThemeStorage @Inject constructor(
     }
 
     suspend fun setVisualEffectMode(mode: VisualEffectMode) {
+        initializationComplete.await()
         val currentGlassVariant = _glassVariant.value
-        context.themeDataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[KEY_VISUAL_EFFECT_MODE] = mode.storageValue
             prefs[KEY_GLASS_VARIANT] = currentGlassVariant.storageValue
         }
@@ -94,7 +115,8 @@ class ThemeStorage @Inject constructor(
         mode: VisualEffectMode,
         glassVariant: GlassVariant
     ) {
-        context.themeDataStore.edit { prefs ->
+        initializationComplete.await()
+        dataStore.edit { prefs ->
             prefs[KEY_VISUAL_EFFECT_MODE] = mode.storageValue
             prefs[KEY_GLASS_VARIANT] = glassVariant.storageValue
         }
@@ -103,7 +125,8 @@ class ThemeStorage @Inject constructor(
     }
 
     suspend fun readAccentColorSnapshot(): MonetAccent? {
-        val prefs = context.themeDataStore.data.first()
+        initializationComplete.await()
+        val prefs = dataStore.data.first()
         return decodeAccentName(prefs[KEY_ACCENT_COLOR])
     }
 

@@ -1,24 +1,26 @@
 package com.tracktosearch.ui.theme
 
 import android.content.Context
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.local.ThemeStorage
+import com.tracktosearch.data.local.themeDataStore
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.async
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withTimeout
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
-
-private val Context.themeTestDataStore by preferencesDataStore(name = "theme")
-private val dummyPropertyForThemeTest: Int = 0
 
 class VisualEffectModeTest {
 
@@ -70,7 +72,7 @@ class ThemeStorageCompatibilityTest {
     @Test
     fun `old glass record without variant loads clear without rewriting`() = kotlinx.coroutines.test.runTest {
         clearThemePrefs()
-        context.themeTestDataStore.edit { prefs ->
+        context.themeDataStore.edit { prefs ->
             prefs[stringPreferencesKey("visual_effect_mode")] = VisualEffectMode.GLASS.storageValue
         }
 
@@ -80,7 +82,7 @@ class ThemeStorageCompatibilityTest {
         assertThat(storage.visualEffectMode.value).isEqualTo(VisualEffectMode.GLASS)
         assertThat(storage.glassVariant.value).isEqualTo(GlassVariant.CLEAR)
 
-        val prefs = context.themeTestDataStore.data.first()
+        val prefs = context.themeDataStore.data.first()
         assertThat(prefs[stringPreferencesKey("glass_variant")]).isNull()
     }
 
@@ -90,7 +92,7 @@ class ThemeStorageCompatibilityTest {
         val storage = ThemeStorage(context)
         storage.setVisualEffectSelection(VisualEffectMode.GLASS, GlassVariant.FOCUSED)
 
-        val prefs = context.themeTestDataStore.data.first()
+        val prefs = context.themeDataStore.data.first()
         assertThat(prefs[stringPreferencesKey("visual_effect_mode")])
             .isEqualTo(VisualEffectMode.GLASS.storageValue)
         assertThat(prefs[stringPreferencesKey("glass_variant")])
@@ -104,22 +106,96 @@ class ThemeStorageCompatibilityTest {
         storage.setVisualEffectSelection(VisualEffectMode.GLASS, GlassVariant.FOCUSED)
         storage.setVisualEffectMode(VisualEffectMode.BLUR)
 
-        val prefs = context.themeTestDataStore.data.first()
+        val prefs = context.themeDataStore.data.first()
         assertThat(prefs[stringPreferencesKey("visual_effect_mode")])
             .isEqualTo(VisualEffectMode.BLUR.storageValue)
         assertThat(prefs[stringPreferencesKey("glass_variant")])
             .isEqualTo(GlassVariant.FOCUSED.storageValue)
     }
 
+    @Test
+    fun `cold start mode setting is not overwritten by initialization snapshot`() = kotlinx.coroutines.test.runTest {
+        clearThemePrefs()
+        context.themeDataStore.edit { prefs ->
+            prefs[stringPreferencesKey("visual_effect_mode")] = VisualEffectMode.GLASS.storageValue
+            prefs[stringPreferencesKey("glass_variant")] = GlassVariant.FOCUSED.storageValue
+        }
+        val initialSnapshot = context.themeDataStore.data.first()
+        val delayedDataStore = DelayedInitialSnapshotDataStore(context.themeDataStore, initialSnapshot)
+
+        val storage = ThemeStorage(context, delayedDataStore)
+        val setting = async(start = CoroutineStart.UNDISPATCHED) {
+            storage.setVisualEffectMode(VisualEffectMode.BLUR)
+        }
+
+        assertThat(setting.isActive).isTrue()
+        delayedDataStore.releaseInitialSnapshot()
+        setting.await()
+
+        assertThat(storage.visualEffectMode.value).isEqualTo(VisualEffectMode.BLUR)
+        assertThat(storage.glassVariant.value).isEqualTo(GlassVariant.FOCUSED)
+        val prefs = context.themeDataStore.data.first()
+        assertThat(prefs[stringPreferencesKey("visual_effect_mode")])
+            .isEqualTo(VisualEffectMode.BLUR.storageValue)
+        assertThat(prefs[stringPreferencesKey("glass_variant")])
+            .isEqualTo(GlassVariant.FOCUSED.storageValue)
+    }
+
+    @Test
+    fun `cold start selection is not overwritten by initialization snapshot`() = kotlinx.coroutines.test.runTest {
+        clearThemePrefs()
+        context.themeDataStore.edit { prefs ->
+            prefs[stringPreferencesKey("visual_effect_mode")] = VisualEffectMode.GLASS.storageValue
+            prefs[stringPreferencesKey("glass_variant")] = GlassVariant.FOCUSED.storageValue
+        }
+        val initialSnapshot = context.themeDataStore.data.first()
+        val delayedDataStore = DelayedInitialSnapshotDataStore(context.themeDataStore, initialSnapshot)
+
+        val storage = ThemeStorage(context, delayedDataStore)
+        val setting = async(start = CoroutineStart.UNDISPATCHED) {
+            storage.setVisualEffectSelection(VisualEffectMode.BLUR, GlassVariant.CLEAR)
+        }
+
+        assertThat(setting.isActive).isTrue()
+        delayedDataStore.releaseInitialSnapshot()
+        setting.await()
+
+        assertThat(storage.visualEffectMode.value).isEqualTo(VisualEffectMode.BLUR)
+        assertThat(storage.glassVariant.value).isEqualTo(GlassVariant.CLEAR)
+        val prefs = context.themeDataStore.data.first()
+        assertThat(prefs[stringPreferencesKey("visual_effect_mode")])
+            .isEqualTo(VisualEffectMode.BLUR.storageValue)
+        assertThat(prefs[stringPreferencesKey("glass_variant")])
+            .isEqualTo(GlassVariant.CLEAR.storageValue)
+    }
+
     private suspend fun clearThemePrefs() {
-        context.themeTestDataStore.edit { it.clear() }
+        context.themeDataStore.edit { it.clear() }
     }
 
     private suspend fun awaitGlassMode(storage: ThemeStorage) {
         withTimeout(5_000) {
-            while (storage.visualEffectMode.value != VisualEffectMode.GLASS) {
-                delay(10)
-            }
+            storage.visualEffectMode.first { it == VisualEffectMode.GLASS }
+        }
+    }
+
+    private class DelayedInitialSnapshotDataStore(
+        private val delegate: DataStore<Preferences>,
+        private val initialSnapshot: Preferences
+    ) : DataStore<Preferences> {
+        private val release = CompletableDeferred<Unit>()
+
+        override val data: Flow<Preferences> = flow {
+            release.await()
+            emit(initialSnapshot)
+        }
+
+        override suspend fun updateData(
+            transform: suspend (t: Preferences) -> Preferences
+        ): Preferences = delegate.updateData(transform)
+
+        fun releaseInitialSnapshot() {
+            release.complete(Unit)
         }
     }
 }
