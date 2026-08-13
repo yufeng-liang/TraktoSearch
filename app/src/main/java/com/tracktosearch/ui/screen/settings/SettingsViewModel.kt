@@ -30,6 +30,7 @@ import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.local.db.OfflineCacheManager
 import com.tracktosearch.data.notification.NotificationScheduler
 import com.tracktosearch.data.session.SessionModeManager
+import com.tracktosearch.ui.theme.GlassVariant
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.data.remote.custom.CustomSearchService
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
@@ -125,6 +126,8 @@ class SettingsViewModel @Inject constructor(
 
     val visualEffectMode: StateFlow<VisualEffectMode> = themeStorage.visualEffectMode
 
+    val glassVariant: StateFlow<GlassVariant> = themeStorage.glassVariant
+
     val defaultTab: StateFlow<Int> = defaultTabStorage.defaultTab
 
     val language: StateFlow<String> = languageStorage.language
@@ -157,6 +160,12 @@ class SettingsViewModel @Inject constructor(
 
     fun setVisualEffectMode(mode: VisualEffectMode) {
         viewModelScope.launch { themeStorage.setVisualEffectMode(mode) }
+    }
+
+    fun setVisualEffectSelection(mode: VisualEffectMode, variant: GlassVariant) {
+        viewModelScope.launch {
+            themeStorage.setVisualEffectSelection(mode, variant)
+        }
     }
 
     fun setDefaultTab(tab: Int) {

@@ -248,9 +248,11 @@
     <!-- 시각 효과 -->
     <string name="settings_visual_effect">시각 효과</string>
     <string name="settings_visual_effect_blur">블러</string>
-    <string name="settings_visual_effect_blur_desc">미세한 입자가 포함된 Haze 반투명 블러</string>
-    <string name="settings_visual_effect_glass">Glass(실험적)</string>
-    <string name="settings_visual_effect_glass_desc">하이라이트와 상호작용 조명을 제공하는 굴절 기반 광학 효과</string>
+    <string name="settings_visual_effect_blur_desc">부드러운 반투명 스타일로 경계를 자연스럽게 표현</string>
+    <string name="settings_visual_effect_glass_clear">Glass - 클리어</string>
+    <string name="settings_visual_effect_glass_clear_desc">경계감이 낮고 가벼운 광학 유리 스타일</string>
+    <string name="settings_visual_effect_glass_focused">Glass - 포커스</string>
+    <string name="settings_visual_effect_glass_focused_desc">탐색과 조작에 어울리는 더 선명한 유리 레이어</string>
 
     <!-- Accent Color -->
     <string name="settings_accent_color">액센트 색상</string>
@@ -1374,7 +1376,7 @@
     <string name="help_tips_b8">인물 상세 페이지에서 좌우 스와이프로 여러 사진 보기, 사진 탭하여 전체 화면 보기 및 앨범에 저장</string>
     <string name="help_tips_b9">온라인 검색은 중국어 인물명 검색 지원(TMDB 기반), 인물 검색 시 자동으로 관련 작품 표시</string>
     <string name="help_tips_b10">발견 페이지 제목 표시줄 오른쪽을 탭하여 섹션 빠르게 사용자 정의</string>
-    <string name="help_tips_b11">시각 효과(Haze 블러 / 실험적 Glass)는 아직 다듬는 중입니다 — 기대해 주세요</string>
+    <string name="help_tips_b11">블러는 부드러운 반투명 스타일을 사용하고, Glass는 클리어와 포커스 두 가지 독립적인 광학 스타일을 제공합니다</string>
 
     <!-- 이스터에그 메시지 (9애니메이션 × 3메시지) -->
     <string name="easter_msg_shy_1">찔렀어요, 간지러워!</string>

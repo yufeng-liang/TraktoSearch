@@ -113,6 +113,7 @@ import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
 import com.tracktosearch.ui.theme.appSwitchColors
+import com.tracktosearch.ui.theme.GlassVariant
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.component.isAppDarkTheme
@@ -151,8 +152,7 @@ private fun resolveConsistencyCheckBlocker(
     kotlinx.coroutines.FlowPreview::class,
     ExperimentalSharedTransitionApi::class,
 )
-// 视觉效果（毛玻璃/Glass）还在打磨中，暂时隐藏设置入口；调好后改回 true 即可恢复
-private const val SHOW_VISUAL_EFFECT_ENTRY = false
+private const val SHOW_VISUAL_EFFECT_ENTRY = true
 
 @Composable
 fun SettingsScreen(
@@ -188,6 +188,7 @@ fun SettingsScreen(
     val currentTheme by viewModel.themeMode.collectAsStateWithLifecycle()
     val currentAccent by viewModel.accentColor.collectAsStateWithLifecycle()
     val currentVisualEffectMode by viewModel.visualEffectMode.collectAsStateWithLifecycle()
+    val currentGlassVariant by viewModel.glassVariant.collectAsStateWithLifecycle()
     val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
     val currentDefaultTab by viewModel.defaultTab.collectAsStateWithLifecycle()
     // 共享元素转场动画开关:读 AppNavigation 顶层 collect 的值(App 启动即开始收集,
@@ -455,7 +456,10 @@ fun SettingsScreen(
                     val accentName = currentAccent?.let { stringResource(it.labelResId) }
                         ?: stringResource(R.string.settings_accent_dynamic)
                     val visualEffectName = when (currentVisualEffectMode) {
-                        VisualEffectMode.GLASS -> stringResource(R.string.settings_visual_effect_glass)
+                        VisualEffectMode.GLASS -> when (currentGlassVariant) {
+                            GlassVariant.CLEAR -> stringResource(R.string.settings_visual_effect_glass_clear)
+                            GlassVariant.FOCUSED -> stringResource(R.string.settings_visual_effect_glass_focused)
+                        }
                         VisualEffectMode.BLUR -> stringResource(R.string.settings_visual_effect_blur)
                     }
                     val languageName = when (currentLanguage) {
@@ -916,8 +920,9 @@ fun SettingsScreen(
     if (showVisualEffectDialog) {
         VisualEffectSelectionDialog(
             currentMode = currentVisualEffectMode,
-            onModeSelected = {
-                viewModel.setVisualEffectMode(it)
+            currentVariant = currentGlassVariant,
+            onSelection = { mode, variant ->
+                viewModel.setVisualEffectSelection(mode, variant)
                 showVisualEffectDialog = false
             },
             onDismiss = { showVisualEffectDialog = false }
