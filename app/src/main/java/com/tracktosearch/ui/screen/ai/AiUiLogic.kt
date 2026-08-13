@@ -12,8 +12,15 @@ import com.tracktosearch.data.ai.AiWatchedTitleDto
 import kotlin.random.Random
 
 private const val MAX_ACTIVATION_ATTEMPTS = 3
-private const val MAX_OVERLAY_SESSION_COUNT = 2
+private const val MAX_OVERLAY_SESSION_COUNT = 3
 private const val MAX_OVERLAY_DAILY_COUNT = 6
+private const val IDLE_TRIGGER_DELAY_MS = 8_000L
+
+private val overlayTriggerCooldowns = mapOf(
+    AiSpriteOverlayTrigger.FIRST_ENTRY to 0L,
+    AiSpriteOverlayTrigger.SEARCH_COMPLETED to 30_000L,
+    AiSpriteOverlayTrigger.IDLE to 45_000L
+)
 
 const val AI_DOUBAN_NAV_PREFIX = "ai-douban:"
 
@@ -63,10 +70,12 @@ data class AiSpriteOverlayBudget(
 /** 搜索页浮层只消费一次展示额度，触发源不负责自己维护计数。 */
 class AiSpriteOverlayPolicy(
     private val readDailyCount: (String) -> Int = { 0 },
-    private val writeDailyCount: (String, Int) -> Unit = { _, _ -> }
+    private val writeDailyCount: (String, Int) -> Unit = { _, _ -> },
+    private val clock: () -> Long = { System.currentTimeMillis() }
 ) {
     private var dayKey: String? = null
     private var budget = AiSpriteOverlayBudget()
+    private val lastConsumedAt = mutableMapOf<AiSpriteOverlayTrigger, Long>()
 
     fun tryConsume(
         activated: Boolean,
@@ -78,8 +87,13 @@ class AiSpriteOverlayPolicy(
             dayKey = currentDayKey
             budget = budget.copy(dailyShown = readDailyCount(currentDayKey).coerceAtLeast(0))
         }
+        val now = clock()
+        val lastTime = lastConsumedAt[trigger]
+        val cooldown = overlayTriggerCooldowns[trigger] ?: 0L
+        if (lastTime != null && (now < lastTime || now - lastTime < cooldown)) return false
         if (!budget.canShow()) return false
         budget = budget.consume()
+        lastConsumedAt[trigger] = now
         writeDailyCount(currentDayKey, budget.dailyShown)
         return true
     }
@@ -104,16 +118,41 @@ fun nextAiSpriteOverlayTrigger(
     hasResults: Boolean,
     isSearchFocused: Boolean,
     searchQuery: String,
-    activated: Boolean
+    activated: Boolean,
+    nowMs: Long = 0L,
+    idleForMs: Long = 0L,
+    hasBlockingOverlay: Boolean = false
 ): AiSpriteOverlayTrigger? {
     if (!activated) return null
     return when {
         !entryHandled -> AiSpriteOverlayTrigger.FIRST_ENTRY
         wasSearchLoading && !isSearchLoading && hasResults -> AiSpriteOverlayTrigger.SEARCH_COMPLETED
-        !isSearchLoading && !isSearchFocused && searchQuery.isBlank() -> AiSpriteOverlayTrigger.IDLE
+        shouldTriggerIdle(
+            isSearchFocused = isSearchFocused,
+            searchQuery = searchQuery,
+            isSearchLoading = isSearchLoading,
+            hasBlockingOverlay = hasBlockingOverlay,
+            idleForMs = idleForMs,
+            nowMs = nowMs
+        ) -> AiSpriteOverlayTrigger.IDLE
         else -> null
     }
 }
+
+fun shouldTriggerIdle(
+    isSearchFocused: Boolean,
+    searchQuery: String,
+    isSearchLoading: Boolean,
+    hasBlockingOverlay: Boolean,
+    idleForMs: Long,
+    nowMs: Long
+): Boolean =
+    nowMs >= 0L &&
+        idleForMs >= IDLE_TRIGGER_DELAY_MS &&
+        !isSearchFocused &&
+        searchQuery.isBlank() &&
+        !isSearchLoading &&
+        !hasBlockingOverlay
 
 fun canActivateCharacter(character: AiCharacter, state: AiSpriteUiState): Boolean =
     character.isAvailable &&

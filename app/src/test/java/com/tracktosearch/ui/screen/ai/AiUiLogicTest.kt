@@ -88,6 +88,7 @@ class AiUiLogicTest {
 
         assertThat(policy.tryConsume(true, AiSpriteOverlayTrigger.FIRST_ENTRY, "2026-08-11")).isTrue()
         assertThat(policy.tryConsume(true, AiSpriteOverlayTrigger.SEARCH_COMPLETED, "2026-08-11")).isTrue()
+        assertThat(policy.tryConsume(true, AiSpriteOverlayTrigger.IDLE, "2026-08-11")).isTrue()
         assertThat(policy.tryConsume(true, AiSpriteOverlayTrigger.IDLE, "2026-08-11")).isFalse()
         assertThat(policy.tryConsume(false, AiSpriteOverlayTrigger.IDLE, "2026-08-11")).isFalse()
 
@@ -121,6 +122,76 @@ class AiUiLogicTest {
                 activated = true
             )
         ).isEqualTo(AiSpriteOverlayTrigger.FIRST_ENTRY)
+    }
+
+    @Test
+    fun firstEntryWinsOverSearchCompletionAndIdle() {
+        assertThat(
+            nextAiSpriteOverlayTrigger(
+                entryHandled = false,
+                wasSearchLoading = true,
+                isSearchLoading = false,
+                hasResults = true,
+                isSearchFocused = false,
+                searchQuery = "",
+                activated = true,
+                nowMs = 90_000L
+            )
+        ).isEqualTo(AiSpriteOverlayTrigger.FIRST_ENTRY)
+    }
+
+    @Test
+    fun idleRequiresEightSecondsAndDoesNotTriggerAfterFocusOrInput() {
+        assertThat(
+            shouldTriggerIdle(
+                isSearchFocused = false,
+                searchQuery = "",
+                isSearchLoading = false,
+                hasBlockingOverlay = false,
+                idleForMs = 7_999L,
+                nowMs = 10_000L
+            )
+        ).isFalse()
+        assertThat(
+            shouldTriggerIdle(
+                isSearchFocused = false,
+                searchQuery = "",
+                isSearchLoading = false,
+                hasBlockingOverlay = false,
+                idleForMs = 8_000L,
+                nowMs = 10_000L
+            )
+        ).isTrue()
+        assertThat(
+            shouldTriggerIdle(
+                isSearchFocused = true,
+                searchQuery = "",
+                isSearchLoading = false,
+                hasBlockingOverlay = false,
+                idleForMs = 8_000L,
+                nowMs = 10_000L
+            )
+        ).isFalse()
+        assertThat(
+            shouldTriggerIdle(
+                isSearchFocused = false,
+                searchQuery = "片名",
+                isSearchLoading = false,
+                hasBlockingOverlay = false,
+                idleForMs = 8_000L,
+                nowMs = 10_000L
+            )
+        ).isFalse()
+    }
+
+    @Test
+    fun policyAppliesThreeMotionSessionBudget() {
+        val policy = AiSpriteOverlayPolicy(clock = { 100_000L })
+
+        assertThat(policy.tryConsume(true, AiSpriteOverlayTrigger.FIRST_ENTRY, "2026-08-13")).isTrue()
+        assertThat(policy.tryConsume(true, AiSpriteOverlayTrigger.SEARCH_COMPLETED, "2026-08-13")).isTrue()
+        assertThat(policy.tryConsume(true, AiSpriteOverlayTrigger.IDLE, "2026-08-13")).isTrue()
+        assertThat(policy.tryConsume(true, AiSpriteOverlayTrigger.IDLE, "2026-08-13")).isFalse()
     }
 
     @Test

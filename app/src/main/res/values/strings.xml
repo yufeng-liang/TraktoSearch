@@ -1583,7 +1583,7 @@ Config:
     <string name="ai_sprite_center_title">AI Sprite Center</string>
     <string name="ai_sprite_center_subtitle">Choose a companion for your movie journey</string>
     <string name="ai_sprite_character_selection">%1$s · %2$s</string>
-    <string name="ai_sprite_long_press_hint">Long-press the cloud icon to open</string>
+    <string name="ai_sprite_long_press_hint">Your sprite may peek out briefly on the search page, then retreat when you type or scroll. The cloud\'s short-tap easter egg and long-press Sprite Center entry stay the same.</string>
     <string name="ai_sprite_activate">Call %1$s to activate</string>
     <string name="ai_sprite_activating">Listening for %1$s…</string>
     <string name="ai_sprite_listening">Say the name once</string>
@@ -1599,7 +1599,8 @@ Config:
     <string name="ai_sprite_welcome">%1$s, %2$s is here</string>
     <string name="ai_sprite_name_meaning">Decode my nickname</string>
     <string name="ai_sprite_close">Close sprite center</string>
-    <string name="ai_sprite_cloud_description">AI sprite cloud</string>
+    <string name="ai_sprite_cloud_description">AI sprite entry. Short-tap the cloud for the easter egg; long-press it to open Sprite Center</string>
+    <string name="ai_sprite_open_center">Open AI Sprite Center</string>
     <string name="ai_sprite_overlay_message">%1$s has a thought</string>
     <string name="ai_sprite_overlay_hint">Pick a small movie challenge</string>
     <string name="ai_audio_play">Play voice</string>

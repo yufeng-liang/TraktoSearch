@@ -4,7 +4,10 @@
 >
 > 日期：2026-08-13
 >
-> 范围：Android Jetpack Compose 搜索页 AI 精灵主动触发、角色资产与动效表现
+> 范围：Android Jetpack Compose 搜索页 AI 精灵主动触发、角色资产与可复用动效契约
+
+详情页复用边界：本任务不修改 `DetailScreen.kt` 或详情页业务文件。公共契约固定在
+`com.tracktosearch.ui.screen.ai`，详情页后续通过传入自身布局得到的 `Rect` 复用同一套角色资产、状态和渲染入口。
 
 ## 1. 目标
 
@@ -197,7 +200,21 @@ HIDDEN -> PREPARE -> PEEK -> OBSERVE -> REACT -> RETREAT -> HIDDEN
 
 帮助页应补充自动动效的行为说明：角色会在搜索页短暂探头，用户输入或滚动时会收回；云朵的短按/长按入口保持不变。
 
-## 9. 代码边界
+## 9. 公共复用契约
+
+以下 API 属于跨页面公共入口，不能移动到 `SearchScreen` 包或在搜索页内私有化：
+
+- `AiSpriteArt`：公共资产目录，提供 `AiSpriteArt.forCharacter(characterId)`、兼容函数 `automaticSpriteArt(characterId)` 和状态到资源的映射。角色配置不依赖页面。
+- `AiSpriteMotionState`：稳定的公共状态枚举 `HIDDEN`、`PREPARE`、`PEEK`、`OBSERVE`、`REACT`、`RETREAT`。
+- `AiSpriteAnchor`：稳定的公共锚点枚举 `Cloud`、`SearchBox`、`ResultCard`、`BottomPanel`、`DetailHeader`、`DetailPanel`、`RecommendationsTab`。
+- `AiSpriteMotion(characterId, anchor, anchorBounds, visible, onClick, onFinished, modifier, interruptRequest)`：唯一的公共 Compose 渲染入口。`anchorBounds` 使用根坐标系 `Rect`，页面只负责采集坐标，不参与角色测量；`interruptRequest` 由宿主递增 `revision`，输入、焦点、滚动和页面切换都可中断。
+- `AiSpriteMotionController`：可中断状态控制器，所有页面都通过 `interrupt(reason)` 进入 `RETREAT`，再由 `finishRetreat()` 回到 `HIDDEN`。
+
+详情页适配时，底部面板入口使用 `BottomPanel`，详情头部使用 `DetailHeader`，详情内容面板使用 `DetailPanel`，相关推荐 Tab 或区域使用 `RecommendationsTab`。输入、滚动和页面切换都应调用同一个中断入口；这些适配不在本次搜索页实现中完成。
+
+资源策略：app 运行时只引用 `R.drawable.ai_sprite_*` 的本地 drawable 资源键，不读取 `F:/website-trakt` 路径。当前 PNG 是从 website 资产目录导入后的 app 副本；保留原始 RGBA 透明边界，website 工程不作为运行时依赖，也不被本任务改写。
+
+## 10. 代码边界
 
 预计修改范围：
 
@@ -211,7 +228,9 @@ HIDDEN -> PREPARE -> PEEK -> OBSERVE -> REACT -> RETREAT -> HIDDEN
 
 不在范围内：重写 AI API、TTS、角色激活流程、云朵天气主题、精灵中心四项功能本身和无关搜索结果布局。
 
-## 10. 测试与验收
+本次明确不修改：`app/src/main/java/com/tracktosearch/ui/screen/detail/DetailScreen.kt` 及详情页业务组件；详情页只消费上述公共契约。
+
+## 11. 测试与验收
 
 ### 10.1 单元测试
 
@@ -240,7 +259,7 @@ HIDDEN -> PREPARE -> PEEK -> OBSERVE -> REACT -> RETREAT -> HIDDEN
 
 视觉检查必须对照 `ai-chiikawa-peek.png`、`chiikawa-spawn.png`、`chiikawa-hi.png` 等参考资产，核对轮廓、耳朵、眼睛高光、腮红条纹、颜色和比例。构建通过不能替代角色相似度验收。
 
-## 11. 实施顺序
+## 12. 实施顺序
 
 1. 建立角色资产清单，导入并检查吉伊三套分层资源；保留原始参考图不直接作为最终整图动画。
 2. 实现 `AiCharacterArtSpec` 和吉伊的 `HIDDEN/PREPARE/PEEK/OBSERVE/REACT/RETREAT` 状态。

@@ -1583,7 +1583,7 @@
     <string name="ai_sprite_center_title">精灵中心</string>
     <string name="ai_sprite_center_subtitle">选一只陪你看电影的 AI 精灵</string>
     <string name="ai_sprite_character_selection">%1$s · %2$s</string>
-    <string name="ai_sprite_long_press_hint">长按搜索页上方的云朵图标进入</string>
+    <string name="ai_sprite_long_press_hint">精灵会在搜索页短暂探头，输入或滚动时会收回；云朵短按彩蛋、长按进入精灵中心的入口保持不变。</string>
     <string name="ai_sprite_activate">喊「%1$s」来激活</string>
     <string name="ai_sprite_activating">正在听你喊「%1$s」…</string>
     <string name="ai_sprite_listening">只需要喊一次名字</string>
@@ -1599,7 +1599,8 @@
     <string name="ai_sprite_welcome">%1$s，%2$s来啦</string>
     <string name="ai_sprite_name_meaning">解读我的昵称</string>
     <string name="ai_sprite_close">关闭精灵中心</string>
-    <string name="ai_sprite_cloud_description">AI 精灵云朵入口</string>
+    <string name="ai_sprite_cloud_description">AI 精灵入口。短按云朵触发彩蛋，长按打开精灵中心</string>
+    <string name="ai_sprite_open_center">打开 AI 精灵中心</string>
     <string name="ai_sprite_overlay_message">%1$s有话想说</string>
     <string name="ai_sprite_overlay_hint">挑一个小小的影视挑战吧</string>
     <string name="ai_audio_play">播放语音</string>

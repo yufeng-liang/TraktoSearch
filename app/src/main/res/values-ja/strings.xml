@@ -1595,7 +1595,7 @@
     <string name="ai_sprite_center_title">AI スプライトセンター</string>
     <string name="ai_sprite_center_subtitle">映画の旅に寄り添う仲間を選択</string>
     <string name="ai_sprite_character_selection">%1$s · %2$s</string>
-    <string name="ai_sprite_long_press_hint">検索ページ上の雲アイコンを長押しして開く</string>
+    <string name="ai_sprite_long_press_hint">検索ページではスプライトが短時間だけ顔を出し、入力やスクロールで引っ込みます。雲を短くタップして起動するイースターエッグと、長押しで開くスプライトセンターの入口は変わりません。</string>
     <string name="ai_sprite_activate">「%1$s」と呼んで起動</string>
     <string name="ai_sprite_activating">「%1$s」を聞いています…</string>
     <string name="ai_sprite_listening">名前を一度だけ言ってください</string>
@@ -1611,7 +1611,8 @@
     <string name="ai_sprite_welcome">%1$s、%2$sが来ました</string>
     <string name="ai_sprite_name_meaning">ニックネームを解読</string>
     <string name="ai_sprite_close">スプライトセンターを閉じる</string>
-    <string name="ai_sprite_cloud_description">AI スプライトの雲入口</string>
+    <string name="ai_sprite_cloud_description">AI スプライト入口。雲を短くタップするとイースターエッグ、長押しするとスプライトセンターを開きます</string>
+    <string name="ai_sprite_open_center">AI スプライトセンターを開く</string>
     <string name="ai_sprite_overlay_message">%1$sからひとこと</string>
     <string name="ai_sprite_overlay_hint">小さな映画チャレンジを選んでね</string>
     <string name="ai_audio_play">音声を再生</string>
