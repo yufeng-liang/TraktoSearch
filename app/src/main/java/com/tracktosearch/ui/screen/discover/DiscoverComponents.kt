@@ -64,11 +64,13 @@ import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
+import com.tracktosearch.ui.component.AppVisualSurface
 import com.tracktosearch.ui.component.DoubanRatingBadge
 import com.tracktosearch.ui.component.RatingBadge
+import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.YearBadge
-import com.tracktosearch.ui.component.isAppDarkTheme
-import com.tracktosearch.ui.component.neumorphicOuterShadow
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.VisualEffectMode
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 
@@ -120,7 +122,6 @@ internal fun MovieCard(
     )
     val ratingValue = rating?.toDoubleOrNull()
     val ratingHazeState = remember { HazeState() }
-    val isDark = isAppDarkTheme()
     val posterShape = RoundedCornerShape(16.dp)
     // 缓存顶部高光渐变 Brush,避免每次重组创建新实例
     val topHighlightBrush = remember { Brush.verticalGradient(0f to Color.White.copy(alpha = 0.15f), 1f to Color.Transparent) }
@@ -148,34 +149,25 @@ internal fun MovieCard(
                 .aspectRatio(2f / 3f)
                 .clip(posterShape)
         }
-        Box(
-            modifier = posterBoxModifier
-                .neumorphicOuterShadow(
-                    shape = posterShape,
-                    isDark = isDark,
-                    elevation = 5.dp,
-                    darkAlpha = if (isDark) 0.38f else 0.20f,
-                    blurRadius = 16.dp,
-                    shadowOffset = 5.dp
-                )
-                .border(
-                    width = 1.dp,
-                    color = Color.White.copy(alpha = 0.35f),
-                    shape = posterShape
-                )
-                .clickable(
-                    enabled = !isResolving,
-                    interactionSource = interactionSource,
-                    indication = null,
-                    onClick = {
-                        // 点击时记录当前海报为活跃状态,并获取新 token,确保只有这个卡片参与转场
-                        if (tmdbId > 0) {
-                            myClickToken = setActivePosterTmdbId(tmdbId)
-                        }
-                        onClick()
+        AppVisualSurface(
+            kind = VisualSurfaceKind.Content,
+            modifier = posterBoxModifier.clickable(
+                enabled = !isResolving,
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = {
+                    // 点击时记录当前海报为活跃状态,并获取新 token,确保只有这个卡片参与转场
+                    if (tmdbId > 0) {
+                        myClickToken = setActivePosterTmdbId(tmdbId)
                     }
-                )
+                    onClick()
+                }
+            ),
+            shape = posterShape,
+            backgroundColor = Color.Transparent,
+            borderColor = Color.White.copy(alpha = 0.35f)
         ) {
+            Box(modifier = Modifier.fillMaxSize()) {
             if (posterUrl != null) {
                 val imageRequest = remember(posterUrl) {
                     ImageRequest.Builder(context)
@@ -219,15 +211,16 @@ internal fun MovieCard(
                     )
                 }
             }
-            // 顶部白色高光（C方案玻璃质感）
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopCenter)
-                    .height(40.dp)
-                    .clip(posterShape)
-                    .background(topHighlightBrush)
-            )
+            if (LocalVisualEffectMode.current == VisualEffectMode.BLUR) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter)
+                        .height(40.dp)
+                        .clip(posterShape)
+                        .background(topHighlightBrush)
+                )
+            }
             // 想看/已看角标（海报左上角）
             if (isWatched || isInWatchlist) {
                 Row(
@@ -299,6 +292,7 @@ internal fun MovieCard(
                         .align(Alignment.BottomEnd)
                         .padding(6.dp)
                 )
+            }
             }
         }
         Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)) {

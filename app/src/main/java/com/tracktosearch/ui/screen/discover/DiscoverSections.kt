@@ -60,10 +60,11 @@ import com.tracktosearch.data.remote.trakt.dto.TraktShow
 import com.tracktosearch.data.remote.trakt.dto.TraktTrendingMovieResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktTrendingShowResponse
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.ui.component.AppVisualSurface
 import com.tracktosearch.ui.component.DoubanHotCardSkeleton
 import com.tracktosearch.ui.component.SectionHeader
 import com.tracktosearch.ui.component.isAppDarkTheme
-import com.tracktosearch.ui.component.neumorphicOuterShadow
+import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.data.repository.MediaType
 
 @Composable
@@ -435,35 +436,30 @@ internal fun LoginUnlockCard(onLoginClick: () -> Unit) {
             else listOf(Color(0xFF283593), Color(0xFF3949AB))
         )
     }
-    Box(
+    AppVisualSurface(
+        kind = VisualSurfaceKind.Content,
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale)
-            .neumorphicOuterShadow(
-                shape = shape,
-                isDark = isDark,
-                elevation = 6.dp,
-                darkAlpha = if (isDark) 0.35f else 0.18f,
-                blurRadius = 16.dp,
-                shadowOffset = 5.dp
-            )
-            .clip(shape)
-            .background(gradient)
-            .border(
-                width = 1.dp,
-                color = Color.White.copy(alpha = 0.30f),
-                shape = shape
-            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onLoginClick
-            )
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
+            ),
+        shape = shape,
+        backgroundColor = Color.Transparent,
+        borderColor = Color.Transparent
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(gradient)
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.30f),
+                    shape = shape
+                )
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -549,35 +545,30 @@ internal fun DoubanRecommendSection(
                         end = Offset(Float.POSITIVE_INFINITY, 0f)
                     )
                 }
-                Box(
+                AppVisualSurface(
+                    kind = VisualSurfaceKind.Content,
                     modifier = Modifier
                         .fillMaxWidth()
                         .scale(scale)
-                        .neumorphicOuterShadow(
-                            shape = shape,
-                            isDark = isDark,
-                            elevation = 6.dp,
-                            darkAlpha = if (isDark) 0.35f else 0.18f,
-                            blurRadius = 16.dp,
-                            shadowOffset = 5.dp
-                        )
-                        .clip(shape)
-                        .background(gradient)
-                        .border(
-                            width = 1.dp,
-                            color = Color.White.copy(alpha = 0.30f),
-                            shape = shape
-                        )
                         .clickable(
                             interactionSource = interactionSource,
                             indication = null,
                             onClick = onLoginClick
-                        )
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center
+                        ),
+                    shape = shape,
+                    backgroundColor = Color.Transparent,
+                    borderColor = Color.Transparent
                 ) {
                     Column(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(gradient)
+                            .border(
+                                width = 1.dp,
+                                color = Color.White.copy(alpha = 0.30f),
+                                shape = shape
+                            )
+                            .padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {

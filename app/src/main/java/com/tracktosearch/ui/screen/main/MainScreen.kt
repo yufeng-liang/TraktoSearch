@@ -538,7 +538,7 @@ fun MainScreen(
                     label = "indicatorOffset"
                 )
 
-                // 选中项凹陷药丸（绘制在 Tab 图标下方）
+                // 选中项普通指示层（绘制在 Tab 图标下方；Glass 不在单个 Tab 上采样）
                 Box(
                     modifier = Modifier
                         .offset(x = indicatorOffsetX)
@@ -682,8 +682,8 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
     val selectedScale by animateFloatAsState(
         targetValue = when {
             visualEffectMode != VisualEffectMode.GLASS -> 1f
-            selected -> 1.06f
-            isHovered || isFocused -> 1.04f
+            selected -> 1.04f
+            isHovered || isFocused -> 1.02f
             else -> 1f
         },
         animationSpec = tween(durationMillis = 180),

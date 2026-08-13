@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -21,8 +23,6 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -43,11 +43,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
@@ -58,10 +60,12 @@ import com.tracktosearch.data.remote.trakt.dto.TraktShow
 import com.tracktosearch.data.remote.trakt.dto.TraktTrendingListResponse
 import com.tracktosearch.data.repository.TraktRepository
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.tracktosearch.ui.component.NeumorphicFrostedSurface
-import com.tracktosearch.ui.component.PosterCard
-import com.tracktosearch.ui.component.DiscoverModalBottomSheet
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
+import com.tracktosearch.ui.component.AppVisualSurface
+import com.tracktosearch.ui.component.DiscoverModalBottomSheet
+import com.tracktosearch.ui.component.RatingBadge
+import com.tracktosearch.ui.component.VisualSurfaceKind
+import com.tracktosearch.ui.component.YearBadge
 import com.tracktosearch.ui.component.isAppDarkTheme
 
 /** Sheet 内影视卡片：海报 + 下方标题/副标题 */
@@ -74,14 +78,56 @@ private fun SheetMediaCard(
     rating: Double? = null,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val cardScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        label = "sheet_media_card_scale"
+    )
+    val posterShape = RoundedCornerShape(12.dp)
+
     Column {
-        PosterCard(
-            imageUrl = imageUrl,
-            title = title,
-            year = year,
-            rating = rating,
-            onClick = onClick
-        )
+        AppVisualSurface(
+            kind = VisualSurfaceKind.Content,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .scale(cardScale)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick
+                ),
+            shape = posterShape,
+            backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
+            borderColor = Color.Transparent
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                if (rating != null) {
+                    RatingBadge(
+                        rating = rating,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(2.dp)
+                    )
+                }
+                if (!year.isNullOrBlank() && year != "0") {
+                    YearBadge(
+                        year = year,
+                        fontSize = 10,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(6.dp)
+                    )
+                }
+            }
+        }
         Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)) {
             AdaptiveTwoLineTitle(
                 text = title,
@@ -506,7 +552,8 @@ internal fun TrendingListsAllSheet(
                         targetValue = if (isPressed) 0.98f else 1f,
                         label = "sheet_list_card_scale"
                     )
-                    NeumorphicFrostedSurface(
+                    AppVisualSurface(
+                        kind = VisualSurfaceKind.Content,
                         modifier = Modifier
                             .fillMaxWidth()
                             .scale(cardScale)
@@ -515,16 +562,9 @@ internal fun TrendingListsAllSheet(
                                 indication = null,
                                 onClick = { onListClick(listResponse.list.ids.trakt, listResponse.list.name) }
                             ),
-                        isDark = isDark,
                         shape = RoundedCornerShape(18.dp),
-                        elevation = 6.dp,
-                        blurRadius = 16.dp,
-                        shadowOffset = 5.dp,
                         backgroundColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
-                        borderColor = if (isDark) MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.9f),
-                        darkShadowAlpha = if (isDark) 0.25f else 0.16f,
-                        lightShadowAlpha = if (isDark) 0.08f else 0.65f,
-                        hazeState = null
+                        borderColor = if (isDark) MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.9f)
                     ) {
                         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                             Text(
