@@ -18,12 +18,14 @@ import com.tracktosearch.data.remote.douban.DoubanRexxarShortComment
 import com.tracktosearch.data.remote.douban.DoubanRexxarShortCommentPage
 import com.tracktosearch.data.remote.douban.MarkWriteResult
 import com.tracktosearch.data.remote.dto.DiskType
+import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.tmdb.dto.TmdbReview
 import com.tracktosearch.data.remote.tmdb.dto.TmdbReviewsResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.RatingsRepository
 import com.tracktosearch.data.repository.ResourceRepository
+import com.tracktosearch.data.repository.ResourceQuery
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.UserReviewRepository
@@ -239,6 +241,60 @@ class DetailViewModelSupplementTest {
         viewModel.toggleShowHighRelevanceOnly()
 
         assertThat(viewModel.uiState.value.showHighRelevanceOnly).isFalse()
+    }
+
+    @Test
+    fun toggleShowHighRelevanceOnly_强标题视频保留并可恢复全部资源() {
+        val video = ResourceItem(
+            name = "蜘蛛侠：崭新之日 最新",
+            diskType = DiskType.QUARK,
+            fileSize = "1G",
+            url = "https://example.com/video",
+            source = ResourceRepository.SOURCE_PANSOU,
+            fileCount = 1
+        )
+        val audio = video.copy(
+            name = "蜘蛛侠：崭新之日 电影中文推广曲 FLAC",
+            url = "https://example.com/audio"
+        )
+        val weak = video.copy(
+            name = "电子情书 1080p",
+            url = "https://example.com/weak"
+        )
+        val all = listOf(video, audio, weak)
+
+        every { resourceRepository.filterItems(any(), any(), any()) } answers { firstArg() }
+        setPrivateField("allResources", all)
+        setPrivateField(
+            "currentResourceQuery",
+            ResourceQuery(
+                title = "蜘蛛侠：崭新之日",
+                year = 2026,
+                mediaType = MediaType.MOVIE
+            )
+        )
+        setPrivateField(
+            "currentHighRelevanceMap",
+            mapOf(video.url to true, audio.url to false, weak.url to false)
+        )
+        setUiState {
+            it.copy(
+                enabledSources = ResourceRepository.ALL_SOURCES,
+                enabledDiskTypes = ResourceRepository.ALL_DISK_TYPES
+            )
+        }
+
+        viewModel.toggleShowHighRelevanceOnly()
+
+        assertThat(viewModel.uiState.value.resources.map { it.name })
+            .containsExactly(video.name)
+        assertThat(viewModel.uiState.value.lowRelevanceHiddenCount).isEqualTo(2)
+
+        viewModel.toggleShowHighRelevanceOnly()
+
+        assertThat(viewModel.uiState.value.resources.map { it.name })
+            .containsExactly(video.name, audio.name, weak.name)
+        assertThat(viewModel.uiState.value.lowRelevanceHiddenCount).isEqualTo(0)
     }
 
     @Test

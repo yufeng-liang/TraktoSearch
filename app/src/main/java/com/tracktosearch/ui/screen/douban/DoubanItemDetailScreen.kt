@@ -139,7 +139,6 @@ import com.tracktosearch.data.repository.DoubanSyncFailure
 import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.FailureReason
 import com.tracktosearch.data.repository.MediaType
-import com.tracktosearch.data.repository.RelevanceScorerProvider
 import com.tracktosearch.data.repository.ResourceQuery
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.util.PosterColorExtractor
@@ -276,8 +275,9 @@ class DoubanItemDetailViewModel @Inject constructor(
     // 资源相关度评分用的目标影视上下文（搜索开始时构造）
     private var currentResourceQuery: ResourceQuery? = null
     // 当前搜索结果的相关度分值表（url -> score），与 allResources 同生命周期
-    // 用于"仅显示高相关"过滤，避免重复打分；query 为空时为空 map（不过滤）
     private var currentScoreMap: Map<String, Int> = emptyMap()
+    // 当前搜索结果的高相关资格表；规则由 Repository 统一计算，页面只负责本地过滤
+    private var currentHighRelevanceMap: Map<String, Boolean> = emptyMap()
 
     /** 累积本次详情页内的状态变更，直到返回 Watchlist 时一次性传递。 */
     private fun recordMarkChange(
@@ -587,9 +587,11 @@ class DoubanItemDetailViewModel @Inject constructor(
                         )
                         allResources = ranked.items
                         currentScoreMap = ranked.scoreMap
+                        currentHighRelevanceMap = ranked.highRelevanceMap
                     } else {
                         allResources = resourceRepository.getCachedAllResources(failure.title)
                         currentScoreMap = emptyMap()
+                        currentHighRelevanceMap = emptyMap()
                     }
                     val filtered = resourceRepository.filterItems(
                         allResources,
@@ -654,14 +656,14 @@ class DoubanItemDetailViewModel @Inject constructor(
 
     /**
      * 应用"仅显示高相关"过滤：低于阈值的结果隐藏，返回（展示列表, 隐藏数量）。
-     * 分值从 [currentScoreMap] 读取（url -> score），避免 ResourceItem 作为可变共享状态。
+     * 资格从 [currentHighRelevanceMap] 读取（url -> Boolean），避免 ResourceItem 作为可变共享状态。
      */
     private fun applyHighRelevanceFilter(
         items: List<ResourceItem>,
         onlyHigh: Boolean
     ): Pair<List<ResourceItem>, Int> {
-        if (!onlyHigh || currentResourceQuery == null || currentScoreMap.isEmpty()) return items to 0
-        val kept = items.filter { (currentScoreMap[it.url] ?: 0) >= RelevanceScorerProvider.HIGH_RELEVANCE_THRESHOLD }
+        if (!onlyHigh || currentResourceQuery == null || currentHighRelevanceMap.isEmpty()) return items to 0
+        val kept = items.filter { currentHighRelevanceMap[it.url] == true }
         return kept to (items.size - kept.size)
     }
 

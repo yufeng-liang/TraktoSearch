@@ -36,6 +36,13 @@ class RuleBasedRelevanceScorerTest {
         mediaType = MediaType.MOVIE
     )
 
+    private val querySpiderMan = ResourceQuery(
+        title = "蜘蛛侠：崭新之日",
+        year = 2026,
+        country = "美国",
+        mediaType = MediaType.MOVIE
+    )
+
     private fun item(name: String) = ResourceItem(
         name = name,
         diskType = DiskType.OTHER,
@@ -191,6 +198,7 @@ class RuleBasedRelevanceScorerTest {
         val score = scorer.score(item("情书 原声带"), queryLoveLetter)
         // 定界片段 +40，"原声带"强信号 -30 → 10，低相关
         assertThat(score).isLessThan(45)
+        assertThat(scorer.evaluate(item("情书 原声带"), queryLoveLetter).isHighRelevance).isFalse()
     }
 
     @Test
@@ -198,6 +206,67 @@ class RuleBasedRelevanceScorerTest {
         val score = scorer.score(item("情书 FLAC 24bit"), queryLoveLetter)
         // 定界片段 +40，FLAC+24bit 强信号 -30 → 10，低相关
         assertThat(score).isLessThan(45)
+        assertThat(scorer.evaluate(item("情书 FLAC 24bit"), queryLoveLetter).isHighRelevance).isFalse()
+    }
+
+    @Test
+    fun spiderMan_latestVideo_isHighRelevanceWithoutQualityToken() {
+        val result = scorer.evaluate(item("蜘蛛侠：崭新之日 最新"), querySpiderMan)
+
+        assertThat(result.titleMatch).isEqualTo(TitleMatch.DELIMITED)
+        assertThat(result.contentType).isEqualTo(ResourceContentType.UNKNOWN)
+        assertThat(result.isHighRelevance).isTrue()
+    }
+
+    @Test
+    fun spiderMan_tcVideo_isHighRelevance() {
+        val result = scorer.evaluate(item("蜘蛛侠：崭新之日（TC画质增强版）"), querySpiderMan)
+
+        assertThat(result.isHighRelevance).isTrue()
+        assertThat(result.hasExplicitConflict).isFalse()
+    }
+
+    @Test
+    fun spiderMan_flacPromotionSong_isNotHighRelevance() {
+        val result = scorer.evaluate(
+            item("蜘蛛侠：崭新之日(2026) 电影中文推广曲 胡彦斌 破晓以后 FLAC 24bit 48khz"),
+            querySpiderMan
+        )
+
+        assertThat(result.titleMatch.isStrong).isTrue()
+        assertThat(result.contentType).isEqualTo(ResourceContentType.AUDIO)
+        assertThat(result.isHighRelevance).isFalse()
+    }
+
+    @Test
+    fun spiderMan_wrongYear_isNotHighRelevance() {
+        val result = scorer.evaluate(item("蜘蛛侠：崭新之日 2012 1080p"), querySpiderMan)
+
+        assertThat(result.hasYearConflict).isTrue()
+        assertThat(result.isHighRelevance).isFalse()
+    }
+
+    @Test
+    fun releaseDate_isNotTreatedAsMovieYear() {
+        val query = ResourceQuery(
+            title = "测试电影",
+            year = 2025,
+            mediaType = MediaType.MOVIE
+        )
+
+        val result = scorer.evaluate(item("测试电影 2025.05.11"), query)
+
+        // 日期中的 2025 不参与年份加分，资源只保留强标题命中的 40 分。
+        assertThat(result.score).isEqualTo(40)
+        assertThat(result.hasYearConflict).isFalse()
+    }
+
+    @Test
+    fun electronicLoveLetter_remainsWeakMatch() {
+        val result = scorer.evaluate(item("电子情书 1080p"), queryLoveLetter)
+
+        assertThat(result.titleMatch).isEqualTo(TitleMatch.NONE)
+        assertThat(result.isHighRelevance).isFalse()
     }
 
     /**

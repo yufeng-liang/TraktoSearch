@@ -861,6 +861,9 @@ class ResourceRepositoryTest {
         val ranked = repository.mergeAndCacheResources("情书", items, query = testQuery)
         // scoreMap 非空
         assertThat(ranked.scoreMap).isNotEmpty()
+        assertThat(ranked.highRelevanceMap).containsKey("https://a.com")
+        assertThat(ranked.highRelevanceMap["https://a.com"]).isTrue()
+        assertThat(ranked.highRelevanceMap["https://b.com"]).isFalse()
         // 高相关应排前面
         assertThat(ranked.items[0].url).isEqualTo("https://a.com")
     }
@@ -870,6 +873,7 @@ class ResourceRepositoryTest {
         val items = listOf(resourceItem(name = "资源1", url = "https://a.com"))
         val ranked = repository.mergeAndCacheResources("情书", items)
         assertThat(ranked.scoreMap).isEmpty()
+        assertThat(ranked.highRelevanceMap).isEmpty()
     }
 
     // ==================== getEnabledSources ====================

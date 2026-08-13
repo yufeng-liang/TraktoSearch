@@ -1,6 +1,7 @@
 package com.tracktosearch.data.repository
 
 import com.tracktosearch.data.remote.dto.ResourceItem
+import java.text.Normalizer
 import kotlin.math.sqrt
 
 /**
@@ -21,20 +22,54 @@ data class ResourceQuery(
     val cast: List<String> = emptyList()
 )
 
+enum class TitleMatch {
+    NONE,
+    PARTIAL,
+    DELIMITED,
+    EXACT;
+
+    val isStrong: Boolean
+        get() = this == DELIMITED || this == EXACT
+}
+
+enum class ResourceContentType {
+    UNKNOWN,
+    VIDEO,
+    AUDIO,
+    BOOK
+}
+
+data class ResourceRelevance(
+    val score: Int,
+    val titleMatch: TitleMatch,
+    val contentType: ResourceContentType,
+    val hasYearConflict: Boolean,
+    val hasMediaTypeConflict: Boolean,
+    val hasRegionConflict: Boolean
+) {
+    val hasExplicitConflict: Boolean
+        get() = hasYearConflict || hasMediaTypeConflict || hasRegionConflict
+
+    val isHighRelevance: Boolean
+        get() = when {
+            contentType == ResourceContentType.AUDIO -> false
+            contentType == ResourceContentType.BOOK -> false
+            titleMatch.isStrong -> !hasExplicitConflict
+            else -> score >= RelevanceScorerProvider.HIGH_RELEVANCE_THRESHOLD && !hasExplicitConflict
+        }
+}
+
 /**
  * 相关度评分器接口。
  * 规则实现见 [RuleBasedRelevanceScorer]；将来若有离线 embedding 模型，
  * 可实现同一接口（如 EmbeddingRelevanceScorer）由 [RelevanceScorerProvider] 切换，调用方无感。
- *
- * 返回 [ScoredResource]（资源 + 分值）而非写回 ResourceItem 字段，
- * 避免 ResourceItem 作为可变共享状态在跨影视缓存场景下产生竞态。
  */
 interface ResourceRelevanceScorer {
-    fun score(item: ResourceItem, query: ResourceQuery): Int
-}
+    fun evaluate(item: ResourceItem, query: ResourceQuery): ResourceRelevance
 
-/** 带分值的资源（不可变，避免共享缓存竞态）。 */
-data class ScoredResource(val item: ResourceItem, val score: Int)
+    /** 保留排序层已有的分数调用契约。 */
+    fun score(item: ResourceItem, query: ResourceQuery): Int = evaluate(item, query).score
+}
 
 /**
  * 活跃评分器提供者（ML 预留点）。
@@ -60,57 +95,78 @@ object RelevanceScorerProvider {
  */
 class RuleBasedRelevanceScorer : ResourceRelevanceScorer {
 
-    override fun score(item: ResourceItem, query: ResourceQuery): Int {
-        val name = item.name
-        if (name.isBlank()) return 0
-        var score = 0
-        score += titleScore(name, query.title, query.originalTitle)
-        score += yearScore(name, query.year)
-        score += typeScore(name, query.mediaType)
-        score += regionScore(name, query.country)
-        score += contentScore(name)
-        score += qualityScore(name)
-        score += peopleScore(name, query.directors, query.cast)
-        return score
+    override fun evaluate(item: ResourceItem, query: ResourceQuery): ResourceRelevance {
+        val rawName = item.name
+        if (rawName.isBlank()) {
+            return ResourceRelevance(
+                score = 0,
+                titleMatch = TitleMatch.NONE,
+                contentType = ResourceContentType.UNKNOWN,
+                hasYearConflict = false,
+                hasMediaTypeConflict = false,
+                hasRegionConflict = false
+            )
+        }
+
+        val normalizedName = normalizeReleaseName(rawName)
+        val titleSignal = titleSignal(normalizedName, query.title, query.originalTitle)
+        val yearSignal = yearSignal(normalizedName, query.year)
+        val hasMediaTypeConflict = hasMediaTypeConflict(normalizedName, query.mediaType)
+        val hasRegionConflict = hasRegionConflict(normalizedName, query.country)
+        val contentType = detectContentType(normalizedName)
+
+        val score = titleSignal.score +
+            yearSignal.score +
+            if (hasMediaTypeConflict) -20 else 0 +
+            if (hasRegionConflict) -15 else 0 +
+            contentPenalty(contentType) +
+            qualityScore(normalizedName) +
+            peopleScore(normalizedName, query.directors, query.cast)
+
+        return ResourceRelevance(
+            score = score,
+            titleMatch = titleSignal.match,
+            contentType = contentType,
+            hasYearConflict = yearSignal.hasConflict,
+            hasMediaTypeConflict = hasMediaTypeConflict,
+            hasRegionConflict = hasRegionConflict
+        )
     }
+
+    private data class TitleSignal(
+        val match: TitleMatch,
+        val score: Int
+    )
+
+    private data class YearSignal(
+        val score: Int,
+        val hasConflict: Boolean
+    )
 
     // ===================== 标题核心匹配 =====================
 
-    private fun titleScore(name: String, title: String, originalTitle: String?): Int {
-        val t = title.trim()
-        if (t.isEmpty()) return 0
-        val best = maxOf(
-            segmentMatchScore(name, t),
-            originalTitle?.takeIf { it.isNotBlank() }?.let { segmentMatchScore(name, it) }
-                ?: Int.MIN_VALUE
-        )
-        return if (best == Int.MIN_VALUE) 0 else best
+    private fun titleSignal(name: String, title: String, originalTitle: String?): TitleSignal {
+        return sequenceOf(title, originalTitle.orEmpty())
+            .filter { it.isNotBlank() }
+            .map { segmentSignal(name, it) }
+            .maxByOrNull { it.score }
+            ?: TitleSignal(TitleMatch.NONE, 0)
     }
 
-    /**
-     * 命中等级：
-     * - 整段相等 → +50
-     * - 目标作为"定界片段"出现（前后为标点/数字/空格/括号/首尾，而非汉字/字母） → +40
-     *   例："5025-情书"、"[夸克网盘]情书："、"Q 情书（199..." 命中；"两世情书""夜港情书""给阿嬷的情书" 不命中
-     * - 否则按字符 bigram 余弦：≥0.9 → +25，0.7~0.9 → +12，<0.7 → 0
-     *
-     * 大小写不敏感：TMDB originalTitle 通常是首字母大写形式（如 "Socias por Accidente"），
-     * 而网盘资源标题多为小写（如 "Socias por accidente 2026"）。若不统一大小写，
-     * isDelimitedSegment 会因 indexOf 找不到而失败、cosineBigram 也会因大小写不同的 bigram
-     * 而降级，导致 titleScore 从 +40 跌到 +12，原本高相关的资源被误隐藏。
-     * 在入口统一 lowercase 后，下游 isDelimitedSegment/cosineBigram/bigrams 都不需要改。
-     */
-    private fun segmentMatchScore(name: String, target: String): Int {
-        val n = name.trim().lowercase()
-        val t = target.trim().lowercase()
-        if (t.isEmpty()) return 0
-        if (n == t) return 50
-        if (isDelimitedSegment(n, t)) return 40
-        val cos = cosineBigram(n, t)
+    private fun segmentSignal(name: String, target: String): TitleSignal {
+        val normalizedTarget = normalizeTitle(target)
+        if (normalizedTarget.isEmpty()) return TitleSignal(TitleMatch.NONE, 0)
+        if (name == normalizedTarget) return TitleSignal(TitleMatch.EXACT, 50)
+        if (isDelimitedSegment(name, normalizedTarget)) return TitleSignal(TitleMatch.DELIMITED, 40)
+
+        val cosine = cosineBigram(
+            stripTechnicalMetadata(name),
+            stripTechnicalMetadata(normalizedTarget)
+        )
         return when {
-            cos >= 0.9 -> 25
-            cos >= 0.7 -> 12
-            else -> 0
+            cosine >= 0.9 -> TitleSignal(TitleMatch.PARTIAL, 25)
+            cosine >= 0.7 -> TitleSignal(TitleMatch.PARTIAL, 12)
+            else -> TitleSignal(TitleMatch.NONE, 0)
         }
     }
 
@@ -129,13 +185,12 @@ class RuleBasedRelevanceScorer : ResourceRelevanceScorer {
         if (c.isWhitespace()) return true
         if (c in DELIMITERS) return true
         if (c.isDigit()) return true
-        // 任何字母（中文/英文）都不是定界符，保证"电子情书""夜港情书"不被误判为片段
-        if (c.isLetter()) return false
-        return true
+        return !c.isLetter()
     }
 
     private fun bigrams(s: String): Set<String> {
         val clean = s.filter { it.isLetterOrDigit() || it in '\u4e00'..'\u9fff' }
+        if (clean.isEmpty()) return emptySet()
         if (clean.length < 2) return setOf(clean)
         return (0 until clean.length - 1).map { clean.substring(it, it + 2) }.toSet()
     }
@@ -148,126 +203,140 @@ class RuleBasedRelevanceScorer : ResourceRelevanceScorer {
         return inter.toDouble() / sqrt(sa.size.toDouble() * sb.size.toDouble())
     }
 
+    private fun normalizeReleaseName(value: String): String {
+        return Normalizer.normalize(value, Normalizer.Form.NFKC)
+            .lowercase()
+            .replace(WHITESPACE_REGEX, " ")
+            .trim()
+    }
+
+    private fun normalizeTitle(value: String): String = normalizeReleaseName(value)
+
+    private fun stripTechnicalMetadata(value: String): String {
+        return value
+            .replace(YEAR_REGEX, " ")
+            .replace(AUDIO_MARKER_REGEX, " ")
+            .replace(BOOK_MARKER_REGEX, " ")
+            .replace(VIDEO_MARKER_REGEX, " ")
+            .replace(WHITESPACE_REGEX, " ")
+            .trim()
+    }
+
     // ===================== 年份 =====================
 
-    private fun yearScore(name: String, year: Int?): Int {
-        if (year == null) return 0
-        val allYears = YEAR_REGEX.findAll(name).map { it.value.toInt() }.toSet()
-        if (year in allYears) return 15
-        // 含"影片年记号"（括号/点/空格包裹的 19xx/20xx）且不等于目标年 → 惩罚
-        val movieYears = MOVIE_YEAR_REGEX.findAll(name).map { it.groupValues[1].toInt() }.toSet()
-        return if (movieYears.isNotEmpty() && year !in movieYears) -15 else 0
+    private fun yearSignal(name: String, year: Int?): YearSignal {
+        if (year == null) return YearSignal(0, false)
+        val movieYears = extractMovieYears(name)
+        if (year in movieYears) return YearSignal(15, false)
+
+        return if (movieYears.isNotEmpty()) {
+            YearSignal(-15, true)
+        } else {
+            YearSignal(0, false)
+        }
+    }
+
+    private fun extractMovieYears(name: String): Set<Int> {
+        return MOVIE_YEAR_REGEX.findAll(name)
+            .mapNotNull { match ->
+                val yearGroup = match.groups[1] ?: return@mapNotNull null
+                if (isDateLikeYear(name, yearGroup.range.last + 1)) {
+                    null
+                } else {
+                    yearGroup.value.toInt()
+                }
+            }
+            .toSet()
+    }
+
+    private fun isDateLikeYear(text: String, nextIndex: Int): Boolean {
+        if (nextIndex >= text.length || text[nextIndex] != '.') return false
+
+        var cursor = nextIndex + 1
+        val firstPartStart = cursor
+        while (cursor < text.length && text[cursor].isDigit()) cursor++
+        val firstPartLength = cursor - firstPartStart
+        if (firstPartLength !in 1..2) return false
+        if (cursor >= text.length || text[cursor] != '.') return false
+
+        cursor += 1
+        val secondPartStart = cursor
+        while (cursor < text.length && text[cursor].isDigit()) cursor++
+        val secondPartLength = cursor - secondPartStart
+        return secondPartLength in 1..2
     }
 
     // ===================== 类型 =====================
 
-    /**
-     * 目标是电影时，标题含明确剧集标记 → 惩罚（它是剧不是电影）。
-     * 目标是剧集时不做惩罚（剧集标记反而是预期）。
-     *
-     * 注意：标记必须带数字或为完整词，避免误伤
-     * - "第" 单字会误伤"第一百次求婚" → 改为 `第\d+季`/`第[一二三四...]+季`
-     * - "s0/s1/s2" 子串会误伤英文词 → 改为 `s\d{1,2}` 且前后需边界
-     */
-    private fun typeScore(name: String, mediaType: MediaType?): Int {
-        if (mediaType == MediaType.MOVIE) {
-            val lower = name.lowercase()
-            // 中文剧集标记：完整词（短剧/电视剧/连续剧/剧集/综艺/韩综/动漫/国漫/全季/合集）
-            if (SHOW_MARKERS_CN.any { it in name }) return -20
-            // "第X季"：中文数字或阿拉伯数字
-            if (SEASON_CN_REGEX.containsMatchIn(name)) return -20
-            // 英文剧集标记：season N / s0X / sXX（前后需边界，避免误伤单词）
-            if (SEASON_EN_REGEX.containsMatchIn(lower)) return -20
-        }
-        return 0
+    private fun hasMediaTypeConflict(name: String, mediaType: MediaType?): Boolean {
+        if (mediaType != MediaType.MOVIE) return false
+        return SHOW_MARKERS_CN.any { it in name } ||
+            SEASON_CN_REGEX.containsMatchIn(name) ||
+            SEASON_EN_REGEX.containsMatchIn(name)
     }
 
     // ===================== 地区 =====================
 
-    /**
-     * 目标国家已知时，标题含与该国冲突的地区标记 → 惩罚。
-     * 例如目标=日本，标题含"韩综/韩剧/美剧"等 → 惩罚。
-     *
-     * 注意：单字"韩/日/美/港/台"误伤率极高（"美人鱼""东京物语""港囧"），
-     * 仅保留**组合词**（韩剧/韩综/美剧/日剧/日影/港剧/台剧/国漫/国产/大陆/华语/欧美）参与匹配。
-     */
-    private fun regionScore(name: String, country: String?): Int {
-        val expected = country?.let { COUNTRY_REGION_MARKERS[it] } ?: return 0
-        for (marker in ALL_REGION_MARKERS) {
-            // marker 已是组合词（长度≥2），直接子串匹配即可
-            if (marker in name && marker !in expected) return -15
+    private fun hasRegionConflict(name: String, country: String?): Boolean {
+        val expected = country?.let { COUNTRY_REGION_MARKERS[it] } ?: return false
+        return ALL_REGION_MARKERS.any { marker -> marker in name && marker !in expected }
+    }
+
+    // ===================== 内容类型 =====================
+
+    private fun detectContentType(name: String): ResourceContentType {
+        return when {
+            AUDIO_MARKER_REGEX.containsMatchIn(name) -> ResourceContentType.AUDIO
+            BOOK_MARKER_REGEX.containsMatchIn(name) -> ResourceContentType.BOOK
+            VIDEO_MARKER_REGEX.containsMatchIn(name) -> ResourceContentType.VIDEO
+            else -> ResourceContentType.UNKNOWN
         }
-        return 0
     }
 
-    // ===================== 内容类型排除 =====================
-
-    /**
-     * 含明确非影片标记 → 强惩罚。
-     *
-     * 注意：单独的"音乐""原声"会误伤"音乐之声""原声大盗"等正常片名，
-     * 收紧为组合标记或需后跟"专辑/原声/配乐/大碟"等限定词。
-     */
-    private fun contentScore(name: String): Int {
-        val lower = name.lowercase()
-        // 强信号：格式后缀（几乎不会误伤）
-        if (CONTENT_STRONG_MARKERS.any { it in lower }) return -30
-        // 弱信号：需组合出现（如"音乐+专辑/原声/配乐"）
-        if (hasMusicCombo(name, lower)) return -30
-        return 0
-    }
-
-    private fun hasMusicCombo(name: String, lower: String): Boolean {
-        // 音乐/原声/歌曲 后跟 专辑/大碟/原声带/配乐/OSS/OST 才触发
-        if (("音乐" in name || "原声" in name || "歌曲" in name) &&
-            MUSIC_COMBO_SUFFIX.any { it in name || it in lower }) return true
-        return false
+    private fun contentPenalty(contentType: ResourceContentType): Int {
+        return when (contentType) {
+            ResourceContentType.AUDIO,
+            ResourceContentType.BOOK -> -30
+            ResourceContentType.UNKNOWN,
+            ResourceContentType.VIDEO -> 0
+        }
     }
 
     // ===================== 画质正信号 =====================
 
-    /** 含 1080p/4K/remux/BluRay/MKV 等 → 是真实视频文件的正信号。 */
     private fun qualityScore(name: String): Int {
-        val n = name.lowercase()
-        return if (QUALITY_MARKERS.any { it in n }) 10 else 0
+        return if (QUALITY_MARKER_REGEX.containsMatchIn(name)) 10 else 0
     }
 
     // ===================== 导演/演员 =====================
 
-    /**
-     * 标题命中导演名或演员名 → 强相关正信号。
-     * 例如"情书 岩井俊二 1080p"明显指向 1995 日本版。
-     * 三字及以上中文姓名才参与匹配，避免"日""美"等单字误伤。
-     */
     private fun peopleScore(name: String, directors: List<String>, cast: List<String>): Int {
         if (directors.isEmpty() && cast.isEmpty()) return 0
-        var s = 0
-        for (d in directors) {
-            if (d.length >= 2 && d in name) s += 15
+        var score = 0
+        for (director in directors) {
+            val normalizedDirector = normalizeTitle(director)
+            if (normalizedDirector.length >= 2 && normalizedDirector in name) score += 15
         }
-        for (c in cast) {
-            if (c.length >= 2 && c in name) s += 8
+        for (actor in cast) {
+            val normalizedActor = normalizeTitle(actor)
+            if (normalizedActor.length >= 2 && normalizedActor in name) score += 8
         }
-        return s.coerceAtMost(25) // 上限避免多个演员名堆分
+        return score.coerceAtMost(25)
     }
 
     companion object {
-        private const val DELIMITERS = "()[]{}（）【】〈〉《》<>/\\|.,。，-—:：;；'\"\"'~@#%&*+=_"
+        private val WHITESPACE_REGEX = Regex("""\s+""")
+        private const val DELIMITERS = "()[]{}<>/\\|.,，。-—:：;；'\"~@#%&*+=_!?！？"
 
         private val YEAR_REGEX = Regex("""(?:19|20)\d{2}""")
-        // 影片年记号：前后为边界（括号/点/空格/首尾），避免把 "2025.05.11" 这种日期当影片年
-        private val MOVIE_YEAR_REGEX = Regex("""(?:^|[\s(\[.（])((?:19|20)\d{2})(?=$|[\s)\]）.]|$)""")
+        private val MOVIE_YEAR_REGEX = Regex("""(?:^|[\s(\[（.])((?:19|20)\d{2})(?=$|[\s)\]）.])""")
 
-        // 中文剧集标记：完整词，避免单字"第"误伤
         private val SHOW_MARKERS_CN = listOf(
             "短剧", "电视剧", "连续剧", "剧集", "综艺", "韩综", "动漫", "国漫", "全季", "合集"
         )
-        // "第X季"：中文数字或阿拉伯数字（如"第一季""第2季"）
         private val SEASON_CN_REGEX = Regex("""第[\d一二三四五六七八九十百千]+季""")
-        // 英文剧集标记：season N / s01 / s02（前后需非字母数字边界，避免误伤单词）
         private val SEASON_EN_REGEX = Regex("""(?:^|[^\w])(?:season\s*\d{1,2}|s\d{2})(?:[^\w]|$)""")
 
-        // 仅保留组合词地区标记，移除单字（韩/日/美/港/台）避免误伤
         private val ALL_REGION_MARKERS = listOf(
             "韩剧", "韩综", "韩国",
             "美剧", "欧美",
@@ -287,18 +356,17 @@ class RuleBasedRelevanceScorer : ResourceRelevanceScorer {
             "台湾" to setOf("台剧")
         )
 
-        // 强信号：几乎不会误伤的格式后缀
-        private val CONTENT_STRONG_MARKERS = listOf(
-            "flac", "hi-res", "hires", "24bit", "24-bit", "96khz", "48khz",
-            "qobuz", "epub", "kindle", "pdf", "有声书", "实体书", "绘本",
-            "专辑", "单曲", "演唱会", "原声带", "原声大碟", "配乐集"
+        private val AUDIO_MARKER_REGEX = Regex(
+            """(?i)(?:^|[^a-z0-9])(flac|mp3|wav|ape|alac|24bit|24-bit|48khz|96khz|qobuz|hi-res|hires|推广曲|主题曲|插曲|原声带|原声大碟|专辑|单曲|演唱会|配乐集|音频|soundtrack|ost)(?:[^a-z0-9]|$)"""
         )
-        // 音乐类组合后缀：与"音乐/原声/歌曲"组合才触发
-        private val MUSIC_COMBO_SUFFIX = listOf("专辑", "大碟", "原声带", "配乐", "ost", "原声")
-
-        private val QUALITY_MARKERS = listOf(
-            "1080p", "720p", "4k", "2160p", "remux", "bluray", "bdrip",
-            "web-dl", "hd", "高清", "mkv", "mp4", "h264", "h265", "hevc"
+        private val BOOK_MARKER_REGEX = Regex(
+            """(?i)(?:^|[^a-z0-9])(epub|kindle|pdf|有声书|实体书|绘本)(?:[^a-z0-9]|$)"""
+        )
+        private val VIDEO_MARKER_REGEX = Regex(
+            """(?i)(?:^|[^a-z0-9])(2160p|1080p|720p|4k|remux|bluray|bdrip|web-dl|hdtv|tc|cam|mkv|mp4|avi|h264|h265|hevc|高清|画质增强版|正片)(?:[^a-z0-9]|$)"""
+        )
+        private val QUALITY_MARKER_REGEX = Regex(
+            """(?i)(?:^|[^a-z0-9])(2160p|1080p|720p|4k|remux|bluray|bdrip|web-dl|hdtv|tc|cam|mkv|mp4|avi|h264|h265|hevc|高清|画质增强版|正片)(?:[^a-z0-9]|$)"""
         )
     }
 }

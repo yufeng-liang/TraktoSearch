@@ -37,7 +37,6 @@ import com.tracktosearch.data.remote.trakt.dto.TraktSeason
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.MultiRatings
 import com.tracktosearch.data.repository.RatingsRepository
-import com.tracktosearch.data.repository.RelevanceScorerProvider
 import com.tracktosearch.data.repository.ResourceQuery
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.repository.TmdbRepository
@@ -385,8 +384,9 @@ class DetailViewModel @Inject constructor(
     // 资源相关度评分用的目标影视上下文（搜索开始时构造）
     private var currentResourceQuery: ResourceQuery? = null
     // 当前搜索结果的相关度分值表（url -> score），与 allResources 同生命周期
-    // 用于"仅显示高相关"过滤，避免重复打分；query 为空时为空 map（不过滤）
     private var currentScoreMap: Map<String, Int> = emptyMap()
+    // 当前搜索结果的高相关资格表；规则由 Repository 统一计算，详情页只负责本地过滤
+    private var currentHighRelevanceMap: Map<String, Boolean> = emptyMap()
     private var currentImdbId: String = ""
     private var currentTraktRating: Double = 0.0
     private var currentTmdbId: Int = 0
@@ -446,6 +446,8 @@ class DetailViewModel @Inject constructor(
             currentDoubanUserRating = cached.uiState.userRating.takeIf { currentDoubanId != null }
             detailLoaded = true
             allResources = cached.allResources
+            currentScoreMap = emptyMap()
+            currentHighRelevanceMap = emptyMap()
             // 从全局缓存获取真实的想看/已看状态，不依赖路由参数（从推荐列表进入时默认为 false）
             // 豆瓣独立模式从本地 douban_synced_items 表读取,其他模式走 trakt API
             val (realInWatchlist, realWatched) = resolveWatchStates(traktId, cached.currentMediaType, cached.currentImdbId)
@@ -538,6 +540,8 @@ class DetailViewModel @Inject constructor(
         currentDoubanUserRating = null
         detailLoaded = false
         allResources = emptyList()
+        currentScoreMap = emptyMap()
+        currentHighRelevanceMap = emptyMap()
 
         _uiState.value = DetailUiState(
             isLoading = true,
@@ -2007,9 +2011,11 @@ class DetailViewModel @Inject constructor(
             )
             allResources = ranked.items
             currentScoreMap = ranked.scoreMap
+            currentHighRelevanceMap = ranked.highRelevanceMap
         } else {
             allResources = resourceRepository.getCachedAllResources(currentKeyword)
             currentScoreMap = emptyMap()
+            currentHighRelevanceMap = emptyMap()
         }
 
         val state = _uiState.value
@@ -2036,14 +2042,14 @@ class DetailViewModel @Inject constructor(
     /**
      * 应用"仅显示高相关"过滤：低于阈值的结果隐藏，返回（展示列表, 隐藏数量）。
      * 若无目标影视上下文（query 为空，通用搜索），不隐藏。
-     * 分值从 [currentScoreMap] 读取（url -> score），避免 ResourceItem 作为可变共享状态。
+     * 资格从 [currentHighRelevanceMap] 读取（url -> Boolean），避免 ResourceItem 作为可变共享状态。
      */
     private fun applyHighRelevanceFilter(
         items: List<ResourceItem>,
         onlyHigh: Boolean
     ): Pair<List<ResourceItem>, Int> {
-        if (!onlyHigh || currentResourceQuery == null || currentScoreMap.isEmpty()) return items to 0
-        val kept = items.filter { (currentScoreMap[it.url] ?: 0) >= RelevanceScorerProvider.HIGH_RELEVANCE_THRESHOLD }
+        if (!onlyHigh || currentResourceQuery == null || currentHighRelevanceMap.isEmpty()) return items to 0
+        val kept = items.filter { currentHighRelevanceMap[it.url] == true }
         return kept to (items.size - kept.size)
     }
 
@@ -2129,9 +2135,11 @@ class DetailViewModel @Inject constructor(
                 )
                 allResources = ranked.items
                 currentScoreMap = ranked.scoreMap
+                currentHighRelevanceMap = ranked.highRelevanceMap
             } else {
                 allResources = resourceRepository.getCachedAllResources(currentKeyword)
                 currentScoreMap = emptyMap()
+                currentHighRelevanceMap = emptyMap()
             }
 
             val filtered = resourceRepository.filterItems(

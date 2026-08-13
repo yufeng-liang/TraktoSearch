@@ -285,7 +285,7 @@ private fun RatingBadge(
                 Text(
                     text = badge.label,
                     style = MaterialTheme.typography.titleSmall.copy(
-                        fontSize = 11.sp, fontWeight = FontWeight.Bold
+                        fontSize = 12.sp, fontWeight = FontWeight.Bold
                     ),
                     color = Color.Black,
                     modifier = Modifier.padding(horizontal = 3.dp, vertical = 0.dp)
@@ -293,17 +293,17 @@ private fun RatingBadge(
             }
             RatingSource.RottenTomatoes -> Text(
                 text = "🍅",
-                fontSize = 14.sp,
+                fontSize = 16.sp,
                 modifier = Modifier.offset(y = -1.dp)
             )
             RatingSource.Douban -> androidx.compose.foundation.Image(
                 painter = painterResource(com.tracktosearch.R.drawable.ic_douban_logo),
                 contentDescription = stringResource(R.string.detail_info_douban_rating),
-                modifier = Modifier.size(14.dp)
+                modifier = Modifier.size(16.dp)
             )
             RatingSource.Metacritic -> Text(
                 text = "🎯",
-                fontSize = 14.sp,
+                fontSize = 16.sp,
                 modifier = Modifier.offset(y = -1.dp)
             )
         }
@@ -311,7 +311,7 @@ private fun RatingBadge(
         if (source != RatingSource.IMDb) {
             Text(
                 text = badge.label,
-                style = MaterialTheme.typography.titleSmall.copy(fontSize = 12.sp),
+                style = MaterialTheme.typography.titleSmall.copy(fontSize = 13.sp),
                 fontWeight = FontWeight.Bold,
                 color = badge.brandColor
             )
@@ -321,7 +321,14 @@ private fun RatingBadge(
         Text(
             text = badge.value,
             modifier = Modifier.padding(start = 4.dp),
-            style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp),
+            style = MaterialTheme.typography.titleSmall.copy(
+                fontSize = 15.sp,
+                shadow = androidx.compose.ui.graphics.Shadow(
+                    color = Color.Black.copy(alpha = 0.38f),
+                    offset = androidx.compose.ui.geometry.Offset.Zero,
+                    blurRadius = 1.2f
+                )
+            ),
             fontWeight = FontWeight.Bold,
             color = scoreColor,
             maxLines = 1,

@@ -23,8 +23,8 @@ import androidx.compose.ui.unit.sp
 import com.tracktosearch.ui.theme.RatingGold
 
 /** 评分徽章统一规格：星星 + 数字，无 chip 底色，靠深色描边阴影保证不同海报上的对比度。 */
-private val RatingFontSize = 10.sp
-private val RatingIconSize = 11.dp
+private val RatingFontSize = 13.sp
+private val RatingIconSize = 14.dp
 
 /**
  * 评分徽章（星星 + 数字，无黑色半透明 chip）。
@@ -42,17 +42,41 @@ fun RatingBadge(
     Row(
         modifier = modifier
             .offset(y = (-2).dp)
-            .padding(horizontal = 4.dp, vertical = 1.dp),
+            .padding(horizontal = 5.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        // 星星：底层黑色偏移副本作描边阴影，上层金色主体
+        // 星星：四向黑色副本形成硬描边，上层金色主体保留海报上的识别度。
         Box {
             Icon(
                 imageVector = Icons.Rounded.Star,
                 contentDescription = null,
                 modifier = Modifier
-                    .offset(x = 0.6.dp, y = 0.6.dp)
+                    .offset(x = (-0.7).dp)
+                    .size(RatingIconSize),
+                tint = Color.Black.copy(alpha = 0.85f)
+            )
+            Icon(
+                imageVector = Icons.Rounded.Star,
+                contentDescription = null,
+                modifier = Modifier
+                    .offset(x = 0.7.dp)
+                    .size(RatingIconSize),
+                tint = Color.Black.copy(alpha = 0.85f)
+            )
+            Icon(
+                imageVector = Icons.Rounded.Star,
+                contentDescription = null,
+                modifier = Modifier
+                    .offset(y = (-0.7).dp)
+                    .size(RatingIconSize),
+                tint = Color.Black.copy(alpha = 0.85f)
+            )
+            Icon(
+                imageVector = Icons.Rounded.Star,
+                contentDescription = null,
+                modifier = Modifier
+                    .offset(y = 0.7.dp)
                     .size(RatingIconSize),
                 tint = Color.Black.copy(alpha = 0.85f)
             )
@@ -67,12 +91,12 @@ fun RatingBadge(
             text = "%.1f".format(rating),
             color = Color.White,
             fontSize = RatingFontSize,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.ExtraBold,
             style = TextStyle(
                 shadow = Shadow(
-                    color = Color.Black.copy(alpha = 0.9f),
-                    offset = Offset(0.6f, 0.6f),
-                    blurRadius = 1.5f
+                    color = Color.Black.copy(alpha = 0.98f),
+                    offset = Offset.Zero,
+                    blurRadius = 2.4f
                 )
             )
         )
