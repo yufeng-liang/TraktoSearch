@@ -109,6 +109,10 @@ fun glassToken(
     )
 }
 
+internal fun resolveGlassTintAlpha(callingAlpha: Float, tokenAlpha: Float): Float {
+    return (callingAlpha * tokenAlpha).coerceIn(0f, 1f)
+}
+
 /** TrackToSearch 的集中 Glass 样式入口。 */
 object AppGlassStyles {
     @Composable
@@ -123,7 +127,7 @@ object AppGlassStyles {
         val token = glassToken(role, variant, isDark)
 
         return GlassStyle {
-            tint(tint.copy(alpha = token.tintAlpha))
+            tint(tint.copy(alpha = resolveGlassTintAlpha(tint.alpha, token.tintAlpha)))
             optics(GlassOptics.Adaptive)
             specularIntensity(token.specularIntensity)
             ambientResponse(token.ambientResponse)

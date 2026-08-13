@@ -159,3 +159,57 @@ Kotlin 编译命令：
 ```
 
 结果：`BUILD SUCCESSFUL`。另行执行 `git diff --check` 通过；静态检查确认 `AppVisualSurface` 公开签名无拟态/光学底层参数，`MainScreen` 无 `navHazeStyle` 或对应底层参数传入。未执行设备运行时截图或性能采样。
+
+## 任务 2 修复：保留调用方 tint alpha
+
+### 根因
+
+`AppGlassStyles.style()` 原先使用 `tint.copy(alpha = token.tintAlpha)`，会覆盖调用方 tint 的 alpha。激活登录页豆瓣按钮传入启用态 `0.72f`、禁用态 `0.24f`，因此 Glass 模式下两种状态都会被同一个 token alpha 替换，禁用态无法继续保持更低透明度。
+
+### 失败优先与实现
+
+先在 `GlassTokenTest` 增加两个纯函数回归测试：
+
+- 同一 `DetailAction` token 下，调用方 `0.24f` 的最终 alpha 必须低于 `0.72f`；
+- `CLEAR`/`FOCUSED` token 仍必须影响同一调用方 alpha，且结果等于调用方 alpha 与 token alpha 的乘积。
+
+首次有效红灯命令：
+
+```bash
+./gradlew.bat :app:testDebugUnitTest --tests 'com.tracktosearch.ui.component.GlassTokenTest' --no-daemon --no-configuration-cache --console=plain
+```
+
+结果：`compileDebugUnitTestKotlin` 按预期失败，报告 `resolveGlassTintAlpha` 未定义；同时 Truth 断言链尚未可解析，证明测试先于实现生效。此前一次带配置缓存的尝试因 Gradle 无法删除 `app/build/kotlin/compileDebugKotlin/cacheable` 被占用而失败，未到达测试编译，未作为红灯证据。
+
+修复内容：
+
+- 在 `AppGlassStyle.kt` 增加 `internal` 纯函数 `resolveGlassTintAlpha(callingAlpha, tokenAlpha)`，返回 `(callingAlpha * tokenAlpha).coerceIn(0f, 1f)`；
+- `AppGlassStyles.style()` 改为使用该函数合成 tint alpha；
+- 保留所有现有 Glass token 数值、角色关系和 `AppGlassStyles` 公开 API 不变。
+
+### 实际验证
+
+```bash
+./gradlew.bat :app:testDebugUnitTest --tests 'com.tracktosearch.ui.component.GlassTokenTest' --no-daemon --no-configuration-cache --no-build-cache --console=plain
+```
+
+结果：`BUILD SUCCESSFUL`；`GlassTokenTest` XML 为 `tests=6, skipped=0, failures=0, errors=0`。之前一次未禁用 build cache 的绿灯尝试已完成 Kotlin 编译，但在 `transformDebugClassesWithAsm` 与 `compileDebugUnitTestKotlin` 写入缓存时因 Windows 文件模式读取失败中断，不是测试断言失败。
+
+```bash
+./gradlew.bat :app:testDebugUnitTest --tests 'com.tracktosearch.ui.component.GlassTokenTest' --tests 'com.tracktosearch.ui.component.NeumorphicGlassTest' --no-daemon --no-configuration-cache --no-build-cache --console=plain
+```
+
+结果：`BUILD SUCCESSFUL`；`GlassTokenTest` 为 `6/6`，`NeumorphicGlassTest` 为 `6/6`，两者均为 `0 skipped / 0 failures / 0 errors`。
+
+```bash
+git diff --check
+```
+
+结果：退出码 `0`，无空白错误。
+
+### 自审与疑虑
+
+- `git diff --name-only` 和最终状态确认本轮代码改动只有 `AppGlassStyle.kt`、`GlassTokenTest.kt`；任务 3/4 已有的 `ThemeStorage.kt`、`VisualEffectModeTest.kt` 及其他未提交改动未被恢复、暂存或修改。
+- 本轮只使用 `internal` helper 供同包单元测试复用，没有扩大应用公开 API；原有 token 测试仍保留。
+- 构建输出包含既有 Experimental Haze API 警告；没有 Kotlin 编译错误或测试错误。
+- 未执行设备安装、运行时截图或交互验收；证据范围是静态 diff、纯函数回归测试、相邻 Glass 组件测试和 `git diff --check`。
