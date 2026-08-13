@@ -85,6 +85,7 @@ import com.tracktosearch.data.local.OnboardingStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.AppGlassStyles
 import com.tracktosearch.ui.component.appVisualEffect
@@ -182,7 +183,8 @@ fun MainScreen(
     onNavigateToDoubanLogin: () -> Unit = {},
     onSpiderTest: () -> Unit = {},
     onFeedbackClick: () -> Unit = {},
-    onMessagesClick: () -> Unit = {}
+    onMessagesClick: () -> Unit = {},
+    onAiRecommendationClick: ((AiRecommendation) -> Unit)? = null
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
     val feedbackViewModel: FeedbackViewModel = hiltViewModel()
@@ -433,6 +435,8 @@ fun MainScreen(
                                         onPersonClick = { tmdbId, name, profileUrl, avatarColor ->
                                             onPersonClick(tmdbId, name, profileUrl, avatarColor)
                                         },
+                                        onNavigateToLogin = onNavigateToLogin,
+                                        onRecommendationClick = onAiRecommendationClick,
                                         viewModel = viewModel,
                                         inlineMode = true
                                     )

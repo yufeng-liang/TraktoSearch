@@ -85,11 +85,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -100,6 +104,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.core.graphics.drawable.toBitmap
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -111,6 +116,7 @@ import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.util.PersonAvatarColorStore
+import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.AppGlassStyles
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
@@ -134,6 +140,15 @@ import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
+import com.tracktosearch.ui.screen.ai.AiSpriteCenter
+import com.tracktosearch.ui.screen.ai.AiSpriteInterruptReason
+import com.tracktosearch.ui.screen.ai.AiSpriteInterruptRequest
+import com.tracktosearch.ui.screen.ai.AiSpriteMotion
+import com.tracktosearch.ui.screen.ai.AiSpriteOverlayPolicy
+import com.tracktosearch.ui.screen.ai.AiSpriteOverlayTrigger
+import com.tracktosearch.ui.screen.ai.AiSpriteViewModel
+import com.tracktosearch.ui.screen.ai.automaticSpriteArt
 import dagger.hilt.android.EntryPointAccessors
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeSampling
@@ -159,11 +174,15 @@ fun TraktSearchScreen(
     onBack: () -> Unit,
     onItemClick: (type: MediaType, traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
     onPersonClick: (tmdbId: Int, name: String, profileUrl: String?, avatarColor: Color?) -> Unit = { _, _, _, _ -> },
+    onNavigateToLogin: () -> Unit = {},
+    onRecommendationClick: ((AiRecommendation) -> Unit)? = null,
     inlineMode: Boolean = false,
-    viewModel: TraktSearchViewModel = hiltViewModel()
+    viewModel: TraktSearchViewModel = hiltViewModel(),
+    spriteViewModel: AiSpriteViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val watchlistWatchedIds by viewModel.watchlistWatchedIds.collectAsStateWithLifecycle()
+    val spriteState by spriteViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val view = LocalView.current
     // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的卡片参与共享元素转场
@@ -176,6 +195,136 @@ fun TraktSearchScreen(
     val isDark = isAppDarkTheme()
 
     var searchQuery by rememberSaveable { mutableStateOf(initialQuery) }
+    var showAiSpriteCenter by rememberSaveable { mutableStateOf(false) }
+    var showAiSpriteMotion by rememberSaveable { mutableStateOf(false) }
+    var overlayEntryHandled by rememberSaveable { mutableStateOf(initialQuery.isNotBlank()) }
+    var isSearchFocused by remember { mutableStateOf(false) }
+    var wasSearchLoading by remember { mutableStateOf(false) }
+    var activeSpriteAnchor by remember { mutableStateOf(AiSpriteAnchor.SearchBox) }
+    var spriteInterruptRevision by remember { mutableStateOf(0L) }
+    var spriteInterruptReason by remember { mutableStateOf(AiSpriteInterruptReason.BLOCKED) }
+    var searchBoxBounds by remember { mutableStateOf<Rect?>(null) }
+    var firstResultBounds by remember { mutableStateOf<Rect?>(null) }
+    var firstResultAnchorKey by remember { mutableStateOf<String?>(null) }
+    var lastInteractionAt by remember { mutableStateOf(System.currentTimeMillis()) }
+    val overlayPreferences = remember(context.applicationContext) {
+        context.applicationContext.getSharedPreferences("ai_sprite_overlay_quota_v1", android.content.Context.MODE_PRIVATE)
+    }
+    val overlayPolicy = remember(overlayPreferences) {
+        AiSpriteOverlayPolicy(
+            readDailyCount = { dayKey ->
+                if (overlayPreferences.getString("day_key", null) == dayKey) {
+                    overlayPreferences.getInt("daily_count", 0)
+                } else 0
+            },
+            writeDailyCount = { dayKey, count ->
+                overlayPreferences.edit()
+                    .putString("day_key", dayKey)
+                    .putInt("daily_count", count)
+                    .apply()
+            }
+        )
+    }
+    var overlayDayKey by remember {
+        mutableStateOf(java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(java.util.Date()))
+    }
+    val resultAnchorKey = "${uiState.selectedTab.name}:${uiState.query}"
+    val currentFirstResultBounds = firstResultBounds.takeIf { firstResultAnchorKey == resultAnchorKey }
+
+    fun interruptAiSprite(reason: AiSpriteInterruptReason) {
+        lastInteractionAt = System.currentTimeMillis()
+        spriteInterruptRevision += 1L
+        spriteInterruptReason = reason
+        showAiSpriteMotion = false
+    }
+
+    LaunchedEffect(Unit) {
+        spriteViewModel.ensureLoaded()
+        while (true) {
+            val now = java.util.Calendar.getInstance()
+            val nextDay = (now.clone() as java.util.Calendar).apply {
+                add(java.util.Calendar.DAY_OF_YEAR, 1)
+                set(java.util.Calendar.HOUR_OF_DAY, 0)
+                set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+            }
+            kotlinx.coroutines.delay((nextDay.timeInMillis - now.timeInMillis).coerceAtLeast(1_000L))
+            overlayDayKey = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(java.util.Date())
+        }
+    }
+
+    LaunchedEffect(
+        spriteState.activatedCharacterId,
+        uiState.currentTabState.isLoading,
+        uiState.currentTabState.results.size,
+        uiState.selectedTab,
+        searchQuery,
+        overlayDayKey,
+        showAiSpriteCenter,
+        showAiSpriteMotion,
+        lastInteractionAt,
+        firstResultBounds,
+        firstResultAnchorKey,
+        searchBoxBounds
+    ) {
+        val isLoading = if (uiState.selectedTab == MediaType.DISK) {
+            uiState.diskState.isLoading
+        } else {
+            uiState.currentTabState.isLoading
+        }
+        val hasResults = if (uiState.selectedTab == MediaType.DISK) {
+            uiState.diskState.resources.isNotEmpty()
+        } else {
+            uiState.currentTabState.results.isNotEmpty()
+        }
+        val blocked = showAiSpriteCenter || isLoading || isSearchFocused
+        val trigger = com.tracktosearch.ui.screen.ai.nextAiSpriteOverlayTrigger(
+            entryHandled = overlayEntryHandled,
+            wasSearchLoading = wasSearchLoading,
+            isSearchLoading = isLoading,
+            hasResults = hasResults,
+            isSearchFocused = isSearchFocused,
+            searchQuery = searchQuery,
+            activated = spriteState.activatedCharacterId?.let { automaticSpriteArt(it) != null } == true,
+            nowMs = System.currentTimeMillis(),
+            idleForMs = System.currentTimeMillis() - lastInteractionAt,
+            hasBlockingOverlay = blocked
+        )
+            if (trigger != null && !blocked && !showAiSpriteMotion) {
+            if (trigger == AiSpriteOverlayTrigger.FIRST_ENTRY) {
+                overlayEntryHandled = true
+                activeSpriteAnchor = AiSpriteAnchor.SearchBox
+            } else if (trigger == AiSpriteOverlayTrigger.SEARCH_COMPLETED) {
+                activeSpriteAnchor = AiSpriteAnchor.ResultCard
+            }
+            if ((trigger != AiSpriteOverlayTrigger.SEARCH_COMPLETED || currentFirstResultBounds != null) &&
+                overlayPolicy.tryConsume(true, trigger, overlayDayKey)
+            ) {
+                showAiSpriteMotion = true
+            }
+        }
+        wasSearchLoading = isLoading
+    }
+
+    LaunchedEffect(lastInteractionAt, spriteState.activatedCharacterId, uiState.selectedTab, searchQuery, showAiSpriteMotion) {
+        val isLoading = if (uiState.selectedTab == MediaType.DISK) {
+            uiState.diskState.isLoading
+        } else {
+            uiState.currentTabState.isLoading
+        }
+        if (spriteState.activatedCharacterId?.let { automaticSpriteArt(it) != null } == true &&
+            !isLoading && searchQuery.isBlank() && !isSearchFocused && !showAiSpriteMotion && !showAiSpriteCenter
+        ) {
+            kotlinx.coroutines.delay(8_000L)
+            if (System.currentTimeMillis() - lastInteractionAt >= 8_000L &&
+                overlayPolicy.tryConsume(true, AiSpriteOverlayTrigger.IDLE, overlayDayKey)
+            ) {
+                activeSpriteAnchor = AiSpriteAnchor.SearchBox
+                showAiSpriteMotion = true
+            }
+        }
+    }
 
     LaunchedEffect(initialQuery, type) {
         viewModel.initSearch(initialQuery, type)
@@ -201,11 +350,25 @@ fun TraktSearchScreen(
     LaunchedEffect(currentGridState) {
         snapshotFlow { currentGridState.firstVisibleItemIndex to currentGridState.firstVisibleItemScrollOffset }
             .collect { (index, offset) ->
+                if (index != prevScrollIndex || offset != prevScrollOffset) {
+                    interruptAiSprite(AiSpriteInterruptReason.SCROLL)
+                }
                 val scrollingUp = index < prevScrollIndex || (index == prevScrollIndex && offset < prevScrollOffset)
                 if (scrollingUp && index > 5) showScrollToTop = true
                 else if (index <= 5) showScrollToTop = false
                 prevScrollIndex = index
                 prevScrollOffset = offset
+            }
+    }
+
+    LaunchedEffect(diskListState) {
+        var previousValue = diskListState.firstVisibleItemIndex to diskListState.firstVisibleItemScrollOffset
+        snapshotFlow { diskListState.firstVisibleItemIndex to diskListState.firstVisibleItemScrollOffset }
+            .collect { value ->
+                if (value != previousValue) {
+                    previousValue = value
+                    interruptAiSprite(AiSpriteInterruptReason.SCROLL)
+                }
             }
     }
 
@@ -279,9 +442,18 @@ fun TraktSearchScreen(
                 isDiskTab -> {
                     DiskSearchContent(
                         diskState = uiState.diskState,
-                        onToggleSource = { viewModel.toggleDiskSource(it) },
-                        onToggleDiskType = { viewModel.toggleDiskType(it) },
-                        onItemClick = { openResourceLink(context, it) },
+                        onToggleSource = {
+                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                            viewModel.toggleDiskSource(it)
+                        },
+                        onToggleDiskType = {
+                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                            viewModel.toggleDiskType(it)
+                        },
+                        onItemClick = {
+                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                            openResourceLink(context, it)
+                        },
                         listState = diskListState,
                         hazeState = hazeState,
                         statusBarHeight = statusBarHeight
@@ -392,7 +564,14 @@ fun TraktSearchScreen(
                                     profileUrl = item.posterUrl,
                                     knownForDepartment = item.knownForDepartment,
                                     personId = item.tmdbId,
+                                    modifier = if (index == 0) {
+                                        Modifier.onGloballyPositioned {
+                                            firstResultBounds = it.boundsInRoot()
+                                            firstResultAnchorKey = resultAnchorKey
+                                        }
+                                    } else Modifier,
                                     onClick = {
+                                        interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                                         if (item.tmdbId > 0) {
                                             onPersonClick(item.tmdbId, item.title, item.posterUrl ?: "", item.avatarColor)
                                         }
@@ -432,7 +611,14 @@ fun TraktSearchScreen(
                                     tmdbId = item.tmdbId,
                                     isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.traktId, item.tmdbId, uiState.selectedTab) == true,
                                     isWatched = watchlistWatchedIds?.isWatched(item.traktId, item.tmdbId, uiState.selectedTab) == true,
+                                    modifier = if (index == 0) {
+                                        Modifier.onGloballyPositioned {
+                                            firstResultBounds = it.boundsInRoot()
+                                            firstResultAnchorKey = resultAnchorKey
+                                        }
+                                    } else Modifier,
                                     onClick = {
+                                        interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                                         onItemClick(uiState.selectedTab, item.traktId, item.tmdbId, item.displayTitle, item.imdbId, item.traktRating)
                                     }
                                 )
@@ -473,14 +659,18 @@ fun TraktSearchScreen(
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = {
+                        interruptAiSprite(AiSpriteInterruptReason.NAVIGATION)
+                        onBack()
+                    }) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.search_back), tint = MaterialTheme.colorScheme.primary)
                     }
                     val searchInteractionSource = remember { MutableInteractionSource() }
                     NeumorphicFrostedSurface(
                         modifier = Modifier
                             .weight(1f)
-                            .height(42.dp),
+                            .height(42.dp)
+                            .onGloballyPositioned { searchBoxBounds = it.boundsInRoot() },
                         isDark = isDark,
                         shape = RoundedCornerShape(21.dp),
                         backgroundColor = if (isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.55f),
@@ -492,10 +682,19 @@ fun TraktSearchScreen(
                     ) {
                         BasicTextField(
                             value = searchQuery,
-                            onValueChange = { searchQuery = it },
+                            onValueChange = {
+                                interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                                searchQuery = it
+                            },
                             modifier = Modifier
                                 .fillMaxSize()
                                 .focusRequester(focusRequester)
+                                .onFocusChanged {
+                                    if (it.isFocused) {
+                                        interruptAiSprite(AiSpriteInterruptReason.FOCUS)
+                                    }
+                                    isSearchFocused = it.isFocused
+                                }
                                 .padding(horizontal = 12.dp),
                             singleLine = true,
                             textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
@@ -503,6 +702,7 @@ fun TraktSearchScreen(
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                             keyboardActions = KeyboardActions(
                                 onSearch = {
+                                    interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                                     if (searchQuery.isNotBlank()) {
                                         viewModel.search(searchQuery)
                                     }
@@ -541,7 +741,10 @@ fun TraktSearchScreen(
                                         innerTextField()
                                     }
                                     if (searchQuery.isNotEmpty()) {
-                                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(28.dp)) {
+                                        IconButton(onClick = {
+                                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                                            searchQuery = ""
+                                        }, modifier = Modifier.size(28.dp)) {
                                             Icon(
                                                 Icons.Rounded.Close,
                                                 contentDescription = stringResource(R.string.content_desc_clear),
@@ -569,7 +772,11 @@ fun TraktSearchScreen(
                 ) {
                     Tab(
                         selected = uiState.selectedTab == MediaType.MOVIE,
-                        onClick = { view.performHaptic(HapticType.TICK); viewModel.switchTab(MediaType.MOVIE) },
+                        onClick = {
+                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                            view.performHaptic(HapticType.TICK)
+                            viewModel.switchTab(MediaType.MOVIE)
+                        },
                         text = {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(stringResource(R.string.trakt_search_tab_movies), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
@@ -582,7 +789,11 @@ fun TraktSearchScreen(
                     )
                     Tab(
                         selected = uiState.selectedTab == MediaType.SHOW,
-                        onClick = { view.performHaptic(HapticType.CLICK); viewModel.switchTab(MediaType.SHOW) },
+                        onClick = {
+                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                            view.performHaptic(HapticType.CLICK)
+                            viewModel.switchTab(MediaType.SHOW)
+                        },
                         text = {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(stringResource(R.string.trakt_search_tab_shows), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
@@ -595,7 +806,11 @@ fun TraktSearchScreen(
                     )
                     Tab(
                         selected = uiState.selectedTab == MediaType.PERSON,
-                        onClick = { view.performHaptic(HapticType.CLICK); viewModel.switchTab(MediaType.PERSON) },
+                        onClick = {
+                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                            view.performHaptic(HapticType.CLICK)
+                            viewModel.switchTab(MediaType.PERSON)
+                        },
                         text = {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(stringResource(R.string.trakt_search_tab_persons), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
@@ -608,7 +823,11 @@ fun TraktSearchScreen(
                     )
                     Tab(
                         selected = uiState.selectedTab == MediaType.DISK,
-                        onClick = { view.performHaptic(HapticType.CLICK); viewModel.switchTab(MediaType.DISK) },
+                        onClick = {
+                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                            view.performHaptic(HapticType.CLICK)
+                            viewModel.switchTab(MediaType.DISK)
+                        },
                         text = {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(stringResource(R.string.trakt_search_tab_disk), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
@@ -669,6 +888,48 @@ fun TraktSearchScreen(
                     )
                 }
             }
+
+            AiSpriteMotion(
+                characterId = spriteState.activatedCharacterId.orEmpty(),
+                anchor = activeSpriteAnchor,
+                anchorBounds = when (activeSpriteAnchor) {
+                    AiSpriteAnchor.ResultCard -> currentFirstResultBounds
+                    else -> searchBoxBounds
+                },
+                visible = showAiSpriteMotion && !showAiSpriteCenter &&
+                    (when (activeSpriteAnchor) {
+                        AiSpriteAnchor.ResultCard -> currentFirstResultBounds
+                        else -> searchBoxBounds
+                    } != null),
+                onClick = {
+                    interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                    showAiSpriteCenter = true
+                },
+                onFinished = {
+                    showAiSpriteMotion = false
+                    lastInteractionAt = System.currentTimeMillis()
+                },
+                modifier = Modifier.zIndex(5f),
+                interruptRequest = AiSpriteInterruptRequest(spriteInterruptRevision, spriteInterruptReason)
+            )
+
+            AiSpriteCenter(
+                visible = showAiSpriteCenter,
+                onDismiss = {
+                    interruptAiSprite(AiSpriteInterruptReason.NAVIGATION)
+                    showAiSpriteCenter = false
+                    spriteViewModel.closeFeature()
+                },
+                onNavigateToLogin = onNavigateToLogin,
+                onMovieClick = { traktId, tmdbId, title, imdbId, traktRating, _, _ ->
+                    onItemClick(MediaType.MOVIE, traktId, tmdbId, title, imdbId, traktRating)
+                },
+                onShowClick = { traktId, tmdbId, title, imdbId, traktRating, _, _ ->
+                    onItemClick(MediaType.SHOW, traktId, tmdbId, title, imdbId, traktRating)
+                },
+                onRecommendationClick = onRecommendationClick,
+                viewModel = spriteViewModel
+            )
         }
     }
     } // CompositionLocalProvider
@@ -910,6 +1171,7 @@ private fun PersonSearchCard(
     profileUrl: String?,
     knownForDepartment: String,
     personId: Int,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
     onAvatarColorExtracted: ((Color?) -> Unit)? = null
 ) {
@@ -926,8 +1188,7 @@ private fun PersonSearchCard(
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     Card(
         onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant

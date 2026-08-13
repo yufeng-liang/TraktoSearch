@@ -92,6 +92,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -105,7 +106,10 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -125,6 +129,7 @@ import androidx.compose.ui.unit.Dp
 
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -145,11 +150,14 @@ import com.tracktosearch.ui.component.CloudEasterEgg
 import com.tracktosearch.ui.component.CloudOverlay
 import com.tracktosearch.ui.component.CloudThemeManager
 import com.tracktosearch.ui.screen.ai.AiSpriteCenter
-import com.tracktosearch.ui.screen.ai.AiFeature
-import com.tracktosearch.ui.screen.ai.AiSpriteOverlay
+import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
+import com.tracktosearch.ui.screen.ai.AiSpriteInterruptReason
+import com.tracktosearch.ui.screen.ai.AiSpriteInterruptRequest
+import com.tracktosearch.ui.screen.ai.AiSpriteMotion
 import com.tracktosearch.ui.screen.ai.AiSpriteOverlayPolicy
 import com.tracktosearch.ui.screen.ai.AiSpriteOverlayTrigger
 import com.tracktosearch.ui.screen.ai.AiSpriteViewModel
+import com.tracktosearch.ui.screen.ai.automaticSpriteArt
 import com.tracktosearch.ui.screen.ai.nextAiSpriteOverlayTrigger
 import com.tracktosearch.ui.component.DiscoverModalBottomSheet
 import com.tracktosearch.ui.component.DoubanRatingBadge
@@ -278,7 +286,13 @@ fun SearchScreen(
     val easterMessageRes by cloudThemeManager.easterMessageRes.collectAsStateWithLifecycle()
     val aiSpriteCloudDescription = stringResource(R.string.ai_sprite_cloud_description)
     var showAiSpriteCenter by rememberSaveable { mutableStateOf(false) }
-    var showAiSpriteOverlay by rememberSaveable { mutableStateOf(false) }
+    var showAiSpriteMotion by rememberSaveable { mutableStateOf(false) }
+    var activeSpriteAnchor by remember { mutableStateOf(AiSpriteAnchor.Cloud) }
+    var spriteInterruptRevision by remember { mutableStateOf(0L) }
+    var spriteInterruptReason by remember { mutableStateOf(AiSpriteInterruptReason.BLOCKED) }
+    var cloudBounds by remember { mutableStateOf<Rect?>(null) }
+    var searchBoxBounds by remember { mutableStateOf<Rect?>(null) }
+    var lastInteractionAt by remember { mutableStateOf(System.currentTimeMillis()) }
     var overlayEntryHandled by rememberSaveable { mutableStateOf(false) }
     var wasSearchLoading by remember { mutableStateOf(false) }
     val overlayPreferences = remember(context.applicationContext) {
@@ -328,6 +342,14 @@ fun SearchScreen(
     // 搜索框焦点状态，用于控制搜索历史展开
     var isSearchFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
+    val searchContentScrollState = rememberScrollState()
+
+    fun interruptAiSprite(reason: AiSpriteInterruptReason) {
+        lastInteractionAt = System.currentTimeMillis()
+        spriteInterruptRevision += 1L
+        spriteInterruptReason = reason
+        showAiSpriteMotion = false
+    }
 
     LaunchedEffect(
         spriteState.activatedCharacterId,
@@ -335,8 +357,23 @@ fun SearchScreen(
         uiState.resources.size,
         isSearchFocused,
         searchQuery,
-        overlayDayKey
+        overlayDayKey,
+        showAiSpriteCenter,
+        showPermissionDialog,
+        easterEggRes,
+        cloudBounds,
+        searchBoxBounds,
+        showAiSpriteMotion
     ) {
+        val nextAnchor = if (!overlayEntryHandled) AiSpriteAnchor.Cloud else AiSpriteAnchor.SearchBox
+        val nextBounds = if (nextAnchor == AiSpriteAnchor.Cloud) cloudBounds else searchBoxBounds
+        val hasBlockingState = showAiSpriteCenter ||
+            showPermissionDialog ||
+            easterEggRes != null ||
+            isSearchFocused ||
+            searchQuery.isNotBlank() ||
+            uiState.isLoading ||
+            nextBounds == null
         val trigger = nextAiSpriteOverlayTrigger(
             entryHandled = overlayEntryHandled,
             wasSearchLoading = wasSearchLoading,
@@ -344,17 +381,76 @@ fun SearchScreen(
             hasResults = uiState.resources.isNotEmpty(),
             isSearchFocused = isSearchFocused,
             searchQuery = searchQuery,
-            activated = spriteState.activatedCharacterId != null
+            activated = spriteState.activatedCharacterId?.let { automaticSpriteArt(it) != null } == true,
+            nowMs = System.currentTimeMillis(),
+            idleForMs = System.currentTimeMillis() - lastInteractionAt,
+            hasBlockingOverlay = showAiSpriteCenter ||
+                showPermissionDialog ||
+                easterEggRes != null ||
+                isSearchFocused ||
+                searchQuery.isNotBlank()
         )
-        if (trigger != null) {
+        if (trigger != null && !hasBlockingState && !showAiSpriteMotion) {
             if (trigger == AiSpriteOverlayTrigger.FIRST_ENTRY) {
                 overlayEntryHandled = true
+                activeSpriteAnchor = AiSpriteAnchor.Cloud
+            } else {
+                activeSpriteAnchor = AiSpriteAnchor.SearchBox
             }
             if (overlayPolicy.tryConsume(true, trigger, overlayDayKey)) {
-                showAiSpriteOverlay = true
+                showAiSpriteMotion = true
             }
         }
         wasSearchLoading = uiState.isLoading
+    }
+
+    LaunchedEffect(
+        lastInteractionAt,
+        spriteState.activatedCharacterId,
+        uiState.isLoading,
+        isSearchFocused,
+        searchQuery,
+        overlayDayKey,
+        showAiSpriteCenter,
+        showPermissionDialog,
+        easterEggRes,
+        showAiSpriteMotion
+    ) {
+        val blocked = showAiSpriteCenter ||
+            showPermissionDialog ||
+            easterEggRes != null ||
+            isSearchFocused ||
+            searchQuery.isNotBlank() ||
+            uiState.isLoading ||
+            showAiSpriteMotion
+        if (!blocked && spriteState.activatedCharacterId?.let { automaticSpriteArt(it) != null } == true) {
+            delay(8_000L)
+            if (System.currentTimeMillis() - lastInteractionAt >= 8_000L &&
+                searchBoxBounds != null &&
+                !showAiSpriteMotion
+            ) {
+                activeSpriteAnchor = AiSpriteAnchor.SearchBox
+                if (overlayPolicy.tryConsume(true, AiSpriteOverlayTrigger.IDLE, overlayDayKey)) {
+                    showAiSpriteMotion = true
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(searchContentScrollState) {
+        var previousValue = searchContentScrollState.value
+        snapshotFlow { searchContentScrollState.value }.collect { value ->
+            if (value != previousValue) {
+                previousValue = value
+                interruptAiSprite(AiSpriteInterruptReason.SCROLL)
+            }
+        }
+    }
+
+    LaunchedEffect(showPermissionDialog, easterEggRes, showAiSpriteCenter) {
+        if (showPermissionDialog || easterEggRes != null || showAiSpriteCenter) {
+            interruptAiSprite(AiSpriteInterruptReason.BLOCKED)
+        }
     }
 
     // Haze 毛玻璃状态
@@ -381,6 +477,7 @@ fun SearchScreen(
 
     // 搜索历史展开时，返回手势收起搜索历史而不是退出页面
     BackHandler(enabled = isSearchFocused) {
+        interruptAiSprite(AiSpriteInterruptReason.FOCUS)
         focusManager.clearFocus()
     }
 
@@ -437,11 +534,12 @@ fun SearchScreen(
             cloudThemeManager = cloudThemeManager,
             isActive = isActive,
             onLongClick = {
-                showAiSpriteOverlay = false
+                interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                 showAiSpriteCenter = true
             },
             modifier = Modifier
                 .size(cloudIconSize)
+                .onGloballyPositioned { cloudBounds = it.boundsInRoot() }
                 .semantics { contentDescription = aiSpriteCloudDescription }
                 .align(Alignment.TopCenter)
                 .offset(
@@ -458,7 +556,9 @@ fun SearchScreen(
             contentAlignment = Alignment.Center
         ) {
             NeumorphicFrostedSurface(
-                modifier = Modifier.fillMaxWidth(animatedWidthFraction.value),
+                modifier = Modifier
+                    .fillMaxWidth(animatedWidthFraction.value)
+                    .onGloballyPositioned { searchBoxBounds = it.boundsInRoot() },
                 isDark = isDark,
                 shape = RoundedCornerShape(32.dp),
                 elevation = 14.dp,
@@ -473,8 +573,12 @@ fun SearchScreen(
                 Box(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
                     SearchBarTopNew(
                         searchQuery = searchQuery,
-                        onQueryChange = { searchQuery = it },
+                        onQueryChange = {
+                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                            searchQuery = it
+                        },
                         onSearch = {
+                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                             if (BuildConfig.DEBUG && searchQuery.trim() == "13638719007") {
                                 onSpiderTest?.invoke()
                             } else {
@@ -483,10 +587,21 @@ fun SearchScreen(
                             }
                             focusManager.clearFocus()
                         },
-                        onClear = { searchQuery = "" },
-                        onBack = if (isActive) onBack else null,
+                        onClear = {
+                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                            searchQuery = ""
+                        },
+                        onBack = if (isActive) {
+                            {
+                                interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                                onBack?.invoke()
+                            }
+                        } else null,
                         focusRequester = focusRequester,
-                        onFocusChanged = { isSearchFocused = it },
+                        onFocusChanged = {
+                            if (it) interruptAiSprite(AiSpriteInterruptReason.FOCUS)
+                            isSearchFocused = it
+                        },
                         searchSourceType = searchSourceType,
                         onSearchSourceTypeChange = onSearchSourceTypeChange,
                         isDark = isDark,
@@ -499,7 +614,10 @@ fun SearchScreen(
         // 权限提示弹窗
         if (showPermissionDialog) {
             ModalBottomSheet(
-                onDismissRequest = { cloudThemeManager.onPermissionDismissed() },
+                onDismissRequest = {
+                    interruptAiSprite(AiSpriteInterruptReason.BLOCKED)
+                    cloudThemeManager.onPermissionDismissed()
+                },
                 sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
                 dragHandle = null
@@ -540,6 +658,7 @@ fun SearchScreen(
                         ) {
                             TextButton(
                                 onClick = {
+                                    interruptAiSprite(AiSpriteInterruptReason.BLOCKED)
                                     cloudThemeManager.onPermissionDismissed()
                                     scope.launch(Dispatchers.IO) {
                                         cloudPermissionStorage.setDismissed(true)
@@ -555,6 +674,7 @@ fun SearchScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Button(
                                 onClick = {
+                                    interruptAiSprite(AiSpriteInterruptReason.BLOCKED)
                                     cloudThemeManager.onPermissionDismissed()
                                     locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION)
                                 },
@@ -584,7 +704,7 @@ fun SearchScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp)
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(searchContentScrollState)
             ) {
                 if (searchQuery.isNotEmpty()) {
                     val suggestions = remember(searchQuery, uiState.searchHistory) {
@@ -594,6 +714,7 @@ fun SearchScreen(
                         SearchSuggestionsInline(
                             suggestions = suggestions,
                             onSuggestionClick = { item ->
+                                interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                                 searchQuery = item.keyword
                                 onTraktSearch?.invoke(searchSourceType, item.keyword)
                                 focusManager.clearFocus()
@@ -605,6 +726,7 @@ fun SearchScreen(
                         SearchHistoryTwoRow(
                             history = uiState.searchHistory,
                             onHistoryClick = { item ->
+                                interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                                 val st = when (item.type) {
                                     "movie" -> SearchSourceType.MOVIE
                                     "show" -> SearchSourceType.SHOW
@@ -626,6 +748,7 @@ fun SearchScreen(
                     PopularSearchesSectionNew(
                         popularSearches = hotSearches,
                         onPopularClick = { keyword ->
+                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                             searchQuery = keyword
                             viewModel.addTraktHistory(keyword, searchSourceType.name.lowercase())
                             onTraktSearch?.invoke(searchSourceType, keyword)
@@ -647,20 +770,28 @@ fun SearchScreen(
             onDismiss = { cloudThemeManager.onEasterDismissed() }
         )
 
-        AiSpriteOverlay(
-            visible = showAiSpriteOverlay && !showAiSpriteCenter,
-            character = spriteState.activatedCharacter,
-            onDismiss = { showAiSpriteOverlay = false },
-            onOpenFeature = { feature ->
-                showAiSpriteOverlay = false
+        AiSpriteMotion(
+            characterId = spriteState.activatedCharacterId.orEmpty(),
+            anchor = activeSpriteAnchor,
+            anchorBounds = if (activeSpriteAnchor == AiSpriteAnchor.Cloud) cloudBounds else searchBoxBounds,
+            visible = showAiSpriteMotion && !showAiSpriteCenter &&
+                (if (activeSpriteAnchor == AiSpriteAnchor.Cloud) cloudBounds else searchBoxBounds) != null,
+            onClick = {
+                interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                 showAiSpriteCenter = true
-                spriteViewModel.openFeature(feature)
-            }
+            },
+            onFinished = {
+                showAiSpriteMotion = false
+                lastInteractionAt = System.currentTimeMillis()
+            },
+            modifier = Modifier.zIndex(5f),
+            interruptRequest = AiSpriteInterruptRequest(spriteInterruptRevision, spriteInterruptReason)
         )
 
         AiSpriteCenter(
             visible = showAiSpriteCenter,
             onDismiss = {
+                interruptAiSprite(AiSpriteInterruptReason.NAVIGATION)
                 showAiSpriteCenter = false
                 spriteViewModel.closeFeature()
             },

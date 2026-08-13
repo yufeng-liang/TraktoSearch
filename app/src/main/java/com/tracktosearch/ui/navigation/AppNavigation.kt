@@ -676,6 +676,9 @@ fun AppNavigation(
                             onTraktSearch = { type, query ->
                                 navController.navigate(Routes.traktSearchRoute(type, query))
                             },
+                            onAiRecommendationClick = { recommendation ->
+                                navigateAiRecommendation(navController, recommendation)
+                            },
                             onPersonClick = { tmdbId, name, profileUrl, avatarColor ->
                                 navController.navigate(Routes.personRoute(tmdbId, name, profileUrl ?: ""))
                             },
@@ -943,6 +946,14 @@ fun AppNavigation(
                             },
                             onPersonClick = { tmdbId, name, profileUrl, avatarColor ->
                                 navController.navigate(Routes.personRoute(tmdbId, name, profileUrl ?: ""))
+                            },
+                            onRecommendationClick = { recommendation ->
+                                navigateAiRecommendation(navController, recommendation)
+                            },
+                            onNavigateToLogin = {
+                                navController.navigate(Routes.LOGIN) {
+                                    popUpTo(Routes.MAIN) { inclusive = false }
+                                }
                             }
                         )
                     }

@@ -120,7 +120,10 @@ fun AiSpriteMotion(
     val art = automaticSpriteArt(characterId) ?: return
     val controller = remember(characterId, anchor) { AiSpriteMotionController() }
     var state by remember(characterId, anchor) { mutableStateOf(AiSpriteMotionState.HIDDEN) }
-    var handledInterruptRevision by remember(characterId, anchor) { mutableStateOf(0L) }
+    // 换锚点时从当前 revision 开始，避免把上一个页面/锚点留下的中断请求误当成新事件。
+    var handledInterruptRevision by remember(characterId, anchor) {
+        mutableStateOf(interruptRequest?.revision ?: 0L)
+    }
 
     LaunchedEffect(visible, characterId, anchor, interruptRequest?.revision) {
         val request = interruptRequest
@@ -187,6 +190,8 @@ private fun SpriteMotionVisual(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    if (state == AiSpriteMotionState.HIDDEN) return
+
     val density = LocalDensity.current
     val spriteSize = when (anchor) {
         AiSpriteAnchor.Cloud -> 112.dp
@@ -257,13 +262,16 @@ private fun SpriteMotionVisual(
     )
     val contentDescription = stringResource(R.string.ai_sprite_open_center)
 
+    val isInteractive = state == AiSpriteMotionState.PEEK ||
+        state == AiSpriteMotionState.OBSERVE ||
+        state == AiSpriteMotionState.REACT
     Box(
         modifier = modifier
             .offset { IntOffset(placement.first.roundToPx(), placement.second.roundToPx()) }
             .size(spriteSize, windowHeight)
             .clipToBounds()
-            .semantics { this.contentDescription = contentDescription }
-            .clickable(onClick = onClick),
+            .then(if (isInteractive) Modifier.semantics { this.contentDescription = contentDescription } else Modifier)
+            .then(if (isInteractive) Modifier.clickable(onClick = onClick) else Modifier),
         contentAlignment = Alignment.BottomCenter
     ) {
         AnimatedContent(
