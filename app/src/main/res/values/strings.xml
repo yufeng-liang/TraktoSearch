@@ -1663,7 +1663,7 @@ Config:
     <string name="help_ai_sprite_b3">AI uses the nickname attached to your authorized account and your watched history</string>
     <string name="help_ai_sprite_b4">The four features are nickname welcome, watchlist roast, film quiz, and daily film facts</string>
     <string name="help_ai_sprite_b5">AI requests use a daily quota and may be unavailable offline; cached content remains readable</string>
-    <string name="help_ai_sprite_b6">Voice samples stay on the private service and are never downloaded to the app</string>
+    <string name="help_ai_sprite_b6">V1 uses character and scene voice-design prompts; failed previews fall back to system speech</string>
     <string name="help_weather_data">Weather Data</string>
     <string name="help_weather_data_b1">Dynamic themes use the Xiaomi Weather wtr-v3 endpoint only; the app does not call AccuWeather or add another weather API.</string>
     <string name="help_weather_data_b2">The app first resolves your coordinates to a Xiaomi weathercn: or accu: location key, then requests current weather from the same endpoint.</string>

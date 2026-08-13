@@ -6,6 +6,8 @@ import com.tracktosearch.data.ai.AiQuizQuestion
 import com.tracktosearch.data.ai.AiQuizQuestionType
 import com.tracktosearch.data.ai.AiQuizQuestionResult
 import com.tracktosearch.data.ai.AiRecommendation
+import com.tracktosearch.data.ai.AiTtsScene
+import com.tracktosearch.data.ai.AiTtsRequest
 import com.tracktosearch.data.ai.AiWatchedTitleDto
 import kotlin.random.Random
 
@@ -25,6 +27,26 @@ enum class AiActivationRequestMode {
     VOICE,
     TEXT,
     NONE
+}
+
+enum class AiAuditionPlaybackRoute {
+    GUEST_TTS,
+    AUTHORIZED_TTS,
+    SYSTEM_TTS
+}
+
+fun buildAuditionTtsRequest(character: AiCharacter, sessionId: String): AiTtsRequest =
+    AiTtsRequest(
+        characterId = character.id,
+        text = character.auditionText,
+        sessionId = sessionId,
+        scene = AiTtsScene.AUDITION
+    )
+
+fun auditionPlaybackRoute(isAuthorized: Boolean, isAvailable: Boolean): AiAuditionPlaybackRoute = when {
+    !isAvailable -> AiAuditionPlaybackRoute.SYSTEM_TTS
+    isAuthorized -> AiAuditionPlaybackRoute.AUTHORIZED_TTS
+    else -> AiAuditionPlaybackRoute.GUEST_TTS
 }
 
 data class AiSpriteOverlayBudget(

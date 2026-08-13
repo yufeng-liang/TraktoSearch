@@ -80,9 +80,9 @@ class AiRepositoryTest {
         val storage = mockk<AiStorage>(relaxed = true)
         val expectedQuota = AiQuotaDto(
             sessionUsed = 3,
-            sessionLimit = 7,
+            sessionLimit = 14,
             dailyUsed = 11,
-            dailyLimit = 40,
+            dailyLimit = 80,
             resetAt = 1_234L,
         )
         coEvery { api.getGreeting(any()) } returns Response.success(
@@ -222,10 +222,122 @@ class AiRepositoryTest {
     }
 
     @Test
+    fun ttsCacheIdentity_includesSceneAndIgnoresLegacyStyle() = runTest {
+        val api = mockk<AiApiService>()
+        val storage = mockk<AiStorage>(relaxed = true)
+        coEvery { api.playTts(any()) } returns Response.success(
+            AiApiResponse(
+                code = "SUCCESS",
+                data = AiAudioDto(audioDataUrl = "data:audio/mpeg;base64,AA=="),
+            )
+        )
+        val suffixes = mutableListOf<String?>()
+        coEvery { storage.write(any(), any(), any(), any()) } coAnswers {
+            suffixes += arg<String?>(3)
+        }
+        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+
+        repository.playTts(
+            "friend-a",
+            AiTtsRequest("usagi", "到——！", style = "style-a", scene = AiTtsScene.GREETING),
+        ).getOrThrow()
+        repository.playTts(
+            "friend-a",
+            AiTtsRequest("usagi", "到——！", style = "style-b", scene = AiTtsScene.GREETING),
+        ).getOrThrow()
+        repository.playTts(
+            "friend-a",
+            AiTtsRequest("usagi", "到——！", style = "style-a", scene = AiTtsScene.ACTIVATION_ACK),
+        ).getOrThrow()
+
+        assertThat(suffixes).hasSize(3)
+        assertThat(suffixes[0]).isEqualTo(suffixes[1])
+        assertThat(suffixes[0]).isNotEqualTo(suffixes[2])
+    }
+
+    @Test
+    fun expiredSignedAudioUrl_isRefetchedInsteadOfReadFromCache() = runTest {
+        val api = mockk<AiApiService>()
+        val storage = mockk<AiStorage>(relaxed = true)
+        val expired = AiAudio(
+            audioDataUrl = null,
+            audioUrl = "https://gateway.example/audio/expired",
+            audioUrlExpiresAt = System.currentTimeMillis() - 1,
+            mimeType = "audio/mpeg",
+            durationMs = null,
+            cacheKey = "tts-vd-v1/expired.mp3",
+            transcript = "到！",
+        )
+        coEvery { storage.read("friend-a", AiCacheFeature.TTS, any()) } returns
+            Json.encodeToString(AiAudio.serializer(), expired)
+        coEvery { api.playTts(any()) } returns Response.success(
+            AiApiResponse(
+                code = "SUCCESS",
+                data = AiAudioDto(
+                    audioUrl = "https://gateway.example/audio/fresh",
+                    audioUrlExpiresAt = System.currentTimeMillis() + 60_000,
+                ),
+            )
+        )
+        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+
+        val audio = repository.playTts(
+            "friend-a",
+            AiTtsRequest("usagi", "到！", scene = AiTtsScene.ACTIVATION_ACK),
+        ).getOrThrow()
+
+        assertThat(audio.audioUrl).isEqualTo("https://gateway.example/audio/fresh")
+        coVerify(exactly = 1) { api.playTts(any()) }
+    }
+
+    @Test
+    fun greetingWithExpiredSignedAudioUrl_isRefetchedInsteadOfPlayedFromCache() = runTest {
+        val api = mockk<AiApiService>()
+        val storage = mockk<AiStorage>(relaxed = true)
+        val expiredGreeting = AiGreeting(
+            nickname = "小明",
+            greeting = "欢迎回来",
+            spokenText = "欢迎回来呀哈！",
+            nicknameMeaning = "名字很有精神",
+            comment = "今天也找部好电影吧",
+            audio = AiAudio(
+                audioDataUrl = null,
+                audioUrl = "https://gateway.example/audio/expired",
+                audioUrlExpiresAt = System.currentTimeMillis() - 1,
+                mimeType = "audio/mpeg",
+                durationMs = null,
+                cacheKey = "tts-vd-v1/expired.mp3",
+                transcript = "欢迎回来呀哈！",
+            ),
+        )
+        coEvery { storage.read("friend-a", AiCacheFeature.GREETING, "usagi") } returns
+            Json.encodeToString(AiGreeting.serializer(), expiredGreeting)
+        coEvery { api.getGreeting(any()) } returns Response.success(
+            AiApiResponse(
+                code = "SUCCESS",
+                data = AiGreetingDto(
+                    greeting = "欢迎回来",
+                    spokenText = "欢迎回来呀哈！",
+                    audio = AiAudioDto(
+                        audioUrl = "https://gateway.example/audio/fresh",
+                        audioUrlExpiresAt = System.currentTimeMillis() + 60_000,
+                    ),
+                ),
+            )
+        )
+        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+
+        val greeting = repository.getGreeting("friend-a", "usagi").getOrThrow()
+
+        assertThat(greeting.audio?.audioUrl).isEqualTo("https://gateway.example/audio/fresh")
+        coVerify(exactly = 1) { api.getGreeting(any()) }
+    }
+
+    @Test
     fun quizResult_retainsCorrectAnswerFieldsAndOuterQuota() = runTest {
         val api = mockk<AiApiService>()
         val storage = mockk<AiStorage>(relaxed = true)
-        val expectedQuota = AiQuotaDto(2, 7, 8, 40, 2_000L)
+        val expectedQuota = AiQuotaDto(2, 14, 8, 80, 2_000L)
         val dto = Json { ignoreUnknownKeys = true }.decodeFromString<AiQuizResultDto>(
             """
             {

@@ -43,6 +43,7 @@ import { handleLegalRequest } from './legal-requests';
 import { closeLegalRequest, listLegalRequests } from './admin/legal-requests';
 import { cleanupRetention } from './retention';
 import { handleAiApi } from './ai/handler';
+import { handleAiAudio } from './ai/tts';
 
 export interface Env {
     [key: string]: unknown;
@@ -78,11 +79,14 @@ export interface Env {
     EMAIL_FROM: string;
     EMAIL_REPLY_TO?: string;
     PUBLIC_SITE_ORIGIN: string;
+    AUDIO_PUBLIC_BASE_URL?: string;
     INVITE_TEST_BYPASS_KEY?: string;
     // MiMo 仅由 Worker 读取，生产环境通过 wrangler secret 注入。
     MIMO_API_KEY?: string;
     // 私有 R2 音色样本，仅供 Worker 读取，不返回原始样本。
     AI_VOICE_SAMPLES?: R2Bucket;
+    // 私有 R2 MP3 缓存，仅通过 10 分钟签名 URL 播放。
+    AI_AUDIO_CACHE?: R2Bucket;
 }
 
 export default {
@@ -124,7 +128,10 @@ export default {
                 // 安全告警：鉴权失败（401/403）记录到 console + KV 计数，便于排查异常访问
                 if (err.statusCode === 401 || err.statusCode === 403) {
                     const clientIp = request.headers.get('CF-Connecting-IP') || 'unknown';
-                    const failPath = new URL(request.url).pathname;
+                    const failPath = new URL(request.url).pathname.replace(
+                        /^\/api\/ai\/audio\/[^/]+$/,
+                        '/api/ai/audio/:token',
+                    );
                     console.warn(`[AUTH_FAIL] ${err.code} status=${err.statusCode} ip=${clientIp} path=${failPath} method=${request.method} requestId=${requestId}`);
                     // KV 计数：按 IP+路径维度，1 小时 TTL，超阈值可在 admin 面板查看
                     try {
@@ -205,6 +212,11 @@ async function handleAuthApi(
     }
     if (path === '/api/auth/refresh' && request.method === 'POST') {
         return handleRefresh(request, env, requestId);
+    }
+
+    const audioMatch = path.match(/^\/api\/ai\/audio\/([^/]+)$/);
+    if (audioMatch && request.method === 'GET') {
+        return handleAiAudio(request, env, audioMatch[1]);
     }
 
     // AI 角色目录和试听是公开体验入口；真正激活和四项能力仍在下方统一校验 JWT。

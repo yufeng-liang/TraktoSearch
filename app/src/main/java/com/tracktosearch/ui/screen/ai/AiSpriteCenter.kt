@@ -78,8 +78,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiCharacter
 import com.tracktosearch.data.ai.AiQuizQuestionType
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 @Composable
 fun AiSpriteCenter(
@@ -106,16 +106,15 @@ fun AiSpriteCenter(
 
     LaunchedEffect(Unit) {
         viewModel.ensureLoaded()
-        viewModel.audioEvents.collectLatest { audio -> audioPlayer.play(audio) }
+        launch {
+            viewModel.audioEvents.collectLatest { audio -> audioPlayer.play(audio) }
+        }
+        launch {
+            viewModel.guestPreviewFallbackEvents.collectLatest { text -> audioPlayer.playText(text) }
+        }
     }
     LaunchedEffect(state.selectedCharacterId, state.isAuthorized) {
         audioPlayer.stop()
-        if (!state.isAuthorized) {
-            state.selectedCharacter?.let { character ->
-                delay(350)
-                audioPlayer.playText(character.auditionText)
-            }
-        }
     }
     DisposableEffect(Unit) {
         onDispose { audioPlayer.stop() }

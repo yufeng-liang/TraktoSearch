@@ -4,9 +4,11 @@ import { AppError, now } from '../util/errors.ts';
 
 export interface AiStoreEnvironment {
     DB?: D1Database;
+    KV?: KVNamespace;
     AI_TEST_MODE?: boolean | string;
     AI_TEST_CACHE?: Map<string, unknown>;
     AI_TEST_QUOTA?: Map<string, unknown>;
+    AI_TEST_RATE_LIMIT?: Map<string, unknown>;
     AI_TEST_NICKNAME?: string;
 }
 
@@ -27,8 +29,17 @@ interface D1QuotaRow {
     daily_count: number;
 }
 
-const SESSION_LIMIT = 7;
-const DAILY_LIMIT = 40;
+interface TtsRateLimitRow {
+    windowStartedAt: number;
+    requestCount: number;
+    missCount: number;
+}
+
+export const AI_SESSION_LIMIT = 14;
+export const AI_DAILY_LIMIT = 80;
+export const AI_TTS_REQUEST_LIMIT = 20;
+export const AI_TTS_MISS_LIMIT = 5;
+export const AI_TTS_RATE_WINDOW_SECONDS = 10 * 60;
 
 export function isTestStore(env: AiStoreEnvironment): boolean {
     return env.AI_TEST_MODE === true || env.AI_TEST_MODE === 'true';
@@ -123,14 +134,14 @@ export async function reserveAiQuota(
         const sameSession = current?.sessionId === sessionId;
         const sessionCount = sameSession ? (current?.sessionCount || 0) + 1 : 1;
         const dailyCount = (current?.dailyCount || 0) + 1;
-        if (dailyCount > DAILY_LIMIT) {
+        if (dailyCount > AI_DAILY_LIMIT) {
             throw new AppError('AI_DAILY_QUOTA_EXCEEDED', 'Daily AI quota exceeded', 429);
         }
-        if (sameSession && sessionCount > SESSION_LIMIT) {
+        if (sameSession && sessionCount > AI_SESSION_LIMIT) {
             throw new AppError('AI_SESSION_QUOTA_EXCEEDED', 'AI session quota exceeded', 429);
         }
         env.AI_TEST_QUOTA.set(key, { sessionId, sessionCount, dailyCount });
-        return { sessionCount, dailyCount, sessionLimit: SESSION_LIMIT, dailyLimit: DAILY_LIMIT };
+        return { sessionCount, dailyCount, sessionLimit: AI_SESSION_LIMIT, dailyLimit: AI_DAILY_LIMIT };
     }
 
     if (!env.DB) throw new AppError('AI_STORAGE_ERROR', 'AI storage is unavailable', 503);
@@ -149,8 +160,8 @@ export async function reserveAiQuota(
                 END,
                 daily_count = ai_usage.daily_count + 1,
                 updated_at = excluded.updated_at
-            WHERE ai_usage.daily_count < 40
-              AND (ai_usage.session_id <> excluded.session_id OR ai_usage.session_count < 7)
+            WHERE ai_usage.daily_count < 80
+              AND (ai_usage.session_id <> excluded.session_id OR ai_usage.session_count < 14)
         `).bind(friendId, deviceId, usageDay, sessionId, now()).run();
         if (typeof result.meta?.changes === 'number' && result.meta.changes === 0) {
             const existing = await env.DB.prepare(`
@@ -158,7 +169,7 @@ export async function reserveAiQuota(
                 FROM ai_usage
                 WHERE friend_id = ? AND usage_day = ?
             `).bind(friendId, usageDay).first<D1QuotaRow>();
-            if (existing?.daily_count === DAILY_LIMIT) {
+            if (existing?.daily_count === AI_DAILY_LIMIT) {
                 throw new AppError('AI_DAILY_QUOTA_EXCEEDED', 'Daily AI quota exceeded', 429);
             }
             throw new AppError('AI_SESSION_QUOTA_EXCEEDED', 'AI session quota exceeded', 429);
@@ -171,13 +182,31 @@ export async function reserveAiQuota(
         return {
             sessionCount: usage?.session_count || 1,
             dailyCount: usage?.daily_count || 1,
-            sessionLimit: SESSION_LIMIT,
-            dailyLimit: DAILY_LIMIT,
+            sessionLimit: AI_SESSION_LIMIT,
+            dailyLimit: AI_DAILY_LIMIT,
         };
     } catch (error) {
         if (error instanceof AppError) throw error;
         throw new AppError('AI_STORAGE_ERROR', 'AI quota storage is unavailable', 503);
     }
+}
+
+export async function reserveAiTtsRequest(env: AiStoreEnvironment, clientIp: string): Promise<void> {
+    const state = await readTtsRateLimit(env, clientIp);
+    if (state.requestCount >= AI_TTS_REQUEST_LIMIT) {
+        throw new AppError('RATE_LIMITED', 'Too many TTS requests', 429);
+    }
+    state.requestCount += 1;
+    await writeTtsRateLimit(env, clientIp, state);
+}
+
+export async function reserveAiTtsMiss(env: AiStoreEnvironment, clientIp: string): Promise<void> {
+    const state = await readTtsRateLimit(env, clientIp);
+    if (state.missCount >= AI_TTS_MISS_LIMIT) {
+        throw new AppError('RATE_LIMITED', 'Too many uncached TTS requests', 429);
+    }
+    state.missCount += 1;
+    await writeTtsRateLimit(env, clientIp, state);
 }
 
 export async function cacheKeyDigest(input: string): Promise<string> {
@@ -201,4 +230,60 @@ function readTestQuota(value: unknown): TestQuotaRow | null {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function readTtsRateLimit(env: AiStoreEnvironment, clientIp: string): Promise<TtsRateLimitRow> {
+    const key = `ai:tts:rate:v1:${await cacheKeyDigest(clientIp || 'unknown')}`;
+    const currentTime = now();
+    if (isTestStore(env) && env.AI_TEST_RATE_LIMIT instanceof Map) {
+        const current = readTtsRateLimitRow(env.AI_TEST_RATE_LIMIT.get(key));
+        if (!current || currentTime - current.windowStartedAt >= AI_TTS_RATE_WINDOW_SECONDS) {
+            return { windowStartedAt: currentTime, requestCount: 0, missCount: 0 };
+        }
+        return current;
+    }
+
+    if (!env.KV) return { windowStartedAt: currentTime, requestCount: 0, missCount: 0 };
+    try {
+        const raw = await env.KV.get(key);
+        const current = raw ? readTtsRateLimitRow(JSON.parse(raw)) : null;
+        if (!current || currentTime - current.windowStartedAt >= AI_TTS_RATE_WINDOW_SECONDS) {
+            return { windowStartedAt: currentTime, requestCount: 0, missCount: 0 };
+        }
+        return current;
+    } catch {
+        throw new AppError('AI_STORAGE_ERROR', 'AI rate limit storage is unavailable', 503);
+    }
+}
+
+async function writeTtsRateLimit(
+    env: AiStoreEnvironment,
+    clientIp: string,
+    state: TtsRateLimitRow,
+): Promise<void> {
+    const key = `ai:tts:rate:v1:${await cacheKeyDigest(clientIp || 'unknown')}`;
+    if (isTestStore(env) && env.AI_TEST_RATE_LIMIT instanceof Map) {
+        env.AI_TEST_RATE_LIMIT.set(key, state);
+        return;
+    }
+    if (!env.KV) return;
+    try {
+        await env.KV.put(key, JSON.stringify(state), { expirationTtl: AI_TTS_RATE_WINDOW_SECONDS });
+    } catch {
+        throw new AppError('AI_STORAGE_ERROR', 'AI rate limit storage is unavailable', 503);
+    }
+}
+
+function readTtsRateLimitRow(value: unknown): TtsRateLimitRow | null {
+    if (!isRecord(value)) return null;
+    if (
+        typeof value.windowStartedAt !== 'number'
+        || typeof value.requestCount !== 'number'
+        || typeof value.missCount !== 'number'
+    ) return null;
+    return {
+        windowStartedAt: value.windowStartedAt,
+        requestCount: value.requestCount,
+        missCount: value.missCount,
+    };
 }

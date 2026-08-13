@@ -6,11 +6,11 @@ import {
     characterVoiceStatus,
     findCharacter,
     matchesActivationName,
-    readVoiceSample,
+    TTS_SCENES,
     type CharacterConfig,
+    type TtsScene,
 } from './characters.ts';
 import {
-    callMimoAudio,
     callMimoJson,
     extractAssistantText,
     parseAssistantJson,
@@ -18,7 +18,6 @@ import {
     isTestFallback,
     type MimoMessage,
     type MimoModel,
-    type MimoAudioResult,
     type MimoEnvironment,
 } from './mimo.ts';
 import {
@@ -26,9 +25,16 @@ import {
     getFriendNickname,
     readAiCache,
     reserveAiQuota,
+    reserveAiTtsMiss,
+    reserveAiTtsRequest,
     writeAiCache,
     type AiStoreEnvironment,
 } from './store.ts';
+import {
+    readCachedTtsAudio,
+    synthesizeTtsAudio,
+    type TtsPublicAudio,
+} from './tts.ts';
 
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_MOVIES = 60;
@@ -36,6 +42,8 @@ const QUIZ_QUESTION_COUNT = 13;
 
 export interface AiEnvironment extends MimoEnvironment, AiStoreEnvironment {
     AI_VOICE_SAMPLES?: R2Bucket;
+    AI_AUDIO_CACHE?: R2Bucket;
+    AUDIO_PUBLIC_BASE_URL?: string;
     [key: string]: unknown;
 }
 
@@ -88,11 +96,13 @@ export async function handleAiApi(
     path: string,
     payload: AiJwtPayload | null,
 ): Promise<Response> {
+    const audioOrigin = resolveAudioPublicBaseUrl(request, env);
+
     if (path === '/api/ai/characters' && request.method === 'GET') {
         return successResponse({
             characters: await characterCatalog(env),
-            sessionLimit: 7,
-            dailyLimit: 40,
+            sessionLimit: 14,
+            dailyLimit: 80,
         }, requestId);
     }
 
@@ -111,17 +121,17 @@ export async function handleAiApi(
     const body = await readJsonBody(request);
     if (path === '/api/ai/activate') {
         assertAction(body, 'activate');
-        return handleActivate(body, env, requestId, requireAiPayload(payload));
+        return handleActivate(body, env, requestId, requireAiPayload(payload), audioOrigin);
     }
     if (path === '/api/ai/tts') {
         assertAction(body, 'tts');
-        return handleTts(body, env, requestId, payload);
+        return handleTts(request, body, env, requestId, payload, audioOrigin);
     }
 
     const authenticatedPayload = requireAiPayload(payload);
     if (path === '/api/ai/greeting') {
         assertAction(body, 'greeting');
-        return handleGreeting(body, env, requestId, authenticatedPayload);
+        return handleGreeting(body, env, requestId, authenticatedPayload, audioOrigin);
     }
     if (path === '/api/ai/taste') {
         assertAction(body, 'taste');
@@ -144,6 +154,7 @@ async function handleActivate(
     env: AiEnvironment,
     requestId: string,
     payload: AiJwtPayload,
+    audioOrigin: string,
 ): Promise<Response> {
     const character = requireCharacter(body);
     const voiceStatus = await characterVoiceStatus(env, character);
@@ -177,12 +188,18 @@ async function handleActivate(
         }, requestId);
     }
 
-    const audio = await synthesizeShortReply(env, character, '到！');
+    const audio = await synthesizeOptionalAudio(
+        env,
+        character,
+        character.activationPhrase,
+        'ACTIVATION_ACK',
+        audioOrigin,
+    );
     return successResponse({
         activated: true,
         characterId: character.id,
         characterName: character.name,
-        activationPhrase: '到！',
+        activationPhrase: character.activationPhrase,
         voiceStatus,
         audio: toPublicAudio(audio),
         quota: publicQuota(quota),
@@ -190,30 +207,37 @@ async function handleActivate(
 }
 
 async function handleTts(
+    request: Request,
     body: Record<string, unknown>,
     env: AiEnvironment,
     requestId: string,
     payload: AiJwtPayload | null,
+    audioOrigin: string,
 ): Promise<Response> {
     const character = requireCharacter(body);
     const text = requiredText(body, ['text', 'content'], 'TTS text');
     if (text.length > 500) throw new AppError('INVALID_REQUEST', 'TTS text is too long', 400);
+    const scene = readTtsScene(body.scene, payload ? 'GREETING' : 'AUDITION');
     if (!payload && text !== character.previewText) {
         throw new AppError('FORBIDDEN', 'Guest TTS is limited to the audition text', 403);
     }
     if (await characterVoiceStatus(env, character) !== 'ready') {
         throw new AppError('VOICE_NOT_READY', 'Voice for this character is not ready', 400);
     }
+    // style 仅为旧客户端兼容保留，不能覆盖服务端的角色声线和场景指导。
+    void body.style;
+    const input = buildTtsInput(character, scene, text, audioOrigin);
+    const clientIp = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Real-IP') || 'unknown';
+    await reserveAiTtsRequest(env, clientIp);
+    const cached = await readCachedTtsAudio(env, input);
+    if (cached) return successResponse(toPublicAudio(cached), requestId);
+
+    await reserveAiTtsMiss(env, clientIp);
     // 登录用户的 TTS 计入同一精灵中心会话；访客试听不建立配额记录。
     const quota = payload
         ? await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body))
         : null;
-    const audio = await synthesizeShortReply(
-        env,
-        character,
-        text,
-        typeof body.style === 'string' ? body.style.slice(0, 300) : undefined,
-    );
+    const audio = await synthesizeShortReply(env, character, text, scene, input.origin);
     return successResponse(toPublicAudio(audio), requestId, quota ? publicQuota(quota) : undefined);
 }
 
@@ -222,34 +246,57 @@ async function handleGreeting(
     env: AiEnvironment,
     requestId: string,
     payload: AiJwtPayload,
+    audioOrigin: string,
 ): Promise<Response> {
     const character = requireCharacter(body);
     const model = requireTextModel(body, 'mimo-v2.5');
     const forceRefresh = readOptionalBoolean(body, 'forceRefresh');
     const includeAudio = readOptionalBoolean(body, 'includeAudio');
-    const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
     const cacheKey = `ai:v1:greeting:${payload.sub}:${character.id}:${includeAudio ? 'audio' : 'text'}`;
     if (!forceRefresh) {
         const cached = await readAiCache(env, cacheKey);
-        if (cached) return successResponse(cached, requestId, publicQuota(quota));
+        if (cached) {
+            const cachedResponse = requireRecord(cached, 'cached greeting');
+            if (!includeAudio) return successResponse(cachedResponse, requestId);
+            const cachedSpokenText = requiredText(cachedResponse, ['spokenText', 'greeting'], 'spokenText');
+            const cachedAudio = await synthesizeOptionalAudio(
+                env,
+                character,
+                cachedSpokenText,
+                'GREETING',
+                audioOrigin,
+            );
+            return successResponse({ ...cachedResponse, audio: toPublicAudio(cachedAudio) }, requestId);
+        }
     }
 
+    const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
     const nickname = await getFriendNickname(env, payload.sub);
     const upstream = await callMimoJson(env, model, greetingMessages(character, nickname));
     const generated = upstream ? normalizeGreeting(parseAssistantJson<unknown>(upstream)) : fallbackGreeting(character, nickname);
+    const spokenText = buildGreetingSpokenText(character, generated.greeting);
+    const audio = includeAudio
+        ? await synthesizeOptionalAudio(env, character, spokenText, 'GREETING', audioOrigin)
+        : null;
     const response = {
         characterId: character.id,
         characterName: character.name,
         nickname,
         greeting: generated.greeting,
+        spokenText,
         nicknameMeaning: generated.nicknameMeaning,
         comment: generated.comment,
         text: `${generated.greeting} ${generated.nicknameMeaning} ${generated.comment}`,
-        audio: includeAudio
-            ? toPublicAudio(await synthesizeShortReply(env, character, generated.greeting))
-            : null,
+        audio: toPublicAudio(audio),
     };
-    await writeAiCache(env, cacheKey, response, 30 * 24 * 60 * 60, payload.sub, 'greeting');
+    await writeAiCache(
+        env,
+        cacheKey,
+        { ...response, audio: null },
+        30 * 24 * 60 * 60,
+        payload.sub,
+        'greeting',
+    );
     return successResponse(response, requestId, publicQuota(quota));
 }
 
@@ -262,13 +309,13 @@ async function handleTaste(
     const model = requireTextModel(body, 'mimo-v2.5-pro');
     const movies = readMovies(body);
     const forceRefresh = readOptionalBoolean(body, 'forceRefresh');
-    const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
     const cacheKey = `ai:v1:taste:${payload.sub}:${await cacheKeyDigest(JSON.stringify(movies))}`;
     if (!forceRefresh) {
         const cached = await readAiCache(env, cacheKey);
-        if (cached) return successResponse(cached, requestId, publicQuota(quota));
+        if (cached) return successResponse(cached, requestId);
     }
 
+    const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
     const nickname = await getFriendNickname(env, payload.sub);
     const upstream = await callMimoJson(env, model, tasteMessages(nickname, movies));
     const response = upstream
@@ -291,17 +338,17 @@ async function handleQuiz(
     const movies = readMovies(body);
     if (movies.length < 7) throw new AppError('NOT_ENOUGH_MOVIES', 'At least 7 watched movies are required', 400);
     const sessionId = readSessionId(body);
-    const quota = await reserveAiQuota(env, payload.sub, payload.device, sessionId);
     // 客户端指定 quizId 且缓存中存在时直接复用（支持重玩/防重）；未指定则每次生成新测验
     if (body.quizId !== undefined) {
         const quizId = readOpaqueId(body.quizId, 'quizId');
         const cached = await readAiCache(env, `ai:v1:quiz:${payload.sub}:${quizId}`);
         if (cached) {
             const cachedQuiz = parseQuizCache(cached);
-            return successResponse(publicQuiz(cachedQuiz), requestId, publicQuota(quota));
+            return successResponse(publicQuiz(cachedQuiz), requestId);
         }
     }
 
+    const quota = await reserveAiQuota(env, payload.sub, payload.device, sessionId);
     const nickname = await getFriendNickname(env, payload.sub);
     // 最近三局尽量避免重复组合：读客户端上送的 excludedQuizIds，把前几局已用影片从本轮选题中优先排除
     const avoidedMediaIds = await readAvoidedMediaIds(env, payload.sub, body.excludedQuizIds);
@@ -417,13 +464,13 @@ async function handleDaily(
     const model = requireTextModel(body, 'mimo-v2.5');
     const forceRefresh = readOptionalBoolean(body, 'forceRefresh');
     const day = new Date().toISOString().slice(0, 10);
-    const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
     const cacheKey = `ai:v1:daily:${payload.sub}:${day}`;
     if (!forceRefresh) {
         const cached = await readAiCache(env, cacheKey);
-        if (cached) return successResponse(cached, requestId, publicQuota(quota));
+        if (cached) return successResponse(cached, requestId);
     }
 
+    const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
     const upstream = await callMimoJson(env, model, dailyMessages(day));
     const response = upstream ? normalizeDaily(parseAssistantJson<unknown>(upstream), day) : fallbackDaily(day);
     await writeAiCache(env, cacheKey, response, 2 * 24 * 60 * 60, payload.sub, 'daily');
@@ -448,31 +495,99 @@ async function synthesizeShortReply(
     env: AiEnvironment,
     character: CharacterConfig,
     text: string,
-    style?: string,
-): Promise<MimoAudioResult | null> {
+    scene: TtsScene,
+    audioOrigin: string,
+): Promise<TtsPublicAudio | null> {
     if (await characterVoiceStatus(env, character) !== 'ready') return null;
-    const voice = await readVoiceSample(env, character);
-    if (!voice) return null;
-    return callMimoAudio(env, 'mimo-v2.5-tts-voiceclone', [
-        {
-            role: 'user',
-            content: style || `请用自然、符合${character.name}设定的中文语气说话：${character.personality}`,
-        },
-        { role: 'assistant', content: text },
-    ], { format: 'wav', voice });
+    return synthesizeTtsAudio(env, buildTtsInput(character, scene, text, audioOrigin));
 }
 
-function toPublicAudio(audio: MimoAudioResult | null): Record<string, unknown> | null {
-    if (!audio) return null;
-    const data = audio.data.startsWith('data:')
-        ? audio.data
-        : `data:${audio.mimeType};base64,${audio.data}`;
+async function synthesizeOptionalAudio(
+    env: AiEnvironment,
+    character: CharacterConfig,
+    text: string,
+    scene: TtsScene,
+    audioOrigin: string,
+): Promise<TtsPublicAudio | null> {
+    try {
+        return await synthesizeShortReply(env, character, text, scene, audioOrigin);
+    } catch {
+        // 激活和欢迎的文字结果不能因音频供应商或缓存故障而失败。
+        return null;
+    }
+}
+
+function buildVoiceDesignPrompt(character: CharacterConfig, scene: TtsScene): string {
+    return [
+        `角色：${character.name}`,
+        `基础音色：${character.voiceDesignPrompt}`,
+        `场景：${scene}`,
+        `场景指导：${character.sceneGuidance[scene]}`,
+        '固定指导：使用中文普通话；保持角色基础声线不变；只朗读 assistant 消息中的原文，不增词、不删词、不解释提示词。',
+    ].join('。');
+}
+
+function buildGreetingSpokenText(character: CharacterConfig, greeting: string): string {
+    const normalizedGreeting = greeting.trim().replace(/\s+/g, ' ');
+    const catchphrase = character.greetingCatchphrase.trim().replace(/\s+/g, ' ');
+    return catchphrase ? `${normalizedGreeting} ${catchphrase}`.trim() : normalizedGreeting;
+}
+
+function resolveAudioPublicBaseUrl(request: Request, env: AiEnvironment): string {
+    const configured = typeof env.AUDIO_PUBLIC_BASE_URL === 'string'
+        ? env.AUDIO_PUBLIC_BASE_URL.trim()
+        : '';
+    if (configured) {
+        try {
+            const url = new URL(configured);
+            if (url.protocol === 'http:' || url.protocol === 'https:') {
+                return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+            }
+        } catch {
+            // 配置无效时保留请求原端的回退行为
+        }
+    }
+    return new URL(request.url).origin;
+}
+
+function readTtsScene(value: unknown, fallback: TtsScene): TtsScene {
+    if (value === undefined || value === null || value === '') return fallback;
+    if (typeof value !== 'string' || !TTS_SCENES.includes(value as TtsScene)) {
+        throw new AppError('INVALID_SCENE', 'Unsupported TTS scene', 400);
+    }
+    return value as TtsScene;
+}
+
+function buildTtsInput(
+    character: CharacterConfig,
+    scene: TtsScene,
+    text: string,
+    origin: string,
+): {
+    characterId: string;
+    scene: TtsScene;
+    text: string;
+    voicePrompt: string;
+    origin: string;
+} {
     return {
-        audioDataUrl: data,
-        audioUrl: null,
+        characterId: character.id,
+        scene,
+        text,
+        voicePrompt: buildVoiceDesignPrompt(character, scene),
+        origin,
+    };
+}
+
+function toPublicAudio(audio: TtsPublicAudio | null): Record<string, unknown> | null {
+    if (!audio) return null;
+    return {
+        audioDataUrl: audio.audioDataUrl,
+        audioUrl: audio.audioUrl,
+        audioUrlExpiresAt: audio.audioUrlExpiresAt,
         mimeType: audio.mimeType,
-        durationMs: null,
-        cacheKey: null,
+        durationMs: audio.durationMs,
+        cacheKey: audio.cacheKey,
         transcript: audio.transcript,
     };
 }
