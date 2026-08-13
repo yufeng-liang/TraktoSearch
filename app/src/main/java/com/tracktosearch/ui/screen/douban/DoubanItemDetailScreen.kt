@@ -153,6 +153,7 @@ import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.detailTopBarIconColor
+import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.screen.detail.PosterFullscreenOverlay
 import com.tracktosearch.ui.util.HapticType
@@ -1062,11 +1063,25 @@ fun DoubanItemDetailScreen(
     val listState = rememberLazyListState()
     val hazeState = remember { HazeState() }
     val isDarkTheme = isAppDarkTheme()
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    val doubanGlassScene = glassSceneForContent(
+        contentCount = uiState.searchResults.size +
+            (uiState.detailInfo?.celebrities?.size ?: 0) +
+            if (uiState.detailInfo != null) 1 else 0,
+        readabilityDemand = when {
+            uiState.isLoading -> 0.82f
+            selectedTab == 1 && (uiState.isSearching || uiState.searchResults.isNotEmpty()) -> 0.94f
+            uiState.detailInfo != null -> 0.86f
+            uiState.failure != null -> 0.78f
+            else -> 0.70f
+        },
+        ambientColor = uiState.posterDominantColor ?: MaterialTheme.colorScheme.background,
+        contentCapacity = 64
+    )
     val handleBack = {
         onBack(markChanges.watchlistChanged, markChanges.watchedChanged)
     }
 
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showPosterFullscreen by remember { mutableStateOf(false) }
     var subtitleInput by remember { mutableStateOf("") }
     // 手动标记媒体类型下拉菜单展开状态
@@ -1433,7 +1448,8 @@ fun DoubanItemDetailScreen(
                 hazeState = hazeState,
                 hazeStyle = dev.chrisbanes.haze.blur.materials.HazeMaterials.ultraThin(),
                 size = 40.dp,
-                buttonStyle = NeumorphicIconButtonStyle.DetailTopBar
+                buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
+                scene = doubanGlassScene
             ) {
                 Icon(
                     Icons.AutoMirrored.Rounded.ArrowBack,
@@ -1461,7 +1477,8 @@ fun DoubanItemDetailScreen(
                         hazeState = hazeState,
                         hazeStyle = dev.chrisbanes.haze.blur.materials.HazeMaterials.ultraThin(),
                         size = 40.dp,
-                        buttonStyle = NeumorphicIconButtonStyle.DetailTopBar
+                        buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
+                        scene = doubanGlassScene
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Edit,
@@ -1576,7 +1593,8 @@ fun DoubanItemDetailScreen(
                     hazeState = hazeState,
                     hazeStyle = dev.chrisbanes.haze.blur.materials.HazeMaterials.ultraThin(),
                     size = 40.dp,
-                    buttonStyle = NeumorphicIconButtonStyle.DetailTopBar
+                    buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
+                    scene = doubanGlassScene
                 ) {
                     Icon(
                         Icons.Rounded.Share,
@@ -1609,7 +1627,8 @@ fun DoubanItemDetailScreen(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(bottom = 16.dp, end = 16.dp),
-                    hazeState = hazeState
+                    hazeState = hazeState,
+                    scene = doubanGlassScene
                 )
             }
         }

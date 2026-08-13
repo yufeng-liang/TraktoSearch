@@ -60,7 +60,8 @@ fun ScrollToTopButton(
     listState: LazyListState,
     modifier: Modifier = Modifier,
     hazeState: HazeState? = null,
-    hazeStyle: HazeBlurStyle? = null
+    hazeStyle: HazeBlurStyle? = null,
+    scene: GlassScene = GlassScene()
 ) {
     val scope = rememberCoroutineScope()
     var showButton by remember { mutableStateOf(false) }
@@ -96,7 +97,8 @@ fun ScrollToTopButton(
         ScrollToTopButtonContent(
             onClick = { scope.launch { listState.animateScrollToItem(0) } },
             hazeState = hazeState,
-            hazeStyle = hazeStyle
+            hazeStyle = hazeStyle,
+            scene = scene
         )
     }
 }
@@ -106,7 +108,8 @@ fun ScrollToTopButton(
     gridState: LazyGridState,
     modifier: Modifier = Modifier,
     hazeState: HazeState? = null,
-    hazeStyle: HazeBlurStyle? = null
+    hazeStyle: HazeBlurStyle? = null,
+    scene: GlassScene = GlassScene()
 ) {
     val scope = rememberCoroutineScope()
     var showButton by remember { mutableStateOf(false) }
@@ -142,7 +145,8 @@ fun ScrollToTopButton(
         ScrollToTopButtonContent(
             onClick = { scope.launch { gridState.animateScrollToItem(0) } },
             hazeState = hazeState,
-            hazeStyle = hazeStyle
+            hazeStyle = hazeStyle,
+            scene = scene
         )
     }
 }
@@ -151,7 +155,8 @@ fun ScrollToTopButton(
 private fun ScrollToTopButtonContent(
     onClick: () -> Unit,
     hazeState: HazeState?,
-    hazeStyle: HazeBlurStyle?
+    hazeStyle: HazeBlurStyle?,
+    scene: GlassScene
 ) {
     val view = LocalView.current
     val arrowTint = MaterialTheme.colorScheme.primary
@@ -171,7 +176,8 @@ private fun ScrollToTopButtonContent(
                     input = HazeInput.Sources(hazeState),
                     hazeStyle = resolvedHazeStyle,
                     glassStyle = AppGlassStyles.circularControl(
-                        tint = MaterialTheme.colorScheme.surface.copy(alpha = 0.18f)
+                        tint = MaterialTheme.colorScheme.surface.copy(alpha = 0.18f),
+                        scene = scene
                     ),
                     blurSampling = HazeSampling.Adaptive,
                     interactionSource = interactionSource

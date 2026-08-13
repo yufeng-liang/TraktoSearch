@@ -58,13 +58,14 @@ fun Modifier.hazeTopBar(
     state: HazeState,
     style: HazeBlurStyle = HazeMaterials.thin(),
     blurRadius: Dp = 24.dp,
-    isContentUnderTopBar: Boolean = true
+    isContentUnderTopBar: Boolean = true,
+    scene: GlassScene = GlassScene()
 ): Modifier {
     if (!isContentUnderTopBar) return this
     return appVisualEffect(
         input = HazeInput.Sources(state),
         hazeStyle = style,
-        glassStyle = AppGlassStyles.topBar(),
+        glassStyle = AppGlassStyles.topBar(scene = scene),
         // 渲染降采样：Haze 官方基准显示可降低 5-20% 开销，肉眼几乎不可见
         blurSampling = HazeSampling.Adaptive
     )
@@ -302,6 +303,8 @@ fun NeumorphicFrostedSurface(
     sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
     // 旧页面默认只保留普通表面；需要 Glass 采样时由页面显式声明语义角色。
     glassRole: GlassSurfaceRole? = null,
+    interactionSource: MutableInteractionSource? = null,
+    scene: GlassScene = GlassScene(),
     content: @Composable () -> Unit
 ) {
     if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
@@ -318,17 +321,37 @@ fun NeumorphicFrostedSurface(
                 role = glassRole,
                 shape = roundedShape!!,
                 sourceSelection = sourceSelection,
-                interactionSource = null,
+                scene = scene,
+                interactionSource = interactionSource,
                 tint = backgroundColor,
                 borderColor = borderColor,
                 content = content
             )
         } else {
+            val fallbackBackground = if (glassRole != null) {
+                resolveGlassFallbackFill(
+                    backgroundColor = backgroundColor,
+                    themeSurface = MaterialTheme.colorScheme.surface,
+                    tokenAlpha = glassToken(
+                        role = glassRole,
+                        variant = com.tracktosearch.ui.theme.LocalGlassVariant.current,
+                        isDark = isDark,
+                        scene = scene
+                    ).tintAlpha
+                )
+            } else {
+                backgroundColor
+            }
+            val fallbackBorder = if (glassRole != null) {
+                glassBorderColor(glassRole, borderColor, scene)
+            } else {
+                borderColor
+            }
             Box(
                 modifier = modifier
                     .clip(shape)
-                    .background(backgroundColor, shape)
-                    .border(1.dp, borderColor, shape),
+                    .background(fallbackBackground, shape)
+                    .border(1.dp, fallbackBorder, shape),
             ) {
                 content()
             }
@@ -345,7 +368,8 @@ fun NeumorphicFrostedSurface(
             ),
             hazeStyle = resolvedHazeStyle,
             glassStyle = glassStyle,
-            blurSampling = HazeSampling.Adaptive
+            blurSampling = HazeSampling.Adaptive,
+            interactionSource = interactionSource
         )
     } else Modifier
 
@@ -394,6 +418,7 @@ fun NeumorphicIconButton(
     interactionSource: MutableInteractionSource? = null,
     enabled: Boolean = true,
     lightBorderAlpha: Float = 0.55f,
+    scene: GlassScene = GlassScene(),
     buttonStyle: NeumorphicIconButtonStyle = NeumorphicIconButtonStyle.Default,
     content: @Composable () -> Unit
 ) {
@@ -402,7 +427,7 @@ fun NeumorphicIconButton(
             onClick = onClick,
             modifier = modifier,
             size = size,
-            hazeState = hazeState ?: remember { HazeState() },
+            hazeState = hazeState,
             role = if (buttonStyle == NeumorphicIconButtonStyle.DetailTopBar) {
                 GlassSurfaceRole.DetailAction
             } else {
@@ -410,6 +435,7 @@ fun NeumorphicIconButton(
             },
             interactionSource = interactionSource,
             enabled = enabled,
+            scene = scene,
             content = content
         )
         return
@@ -427,7 +453,8 @@ fun NeumorphicIconButton(
                 tint = MaterialTheme.colorScheme.surface.copy(
                     alpha = if (isDetailTopBar) 0.10f else 0.18f
                 ),
-                interactive = enabled
+                interactive = enabled,
+                scene = scene
             ),
             blurSampling = HazeSampling.Adaptive,
             interactionSource = resolvedInteractionSource

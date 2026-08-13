@@ -60,6 +60,8 @@ import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
+import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.ScrollToTopButton
 import dev.chrisbanes.haze.HazeState
@@ -79,6 +81,22 @@ fun TraktListDetailScreen(
     val gridState = rememberLazyGridState()
     val hazeState = remember { HazeState() }
     val hazeStyle = HazeMaterials.thin()
+    val listGlassScene = glassSceneForContent(
+        contentCount = uiState.items.size,
+        readabilityDemand = when {
+            uiState.error != null -> 0.96f
+            uiState.isLoading -> 0.78f
+            uiState.items.isNotEmpty() -> 0.82f
+            else -> 0.62f
+        },
+        ambientColor = rememberCachedPosterAmbientColor(
+            posterUrls = uiState.items.mapNotNull { it.posterUrl },
+            fallback = MaterialTheme.colorScheme.background
+        ),
+        contentCapacity = 42,
+        loadingCount = if (uiState.isLoading || uiState.isLoadingMore) 1 else 0,
+        loadingItemWeight = 4
+    )
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的卡片参与共享元素转场
     var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
@@ -150,7 +168,8 @@ fun TraktListDetailScreen(
                                 .hazeTopBar(
                                     state = hazeState,
                                     style = hazeStyle,
-                                    blurRadius = 24.dp
+                                    blurRadius = 24.dp,
+                                    scene = listGlassScene
                                 )
                                 .clickable(enabled = false, onClick = {})
                         ) {
@@ -250,7 +269,8 @@ fun TraktListDetailScreen(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(bottom = 16.dp, end = 16.dp),
-                        hazeState = hazeState
+                        hazeState = hazeState,
+                        scene = listGlassScene
                     )
 
                     // Haze 模糊标题栏（与发现页社区列表卡片配对 sharedBounds 转场）
@@ -269,7 +289,8 @@ fun TraktListDetailScreen(
                             .hazeTopBar(
                                 state = hazeState,
                                 style = hazeStyle,
-                                blurRadius = 24.dp
+                                blurRadius = 24.dp,
+                                scene = listGlassScene
                             )
                             .clickable(enabled = false, onClick = {})
                     ) {

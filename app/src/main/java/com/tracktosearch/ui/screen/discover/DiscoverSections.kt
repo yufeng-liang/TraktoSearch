@@ -65,7 +65,10 @@ import com.tracktosearch.ui.component.DoubanHotCardSkeleton
 import com.tracktosearch.ui.component.SectionHeader
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.VisualSurfaceKind
+import com.tracktosearch.ui.component.GlassTabIndicator
 import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.VisualEffectMode
 
 @Composable
 internal fun TmdbMovieSection(
@@ -695,9 +698,20 @@ internal fun CapsuleTabSelector(
                 if (isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.35f)
             )
     ) {
-        // 滑块指示器（贴合无留白，拟态药丸）
-        Box(
-            modifier = Modifier
+        // Glass 使用独立指示器；Blur 才保留旧拟态药丸。
+        if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
+            GlassTabIndicator(
+                modifier = Modifier
+                    .offset(x = indicatorOffset)
+                    .width(indicatorWidth)
+                    .fillMaxHeight()
+                    .padding(2.dp),
+                isDark = isDark,
+                shape = capsuleShape
+            )
+        } else {
+            Box(
+                modifier = Modifier
                 .offset(x = indicatorOffset)
                 .width(indicatorWidth)
                 .fillMaxHeight()
@@ -728,7 +742,8 @@ internal fun CapsuleTabSelector(
                         offset = DpOffset((-1).dp, (-1).dp)
                     )
                 )
-        )
+                )
+            }
         // Tab 文字
         Row(modifier = Modifier.fillMaxHeight()) {
             tabs.forEachIndexed { index, label ->
@@ -749,7 +764,9 @@ internal fun CapsuleTabSelector(
                             fontSize = 13.sp,
                             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
                         ),
-                        color = if (selected) MaterialTheme.colorScheme.onPrimary
+                        color = if (selected && LocalVisualEffectMode.current != VisualEffectMode.GLASS) {
+                            MaterialTheme.colorScheme.onPrimary
+                        }
                         else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

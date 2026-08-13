@@ -89,6 +89,7 @@ import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.detailTopBarIconColor
+import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
@@ -250,6 +251,32 @@ fun DetailScreen(
     // Haze 毛玻璃状态
     val detailHazeState = remember { HazeState() }
     val detailIsDark = isAppDarkTheme()
+    val detailGlassScene = glassSceneForContent(
+        contentCount = uiState.resources.size + uiState.comments.size +
+            uiState.recommendations.size + uiState.videos.size,
+        readabilityDemand = when {
+            uiState.isSearching || uiState.isTranslating -> 0.96f
+            selectedTab == 1 && uiState.comments.isNotEmpty() -> 0.90f
+            uiState.resources.isNotEmpty() -> 0.84f
+            else -> 0.68f
+        },
+        ambientColor = uiState.posterDominantColor ?: MaterialTheme.colorScheme.background,
+        contentCapacity = 72,
+        loadingCount = listOf(
+            uiState.isLoading,
+            uiState.isSearching,
+            uiState.isTranslating,
+            uiState.isLoadingMoreComments,
+            uiState.isLoadingVideosImages,
+            uiState.isLoadingRecommendations,
+            uiState.isMarkingWatched,
+            uiState.isMarkingWatchlist,
+            uiState.isRating,
+            uiState.isRatingLoading,
+            uiState.isDoubanSyncing
+        ).count { it },
+        loadingItemWeight = 4
+    )
 
     // 点击 token,确保只有被点击的卡片参与转场(避免同 tmdbId 海报跨栏目飘错)
     var activeClickToken by remember { mutableStateOf(0) }
@@ -768,7 +795,8 @@ fun DetailScreen(
                 hazeState = detailHazeState,
                 hazeStyle = HazeMaterials.ultraThin(),
                 size = 40.dp,
-                buttonStyle = NeumorphicIconButtonStyle.DetailTopBar
+                buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
+                scene = detailGlassScene
             ) {
                 Icon(
                     Icons.AutoMirrored.Rounded.ArrowBack,
@@ -802,7 +830,8 @@ fun DetailScreen(
                         hazeState = detailHazeState,
                         hazeStyle = HazeMaterials.ultraThin(),
                         size = 40.dp,
-                        buttonStyle = NeumorphicIconButtonStyle.DetailTopBar
+                        buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
+                        scene = detailGlassScene
                     ) {
                         if (uiState.isDoubanSyncing) {
                             CircularProgressIndicator(
@@ -851,7 +880,8 @@ fun DetailScreen(
                     hazeState = detailHazeState,
                     hazeStyle = HazeMaterials.ultraThin(),
                     size = 40.dp,
-                    buttonStyle = NeumorphicIconButtonStyle.DetailTopBar
+                    buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
+                    scene = detailGlassScene
                 ) {
                     Icon(
                         Icons.Rounded.Share,
@@ -868,7 +898,8 @@ fun DetailScreen(
                     .align(Alignment.BottomEnd)
                     .padding(bottom = 16.dp, end = 16.dp),
                 hazeState = detailHazeState,
-                hazeStyle = HazeMaterials.ultraThin()
+                hazeStyle = HazeMaterials.ultraThin(),
+                scene = detailGlassScene
             )
 
             // 海报大图查看

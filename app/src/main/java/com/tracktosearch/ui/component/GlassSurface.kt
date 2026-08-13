@@ -34,6 +34,8 @@ fun GlassSurface(
     role: GlassSurfaceRole,
     shape: RoundedCornerShape,
     sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
+    interactionSource: MutableInteractionSource? = null,
+    scene: GlassScene = GlassScene(),
     content: @Composable () -> Unit
 ) {
     GlassSurfaceImpl(
@@ -42,7 +44,8 @@ fun GlassSurface(
         role = role,
         shape = shape,
         sourceSelection = sourceSelection,
-        interactionSource = null,
+        scene = scene,
+        interactionSource = interactionSource,
         tint = MaterialTheme.colorScheme.surface,
         borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
         content = content
@@ -58,16 +61,16 @@ fun GlassIconButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     size: Dp = 42.dp,
-    hazeState: HazeState,
+    hazeState: HazeState?,
     role: GlassSurfaceRole = GlassSurfaceRole.CircularControl,
     interactionSource: MutableInteractionSource? = null,
     enabled: Boolean = true,
+    scene: GlassScene = GlassScene(),
     content: @Composable () -> Unit
 ) {
     val resolvedInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
     val shape = RoundedCornerShape(50)
-    GlassSurfaceImpl(
-        modifier = modifier
+    val buttonModifier = modifier
             .alpha(if (enabled) 1f else 0.55f)
             .clickable(
                 interactionSource = resolvedInteractionSource,
@@ -75,16 +78,45 @@ fun GlassIconButton(
                 enabled = enabled,
                 onClick = onClick
             )
-            .size(size),
-        hazeState = hazeState,
-        role = role,
-        shape = shape,
-        sourceSelection = HazeSourceSelection.Behind,
-        interactionSource = resolvedInteractionSource,
-        tint = MaterialTheme.colorScheme.surface,
-        borderColor = MaterialTheme.colorScheme.outline.copy(alpha = if (enabled) 0.35f else 0.20f),
-        content = content
-    )
+            .size(size)
+    val borderColor = MaterialTheme.colorScheme.outline.copy(alpha = if (enabled) 0.35f else 0.20f)
+    if (hazeState == null) {
+        val token = glassToken(
+            role = role,
+            variant = com.tracktosearch.ui.theme.LocalGlassVariant.current,
+            isDark = isAppDarkTheme(),
+            scene = scene
+        )
+        Box(
+            modifier = buttonModifier
+                .clip(shape)
+                .background(
+                    resolveGlassFallbackFill(
+                        backgroundColor = Color.Transparent,
+                        themeSurface = MaterialTheme.colorScheme.surface,
+                        tokenAlpha = token.tintAlpha
+                    ),
+                    shape
+                )
+                .border(1.dp, glassBorderColor(role, borderColor, scene), shape),
+            contentAlignment = Alignment.Center
+        ) {
+            content()
+        }
+    } else {
+        GlassSurfaceImpl(
+            modifier = buttonModifier,
+            hazeState = hazeState,
+            role = role,
+            shape = shape,
+            sourceSelection = HazeSourceSelection.Behind,
+            scene = scene,
+            interactionSource = resolvedInteractionSource,
+            tint = MaterialTheme.colorScheme.surface,
+            borderColor = borderColor,
+            content = content
+        )
+    }
 }
 
 /** 玻璃模式的底部导航选中态，只绘制普通半透明背景和边框，不采样背景。 */
@@ -119,6 +151,7 @@ internal fun GlassSurfaceImpl(
     role: GlassSurfaceRole,
     shape: RoundedCornerShape,
     sourceSelection: HazeSourceSelection,
+    scene: GlassScene,
     interactionSource: MutableInteractionSource?,
     tint: Color,
     borderColor: Color,
@@ -128,7 +161,8 @@ internal fun GlassSurfaceImpl(
         role = role,
         shape = shape,
         tint = tint.takeIf { it.alpha > 0f } ?: MaterialTheme.colorScheme.surface,
-        interactive = interactionSource != null
+        interactive = interactionSource != null,
+        scene = scene
     )
     Box(
         modifier = modifier
@@ -142,7 +176,7 @@ internal fun GlassSurfaceImpl(
                 sampling = HazeSampling.Default,
                 interactionSource = interactionSource
             )
-            .border(1.dp, borderColor, shape),
+            .border(1.dp, glassBorderColor(role, borderColor, scene), shape),
         contentAlignment = Alignment.Center
     ) {
         content()

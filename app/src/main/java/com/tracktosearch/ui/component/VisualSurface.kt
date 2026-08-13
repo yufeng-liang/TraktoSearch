@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -21,6 +20,7 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.LocalGlassVariant
 import com.tracktosearch.ui.theme.VisualEffectMode
 
 enum class VisualSurfaceKind {
@@ -87,6 +87,8 @@ fun AppVisualSurface(
     hazeState: HazeState? = null,
     role: GlassSurfaceRole = GlassSurfaceRole.TopBar,
     sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
+    interactionSource: MutableInteractionSource? = null,
+    scene: GlassScene = GlassScene(),
     backgroundColor: Color,
     borderColor: Color,
     content: @Composable () -> Unit
@@ -101,14 +103,35 @@ fun AppVisualSurface(
         )
 
         LocalVisualEffectMode.current == VisualEffectMode.GLASS && kind == VisualSurfaceKind.Glass -> {
-            val state = hazeState ?: remember { HazeState() }
+            if (hazeState == null) {
+                PlainGlassSurface(
+                    modifier = modifier,
+                    shape = shape,
+                    backgroundColor = resolveGlassFallbackFill(
+                        backgroundColor = backgroundColor,
+                        themeSurface = MaterialTheme.colorScheme.surface,
+                        tokenAlpha = glassToken(
+                            role = role,
+                            variant = LocalGlassVariant.current,
+                            isDark = isDark,
+                            scene = scene
+                        ).tintAlpha
+                    ),
+                    borderColor = glassBorderColor(role, borderColor, scene),
+                    content = content
+                )
+                return
+            }
             GlassSurfaceImpl(
                 modifier = modifier,
-                hazeState = state,
+                hazeState = hazeState,
                 role = role,
                 shape = requireRoundedGlassShape(shape, role),
                 sourceSelection = sourceSelection,
-                interactionSource = null,
+                scene = scene,
+                interactionSource = interactionSource,
+                // 透明调用方仍需要让 Glass token 参与计算；透明只表示不覆盖 Blur 的旧底色，
+                // Glass 分支使用主题 surface 作为基准，再由角色 token 控制最终通透度。
                 tint = backgroundColor,
                 borderColor = borderColor,
                 content = content
@@ -135,6 +158,8 @@ fun AppVisualSurface(
                 sourceSelection = sourceSelection,
                 hazeStyle = config.hazeStyle,
                 hazeBlurRadius = config.hazeBlurRadius,
+                interactionSource = interactionSource,
+                scene = scene,
                 elevation = config.elevation,
                 blurRadius = config.blurRadius,
                 shadowOffset = config.shadowOffset,
@@ -158,20 +183,21 @@ fun AppIconButton(
     role: GlassSurfaceRole = GlassSurfaceRole.CircularControl,
     interactionSource: MutableInteractionSource? = null,
     enabled: Boolean = true,
+    scene: GlassScene = GlassScene(),
     buttonStyle: NeumorphicIconButtonStyle = NeumorphicIconButtonStyle.Default,
     content: @Composable () -> Unit
 ) {
     when (LocalVisualEffectMode.current) {
         VisualEffectMode.GLASS -> {
-            val state = hazeState ?: remember { HazeState() }
             GlassIconButton(
                 onClick = onClick,
                 modifier = modifier,
                 size = size,
-                hazeState = state,
+                hazeState = hazeState,
                 role = role,
                 interactionSource = interactionSource,
                 enabled = enabled,
+                scene = scene,
                 content = content
             )
         }
@@ -184,6 +210,7 @@ fun AppIconButton(
             hazeState = hazeState,
             interactionSource = interactionSource,
             enabled = enabled,
+            scene = scene,
             buttonStyle = buttonStyle,
             content = content
         )

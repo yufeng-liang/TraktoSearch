@@ -76,6 +76,7 @@ import com.tracktosearch.data.local.DiscoverSectionStorage
 import com.tracktosearch.ui.animation.fadeSlideIn
 import com.tracktosearch.ui.component.AppIconButton
 import com.tracktosearch.ui.component.AppVisualSurface
+import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.hazeTopBar
@@ -85,6 +86,8 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.screen.search.DoubanHotAllSheet
@@ -196,6 +199,51 @@ fun DiscoverScreen(
     }
 
     val isDark = isAppDarkTheme()
+    val discoverContentCount = uiState.doubanHotCategories.sumOf { it.items.size } +
+        uiState.tmdbPopularMovies.size +
+        uiState.tmdbUpcomingMovies.size +
+        uiState.traktRecommendations.size +
+        uiState.traktTrendingMovies.size +
+        uiState.traktTrendingShows.size +
+        uiState.traktAnticipatedMovies.size +
+        uiState.traktAnticipatedShows.size +
+        uiState.traktShowRecommendations.size +
+        uiState.trendingLists.size
+    val discoverPosterPaths = listOf(
+        uiState.doubanHotCategories.flatMap { category -> category.items.mapNotNull { it.cover } },
+        uiState.tmdbPopularMovies.mapNotNull { it.poster_path },
+        uiState.tmdbUpcomingMovies.mapNotNull { it.poster_path },
+        uiState.traktRecommendations.mapNotNull { it.posterPath },
+        uiState.traktTrendingMovies.mapNotNull { it.movie.posterPath },
+        uiState.traktTrendingShows.mapNotNull { it.show.posterPath },
+        uiState.traktAnticipatedMovies.mapNotNull { it.movie.posterPath },
+        uiState.traktAnticipatedShows.mapNotNull { it.show.posterPath },
+        uiState.traktShowRecommendations.mapNotNull { it.show.posterPath }
+    ).flatten()
+    val discoverAmbientColor = rememberCachedPosterAmbientColor(
+        posterUrls = discoverPosterPaths,
+        fallback = MaterialTheme.colorScheme.background
+    )
+    val discoverLoadingCount = uiState.doubanHotCategories.count { it.isLoading } +
+        listOf(
+            uiState.isLoadingPopular,
+            uiState.isLoadingUpcoming,
+            uiState.isLoadingRecommendations,
+            uiState.isLoadingTrakt,
+            uiState.isLoadingTraktLists
+        ).count { it }
+    val discoverGlassScene = glassSceneForContent(
+        contentCount = discoverContentCount,
+        readabilityDemand = when {
+            discoverLoadingCount > 0 -> 0.78f
+            discoverContentCount == 0 -> 0.30f
+            else -> 0.62f
+        },
+        ambientColor = discoverAmbientColor,
+        contentCapacity = 72,
+        loadingCount = discoverLoadingCount,
+        loadingItemWeight = 4
+    )
     CompositionLocalProvider(
         LocalActivePosterTmdbId provides activePosterTmdbId,
         LocalActivePosterClickSetter provides { id ->
@@ -779,7 +827,8 @@ fun DiscoverScreen(
                         state = discoverHazeState,
                         style = discoverHazeStyle,
                         blurRadius = 24.dp,
-                        isContentUnderTopBar = discoverHasContentUnderTopBar
+                        isContentUnderTopBar = discoverHasContentUnderTopBar,
+                        scene = discoverGlassScene
                     )
             ) {
                 Column {
@@ -819,7 +868,8 @@ fun DiscoverScreen(
                             modifier = iconModifier,
                             isDark = isDark,
                             hazeState = discoverHazeState,
-                            role = GlassSurfaceRole.CircularControl
+                            role = GlassSurfaceRole.CircularControl,
+                            scene = discoverGlassScene
                         ) {
                             Icon(
                                 Icons.Rounded.FilterList,
@@ -832,7 +882,8 @@ fun DiscoverScreen(
                             onClick = { showDiscoverSectionsDialog = true },
                             isDark = isDark,
                             hazeState = discoverHazeState,
-                            role = GlassSurfaceRole.CircularControl
+                            role = GlassSurfaceRole.CircularControl,
+                            scene = discoverGlassScene
                         ) {
                             Icon(
                                 Icons.Rounded.FormatListNumbered,

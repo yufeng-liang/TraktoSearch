@@ -89,6 +89,7 @@ import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.AppVisualSurface
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.GlassTabIndicator
+import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.NeumorphicActiveTab
 import com.tracktosearch.ui.component.OnboardingOverlay
 import com.tracktosearch.ui.component.PageBackground
@@ -521,12 +522,32 @@ fun MainScreen(
                     // 让底部导航作为前景层，effect 明确采样 zIndex=0 的页面内容。
                 shape = navBarShape,
                 role = GlassSurfaceRole.BottomNavigation,
-                backgroundColor = Color.Transparent,
+                backgroundColor = if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.42f)
+                } else {
+                    Color.Transparent
+                },
                 borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.45f),
                 hazeState = hazeState,
                 // 底部导航自身作为 zIndex=1 的 source，effect 只采样 zIndex=0 的页面内容，
                 // 避免导航栏模糊自身导致重复模糊与无谓开销（Haze 最重的叠加场景）
-                sourceSelection = HazeSourceSelection.Behind.where { source -> source.zIndex < 1f }
+                sourceSelection = HazeSourceSelection.Behind.where { source -> source.zIndex < 1f },
+                scene = glassSceneForContent(
+                    contentCount = when (selectedTab) {
+                        0 -> 34
+                        1 -> 60
+                        2 -> 72
+                        else -> 24
+                    },
+                    readabilityDemand = when (selectedTab) {
+                        0 -> 0.86f
+                        1 -> 0.72f
+                        2 -> 0.84f
+                        else -> 0.88f
+                    },
+                    ambientColor = MaterialTheme.colorScheme.background,
+                    contentCapacity = 72
+                )
             ) {
                 val tabCount = tabs.size
                 val rowPadding = 8.dp

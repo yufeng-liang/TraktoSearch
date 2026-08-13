@@ -85,6 +85,8 @@ import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
@@ -111,6 +113,23 @@ fun DiscoverFilterScreen(
     val isLoggedIn by viewModel.isLoggedIn.collectAsStateWithLifecycle()
     val hazeState = remember { HazeState() }
     val hazeStyle = HazeMaterials.thin()
+    val discoverFilterGlassScene = glassSceneForContent(
+        contentCount = uiState.items.size,
+        readabilityDemand = when {
+            uiState.showAdvanced -> 0.94f
+            uiState.selectedGenreIds.isNotEmpty() || uiState.selectedCountries.isNotEmpty() ||
+                uiState.selectedKeywordIds.isNotEmpty() -> 0.82f
+            uiState.isLoading -> 0.76f
+            else -> 0.66f
+        },
+        ambientColor = rememberCachedPosterAmbientColor(
+            posterUrls = uiState.items.mapNotNull { it.poster_path },
+            fallback = MaterialTheme.colorScheme.background
+        ),
+        contentCapacity = 36,
+        loadingCount = if (uiState.isLoading || uiState.isLoadingMore) 1 else 0,
+        loadingItemWeight = 4
+    )
     val listState = rememberLazyListState()
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
@@ -243,7 +262,8 @@ fun DiscoverFilterScreen(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(bottom = 16.dp, end = 16.dp),
-            hazeState = hazeState
+            hazeState = hazeState,
+            scene = discoverFilterGlassScene
         )
 
         // ========== 吸顶栏（Blur，透明底色） ==========
@@ -256,7 +276,8 @@ fun DiscoverFilterScreen(
                 .hazeTopBar(
                     state = hazeState,
                     style = hazeStyle,
-                    blurRadius = 24.dp
+                    blurRadius = 24.dp,
+                    scene = discoverFilterGlassScene
                 )
         ) {
             Spacer(modifier = Modifier.statusBarsPadding())
