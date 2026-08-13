@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsEnabled
@@ -11,6 +12,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
@@ -45,6 +47,55 @@ class NeumorphicGlassTest {
         }
 
         composeRule.waitForIdle()
+    }
+
+    @Test
+    fun glass_surface_rejects_non_rounded_shape_with_a_clear_error() {
+        var failure: IllegalArgumentException? = null
+        try {
+            composeRule.setContent {
+                CompositionLocalProvider(LocalVisualEffectMode provides VisualEffectMode.GLASS) {
+                    MaterialTheme {
+                        AppVisualSurface(
+                            kind = VisualSurfaceKind.Glass,
+                            shape = CutCornerShape(12.dp),
+                            hazeState = HazeState(),
+                            role = GlassSurfaceRole.BottomNavigation,
+                            backgroundColor = Color.Transparent,
+                            borderColor = Color.Transparent
+                        ) {}
+                    }
+                }
+            }
+            composeRule.waitForIdle()
+        } catch (exception: IllegalArgumentException) {
+            failure = exception
+        }
+
+        assertThat(failure).isNotNull()
+        assertThat(failure?.message).contains("RoundedCornerShape")
+    }
+
+    @Test
+    fun bottom_navigation_blur_config_keeps_legacy_visual_values() {
+        lateinit var config: BlurSurfaceConfig
+        composeRule.setContent {
+            MaterialTheme {
+                config = blurSurfaceConfig(
+                    role = GlassSurfaceRole.BottomNavigation,
+                    isDark = false
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        assertThat(config.elevation).isEqualTo(8.dp)
+        assertThat(config.blurRadius).isEqualTo(22.dp)
+        assertThat(config.shadowOffset).isEqualTo(6.dp)
+        assertThat(config.hazeBlurRadius).isEqualTo(40.dp)
+        assertThat(config.darkShadowAlpha).isEqualTo(0.16f)
+        assertThat(config.lightShadowAlpha).isEqualTo(0f)
+        assertThat(config.showHighlight).isFalse()
     }
 
     @Test

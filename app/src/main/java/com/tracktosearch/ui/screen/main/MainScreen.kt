@@ -118,7 +118,6 @@ import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.where
 import kotlinx.coroutines.delay
@@ -510,10 +509,6 @@ fun MainScreen(
             val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             val navBarShape = RoundedCornerShape(31.dp)
             val isDark = isAppDarkTheme()
-            // 降低表面染色强度，让模糊后的页面主色透过导航栏。
-            val navHazeStyle = HazeMaterials.thin(
-                MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.08f else 0.03f)
-            )
             AppVisualSurface(
                 kind = VisualSurfaceKind.Glass,
                 modifier = Modifier
@@ -524,23 +519,14 @@ fun MainScreen(
                     .height(62.dp)
                     .hazeSource(state = hazeState, zIndex = 1f),
                     // 让底部导航作为前景层，effect 明确采样 zIndex=0 的页面内容。
-                isDark = isDark,
                 shape = navBarShape,
-                glassRole = GlassSurfaceRole.BottomNavigation,
-                elevation = 8.dp,
-                blurRadius = 22.dp,
-                shadowOffset = 6.dp,
+                role = GlassSurfaceRole.BottomNavigation,
                 backgroundColor = Color.Transparent,
                 borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.45f),
-                darkShadowAlpha = if (isDark) 0.38f else 0.16f,
-                lightShadowAlpha = 0f,
                 hazeState = hazeState,
-                hazeStyle = navHazeStyle,
-                hazeBlurRadius = 40.dp,
                 // 底部导航自身作为 zIndex=1 的 source，effect 只采样 zIndex=0 的页面内容，
                 // 避免导航栏模糊自身导致重复模糊与无谓开销（Haze 最重的叠加场景）
-                sourceSelection = HazeSourceSelection.Behind.where { source -> source.zIndex < 1f },
-                showHighlight = false
+                sourceSelection = HazeSourceSelection.Behind.where { source -> source.zIndex < 1f }
             ) {
                 val tabCount = tabs.size
                 val rowPadding = 8.dp

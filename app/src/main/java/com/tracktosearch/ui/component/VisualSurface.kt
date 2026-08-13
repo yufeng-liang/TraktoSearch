@@ -13,12 +13,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
-import dev.chrisbanes.haze.glass.GlassStyle
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 
@@ -26,6 +27,52 @@ enum class VisualSurfaceKind {
     Glass,
     Content,
     Modal
+}
+
+/** Blur 分支的有限内部配置，页面只能选择语义角色。 */
+internal data class BlurSurfaceConfig(
+    val elevation: Dp,
+    val blurRadius: Dp?,
+    val shadowOffset: Dp?,
+    val hazeStyle: HazeBlurStyle,
+    val hazeBlurRadius: Dp?,
+    val darkShadowAlpha: Float,
+    val lightShadowAlpha: Float,
+    val showHighlight: Boolean
+)
+
+@Composable
+internal fun blurSurfaceConfig(
+    role: GlassSurfaceRole,
+    isDark: Boolean
+): BlurSurfaceConfig {
+    return when (role) {
+        GlassSurfaceRole.BottomNavigation -> BlurSurfaceConfig(
+            elevation = 8.dp,
+            blurRadius = 22.dp,
+            shadowOffset = 6.dp,
+            hazeStyle = HazeMaterials.thin(
+                MaterialTheme.colorScheme.surface.copy(
+                    alpha = if (isDark) 0.08f else 0.03f
+                )
+            ),
+            hazeBlurRadius = 40.dp,
+            darkShadowAlpha = if (isDark) 0.38f else 0.16f,
+            lightShadowAlpha = 0f,
+            showHighlight = false
+        )
+
+        else -> BlurSurfaceConfig(
+            elevation = 14.dp,
+            blurRadius = null,
+            shadowOffset = null,
+            hazeStyle = HazeMaterials.thin(),
+            hazeBlurRadius = null,
+            darkShadowAlpha = if (isDark) 0.5f else 0.12f,
+            lightShadowAlpha = if (isDark) 0.10f else 0.85f,
+            showHighlight = true
+        )
+    }
 }
 
 /**
@@ -36,24 +83,15 @@ enum class VisualSurfaceKind {
 fun AppVisualSurface(
     kind: VisualSurfaceKind,
     modifier: Modifier = Modifier,
-    isDark: Boolean,
-    shape: RoundedCornerShape,
+    shape: Shape,
     hazeState: HazeState? = null,
-    glassRole: GlassSurfaceRole = GlassSurfaceRole.TopBar,
+    role: GlassSurfaceRole = GlassSurfaceRole.TopBar,
     sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
     backgroundColor: Color,
     borderColor: Color,
-    elevation: Dp = 14.dp,
-    blurRadius: Dp? = null,
-    shadowOffset: Dp? = null,
-    hazeStyle: HazeBlurStyle? = null,
-    glassStyle: GlassStyle? = null,
-    hazeBlurRadius: Dp? = null,
-    darkShadowAlpha: Float? = null,
-    lightShadowAlpha: Float? = null,
-    showHighlight: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    val isDark = isAppDarkTheme()
     when {
         kind == VisualSurfaceKind.Modal -> ModalSurface(
             modifier = modifier,
@@ -67,8 +105,8 @@ fun AppVisualSurface(
             GlassSurfaceImpl(
                 modifier = modifier,
                 hazeState = state,
-                role = glassRole,
-                shape = shape,
+                role = role,
+                shape = requireRoundedGlassShape(shape, role),
                 sourceSelection = sourceSelection,
                 interactionSource = null,
                 tint = backgroundColor,
@@ -85,25 +123,27 @@ fun AppVisualSurface(
             content = content
         )
 
-        else -> NeumorphicFrostedSurface(
-            modifier = modifier,
-            isDark = isDark,
-            shape = shape,
-            backgroundColor = backgroundColor,
-            borderColor = borderColor,
-            hazeState = hazeState,
-            sourceSelection = sourceSelection,
-            hazeStyle = hazeStyle,
-            glassStyle = glassStyle,
-            hazeBlurRadius = hazeBlurRadius,
-            elevation = elevation,
-            blurRadius = blurRadius,
-            shadowOffset = shadowOffset,
-            darkShadowAlpha = darkShadowAlpha ?: if (isDark) 0.5f else 0.12f,
-            lightShadowAlpha = lightShadowAlpha ?: if (isDark) 0.10f else 0.85f,
-            showHighlight = showHighlight,
-            content = content
-        )
+        else -> {
+            val config = blurSurfaceConfig(role = role, isDark = isDark)
+            NeumorphicFrostedSurface(
+                modifier = modifier,
+                isDark = isDark,
+                shape = shape,
+                backgroundColor = backgroundColor,
+                borderColor = borderColor,
+                hazeState = hazeState,
+                sourceSelection = sourceSelection,
+                hazeStyle = config.hazeStyle,
+                hazeBlurRadius = config.hazeBlurRadius,
+                elevation = config.elevation,
+                blurRadius = config.blurRadius,
+                shadowOffset = config.shadowOffset,
+                darkShadowAlpha = config.darkShadowAlpha,
+                lightShadowAlpha = config.lightShadowAlpha,
+                showHighlight = config.showHighlight,
+                content = content
+            )
+        }
     }
 }
 
@@ -153,7 +193,7 @@ fun AppIconButton(
 @Composable
 private fun PlainGlassSurface(
     modifier: Modifier,
-    shape: RoundedCornerShape,
+    shape: Shape,
     backgroundColor: Color,
     borderColor: Color,
     content: @Composable () -> Unit
@@ -171,7 +211,7 @@ private fun PlainGlassSurface(
 @Composable
 private fun ModalSurface(
     modifier: Modifier,
-    shape: RoundedCornerShape,
+    shape: Shape,
     borderColor: Color,
     content: @Composable () -> Unit
 ) {
@@ -184,4 +224,15 @@ private fun ModalSurface(
     ) {
         content()
     }
+}
+
+private fun requireRoundedGlassShape(
+    shape: Shape,
+    role: GlassSurfaceRole
+): RoundedCornerShape {
+    require(shape is RoundedCornerShape) {
+        "Glass surface role $role requires RoundedCornerShape, " +
+            "but received ${shape::class.simpleName}."
+    }
+    return shape
 }
