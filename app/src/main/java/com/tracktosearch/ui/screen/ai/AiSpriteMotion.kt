@@ -274,35 +274,173 @@ private fun SpriteMotionVisual(
             .then(if (isInteractive) Modifier.clickable(onClick = onClick) else Modifier),
         contentAlignment = Alignment.BottomCenter
     ) {
-        AnimatedContent(
-            targetState = art.drawableFor(state, anchor),
-            transitionSpec = {
-                (fadeIn(animationSpec = tween(120)) + scaleIn(initialScale = 0.96f))
-                    .togetherWith(fadeOut(animationSpec = tween(90)))
-                    .using(SizeTransform(clip = false))
-            },
-            label = "sprite_frame"
-        ) { frameRes ->
-            Image(
-                painter = painterResource(frameRes),
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        this.alpha = alpha
-                        translationY = offsetY.toPx()
-                        scaleX = scale
-                        scaleY = scale
-                        rotationZ = rotation
-                    }
+        val layeredArt = art.layerArt
+        if (layeredArt != null) {
+            LayeredSpriteMotionVisual(
+                art = layeredArt,
+                state = state,
+                alpha = alpha,
+                offsetY = offsetY,
+                scale = scale,
+                rotation = rotation
             )
+        } else {
+            AnimatedContent(
+                targetState = art.drawableFor(state, anchor),
+                transitionSpec = {
+                    (fadeIn(animationSpec = tween(120)) + scaleIn(initialScale = 0.96f))
+                        .togetherWith(fadeOut(animationSpec = tween(90)))
+                        .using(SizeTransform(clip = false))
+                },
+                label = "sprite_frame"
+            ) { frameRes ->
+                Image(
+                    painter = painterResource(frameRes),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            this.alpha = alpha
+                            translationY = offsetY.toPx()
+                            scaleX = scale
+                            scaleY = scale
+                            rotationZ = rotation
+                        }
+                )
+            }
         }
         SpriteReactionEffect(
             reaction = art.reaction,
             active = state == AiSpriteMotionState.REACT,
             modifier = Modifier.align(Alignment.TopEnd)
         )
+    }
+}
+
+private data class LayerTransform(
+    val translationX: Dp = 0.dp,
+    val translationY: Dp = 0.dp,
+    val scale: Float = 1f,
+    val rotation: Float = 0f,
+    val alpha: Float = 1f
+)
+
+@Composable
+private fun LayeredSpriteMotionVisual(
+    art: AiCharacterLayerArt,
+    state: AiSpriteMotionState,
+    alpha: Float,
+    offsetY: Dp,
+    scale: Float,
+    rotation: Float
+) {
+    val frameState = when (state) {
+        AiSpriteMotionState.PEEK -> AiSpriteMotionState.PEEK
+        AiSpriteMotionState.REACT -> AiSpriteMotionState.REACT
+        else -> AiSpriteMotionState.OBSERVE
+    }
+    AiSpriteLayer.entries
+        .filter { it != AiSpriteLayer.EFFECTS }
+        .forEach { layer ->
+            val frameRes = art.drawableFor(layer, frameState) ?: return@forEach
+            val transform = layerTransform(layer, state)
+            val layerAlpha by animateFloatAsState(
+                targetValue = alpha * transform.alpha,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                label = "sprite_${layer.name.lowercase()}_alpha"
+            )
+            val layerOffsetX by animateDpAsState(
+                targetValue = transform.translationX,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                label = "sprite_${layer.name.lowercase()}_offset_x"
+            )
+            val layerOffsetY by animateDpAsState(
+                targetValue = offsetY + transform.translationY,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                label = "sprite_${layer.name.lowercase()}_offset_y"
+            )
+            val layerScale by animateFloatAsState(
+                targetValue = scale * transform.scale,
+                animationSpec = spring(stiffness = Spring.StiffnessLow),
+                label = "sprite_${layer.name.lowercase()}_scale"
+            )
+            val layerRotation by animateFloatAsState(
+                targetValue = rotation + transform.rotation,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                label = "sprite_${layer.name.lowercase()}_rotation"
+            )
+            AnimatedContent(
+                targetState = frameRes,
+                transitionSpec = {
+                    (fadeIn(animationSpec = tween(120)) + scaleIn(initialScale = 0.98f))
+                        .togetherWith(fadeOut(animationSpec = tween(90)))
+                        .using(SizeTransform(clip = false))
+                },
+                label = "sprite_${layer.name.lowercase()}_frame"
+            ) { resource ->
+                Image(
+                    painter = painterResource(resource),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            this.alpha = layerAlpha
+                            translationX = layerOffsetX.toPx()
+                            translationY = layerOffsetY.toPx()
+                            scaleX = layerScale
+                            scaleY = layerScale
+                            rotationZ = layerRotation
+                        }
+                )
+            }
+        }
+}
+
+private fun layerTransform(layer: AiSpriteLayer, state: AiSpriteMotionState): LayerTransform {
+    return when (layer) {
+        AiSpriteLayer.BODY -> when (state) {
+            AiSpriteMotionState.PREPARE -> LayerTransform(translationY = 5.dp, scale = 0.96f)
+            AiSpriteMotionState.PEEK -> LayerTransform(translationY = 1.dp, scale = 0.99f)
+            AiSpriteMotionState.OBSERVE -> LayerTransform(translationY = 0.dp, scale = 1f)
+            AiSpriteMotionState.REACT -> LayerTransform(translationY = (-2).dp, scale = 1.015f)
+            AiSpriteMotionState.RETREAT -> LayerTransform(translationY = 7.dp, scale = 0.96f, alpha = 0.8f)
+            AiSpriteMotionState.HIDDEN -> LayerTransform(alpha = 0f)
+        }
+        AiSpriteLayer.HEAD -> when (state) {
+            AiSpriteMotionState.PREPARE -> LayerTransform(translationY = 5.dp, scale = 0.96f)
+            AiSpriteMotionState.PEEK -> LayerTransform(translationY = (-1).dp, rotation = -1f)
+            AiSpriteMotionState.OBSERVE -> LayerTransform(translationX = 1.dp, rotation = 1.4f)
+            AiSpriteMotionState.REACT -> LayerTransform(translationY = (-3).dp, scale = 1.025f, rotation = -2f)
+            AiSpriteMotionState.RETREAT -> LayerTransform(translationY = 7.dp, rotation = -1f, alpha = 0.8f)
+            AiSpriteMotionState.HIDDEN -> LayerTransform(alpha = 0f)
+        }
+        AiSpriteLayer.EARS -> when (state) {
+            AiSpriteMotionState.PREPARE -> LayerTransform(translationY = 6.dp, scale = 0.94f)
+            AiSpriteMotionState.PEEK -> LayerTransform(translationY = (-3).dp, rotation = -1.2f)
+            AiSpriteMotionState.OBSERVE -> LayerTransform(translationX = (-1).dp, rotation = 1.8f)
+            AiSpriteMotionState.REACT -> LayerTransform(translationY = (-7).dp, scale = 1.06f, rotation = -3.5f)
+            AiSpriteMotionState.RETREAT -> LayerTransform(translationY = 9.dp, rotation = 1f, alpha = 0.8f)
+            AiSpriteMotionState.HIDDEN -> LayerTransform(alpha = 0f)
+        }
+        AiSpriteLayer.FACE -> when (state) {
+            AiSpriteMotionState.PREPARE -> LayerTransform(translationY = 4.dp, scale = 0.96f)
+            AiSpriteMotionState.PEEK -> LayerTransform(translationX = 1.dp, translationY = (-1).dp)
+            AiSpriteMotionState.OBSERVE -> LayerTransform(translationX = 2.dp, rotation = 0.6f)
+            AiSpriteMotionState.REACT -> LayerTransform(translationY = (-2).dp, scale = 1.03f, rotation = -1.2f)
+            AiSpriteMotionState.RETREAT -> LayerTransform(translationY = 7.dp, alpha = 0.8f)
+            AiSpriteMotionState.HIDDEN -> LayerTransform(alpha = 0f)
+        }
+        AiSpriteLayer.ARMS -> when (state) {
+            AiSpriteMotionState.PREPARE -> LayerTransform(translationY = 5.dp, scale = 0.96f)
+            AiSpriteMotionState.PEEK -> LayerTransform(translationX = (-1).dp, rotation = -1.5f)
+            AiSpriteMotionState.OBSERVE -> LayerTransform(translationX = 1.dp, rotation = 1.2f)
+            AiSpriteMotionState.REACT -> LayerTransform(translationY = (-5).dp, scale = 1.04f, rotation = 4f)
+            AiSpriteMotionState.RETREAT -> LayerTransform(translationY = 8.dp, rotation = 2f, alpha = 0.8f)
+            AiSpriteMotionState.HIDDEN -> LayerTransform(alpha = 0f)
+        }
+        AiSpriteLayer.EFFECTS -> LayerTransform()
     }
 }
 

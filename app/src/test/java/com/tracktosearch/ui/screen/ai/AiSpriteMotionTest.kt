@@ -22,6 +22,51 @@ class AiSpriteMotionTest {
     }
 
     @Test
+    fun artSpecExposesIndependentCharacterLayers() {
+        listOf("chiikawa", "hachiware", "usagi").forEach { characterId ->
+            val layers = automaticSpriteArt(characterId)!!.layerArt
+
+            assertThat(layers).isNotNull()
+            listOf(AiSpriteLayer.BODY, AiSpriteLayer.HEAD, AiSpriteLayer.EARS,
+                AiSpriteLayer.FACE, AiSpriteLayer.ARMS).forEach { layer ->
+                assertThat(layers!!.drawableFor(layer)).isNotEqualTo(0)
+            }
+        }
+    }
+
+    @Test
+    fun everyCharacterStateMapsEveryIndependentLayerToItsOwnFrame() {
+        listOf("chiikawa", "hachiware", "usagi").forEach { characterId ->
+            val layers = automaticSpriteArt(characterId)!!.layerArt!!
+            listOf(
+                AiSpriteMotionState.OBSERVE to layers.standby,
+                AiSpriteMotionState.PEEK to layers.peek,
+                AiSpriteMotionState.REACT to layers.react
+            ).forEach { (state, frame) ->
+                assertThat(layers.drawableFor(AiSpriteLayer.BODY, state)).isEqualTo(frame.bodyRes)
+                assertThat(layers.drawableFor(AiSpriteLayer.HEAD, state)).isEqualTo(frame.headRes)
+                assertThat(layers.drawableFor(AiSpriteLayer.EARS, state)).isEqualTo(frame.earsRes)
+                assertThat(layers.drawableFor(AiSpriteLayer.FACE, state)).isEqualTo(frame.faceRes)
+                assertThat(layers.drawableFor(AiSpriteLayer.ARMS, state)).isEqualTo(frame.armsRes)
+            }
+        }
+    }
+
+    @Test
+    fun publicLayerContractKeepsEffectsAsAComposeLayer() {
+        assertThat(AiSpriteLayer.entries).containsExactly(
+            AiSpriteLayer.BODY,
+            AiSpriteLayer.HEAD,
+            AiSpriteLayer.EARS,
+            AiSpriteLayer.FACE,
+            AiSpriteLayer.ARMS,
+            AiSpriteLayer.EFFECTS
+        ).inOrder()
+        assertThat(automaticSpriteArt("chiikawa")!!.layerArt!!.drawableFor(AiSpriteLayer.EFFECTS))
+            .isNull()
+    }
+
+    @Test
     fun peekFrameUsesDedicatedArtAtDetailAnchors() {
         val art = automaticSpriteArt("chiikawa")!!
 
