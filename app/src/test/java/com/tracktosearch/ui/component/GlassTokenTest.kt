@@ -318,4 +318,48 @@ class GlassTokenTest {
         assertThat(resolveCachedPosterAmbientColor(emptyList(), fallback))
             .isEqualTo(fallback)
     }
+
+    @Test
+    fun searchBarKeepsBaseFillWhenHazeInactive() {
+        val fallback = Color(0xFF112233)
+
+        assertThat(
+            searchBarBaseColor(
+                mode = VisualEffectMode.GLASS,
+                hazeActive = false,
+                fallbackColor = fallback
+            )
+        ).isEqualTo(fallback)
+        assertThat(
+            searchBarBaseColor(
+                mode = VisualEffectMode.BLUR,
+                hazeActive = false,
+                fallbackColor = fallback
+            )
+        ).isEqualTo(fallback)
+    }
+
+    @Test
+    fun searchBarKeepsBaseFillInBlurModeWithHaze() {
+        val fallback = Color(0xFF112233)
+
+        assertThat(
+            searchBarBaseColor(
+                mode = VisualEffectMode.BLUR,
+                hazeActive = true,
+                fallbackColor = fallback
+            )
+        ).isEqualTo(fallback)
+    }
+
+    @Test
+    fun searchBarDropsBaseFillInGlassModeWithHaze() {
+        assertThat(
+            searchBarBaseColor(
+                mode = VisualEffectMode.GLASS,
+                hazeActive = true,
+                fallbackColor = Color.Red
+            )
+        ).isEqualTo(Color.Transparent)
+    }
 }

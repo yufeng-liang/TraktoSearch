@@ -40,6 +40,18 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 
 /**
+ * 搜索栏底色决策：Blur 模式不叠玻璃 tint，必须保留底色保证可读性；
+ * Glass 模式在 haze 生效时把底色交给玻璃 tint，避免双重底色。
+ */
+internal fun searchBarBaseColor(
+    mode: VisualEffectMode,
+    hazeActive: Boolean,
+    fallbackColor: Color
+): Color {
+    return if (!hazeActive || mode == VisualEffectMode.BLUR) fallbackColor else Color.Transparent
+}
+
+/**
  * 毛玻璃胶囊搜索栏
  *
  * @param placeholder 占位提示文字
@@ -117,7 +129,13 @@ fun GlassSearchBar(
             .fillMaxWidth()
             .clip(RoundedCornerShape(28.dp))
             .border(1.dp, resolvedBorderColor, RoundedCornerShape(28.dp))
-            .background(if (hazeState == null) resolvedContainerColor else Color.Transparent)
+            .background(
+                searchBarBaseColor(
+                    mode = LocalVisualEffectMode.current,
+                    hazeActive = hazeState != null,
+                    fallbackColor = resolvedContainerColor
+                )
+            )
             .then(
                 if (hazeState != null) {
                     Modifier.appVisualEffect(
