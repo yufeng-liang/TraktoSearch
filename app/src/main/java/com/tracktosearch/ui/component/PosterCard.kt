@@ -35,6 +35,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
 
 /**
  * 统一海报卡片
@@ -97,24 +98,38 @@ fun PosterCard(
 
     val isDark = isAppDarkTheme()
     val ratingHazeState = remember { HazeState() }
+    val posterShape = RoundedCornerShape(12.dp)
+    val useNeumorphicDecoration = usesNeumorphicDecoration(LocalVisualEffectMode.current)
     Box(modifier = modifier.scale(scale)) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
-                .neumorphicOuterShadow(
-                    shape = RoundedCornerShape(12.dp),
-                    isDark = isDark,
-                    elevation = 4.dp,
-                    darkAlpha = if (isDark) 0.4f else 0.12f
+                .then(
+                    if (useNeumorphicDecoration) {
+                        Modifier.neumorphicOuterShadow(
+                            shape = posterShape,
+                            isDark = isDark,
+                            elevation = 4.dp,
+                            darkAlpha = if (isDark) 0.4f else 0.12f
+                        )
+                    } else {
+                        Modifier
+                    }
                 )
-                .clip(RoundedCornerShape(12.dp))
+                .clip(posterShape)
                 .then(posterModifier)
-                .neumorphicInnerShadow(
-                    shape = RoundedCornerShape(12.dp),
-                    isDark = isDark,
-                    elevation = 4.dp,
-                    lightAlpha = if (isDark) 0.08f else 0.55f
+                .then(
+                    if (useNeumorphicDecoration) {
+                        Modifier.neumorphicInnerShadow(
+                            shape = posterShape,
+                            isDark = isDark,
+                            elevation = 4.dp,
+                            lightAlpha = if (isDark) 0.08f else 0.55f
+                        )
+                    } else {
+                        Modifier
+                    }
                 )
                 .then(
                     if (onClick != null) {

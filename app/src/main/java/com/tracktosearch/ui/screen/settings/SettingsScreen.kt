@@ -95,6 +95,8 @@ import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.DoubanLogo
 import com.tracktosearch.ui.component.TraktLogo
+import com.tracktosearch.ui.component.GlassScene
+import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.hasListScrolled
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -113,6 +115,7 @@ import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
 import com.tracktosearch.ui.theme.appSwitchColors
+import com.tracktosearch.ui.theme.GlassVariant
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.component.isAppDarkTheme
@@ -151,8 +154,7 @@ private fun resolveConsistencyCheckBlocker(
     kotlinx.coroutines.FlowPreview::class,
     ExperimentalSharedTransitionApi::class,
 )
-// 视觉效果（毛玻璃/Glass）还在打磨中，暂时隐藏设置入口；调好后改回 true 即可恢复
-private const val SHOW_VISUAL_EFFECT_ENTRY = false
+private const val SHOW_VISUAL_EFFECT_ENTRY = true
 
 @Composable
 fun SettingsScreen(
@@ -188,8 +190,10 @@ fun SettingsScreen(
     val currentTheme by viewModel.themeMode.collectAsStateWithLifecycle()
     val currentAccent by viewModel.accentColor.collectAsStateWithLifecycle()
     val currentVisualEffectMode by viewModel.visualEffectMode.collectAsStateWithLifecycle()
+    val currentGlassVariant by viewModel.glassVariant.collectAsStateWithLifecycle()
     val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
     val currentDefaultTab by viewModel.defaultTab.collectAsStateWithLifecycle()
+    val isLoadingChangelog by viewModel.isLoadingChangelog.collectAsStateWithLifecycle()
     // 共享元素转场动画开关:读 AppNavigation 顶层 collect 的值(App 启动即开始收集,
     // 进设置页时已稳定,避免 SettingsViewModel 延迟构造导致的初始 false→true 跳变)
     val sharedTransitionEnabled = LocalSharedTransitionEnabled.current
@@ -359,6 +363,21 @@ fun SettingsScreen(
     val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
     val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsStateWithLifecycle()
     val latestVersion by viewModel.latestVersion.collectAsStateWithLifecycle()
+    val settingsGlassScene = glassSceneForContent(
+        contentCount = 16 + if (isLoggedIn) 4 else 0,
+        readabilityDemand = if (unreadCount > 0) 0.82f else 0.68f,
+        ambientColor = MaterialTheme.colorScheme.background,
+        contentCapacity = 24,
+        loadingCount = listOf(
+            exportImportState.isExporting,
+            exportImportState.isImporting,
+            isDoubanSyncRunning,
+            consistencyCheckState.isRunning,
+            isCheckingUpdate,
+            isLoadingChangelog
+        ).count { it },
+        loadingItemWeight = 2
+    )
 
     // LazyListState 由 NavGraph backstack 自然 remember,返回设置页时位置自动恢复,无需手动持久化
     val settingsListState = rememberLazyListState()
@@ -455,7 +474,10 @@ fun SettingsScreen(
                     val accentName = currentAccent?.let { stringResource(it.labelResId) }
                         ?: stringResource(R.string.settings_accent_dynamic)
                     val visualEffectName = when (currentVisualEffectMode) {
-                        VisualEffectMode.GLASS -> stringResource(R.string.settings_visual_effect_glass)
+                        VisualEffectMode.GLASS -> when (currentGlassVariant) {
+                            GlassVariant.CLEAR -> stringResource(R.string.settings_visual_effect_glass_clear)
+                            GlassVariant.FOCUSED -> stringResource(R.string.settings_visual_effect_glass_focused)
+                        }
                         VisualEffectMode.BLUR -> stringResource(R.string.settings_visual_effect_blur)
                     }
                     val languageName = when (currentLanguage) {
@@ -864,7 +886,8 @@ fun SettingsScreen(
                         state = settingsHazeState,
                         style = settingsHazeStyle,
                         blurRadius = 24.dp,
-                        isContentUnderTopBar = settingsHasContentUnderTopBar
+                        isContentUnderTopBar = settingsHasContentUnderTopBar,
+                        scene = settingsGlassScene
                     )
             ) {
                 Column {
@@ -886,7 +909,9 @@ fun SettingsScreen(
                         NeumorphicIconButton(
                             onClick = onMessagesClick,
                             isDark = isDark,
-                            lightBorderAlpha = 0.35f
+                            lightBorderAlpha = 0.35f,
+                            hazeState = settingsHazeState,
+                            scene = settingsGlassScene
                         ) {
                             BadgedBox(badge = { if (unreadCount > 0) { Badge { Text(if (unreadCount > 99) "99+" else unreadCount.toString()) } } }) {
                                 Icon(imageVector = Icons.Rounded.Email, contentDescription = stringResource(R.string.feedback_messages), modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurface)
@@ -916,8 +941,9 @@ fun SettingsScreen(
     if (showVisualEffectDialog) {
         VisualEffectSelectionDialog(
             currentMode = currentVisualEffectMode,
-            onModeSelected = {
-                viewModel.setVisualEffectMode(it)
+            currentVariant = currentGlassVariant,
+            onSelection = { mode, variant ->
+                viewModel.setVisualEffectSelection(mode, variant)
                 showVisualEffectDialog = false
             },
             onDismiss = { showVisualEffectDialog = false }

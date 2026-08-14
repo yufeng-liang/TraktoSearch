@@ -37,6 +37,8 @@ import com.tracktosearch.data.util.CrashLogUploader
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.test.MainDispatcherRule
+import com.tracktosearch.ui.theme.GlassVariant
+import com.tracktosearch.ui.theme.VisualEffectMode
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -147,6 +149,7 @@ class SettingsViewModelTest {
         // 构造时直接赋值的 StateFlow 属性必须在 ViewModel 构造前 stub
         every { themeStorage.themeMode } returns MutableStateFlow("system")
         every { themeStorage.accentColor } returns MutableStateFlow(null)
+        every { themeStorage.glassVariant } returns MutableStateFlow(GlassVariant.CLEAR)
         every { defaultTabStorage.defaultTab } returns MutableStateFlow(0)
         every { languageStorage.language } returns MutableStateFlow("zh-CN")
         every { searchSourceStorage.pansouEnabled } returns MutableStateFlow(false)
@@ -220,6 +223,19 @@ class SettingsViewModelTest {
         advanceUntilIdle()
 
         coVerify { themeStorage.setThemeMode("dark") }
+    }
+
+    @Test
+    fun setVisualEffectSelectionWritesModeAndVariantTogether() = runTest {
+        viewModel.setVisualEffectSelection(VisualEffectMode.GLASS, GlassVariant.FOCUSED)
+        advanceUntilIdle()
+
+        coVerify {
+            themeStorage.setVisualEffectSelection(
+                VisualEffectMode.GLASS,
+                GlassVariant.FOCUSED
+            )
+        }
     }
 
     /**

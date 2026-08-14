@@ -23,6 +23,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.draggable
@@ -168,6 +169,9 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.GlassSurfaceRole
+import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
@@ -391,6 +395,7 @@ fun WatchlistScreen(
         label = "overscroll"
     )
     val focusRequester = remember { FocusRequester() }
+    val searchInteractionSource = remember { MutableInteractionSource() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     var isSearchExpanded by rememberSaveable { mutableStateOf(false) }
@@ -541,6 +546,23 @@ fun WatchlistScreen(
         selectedMode == 1 && selectedTab == 1 -> uiState.isLoadingHistoryShows
         else -> uiState.isLoadingHistoryOthers
     }
+
+    val watchlistGlassScene = glassSceneForContent(
+        contentCount = currentItems.size,
+        readabilityDemand = when {
+            searchQuery.isNotBlank() && hasActiveFilters -> 0.92f
+            searchQuery.isNotBlank() || hasActiveFilters -> 0.78f
+            isMultiSelectMode -> 0.74f
+            else -> 0.52f
+        },
+        ambientColor = rememberCachedPosterAmbientColor(
+            posterUrls = currentItems.mapNotNull { it.posterUrl },
+            fallback = MaterialTheme.colorScheme.background
+        ),
+        contentCapacity = 40,
+        loadingCount = if (isCurrentLoading) 1 else 0,
+        loadingItemWeight = 4
+    )
 
     // 接近列表末尾时加载下一页，避免 watchlist 超过 200 条后停在第一页
     LaunchedEffect(selectedMode, selectedTab, currentGridState) {
@@ -849,7 +871,8 @@ fun WatchlistScreen(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(bottom = 100.dp, end = 16.dp),
-                    hazeState = hazeState
+                    hazeState = hazeState,
+                    scene = watchlistGlassScene
                 )
     
                 // Haze 模糊覆盖层 - 搜索框 + 胶囊切换 + PrimaryTabRow 或 多选操作栏
@@ -860,7 +883,8 @@ fun WatchlistScreen(
                             state = hazeState,
                             style = hazeStyle,
                             blurRadius = 24.dp,
-                            isContentUnderTopBar = hasContentUnderTopBar
+                            isContentUnderTopBar = hasContentUnderTopBar,
+                            scene = watchlistGlassScene
                         )
                 ) {
                     // 搜索框 + Tab 栏（非多选模式时显示）
@@ -946,12 +970,15 @@ fun WatchlistScreen(
                                                         modifier = Modifier.fillMaxSize(),
                                                         isDark = isDark,
                                                         shape = RoundedCornerShape(21.dp),
+                                                        glassRole = GlassSurfaceRole.SearchField,
+                                                        interactionSource = searchInteractionSource,
                                                         backgroundColor = if (isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.55f),
                                                         borderColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.75f),
                                                         elevation = 4.dp,
                                                         blurRadius = 16.dp,
                                                         hazeState = hazeState,
-                                                        hazeStyle = HazeMaterials.thin()
+                                                        hazeStyle = HazeMaterials.thin(),
+                                                        scene = watchlistGlassScene
                                                     ) {
                                                         BasicTextField(
                                                             value = searchQuery,
@@ -962,11 +989,12 @@ fun WatchlistScreen(
                                                                 fontSize = 14.sp
                                                             ),
                                                             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                                            modifier = Modifier
-                                                                .fillMaxSize()
-                                                                .focusRequester(focusRequester)
-                                                                .testTag("watchlist_search_input")
-                                                                .padding(horizontal = 12.dp),
+                                                             modifier = Modifier
+                                                                 .fillMaxSize()
+                                                                 .focusRequester(focusRequester)
+                                                                 .testTag("watchlist_search_input")
+                                                                 .padding(horizontal = 12.dp),
+                                                             interactionSource = searchInteractionSource,
                                                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                                                             keyboardActions = KeyboardActions(
                                                                 onSearch = {
@@ -1027,7 +1055,9 @@ fun WatchlistScreen(
                                                     NeumorphicIconButton(
                                                         onClick = { isSearchExpanded = true },
                                                         isDark = isDark,
-                                                        lightBorderAlpha = 0.35f
+                                                        lightBorderAlpha = 0.35f,
+                                                        hazeState = hazeState,
+                                                        scene = watchlistGlassScene
                                                     ) {
                                                         Icon(
                                                             imageVector = Icons.Rounded.Search,
@@ -1050,7 +1080,9 @@ fun WatchlistScreen(
                                                 showFilterSheet = true
                                             },
                                             isDark = isDark,
-                                            lightBorderAlpha = 0.35f
+                                            lightBorderAlpha = 0.35f,
+                                            hazeState = hazeState,
+                                            scene = watchlistGlassScene
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Rounded.Tune,

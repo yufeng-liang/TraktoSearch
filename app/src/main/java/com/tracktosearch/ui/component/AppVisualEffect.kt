@@ -38,8 +38,8 @@ fun Modifier.appVisualEffect(
 
         VisualEffectMode.GLASS -> hazeGlass(
             input = input,
-            style = glassStyle ?: AppGlassStyles.surface(),
-            // Glass 官方建议默认采样；只有 Blur 模式继续沿用调用点的 Adaptive。
+            style = glassStyle ?: AppGlassStyles.topBar(),
+            // Glass 统一使用 alpha04 的默认采样；Blur 才接受调用点的降采样策略。
             sampling = HazeSampling.Default,
             interactionSource = interactionSource,
             interactionTransformTarget = interactionTransformTarget,

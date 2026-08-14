@@ -74,20 +74,22 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.local.DiscoverSectionStorage
 import com.tracktosearch.ui.animation.fadeSlideIn
-import com.tracktosearch.ui.component.GlassHighlight
+import com.tracktosearch.ui.component.AppIconButton
+import com.tracktosearch.ui.component.AppVisualSurface
+import com.tracktosearch.ui.component.GlassScene
+import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
-import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
-import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.hasListScrolled
-import com.tracktosearch.ui.component.neumorphicInnerShadow
-import com.tracktosearch.ui.component.neumorphicOuterShadow
+import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.screen.search.DoubanHotAllSheet
 import com.tracktosearch.ui.screen.search.DoubanHotCategorySection
 import com.tracktosearch.ui.screen.settings.DiscoverSectionsDialog
@@ -197,6 +199,51 @@ fun DiscoverScreen(
     }
 
     val isDark = isAppDarkTheme()
+    val discoverContentCount = uiState.doubanHotCategories.sumOf { it.items.size } +
+        uiState.tmdbPopularMovies.size +
+        uiState.tmdbUpcomingMovies.size +
+        uiState.traktRecommendations.size +
+        uiState.traktTrendingMovies.size +
+        uiState.traktTrendingShows.size +
+        uiState.traktAnticipatedMovies.size +
+        uiState.traktAnticipatedShows.size +
+        uiState.traktShowRecommendations.size +
+        uiState.trendingLists.size
+    val discoverPosterPaths = listOf(
+        uiState.doubanHotCategories.flatMap { category -> category.items.mapNotNull { it.cover } },
+        uiState.tmdbPopularMovies.mapNotNull { it.poster_path },
+        uiState.tmdbUpcomingMovies.mapNotNull { it.poster_path },
+        uiState.traktRecommendations.mapNotNull { it.posterPath },
+        uiState.traktTrendingMovies.mapNotNull { it.movie.posterPath },
+        uiState.traktTrendingShows.mapNotNull { it.show.posterPath },
+        uiState.traktAnticipatedMovies.mapNotNull { it.movie.posterPath },
+        uiState.traktAnticipatedShows.mapNotNull { it.show.posterPath },
+        uiState.traktShowRecommendations.mapNotNull { it.show.posterPath }
+    ).flatten()
+    val discoverAmbientColor = rememberCachedPosterAmbientColor(
+        posterUrls = discoverPosterPaths,
+        fallback = MaterialTheme.colorScheme.background
+    )
+    val discoverLoadingCount = uiState.doubanHotCategories.count { it.isLoading } +
+        listOf(
+            uiState.isLoadingPopular,
+            uiState.isLoadingUpcoming,
+            uiState.isLoadingRecommendations,
+            uiState.isLoadingTrakt,
+            uiState.isLoadingTraktLists
+        ).count { it }
+    val discoverGlassScene = glassSceneForContent(
+        contentCount = discoverContentCount,
+        readabilityDemand = when {
+            discoverLoadingCount > 0 -> 0.78f
+            discoverContentCount == 0 -> 0.30f
+            else -> 0.62f
+        },
+        ambientColor = discoverAmbientColor,
+        contentCapacity = 72,
+        loadingCount = discoverLoadingCount,
+        loadingItemWeight = 4
+    )
     CompositionLocalProvider(
         LocalActivePosterTmdbId provides activePosterTmdbId,
         LocalActivePosterClickSetter provides { id ->
@@ -649,7 +696,8 @@ fun DiscoverScreen(
                                                     label = "trakt_list_card_scale_${index}"
                                                 )
                                                 Box(modifier = Modifier.fillMaxWidth().then(listCardModifier).fadeSlideIn(index)) {
-                                                    NeumorphicFrostedSurface(
+                                                    AppVisualSurface(
+                                                        kind = VisualSurfaceKind.Content,
                                                         modifier = Modifier
                                                             .fillMaxWidth()
                                                             .scale(cardScale)
@@ -658,16 +706,9 @@ fun DiscoverScreen(
                                                                 indication = null,
                                                                 onClick = { onListClick(listResponse.list.ids.trakt, listResponse.list.name) }
                                                             ),
-                                                        isDark = isDark,
                                                         shape = RoundedCornerShape(18.dp),
-                                                        elevation = 6.dp,
-                                                        blurRadius = 16.dp,
-                                                        shadowOffset = 5.dp,
                                                         backgroundColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
-                                                        borderColor = if (isDark) MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.9f),
-                                                        darkShadowAlpha = if (isDark) 0.25f else 0.16f,
-                                                        lightShadowAlpha = if (isDark) 0.08f else 0.65f,
-                                                        hazeState = null
+                                                        borderColor = if (isDark) MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.9f)
                                                     ) {
                                                         Row(
                                                             modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -734,36 +775,31 @@ fun DiscoverScreen(
                             end = Offset(Float.POSITIVE_INFINITY, 0f)
                         )
                     }
-                    Box(
+                    AppVisualSurface(
+                        kind = VisualSurfaceKind.Content,
                         modifier = cardModifier
                             .scale(cardScale)
-                            .neumorphicOuterShadow(
-                                shape = shape,
-                                isDark = isDark,
-                                elevation = 6.dp,
-                                darkAlpha = if (isDark) 0.35f else 0.18f,
-                                blurRadius = 16.dp,
-                                shadowOffset = 5.dp
-                            )
-                            .clip(shape)
-                            .background(gradient)
-                            .border(
-                                width = 1.dp,
-                                color = Color.White.copy(alpha = 0.30f),
-                                shape = shape
-                            )
                             .clickable(
                                 interactionSource = interactionSource,
                                 indication = null
                             ) {
                                 activeFilterEntry = "card"
                                 onFilterDiscoverClick()
-                            }
-                            .padding(24.dp)
+                            },
+                        shape = shape,
+                        backgroundColor = Color.Transparent,
+                        borderColor = Color.Transparent
                     ) {
-                        // 顶部高光
                         Column(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(gradient)
+                                .border(
+                                    width = 1.dp,
+                                    color = Color.White.copy(alpha = 0.30f),
+                                    shape = shape
+                                )
+                                .padding(24.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
@@ -791,7 +827,8 @@ fun DiscoverScreen(
                         state = discoverHazeState,
                         style = discoverHazeStyle,
                         blurRadius = 24.dp,
-                        isContentUnderTopBar = discoverHasContentUnderTopBar
+                        isContentUnderTopBar = discoverHasContentUnderTopBar,
+                        scene = discoverGlassScene
                     )
             ) {
                 Column {
@@ -810,7 +847,7 @@ fun DiscoverScreen(
                             letterSpacing = (-0.5).sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        // 两个拟态玻璃图标按钮右对齐
+                        // 圆形操作按钮在 Glass 下使用轻量光学层，在 Blur 下沿用拟态按钮。
                         Row(verticalAlignment = Alignment.CenterVertically) {
                         // 当从右上角图标进入筛选页时（activeFilterEntry == "icon"），给图标加 sharedElement 与筛选页返回箭头配对
                         val iconModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && activeFilterEntry == "icon" && LocalSharedTransitionEnabled.current) {
@@ -823,15 +860,16 @@ fun DiscoverScreen(
                         } else {
                             Modifier
                         }
-                        // 拟态玻璃图标按钮
-                        NeumorphicIconButton(
+                        AppIconButton(
                             onClick = {
                                 activeFilterEntry = "icon"
                                 onFilterDiscoverClick()
                             },
                             modifier = iconModifier,
                             isDark = isDark,
-                            lightBorderAlpha = 0.35f
+                            hazeState = discoverHazeState,
+                            role = GlassSurfaceRole.CircularControl,
+                            scene = discoverGlassScene
                         ) {
                             Icon(
                                 Icons.Rounded.FilterList,
@@ -840,10 +878,12 @@ fun DiscoverScreen(
                             )
                         }
                         Spacer(modifier = Modifier.width(8.dp))
-                        NeumorphicIconButton(
+                        AppIconButton(
                             onClick = { showDiscoverSectionsDialog = true },
                             isDark = isDark,
-                            lightBorderAlpha = 0.35f
+                            hazeState = discoverHazeState,
+                            role = GlassSurfaceRole.CircularControl,
+                            scene = discoverGlassScene
                         ) {
                             Icon(
                                 Icons.Rounded.FormatListNumbered,
@@ -1081,43 +1121,31 @@ private fun CategoryHeroCard(
         targetValue = if (isPressed) 0.97f else 1f,
         label = "category_hero_scale"
     )
-    Box(
+    AppVisualSurface(
+        kind = VisualSurfaceKind.Content,
         modifier = modifier
             .width(160.dp)
             .height(75.dp)
             .scale(scale)
-            .neumorphicOuterShadow(
-                shape = shape,
-                isDark = isDark,
-                elevation = 7.dp,
-                darkAlpha = if (isDark) 0.42f else 0.26f,
-                blurRadius = 22.dp,
-                shadowOffset = 7.dp
-            )
-            .dropShadow(
-                shape = shape,
-                shadow = Shadow(
-                    radius = 12.dp,
-                    color = Color.White.copy(alpha = if (isDark) 0.12f else 0.60f),
-                    offset = DpOffset((-3).dp, (-3).dp)
-                )
-            )
-            .clip(shape)
-            .background(gradient)
-            .border(
-                width = 1.dp,
-                color = Color.White.copy(alpha = 0.32f),
-                shape = shape
-            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
-            )
-            .padding(16.dp)
+            ),
+        shape = shape,
+        backgroundColor = Color.Transparent,
+        borderColor = Color.Transparent
     ) {
         Column(
-            modifier = Modifier.align(Alignment.BottomStart),
+            modifier = Modifier
+                .fillMaxSize()
+                .background(gradient)
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.32f),
+                    shape = shape
+                )
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(

@@ -54,6 +54,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
+import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
@@ -64,6 +65,7 @@ import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.SectionHeader
 import com.tracktosearch.ui.component.detailTopBarIconColor
+import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.ToastEffect
@@ -97,6 +99,26 @@ fun PersonScreen(
 
     val listState = rememberLazyListState()
     val hazeState = remember { HazeState() }
+    val personGlassScene = glassSceneForContent(
+        contentCount = uiState.personImages.size + uiState.movieCredits.size + uiState.tvCredits.size,
+        readabilityDemand = when {
+            uiState.movieCredits.isNotEmpty() || uiState.tvCredits.isNotEmpty() -> 0.72f
+            uiState.personImages.isNotEmpty() -> 0.56f
+            else -> 0.38f
+        },
+        ambientColor = uiState.avatarDominantColor ?: MaterialTheme.colorScheme.background,
+        contentCapacity = 48,
+        loadingCount = listOf(
+            uiState.isLoading,
+            uiState.isLoadingMovies,
+            uiState.isLoadingTvShows,
+            uiState.isLoadingPersonImages,
+            uiState.isLoadingTrakt,
+            uiState.isLoadingMoreMovies,
+            uiState.isLoadingMoreTvShows
+        ).count { it },
+        loadingItemWeight = 4
+    )
     val view = LocalView.current
     // 全部作品展开状态
     var showAllMovies by rememberSaveable { mutableStateOf(false) }
@@ -404,7 +426,8 @@ fun PersonScreen(
                         hazeState = hazeState,
                         hazeStyle = HazeMaterials.ultraThin(),
                         size = 40.dp,
-                        buttonStyle = NeumorphicIconButtonStyle.DetailTopBar
+                        buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
+                        scene = personGlassScene
                     ) {
                         Icon(
                             Icons.AutoMirrored.Rounded.ArrowBack,
@@ -419,7 +442,8 @@ fun PersonScreen(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(bottom = 16.dp, end = 16.dp),
-                        hazeState = hazeState
+                        hazeState = hazeState,
+                        scene = personGlassScene
                     )
 
                     // 全部参演电影

@@ -28,8 +28,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tracktosearch.ui.component.GlassTabIndicator
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.VisualEffectMode
 
 internal data class WatchlistCategoryTab(
     val label: String,
@@ -86,7 +89,7 @@ internal fun WatchlistCategoryTabs(
                         },
                     contentAlignment = Alignment.Center
                 ) {
-                    if (selected) {
+                    if (selected && LocalVisualEffectMode.current == VisualEffectMode.BLUR) {
                         NeumorphicFrostedSurface(
                             modifier = Modifier.fillMaxSize(),
                             isDark = isDark,
@@ -107,6 +110,13 @@ internal fun WatchlistCategoryTabs(
                                 CategoryTabContent(tab = tab, selected = true)
                             }
                         }
+                    } else if (selected) {
+                        GlassTabIndicator(
+                            modifier = Modifier.fillMaxSize(),
+                            isDark = isDark,
+                            shape = selectedShape
+                        )
+                        CategoryTabContent(tab = tab, selected = true)
                     } else {
                         CategoryTabContent(tab = tab, selected = false)
                     }

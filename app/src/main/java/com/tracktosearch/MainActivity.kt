@@ -302,10 +302,12 @@ class MainActivity : AppCompatActivity() {
             val themeMode by themeStorage.themeMode.collectAsStateWithLifecycle()
             val accentColor by themeStorage.accentColor.collectAsStateWithLifecycle()
             val visualEffectMode by themeStorage.visualEffectMode.collectAsStateWithLifecycle()
+            val glassVariant by themeStorage.glassVariant.collectAsStateWithLifecycle()
             TraktoSearchTheme(
                 themeMode = themeMode,
                 accentColor = accentColor,
-                visualEffectMode = visualEffectMode
+                visualEffectMode = visualEffectMode,
+                glassVariant = glassVariant
             ) {
                 CompositionLocalProvider(LocalScrollToTopProvider provides scrollToTopProvider) {
                 // Splash 完成后展示主导航

@@ -63,8 +63,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import dev.chrisbanes.haze.HazeState
@@ -88,6 +91,21 @@ fun MarkRecordScreen(
     val listState = rememberLazyGridState()
     var showFilterSheet by remember { mutableStateOf(false) }
     var searchExpanded by remember { mutableStateOf(false) }
+    val markRecordGlassScene = glassSceneForContent(
+        contentCount = uiState.items.size,
+        readabilityDemand = when {
+            searchExpanded && uiState.searchQuery.isNotBlank() -> 0.88f
+            searchExpanded || uiState.searchQuery.isNotBlank() -> 0.74f
+            else -> 0.60f
+        },
+        ambientColor = rememberCachedPosterAmbientColor(
+            posterUrls = uiState.items.mapNotNull { it.posterUrl },
+            fallback = MaterialTheme.colorScheme.background
+        ),
+        contentCapacity = 36,
+        loadingCount = if (uiState.isLoading || uiState.isLoadingMore) 1 else 0,
+        loadingItemWeight = 4
+    )
     val statusBarHeight = WindowInsets.statusBars
         .asPaddingValues().calculateTopPadding()
     val stickyHeaderHeight = statusBarHeight + 100.dp
@@ -219,7 +237,8 @@ fun MarkRecordScreen(
                 .hazeTopBar(
                     state = hazeState,
                     style = hazeStyle,
-                    blurRadius = 24.dp
+                    blurRadius = 24.dp,
+                    scene = markRecordGlassScene
                 )
         ) {
             Spacer(modifier = Modifier.statusBarsPadding())
@@ -265,7 +284,9 @@ fun MarkRecordScreen(
                         NeumorphicIconButton(
                             onClick = { showFilterSheet = true },
                             isDark = isDark,
-                            lightBorderAlpha = 0.35f
+                            lightBorderAlpha = 0.35f,
+                            hazeState = hazeState,
+                            scene = markRecordGlassScene
                         ) {
                             Icon(
                                 Icons.Rounded.FilterList,
@@ -293,7 +314,9 @@ fun MarkRecordScreen(
                         NeumorphicIconButton(
                             onClick = { searchExpanded = true },
                             isDark = isDark,
-                            lightBorderAlpha = 0.35f
+                            lightBorderAlpha = 0.35f,
+                            hazeState = hazeState,
+                            scene = markRecordGlassScene
                         ) {
                             Icon(
                                 Icons.Rounded.Search,
@@ -305,7 +328,9 @@ fun MarkRecordScreen(
                         NeumorphicIconButton(
                             onClick = { showFilterSheet = true },
                             isDark = isDark,
-                            lightBorderAlpha = 0.35f
+                            lightBorderAlpha = 0.35f,
+                            hazeState = hazeState,
+                            scene = markRecordGlassScene
                         ) {
                             Icon(
                                 Icons.Rounded.FilterList,
@@ -345,7 +370,8 @@ fun MarkRecordScreen(
                 .align(Alignment.BottomEnd)
                 .padding(bottom = 16.dp, end = 16.dp),
             hazeState = hazeState,
-            hazeStyle = hazeStyle
+            hazeStyle = hazeStyle,
+            scene = markRecordGlassScene
         )
     }
 

@@ -248,9 +248,11 @@
     <!-- 視覚効果 -->
     <string name="settings_visual_effect">視覚効果</string>
     <string name="settings_visual_effect_blur">ぼかし</string>
-    <string name="settings_visual_effect_blur_desc">微細な粒子を含む Haze のすりガラスぼかし</string>
-    <string name="settings_visual_effect_glass">Glass（実験的）</string>
-    <string name="settings_visual_effect_glass_desc">ハイライトとインタラクション照明を備えた屈折ベースの光学効果</string>
+    <string name="settings_visual_effect_blur_desc">柔らかなすりガラス風で、境界を自然に見せるスタイル</string>
+    <string name="settings_visual_effect_glass_clear">Glass - クリア</string>
+    <string name="settings_visual_effect_glass_clear_desc">軽やかな光学ガラス風で、境界を控えめに見せるスタイル</string>
+    <string name="settings_visual_effect_glass_focused">Glass - フォーカス</string>
+    <string name="settings_visual_effect_glass_focused_desc">ナビゲーションや操作に適した、輪郭の明確なガラス階層</string>
 
     <!-- Accent Color -->
     <string name="settings_accent_color">アクセントカラー</string>
@@ -1389,7 +1391,7 @@
     <string name="help_tips_b8">人物詳細ページで横スワイプして複数の写真を表示、写真をタップして全画面表示しアルバムに保存</string>
     <string name="help_tips_b9">オンライン検索は中国語人名検索に対応（TMDBベース）、人物検索時に自動的に関連作品を表示</string>
     <string name="help_tips_b10">発見ページのタイトルバー右側をタップしてセクションを素早くカスタマイズ</string>
-    <string name="help_tips_b11">視覚効果（Haze ぼかし / 実験的な Glass）は現在調整中です。近日中に提供予定です</string>
+    <string name="help_tips_b11">ぼかしは柔らかなすりガラス風、Glass はクリアとフォーカスの2つの独立した光学スタイルを提供します</string>
     <string name="help_tips_b12">設定で「クラッシュログを自動アップロード」を有効にすると、クラッシュログは次回起動時に自動的にアップロードされます。アップロード履歴はフィードバックページで確認できます</string>
 
     <!-- 彩蛋メッセージ（9アニメ × 3メッセージ） -->

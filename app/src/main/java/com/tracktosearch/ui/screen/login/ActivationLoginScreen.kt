@@ -71,7 +71,9 @@ import com.tracktosearch.OAuthCallback
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.AppGlassStyles
 import com.tracktosearch.ui.component.DoubanLogo
+import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.appVisualEffect
+import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.monetDoubanGreen
 import com.tracktosearch.ui.theme.onMonetDoubanGreen
@@ -112,6 +114,16 @@ fun ActivationLoginScreen(
     var showWhatIsTraktDialog by remember { mutableStateOf(false) }
 
     val isActivated = authState.activated
+    val loginGlassScene = glassSceneForContent(
+        contentCount = 7 + if (authState.requiresMigrationInvite) 2 else 0,
+        readabilityDemand = when {
+            authState.error != null || errorMessage != null -> 0.96f
+            isActivated -> 0.82f
+            else -> 0.88f
+        },
+        ambientColor = loginBackground,
+        contentCapacity = 12
+    )
     var showCelebration by remember { mutableStateOf(false) }
     var observedActivated by remember { mutableStateOf(isActivated) }
 
@@ -256,6 +268,7 @@ fun ActivationLoginScreen(
                     loginState = loginState,
                     onLoginClick = { launchAuthorization() },
                     canUseActions = isActivated,
+                    scene = loginGlassScene,
                     modifier = Modifier.padding(top = if (expired) 14.dp else 0.dp)
                 )
 
@@ -280,6 +293,7 @@ fun ActivationLoginScreen(
                     guestContentColor = loginTextColor,
                     onDoubanLogin = onDoubanLogin,
                     onGuestMode = onGuestMode,
+                    scene = loginGlassScene,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(20.dp))
@@ -326,6 +340,7 @@ internal fun ActivationSecondaryActions(
     guestContentColor: Color,
     onDoubanLogin: () -> Unit,
     onGuestMode: () -> Unit,
+    scene: GlassScene = GlassScene(),
     modifier: Modifier = Modifier
 ) {
     val doubanGreen = MaterialTheme.colorScheme.monetDoubanGreen()
@@ -347,10 +362,11 @@ internal fun ActivationSecondaryActions(
                 .appVisualEffect(
                     input = HazeInput.Sources(hazeState),
                     hazeStyle = doubanHazeStyle,
-                    glassStyle = AppGlassStyles.control(
+                    glassStyle = AppGlassStyles.detailAction(
                         tint = doubanGreen.copy(alpha = if (doubanEnabled) 0.72f else 0.24f),
                         shape = doubanButtonShape,
-                        interactive = doubanEnabled
+                        interactive = doubanEnabled,
+                        scene = scene
                     ),
                     interactionSource = doubanInteractionSource
                 ),
@@ -446,6 +462,7 @@ private fun ActivationCard(
     loginState: LoginState,
     onLoginClick: () -> Unit,
     canUseActions: Boolean,
+    scene: GlassScene = GlassScene(),
     modifier: Modifier = Modifier
 ) {
     val shape = RoundedCornerShape(20.dp)
@@ -477,12 +494,10 @@ private fun ActivationCard(
             .appVisualEffect(
                 input = HazeInput.Sources(hazeState),
                 hazeStyle = hazeStyle,
-                glassStyle = AppGlassStyles.surface(
+                glassStyle = AppGlassStyles.loginSurface(
                     tint = MaterialTheme.colorScheme.surface.copy(alpha = 0.48f),
                     shape = shape,
-                    edgeSoftness = 8.dp,
-                    specularIntensity = 0.46f,
-                    ambientResponse = 0.50f
+                    scene = scene
                 )
             )
             .background(Color.Transparent, shape)

@@ -162,11 +162,19 @@ import com.tracktosearch.ui.screen.ai.nextAiSpriteOverlayTrigger
 import com.tracktosearch.ui.component.DiscoverModalBottomSheet
 import com.tracktosearch.ui.component.DoubanRatingBadge
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
+import com.tracktosearch.ui.component.AppVisualSurface
+import com.tracktosearch.ui.component.GlassIconButton
 import com.tracktosearch.ui.component.GlassHighlight
+import com.tracktosearch.ui.component.GlassScene
+import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.RatingBadge
+import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.neumorphicShadow
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import dagger.hilt.EntryPoint
@@ -455,6 +463,20 @@ fun SearchScreen(
 
     // Haze 毛玻璃状态
     val hazeState = remember { HazeState() }
+    val searchGlassScene = glassSceneForContent(
+        contentCount = uiState.searchHistory.size + hotSearches.size,
+        readabilityDemand = when {
+            isSearchFocused && searchQuery.isNotBlank() -> 0.86f
+            isSearchFocused || searchQuery.isNotBlank() -> 0.68f
+            else -> 0.42f
+        },
+        ambientColor = MaterialTheme.colorScheme.background,
+        contentCapacity = 32,
+        loadingCount =
+            (if (uiState.isLoading) 1 else 0) +
+                uiState.doubanHotCategories.count { it.isLoading },
+        loadingItemWeight = 4
+    )
 
     // Animation state for search box width
     val animatedWidthFraction = remember { Animatable(0.75f) }
@@ -555,6 +577,7 @@ fun SearchScreen(
                 .padding(horizontal = 16.dp),
             contentAlignment = Alignment.Center
         ) {
+            val searchInteractionSource = remember { MutableInteractionSource() }
             NeumorphicFrostedSurface(
                 modifier = Modifier
                     .fillMaxWidth(animatedWidthFraction.value)
@@ -566,9 +589,12 @@ fun SearchScreen(
                 shadowOffset = 10.dp,
                 backgroundColor = if (isDark) Color(0xFF222244).copy(alpha = 0.7f) else Color.White.copy(alpha = 0.65f),
                 borderColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.8f),
+                glassRole = GlassSurfaceRole.SearchField,
+                scene = searchGlassScene,
                 darkShadowAlpha = if (isDark) 0.65f else 0.28f,
                 lightShadowAlpha = if (isDark) 0.12f else 0.9f,
-                hazeState = hazeState
+                hazeState = hazeState,
+                interactionSource = searchInteractionSource
             ) {
                 Box(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
                     SearchBarTopNew(
@@ -605,7 +631,10 @@ fun SearchScreen(
                         searchSourceType = searchSourceType,
                         onSearchSourceTypeChange = onSearchSourceTypeChange,
                         isDark = isDark,
-                        view = view
+                        view = view,
+                        hazeState = hazeState,
+                        interactionSource = searchInteractionSource,
+                        scene = searchGlassScene
                     )
                 }
             }
@@ -741,7 +770,8 @@ fun SearchScreen(
                             onClearAll = { viewModel.clearHistory() },
                             selectedKeyword = searchQuery,
                             isDark = isDark,
-                            hazeState = hazeState
+                            hazeState = hazeState,
+                            scene = searchGlassScene
                         )
                     }
                     Spacer(modifier = Modifier.height(18.dp))
@@ -756,7 +786,8 @@ fun SearchScreen(
                         },
                         selectedKeyword = searchQuery,
                         isDark = isDark,
-                        hazeState = hazeState
+                        hazeState = hazeState,
+                        scene = searchGlassScene
                     )
                 }
                 Spacer(modifier = Modifier.height(80.dp))
@@ -1143,7 +1174,10 @@ private fun SearchBarTopNew(
     searchSourceType: SearchSourceType = SearchSourceType.DISK,
     onSearchSourceTypeChange: ((SearchSourceType) -> Unit)? = null,
     isDark: Boolean = false,
-    view: android.view.View
+    view: android.view.View,
+    hazeState: HazeState,
+    interactionSource: MutableInteractionSource,
+    scene: GlassScene
 ) {
     var showTypeDropdown by remember { mutableStateOf(false) }
     val typeColorMap = mapOf(
@@ -1174,6 +1208,7 @@ private fun SearchBarTopNew(
                 .onFocusChanged { focusState ->
                     onFocusChanged(focusState.isFocused)
                 },
+            interactionSource = interactionSource,
             placeholder = {
                 val placeholderText = stringResource(
                     when (searchSourceType) {
@@ -1280,6 +1315,8 @@ private fun SearchBarTopNew(
                         size = 44.dp,
                         iconSize = 20.dp,
                         isDark = isDark,
+                        hazeState = hazeState,
+                        scene = scene,
                         modifier = Modifier.padding(end = 2.dp)
                     )
                 } else {
@@ -1302,7 +1339,9 @@ private fun SearchBarTopNew(
                             onClick = { view.performHaptic(HapticType.CLICK); onSearch() },
                             size = 40.dp,
                             iconSize = 18.dp,
-                            isDark = isDark
+                            isDark = isDark,
+                            hazeState = hazeState,
+                            scene = scene
                         )
                     }
                 }
@@ -1323,8 +1362,29 @@ private fun SearchActionButton(
     size: Dp,
     iconSize: Dp,
     isDark: Boolean,
+    hazeState: HazeState,
+    scene: GlassScene,
     modifier: Modifier = Modifier
 ) {
+    if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
+        GlassIconButton(
+            onClick = onClick,
+            modifier = modifier,
+            size = size,
+            hazeState = hazeState,
+            role = GlassSurfaceRole.CircularControl,
+            scene = scene
+        ) {
+            Icon(
+                Icons.Rounded.Search,
+                contentDescription = null,
+                modifier = Modifier.size(iconSize),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+        return
+    }
+
     Box(
         modifier = modifier
             .size(size)
@@ -1363,6 +1423,8 @@ private fun NeumorphicChip(
     onClick: () -> Unit,
     isSelected: Boolean,
     isDark: Boolean,
+    hazeState: HazeState,
+    scene: GlassScene,
     blurRadius: Dp = 10.dp,
     shadowOffset: Dp = 3.dp,
     content: @Composable () -> Unit
@@ -1386,29 +1448,50 @@ private fun NeumorphicChip(
     val elevation = 5.dp
     val chipShape = RoundedCornerShape(22.dp)
 
-    Box(
-        modifier = Modifier
-            .scale(scale)
-            .neumorphicShadow(
-                shape = chipShape,
-                isDark = isDark,
-                elevation = elevation,
-                darkAlpha = if (isDark) 0.30f else 0.18f,
-                lightAlpha = if (isDark) 0.06f else 0.65f,
-                blurRadius = blurRadius,
-                shadowOffset = shadowOffset
-            )
-            .clip(chipShape)
-            .background(bgColor, chipShape)
-            .border(1.dp, borderColor, chipShape)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-    ) {
-        GlassHighlight(isDark = isDark, shape = chipShape)
-        content()
+    if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
+        AppVisualSurface(
+            kind = VisualSurfaceKind.Glass,
+            modifier = Modifier
+                .scale(scale)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick
+                ),
+            shape = chipShape,
+            hazeState = hazeState,
+            role = GlassSurfaceRole.SearchField,
+            interactionSource = interactionSource,
+            scene = scene,
+            backgroundColor = bgColor,
+            borderColor = borderColor,
+            content = content
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .scale(scale)
+                .neumorphicShadow(
+                    shape = chipShape,
+                    isDark = isDark,
+                    elevation = elevation,
+                    darkAlpha = if (isDark) 0.30f else 0.18f,
+                    lightAlpha = if (isDark) 0.06f else 0.65f,
+                    blurRadius = blurRadius,
+                    shadowOffset = shadowOffset
+                )
+                .clip(chipShape)
+                .background(bgColor, chipShape)
+                .border(1.dp, borderColor, chipShape)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick
+                )
+        ) {
+            GlassHighlight(isDark = isDark, shape = chipShape)
+            content()
+        }
     }
 }
 
@@ -1421,7 +1504,8 @@ private fun SearchHistoryTwoRow(
     onClearAll: () -> Unit,
     selectedKeyword: String? = null,
     isDark: Boolean = false,
-    hazeState: HazeState
+    hazeState: HazeState,
+    scene: GlassScene
 ) {
     val typeColorMap = mapOf(
         "disk" to Color(0xFF26A69A),
@@ -1471,7 +1555,9 @@ private fun SearchHistoryTwoRow(
                 NeumorphicChip(
                     onClick = { onHistoryClick(item) },
                     isSelected = isSelected,
-                    isDark = isDark
+                    isDark = isDark,
+                    hazeState = hazeState,
+                    scene = scene
                 ) {
                     Row(
                         modifier = Modifier.padding(start = 15.dp, top = 9.dp, end = 10.dp, bottom = 9.dp),
@@ -1533,7 +1619,8 @@ private fun PopularSearchesSectionNew(
     onPopularClick: (String) -> Unit,
     selectedKeyword: String? = null,
     isDark: Boolean = false,
-    hazeState: HazeState
+    hazeState: HazeState,
+    scene: GlassScene
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
@@ -1562,7 +1649,9 @@ private fun PopularSearchesSectionNew(
                 NeumorphicChip(
                     onClick = { onPopularClick(keyword) },
                     isSelected = isSelected,
-                    isDark = isDark
+                    isDark = isDark,
+                    hazeState = hazeState,
+                    scene = scene
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 17.dp, vertical = 9.dp),

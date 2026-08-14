@@ -53,6 +53,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
+import com.tracktosearch.ui.theme.GlassVariant
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.component.AdaptiveSingleLineText
 import com.tracktosearch.ui.component.StickyHeaderChangelogContent
@@ -96,11 +97,11 @@ internal fun ThemeSelectionDialog(
     )
 }
 
-/** 视觉材质选择对话框。Glass 明确标记为实验性，避免用户误以为两种模式完全等价。 */
 @Composable
 internal fun VisualEffectSelectionDialog(
     currentMode: VisualEffectMode,
-    onModeSelected: (VisualEffectMode) -> Unit,
+    currentVariant: GlassVariant,
+    onSelection: (VisualEffectMode, GlassVariant) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -113,13 +114,19 @@ internal fun VisualEffectSelectionDialog(
                     label = stringResource(R.string.settings_visual_effect_blur),
                     description = stringResource(R.string.settings_visual_effect_blur_desc),
                     selected = currentMode == VisualEffectMode.BLUR,
-                    onClick = { onModeSelected(VisualEffectMode.BLUR) }
+                    onClick = { onSelection(VisualEffectMode.BLUR, currentVariant) }
                 )
                 VisualEffectOptionRow(
-                    label = stringResource(R.string.settings_visual_effect_glass),
-                    description = stringResource(R.string.settings_visual_effect_glass_desc),
-                    selected = currentMode == VisualEffectMode.GLASS,
-                    onClick = { onModeSelected(VisualEffectMode.GLASS) }
+                    label = stringResource(R.string.settings_visual_effect_glass_clear),
+                    description = stringResource(R.string.settings_visual_effect_glass_clear_desc),
+                    selected = currentMode == VisualEffectMode.GLASS && currentVariant == GlassVariant.CLEAR,
+                    onClick = { onSelection(VisualEffectMode.GLASS, GlassVariant.CLEAR) }
+                )
+                VisualEffectOptionRow(
+                    label = stringResource(R.string.settings_visual_effect_glass_focused),
+                    description = stringResource(R.string.settings_visual_effect_glass_focused_desc),
+                    selected = currentMode == VisualEffectMode.GLASS && currentVariant == GlassVariant.FOCUSED,
+                    onClick = { onSelection(VisualEffectMode.GLASS, GlassVariant.FOCUSED) }
                 )
             }
         },

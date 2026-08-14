@@ -119,6 +119,8 @@ import com.tracktosearch.data.util.PersonAvatarColorStore
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.AppGlassStyles
+import com.tracktosearch.ui.component.GlassScene
+import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
@@ -130,6 +132,8 @@ import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.appVisualEffect
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
@@ -325,6 +329,31 @@ fun TraktSearchScreen(
             }
         }
     }
+    val searchContentCount = when (uiState.selectedTab) {
+        MediaType.MOVIE -> uiState.movieState.results.size
+        MediaType.SHOW -> uiState.showState.results.size
+        MediaType.PERSON -> uiState.personState.results.size
+        MediaType.DISK -> getFilteredDiskCount(uiState.diskState)
+    }
+    val traktSearchGlassScene = glassSceneForContent(
+        contentCount = searchContentCount,
+        readabilityDemand = when {
+            searchQuery.isNotBlank() && uiState.selectedTab == MediaType.PERSON -> 0.88f
+            searchQuery.isNotBlank() -> 0.76f
+            searchContentCount > 0 -> 0.58f
+            else -> 0.34f
+        },
+        ambientColor = rememberCachedPosterAmbientColor(
+            posterUrls = uiState.currentTabState.results.mapNotNull { it.posterUrl },
+            fallback = MaterialTheme.colorScheme.background
+        ),
+        contentCapacity = 36,
+        loadingCount =
+            (if (uiState.currentTabState.isLoading) 1 else 0) +
+                (if (uiState.currentTabState.isLoadingMore) 1 else 0) +
+                (if (uiState.selectedTab == MediaType.DISK && uiState.diskState.isLoading) 1 else 0),
+        loadingItemWeight = 4
+    )
 
     LaunchedEffect(initialQuery, type) {
         viewModel.initSearch(initialQuery, type)
@@ -456,7 +485,8 @@ fun TraktSearchScreen(
                         },
                         listState = diskListState,
                         hazeState = hazeState,
-                        statusBarHeight = statusBarHeight
+                        statusBarHeight = statusBarHeight,
+                        scene = traktSearchGlassScene
                     )
                 }
                 currentTabState.isLoading -> {
@@ -647,7 +677,8 @@ fun TraktSearchScreen(
                         state = hazeState,
                         style = hazeStyle,
                         blurRadius = 24.dp,
-                        isContentUnderTopBar = hasContentUnderTopBar
+                        isContentUnderTopBar = hasContentUnderTopBar,
+                        scene = traktSearchGlassScene
                     )
             ) {
                 // 状态栏 Spacer
@@ -675,6 +706,9 @@ fun TraktSearchScreen(
                         shape = RoundedCornerShape(21.dp),
                         backgroundColor = if (isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.55f),
                         borderColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.75f),
+                        glassRole = GlassSurfaceRole.SearchField,
+                        interactionSource = searchInteractionSource,
+                        scene = traktSearchGlassScene,
                         elevation = 4.dp,
                         blurRadius = 16.dp,
                         hazeState = hazeState,
@@ -864,7 +898,8 @@ fun TraktSearchScreen(
                                 noiseFactor(0f)
                             },
                             glassStyle = AppGlassStyles.circularControl(
-                                tint = hazeSurface.copy(alpha = 0.6f)
+                                tint = hazeSurface.copy(alpha = 0.6f),
+                                scene = traktSearchGlassScene
                             ),
                             blurSampling = HazeSampling.Adaptive,
                             interactionSource = interactionSource
@@ -943,7 +978,8 @@ private fun DiskSearchContent(
     onItemClick: (ResourceItem) -> Unit,
     listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
     hazeState: HazeState = remember { HazeState() },
-    statusBarHeight: Dp = 0.dp
+    statusBarHeight: Dp = 0.dp,
+    scene: GlassScene = GlassScene()
 ) {
     val view = LocalView.current
     val context = LocalContext.current
@@ -1157,7 +1193,8 @@ private fun DiskSearchContent(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(bottom = 100.dp, end = 16.dp),
-                    hazeState = hazeState
+                    hazeState = hazeState,
+                    scene = scene
                 )
             }
         }

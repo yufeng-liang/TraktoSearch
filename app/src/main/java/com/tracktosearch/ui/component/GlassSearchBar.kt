@@ -31,10 +31,25 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tracktosearch.ui.theme.LocalGlassVariant
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.VisualEffectMode
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeSampling
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
+
+/**
+ * 搜索栏底色决策：Blur 模式不叠玻璃 tint，必须保留底色保证可读性；
+ * Glass 模式在 haze 生效时把底色交给玻璃 tint，避免双重底色。
+ */
+internal fun searchBarBaseColor(
+    mode: VisualEffectMode,
+    hazeActive: Boolean,
+    fallbackColor: Color
+): Color {
+    return if (!hazeActive || mode == VisualEffectMode.BLUR) fallbackColor else Color.Transparent
+}
 
 /**
  * 毛玻璃胶囊搜索栏
@@ -58,6 +73,7 @@ fun GlassSearchBar(
     onClick: () -> Unit = {},
     onTypeClick: () -> Unit = {},
     hazeState: HazeState? = null,
+    scene: GlassScene = GlassScene(),
     modifier: Modifier = Modifier,
     value: String = "",
     onValueChange: ((String) -> Unit)? = null,
@@ -68,34 +84,74 @@ fun GlassSearchBar(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isEditable = onValueChange != null
-
     val containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f)
     val contentColor = MaterialTheme.colorScheme.onSurface
     val hintColor = contentColor.copy(alpha = 0.55f)
     val hazeStyle = HazeMaterials.thin(MaterialTheme.colorScheme.background)
+    val isGlassFallback = LocalVisualEffectMode.current == VisualEffectMode.GLASS && hazeState == null
+    val searchFieldToken = if (isGlassFallback) {
+        glassToken(
+            role = GlassSurfaceRole.SearchField,
+            variant = LocalGlassVariant.current,
+            isDark = isAppDarkTheme(),
+            scene = scene
+        )
+    } else {
+        null
+    }
+    val resolvedContainerColor = if (isGlassFallback && searchFieldToken != null) {
+        resolveGlassFallbackFill(
+            backgroundColor = containerColor,
+            themeSurface = MaterialTheme.colorScheme.surface,
+            tokenAlpha = searchFieldToken.tintAlpha,
+            ambientColor = resolveGlassAmbientColor(
+                sceneAmbient = scene.ambientColor,
+                themeBackground = MaterialTheme.colorScheme.background
+            ),
+            environmentTintStrength = searchFieldToken.environmentTintStrength
+        )
+    } else {
+        containerColor
+    }
+    val resolvedBorderColor = if (isGlassFallback) {
+        glassBorderColor(
+            role = GlassSurfaceRole.SearchField,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            scene = scene
+        )
+    } else {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+    }
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(28.dp))
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(28.dp))
+            .border(1.dp, resolvedBorderColor, RoundedCornerShape(28.dp))
+            .background(
+                searchBarBaseColor(
+                    mode = LocalVisualEffectMode.current,
+                    hazeActive = hazeState != null,
+                    fallbackColor = resolvedContainerColor
+                )
+            )
             .then(
                 if (hazeState != null) {
                     Modifier.appVisualEffect(
                         input = HazeInput.Sources(hazeState),
                         hazeStyle = hazeStyle,
-                        glassStyle = AppGlassStyles.control(
+                        glassStyle = AppGlassStyles.searchField(
                             tint = containerColor,
                             shape = RoundedCornerShape(28.dp),
-                            interactive = true
+                            interactive = true,
+                            scene = scene
                         ),
                         blurSampling = HazeSampling.Adaptive,
                         interactionSource = interactionSource
                     )
                 } else Modifier
             )
-            .background(containerColor)
             .then(
                 if (isEditable) {
                     Modifier

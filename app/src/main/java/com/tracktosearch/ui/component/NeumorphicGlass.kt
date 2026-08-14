@@ -8,8 +8,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,8 +37,8 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.glass.GlassStyle
-
-const val MODAL_BOTTOM_SHEET_HEIGHT_FRACTION = 0.8f
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.VisualEffectMode
 
 /** 初始位置保持沉浸透明，列表发生位移后启用 Haze。 */
 internal fun hasListScrolled(
@@ -56,35 +54,20 @@ fun Modifier.hazeTopBar(
     state: HazeState,
     style: HazeBlurStyle = HazeMaterials.thin(),
     blurRadius: Dp = 24.dp,
-    isContentUnderTopBar: Boolean = true
+    isContentUnderTopBar: Boolean = true,
+    scene: GlassScene = GlassScene()
 ): Modifier {
     if (!isContentUnderTopBar) return this
+    // 将调用方传入的 blurRadius 实际写入 HazeBlurStyle，避免参数失效
+    val resolvedStyle = style.then { blurRadius(blurRadius) }
     return appVisualEffect(
         input = HazeInput.Sources(state),
-        hazeStyle = style,
-        glassStyle = AppGlassStyles.topBar(),
+        hazeStyle = resolvedStyle,
+        glassStyle = AppGlassStyles.topBar(scene = scene),
         // 渲染降采样：Haze 官方基准显示可降低 5-20% 开销，肉眼几乎不可见
         blurSampling = HazeSampling.Adaptive
     )
 }
-
-/** 底部抽屉恢复普通 surfaceVariant 填充，只裁剪顶部圆角以保持贴底布局。 */
-@Composable
-fun Modifier.hazeBottomSheetSurface(
-    blurRadius: Dp = 40.dp
-): Modifier {
-    val surface = MaterialTheme.colorScheme.surfaceVariant
-    val shape = RoundedCornerShape(
-            topStart = 28.dp,
-            topEnd = 28.dp
-        )
-    return clip(shape)
-        .background(surface, shape)
-}
-
-/** 底部抽屉内容占满可用窗口，避免 Surface 与屏幕底部之间出现空隙。 */
-fun Modifier.hazeBottomSheetContent(): Modifier =
-    fillMaxWidth().fillMaxHeight(MODAL_BOTTOM_SHEET_HEIGHT_FRACTION)
 
 /**
  * C方案拟态外阴影：dropShadow 画右下暗投影（位于组件外部，不受clip影响）
@@ -225,6 +208,15 @@ fun NeumorphicActiveTab(
     isDark: Boolean,
     shape: Shape = RoundedCornerShape(24.dp)
 ) {
+    if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
+        GlassTabIndicator(
+            modifier = modifier,
+            isDark = isDark,
+            shape = shape
+        )
+        return
+    }
+
     val darkColor = if (isDark) {
         Color.Black.copy(alpha = 0.25f)
     } else {
@@ -289,8 +281,74 @@ fun NeumorphicFrostedSurface(
     // 可选：过滤参与模糊的源区域。底部导航等"自身既作 source 又作 effect"的场景
     // 应传入 Behind.where { source -> source.zIndex < 自身 zIndex } 排除自采样。
     sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
+    // 旧页面默认只保留普通表面；需要 Glass 采样时由页面显式声明语义角色。
+    glassRole: GlassSurfaceRole? = null,
+    interactionSource: MutableInteractionSource? = null,
+    scene: GlassScene = GlassScene(),
     content: @Composable () -> Unit
 ) {
+    if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
+        val roundedShape = if (glassRole != null) {
+            shape as? RoundedCornerShape
+                ?: error("Glass role $glassRole requires RoundedCornerShape")
+        } else {
+            null
+        }
+        if (hazeState != null && glassRole != null) {
+            GlassSurfaceImpl(
+                modifier = modifier,
+                hazeState = hazeState,
+                role = glassRole,
+                shape = roundedShape!!,
+                sourceSelection = sourceSelection,
+                scene = scene,
+                interactionSource = interactionSource,
+                tint = backgroundColor,
+                borderColor = borderColor,
+                content = content
+            )
+        } else {
+            val fallbackToken = if (glassRole != null) {
+                glassToken(
+                    role = glassRole,
+                    variant = com.tracktosearch.ui.theme.LocalGlassVariant.current,
+                    isDark = isDark,
+                    scene = scene
+                )
+            } else {
+                null
+            }
+            val fallbackBackground = if (glassRole != null && fallbackToken != null) {
+                resolveGlassFallbackFill(
+                    backgroundColor = backgroundColor,
+                    themeSurface = MaterialTheme.colorScheme.surface,
+                    tokenAlpha = fallbackToken.tintAlpha,
+                    ambientColor = resolveGlassAmbientColor(
+                        sceneAmbient = scene.ambientColor,
+                        themeBackground = MaterialTheme.colorScheme.background
+                    ),
+                    environmentTintStrength = fallbackToken.environmentTintStrength
+                )
+            } else {
+                backgroundColor
+            }
+            val fallbackBorder = if (glassRole != null) {
+                glassBorderColor(glassRole, borderColor, scene)
+            } else {
+                borderColor
+            }
+            Box(
+                modifier = modifier
+                    .clip(shape)
+                    .background(fallbackBackground, shape)
+                    .border(1.dp, fallbackBorder, shape),
+            ) {
+                content()
+            }
+        }
+        return
+    }
+
     val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin()
     val hazeModifier = if (hazeState != null) {
         Modifier.appVisualEffect(
@@ -299,12 +357,9 @@ fun NeumorphicFrostedSurface(
                 selection = sourceSelection
             ),
             hazeStyle = resolvedHazeStyle,
-            glassStyle = glassStyle ?: AppGlassStyles.surface(
-                tint = backgroundColor.takeIf { it.alpha > 0f }
-                    ?: MaterialTheme.colorScheme.surface.copy(alpha = 0.16f),
-                shape = shape as? RoundedCornerShape ?: RoundedCornerShape(16.dp)
-            ),
-            blurSampling = HazeSampling.Adaptive
+            glassStyle = glassStyle,
+            blurSampling = HazeSampling.Adaptive,
+            interactionSource = interactionSource
         )
     } else Modifier
 
@@ -353,9 +408,29 @@ fun NeumorphicIconButton(
     interactionSource: MutableInteractionSource? = null,
     enabled: Boolean = true,
     lightBorderAlpha: Float = 0.55f,
+    scene: GlassScene = GlassScene(),
     buttonStyle: NeumorphicIconButtonStyle = NeumorphicIconButtonStyle.Default,
     content: @Composable () -> Unit
 ) {
+    if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
+        GlassIconButton(
+            onClick = onClick,
+            modifier = modifier,
+            size = size,
+            hazeState = hazeState,
+            role = if (buttonStyle == NeumorphicIconButtonStyle.DetailTopBar) {
+                GlassSurfaceRole.DetailAction
+            } else {
+                GlassSurfaceRole.CircularControl
+            },
+            interactionSource = interactionSource,
+            enabled = enabled,
+            scene = scene,
+            content = content
+        )
+        return
+    }
+
     val isDetailTopBar = buttonStyle == NeumorphicIconButtonStyle.DetailTopBar
     val shape = CircleShape
     val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin()
@@ -368,7 +443,8 @@ fun NeumorphicIconButton(
                 tint = MaterialTheme.colorScheme.surface.copy(
                     alpha = if (isDetailTopBar) 0.10f else 0.18f
                 ),
-                interactive = enabled
+                interactive = enabled,
+                scene = scene
             ),
             blurSampling = HazeSampling.Adaptive,
             interactionSource = resolvedInteractionSource

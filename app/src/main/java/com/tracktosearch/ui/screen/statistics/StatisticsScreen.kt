@@ -87,6 +87,7 @@ import com.tracktosearch.R
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.rememberShimmerBrush
 import com.tracktosearch.ui.util.HapticType
@@ -122,6 +123,18 @@ fun StatisticsScreen(
 
     val statsHazeState = remember { HazeState() }
     val statsHazeStyle = HazeMaterials.thin()
+    val statisticsContentCount = uiState.genreDistribution.values.sum() +
+        uiState.heatmapData.size + uiState.wordCloud.size
+    val statisticsGlassScene = glassSceneForContent(
+        contentCount = statisticsContentCount,
+        readabilityDemand = when {
+            uiState.error != null -> 0.96f
+            uiState.initialLoading -> 0.84f
+            else -> 0.90f
+        },
+        ambientColor = MaterialTheme.colorScheme.background,
+        contentCapacity = 72
+    )
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
@@ -348,7 +361,8 @@ fun StatisticsScreen(
                     .hazeTopBar(
                         state = statsHazeState,
                         style = statsHazeStyle,
-                        blurRadius = 24.dp
+                        blurRadius = 24.dp,
+                        scene = statisticsGlassScene
                     )
                     .clickable(enabled = false, onClick = {})
             ) {

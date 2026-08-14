@@ -60,6 +60,8 @@ import com.tracktosearch.data.remote.trakt.dto.TraktEpisode
 import com.tracktosearch.data.remote.trakt.dto.TraktSeason
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.neumorphicOuterShadow
+import com.tracktosearch.ui.component.usesNeumorphicDecoration
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 
@@ -182,18 +184,25 @@ internal fun SeasonsSection(
             val watchedCount = (watchedEpisodeNumbers[season.number]?.size ?: 0)
             val totalCount = season.episode_count
             val seasonShape = RoundedCornerShape(12.dp)
+            val useNeumorphicDecoration = usesNeumorphicDecoration(LocalVisualEffectMode.current)
 
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 8.dp)
-                    .neumorphicOuterShadow(
-                        shape = seasonShape,
-                        isDark = isDark,
-                        elevation = 4.dp,
-                        darkAlpha = if (isDark) 0.36f else 0.16f,
-                        blurRadius = 9.dp,
-                        shadowOffset = 2.dp
+                    .then(
+                        if (useNeumorphicDecoration) {
+                            Modifier.neumorphicOuterShadow(
+                                shape = seasonShape,
+                                isDark = isDark,
+                                elevation = 4.dp,
+                                darkAlpha = if (isDark) 0.36f else 0.16f,
+                                blurRadius = 9.dp,
+                                shadowOffset = 2.dp
+                            )
+                        } else {
+                            Modifier
+                        }
                     )
                     .clip(seasonShape)
                     .clickable { view.performHaptic(HapticType.CLICK); onToggleSeason(season.number) },

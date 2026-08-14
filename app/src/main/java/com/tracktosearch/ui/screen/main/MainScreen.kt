@@ -87,12 +87,14 @@ import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.ui.component.LocalIsCurrentTab
-import com.tracktosearch.ui.component.AppGlassStyles
-import com.tracktosearch.ui.component.appVisualEffect
+import com.tracktosearch.ui.component.AppVisualSurface
+import com.tracktosearch.ui.component.GlassSurfaceRole
+import com.tracktosearch.ui.component.GlassTabIndicator
+import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.NeumorphicActiveTab
-import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.OnboardingOverlay
 import com.tracktosearch.ui.component.PageBackground
+import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
@@ -116,11 +118,8 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
-import dev.chrisbanes.haze.HazeInput
-import dev.chrisbanes.haze.HazeSampling
 import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.where
 import kotlinx.coroutines.delay
@@ -510,16 +509,13 @@ fun MainScreen(
                 }
             }
 
-            // 悬浮底部导航（C 方案：毛玻璃 + 强拟态双向阴影 + 选中凹陷药丸）
+            // 悬浮底部导航：Glass 只在外层采样，Blur 仍由 AppVisualSurface 分发到拟态实现。
             val navBarWidthFraction = 0.92f
             val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             val navBarShape = RoundedCornerShape(31.dp)
             val isDark = isAppDarkTheme()
-            // 降低表面染色强度，让模糊后的页面主色透过导航栏。
-            val navHazeStyle = HazeMaterials.thin(
-                MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.08f else 0.03f)
-            )
-            NeumorphicFrostedSurface(
+            AppVisualSurface(
+                kind = VisualSurfaceKind.Glass,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = navBarHeight + 8.dp)
@@ -528,28 +524,34 @@ fun MainScreen(
                     .height(62.dp)
                     .hazeSource(state = hazeState, zIndex = 1f),
                     // 让底部导航作为前景层，effect 明确采样 zIndex=0 的页面内容。
-                isDark = isDark,
                 shape = navBarShape,
-                elevation = 8.dp,
-                blurRadius = 22.dp,
-                shadowOffset = 6.dp,
-                backgroundColor = Color.Transparent,
+                role = GlassSurfaceRole.BottomNavigation,
+                backgroundColor = if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.42f)
+                } else {
+                    Color.Transparent
+                },
                 borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.45f),
-                darkShadowAlpha = if (isDark) 0.38f else 0.16f,
-                lightShadowAlpha = 0f,
                 hazeState = hazeState,
-                hazeStyle = navHazeStyle,
-                glassStyle = AppGlassStyles.bottomNavigation(
-                    tint = MaterialTheme.colorScheme.surface.copy(
-                        alpha = if (isDark) 0.10f else 0.06f
-                    ),
-                    shape = navBarShape
-                ),
-                hazeBlurRadius = 40.dp,
                 // 底部导航自身作为 zIndex=1 的 source，effect 只采样 zIndex=0 的页面内容，
                 // 避免导航栏模糊自身导致重复模糊与无谓开销（Haze 最重的叠加场景）
                 sourceSelection = HazeSourceSelection.Behind.where { source -> source.zIndex < 1f },
-                showHighlight = false
+                scene = glassSceneForContent(
+                    contentCount = when (selectedTab) {
+                        0 -> 34
+                        1 -> 60
+                        2 -> 72
+                        else -> 24
+                    },
+                    readabilityDemand = when (selectedTab) {
+                        0 -> 0.86f
+                        1 -> 0.72f
+                        2 -> 0.84f
+                        else -> 0.88f
+                    },
+                    ambientColor = MaterialTheme.colorScheme.background,
+                    contentCapacity = 72
+                )
             ) {
                 val tabCount = tabs.size
                 val rowPadding = 8.dp
@@ -561,7 +563,7 @@ fun MainScreen(
                     label = "indicatorOffset"
                 )
 
-                // 选中项凹陷药丸（绘制在 Tab 图标下方）
+                // 选中项普通指示层（绘制在 Tab 图标下方；Glass 不在单个 Tab 上采样）
                 Box(
                     modifier = Modifier
                         .offset(x = indicatorOffsetX)
@@ -571,11 +573,19 @@ fun MainScreen(
                         .padding(horizontal = 4.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    NeumorphicActiveTab(
-                        modifier = Modifier.fillMaxSize(),
-                        isDark = isDark,
-                        shape = RoundedCornerShape(24.dp)
-                    )
+                    if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
+                        GlassTabIndicator(
+                            modifier = Modifier.fillMaxSize(),
+                            isDark = isDark,
+                            shape = RoundedCornerShape(24.dp)
+                        )
+                    } else {
+                        NeumorphicActiveTab(
+                            modifier = Modifier.fillMaxSize(),
+                            isDark = isDark,
+                            shape = RoundedCornerShape(24.dp)
+                        )
+                    }
                 }
 
                 // Tab 内容（绘制在药丸上方）
@@ -602,7 +612,6 @@ fun MainScreen(
                             labelRes = tab.labelRes,
                             selected = isSelected,
                             weight = 1f,
-                            hazeState = hazeState,
                             avatarUrl = avatarUrl,
                             badgeCount = if (index == 3) unreadCount else 0,
                             onClick = {
@@ -686,7 +695,6 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
     selected: Boolean,
     weight: Float,
     onClick: () -> Unit,
-    hazeState: HazeState,
     avatarUrl: String? = null,
     badgeCount: Int = 0,
     onPositioned: (Rect) -> Unit = {}
@@ -699,8 +707,8 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
     val selectedScale by animateFloatAsState(
         targetValue = when {
             visualEffectMode != VisualEffectMode.GLASS -> 1f
-            selected -> 1.06f
-            isHovered || isFocused -> 1.04f
+            selected -> 1.04f
+            isHovered || isFocused -> 1.02f
             else -> 1f
         },
         animationSpec = tween(durationMillis = 180),
@@ -756,26 +764,6 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
                 onPositioned(bounds)
             }
             .clip(RoundedCornerShape(24.dp))
-            .then(
-                if (visualEffectMode == VisualEffectMode.GLASS) {
-                    Modifier.appVisualEffect(
-                        input = HazeInput.Sources(
-                            state = hazeState,
-                            selection = HazeSourceSelection.Behind.where { source -> source.zIndex < 1f }
-                        ),
-                        hazeStyle = HazeMaterials.thin(),
-                        glassStyle = AppGlassStyles.bottomNavigationItem(
-                            tint = MaterialTheme.colorScheme.surface.copy(
-                                alpha = if (selected) 0.08f else 0.03f
-                            )
-                        ),
-                        blurSampling = HazeSampling.Adaptive,
-                        interactionSource = interactionSource
-                    )
-                } else {
-                    Modifier
-                }
-            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
