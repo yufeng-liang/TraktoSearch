@@ -62,9 +62,11 @@ fun Modifier.hazeTopBar(
     scene: GlassScene = GlassScene()
 ): Modifier {
     if (!isContentUnderTopBar) return this
+    // 将调用方传入的 blurRadius 实际写入 HazeBlurStyle，避免参数失效
+    val resolvedStyle = style.then { blurRadius(blurRadius) }
     return appVisualEffect(
         input = HazeInput.Sources(state),
-        hazeStyle = style,
+        hazeStyle = resolvedStyle,
         glassStyle = AppGlassStyles.topBar(scene = scene),
         // 渲染降采样：Haze 官方基准显示可降低 5-20% 开销，肉眼几乎不可见
         blurSampling = HazeSampling.Adaptive
@@ -328,16 +330,26 @@ fun NeumorphicFrostedSurface(
                 content = content
             )
         } else {
-            val fallbackBackground = if (glassRole != null) {
+            val fallbackToken = if (glassRole != null) {
+                glassToken(
+                    role = glassRole,
+                    variant = com.tracktosearch.ui.theme.LocalGlassVariant.current,
+                    isDark = isDark,
+                    scene = scene
+                )
+            } else {
+                null
+            }
+            val fallbackBackground = if (glassRole != null && fallbackToken != null) {
                 resolveGlassFallbackFill(
                     backgroundColor = backgroundColor,
                     themeSurface = MaterialTheme.colorScheme.surface,
-                    tokenAlpha = glassToken(
-                        role = glassRole,
-                        variant = com.tracktosearch.ui.theme.LocalGlassVariant.current,
-                        isDark = isDark,
-                        scene = scene
-                    ).tintAlpha
+                    tokenAlpha = fallbackToken.tintAlpha,
+                    ambientColor = resolveGlassAmbientColor(
+                        sceneAmbient = scene.ambientColor,
+                        themeBackground = MaterialTheme.colorScheme.background
+                    ),
+                    environmentTintStrength = fallbackToken.environmentTintStrength
                 )
             } else {
                 backgroundColor

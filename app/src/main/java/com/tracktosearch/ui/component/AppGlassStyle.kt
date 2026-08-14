@@ -184,10 +184,17 @@ internal fun resolveGlassTintAlpha(callingAlpha: Float, tokenAlpha: Float): Floa
 internal fun resolveGlassFallbackFill(
     backgroundColor: Color,
     themeSurface: Color,
-    tokenAlpha: Float
+    tokenAlpha: Float,
+    ambientColor: Color,
+    environmentTintStrength: Float
 ): Color {
     val base = backgroundColor.takeIf { it.alpha > 0f } ?: themeSurface
-    return base.copy(alpha = resolveGlassTintAlpha(base.alpha, tokenAlpha))
+    val tinted = resolveGlassEnvironmentTint(
+        tint = base,
+        ambientColor = ambientColor,
+        strength = environmentTintStrength
+    )
+    return tinted.copy(alpha = resolveGlassTintAlpha(base.alpha, tokenAlpha))
 }
 
 @Composable
@@ -198,6 +205,14 @@ internal fun glassBorderColor(
 ): Color {
     val token = glassToken(role, LocalGlassVariant.current, isAppDarkTheme(), scene)
     return color.copy(alpha = resolveGlassTintAlpha(color.alpha, token.borderAlpha))
+}
+
+/** 解析 Glass 表面的有效环境色：页面无环境色时回退到主题背景。 */
+internal fun resolveGlassAmbientColor(
+    sceneAmbient: Color,
+    themeBackground: Color
+): Color {
+    return sceneAmbient.takeIf { it.alpha > 0f } ?: themeBackground
 }
 
 internal fun resolveGlassEnvironmentTint(
@@ -244,8 +259,10 @@ object AppGlassStyles {
         val isDark = isAppDarkTheme()
         val token = glassToken(role, variant, isDark, scene)
         val resolvedTint = tint.takeIf { it.alpha > 0f } ?: MaterialTheme.colorScheme.surface
-        val ambientColor = scene.ambientColor.takeIf { it.alpha > 0f }
-            ?: MaterialTheme.colorScheme.background
+        val ambientColor = resolveGlassAmbientColor(
+            sceneAmbient = scene.ambientColor,
+            themeBackground = MaterialTheme.colorScheme.background
+        )
         val callingAlpha = if (tint.alpha > 0f) tint.alpha else 1f
 
         return GlassStyle {

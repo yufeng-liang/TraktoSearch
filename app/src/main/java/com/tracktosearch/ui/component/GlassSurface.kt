@@ -94,7 +94,12 @@ fun GlassIconButton(
                     resolveGlassFallbackFill(
                         backgroundColor = Color.Transparent,
                         themeSurface = MaterialTheme.colorScheme.surface,
-                        tokenAlpha = token.tintAlpha
+                        tokenAlpha = token.tintAlpha,
+                        ambientColor = resolveGlassAmbientColor(
+                            sceneAmbient = scene.ambientColor,
+                            themeBackground = MaterialTheme.colorScheme.background
+                        ),
+                        environmentTintStrength = token.environmentTintStrength
                     ),
                     shape
                 )

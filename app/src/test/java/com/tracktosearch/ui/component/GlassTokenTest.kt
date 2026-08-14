@@ -30,9 +30,72 @@ class GlassTokenTest {
             resolveGlassFallbackFill(
                 backgroundColor = Color.Transparent,
                 themeSurface = themeSurface,
-                tokenAlpha = 0.24f
+                tokenAlpha = 0.24f,
+                ambientColor = Color.Transparent,
+                environmentTintStrength = 0f
             )
         ).isEqualTo(themeSurface.copy(alpha = 0.24f))
+    }
+
+    @Test
+    fun glassFallbackBlendsEnvironmentColorIntoFill() {
+        val themeSurface = Color.White
+        val ambient = Color.Black
+
+        val plain = resolveGlassFallbackFill(
+            backgroundColor = Color.Transparent,
+            themeSurface = themeSurface,
+            tokenAlpha = 0.5f,
+            ambientColor = Color.Transparent,
+            environmentTintStrength = 0f
+        )
+        val tinted = resolveGlassFallbackFill(
+            backgroundColor = Color.Transparent,
+            themeSurface = themeSurface,
+            tokenAlpha = 0.5f,
+            ambientColor = ambient,
+            environmentTintStrength = 0.5f
+        )
+
+        assertThat(tinted.red).isLessThan(plain.red)
+        assertThat(tinted.alpha).isEqualTo(plain.alpha)
+        // 混合后的颜色亮度应介于纯白与纯黑之间
+        assertThat(tinted.red).isGreaterThan(0f)
+        assertThat(tinted.red).isLessThan(1f)
+    }
+
+    @Test
+    fun glassFallbackKeepsCallingAlphaAfterEnvironmentBlend() {
+        val result = resolveGlassFallbackFill(
+            backgroundColor = Color.White.copy(alpha = 0.4f),
+            themeSurface = Color.Black,
+            tokenAlpha = 0.5f,
+            ambientColor = Color.Blue,
+            environmentTintStrength = 0.3f
+        )
+
+        assertThat(result.alpha).isWithin(0.0001f).of(0.2f)
+        assertThat(result.blue).isGreaterThan(0f)
+    }
+
+    @Test
+    fun glassAmbientColorFallsBackToThemeBackgroundWhenTransparent() {
+        val sceneAmbient = Color.Transparent
+        val themeBackground = Color(0xFF101820)
+
+        assertThat(
+            resolveGlassAmbientColor(
+                sceneAmbient = sceneAmbient,
+                themeBackground = themeBackground
+            )
+        ).isEqualTo(themeBackground)
+
+        assertThat(
+            resolveGlassAmbientColor(
+                sceneAmbient = Color(0xFF223344),
+                themeBackground = themeBackground
+            )
+        ).isEqualTo(Color(0xFF223344))
     }
 
     @Test

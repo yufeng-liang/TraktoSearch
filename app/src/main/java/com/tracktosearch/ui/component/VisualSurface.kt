@@ -104,18 +104,24 @@ fun AppVisualSurface(
 
         LocalVisualEffectMode.current == VisualEffectMode.GLASS && kind == VisualSurfaceKind.Glass -> {
             if (hazeState == null) {
+                val fallbackToken = glassToken(
+                    role = role,
+                    variant = LocalGlassVariant.current,
+                    isDark = isDark,
+                    scene = scene
+                )
                 PlainGlassSurface(
                     modifier = modifier,
                     shape = shape,
                     backgroundColor = resolveGlassFallbackFill(
                         backgroundColor = backgroundColor,
                         themeSurface = MaterialTheme.colorScheme.surface,
-                        tokenAlpha = glassToken(
-                            role = role,
-                            variant = LocalGlassVariant.current,
-                            isDark = isDark,
-                            scene = scene
-                        ).tintAlpha
+                        tokenAlpha = fallbackToken.tintAlpha,
+                        ambientColor = resolveGlassAmbientColor(
+                            sceneAmbient = scene.ambientColor,
+                            themeBackground = MaterialTheme.colorScheme.background
+                        ),
+                        environmentTintStrength = fallbackToken.environmentTintStrength
                     ),
                     borderColor = glassBorderColor(role, borderColor, scene),
                     content = content

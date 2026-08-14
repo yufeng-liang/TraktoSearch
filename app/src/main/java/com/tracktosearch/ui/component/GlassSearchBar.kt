@@ -77,16 +77,26 @@ fun GlassSearchBar(
     val hintColor = contentColor.copy(alpha = 0.55f)
     val hazeStyle = HazeMaterials.thin(MaterialTheme.colorScheme.background)
     val isGlassFallback = LocalVisualEffectMode.current == VisualEffectMode.GLASS && hazeState == null
-    val resolvedContainerColor = if (isGlassFallback) {
+    val searchFieldToken = if (isGlassFallback) {
+        glassToken(
+            role = GlassSurfaceRole.SearchField,
+            variant = LocalGlassVariant.current,
+            isDark = isAppDarkTheme(),
+            scene = scene
+        )
+    } else {
+        null
+    }
+    val resolvedContainerColor = if (isGlassFallback && searchFieldToken != null) {
         resolveGlassFallbackFill(
             backgroundColor = containerColor,
             themeSurface = MaterialTheme.colorScheme.surface,
-            tokenAlpha = glassToken(
-                role = GlassSurfaceRole.SearchField,
-                variant = LocalGlassVariant.current,
-                isDark = isAppDarkTheme(),
-                scene = scene
-            ).tintAlpha
+            tokenAlpha = searchFieldToken.tintAlpha,
+            ambientColor = resolveGlassAmbientColor(
+                sceneAmbient = scene.ambientColor,
+                themeBackground = MaterialTheme.colorScheme.background
+            ),
+            environmentTintStrength = searchFieldToken.environmentTintStrength
         )
     } else {
         containerColor

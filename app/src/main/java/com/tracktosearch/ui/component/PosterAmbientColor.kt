@@ -9,6 +9,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.VisualEffectMode
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -47,6 +49,8 @@ internal fun rememberCachedPosterAmbientColor(
     posterUrls: List<String>,
     fallback: Color
 ): Color {
+    // Blur/拟态模式不使用海报环境色，跳过缓存读取避免无谓 I/O
+    if (LocalVisualEffectMode.current != VisualEffectMode.GLASS) return fallback
     val context = LocalContext.current
     val extractor = remember {
         EntryPointAccessors.fromApplication(
