@@ -8,8 +8,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,8 +40,6 @@ import dev.chrisbanes.haze.glass.GlassStyle
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 
-const val MODAL_BOTTOM_SHEET_HEIGHT_FRACTION = 0.8f
-
 /** 初始位置保持沉浸透明，列表发生位移后启用 Haze。 */
 internal fun hasListScrolled(
     firstVisibleItemIndex: Int?,
@@ -72,24 +68,6 @@ fun Modifier.hazeTopBar(
         blurSampling = HazeSampling.Adaptive
     )
 }
-
-/** 底部抽屉恢复普通 surfaceVariant 填充，只裁剪顶部圆角以保持贴底布局。 */
-@Composable
-fun Modifier.hazeBottomSheetSurface(
-    blurRadius: Dp = 40.dp
-): Modifier {
-    val surface = MaterialTheme.colorScheme.surfaceVariant
-    val shape = RoundedCornerShape(
-            topStart = 28.dp,
-            topEnd = 28.dp
-        )
-    return clip(shape)
-        .background(surface, shape)
-}
-
-/** 底部抽屉内容占满可用窗口，避免 Surface 与屏幕底部之间出现空隙。 */
-fun Modifier.hazeBottomSheetContent(): Modifier =
-    fillMaxWidth().fillMaxHeight(MODAL_BOTTOM_SHEET_HEIGHT_FRACTION)
 
 /**
  * C方案拟态外阴影：dropShadow 画右下暗投影（位于组件外部，不受clip影响）

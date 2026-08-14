@@ -117,7 +117,7 @@ fun GlassSearchBar(
             .fillMaxWidth()
             .clip(RoundedCornerShape(28.dp))
             .border(1.dp, resolvedBorderColor, RoundedCornerShape(28.dp))
-            .background(if (hazeState == null) resolvedContainerColor else containerColor)
+            .background(if (hazeState == null) resolvedContainerColor else Color.Transparent)
             .then(
                 if (hazeState != null) {
                     Modifier.appVisualEffect(
