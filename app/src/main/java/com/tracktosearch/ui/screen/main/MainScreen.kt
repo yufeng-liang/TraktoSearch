@@ -205,6 +205,8 @@ fun MainScreen(
         EntryPointAccessors.fromApplication(context.applicationContext, ThemeStorageEntryPoint::class.java).themeStorage()
     }
     val currentAccent by themeStorage.accentColor.collectAsState()
+    val currentVisualEffectMode by themeStorage.visualEffectMode.collectAsState()
+    val currentGlassVariant by themeStorage.glassVariant.collectAsState()
     var showAccentOnboarding by remember { mutableStateOf(false) }
     var showOnboarding by remember { mutableStateOf(false) }
     val tabRects = remember { mutableStateOf<List<Rect>>(emptyList()) }
@@ -277,6 +279,11 @@ fun MainScreen(
                     showAccentOnboarding = false
                     showOnboarding = true
                 }
+            },
+            currentMode = currentVisualEffectMode,
+            currentVariant = currentGlassVariant,
+            onVisualEffectSelected = { mode, variant ->
+                scope.launch { themeStorage.setVisualEffectSelection(mode, variant) }
             },
             onDismiss = {
                 scope.launch {
