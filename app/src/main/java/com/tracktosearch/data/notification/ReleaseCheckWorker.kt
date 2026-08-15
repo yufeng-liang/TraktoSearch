@@ -48,6 +48,25 @@ class ReleaseCheckWorker @AssistedInject constructor(
         }
     }
 
+    /**
+     * 把日期或完整 ISO 时间串统一格式化为 yyyy-MM-dd。
+     * Trakt 的 season.first_aired 是完整时间串（如 2024-03-15T03:00:00.000Z），
+     * 直接进通知会显示很长的文本；TMDB 的日期本就是 yyyy-MM-dd，转换后不变。
+     */
+    private fun toDateOnly(source: String): String {
+        val formatter = createDateParser()
+        val date = runCatching { formatter.parse(source) }.getOrNull() ?: return source
+        return formatter.format(date)
+    }
+
+    /**
+     * 取 TMDB 本土化标题（接口默认 language=zh-CN）。
+     * movie 用 title，show 用 name；为空时降级为 Trakt 原标题。
+     */
+    private fun resolveLocalizedTitle(tmdbTitle: String, fallback: String): String {
+        return tmdbTitle.takeIf { it.isNotBlank() } ?: fallback
+    }
+
     override suspend fun doWork(): Result {
         // 检查通知总开关
         val enabled = notificationStorage.enabled.first()
@@ -116,10 +135,11 @@ class ReleaseCheckWorker @AssistedInject constructor(
 
                         if (releaseCal.after(startDate) && !releaseCal.after(today)) {
                             val payload = releaseDateStr
+                            val localizedTitle = resolveLocalizedTitle(detail.title, item.movie.title)
                             val existing = notificationRecordDao.find(traktId, "release", payload)
                             if (existing == null) {
                                 notificationHelper.showReleaseNotification(
-                                    title = item.movie.title,
+                                    title = localizedTitle,
                                     releaseDate = releaseDateStr,
                                     traktId = traktId,
                                     tmdbId = tmdbId,
@@ -130,7 +150,7 @@ class ReleaseCheckWorker @AssistedInject constructor(
                                         traktId = traktId,
                                         tmdbId = tmdbId,
                                         mediaType = "movie",
-                                        title = item.movie.title,
+                                        title = localizedTitle,
                                         type = "release",
                                         payload = payload
                                     )
@@ -173,10 +193,11 @@ class ReleaseCheckWorker @AssistedInject constructor(
 
                         if (airCal.after(startDate) && !airCal.after(today)) {
                             val payload = airDateStr
+                            val localizedTitle = resolveLocalizedTitle(detail.name, item.show.title)
                             val existing = notificationRecordDao.find(traktId, "release", payload)
                             if (existing == null) {
                                 notificationHelper.showReleaseNotification(
-                                    title = item.show.title,
+                                    title = localizedTitle,
                                     releaseDate = airDateStr,
                                     traktId = traktId,
                                     tmdbId = tmdbId,
@@ -187,7 +208,7 @@ class ReleaseCheckWorker @AssistedInject constructor(
                                         traktId = traktId,
                                         tmdbId = tmdbId,
                                         mediaType = "show",
-                                        title = item.show.title,
+                                        title = localizedTitle,
                                         type = "release",
                                         payload = payload
                                     )
@@ -220,10 +241,21 @@ class ReleaseCheckWorker @AssistedInject constructor(
                         }
                         val seasons = seasonsResult.getOrNull() ?: return@async
 
+                        // 取 TMDB 本土化剧名（接口默认 language=zh-CN），失败降级 Trakt 原标题
+                        val localizedTitle = if (tmdbId != null && tmdbId > 0) {
+                            val tvResp = runCatching {
+                                apiSemaphore.withPermit { tmdbApiService.getTvDetail(tmdbId) }
+                            }.getOrNull()
+                            resolveLocalizedTitle(tvResp?.body()?.name ?: "", item.show.title)
+                        } else {
+                            item.show.title
+                        }
+
                         for (season in seasons) {
                             // 跳过第 0 季（特集）和第 1 季（已由 release 通知覆盖）
                             if (season.number <= 1) continue
-                            val airDateStr = season.first_aired.takeIf { it.isNotBlank() } ?: continue
+                            val rawAirDate = season.first_aired.takeIf { it.isNotBlank() } ?: continue
+                            val airDateStr = toDateOnly(rawAirDate)
 
                             val airDate = try {
                                 createDateParser().parse(airDateStr) ?: continue
@@ -240,7 +272,7 @@ class ReleaseCheckWorker @AssistedInject constructor(
                                 val existing = notificationRecordDao.find(traktId, "new_season", payload)
                                 if (existing == null) {
                                     notificationHelper.showNewSeasonNotification(
-                                        title = item.show.title,
+                                        title = localizedTitle,
                                         seasonNumber = season.number,
                                         airDate = airDateStr,
                                         traktId = traktId,
@@ -251,7 +283,7 @@ class ReleaseCheckWorker @AssistedInject constructor(
                                             traktId = traktId,
                                             tmdbId = tmdbId ?: 0,
                                             mediaType = "show",
-                                            title = item.show.title,
+                                            title = localizedTitle,
                                             type = "new_season",
                                             payload = payload
                                         )
