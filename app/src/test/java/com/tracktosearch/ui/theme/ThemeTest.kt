@@ -28,6 +28,14 @@ class ThemeTest {
     fun appHazeDefaultNoiseFactor_usesRequestedValue() {
         assertThat(AppHazeDefaultNoiseFactor).isEqualTo(0.10f)
     }
+
+    @Test
+    fun vintageTicketLightScheme_usesNeutralPageBackgroundBehindWhiteSurfaces() {
+        assertThat(vintageTicketColorScheme(dark = false).background)
+            .isEqualTo(Color(0xFFF0F1F3))
+        assertThat(vintageTicketColorScheme(dark = false).surface)
+            .isEqualTo(Color.White)
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)

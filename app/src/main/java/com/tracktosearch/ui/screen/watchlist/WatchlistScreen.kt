@@ -169,11 +169,11 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.AppIconButton
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
-import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
@@ -1052,7 +1052,7 @@ fun WatchlistScreen(
                                                         )
                                                     }
                                                 } else {
-                                                    NeumorphicIconButton(
+                                                    AppIconButton(
                                                         onClick = { isSearchExpanded = true },
                                                         isDark = isDark,
                                                         lightBorderAlpha = 0.35f,
@@ -1074,7 +1074,7 @@ fun WatchlistScreen(
                                             }
                                         }
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        NeumorphicIconButton(
+                                        AppIconButton(
                                             onClick = {
                                                 collapseSearch()
                                                 showFilterSheet = true

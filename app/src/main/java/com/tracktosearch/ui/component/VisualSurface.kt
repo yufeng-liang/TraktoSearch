@@ -189,6 +189,7 @@ fun AppIconButton(
     role: GlassSurfaceRole = GlassSurfaceRole.CircularControl,
     interactionSource: MutableInteractionSource? = null,
     enabled: Boolean = true,
+    lightBorderAlpha: Float = 0.55f,
     scene: GlassScene = GlassScene(),
     buttonStyle: NeumorphicIconButtonStyle = NeumorphicIconButtonStyle.Default,
     content: @Composable () -> Unit
@@ -216,6 +217,7 @@ fun AppIconButton(
             hazeState = hazeState,
             interactionSource = interactionSource,
             enabled = enabled,
+            lightBorderAlpha = lightBorderAlpha,
             scene = scene,
             buttonStyle = buttonStyle,
             content = content

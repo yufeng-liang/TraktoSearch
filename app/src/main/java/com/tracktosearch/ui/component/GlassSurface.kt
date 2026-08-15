@@ -70,6 +70,8 @@ fun GlassIconButton(
 ) {
     val resolvedInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
     val shape = RoundedCornerShape(50)
+    val isDark = isAppDarkTheme()
+    val highlightAlphaScale = if (role == GlassSurfaceRole.DetailAction) 0.55f else 0.72f
     val buttonModifier = modifier
             .alpha(if (enabled) 1f else 0.55f)
             .clickable(
@@ -79,12 +81,16 @@ fun GlassIconButton(
                 onClick = onClick
             )
             .size(size)
-    val borderColor = MaterialTheme.colorScheme.outline.copy(alpha = if (enabled) 0.35f else 0.20f)
+    val borderColor = if (isDark) {
+        Color.White.copy(alpha = if (enabled) 0.14f else 0.08f)
+    } else {
+        Color.White.copy(alpha = if (enabled) 0.92f else 0.55f)
+    }
     if (hazeState == null) {
         val token = glassToken(
             role = role,
             variant = com.tracktosearch.ui.theme.LocalGlassVariant.current,
-            isDark = isAppDarkTheme(),
+            isDark = isDark,
             scene = scene
         )
         Box(
@@ -106,6 +112,12 @@ fun GlassIconButton(
                 .border(1.dp, glassBorderColor(role, borderColor, scene), shape),
             contentAlignment = Alignment.Center
         ) {
+            GlassHighlight(
+                isDark = isDark,
+                shape = shape,
+                alphaScale = highlightAlphaScale,
+                compact = true
+            )
             content()
         }
     } else {
@@ -119,6 +131,8 @@ fun GlassIconButton(
             interactionSource = resolvedInteractionSource,
             tint = MaterialTheme.colorScheme.surface,
             borderColor = borderColor,
+            showSpecularHighlight = true,
+            specularHighlightAlphaScale = highlightAlphaScale,
             content = content
         )
     }
@@ -160,6 +174,8 @@ internal fun GlassSurfaceImpl(
     interactionSource: MutableInteractionSource?,
     tint: Color,
     borderColor: Color,
+    showSpecularHighlight: Boolean = false,
+    specularHighlightAlphaScale: Float = 1f,
     content: @Composable () -> Unit
 ) {
     val style = AppGlassStyles.style(
@@ -184,6 +200,14 @@ internal fun GlassSurfaceImpl(
             .border(1.dp, glassBorderColor(role, borderColor, scene), shape),
         contentAlignment = Alignment.Center
     ) {
+        if (showSpecularHighlight) {
+            GlassHighlight(
+                isDark = isAppDarkTheme(),
+                shape = shape,
+                alphaScale = specularHighlightAlphaScale,
+                compact = true
+            )
+        }
         content()
     }
 }

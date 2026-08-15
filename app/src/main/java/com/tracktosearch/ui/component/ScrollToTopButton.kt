@@ -176,7 +176,9 @@ private fun ScrollToTopButtonContent(
                     input = HazeInput.Sources(hazeState),
                     hazeStyle = resolvedHazeStyle,
                     glassStyle = AppGlassStyles.circularControl(
-                        tint = MaterialTheme.colorScheme.surface.copy(alpha = 0.18f),
+                        tint = MaterialTheme.colorScheme.surface.copy(
+                            alpha = if (isAppDarkTheme()) 0.18f else 0.72f
+                        ),
                         scene = scene
                     ),
                     blurSampling = HazeSampling.Adaptive,
