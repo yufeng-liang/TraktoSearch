@@ -115,8 +115,6 @@ import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
 import com.tracktosearch.ui.theme.appSwitchColors
-import com.tracktosearch.ui.theme.GlassVariant
-import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
@@ -154,8 +152,6 @@ private fun resolveConsistencyCheckBlocker(
     kotlinx.coroutines.FlowPreview::class,
     ExperimentalSharedTransitionApi::class,
 )
-private const val SHOW_VISUAL_EFFECT_ENTRY = true
-
 @Composable
 fun SettingsScreen(
     onLogout: () -> Unit = {},
@@ -320,7 +316,6 @@ fun SettingsScreen(
     val exportImportState by viewModel.exportImportState.collectAsStateWithLifecycle()
     var showThemeDialog by remember { mutableStateOf(false) }
     var showAccentColorDialog by remember { mutableStateOf(false) }
-    var showVisualEffectDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showDefaultTabDialog by remember { mutableStateOf(false) }
     var showChangelogDialog by remember { mutableStateOf(false) }
@@ -471,15 +466,6 @@ fun SettingsScreen(
                         ThemeStorage.MODE_LIGHT -> stringResource(R.string.theme_light)
                         else -> stringResource(R.string.theme_system)
                     }
-                    val accentName = currentAccent?.let { stringResource(it.labelResId) }
-                        ?: stringResource(R.string.settings_accent_dynamic)
-                    val visualEffectName = when (currentVisualEffectMode) {
-                        VisualEffectMode.GLASS -> when (currentGlassVariant) {
-                            GlassVariant.CLEAR -> stringResource(R.string.settings_visual_effect_glass_clear)
-                            GlassVariant.FOCUSED -> stringResource(R.string.settings_visual_effect_glass_focused)
-                        }
-                        VisualEffectMode.BLUR -> stringResource(R.string.settings_visual_effect_blur)
-                    }
                     val languageName = when (currentLanguage) {
                         LanguageStorage.LANGUAGE_CHINESE -> stringResource(R.string.language_chinese)
                         LanguageStorage.LANGUAGE_ENGLISH -> stringResource(R.string.language_english)
@@ -509,28 +495,10 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f),
                             icon = Icons.Rounded.Palette,
                             title = stringResource(R.string.settings_accent_color),
-                            subtitle = accentName,
                             mergeTitleAndSubtitle = true,
                             onClick = { showAccentColorDialog = true },
                             containerColor = Color.Transparent
                         )
-                    }
-                    if (SHOW_VISUAL_EFFECT_ENTRY) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            SettingsCard(
-                                modifier = Modifier.weight(1f),
-                                icon = Icons.Rounded.AutoAwesome,
-                                title = stringResource(R.string.settings_visual_effect),
-                                subtitle = visualEffectName,
-                                mergeTitleAndSubtitle = true,
-                                onClick = { showVisualEffectDialog = true },
-                                containerColor = Color.Transparent
-                            )
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
@@ -934,19 +902,13 @@ fun SettingsScreen(
         AccentColorDialog(
             currentAccent = currentAccent,
             onAccentSelected = { viewModel.setAccentColor(it); showAccentColorDialog = false },
-            onDismiss = { showAccentColorDialog = false }
-        )
-    }
-
-    if (showVisualEffectDialog) {
-        VisualEffectSelectionDialog(
             currentMode = currentVisualEffectMode,
             currentVariant = currentGlassVariant,
-            onSelection = { mode, variant ->
+            onVisualEffectSelected = { mode, variant ->
                 viewModel.setVisualEffectSelection(mode, variant)
-                showVisualEffectDialog = false
+                showAccentColorDialog = false
             },
-            onDismiss = { showVisualEffectDialog = false }
+            onDismiss = { showAccentColorDialog = false }
         )
     }
 
