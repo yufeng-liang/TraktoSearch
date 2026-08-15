@@ -283,6 +283,7 @@ fun MainScreen(
             currentMode = currentVisualEffectMode,
             currentVariant = currentGlassVariant,
             onVisualEffectSelected = { mode, variant ->
+                // 仅持久化材质选择，不关闭引导弹窗，用户仍需选择强调色
                 scope.launch { themeStorage.setVisualEffectSelection(mode, variant) }
             },
             onDismiss = {
