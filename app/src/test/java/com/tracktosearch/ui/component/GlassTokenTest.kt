@@ -159,6 +159,30 @@ class GlassTokenTest {
     }
 
     @Test
+    fun lightCircularControlGetsAWhiterFillThanTopBar() {
+        val circularControl = glassToken(
+            GlassSurfaceRole.CircularControl,
+            GlassVariant.CLEAR,
+            isDark = false
+        )
+        val topBar = glassToken(GlassSurfaceRole.TopBar, GlassVariant.CLEAR, isDark = false)
+
+        assertThat(circularControl.tintAlpha).isAtLeast(0.16f)
+        assertThat(circularControl.tintAlpha).isGreaterThan(topBar.tintAlpha)
+    }
+
+    @Test
+    fun lightCircularControlUsesAVisibleSpecularHighlight() {
+        val circularControl = glassToken(
+            GlassSurfaceRole.CircularControl,
+            GlassVariant.CLEAR,
+            isDark = false
+        )
+
+        assertThat(circularControl.specularIntensity).isAtLeast(0.48f)
+    }
+
+    @Test
     fun allFormalRolesDisableChromaticAberration() {
         GlassSurfaceRole.entries.forEach { role ->
             GlassVariant.entries.forEach { variant ->

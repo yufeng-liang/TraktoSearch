@@ -60,9 +60,9 @@ private val LightColorScheme = lightColorScheme(
     primaryContainer = Red500,
     secondary = QuarkBlue,
     onSecondary = Color.White,
-    background = Color.White,
+    background = LightBackground,
     onBackground = DarkGray,
-    surface = Color.White,
+    surface = LightSurface,
     onSurface = DarkGray,
     outline = Color(0xFFBDBDBD),
     outlineVariant = Color(0xFFE8E8E8),
@@ -100,10 +100,10 @@ internal fun vintageTicketColorScheme(dark: Boolean): androidx.compose.material3
         // 显式覆盖 secondaryContainer，避免 Material3 baseline 紫色 fallback 导致 FilterChip 选中态变紫
         secondaryContainer = Color(0xFFE9E2D4),
         onSecondaryContainer = Color(0xFF5D4638),
-        background = Color.White,
+        background = LightBackground,
         onBackground = Color(0xFF5D4638),
         // Haze 默认使用 surface 作为填充色，保持与其他主题一致。
-        surface = Color.White,
+        surface = LightSurface,
         onSurface = Color(0xFF5D4638),
         surfaceVariant = Color(0xFFEFE9DF),
         onSurfaceVariant = Color(0xFF49454F),
@@ -148,9 +148,9 @@ private fun monetColorScheme(seed: Color, dark: Boolean): androidx.compose.mater
             onSecondary = onSecondary,
             secondaryContainer = secondaryContainer,
             onSecondaryContainer = onSecondaryContainer,
-            background = Color.White,
+            background = LightBackground,
             onBackground = DarkGray,
-            surface = Color.White,
+            surface = LightSurface,
             onSurface = DarkGray,
             surfaceVariant = Color(
                 red = seed.red * 0.08f + 0.92f,
@@ -186,7 +186,14 @@ fun TraktoSearchTheme(
         // 默认：Android 12+ 使用壁纸动态颜色
         Build.VERSION.SDK_INT >= 31 -> {
             val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            if (darkTheme) {
+                dynamicDarkColorScheme(context)
+            } else {
+                dynamicLightColorScheme(context).copy(
+                    background = LightBackground,
+                    surface = LightSurface
+                )
+            }
         }
         // 低版本：静态配色
         darkTheme -> DarkColorScheme

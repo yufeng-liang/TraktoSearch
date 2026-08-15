@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.tracktosearch.ui.theme.LightBackground
 
 /**
  * 跨页面共享背景：渐变底色 + 彩色光晕。
@@ -50,41 +51,41 @@ fun PageBackground(
         )
     } else {
         Brush.linearGradient(
-            0f to Color(0xFFF0F4FF),
-            0.4f to Color(0xFFE8F0FF),
-            1f to Color(0xFFF5E8FF)
+            0f to LightBackground,
+            0.4f to Color(0xFFECEDEF),
+            1f to Color(0xFFF3F4F5)
         )
     }
 
     val orb1Colors = if (isDark) {
         listOf(Color(0xFF5C6BC0).copy(alpha = 0.42f), Color(0xFF5C6BC0).copy(alpha = 0f))
     } else {
-        listOf(Color(0xFF7986CB).copy(alpha = 0.48f), Color(0xFF7986CB).copy(alpha = 0f))
+        listOf(Color(0xFF7986CB).copy(alpha = 0.18f), Color(0xFF7986CB).copy(alpha = 0f))
     }
     val orb2Colors = if (isDark) {
         listOf(Color(0xFFEC407A).copy(alpha = 0.35f), Color(0xFFEC407A).copy(alpha = 0f))
     } else {
-        listOf(Color(0xFFF48FB1).copy(alpha = 0.42f), Color(0xFFF48FB1).copy(alpha = 0f))
+        listOf(Color(0xFFF48FB1).copy(alpha = 0.16f), Color(0xFFF48FB1).copy(alpha = 0f))
     }
     val orb3Colors = if (isDark) {
         listOf(Color(0xFF26A69A).copy(alpha = 0.32f), Color(0xFF26A69A).copy(alpha = 0f))
     } else {
-        listOf(Color(0xFF80CBC4).copy(alpha = 0.40f), Color(0xFF80CBC4).copy(alpha = 0f))
+        listOf(Color(0xFF80CBC4).copy(alpha = 0.14f), Color(0xFF80CBC4).copy(alpha = 0f))
     }
     val orb4Colors = if (isDark) {
         listOf(Color(0xFFFFB74D).copy(alpha = 0.28f), Color(0xFFFFB74D).copy(alpha = 0f))
     } else {
-        listOf(Color(0xFFFFE0B2).copy(alpha = 0.35f), Color(0xFFFFE0B2).copy(alpha = 0f))
+        listOf(Color(0xFFFFE0B2).copy(alpha = 0.13f), Color(0xFFFFE0B2).copy(alpha = 0f))
     }
     val orb5Colors = if (isDark) {
         listOf(Color(0xFFBA68C8).copy(alpha = 0.35f), Color(0xFFBA68C8).copy(alpha = 0f))
     } else {
-        listOf(Color(0xFFCE93D8).copy(alpha = 0.40f), Color(0xFFCE93D8).copy(alpha = 0f))
+        listOf(Color(0xFFCE93D8).copy(alpha = 0.14f), Color(0xFFCE93D8).copy(alpha = 0f))
     }
     val orb6Colors = if (isDark) {
         listOf(Color(0xFF64B5F6).copy(alpha = 0.32f), Color(0xFF64B5F6).copy(alpha = 0f))
     } else {
-        listOf(Color(0xFF90CAF9).copy(alpha = 0.38f), Color(0xFF90CAF9).copy(alpha = 0f))
+        listOf(Color(0xFF90CAF9).copy(alpha = 0.14f), Color(0xFF90CAF9).copy(alpha = 0f))
     }
 
     // 背景画布随当前页水平平移，形成连续画布效果
@@ -158,7 +159,7 @@ fun PageBackground(
                 colors = if (isDark) {
                     listOf(Color(0xFF66BB6A).copy(alpha = 0.30f), Color(0xFF66BB6A).copy(alpha = 0f))
                 } else {
-                    listOf(Color(0xFFA5D6A7).copy(alpha = 0.36f), Color(0xFFA5D6A7).copy(alpha = 0f))
+                    listOf(Color(0xFFA5D6A7).copy(alpha = 0.14f), Color(0xFFA5D6A7).copy(alpha = 0f))
                 }
             )
             // 琥珀色光晕（第 3 页右下）
@@ -169,7 +170,7 @@ fun PageBackground(
                 colors = if (isDark) {
                     listOf(Color(0xFFFFCA28).copy(alpha = 0.28f), Color(0xFFFFCA28).copy(alpha = 0f))
                 } else {
-                    listOf(Color(0xFFFFE082).copy(alpha = 0.34f), Color(0xFFFFE082).copy(alpha = 0f))
+                    listOf(Color(0xFFFFE082).copy(alpha = 0.12f), Color(0xFFFFE082).copy(alpha = 0f))
                 }
             )
         }

@@ -110,6 +110,22 @@ fun glassToken(
             ambientContrast * 0.16f
         ).coerceIn(0f, 1f)
     val focused = variant == GlassVariant.FOCUSED
+    // 圆形控件沿用 iOS 控制中心的镜面边缘：保持明显高光，但让内容密度继续压低眩光。
+    val baseSpecularIntensity = when (role) {
+        GlassSurfaceRole.CircularControl,
+        GlassSurfaceRole.DetailAction -> if (focused) 0.76f else 0.58f
+
+        GlassSurfaceRole.TopBar -> if (focused) 0.56f else 0.34f
+        GlassSurfaceRole.BottomNavigation -> if (focused) 0.50f else 0.34f
+        GlassSurfaceRole.SearchField -> if (focused) 0.52f else 0.32f
+        GlassSurfaceRole.LoginSurface -> if (focused) 0.58f else 0.40f
+    }
+    val specularProtection = when (role) {
+        GlassSurfaceRole.CircularControl,
+        GlassSurfaceRole.DetailAction -> 0.42f
+
+        else -> 0.55f
+    }
     val baseTintAlpha = when (role) {
         GlassSurfaceRole.TopBar -> if (isDark) {
             if (focused) 0.20f else 0.13f
@@ -121,7 +137,7 @@ fun glassToken(
         GlassSurfaceRole.DetailAction -> if (isDark) {
             if (focused) 0.25f else 0.15f
         } else {
-            if (focused) 0.18f else 0.11f
+            if (focused) 0.24f else 0.16f
         }
 
         GlassSurfaceRole.BottomNavigation -> if (isDark) {
@@ -149,7 +165,7 @@ fun glassToken(
         borderAlpha = ((if (focused) 1.0f else 0.76f) + protection * 0.24f)
             .coerceIn(0f, 1f),
         // 内容越密，镜面高光越弱，避免海报/标题在玻璃边缘产生白色噪点。
-        specularIntensity = ((if (focused) 0.62f else 0.38f) * (1f - protection * 0.55f))
+        specularIntensity = (baseSpecularIntensity * (1f - protection * specularProtection))
             .coerceIn(0f, 1f),
         ambientResponse = ((if (focused) 0.60f else 0.42f) + protection * 0.08f)
             .coerceIn(0f, 1f),

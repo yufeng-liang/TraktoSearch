@@ -156,26 +156,42 @@ fun Modifier.neumorphicShadow(
 }
 
 /**
- * 顶部玻璃高光渐变（C方案 ::before 效果）
+ * 上沿和左上角的镜面高光。保持中部和底部通透，避免整块泛白。
  */
 @Composable
 fun BoxScope.GlassHighlight(
     isDark: Boolean,
     shape: Shape = RoundedCornerShape(32.dp),
-    alphaScale: Float = 1f
+    alphaScale: Float = 1f,
+    compact: Boolean = false
 ) {
     val resolvedScale = alphaScale.coerceIn(0f, 1f)
+    val topAlpha = (if (isDark) 0.055f else if (compact) 0.22f else 0.28f) * resolvedScale
+    val edgeAlpha = (if (isDark) 0.20f else if (compact) 0.78f else 0.52f) * resolvedScale
     Box(
         modifier = Modifier
             .matchParentSize()
             .clip(shape)
             .background(
                 Brush.verticalGradient(
-                    0.0f to Color.White.copy(alpha = (if (isDark) 0.08f else 0.60f) * resolvedScale),
-                    0.25f to Color.White.copy(alpha = (if (isDark) 0.03f else 0.25f) * resolvedScale),
-                    0.50f to Color.White.copy(alpha = (if (isDark) 0.01f else 0.08f) * resolvedScale),
+                    0.0f to Color.White.copy(alpha = topAlpha),
+                    0.035f to Color.White.copy(alpha = topAlpha * 0.72f),
+                    0.10f to Color.White.copy(alpha = topAlpha * 0.24f),
+                    0.18f to Color.White.copy(alpha = topAlpha * 0.07f),
+                    0.34f to Color.Transparent,
                     1.0f to Color.Transparent
                 )
+            )
+            .border(
+                width = if (compact) 0.75.dp else 1.dp,
+                brush = Brush.linearGradient(
+                    0.0f to Color.White.copy(alpha = edgeAlpha),
+                    0.08f to Color.White.copy(alpha = edgeAlpha * 0.62f),
+                    0.28f to Color.White.copy(alpha = edgeAlpha * 0.20f),
+                    0.65f to Color.White.copy(alpha = edgeAlpha * 0.08f),
+                    1.0f to Color.White.copy(alpha = edgeAlpha * 0.22f)
+                ),
+                shape = shape
             )
     )
 }
@@ -433,15 +449,27 @@ fun NeumorphicIconButton(
 
     val isDetailTopBar = buttonStyle == NeumorphicIconButtonStyle.DetailTopBar
     val shape = CircleShape
-    val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin()
     val resolvedInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
+    val blurTintAlpha = when {
+        isDetailTopBar -> 0.10f
+        isDark -> 0.18f
+        else -> 0.72f
+    }
+    val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin(
+        MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.08f else 0.18f)
+    )
+    val blurFill = when {
+        isDark -> Color.Transparent
+        hazeState == null -> Color.White
+        else -> Color.White.copy(alpha = blurTintAlpha)
+    }
     val hazeModifier = if (hazeState != null) {
         Modifier.appVisualEffect(
             input = HazeInput.Sources(hazeState),
             hazeStyle = resolvedHazeStyle,
             glassStyle = glassStyle ?: AppGlassStyles.circularControl(
                 tint = MaterialTheme.colorScheme.surface.copy(
-                    alpha = if (isDetailTopBar) 0.10f else 0.18f
+                    alpha = blurTintAlpha
                 ),
                 interactive = enabled,
                 scene = scene
@@ -460,13 +488,14 @@ fun NeumorphicIconButton(
                 shape = shape,
                 isDark = isDark,
                 elevation = 5.dp,
-                darkAlpha = if (isDark) 0.35f else 0.12f,
+                darkAlpha = if (isDark) 0.35f else 0.16f,
                 blurRadius = 12.dp,
-                shadowOffset = 5.dp
+                shadowOffset = 5.dp,
+                darkColor = if (isDark) Color.Black else Color(0xFF68707C)
             )
             .clip(shape)
             .then(hazeModifier)
-            .background(Color.Transparent, shape)
+            .background(blurFill, shape)
             .neumorphicInnerShadow(
                 shape = shape,
                 isDark = isDark,
@@ -484,7 +513,11 @@ fun NeumorphicIconButton(
                 color = if (isDark) {
                     Color.White.copy(alpha = if (isDetailTopBar) 0.06f else 0.12f)
                 } else {
-                    MaterialTheme.colorScheme.outline.copy(alpha = if (isDetailTopBar) lightBorderAlpha * 0.5f else lightBorderAlpha)
+                    Color.White.copy(
+                        alpha = (
+                            lightBorderAlpha * if (isDetailTopBar) 0.5f else 1f
+                        ).coerceIn(0f, 1f)
+                    )
                 },
                 shape = shape
             )
@@ -499,7 +532,8 @@ fun NeumorphicIconButton(
         GlassHighlight(
             isDark = isDark,
             shape = shape,
-            alphaScale = if (isDetailTopBar) 0.5f else 1f
+            alphaScale = if (isDetailTopBar) 0.5f else 1f,
+            compact = true
         )
         content()
     }

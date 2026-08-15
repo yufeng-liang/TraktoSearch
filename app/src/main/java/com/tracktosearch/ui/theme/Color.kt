@@ -26,6 +26,8 @@ val UcOrange = Color(0xFFFF6B00)         // UC网盘 - 橙色
 val Blue115 = Color(0xFF2563EB)          // 115网盘 - 蓝色
 
 // Background
+val LightBackground = Color(0xFFF0F1F3)
+val LightSurface = Color.White
 val DarkBackground = Color(0xFF0F0F1A)
 val DarkSurface = Color(0xFF1A1A2E)
 val DarkCard = Color(0xFF242442)
