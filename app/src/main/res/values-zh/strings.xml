@@ -487,7 +487,6 @@
     <string name="theme_light">浅色</string>
 
     <!-- 视觉效果 -->
-    <string name="settings_visual_effect">视觉效果</string>
     <string name="settings_visual_effect_blur">模糊</string>
     <string name="settings_visual_effect_blur_desc">柔和的毛玻璃风格，边界过渡更自然</string>
     <string name="settings_visual_effect_glass_clear">玻璃 - 清透</string>
@@ -496,7 +495,9 @@
     <string name="settings_visual_effect_glass_focused_desc">更明确的玻璃层次，适合导航与操作</string>
 
     <!-- Accent Color -->
-    <string name="settings_accent_color">应用色调</string>
+    <string name="settings_accent_color">色调与材质</string>
+    <string name="settings_material">材质</string>
+    <string name="settings_visual_effect_glass">玻璃</string>
     <string name="settings_accent_dynamic">跟随壁纸取色</string>
     <!-- 应用色调 -->
     <string name="accent_vintage_ticket">复古票根</string>

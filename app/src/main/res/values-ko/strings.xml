@@ -246,7 +246,6 @@
     <string name="theme_light">라이트</string>
 
     <!-- 시각 효과 -->
-    <string name="settings_visual_effect">시각 효과</string>
     <string name="settings_visual_effect_blur">블러</string>
     <string name="settings_visual_effect_blur_desc">부드러운 반투명 스타일로 경계를 자연스럽게 표현</string>
     <string name="settings_visual_effect_glass_clear">Glass - 클리어</string>
@@ -255,7 +254,9 @@
     <string name="settings_visual_effect_glass_focused_desc">탐색과 조작에 어울리는 더 선명한 유리 레이어</string>
 
     <!-- Accent Color -->
-    <string name="settings_accent_color">액센트 색상</string>
+    <string name="settings_accent_color">톤 및 소재</string>
+    <string name="settings_material">소재</string>
+    <string name="settings_visual_effect_glass">유리</string>
     <string name="settings_accent_dynamic">다이나믹</string>
     <!-- 액센트 색상 -->
     <string name="accent_vintage_ticket">레트로 티켓</string>

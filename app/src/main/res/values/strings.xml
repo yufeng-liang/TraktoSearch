@@ -487,7 +487,6 @@
     <string name="theme_light">Light</string>
 
     <!-- Visual Effect -->
-    <string name="settings_visual_effect">Visual Effect</string>
     <string name="settings_visual_effect_blur">Blur</string>
     <string name="settings_visual_effect_blur_desc">A soft frosted style with a gentle, diffused boundary</string>
     <string name="settings_visual_effect_glass_clear">Glass - Clear</string>
@@ -496,7 +495,9 @@
     <string name="settings_visual_effect_glass_focused_desc">A more defined glass layer for navigation and controls</string>
 
     <!-- Accent Color -->
-    <string name="settings_accent_color">Accent Color</string>
+    <string name="settings_accent_color">Tone &amp; Material</string>
+    <string name="settings_material">Material</string>
+    <string name="settings_visual_effect_glass">Glass</string>
     <string name="settings_accent_dynamic">Dynamic</string>
     <!-- Accent Color Names -->
     <string name="accent_vintage_ticket">Vintage Ticket</string>

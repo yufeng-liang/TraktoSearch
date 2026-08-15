@@ -246,7 +246,6 @@
     <string name="theme_light">ライト</string>
 
     <!-- 視覚効果 -->
-    <string name="settings_visual_effect">視覚効果</string>
     <string name="settings_visual_effect_blur">ぼかし</string>
     <string name="settings_visual_effect_blur_desc">柔らかなすりガラス風で、境界を自然に見せるスタイル</string>
     <string name="settings_visual_effect_glass_clear">Glass - クリア</string>
@@ -255,7 +254,9 @@
     <string name="settings_visual_effect_glass_focused_desc">ナビゲーションや操作に適した、輪郭の明確なガラス階層</string>
 
     <!-- Accent Color -->
-    <string name="settings_accent_color">アクセントカラー</string>
+    <string name="settings_accent_color">トーンと素材</string>
+    <string name="settings_material">素材</string>
+    <string name="settings_visual_effect_glass">ガラス</string>
     <string name="settings_accent_dynamic">ダイナミック</string>
     <!-- アクセントカラー -->
     <string name="accent_vintage_ticket">レトロチケット</string>
