@@ -18,8 +18,8 @@ private const val IDLE_TRIGGER_DELAY_MS = 8_000L
 
 private val overlayTriggerCooldowns = mapOf(
     AiSpriteOverlayTrigger.FIRST_ENTRY to 0L,
-    AiSpriteOverlayTrigger.SEARCH_COMPLETED to 30_000L,
-    AiSpriteOverlayTrigger.IDLE to 45_000L
+    AiSpriteOverlayTrigger.SEARCH_COMPLETED to 3_000L,
+    AiSpriteOverlayTrigger.IDLE to 90_000L
 )
 
 const val AI_DOUBAN_NAV_PREFIX = "ai-douban:"
