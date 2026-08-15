@@ -98,43 +98,6 @@ internal fun ThemeSelectionDialog(
 }
 
 @Composable
-internal fun VisualEffectSelectionDialog(
-    currentMode: VisualEffectMode,
-    currentVariant: GlassVariant,
-    onSelection: (VisualEffectMode, GlassVariant) -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        title = { Text(stringResource(R.string.settings_visual_effect)) },
-        text = {
-            Column {
-                VisualEffectOptionRow(
-                    label = stringResource(R.string.settings_visual_effect_blur),
-                    description = stringResource(R.string.settings_visual_effect_blur_desc),
-                    selected = currentMode == VisualEffectMode.BLUR,
-                    onClick = { onSelection(VisualEffectMode.BLUR, currentVariant) }
-                )
-                VisualEffectOptionRow(
-                    label = stringResource(R.string.settings_visual_effect_glass_clear),
-                    description = stringResource(R.string.settings_visual_effect_glass_clear_desc),
-                    selected = currentMode == VisualEffectMode.GLASS && currentVariant == GlassVariant.CLEAR,
-                    onClick = { onSelection(VisualEffectMode.GLASS, GlassVariant.CLEAR) }
-                )
-                VisualEffectOptionRow(
-                    label = stringResource(R.string.settings_visual_effect_glass_focused),
-                    description = stringResource(R.string.settings_visual_effect_glass_focused_desc),
-                    selected = currentMode == VisualEffectMode.GLASS && currentVariant == GlassVariant.FOCUSED,
-                    onClick = { onSelection(VisualEffectMode.GLASS, GlassVariant.FOCUSED) }
-                )
-            }
-        },
-        confirmButton = {}
-    )
-}
-
-@Composable
 private fun VisualEffectOptionRow(
     label: String,
     description: String,
@@ -193,6 +156,9 @@ private fun ThemeOptionRow(
 internal fun AccentColorDialog(
     currentAccent: com.tracktosearch.ui.theme.MonetAccent?,
     onAccentSelected: (com.tracktosearch.ui.theme.MonetAccent?) -> Unit,
+    currentMode: VisualEffectMode,
+    currentVariant: GlassVariant,
+    onVisualEffectSelected: (VisualEffectMode, GlassVariant) -> Unit,
     onDismiss: () -> Unit,
     dialogTitle: String? = null
 ) {
@@ -202,7 +168,49 @@ internal fun AccentColorDialog(
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(dialogTitle ?: stringResource(R.string.settings_accent_color)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 300.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // 材质区
+                Text(
+                    text = stringResource(R.string.settings_material),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                VisualEffectOptionRow(
+                    label = stringResource(R.string.settings_visual_effect_glass),
+                    description = "",
+                    selected = currentMode == VisualEffectMode.GLASS,
+                    onClick = { onVisualEffectSelected(VisualEffectMode.GLASS, currentVariant) }
+                )
+                if (currentMode == VisualEffectMode.GLASS) {
+                    Column(modifier = Modifier.padding(start = 32.dp)) {
+                        VisualEffectOptionRow(
+                            label = stringResource(R.string.settings_visual_effect_glass_clear),
+                            description = stringResource(R.string.settings_visual_effect_glass_clear_desc),
+                            selected = currentVariant == GlassVariant.CLEAR,
+                            onClick = { onVisualEffectSelected(VisualEffectMode.GLASS, GlassVariant.CLEAR) }
+                        )
+                        VisualEffectOptionRow(
+                            label = stringResource(R.string.settings_visual_effect_glass_focused),
+                            description = stringResource(R.string.settings_visual_effect_glass_focused_desc),
+                            selected = currentVariant == GlassVariant.FOCUSED,
+                            onClick = { onVisualEffectSelected(VisualEffectMode.GLASS, GlassVariant.FOCUSED) }
+                        )
+                    }
+                }
+                VisualEffectOptionRow(
+                    label = stringResource(R.string.settings_visual_effect_blur),
+                    description = stringResource(R.string.settings_visual_effect_blur_desc),
+                    selected = currentMode == VisualEffectMode.BLUR,
+                    onClick = { onVisualEffectSelected(VisualEffectMode.BLUR, currentVariant) }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
                 // 动态壁纸取色项渐变色与勾选图标对比色
                 val dynamicColors = listOf(
                     Color(0xFF7B68AE), Color(0xFFE8915A), Color(0xFF5A8F6B),
