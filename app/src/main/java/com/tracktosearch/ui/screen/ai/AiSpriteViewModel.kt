@@ -74,6 +74,8 @@ data class AiSpriteUiState(
     val activeFeature: AiFeature? = null,
     val greeting: AiGreeting? = null,
     val taste: AiTasteAnalysis? = null,
+    // 口味分析成功加载次数，用于只触发一次对应场景图
+    val tasteRevision: Long = 0L,
     val quiz: AiQuiz? = null,
     val quizPreviewMovies: List<AiWatchedTitleDto> = emptyList(),
     val quizReplacementCount: Int = 0,
@@ -81,6 +83,8 @@ data class AiSpriteUiState(
     val quizIndex: Int = 0,
     val quizAnswers: Map<String, AiQuizAnswer> = emptyMap(),
     val quizResult: AiQuizResult? = null,
+    // 答题结果成功提交次数，用于只触发一次对应场景图
+    val quizResultRevision: Long = 0L,
     val quizHistory: com.tracktosearch.data.ai.AiQuizHistory? = null,
     val dailyKnowledge: AiDailyKnowledge? = null,
     val errorCode: String? = null
@@ -371,7 +375,14 @@ class AiSpriteViewModel @Inject constructor(
                 quiz.quizId,
                 state.quizAnswers.values.toList()
             ).onSuccess { result ->
-                _uiState.update { it.copy(isLoading = false, quizResult = result, quota = it.quota) }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        quizResult = result,
+                        quizResultRevision = it.quizResultRevision + 1L,
+                        quota = it.quota
+                    )
+                }
                 // 保存最近/最高成绩与错题（离线可浏览闯关历史）
                 val friendId = authManager.friendId.value.orEmpty()
                 if (friendId.isNotBlank()) {
@@ -505,7 +516,15 @@ class AiSpriteViewModel @Inject constructor(
                 authManager.friendId.value.orEmpty(),
                 com.tracktosearch.data.ai.AiTasteRequest(watched = watched, forceRefresh = forceRefresh),
                 forceRefresh
-            ).onSuccess { taste -> _uiState.update { it.copy(taste = taste, quota = taste.quota ?: it.quota) } }
+            ).onSuccess { taste ->
+                _uiState.update {
+                    it.copy(
+                        taste = taste,
+                        tasteRevision = it.tasteRevision + 1L,
+                        quota = taste.quota ?: it.quota
+                    )
+                }
+            }
                 .getOrElse { throw it }
         }
     }

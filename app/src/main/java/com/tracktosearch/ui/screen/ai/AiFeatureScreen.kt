@@ -44,14 +44,23 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
 import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiAudio
@@ -73,9 +82,35 @@ fun AiFeatureScreen(
     onShowClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit,
     onRecommendationClick: ((AiRecommendation) -> Unit)? = null
 ) {
-    Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
+    val sceneRevision = when (feature) {
+        AiFeature.TASTE -> state.tasteRevision
+        AiFeature.QUIZ -> state.quizResultRevision
+        else -> 0L
+    }
+    val sceneEvent = when (feature) {
+        AiFeature.TASTE -> state.taste?.let { tasteSceneEvent(it.recommendations.isNotEmpty()) }
+        AiFeature.QUIZ -> state.quizResult?.let { quizSceneEvent(it.score, it.totalScore) }
+        else -> null
+    }
+    var featureAnchorBounds by remember(feature) { mutableStateOf<Rect?>(null) }
+    var showFeatureScene by remember(feature) { mutableStateOf(false) }
+    var handledSceneRevision by remember(feature) { mutableStateOf(sceneRevision) }
+
+    LaunchedEffect(feature, sceneRevision, sceneEvent) {
+        if (sceneEvent == null) {
+            showFeatureScene = false
+            return@LaunchedEffect
+        }
+        if (shouldShowSceneForRevision(handledSceneRevision, sceneRevision)) {
+            handledSceneRevision = sceneRevision
+            showFeatureScene = true
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            topBar = {
             TopAppBar(
                 title = {
                     Text(
@@ -104,53 +139,73 @@ fun AiFeatureScreen(
                     containerColor = MaterialTheme.colorScheme.background
                 )
             )
-        }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
-        ) {
-            when (feature) {
-                AiFeature.GREETING -> GreetingFeature(greeting = state.greeting, onPlayAudio = onPlayAudio)
-                AiFeature.TASTE -> TasteFeature(
-                    taste = state.taste,
-                    onMovieClick = onMovieClick,
-                    onShowClick = onShowClick,
-                    onRecommendationClick = onRecommendationClick
-                )
-                AiFeature.QUIZ -> AiQuizScreen(state = state, viewModel = viewModel)
-                AiFeature.DAILY -> DailyFeature(daily = state.dailyKnowledge)
             }
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+            ) {
+                when (feature) {
+                    AiFeature.GREETING -> GreetingFeature(greeting = state.greeting, onPlayAudio = onPlayAudio)
+                    AiFeature.TASTE -> TasteFeature(
+                        taste = state.taste,
+                        onMovieClick = onMovieClick,
+                        onShowClick = onShowClick,
+                        onRecommendationClick = onRecommendationClick,
+                        onHeaderAnchorBoundsChanged = { featureAnchorBounds = it }
+                    )
+                    AiFeature.QUIZ -> AiQuizScreen(
+                        state = state,
+                        viewModel = viewModel,
+                        onResultAnchorBoundsChanged = { featureAnchorBounds = it }
+                    )
+                    AiFeature.DAILY -> DailyFeature(daily = state.dailyKnowledge)
+                }
 
-            if (state.isLoading) {
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 12.dp),
-                    shape = RoundedCornerShape(50),
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    tonalElevation = 2.dp
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                if (state.isLoading) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 12.dp),
+                        shape = RoundedCornerShape(50),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        tonalElevation = 2.dp
                     ) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        Text(stringResource(R.string.ai_feature_loading), style = MaterialTheme.typography.labelMedium)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Text(stringResource(R.string.ai_feature_loading), style = MaterialTheme.typography.labelMedium)
+                        }
                     }
                 }
-            }
 
-            if (state.errorCode != null) {
-                FeatureError(
-                    modifier = Modifier.align(Alignment.Center),
-                    onRetry = onRefresh
-                )
+                if (state.errorCode != null) {
+                    FeatureError(
+                        modifier = Modifier.align(Alignment.Center),
+                        onRetry = onRefresh
+                    )
+                }
             }
         }
+
+        AiSpriteMotion(
+            characterId = state.activatedCharacterId.orEmpty(),
+            anchor = sceneEvent?.let { sceneArtFor(it).anchor } ?: AiSpriteAnchor.AiFeatureHeader,
+            anchorBounds = featureAnchorBounds,
+            visible = showFeatureScene &&
+                featureAnchorBounds != null &&
+                sceneEvent != null &&
+                state.activatedCharacterId?.let { automaticSpriteArt(it) != null } == true,
+            onClick = {},
+            onFinished = { showFeatureScene = false },
+            modifier = Modifier.zIndex(5f),
+            sceneRes = sceneEvent?.let { sceneArtFor(it).drawableRes }
+        )
     }
 }
 
@@ -245,7 +300,8 @@ private fun TasteFeature(
     taste: AiTasteAnalysis?,
     onMovieClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit,
     onShowClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit,
-    onRecommendationClick: ((AiRecommendation) -> Unit)?
+    onRecommendationClick: ((AiRecommendation) -> Unit)?,
+    onHeaderAnchorBoundsChanged: (Rect) -> Unit = {}
 ) {
     if (taste == null) {
         FeatureUnavailable()
@@ -259,7 +315,8 @@ private fun TasteFeature(
         item {
             SectionTitle(
                 title = stringResource(R.string.ai_taste_title),
-                icon = Icons.Rounded.AutoAwesome
+                icon = Icons.Rounded.AutoAwesome,
+                onBoundsChanged = onHeaderAnchorBoundsChanged
             )
         }
         item {
@@ -435,8 +492,16 @@ private fun DailyFeature(daily: AiDailyKnowledge?) {
 }
 
 @Composable
-private fun SectionTitle(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+private fun SectionTitle(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onBoundsChanged: (Rect) -> Unit = {}
+) {
+    Row(
+        modifier = Modifier.onGloballyPositioned { onBoundsChanged(it.boundsInRoot()) },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
         Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
         Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
     }

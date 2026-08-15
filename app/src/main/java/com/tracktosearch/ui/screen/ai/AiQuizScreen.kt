@@ -27,6 +27,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -42,7 +45,8 @@ import com.tracktosearch.data.ai.AiWatchedTitleDto
 @Composable
 fun AiQuizScreen(
     state: AiSpriteUiState,
-    viewModel: AiSpriteViewModel
+    viewModel: AiSpriteViewModel,
+    onResultAnchorBoundsChanged: (Rect) -> Unit = {}
 ) {
     val result = state.quizResult
     if (result != null) {
@@ -50,7 +54,8 @@ fun AiQuizScreen(
             result = result,
             quiz = state.quiz,
             answers = state.quizAnswers,
-            onReplay = viewModel::replayQuiz
+            onReplay = viewModel::replayQuiz,
+            onResultAnchorBoundsChanged = onResultAnchorBoundsChanged
         )
         return
     }
@@ -342,7 +347,8 @@ private fun QuizResultScreen(
     result: AiQuizResult,
     quiz: AiQuiz?,
     answers: Map<String, AiQuizAnswer>,
-    onReplay: () -> Unit
+    onReplay: () -> Unit,
+    onResultAnchorBoundsChanged: (Rect) -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -351,7 +357,9 @@ private fun QuizResultScreen(
     ) {
         item {
             Surface(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned { onResultAnchorBoundsChanged(it.boundsInRoot()) },
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.primaryContainer
             ) {

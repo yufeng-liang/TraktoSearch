@@ -157,8 +157,12 @@ import com.tracktosearch.ui.screen.ai.AiSpriteMotion
 import com.tracktosearch.ui.screen.ai.AiSpriteOverlayPolicy
 import com.tracktosearch.ui.screen.ai.AiSpriteOverlayTrigger
 import com.tracktosearch.ui.screen.ai.AiSpriteViewModel
+import com.tracktosearch.ui.screen.ai.AiSceneEvent
 import com.tracktosearch.ui.screen.ai.automaticSpriteArt
 import com.tracktosearch.ui.screen.ai.nextAiSpriteOverlayTrigger
+import com.tracktosearch.ui.screen.ai.sceneArtFor
+import com.tracktosearch.ui.screen.ai.sceneEventForSearch
+import com.tracktosearch.ui.screen.ai.searchAnchorFor
 import com.tracktosearch.ui.component.DiscoverModalBottomSheet
 import com.tracktosearch.ui.component.DoubanRatingBadge
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
@@ -295,10 +299,10 @@ fun SearchScreen(
     val aiSpriteCloudDescription = stringResource(R.string.ai_sprite_cloud_description)
     var showAiSpriteCenter by rememberSaveable { mutableStateOf(false) }
     var showAiSpriteMotion by rememberSaveable { mutableStateOf(false) }
-    var activeSpriteAnchor by remember { mutableStateOf(AiSpriteAnchor.Cloud) }
+    var activeSpriteAnchor by remember { mutableStateOf(AiSpriteAnchor.SearchBox) }
+    var activeSceneEvent by remember { mutableStateOf<AiSceneEvent?>(null) }
     var spriteInterruptRevision by remember { mutableStateOf(0L) }
     var spriteInterruptReason by remember { mutableStateOf(AiSpriteInterruptReason.BLOCKED) }
-    var cloudBounds by remember { mutableStateOf<Rect?>(null) }
     var searchBoxBounds by remember { mutableStateOf<Rect?>(null) }
     var lastInteractionAt by remember { mutableStateOf(System.currentTimeMillis()) }
     var overlayEntryHandled by rememberSaveable { mutableStateOf(false) }
@@ -357,6 +361,7 @@ fun SearchScreen(
         spriteInterruptRevision += 1L
         spriteInterruptReason = reason
         showAiSpriteMotion = false
+        activeSceneEvent = null
     }
 
     LaunchedEffect(
@@ -369,12 +374,10 @@ fun SearchScreen(
         showAiSpriteCenter,
         showPermissionDialog,
         easterEggRes,
-        cloudBounds,
         searchBoxBounds,
         showAiSpriteMotion
     ) {
-        val nextAnchor = if (!overlayEntryHandled) AiSpriteAnchor.Cloud else AiSpriteAnchor.SearchBox
-        val nextBounds = if (nextAnchor == AiSpriteAnchor.Cloud) cloudBounds else searchBoxBounds
+        val nextBounds = searchBoxBounds
         val hasBlockingState = showAiSpriteCenter ||
             showPermissionDialog ||
             easterEggRes != null ||
@@ -399,12 +402,9 @@ fun SearchScreen(
                 searchQuery.isNotBlank()
         )
         if (trigger != null && !hasBlockingState && !showAiSpriteMotion) {
-            if (trigger == AiSpriteOverlayTrigger.FIRST_ENTRY) {
-                overlayEntryHandled = true
-                activeSpriteAnchor = AiSpriteAnchor.Cloud
-            } else {
-                activeSpriteAnchor = AiSpriteAnchor.SearchBox
-            }
+            if (trigger == AiSpriteOverlayTrigger.FIRST_ENTRY) overlayEntryHandled = true
+            activeSpriteAnchor = searchAnchorFor(trigger, hasResultAnchor = false)
+            activeSceneEvent = sceneEventForSearch(trigger)
             if (overlayPolicy.tryConsume(true, trigger, overlayDayKey)) {
                 showAiSpriteMotion = true
             }
@@ -438,6 +438,7 @@ fun SearchScreen(
                 !showAiSpriteMotion
             ) {
                 activeSpriteAnchor = AiSpriteAnchor.SearchBox
+                activeSceneEvent = sceneEventForSearch(AiSpriteOverlayTrigger.IDLE)
                 if (overlayPolicy.tryConsume(true, AiSpriteOverlayTrigger.IDLE, overlayDayKey)) {
                     showAiSpriteMotion = true
                 }
@@ -561,7 +562,6 @@ fun SearchScreen(
             },
             modifier = Modifier
                 .size(cloudIconSize)
-                .onGloballyPositioned { cloudBounds = it.boundsInRoot() }
                 .semantics { contentDescription = aiSpriteCloudDescription }
                 .align(Alignment.TopCenter)
                 .offset(
@@ -804,18 +804,20 @@ fun SearchScreen(
         AiSpriteMotion(
             characterId = spriteState.activatedCharacterId.orEmpty(),
             anchor = activeSpriteAnchor,
-            anchorBounds = if (activeSpriteAnchor == AiSpriteAnchor.Cloud) cloudBounds else searchBoxBounds,
+            anchorBounds = searchBoxBounds,
             visible = showAiSpriteMotion && !showAiSpriteCenter &&
-                (if (activeSpriteAnchor == AiSpriteAnchor.Cloud) cloudBounds else searchBoxBounds) != null,
+                searchBoxBounds != null,
             onClick = {
                 interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                 showAiSpriteCenter = true
             },
             onFinished = {
                 showAiSpriteMotion = false
+                activeSceneEvent = null
                 lastInteractionAt = System.currentTimeMillis()
             },
             modifier = Modifier.zIndex(5f),
+            sceneRes = activeSceneEvent?.let { sceneArtFor(it).drawableRes },
             interruptRequest = AiSpriteInterruptRequest(spriteInterruptRevision, spriteInterruptReason)
         )
 

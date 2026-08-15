@@ -152,7 +152,11 @@ import com.tracktosearch.ui.screen.ai.AiSpriteMotion
 import com.tracktosearch.ui.screen.ai.AiSpriteOverlayPolicy
 import com.tracktosearch.ui.screen.ai.AiSpriteOverlayTrigger
 import com.tracktosearch.ui.screen.ai.AiSpriteViewModel
+import com.tracktosearch.ui.screen.ai.AiSceneEvent
 import com.tracktosearch.ui.screen.ai.automaticSpriteArt
+import com.tracktosearch.ui.screen.ai.sceneArtFor
+import com.tracktosearch.ui.screen.ai.sceneEventForSearch
+import com.tracktosearch.ui.screen.ai.searchAnchorFor
 import dagger.hilt.android.EntryPointAccessors
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeSampling
@@ -205,6 +209,7 @@ fun TraktSearchScreen(
     var isSearchFocused by remember { mutableStateOf(false) }
     var wasSearchLoading by remember { mutableStateOf(false) }
     var activeSpriteAnchor by remember { mutableStateOf(AiSpriteAnchor.SearchBox) }
+    var activeSceneEvent by remember { mutableStateOf<AiSceneEvent?>(null) }
     var spriteInterruptRevision by remember { mutableStateOf(0L) }
     var spriteInterruptReason by remember { mutableStateOf(AiSpriteInterruptReason.BLOCKED) }
     var searchBoxBounds by remember { mutableStateOf<Rect?>(null) }
@@ -240,6 +245,7 @@ fun TraktSearchScreen(
         spriteInterruptRevision += 1L
         spriteInterruptReason = reason
         showAiSpriteMotion = false
+        activeSceneEvent = null
     }
 
     LaunchedEffect(Unit) {
@@ -296,12 +302,9 @@ fun TraktSearchScreen(
             hasBlockingOverlay = blocked
         )
             if (trigger != null && !blocked && !showAiSpriteMotion) {
-            if (trigger == AiSpriteOverlayTrigger.FIRST_ENTRY) {
-                overlayEntryHandled = true
-                activeSpriteAnchor = AiSpriteAnchor.SearchBox
-            } else if (trigger == AiSpriteOverlayTrigger.SEARCH_COMPLETED) {
-                activeSpriteAnchor = AiSpriteAnchor.ResultCard
-            }
+            if (trigger == AiSpriteOverlayTrigger.FIRST_ENTRY) overlayEntryHandled = true
+            activeSpriteAnchor = searchAnchorFor(trigger)
+            activeSceneEvent = sceneEventForSearch(trigger)
             if ((trigger != AiSpriteOverlayTrigger.SEARCH_COMPLETED || currentFirstResultBounds != null) &&
                 overlayPolicy.tryConsume(true, trigger, overlayDayKey)
             ) {
@@ -325,6 +328,7 @@ fun TraktSearchScreen(
                 overlayPolicy.tryConsume(true, AiSpriteOverlayTrigger.IDLE, overlayDayKey)
             ) {
                 activeSpriteAnchor = AiSpriteAnchor.SearchBox
+                activeSceneEvent = sceneEventForSearch(AiSpriteOverlayTrigger.IDLE)
                 showAiSpriteMotion = true
             }
         }
@@ -942,9 +946,11 @@ fun TraktSearchScreen(
                 },
                 onFinished = {
                     showAiSpriteMotion = false
+                    activeSceneEvent = null
                     lastInteractionAt = System.currentTimeMillis()
                 },
                 modifier = Modifier.zIndex(5f),
+                sceneRes = activeSceneEvent?.let { sceneArtFor(it).drawableRes },
                 interruptRequest = AiSpriteInterruptRequest(spriteInterruptRevision, spriteInterruptReason)
             )
 

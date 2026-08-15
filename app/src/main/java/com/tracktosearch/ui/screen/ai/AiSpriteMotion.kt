@@ -62,7 +62,9 @@ enum class AiSpriteAnchor {
     BottomPanel,
     DetailHeader,
     DetailPanel,
-    RecommendationsTab
+    RecommendationsTab,
+    QuizResult,
+    AiFeatureHeader
 }
 
 enum class AiSpriteInterruptReason {
@@ -115,6 +117,7 @@ fun AiSpriteMotion(
     onClick: () -> Unit,
     onFinished: () -> Unit,
     modifier: Modifier = Modifier,
+    sceneRes: Int? = null,
     interruptRequest: AiSpriteInterruptRequest? = null
 ) {
     val art = automaticSpriteArt(characterId) ?: return
@@ -125,7 +128,7 @@ fun AiSpriteMotion(
         mutableStateOf(interruptRequest?.revision ?: 0L)
     }
 
-    LaunchedEffect(visible, characterId, anchor, interruptRequest?.revision) {
+    LaunchedEffect(visible, characterId, anchor, sceneRes, interruptRequest?.revision) {
         val request = interruptRequest
         if (request != null && request.revision > handledInterruptRevision) {
             handledInterruptRevision = request.revision
@@ -177,6 +180,7 @@ fun AiSpriteMotion(
         anchorBounds = anchorBounds,
         state = state,
         onClick = onClick,
+        sceneRes = sceneRes,
         modifier = modifier
     )
 }
@@ -188,6 +192,7 @@ private fun SpriteMotionVisual(
     anchorBounds: Rect?,
     state: AiSpriteMotionState,
     onClick: () -> Unit,
+    sceneRes: Int?,
     modifier: Modifier = Modifier
 ) {
     if (state == AiSpriteMotionState.HIDDEN) return
@@ -201,6 +206,8 @@ private fun SpriteMotionVisual(
         AiSpriteAnchor.DetailHeader -> 116.dp
         AiSpriteAnchor.DetailPanel -> 112.dp
         AiSpriteAnchor.RecommendationsTab -> 108.dp
+        AiSpriteAnchor.QuizResult -> 132.dp
+        AiSpriteAnchor.AiFeatureHeader -> 136.dp
     }
     val windowHeight = when (anchor) {
         AiSpriteAnchor.SearchBox -> 92.dp
@@ -210,6 +217,8 @@ private fun SpriteMotionVisual(
         AiSpriteAnchor.DetailHeader -> 124.dp
         AiSpriteAnchor.DetailPanel -> 118.dp
         AiSpriteAnchor.RecommendationsTab -> 122.dp
+        AiSpriteAnchor.QuizResult -> 148.dp
+        AiSpriteAnchor.AiFeatureHeader -> 152.dp
     }
     val placement = with(density) {
         anchorBounds?.let { bounds ->
@@ -223,6 +232,8 @@ private fun SpriteMotionVisual(
                 AiSpriteAnchor.DetailHeader -> centerX - spriteSize / 2f to top + bounds.height.toDp() - 14.dp
                 AiSpriteAnchor.DetailPanel -> bounds.right.toDp() - spriteSize + 14.dp to top - windowHeight + 4.dp
                 AiSpriteAnchor.RecommendationsTab -> bounds.right.toDp() - spriteSize + 10.dp to top - 42.dp
+                AiSpriteAnchor.QuizResult -> centerX - spriteSize / 2f to top - 12.dp
+                AiSpriteAnchor.AiFeatureHeader -> centerX - spriteSize / 2f to top + bounds.height.toDp() - 18.dp
             }
         } ?: (0.dp to 132.dp)
     }
@@ -262,9 +273,10 @@ private fun SpriteMotionVisual(
     )
     val contentDescription = stringResource(R.string.ai_sprite_open_center)
 
-    val isInteractive = state == AiSpriteMotionState.PEEK ||
+    val isInteractive = sceneRes == null && (state == AiSpriteMotionState.PEEK ||
         state == AiSpriteMotionState.OBSERVE ||
-        state == AiSpriteMotionState.REACT
+        state == AiSpriteMotionState.REACT)
+    val layeredArt = art.layerArt
     Box(
         modifier = modifier
             .offset { IntOffset(placement.first.roundToPx(), placement.second.roundToPx()) }
@@ -274,8 +286,29 @@ private fun SpriteMotionVisual(
             .then(if (isInteractive) Modifier.clickable(onClick = onClick) else Modifier),
         contentAlignment = Alignment.BottomCenter
     ) {
-        val layeredArt = art.layerArt
-        if (layeredArt != null) {
+        if (sceneRes != null) {
+            Image(
+                painter = painterResource(sceneRes),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        this.alpha = alpha
+                        translationY = offsetY.toPx()
+                        val sceneScale = when (state) {
+                            AiSpriteMotionState.PREPARE -> 0.88f
+                            AiSpriteMotionState.PEEK -> 0.96f
+                            AiSpriteMotionState.OBSERVE -> 1f
+                            AiSpriteMotionState.REACT -> 1.025f
+                            AiSpriteMotionState.HIDDEN,
+                            AiSpriteMotionState.RETREAT -> 0.9f
+                        }
+                        scaleX = sceneScale
+                        scaleY = sceneScale
+                    }
+            )
+        } else if (layeredArt != null) {
             LayeredSpriteMotionVisual(
                 art = layeredArt,
                 state = state,
@@ -310,11 +343,13 @@ private fun SpriteMotionVisual(
                 )
             }
         }
-        SpriteReactionEffect(
-            reaction = art.reaction,
-            active = state == AiSpriteMotionState.REACT,
-            modifier = Modifier.align(Alignment.TopEnd)
-        )
+        if (sceneRes == null) {
+            SpriteReactionEffect(
+                reaction = art.reaction,
+                active = state == AiSpriteMotionState.REACT,
+                modifier = Modifier.align(Alignment.TopEnd)
+            )
+        }
     }
 }
 

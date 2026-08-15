@@ -99,7 +99,9 @@ class AiSpriteMotionTest {
             AiSpriteAnchor.BottomPanel,
             AiSpriteAnchor.DetailHeader,
             AiSpriteAnchor.DetailPanel,
-            AiSpriteAnchor.RecommendationsTab
+            AiSpriteAnchor.RecommendationsTab,
+            AiSpriteAnchor.QuizResult,
+            AiSpriteAnchor.AiFeatureHeader
         ).inOrder()
     }
 

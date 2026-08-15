@@ -163,6 +163,8 @@ data class DetailUiState(
     val isLoadingVideosImages: Boolean = false,
     // 想看列表是否变更（添加/移除想看后变为 true）
     val watchlistChanged: Boolean = false,
+    // 成功加入想看后的单调 revision，仅用于触发一次性详情页场景动效
+    val watchlistAddedRevision: Long = 0L,
     // 已看历史是否变更（标记/取消已看后变为 true）
     val watchedChanged: Boolean = false,
     // 相关推荐
@@ -197,6 +199,10 @@ data class DetailUiState(
     /** 待重试的豆瓣动作 */
     val pendingDoubanAction: DoubanSyncAction? = null
 )
+
+/** 场景 revision 只服务当前页面，详情缓存恢复时不能再次播放旧的加入想看动效。 */
+internal fun DetailUiState.withoutTransientSceneState(): DetailUiState =
+    copy(watchlistAddedRevision = 0L)
 
 /** 豆瓣同步动作枚举 */
 enum class DoubanSyncAction {
@@ -459,7 +465,7 @@ class DetailViewModel @Inject constructor(
             } else {
                 cached.uiState.ratingSource
             }
-            _uiState.value = cached.uiState.copy(
+            _uiState.value = cached.uiState.withoutTransientSceneState().copy(
                 isMarkedWatchlist = realInWatchlist,
                 isMarkedWatched = realWatched,
                 ratingSource = restoredRatingSource
@@ -2393,7 +2399,12 @@ class DetailViewModel @Inject constructor(
                     // 乐观设置已看为 false（副操作失败由下次全量拉取纠正，对称于 markAsWatched 副操作失败处理）
                     isMarkedWatched = if (willChangeWatched) false else _uiState.value.isMarkedWatched,
                     isMarkingWatchlist = false,
-                    isMarkingWatched = false
+                    isMarkingWatched = false,
+                    watchlistAddedRevision = if (targetState) {
+                        _uiState.value.watchlistAddedRevision + 1L
+                    } else {
+                        _uiState.value.watchlistAddedRevision
+                    }
                 )
                 publishWatchlistMutation(
                     if (targetState) TraktRepository.WatchlistMutationAction.ADD
@@ -2485,6 +2496,11 @@ class DetailViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(
                 isMarkedWatchlist = targetState,
                 isMarkingWatchlist = false,
+                watchlistAddedRevision = if (targetState && success) {
+                    _uiState.value.watchlistAddedRevision + 1L
+                } else {
+                    _uiState.value.watchlistAddedRevision
+                },
                 doubanSyncRetryable = if (success) false else _uiState.value.doubanSyncRetryable,
                 pendingDoubanAction = if (success) null else _uiState.value.pendingDoubanAction
             )
@@ -2916,7 +2932,7 @@ class DetailViewModel @Inject constructor(
     private fun saveToCache() {
         val cacheKey = currentDetailCacheKey ?: return
         cachePut(cacheKey, CachedDetailData(
-            uiState = _uiState.value,
+            uiState = _uiState.value.withoutTransientSceneState(),
             allResources = allResources,
             currentKeyword = currentKeyword,
             currentOriginalTitle = currentOriginalTitle,

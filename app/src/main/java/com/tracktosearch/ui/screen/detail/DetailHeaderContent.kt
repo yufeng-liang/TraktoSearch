@@ -54,8 +54,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -118,7 +121,8 @@ internal fun DetailHeaderContent(
     // 头部下方内容(cast/视频/简介/季集)的透明度,用于"沉浸背景先现,内容后显"淡入效果
     // 1f=完全显示,0f=隐藏;海报+标题+按钮始终不透明
     contentAlpha: Float = 1f,
-    hazeState: HazeState
+    hazeState: HazeState,
+    onHeaderAnchorBoundsChanged: (Rect) -> Unit = {}
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -137,7 +141,8 @@ internal fun DetailHeaderContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(IntrinsicSize.Max)
-                .padding(bottom = 12.dp),
+                .padding(bottom = 12.dp)
+                .onGloballyPositioned { onHeaderAnchorBoundsChanged(it.boundsInRoot()) },
             verticalAlignment = Alignment.Top
         ) {
             // 海报：fillMaxHeight 让海报高度跟随右侧信息列（含按钮组），

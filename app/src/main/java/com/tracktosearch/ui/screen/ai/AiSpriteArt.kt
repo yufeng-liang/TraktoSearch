@@ -202,7 +202,9 @@ fun AiCharacterArtSpec.drawableFor(
         AiSpriteAnchor.DetailHeader,
         AiSpriteAnchor.DetailPanel,
         AiSpriteAnchor.BottomPanel,
-        AiSpriteAnchor.RecommendationsTab -> peekRes
+        AiSpriteAnchor.RecommendationsTab,
+        AiSpriteAnchor.QuizResult,
+        AiSpriteAnchor.AiFeatureHeader -> peekRes
         AiSpriteAnchor.Cloud -> standbyRes
     }
     AiSpriteMotionState.REACT -> reactRes

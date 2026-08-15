@@ -1092,6 +1092,13 @@ class DetailViewModelSupplementTest {
         coVerify(exactly = 0) { traktRepository.markEpisodesWatched(any(), any(), any()) }
     }
 
+    @Test
+    fun cachedDetailStateDoesNotReplayWatchlistSceneRevision() {
+        val cachedState = DetailUiState(watchlistAddedRevision = 7L)
+
+        assertThat(cachedState.withoutTransientSceneState().watchlistAddedRevision).isEqualTo(0L)
+    }
+
     private fun setupDoubanBackedTraktDetail(userRating: Int? = null) {
         setupLoggedInState(traktId = 0)
         setPrivateField("currentDoubanId", "db-1")

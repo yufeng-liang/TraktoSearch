@@ -59,6 +59,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -70,6 +71,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.zIndex
 import androidx.core.graphics.drawable.toBitmap
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -97,6 +99,13 @@ import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.screen.ai.AiSceneEvent
+import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
+import com.tracktosearch.ui.screen.ai.AiSpriteMotion
+import com.tracktosearch.ui.screen.ai.AiSpriteViewModel
+import com.tracktosearch.ui.screen.ai.automaticSpriteArt
+import com.tracktosearch.ui.screen.ai.sceneArtFor
+import com.tracktosearch.ui.screen.ai.shouldShowWatchlistAddedScene
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -124,11 +133,23 @@ fun DetailScreen(
     viewModel: DetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val spriteViewModel: AiSpriteViewModel = hiltViewModel()
+    val spriteState by spriteViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val view = LocalView.current
     // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的推荐卡片参与共享元素转场
     var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
     var showRatingDialog by remember { mutableStateOf(false) }
+    var detailHeaderBounds by remember { mutableStateOf<Rect?>(null) }
+    var showWatchlistScene by remember { mutableStateOf(false) }
+    var handledWatchlistRevision by remember(traktId, tmdbId) { mutableStateOf(0L) }
+
+    LaunchedEffect(uiState.watchlistAddedRevision, traktId, tmdbId) {
+        if (shouldShowWatchlistAddedScene(handledWatchlistRevision, uiState.watchlistAddedRevision)) {
+            handledWatchlistRevision = uiState.watchlistAddedRevision
+            showWatchlistScene = true
+        }
+    }
 
     // 拦截系统返回手势/返回键，统一走 onBack 回调以传递变更状态
     BackHandler(enabled = true) {
@@ -411,7 +432,8 @@ fun DetailScreen(
                         sectionVisible = uiState.sectionVisible,
                         hazeState = detailHazeState,
                         // 头部下方内容(cast/视频/简介/季集)淡入,海报+标题+按钮始终可见
-                        contentAlpha = contentAlpha
+                        contentAlpha = contentAlpha,
+                        onHeaderAnchorBoundsChanged = { detailHeaderBounds = it }
                     )
                 }
 
@@ -783,6 +805,19 @@ fun DetailScreen(
                 }
             } // CompositionLocalProvider
             }
+
+            AiSpriteMotion(
+                characterId = spriteState.activatedCharacterId.orEmpty(),
+                anchor = AiSpriteAnchor.DetailHeader,
+                anchorBounds = detailHeaderBounds,
+                visible = showWatchlistScene &&
+                    detailHeaderBounds != null &&
+                    spriteState.activatedCharacterId?.let { automaticSpriteArt(it) != null } == true,
+                onClick = {},
+                onFinished = { showWatchlistScene = false },
+                modifier = Modifier.zIndex(5f),
+                sceneRes = sceneArtFor(AiSceneEvent.DETAIL_WATCHLIST_ADDED).drawableRes
+            )
 
             // 返回按钮：与详情页其他操作统一使用拟态玻璃，并保留真实 Haze 背景采样。
             NeumorphicIconButton(
