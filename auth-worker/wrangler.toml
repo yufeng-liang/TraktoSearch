@@ -62,8 +62,8 @@ bucket_name = "tracktosearch-ai-audio"
 ENVIRONMENT = "production"
 PUBLIC_SITE_ORIGIN = "https://tracktosearch.pages.dev"
 AUDIO_PUBLIC_BASE_URL = "https://tracktosearch-gateway.pages.dev/gateway-api"
-# 文本生成默认供应商：agnes（免费，多 key 容灾）优先，上游失败自动回退 mimo
-AI_DEFAULT_PROVIDER = "agnes"
+# 文本生成默认供应商：mimo 优先（当前仍可用），上游失败时自动回退 agnes（3 个独立账号 key，多 key 容灾）
+AI_DEFAULT_PROVIDER = "mimo"
 # Brevo 已验证的 Sender 地址
 EMAIL_FROM = "TraktoSearch <Yu-Fengliang@outlook.com>"
 EMAIL_REPLY_TO = "1577865546@qq.com"
