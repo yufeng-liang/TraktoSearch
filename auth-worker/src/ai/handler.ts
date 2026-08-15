@@ -21,6 +21,12 @@ import {
     type MimoEnvironment,
 } from './mimo.ts';
 import {
+    callAgnesJson,
+    AGNES_MODELS,
+    type AgnesMessage,
+    type AgnesEnvironment,
+} from './agnes.ts';
+import {
     cacheKeyDigest,
     getFriendNickname,
     readAiCache,
@@ -40,10 +46,12 @@ const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_MOVIES = 60;
 const QUIZ_QUESTION_COUNT = 13;
 
-export interface AiEnvironment extends MimoEnvironment, AiStoreEnvironment {
+export interface AiEnvironment extends MimoEnvironment, AiStoreEnvironment, AgnesEnvironment {
     AI_VOICE_SAMPLES?: R2Bucket;
     AI_AUDIO_CACHE?: R2Bucket;
     AUDIO_PUBLIC_BASE_URL?: string;
+    // 文本生成默认供应商：agnes 或 mimo。为空时回退到 mimo。
+    AI_DEFAULT_PROVIDER?: string;
     [key: string]: unknown;
 }
 
@@ -249,7 +257,7 @@ async function handleGreeting(
     audioOrigin: string,
 ): Promise<Response> {
     const character = requireCharacter(body);
-    const model = requireTextModel(body, 'mimo-v2.5');
+    const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5', 'agnes-2.5-flash');
     const forceRefresh = readOptionalBoolean(body, 'forceRefresh');
     const includeAudio = readOptionalBoolean(body, 'includeAudio');
     const cacheKey = `ai:v1:greeting:${payload.sub}:${character.id}:${includeAudio ? 'audio' : 'text'}`;
@@ -272,7 +280,7 @@ async function handleGreeting(
 
     const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
     const nickname = await getFriendNickname(env, payload.sub);
-    const upstream = await callMimoJson(env, model, greetingMessages(character, nickname));
+    const upstream = await callLlmJson(env, provider, model, greetingMessages(character, nickname), {}, fallbackModel);
     const generated = upstream ? normalizeGreeting(parseAssistantJson<unknown>(upstream)) : fallbackGreeting(character, nickname);
     const spokenText = buildGreetingSpokenText(character, generated.greeting);
     const audio = includeAudio
@@ -306,7 +314,7 @@ async function handleTaste(
     requestId: string,
     payload: AiJwtPayload,
 ): Promise<Response> {
-    const model = requireTextModel(body, 'mimo-v2.5-pro');
+    const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5-pro', 'agnes-2.5-flash');
     const movies = readMovies(body);
     const forceRefresh = readOptionalBoolean(body, 'forceRefresh');
     const cacheKey = `ai:v1:taste:${payload.sub}:${await cacheKeyDigest(JSON.stringify(movies))}`;
@@ -317,7 +325,7 @@ async function handleTaste(
 
     const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
     const nickname = await getFriendNickname(env, payload.sub);
-    const upstream = await callMimoJson(env, model, tasteMessages(nickname, movies));
+    const upstream = await callLlmJson(env, provider, model, tasteMessages(nickname, movies), {}, fallbackModel);
     const response = upstream
         ? normalizeTaste(parseAssistantJson<unknown>(upstream), nickname, verifiedMediaIdWhitelist(movies))
         : fallbackTaste(nickname, movies);
@@ -331,7 +339,7 @@ async function handleQuiz(
     requestId: string,
     payload: AiJwtPayload,
 ): Promise<Response> {
-    const model = requireTextModel(body, 'mimo-v2.5-pro');
+    const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5-pro', 'agnes-2.5-flash');
     if (body.questionCount !== undefined && body.questionCount !== QUIZ_QUESTION_COUNT) {
         throw new AppError('INVALID_QUESTION_COUNT', 'Quiz must contain exactly 13 questions', 400);
     }
@@ -355,7 +363,7 @@ async function handleQuiz(
     const selectedMovies = selectQuizMovies(movies, avoidedMediaIds);
     // 客户端显式传入 quizId 时沿用（重玩同一测验）；未传则每次生成新 id
     const requestedQuizId = body.quizId === undefined ? null : readOpaqueId(body.quizId, 'quizId');
-    const cacheData = await generateQuiz(env, model, selectedMovies, requestedQuizId, sessionId, nickname);
+    const cacheData = await generateQuiz(env, provider, model, fallbackModel, selectedMovies, requestedQuizId, sessionId, nickname);
     if (cacheData) {
         const cacheKey = `ai:v1:quiz:${payload.sub}:${cacheData.quizId}`;
         await writeAiCache(env, cacheKey, cacheData, 24 * 60 * 60, payload.sub, 'quiz');
@@ -380,16 +388,18 @@ async function handleQuiz(
  */
 async function generateQuiz(
     env: AiEnvironment,
-    model: Extract<MimoModel, 'mimo-v2.5' | 'mimo-v2.5-pro'>,
+    provider: 'mimo' | 'agnes',
+    model: string,
+    fallbackModel: string,
     selectedMovies: WatchMovie[],
     requestedQuizId: string | null,
     sessionId: string,
     nickname: string,
 ): Promise<QuizCacheData | null> {
-    const upstream = await callMimoJson(env, model, quizMessages(nickname, selectedMovies), {
+    const upstream = await callLlmJson(env, provider, model, quizMessages(nickname, selectedMovies), {
         // 13 题（含选项/解析）JSON 超过默认 1024 输出 token，给足上限避免截断后解析失败
         maxCompletionTokens: 4000,
-    });
+    }, fallbackModel);
     if (!upstream) return null;
     try {
         const questions = normalizeQuiz(parseAssistantJson<unknown>(upstream), selectedMovies);
@@ -461,7 +471,7 @@ async function handleDaily(
     requestId: string,
     payload: AiJwtPayload,
 ): Promise<Response> {
-    const model = requireTextModel(body, 'mimo-v2.5');
+    const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5', 'agnes-2.5-flash');
     const forceRefresh = readOptionalBoolean(body, 'forceRefresh');
     const day = new Date().toISOString().slice(0, 10);
     const cacheKey = `ai:v1:daily:${payload.sub}:${day}`;
@@ -471,7 +481,7 @@ async function handleDaily(
     }
 
     const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
-    const upstream = await callMimoJson(env, model, dailyMessages(day));
+    const upstream = await callLlmJson(env, provider, model, dailyMessages(day), {}, fallbackModel);
     const response = upstream ? normalizeDaily(parseAssistantJson<unknown>(upstream), day) : fallbackDaily(day);
     await writeAiCache(env, cacheKey, response, 2 * 24 * 60 * 60, payload.sub, 'daily');
     return successResponse(response, requestId, publicQuota(quota));
@@ -1081,12 +1091,65 @@ function assertAction(body: Record<string, unknown>, expected: string | string[]
     }
 }
 
-function requireTextModel(body: Record<string, unknown>, fallback: Extract<MimoModel, 'mimo-v2.5' | 'mimo-v2.5-pro'>): Extract<MimoModel, 'mimo-v2.5' | 'mimo-v2.5-pro'> {
-    const model = body.model === undefined ? fallback : validateMimoModel(body.model);
-    if (model !== 'mimo-v2.5' && model !== 'mimo-v2.5-pro') {
-        throw new AppError('INVALID_MODEL', 'Text endpoint requires a text model', 400);
+interface ResolvedTextModel {
+    provider: 'mimo' | 'agnes';
+    model: string;
+    // 主供应商上游失败时回退到另一种供应商所用的默认模型。
+    fallbackModel: string;
+}
+
+// 解析文本生成模型与供应商：
+// - 显式 model 优先（agnes-2.5-flash 走 Agnes，mimo-* 走 MiMo）
+// - 未指定时取 AI_DEFAULT_PROVIDER（默认 mimo），Agnes 默认模型为 agnes-2.5-flash
+function resolveTextModel(
+    body: Record<string, unknown>,
+    env: AiEnvironment,
+    mimoDefault: 'mimo-v2.5' | 'mimo-v2.5-pro',
+    agnesDefault: 'agnes-2.5-flash',
+): ResolvedTextModel {
+    const requested = body.model;
+    if (requested !== undefined) {
+        if (typeof requested === 'string' && (AGNES_MODELS as readonly string[]).includes(requested)) {
+            return { provider: 'agnes', model: requested, fallbackModel: mimoDefault };
+        }
+        return { provider: 'mimo', model: validateMimoModel(requested), fallbackModel: agnesDefault };
     }
-    return model;
+    const useAgnes = typeof env.AI_DEFAULT_PROVIDER === 'string' && env.AI_DEFAULT_PROVIDER === 'agnes';
+    return useAgnes
+        ? { provider: 'agnes', model: agnesDefault, fallbackModel: mimoDefault }
+        : { provider: 'mimo', model: mimoDefault, fallbackModel: agnesDefault };
+}
+
+// 统一文本生成入口：调用主供应商，上游确定性错误时回退到另一种供应商一次。
+async function callLlmJson(
+    env: AiEnvironment,
+    provider: 'mimo' | 'agnes',
+    model: string,
+    messages: MimoMessage[],
+    options: Record<string, unknown>,
+    fallbackModel: string,
+): Promise<unknown | null> {
+    const order: Array<'mimo' | 'agnes'> = provider === 'agnes' ? ['agnes', 'mimo'] : ['mimo', 'agnes'];
+    let lastError: unknown = null;
+    for (const p of order) {
+        try {
+            const m = p === provider ? model : (p === 'agnes' ? 'agnes-2.5-flash' : fallbackModel);
+            const result = p === 'agnes'
+                ? await callAgnesJson(env, m, messages as unknown as AgnesMessage[], options)
+                : await callMimoJson(env, m as MimoModel, messages, options);
+            // 未配置/测试模式下供应商返回 null 表示不可用：主供应商直接走离线兜底，回退供应商则上抛原错误。
+            if (result === null) {
+                if (p === provider) return null;
+                throw new AppError('AI_UPSTREAM_ERROR', 'Fallback AI provider unavailable', 502);
+            }
+            return result;
+        } catch (error) {
+            // 模型非法属于请求错误，不回退，直接上抛。
+            if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
+            lastError = error;
+        }
+    }
+    throw lastError ?? new AppError('AI_UPSTREAM_ERROR', 'All AI providers failed', 502);
 }
 
 function readSessionId(body: Record<string, unknown>): string {
