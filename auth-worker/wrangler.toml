@@ -39,6 +39,8 @@ id = "d6fc37992e6d47fc9fe45207923627a3"
 # DOUBAN_API_KEY（兼容单值、JSON 数组、逗号/换行分隔的多 key）
 # OMDb_API_KEY（兼容单值、JSON 数组、逗号/换行分隔的多 key）
 # TRAKT_CREDENTIALS_ENCRYPTION_KEY
+# AGNES_API_KEYS（Agnes AI 多 key：兼容单值、JSON 数组、逗号/换行分隔；多 key 自动轮换容灾）
+# AI_DEFAULT_PROVIDER 在 [vars] 中配置（agnes 优先，mimo 兜底）；不在此处写密钥
 # ADMIN_EMAIL
 # ACCESS_TEAM_DOMAIN
 # ACCESS_AUDIENCE
@@ -60,6 +62,8 @@ bucket_name = "tracktosearch-ai-audio"
 ENVIRONMENT = "production"
 PUBLIC_SITE_ORIGIN = "https://tracktosearch.pages.dev"
 AUDIO_PUBLIC_BASE_URL = "https://tracktosearch-gateway.pages.dev/gateway-api"
+# 文本生成默认供应商：agnes（免费，多 key 容灾）优先，上游失败自动回退 mimo
+AI_DEFAULT_PROVIDER = "agnes"
 # Brevo 已验证的 Sender 地址
 EMAIL_FROM = "TraktoSearch <Yu-Fengliang@outlook.com>"
 EMAIL_REPLY_TO = "1577865546@qq.com"
