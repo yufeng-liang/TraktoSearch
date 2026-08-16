@@ -66,8 +66,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -105,14 +103,18 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -144,6 +146,7 @@ import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.ActionButtonRow
 import com.tracktosearch.ui.component.ActionItem
+import com.tracktosearch.ui.component.DropdownAnchorMenu
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
@@ -1472,98 +1475,148 @@ fun DoubanItemDetailScreen(
             ) {
                 // 手动标记媒体类型按钮(下拉菜单)
                 val failure = uiState.failure
-                Box {
-                    NeumorphicIconButton(
-                        onClick = { view.performHaptic(HapticType.CLICK); showMarkMenu = true },
-                        isDark = isDarkTheme,
-                        hazeState = hazeState,
-                        hazeStyle = dev.chrisbanes.haze.blur.materials.HazeMaterials.ultraThin(),
-                        size = 40.dp,
-                        buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
-                        scene = doubanGlassScene
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Edit,
-                            contentDescription = stringResource(R.string.screen_douban_failures_mark_as_movie),
-                            tint = detailTopBarIconColor(),
-                            modifier = Modifier.size(20.dp)
-                        )
+                // 菜单宽度 = 最长文案（覆盖未标记/已标记两种文案 + 清除标记）+ 图标 + 间隔 + 内边距，多语言适配
+                val markMenuLabels = listOf(
+                    R.string.screen_douban_failures_mark_as_movie, R.string.screen_douban_failures_marked_as_movie,
+                    R.string.screen_douban_failures_mark_as_show, R.string.screen_douban_failures_marked_as_show,
+                    R.string.screen_douban_failures_mark_as_variety, R.string.screen_douban_failures_marked_as_variety,
+                    R.string.screen_douban_failures_mark_as_documentary, R.string.screen_douban_failures_marked_as_documentary,
+                    R.string.screen_douban_failures_clear_mark
+                ).map { stringResource(it) }
+                val markTextMeasurer = rememberTextMeasurer()
+                val markLabelStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
+                val markMenuWidth = with(LocalDensity.current) {
+                    markMenuLabels.maxOf { markTextMeasurer.measure(AnnotatedString(it), markLabelStyle).size.width }.toDp()
+                } + 24.dp + 8.dp + 24.dp
+                DropdownAnchorMenu(
+                    expanded = showMarkMenu,
+                    onDismissRequest = { showMarkMenu = false },
+                    menuWidth = markMenuWidth,
+                    anchor = {
+                        NeumorphicIconButton(
+                            onClick = { view.performHaptic(HapticType.CLICK); showMarkMenu = true },
+                            isDark = isDarkTheme,
+                            hazeState = hazeState,
+                            hazeStyle = dev.chrisbanes.haze.blur.materials.HazeMaterials.ultraThin(),
+                            size = 40.dp,
+                            buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
+                            scene = doubanGlassScene
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Edit,
+                                contentDescription = stringResource(R.string.screen_douban_failures_mark_as_movie),
+                                tint = detailTopBarIconColor(),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
-                    DropdownMenu(
-                        expanded = showMarkMenu,
-                        onDismissRequest = { showMarkMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    stringResource(
-                                        if (failure?.mediaType == "movie") R.string.screen_douban_failures_marked_as_movie
-                                        else R.string.screen_douban_failures_mark_as_movie
-                                    )
-                                )
-                            },
-                            leadingIcon = { Icon(Icons.Rounded.Movie, contentDescription = null) },
-                            modifier = if (failure?.mediaType == "movie") Modifier.background(MaterialTheme.colorScheme.primaryContainer) else Modifier,
-                            onClick = {
+                ) {
+                    val markItemHighlight = Modifier.background(MaterialTheme.colorScheme.primaryContainer)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (failure?.mediaType == "movie") markItemHighlight else Modifier)
+                            .clickable {
+                                view.performHaptic(HapticType.TICK)
                                 viewModel.setMediaType("movie")
                                 showMarkMenu = false
                             }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Rounded.Movie, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(
+                                if (failure?.mediaType == "movie") R.string.screen_douban_failures_marked_as_movie
+                                else R.string.screen_douban_failures_mark_as_movie
+                            ),
+                            style = markLabelStyle
                         )
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    stringResource(
-                                        if (failure?.mediaType == "show") R.string.screen_douban_failures_marked_as_show
-                                        else R.string.screen_douban_failures_mark_as_show
-                                    )
-                                )
-                            },
-                            leadingIcon = { Icon(Icons.Rounded.Tv, contentDescription = null) },
-                            modifier = if (failure?.mediaType == "show") Modifier.background(MaterialTheme.colorScheme.primaryContainer) else Modifier,
-                            onClick = {
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (failure?.mediaType == "show") markItemHighlight else Modifier)
+                            .clickable {
+                                view.performHaptic(HapticType.TICK)
                                 viewModel.setMediaType("show")
                                 showMarkMenu = false
                             }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Rounded.Tv, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(
+                                if (failure?.mediaType == "show") R.string.screen_douban_failures_marked_as_show
+                                else R.string.screen_douban_failures_mark_as_show
+                            ),
+                            style = markLabelStyle
                         )
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    stringResource(
-                                        if (failure?.mediaType == "variety") R.string.screen_douban_failures_marked_as_variety
-                                        else R.string.screen_douban_failures_mark_as_variety
-                                    )
-                                )
-                            },
-                            leadingIcon = { Icon(Icons.Rounded.TheaterComedy, contentDescription = null) },
-                            modifier = if (failure?.mediaType == "variety") Modifier.background(MaterialTheme.colorScheme.primaryContainer) else Modifier,
-                            onClick = {
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (failure?.mediaType == "variety") markItemHighlight else Modifier)
+                            .clickable {
+                                view.performHaptic(HapticType.TICK)
                                 viewModel.setMediaType("variety")
                                 showMarkMenu = false
                             }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Rounded.TheaterComedy, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(
+                                if (failure?.mediaType == "variety") R.string.screen_douban_failures_marked_as_variety
+                                else R.string.screen_douban_failures_mark_as_variety
+                            ),
+                            style = markLabelStyle
                         )
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    stringResource(
-                                        if (failure?.mediaType == "documentary") R.string.screen_douban_failures_marked_as_documentary
-                                        else R.string.screen_douban_failures_mark_as_documentary
-                                    )
-                                )
-                            },
-                            leadingIcon = { Icon(Icons.Rounded.Nature, contentDescription = null) },
-                            modifier = if (failure?.mediaType == "documentary") Modifier.background(MaterialTheme.colorScheme.primaryContainer) else Modifier,
-                            onClick = {
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (failure?.mediaType == "documentary") markItemHighlight else Modifier)
+                            .clickable {
+                                view.performHaptic(HapticType.TICK)
                                 viewModel.setMediaType("documentary")
                                 showMarkMenu = false
                             }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Rounded.Nature, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(
+                                if (failure?.mediaType == "documentary") R.string.screen_douban_failures_marked_as_documentary
+                                else R.string.screen_douban_failures_mark_as_documentary
+                            ),
+                            style = markLabelStyle
                         )
-                        if (failure?.mediaType != null) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.screen_douban_failures_clear_mark)) },
-                                onClick = {
+                    }
+                    if (failure?.mediaType != null) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    view.performHaptic(HapticType.TICK)
                                     viewModel.setMediaType(null)
                                     showMarkMenu = false
                                 }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // 与带图标的选项文字对齐
+                            Spacer(modifier = Modifier.width(32.dp))
+                            Text(
+                                text = stringResource(R.string.screen_douban_failures_clear_mark),
+                                style = markLabelStyle
                             )
                         }
                     }
