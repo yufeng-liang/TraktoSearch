@@ -9,13 +9,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -28,10 +30,15 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -42,10 +49,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.colorControls
@@ -53,8 +64,6 @@ import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.highlight.HighlightStyle
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
 import com.tracktosearch.ui.component.GlassScene
@@ -65,26 +74,32 @@ import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
+import kotlin.math.roundToInt
 
 /**
  * 玻璃引擎试点页(仅 DEBUG 注册)。
  *
- * 目的：在同一屏上对比两套玻璃引擎的「模糊 / 玻璃」两种模式：
+ * 目的：在同一屏上对比两套玻璃引擎的「模糊 / 玻璃」两种模式，并实时调参：
  * - Haze（现引擎）：复用 NeumorphicFrostedSurface / NeumorphicIconButton，
  *   由 LocalVisualEffectMode 分发给 hazeBlur（模糊）或 hazeGlass（玻璃）。
+ *   模糊分支支持调 blurRadius / tintAlpha。
  * - Backdrop（新引擎，com.kyant.backdrop）：drawBackdrop + blur / lens 效果，
- *   自带镜面高光(Highlight)与投影(Shadow)，按场景深度调参。
+ *   自带镜面高光(Highlight)与投影(Shadow)，10 项参数全部实时可调。
  *
  * 结论口径：玻璃模式目标是彻底脱离 haze-glass，以 backdrop 的液态玻璃为主；
- * 模糊模式保留成熟 haze 作为参照，方便 A/B 对比。
+ * 模糊模式保留成熟 haze 作为参照，参数调好后可直接搬进真实页面。
  */
 @Composable
 fun GlassEnginePilotScreen(onBack: () -> Unit) {
     var engine by rememberSaveable { mutableStateOf(PilotEngine.BACKDROP) }
     var mode by rememberSaveable { mutableStateOf(VisualEffectMode.GLASS) }
+    var selectedScene by rememberSaveable { mutableStateOf("card") }
     val hazeState = remember { HazeState() }
     val backgroundColor = MaterialTheme.colorScheme.background
+    val isDark = isAppDarkTheme()
     // 背景色画进 backdrop 层，保证玻璃区域之外不透出空洞。
     // onDraw 单独 remember 稳定化，避免每次重组重建 LayerBackdrop。
     val backdrop = rememberLayerBackdrop(
@@ -95,6 +110,39 @@ fun GlassEnginePilotScreen(onBack: () -> Unit) {
             }
         }
     )
+    // 每场景独立参数：切换场景保留各自调参结果；重置时恢复默认。
+    val defaultBackdropParams = remember(isDark) {
+        mapOf(
+            "bottomBar" to pilotParams("bottomBar", isDark),
+            "card" to pilotParams("card", isDark),
+            "button" to pilotParams("button", isDark)
+        )
+    }
+    val defaultHazeParams = remember(isDark) {
+        mapOf(
+            "bottomBar" to HazeBlurParams(blurRadius = 24.dp, tintAlpha = if (isDark) 0.25f else 0.35f),
+            "card" to HazeBlurParams(blurRadius = 20.dp, tintAlpha = if (isDark) 0.30f else 0.40f),
+            "button" to HazeBlurParams(blurRadius = 16.dp, tintAlpha = if (isDark) 0.18f else 0.72f)
+        )
+    }
+    val sceneBackdropParams = remember {
+        mutableStateMapOf(
+            "bottomBar" to defaultBackdropParams.getValue("bottomBar"),
+            "card" to defaultBackdropParams.getValue("card"),
+            "button" to defaultBackdropParams.getValue("button")
+        )
+    }
+    val sceneHazeParams = remember {
+        mutableStateMapOf(
+            "bottomBar" to defaultHazeParams.getValue("bottomBar"),
+            "card" to defaultHazeParams.getValue("card"),
+            "button" to defaultHazeParams.getValue("button")
+        )
+    }
+    val currentBackdrop = sceneBackdropParams.getValue(selectedScene)
+    val currentHaze = sceneHazeParams.getValue(selectedScene)
+    // 调参面板总高（含导航条避让），演示对象定位在其上方
+    val panelHeight = 330.dp
 
     Box(
         Modifier
@@ -119,38 +167,72 @@ fun GlassEnginePilotScreen(onBack: () -> Unit) {
             onEngineChange = { engine = it },
             mode = mode,
             onModeChange = { mode = it },
+            selectedScene = selectedScene,
+            onSceneChange = { selectedScene = it },
             onBack = onBack
         )
 
-        // 玻璃卡片 demo
-        PilotGlassCard(
-            engine = engine,
-            mode = mode,
-            hazeState = hazeState,
-            backdrop = backdrop,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 176.dp)
-        )
-
-        // 圆形玻璃按钮行
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 92.dp),
-            horizontalArrangement = Arrangement.spacedBy(22.dp)
-        ) {
-            PilotGlassButton(engine, mode, hazeState, backdrop, onClick = {})
-            PilotGlassButton(engine, mode, hazeState, backdrop, onClick = {})
-            PilotGlassButton(engine, mode, hazeState, backdrop, onClick = {})
+        // 玻璃演示对象：仅渲染选中场景，避免互相遮挡
+        if (selectedScene == "card") {
+            PilotGlassCard(
+                engine = engine,
+                mode = mode,
+                hazeState = hazeState,
+                backdrop = backdrop,
+                backdropParams = sceneBackdropParams.getValue("card"),
+                hazeParams = sceneHazeParams.getValue("card"),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 400.dp)
+            )
+        }
+        if (selectedScene == "button") {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = panelHeight + 96.dp),
+                horizontalArrangement = Arrangement.spacedBy(22.dp)
+            ) {
+                repeat(3) {
+                    PilotGlassButton(
+                        engine = engine,
+                        mode = mode,
+                        hazeState = hazeState,
+                        backdrop = backdrop,
+                        backdropParams = sceneBackdropParams.getValue("button"),
+                        hazeParams = sceneHazeParams.getValue("button"),
+                        onClick = {}
+                    )
+                }
+            }
+        }
+        if (selectedScene == "bottomBar") {
+            PilotGlassBottomBar(
+                engine = engine,
+                mode = mode,
+                hazeState = hazeState,
+                backdrop = backdrop,
+                backdropParams = sceneBackdropParams.getValue("bottomBar"),
+                hazeParams = sceneHazeParams.getValue("bottomBar"),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = panelHeight + 20.dp)
+            )
         }
 
-        // 底部玻璃栏 demo
-        PilotGlassBottomBar(
+        // 底部实时调参面板
+        PilotParamPanel(
             engine = engine,
             mode = mode,
-            hazeState = hazeState,
-            backdrop = backdrop,
+            selectedScene = selectedScene,
+            backdropParams = currentBackdrop,
+            onBackdropParamsChange = { sceneBackdropParams[selectedScene] = it },
+            hazeParams = currentHaze,
+            onHazeParamsChange = { sceneHazeParams[selectedScene] = it },
+            onReset = {
+                sceneBackdropParams[selectedScene] = defaultBackdropParams.getValue(selectedScene)
+                sceneHazeParams[selectedScene] = defaultHazeParams.getValue(selectedScene)
+            },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
     }
@@ -173,8 +255,14 @@ private data class BackdropGlassParams(
     val innerShadowRadius: Dp = 0.dp
 )
 
+/** Haze 模糊分支的可调参数（模糊模式保留成熟 haze，仅暴露影响观感的两项）。 */
+private data class HazeBlurParams(
+    val blurRadius: Dp,
+    val tintAlpha: Float
+)
+
 /**
- * 场景参数：
+ * 场景参数（backdrop 默认值）：
  * - bottomBar：Lip 感，折射强 + 轻微色散，投影重（悬浮感）
  * - card：清透聚焦，深度折射 + 色散，投影轻
  * - button：圆形控件，高光最亮（iOS 控制中心镜面边缘），折射收敛避免噪点
@@ -280,20 +368,36 @@ private fun Modifier.pilotBackdropGlass(
     )
 }
 
-/** 顶部控制条：返回 + 引擎切换 + 模式切换。 */
+/** Haze 模糊分支的 HazeBlurStyle：tint 透明度 + 模糊半径。 */
+@Composable
+private fun rememberHazeBlurStyle(params: HazeBlurParams): HazeBlurStyle {
+    val tintedSurface = HazeMaterials.thin(
+        MaterialTheme.colorScheme.surface.copy(alpha = params.tintAlpha)
+    )
+    return remember(params, tintedSurface) {
+        tintedSurface.then {
+            blurRadius(params.blurRadius)
+        }
+    }
+}
+
+/** 顶部控制条：返回 + 引擎/模式/场景切换。 */
 @Composable
 private fun PilotControlBar(
     engine: PilotEngine,
     onEngineChange: (PilotEngine) -> Unit,
     mode: VisualEffectMode,
     onModeChange: (VisualEffectMode) -> Unit,
+    selectedScene: String,
+    onSceneChange: (String) -> Unit,
     onBack: () -> Unit
 ) {
     Column(
         Modifier
             .fillMaxWidth()
-            .statusBarsPadding()
+            // 背景先画:铺满整行含状态栏区域,再避让状态栏,让状态栏区域显示标题栏填充色而非内容
             .background(MaterialTheme.colorScheme.surface)
+            .statusBarsPadding()
             .padding(bottom = 10.dp)
     ) {
         Row(
@@ -332,6 +436,16 @@ private fun PilotControlBar(
             PilotChip("模式: 模糊", mode == VisualEffectMode.BLUR) { onModeChange(VisualEffectMode.BLUR) }
             PilotChip("模式: 玻璃", mode == VisualEffectMode.GLASS) { onModeChange(VisualEffectMode.GLASS) }
         }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            PilotChip("场景: 底栏", selectedScene == "bottomBar") { onSceneChange("bottomBar") }
+            PilotChip("场景: 卡片", selectedScene == "card") { onSceneChange("card") }
+            PilotChip("场景: 按钮", selectedScene == "button") { onSceneChange("button") }
+        }
     }
 }
 
@@ -342,6 +456,191 @@ private fun PilotChip(label: String, selected: Boolean, onClick: () -> Unit) {
         onClick = onClick,
         label = { Text(label, fontSize = MaterialTheme.typography.bodySmall.fontSize) }
     )
+}
+
+/** 底部实时调参面板：按引擎/模式切换参数组。 */
+@Composable
+private fun PilotParamPanel(
+    engine: PilotEngine,
+    mode: VisualEffectMode,
+    selectedScene: String,
+    backdropParams: BackdropGlassParams,
+    onBackdropParamsChange: (BackdropGlassParams) -> Unit,
+    hazeParams: HazeBlurParams,
+    onHazeParamsChange: (HazeBlurParams) -> Unit,
+    onReset: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 3.dp
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "调参 · " + selectedScene + " · " + engine.name + " " + mode.name,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = onReset) {
+                    Text("重置")
+                }
+            }
+            when {
+                engine == PilotEngine.BACKDROP -> {
+                    LazyColumn(Modifier.height(244.dp)) {
+                        item {
+                            PilotSliderRow("模糊半径(px)", backdropParams.blurRadius.value, 0f..48f) {
+                                onBackdropParamsChange(backdropParams.copy(blurRadius = it.dp))
+                            }
+                        }
+                        item {
+                            PilotSliderRow("折射高度(px)", backdropParams.refractionHeight.value, 0f..28f) {
+                                onBackdropParamsChange(backdropParams.copy(refractionHeight = it.dp))
+                            }
+                        }
+                        item {
+                            PilotSliderRow("折射量(px)", backdropParams.refractionAmount.value, 0f..96f) {
+                                onBackdropParamsChange(backdropParams.copy(refractionAmount = it.dp))
+                            }
+                        }
+                        item {
+                            PilotToggleRow("深度效果", backdropParams.depthEffect) {
+                                onBackdropParamsChange(backdropParams.copy(depthEffect = it))
+                            }
+                        }
+                        item {
+                            PilotToggleRow("色散", backdropParams.chromaticAberration) {
+                                onBackdropParamsChange(backdropParams.copy(chromaticAberration = it))
+                            }
+                        }
+                        item {
+                            PilotSliderRow("高光宽度(dp)", backdropParams.highlightWidth.value, 0f..2f) {
+                                onBackdropParamsChange(backdropParams.copy(highlightWidth = it.dp))
+                            }
+                        }
+                        item {
+                            PilotSliderRow("高光强度", backdropParams.highlightAlpha, 0f..1f) {
+                                onBackdropParamsChange(backdropParams.copy(highlightAlpha = it))
+                            }
+                        }
+                        item {
+                            PilotSliderRow("投影半径(dp)", backdropParams.shadowRadius.value, 0f..48f) {
+                                onBackdropParamsChange(backdropParams.copy(shadowRadius = it.dp))
+                            }
+                        }
+                        item {
+                            PilotSliderRow("投影透明度", backdropParams.shadowAlpha, 0f..0.8f) {
+                                onBackdropParamsChange(backdropParams.copy(shadowAlpha = it))
+                            }
+                        }
+                        item {
+                            PilotSliderRow("内阴影半径(dp)", backdropParams.innerShadowRadius.value, 0f..24f) {
+                                onBackdropParamsChange(backdropParams.copy(innerShadowRadius = it.dp))
+                            }
+                        }
+                    }
+                }
+
+                mode == VisualEffectMode.BLUR -> {
+                    LazyColumn(Modifier.height(244.dp)) {
+                        item {
+                            PilotSliderRow("模糊半径(dp)", hazeParams.blurRadius.value, 0f..48f) {
+                                onHazeParamsChange(hazeParams.copy(blurRadius = it.dp))
+                            }
+                        }
+                        item {
+                            PilotSliderRow("底色透明度", hazeParams.tintAlpha, 0f..1f) {
+                                onHazeParamsChange(hazeParams.copy(tintAlpha = it))
+                            }
+                        }
+                        item {
+                            Text(
+                                text = "Haze 模糊为成熟方案，仅暴露影响观感的两项参数。",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+                    }
+                }
+
+                else -> {
+                    Text(
+                        text = "haze-glass 为待替换方案（将被 backdrop 玻璃取代），不提供调参。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PilotSliderRow(
+    label: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    decimals: Int = 0,
+    onValueChange: (Float) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 1.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.width(104.dp),
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Slider(
+            value = value.coerceIn(range.start, range.endInclusive),
+            onValueChange = onValueChange,
+            valueRange = range,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = if (decimals > 0) String.format("%." + decimals + "f", value) else value.roundToInt().toString(),
+            modifier = Modifier.width(46.dp),
+            textAlign = TextAlign.End,
+            fontSize = 12.sp
+        )
+    }
+}
+
+@Composable
+private fun PilotToggleRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 1.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.width(170.dp),
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
 }
 
 /** 背景彩色卡片：高饱和渐变，让模糊/折射肉眼可辨。 */
@@ -381,6 +680,8 @@ private fun PilotGlassCard(
     mode: VisualEffectMode,
     hazeState: HazeState,
     backdrop: LayerBackdrop,
+    backdropParams: BackdropGlassParams,
+    hazeParams: HazeBlurParams,
     modifier: Modifier = Modifier
 ) {
     Box(modifier) {
@@ -391,6 +692,7 @@ private fun PilotGlassCard(
                     isDark = isAppDarkTheme(),
                     shape = RoundedCornerShape(24.dp),
                     hazeState = hazeState,
+                    hazeStyle = rememberHazeBlurStyle(hazeParams),
                     glassRole = GlassSurfaceRole.SearchField,
                     scene = GlassScene(contentLoad = 0.2f, readabilityDemand = 0.4f)
                 ) {
@@ -401,7 +703,7 @@ private fun PilotGlassCard(
             PilotEngine.BACKDROP -> Box(
                 Modifier
                     .size(width = 230.dp, height = 140.dp)
-                    .pilotBackdropGlass(backdrop, mode, pilotParams("card", isAppDarkTheme()))
+                    .pilotBackdropGlass(backdrop, mode, backdropParams)
             ) {
                 PilotSurfaceLabel("Backdrop·" + mode.name)
             }
@@ -416,6 +718,8 @@ private fun PilotGlassButton(
     mode: VisualEffectMode,
     hazeState: HazeState,
     backdrop: LayerBackdrop,
+    backdropParams: BackdropGlassParams,
+    hazeParams: HazeBlurParams,
     onClick: () -> Unit
 ) {
     when (engine) {
@@ -424,6 +728,7 @@ private fun PilotGlassButton(
                 onClick = onClick,
                 isDark = isAppDarkTheme(),
                 hazeState = hazeState,
+                hazeStyle = rememberHazeBlurStyle(hazeParams),
                 size = 52.dp
             ) {
                 Icon(
@@ -437,7 +742,7 @@ private fun PilotGlassButton(
         PilotEngine.BACKDROP -> Box(
             Modifier
                 .size(52.dp)
-                .pilotBackdropGlass(backdrop, mode, pilotParams("button", isAppDarkTheme()))
+                .pilotBackdropGlass(backdrop, mode, backdropParams)
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
@@ -457,6 +762,8 @@ private fun PilotGlassBottomBar(
     mode: VisualEffectMode,
     hazeState: HazeState,
     backdrop: LayerBackdrop,
+    backdropParams: BackdropGlassParams,
+    hazeParams: HazeBlurParams,
     modifier: Modifier = Modifier
 ) {
     val icons = listOf(Icons.Rounded.Home, Icons.Rounded.Search, Icons.Rounded.Person)
@@ -474,6 +781,7 @@ private fun PilotGlassBottomBar(
                     isDark = isAppDarkTheme(),
                     shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
                     hazeState = hazeState,
+                    hazeStyle = rememberHazeBlurStyle(hazeParams),
                     glassRole = GlassSurfaceRole.BottomNavigation,
                     scene = GlassScene(contentLoad = 0.1f, readabilityDemand = 0.3f)
                 ) {
@@ -484,7 +792,7 @@ private fun PilotGlassBottomBar(
             PilotEngine.BACKDROP -> Box(
                 Modifier
                     .fillMaxSize()
-                    .pilotBackdropGlass(backdrop, mode, pilotParams("bottomBar", isAppDarkTheme()))
+                    .pilotBackdropGlass(backdrop, mode, backdropParams)
             ) {
                 PilotBottomBarContent(icons)
             }
