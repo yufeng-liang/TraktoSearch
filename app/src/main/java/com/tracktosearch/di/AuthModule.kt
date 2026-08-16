@@ -26,9 +26,12 @@ object AuthModule {
     fun provideAuthOkHttpClient(authHeaderInterceptor: AuthHeaderInterceptor): OkHttpClient {
         return OkHttpClient.Builder()
             .addInterceptor(authHeaderInterceptor)
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
-            .writeTimeout(15, TimeUnit.SECONDS)
+            // 授权接口仅在启动/校验/激活场景调用，收紧超时防止单个请求长时间占用启动预算
+            // （协程侧 2s 上限先行截断，这里兜底网络栈自身超时）
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .readTimeout(6, TimeUnit.SECONDS)
+            .writeTimeout(6, TimeUnit.SECONDS)
+            .callTimeout(7, TimeUnit.SECONDS)
             .build()
     }
 

@@ -59,7 +59,9 @@ class AuthManager @Inject constructor(
     private val traktRepositoryProvider: Provider<TraktRepository>
 ) {
     companion object {
-        const val STARTUP_AUTH_TIMEOUT_MS = 5_000L
+        // 冷启动授权等待硬上限：网络正常时 challenge+refresh 刷新链约 0.3-1s，2s 足够覆盖；
+        // 超时走既有 OFFLINE 宽限路径（3 天）仍进主界面，不改变授权失败/离线场景行为。
+        const val STARTUP_AUTH_TIMEOUT_MS = 2_000L
     }
 
     private val refreshCoordinator = AuthRefreshCoordinator()
