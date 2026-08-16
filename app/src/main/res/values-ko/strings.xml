@@ -1005,7 +1005,7 @@
     <string name="onboarding_skip">건너뛰기</string>
     <string name="onboarding_next">다음</string>
     <string name="onboarding_done">확인</string>
-    <string name="onboarding_choose_theme">원하는 테마 색상 선택</string>
+    <string name="onboarding_choose_theme">원하는 톤과 소재 선택</string>
     <string name="onboarding_step1_title">검색</string>
     <string name="onboarding_step1_desc">영화, TV 프로그램, 인물, 리소스 카테고리별 검색 지원</string>
     <string name="onboarding_step2_title">발견</string>

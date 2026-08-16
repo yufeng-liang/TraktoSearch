@@ -21,10 +21,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.DragIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -98,39 +101,6 @@ internal fun ThemeSelectionDialog(
 }
 
 @Composable
-private fun VisualEffectOptionRow(
-    label: String,
-    description: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    val view = LocalView.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { view.performHaptic(HapticType.TICK); onClick() }
-            .padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        RadioButton(
-            selected = selected,
-            onClick = { view.performHaptic(HapticType.TICK); onClick() }
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(label)
-            if (description.isNotBlank()) {
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun ThemeOptionRow(
     label: String,
     selected: Boolean,
@@ -165,6 +135,23 @@ internal fun AccentColorDialog(
     dialogTitle: String? = null
 ) {
     val view = LocalView.current
+    var materialMenuExpanded by remember { mutableStateOf(false) }
+
+    // 壁纸取色选项的渐变色板与勾选图标对比色
+    val dynamicColors = listOf(
+        Color(0xFF7B68AE), Color(0xFFE8915A), Color(0xFF5A8F6B),
+        Color(0xFF6B7FA0), Color(0xFFC4A94D), Color(0xFFD4748A),
+        Color(0xFF4A7FB5), Color(0xFF7B68AE)
+    )
+    val dynamicCheckTint = if (dynamicColors.map { it.luminance() }.average() > 0.5) Color.Black else Color.White
+
+    // 材质选项：玻璃·清晰 / 玻璃·聚焦 / 模糊
+    val materialOptions = listOf(
+        Triple(VisualEffectMode.GLASS, GlassVariant.CLEAR, stringResource(R.string.settings_visual_effect_glass_clear)),
+        Triple(VisualEffectMode.GLASS, GlassVariant.FOCUSED, stringResource(R.string.settings_visual_effect_glass_focused)),
+        Triple(VisualEffectMode.BLUR, GlassVariant.CLEAR, stringResource(R.string.settings_visual_effect_blur))
+    )
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -177,95 +164,81 @@ internal fun AccentColorDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // 材质区
+                // 材质区：一行当前值 + 下拉菜单
                 Text(
                     text = stringResource(R.string.settings_material),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
-                VisualEffectOptionRow(
-                    label = stringResource(R.string.settings_visual_effect_glass),
-                    description = "",
-                    selected = currentMode == VisualEffectMode.GLASS,
-                    onClick = { onVisualEffectSelected(VisualEffectMode.GLASS, currentVariant) }
-                )
-                if (currentMode == VisualEffectMode.GLASS) {
-                    Column(modifier = Modifier.padding(start = 32.dp)) {
-                        VisualEffectOptionRow(
-                            label = stringResource(R.string.settings_visual_effect_glass_clear),
-                            description = stringResource(R.string.settings_visual_effect_glass_clear_desc),
-                            selected = currentVariant == GlassVariant.CLEAR,
-                            onClick = { onVisualEffectSelected(VisualEffectMode.GLASS, GlassVariant.CLEAR) }
+                Box {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                view.performHaptic(HapticType.TICK)
+                                materialMenuExpanded = true
+                            }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val currentLabel = materialOptions.firstOrNull {
+                            it.first == currentMode && it.second == currentVariant
+                        }?.third ?: stringResource(R.string.settings_visual_effect_blur)
+                        Text(
+                            text = currentLabel,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
                         )
-                        VisualEffectOptionRow(
-                            label = stringResource(R.string.settings_visual_effect_glass_focused),
-                            description = stringResource(R.string.settings_visual_effect_glass_focused_desc),
-                            selected = currentVariant == GlassVariant.FOCUSED,
-                            onClick = { onVisualEffectSelected(VisualEffectMode.GLASS, GlassVariant.FOCUSED) }
+                        Icon(
+                            imageVector = Icons.Rounded.ArrowDropDown,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                }
-                VisualEffectOptionRow(
-                    label = stringResource(R.string.settings_visual_effect_blur),
-                    description = stringResource(R.string.settings_visual_effect_blur_desc),
-                    selected = currentMode == VisualEffectMode.BLUR,
-                    onClick = { onVisualEffectSelected(VisualEffectMode.BLUR, currentVariant) }
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                // 动态壁纸取色项渐变色与勾选图标对比色
-                val dynamicColors = listOf(
-                    Color(0xFF7B68AE), Color(0xFFE8915A), Color(0xFF5A8F6B),
-                    Color(0xFF6B7FA0), Color(0xFFC4A94D), Color(0xFFD4748A),
-                    Color(0xFF4A7FB5), Color(0xFF7B68AE)
-                )
-                val dynamicCheckTint = if (dynamicColors.map { it.luminance() }.average() > 0.5) Color.Black else Color.White
-                // 动态壁纸取色选项（带渐变色块）
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { view.performHaptic(HapticType.TICK); onAccentSelected(null) }
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RadioButton(selected = currentAccent == null, onClick = { view.performHaptic(HapticType.TICK); onAccentSelected(null) })
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(
-                                brush = androidx.compose.ui.graphics.Brush.sweepGradient(
-                                    colors = dynamicColors
-                                )
-                            )
-                            .then(
-                                if (currentAccent == null)
-                                    Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                                else Modifier
-                            ),
-                        contentAlignment = Alignment.Center
+                    DropdownMenu(
+                        expanded = materialMenuExpanded,
+                        onDismissRequest = { materialMenuExpanded = false }
                     ) {
-                        if (currentAccent == null) {
-                            Icon(Icons.Rounded.Check, contentDescription = null, tint = dynamicCheckTint, modifier = Modifier.size(20.dp))
+                        materialOptions.forEach { (mode, variant, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    view.performHaptic(HapticType.TICK)
+                                    onVisualEffectSelected(mode, variant)
+                                    materialMenuExpanded = false
+                                },
+                                trailingIcon = {
+                                    if (mode == currentMode && variant == currentVariant) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            )
                         }
                     }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(stringResource(R.string.settings_accent_dynamic))
                 }
-                // 莫奈/印象派色块网格
-                val accents = com.tracktosearch.ui.theme.MonetAccent.entries
-                val rows = accents.chunked(4)
+                Spacer(modifier = Modifier.height(8.dp))
+                // 色调区：壁纸取色 + 莫奈/印象派色块网格
+                val swatches = listOf(null) + com.tracktosearch.ui.theme.MonetAccent.entries
+                val rows = swatches.chunked(4)
                 rows.forEach { row ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         row.forEach { accent ->
+                            val labelResId = if (accent != null) accent.labelResId else R.string.settings_accent_dynamic
                             Column(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clickable { view.performHaptic(HapticType.TICK); onAccentSelected(accent) }
+                                    .clickable {
+                                        view.performHaptic(HapticType.TICK)
+                                        onAccentSelected(accent)
+                                    }
                                     .padding(vertical = 4.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
@@ -273,7 +246,13 @@ internal fun AccentColorDialog(
                                     modifier = Modifier
                                         .size(44.dp)
                                         .clip(CircleShape)
-                                        .background(accent.light)
+                                        .background(
+                                            brush = if (accent != null) {
+                                                androidx.compose.ui.graphics.SolidColor(accent.light)
+                                            } else {
+                                                androidx.compose.ui.graphics.Brush.sweepGradient(colors = dynamicColors)
+                                            }
+                                        )
                                         .then(
                                             if (currentAccent == accent)
                                                 Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
@@ -282,7 +261,16 @@ internal fun AccentColorDialog(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     if (currentAccent == accent) {
-                                        Icon(Icons.Rounded.Check, contentDescription = null, tint = if (accent.light.luminance() > 0.5f) Color.Black else Color.White, modifier = Modifier.size(20.dp))
+                                        Icon(
+                                            imageVector = Icons.Rounded.Check,
+                                            contentDescription = null,
+                                            tint = if (accent != null) {
+                                                if (accent.light.luminance() > 0.5f) Color.Black else Color.White
+                                            } else {
+                                                dynamicCheckTint
+                                            },
+                                            modifier = Modifier.size(20.dp)
+                                        )
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
@@ -291,7 +279,7 @@ internal fun AccentColorDialog(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     AdaptiveSingleLineText(
-                                        text = stringResource(accent.labelResId),
+                                        text = stringResource(labelResId),
                                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                                         maxFontSize = 11.sp,
                                         minFontSize = 8.5.sp,
@@ -308,7 +296,11 @@ internal fun AccentColorDialog(
                 }
             }
         },
-        confirmButton = {}
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_done))
+            }
+        }
     )
 }
 

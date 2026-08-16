@@ -750,7 +750,7 @@ Config:
     <string name="onboarding_skip">Skip</string>
     <string name="onboarding_next">Next</string>
     <string name="onboarding_done">Got it</string>
-    <string name="onboarding_choose_theme">Choose your preferred theme color</string>
+    <string name="onboarding_choose_theme">Choose your preferred tone and material</string>
     <string name="onboarding_step1_title">Search</string>
     <string name="onboarding_step1_desc">Search by movie, TV show, person, or resource category</string>
     <string name="onboarding_step2_title">Discover</string>

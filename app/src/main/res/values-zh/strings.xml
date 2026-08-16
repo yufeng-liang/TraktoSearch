@@ -750,7 +750,7 @@
     <string name="onboarding_skip">跳过</string>
     <string name="onboarding_next">下一步</string>
     <string name="onboarding_done">知道了</string>
-    <string name="onboarding_choose_theme">选择你喜欢的主题色调</string>
+    <string name="onboarding_choose_theme">选择你喜欢的色调与材质</string>
     <string name="onboarding_step1_title">搜索</string>
     <string name="onboarding_step1_desc">支持按电影、电视剧、人物、资源分类搜索</string>
     <string name="onboarding_step2_title">发现</string>

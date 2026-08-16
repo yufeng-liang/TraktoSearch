@@ -1005,7 +1005,7 @@
     <string name="onboarding_skip">スキップ</string>
     <string name="onboarding_next">次へ</string>
     <string name="onboarding_done">了解</string>
-    <string name="onboarding_choose_theme">好きなテーマカラーを選択</string>
+    <string name="onboarding_choose_theme">好きなトーンと素材を選択</string>
     <string name="onboarding_step1_title">検索</string>
     <string name="onboarding_step1_desc">映画、テレビ番組、人物、リソースのカテゴリ別に検索</string>
     <string name="onboarding_step2_title">発見</string>
