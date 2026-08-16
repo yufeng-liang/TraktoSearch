@@ -487,10 +487,10 @@ fun NeumorphicIconButton(
             .neumorphicOuterShadow(
                 shape = shape,
                 isDark = isDark,
-                elevation = 5.dp,
-                darkAlpha = if (isDark) 0.35f else 0.16f,
-                blurRadius = 12.dp,
-                shadowOffset = 5.dp,
+                elevation = 9.dp,
+                darkAlpha = if (isDark) 0.42f else 0.30f,
+                blurRadius = 18.dp,
+                shadowOffset = 8.dp,
                 darkColor = if (isDark) Color.Black else Color(0xFF68707C)
             )
             .clip(shape)
@@ -503,7 +503,7 @@ fun NeumorphicIconButton(
                 lightAlpha = if (isDark) {
                     if (isDetailTopBar) 0.04f else 0.08f
                 } else {
-                    if (isDetailTopBar) 0.33f else 0.65f
+                    if (isDetailTopBar) 0.33f else 0.35f
                 },
                 blurRadius = 10.dp,
                 shadowOffset = 4.dp
@@ -515,7 +515,7 @@ fun NeumorphicIconButton(
                 } else {
                     Color.White.copy(
                         alpha = (
-                            lightBorderAlpha * if (isDetailTopBar) 0.5f else 1f
+                            lightBorderAlpha * if (isDetailTopBar) 0.5f else 0.45f
                         ).coerceIn(0f, 1f)
                     )
                 },

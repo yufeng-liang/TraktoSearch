@@ -81,6 +81,16 @@ fun GlassIconButton(
                 onClick = onClick
             )
             .size(size)
+            // 与 Blur 分支 NeumorphicIconButton 保持一致的外阴影，避免两种视觉模式浮起感不一致
+            .neumorphicOuterShadow(
+                shape = shape,
+                isDark = isDark,
+                elevation = 9.dp,
+                darkAlpha = if (isDark) 0.42f else 0.30f,
+                blurRadius = 18.dp,
+                shadowOffset = 8.dp,
+                darkColor = if (isDark) Color.Black else Color(0xFF68707C)
+            )
     val borderColor = if (isDark) {
         Color.White.copy(alpha = if (enabled) 0.14f else 0.08f)
     } else {
