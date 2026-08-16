@@ -160,65 +160,67 @@ internal fun AccentColorDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 300.dp)
+                    .heightIn(max = 350.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // 材质区：标题在左，当前值 + 下拉箭头在右，点击弹出菜单
-                Box {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                view.performHaptic(HapticType.TICK)
-                                materialMenuExpanded = true
-                            }
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = stringResource(R.string.settings_material),
-                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 14.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f)
-                        )
-                        val currentLabel = materialOptions.firstOrNull {
-                            it.first == currentMode && it.second == currentVariant
-                        }?.third ?: stringResource(R.string.settings_visual_effect_blur)
-                        Text(
-                            text = currentLabel,
-                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Icon(
-                            imageVector = Icons.Rounded.ArrowDropDown,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = materialMenuExpanded,
-                        onDismissRequest = { materialMenuExpanded = false },
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    ) {
-                        materialOptions.forEach { (mode, variant, label) ->
-                            DropdownMenuItem(
-                                text = { Text(label) },
-                                onClick = {
-                                    view.performHaptic(HapticType.TICK)
-                                    onVisualEffectSelected(mode, variant)
-                                    materialMenuExpanded = false
-                                },
-                                trailingIcon = {
-                                    if (mode == currentMode && variant == currentVariant) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Check,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                }
+                // 材质区：标题在左，当前值 + 下拉箭头在右，点击弹出菜单（锚定右侧选项，菜单与选项左边缘对齐）
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            view.performHaptic(HapticType.TICK)
+                            materialMenuExpanded = true
+                        }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_material),
+                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 14.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Box {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val currentLabel = materialOptions.firstOrNull {
+                                it.first == currentMode && it.second == currentVariant
+                            }?.third ?: stringResource(R.string.settings_visual_effect_blur)
+                            Text(
+                                text = currentLabel,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
                             )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(
+                                imageVector = Icons.Rounded.ArrowDropDown,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = materialMenuExpanded,
+                            onDismissRequest = { materialMenuExpanded = false },
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            materialOptions.forEach { (mode, variant, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        view.performHaptic(HapticType.TICK)
+                                        onVisualEffectSelected(mode, variant)
+                                        materialMenuExpanded = false
+                                    },
+                                    trailingIcon = {
+                                        if (mode == currentMode && variant == currentVariant) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Check,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
                 }
