@@ -64,7 +64,7 @@ internal fun WatchlistModeSelector(
         tabs.map { label ->
             val selectedText = textMeasurer.measure(
                 text = label,
-                style = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold)
             ).size.width
             val unselectedText = textMeasurer.measure(
                 text = label,
@@ -112,7 +112,7 @@ internal fun WatchlistModeSelector(
                 label = "watchlist_mode_width_$index"
             )
             val fontSize by animateFloatAsState(
-                targetValue = if (selected) 18f else 14f,
+                targetValue = if (selected) 16f else 14f,
                 animationSpec = tween(durationMillis),
                 label = "watchlist_mode_font_size_$index"
             )

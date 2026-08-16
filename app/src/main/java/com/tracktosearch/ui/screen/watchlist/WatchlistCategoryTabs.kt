@@ -138,7 +138,7 @@ private fun CategoryTabContent(
     ) {
         Text(
             text = tab.label,
-            fontSize = 14.sp,
+            fontSize = 15.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             color = if (selected) {
                 MaterialTheme.colorScheme.primary
@@ -157,7 +157,7 @@ private fun CategoryTabContent(
             Text(
                 text = tab.count.toString(),
                 modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (selected) {
                     MaterialTheme.colorScheme.primary
