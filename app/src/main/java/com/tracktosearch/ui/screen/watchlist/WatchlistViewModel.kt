@@ -38,11 +38,13 @@ import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -50,11 +52,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import javax.inject.Inject
 
@@ -298,29 +303,59 @@ class WatchlistViewModel @Inject constructor(
             state.ratingRange != 0f..10f
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    /** 从三类媒体聚合可选类型（按 `,` 和 `·` 拆分、distinct、sorted） */
-    val availableGenres: StateFlow<List<String>> = _uiState.map { state ->
-        (state.movies.asSequence() + state.shows.asSequence() + state.others.asSequence() +
-            state.historyMovies.asSequence() + state.historyShows.asSequence() + state.historyOthers.asSequence())
-            .flatMap { it.genres.split(",", "·").asSequence() }
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .distinct()
-            .sorted()
-            .toList()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    /** 派生流聚合输入：仅取六个媒体列表字段（进度等高频字段不参与聚合，避免 tick 触发重算） */
+    private data class GenreDecadeAggregationInput(
+        val movies: List<MediaUiItem>,
+        val shows: List<MediaUiItem>,
+        val others: List<MediaUiItem>,
+        val historyMovies: List<MediaUiItem>,
+        val historyShows: List<MediaUiItem>,
+        val historyOthers: List<MediaUiItem>
+    )
 
-    /** 从三类媒体动态生成可选年代列表（按起始年份降序，如 2020、2010、2000...） */
-    val decadeOptions: StateFlow<List<Int>> = _uiState.map { state ->
-        (state.movies.asSequence() + state.shows.asSequence() + state.others.asSequence() +
-            state.historyMovies.asSequence() + state.historyShows.asSequence() + state.historyOthers.asSequence())
-            .mapNotNull { it.year }
-            .filter { it > 0 }
-            .map { (it / 10) * 10 }  // 取年代起始年份,如 2023 -> 2020
-            .distinct()
-            .sortedDescending()
-            .toList()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    /** 按列表引用去重：进度 tick 不替换列表引用（O(1) 比较直接跳过），仅列表真实替换才触发下游聚合 */
+    private val genreDecadeInput: Flow<GenreDecadeAggregationInput> = _uiState
+        .map { state ->
+            GenreDecadeAggregationInput(
+                state.movies, state.shows, state.others,
+                state.historyMovies, state.historyShows, state.historyOthers
+            )
+        }
+        .distinctUntilChanged { old, new ->
+            old.movies === new.movies && old.shows === new.shows &&
+                old.others === new.others && old.historyMovies === new.historyMovies &&
+                old.historyShows === new.historyShows && old.historyOthers === new.historyOthers
+        }
+
+    /** 从三类媒体聚合可选类型（按 `,` 和 `·` 拆分、distinct、sorted）；聚合在 Default 线程执行 */
+    val availableGenres: StateFlow<List<String>> = genreDecadeInput
+        .map { input ->
+            (input.movies.asSequence() + input.shows.asSequence() + input.others.asSequence() +
+                input.historyMovies.asSequence() + input.historyShows.asSequence() + input.historyOthers.asSequence())
+                .flatMap { it.genres.split(",", "·").asSequence() }
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+                .sorted()
+                .toList()
+        }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** 从三类媒体动态生成可选年代列表（按起始年份降序，如 2020、2010、2000...）；聚合在 Default 线程执行 */
+    val decadeOptions: StateFlow<List<Int>> = genreDecadeInput
+        .map { input ->
+            (input.movies.asSequence() + input.shows.asSequence() + input.others.asSequence() +
+                input.historyMovies.asSequence() + input.historyShows.asSequence() + input.historyOthers.asSequence())
+                .mapNotNull { it.year }
+                .filter { it > 0 }
+                .map { (it / 10) * 10 }  // 取年代起始年份,如 2023 -> 2020
+                .distinct()
+                .sortedDescending()
+                .toList()
+        }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun updateSelectedGenres(genres: Set<String>) {
         _filterState.value = _filterState.value.copy(selectedGenres = genres)
@@ -513,17 +548,15 @@ class WatchlistViewModel @Inject constructor(
                         }
                         return@launch
                     }
-                    // 静默刷新时保留旧列表避免闪烁；非静默时清空旧列表避免新旧数据混合
-                    if (!silent) {
-                        _uiState.value = _uiState.value.copy(movies = emptyList())
-                    }
                 }
                 // 先发布完整占位列表，富化结果全部完成后再一次性替换，避免每个 item 触发一次状态复制。
+                // 已有非空数据时不再清空列表（等价静默刷新语义）；占位仅在列表为空（首次加载）时发布，
+                // 避免加载过程连续发布 emptyList / placeholderList / 最终列表多个引用触发整表重算与 Coil 重解码
                 val placeholderList = List(items.size) { index ->
                     val p = items[index].movie
                     createPlaceholder(p.ids.trakt, p.ids.tmdb, p.title, p.year, p.ids.imdb, p.rating, items[index].listed_at)
                 }
-                if (!silent) {
+                if (!silent && _uiState.value.movies.isEmpty()) {
                     _uiState.update { it.copy(movies = placeholderList) }
                 }
                 val deferredItems = items.map { item ->
@@ -635,13 +668,10 @@ class WatchlistViewModel @Inject constructor(
                         }
                         return@launch
                     }
-                    // 静默刷新时保留旧列表避免闪烁；非静默时清空旧列表避免新旧数据混合
-                    if (!silent) {
-                        _uiState.value = _uiState.value.copy(shows = emptyList())
-                    }
                 }
-                // 每个 item 的 TMDB enrich 完成就立即显示，不等整批
                 // 预填充占位列表到完整大小，避免多个 async 协程并发 add/resize 导致 IndexOutOfBounds
+                // 已有非空数据时不再清空列表（等价静默刷新语义）；占位仅在列表为空（首次加载）时发布，
+                // 避免加载过程连续发布 emptyList / placeholderList / 最终列表多个引用触发整表重算与 Coil 重解码
                 val placeholderList = List(items.size) { index ->
                     val s = items[index].show
                     createPlaceholder(
@@ -649,7 +679,7 @@ class WatchlistViewModel @Inject constructor(
                         items[index].listed_at, WatchlistMediaType.SHOW
                     )
                 }
-                if (!silent) {
+                if (!silent && _uiState.value.shows.isEmpty()) {
                     _uiState.update { it.copy(shows = placeholderList) }
                 }
                 val deferredItems = items.map { item ->
@@ -937,17 +967,23 @@ class WatchlistViewModel @Inject constructor(
             } else {
                 rawItems
             }
-            val uiItems = items.map { item ->
-                enrichMediaItem(
-                    traktId = item.movie.ids.trakt,
-                    tmdbId = item.movie.ids.tmdb,
-                    title = item.movie.title,
-                    year = item.movie.year,
-                    imdbId = item.movie.ids.imdb,
-                    rating = item.movie.rating,
-                    listedAt = item.listed_at,
-                    isMovie = true
-                ).copy(mediaType = WatchlistMediaType.MOVIE)
+            // 并发 enrich 保持结果顺序（map+awaitAll）：async 并发触发网络/缓存 suspend 即可获得并发收益，
+            // 在调用方上下文执行（runTest 调度器可确定性推进，避免真实线程池导致测试竞态；网络请求自行切换 IO）
+            val uiItems = coroutineScope {
+                    items.map { item ->
+                        async {
+                            enrichMediaItem(
+                                traktId = item.movie.ids.trakt,
+                                tmdbId = item.movie.ids.tmdb,
+                                title = item.movie.title,
+                                year = item.movie.year,
+                                imdbId = item.movie.ids.imdb,
+                                rating = item.movie.rating,
+                                listedAt = item.listed_at,
+                                isMovie = true
+                            ).copy(mediaType = WatchlistMediaType.MOVIE)
+                        }
+                    }.awaitAll()
             }
             replaceLoadedTraktItems(loadedTraktMovies, uiItems)
             val doubanItems = getDoubanItemsForType("wish", WatchlistMediaType.MOVIE)
@@ -999,17 +1035,23 @@ class WatchlistViewModel @Inject constructor(
             } else {
                 rawItems
             }
-            val uiItems = items.map { item ->
-                enrichMediaItem(
-                    traktId = item.show.ids.trakt,
-                    tmdbId = item.show.ids.tmdb,
-                    title = item.show.title,
-                    year = item.show.year,
-                    imdbId = item.show.ids.imdb,
-                    rating = item.show.rating,
-                    listedAt = item.listed_at,
-                    isMovie = false
-                ).copy(mediaType = WatchlistMediaType.SHOW)
+            // 并发 enrich 保持结果顺序（map+awaitAll）：async 并发触发网络/缓存 suspend 即可获得并发收益，
+            // 在调用方上下文执行（runTest 调度器可确定性推进，避免真实线程池导致测试竞态；网络请求自行切换 IO）
+            val uiItems = coroutineScope {
+                    items.map { item ->
+                        async {
+                            enrichMediaItem(
+                                traktId = item.show.ids.trakt,
+                                tmdbId = item.show.ids.tmdb,
+                                title = item.show.title,
+                                year = item.show.year,
+                                imdbId = item.show.ids.imdb,
+                                rating = item.show.rating,
+                                listedAt = item.listed_at,
+                                isMovie = false
+                            ).copy(mediaType = WatchlistMediaType.SHOW)
+                        }
+                    }.awaitAll()
             }
             replaceLoadedTraktItems(loadedTraktShows, uiItems)
             val doubanItems = getDoubanItemsForType("wish", WatchlistMediaType.SHOW)
@@ -1054,17 +1096,23 @@ class WatchlistViewModel @Inject constructor(
             } else {
                 dedupedItems
             }
-            val uiItems = items.map { item ->
-                enrichMediaItem(
-                    traktId = item.movie.ids.trakt,
-                    tmdbId = item.movie.ids.tmdb,
-                    title = item.movie.title,
-                    year = item.movie.year,
-                    imdbId = item.movie.ids.imdb,
-                    rating = item.movie.rating,
-                    listedAt = item.listed_at,
-                    isMovie = true
-                ).copy(mediaType = WatchlistMediaType.MOVIE)
+            // 并发 enrich 保持结果顺序（map+awaitAll）：async 并发触发网络/缓存 suspend 即可获得并发收益，
+            // 在调用方上下文执行（runTest 调度器可确定性推进，避免真实线程池导致测试竞态；网络请求自行切换 IO）
+            val uiItems = coroutineScope {
+                    items.map { item ->
+                        async {
+                            enrichMediaItem(
+                                traktId = item.movie.ids.trakt,
+                                tmdbId = item.movie.ids.tmdb,
+                                title = item.movie.title,
+                                year = item.movie.year,
+                                imdbId = item.movie.ids.imdb,
+                                rating = item.movie.rating,
+                                listedAt = item.listed_at,
+                                isMovie = true
+                            ).copy(mediaType = WatchlistMediaType.MOVIE)
+                        }
+                    }.awaitAll()
             }
             replaceLoadedTraktItems(loadedTraktHistoryMovies, uiItems)
             val doubanItems = getDoubanWatchlistItems("collect")
@@ -1101,17 +1149,23 @@ class WatchlistViewModel @Inject constructor(
             } else {
                 dedupedItems
             }
-            val uiItems = items.map { item ->
-                enrichMediaItem(
-                    traktId = item.show.ids.trakt,
-                    tmdbId = item.show.ids.tmdb,
-                    title = item.show.title,
-                    year = item.show.year,
-                    imdbId = item.show.ids.imdb,
-                    rating = item.show.rating,
-                    listedAt = item.listed_at,
-                    isMovie = false
-                ).copy(mediaType = WatchlistMediaType.SHOW)
+            // 并发 enrich 保持结果顺序（map+awaitAll）：async 并发触发网络/缓存 suspend 即可获得并发收益，
+            // 在调用方上下文执行（runTest 调度器可确定性推进，避免真实线程池导致测试竞态；网络请求自行切换 IO）
+            val uiItems = coroutineScope {
+                    items.map { item ->
+                        async {
+                            enrichMediaItem(
+                                traktId = item.show.ids.trakt,
+                                tmdbId = item.show.ids.tmdb,
+                                title = item.show.title,
+                                year = item.show.year,
+                                imdbId = item.show.ids.imdb,
+                                rating = item.show.rating,
+                                listedAt = item.listed_at,
+                                isMovie = false
+                            ).copy(mediaType = WatchlistMediaType.SHOW)
+                        }
+                    }.awaitAll()
             }
             replaceLoadedTraktItems(loadedTraktHistoryShows, uiItems)
             val doubanItems = getDoubanWatchlistItems("collect")
@@ -1297,7 +1351,8 @@ class WatchlistViewModel @Inject constructor(
         target += byTraktId.values
     }
 
-    private fun mergeWatchlistItems(
+    /** 合并 Trakt 与豆瓣条目为 UI 列表（纯计算；保持在调用方上下文，runTest 可确定性推进） */
+    private suspend fun mergeWatchlistItems(
         traktItems: List<MediaUiItem>,
         doubanItems: List<DoubanSyncedItem>,
         mediaType: WatchlistMediaType
