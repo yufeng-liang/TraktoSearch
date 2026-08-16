@@ -456,7 +456,16 @@ fun AppNavigation(
             ) {
             NavHost(
                 navController = navController,
-                startDestination = currentStartDest
+                startDestination = currentStartDest,
+                // 全局默认转场：统一 220ms 纯 fade。
+                // 原默认 700ms fadeIn/fadeOut 转场期间新旧两页同时组合，各页全屏 hazeSource
+                // 与多个 blur 节点同时渲染导致切换掉帧；纯 fade 无水平偏移，时长缩短为 220ms
+                // 可减少转场重叠开销，且与详情页共享元素 spring 动画对齐，避免违和。
+                // 共享元素(海报)由 SharedTransitionLayout 独立接管，不依赖 NavHost 的 slide。
+                enterTransition = { fadeIn(animationSpec = tween(220)) },
+                exitTransition = { fadeOut(animationSpec = tween(220)) },
+                popEnterTransition = { fadeIn(animationSpec = tween(220)) },
+                popExitTransition = { fadeOut(animationSpec = tween(220)) }
             ) {
                 composable(Routes.LOGIN) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
@@ -748,15 +757,7 @@ fun AppNavigation(
                         navArgument("inWatchlist") { type = NavType.BoolType; defaultValue = false },
                          navArgument("isWatched") { type = NavType.BoolType; defaultValue = false },
                          navArgument("doubanId") { type = NavType.StringType; defaultValue = "" }
-                    ),
-                    // 详情页转场:用纯 fade 替代默认的 fadeIn+slideIn,去掉水平偏移
-                    // slide 每帧都需重新计算详情页所有子节点的水平位置(转场期间放大开销)。
-                    // 时长 220ms 与默认对齐,避免与共享元素 spring 动画违和;
-                    // 共享元素(海报)由 SharedTransitionLayout 独立接管,不依赖 NavHost 的 slide。
-                    enterTransition = { fadeIn(animationSpec = tween(220)) },
-                    exitTransition = { fadeOut(animationSpec = tween(220)) },
-                    popEnterTransition = { fadeIn(animationSpec = tween(220)) },
-                    popExitTransition = { fadeOut(animationSpec = tween(220)) }
+                    )
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         val type = backStackEntry.arguments?.getString("type") ?: "movie"

@@ -402,7 +402,12 @@ fun MainScreen(
                 HorizontalPager(
                     state = pagerState,
                     userScrollEnabled = false,
-                    beyondViewportPageCount = 1,
+                    // 4 个 tab 页全部保持组合（2 = 当前页两侧各 2 页）：
+                    // 远 Tab 切换（如 搜索↔设置）不再销毁/重建整页，消除切换瞬间的
+                    // 200-300ms 组合尖峰；各页状态收集已下沉到 item/子 composable，
+                    // 后台页的隐藏重组成本极低。滚动位置由 rememberSaveable 的
+                    // grid/list state 跨销毁保留，此改动只省去重建不改变行为。
+                    beyondViewportPageCount = 2,
                     modifier = Modifier.fillMaxSize()
                 ) { page ->
                 // 只有当前可见 tab 的 MovieCard 参与 sharedElement 转场，避免 HorizontalPager 常驻的其他 tab 同 tmdbId 海报冲突
