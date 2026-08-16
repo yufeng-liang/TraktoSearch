@@ -164,13 +164,7 @@ internal fun AccentColorDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // 材质区：一行当前值 + 下拉菜单
-                Text(
-                    text = stringResource(R.string.settings_material),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
+                // 材质区：标题在左，当前值 + 下拉箭头在右，点击弹出菜单
                 Box {
                     Row(
                         modifier = Modifier
@@ -182,14 +176,20 @@ internal fun AccentColorDialog(
                             .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Text(
+                            text = stringResource(R.string.settings_material),
+                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 14.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
                         val currentLabel = materialOptions.firstOrNull {
                             it.first == currentMode && it.second == currentVariant
                         }?.third ?: stringResource(R.string.settings_visual_effect_blur)
                         Text(
                             text = currentLabel,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f)
+                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
                         )
+                        Spacer(modifier = Modifier.width(6.dp))
                         Icon(
                             imageVector = Icons.Rounded.ArrowDropDown,
                             contentDescription = null,
@@ -198,7 +198,8 @@ internal fun AccentColorDialog(
                     }
                     DropdownMenu(
                         expanded = materialMenuExpanded,
-                        onDismissRequest = { materialMenuExpanded = false }
+                        onDismissRequest = { materialMenuExpanded = false },
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
                     ) {
                         materialOptions.forEach { (mode, variant, label) ->
                             DropdownMenuItem(

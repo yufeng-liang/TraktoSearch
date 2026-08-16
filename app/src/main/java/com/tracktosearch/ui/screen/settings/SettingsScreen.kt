@@ -901,7 +901,7 @@ fun SettingsScreen(
     if (showAccentColorDialog) {
         AccentColorDialog(
             currentAccent = currentAccent,
-            onAccentSelected = { viewModel.setAccentColor(it); showAccentColorDialog = false },
+            onAccentSelected = { viewModel.setAccentColor(it) },
             currentMode = currentVisualEffectMode,
             currentVariant = currentGlassVariant,
             onVisualEffectSelected = { mode, variant ->
