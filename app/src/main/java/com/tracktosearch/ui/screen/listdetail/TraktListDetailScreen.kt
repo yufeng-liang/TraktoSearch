@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -78,7 +79,8 @@ fun TraktListDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val watchlistWatchedIds by viewModel.watchlistWatchedIds.collectAsStateWithLifecycle()
-    val gridState = rememberLazyGridState()
+    // rememberSaveable + Saver：进入详情页返回后恢复原滚动位置，不再回到顶部
+    val gridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
     val hazeState = remember { HazeState() }
     val hazeStyle = HazeMaterials.thin()
     val listGlassScene = glassSceneForContent(

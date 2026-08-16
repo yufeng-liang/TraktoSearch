@@ -36,9 +36,11 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
@@ -363,10 +365,11 @@ fun TraktSearchScreen(
         viewModel.initSearch(initialQuery, type)
     }
 
-    val movieGridState = rememberLazyGridState()
-    val showGridState = rememberLazyGridState()
-    val personGridState = rememberLazyGridState()
-    val diskListState = rememberLazyListState()
+    // rememberSaveable + Saver：进入详情/人物页返回后恢复原滚动位置，不再回到顶部
+    val movieGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
+    val showGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
+    val personGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
+    val diskListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
     val scrollToTopProvider = LocalScrollToTopProvider.current
     val traktCoroutineScope = rememberCoroutineScope()
 

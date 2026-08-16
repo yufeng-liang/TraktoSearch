@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -57,6 +58,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -130,7 +132,8 @@ fun DiscoverFilterScreen(
         loadingCount = if (uiState.isLoading || uiState.isLoadingMore) 1 else 0,
         loadingItemWeight = 4
     )
-    val listState = rememberLazyListState()
+    // rememberSaveable + Saver：进入详情页返回后恢复原滚动位置，不再回到顶部
+    val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val view = LocalView.current
