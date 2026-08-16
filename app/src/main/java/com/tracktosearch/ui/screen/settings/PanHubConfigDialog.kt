@@ -85,8 +85,12 @@ fun PanHubConfigDialog(
                             if (intVal != oldVal) {
                                 view.performHaptic(HapticType.TICK)
                             }
+                            // 拖动过程只更新本地显示值；松手（onValueChangeFinished）
+                            // 才回调提交，避免每个拖拽 tick 都写 DataStore 并触发收集方重组
                             concurrencyText = intVal.toString()
-                            onConcurrencyChange(intVal)
+                        },
+                        onValueChangeFinished = {
+                            concurrencyText.toIntOrNull()?.let(onConcurrencyChange)
                         },
                         valueRange = 1f..16f,
                         steps = 14
