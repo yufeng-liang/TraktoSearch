@@ -39,7 +39,18 @@ internal fun AdaptiveTwoLineTitle(
 
     BoxWithConstraints(modifier = modifier) {
         val maxWidthPx = constraints.maxWidth
-        val fontSize = remember(text, style, maxFontSize, minFontSize, maxWidthPx) {
+        // 测量结果只依赖字体度量属性：style 每次重组都是新实例，直接用 style 做键恒失效，
+        // 改为只取 fontFamily/fontWeight/fontStyle/letterSpacing，重组时复用缓存。
+        val fontSize = remember(
+            text,
+            style.fontFamily,
+            style.fontWeight,
+            style.fontStyle,
+            style.letterSpacing,
+            maxFontSize,
+            minFontSize,
+            maxWidthPx
+        ) {
             if (maxWidthPx <= 0 || maxWidthPx == Constraints.Infinity) {
                 maxFontSize
             } else {

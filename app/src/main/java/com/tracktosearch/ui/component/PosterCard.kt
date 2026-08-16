@@ -18,8 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,11 +29,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.graphics.drawable.BitmapDrawable
 import androidx.core.graphics.drawable.toBitmap
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 
 /**
@@ -76,9 +74,9 @@ fun PosterCard(
         targetValue = if (isPressed) 0.96f else 1f,
         label = "poster_scale"
     )
-    // 用 holder 持有最新 onImageSuccess，避免 lambda 引用变化导致 remember 失效、ImageRequest 重复创建
-    var onImageSuccessRef by remember { mutableStateOf(onImageSuccess) }
-    onImageSuccessRef = onImageSuccess
+    // 用 rememberUpdatedState 持有最新 onImageSuccess：lambda 引用变化不会导致重组或
+    // 触发 ImageRequest 重建，也不会在组合期写 snapshot state（原 var + mutableStateOf 写法）。
+    val onImageSuccessRef by rememberUpdatedState(onImageSuccess)
     val model = remember(imageUrl, imageSize) {
         if (imageSize != null || onImageSuccess != null) {
             ImageRequest.Builder(context)
@@ -87,7 +85,12 @@ fun PosterCard(
                 .crossfade(false)
                 .listener(
                     onSuccess = { _, result ->
-                        onImageSuccessRef?.invoke(result.drawable.toBitmap())
+                        val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
+                        if (bitmap != null) {
+                            onImageSuccessRef?.invoke(bitmap) // 零拷贝复用 Coil 解码位图
+                        } else {
+                            onImageSuccessRef?.invoke(result.drawable.toBitmap())
+                        }
                     }
                 )
                 .build()
@@ -97,7 +100,6 @@ fun PosterCard(
     }
 
     val isDark = isAppDarkTheme()
-    val ratingHazeState = remember { HazeState() }
     val posterShape = RoundedCornerShape(12.dp)
     val useNeumorphicDecoration = usesNeumorphicDecoration(LocalVisualEffectMode.current)
     Box(modifier = modifier.scale(scale)) {
@@ -156,15 +158,7 @@ fun PosterCard(
                 model = model,
                 contentDescription = title,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .then(
-                        if (rating != null) {
-                            Modifier.hazeSource(state = ratingHazeState)
-                        } else {
-                            Modifier
-                        }
-                    )
+                modifier = Modifier.fillMaxSize()
             )
             // 类型标签（左上角）
             if (!genres.isNullOrBlank()) {
