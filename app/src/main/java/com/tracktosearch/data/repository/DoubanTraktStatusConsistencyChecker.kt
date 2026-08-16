@@ -133,6 +133,66 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
     /** WakeLock:手动检查期间保持 CPU 唤醒,避免息屏后网络请求 timeout */
     private var wakeLock: PowerManager.WakeLock? = null
 
+    /**
+     * 预解析的 UI 文案缓存。
+     *
+     * 背景：检查协程运行在 Dispatchers.IO，历史上循环/取消路径直接 context.getString，
+     * 与主线程（cancel()/resetProgress() 也会取字符串）形成跨线程资源访问；
+     * Robolectric 下该竞争偶发死锁导致取消测试 60s 卡死（真机无碍但属隐患），
+     * 生产环境也重复解析浪费。这里首次使用时在调用方线程解析一次并缓存，
+     * 协程内只读缓存值；按 locale 标记失效，语言切换后自动重取。
+     */
+    private class CheckUiStrings(
+        val cancelling: String,
+        val cancelled: String,
+        val alreadyRunning: String,
+        val notLoggedIn: String,
+        val crawlPhase: String,
+        val subWish: String,
+        val subCollect: String,
+        val cookieExpired: String,
+        val done: String,
+        val compare: String,
+        val updateTrakt: String,
+        val updateDouban: String,
+        val subDetailCk: String,
+        val networkTimeout: String,
+        val networkFailed: String,
+        val exceptionFormat: String
+    )
+
+    private val uiStringsLock = Any()
+    private var cachedLocaleTag: String? = null
+    private var cachedUiStrings: CheckUiStrings? = null
+
+    private fun uiStrings(): CheckUiStrings {
+        val localeTag = context.resources.configuration.locales[0].toLanguageTag()
+        synchronized(uiStringsLock) {
+            cachedUiStrings?.takeIf { cachedLocaleTag == localeTag }?.let { return it }
+            val strings = CheckUiStrings(
+                cancelling = context.getString(R.string.consistency_check_phase_cancelling),
+                cancelled = context.getString(R.string.consistency_check_phase_cancelled),
+                alreadyRunning = context.getString(R.string.consistency_check_already_running),
+                notLoggedIn = context.getString(R.string.consistency_check_not_logged_in),
+                crawlPhase = context.getString(R.string.consistency_check_phase_crawl),
+                subWish = context.getString(R.string.consistency_check_sub_wish),
+                subCollect = context.getString(R.string.consistency_check_sub_collect),
+                cookieExpired = context.getString(R.string.consistency_check_cookie_expired),
+                done = context.getString(R.string.consistency_check_phase_done),
+                compare = context.getString(R.string.consistency_check_phase_compare),
+                updateTrakt = context.getString(R.string.consistency_check_phase_update_trakt),
+                updateDouban = context.getString(R.string.consistency_check_phase_update_douban),
+                subDetailCk = context.getString(R.string.consistency_check_sub_detail_ck),
+                networkTimeout = context.getString(R.string.consistency_check_network_timeout),
+                networkFailed = context.getString(R.string.consistency_check_network_failed),
+                exceptionFormat = context.getString(R.string.consistency_check_exception)
+            )
+            cachedUiStrings = strings
+            cachedLocaleTag = localeTag
+            return strings
+        }
+    }
+
     init {
         // 监听 DoubanRepository 的延时事件，合并到 checkProgress.delayInfo
         appScope.launch {
@@ -170,7 +230,7 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         // 同步更新 isCancelling 中间态:UI 立即禁用取消按钮 + 显示"正在取消..." 文案
         _checkProgress.value = _checkProgress.value.copy(
             isCancelling = true,
-            phase = context.getString(R.string.consistency_check_phase_cancelling),
+            phase = uiStrings().cancelling,
             subPhase = "",
             delayInfo = null
         )
@@ -219,7 +279,7 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             return@withContext ConsistencyCheckResult(
                 isComplete = true,
                 errors = 1,
-                phase = context.getString(R.string.consistency_check_already_running)
+                phase = uiStrings().alreadyRunning
             )
         }
         try {
@@ -388,22 +448,26 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             isRunning = false,
             isComplete = true,
             isCancelled = true,
-            phase = context.getString(R.string.consistency_check_phase_cancelled)
+            phase = uiStrings().cancelled
         )
     }
 
     private suspend fun runCheckWithCrawl() {
-        _checkProgress.value = ConsistencyCheckResult(
-            isRunning = true,
-            startTimeMs = System.currentTimeMillis()
-        )
+        // CC-F05: cancel() 可能在令牌获取后、协程体于 IO 线程启动前已同步写入取消中间态；
+        // 此时跳过整体重置，避免抹掉 isCancelling 导致取消链路状态与 UI 断言错乱（竞态）
+        if (!cancelled) {
+            _checkProgress.value = ConsistencyCheckResult(
+                isRunning = true,
+                startTimeMs = System.currentTimeMillis()
+            )
+        }
 
         val cred = doubanAuthStorage.getCredentials()
         if (cred == null) {
             _checkProgress.value = ConsistencyCheckResult(
                 isComplete = true,
                 neverLoggedInDouban = true,
-                phase = context.getString(R.string.consistency_check_not_logged_in)
+                phase = uiStrings().notLoggedIn
             )
             // 错误完成也应触发一次完成弹窗,让用户看到错误信息
             checkCompleteHandled = true
@@ -413,10 +477,10 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         // ========== 阶段1: 爬取豆瓣列表 ==========
         val latestDoubanStatuses = mutableMapOf<String, Pair<String, String>>() // doubanId → (status, title)
 
-        // 预加载阶段文案,避免循环内重复 getString
-        val phaseCrawl = context.getString(R.string.consistency_check_phase_crawl)
-        val subWish = context.getString(R.string.consistency_check_sub_wish)
-        val subCollect = context.getString(R.string.consistency_check_sub_collect)
+        // 阶段文案使用预解析缓存：协程线程不直接访问资源（见 uiStrings 注释）
+        val phaseCrawl = uiStrings().crawlPhase
+        val subWish = uiStrings().subWish
+        val subCollect = uiStrings().subCollect
         for (status in listOf(DoubanMarkStatus.WISH, DoubanMarkStatus.COLLECT)) {
             // CC-F03: 取消时显式设置终态,避免状态卡在"正在取消..."
             if (cancelled) {
@@ -424,7 +488,7 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                     isRunning = false,
                     isComplete = true,
                     isCancelled = true,
-                    phase = context.getString(R.string.consistency_check_phase_cancelled)
+                    phase = uiStrings().cancelled
                 )
                 return
             }
@@ -459,7 +523,7 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                     isRunning = false,
                     isComplete = true,
                     cookieExpired = true,
-                    phase = context.getString(R.string.consistency_check_cookie_expired)
+                    phase = uiStrings().cookieExpired
                 )
                 // 错误完成也应触发一次完成弹窗,让用户看到 cookie 过期提示
                 checkCompleteHandled = true
@@ -479,7 +543,7 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             _checkProgress.value = ConsistencyCheckResult(
                 isComplete = true,
                 totalChecked = 0,
-                phase = context.getString(R.string.consistency_check_phase_done)
+                phase = uiStrings().done
             )
             // 正常完成(空列表),触发一次完成弹窗
             checkCompleteHandled = true
@@ -493,12 +557,12 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                 isRunning = false,
                 isComplete = true,
                 isCancelled = true,
-                phase = context.getString(R.string.consistency_check_phase_cancelled)
+                phase = uiStrings().cancelled
             )
             return
         }
         _checkProgress.value = _checkProgress.value.copy(
-            phase = context.getString(R.string.consistency_check_phase_compare),
+            phase = uiStrings().compare,
             subPhase = "",
             current = 0,
             total = latestDoubanStatuses.size
@@ -524,7 +588,7 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                     isRunning = false,
                     isComplete = true,
                     isCancelled = true,
-                    phase = context.getString(R.string.consistency_check_phase_cancelled)
+                    phase = uiStrings().cancelled
                 )
                 return
             }
@@ -591,12 +655,12 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                 isRunning = false,
                 isComplete = true,
                 isCancelled = true,
-                phase = context.getString(R.string.consistency_check_phase_cancelled)
+                phase = uiStrings().cancelled
             )
             return
         }
         _checkProgress.value = _checkProgress.value.copy(
-            phase = context.getString(R.string.consistency_check_phase_update_trakt),
+            phase = uiStrings().updateTrakt,
             subPhase = "",
             current = 0,
             total = traktNeedWatched.size + traktNeedWatchlist.size
@@ -624,13 +688,13 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                 isRunning = false,
                 isComplete = true,
                 isCancelled = true,
-                phase = context.getString(R.string.consistency_check_phase_cancelled)
+                phase = uiStrings().cancelled
             )
             return
         }
         _checkProgress.value = _checkProgress.value.copy(
-            phase = context.getString(R.string.consistency_check_phase_update_douban),
-            subPhase = context.getString(R.string.consistency_check_sub_detail_ck),
+            phase = uiStrings().updateDouban,
+            subPhase = uiStrings().subDetailCk,
             current = 0,
             total = doubanNeedUpdate.size
         )
@@ -646,7 +710,7 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         _checkProgress.value = _checkProgress.value.copy(
             isRunning = false,
             isComplete = true,
-            phase = context.getString(R.string.consistency_check_phase_done),
+            phase = uiStrings().done,
             subPhase = "",
             currentTitle = null,
             doubanUpdated = doubanUpdated,
@@ -917,16 +981,17 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         base: ConsistencyCheckResult? = null
     ): ConsistencyCheckResult {
         val phase = when (exception) {
-            is DoubanCookieExpiredException -> context.getString(R.string.consistency_check_cookie_expired)
-            is SocketTimeoutException -> context.getString(R.string.consistency_check_network_timeout)
+            is DoubanCookieExpiredException -> uiStrings().cookieExpired
+            is SocketTimeoutException -> uiStrings().networkTimeout
             is DoubanNetworkException,
             is UnknownHostException,
             is ConnectException,
-            is SSLException -> context.getString(R.string.consistency_check_network_failed)
+            is SSLException -> uiStrings().networkFailed
             else -> if (exception.message?.contains("timeout", ignoreCase = true) == true) {
-                context.getString(R.string.consistency_check_network_timeout)
+                uiStrings().networkTimeout
             } else {
-                context.getString(R.string.consistency_check_exception, exception.message ?: "")
+                // 带参模板用缓存的原型字符串本地格式化，避免协程线程访问资源
+                String.format(uiStrings().exceptionFormat, exception.message ?: "")
             }
         }
         val cookieExpired = exception is DoubanCookieExpiredException
