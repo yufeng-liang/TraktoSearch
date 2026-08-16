@@ -26,8 +26,6 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.DragIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -47,8 +45,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -59,6 +60,7 @@ import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.ui.theme.GlassVariant
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.component.AdaptiveSingleLineText
+import com.tracktosearch.ui.component.DropdownAnchorMenu
 import com.tracktosearch.ui.component.StickyHeaderChangelogContent
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
@@ -152,6 +154,17 @@ internal fun AccentColorDialog(
         Triple(VisualEffectMode.BLUR, GlassVariant.CLEAR, stringResource(R.string.settings_visual_effect_blur))
     )
 
+    // 菜单宽度 = 最长选项文字 + 打勾图标 + 间隔 + 左右内边距，按实际渲染测量，适配多语言
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val labelStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
+    val maxLabelWidth = materialOptions.maxOf { option ->
+        textMeasurer.measure(AnnotatedString(option.third), labelStyle).size.width
+    }
+    val menuWidth = with(density) {
+        maxLabelWidth.toDp() + 24.dp + 8.dp + 24.dp
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -164,7 +177,7 @@ internal fun AccentColorDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // 材质区：标题在左，当前值 + 下拉箭头在右，点击弹出菜单（锚定右侧选项，菜单与选项左边缘对齐）
+                // 材质区：标题在左，当前值 + 下拉箭头在右；点击弹出 DropdownAnchorMenu
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -181,45 +194,53 @@ internal fun AccentColorDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f)
                     )
-                    Box {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            val currentLabel = materialOptions.firstOrNull {
-                                it.first == currentMode && it.second == currentVariant
-                            }?.third ?: stringResource(R.string.settings_visual_effect_blur)
-                            Text(
-                                text = currentLabel,
-                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Icon(
-                                imageVector = Icons.Rounded.ArrowDropDown,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                    DropdownAnchorMenu(
+                        expanded = materialMenuExpanded,
+                        onDismissRequest = { materialMenuExpanded = false },
+                        menuWidth = menuWidth,
+                        anchor = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                val currentLabel = materialOptions.firstOrNull {
+                                    it.first == currentMode && it.second == currentVariant
+                                }?.third ?: stringResource(R.string.settings_visual_effect_blur)
+                                Text(
+                                    text = currentLabel,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Icon(
+                                    imageVector = Icons.Rounded.ArrowDropDown,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
-                        DropdownMenu(
-                            expanded = materialMenuExpanded,
-                            onDismissRequest = { materialMenuExpanded = false },
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        ) {
-                            materialOptions.forEach { (mode, variant, label) ->
-                                DropdownMenuItem(
-                                    text = { Text(label) },
-                                    onClick = {
+                    ) {
+                        materialOptions.forEach { (mode, variant, label) ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
                                         view.performHaptic(HapticType.TICK)
                                         onVisualEffectSelected(mode, variant)
                                         materialMenuExpanded = false
-                                    },
-                                    trailingIcon = {
-                                        if (mode == currentMode && variant == currentVariant) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Check,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
                                     }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                                    modifier = Modifier.weight(1f)
                                 )
+                                if (mode == currentMode && variant == currentVariant) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Icon(
+                                        imageVector = Icons.Rounded.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
                         }
                     }
