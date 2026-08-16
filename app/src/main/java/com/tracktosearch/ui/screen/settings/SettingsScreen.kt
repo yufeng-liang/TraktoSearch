@@ -175,6 +175,7 @@ fun SettingsScreen(
     onMarkRecordsClick: () -> Unit = {},
     onFeedbackClick: () -> Unit = {},
     onMessagesClick: () -> Unit = {},
+    onGlassPilot: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -481,6 +482,31 @@ fun SettingsScreen(
                     onLanguageClick = { showLanguageDialog = true },
                     onDefaultTabClick = { showDefaultTabDialog = true }
                 )
+            }
+
+            // 玻璃引擎试点（仅 DEBUG）：对比 haze / backdrop 两套引擎的模糊与玻璃效果
+            if (BuildConfig.DEBUG) {
+                item(key = "glass_pilot_entry") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onGlassPilot)
+                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "玻璃引擎试点（对比 haze / backdrop）",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.weight(1f))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
 
             // 搜索源（State 收集下沉到 SearchSourcesItem，开关切换/测试结果更新只重组本 item）

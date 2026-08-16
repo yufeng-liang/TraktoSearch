@@ -20,6 +20,7 @@ browser = "1.10.0"
 splashscreen = "1.2.0"
 palette = "1.0.0"
 haze = "2.0.0-alpha04"
+backdrop = "2.0.0"
 richtext = "0.20.0"
 room = "2.8.4"
 workManager = "2.11.2"
@@ -104,6 +105,7 @@ haze = { group = "dev.chrisbanes.haze", name = "haze", version.ref = "haze" }
 haze-blur = { group = "dev.chrisbanes.haze", name = "haze-blur", version.ref = "haze" }
 haze-blur-materials = { group = "dev.chrisbanes.haze", name = "haze-blur-materials", version.ref = "haze" }
 haze-glass = { group = "dev.chrisbanes.haze", name = "haze-glass", version.ref = "haze" }
+backdrop = { group = "io.github.kyant0", name = "backdrop", version.ref = "backdrop" }
 
 # Markdown
 richtext-commonmark = { group = "com.halilibo.compose-richtext", name = "richtext-commonmark", version.ref = "richtext" }

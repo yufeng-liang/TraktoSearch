@@ -181,6 +181,7 @@ fun MainScreen(
     onDoubanResync: () -> Unit = {},
     onNavigateToDoubanLogin: () -> Unit = {},
     onSpiderTest: () -> Unit = {},
+    onGlassPilot: () -> Unit = {},
     onFeedbackClick: () -> Unit = {},
     onMessagesClick: () -> Unit = {},
     onAiRecommendationClick: ((AiRecommendation) -> Unit)? = null
@@ -511,6 +512,7 @@ fun MainScreen(
                         onMarkRecordsClick = onMarkRecordsClick,
                         onFeedbackClick = onFeedbackClick,
                         onMessagesClick = onMessagesClick,
+                        onGlassPilot = onGlassPilot,
                         modifier = Modifier.fillMaxSize()
                     )
                 }

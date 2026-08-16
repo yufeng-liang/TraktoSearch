@@ -92,9 +92,13 @@ privacy-security-report.html
 /.wrangler/
 /node_modules/
 /qa-*.png
+/pilot_*.png
 
 # Local verification screenshots and reports
 verification-artifacts/
 
 # Git worktrees
 .worktrees/
+
+# backdrop 源码参考克隆(玻璃引擎迁移用,不入库)
+/.backdrop-ref/
