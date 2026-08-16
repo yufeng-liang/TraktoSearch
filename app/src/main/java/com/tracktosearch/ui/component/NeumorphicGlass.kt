@@ -2,6 +2,8 @@
 
 package com.tracktosearch.ui.component
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,6 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,16 +57,30 @@ fun Modifier.hazeTopBar(
     state: HazeState,
     style: HazeBlurStyle = HazeMaterials.thin(),
     blurRadius: Dp = 24.dp,
-    isContentUnderTopBar: Boolean = true,
+    isContentUnderTopBar: Boolean? = null,
     scene: GlassScene = GlassScene()
 ): Modifier {
-    if (!isContentUnderTopBar) return this
+    // 效果节点常驻、用透明度插值，避免布尔硬切换导致的新节点首帧未就绪闪透明。
+    // isContentUnderTopBar == null 时保持恒模糊（不参与滚动判定的页面，如列表详情标题栏）。
+    val visible by animateFloatAsState(
+        targetValue = when (isContentUnderTopBar) {
+            null -> 1f
+            else -> if (isContentUnderTopBar) 1f else 0f
+        },
+        animationSpec = tween(durationMillis = 220),
+        label = "topBarHazeAlpha"
+    )
     // 将调用方传入的 blurRadius 实际写入 HazeBlurStyle，避免参数失效
-    val resolvedStyle = style.then { blurRadius(blurRadius) }
+    val resolvedStyle = style.then {
+        blurRadius(blurRadius)
+        // blur=0 时 Haze 输出为空，alpha=0 作为双重保障，避免效果未就绪露出未模糊内容
+        alpha(visible)
+    }
+    val resolvedGlassStyle = AppGlassStyles.topBar(scene = scene).then { alpha(visible) }
     return appVisualEffect(
         input = HazeInput.Sources(state),
         hazeStyle = resolvedStyle,
-        glassStyle = AppGlassStyles.topBar(scene = scene),
+        glassStyle = resolvedGlassStyle,
         // 渲染降采样：Haze 官方基准显示可降低 5-20% 开销，肉眼几乎不可见
         blurSampling = HazeSampling.Adaptive
     )
