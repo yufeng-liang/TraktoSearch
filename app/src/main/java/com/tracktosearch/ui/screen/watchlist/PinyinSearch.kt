@@ -32,17 +32,28 @@ internal object PinyinSearch {
         if (title.isBlank() || query.isBlank()) return false
         // 查询含非 ASCII 字母（如汉字）时不做拼音匹配
         if (query.any { it.isLetter() && !it.isAsciiLetter() }) return false
-        val index = cache.getOrPut(title) { toPinyinIndex(title) }
-        if (index.isEmpty()) return false
+        val index = buildIndex(title) ?: return false
         val q = query.lowercase()
         // 全拼匹配：含空格与去空格两种形式
         if (index.contains(q) || index.replace(" ", "").contains(q)) return true
         // 首字母缩写：连续缩写段前缀命中
-        val abbr = index.split(" ").mapNotNull { it.firstOrNull() }.joinToString("")
-        return abbr.startsWith(q)
+        return abbreviationOf(index).startsWith(q)
     }
 
-    /** 中文名转拼音索引："花束般的恋爱" → "huashu bande lianai"（非汉字原样保留，整体小写） */
+    /**
+     * 构建拼音搜索索引："花束般的恋爱" → "huashu bande lianai"（无音调、小写、含空格）。
+     * 标题为空或无可转换内容时返回 null，供上层为列表预计算搜索索引复用。
+     */
+    fun buildIndex(title: String): String? {
+        if (title.isBlank()) return null
+        return cache.getOrPut(title) { toPinyinIndex(title) }.ifEmpty { null }
+    }
+
+    /** 由拼音索引计算首字母缩写：例如 "huashu bande lianai" → "hsbdla" */
+    fun abbreviationOf(index: String): String =
+        index.split(" ").mapNotNull { it.firstOrNull() }.joinToString("")
+
+    /** 中文名转拼音索引：非汉字原样保留，整体小写，多音字取第一个读音 */
     private fun toPinyinIndex(text: String): String {
         return buildString {
             for (ch in text) {

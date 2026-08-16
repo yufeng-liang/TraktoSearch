@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
@@ -55,8 +56,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -105,6 +106,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -148,6 +150,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -196,13 +199,13 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
-import java.time.temporal.ChronoUnit
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
 @Composable
@@ -344,12 +347,34 @@ fun WatchlistScreen(
 
     // 用 rememberSaveable 而非 remember：旋屏/进程恢复后保留搜索关键词，与同文件其他 UI 状态保持一致
     var searchQuery by rememberSaveable { mutableStateOf("") }
+    // 防抖后的搜索词：输入框仍显示原始 searchQuery，过滤统一使用 debouncedQuery，
+    // 停止输入 120ms 后才触发全量过滤，避免每敲一个字符在主线程重算 6 个列表。
+    var debouncedQuery by remember { mutableStateOf(searchQuery) }
+    LaunchedEffect(Unit) {
+        snapshotFlow { searchQuery }
+            .debounce(120)
+            .collect { debouncedQuery = it }
+    }
     var isRefreshing by remember { mutableStateOf(false) }
     // 弹性下拉刷新状态
     var overscrollOffset by remember { mutableStateOf(0f) }
     val density = LocalDensity.current
     val triggerThreshold = with(density) { 80.dp.toPx() } // 触发刷新的阈值
-    val isThresholdReached = overscrollOffset >= triggerThreshold
+    // 弹性下拉偏移动画值（px）：指示器与 grid 只在 graphicsLayer 绘制阶段读取该值，
+    // 不参与组合期读取，避免下拉过程中每帧驱动整屏重组。
+    val overscrollAnim = remember { Animatable(0f) }
+    // 在协程中通过 snapshotFlow 观察下拉偏移（不产生组合期状态依赖）：
+    // 拖动中瞬时跟随，松手（offset 归零）后弹簧回弹。
+    LaunchedEffect(Unit) {
+        snapshotFlow { overscrollOffset }
+            .collect { target ->
+                if (target == 0f) {
+                    overscrollAnim.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 400f))
+                } else {
+                    overscrollAnim.snapTo(target)
+                }
+            }
+    }
     val gridCoroutineScope = rememberCoroutineScope()
     val pullToRefreshConnection = remember {
         object : NestedScrollConnection {
@@ -388,12 +413,6 @@ fun WatchlistScreen(
             }
         }
     }
-    // 弹性偏移动画（松手后弹回）
-    val animatedOverscrollDp by animateDpAsState(
-        targetValue = with(density) { overscrollOffset.toDp() },
-        animationSpec = if (overscrollOffset == 0f) spring(dampingRatio = 0.6f, stiffness = 400f) else tween(0),
-        label = "overscroll"
-    )
     val focusRequester = remember { FocusRequester() }
     val searchInteractionSource = remember { MutableInteractionSource() }
     val focusManager = LocalFocusManager.current
@@ -426,13 +445,30 @@ fun WatchlistScreen(
     val hazeStyle = HazeMaterials.thin()
     val isDark = isAppDarkTheme()
     // 为6种 (mode, tab) 组合各自创建独立的 gridState，彻底隔离滚动位置，
-    // 避免切 tab 时列表位置互相影响
-    val movieGridState = rememberLazyGridState()        // mode=0, tab=0 想看电影
-    val showGridState = rememberLazyGridState()         // mode=0, tab=1 想看电视剧
-    val otherGridState = rememberLazyGridState()        // mode=0, tab=2 想看其他
-    val historyMovieGridState = rememberLazyGridState() // mode=1, tab=0 已看电影
-    val historyShowGridState = rememberLazyGridState()  // mode=1, tab=1 已看电视剧
-    val historyOtherGridState = rememberLazyGridState() // mode=1, tab=2 已看其他
+    // 避免切 tab 时列表位置互相影响。
+    //
+    // 筛选/搜索 token 真正变化时通过 key() 整体重建全部 gridState：
+    // 全新 LazyGridState 天生从 item 0 开始，新列表首帧就处于正确位置，
+    // 不会先被旧滚动位置钳到底部、再由事后 scrollToItem 跳回顶部（两段式跳动）。
+    // 从详情页返回时 token 不变：key 块不重建，rememberSaveable 正常恢复原滚动位置
+    // （HorizontalPager 页面销毁重建 / 进程重建场景由 Saver 持久化兜底）。
+    val filterToken = "$filterState||$debouncedQuery"
+    val gridStates = key(filterToken) {
+        WatchlistGridStates(
+            movies = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() },        // mode=0, tab=0 想看电影
+            shows = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() },         // mode=0, tab=1 想看电视剧
+            others = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() },        // mode=0, tab=2 想看其他
+            historyMovies = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }, // mode=1, tab=0 已看电影
+            historyShows = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() },  // mode=1, tab=1 已看电视剧
+            historyOthers = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }  // mode=1, tab=2 已看其他
+        )
+    }
+    val movieGridState = gridStates.movies
+    val showGridState = gridStates.shows
+    val otherGridState = gridStates.others
+    val historyMovieGridState = gridStates.historyMovies
+    val historyShowGridState = gridStates.historyShows
+    val historyOtherGridState = gridStates.historyOthers
     val scrollToTopProvider = LocalScrollToTopProvider.current
 
     // 根据 selectedMode 和 selectedTab 选择对应的 gridState
@@ -450,18 +486,6 @@ fun WatchlistScreen(
                 firstVisibleItemIndex = currentGridState.layoutInfo.visibleItemsInfo.firstOrNull()?.index,
                 firstVisibleItemScrollOffsetPx = currentGridState.firstVisibleItemScrollOffset
             )
-        }
-    }
-
-    // 筛选条件或搜索词变化时回到顶部：筛选是纯客户端过滤，只改变列表内容而 gridState 引用不变，
-    // Compose 锚点机制在旧 key 大量消失时会错误地把滚动位置推到新列表末尾（跳到底部）。
-    // 统一滚动到顶部保证筛选后从列表头部看结果。
-    LaunchedEffect(filterState, searchQuery) {
-        listOf(
-            movieGridState, showGridState, otherGridState,
-            historyMovieGridState, historyShowGridState, historyOtherGridState
-        ).forEach { gridState ->
-            gridState.scrollToItem(0)
         }
     }
 
@@ -507,24 +531,33 @@ fun WatchlistScreen(
         isRemoving = false
     }
 
-    // 根据搜索关键词和筛选条件过滤当前 Tab 的列表
-    val filteredMovies = remember(uiState.movies, searchQuery, filterState) {
-        applyFilterAndSort(uiState.movies, searchQuery, filterState)
+    // 根据搜索关键词和筛选条件过滤当前 Tab 的列表。
+    // 每个列表在数据不变时预计算一次 SearchIndex（小写标题、拼音全拼/缩写、类型集合、
+    // 预解析的 listedAt epochMillis），过滤循环内只做 contains 比较与数字比较，不再分配中间对象。
+    // 搜索使用防抖后的 debouncedQuery：输入期间只更新输入框，停止输入 120ms 后才重算。
+    val movieSearchIndex = remember(uiState.movies) { buildSearchIndex(uiState.movies) }
+    val showSearchIndex = remember(uiState.shows) { buildSearchIndex(uiState.shows) }
+    val otherSearchIndex = remember(uiState.others) { buildSearchIndex(uiState.others) }
+    val historyMovieSearchIndex = remember(uiState.historyMovies) { buildSearchIndex(uiState.historyMovies) }
+    val historyShowSearchIndex = remember(uiState.historyShows) { buildSearchIndex(uiState.historyShows) }
+    val historyOtherSearchIndex = remember(uiState.historyOthers) { buildSearchIndex(uiState.historyOthers) }
+    val filteredMovies = remember(uiState.movies, movieSearchIndex, debouncedQuery, filterState) {
+        applyFilterAndSort(uiState.movies, movieSearchIndex, debouncedQuery, filterState)
     }
-    val filteredShows = remember(uiState.shows, searchQuery, filterState) {
-        applyFilterAndSort(uiState.shows, searchQuery, filterState)
+    val filteredShows = remember(uiState.shows, showSearchIndex, debouncedQuery, filterState) {
+        applyFilterAndSort(uiState.shows, showSearchIndex, debouncedQuery, filterState)
     }
-    val filteredOthers = remember(uiState.others, searchQuery, filterState) {
-        applyFilterAndSort(uiState.others, searchQuery, filterState)
+    val filteredOthers = remember(uiState.others, otherSearchIndex, debouncedQuery, filterState) {
+        applyFilterAndSort(uiState.others, otherSearchIndex, debouncedQuery, filterState)
     }
-    val filteredHistoryMovies = remember(uiState.historyMovies, searchQuery, filterState) {
-        applyFilterAndSort(uiState.historyMovies, searchQuery, filterState)
+    val filteredHistoryMovies = remember(uiState.historyMovies, historyMovieSearchIndex, debouncedQuery, filterState) {
+        applyFilterAndSort(uiState.historyMovies, historyMovieSearchIndex, debouncedQuery, filterState)
     }
-    val filteredHistoryShows = remember(uiState.historyShows, searchQuery, filterState) {
-        applyFilterAndSort(uiState.historyShows, searchQuery, filterState)
+    val filteredHistoryShows = remember(uiState.historyShows, historyShowSearchIndex, debouncedQuery, filterState) {
+        applyFilterAndSort(uiState.historyShows, historyShowSearchIndex, debouncedQuery, filterState)
     }
-    val filteredHistoryOthers = remember(uiState.historyOthers, searchQuery, filterState) {
-        applyFilterAndSort(uiState.historyOthers, searchQuery, filterState)
+    val filteredHistoryOthers = remember(uiState.historyOthers, historyOtherSearchIndex, debouncedQuery, filterState) {
+        applyFilterAndSort(uiState.historyOthers, historyOtherSearchIndex, debouncedQuery, filterState)
     }
 
     // 获取当前 tab 对应的 items（用于多选操作）
@@ -547,6 +580,9 @@ fun WatchlistScreen(
         else -> uiState.isLoadingHistoryOthers
     }
 
+    // 海报 URL 列表：列表内容不变时复用同一实例，避免每次重组都 O(n) 重建导致
+    // rememberCachedPosterAmbientColor 重新构建缓存 key 与重跑缓存读取。
+    val posterUrls = remember(currentItems) { currentItems.mapNotNull { it.posterUrl } }
     val watchlistGlassScene = glassSceneForContent(
         contentCount = currentItems.size,
         readabilityDemand = when {
@@ -556,7 +592,7 @@ fun WatchlistScreen(
             else -> 0.52f
         },
         ambientColor = rememberCachedPosterAmbientColor(
-            posterUrls = currentItems.mapNotNull { it.posterUrl },
+            posterUrls = posterUrls,
             fallback = MaterialTheme.colorScheme.background
         ),
         contentCapacity = 40,
@@ -647,31 +683,16 @@ fun WatchlistScreen(
             ) {
                 val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     
-                // 弹性下拉刷新指示器
-                if (overscrollOffset > 0f || isRefreshing) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = statusBarHeight + 60.dp)
-                            .graphicsLayer { translationY = animatedOverscrollDp.toPx() },
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Refresh,
-                            contentDescription = null,
-                            modifier = Modifier.size(26.dp),
-                            tint = if (isThresholdReached) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = if (isRefreshing) stringResource(R.string.watchlist_refreshing)
-                            else if (isThresholdReached) stringResource(R.string.watchlist_release_to_refresh)
-                            else stringResource(R.string.watchlist_pull_to_refresh),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isThresholdReached) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+                // 弹性下拉刷新指示器：可见性/偏移/阈值都在指示器局部 composable 内通过
+                // lambda 惰性读取，下拉过程中 overscrollOffset 每帧变化只重组指示器自身，
+                // 不再驱动整屏重组。
+                PullToRefreshIndicator(
+                    statusBarHeight = statusBarHeight,
+                    offsetVisible = { overscrollOffset > 0f || isRefreshing },
+                    refreshing = { isRefreshing },
+                    thresholdReached = { overscrollOffset >= triggerThreshold },
+                    offsetY = { overscrollAnim.value }
+                )
     
                 // 空列表引导 UI
                 if (currentItems.isEmpty() && !isCurrentLoading) {
@@ -802,7 +823,7 @@ fun WatchlistScreen(
                         .fillMaxSize()
                         .hazeSource(state = hazeState)
                         .nestedScroll(pullToRefreshConnection)
-                        .graphicsLayer { translationY = animatedOverscrollDp.toPx() }
+                        .graphicsLayer { translationY = overscrollAnim.value }
                     ) {
                         // 根据 selectedMode 和 selectedTab 渲染对应列表
                         val items = currentItems
@@ -1960,6 +1981,46 @@ private fun WatchlistPosterCard(
     }
 }
 
+/**
+ * 弹性下拉刷新指示器：状态读取收敛到本 composable 内部（通过 lambda 惰性读取），
+ * 下拉偏移每帧变化时只重组指示器自身，不影响整屏；偏移位移在 graphicsLayer 绘制阶段读取。
+ */
+@Composable
+private fun PullToRefreshIndicator(
+    statusBarHeight: Dp,
+    offsetVisible: () -> Boolean,
+    refreshing: () -> Boolean,
+    thresholdReached: () -> Boolean,
+    offsetY: () -> Float
+) {
+    if (offsetVisible()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = statusBarHeight + 60.dp)
+                // 参数名避开 GraphicsLayerScope.translationY（同名会遮蔽作用域属性导致无法赋值）
+                .graphicsLayer { translationY = offsetY() },
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            val reached = thresholdReached()
+            Icon(
+                imageVector = Icons.Rounded.Refresh,
+                contentDescription = null,
+                modifier = Modifier.size(26.dp),
+                tint = if (reached) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = if (refreshing()) stringResource(R.string.watchlist_refreshing)
+                else if (reached) stringResource(R.string.watchlist_release_to_refresh)
+                else stringResource(R.string.watchlist_pull_to_refresh),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (reached) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
 /** 骨架屏网格 - 3列，海报占位 + 标题条 + 类型条，呼吸动画 */
 @Composable
 private fun WatchlistSkeletonGrid(modifier: Modifier = Modifier) {
@@ -2301,37 +2362,91 @@ private fun WatchlistFilterSheet(
 }
 
 /**
+ * 预计算的搜索索引：把每次过滤都要做的字符串预处理提前到数据不变时做一次，
+ * 过滤循环内只做 contains 比较，避免每 item 重复 lowercase/split/拼音转换/时间解析。
+ *
+ * - lowerTitle/lowerOriginalTitle：小写后的标题与原始标题，contains 时不再临时分配小写串
+ * - pinyinIndex/pinyinCompact：displayTitle 的拼音全拼（含空格）与去空格紧凑版
+ * - pinyinAbbr：displayTitle 拼音首字母缩写（如 "hsbdla"）
+ * - genreSet：item.genres 预切分（`,`/`·`）并 trim 后的集合，命中判断不再反复 split
+ * - listedAtEpochMillis：预解析的标记时间（epochMillis，失败为 null），
+ *   时间区间过滤直接比较数字，不再每 item Instant.parse
+ */
+private class SearchIndex(
+    val lowerTitle: String,
+    val lowerOriginalTitle: String,
+    val pinyinIndex: String?,
+    val pinyinCompact: String?,
+    val pinyinAbbr: String?,
+    val genreSet: Set<String>,
+    val listedAtEpochMillis: Long?
+)
+
+private fun buildSearchIndex(item: MediaUiItem): SearchIndex {
+    val pinyinIndex = PinyinSearch.buildIndex(item.displayTitle)
+    return SearchIndex(
+        lowerTitle = item.displayTitle.lowercase(),
+        lowerOriginalTitle = item.title.lowercase(),
+        pinyinIndex = pinyinIndex,
+        // 去空格紧凑版，避免过滤循环里每次 replace 分配新串
+        pinyinCompact = pinyinIndex?.replace(" ", ""),
+        pinyinAbbr = pinyinIndex?.let { PinyinSearch.abbreviationOf(it) },
+        genreSet = if (item.genres.isBlank()) emptySet()
+        else item.genres.split(",", "·").map { it.trim() }.filter { it.isNotEmpty() }.toSet(),
+        listedAtEpochMillis = runCatching { if (item.listedAt.isBlank()) null else Instant.parse(item.listedAt).toEpochMilli() }.getOrNull()
+    )
+}
+
+private fun buildSearchIndex(items: List<MediaUiItem>): Map<String, SearchIndex> =
+    items.associate { it.selectionKey to buildSearchIndex(it) }
+
+/**
  * 应用搜索 + 筛选条件，并按标记时间排序。
- * - 搜索：标题/displayTitle 包含关键词（忽略大小写）
+ * - 搜索：标题/displayTitle 包含关键词（忽略大小写），拼音匹配用预计算的索引
  * - 类型：多选，item.genres（按 `,` 或 `·` 分隔）与选中类型有交集即通过；未选则全部通过
  * - 年份：按年代多选匹配（null year 视为不通过；未选年代则全部通过）
- * - 标记时间：按预设区间过滤（7天/30天/全部）
+ * - 标记时间：按预设区间过滤（7天/30天/全部），用预解析的 epochMillis 比较
  * - Trakt 评分：item.traktRating 落在区间内
  * - 排序：按 listedAt（ISO 字符串天然有序）升降序
+ *
+ * 过滤语义与旧实现完全一致：搜索只在直接包含不命中时才尝试拼音匹配，
+ * 拼音匹配条件与旧 PinyinSearch.matches 相同（查询含非 ASCII 字母时跳过）；
+ * 其余条件逐条短路判断，排序字段与方向不变。
  */
 private fun applyFilterAndSort(
     items: List<MediaUiItem>,
+    searchIndex: Map<String, SearchIndex>,
     searchQuery: String,
     filter: FilterState
 ): List<MediaUiItem> {
+    // 时间区间只在入口取一次当前时间，避免每 item 重复 Instant.now()
+    val nowMillis = Instant.now().toEpochMilli()
     val filtered = items.filter { item ->
-        // 搜索
-        val matchesSearch = searchQuery.isBlank() || matchesSearchQuery(item, searchQuery)
+        // 搜索（查询为空则全部通过）
+        val matchesSearch = if (searchQuery.isBlank()) true else {
+            val index = searchIndex[item.selectionKey]
+            val q = searchQuery.lowercase()
+            if (index == null) false
+            else index.lowerTitle.contains(q) || index.lowerOriginalTitle.contains(q) ||
+                // 查询纯 ASCII（无非 ASCII 字母，与旧实现一致）时启用拼音匹配
+                (q.isAsciiLettersOnly() && index.pinyinIndex != null &&
+                    (index.pinyinIndex.contains(q) ||
+                        index.pinyinCompact?.contains(q) == true ||
+                        index.pinyinAbbr?.startsWith(q) == true))
+        }
         if (!matchesSearch) return@filter false
-        // 类型多选（按 `,` 或 `·` 分隔）
+        // 类型多选（预切分集合交集判断）
         val matchesGenres = filter.selectedGenres.isEmpty() ||
-            (item.genres.isNotEmpty() && filter.selectedGenres.any { g ->
-                item.genres.split(",", "·").any { it.trim() == g }
-            })
+            searchIndex[item.selectionKey]?.genreSet?.any { it in filter.selectedGenres } == true
         if (!matchesGenres) return@filter false
         // 年代多选（未选年代则全部通过；null year 视为不通过）
         val matchesDecade = filter.selectedDecadeKeys.isEmpty() ||
             (item.year != null && ((item.year / 10) * 10) in filter.selectedDecadeKeys)
         if (!matchesDecade) return@filter false
-        // 标记时间区间
+        // 标记时间区间（epochMillis 数字比较，解析失败视为不通过）
         val matchesMarkedTime = when (filter.markedTimePreset) {
-            MarkedTimePreset.SEVEN_DAYS -> isWithinDays(item.listedAt, 7)
-            MarkedTimePreset.THIRTY_DAYS -> isWithinDays(item.listedAt, 30)
+            MarkedTimePreset.SEVEN_DAYS -> isWithinDays(searchIndex[item.selectionKey]?.listedAtEpochMillis, nowMillis, 7)
+            MarkedTimePreset.THIRTY_DAYS -> isWithinDays(searchIndex[item.selectionKey]?.listedAtEpochMillis, nowMillis, 30)
             MarkedTimePreset.ALL -> true
         }
         if (!matchesMarkedTime) return@filter false
@@ -2347,30 +2462,30 @@ private fun applyFilterAndSort(
     }
 }
 
-/**
- * 看单搜索匹配：
- * - 直接匹配：displayTitle（中文名）/ title（原句）包含关键词（忽略大小写）
- * - 拼音匹配：查询为纯 ASCII 字母时，用中文名的拼音匹配
- *   - 全拼：如 "花束般的恋爱" → "huashubandelianai"，输入 "huashu" 命中
- *   - 首字母缩写：如 "hsbdla"，输入 "hsbd" 命中
- *   拼音匹配仅在查询不含汉字时启用，避免干扰中文直接匹配
- */
-private fun matchesSearchQuery(item: MediaUiItem, query: String): Boolean {
-    if (item.displayTitle.contains(query, ignoreCase = true) ||
-        item.title.contains(query, ignoreCase = true)
-    ) return true
-    // 查询纯 ASCII（拼音输入）时启用拼音匹配
-    return PinyinSearch.matches(item.displayTitle, query)
+/** 判断 epochMillis 是否在最近 N 天（以 nowMillis 为基准）内；null（解析失败）返回 false */
+private fun isWithinDays(epochMillis: Long?, nowMillis: Long, days: Long): Boolean {
+    if (epochMillis == null) return false
+    return epochMillis > nowMillis - days * 24L * 60L * 60L * 1000L
 }
 
-/** 判断 ISO 时间字符串是否在最近 N 天内（解析失败返回 false） */
-private fun isWithinDays(isoString: String, days: Long): Boolean {
-    if (isoString.isBlank()) return false
-    return try {
-        val instant = Instant.parse(isoString)
-        val cutoff = Instant.now().minus(days, ChronoUnit.DAYS)
-        instant.isAfter(cutoff)
-    } catch (e: Exception) {
-        false
-    }
-}
+/**
+ * 查询是否可用于拼音匹配：不含任何非 ASCII 字母（标点、数字、空格等允许），
+ * 与旧实现 PinyinSearch.matches 的判断一致。
+ */
+private fun String.isAsciiLettersOnly(): Boolean =
+    all { !it.isLetter() || it in 'a'..'z' || it in 'A'..'Z' }
+
+/**
+ * 6 种 (mode, tab) 组合各自的 LazyGridState 持有者。
+ * 在 key(filterToken) 块内整体创建：筛选/搜索 token 变化时全部重建（新状态从 item 0
+ * 开始，避免旧位置先被钳到底部再跳回顶部的两段式跳动），token 不变时随 rememberSaveable
+ * 跨页面销毁/进程重建恢复原位置。
+ */
+private class WatchlistGridStates(
+    val movies: LazyGridState,
+    val shows: LazyGridState,
+    val others: LazyGridState,
+    val historyMovies: LazyGridState,
+    val historyShows: LazyGridState,
+    val historyOthers: LazyGridState
+)
