@@ -226,7 +226,15 @@ class DiscoverViewModel @Inject constructor(
                 _watchlistWatchedIds.value = TraktRepository.WatchlistWatchedIds()
                 return@launch
             }
-            traktRepository.loadWatchlistWatchedIds()
+            // 仓库层网络失败会向上抛（约定由调用方兜底）；此处失败仅保留现有状态，
+            // 未捕获会把协程异常抛到全局 handler 直接杀死进程（断网时必现）
+            try {
+                traktRepository.loadWatchlistWatchedIds()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("DiscoverVM", "loadWatchlistWatchedIds failed: ${e.message}")
+            }
             _watchlistWatchedIds.value = traktRepository.getWatchlistWatchedIds()
         }
     }

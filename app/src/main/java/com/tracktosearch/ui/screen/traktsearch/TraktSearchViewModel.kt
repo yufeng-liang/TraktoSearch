@@ -135,7 +135,15 @@ class TraktSearchViewModel @Inject constructor(
                 return@launch
             }
             traktRepository.getWatchlistWatchedIds()?.let { _watchlistWatchedIds.value = it }
-            traktRepository.loadWatchlistWatchedIds().let { _watchlistWatchedIds.value = it }
+            // 仓库层网络失败会向上抛（约定由调用方兜底）；失败仅保留上面的缓存值，
+            // 未捕获会把协程异常抛到全局 handler 直接杀死进程（断网时必现）
+            try {
+                traktRepository.loadWatchlistWatchedIds().let { _watchlistWatchedIds.value = it }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("TraktSearchVM", "loadWatchlistWatchedIds failed: ${e.message}")
+            }
         }
     }
 
