@@ -33,7 +33,9 @@ class TmdbRepository @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     companion object {
-        private val IMAGE_BASE_URL = TmdbImageUrls.W500
+        // 列表/卡片海报统一 w342：卡片显示约 318px，w342 足够且下载量比 w500 省 30-40%；
+        // 详情页 header 与全屏大图在 UI 层用 swapSize 升级到 w780/original 保证清晰度
+        private val IMAGE_BASE_URL = TmdbImageUrls.W342
         private const val TTL_DETAIL = Long.MAX_VALUE       // 详情（海报路径、tmdbId、imdbId 等不变字段）永久缓存
         private const val TTL_CREDITS = Long.MAX_VALUE      // 演职员信息永久缓存（头像、姓名、角色不变）
         private const val TTL_SEARCH = 60 * 60 * 1000L       // 搜索/ID转换 1 小时

@@ -19,6 +19,7 @@ import kotlinx.coroutines.coroutineScope
 private const val MAX_AMBIENT_POSTERS = 12
 private val POSTER_CACHE_SIZES = listOf(
     TmdbImageUrls.W200,
+    TmdbImageUrls.W342,
     TmdbImageUrls.W500,
     TmdbImageUrls.W780,
     TmdbImageUrls.H632
@@ -28,7 +29,7 @@ private val POSTER_CACHE_SIZES = listOf(
 /** 同一海报可能以不同 TMDB 尺寸写入缓存，读取时尝试所有已使用尺寸。 */
 internal fun posterCacheKeyCandidates(path: String): List<String> {
     val value = path.trim().takeIf { it.isNotEmpty() } ?: return emptyList()
-    val tmdbPattern = Regex("^(https?://image\\.tmdb\\.org/t/p/)([^/]+)(/.*)$")
+    val tmdbPattern = Regex("^(https?://[^/]+/.*?/t/p/)([^/]+)(/.*)$")
     val match = tmdbPattern.matchEntire(value)
     if (match != null) {
         return POSTER_CACHE_SIZES.map { size ->
