@@ -197,6 +197,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.regex.Pattern
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -1855,6 +1856,26 @@ private fun PopularSearchesSection(
 
 // ========== 豆瓣热榜组件（供 DiscoverScreen 复用） ==========
 
+/** 标题内评分提取正则：匹配【9.2】形式，文件级缓存避免每次组合内联编译。 */
+private val DOUBAN_RATING_IN_TITLE = Pattern.compile("【(\\d+\\.?\\d*)】")
+
+/** 去除标题内评分【9.2】前缀部分。 */
+private val DOUBAN_RATING_BRACKET = Pattern.compile("【\\d+\\.?\\d*】\\s*")
+
+/** 去除标题开头排名 #1 前缀。 */
+private val DOUBAN_RANK_PREFIX = Pattern.compile("^#\\d+\\s*")
+
+/** 解析豆瓣热榜标题：返回 (评分, 去除评分与排名前缀后的展示标题)。 */
+private fun parseDoubanHotTitle(title: String): Pair<Double?, String> {
+    val matcher = DOUBAN_RATING_IN_TITLE.matcher(title)
+    val rating = if (matcher.find()) matcher.group(1)?.toDoubleOrNull() else null
+    val displayTitle = DOUBAN_RATING_BRACKET
+        .matcher(title)
+        .replaceAll("")
+        .let { DOUBAN_RANK_PREFIX.matcher(it).replaceAll("") }
+    return rating to displayTitle
+}
+
 @Composable
 fun DoubanHotCategorySection(
     category: DoubanHotCategory,
@@ -1939,12 +1960,8 @@ fun DoubanHotCard(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val ratingMatch = Regex("【(\\d+\\.?\\d*)】").find(item.title)
-    val rating = ratingMatch?.groupValues?.get(1)?.toDoubleOrNull()
-    val displayTitle = item.title
-        .replace(Regex("【\\d+\\.?\\d*】\\s*"), "")
-        .replace(Regex("^#\\d+\\s*"), "")
-    val ratingHazeState = remember { HazeState() }
+    // 标题解析结果只依赖 item.title，remember 缓存避免每次重组重复正则匹配/替换
+    val (rating, displayTitle) = remember(item.title) { parseDoubanHotTitle(item.title) }
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -1982,28 +1999,13 @@ fun DoubanHotCard(
                 coil.compose.AsyncImage(
                     model = imageRequest,
                     contentDescription = displayTitle,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .then(
-                            if (rating != null) {
-                                Modifier.hazeSource(state = ratingHazeState)
-                            } else {
-                                Modifier
-                            }
-                        ),
+                    modifier = Modifier.fillMaxSize(),
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop
                 )
             } else {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(
-                            if (rating != null) {
-                                Modifier.hazeSource(state = ratingHazeState)
-                            } else {
-                                Modifier
-                            }
-                        )
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
@@ -2127,12 +2129,8 @@ private fun DoubanHotGridItem(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val ratingMatch = Regex("【(\\d+\\.?\\d*)】").find(item.title)
-    val rating = ratingMatch?.groupValues?.get(1)?.toDoubleOrNull()
-    val displayTitle = item.title
-        .replace(Regex("【\\d+\\.?\\d*】\\s*"), "")
-        .replace(Regex("^#\\d+\\s*"), "")
-    val ratingHazeState = remember { HazeState() }
+    // 标题解析结果只依赖 item.title，remember 缓存避免每次重组重复正则匹配/替换
+    val (rating, displayTitle) = remember(item.title) { parseDoubanHotTitle(item.title) }
 
     Card(
         onClick = { onClick() },
@@ -2161,28 +2159,12 @@ private fun DoubanHotGridItem(
                     coil.compose.AsyncImage(
                         model = imageRequest,
                         contentDescription = displayTitle,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .then(
-                                if (rating != null) {
-                                    Modifier.hazeSource(state = ratingHazeState)
-                                } else {
-                                    Modifier
-                                }
-                            ),
+                        modifier = Modifier.fillMaxSize(),
                         contentScale = androidx.compose.ui.layout.ContentScale.Crop
                     )
                 } else {
                     Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .then(
-                                if (rating != null) {
-                                    Modifier.hazeSource(state = ratingHazeState)
-                                } else {
-                                    Modifier
-                                }
-                            ),
+                        modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
