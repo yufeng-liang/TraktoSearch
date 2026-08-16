@@ -24,6 +24,11 @@ export async function onRequest(context) {
     const url = new URL(request.url);
     const upstreamPath = url.pathname.slice(PUBLIC_PREFIX.length) || '/';
 
+    // 路由：/api/tmdb-image/* → 直接代理 TMDB 图片（不经过 Service Binding）
+    if (upstreamPath.startsWith('/api/tmdb-image/')) {
+        return handleTmdbImage(request, upstreamPath, context);
+    }
+
     // 路由：/feedback-api/* → feedback-worker，其余 → auth-worker
     let bindingName = 'AUTH_WORKER';
     if (upstreamPath.startsWith('/feedback-api/')) {
@@ -190,4 +195,93 @@ function jsonResponse(body, status) {
             'Cache-Control': 'no-store',
         },
     });
+}
+
+/**
+ * TMDB 图片代理：App 国内直连 image.tmdb.org 慢/不稳定，改为走 Cloudflare Pages 边缘节点。
+ * 图片 URL 内容不变，长 TTL 边缘缓存（30 天），命中后零回源。
+ * 路径白名单严格校验，防止网关变成开放代理被滥用。
+ */
+const TMDB_IMAGE_ALLOWED_SIZES = new Set(['w92', 'w185', 'w342', 'w500', 'w780', 'original', 'h632']);
+
+async function handleTmdbImage(request, upstreamPath, context) {
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+        return jsonResponse({ code: 'METHOD_NOT_ALLOWED', message: 'Method not allowed' }, 405);
+    }
+
+    // 校验结构：/api/tmdb-image/t/p/<size>/<file>.jpg
+    const rest = upstreamPath.slice('/api/tmdb-image'.length); // /t/p/...
+    const parts = rest.split('/');
+    if (parts.length < 5 || parts[0] !== '' || parts[1] !== 't' || parts[2] !== 'p') {
+        return jsonResponse({ code: 'INVALID_IMAGE_PATH', message: 'Invalid image path' }, 400);
+    }
+    const size = parts[3];
+    if (!TMDB_IMAGE_ALLOWED_SIZES.has(size)) {
+        return jsonResponse({ code: 'INVALID_IMAGE_SIZE', message: 'Invalid image size' }, 400);
+    }
+    const filePart = parts.slice(4).join('/');
+    if (!/^[A-Za-z0-9_\-./]+\.(jpg|jpeg|png|webp)$/.test(filePart)) {
+        return jsonResponse({ code: 'INVALID_IMAGE_FILE', message: 'Invalid image file' }, 400);
+    }
+
+    const upstreamUrl = 'https://image.tmdb.org/t/p/' + size + '/' + filePart;
+
+    // 边缘缓存（30 天）：用网关内部 URL 作 key，与 API 缓存隔离
+    const cache = globalThis.caches?.default;
+    const cacheKey = new Request('https://gateway.internal' + upstreamPath, { method: 'GET' });
+    if (cache) {
+        try {
+            const cached = await cache.match(cacheKey);
+            if (cached) {
+                const headers = new Headers(cached.headers);
+                headers.set('X-Gateway-Cache', 'HIT');
+                return new Response(cached.body, {
+                    status: cached.status,
+                    statusText: cached.statusText,
+                    headers,
+                });
+            }
+        } catch {
+            // 缓存不可用继续回源，不影响可用性
+        }
+    }
+
+    try {
+        const upstream = await fetch(upstreamUrl, {
+            headers: { 'User-Agent': 'TrackToSearch-ImageProxy/1.0' },
+            cf: { cacheTtl: 2592000, cacheEverything: true },
+        });
+
+        if (!upstream.ok) {
+            // 上游错误（4xx/5xx）不缓存，原样转发状态码
+            const headers = new Headers(upstream.headers);
+            headers.set('Content-Type', upstream.headers.get('Content-Type') || 'image/jpeg');
+            headers.set('Cache-Control', 'no-store');
+            return new Response(upstream.body, { status: upstream.status, headers });
+        }
+
+        const headers = new Headers(upstream.headers);
+        headers.set('Cache-Control', 'public, max-age=86400, s-maxage=2592000, immutable');
+        headers.set('Content-Type', upstream.headers.get('Content-Type') || 'image/jpeg');
+        headers.set('X-Gateway-Cache', 'MISS');
+        for (const [name, value] of Object.entries(corsHeaders())) {
+            if (!headers.has(name)) headers.set(name, value);
+        }
+
+        const response = new Response(upstream.body, { status: 200, statusText: 'OK', headers });
+        if (cache) {
+            const cacheWrite = cache.put(cacheKey, response.clone()).catch(() => undefined);
+            if (typeof context.waitUntil === 'function') {
+                context.waitUntil(cacheWrite);
+            } else {
+                await cacheWrite;
+            }
+        }
+        return response;
+    } catch {
+        return new Response('Upstream unavailable', {
+            status: 502,
+            headers: { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' },
+        });
+    }
 }
