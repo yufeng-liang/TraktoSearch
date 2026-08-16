@@ -71,8 +71,6 @@ import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.YearBadge
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
 
 /** 通用电影卡片（复用豆瓣卡片样式） */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -108,10 +106,13 @@ internal fun MovieCard(
         && isCurrentTab
         && myClickToken != 0
         && myClickToken == activeClickToken
-    val posterUrl = posterPath?.let {
-        if (it.startsWith("http")) it
-        else if (it.toIntOrNull() != null) null // TMDB ID 无法直接拼海报 URL，需要通过详情接口获取
-        else TmdbImageUrls.build(it)
+    // posterUrl 仅依赖 posterPath，包进 remember 避免每次重组重复 toIntOrNull/TmdbImageUrls.build 解析
+    val posterUrl = remember(posterPath) {
+        posterPath?.let {
+            if (it.startsWith("http")) it
+            else if (it.toIntOrNull() != null) null // TMDB ID 无法直接拼海报 URL，需要通过详情接口获取
+            else TmdbImageUrls.build(it)
+        }
     }
 
     val interactionSource = remember { MutableInteractionSource() }
@@ -121,7 +122,6 @@ internal fun MovieCard(
         label = "movie_card_scale"
     )
     val ratingValue = rating?.toDoubleOrNull()
-    val ratingHazeState = remember { HazeState() }
     val posterShape = RoundedCornerShape(16.dp)
     // 缓存顶部高光渐变 Brush,避免每次重组创建新实例
     val topHighlightBrush = remember { Brush.verticalGradient(0f to Color.White.copy(alpha = 0.15f), 1f to Color.Transparent) }
@@ -180,27 +180,13 @@ internal fun MovieCard(
                     model = imageRequest,
                     contentDescription = title,
                     modifier = Modifier
-                        .fillMaxSize()
-                        .then(
-                            if (ratingValue != null) {
-                                Modifier.hazeSource(state = ratingHazeState)
-                            } else {
-                                Modifier
-                            }
-                        ),
+                        .fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
             } else {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(
-                            if (ratingValue != null) {
-                                Modifier.hazeSource(state = ratingHazeState)
-                            } else {
-                                Modifier
-                            }
-                        )
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
@@ -254,19 +240,30 @@ internal fun MovieCard(
                 }
             }
             if (ratingValue != null) {
-                val badgeModifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(2.dp)
-                if (isDoubanRating) {
-                    DoubanRatingBadge(
-                        rating = ratingValue,
-                        modifier = badgeModifier
-                    )
-                } else {
-                    RatingBadge(
-                        rating = ratingValue,
-                        modifier = badgeModifier
-                    )
+                // 评分角标：黑半透明 scrim 底 + 圆角边框，替代原 per-card HazeState 毛玻璃底。
+                // 与并行任务统一方案一致：去掉每张卡独立的 HazeState/hazeSource，提升 LazyRow 滑动流畅度。
+                // （这是本任务唯一的视觉变化：角标由纯阴影文字改为半透明底 chip，文字/边框样式保留）
+                val badgeShape = RoundedCornerShape(8.dp)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(2.dp)
+                        .clip(badgeShape)
+                        .background(Color.Black.copy(alpha = 0.45f))
+                        .border(
+                            width = 1.dp,
+                            color = Color.White.copy(alpha = 0.18f),
+                            shape = badgeShape
+                        )
+                        // 内部 padding 不设水平值：宽度由 RatingBadge 自带的 5dp 水平 padding 决定；
+                        // 顶部留 4dp 容纳 RatingBadge 内部的 -2dp 上移，避免星星图标被 chip 裁切
+                        .padding(top = 4.dp)
+                ) {
+                    if (isDoubanRating) {
+                        DoubanRatingBadge(rating = ratingValue)
+                    } else {
+                        RatingBadge(rating = ratingValue)
+                    }
                 }
             }
             if (isResolving) {

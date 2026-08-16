@@ -70,6 +70,10 @@ import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 
+// LazyRow 内容类型常量：Compose 依据 contentType 复用滚动复用池中的 item 布局，减少重组与重新测量
+private const val CONTENT_TYPE_MEDIA_CARD = "media_card"
+private const val CONTENT_TYPE_SKELETON = "skeleton"
+
 @Composable
 internal fun TmdbMovieSection(
     title: String,
@@ -94,7 +98,11 @@ internal fun TmdbMovieSection(
         when {
             isLoading -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 5.dp)) {
-                    items(5) { DoubanHotCardSkeleton() }
+                    items(
+                        count = 5,
+                        key = { index -> "skeleton_$index" },
+                        contentType = { CONTENT_TYPE_SKELETON }
+                    ) { DoubanHotCardSkeleton() }
                 }
             }
             error != null -> {
@@ -107,7 +115,7 @@ internal fun TmdbMovieSection(
                 val internalState = rememberLazyListState()
                 val effectiveState = lazyListState ?: internalState
                 LazyRow(state = effectiveState, horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 5.dp)) {
-                    itemsIndexed(movies, key = { _, movie -> "tmdb_movie_${movie.id}" }, contentType = { _, _ -> "media_card" }) { index, movie ->
+                    itemsIndexed(movies, key = { _, movie -> "tmdb_movie_${movie.id}" }, contentType = { _, _ -> CONTENT_TYPE_MEDIA_CARD }) { index, movie ->
                         Box(modifier = Modifier.fadeSlideIn(index)) {
                             MovieCard(
                                 title = movie.title,
@@ -154,7 +162,11 @@ internal fun TraktRecommendationSection(
             }
             isLoading -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 5.dp)) {
-                    items(5) { DoubanHotCardSkeleton() }
+                    items(
+                        count = 5,
+                        key = { index -> "skeleton_$index" },
+                        contentType = { CONTENT_TYPE_SKELETON }
+                    ) { DoubanHotCardSkeleton() }
                 }
             }
             error != null -> {
@@ -165,7 +177,7 @@ internal fun TraktRecommendationSection(
             }
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 5.dp)) {
-                    itemsIndexed(movies, key = { _, movie -> "trakt_movie_${movie.ids.trakt}_${movie.ids.tmdb}" }, contentType = { _, _ -> "media_card" }) { index, movie ->
+                    itemsIndexed(movies, key = { _, movie -> "trakt_movie_${movie.ids.trakt}_${movie.ids.tmdb}" }, contentType = { _, _ -> CONTENT_TYPE_MEDIA_CARD }) { index, movie ->
                         Box(modifier = Modifier.fadeSlideIn(index)) {
                             MovieCard(
                                 title = movie.title,
@@ -209,14 +221,18 @@ internal fun TraktTrendingMovieSection(
         when {
             isLoading -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 5.dp)) {
-                    items(5) { DoubanHotCardSkeleton() }
+                    items(
+                        count = 5,
+                        key = { index -> "skeleton_$index" },
+                        contentType = { CONTENT_TYPE_SKELETON }
+                    ) { DoubanHotCardSkeleton() }
                 }
             }
             error != null -> ErrorRetryRow(error = error, onRetry = onRetry)
             items.isEmpty() -> EmptyRow()
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 5.dp)) {
-                    itemsIndexed(items, key = { _, item -> "trending_movie_${item.movie.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
+                    itemsIndexed(items, key = { _, item -> "trending_movie_${item.movie.ids.trakt}" }, contentType = { _, _ -> CONTENT_TYPE_MEDIA_CARD }) { index, item ->
                         Box(modifier = Modifier.fadeSlideIn(index)) {
                             MovieCard(
                                 title = item.movie.title,
@@ -260,14 +276,18 @@ internal fun TraktTrendingShowSection(
         when {
             isLoading -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 5.dp)) {
-                    items(5) { DoubanHotCardSkeleton() }
+                    items(
+                        count = 5,
+                        key = { index -> "skeleton_$index" },
+                        contentType = { CONTENT_TYPE_SKELETON }
+                    ) { DoubanHotCardSkeleton() }
                 }
             }
             error != null -> ErrorRetryRow(error = error, onRetry = onRetry)
             items.isEmpty() -> EmptyRow()
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 5.dp)) {
-                    itemsIndexed(items, key = { _, item -> "show_rec_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
+                    itemsIndexed(items, key = { _, item -> "show_rec_${item.show.ids.trakt}" }, contentType = { _, _ -> CONTENT_TYPE_MEDIA_CARD }) { index, item ->
                         Box(modifier = Modifier.fadeSlideIn(index)) {
                             MovieCard(
                                 title = item.show.title,
@@ -313,7 +333,11 @@ internal fun TraktAnticipatedSection(
         when {
             isLoading -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 5.dp)) {
-                    items(5) { DoubanHotCardSkeleton() }
+                    items(
+                        count = 5,
+                        key = { index -> "skeleton_$index" },
+                        contentType = { CONTENT_TYPE_SKELETON }
+                    ) { DoubanHotCardSkeleton() }
                 }
             }
             error != null -> ErrorRetryRow(error = error, onRetry = onRetry)
@@ -321,7 +345,7 @@ internal fun TraktAnticipatedSection(
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 5.dp)) {
                     // 先展示电影，再展示剧集
-                    itemsIndexed(anticipatedMovies, key = { _, item -> "anticip_m_${item.movie.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
+                    itemsIndexed(anticipatedMovies, key = { _, item -> "anticip_m_${item.movie.ids.trakt}" }, contentType = { _, _ -> CONTENT_TYPE_MEDIA_CARD }) { index, item ->
                         Box(modifier = Modifier.fadeSlideIn(index)) {
                             MovieCard(
                                 title = item.movie.title,
@@ -337,7 +361,7 @@ internal fun TraktAnticipatedSection(
                             )
                         }
                     }
-                    itemsIndexed(anticipatedShows, key = { _, item -> "anticip_s_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
+                    itemsIndexed(anticipatedShows, key = { _, item -> "anticip_s_${item.show.ids.trakt}" }, contentType = { _, _ -> CONTENT_TYPE_MEDIA_CARD }) { index, item ->
                         Box(modifier = Modifier.fadeSlideIn(anticipatedMovies.size + index)) {
                             MovieCard(
                                 title = item.show.title,
@@ -389,14 +413,18 @@ internal fun TraktShowRecommendationSection(
             }
             isLoading -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 5.dp)) {
-                    items(5) { DoubanHotCardSkeleton() }
+                    items(
+                        count = 5,
+                        key = { index -> "skeleton_$index" },
+                        contentType = { CONTENT_TYPE_SKELETON }
+                    ) { DoubanHotCardSkeleton() }
                 }
             }
             error != null -> ErrorRetryRow(error = error, onRetry = onRetry)
             items.isEmpty() -> EmptyRow()
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 5.dp)) {
-                    itemsIndexed(items, key = { _, item -> "show_rec_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
+                    itemsIndexed(items, key = { _, item -> "show_rec_${item.show.ids.trakt}" }, contentType = { _, _ -> CONTENT_TYPE_MEDIA_CARD }) { index, item ->
                         Box(modifier = Modifier.fadeSlideIn(index)) {
                             MovieCard(
                                 title = item.show.title,
@@ -593,7 +621,11 @@ internal fun DoubanRecommendSection(
 
             is DoubanRecommendState.Loading -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 5.dp)) {
-                    items(5) { DoubanHotCardSkeleton() }
+                    items(
+                        count = 5,
+                        key = { index -> "skeleton_$index" },
+                        contentType = { CONTENT_TYPE_SKELETON }
+                    ) { DoubanHotCardSkeleton() }
                 }
             }
 
@@ -614,7 +646,7 @@ internal fun DoubanRecommendSection(
                         itemsIndexed(
                             items,
                             key = { _, item -> "douban_rec_${state.currentTab.name.lowercase()}_${item.id}" },
-                            contentType = { _, _ -> "media_card" }
+                            contentType = { _, _ -> CONTENT_TYPE_MEDIA_CARD }
                         ) { index, item ->
                             Box(modifier = Modifier.fadeSlideIn(index)) {
                                 MovieCard(
@@ -686,9 +718,33 @@ internal fun CapsuleTabSelector(
     val isDark = isAppDarkTheme()
     val capsuleShape = RoundedCornerShape(50)
     val primaryColor = MaterialTheme.colorScheme.primary
-    val activeGradient = Brush.linearGradient(
-        listOf(primaryColor, primaryColor.copy(alpha = 0.85f))
-    )
+    // 缓存不依赖参数的 Brush/Shadow 对象，避免滑块动画期间每次重组重建（提升滑动流畅度）
+    val activeGradient = remember(primaryColor) {
+        Brush.linearGradient(
+            listOf(primaryColor, primaryColor.copy(alpha = 0.85f))
+        )
+    }
+    val indicatorShadowOuter = remember(primaryColor) {
+        Shadow(
+            radius = 5.dp,
+            color = primaryColor.copy(alpha = 0.30f),
+            offset = DpOffset(3.dp, 3.dp)
+        )
+    }
+    val indicatorShadowHighlight = remember {
+        Shadow(
+            radius = 4.dp,
+            color = Color.White.copy(alpha = 0.40f),
+            offset = DpOffset((-1).dp, (-1).dp)
+        )
+    }
+    val indicatorShadowInner = remember {
+        Shadow(
+            radius = 4.dp,
+            color = Color.White.copy(alpha = 0.25f),
+            offset = DpOffset((-1).dp, (-1).dp)
+        )
+    }
     Box(
         modifier = Modifier
             .height(tabHeight)
@@ -718,29 +774,17 @@ internal fun CapsuleTabSelector(
                 .padding(horizontal = 2.dp, vertical = 2.dp)
                 .dropShadow(
                     shape = capsuleShape,
-                    shadow = Shadow(
-                        radius = 5.dp,
-                        color = primaryColor.copy(alpha = 0.30f),
-                        offset = DpOffset(3.dp, 3.dp)
-                    )
+                    shadow = indicatorShadowOuter
                 )
                 .dropShadow(
                     shape = capsuleShape,
-                    shadow = Shadow(
-                        radius = 4.dp,
-                        color = Color.White.copy(alpha = 0.40f),
-                        offset = DpOffset((-1).dp, (-1).dp)
-                    )
+                    shadow = indicatorShadowHighlight
                 )
                 .clip(capsuleShape)
                 .background(activeGradient)
                 .innerShadow(
                     shape = capsuleShape,
-                    shadow = Shadow(
-                        radius = 4.dp,
-                        color = Color.White.copy(alpha = 0.25f),
-                        offset = DpOffset((-1).dp, (-1).dp)
-                    )
+                    shadow = indicatorShadowInner
                 )
                 )
             }

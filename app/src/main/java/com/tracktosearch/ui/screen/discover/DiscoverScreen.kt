@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -176,7 +177,9 @@ fun DiscoverScreen(
     // HazeMaterials.thin() 读取 MaterialTheme.colorScheme，是 @Composable 函数，不能用 remember 缓存
     // DiscoverScreen 仅在 uiState 变化时重组，主题不变时 HazeStyle 开销可接受
     val discoverHazeStyle = HazeMaterials.thin()
-    val discoverListState = rememberLazyListState()
+    // rememberSaveable + Saver：进入详情页（MAIN 整体销毁）返回后恢复原滚动位置，
+    // 不再回到顶部（与 Watchlist 的 grid 状态策略一致）
+    val discoverListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
     val discoverHasContentUnderTopBar by remember {
         derivedStateOf {
             hasListScrolled(
@@ -199,39 +202,48 @@ fun DiscoverScreen(
     }
 
     val isDark = isAppDarkTheme()
-    val discoverContentCount = uiState.doubanHotCategories.sumOf { it.items.size } +
-        uiState.tmdbPopularMovies.size +
-        uiState.tmdbUpcomingMovies.size +
-        uiState.traktRecommendations.size +
-        uiState.traktTrendingMovies.size +
-        uiState.traktTrendingShows.size +
-        uiState.traktAnticipatedMovies.size +
-        uiState.traktAnticipatedShows.size +
-        uiState.traktShowRecommendations.size +
-        uiState.trendingLists.size
-    val discoverPosterPaths = listOf(
-        uiState.doubanHotCategories.flatMap { category -> category.items.mapNotNull { it.cover } },
-        uiState.tmdbPopularMovies.mapNotNull { it.poster_path },
-        uiState.tmdbUpcomingMovies.mapNotNull { it.poster_path },
-        uiState.traktRecommendations.mapNotNull { it.posterPath },
-        uiState.traktTrendingMovies.mapNotNull { it.movie.posterPath },
-        uiState.traktTrendingShows.mapNotNull { it.show.posterPath },
-        uiState.traktAnticipatedMovies.mapNotNull { it.movie.posterPath },
-        uiState.traktAnticipatedShows.mapNotNull { it.show.posterPath },
-        uiState.traktShowRecommendations.mapNotNull { it.show.posterPath }
-    ).flatten()
+    // 派生聚合仅依赖 uiState：包进 remember 避免滚动/点击等无关重组时反复 sumOf/flatMap 跨 10 个列表计算
+    val discoverContentCount = remember(uiState) {
+        uiState.doubanHotCategories.sumOf { it.items.size } +
+            uiState.tmdbPopularMovies.size +
+            uiState.tmdbUpcomingMovies.size +
+            uiState.traktRecommendations.size +
+            uiState.traktTrendingMovies.size +
+            uiState.traktTrendingShows.size +
+            uiState.traktAnticipatedMovies.size +
+            uiState.traktAnticipatedShows.size +
+            uiState.traktShowRecommendations.size +
+            uiState.trendingLists.size
+    }
+    // 海报路径列表同样只在 uiState 变化时重建；内容未变时保持实例稳定，
+    // 使 rememberCachedPosterAmbientColor 内部 remember(posterUrls) 命中缓存
+    val discoverPosterPaths = remember(uiState) {
+        listOf(
+            uiState.doubanHotCategories.flatMap { category -> category.items.mapNotNull { it.cover } },
+            uiState.tmdbPopularMovies.mapNotNull { it.poster_path },
+            uiState.tmdbUpcomingMovies.mapNotNull { it.poster_path },
+            uiState.traktRecommendations.mapNotNull { it.posterPath },
+            uiState.traktTrendingMovies.mapNotNull { it.movie.posterPath },
+            uiState.traktTrendingShows.mapNotNull { it.show.posterPath },
+            uiState.traktAnticipatedMovies.mapNotNull { it.movie.posterPath },
+            uiState.traktAnticipatedShows.mapNotNull { it.show.posterPath },
+            uiState.traktShowRecommendations.mapNotNull { it.show.posterPath }
+        ).flatten()
+    }
     val discoverAmbientColor = rememberCachedPosterAmbientColor(
         posterUrls = discoverPosterPaths,
         fallback = MaterialTheme.colorScheme.background
     )
-    val discoverLoadingCount = uiState.doubanHotCategories.count { it.isLoading } +
-        listOf(
-            uiState.isLoadingPopular,
-            uiState.isLoadingUpcoming,
-            uiState.isLoadingRecommendations,
-            uiState.isLoadingTrakt,
-            uiState.isLoadingTraktLists
-        ).count { it }
+    val discoverLoadingCount = remember(uiState) {
+        uiState.doubanHotCategories.count { it.isLoading } +
+            listOf(
+                uiState.isLoadingPopular,
+                uiState.isLoadingUpcoming,
+                uiState.isLoadingRecommendations,
+                uiState.isLoadingTrakt,
+                uiState.isLoadingTraktLists
+            ).count { it }
+    }
     val discoverGlassScene = glassSceneForContent(
         contentCount = discoverContentCount,
         readabilityDemand = when {
@@ -377,9 +389,12 @@ fun DiscoverScreen(
                         )
                     )
                     // 按栏目设置顺序过滤可见且存在 Hero 定义的栏目，实现 Hero 卡片排序与显隐联动
-                    val heroCategories = sectionConfigs
-                        .filter { it.visible && it.id in heroCategoryDefs }
-                        .mapNotNull { heroCategoryDefs[it.id] }
+                    // 依赖 sectionConfigs（显隐/顺序）与 uiState（各栏目 count），包进 remember 避免无关重组时重建列表
+                    val heroCategories = remember(sectionConfigs, uiState) {
+                        sectionConfigs
+                            .filter { it.visible && it.id in heroCategoryDefs }
+                            .mapNotNull { heroCategoryDefs[it.id] }
+                    }
                     if (heroCategories.isNotEmpty()) {
                         Row(
                             modifier = Modifier
@@ -451,9 +466,10 @@ fun DiscoverScreen(
                         // 趋势电影（原热门电影，含今日/本周切换）
                         "tmdb-popular" -> {
                             item(key = "tmdb_popular") {
-                                // 今日/本周各自独立的滚动状态，互不影响
-                                val trendingDayListState = androidx.compose.foundation.lazy.rememberLazyListState()
-                                val trendingWeekListState = androidx.compose.foundation.lazy.rememberLazyListState()
+                                // 今日/本周各自独立的滚动状态，互不影响；
+                                // rememberSaveable：item 滚出视口回收或进详情页返回后位置不重置
+                                val trendingDayListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+                                val trendingWeekListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
                                 val trendingListState = if (uiState.trendingTimeWindow == "day") trendingDayListState else trendingWeekListState
                                 Column {
                                     Row(
