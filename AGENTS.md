@@ -65,6 +65,7 @@
 - 有不确定先用 grill-me问清楚（新增功能时必须用）
 - 涉及 UI 设计时，使用 PureShowWidget 内联展示设计效果（SVG/HTML）；前端新页面设计用 web-dev 技能生成实时预览（自动启动本地 HTTP 服务器并通过 OpenPreview 提供预览链接），批准后用 `ai-self-loop-ui-workflow` 截图闭环。
 - 发布用 `release` skill 编排，说"发布"即触发
+- Android 官方 CLI 与 skills（命令、已装清单、触发方式、更新）见 `android-cli-skills.md`；Agent 会按指令自动加载对应 skill，无需手动点名。常用：`android --no-metrics run/install/emulator/screen/layout/docs/sdk`，记得加 `--no-metrics` 避免上报超时。
 - 安卓测试用 OpenAI 官方 skill（`~/.agents/skills/`），无需点名即匹配：
   - `android-emulator-qa`：模拟器功能验证/UI bug 复现/截图/logcat
   - `android-performance`：CPU/内存/帧率/卡顿剖析（Simpleperf/Perfetto/gfxinfo/meminfo/heap dump）
