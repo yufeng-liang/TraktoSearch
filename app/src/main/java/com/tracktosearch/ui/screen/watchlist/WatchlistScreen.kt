@@ -793,7 +793,7 @@ fun WatchlistScreen(
                     contentPadding = PaddingValues(
                         start = 8.dp,
                         end = 8.dp,
-                        top = 125.dp + statusBarHeight,
+                        top = 122.dp + statusBarHeight,
                         bottom = 80.dp
                     ),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1620,7 +1620,7 @@ fun WatchlistScreen(
                     WatchlistSkeletonGrid(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(top = 127.dp + statusBarHeight)
+                            .padding(top = 124.dp + statusBarHeight)
                     )
                 }
             }
