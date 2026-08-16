@@ -863,7 +863,7 @@ fun SettingsScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+                            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
@@ -906,7 +906,6 @@ fun SettingsScreen(
             currentVariant = currentGlassVariant,
             onVisualEffectSelected = { mode, variant ->
                 viewModel.setVisualEffectSelection(mode, variant)
-                showAccentColorDialog = false
             },
             onDismiss = { showAccentColorDialog = false }
         )

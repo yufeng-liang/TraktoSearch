@@ -836,7 +836,7 @@ fun DiscoverScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+                            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
