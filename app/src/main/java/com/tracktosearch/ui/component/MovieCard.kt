@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -46,8 +47,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.util.PosterColorExtractor
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -123,12 +126,13 @@ fun MovieCard(
     // 海报加载成功 + 卡片仍在组合树中,延迟 500ms 后提取主色
     // 快速滑过的卡片会在 DisposableEffect 中取消协程,不会浪费 CPU
     // 500ms 确保用户点击卡片进入详情页前 PosterColorCache 大概率已写入
-    // ImageRequest 尺寸与 DetailHeaderContent 保持一致(264),让 Coil 内存缓存同一份解码图,
-    // 避免 sharedElement 转场时详情页需要重新解码导致图片"空"瞬间跳动
+    // 卡片海报源图已降级 w342(列表数据 posterUrl),解码 342 与源图 1:1,显示约 318px 清晰;
+    // 详情页 header 改用 w780 独立高清图(见 DetailHeaderContent),不再与卡片共享解码图,
+    // 转场期间由 header 的 w342 占位图兜底避免"闪空"
     val imageRequest = remember(posterUrl) {
         ImageRequest.Builder(context)
             .data(posterUrl)
-            .size(264)
+            .size(342)
             .crossfade(false)
             .listener(
                 onSuccess = { _, result ->
@@ -222,14 +226,33 @@ fun MovieCard(
             }
 
             Box {
-                AsyncImage(
+                SubcomposeAsyncImage(
                     model = imageRequest,
                     contentDescription = title,
                     modifier = imageModifier,
                     contentScale = ContentScale.Crop,
-                    placeholder = null,
-                    error = null,
-                    fallback = null
+                    // 低分辨率 w92 缩略图占位:先显示轮廓再替换为 w342 清晰图,改善加载白屏感知;
+                    // 仅 TMDB URL 生效(swapSize 对豆瓣图原样返回,避免重复加载同一原图)
+                    loading = {
+                        val thumbUrl = posterUrl?.let {
+                            if (it.contains("/t/p/")) TmdbImageUrls.swapSize(it, "w92") else null
+                        }
+                        if (thumbUrl != null) {
+                            AsyncImage(
+                                model = remember(thumbUrl) {
+                                    ImageRequest.Builder(context)
+                                        .data(thumbUrl)
+                                        .size(92)
+                                        .crossfade(false)
+                                        .build()
+                                },
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    },
+                    error = null
                 )
 
                 // 海报左上角状态角标

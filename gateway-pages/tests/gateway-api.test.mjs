@@ -147,3 +147,65 @@ test('returns a clear unavailable response when the selected service binding is 
         message: 'Gateway service unavailable',
     });
 });
+
+test('proxies TMDB images through the gateway with long edge cache', async () => {
+    const upstreamCalls = [];
+    const entries = new Map();
+    const originalFetch = globalThis.fetch;
+    const originalCaches = globalThis.caches;
+    globalThis.fetch = async (url) => {
+        upstreamCalls.push(url);
+        return new Response(Buffer.from([0xff, 0xd8, 0xff, 0xe0]), {
+            status: 200,
+            headers: { 'Content-Type': 'image/jpeg', 'Content-Length': '4' },
+        });
+    };
+    globalThis.caches = {
+        default: {
+            async match(request) { return entries.get(request.url); },
+            async put(request, response) { entries.set(request.url, response); },
+        },
+    };
+
+    try {
+        const path = '/gateway-api/api/tmdb-image/t/p/w342/abc123.jpg';
+        const first = await onRequest(contextFor(path));
+        const second = await onRequest(contextFor(path));
+
+        assert.equal(first.status, 200);
+        assert.equal(first.headers.get('X-Gateway-Cache'), 'MISS');
+        assert.match(first.headers.get('Cache-Control'), /s-maxage=2592000/);
+        assert.equal(first.headers.get('Content-Type'), 'image/jpeg');
+        assert.equal(second.headers.get('X-Gateway-Cache'), 'HIT');
+        assert.equal(upstreamCalls.length, 1);
+        assert.equal(upstreamCalls[0], 'https://image.tmdb.org/t/p/w342/abc123.jpg');
+    } finally {
+        globalThis.fetch = originalFetch;
+        globalThis.caches = originalCaches;
+    }
+});
+
+test('rejects non-whitelisted TMDB image sizes', async () => {
+    const response = await onRequest(contextFor('/gateway-api/api/tmdb-image/t/p/w999/abc.jpg'));
+    assert.equal(response.status, 400);
+});
+
+test('rejects invalid TMDB image paths (no proxy abuse)', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => { throw new Error('must not fetch'); };
+    try {
+        const r1 = await onRequest(contextFor('/gateway-api/api/tmdb-image/t/p'));
+        const r2 = await onRequest(contextFor('/gateway-api/api/tmdb-image/t/p/w342/../secret.jpg'));
+        const r3 = await onRequest(contextFor('/gateway-api/api/tmdb-image/t/p/w342/x.html'));
+        assert.equal(r1.status, 400);
+        assert.equal(r2.status, 400);
+        assert.equal(r3.status, 400);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('rejects non-GET image proxy requests', async () => {
+    const response = await onRequest(contextFor('/gateway-api/api/tmdb-image/t/p/w342/a.jpg', { method: 'POST' }));
+    assert.equal(response.status, 405);
+});

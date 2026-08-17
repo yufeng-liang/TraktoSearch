@@ -14,14 +14,17 @@ import com.tracktosearch.di.NetworkModule
 import com.tracktosearch.data.auth.AuthCheckScheduler
 import com.tracktosearch.data.local.db.AppDatabase
 import com.tracktosearch.data.notification.NotificationScheduler
+import com.tracktosearch.data.util.DnsCache
 import com.tracktosearch.data.util.StartupTrace
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import okhttp3.Dispatcher
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import java.util.concurrent.Executors
 import javax.inject.Inject
 import javax.inject.Provider
@@ -111,9 +114,23 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
             chain.proceed(newRequest)
         }
 
-        // 复用 DI 中的 base OkHttpClient（共享连接池和 IPv4 DNS 策略），仅添加图片特有拦截器
+        // 复用 DI 中的 base OkHttpClient（共享连接池），仅添加图片特有配置：
+        // 1. 豆瓣防盗链拦截器
+        // 2. 图片专用 DNS 缓存（TTL 10min）：海报图首次下载常发生在慢速/被污染网络，
+        //    避免每个新连接重复系统 DNS 解析
+        // 3. 独立 Dispatcher 提升并发：默认 maxRequestsPerHost=5 是 3 列网格快速滚动的瓶颈，
+        //    提升到 per-host 8 / 总 20（线程池 8 与 per-host 对齐）
+        // 4. 显式声明 HTTP/2 优先：同一连接多路复用，批量海报下载更高效
         val imageHttpClient = baseOkHttpClient.newBuilder()
             .addInterceptor(doubanRefererInterceptor)
+            .dns(DnsCache())
+            .dispatcher(
+                Dispatcher(Executors.newFixedThreadPool(8)).apply {
+                    maxRequests = 20
+                    maxRequestsPerHost = 8
+                }
+            )
+            .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
             .build()
 
         return ImageLoader.Builder(this)

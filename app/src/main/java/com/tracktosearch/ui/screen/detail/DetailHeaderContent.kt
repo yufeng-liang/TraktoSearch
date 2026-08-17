@@ -73,9 +73,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.core.graphics.drawable.toBitmap
 import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.eygraber.seymour.SeymourText
 import com.tracktosearch.R
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.ActionButtonRow
@@ -193,13 +195,14 @@ internal fun DetailHeaderContent(
                                 .fillMaxSize()
                                 .then(boundsModifier)
                         ) {
-                            AsyncImage(
+                            SubcomposeAsyncImage(
                                 model = remember(uiState.posterUrl) {
+                                    // 详情页海报独立使用 w780 高清图:header 实际渲染约 525-700px,
+                                    // w780 源图 + 780 解码 1:1 保证清晰(原 264 解码明显模糊)
                                     ImageRequest.Builder(context)
-                                        .data(uiState.posterUrl)
-                                        .size(264)
-                                        // 与 MovieCard 保持一致:转场时不要图片淡入叠加在
-                                        // sharedElement 容器动画上,避免双重动画看起来卡顿
+                                        .data(uiState.posterUrl?.let { TmdbImageUrls.swapSize(it, "w780") })
+                                        .size(780)
+                                        // 转场时不要图片淡入叠加在 sharedElement 容器动画上,避免双重动画看起来卡顿
                                         .crossfade(false)
                                         .listener(
                                             onSuccess = { _, result ->
@@ -225,7 +228,26 @@ internal fun DetailHeaderContent(
                                         detectTransformGestures { _, _, zoom, _ ->
                                             posterScale = (posterScale * zoom).coerceIn(1f, 4f)
                                         }
+                                    },
+                                // 转场兜底:首次进入详情页 w780 可能需网络下载,
+                                // loading 期间显示与列表卡片同 URL+size 的 w342 缩略图(内存缓存大概率命中),避免"闪空"
+                                loading = {
+                                    val thumbUrl = uiState.posterUrl?.let { TmdbImageUrls.swapSize(it, "w342") }
+                                    if (thumbUrl != null) {
+                                        AsyncImage(
+                                            model = remember(thumbUrl) {
+                                                ImageRequest.Builder(context)
+                                                    .data(thumbUrl)
+                                                    .size(342)
+                                                    .crossfade(false)
+                                                    .build()
+                                            },
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
                                     }
+                                }
                             )
                         }
                     } else {

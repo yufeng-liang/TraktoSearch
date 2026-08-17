@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.queryExistingFile
@@ -137,7 +138,10 @@ internal fun PosterFullscreenOverlay(
             AsyncImage(
                 model = remember(posterUrl) {
                     ImageRequest.Builder(context)
-                        .data(posterUrl)
+                        // 全屏查看用 original 原图:1080p 屏全屏显示约 1050px,
+                        // w500 源图放大到 1080 解码会模糊,original(2000px+) 保证清晰;
+                        // 下载大但仅在用户主动查看大图时触发
+                        .data(TmdbImageUrls.swapSize(posterUrl, "original"))
                         .crossfade(false)
                         .size(1080) // 加载高清大图
                         .build()
