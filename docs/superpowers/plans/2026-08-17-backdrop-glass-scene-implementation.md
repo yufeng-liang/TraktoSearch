@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking progress.
 
-**Goal:** 将 TrackToSearch 的正式 Glass 路径从 `hazeGlass` 迁移到 Backdrop，并按底栏、顶栏、搜索框、圆形按钮和详情按钮使用独立光学参数，同时保持 Blur 的成熟 Haze 行为不变。
+**Goal:** 将 TrackToSearch 的正式 Glass 路径从 `hazeGlass` 迁移到 Backdrop，并按底栏、顶栏、搜索框、圆形按钮、详情按钮和卡片使用独立光学参数，同时保持 Blur 的成熟 Haze 行为不变；设置页只保留一套 Backdrop Glass 预设并默认使用 Glass。
 
 **Architecture:** 在每个需要采样的页面根部创建一个 `BackdropProvider`，由 `LayerBackdrop` 采集后方内容并通过 CompositionLocal 提供给 Glass 组件。`AppVisualSurface`、`AppIconButton` 和 `appVisualEffect` 在 Blur 模式继续分发到 Haze/拟态实现，在 Glass 模式分发到 `drawBackdrop`；底栏只创建一个采样外壳，选中指示器用独立的普通半透明层和 spring 位移实现 A 方案。
 
@@ -14,11 +14,12 @@
 
 - 模糊模式继续使用现有 `hazeBlur`、`NeumorphicFrostedSurface` 和 `NeumorphicIconButton`，不改变视觉和交互。
 - 玻璃模式不得调用 `hazeGlass`、`dev.chrisbanes.haze.glass.*` 或拟态 Glass 装饰；无 Backdrop host 时只使用普通半透明 fallback。
-- 五类核心角色的基础参数固定为：BottomNavigation `20/8/36`、TopBar `20/8/36`、SearchField `14/8/26`、CircularControl `12/6/18`、DetailAction `12/6/18`，顺序分别为 blur/refractionHeight/refractionAmount。
-- BottomNavigation、TopBar、SearchField 开启 depth 和 chromatic；CircularControl、DetailAction 开启 depth、关闭 chromatic。
+- 六类核心角色的基础参数固定为：BottomNavigation `20/8/36`、TopBar `20/8/36`、SearchField `14/8/26`、Card `14/8/26`、CircularControl `12/6/18`、DetailAction `12/6/18`，顺序分别为 blur/refractionHeight/refractionAmount。
+- BottomNavigation、TopBar、SearchField、Card 开启 depth 和 chromatic；CircularControl、DetailAction 开启 depth、关闭 chromatic。
 - Backdrop effect 顺序固定为色彩滤镜或 vibrancy、blur、lens；代码统一完成 `Dp` 到 API 像素值的转换。
 - 底栏按压只缩放内容层和独立指示器，不能缩放承载采样的外层；指示器不创建第二个 Backdrop surface。
-- 保留 `VisualEffectMode`、`GlassVariant`、DataStore key 和四语言设置文案；Focused 只增强强度，不改变基础 lens 表。
+- 保留 `VisualEffectMode`、`GlassVariant` 和 DataStore key 的读取兼容性，但设置页只展示 Blur 与一项 Backdrop Glass，不再展示 Clear/Focused 两个 Glass 预设；旧的 `focused` 存储值归一到唯一 Backdrop Glass。没有已保存材质时默认使用 Glass，用户明确保存的 Blur 仍保持 Blur。
+- `Card` 角色对应设置页卡片、发现页社区热门列表卡片和详情页评论卡片；其 lens 与开关必须使用截图明确的 `14/8/26`、depth 开启、chromatic 开启，高光/投影沿用 SearchField 的可读性包络。
 - 用户可见文字必须使用 `stringResource`，新增或修改文案同步 `values/`、`values-zh/`、`values-ja/`、`values-ko/`。
 - 代码注释和面向用户说明使用中文；ViewModel 内部错误使用英文；不修改网络、缓存、数据库或 DTO 契约。
 - 每个任务都必须先完成针对性测试/编译，再只提交该任务的授权文件；提交前执行 `git diff --cached --check` 和 `git diff --cached --name-only`。
@@ -38,6 +39,8 @@
 - `app/src/main/java/com/tracktosearch/ui/component/AppVisualEffect.kt`：保留 Haze Blur 分支，把 Glass 分支改为 Backdrop。
 - `app/src/main/java/com/tracktosearch/ui/component/NeumorphicGlass.kt`：保留 Blur 实现，迁移完成后移除其中的 Glass 旁路。
 - `app/src/main/java/com/tracktosearch/ui/screen/pilot/GlassEnginePilotScreen.kt`：使用正式 token 展示五类场景和 A 方案动效。
+- `app/src/main/java/com/tracktosearch/ui/theme/VisualEffectMode.kt`、`app/src/main/java/com/tracktosearch/data/local/ThemeStorage.kt`：保留旧存储读取兼容，新增无记录默认 Glass 和旧 Focused 归一逻辑。
+- `app/src/main/java/com/tracktosearch/ui/screen/settings/SettingsDialogs.kt`、`SettingsScreen.kt`：材质弹窗只展示 Blur/Backdrop Glass 两项，选项均带小字说明，设置卡片在 Glass 模式使用 Card token。
 - `app/src/main/java/com/tracktosearch/ui/screen/main/MainScreen.kt`、Discover、Search、TraktSearch、Watchlist、MarkRecord、Detail、Person、Douban、Statistics、DiscoverFilter、Settings、Login 相关页面：接入 Backdrop host 和角色入口。
 - `app/src/main/java/com/tracktosearch/ui/component/GlassSearchBar.kt`、`ActionButtonRow.kt`、`ScrollToTopButton.kt`、`WatchlistCategoryTabs.kt`：迁移直接使用效果 modifier 的组件。
 - `app/build.gradle.kts`、`gradle/libs.versions.toml`：所有正式 Glass 调用迁移后删除 `haze-glass` 依赖，保留 Haze blur 和 Backdrop。
@@ -69,6 +72,7 @@ fun backdropRolesUseApprovedLensTable() {
     val bottom = backdropGlassToken(GlassSurfaceRole.BottomNavigation, GlassVariant.CLEAR, false)
     val top = backdropGlassToken(GlassSurfaceRole.TopBar, GlassVariant.CLEAR, false)
     val search = backdropGlassToken(GlassSurfaceRole.SearchField, GlassVariant.CLEAR, false)
+    val card = backdropGlassToken(GlassSurfaceRole.Card, GlassVariant.CLEAR, false)
     val circular = backdropGlassToken(GlassSurfaceRole.CircularControl, GlassVariant.CLEAR, false)
     val detail = backdropGlassToken(GlassSurfaceRole.DetailAction, GlassVariant.CLEAR, false)
 
@@ -81,6 +85,11 @@ fun backdropRolesUseApprovedLensTable() {
     assertThat(search.blurRadius).isEqualTo(14.dp)
     assertThat(search.refractionHeight).isEqualTo(8.dp)
     assertThat(search.refractionAmount).isEqualTo(26.dp)
+    assertThat(card.blurRadius).isEqualTo(14.dp)
+    assertThat(card.refractionHeight).isEqualTo(8.dp)
+    assertThat(card.refractionAmount).isEqualTo(26.dp)
+    assertThat(card.depthEffect).isTrue()
+    assertThat(card.chromaticAberration).isTrue()
     assertThat(circular.blurRadius).isEqualTo(12.dp)
     assertThat(circular.refractionHeight).isEqualTo(6.dp)
     assertThat(circular.refractionAmount).isEqualTo(18.dp)
@@ -122,6 +131,7 @@ In `GlassTokens.kt`, remove the Haze-only `GlassOptics`, `GlassStyle`, and `Surf
 GlassSurfaceRole.BottomNavigation -> lens(20.dp, 8.dp, 36.dp, true, true, 1.2.dp, 0.52f, 26.dp, 0.38f)
 GlassSurfaceRole.TopBar -> lens(20.dp, 8.dp, 36.dp, true, true, 0.9.dp, 0.36f, 18.dp, 0.28f)
 GlassSurfaceRole.SearchField -> lens(14.dp, 8.dp, 26.dp, true, true, 0.9.dp, 0.46f, 12.dp, 0.22f)
+GlassSurfaceRole.Card -> lens(14.dp, 8.dp, 26.dp, true, true, 0.9.dp, 0.46f, 12.dp, 0.22f)
 GlassSurfaceRole.CircularControl -> lens(12.dp, 6.dp, 18.dp, true, false, 0.7.dp, 0.76f, 14.dp, 0.32f)
 GlassSurfaceRole.DetailAction -> lens(12.dp, 6.dp, 18.dp, true, false, 0.8.dp, 0.58f, 16.dp, 0.28f)
 ```
@@ -303,6 +313,7 @@ Stage only pilot, resource and test files after `git diff --cached --check`; com
 
 - Each root screen wraps its source content in `BackdropProvider`; the scrolling/background child receives `.layerBackdrop(LocalBackdrop.current ?: error("Backdrop host is missing"))`.
 - Main bottom navigation uses one `AppVisualSurface(kind = VisualSurfaceKind.Glass, role = GlassSurfaceRole.BottomNavigation)` and one `GlassTabIndicator`; it never creates a Glass effect inside an individual tab.
+- The Discover community-popular list cards use `GlassSurfaceRole.Card` in Glass mode; poster content and modal sheets remain outside the sampling surface.
 
 - [ ] **Step 1: Add source-layer host to Main and Discover**
 
@@ -387,6 +398,7 @@ Expected: no Haze Glass symbol in these paths and existing search/action tests p
 **Interfaces:**
 
 - Detail/Person/Douban action buttons use `AppIconButton(role = CircularControl or DetailAction)` and keep existing `NeumorphicIconButtonStyle.DetailTopBar` behavior in Blur.
+- Detail comment cards use `GlassSurfaceRole.Card` in Glass mode and retain their existing loading, translation and click semantics.
 - Detail content, comments, seasons, stills and full-screen preview remain `Content`/`Modal` and never receive a Backdrop Glass role.
 
 - [ ] **Step 1: Migrate detail action buttons and hosts**
@@ -411,7 +423,10 @@ Run `./gradlew.bat :app:compileDebugKotlin --no-daemon --console=plain`, the foc
 
 - Modify: `app/src/main/java/com/tracktosearch/ui/screen/settings/SettingsScreen.kt`
 - Modify: `app/src/main/java/com/tracktosearch/ui/screen/settings/SettingsComponents.kt`
+- Modify: `app/src/main/java/com/tracktosearch/ui/screen/settings/SettingsDialogs.kt`
 - Modify: `app/src/main/java/com/tracktosearch/ui/screen/login/ActivationLoginScreen.kt`
+- Modify: `app/src/main/java/com/tracktosearch/ui/theme/VisualEffectMode.kt`
+- Modify: `app/src/main/java/com/tracktosearch/data/local/ThemeStorage.kt`
 - Modify: `app/src/main/java/com/tracktosearch/ui/component/NeumorphicGlass.kt`
 - Modify: `app/src/main/java/com/tracktosearch/ui/component/GlassSurface.kt`
 - Modify: `app/src/main/java/com/tracktosearch/ui/component/AppVisualEffect.kt`
@@ -419,27 +434,33 @@ Run `./gradlew.bat :app:compileDebugKotlin --no-daemon --console=plain`, the foc
 - Modify: `app/build.gradle.kts`
 - Modify if needed: `app/src/main/res/values/strings.xml`, `values-zh/strings.xml`, `values-ja/strings.xml`, `values-ko/strings.xml`
 - Test: `app/src/test/java/com/tracktosearch/ui/screen/settings/SettingsViewModelTest.kt`
+- Test: `app/src/test/java/com/tracktosearch/ui/theme/VisualEffectModeTest.kt`
 - Test: `app/src/androidTest/java/com/tracktosearch/ui/screen/settings/SettingsScreenTest.kt`
 
 **Interfaces:**
 
-- Settings continues using the existing `VisualEffectMode`/`GlassVariant` selection and DataStore APIs; no new low-level setting is added.
+- Settings continues using the existing `VisualEffectMode`/`GlassVariant` DataStore keys for compatibility, but the material popup exposes exactly two options: Blur and one Backdrop Glass. Missing material defaults to Glass; explicit Blur remains selectable; old Focused values normalize to the sole Glass option.
 - Login uses one `LoginSurface` Backdrop profile around the form; inputs and error surfaces do not each create Glass effects.
+- Settings group cards use `GlassSurfaceRole.Card` in Glass mode and show the same screenshot-derived lens values as other Card surfaces.
 - After this task, no production source or dependency references Haze Glass.
 
 - [ ] **Step 1: Migrate Settings and preserve modal surfaces**
 
-Add a Backdrop source host for the settings content, use TopBar/CircularControl only for fixed navigation/actions, and leave AlertDialog/BottomSheet on `surfaceVariant` or existing Material surfaces. Check the existing help copy; if it still describes Glass as experimental Haze Glass, update the same key in all four resource directories using `stringResource`.
+Add a Backdrop source host for the settings content, use TopBar/CircularControl only for fixed navigation/actions, apply Card to settings group cards, and leave AlertDialog/BottomSheet on `surfaceVariant` or existing Material surfaces. Check the existing help copy; if it still describes Glass as experimental Haze Glass, update the same key in all four resource directories using `stringResource`.
 
-- [ ] **Step 2: Migrate ActivationLoginScreen**
+- [ ] **Step 2: Collapse the material popup to one Backdrop Glass preset**
+
+Replace the two Glass rows (Clear/Focused) with one localized Backdrop Glass row plus the Blur row. Give both rows a primary label and a smaller localized description below it. Keep `GlassVariant` and its storage key only as a compatibility boundary; normalize old Focused values to the single Glass presentation. Set the no-record/default `VisualEffectMode` to Glass while preserving an explicit stored Blur selection. Add/update unit and Compose assertions for option count, descriptions, default selection and legacy-value normalization across all four resource directories.
+
+- [ ] **Step 3: Migrate ActivationLoginScreen**
 
 Replace direct `appVisualEffect` Glass modifiers with one `AppVisualSurface(kind = Glass, role = LoginSurface)` around the form. Keep activation, guest mode, error state, keyboard and navigation behavior. Ensure the form itself is readable in both themes and that input fields are not nested Glass surfaces.
 
-- [ ] **Step 3: Remove the legacy Glass branches**
+- [ ] **Step 4: Remove the legacy Glass branches**
 
 After all call sites compile through `AppVisualSurface`, `AppIconButton` or the role-aware effect modifier, remove Glass branches from `NeumorphicGlass.kt`, delete Haze Glass imports and delete `glassStyle`/Haze Glass-only parameters from shared APIs. Remove `haze-glass` from `gradle/libs.versions.toml` and `implementation(libs.haze.glass)` from `app/build.gradle.kts`; keep `haze`, `haze-blur`, `haze-blur-materials`, and `backdrop`.
 
-- [ ] **Step 4: Run the full static boundary audit**
+- [ ] **Step 5: Run the full static boundary audit**
 
 Run:
 
@@ -450,7 +471,7 @@ rg -n "appVisualEffect\(|drawBackdrop\(" app/src/main/java/com/tracktosearch/ui 
 
 The first command must return no production/dependency hits. The second command must show only the centralized Backdrop dispatcher/surface and explicit Blur calls; page code must not pass optical numbers. Run `./gradlew.bat :app:compileDebugKotlin --no-daemon --console=plain` and `./gradlew.bat :app:testDebugUnitTest --no-daemon --console=plain`.
 
-- [ ] **Step 5: Commit the completed migration boundary**
+- [ ] **Step 6: Commit the completed migration boundary**
 
 Run `git diff --check`, inspect `git diff --cached --name-only`, and commit `refactor(glass): 清理 Haze Glass 并完成全局迁移` with only the files listed for this task.
 
