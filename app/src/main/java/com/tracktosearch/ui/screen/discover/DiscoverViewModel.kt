@@ -389,10 +389,9 @@ class DiscoverViewModel @Inject constructor(
                             val response = doubanHotApi.getChart()
                             com.tracktosearch.data.remote.douban.dto.DoubanHotData(
                                 items = response.data.map { item ->
-                                    val ratingText = if (item.rating.isNotBlank() && item.rating != "暂无评分") "【${item.rating}】" else ""
                                     com.tracktosearch.data.remote.douban.dto.DoubanHotItem(
                                         id = item.id.hashCode(),
-                                        title = "$ratingText${item.title}",
+                                        title = item.title,
                                         cover = item.poster,
                                         desc = item.ratingCount,
                                         rating = item.rating,
@@ -410,10 +409,9 @@ class DiscoverViewModel @Inject constructor(
                             val response = doubanHotApi.getWeekly()
                             com.tracktosearch.data.remote.douban.dto.DoubanHotData(
                                 items = response.data.map { item ->
-                                    val ratingText = if (item.rating.isNotBlank() && item.rating != "暂无评分") "【${item.rating}】" else ""
                                     com.tracktosearch.data.remote.douban.dto.DoubanHotItem(
                                         id = item.id.hashCode(),
-                                        title = "$ratingText${item.title}",
+                                        title = item.title,
                                         cover = item.poster,
                                         desc = item.ratingCount,
                                         rating = item.rating,
@@ -431,10 +429,9 @@ class DiscoverViewModel @Inject constructor(
                             val response = doubanHotApi.getTop250(page = 1)
                             com.tracktosearch.data.remote.douban.dto.DoubanHotData(
                                 items = response.data.map { item ->
-                                    val ratingText = if (item.rating.isNotBlank()) "【${item.rating}】" else ""
                                     com.tracktosearch.data.remote.douban.dto.DoubanHotItem(
                                         id = item.id.hashCode(),
-                                        title = "$ratingText${item.title}",
+                                        title = item.title,
                                         cover = item.poster,
                                         desc = item.ratingCount,
                                         rating = item.rating,
@@ -452,10 +449,9 @@ class DiscoverViewModel @Inject constructor(
                             val response = doubanHotApi.getNowPlaying()
                             com.tracktosearch.data.remote.douban.dto.DoubanHotData(
                                 items = response.data.take(10).map { item ->
-                                    val ratingText = if (item.rating.isNotBlank() && item.rating != "暂无评分") "【${item.rating}】" else ""
                                     com.tracktosearch.data.remote.douban.dto.DoubanHotItem(
                                         id = item.id.hashCode(),
-                                        title = "$ratingText${item.title}",
+                                        title = item.title,
                                         cover = item.poster,
                                         desc = item.ratingCount,
                                         rating = item.rating,
@@ -543,10 +539,9 @@ class DiscoverViewModel @Inject constructor(
                             code = chartResponse.code,
                             data = com.tracktosearch.data.remote.douban.dto.DoubanHotData(
                                 items = chartResponse.data.map { item ->
-                                    val ratingText = if (item.rating.isNotBlank() && item.rating != "暂无评分") "【${item.rating}】" else ""
                                     com.tracktosearch.data.remote.douban.dto.DoubanHotItem(
                                         id = item.id.hashCode(),
-                                        title = "$ratingText${item.title}",
+                                        title = item.title,
                                         cover = item.poster,
                                         desc = item.ratingCount,
                                         rating = item.rating,
@@ -570,10 +565,9 @@ class DiscoverViewModel @Inject constructor(
                             code = weeklyResponse.code,
                             data = com.tracktosearch.data.remote.douban.dto.DoubanHotData(
                                 items = weeklyResponse.data.map { item ->
-                                    val ratingText = if (item.rating.isNotBlank() && item.rating != "暂无评分") "【${item.rating}】" else ""
                                     com.tracktosearch.data.remote.douban.dto.DoubanHotItem(
                                         id = item.id.hashCode(),
-                                        title = "$ratingText${item.title}",
+                                        title = item.title,
                                         cover = item.poster,
                                         desc = item.ratingCount,
                                         rating = item.rating,
@@ -597,10 +591,9 @@ class DiscoverViewModel @Inject constructor(
                             code = top250Response.code,
                             data = com.tracktosearch.data.remote.douban.dto.DoubanHotData(
                                 items = top250Response.data.map { item ->
-                                    val ratingText = if (item.rating.isNotBlank()) "【${item.rating}】" else ""
                                     com.tracktosearch.data.remote.douban.dto.DoubanHotItem(
                                         id = item.id.hashCode(),
-                                        title = "$ratingText${item.title}",
+                                        title = item.title,
                                         cover = item.poster,
                                         desc = item.ratingCount,
                                         rating = item.rating,
@@ -624,10 +617,9 @@ class DiscoverViewModel @Inject constructor(
                             code = nowPlayingResponse.code,
                             data = com.tracktosearch.data.remote.douban.dto.DoubanHotData(
                                 items = nowPlayingResponse.data.map { item ->
-                                    val ratingText = if (item.rating.isNotBlank() && item.rating != "暂无评分") "【${item.rating}】" else ""
                                     com.tracktosearch.data.remote.douban.dto.DoubanHotItem(
                                         id = item.id.hashCode(),
-                                        title = "$ratingText${item.title}",
+                                        title = item.title,
                                         cover = item.poster,
                                         desc = item.ratingCount,
                                         rating = item.rating,
