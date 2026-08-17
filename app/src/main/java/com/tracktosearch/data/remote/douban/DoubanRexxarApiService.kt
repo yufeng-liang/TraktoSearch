@@ -1,5 +1,6 @@
 package com.tracktosearch.data.remote.douban
 
+import com.tracktosearch.data.remote.douban.dto.DoubanRexxarCollectionPage
 import com.tracktosearch.data.remote.douban.dto.DoubanRexxarDetailDto
 import com.tracktosearch.data.remote.douban.dto.DoubanRexxarInterestPageDto
 import com.tracktosearch.data.remote.douban.dto.DoubanRexxarPhotoPageDto
@@ -52,4 +53,12 @@ interface DoubanRexxarApiService {
         @Query("start") start: Int = 0,
         @Query("count") count: Int = 20
     ): retrofit2.Response<DoubanRexxarInterestPageDto>
+
+    /** 豆瓣移动端榜单集合（新片榜 movie_hot / 口碑榜 movie_weekly_best / Top250 / 热门 movie_hot_gaia）。 */
+    @GET("subject_collection/{collectionId}/items")
+    suspend fun getCollectionItems(
+        @Path("collectionId") collectionId: String,
+        @Query("start") start: Int = 0,
+        @Query("count") count: Int = 25
+    ): retrofit2.Response<DoubanRexxarCollectionPage>
 }
