@@ -34,6 +34,7 @@
 **修改：**
 
 - `app/src/main/java/com/tracktosearch/ui/component/GlassTokens.kt`：把 Haze Glass 专用 token 替换为 Backdrop 角色 token，保留 `GlassScene`、环境色和 fallback 辅助函数。
+- `app/src/main/java/com/tracktosearch/ui/component/AppGlassStyle.kt`：Task 1 阶段保留旧 Haze Glass 兼容 shim，并补齐 `Card` 角色；Task 7 完成调用迁移后删除旧 Haze Glass token/样式定义。
 - `app/src/main/java/com/tracktosearch/ui/component/GlassSurface.kt`：用 `drawBackdrop` 重写 Glass surface、icon button 和普通指示器。
 - `app/src/main/java/com/tracktosearch/ui/component/VisualSurface.kt`：统一分发 Blur、Backdrop Glass、Content 和 Modal。
 - `app/src/main/java/com/tracktosearch/ui/component/AppVisualEffect.kt`：保留 Haze Blur 分支，把 Glass 分支改为 Backdrop。
@@ -53,6 +54,7 @@
 
 - Create: `app/src/main/java/com/tracktosearch/ui/component/BackdropHost.kt`
 - Modify: `app/src/main/java/com/tracktosearch/ui/component/GlassTokens.kt`
+- Modify: `app/src/main/java/com/tracktosearch/ui/component/AppGlassStyle.kt`
 - Test: `app/src/test/java/com/tracktosearch/ui/component/GlassTokenTest.kt`
 
 **Interfaces:**
@@ -125,7 +127,7 @@ Expected: FAIL because the Backdrop token type and function do not exist yet.
 
 - [ ] **Step 2: Implement the token table and variant modulation**
 
-In `GlassTokens.kt`, remove the Haze-only `GlassOptics`, `GlassStyle`, and `SurfaceProfile` fields from the token model. Keep `GlassSurfaceRole`, `GlassScene`, `glassSceneForContent`, `resolveGlassFallbackFill`, `resolveGlassAmbientColor`, `resolveGlassEnvironmentTint`, and cached poster ambient helpers. Implement the five rows exactly as follows:
+In `GlassTokens.kt`, create the new Backdrop token model independently of the temporary Haze compatibility shim in `AppGlassStyle.kt`; the old `GlassOptics`, `GlassStyle`, and `SurfaceProfile` definitions remain only until Task 7. Keep the existing `GlassSurfaceRole`, `GlassScene`, `glassSceneForContent`, `resolveGlassFallbackFill`, `resolveGlassAmbientColor`, `resolveGlassEnvironmentTint`, and cached poster ambient helpers in their current package/API location. Implement the six rows exactly as follows:
 
 ```kotlin
 GlassSurfaceRole.BottomNavigation -> lens(20.dp, 8.dp, 36.dp, true, true, 1.2.dp, 0.52f, 26.dp, 0.38f)
@@ -157,7 +159,7 @@ Document in the function comment that each screen must apply `.layerBackdrop(Loc
 
 - [ ] **Step 4: Run token tests and commit the core model**
 
-Run the focused test again and then `git diff --check`. Stage only `BackdropHost.kt`, `GlassTokens.kt`, and `GlassTokenTest.kt`; inspect `git diff --cached --name-only`; commit with `refactor(glass): 建立 Backdrop 场景 token 与采样 host`.
+Run the focused test again and then `git diff --check`. Stage only `BackdropHost.kt`, `GlassTokens.kt`, `AppGlassStyle.kt`, and `GlassTokenTest.kt`; inspect `git diff --cached --name-only`; commit with `refactor(glass): 建立 Backdrop 场景 token 与采样 host`.
 
 ## Task 2: Replace the formal Glass renderer and mode dispatcher
 
@@ -428,6 +430,7 @@ Run `./gradlew.bat :app:compileDebugKotlin --no-daemon --console=plain`, the foc
 - Modify: `app/src/main/java/com/tracktosearch/ui/theme/VisualEffectMode.kt`
 - Modify: `app/src/main/java/com/tracktosearch/data/local/ThemeStorage.kt`
 - Modify: `app/src/main/java/com/tracktosearch/ui/component/NeumorphicGlass.kt`
+- Modify: `app/src/main/java/com/tracktosearch/ui/component/AppGlassStyle.kt`
 - Modify: `app/src/main/java/com/tracktosearch/ui/component/GlassSurface.kt`
 - Modify: `app/src/main/java/com/tracktosearch/ui/component/AppVisualEffect.kt`
 - Modify: `gradle/libs.versions.toml`
