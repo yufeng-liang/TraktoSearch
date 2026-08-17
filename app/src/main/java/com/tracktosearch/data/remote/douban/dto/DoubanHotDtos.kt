@@ -124,13 +124,20 @@ data class DoubanRexxarCollectionPage(
 data class DoubanRexxarCollectionItem(
     val id: String = "",
     val title: String = "",
-    /** 豆瓣海报（中等尺寸 m_ratio_poster）。 */
+    /** 豆瓣海报（中等尺寸 m_ratio_poster）。新片榜/热门/Top250 用 cover 对象，口碑榜用 cover_url。 */
     val cover_url: String? = null,
+    val cover: DoubanRexxarCover? = null,
     val pic: DoubanRexxarPic? = null,
     val rating: DoubanRexxarRating? = null,
     val url: String = "",
     val sharing_url: String = "",
     val subtype: String = "movie"
+)
+
+@Immutable
+@Serializable
+data class DoubanRexxarCover(
+    val url: String? = null
 )
 
 @Immutable
@@ -155,7 +162,7 @@ data class DoubanRexxarRating(
 fun DoubanRexxarCollectionItem.toDoubanHotItem(): DoubanHotItem = DoubanHotItem(
     id = id.hashCode(),
     title = title,
-    cover = pic?.large ?: cover_url,
+    cover = pic?.large ?: cover?.url ?: cover_url,
     desc = rating?.count?.takeIf { it > 0 }?.let { it.toString() + "人评价" } ?: "",
     rating = rating?.value?.takeIf { it > 0 }?.let { String.format("%.1f", it) } ?: "暂无评分",
     url = url.ifBlank { sharing_url },

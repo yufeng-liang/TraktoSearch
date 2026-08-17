@@ -137,7 +137,7 @@ class SearchViewModel @Inject constructor(
             }
             // 共享缓存 + 飞行中去重：并发时只发一次网络请求
             // 缓存 key 带版本号 v4：数据源切为 App 直连豆瓣 Rexxar，与发现页共享同一缓存
-            val cacheKey = "douban-movie_1_10_v4"
+            val cacheKey = "douban-movie_1_10_v5"
             try {
                 val data = sharedDoubanHotCache.getOrAwait(cacheKey) {
                     val response = doubanRexxarApi.getCollectionItems(
@@ -160,7 +160,7 @@ class SearchViewModel @Inject constructor(
             } catch (_: Exception) {
                 // 失败兜底：尝试从 v2 缓存取数据(发现页新片榜可能已加载成功)
                 try {
-                    val cached = sharedDoubanHotCache.get("douban-movie_1_10_v4")
+                    val cached = sharedDoubanHotCache.get("douban-movie_1_10_v5")
                     if (cached != null) {
                         val titles = cached.items.take(8).map { item ->
                             item.title.replace(Regex("^【[^】]+】"), "").trim()
@@ -196,7 +196,7 @@ class SearchViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(doubanHotCategories = current)
             }
             // 缓存 key 带版本号 v4：数据源切为 App 直连豆瓣 Rexxar（带评分/豆瓣海报），旧 v3 网关缓存自动失效
-            val cacheKey = "${categoryId}_1_10_v4"
+            val cacheKey = "${categoryId}_1_10_v5"
             try {
                 val data = sharedDoubanHotCache.getOrAwait(cacheKey, skipCache = skipCache) {
                     val response = doubanRexxarApi.getCollectionItems(
@@ -295,7 +295,7 @@ class SearchViewModel @Inject constructor(
             }
             // 1 小时内用缓存（仅首页）
             // 缓存 key 带版本号 v4：数据源切为 App 直连豆瓣 Rexxar，旧 v3 网关缓存自动失效
-            val cacheKey = "${categoryId}_${page}_${limit}_v4"
+            val cacheKey = "${categoryId}_${page}_${limit}_v5"
             if (page == 1) {
                 sharedDoubanHotCache.get(cacheKey)?.let { data ->
                     val updated = _uiState.value.doubanHotCategories.toMutableList()

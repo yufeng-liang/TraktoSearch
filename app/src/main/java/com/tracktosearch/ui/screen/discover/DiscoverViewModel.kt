@@ -393,7 +393,7 @@ class DiscoverViewModel @Inject constructor(
             }
             // 共享缓存 + 飞行中去重：与搜索页共享同一请求
             // 缓存 key 带版本号 v4：数据源切为 App 直连豆瓣 Rexxar（带评分/豆瓣海报），旧 v3 网关缓存自动失效
-            val cacheKey = "${categoryId}_1_10_v4"
+            val cacheKey = "${categoryId}_1_10_v5"
             try {
                 val data = sharedDoubanHotCache.getOrAwait(cacheKey) {
                     val response = doubanRexxarApi.getCollectionItems(
@@ -483,7 +483,7 @@ class DiscoverViewModel @Inject constructor(
             }
             // 1 小时内用缓存（仅首页）
             // 缓存 key 带版本号 v4：数据源切为 App 直连豆瓣 Rexxar（带评分/豆瓣海报），旧 v3 网关缓存自动失效
-            val cacheKey = "${categoryId}_${page}_${limit}_v4"
+            val cacheKey = "${categoryId}_${page}_${limit}_v5"
             if (page == 1) {
                 sharedDoubanHotCache.get(cacheKey)?.let { data ->
                     val updated = _uiState.value.doubanHotCategories.toMutableList()
