@@ -558,8 +558,14 @@ fun NeumorphicIconButton(
 
 /**
  * 基于 MaterialTheme.colorScheme.background 亮度判断暗色模式
+ *
+ * 列表滚动时该方法在每张卡片组合中被高频调用（全局 40+ 处调用点），
+ * 用 remember(colorScheme) 缓存结果：colorScheme 实例未变化（主题未切换）
+ * 时直接返回缓存值，避免每帧重复执行 sRGB luminance() 浮点计算。
+ * 主题切换（如深色模式、动态取色）时 colorScheme 引用变化，自动重算。
  */
 @Composable
 fun isAppDarkTheme(): Boolean {
-    return MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val colorScheme = MaterialTheme.colorScheme
+    return remember(colorScheme) { colorScheme.background.luminance() < 0.5f }
 }

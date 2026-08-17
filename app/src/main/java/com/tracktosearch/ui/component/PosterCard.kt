@@ -100,7 +100,7 @@ fun PosterCard(
     }
 
     val isDark = isAppDarkTheme()
-    val posterShape = RoundedCornerShape(12.dp)
+    val posterShape = remember { RoundedCornerShape(12.dp) }
     val useNeumorphicDecoration = usesNeumorphicDecoration(LocalVisualEffectMode.current)
     Box(modifier = modifier.scale(scale)) {
         Box(
