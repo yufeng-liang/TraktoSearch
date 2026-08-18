@@ -16,6 +16,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -31,6 +33,9 @@ class CommentTranslator @Inject constructor(
 
     // 翻译结果缓存（相同评论的翻译不会变，LRU 限制 200 条防内存增长）
     private val translationCache = android.util.LruCache<Int, String>(200)
+
+    // 并发翻译限制：全量并发打满网关会加剧 AI 限流与流量占用，4 并发足够覆盖单条 1-3s 延迟
+    private val translateSemaphore = Semaphore(4)
 
     /** 翻译提示词：让大模型知道这是影视评论，保留人名/专有名词 */
     private val TRANSLATION_CONTEXT = "这是一条外文影视评论，请翻译为中文。保留电影/电视剧名称、演员名、导演名等专有名词不翻译。"
@@ -130,27 +135,27 @@ class CommentTranslator @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
 
-    /** 翻译单条评论（内部复用，供并发调用） */
-    private suspend fun translateOneComment(comment: TraktComment, targetLang: String): TraktComment {
-        return try {
-            withTimeoutOrNull(5000) {
-                var result = translateWithBaiduAI(comment.comment, targetLang)
-                val isLongText = comment.comment.length > 6000
-                if (result.isNullOrEmpty() && !isLongText) result = translateWithBaidu(comment.comment, targetLang)
+    /** 翻译单条评论（内部复用，供并发调用；经信号量限流避免打满网关） */
+    private suspend fun translateOneComment(comment: TraktComment, targetLang: String): TraktComment =
+        translateSemaphore.withPermit {
+            try {
+                withTimeoutOrNull(5000) {
+                    var result = translateWithBaiduAI(comment.comment, targetLang)
+                    val isLongText = comment.comment.length > 6000
+                    if (result.isNullOrEmpty() && !isLongText) result = translateWithBaidu(comment.comment, targetLang)
 
-                if (!result.isNullOrEmpty() && result != comment.comment) {
-                    translationCache.put(comment.id, result)
-                    comment.copy(comment = result)
-                } else comment
-            } ?: comment
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.e("CommentTranslator", "Translation error: ${e.message}", e)
-            comment
+                    if (!result.isNullOrEmpty() && result != comment.comment) {
+                        translationCache.put(comment.id, result)
+                        comment.copy(comment = result)
+                    } else comment
+                } ?: comment
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e("CommentTranslator", "Translation error: ${e.message}", e)
+                comment
+            }
         }
-
-    }
 
     /**
      * 百度大模型文本翻译 API（AI）—— 走网关代理。

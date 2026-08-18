@@ -583,6 +583,8 @@ class TraktRepository @Inject constructor(
     private val showWatchlistTotalCountCache = TtlCache<Int>(TTL_STATS, maxSize = 5)
     // 已看历史分页缓存（fetchWatchHistory 用，1 小时 TTL）
     private val watchHistoryCache = TtlCache<WatchHistoryPage>(TTL_WATCH_HISTORY, maxSize = 10)
+    // 剧集观看进度缓存（10 分钟）：重复进出详情页避免重复请求；标记已看后按剧失效
+    private val showProgressCache = TtlCache<TraktShowProgress>(10 * 60 * 1000L, maxSize = 200)
 
     /** 已搜索但未找到有效 Trakt ID 的 tmdbId 集合（负缓存，避免重复请求和转圈） */
     private val notFoundTmdbIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
@@ -996,12 +998,16 @@ class TraktRepository @Inject constructor(
         }
     }
 
-    /** 获取电视剧的观看进度（已看剧集列表） */
+    /** 获取电视剧的观看进度（已看剧集列表），10 分钟内存缓存 */
     suspend fun getShowWatchedProgress(showTraktId: Int): Result<TraktShowProgress> {
+        val key = "show_$showTraktId"
+        showProgressCache.get(key)?.let { return Result.success(it) }
         return try {
             val response = traktApiService.getShowWatchedProgress(showTraktId)
             if (response.isSuccessful) {
-                Result.success(response.body() ?: TraktShowProgress())
+                val body = response.body() ?: TraktShowProgress()
+                showProgressCache.put(key, body)
+                Result.success(body)
             } else {
                 Result.failure(Exception("Failed to fetch watched progress: ${response.code()}"))
             }
@@ -1045,6 +1051,7 @@ class TraktRepository @Inject constructor(
                     addToWatchedCache(showTraktId, showTmdbId, MediaType.SHOW)
                     showWatchlistCache.clear()
                     showWatchlistTotalCountCache.clear()
+                    showProgressCache.remove("show_$showTraktId")
                 }
                 Result.success(Unit)
             } else {

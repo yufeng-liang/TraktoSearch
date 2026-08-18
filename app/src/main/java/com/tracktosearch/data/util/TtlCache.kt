@@ -175,6 +175,13 @@ open class TtlCache<T>(
         }
     }
 
+    /** 删除单个 key（如数据变更后失效对应条目），不影响其他条目与飞行中请求 */
+    fun remove(key: String) {
+        synchronized(generationLock) {
+            cache.remove(key)
+        }
+    }
+
     private fun trimToSize() {
         if (maxSize <= 0) return
         val size = cache.size

@@ -146,6 +146,13 @@ class TmdbRepository @Inject constructor(
         TTL_LISTS, 10, persistentDataStore, json, "trending_movies_v1", persistentScope
     )
 
+    // 分页列表内存缓存（6 小时，不落盘避免 DataStore 膨胀）：
+    // "查看全部"Sheet 翻页时复用已加载页，避免每次翻页重复请求同一页
+    private val trendingPagesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS, maxSize = 50)
+    private val popularPagesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS, maxSize = 50)
+    private val upcomingPagesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS, maxSize = 50)
+    private val topRatedPagesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS, maxSize = 50)
+
     // 内存缓存（短期，App 进程内有效）
     private val movieTitleCache = TtlCache<String>(TTL_DETAIL, maxSize = 100)
     private val tvTitleCache = TtlCache<String>(TTL_DETAIL, maxSize = 100)
@@ -627,19 +634,22 @@ class TmdbRepository @Inject constructor(
         }
     }
 
-    /** 趋势电影（今日/本周，分页）—— 用于"查看全部"Sheet，绕过缓存 */
+    /** 趋势电影（今日/本周，分页）—— 用于"查看全部"Sheet，每页内存缓存 6 小时 */
     suspend fun getTrendingMovies(timeWindow: String = "day", page: Int): List<TmdbSearchResult> {
-        return try {
-            val response = tmdbApiService.getTrendingMovies(
-                timeWindow = timeWindow,
-                language = getTmdbLanguage(),
-                page = page
-            )
-            if (response.isSuccessful) {
-                response.body()?.results ?: emptyList()
-            } else emptyList()
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            emptyList()
+        val key = langKey("${timeWindow}_p$page")
+        return trendingPagesCache.getOrAwait(key) {
+            try {
+                val response = tmdbApiService.getTrendingMovies(
+                    timeWindow = timeWindow,
+                    language = getTmdbLanguage(),
+                    page = page
+                )
+                if (response.isSuccessful) {
+                    response.body()?.results ?: emptyList()
+                } else emptyList()
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                emptyList()
+            }
         }
     }
 
@@ -660,15 +670,18 @@ class TmdbRepository @Inject constructor(
         }
     }
 
-    /** 热门电影（分页） */
+    /** 热门电影（分页，每页内存缓存 6 小时） */
     suspend fun getPopularMovies(page: Int): List<TmdbSearchResult> {
-        return try {
-            val response = tmdbApiService.getPopularMovies(language = getTmdbLanguage(), page = page)
-            if (response.isSuccessful) {
-                response.body()?.results ?: emptyList()
-            } else emptyList()
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            emptyList()
+        val key = langKey("p$page")
+        return popularPagesCache.getOrAwait(key) {
+            try {
+                val response = tmdbApiService.getPopularMovies(language = getTmdbLanguage(), page = page)
+                if (response.isSuccessful) {
+                    response.body()?.results ?: emptyList()
+                } else emptyList()
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                emptyList()
+            }
         }
     }
 
@@ -689,15 +702,18 @@ class TmdbRepository @Inject constructor(
         }
     }
 
-    /** 即将上映（分页） */
+    /** 即将上映（分页，每页内存缓存 6 小时） */
     suspend fun getUpcomingMovies(page: Int): List<TmdbSearchResult> {
-        return try {
-            val response = tmdbApiService.getUpcomingMovies(language = getTmdbLanguage(), page = page)
-            if (response.isSuccessful) {
-                response.body()?.results ?: emptyList()
-            } else emptyList()
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            emptyList()
+        val key = langKey("p$page")
+        return upcomingPagesCache.getOrAwait(key) {
+            try {
+                val response = tmdbApiService.getUpcomingMovies(language = getTmdbLanguage(), page = page)
+                if (response.isSuccessful) {
+                    response.body()?.results ?: emptyList()
+                } else emptyList()
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                emptyList()
+            }
         }
     }
 
@@ -718,15 +734,18 @@ class TmdbRepository @Inject constructor(
         }
     }
 
-    /** 高分电影（分页） */
+    /** 高分电影（分页，每页内存缓存 6 小时） */
     suspend fun getTopRatedMovies(page: Int): List<TmdbSearchResult> {
-        return try {
-            val response = tmdbApiService.getTopRatedMovies(language = getTmdbLanguage(), page = page)
-            if (response.isSuccessful) {
-                response.body()?.results ?: emptyList()
-            } else emptyList()
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            emptyList()
+        val key = langKey("p$page")
+        return topRatedPagesCache.getOrAwait(key) {
+            try {
+                val response = tmdbApiService.getTopRatedMovies(language = getTmdbLanguage(), page = page)
+                if (response.isSuccessful) {
+                    response.body()?.results ?: emptyList()
+                } else emptyList()
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                emptyList()
+            }
         }
     }
 
