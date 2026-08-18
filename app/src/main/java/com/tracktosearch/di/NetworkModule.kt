@@ -20,6 +20,8 @@ import com.tracktosearch.data.remote.update.GitHubUpdateApiService
 import com.tracktosearch.data.remote.update.GiteeUpdateApiService
 import com.tracktosearch.data.remote.weather.XiaomiWeatherApi
 import com.tracktosearch.data.remote.zreso.ZresoApiService
+import com.tracktosearch.data.util.ConnectivityObserver
+import com.tracktosearch.data.util.DnsCache
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.persistentTtlCache
 import dagger.Module
@@ -39,7 +41,6 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
-import java.net.Inet4Address
 import java.util.concurrent.TimeUnit
 import javax.inject.Named
 import javax.inject.Singleton
@@ -84,18 +85,18 @@ object NetworkModule {
         }
     }
 
-    /** 共享基础 OkHttpClient：连接池 + 线程池 + IPv4 DNS，子客户端通过 newBuilder() 复用 */
+    /** 共享基础 OkHttpClient：连接池 + 线程池 + IPv4 DNS 缓存，子客户端通过 newBuilder() 复用 */
     @Provides
     @Singleton
-    fun provideBaseOkHttpClient(): OkHttpClient {
+    fun provideBaseOkHttpClient(
+        dnsCache: DnsCache,
+        connectivityObserver: ConnectivityObserver
+    ): OkHttpClient {
         return OkHttpClient.Builder()
             .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES))
-            .dns(object : okhttp3.Dns {
-                override fun lookup(hostname: String): List<java.net.InetAddress> {
-                    val addrs = okhttp3.Dns.SYSTEM.lookup(hostname)
-                    return addrs.filter { it is Inet4Address }.ifEmpty { addrs }
-                }
-            })
+            .dns(dnsCache)
+            // 无网快速失败：避免离线时按 connectTimeout 空等浪费电量，网络恢复后 OkHttp 自动重连
+            .addInterceptor(NetworkStatusInterceptor(connectivityObserver))
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
             .writeTimeout(10, TimeUnit.SECONDS)
@@ -105,12 +106,17 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    fun provideDnsCache(): DnsCache = DnsCache()
+
+    @Provides
+    @Singleton
     @Named("trakt")
     fun provideTraktOkHttpClient(
         baseClient: OkHttpClient,
         loggingInterceptor: HttpLoggingInterceptor,
         cache: Cache,
-        authInterceptor: AuthInterceptor
+        authInterceptor: AuthInterceptor,
+        connectivityObserver: ConnectivityObserver
     ): OkHttpClient {
         return baseClient.newBuilder()
             .cache(cache)
@@ -122,7 +128,7 @@ object NetworkModule {
                     .build()
                 chain.proceed(request)
             })
-            .addInterceptor(RetryInterceptor(maxRetries = 2))
+            .addInterceptor(RetryInterceptor(connectivityObserver = connectivityObserver, maxRetries = 2))
             .addInterceptor(loggingInterceptor)
             .build()
     }
@@ -147,7 +153,8 @@ object NetworkModule {
         baseClient: OkHttpClient,
         loggingInterceptor: HttpLoggingInterceptor,
         cache: Cache,
-        authInterceptor: AuthInterceptor
+        authInterceptor: AuthInterceptor,
+        connectivityObserver: ConnectivityObserver
     ): OkHttpClient {
         return baseClient.newBuilder()
             .cache(cache)
@@ -158,7 +165,7 @@ object NetworkModule {
                     .build()
                 chain.proceed(request)
             })
-            .addInterceptor(RetryInterceptor(maxRetries = 2))
+            .addInterceptor(RetryInterceptor(connectivityObserver = connectivityObserver, maxRetries = 2))
             .addInterceptor(loggingInterceptor)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
@@ -703,10 +710,26 @@ object NetworkModule {
 }
 
 /**
+ * 网络状态感知拦截器：离线时立即失败，跳过 connectTimeout 空等。
+ * 挂在 base client，所有子客户端（含图片 client）继承。
+ */
+class NetworkStatusInterceptor(
+    private val connectivityObserver: ConnectivityObserver
+) : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): okhttp3.Response {
+        if (connectivityObserver.status.value != ConnectivityObserver.NetworkStatus.ONLINE) {
+            throw java.io.IOException("no network")
+        }
+        return chain.proceed(chain.request())
+    }
+}
+
+/**
  * 带指数退避的重试拦截器
  * 对 429 (Too Many Requests) 和 5xx 错误自动重试
  */
 class RetryInterceptor(
+    private val connectivityObserver: ConnectivityObserver,
     private val maxRetries: Int = 2,
     private val baseDelayMs: Long = 500L,
     private val tokenProvider: () -> String? = { null }
@@ -717,13 +740,17 @@ class RetryInterceptor(
         var retries = 0
 
         while (shouldRetry(response) && retries < maxRetries) {
+            // 离线时跳过重试：网络已不可用，重试只会浪费电量与 dispatcher 线程
+            if (connectivityObserver.status.value != ConnectivityObserver.NetworkStatus.ONLINE) {
+                break
+            }
             // 优先读 Retry-After header（429 响应通常携带，单位秒），否则用指数退避
             val retryAfterSec = response.header("Retry-After")?.toLongOrNull()
             response.close()
-            // 限制最大延迟 10 秒,避免 Retry-After 几十秒时长时间阻塞 OkHttp dispatcher 线程
+            // 限制最大延迟 3 秒：既保留 429 退避语义，又避免长时间阻塞 OkHttp dispatcher 线程
             val delayMs = (retryAfterSec?.let { it * 1000 }
                 ?: baseDelayMs * 2.0.pow(retries.toDouble()).toLong())
-                .coerceAtMost(10_000L)
+                .coerceAtMost(3_000L)
             try {
                 Thread.sleep(delayMs)
             } catch (_: InterruptedException) {

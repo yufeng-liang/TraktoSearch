@@ -34,6 +34,7 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var baseOkHttpClient: OkHttpClient
+    @Inject lateinit var dnsCache: DnsCache
     @Inject lateinit var notificationScheduler: NotificationScheduler
     @Inject lateinit var authCheckScheduler: AuthCheckScheduler
     @Inject lateinit var crashLogUploader: com.tracktosearch.data.util.CrashLogUploader
@@ -123,7 +124,7 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
         // 4. 显式声明 HTTP/2 优先：同一连接多路复用，批量海报下载更高效
         val imageHttpClient = baseOkHttpClient.newBuilder()
             .addInterceptor(doubanRefererInterceptor)
-            .dns(DnsCache())
+            .dns(dnsCache)
             .dispatcher(
                 Dispatcher(Executors.newFixedThreadPool(8)).apply {
                     maxRequests = 20
