@@ -5,7 +5,9 @@ import com.tracktosearch.R
 import com.tracktosearch.data.local.SearchHistoryItem
 import com.tracktosearch.data.local.SearchHistoryStorage
 import com.tracktosearch.data.local.ViewedItemStorage
-import com.tracktosearch.data.remote.douban.DoubanHotApiService
+import com.tracktosearch.data.local.DoubanAuthStorage
+import com.tracktosearch.data.remote.douban.DoubanRepository
+import com.tracktosearch.data.remote.douban.DoubanRexxarApiService
 import com.tracktosearch.data.remote.douban.dto.DoubanHotData
 import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
 import com.tracktosearch.data.remote.dto.DiskType
@@ -67,7 +69,9 @@ class SearchViewModelTest {
     private val resourceRepository = mockk<ResourceRepository>(relaxed = true)
     private val searchHistoryStorage = mockk<SearchHistoryStorage>(relaxed = true)
     private val viewedItemStorage = mockk<ViewedItemStorage>(relaxed = true)
-    private val doubanHotApi = mockk<DoubanHotApiService>(relaxed = true)
+    private val doubanRexxarApi = mockk<DoubanRexxarApiService>(relaxed = true)
+    private val doubanRepository = mockk<DoubanRepository>(relaxed = true)
+    private val doubanAuthStorage = mockk<DoubanAuthStorage>(relaxed = true)
     private val tmdbRepository = mockk<TmdbRepository>(relaxed = true)
     private val traktRepository = mockk<TraktRepository>(relaxed = true)
     private val sharedDoubanHotCache = mockk<PersistentTtlCache<DoubanHotData>>(relaxed = true)
@@ -111,7 +115,8 @@ class SearchViewModelTest {
     fun setup() {
         clearMocks(
             resourceRepository, searchHistoryStorage, viewedItemStorage,
-            doubanHotApi, tmdbRepository, traktRepository, sharedDoubanHotCache
+            doubanRexxarApi, doubanRepository, doubanAuthStorage,
+            tmdbRepository, traktRepository, sharedDoubanHotCache
         )
         historyFlow.value = emptyList()
 
@@ -128,7 +133,9 @@ class SearchViewModelTest {
             resourceRepository = resourceRepository,
             searchHistoryStorage = searchHistoryStorage,
             viewedItemStorage = viewedItemStorage,
-            doubanHotApi = doubanHotApi,
+            doubanRexxarApi = doubanRexxarApi,
+            doubanRepository = doubanRepository,
+            doubanAuthStorage = doubanAuthStorage,
             tmdbRepository = tmdbRepository,
             traktRepository = traktRepository,
             sharedDoubanHotCache = sharedDoubanHotCache,

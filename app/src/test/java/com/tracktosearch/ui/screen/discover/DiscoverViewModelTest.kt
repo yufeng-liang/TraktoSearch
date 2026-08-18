@@ -8,7 +8,7 @@ import com.tracktosearch.data.local.DoubanCredentials
 import com.tracktosearch.data.local.DiscoverSectionStorage
 import com.tracktosearch.data.local.SearchHistoryStorage
 import com.tracktosearch.data.local.ViewedItemStorage
-import com.tracktosearch.data.remote.douban.DoubanHotApiService
+import com.tracktosearch.data.remote.douban.DoubanRexxarApiService
 import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.douban.dto.DoubanHotData
 import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
@@ -67,7 +67,7 @@ class DiscoverViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private lateinit var doubanHotApi: DoubanHotApiService
+    private lateinit var doubanRexxarApi: DoubanRexxarApiService
     private lateinit var tmdbRepository: TmdbRepository
     private lateinit var traktRepository: TraktRepository
     private lateinit var searchHistoryStorage: SearchHistoryStorage
@@ -88,7 +88,7 @@ class DiscoverViewModelTest {
         advanceUntilIdle()
         io.mockk.clearMocks(traktRepository)
         viewModel = DiscoverViewModel(
-            doubanHotApi, tmdbRepository, traktRepository, searchHistoryStorage,
+            doubanRexxarApi, tmdbRepository, traktRepository, searchHistoryStorage,
             viewedItemStorage, discoverSectionStorage,
             sharedDoubanHotCache, doubanRepository, doubanAuthStorage,
             doubanRecommendCache, sessionModeManager, context
@@ -113,7 +113,7 @@ class DiscoverViewModelTest {
 
     @Before
     fun setup() {
-        doubanHotApi = mockk(relaxed = true)
+        doubanRexxarApi = mockk(relaxed = true)
         tmdbRepository = mockk(relaxed = true)
         traktRepository = mockk(relaxed = true)
         searchHistoryStorage = mockk(relaxed = true)
@@ -145,7 +145,7 @@ class DiscoverViewModelTest {
         coEvery { tmdbRepository.getUpcomingMovies() } returns emptyList()
 
         viewModel = DiscoverViewModel(
-            doubanHotApi, tmdbRepository, traktRepository, searchHistoryStorage,
+            doubanRexxarApi, tmdbRepository, traktRepository, searchHistoryStorage,
             viewedItemStorage, discoverSectionStorage,
             sharedDoubanHotCache, doubanRepository, doubanAuthStorage,
             doubanRecommendCache, sessionModeManager, context

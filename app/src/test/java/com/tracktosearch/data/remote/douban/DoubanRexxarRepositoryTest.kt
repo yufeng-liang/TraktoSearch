@@ -5,6 +5,7 @@ import com.google.common.truth.Truth.assertThat
 import androidx.datastore.preferences.core.longPreferencesKey
 import com.tracktosearch.data.repository.DoubanPublicCommentsDocument
 import com.tracktosearch.data.repository.DoubanPublicDataPoolManager
+import com.tracktosearch.data.remote.douban.dto.DoubanRexxarCollectionPage
 import com.tracktosearch.data.remote.douban.dto.DoubanRexxarDetailDto
 import com.tracktosearch.data.remote.douban.dto.DoubanRexxarCoverDto
 import com.tracktosearch.data.remote.douban.dto.DoubanRexxarImageDto
@@ -714,6 +715,7 @@ class DoubanRexxarRepositoryTest {
         val detailResponses = ArrayDeque<Response<DoubanRexxarDetailDto>>()
         val photoResponses = ArrayDeque<Response<DoubanRexxarPhotoPageDto>>()
         val interestResponses = ArrayDeque<Response<DoubanRexxarInterestPageDto>>()
+        val collectionResponses = ArrayDeque<Response<DoubanRexxarCollectionPage>>()
         val detailExceptions = ArrayDeque<Throwable>()
         var blockFirstPhotoRequest = false
         val firstPhotoRequestStarted = CompletableDeferred<Unit>()
@@ -749,5 +751,11 @@ class DoubanRexxarRepositoryTest {
             start: Int,
             count: Int
         ): Response<DoubanRexxarInterestPageDto> = interestResponses.removeFirst()
+
+        override suspend fun getCollectionItems(
+            collectionId: String,
+            start: Int,
+            count: Int
+        ): Response<DoubanRexxarCollectionPage> = collectionResponses.removeFirst()
     }
 }
