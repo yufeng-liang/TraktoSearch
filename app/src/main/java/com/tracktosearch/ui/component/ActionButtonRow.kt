@@ -142,7 +142,8 @@ private fun ActionButtonContent(
                     Icon(
                         imageVector = action.icon,
                         contentDescription = action.label,
-                        tint = contentColor
+                        tint = contentColor,
+                        modifier = Modifier.padding(top = 4.dp)
                     )
                 }
                 Text(
@@ -152,7 +153,8 @@ private fun ActionButtonContent(
                     lineHeight = 12.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(bottom = 4.dp)
                 )
     }
 }
