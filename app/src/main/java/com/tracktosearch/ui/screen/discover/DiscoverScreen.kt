@@ -183,7 +183,7 @@ fun DiscoverScreen(
     val discoverHasContentUnderTopBar by remember {
         derivedStateOf {
             hasListScrolled(
-                firstVisibleItemIndex = discoverListState.layoutInfo.visibleItemsInfo.firstOrNull()?.index,
+                firstVisibleItemIndex = discoverListState.firstVisibleItemIndex,
                 firstVisibleItemScrollOffsetPx = discoverListState.firstVisibleItemScrollOffset
             )
         }

@@ -394,7 +394,7 @@ fun SettingsScreen(
     val settingsHasContentUnderTopBar by remember {
         derivedStateOf {
             hasListScrolled(
-                firstVisibleItemIndex = settingsListState.layoutInfo.visibleItemsInfo.firstOrNull()?.index,
+                firstVisibleItemIndex = settingsListState.firstVisibleItemIndex,
                 firstVisibleItemScrollOffsetPx = settingsListState.firstVisibleItemScrollOffset
             )
         }

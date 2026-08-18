@@ -483,7 +483,7 @@ fun WatchlistScreen(
     val hasContentUnderTopBar by remember(currentGridState) {
         derivedStateOf {
             hasListScrolled(
-                firstVisibleItemIndex = currentGridState.layoutInfo.visibleItemsInfo.firstOrNull()?.index,
+                firstVisibleItemIndex = currentGridState.firstVisibleItemIndex,
                 firstVisibleItemScrollOffsetPx = currentGridState.firstVisibleItemScrollOffset
             )
         }
