@@ -328,7 +328,15 @@ class AuthManager @Inject constructor(
         if (!completed) {
             StartupTrace.mark("auth.initialize.timeout", "timeoutMs=$timeoutMillis")
             // 不取消后台刷新：服务端可能已经完成一次性 refresh token 轮换。
-            handleOffline<Unit>()
+            // 本地会话有效时，网络慢≠离线：乐观置为已授权进入主界面，由后台 job 收敛真实状态
+            // （成功→AUTHORIZED，失败→OFFLINE/EXPIRED），避免启动期网络响应慢被误报离线提示。
+            val hasLocalSession = !deviceId.isNullOrBlank() &&
+                !tokenStorage.getRefreshToken().isNullOrBlank()
+            if (!hasLocalSession) {
+                handleOffline<Unit>()
+            } else {
+                _authState.value = AuthState.AUTHORIZED
+            }
         }
     }
 

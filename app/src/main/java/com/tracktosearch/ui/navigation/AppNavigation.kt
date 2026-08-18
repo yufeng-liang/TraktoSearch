@@ -88,6 +88,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import javax.inject.Inject
 
 @EntryPoint
@@ -420,8 +421,13 @@ fun AppNavigation(
     }
 
     LaunchedEffect(currentAuthState) {
+        // 延迟确认：冷启动/后台校验的网络抖动会短暂置 OFFLINE 随后恢复 AUTHORIZED，
+        // 只有状态稳定为 OFFLINE 才提示离线，避免网络正常时误报。
         if (currentAuthState == AuthState.OFFLINE) {
-            Toast.makeText(context, authOfflineMessage, Toast.LENGTH_LONG).show()
+            delay(3_000)
+            if (authStateHolder.authState.value == AuthState.OFFLINE) {
+                Toast.makeText(context, authOfflineMessage, Toast.LENGTH_LONG).show()
+            }
         }
         if ((currentAuthState == AuthState.UNAUTHORIZED || currentAuthState == AuthState.EXPIRED) &&
             navController.currentDestination?.route == Routes.MAIN

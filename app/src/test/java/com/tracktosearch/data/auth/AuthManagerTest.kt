@@ -98,22 +98,28 @@ class AuthManagerTest {
     }
 
     @Test
-    fun initializeForStartup_timeoutKeepsSessionInOfflineGrace() = runTest {
+    fun initializeForStartup_timeoutKeepsValidSessionAuthorized() = runTest {
         val api = mockk<AuthApiService>()
         val keyManager = mockk<DeviceKeyManager>()
         val continuityManager = mockk<DeviceContinuityManager>()
         val storage = mockk<TokenStorage>()
         val manager = AuthManager(api, keyManager, continuityManager, storage, Json, mockk<AiStorage>(relaxed = true), traktRepositoryProvider)
         val now = System.currentTimeMillis() / 1000
+        val releaseCheck = CompletableDeferred<Unit>()
+        val checkDone = CompletableDeferred<Unit>()
 
         coEvery { storage.ensureCacheLoaded() } returns Unit
         every { storage.getCachedDeviceId() } returns "device-id"
         every { storage.getCachedNextCheckAt() } returns 0L
         every { storage.getCachedLastOnlineAt() } returns now
         coEvery { storage.isTokenValid() } returns true
+        coEvery { storage.getRefreshToken() } returns "refresh-token"
+        every { storage.getCachedAccessToken() } returns "access-token"
+        coEvery { storage.saveSessionMetadata(any(), any(), any()) } returns Unit
         every { continuityManager.getAndroidId() } returns "android-id"
         coEvery { api.check(CheckRequest("android-id")) } coAnswers {
-            delay(1_000)
+            releaseCheck.await()
+            checkDone.complete(Unit)
             Response.success(
                 GatewayResponse(
                     "SUCCESS",
@@ -133,6 +139,85 @@ class AuthManagerTest {
 
         manager.initializeForStartup(timeoutMillis = 100)
 
+        // 网络响应慢于启动等待上限≠离线：乐观保持已授权，后台 job 完成时收敛
+        assertThat(manager.authState.value).isEqualTo(AuthState.AUTHORIZED)
+        releaseCheck.complete(Unit)
+        waitForCompletion(checkDone)
+        coVerify(exactly = 1) { api.check(CheckRequest("android-id")) }
+    }
+
+    @Test
+    fun initializeForStartup_timeoutThenCheckFailureConvergesToOffline() = runTest {
+        val api = mockk<AuthApiService>()
+        val keyManager = mockk<DeviceKeyManager>()
+        val continuityManager = mockk<DeviceContinuityManager>()
+        val storage = mockk<TokenStorage>()
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, mockk<AiStorage>(relaxed = true), traktRepositoryProvider)
+        val now = System.currentTimeMillis() / 1000
+        val releaseCheck = CompletableDeferred<Unit>()
+
+        coEvery { storage.ensureCacheLoaded() } returns Unit
+        every { storage.getCachedDeviceId() } returns "device-id"
+        every { storage.getCachedNextCheckAt() } returns 0L
+        every { storage.getCachedLastOnlineAt() } returns now
+        coEvery { storage.isTokenValid() } returns true
+        coEvery { storage.getRefreshToken() } returns "refresh-token"
+        every { storage.getCachedAccessToken() } returns "access-token"
+        every { continuityManager.getAndroidId() } returns "android-id"
+        coEvery { api.check(CheckRequest("android-id")) } coAnswers {
+            releaseCheck.await()
+            throw java.io.IOException("network down")
+        }
+
+        manager.initializeForStartup(timeoutMillis = 100)
+
+        // 超时瞬间乐观授权；后台校验真实失败后收敛为 OFFLINE（真离线仍保留提示）
+        assertThat(manager.authState.value).isEqualTo(AuthState.AUTHORIZED)
+        releaseCheck.complete(Unit)
+        waitForState(manager, AuthState.OFFLINE)
+    }
+
+    @Test
+    fun initializeForStartup_timeoutWithoutSessionKeepsOfflineGrace() = runTest {
+        val api = mockk<AuthApiService>()
+        val keyManager = mockk<DeviceKeyManager>()
+        val continuityManager = mockk<DeviceContinuityManager>()
+        val storage = mockk<TokenStorage>()
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, mockk<AiStorage>(relaxed = true), traktRepositoryProvider)
+        val now = System.currentTimeMillis() / 1000
+
+        coEvery { storage.ensureCacheLoaded() } returns Unit
+        every { storage.getCachedDeviceId() } returns null
+        every { storage.getCachedNextCheckAt() } returns 0L
+        every { storage.getCachedLastOnlineAt() } returns now
+        coEvery { storage.isTokenValid() } returns true
+        coEvery { storage.getRefreshToken() } returns null
+        every { storage.getCachedAccessToken() } returns "access-token"
+        coEvery { storage.saveSessionMetadata(any(), any(), any()) } returns Unit
+        every { continuityManager.getAndroidId() } returns "android-id"
+        val releaseCheck = CompletableDeferred<Unit>()
+        coEvery { api.check(CheckRequest("android-id")) } coAnswers {
+            releaseCheck.await()
+            Response.success(
+                GatewayResponse(
+                    "SUCCESS",
+                    "OK",
+                    data = CheckResponse(
+                        authorized = true,
+                        friendId = "friend-id",
+                        deviceId = "device-id",
+                        nickname = "friend",
+                        deviceStatus = "ACTIVE",
+                        nextCheckAt = now + 86_400,
+                        configVersion = 1,
+                    ),
+                ),
+            )
+        }
+
+        manager.initializeForStartup(timeoutMillis = 100)
+
+        // 本地会话缺失（异常状态）：超时仍走既有离线宽限路径
         assertThat(manager.authState.value).isEqualTo(AuthState.OFFLINE)
     }
 
@@ -177,16 +262,11 @@ class AuthManagerTest {
         refreshStarted.await()
         startup.await()
 
-        assertThat(manager.authState.value).isEqualTo(AuthState.OFFLINE)
+        // 本地会话有效：超时乐观保持已授权，刷新在后台继续
+        assertThat(manager.authState.value).isEqualTo(AuthState.AUTHORIZED)
         releaseRefresh.complete(Unit)
 
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default.limitedParallelism(1)) {
-            kotlinx.coroutines.withTimeout(2_000) {
-                while (manager.authState.value != AuthState.AUTHORIZED) {
-                    delay(10)
-                }
-            }
-        }
+        waitForState(manager, AuthState.AUTHORIZED)
 
         coVerify(exactly = 1) {
             storage.saveSession("new-access", "new-refresh", any(), "device-id", any(), any())
@@ -343,5 +423,23 @@ class AuthManagerTest {
 
         assertThat(manager.authState.value).isEqualTo(AuthState.UNAUTHORIZED)
         coVerify(exactly = 1) { traktRepository.clearTraktAccountCaches() }
+    }
+
+    private suspend fun waitForState(manager: AuthManager, expected: AuthState) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default.limitedParallelism(1)) {
+            kotlinx.coroutines.withTimeout(5_000) {
+                while (manager.authState.value != expected) {
+                    delay(10)
+                }
+            }
+        }
+    }
+
+    private suspend fun waitForCompletion(deferred: CompletableDeferred<Unit>) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default.limitedParallelism(1)) {
+            kotlinx.coroutines.withTimeout(5_000) {
+                deferred.await()
+            }
+        }
     }
 }
