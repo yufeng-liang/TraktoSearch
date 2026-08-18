@@ -1,7 +1,8 @@
 ﻿package com.tracktosearch.data.util
 
 import android.graphics.Bitmap
-import androidx.palette.graphics.Palette
+import com.tracktosearch.data.util.mcu.quantize.QuantizerCelebi
+import com.tracktosearch.data.util.mcu.score.Score
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -9,7 +10,12 @@ import javax.inject.Singleton
 
 /**
  * 海报主色调提取器。
- * 先查 PosterColorCache,命中直接返回;未命中用 Palette 异步提取 dominantColor,写缓存后返回。
+ * 先查 PosterColorCache,命中直接返回;未命中用 Material Color Utilities(QuantizerCelebi + Score)
+ * 异步提取主色,写缓存后返回。
+ *
+ * 算法说明:QuantizerCelebi 做色彩量化(Wu 预量化 + WSMeans 细化),Score 按 population、
+ * 彩色度与黑白对比度打分排序,选出视觉上最适合做主题背景的颜色,避免纯按像素数量取色
+ * 导致大面积暗部/背景"脏色"胜出的问题。
  */
 @Singleton
 class PosterColorExtractor @Inject constructor(
@@ -24,9 +30,18 @@ class PosterColorExtractor @Inject constructor(
         } else {
             bitmap
         }
-        // 降采样：Palette 只统计颜色分布,缩小到 30x30 面积即可,减少 95%+ 像素计算量
-        val palette = Palette.Builder(safeBitmap).resizeBitmapArea(900).generate()
-        val argb = palette.getDominantColor(0).toLong()
+        // 降采样到最大边 48px 再量化,QuantizerCelebi 只统计颜色分布,缩小后大幅减少像素计算量
+        val sample = Bitmap.createScaledBitmap(
+            safeBitmap,
+            minOf(safeBitmap.width, MAX_SAMPLE_SIZE),
+            minOf(safeBitmap.height, MAX_SAMPLE_SIZE),
+            true
+        )
+        val pixels = IntArray(sample.width * sample.height)
+        sample.getPixels(pixels, 0, sample.width, 0, 0, sample.width, sample.height)
+
+        val colorToPopulation = QuantizerCelebi.quantize(pixels, MAX_QUANTIZE_COLORS)
+        val argb = Score.score(colorToPopulation).firstOrNull()?.toLong() ?: 0L
 
         if (argb != 0L) {
             cache.putColor(posterUrl, argb)
@@ -40,5 +55,13 @@ class PosterColorExtractor @Inject constructor(
      */
     suspend fun getCachedColor(posterUrl: String): Long? = withContext(Dispatchers.Default) {
         cache.getColor(posterUrl)
+    }
+
+    private companion object {
+        /** 降采样最大边长,保持速度与质量平衡 */
+        const val MAX_SAMPLE_SIZE = 48
+
+        /** 量化目标颜色数,Score 将从这些代表色中打分排名 */
+        const val MAX_QUANTIZE_COLORS = 128
     }
 }

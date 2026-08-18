@@ -19,8 +19,8 @@ import org.robolectric.annotation.Config
  *
  * 测试策略：
  * - mock PosterColorCache 隔离 DataStore/Context 依赖，专注测试 Extractor 逻辑
- * - 使用 Robolectric 提供 Bitmap/Palette 的 Android 影子实现
- * - 涉及 Palette 实际提取的测试用 assumeTrue 保护，Palette 在 Robolectric 不可用时自动跳过
+ * - 使用 Robolectric 提供 Bitmap 的 Android 影子实现
+ * - 涉及实际颜色提取(QuantizerCelebi + Score)的测试用 assumeTrue 保护，Robolectric 不可用时自动跳过
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
@@ -50,8 +50,8 @@ class PosterColorExtractorTest {
 
         val extracted = extractor.extractDominantColor("url1", bitmap)
 
-        // Palette 应从纯红 bitmap 提取非零颜色；若 Robolectric Palette 不可用则跳过
-        assumeTrue("Palette should extract non-zero color", extracted != 0L)
+        // 提取器应从纯红 bitmap 提取非零颜色；若 Robolectric 提取不可用则跳过
+        assumeTrue("Extractor should extract non-zero color", extracted != 0L)
         coVerify { cache.putColor("url1", extracted) }
     }
 
@@ -70,7 +70,7 @@ class PosterColorExtractorTest {
 
         val extracted = extractor.extractDominantColor("url1", bitmap)
 
-        assumeTrue("Palette should extract non-zero color", extracted != 0L)
+        assumeTrue("Extractor should extract non-zero color", extracted != 0L)
 
         // 捕获写入缓存的颜色值
         val slot = slot<Long>()
