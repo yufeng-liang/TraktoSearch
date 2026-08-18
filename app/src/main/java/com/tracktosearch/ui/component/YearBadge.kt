@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
@@ -29,19 +30,28 @@ fun YearBadge(
     modifier: Modifier = Modifier,
     fontSize: Int = 10
 ) {
-    val textStyle = MaterialTheme.typography.labelSmall.copy(
-        fontSize = fontSize.sp,
-        fontWeight = FontWeight.Bold
-    )
+    // 列表卡片高频重组：remember 缓存 TextStyle 与阴影修饰符链，
+    // 避免每次组合重复 copy 创建 TextStyle、重复构建 Modifier 链
+    // （MaterialTheme.typography 是 @Composable 属性，须在 remember 外读取）
+    val labelSmall = MaterialTheme.typography.labelSmall
+    val textStyle = remember(fontSize, labelSmall) {
+        labelSmall.copy(
+            fontSize = fontSize.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+    val shadowModifier = remember {
+        Modifier
+            .offset(x = 1.dp, y = 1.5.dp)
+            .blur(3.dp, BlurredEdgeTreatment.Unbounded)
+    }
     Box(modifier = modifier) {
         // 阴影层：暗色 + 右下偏移 + 模糊（Unbounded 让阴影不被裁切）
         Text(
             text = year,
             style = textStyle,
             color = Color.Black.copy(alpha = 0.65f),
-            modifier = Modifier
-                .offset(x = 1.dp, y = 1.5.dp)
-                .blur(3.dp, BlurredEdgeTreatment.Unbounded)
+            modifier = shadowModifier
         )
         // 主层：纯白
         Text(

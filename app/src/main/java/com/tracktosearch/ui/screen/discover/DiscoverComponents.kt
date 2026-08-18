@@ -260,30 +260,16 @@ internal fun MovieCard(
                 }
             }
             if (ratingValue != null) {
-                // 评分角标：黑半透明 scrim 底 + 圆角边框，替代原 per-card HazeState 毛玻璃底。
-                // 与并行任务统一方案一致：去掉每张卡独立的 HazeState/hazeSource，提升 LazyRow 滑动流畅度。
-                // （这是本任务唯一的视觉变化：角标由纯阴影文字改为半透明底 chip，文字/边框样式保留）
-                val badgeShape = RoundedCornerShape(8.dp)
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(2.dp)
-                        .clip(badgeShape)
-                        .background(Color.Black.copy(alpha = 0.45f))
-                        .border(
-                            width = 1.dp,
-                            color = Color.White.copy(alpha = 0.18f),
-                            shape = badgeShape
-                        )
-                        // 内部 padding 不设水平值：宽度由 RatingBadge 自带的 5dp 水平 padding 决定；
-                        // 顶部留 4dp 容纳 RatingBadge 内部的 -2dp 上移，避免星星图标被 chip 裁切
-                        .padding(top = 4.dp)
-                ) {
-                    if (isDoubanRating) {
-                        DoubanRatingBadge(rating = ratingValue)
-                    } else {
-                        RatingBadge(rating = ratingValue)
-                    }
+                // 评分角标：RatingBadge/DoubanRatingBadge 组件自身已含 scrim 半透明底 + 圆角细边框
+                // （与其他页面 PosterCard/DiscoverSheets 的用法一致），这里直接复用统一规格。
+                // 此前在组件外再套一层 chip 会导致双层黑底、两圈不同样式的边框叠加。
+                val badgeModifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(2.dp)
+                if (isDoubanRating) {
+                    DoubanRatingBadge(rating = ratingValue, modifier = badgeModifier)
+                } else {
+                    RatingBadge(rating = ratingValue, modifier = badgeModifier)
                 }
             }
             if (isResolving) {

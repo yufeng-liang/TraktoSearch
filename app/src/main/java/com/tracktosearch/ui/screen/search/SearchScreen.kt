@@ -1856,25 +1856,16 @@ private fun PopularSearchesSection(
 
 // ========== 豆瓣热榜组件（供 DiscoverScreen 复用） ==========
 
-/** 标题内评分提取正则：匹配【9.2】形式，文件级缓存避免每次组合内联编译。 */
-private val DOUBAN_RATING_IN_TITLE = Pattern.compile("【(\\d+\\.?\\d*)】")
-
-/** 去除标题内评分【9.2】前缀部分。 */
-private val DOUBAN_RATING_BRACKET = Pattern.compile("【\\d+\\.?\\d*】\\s*")
-
-/** 去除标题开头排名 #1 前缀。 */
+/** 去除标题开头排名 #1 前缀（评分不再内嵌标题，直接用接口 rating 字段）。 */
 private val DOUBAN_RANK_PREFIX = Pattern.compile("^#\\d+\\s*")
 
-/** 解析豆瓣热榜标题：返回 (评分, 去除评分与排名前缀后的展示标题)。 */
-private fun parseDoubanHotTitle(title: String): Pair<Double?, String> {
-    val matcher = DOUBAN_RATING_IN_TITLE.matcher(title)
-    val rating = if (matcher.find()) matcher.group(1)?.toDoubleOrNull() else null
-    val displayTitle = DOUBAN_RATING_BRACKET
-        .matcher(title)
-        .replaceAll("")
-        .let { DOUBAN_RANK_PREFIX.matcher(it).replaceAll("") }
-    return rating to displayTitle
-}
+/** 解析接口评分字段："暂无评分"/空白返回 null，其余转 Double。 */
+private fun parseDoubanRating(rating: String): Double? =
+    rating.takeIf { it.isNotBlank() && it != "暂无评分" }?.toDoubleOrNull()
+
+/** 清理展示标题：仅去除排名前缀（评分由 [parseDoubanRating] 单独从接口字段解析）。 */
+private fun cleanDoubanTitle(title: String): String =
+    DOUBAN_RANK_PREFIX.matcher(title).replaceAll("")
 
 @Composable
 fun DoubanHotCategorySection(
@@ -1960,8 +1951,9 @@ fun DoubanHotCard(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    // 标题解析结果只依赖 item.title，remember 缓存避免每次重组重复正则匹配/替换
-    val (rating, displayTitle) = remember(item.title) { parseDoubanHotTitle(item.title) }
+    // 评分直接用接口返回的 rating 字段；标题仅去除排名前缀（不再从标题正则提取评分）
+    val rating = remember(item.rating) { parseDoubanRating(item.rating) }
+    val displayTitle = remember(item.title) { cleanDoubanTitle(item.title) }
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -2129,8 +2121,9 @@ private fun DoubanHotGridItem(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    // 标题解析结果只依赖 item.title，remember 缓存避免每次重组重复正则匹配/替换
-    val (rating, displayTitle) = remember(item.title) { parseDoubanHotTitle(item.title) }
+    // 评分直接用接口返回的 rating 字段；标题仅去除排名前缀（不再从标题正则提取评分）
+    val rating = remember(item.rating) { parseDoubanRating(item.rating) }
+    val displayTitle = remember(item.title) { cleanDoubanTitle(item.title) }
 
     Card(
         onClick = { onClick() },

@@ -460,13 +460,12 @@ fun TraktSearchScreen(
             derivedStateOf {
                 if (isDiskTab) {
                     hasListScrolled(
-                        firstVisibleItemIndex = diskListState.layoutInfo.visibleItemsInfo.firstOrNull()?.index,
+                        firstVisibleItemIndex = diskListState.firstVisibleItemIndex,
                         firstVisibleItemScrollOffsetPx = diskListState.firstVisibleItemScrollOffset
                     )
                 } else {
-                    val firstVisibleItem = currentGridState.layoutInfo.visibleItemsInfo.firstOrNull()
                     hasListScrolled(
-                        firstVisibleItemIndex = firstVisibleItem?.index,
+                        firstVisibleItemIndex = currentGridState.firstVisibleItemIndex,
                         firstVisibleItemScrollOffsetPx = currentGridState.firstVisibleItemScrollOffset
                     )
                 }
