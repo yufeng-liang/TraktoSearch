@@ -5,13 +5,14 @@ import com.tracktosearch.BuildConfig
 /** TMDB 图片 URL 构建工具，统一管理各尺寸 base url，避免散落硬编码 */
 object TmdbImageUrls {
     /**
-     * 图片 base URL：默认走网关图片代理（/api/tmdb-image/ 路由，带 CF 边缘缓存），
+     * 图片 base URL：默认走网关图片代理（/api/tmdb-image-v2/ 路由，带 CF 边缘缓存）。
+     * v2：网关回源请求 WebP（比 JPEG 小 30-50%），缓存 key 与 v1（JPEG）隔离，WebP 立即生效。
      * 国内直连 image.tmdb.org 慢/不稳定，走网关后首次回源缓存、后续命中边缘零回源。
      * 网关地址由 local.properties 的 gateway.base.url 配置，可整体切换。
      */
     private val BASE: String = run {
         val gateway = BuildConfig.GATEWAY_BASE_URL.trimEnd('/')
-        "$gateway/api/tmdb-image/t/p"
+        "$gateway/api/tmdb-image-v2/t/p"
     }
 
     val W92: String = "$BASE/w92"

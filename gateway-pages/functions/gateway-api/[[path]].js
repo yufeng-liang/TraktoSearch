@@ -24,8 +24,9 @@ export async function onRequest(context) {
     const url = new URL(request.url);
     const upstreamPath = url.pathname.slice(PUBLIC_PREFIX.length) || '/';
 
-    // 路由：/api/tmdb-image/* → 直接代理 TMDB 图片（不经过 Service Binding）
-    if (upstreamPath.startsWith('/api/tmdb-image/')) {
+    // 路由：/api/tmdb-image(-v2)/* → 直接代理 TMDB 图片（不经过 Service Binding）
+    // v2：回源请求 WebP（Accept 协商），缓存 key 版本隔离，避免旧 JPEG 缓存（30 天 TTL）挡住新格式
+    if (/^\/api\/tmdb-image(-v2)?\//.test(upstreamPath)) {
         return handleTmdbImage(request, upstreamPath, context);
     }
 
@@ -117,10 +118,14 @@ export async function onRequest(context) {
         const responseHeaders = new Headers(upstream.headers);
         responseHeaders.set(
             'Cache-Control',
-            cachePlan && upstream.status === 200
-                ? `public, max-age=0, s-maxage=${cachePlan.ttlSeconds}, stale-while-revalidate=60`
-                : 'no-store'
+            cachePlan && upstream.status === 200 ? 'public, max-age=0' : 'no-store'
         );
+        // 边缘缓存 TTL 用 CDN-Cache-Control 单独控制：s-maxage 隐含 proxy-revalidate，
+        // 与 stale-while-revalidate 混用会使其失效（Cloudflare 官方文档明确禁止）；
+        // 客户端 max-age=0 不缓存 API 响应（App 有自建缓存层）。
+        if (cachePlan && upstream.status === 200) {
+            responseHeaders.set('CDN-Cache-Control', `max-age=${cachePlan.ttlSeconds}, stale-while-revalidate=60`);
+        }
         responseHeaders.set('X-Gateway-Cache', cachePlan ? 'MISS' : 'BYPASS');
         for (const [name, value] of Object.entries(corsHeaders())) {
             if (!responseHeaders.has(name)) responseHeaders.set(name, value);
@@ -200,6 +205,7 @@ function jsonResponse(body, status) {
 /**
  * TMDB 图片代理：App 国内直连 image.tmdb.org 慢/不稳定，改为走 Cloudflare Pages 边缘节点。
  * 图片 URL 内容不变，长 TTL 边缘缓存（30 天），命中后零回源。
+ * v2 起回源请求 WebP（Accept 协商），比 JPEG 平均小 30-50%。
  * 路径白名单严格校验，防止网关变成开放代理被滥用。
  */
 const TMDB_IMAGE_ALLOWED_SIZES = new Set(['w92', 'w185', 'w342', 'w500', 'w780', 'original', 'h632']);
@@ -209,8 +215,9 @@ async function handleTmdbImage(request, upstreamPath, context) {
         return jsonResponse({ code: 'METHOD_NOT_ALLOWED', message: 'Method not allowed' }, 405);
     }
 
-    // 校验结构：/api/tmdb-image/t/p/<size>/<file>.jpg
-    const rest = upstreamPath.slice('/api/tmdb-image'.length); // /t/p/...
+    // 兼容 v1（JPEG）与 v2（WebP）前缀，v2 缓存 key 独立
+    const v2 = upstreamPath.startsWith('/api/tmdb-image-v2/');
+    const rest = upstreamPath.slice(v2 ? '/api/tmdb-image-v2'.length : '/api/tmdb-image'.length); // /t/p/...
     const parts = rest.split('/');
     if (parts.length < 5 || parts[0] !== '' || parts[1] !== 't' || parts[2] !== 'p') {
         return jsonResponse({ code: 'INVALID_IMAGE_PATH', message: 'Invalid image path' }, 400);
@@ -224,11 +231,14 @@ async function handleTmdbImage(request, upstreamPath, context) {
         return jsonResponse({ code: 'INVALID_IMAGE_FILE', message: 'Invalid image file' }, 400);
     }
 
-    const upstreamUrl = 'https://image.tmdb.org/t/p/' + size + '/' + filePart;
+    // v2 回源 URL 带版本参数：CF CDN 层（cf.cacheTtl 边缘缓存）缓存 key 不含 Accept，
+    // 不加参数会命中 v1 缓存的 JPEG，回源永远拿不到 WebP。TMDB CloudFront 忽略该参数。
+    const upstreamUrl = 'https://image.tmdb.org/t/p/' + size + '/' + filePart + (v2 ? '?v2=1' : '');
 
-    // 边缘缓存（30 天）：用网关内部 URL 作 key，与 API 缓存隔离
+    // 边缘缓存（30 天）：用网关内部 URL 作 key，与 API 缓存隔离。
+    // v2 再加 /v2 前缀：缓存 key 版本隔离，避免上轮部署写入的 JPEG 缓存挡住 WebP。
     const cache = globalThis.caches?.default;
-    const cacheKey = new Request('https://gateway.internal' + upstreamPath, { method: 'GET' });
+    const cacheKey = new Request('https://gateway.internal' + (v2 ? '/v2' : '') + upstreamPath, { method: 'GET' });
     if (cache) {
         try {
             const cached = await cache.match(cacheKey);
@@ -248,20 +258,26 @@ async function handleTmdbImage(request, upstreamPath, context) {
 
     try {
         const upstream = await fetch(upstreamUrl, {
-            headers: { 'User-Agent': 'TrackToSearch-ImageProxy/1.0' },
+            headers: {
+                'User-Agent': 'TrackToSearch-ImageProxy/1.0',
+                // 请求 WebP：TMDB CloudFront 按 Accept 协商返回 webp，比 JPEG 小 30-50%。
+                // 固定单一格式（App 端原生支持 webp 解码），缓存无需 Vary 分片。
+                'Accept': 'image/webp,image/*',
+            },
             cf: { cacheTtl: 2592000, cacheEverything: true },
         });
 
         if (!upstream.ok) {
             // 上游错误（4xx/5xx）不缓存，原样转发状态码
             const headers = new Headers(upstream.headers);
-            headers.set('Content-Type', upstream.headers.get('Content-Type') || 'image/jpeg');
+            headers.set('Content-Type', upstream.headers.get('Content-Type') || 'image/webp');
             headers.set('Cache-Control', 'no-store');
             return new Response(upstream.body, { status: upstream.status, headers });
         }
 
         const headers = new Headers(upstream.headers);
-        headers.set('Cache-Control', 'public, max-age=86400, s-maxage=2592000, immutable');
+        // stale-if-error：TMDB 故障时边缘仍可服务 stale 内容兜底（30 天缓存窗口内几乎无感，仅防边界 MISS 暴露）
+        headers.set('Cache-Control', 'public, max-age=86400, s-maxage=2592000, immutable, stale-if-error=86400');
         headers.set('Content-Type', upstream.headers.get('Content-Type') || 'image/jpeg');
         headers.set('X-Gateway-Cache', 'MISS');
         for (const [name, value] of Object.entries(corsHeaders())) {
