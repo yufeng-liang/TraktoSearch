@@ -70,6 +70,27 @@ class CustomSearchService @Inject constructor(
         parseResponse(source, jsonElement, keyword)
     }
 
+    /**
+     * 获取原始响应 JSON（自动探测用）：请求失败或非 2xx 返回 null
+     */
+    suspend fun fetchRaw(source: CustomSearchSource, keyword: String): JsonElement? = withContext(Dispatchers.IO) {
+        try {
+            val url = buildUrl(source, keyword)
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("User-Agent", com.tracktosearch.di.NetworkModule.USER_AGENT)
+                .addHeader("Referer", source.baseUrl)
+                .build()
+            okHttpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext null
+                val body = response.body?.string() ?: return@withContext null
+                json.parseToJsonElement(body)
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun buildUrl(source: CustomSearchSource, keyword: String): String {
         val base = source.baseUrl.trimEnd('/')
         val path = source.apiPath.trimStart('/')

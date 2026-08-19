@@ -9,10 +9,10 @@ data class CustomSearchSource(
     val baseUrl: String,        // e.g., "https://so.252035.xyz/"
     val apiPath: String,        // e.g., "api/search"
     val keywordParam: String,   // e.g., "kw"
-    val cloudTypesParam: String?, // e.g., "cloud_types"
-    val cloudTypesValue: String?, // e.g., "quark,baidu,aliyun,xunlei,uc,115"
-    val srcParam: String?,      // e.g., "src"
-    val srcValue: String?,      // e.g., "all"
+    val cloudTypesParam: String? = null, // e.g., "cloud_types"
+    val cloudTypesValue: String? = null, // e.g., "quark,baidu,aliyun,xunlei,uc,115"
+    val srcParam: String? = null,      // e.g., "src"
+    val srcValue: String? = null,      // e.g., "all"
     val enabled: Boolean = true,
     // Parsing mode: "pansou_template" | "zreso_template" | "custom"
     val parseMode: String = "pansou_template",
