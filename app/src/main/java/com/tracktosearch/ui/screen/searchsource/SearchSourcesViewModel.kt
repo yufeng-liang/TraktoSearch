@@ -5,6 +5,7 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.R
+import com.tracktosearch.data.local.ClipboardImportStorage
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.CustomSearchSourceStorage
 import com.tracktosearch.data.local.PanHubConfigStorage
@@ -30,6 +31,7 @@ class SearchSourcesViewModel @Inject constructor(
     private val customSearchSourceStorage: CustomSearchSourceStorage,
     private val panHubConfigStorage: PanHubConfigStorage,
     private val customSearchService: CustomSearchService,
+    private val clipboardImportStorage: ClipboardImportStorage,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -86,6 +88,17 @@ class SearchSourcesViewModel @Inject constructor(
             if (conflict != null) customSearchSourceStorage.updateSource(finalSource)
             else customSearchSourceStorage.addSource(finalSource)
         }
+    }
+
+    /** 剪贴板自动导入：等待忽略记录加载完成（冷启动检测前调用） */
+    suspend fun awaitAutoImportLoaded() = clipboardImportStorage.awaitLoaded()
+
+    /** 剪贴板自动导入：指纹是否已被忽略（取消/已导入过） */
+    fun isAutoImportIgnored(fingerprint: String): Boolean = clipboardImportStorage.isIgnored(fingerprint)
+
+    /** 剪贴板自动导入：记录指纹为已处理（取消或导入成功），跨启动不再提示 */
+    fun markAutoImportIgnored(fingerprint: String) {
+        viewModelScope.launch { clipboardImportStorage.markIgnored(fingerprint) }
     }
 
     fun setCustomSourceEnabled(id: String, enabled: Boolean) {

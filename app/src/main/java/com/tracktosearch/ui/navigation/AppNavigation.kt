@@ -102,6 +102,7 @@ import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
@@ -1298,7 +1299,8 @@ fun AppNavigation(
             }
 
             // ---- 剪贴板自动导入：冷启动/回前台检测到分享配置时直接弹导入弹层 ----
-            // 仅已授权/离线（主界面可用）时检测；按文本指纹会话内去重；更新弹窗优先展示
+            // 仅已授权/离线（主界面可用）时检测；按文本指纹去重（会话内 + 跨启动持久化忽略）；
+            // 更新弹窗优先展示
             val autoImportVm: SearchSourcesViewModel = hiltViewModel()
             val lifecycleOwner = LocalLifecycleOwner.current
             val seenAutoImport = remember { mutableSetOf<String>() }
@@ -1309,18 +1311,25 @@ fun AppNavigation(
             DisposableEffect(lifecycleOwner) {
                 val observer = LifecycleEventObserver { _, event ->
                     if (event == Lifecycle.Event.ON_START) {
-                        // 延迟等认证状态加载完成（冷启动时 ON_START 可能早于 authState 就绪）
                         scope.launch {
-                            kotlinx.coroutines.delay(1_500)
-                            val auth = authStateHolder.authState.value
-                            if (auth != AuthState.AUTHORIZED && auth != AuthState.OFFLINE) return@launch
+                            // 等认证状态就绪（冷启动时 authState 可能尚未加载完成），超时则不检测
+                            val ready = withTimeoutOrNull(10_000) {
+                                authStateHolder.authState.first {
+                                    it == AuthState.AUTHORIZED || it == AuthState.OFFLINE
+                                }
+                            }
+                            if (ready == null) return@launch
+                            kotlinx.coroutines.delay(300)
                             if (showAutoImport || autoImportConflict != null || autoImportHit != null) return@launch
+                            autoImportVm.awaitAutoImportLoaded()
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             val text = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
                             if (text.isNullOrBlank()) return@launch
                             if (ShareCodec.decode(text.trim()) == null) return@launch
                             val fingerprint = text.trim()
                             if (!seenAutoImport.add(fingerprint)) return@launch
+                            // 已取消/已导入过的指纹跨启动不再提示
+                            if (autoImportVm.isAutoImportIgnored(fingerprint)) return@launch
                             autoImportHit = fingerprint
                         }
                     }
@@ -1341,17 +1350,19 @@ fun AppNavigation(
                 ImportSourceDialog(
                     onConfirm = { source ->
                         showAutoImport = false
-                        autoImportHit = null
                         val conflict = autoImportVm.findImportConflict(source)
                         if (conflict != null) {
                             autoImportConflict = source
                         } else {
+                            autoImportHit?.let { autoImportVm.markAutoImportIgnored(it) }
+                            autoImportHit = null
                             autoImportVm.importSource(source)
                             Toast.makeText(context, R.string.import_success, Toast.LENGTH_SHORT).show()
                         }
                     },
                     onDismiss = {
                         showAutoImport = false
+                        autoImportHit?.let { autoImportVm.markAutoImportIgnored(it) }
                         autoImportHit = null
                     }
                 )
@@ -1359,19 +1370,29 @@ fun AppNavigation(
 
             autoImportConflict?.let { source ->
                 AlertDialog(
-                    onDismissRequest = { autoImportConflict = null },
+                    onDismissRequest = {
+                        autoImportConflict = null
+                        autoImportHit?.let { autoImportVm.markAutoImportIgnored(it) }
+                        autoImportHit = null
+                    },
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     title = { Text(stringResource(R.string.search_sources_title)) },
                     text = { Text(stringResource(R.string.import_duplicate_warning)) },
                     confirmButton = {
                         TextButton(onClick = {
                             autoImportConflict = null
+                            autoImportHit?.let { autoImportVm.markAutoImportIgnored(it) }
+                            autoImportHit = null
                             autoImportVm.importSource(source, overwrite = true)
                             Toast.makeText(context, R.string.import_success, Toast.LENGTH_SHORT).show()
                         }) { Text(stringResource(R.string.import_confirm)) }
                     },
                     dismissButton = {
-                        TextButton(onClick = { autoImportConflict = null }) {
+                        TextButton(onClick = {
+                            autoImportConflict = null
+                            autoImportHit?.let { autoImportVm.markAutoImportIgnored(it) }
+                            autoImportHit = null
+                        }) {
                             Text(stringResource(android.R.string.cancel))
                         }
                     }
