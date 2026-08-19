@@ -1237,6 +1237,61 @@
     <string name="panhub_select_all">全选</string>
     <string name="panhub_deselect_all">全不选</string>
 
+    <!-- 搜索源管理页 -->
+    <string name="search_sources_title">搜索源</string>
+    <string name="search_sources_import">导入配置</string>
+    <string name="search_sources_builtin">内置源</string>
+    <string name="search_sources_custom">自定义源</string>
+    <string name="search_sources_add_from_template">从模板添加搜索源</string>
+    <string name="search_sources_empty">还没有自定义搜索源。\n可以从模板添加，或粘贴分享的配置。</string>
+    <string name="search_sources_manage_entry_title">搜索源</string>
+    <string name="search_sources_manage_entry_subtitle">内置与自定义搜索源</string>
+    <!-- 模板库 -->
+    <string name="template_library_title">从模板添加</string>
+    <string name="template_import_shortcut">有现成配置？从文本导入 →</string>
+    <!-- 向导 -->
+    <string name="editor_title_add">添加搜索源</string>
+    <string name="editor_title_edit">编辑搜索源</string>
+    <string name="editor_title_import">从文本导入</string>
+    <string name="editor_step_basic">基本信息</string>
+    <string name="editor_step_auto">自动解析</string>
+    <string name="editor_step_confirm">确认参数</string>
+    <string name="editor_next">下一步：自动解析</string>
+    <string name="editor_next_confirm">下一步：确认参数</string>
+    <string name="editor_prev">上一步</string>
+    <string name="editor_applied_template">已应用模板「%1$s」</string>
+    <string name="editor_probe_start">开始解析</string>
+    <string name="editor_probe_progress">正在用示例关键词请求接口…</string>
+    <string name="editor_probe_success">识别成功</string>
+    <string name="editor_probe_failed">未能自动识别，可手动配置</string>
+    <string name="editor_probe_result_list">结果列表</string>
+    <string name="editor_probe_result_title">标题</string>
+    <string name="editor_probe_result_url">链接</string>
+    <string name="editor_probe_result_disk">网盘类型</string>
+    <string name="editor_probe_result_date">时间</string>
+    <string name="editor_probe_keyword_param">关键词参数</string>
+    <string name="editor_probe_manual">识别不准？手动调整 JSONPath →</string>
+    <string name="editor_confirm_url_preview">请求地址预览</string>
+    <string name="editor_advanced_expand">展开全部高级参数</string>
+    <string name="editor_advanced_collapse">收起高级参数</string>
+    <string name="editor_parse_mode_label">解析模式</string>
+    <string name="import_paste">粘贴</string>
+    <!-- 分享/导入 -->
+    <string name="share_source_title">分享「%1$s」</string>
+    <string name="share_source_desc">配置以文本形式发送，对方在 App 内粘贴即可导入</string>
+    <string name="share_copy">复制</string>
+    <string name="share_to_apps">分享到其他应用</string>
+    <string name="share_copy_success">配置文本已复制</string>
+    <string name="import_paste_hint">粘贴配置文本</string>
+    <string name="import_valid">检测到有效配置</string>
+    <string name="import_invalid">不是有效的配置文本</string>
+    <string name="import_preview_name">名称</string>
+    <string name="import_preview_url">API 地址</string>
+    <string name="import_preview_mode">解析模式</string>
+    <string name="import_duplicate_warning">同名配置已存在，导入将覆盖。可在导入前修改名称。</string>
+    <string name="import_confirm">确认导入</string>
+    <string name="cd_share">分享</string>
+
     <string name="settings_add_custom_source">添加自定义搜索源</string>
     <string name="settings_add_custom_source_desc">支持 PanSou/Zreso 兼容源或自定义 JSONPath</string>
     <string name="discover_douban_new_movies">新片榜</string>

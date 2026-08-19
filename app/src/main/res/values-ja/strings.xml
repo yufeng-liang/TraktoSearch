@@ -1135,6 +1135,61 @@
     <string name="panhub_select_all">すべて選択</string>
     <string name="panhub_deselect_all">すべて解除</string>
 
+    <!-- 検索ソース管理ページ -->
+    <string name="search_sources_title">検索ソース</string>
+    <string name="search_sources_import">設定をインポート</string>
+    <string name="search_sources_builtin">内蔵ソース</string>
+    <string name="search_sources_custom">カスタムソース</string>
+    <string name="search_sources_add_from_template">テンプレートから追加</string>
+    <string name="search_sources_empty">カスタムソースはまだありません。\nテンプレートから追加するか、共有設定を貼り付けてください。</string>
+    <string name="search_sources_manage_entry_title">検索ソース</string>
+    <string name="search_sources_manage_entry_subtitle">内蔵・カスタムソース</string>
+    <!-- テンプレートライブラリ -->
+    <string name="template_library_title">テンプレートから追加</string>
+    <string name="template_import_shortcut">共有設定をお持ちですか？テキストからインポート →</string>
+    <!-- ウィザード -->
+    <string name="editor_title_add">検索ソースを追加</string>
+    <string name="editor_title_edit">検索ソースを編集</string>
+    <string name="editor_title_import">テキストからインポート</string>
+    <string name="editor_step_basic">基本情報</string>
+    <string name="editor_step_auto">自動解析</string>
+    <string name="editor_step_confirm">パラメータ確認</string>
+    <string name="editor_next">次へ：自動解析</string>
+    <string name="editor_next_confirm">次へ：パラメータ確認</string>
+    <string name="editor_prev">戻る</string>
+    <string name="editor_applied_template">テンプレート「%1$s」を適用しました</string>
+    <string name="editor_probe_start">解析開始</string>
+    <string name="editor_probe_progress">サンプルキーワードでリクエスト中…</string>
+    <string name="editor_probe_success">認識成功</string>
+    <string name="editor_probe_failed">自動認識できませんでした。手動設定してください</string>
+    <string name="editor_probe_result_list">結果リスト</string>
+    <string name="editor_probe_result_title">タイトル</string>
+    <string name="editor_probe_result_url">リンク</string>
+    <string name="editor_probe_result_disk">クラウド種別</string>
+    <string name="editor_probe_result_date">日時</string>
+    <string name="editor_probe_keyword_param">キーワードパラメータ</string>
+    <string name="editor_probe_manual">認識が不正確？JSONPath を手動調整 →</string>
+    <string name="editor_confirm_url_preview">リクエスト URL プレビュー</string>
+    <string name="editor_advanced_expand">詳細パラメータをすべて表示</string>
+    <string name="editor_advanced_collapse">詳細パラメータを隠す</string>
+    <string name="editor_parse_mode_label">解析モード</string>
+    <string name="import_paste">貼り付け</string>
+    <!-- 共有/インポート -->
+    <string name="share_source_title">「%1$s」を共有</string>
+    <string name="share_source_desc">設定はテキストとして送信されます。相手のアプリに貼り付けるとインポートできます。</string>
+    <string name="share_copy">コピー</string>
+    <string name="share_to_apps">他のアプリに共有</string>
+    <string name="share_copy_success">設定テキストをコピーしました</string>
+    <string name="import_paste_hint">設定テキストを貼り付け</string>
+    <string name="import_valid">有効な設定を検出</string>
+    <string name="import_invalid">有効な設定テキストではありません</string>
+    <string name="import_preview_name">名前</string>
+    <string name="import_preview_url">API URL</string>
+    <string name="import_preview_mode">解析モード</string>
+    <string name="import_duplicate_warning">同名のソースが存在します。インポートすると上書きされます。インポート前に名前を変更できます。</string>
+    <string name="import_confirm">インポート確認</string>
+    <string name="cd_share">共有</string>
+
     <string name="settings_add_custom_source">カスタム検索ソースを追加</string>
     <string name="settings_add_custom_source_desc">PanSou/Zreso互換ソースまたはカスタムJSONPathに対応</string>
     <string name="discover_douban_new_movies">新作映画</string>

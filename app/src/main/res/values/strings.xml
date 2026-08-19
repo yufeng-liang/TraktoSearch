@@ -1237,6 +1237,61 @@ Config:
     <string name="panhub_select_all">Select All</string>
     <string name="panhub_deselect_all">Deselect All</string>
 
+    <!-- Search Source Management Page -->
+    <string name="search_sources_title">Search Sources</string>
+    <string name="search_sources_import">Import config</string>
+    <string name="search_sources_builtin">Built-in</string>
+    <string name="search_sources_custom">Custom</string>
+    <string name="search_sources_add_from_template">Add from template</string>
+    <string name="search_sources_empty">No custom sources yet.\nAdd one from a template, or paste a shared config.</string>
+    <string name="search_sources_manage_entry_title">Search sources</string>
+    <string name="search_sources_manage_entry_subtitle">Built-in &amp; custom sources</string>
+    <!-- Template Library -->
+    <string name="template_library_title">Add from template</string>
+    <string name="template_import_shortcut">Have a shared config? Import from text</string>
+    <!-- Wizard -->
+    <string name="editor_title_add">Add search source</string>
+    <string name="editor_title_edit">Edit search source</string>
+    <string name="editor_title_import">Import from text</string>
+    <string name="editor_step_basic">Basic info</string>
+    <string name="editor_step_auto">Auto parse</string>
+    <string name="editor_step_confirm">Confirm</string>
+    <string name="editor_next">Next: auto parse</string>
+    <string name="editor_next_confirm">Next: confirm</string>
+    <string name="editor_prev">Back</string>
+    <string name="editor_applied_template">Template "%1$s" applied</string>
+    <string name="editor_probe_start">Start parsing</string>
+    <string name="editor_probe_progress">Requesting with sample keyword…</string>
+    <string name="editor_probe_success">Recognized</string>
+    <string name="editor_probe_failed">Could not recognize automatically, you can configure manually</string>
+    <string name="editor_probe_result_list">Result list</string>
+    <string name="editor_probe_result_title">Title</string>
+    <string name="editor_probe_result_url">Link</string>
+    <string name="editor_probe_result_disk">Disk type</string>
+    <string name="editor_probe_result_date">Date</string>
+    <string name="editor_probe_keyword_param">Keyword param</string>
+    <string name="editor_probe_manual">Wrong? Adjust JSONPath manually</string>
+    <string name="editor_confirm_url_preview">Request URL preview</string>
+    <string name="editor_advanced_expand">Show all advanced params</string>
+    <string name="editor_advanced_collapse">Hide advanced params</string>
+    <string name="editor_parse_mode_label">Parse mode</string>
+    <string name="import_paste">Paste</string>
+    <!-- Share/Import -->
+    <string name="share_source_title">Share "%1$s"</string>
+    <string name="share_source_desc">The config is sent as text; paste it in the app on the other device to import.</string>
+    <string name="share_copy">Copy</string>
+    <string name="share_to_apps">Share to other apps</string>
+    <string name="share_copy_success">Config text copied</string>
+    <string name="import_paste_hint">Paste config text</string>
+    <string name="import_valid">Valid config detected</string>
+    <string name="import_invalid">Not a valid config text</string>
+    <string name="import_preview_name">Name</string>
+    <string name="import_preview_url">API URL</string>
+    <string name="import_preview_mode">Parse mode</string>
+    <string name="import_duplicate_warning">A source with the same name exists; importing will overwrite it. You can rename before importing.</string>
+    <string name="import_confirm">Confirm import</string>
+    <string name="cd_share">Share</string>
+
     <string name="settings_add_custom_source">Add Custom Search Source</string>
     <string name="settings_add_custom_source_desc">Support PanSou/Zreso compatible sources or custom JSONPath</string>
     <string name="discover_douban_new_movies">New Movies</string>

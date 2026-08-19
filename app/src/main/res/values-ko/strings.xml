@@ -1135,6 +1135,61 @@
     <string name="panhub_select_all">전체 선택</string>
     <string name="panhub_deselect_all">전체 해제</string>
 
+    <!-- 검색 소스 관리 페이지 -->
+    <string name="search_sources_title">검색 소스</string>
+    <string name="search_sources_import">설정 가져오기</string>
+    <string name="search_sources_builtin">내장 소스</string>
+    <string name="search_sources_custom">사용자 소스</string>
+    <string name="search_sources_add_from_template">템플릿에서 추가</string>
+    <string name="search_sources_empty">사용자 검색 소스가 없습니다.\n템플릿에서 추가하거나 공유 설정을 붙여넣으세요.</string>
+    <string name="search_sources_manage_entry_title">검색 소스</string>
+    <string name="search_sources_manage_entry_subtitle">내장 · 사용자 소스</string>
+    <!-- 템플릿 라이브러리 -->
+    <string name="template_library_title">템플릿에서 추가</string>
+    <string name="template_import_shortcut">공유 설정이 있나요? 텍스트에서 가져오기 →</string>
+    <!-- 마법사 -->
+    <string name="editor_title_add">검색 소스 추가</string>
+    <string name="editor_title_edit">검색 소스 편집</string>
+    <string name="editor_title_import">텍스트에서 가져오기</string>
+    <string name="editor_step_basic">기본 정보</string>
+    <string name="editor_step_auto">자동 파싱</string>
+    <string name="editor_step_confirm">파라미터 확인</string>
+    <string name="editor_next">다음: 자동 파싱</string>
+    <string name="editor_next_confirm">다음: 파라미터 확인</string>
+    <string name="editor_prev">이전</string>
+    <string name="editor_applied_template">템플릿「%1$s」적용됨</string>
+    <string name="editor_probe_start">파싱 시작</string>
+    <string name="editor_probe_progress">샘플 키워드로 요청 중…</string>
+    <string name="editor_probe_success">인식 성공</string>
+    <string name="editor_probe_failed">자동 인식 실패, 수동으로 설정하세요</string>
+    <string name="editor_probe_result_list">결과 목록</string>
+    <string name="editor_probe_result_title">제목</string>
+    <string name="editor_probe_result_url">링크</string>
+    <string name="editor_probe_result_disk">클라우드 유형</string>
+    <string name="editor_probe_result_date">날짜</string>
+    <string name="editor_probe_keyword_param">키워드 파라미터</string>
+    <string name="editor_probe_manual">인식이 정확하지 않나요? JSONPath 수동 조정 →</string>
+    <string name="editor_confirm_url_preview">요청 URL 미리보기</string>
+    <string name="editor_advanced_expand">고급 파라미터 모두 표시</string>
+    <string name="editor_advanced_collapse">고급 파라미터 숨기기</string>
+    <string name="editor_parse_mode_label">파싱 모드</string>
+    <string name="import_paste">붙여넣기</string>
+    <!-- 공유/가져오기 -->
+    <string name="share_source_title">「%1$s」공유</string>
+    <string name="share_source_desc">설정이 텍스트로 전송됩니다. 상대방 앱에 붙여넣으면 가져올 수 있습니다.</string>
+    <string name="share_copy">복사</string>
+    <string name="share_to_apps">다른 앱에 공유</string>
+    <string name="share_copy_success">설정 텍스트가 복사되었습니다</string>
+    <string name="import_paste_hint">설정 텍스트 붙여넣기</string>
+    <string name="import_valid">유효한 설정 감지</string>
+    <string name="import_invalid">유효한 설정 텍스트가 아닙니다</string>
+    <string name="import_preview_name">이름</string>
+    <string name="import_preview_url">API URL</string>
+    <string name="import_preview_mode">파싱 모드</string>
+    <string name="import_duplicate_warning">같은 이름의 소스가 있습니다. 가져오면 덮어씁니다. 가져오기 전에 이름을 바꿀 수 있습니다.</string>
+    <string name="import_confirm">가져오기 확인</string>
+    <string name="cd_share">공유</string>
+
     <string name="settings_add_custom_source">사용자 정의 검색 소스 추가</string>
     <string name="settings_add_custom_source_desc">PanSou/Zreso 호환 소스 또는 사용자 정의 JSONPath 지원</string>
     <string name="discover_douban_new_movies">신작 영화</string>
