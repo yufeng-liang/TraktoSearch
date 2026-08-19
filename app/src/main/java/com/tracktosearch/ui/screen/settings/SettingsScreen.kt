@@ -52,6 +52,7 @@ import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.SyncAlt
 import androidx.compose.material.icons.rounded.Tv
@@ -176,6 +177,7 @@ fun SettingsScreen(
     onFeedbackClick: () -> Unit = {},
     onMessagesClick: () -> Unit = {},
     onGlassPilot: () -> Unit = {},
+    onSearchSourcesClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -509,9 +511,32 @@ fun SettingsScreen(
                 }
             }
 
-            // 搜索源（State 收集下沉到 SearchSourcesItem，开关切换/测试结果更新只重组本 item）
+            // 搜索源（独立管理页入口）
             item(key = "group_search") {
-                SearchSourcesItem(viewModel = viewModel, hazeState = settingsHazeState)
+                SettingsGroupCard(
+                    title = stringResource(R.string.search_sources_manage_entry_title),
+                    hazeState = settingsHazeState
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSearchSourcesClick() }
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.search_sources_manage_entry_subtitle),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            Icons.Rounded.Search,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
 
             // 通知提醒（仅 Trakt 登录用户可见，通知依赖 Trakt 想看列表推送）
@@ -1123,152 +1148,6 @@ fun SettingsScreen(
         )
     }
 }
-/**
- * 搜索源分组 item：3 个内置源开关 + 自定义源列表 + 添加入口。
- * State 收集局部化到本函数，开关切换/测试结果/配置变更只重组本 item，不波及 LazyColumn 其他 item。
- */
-@Composable
-private fun SearchSourcesItem(
-    viewModel: SettingsViewModel,
-    hazeState: dev.chrisbanes.haze.HazeState? = null
-) {
-    val pansouEnabled by viewModel.pansouEnabled.collectAsStateWithLifecycle()
-    val panhubEnabled by viewModel.panhubEnabled.collectAsStateWithLifecycle()
-    val zresoEnabled by viewModel.zresoEnabled.collectAsStateWithLifecycle()
-    val customSources by viewModel.customSources.collectAsStateWithLifecycle()
-    val testResults by viewModel.testResults.collectAsStateWithLifecycle()
-    val panHubConfig by viewModel.panHubConfig.collectAsStateWithLifecycle()
-
-    var showPanHubConfigDialog by remember { mutableStateOf(false) }
-    var showEditCustomSource by remember { mutableStateOf<CustomSearchSource?>(null) }
-    var showDeleteCustomSource by remember { mutableStateOf<CustomSearchSource?>(null) }
-
-    SettingsGroupCard(
-        title = stringResource(R.string.settings_search),
-        hazeState = hazeState
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            SearchSourceCard(
-                modifier = Modifier.weight(1f).heightIn(min = 60.dp),
-                name = "PanSou",
-                checked = pansouEnabled,
-                onCheckedChange = { viewModel.setPansouEnabled(it) },
-                containerColor = Color.Transparent
-            )
-            SearchSourceCard(
-                modifier = Modifier.weight(1f).heightIn(min = 60.dp),
-                name = "Panhub",
-                checked = panhubEnabled,
-                onCheckedChange = { viewModel.setPanhubEnabled(it) },
-                onConfigClick = { showPanHubConfigDialog = true },
-                configContentDescription = stringResource(R.string.settings_panhub_config),
-                containerColor = Color.Transparent
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            SearchSourceCard(
-                modifier = Modifier.weight(1f).heightIn(min = 60.dp),
-                name = "Zreso",
-                checked = zresoEnabled,
-                onCheckedChange = { viewModel.setZresoEnabled(it) },
-                containerColor = Color.Transparent
-            )
-            SearchSourceAddCard(
-                modifier = Modifier.weight(1f).heightIn(min = 60.dp),
-                title = stringResource(R.string.settings_add_source),
-                onClick = {
-                    showEditCustomSource = CustomSearchSource(
-                        id = java.util.UUID.randomUUID().toString(),
-                        name = "",
-                        baseUrl = "",
-                        apiPath = "api/search",
-                        keywordParam = "kw",
-                        cloudTypesParam = "cloud_types",
-                        cloudTypesValue = "quark,baidu,aliyun,xunlei,uc,115",
-                        srcParam = "src",
-                        srcValue = "all"
-                    )
-                },
-                containerColor = Color.Transparent
-            )
-        }
-        // 自定义搜索源列表项
-        customSources.forEachIndexed { index, source ->
-            val testResult = testResults[source.id]
-            CustomSearchSourceItem(
-                source = source,
-                testResult = testResult,
-                onToggle = { viewModel.setCustomSourceEnabled(source.id, it) },
-                onEdit = { showEditCustomSource = source },
-                onDelete = { showDeleteCustomSource = source },
-                onTest = { viewModel.testCustomSource(source) }
-            )
-            if (index < customSources.size - 1) GroupDivider()
-        }
-    }
-
-    // 自定义搜索源编辑弹窗
-    showEditCustomSource?.let { source ->
-        CustomSourceEditDialog(
-            source = source,
-            isNew = customSources.none { it.id == source.id },
-            onSave = {
-                if (customSources.none { s -> s.id == it.id }) {
-                    viewModel.addCustomSource(it)
-                } else {
-                    viewModel.updateCustomSource(it)
-                }
-                showEditCustomSource = null
-            },
-            onDismiss = { showEditCustomSource = null }
-        )
-    }
-
-    // 删除确认弹窗
-    showDeleteCustomSource?.let { source ->
-        AlertDialog(
-            onDismissRequest = { showDeleteCustomSource = null },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            title = { Text(stringResource(R.string.settings_delete_source)) },
-            text = { Text(stringResource(R.string.settings_delete_source_confirm, source.name)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deleteCustomSource(source.id)
-                    showDeleteCustomSource = null
-                }) {
-                    Text(stringResource(R.string.cd_delete))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteCustomSource = null }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            }
-        )
-    }
-
-    // PanHub 配置弹窗
-    if (showPanHubConfigDialog) {
-        PanHubConfigDialog(
-            config = panHubConfig,
-            enabled = panhubEnabled,
-            onEnabledChange = { viewModel.setPanhubEnabled(it) },
-            onConcurrencyChange = { viewModel.setPanHubConcurrency(it) },
-            onTimeoutMsChange = { viewModel.setPanHubTimeoutMs(it) },
-            onEnabledPluginsChange = { viewModel.setPanHubEnabledPlugins(it) },
-            onEnabledChannelsChange = { viewModel.setPanHubEnabledChannels(it) },
-            onDismiss = { showPanHubConfigDialog = false }
-        )
-    }
-}
-
 /**
  * 标记记录入口卡片（仅登录用户可见，独占整行）。
  * 与 StatisticsCard 风格保持一致，点击跳转标记记录页。

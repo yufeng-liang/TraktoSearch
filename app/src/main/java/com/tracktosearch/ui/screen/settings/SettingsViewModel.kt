@@ -8,8 +8,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.R
-import com.tracktosearch.data.local.CustomSearchSource
-import com.tracktosearch.data.local.CustomSearchSourceStorage
 import com.tracktosearch.data.local.DefaultTabStorage
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.CloudFailureSyncMetaStorage
@@ -32,7 +30,6 @@ import com.tracktosearch.data.notification.NotificationScheduler
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.ui.theme.GlassVariant
 import com.tracktosearch.ui.theme.VisualEffectMode
-import com.tracktosearch.data.remote.custom.CustomSearchService
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
 import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.douban.dto.DoubanHotData
@@ -101,8 +98,6 @@ class SettingsViewModel @Inject constructor(
     private val doubanDetailCache: PersistentTtlCache<DoubanDetailCacheEntry>,
     private val discoverSectionStorage: DiscoverSectionStorage,
     private val detailSectionStorage: DetailSectionStorage,
-    private val customSearchSourceStorage: CustomSearchSourceStorage,
-    private val customSearchService: CustomSearchService,
     private val panHubConfigStorage: PanHubConfigStorage,
     private val defaultTabStorage: DefaultTabStorage,
     private val doubanAuthStorage: DoubanAuthStorage,
@@ -223,58 +218,6 @@ class SettingsViewModel @Inject constructor(
 
     fun setPanHubEnabledChannels(channelIds: Set<String>) {
         viewModelScope.launch { panHubConfigStorage.setEnabledChannels(channelIds) }
-    }
-
-    // ========== 自定义搜索源 ==========
-
-    val customSources: StateFlow<List<CustomSearchSource>> = customSearchSourceStorage.sources
-
-    fun addCustomSource(source: CustomSearchSource) {
-        viewModelScope.launch { customSearchSourceStorage.addSource(source) }
-    }
-
-    fun updateCustomSource(source: CustomSearchSource) {
-        viewModelScope.launch { customSearchSourceStorage.updateSource(source) }
-    }
-
-    fun deleteCustomSource(id: String) {
-        viewModelScope.launch { customSearchSourceStorage.deleteSource(id) }
-    }
-
-    fun setCustomSourceEnabled(id: String, enabled: Boolean) {
-        viewModelScope.launch { customSearchSourceStorage.setEnabled(id, enabled) }
-    }
-
-    // 测试结果状态
-    @Immutable
-    data class TestResultState(
-        val sourceId: String,
-        val isTesting: Boolean = false,
-        val success: Boolean? = null,
-        val message: String? = null
-    )
-
-    private val _testResults = MutableStateFlow<Map<String, TestResultState>>(emptyMap())
-    val testResults: StateFlow<Map<String, TestResultState>> = _testResults.asStateFlow()
-
-    fun testCustomSource(source: CustomSearchSource) {
-        viewModelScope.launch {
-            _testResults.value = _testResults.value + (source.id to TestResultState(source.id, isTesting = true))
-            val result = customSearchService.testSource(source)
-            val state = when (result) {
-                is CustomSearchService.TestResult.Success -> {
-                    if (result.count > 0) {
-                        TestResultState(source.id, isTesting = false, success = true, message = context.getString(R.string.snackbar_test_success, result.count))
-                    } else {
-                        TestResultState(source.id, isTesting = false, success = true, message = context.getString(R.string.snackbar_test_empty))
-                    }
-                }
-                is CustomSearchService.TestResult.Error -> {
-                    TestResultState(source.id, isTesting = false, success = false, message = Exception(result.message).toUserMessage(context, R.string.error_unknown))
-                }
-            }
-            _testResults.value = _testResults.value + (source.id to state)
-        }
     }
 
     fun setNotificationEnabled(enabled: Boolean) {

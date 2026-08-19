@@ -2,7 +2,6 @@ package com.tracktosearch.ui.screen.settings
 
 import android.content.Context
 import com.google.common.truth.Truth.assertThat
-import com.tracktosearch.data.local.CustomSearchSourceStorage
 import com.tracktosearch.data.local.CrashLogStorage
 import com.tracktosearch.data.local.DefaultTabStorage
 import com.tracktosearch.data.local.DetailSectionStorage
@@ -19,7 +18,6 @@ import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.local.db.OfflineCacheManager
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.notification.NotificationScheduler
-import com.tracktosearch.data.remote.custom.CustomSearchService
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
 import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.douban.dto.DoubanHotData
@@ -90,8 +88,6 @@ class SettingsViewModelTest {
     private lateinit var doubanDetailCache: PersistentTtlCache<DoubanDetailCacheEntry>
     private lateinit var discoverSectionStorage: DiscoverSectionStorage
     private lateinit var detailSectionStorage: DetailSectionStorage
-    private lateinit var customSearchSourceStorage: CustomSearchSourceStorage
-    private lateinit var customSearchService: CustomSearchService
     private lateinit var panHubConfigStorage: PanHubConfigStorage
     private lateinit var defaultTabStorage: DefaultTabStorage
     private lateinit var doubanAuthStorage: DoubanAuthStorage
@@ -128,8 +124,6 @@ class SettingsViewModelTest {
         doubanDetailCache = mockk(relaxed = true)
         discoverSectionStorage = mockk(relaxed = true)
         detailSectionStorage = mockk(relaxed = true)
-        customSearchSourceStorage = mockk(relaxed = true)
-        customSearchService = mockk(relaxed = true)
         panHubConfigStorage = mockk(relaxed = true)
         defaultTabStorage = mockk(relaxed = true)
         doubanAuthStorage = mockk(relaxed = true)
@@ -159,7 +153,6 @@ class SettingsViewModelTest {
         every { notificationStorage.releaseReminderEnabled } returns MutableStateFlow(false)
         every { notificationStorage.newSeasonReminderEnabled } returns MutableStateFlow(false)
         every { panHubConfigStorage.config } returns MutableStateFlow(PanHubConfig())
-        every { customSearchSourceStorage.sources } returns MutableStateFlow(emptyList())
         every { doubanAuthStorage.isLoggedIn } returns MutableStateFlow(false)
         every { doubanAuthStorage.doubanProfile } returns MutableStateFlow(null)
         every { discoverSectionStorage.sectionConfigs } returns MutableStateFlow(emptyList())
@@ -192,8 +185,6 @@ class SettingsViewModelTest {
             doubanDetailCache = doubanDetailCache,
             discoverSectionStorage = discoverSectionStorage,
             detailSectionStorage = detailSectionStorage,
-            customSearchSourceStorage = customSearchSourceStorage,
-            customSearchService = customSearchService,
             panHubConfigStorage = panHubConfigStorage,
             defaultTabStorage = defaultTabStorage,
             doubanAuthStorage = doubanAuthStorage,

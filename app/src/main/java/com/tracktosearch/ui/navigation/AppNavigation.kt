@@ -64,6 +64,10 @@ import com.tracktosearch.ui.screen.douban.DoubanItemDetailScreen
 import com.tracktosearch.ui.screen.douban.DoubanLoginScreen
 import com.tracktosearch.ui.screen.douban.DoubanSpiderTestScreen
 import com.tracktosearch.ui.screen.pilot.GlassEnginePilotScreen
+import com.tracktosearch.ui.screen.searchsource.EditorMode
+import com.tracktosearch.ui.screen.searchsource.SearchSourceEditorScreen
+import com.tracktosearch.ui.screen.searchsource.SearchSourceEditorViewModel
+import com.tracktosearch.ui.screen.searchsource.SearchSourcesScreen
 import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
 import com.tracktosearch.ui.screen.help.HelpScreen
 import com.tracktosearch.ui.screen.listdetail.TraktListDetailScreen
@@ -138,6 +142,11 @@ object Routes {
     const val NEW_FEEDBACK = "newFeedback"
     const val CRASH_LOG_DETAIL = "crashLogDetail/{recordId}"
     const val MESSAGES = "messages"
+    const val SEARCH_SOURCES = "searchSources"
+    const val SEARCH_SOURCE_EDITOR = "searchSourceEditor/{mode}/{payload}"
+
+    fun searchSourceEditorRoute(mode: String, payload: String = ""): String =
+        "searchSourceEditor/$mode/${java.net.URLEncoder.encode(payload.ifBlank { " " }, "UTF-8")}"
 
     fun feedbackDetailRoute(feedbackId: String, replyId: String? = null): String =
         "feedbackDetail/$feedbackId?replyId=${replyId ?: ""}"
@@ -778,6 +787,9 @@ fun AppNavigation(
                             },
                             onMessagesClick = {
                                 navController.navigate(Routes.MESSAGES)
+                            },
+                            onSearchSourcesClick = {
+                                navController.navigate(Routes.SEARCH_SOURCES)
                             }
                         )
                     }
@@ -1106,6 +1118,55 @@ fun AppNavigation(
                             onShowClick = { traktId, tmdbId, title, imdbId, traktRating ->
                                 navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating))
                             }
+                        )
+                    }
+                }
+
+                composable(Routes.SEARCH_SOURCES) {
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        SearchSourcesScreen(
+                            onBack = { navController.popBackStack() },
+                            onAddFromTemplate = { templateId ->
+                                navController.navigate(
+                                    Routes.searchSourceEditorRoute(
+                                        if (templateId.isBlank()) "blank" else "template",
+                                        templateId
+                                    )
+                                )
+                            },
+                            onEditSource = { sourceId ->
+                                navController.navigate(Routes.searchSourceEditorRoute("edit", sourceId))
+                            },
+                            onImport = {
+                                navController.navigate(Routes.searchSourceEditorRoute("import"))
+                            }
+                        )
+                    }
+                }
+
+                composable(Routes.SEARCH_SOURCE_EDITOR) { backStackEntry ->
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        val mode = backStackEntry.arguments?.getString("mode")
+                        val payload = backStackEntry.arguments?.getString("payload")?.let {
+                            java.net.URLDecoder.decode(it, "UTF-8")
+                        }.orEmpty()
+                        val editorViewModel: SearchSourceEditorViewModel = hiltViewModel(backStackEntry)
+                        LaunchedEffect(mode, payload) {
+                            editorViewModel.initMode(
+                                mode = when (mode) {
+                                    "template" -> EditorMode.TEMPLATE
+                                    "edit" -> EditorMode.EDIT
+                                    "import" -> EditorMode.IMPORT
+                                    else -> EditorMode.BLANK
+                                },
+                                templateId = payload,
+                                sourceId = payload,
+                                importText = payload
+                            )
+                        }
+                        SearchSourceEditorScreen(
+                            onBack = { navController.popBackStack() },
+                            onSaved = { navController.popBackStack() }
                         )
                     }
                 }
