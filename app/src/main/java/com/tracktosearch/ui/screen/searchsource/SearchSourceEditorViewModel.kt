@@ -119,7 +119,14 @@ class SearchSourceEditorViewModel @Inject constructor(
             EditorMode.IMPORT -> {
                 _appliedTemplateName.value = null
                 _step.value = 3
-                parseImport(importText.orEmpty())
+                val decoded = ShareCodec.decode(importText.orEmpty().trim())
+                _importState.value = if (decoded == null) {
+                    ImportUiState.Invalid
+                } else {
+                    // 同步填充表单字段，保证保存按钮可用、可直接保存
+                    applySource(decoded)
+                    ImportUiState.Preview(decoded)
+                }
             }
         }
     }
@@ -147,6 +154,12 @@ class SearchSourceEditorViewModel @Inject constructor(
 
     fun prevStep() {
         if (_step.value > 1) _step.value -= 1
+    }
+
+    /** 点击步骤指示器直接跳转 */
+    fun goToStep(target: Int) {
+        android.util.Log.d("StepDebug", "goToStep target=$target current=${_step.value}")
+        if (target in 1..3) _step.value = target
     }
 
     // ---- 自动探测 ----
@@ -210,6 +223,7 @@ class SearchSourceEditorViewModel @Inject constructor(
         val current = _importState.value
         if (current is ImportUiState.Preview) {
             _importState.value = ImportUiState.Preview(current.source.copy(name = newName))
+            _name.value = newName
         }
     }
 

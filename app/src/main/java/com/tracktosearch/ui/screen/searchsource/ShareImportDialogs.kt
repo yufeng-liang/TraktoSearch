@@ -91,6 +91,8 @@ fun ImportSourceDialog(
     var pasteText by remember { mutableStateOf("") }
     var preview by remember { mutableStateOf<CustomSearchSource?>(null) }
     var invalid by remember { mutableStateOf(false) }
+    // 预览区名称可编辑：预览源变化时重置
+    var editableName by remember(preview?.id) { mutableStateOf(preview?.name.orEmpty()) }
 
     // 打开时自动读取剪贴板：符合分享格式则直接填充并预览，点击导入即可
     LaunchedEffect(Unit) {
@@ -149,10 +151,13 @@ fun ImportSourceDialog(
                         color = MaterialTheme.colorScheme.primary,
                         style = MaterialTheme.typography.bodySmall
                     )
-                    Column {
-                        KeyValueRow(
-                            stringResource(R.string.import_preview_name),
-                            source.name.ifBlank { stringResource(R.string.settings_source_unnamed) }
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedTextField(
+                            value = editableName,
+                            onValueChange = { editableName = it },
+                            label = { Text(stringResource(R.string.import_preview_name)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
                         )
                         KeyValueRow(stringResource(R.string.import_preview_url), source.baseUrl)
                         KeyValueRow(stringResource(R.string.import_preview_mode), parseModeLabel(source.parseMode))
@@ -163,7 +168,12 @@ fun ImportSourceDialog(
         confirmButton = {
             TextButton(
                 enabled = preview != null,
-                onClick = { preview?.let { onConfirm(it) } }
+                onClick = {
+                    preview?.let { source ->
+                        val finalName = editableName.trim().ifBlank { source.name }
+                        onConfirm(if (finalName != source.name) source.copy(name = finalName) else source)
+                    }
+                }
             ) { Text(stringResource(R.string.import_confirm)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) } }

@@ -1143,11 +1143,11 @@
     <string name="search_sources_add_from_template">템플릿에서 추가</string>
     <string name="search_sources_empty">사용자 검색 소스가 없습니다.\n템플릿에서 추가하거나 공유 설정을 붙여넣으세요.</string>
     <string name="search_sources_manage_entry_title">검색 소스</string>
-        <string name="search_sources_pansou">PanSou 판수</string>
+        <string name="search_sources_pansou">PanSou</string>
     <string name="search_sources_pansou_desc">공공 판검색 API, 템플릿 파싱</string>
-    <string name="search_sources_panhub">Panhub 판호</string>
+    <string name="search_sources_panhub">Panhub</string>
     <string name="search_sources_panhub_desc">Panhub API, 동시성 및 플러그인 설정 가능</string>
-    <string name="search_sources_zreso">Zreso 자원고</string>
+    <string name="search_sources_zreso">Zreso</string>
     <string name="search_sources_zreso_desc">zreso.cn 자원 라이브러리, 템플릿 파싱</string>
 <string name="search_sources_manage_entry_subtitle">내장 · 사용자 소스</string>
     <!-- 템플릿 라이브러리 -->
@@ -1195,6 +1195,7 @@
     <string name="import_preview_mode">파싱 모드</string>
     <string name="import_duplicate_warning">같은 이름의 소스가 있습니다. 가져오면 덮어씁니다. 가져오기 전에 이름을 바꿀 수 있습니다.</string>
     <string name="import_confirm">가져오기 확인</string>
+    <string name="import_success">검색 소스를 가져왔습니다</string>
     <string name="cd_share">공유</string>
 
     <string name="settings_add_custom_source">사용자 정의 검색 소스 추가</string>

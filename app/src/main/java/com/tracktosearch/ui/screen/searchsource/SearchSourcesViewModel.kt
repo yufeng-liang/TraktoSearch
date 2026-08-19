@@ -71,6 +71,23 @@ class SearchSourcesViewModel @Inject constructor(
         viewModelScope.launch { customSearchSourceStorage.deleteSource(id) }
     }
 
+    /** 导入冲突检测：同名或同地址的源已存在 */
+    fun findImportConflict(source: CustomSearchSource): CustomSearchSource? =
+        customSearchSourceStorage.sources.value.find {
+            it.name == source.name || it.baseUrl.trimEnd('/') == source.baseUrl.trimEnd('/')
+        }
+
+    /** 导入分享配置：覆盖冲突源或新增（分享文本中的 id 属于原分享者，导入时改用本地 id） */
+    fun importSource(source: CustomSearchSource, overwrite: Boolean = false) {
+        viewModelScope.launch {
+            val conflict = findImportConflict(source)
+            if (conflict != null && !overwrite) return@launch
+            val finalSource = source.copy(id = conflict?.id ?: java.util.UUID.randomUUID().toString())
+            if (conflict != null) customSearchSourceStorage.updateSource(finalSource)
+            else customSearchSourceStorage.addSource(finalSource)
+        }
+    }
+
     fun setCustomSourceEnabled(id: String, enabled: Boolean) {
         viewModelScope.launch { customSearchSourceStorage.setEnabled(id, enabled) }
     }

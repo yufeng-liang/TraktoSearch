@@ -1299,6 +1299,7 @@ Config:
     <string name="import_preview_mode">Parse mode</string>
     <string name="import_duplicate_warning">A source with the same name exists; importing will overwrite it. You can rename before importing.</string>
     <string name="import_confirm">Confirm import</string>
+    <string name="import_success">Search source imported</string>
     <string name="cd_share">Share</string>
 
     <string name="settings_add_custom_source">Add Custom Search Source</string>

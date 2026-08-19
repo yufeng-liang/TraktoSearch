@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.searchsource
 
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,6 +52,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,7 +61,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
-import com.tracktosearch.data.local.ShareCodec
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.screen.settings.PanHubConfigDialog
@@ -79,9 +80,9 @@ fun SearchSourcesScreen(
     onBack: () -> Unit,
     onEditSource: (String) -> Unit,
     onAddFromTemplate: (String) -> Unit,
-    onImport: (String) -> Unit,
     viewModel: SearchSourcesViewModel = hiltViewModel()
 ) {
+    val context = LocalContext.current
     val hazeState = remember { HazeState() }
     val listState = rememberLazyListState()
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -94,6 +95,7 @@ fun SearchSourcesScreen(
     var showPanHubConfig by remember { mutableStateOf(false) }
     var showShareSource by remember { mutableStateOf<CustomSearchSource?>(null) }
     var showImportDialog by remember { mutableStateOf(false) }
+    var pendingImport by remember { mutableStateOf<CustomSearchSource?>(null) }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -209,9 +211,37 @@ fun SearchSourcesScreen(
         ImportSourceDialog(
             onConfirm = { source ->
                 showImportDialog = false
-                onImport(ShareCodec.encode(source))
+                val conflict = viewModel.findImportConflict(source)
+                if (conflict != null) {
+                    pendingImport = source
+                } else {
+                    viewModel.importSource(source)
+                    Toast.makeText(context, R.string.import_success, Toast.LENGTH_SHORT).show()
+                }
             },
             onDismiss = { showImportDialog = false }
+        )
+    }
+
+    // ---- 冲突确认：同名/同地址源已存在 ----
+    pendingImport?.let { source ->
+        AlertDialog(
+            onDismissRequest = { pendingImport = null },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            title = { Text(stringResource(R.string.search_sources_title)) },
+            text = { Text(stringResource(R.string.import_duplicate_warning)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingImport = null
+                    viewModel.importSource(source, overwrite = true)
+                    Toast.makeText(context, R.string.import_success, Toast.LENGTH_SHORT).show()
+                }) { Text(stringResource(R.string.import_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingImport = null }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            }
         )
     }
 }

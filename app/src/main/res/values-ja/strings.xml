@@ -1143,11 +1143,11 @@
     <string name="search_sources_add_from_template">テンプレートから追加</string>
     <string name="search_sources_empty">カスタムソースはまだありません。\nテンプレートから追加するか、共有設定を貼り付けてください。</string>
     <string name="search_sources_manage_entry_title">検索ソース</string>
-        <string name="search_sources_pansou">PanSou 盤捜</string>
+        <string name="search_sources_pansou">PanSou</string>
     <string name="search_sources_pansou_desc">公共パン検索API、テンプレート解析</string>
-    <string name="search_sources_panhub">Panhub 盤狐</string>
+    <string name="search_sources_panhub">Panhub</string>
     <string name="search_sources_panhub_desc">Panhub API、並列数とプラグインを設定可能</string>
-    <string name="search_sources_zreso">Zreso 資源庫</string>
+    <string name="search_sources_zreso">Zreso</string>
     <string name="search_sources_zreso_desc">zreso.cn 資源ライブラリ、テンプレート解析</string>
 <string name="search_sources_manage_entry_subtitle">内蔵・カスタムソース</string>
     <!-- テンプレートライブラリ -->
@@ -1195,6 +1195,7 @@
     <string name="import_preview_mode">解析モード</string>
     <string name="import_duplicate_warning">同名のソースが存在します。インポートすると上書きされます。インポート前に名前を変更できます。</string>
     <string name="import_confirm">インポート確認</string>
+    <string name="import_success">検索ソースをインポートしました</string>
     <string name="cd_share">共有</string>
 
     <string name="settings_add_custom_source">カスタム検索ソースを追加</string>

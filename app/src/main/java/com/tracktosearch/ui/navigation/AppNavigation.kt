@@ -9,9 +9,13 @@ import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -23,9 +27,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import android.content.ClipboardManager
+import android.content.Context
 import android.net.Uri
 import android.widget.Toast
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.NavBackStackEntry
@@ -42,7 +51,9 @@ import com.tracktosearch.data.local.OnboardingStorage
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
+import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.DoubanAuthStorage
+import com.tracktosearch.data.local.ShareCodec
 import com.tracktosearch.data.remote.trakt.TraktAuthManager
 import com.tracktosearch.data.remote.trakt.TraktConnectionState
 import com.tracktosearch.data.session.SessionModeManager
@@ -65,9 +76,11 @@ import com.tracktosearch.ui.screen.douban.DoubanLoginScreen
 import com.tracktosearch.ui.screen.douban.DoubanSpiderTestScreen
 import com.tracktosearch.ui.screen.pilot.GlassEnginePilotScreen
 import com.tracktosearch.ui.screen.searchsource.EditorMode
+import com.tracktosearch.ui.screen.searchsource.ImportSourceDialog
 import com.tracktosearch.ui.screen.searchsource.SearchSourceEditorScreen
 import com.tracktosearch.ui.screen.searchsource.SearchSourceEditorViewModel
 import com.tracktosearch.ui.screen.searchsource.SearchSourcesScreen
+import com.tracktosearch.ui.screen.searchsource.SearchSourcesViewModel
 import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
 import com.tracktosearch.ui.screen.help.HelpScreen
 import com.tracktosearch.ui.screen.listdetail.TraktListDetailScreen
@@ -1136,9 +1149,6 @@ fun AppNavigation(
                             },
                             onEditSource = { sourceId ->
                                 navController.navigate(Routes.searchSourceEditorRoute("edit", sourceId))
-                            },
-                            onImport = { text ->
-                                navController.navigate(Routes.searchSourceEditorRoute("import", text))
                             }
                         )
                     }
@@ -1285,6 +1295,87 @@ fun AppNavigation(
                         onDismiss = { updateInfo = null }
                     )
                 }
+            }
+
+            // ---- 剪贴板自动导入：冷启动/回前台检测到分享配置时直接弹导入弹层 ----
+            // 仅已授权/离线（主界面可用）时检测；按文本指纹会话内去重；更新弹窗优先展示
+            val autoImportVm: SearchSourcesViewModel = hiltViewModel()
+            val lifecycleOwner = LocalLifecycleOwner.current
+            val seenAutoImport = remember { mutableSetOf<String>() }
+            var autoImportHit by remember { mutableStateOf<String?>(null) }
+            var showAutoImport by remember { mutableStateOf(false) }
+            var autoImportConflict by remember { mutableStateOf<CustomSearchSource?>(null) }
+
+            DisposableEffect(lifecycleOwner) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_START) {
+                        // 延迟等认证状态加载完成（冷启动时 ON_START 可能早于 authState 就绪）
+                        scope.launch {
+                            kotlinx.coroutines.delay(1_500)
+                            val auth = authStateHolder.authState.value
+                            if (auth != AuthState.AUTHORIZED && auth != AuthState.OFFLINE) return@launch
+                            if (showAutoImport || autoImportConflict != null || autoImportHit != null) return@launch
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            val text = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
+                            if (text.isNullOrBlank()) return@launch
+                            if (ShareCodec.decode(text.trim()) == null) return@launch
+                            val fingerprint = text.trim()
+                            if (!seenAutoImport.add(fingerprint)) return@launch
+                            autoImportHit = fingerprint
+                        }
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
+
+            // 更新弹窗优先：等更新检查完成且更新弹窗关闭后再弹出导入弹层
+            LaunchedEffect(autoImportHit, updateChecked, updateInfo) {
+                val hit = autoImportHit ?: return@LaunchedEffect
+                if (!updateChecked) return@LaunchedEffect
+                if (updateInfo?.hasUpdate == true) return@LaunchedEffect
+                showAutoImport = true
+            }
+
+            if (showAutoImport) {
+                ImportSourceDialog(
+                    onConfirm = { source ->
+                        showAutoImport = false
+                        autoImportHit = null
+                        val conflict = autoImportVm.findImportConflict(source)
+                        if (conflict != null) {
+                            autoImportConflict = source
+                        } else {
+                            autoImportVm.importSource(source)
+                            Toast.makeText(context, R.string.import_success, Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onDismiss = {
+                        showAutoImport = false
+                        autoImportHit = null
+                    }
+                )
+            }
+
+            autoImportConflict?.let { source ->
+                AlertDialog(
+                    onDismissRequest = { autoImportConflict = null },
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    title = { Text(stringResource(R.string.search_sources_title)) },
+                    text = { Text(stringResource(R.string.import_duplicate_warning)) },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            autoImportConflict = null
+                            autoImportVm.importSource(source, overwrite = true)
+                            Toast.makeText(context, R.string.import_success, Toast.LENGTH_SHORT).show()
+                        }) { Text(stringResource(R.string.import_confirm)) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { autoImportConflict = null }) {
+                            Text(stringResource(android.R.string.cancel))
+                        }
+                    }
+                )
             }
             } // Box
         }
