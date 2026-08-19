@@ -25,11 +25,11 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.FileUpload
-import androidx.compose.material.icons.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -59,6 +59,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
+import com.tracktosearch.data.local.ShareCodec
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.screen.settings.PanHubConfigDialog
@@ -78,7 +79,7 @@ fun SearchSourcesScreen(
     onBack: () -> Unit,
     onEditSource: (String) -> Unit,
     onAddFromTemplate: (String) -> Unit,
-    onImport: () -> Unit,
+    onImport: (String) -> Unit,
     viewModel: SearchSourcesViewModel = hiltViewModel()
 ) {
     val hazeState = remember { HazeState() }
@@ -92,6 +93,7 @@ fun SearchSourcesScreen(
     val panHubConfig by viewModel.panHubConfig.collectAsStateWithLifecycle()
     var showPanHubConfig by remember { mutableStateOf(false) }
     var showShareSource by remember { mutableStateOf<CustomSearchSource?>(null) }
+    var showImportDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -127,32 +129,20 @@ fun SearchSourcesScreen(
                     Column(
                         modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 2.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = stringResource(R.string.search_sources_custom),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.weight(1f))
-                            TextButton(onClick = onImport) {
-                                Icon(
-                                    imageVector = Icons.Rounded.FileUpload,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(stringResource(R.string.search_sources_import))
-                            }
-                        }
+                        Text(
+                            text = stringResource(R.string.search_sources_custom),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
                     }
                 }
 
                 if (customSources.isEmpty()) {
                     item(key = "custom_empty") {
                         EmptyCustomSourceCard(
-                            onAddFromTemplate = { onAddFromTemplate("") },
-                            onImport = onImport
+                            onAddFromTemplate = onAddFromTemplate,
+                            onImport = { showImportDialog = true }
                         )
                     }
                 } else {
@@ -174,15 +164,20 @@ fun SearchSourcesScreen(
                     }
                 }
 
-                item(key = "add_card") {
-                    AddSourceCard(onAddFromTemplate = onAddFromTemplate)
+                if (customSources.isNotEmpty()) {
+                    item(key = "add_card") {
+                        AddSourceCard(
+                            onAddFromTemplate = onAddFromTemplate,
+                            onImport = { showImportDialog = true }
+                        )
+                    }
                 }
             }
 
             HeaderBar(
                 hazeState = hazeState,
                 onBack = onBack,
-                onImport = onImport
+                onImport = { showImportDialog = true }
             )
         }
     }
@@ -206,6 +201,17 @@ fun SearchSourcesScreen(
         ShareSourceDialog(
             source = source,
             onDismiss = { showShareSource = null }
+        )
+    }
+
+    // ---- 导入弹层：打开时自动识别剪贴板中的分享配置 ----
+    if (showImportDialog) {
+        ImportSourceDialog(
+            onConfirm = { source ->
+                showImportDialog = false
+                onImport(ShareCodec.encode(source))
+            },
+            onDismiss = { showImportDialog = false }
         )
     }
 }
@@ -252,7 +258,7 @@ private fun HeaderBar(
             Spacer(modifier = Modifier.weight(1f))
             IconButton(onClick = onImport) {
                 Icon(
-                    imageVector = Icons.Rounded.FileUpload,
+                    imageVector = Icons.Rounded.FileDownload,
                     contentDescription = stringResource(R.string.search_sources_import),
                     tint = MaterialTheme.colorScheme.primary
                 )
@@ -281,77 +287,65 @@ private fun BuiltinSourcesSection(
         SourceCardRow(
             title = stringResource(R.string.search_sources_pansou),
             subtitle = stringResource(R.string.search_sources_pansou_desc),
-            icon = Icons.Rounded.Language,
-            isDark = isAppDarkTheme(),
             checked = pansouEnabled,
             onCheckedChange = onPansouChange
         )
         SourceCardRow(
             title = stringResource(R.string.search_sources_panhub),
             subtitle = stringResource(R.string.search_sources_panhub_desc),
-            icon = Icons.Rounded.CloudUpload,
-            isDark = isAppDarkTheme(),
             checked = panhubEnabled,
             onCheckedChange = onPanhubChange,
             onClick = onOpenPanHubConfig,
-            trailing = {
-                Icon(
-                    imageVector = Icons.Rounded.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            leadingAction = {
+                IconButton(onClick = onOpenPanHubConfig) {
+                    Icon(
+                        imageVector = Icons.Rounded.Settings,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         )
         SourceCardRow(
             title = stringResource(R.string.search_sources_zreso),
             subtitle = stringResource(R.string.search_sources_zreso_desc),
-            icon = Icons.Rounded.Language,
-            isDark = isAppDarkTheme(),
             checked = zresoEnabled,
             onCheckedChange = onZresoChange
         )
     }
 }
 
-/** 分组小标题 */
+/** 分组小标题（与自定义源分组标题字号、左边距一致） */
 @Composable
 private fun SectionLabel(text: String) {
     Text(
         text = text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.padding(top = 12.dp, bottom = 2.dp)
     )
 }
 
-/** 内置源单行卡片：图标 + 名称描述 + 开关（可附带点击区域与尾部图标） */
+/** 内置源单行卡片：名称描述 + 开关（可附带点击区域与开关左侧操作） */
 @Composable
 private fun SourceCardRow(
     title: String,
     subtitle: String,
-    icon: ImageVector,
-    isDark: Boolean,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     onClick: (() -> Unit)? = null,
-    trailing: (@Composable () -> Unit)? = null
+    leadingAction: (@Composable () -> Unit)? = null
 ) {
     val view = LocalView.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
-            .clickable(onClick = { view.performHaptic(HapticType.CLICK); onClick?.invoke() })
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(22.dp)
-        )
-        Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
@@ -367,13 +361,16 @@ private fun SourceCardRow(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        if (trailing != null) {
-            trailing()
+        if (leadingAction != null) {
+            leadingAction()
             Spacer(modifier = Modifier.width(4.dp))
         }
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange,
+            onCheckedChange = {
+                view.performHaptic(HapticType.CLICK)
+                onCheckedChange(it)
+            },
             colors = appSwitchColors()
         )
     }
@@ -382,9 +379,10 @@ private fun SourceCardRow(
 /** 空状态卡片：引导新建或导入 */
 @Composable
 private fun EmptyCustomSourceCard(
-    onAddFromTemplate: () -> Unit,
+    onAddFromTemplate: (String) -> Unit,
     onImport: () -> Unit
 ) {
+    var showTemplateSheet by remember { mutableStateOf(false) }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -403,7 +401,7 @@ private fun EmptyCustomSourceCard(
             )
             Spacer(modifier = Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onAddFromTemplate) {
+                TextButton(onClick = { showTemplateSheet = true }) {
                     Icon(
                         imageVector = Icons.Rounded.Add,
                         contentDescription = null,
@@ -414,7 +412,7 @@ private fun EmptyCustomSourceCard(
                 }
                 TextButton(onClick = onImport) {
                     Icon(
-                        imageVector = Icons.Rounded.FileUpload,
+                        imageVector = Icons.Rounded.FileDownload,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
@@ -423,6 +421,20 @@ private fun EmptyCustomSourceCard(
                 }
             }
         }
+    }
+
+    if (showTemplateSheet) {
+        SourceTemplateSheet(
+            onTemplateClick = { template ->
+                showTemplateSheet = false
+                onAddFromTemplate(template.id)
+            },
+            onImport = {
+                showTemplateSheet = false
+                onImport()
+            },
+            onDismiss = { showTemplateSheet = false }
+        )
     }
 }
 
@@ -614,7 +626,10 @@ private fun SourceActionIcon(
 
 /** 底部新建卡片：点击打开模板库弹层 */
 @Composable
-private fun AddSourceCard(onAddFromTemplate: (String) -> Unit) {
+private fun AddSourceCard(
+    onAddFromTemplate: (String) -> Unit,
+    onImport: () -> Unit
+) {
     var showTemplateSheet by remember { mutableStateOf(false) }
     val view = LocalView.current
 
@@ -653,6 +668,7 @@ private fun AddSourceCard(onAddFromTemplate: (String) -> Unit) {
             },
             onImport = {
                 showTemplateSheet = false
+                onImport()
             },
             onDismiss = { showTemplateSheet = false }
         )

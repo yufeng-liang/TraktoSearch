@@ -1137,8 +1137,8 @@ fun AppNavigation(
                             onEditSource = { sourceId ->
                                 navController.navigate(Routes.searchSourceEditorRoute("edit", sourceId))
                             },
-                            onImport = {
-                                navController.navigate(Routes.searchSourceEditorRoute("import"))
+                            onImport = { text ->
+                                navController.navigate(Routes.searchSourceEditorRoute("import", text))
                             }
                         )
                     }

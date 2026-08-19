@@ -17,6 +17,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,29 +54,30 @@ fun ShareSourceDialog(
                     maxLines = 4,
                     overflow = TextOverflow.Ellipsis
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(
-                        onClick = {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("source-config", text))
-                            Toast.makeText(context, R.string.share_copy_success, Toast.LENGTH_SHORT).show()
-                        },
-                        modifier = Modifier.weight(1f)
-                    ) { Text(stringResource(R.string.share_copy)) }
-                    Button(
-                        onClick = {
-                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, text)
-                            }
-                            context.startActivity(Intent.createChooser(sendIntent, null))
-                        },
-                        modifier = Modifier.weight(1.4f)
-                    ) { Text(stringResource(R.string.share_to_apps)) }
-                }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) } }
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("source-config", text))
+                        Toast.makeText(context, R.string.share_copy_success, Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.weight(1f)
+                ) { Text(stringResource(R.string.share_copy)) }
+                Button(
+                    onClick = {
+                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, text)
+                        }
+                        context.startActivity(Intent.createChooser(sendIntent, null))
+                    },
+                    modifier = Modifier.weight(1.4f)
+                ) { Text(stringResource(R.string.share_to_apps)) }
+            }
+        }
     )
 }
 
@@ -89,6 +91,19 @@ fun ImportSourceDialog(
     var pasteText by remember { mutableStateOf("") }
     var preview by remember { mutableStateOf<CustomSearchSource?>(null) }
     var invalid by remember { mutableStateOf(false) }
+
+    // 打开时自动读取剪贴板：符合分享格式则直接填充并预览，点击导入即可
+    LaunchedEffect(Unit) {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val text = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
+        if (!text.isNullOrBlank()) {
+            val decoded = ShareCodec.decode(text.trim())
+            if (decoded != null) {
+                pasteText = text.trim()
+                preview = decoded
+            }
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
