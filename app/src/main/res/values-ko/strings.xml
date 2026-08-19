@@ -1371,9 +1371,11 @@
     <string name="help_dc_douban_desc">Douban에 로그인하여 관심/시청 마크를 Watchlist로 가져오고, Trakt 연결 시 동기화</string>
     <string name="help_dc_cooldown">쿨다운: 더우반에는 안티 크롤링 메커니즘이 있어, 잦은 반복 크롤링 시 IP 주소가 블랙리스트에 등록될 수 있습니다. 전체 크롤링 후 7일 쿨다운을 설정해 요청 빈도를 낮춥니다. 쿨다운 중 증분 동기화는 클라우드 데이터를 재사용하며 재크롤링하지 않습니다. 본인 책임하에 강제 동기화 가능.</string>
     <string name="help_custom_source">사용자 정의 검색 소스</string>
-    <string name="help_custom_source_b1">설정 → 검색 소스 → 사용자 정의 검색 소스 → 검색 소스 추가</string>
+    <string name="help_custom_source_b1">설정 → 검색 소스 → 전용 페이지: PanSou/Panhub/Zreso 켜기/끄기(Panhub 설정 가능), 사용자 정의 소스 목록과 템플릿</string>
     <string name="help_custom_source_b2">검색 소스는 URL을 조합하여 요청: {baseUrl}/{apiPath}?{keywordParam}=검색어&amp;기타 매개변수</string>
-    <string name="help_custom_source_b3">추가 후 활성화/비활성화 가능, 드래그로 정렬</string>
+    <string name="help_custom_source_b3">템플릿 라이브러리에서 한 번에 추가하거나 3단계 마법사: 기본 정보 → 자동 파싱 → 확인</string>
+    <string name="help_custom_source_b4">자동 파싱은 JSONPath로 목록 경로/이름/링크/디스크 유형 인식, 수동 미세 조정 가능</string>
+    <string name="help_custom_source_b5">공유: 목록 항목 공유 버튼으로 설정 텍스트 복사; 가져오기: 텍스트 붙여넣기만 하면 되며, 이름 충돌 시 알림</string>
     <string name="help_custom_source_params">매개변수 설명</string>
     <string name="help_cs_table_param">매개변수명</string>
     <string name="help_cs_table_desc">설명</string>

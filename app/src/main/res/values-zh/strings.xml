@@ -638,9 +638,11 @@
     <string name="help_dc_douban_desc">登录豆瓣抓取想看/已看标记并显示在 Watchlist；连接 Trakt 后可同步到 Trakt</string>
     <string name="help_dc_cooldown">冷却期：豆瓣有反爬机制，频繁多次爬取可能导致你的 IP 地址被列入黑名单。完整爬取后设置 7 天冷却期以降低请求频率。冷却期内增量同步复用云端数据，不再重新爬取；你可以自行承担风险强制同步。</string>
     <string name="help_custom_source">自定义搜索源</string>
-    <string name="help_custom_source_b1">设置 → 搜索源 → 自定义搜索源 → 添加搜索源</string>
+    <string name="help_custom_source_b1">设置 → 搜索源 → 独立管理页：内置 PanSou/Panhub/Zreso 启停（Panhub 可配置），自定义源列表与模板</string>
     <string name="help_custom_source_b2">搜索源会拼接 URL 发送请求：{baseUrl}/{apiPath}?{keywordParam}=搜索词&amp;其他参数</string>
-    <string name="help_custom_source_b3">添加后可开关启用/禁用，支持拖拽排序</string>
+    <string name="help_custom_source_b3">添加自定义源可从模板库一键选用，或走三步向导：基本信息 → 自动解析 → 确认</string>
+    <string name="help_custom_source_b4">自动解析支持 JSONPath 识别列表路径/名称/链接/网盘类型，可手动微调</string>
+    <string name="help_custom_source_b5">分享：列表项分享按钮生成配置文本；导入：粘贴配置文本即可，同名冲突会提示</string>
     <string name="help_custom_source_params">参数说明</string>
     <string name="help_cs_table_param">参数名</string>
     <string name="help_cs_table_desc">说明</string>

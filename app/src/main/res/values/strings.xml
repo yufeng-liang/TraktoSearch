@@ -638,9 +638,11 @@
     <string name="help_dc_douban_desc">Log in to Douban and import wish/watched marks into Watchlist; optionally sync them to Trakt</string>
     <string name="help_dc_cooldown">Cooldown: Douban has anti-crawl measures. Frequent repeated crawls may get your IP blacklisted. A 7-day cooldown after a full crawl reduces request frequency. During cooldown, incremental sync reuses cloud data without re-crawling; you can force sync at your own risk.</string>
     <string name="help_custom_source">Custom Search Sources</string>
-    <string name="help_custom_source_b1">Settings → Search Sources → Custom Sources → Add Source</string>
+    <string name="help_custom_source_b1">Settings → Search Sources → dedicated page: toggle PanSou/Panhub/Zreso (Panhub configurable), custom sources &amp; templates</string>
     <string name="help_custom_source_b2">URL is constructed as: {baseUrl}/{apiPath}?{keywordParam}=query&amp;other params</string>
-    <string name="help_custom_source_b3">Enable/disable with toggle, drag to reorder</string>
+    <string name="help_custom_source_b3">Add custom sources from the template library in one tap, or use the 3-step wizard: Basic Info → Auto Parse → Confirm</string>
+    <string name="help_custom_source_b4">Auto Parse detects JSONPath rules (list path, name, link, disk type); fine-tune manually if needed</string>
+    <string name="help_custom_source_b5">Share: list item share button copies config text; Import: paste the text, name conflicts are reported</string>
     <string name="help_custom_source_params">Parameter Reference</string>
     <string name="help_cs_table_param">Param</string>
     <string name="help_cs_table_desc">Description</string>

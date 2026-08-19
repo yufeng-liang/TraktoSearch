@@ -221,6 +221,8 @@ fun HelpScreen(
                         HelpBullet(stringResource(R.string.help_custom_source_b1))
                         HelpBullet(stringResource(R.string.help_custom_source_b2))
                         HelpBullet(stringResource(R.string.help_custom_source_b3))
+                        HelpBullet(stringResource(R.string.help_custom_source_b4))
+                        HelpBullet(stringResource(R.string.help_custom_source_b5))
 
                         Spacer(modifier = Modifier.height(8.dp))
                         HelpSubtitle(stringResource(R.string.help_custom_source_params))
