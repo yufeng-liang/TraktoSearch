@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.ui.component.AdaptiveSingleLineText
+import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.appSwitchColors
@@ -90,7 +91,8 @@ fun SettingsGroupCard(
             elevation = 6.dp,
             blurRadius = 18.dp,
             hazeState = hazeState,
-            hazeStyle = HazeMaterials.thin()
+            hazeStyle = HazeMaterials.thin(),
+            glassRole = GlassSurfaceRole.Card
         ) {
             Column(
                 modifier = Modifier.padding(vertical = 4.dp),
@@ -619,7 +621,8 @@ internal fun StatisticsCard(
         elevation = 6.dp,
         blurRadius = 18.dp,
         hazeState = hazeState,
-        hazeStyle = HazeMaterials.thin()
+        hazeStyle = HazeMaterials.thin(),
+        glassRole = GlassSurfaceRole.Card
     ) {
         Row(
             modifier = Modifier
@@ -700,7 +703,8 @@ fun SettingsSectionCard(
             elevation = 4.dp,
             blurRadius = 16.dp,
             hazeState = hazeState,
-            hazeStyle = HazeMaterials.thin()
+            hazeStyle = HazeMaterials.thin(),
+            glassRole = GlassSurfaceRole.Card
         ) {
             Column(
                 modifier = Modifier.padding(vertical = 4.dp),

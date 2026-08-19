@@ -10,9 +10,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,6 +28,7 @@ import androidx.compose.ui.draw.innerShadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.shadow.Shadow
@@ -33,13 +36,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.ColorUtils
+import com.kyant.backdrop.backdrops.LayerBackdrop
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeSampling
 import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
-import dev.chrisbanes.haze.glass.GlassStyle
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 
@@ -58,9 +61,11 @@ fun Modifier.hazeTopBar(
     style: HazeBlurStyle = HazeMaterials.thin(),
     blurRadius: Dp = 24.dp,
     isContentUnderTopBar: Boolean? = null,
+    backdropOverride: LayerBackdrop? = null,
     scene: GlassScene = GlassScene()
 ): Modifier {
-    // 效果节点常驻、用透明度插值，避免布尔硬切换导致的新节点首帧未就绪闪透明。
+    // Blur 效果节点常驻、用透明度插值，避免布尔硬切换导致的新节点首帧未就绪闪透明。
+    // Backdrop 在初始位置不注册采样；滚动后再恢复完整的 Glass 光学效果。
     // isContentUnderTopBar == null 时保持恒模糊（不参与滚动判定的页面，如列表详情标题栏）。
     val visible by animateFloatAsState(
         targetValue = when (isContentUnderTopBar) {
@@ -76,11 +81,17 @@ fun Modifier.hazeTopBar(
         // blur=0 时 Haze 输出为空，alpha=0 作为双重保障，避免效果未就绪露出未模糊内容
         alpha(visible)
     }
-    val resolvedGlassStyle = AppGlassStyles.topBar(scene = scene).then { alpha(visible) }
     return appVisualEffect(
         input = HazeInput.Sources(state),
         hazeStyle = resolvedStyle,
-        glassStyle = resolvedGlassStyle,
+        glassRole = GlassSurfaceRole.TopBar,
+        glassShape = RoundedCornerShape(0.dp),
+        // Glass 填充 alpha 由 TopBar token 统一控制；预乘 0.12 会让滚动后的实际填充
+        // 只剩约 2-3%，视觉上仍像透明。初始透明仍由 glassEffectEnabled 控制。
+        glassTint = MaterialTheme.colorScheme.surface,
+        backdropOverride = backdropOverride,
+        scene = scene,
+        glassEffectEnabled = isContentUnderTopBar != false,
         // 渲染降采样：Haze 官方基准显示可降低 5-20% 开销，肉眼几乎不可见
         blurSampling = HazeSampling.Adaptive
     )
@@ -232,6 +243,43 @@ fun detailTopBarIconColor(): Color {
     )
 }
 
+/** 详情页顶部图标：主题色前景叠加反色偏移阴影，增强海报暗部采样时的边缘对比。 */
+@Composable
+fun DetailTopBarIcon(
+    imageVector: ImageVector,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    size: Dp = 20.dp,
+    tint: Color = detailTopBarIconColor()
+) {
+    val isDark = isAppDarkTheme()
+    val inverseShadow = Color(
+        red = 1f - tint.red,
+        green = 1f - tint.green,
+        blue = 1f - tint.blue,
+        alpha = if (isDark) 0.82f else 0.62f
+    )
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = imageVector,
+            contentDescription = null,
+            tint = inverseShadow,
+            modifier = Modifier
+                .size(size)
+                .offset(x = 0.8.dp, y = 0.8.dp)
+        )
+        Icon(
+            imageVector = imageVector,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(size)
+        )
+    }
+}
+
 /**
  * C方案底部导航选中项：凹陷药丸，内阴影暗部 + 左上高光
  */
@@ -308,7 +356,6 @@ fun NeumorphicFrostedSurface(
     lightShadowAlpha: Float = if (isDark) 0.10f else 0.85f,
     hazeState: HazeState? = null,
     hazeStyle: HazeBlurStyle? = null,
-    glassStyle: GlassStyle? = null,
     hazeBlurRadius: Dp? = null,
     showHighlight: Boolean = true,
     // 可选：过滤参与模糊的源区域。底部导航等"自身既作 source 又作 effect"的场景
@@ -316,6 +363,9 @@ fun NeumorphicFrostedSurface(
     sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
     // 旧页面默认只保留普通表面；需要 Glass 采样时由页面显式声明语义角色。
     glassRole: GlassSurfaceRole? = null,
+    useNavigationSelectionGlassStyle: Boolean = false,
+    selectionBorderWidth: Dp? = null,
+    showGlassBorder: Boolean = true,
     interactionSource: MutableInteractionSource? = null,
     scene: GlassScene = GlassScene(),
     content: @Composable () -> Unit
@@ -327,7 +377,7 @@ fun NeumorphicFrostedSurface(
         } else {
             null
         }
-        if (hazeState != null && glassRole != null) {
+        if (glassRole != null) {
             GlassSurfaceImpl(
                 modifier = modifier,
                 hazeState = hazeState,
@@ -338,6 +388,9 @@ fun NeumorphicFrostedSurface(
                 interactionSource = interactionSource,
                 tint = backgroundColor,
                 borderColor = borderColor,
+                useNavigationSelectionStyle = useNavigationSelectionGlassStyle,
+                selectionBorderWidth = selectionBorderWidth,
+                showGlassBorder = showGlassBorder,
                 content = content
             )
         } else {
@@ -390,7 +443,6 @@ fun NeumorphicFrostedSurface(
                 selection = sourceSelection
             ),
             hazeStyle = resolvedHazeStyle,
-            glassStyle = glassStyle,
             blurSampling = HazeSampling.Adaptive,
             interactionSource = interactionSource
         )
@@ -437,7 +489,6 @@ fun NeumorphicIconButton(
     size: Dp = 42.dp,
     hazeState: HazeState? = null,
     hazeStyle: HazeBlurStyle? = null,
-    glassStyle: GlassStyle? = null,
     interactionSource: MutableInteractionSource? = null,
     enabled: Boolean = true,
     lightBorderAlpha: Float = 0.55f,
@@ -484,13 +535,14 @@ fun NeumorphicIconButton(
         Modifier.appVisualEffect(
             input = HazeInput.Sources(hazeState),
             hazeStyle = resolvedHazeStyle,
-            glassStyle = glassStyle ?: AppGlassStyles.circularControl(
-                tint = MaterialTheme.colorScheme.surface.copy(
-                    alpha = blurTintAlpha
-                ),
-                interactive = enabled,
-                scene = scene
-            ),
+            glassRole = if (isDetailTopBar) {
+                GlassSurfaceRole.DetailAction
+            } else {
+                GlassSurfaceRole.CircularControl
+            },
+            glassShape = RoundedCornerShape(50),
+            glassTint = MaterialTheme.colorScheme.surface.copy(alpha = blurTintAlpha),
+            scene = scene,
             blurSampling = HazeSampling.Adaptive,
             interactionSource = resolvedInteractionSource
         )

@@ -120,7 +120,6 @@ import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.util.PersonAvatarColorStore
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.ui.component.EmptyView
-import com.tracktosearch.ui.component.AppGlassStyles
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
@@ -135,6 +134,7 @@ import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.appVisualEffect
 import com.tracktosearch.ui.component.MovieCardSkeleton
@@ -505,6 +505,7 @@ fun TraktSearchScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .hazeSource(state = hazeState)
+                            .backdropSource()
                     ) {
                         items(9) {
                             if (uiState.selectedTab == MediaType.PERSON) PersonCardSkeleton()
@@ -516,7 +517,8 @@ fun TraktSearchScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .hazeSource(state = hazeState),
+                                .hazeSource(state = hazeState)
+                                .backdropSource(),
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -535,7 +537,8 @@ fun TraktSearchScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .hazeSource(state = hazeState),
+                            .hazeSource(state = hazeState)
+                            .backdropSource(),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -551,7 +554,8 @@ fun TraktSearchScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .hazeSource(state = hazeState),
+                            .hazeSource(state = hazeState)
+                            .backdropSource(),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -593,6 +597,7 @@ fun TraktSearchScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .hazeSource(state = hazeState)
+                                .backdropSource()
                         ) {
                             items(currentTabState.results.size, key = { "${currentTabState.results[it].traktId}_$it" }, contentType = { "person" }) { index ->
                                 val item = currentTabState.results[index]
@@ -637,6 +642,7 @@ fun TraktSearchScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .hazeSource(state = hazeState)
+                                .backdropSource()
                         ) {
                             items(currentTabState.results.size, key = { "${currentTabState.results[it].traktId}_$it" }, contentType = { "media_card" }) { index ->
                                 val item = currentTabState.results[index]
@@ -904,10 +910,10 @@ fun TraktSearchScreen(
                                 blurRadius(20.dp)
                                 noiseFactor(0f)
                             },
-                            glassStyle = AppGlassStyles.circularControl(
-                                tint = hazeSurface.copy(alpha = 0.6f),
-                                scene = traktSearchGlassScene
-                            ),
+                            glassRole = GlassSurfaceRole.CircularControl,
+                            glassShape = RoundedCornerShape(50),
+                            glassTint = hazeSurface.copy(alpha = 0.6f),
+                            scene = traktSearchGlassScene,
                             blurSampling = HazeSampling.Adaptive,
                             interactionSource = interactionSource
                         )
@@ -1008,7 +1014,8 @@ private fun DiskSearchContent(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .hazeSource(state = hazeState),
+                    .hazeSource(state = hazeState)
+                    .backdropSource(),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
@@ -1037,7 +1044,8 @@ private fun DiskSearchContent(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .hazeSource(state = hazeState),
+                    .hazeSource(state = hazeState)
+                    .backdropSource(),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1050,7 +1058,8 @@ private fun DiskSearchContent(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .hazeSource(state = hazeState),
+                    .hazeSource(state = hazeState)
+                    .backdropSource(),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -1069,7 +1078,9 @@ private fun DiskSearchContent(
                     state = listState,
                     contentPadding = PaddingValues(start = 8.dp, top = 124.dp + statusBarHeight, end = 8.dp, bottom = 80.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = Modifier.hazeSource(state = hazeState)
+                    modifier = Modifier
+                        .hazeSource(state = hazeState)
+                        .backdropSource()
                 ) {
                     // 搜索中时顶部显示紧凑进度条
                     if (diskState.isLoading && diskState.resources.isNotEmpty()) {

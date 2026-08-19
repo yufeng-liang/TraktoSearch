@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -19,10 +20,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -91,9 +94,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.DoubanLogo
+import com.tracktosearch.ui.component.GlassSurfaceRole
+import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
+import com.tracktosearch.ui.component.TopBarBackdropSourcePadding
 import com.tracktosearch.ui.component.TraktLogo
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.glassSceneForContent
@@ -392,6 +400,12 @@ fun SettingsScreen(
 
     // LazyListState 由 NavGraph backstack 自然 remember,返回设置页时位置自动恢复,无需手动持久化
     val settingsListState = rememberLazyListState()
+    // 顶栏采样独立的列表 source，不能与列表内 Glass 卡片共用同一个 source。
+    val settingsBackdropBackground = MaterialTheme.colorScheme.background
+    val settingsContentBackdrop = rememberLayerBackdrop {
+        drawRect(settingsBackdropBackground)
+        drawContent()
+    }
     val settingsHasContentUnderTopBar by remember {
         derivedStateOf {
             hasListScrolled(
@@ -423,22 +437,35 @@ fun SettingsScreen(
             )
         }
     ) { padding ->
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
             val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-            LazyColumn(
-                state = settingsListState,
-                modifier = modifier
-                    .fillMaxSize()
-                    .hazeSource(state = settingsHazeState),
-                contentPadding = PaddingValues(
-                    top = 65.dp + statusBarHeight,
-                    bottom = 80.dp
-                )
-        ) {
+            // Backdrop source 在窗口外各保留一个顶栏 blur 半径；边缘卷积采样背景而非裁切/重复首列内容。
+            Box(
+                modifier = Modifier
+                    // requiredWidth 会将超出父约束的 source 自动居中，左右各保留 blur 采样余量。
+                    .requiredWidth(maxWidth + TopBarBackdropSourcePadding * 2)
+                    .fillMaxHeight()
+                    .layerBackdrop(settingsContentBackdrop)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = TopBarBackdropSourcePadding)
+                ) {
+                    LazyColumn(
+                        state = settingsListState,
+                        modifier = modifier
+                            .fillMaxSize()
+                            .hazeSource(state = settingsHazeState),
+                        contentPadding = PaddingValues(
+                            top = 65.dp + statusBarHeight,
+                            bottom = 80.dp
+                        )
+                    ) {
             // 观看统计（第一位，独占整行卡片，无类目 Header）—— 仅登录可见
             // sharedBounds 与 StatisticsScreen 头部配对,实现卡片↔页面展开/收起转场
             // 豆瓣独立模式: 统计数据来源是 Trakt watchlist/history,无 trakt token 时无意义,隐藏
@@ -648,7 +675,9 @@ fun SettingsScreen(
                     onFeedbackClick = onFeedbackClick
                 )
             }
-        }
+                    }
+                }
+            }
             // 毛玻璃吸顶标题栏（thin 模糊，与发现/我的页一致）
             Box(
                 modifier = Modifier
@@ -656,8 +685,9 @@ fun SettingsScreen(
                     .hazeTopBar(
                         state = settingsHazeState,
                         style = settingsHazeStyle,
-                        blurRadius = 24.dp,
+                        blurRadius = TopBarBackdropBlurRadius,
                         isContentUnderTopBar = settingsHasContentUnderTopBar,
+                        backdropOverride = settingsContentBackdrop,
                         scene = settingsGlassScene
                     )
             ) {
@@ -1295,7 +1325,8 @@ private fun MarkRecordsEntryCard(
         elevation = 6.dp,
         blurRadius = 18.dp,
         hazeState = hazeState,
-        hazeStyle = HazeMaterials.thin()
+        hazeStyle = HazeMaterials.thin(),
+        glassRole = GlassSurfaceRole.Card
     ) {
         Row(
             modifier = Modifier

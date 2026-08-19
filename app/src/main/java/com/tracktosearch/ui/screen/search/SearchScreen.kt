@@ -177,6 +177,7 @@ import com.tracktosearch.ui.component.RatingBadge
 import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.neumorphicShadow
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
@@ -535,6 +536,14 @@ fun SearchScreen(
             .fillMaxSize()
             .hazeSource(state = hazeState)
     ) {
+        // 搜索页的历史/热门词是 Glass chip，不能把整块内容注册为 source。
+        // 这个空 source 只让搜索框拥有稳定的页面底色采样，避免把 Glass 子树录回同一 backdrop。
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .backdropSource()
+        )
+
         // 标题区（固定顶部，不随搜索框移动，padding状态栏避开系统栏）
         Box(
             modifier = Modifier
@@ -570,77 +579,6 @@ fun SearchScreen(
                     y = targetSearchBoxY - cloudIconSize - 16.dp
                 )
         )
-
-        // 搜索框（带动画垂直位置）- 拟态毛玻璃效果
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset(y = targetSearchBoxY)
-                .padding(horizontal = 16.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            val searchInteractionSource = remember { MutableInteractionSource() }
-            NeumorphicFrostedSurface(
-                modifier = Modifier
-                    .fillMaxWidth(animatedWidthFraction.value)
-                    .onGloballyPositioned { searchBoxBounds = it.boundsInRoot() },
-                isDark = isDark,
-                shape = RoundedCornerShape(32.dp),
-                elevation = 14.dp,
-                blurRadius = 28.dp,
-                shadowOffset = 10.dp,
-                backgroundColor = if (isDark) Color(0xFF222244).copy(alpha = 0.7f) else Color.White.copy(alpha = 0.65f),
-                borderColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.8f),
-                glassRole = GlassSurfaceRole.SearchField,
-                scene = searchGlassScene,
-                darkShadowAlpha = if (isDark) 0.65f else 0.28f,
-                lightShadowAlpha = if (isDark) 0.12f else 0.9f,
-                hazeState = hazeState,
-                interactionSource = searchInteractionSource
-            ) {
-                Box(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
-                    SearchBarTopNew(
-                        searchQuery = searchQuery,
-                        onQueryChange = {
-                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                            searchQuery = it
-                        },
-                        onSearch = {
-                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                            if (BuildConfig.DEBUG && searchQuery.trim() == "13638719007") {
-                                onSpiderTest?.invoke()
-                            } else {
-                                viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
-                                onTraktSearch?.invoke(searchSourceType, searchQuery)
-                            }
-                            focusManager.clearFocus()
-                        },
-                        onClear = {
-                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                            searchQuery = ""
-                        },
-                        onBack = if (isActive) {
-                            {
-                                interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                                onBack?.invoke()
-                            }
-                        } else null,
-                        focusRequester = focusRequester,
-                        onFocusChanged = {
-                            if (it) interruptAiSprite(AiSpriteInterruptReason.FOCUS)
-                            isSearchFocused = it
-                        },
-                        searchSourceType = searchSourceType,
-                        onSearchSourceTypeChange = onSearchSourceTypeChange,
-                        isDark = isDark,
-                        view = view,
-                        hazeState = hazeState,
-                        interactionSource = searchInteractionSource,
-                        scene = searchGlassScene
-                    )
-                }
-            }
-        }
 
         // 权限提示弹窗
         if (showPermissionDialog) {
@@ -793,6 +731,77 @@ fun SearchScreen(
                     )
                 }
                 Spacer(modifier = Modifier.height(80.dp))
+            }
+        }
+
+        // 搜索框（带动画垂直位置）- 作为 Backdrop source 的兄弟 overlay
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset(y = targetSearchBoxY)
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            val searchInteractionSource = remember { MutableInteractionSource() }
+            NeumorphicFrostedSurface(
+                modifier = Modifier
+                    .fillMaxWidth(animatedWidthFraction.value)
+                    .onGloballyPositioned { searchBoxBounds = it.boundsInRoot() },
+                isDark = isDark,
+                shape = RoundedCornerShape(32.dp),
+                elevation = 14.dp,
+                blurRadius = 28.dp,
+                shadowOffset = 10.dp,
+                backgroundColor = if (isDark) Color(0xFF222244).copy(alpha = 0.7f) else Color.White.copy(alpha = 0.65f),
+                borderColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.8f),
+                glassRole = GlassSurfaceRole.SearchField,
+                scene = searchGlassScene,
+                darkShadowAlpha = if (isDark) 0.65f else 0.28f,
+                lightShadowAlpha = if (isDark) 0.12f else 0.9f,
+                hazeState = hazeState,
+                interactionSource = searchInteractionSource
+            ) {
+                Box(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
+                    SearchBarTopNew(
+                        searchQuery = searchQuery,
+                        onQueryChange = {
+                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                            searchQuery = it
+                        },
+                        onSearch = {
+                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                            if (BuildConfig.DEBUG && searchQuery.trim() == "13638719007") {
+                                onSpiderTest?.invoke()
+                            } else {
+                                viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
+                                onTraktSearch?.invoke(searchSourceType, searchQuery)
+                            }
+                            focusManager.clearFocus()
+                        },
+                        onClear = {
+                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                            searchQuery = ""
+                        },
+                        onBack = if (isActive) {
+                            {
+                                interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                                onBack?.invoke()
+                            }
+                        } else null,
+                        focusRequester = focusRequester,
+                        onFocusChanged = {
+                            if (it) interruptAiSprite(AiSpriteInterruptReason.FOCUS)
+                            isSearchFocused = it
+                        },
+                        searchSourceType = searchSourceType,
+                        onSearchSourceTypeChange = onSearchSourceTypeChange,
+                        isDark = isDark,
+                        view = view,
+                        hazeState = hazeState,
+                        interactionSource = searchInteractionSource,
+                        scene = searchGlassScene
+                    )
+                }
             }
         }
 

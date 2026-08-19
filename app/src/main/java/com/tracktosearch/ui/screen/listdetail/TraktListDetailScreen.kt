@@ -62,6 +62,7 @@ import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.ScrollToTopButton
@@ -144,7 +145,8 @@ fun TraktListDetailScreen(
                             columns = GridCells.Fixed(3),
                             modifier = Modifier
                                 .fillMaxSize()
-                                .hazeSource(state = hazeState),
+                                .hazeSource(state = hazeState)
+                                .backdropSource(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 65.dp + statusBarHeight, bottom = 16.dp)
@@ -231,7 +233,8 @@ fun TraktListDetailScreen(
                         state = gridState,
                         modifier = Modifier
                             .fillMaxSize()
-                            .hazeSource(state = hazeState),
+                            .hazeSource(state = hazeState)
+                            .backdropSource(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 65.dp + statusBarHeight, bottom = 16.dp)

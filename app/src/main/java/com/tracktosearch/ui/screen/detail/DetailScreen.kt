@@ -88,11 +88,15 @@ import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
+import com.tracktosearch.ui.component.DetailTopBarIcon
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.ToastEffect
@@ -316,25 +320,39 @@ fun DetailScreen(
             .fillMaxSize()
             .padding(padding)
         ) {
-            // source 必须与浮动按钮保持兄弟层级：按钮不能成为 source 的子节点，
-            // 否则 Haze 会排除 source 自身，按钮就会退化为完全透明。
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .hazeSource(state = detailHazeState, zIndex = 0f)
-                    // 海报主色调垂直渐变背景(主色 0.70f 透明 → 背景色),实现沉浸式视觉
-                    .then(
-                        uiState.posterDominantColor?.let { c ->
-                            Modifier.background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        c.copy(alpha = 0.70f),
-                                        MaterialTheme.colorScheme.background
-                                    )
-                                )
-                            )
-                        } ?: Modifier
+            val isGlassMode = LocalVisualEffectMode.current == VisualEffectMode.GLASS
+            val immersiveBackgroundModifier = uiState.posterDominantColor?.let { color ->
+                Modifier.background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            color.copy(alpha = 0.70f),
+                            MaterialTheme.colorScheme.background
+                        )
                     )
+                )
+            } ?: Modifier
+
+            // Glass 只录制纯沉浸背景；滚动内容中的 Glass 控件作为 sibling 采样，
+            // 避免将 drawBackdrop 子树再次纳入同一个 source 造成 RenderThread 递归。
+            if (isGlassMode) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .backdropSource()
+                        .then(immersiveBackgroundModifier)
+                )
+            }
+
+            // Blur 维持原有的完整 Haze source 范围，Glass 则保持在背景 source 之上。
+            Box(
+                modifier = if (isGlassMode) {
+                    Modifier.fillMaxSize()
+                } else {
+                    Modifier
+                        .fillMaxSize()
+                        .hazeSource(state = detailHazeState, zIndex = 0f)
+                        .then(immersiveBackgroundModifier)
+                }
             ) {
             // Tab 栏底色/文字颜色计算(在 LazyColumn 之外定义,让内容区也能用)
             // - 非吸顶(tab 还在海报下方):底色透明,文字按海报主色亮度自适应
@@ -679,7 +697,8 @@ fun DetailScreen(
                                 else viewModel.translateSingleComment(commentId)
                             },
                             isTranslating = uiState.isTranslating,
-                            isThisTranslating = (uiState.translatingCommentId == comment.id)
+                            isThisTranslating = (uiState.translatingCommentId == comment.id),
+                            scene = detailGlassScene
                         )
                     }
 
@@ -833,11 +852,10 @@ fun DetailScreen(
                 buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
                 scene = detailGlassScene
             ) {
-                Icon(
-                    Icons.AutoMirrored.Rounded.ArrowBack,
+                DetailTopBarIcon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = stringResource(R.string.detail_back),
-                    tint = detailTopBarIconColor(),
-                    modifier = Modifier.size(24.dp)
+                    size = 24.dp
                 )
             }
 
@@ -875,11 +893,9 @@ fun DetailScreen(
                                 color = detailTopBarIconColor()
                             )
                         } else {
-                            Icon(
-                                Icons.Rounded.Refresh,
-                                contentDescription = stringResource(R.string.detail_douban_sync_retry),
-                                tint = detailTopBarIconColor(),
-                                modifier = Modifier.size(20.dp)
+                            DetailTopBarIcon(
+                                imageVector = Icons.Rounded.Refresh,
+                                contentDescription = stringResource(R.string.detail_douban_sync_retry)
                             )
                         }
                     }
@@ -918,11 +934,9 @@ fun DetailScreen(
                     buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
                     scene = detailGlassScene
                 ) {
-                    Icon(
-                        Icons.Rounded.Share,
-                        contentDescription = stringResource(R.string.detail_share),
-                        tint = detailTopBarIconColor(),
-                        modifier = Modifier.size(20.dp)
+                    DetailTopBarIcon(
+                        imageVector = Icons.Rounded.Share,
+                        contentDescription = stringResource(R.string.detail_share)
                     )
                 }
             }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -17,9 +18,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -69,6 +72,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -79,6 +84,8 @@ import com.tracktosearch.ui.component.AppIconButton
 import com.tracktosearch.ui.component.AppVisualSurface
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
+import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
+import com.tracktosearch.ui.component.TopBarBackdropSourcePadding
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
@@ -174,6 +181,12 @@ fun DiscoverScreen(
     }
 
     val discoverHazeState = remember { HazeState() }
+    // 顶栏只采样本页面的滚动内容；列表内 Glass 卡片仍采样全局背景，避免同源递归。
+    val discoverBackdropBackground = MaterialTheme.colorScheme.background
+    val discoverContentBackdrop = rememberLayerBackdrop {
+        drawRect(discoverBackdropBackground)
+        drawContent()
+    }
     // HazeMaterials.thin() 读取 MaterialTheme.colorScheme，是 @Composable 函数，不能用 remember 缓存
     // DiscoverScreen 仅在 uiState 变化时重组，主题不变时 HazeStyle 开销可接受
     val discoverHazeStyle = HazeMaterials.thin()
@@ -269,25 +282,38 @@ fun DiscoverScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = Color.Transparent
     ) { paddingValues ->
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
             val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-            LazyColumn(
-                    state = discoverListState,
-                    modifier = modifier
-                        .fillMaxSize()
-                        .hazeSource(state = discoverHazeState),
-                    contentPadding = PaddingValues(
-                        start = 16.dp,
-                        end = 16.dp,
-                        top = 80.dp + statusBarHeight,
-                        bottom = 112.dp
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(24.dp)
+            // Backdrop source 在窗口外各保留一个顶栏 blur 半径；边缘卷积采样背景而非裁切/重复首列内容。
+            Box(
+                modifier = Modifier
+                    // requiredWidth 会将超出父约束的 source 自动居中，左右各保留 blur 采样余量。
+                    .requiredWidth(maxWidth + TopBarBackdropSourcePadding * 2)
+                    .fillMaxHeight()
+                    .layerBackdrop(discoverContentBackdrop)
             ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = TopBarBackdropSourcePadding)
+                ) {
+                    LazyColumn(
+                        state = discoverListState,
+                        modifier = modifier
+                            .fillMaxSize()
+                            .hazeSource(state = discoverHazeState),
+                        contentPadding = PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            top = 80.dp + statusBarHeight,
+                            bottom = 112.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(24.dp)
+                    ) {
                 // 顶部 Hero 分类快捷入口：由栏目设置（显示/隐藏 + 排序）驱动
                 item(key = "discover_hero_categories") {
                     // 缓存按主题生成的 5 个渐变 Brush，避免每次重组创建新实例
@@ -713,7 +739,7 @@ fun DiscoverScreen(
                                                 )
                                                 Box(modifier = Modifier.fillMaxWidth().then(listCardModifier).fadeSlideIn(index)) {
                                                     AppVisualSurface(
-                                                        kind = VisualSurfaceKind.Content,
+                                                        kind = VisualSurfaceKind.Glass,
                                                         modifier = Modifier
                                                             .fillMaxWidth()
                                                             .scale(cardScale)
@@ -723,6 +749,9 @@ fun DiscoverScreen(
                                                                 onClick = { onListClick(listResponse.list.ids.trakt, listResponse.list.name) }
                                                             ),
                                                         shape = RoundedCornerShape(18.dp),
+                                                        role = GlassSurfaceRole.Card,
+                                                        interactionSource = interactionSource,
+                                                        scene = discoverGlassScene,
                                                         backgroundColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
                                                         borderColor = if (isDark) MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.9f)
                                                     ) {
@@ -833,7 +862,9 @@ fun DiscoverScreen(
                             )
                         }
                     }
+                    }
                 }
+            }
             }
             // 毛玻璃吸顶标题栏（仅 thin 模糊，不叠 surface 背景，更通透）
             Box(
@@ -842,8 +873,9 @@ fun DiscoverScreen(
                     .hazeTopBar(
                         state = discoverHazeState,
                         style = discoverHazeStyle,
-                        blurRadius = 24.dp,
+                        blurRadius = TopBarBackdropBlurRadius,
                         isContentUnderTopBar = discoverHasContentUnderTopBar,
+                        backdropOverride = discoverContentBackdrop,
                         scene = discoverGlassScene
                     )
             ) {

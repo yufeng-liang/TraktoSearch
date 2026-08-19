@@ -51,6 +51,7 @@ import com.tracktosearch.data.repository.SyncMode
 import com.tracktosearch.data.repository.WatchlistMediaType
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.BackdropProvider
 import com.tracktosearch.ui.component.UpdateDialog
 import com.tracktosearch.ui.screen.crashlog.CrashLogDetailScreen
 import com.tracktosearch.ui.screen.detail.DetailScreen
@@ -451,11 +452,12 @@ fun AppNavigation(
             LocalSharedTransitionScope provides this@SharedTransitionLayout,
             com.tracktosearch.ui.component.LocalSharedTransitionEnabled provides sharedTransitionEnabled
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
-            ) {
+            BackdropProvider(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
             NavHost(
                 navController = navController,
                 startDestination = currentStartDest,
@@ -1210,7 +1212,8 @@ fun AppNavigation(
                     )
                 }
             }
-            } // Box
+                } // Box
+            } // BackdropProvider
         }
     }
 }

@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
+import com.tracktosearch.ui.component.GlassScene
+import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.isAppDarkTheme
 
 // ==================== 单条评论 ====================
@@ -45,7 +47,8 @@ internal fun CommentItem(
     translatedText: String?,
     onTranslate: (Int) -> Unit,
     isTranslating: Boolean,
-    isThisTranslating: Boolean
+    isThisTranslating: Boolean,
+    scene: GlassScene = GlassScene()
 ) {
     var showOriginal by remember(comment.id) { mutableStateOf(false) }
     var spoilerRevealed by remember { mutableStateOf(false) }
@@ -76,7 +79,9 @@ internal fun CommentItem(
         borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color(0xFFD0D5DC).copy(alpha = 0.9f),
         darkShadowAlpha = if (isDark) 0.25f else 0.16f,
         lightShadowAlpha = if (isDark) 0.08f else 0.65f,
-        hazeState = null
+        hazeState = null,
+        glassRole = GlassSurfaceRole.Card,
+        scene = scene
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // 用户名 + 评分

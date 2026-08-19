@@ -4,13 +4,16 @@ package com.tracktosearch.ui.screen.main
 
 import android.util.Log
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -60,8 +63,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -89,13 +94,18 @@ import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.AppVisualSurface
 import com.tracktosearch.ui.component.GlassSurfaceRole
+import com.tracktosearch.ui.component.GlassNavigationTabIndicator
 import com.tracktosearch.ui.component.GlassTabIndicator
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.NeumorphicActiveTab
 import com.tracktosearch.ui.component.OnboardingOverlay
 import com.tracktosearch.ui.component.PageBackground
+import com.tracktosearch.ui.component.LocalBackdropSourceEnabled
 import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.rememberGlassSelectionBounceScale
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.screen.discover.DiscoverScreen
@@ -374,7 +384,24 @@ fun MainScreen(
         TabData(Icons.Rounded.Person, R.string.tab_me),
         TabData(Icons.Rounded.Settings, R.string.tab_settings)
     )
-    val isDarkTheme = isAppDarkTheme()
+    val tabInteractionSources = remember(tabs.size) {
+        List(tabs.size) { MutableInteractionSource() }
+    }
+    val pageBackdropColor = androidx.compose.ui.graphics.lerp(
+        MaterialTheme.colorScheme.background,
+        MaterialTheme.colorScheme.primary,
+        0.05f
+    )
+    // 主内容宿主与底栏保持兄弟关系。页面内部的 Glass 仍采样外层 backdrop，
+    // 避免把 drawBackdrop 子树录回同一个 source 形成递归渲染。
+    val mainContentBackdrop = rememberLayerBackdrop(
+        onDraw = remember(pageBackdropColor) {
+            {
+                drawRect(pageBackdropColor)
+                drawContent()
+            }
+        }
+    )
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -391,29 +418,33 @@ fun MainScreen(
                     .fillMaxSize()
                     .hazeSource(state = hazeState, zIndex = 0f)
             ) {
-                // 跨页面共享背景（渐变 + 彩色光晕，光晕在宽画布上连续运动）
+                // 页面背景暂时只保留中性灰底，后续背景重做不影响内容采样层。
                 PageBackground(
-                    currentPage = selectedTab,
-                    pageCount = 4,
-                    isDark = isDarkTheme,
-                    showColorGlow = !isDarkTheme || selectedTab == 0,
                     modifier = Modifier.fillMaxSize()
                 )
 
+                // 主内容 backdrop 与页面级 backdrop 是两个独立实例：前者供底栏采样整页画面，
+                // 后者供当前页的 Glass 控件采样内容列表。只开放当前页的 source，避免隐藏页
+                // 同时写入共享 backdrop；各页面自身仍必须把 source 与 Glass overlay 分开。
                 HorizontalPager(
-                    state = pagerState,
-                    userScrollEnabled = false,
-                    // 4 个 tab 页全部保持组合（2 = 当前页两侧各 2 页）：
-                    // 远 Tab 切换（如 搜索↔设置）不再销毁/重建整页，消除切换瞬间的
-                    // 200-300ms 组合尖峰；各页状态收集已下沉到 item/子 composable，
-                    // 后台页的隐藏重组成本极低。滚动位置由 rememberSaveable 的
-                    // grid/list state 跨销毁保留，此改动只省去重建不改变行为。
-                    beyondViewportPageCount = 2,
-                    modifier = Modifier.fillMaxSize()
-                ) { page ->
-                // 只有当前可见 tab 的 MovieCard 参与 sharedElement 转场，避免 HorizontalPager 常驻的其他 tab 同 tmdbId 海报冲突
-                CompositionLocalProvider(LocalIsCurrentTab provides (page == pagerState.currentPage)) {
-                when (page) {
+                        state = pagerState,
+                        userScrollEnabled = false,
+                        // 4 个 tab 页全部保持组合（2 = 当前页两侧各 2 页）：
+                        // 远 Tab 切换（如 搜索↔设置）不再销毁/重建整页，消除切换瞬间的
+                        // 200-300ms 组合尖峰；各页状态收集已下沉到 item/子 composable，
+                        // 后台页的隐藏重组成本极低。滚动位置由 rememberSaveable 的
+                        // grid/list state 跨销毁保留，此改动只省去重建不改变行为。
+                        beyondViewportPageCount = 2,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .layerBackdrop(mainContentBackdrop)
+                    ) { page ->
+                        // 只有当前可见 tab 的 MovieCard 参与 sharedElement 转场，避免 HorizontalPager 常驻的其他 tab 同 tmdbId 海报冲突
+                        CompositionLocalProvider(
+                            LocalBackdropSourceEnabled provides (page == pagerState.currentPage),
+                            LocalIsCurrentTab provides (page == pagerState.currentPage)
+                        ) {
+                            when (page) {
                     0 -> {
                         if (showTraktSearch) {
                             val mediaType = when (traktSearchType) {
@@ -515,9 +546,9 @@ fun MainScreen(
                         onGlassPilot = onGlassPilot,
                         modifier = Modifier.fillMaxSize()
                     )
-                }
-                    } // CompositionLocalProvider
-                }
+                            }
+                        } // CompositionLocalProvider
+                    }
             }
 
             // 悬浮底部导航：Glass 只在外层采样，Blur 仍由 AppVisualSurface 分发到拟态实现。
@@ -525,6 +556,22 @@ fun MainScreen(
             val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             val navBarShape = RoundedCornerShape(31.dp)
             val isDark = isAppDarkTheme()
+            val navigationScene = glassSceneForContent(
+                contentCount = when (selectedTab) {
+                    0 -> 34
+                    1 -> 60
+                    2 -> 72
+                    else -> 24
+                },
+                readabilityDemand = when (selectedTab) {
+                    0 -> 0.86f
+                    1 -> 0.72f
+                    2 -> 0.84f
+                    else -> 0.88f
+                },
+                ambientColor = MaterialTheme.colorScheme.background,
+                contentCapacity = 72
+            )
             AppVisualSurface(
                 kind = VisualSurfaceKind.Glass,
                 modifier = Modifier
@@ -544,51 +591,45 @@ fun MainScreen(
                 },
                 borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.45f),
                 hazeState = hazeState,
+                backdropOverride = mainContentBackdrop,
+                interactionSource = tabInteractionSources[selectedTab],
                 // 底部导航自身作为 zIndex=1 的 source，effect 只采样 zIndex=0 的页面内容，
                 // 避免导航栏模糊自身导致重复模糊与无谓开销（Haze 最重的叠加场景）
                 sourceSelection = HazeSourceSelection.Behind.where { source -> source.zIndex < 1f },
-                scene = glassSceneForContent(
-                    contentCount = when (selectedTab) {
-                        0 -> 34
-                        1 -> 60
-                        2 -> 72
-                        else -> 24
-                    },
-                    readabilityDemand = when (selectedTab) {
-                        0 -> 0.86f
-                        1 -> 0.72f
-                        2 -> 0.84f
-                        else -> 0.88f
-                    },
-                    ambientColor = MaterialTheme.colorScheme.background,
-                    contentCapacity = 72
-                )
+                scene = navigationScene
             ) {
                 val tabCount = tabs.size
                 val rowPadding = 8.dp
                 val navBarWidth = screenWidthDp.dp * navBarWidthFraction
                 val tabWidth = (navBarWidth - rowPadding * 2) / tabCount
+                val indicatorSelectionScale = rememberGlassSelectionBounceScale(selectedTab)
                 val indicatorOffsetX by animateDpAsState(
                     targetValue = rowPadding + tabWidth * selectedTab,
-                    animationSpec = tween(durationMillis = 200),
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    ),
                     label = "indicatorOffset"
                 )
 
-                // 选中项普通指示层（绘制在 Tab 图标下方；Glass 不在单个 Tab 上采样）
+                // 选中水滴与外层导航共用主内容 source，始终保持 source 的兄弟采样关系。
                 Box(
                     modifier = Modifier
                         .offset(x = indicatorOffsetX)
                         .align(Alignment.CenterStart)
                         .width(tabWidth)
                         .height(48.dp)
-                        .padding(horizontal = 4.dp),
+                        .padding(horizontal = 4.dp)
+                        .scale(indicatorSelectionScale),
                     contentAlignment = Alignment.Center
                 ) {
                     if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
-                        GlassTabIndicator(
+                        GlassNavigationTabIndicator(
+                            backdrop = mainContentBackdrop,
                             modifier = Modifier.fillMaxSize(),
                             isDark = isDark,
-                            shape = RoundedCornerShape(24.dp)
+                            shape = RoundedCornerShape(24.dp),
+                            scene = navigationScene
                         )
                     } else {
                         NeumorphicActiveTab(
@@ -625,6 +666,7 @@ fun MainScreen(
                             weight = 1f,
                             avatarUrl = avatarUrl,
                             badgeCount = if (index == 3) unreadCount else 0,
+                            interactionSource = tabInteractionSources[index],
                             onClick = {
                                 if (selectedTab != index) {
                                     view.performHaptic(HapticType.CLICK)
@@ -708,21 +750,26 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
     onClick: () -> Unit,
     avatarUrl: String? = null,
     badgeCount: Int = 0,
+    interactionSource: MutableInteractionSource,
     onPositioned: (Rect) -> Unit = {}
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
     val context = LocalContext.current
     val visualEffectMode = LocalVisualEffectMode.current
     val isHovered by interactionSource.collectIsHoveredAsState()
     val isFocused by interactionSource.collectIsFocusedAsState()
+    val isPressed by interactionSource.collectIsPressedAsState()
     val selectedScale by animateFloatAsState(
         targetValue = when {
             visualEffectMode != VisualEffectMode.GLASS -> 1f
-            selected -> 1.04f
-            isHovered || isFocused -> 1.02f
+            isPressed -> 0.99f
+            selected -> 1.015f
+            isHovered || isFocused -> 1.01f
             else -> 1f
         },
-        animationSpec = tween(durationMillis = 180),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
         label = "navTabScale"
     )
     // 浅色模式下 primary 偏暗（Red700），选中态提亮饱和度与亮度，提升鲜亮感
@@ -765,6 +812,15 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
     }
+    val contrastHalo = if (visualEffectMode == VisualEffectMode.GLASS) {
+        if (selectedColor.luminance() < 0.5f) {
+            Color.White.copy(alpha = if (selected) 0.60f else 0.42f)
+        } else {
+            Color.Black.copy(alpha = if (selected) 0.58f else 0.40f)
+        }
+    } else {
+        Color.Transparent
+    }
     Column(
         modifier = Modifier
             .weight(weight)
@@ -795,7 +851,27 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
             )
         } else {
             BadgedBox(badge = { if (badgeCount > 0) { Badge { Text(if (badgeCount > 99) "99+" else badgeCount.toString()) } } }) {
-                Icon(imageVector = icon, contentDescription = stringResource(labelRes), tint = selectedColor, modifier = Modifier.size(24.dp).offset(y = 3.dp))
+                Box(
+                    modifier = Modifier
+                        .size(26.dp)
+                        .offset(y = 3.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (contrastHalo.alpha > 0f) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = contrastHalo,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = stringResource(labelRes),
+                        tint = selectedColor,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
         }
         Spacer(modifier = Modifier.height(0.dp))
@@ -804,6 +880,17 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
             fontSize = 12.sp,
             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
             color = selectedColor,
+            style = MaterialTheme.typography.labelMedium.copy(
+                shadow = if (contrastHalo.alpha > 0f) {
+                    Shadow(
+                        color = contrastHalo,
+                        offset = Offset(0f, 1.5f),
+                        blurRadius = 2.5f
+                    )
+                } else {
+                    null
+                }
+            ),
             maxLines = 1
         )
     }

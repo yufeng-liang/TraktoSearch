@@ -47,9 +47,8 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -147,23 +146,33 @@ internal fun AccentColorDialog(
     )
     val dynamicCheckTint = if (dynamicColors.map { it.luminance() }.average() > 0.5) Color.Black else Color.White
 
-    // 材质选项：玻璃·清晰 / 玻璃·聚焦 / 模糊
-    val materialOptions = listOf(
-        Triple(VisualEffectMode.GLASS, GlassVariant.CLEAR, stringResource(R.string.settings_visual_effect_glass_clear)),
-        Triple(VisualEffectMode.GLASS, GlassVariant.FOCUSED, stringResource(R.string.settings_visual_effect_glass_focused)),
-        Triple(VisualEffectMode.BLUR, GlassVariant.CLEAR, stringResource(R.string.settings_visual_effect_blur))
+    data class MaterialOption(
+        val mode: VisualEffectMode,
+        val variant: GlassVariant,
+        val title: String,
+        val description: String
     )
 
-    // 菜单宽度 = 最长选项文字 + 打勾图标 + 间隔 + 左右内边距，按实际渲染测量，适配多语言
-    val textMeasurer = rememberTextMeasurer()
+    // 材质选项：Backdrop Glass / 成熟 Haze Blur；Glass 的场景深度由组件自行适配。
+    val materialOptions = listOf(
+        MaterialOption(
+            mode = VisualEffectMode.GLASS,
+            variant = GlassVariant.CLEAR,
+            title = stringResource(R.string.settings_visual_effect_glass),
+            description = stringResource(R.string.settings_visual_effect_glass_desc)
+        ),
+        MaterialOption(
+            mode = VisualEffectMode.BLUR,
+            variant = GlassVariant.CLEAR,
+            title = stringResource(R.string.settings_visual_effect_blur),
+            description = stringResource(R.string.settings_visual_effect_blur_desc)
+        )
+    )
+
+    // 描述文案比标题长很多，菜单宽度按窗口可用空间计算，避免只按标题测量导致窄列截断描述。
     val density = LocalDensity.current
-    val labelStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
-    val maxLabelWidth = materialOptions.maxOf { option ->
-        textMeasurer.measure(AnnotatedString(option.third), labelStyle).size.width
-    }
-    val menuWidth = with(density) {
-        maxLabelWidth.toDp() + 24.dp + 8.dp + 24.dp
-    }
+    val windowWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
+    val menuWidth = (windowWidth - 32.dp).coerceAtLeast(0.dp).coerceAtMost(320.dp)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -201,8 +210,8 @@ internal fun AccentColorDialog(
                         anchor = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 val currentLabel = materialOptions.firstOrNull {
-                                    it.first == currentMode && it.second == currentVariant
-                                }?.third ?: stringResource(R.string.settings_visual_effect_blur)
+                                    it.mode == currentMode
+                                }?.title ?: stringResource(R.string.settings_visual_effect_glass)
                                 Text(
                                     text = currentLabel,
                                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
@@ -216,24 +225,31 @@ internal fun AccentColorDialog(
                             }
                         }
                     ) {
-                        materialOptions.forEach { (mode, variant, label) ->
+                        materialOptions.forEach { option ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
                                         view.performHaptic(HapticType.TICK)
-                                        onVisualEffectSelected(mode, variant)
+                                        onVisualEffectSelected(option.mode, option.variant)
                                         materialMenuExpanded = false
                                     }
                                     .padding(horizontal = 12.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = label,
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-                                    modifier = Modifier.weight(1f)
-                                )
-                                if (mode == currentMode && variant == currentVariant) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = option.title,
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
+                                    )
+                                    Text(
+                                        text = option.description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 2
+                                    )
+                                }
+                                if (option.mode == currentMode) {
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Icon(
                                         imageVector = Icons.Rounded.Check,

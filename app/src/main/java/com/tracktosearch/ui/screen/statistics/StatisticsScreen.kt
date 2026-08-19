@@ -88,6 +88,7 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.rememberShimmerBrush
 import com.tracktosearch.ui.util.HapticType
@@ -183,7 +184,8 @@ fun StatisticsScreen(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .hazeSource(state = statsHazeState),
+                        .hazeSource(state = statsHazeState)
+                        .backdropSource(),
                     contentPadding = PaddingValues(
                         start = 16.dp,
                         end = 16.dp,
@@ -1511,7 +1513,8 @@ private fun StatisticsSkeleton(hazeState: HazeState) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .hazeSource(state = hazeState),
+            .hazeSource(state = hazeState)
+            .backdropSource(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 65.dp + statusBarHeight, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {

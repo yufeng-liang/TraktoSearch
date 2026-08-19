@@ -49,6 +49,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -154,6 +155,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
@@ -174,6 +177,8 @@ import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.AppIconButton
 import com.tracktosearch.ui.component.GlassSurfaceRole
+import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
+import com.tracktosearch.ui.component.TopBarBackdropSourcePadding
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
@@ -444,6 +449,12 @@ fun WatchlistScreen(
     val hazeState = remember { HazeState() }
     val hazeStyle = HazeMaterials.thin()
     val isDark = isAppDarkTheme()
+    // 顶栏单独采样本页内容，避免搜索展开时全局 source 层级变化导致 Glass 失效。
+    val watchlistBackdropBackground = MaterialTheme.colorScheme.background
+    val watchlistContentBackdrop = rememberLayerBackdrop {
+        drawRect(watchlistBackdropBackground)
+        drawContent()
+    }
     // 为6种 (mode, tab) 组合各自创建独立的 gridState，彻底隔离滚动位置，
     // 避免切 tab 时列表位置互相影响。
     //
@@ -694,14 +705,27 @@ fun WatchlistScreen(
                     offsetY = { overscrollAnim.value }
                 )
     
-                // 空列表引导 UI
-                if (currentItems.isEmpty() && !isCurrentLoading) {
+                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                    // Backdrop source 向左右各扩展一个 blur 半径，补足顶栏边缘采样区域。
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 32.dp),
-                        contentAlignment = Alignment.Center
+                            .requiredWidth(maxWidth + TopBarBackdropSourcePadding * 2)
+                            .fillMaxHeight()
+                            .layerBackdrop(watchlistContentBackdrop)
                     ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = TopBarBackdropSourcePadding)
+                        ) {
+                            // 空列表引导 UI
+                            if (currentItems.isEmpty() && !isCurrentLoading) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
                         NeumorphicFrostedSurface(
                             modifier = Modifier.fillMaxWidth(),
                             isDark = isDark,
@@ -806,9 +830,9 @@ fun WatchlistScreen(
                                 }
                             }
                         }
-                    }
-                } else {
-                LazyVerticalGrid(
+                                }
+                            } else {
+                            LazyVerticalGrid(
                     state = currentGridState,
                     columns = GridCells.Fixed(3),
                     contentPadding = PaddingValues(
@@ -885,6 +909,9 @@ fun WatchlistScreen(
                             }
                         }
                     }
+                            }
+                        }
+                    }
                 }
     
                 ScrollToTopButton(
@@ -903,8 +930,9 @@ fun WatchlistScreen(
                         .hazeTopBar(
                             state = hazeState,
                             style = hazeStyle,
-                            blurRadius = 24.dp,
+                            blurRadius = TopBarBackdropBlurRadius,
                             isContentUnderTopBar = hasContentUnderTopBar,
+                            backdropOverride = watchlistContentBackdrop,
                             scene = watchlistGlassScene
                         )
                 ) {
@@ -1123,6 +1151,8 @@ fun WatchlistScreen(
                                                 collapseSearch()
                                                 selectedMode = it
                                             },
+                                            hazeState = hazeState,
+                                            scene = watchlistGlassScene,
                                         )
                                     }
                                     }

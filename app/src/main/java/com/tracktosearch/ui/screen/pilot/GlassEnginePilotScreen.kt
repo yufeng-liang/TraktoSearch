@@ -2,10 +2,17 @@
 
 package com.tracktosearch.ui.screen.pilot
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -46,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -83,9 +92,8 @@ import kotlin.math.roundToInt
  * 玻璃引擎试点页(仅 DEBUG 注册)。
  *
  * 目的：在同一屏上对比两套玻璃引擎的「模糊 / 玻璃」两种模式，并实时调参：
- * - Haze（现引擎）：复用 NeumorphicFrostedSurface / NeumorphicIconButton，
- *   由 LocalVisualEffectMode 分发给 hazeBlur（模糊）或 hazeGlass（玻璃）。
- *   模糊分支支持调 blurRadius / tintAlpha。
+ * - Haze（模糊参照）：复用 NeumorphicFrostedSurface / NeumorphicIconButton，
+ *   由 LocalVisualEffectMode 分发给成熟 hazeBlur。模糊分支支持调 blurRadius / tintAlpha。
  * - Backdrop（新引擎，com.kyant.backdrop）：drawBackdrop + blur / lens 效果，
  *   自带镜面高光(Highlight)与投影(Shadow)，10 项参数全部实时可调。
  *
@@ -317,7 +325,8 @@ private fun pilotParams(role: String, isDark: Boolean): BackdropGlassParams = wh
 private fun Modifier.pilotBackdropGlass(
     backdrop: LayerBackdrop,
     mode: VisualEffectMode,
-    params: BackdropGlassParams
+    params: BackdropGlassParams,
+    pressed: Boolean = false
 ): Modifier {
     val isDark = isAppDarkTheme()
     return drawBackdrop(
@@ -334,7 +343,9 @@ private fun Modifier.pilotBackdropGlass(
             if (mode == VisualEffectMode.GLASS) {
                 lens(
                     refractionHeight = params.refractionHeight.toPx(),
-                    refractionAmount = params.refractionAmount.toPx(),
+                    refractionAmount = (
+                        params.refractionAmount * if (pressed) 1.14f else 1f
+                    ).toPx(),
                     depthEffect = params.depthEffect,
                     chromaticAberration = params.chromaticAberration
                 )
@@ -343,7 +354,9 @@ private fun Modifier.pilotBackdropGlass(
         highlight = {
             Highlight(
                 width = params.highlightWidth,
-                alpha = params.highlightAlpha,
+                alpha = (
+                    params.highlightAlpha * if (pressed) 1.18f else 1f
+                ).coerceAtMost(1f),
                 style = HighlightStyle.Default
             )
         },
@@ -578,7 +591,7 @@ private fun PilotParamPanel(
 
                 else -> {
                     Text(
-                        text = "haze-glass 为待替换方案（将被 backdrop 玻璃取代），不提供调参。",
+                        text = "Glass 模式统一使用 Backdrop；当前面板参数直接作用于真实折射与高光。",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 12.dp)
@@ -722,6 +735,16 @@ private fun PilotGlassButton(
     hazeParams: HazeBlurParams,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (pressed) 0.985f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "pilot_button_press_scale"
+    )
     when (engine) {
         PilotEngine.HAZE -> CompositionLocalProvider(LocalVisualEffectMode provides mode) {
             NeumorphicIconButton(
@@ -742,8 +765,13 @@ private fun PilotGlassButton(
         PilotEngine.BACKDROP -> Box(
             Modifier
                 .size(52.dp)
-                .pilotBackdropGlass(backdrop, mode, backdropParams)
-                .clickable(onClick = onClick),
+                .scale(pressScale)
+                .pilotBackdropGlass(backdrop, mode, backdropParams, pressed = pressed)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick
+                ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -767,6 +795,7 @@ private fun PilotGlassBottomBar(
     modifier: Modifier = Modifier
 ) {
     val icons = listOf(Icons.Rounded.Home, Icons.Rounded.Search, Icons.Rounded.Person)
+    var selectedIndex by rememberSaveable { mutableStateOf(0) }
     Box(
         modifier
             .fillMaxWidth()
@@ -785,7 +814,11 @@ private fun PilotGlassBottomBar(
                     glassRole = GlassSurfaceRole.BottomNavigation,
                     scene = GlassScene(contentLoad = 0.1f, readabilityDemand = 0.3f)
                 ) {
-                    PilotBottomBarContent(icons)
+                    PilotBottomBarContent(
+                        icons = icons,
+                        selectedIndex = selectedIndex,
+                        onSelected = { selectedIndex = it }
+                    )
                 }
             }
 
@@ -794,27 +827,120 @@ private fun PilotGlassBottomBar(
                     .fillMaxSize()
                     .pilotBackdropGlass(backdrop, mode, backdropParams)
             ) {
-                PilotBottomBarContent(icons)
+                PilotBottomBarContent(
+                    icons = icons,
+                    selectedIndex = selectedIndex,
+                    onSelected = { selectedIndex = it },
+                    backdrop = backdrop,
+                    mode = mode,
+                    params = backdropParams
+                )
             }
         }
     }
 }
 
 @Composable
-private fun PilotBottomBarContent(icons: List<androidx.compose.ui.graphics.vector.ImageVector>) {
-    Row(
-        modifier = Modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        icons.forEachIndexed { index, icon ->
-            val tint = if (index == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = tint,
-                modifier = Modifier.size(24.dp)
-            )
+private fun PilotBottomBarContent(
+    icons: List<androidx.compose.ui.graphics.vector.ImageVector>,
+    selectedIndex: Int,
+    onSelected: (Int) -> Unit,
+    backdrop: LayerBackdrop? = null,
+    mode: VisualEffectMode = VisualEffectMode.GLASS,
+    params: BackdropGlassParams? = null
+) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val rowPadding = 8.dp
+        val itemWidth = (maxWidth - rowPadding * 2) / icons.size
+        val indicatorOffset by animateDpAsState(
+            targetValue = rowPadding + itemWidth * selectedIndex,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            ),
+            label = "pilot_bottom_indicator_offset"
+        )
+        Box(
+            modifier = Modifier
+                .offset(x = indicatorOffset)
+                .align(Alignment.CenterStart)
+                .width(itemWidth)
+                .height(46.dp)
+                .padding(horizontal = 4.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                    RoundedCornerShape(24.dp)
+                )
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = rowPadding),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            icons.forEachIndexed { index, icon ->
+                val interactionSource = remember { MutableInteractionSource() }
+                val pressed by interactionSource.collectIsPressedAsState()
+                val itemScale by animateFloatAsState(
+                    targetValue = when {
+                        pressed -> 0.985f
+                        selectedIndex == index -> 1.04f
+                        else -> 1f
+                    },
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    ),
+                    label = "pilot_bottom_item_scale_$index"
+                )
+                val itemParams = params?.copy(
+                    shape = RoundedCornerShape(22.dp),
+                    refractionHeight = params.refractionHeight * 0.7f,
+                    refractionAmount = params.refractionAmount * 0.68f,
+                    highlightWidth = 0.6.dp,
+                    highlightAlpha = (params.highlightAlpha * 0.82f).coerceAtMost(1f),
+                    shadowRadius = 0.dp,
+                    shadowAlpha = 0f,
+                    innerShadowRadius = 0.dp
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxSize()
+                        .scale(itemScale)
+                        .then(
+                            if (backdrop != null && itemParams != null) {
+                                Modifier.pilotBackdropGlass(
+                                    backdrop = backdrop,
+                                    mode = mode,
+                                    params = itemParams,
+                                    pressed = pressed
+                                )
+                            } else {
+                                Modifier
+                            }
+                        )
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            onClick = { onSelected(index) }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val tint = if (selectedIndex == index) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    }
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = tint,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
         }
     }
 }

@@ -62,10 +62,11 @@ import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
+import com.tracktosearch.ui.component.DetailTopBarIcon
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.SectionHeader
-import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.ToastEffect
@@ -166,7 +167,8 @@ fun PersonScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .statusBarsPadding()
-                            .hazeSource(state = hazeState),
+                            .hazeSource(state = hazeState)
+                            .backdropSource(),
                         contentPadding = PaddingValues(bottom = 80.dp)
                     ) {
                         item(key = "person_header") {
@@ -429,11 +431,10 @@ fun PersonScreen(
                         buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
                         scene = personGlassScene
                     ) {
-                        Icon(
-                            Icons.AutoMirrored.Rounded.ArrowBack,
+                        DetailTopBarIcon(
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = stringResource(R.string.detail_back),
-                            tint = detailTopBarIconColor(),
-                            modifier = Modifier.size(24.dp)
+                            size = 24.dp
                         )
                     }
 

@@ -141,12 +141,10 @@ fun GlassSearchBar(
                     Modifier.appVisualEffect(
                         input = HazeInput.Sources(hazeState),
                         hazeStyle = hazeStyle,
-                        glassStyle = AppGlassStyles.searchField(
-                            tint = containerColor,
-                            shape = RoundedCornerShape(28.dp),
-                            interactive = true,
-                            scene = scene
-                        ),
+                        glassRole = GlassSurfaceRole.SearchField,
+                        glassShape = RoundedCornerShape(28.dp),
+                        glassTint = containerColor,
+                        scene = scene,
                         blurSampling = HazeSampling.Adaptive,
                         interactionSource = interactionSource
                     )

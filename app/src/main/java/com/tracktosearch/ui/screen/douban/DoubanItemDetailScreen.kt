@@ -152,12 +152,16 @@ import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
+import com.tracktosearch.ui.component.DetailTopBarIcon
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.screen.detail.PosterFullscreenOverlay
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.util.copyResourceLink
@@ -1157,23 +1161,39 @@ fun DoubanItemDetailScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // source 与浮动按钮保持兄弟层级，同时采样沉浸背景和详情内容。
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .hazeSource(state = hazeState, zIndex = 0f)
-                    .then(
-                        uiState.posterDominantColor?.let { c ->
-                            Modifier.background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        c.copy(alpha = 0.70f),
-                                        MaterialTheme.colorScheme.background
-                                    )
-                                )
-                            )
-                        } ?: Modifier
+            val isGlassMode = LocalVisualEffectMode.current == VisualEffectMode.GLASS
+            val immersiveBackgroundModifier = uiState.posterDominantColor?.let { color ->
+                Modifier.background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            color.copy(alpha = 0.70f),
+                            MaterialTheme.colorScheme.background
+                        )
                     )
+                )
+            } ?: Modifier
+
+            // Glass source 只录制纯沉浸背景，内容和 Glass 控件保持兄弟层级，
+            // 避免 LazyColumn 内的 drawBackdrop 子树被同一 source 再次采样。
+            if (isGlassMode) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .backdropSource()
+                        .then(immersiveBackgroundModifier)
+                )
+            }
+
+            // Blur 保持原有的完整 Haze source 范围，Glass 内容位于背景 source 之上。
+            Box(
+                modifier = if (isGlassMode) {
+                    Modifier.fillMaxSize()
+                } else {
+                    Modifier
+                        .fillMaxSize()
+                        .hazeSource(state = hazeState, zIndex = 0f)
+                        .then(immersiveBackgroundModifier)
+                }
             ) {
             val failure = uiState.failure
 
@@ -1456,11 +1476,10 @@ fun DoubanItemDetailScreen(
                 buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
                 scene = doubanGlassScene
             ) {
-                Icon(
-                    Icons.AutoMirrored.Rounded.ArrowBack,
+                DetailTopBarIcon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = stringResource(R.string.detail_back),
-                    tint = detailTopBarIconColor(),
-                    modifier = Modifier.size(24.dp)
+                    size = 24.dp
                 )
             }
 
@@ -1502,11 +1521,9 @@ fun DoubanItemDetailScreen(
                             buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
                             scene = doubanGlassScene
                         ) {
-                            Icon(
+                            DetailTopBarIcon(
                                 imageVector = Icons.Rounded.Edit,
-                                contentDescription = stringResource(R.string.screen_douban_failures_mark_as_movie),
-                                tint = detailTopBarIconColor(),
-                                modifier = Modifier.size(20.dp)
+                                contentDescription = stringResource(R.string.screen_douban_failures_mark_as_movie)
                             )
                         }
                     }
@@ -1651,11 +1668,9 @@ fun DoubanItemDetailScreen(
                     buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
                     scene = doubanGlassScene
                 ) {
-                    Icon(
-                        Icons.Rounded.Share,
-                        contentDescription = stringResource(R.string.detail_share),
-                        tint = detailTopBarIconColor(),
-                        modifier = Modifier.size(20.dp)
+                    DetailTopBarIcon(
+                        imageVector = Icons.Rounded.Share,
+                        contentDescription = stringResource(R.string.detail_share)
                     )
                 }
             }

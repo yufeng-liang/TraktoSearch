@@ -167,7 +167,7 @@ private fun monetColorScheme(seed: Color, dark: Boolean): androidx.compose.mater
 fun TraktoSearchTheme(
     themeMode: String = "system",
     accentColor: MonetAccent? = null,
-    visualEffectMode: VisualEffectMode = VisualEffectMode.BLUR,
+    visualEffectMode: VisualEffectMode = VisualEffectMode.GLASS,
     glassVariant: GlassVariant = GlassVariant.CLEAR,
     content: @Composable () -> Unit
 ) {
