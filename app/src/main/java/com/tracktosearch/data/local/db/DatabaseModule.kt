@@ -312,6 +312,14 @@ object DatabaseModule {
         }
     }
 
+    internal val MIGRATION_13_14 = object : Migration(13, 14) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // v13 -> v14：保存 Trakt 短评 ID，编辑时复用原评论，避免重复发布。
+            db.execSQL("ALTER TABLE user_review ADD COLUMN traktCommentId INTEGER")
+            db.execSQL("ALTER TABLE user_review ADD COLUMN commentCheckedAt INTEGER")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -333,7 +341,7 @@ object DatabaseModule {
             "tracktosearch.db"
         )
             .openHelperFactory(factory)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
             .build()
     }
 

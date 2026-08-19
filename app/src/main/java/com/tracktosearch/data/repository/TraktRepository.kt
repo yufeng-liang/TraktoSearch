@@ -961,6 +961,63 @@ class TraktRepository @Inject constructor(
         }
     }
 
+    /** 更新已知的 Trakt 短评。 */
+    suspend fun editComment(commentId: Int, comment: String, spoiler: Boolean = false): Result<TraktComment> {
+        return try {
+            val response = traktApiService.editComment(
+                commentId,
+                TraktCommentEditRequest(comment = comment, spoiler = spoiler)
+            )
+            if (response.isSuccessful) {
+                response.body()?.let(Result.Companion::success)
+                    ?: Result.failure(Exception("Empty response body"))
+            } else {
+                Result.failure(Exception("Failed to edit comment: ${response.code()}"))
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 查找当前用户在一个影视条目下的短评。
+     *
+     * 旧版本未持久化评论 ID 时调用。使用 API 的分页页数，不依赖文本匹配。
+     */
+    suspend fun findMyCommentForItem(traktId: Int, type: MediaType): Result<TraktComment?> {
+        val mediaType = when (type) {
+            MediaType.MOVIE -> "movies"
+            MediaType.SHOW -> "shows"
+            else -> return Result.failure(Exception("Unsupported type for comment: $type"))
+        }
+        return try {
+            var page = 1
+            var pageCount = 1
+            while (page <= pageCount) {
+                val response = traktApiService.getMyComments(type = mediaType, page = page)
+                if (!response.isSuccessful) {
+                    return Result.failure(Exception("Failed to fetch user comments: ${response.code()}"))
+                }
+                val item = response.body().orEmpty().firstOrNull { userComment ->
+                    when (type) {
+                        MediaType.MOVIE -> userComment.movie?.ids?.trakt == traktId
+                        MediaType.SHOW -> userComment.show?.ids?.trakt == traktId
+                    }
+                }
+                if (item != null) return Result.success(item.comment)
+                pageCount = response.headers()["X-Pagination-Page-Count"]?.toIntOrNull() ?: 1
+                page += 1
+            }
+            Result.success(null)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun getShowSeasons(traktId: Int): Result<List<TraktSeason>> {
         val cacheKey = traktId.toString()
         // 优先走持久化缓存（永久），命中则秒回

@@ -14,12 +14,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +47,180 @@ import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.isAppDarkTheme
 
 // ==================== 单条评论 ====================
+
+@Composable
+private fun ownCommentSyncDescription(targets: Set<OwnCommentTarget>): String = when {
+    OwnCommentTarget.TRAKT in targets && OwnCommentTarget.DOUBAN in targets ->
+        stringResource(R.string.detail_own_comment_sync_trakt_douban)
+    OwnCommentTarget.TRAKT in targets -> stringResource(R.string.detail_own_comment_sync_trakt)
+    OwnCommentTarget.DOUBAN in targets -> stringResource(R.string.detail_own_comment_sync_douban)
+    else -> stringResource(R.string.detail_own_comment_sync_unavailable)
+}
+
+@Composable
+internal fun OwnCommentComposer(
+    initialComment: String,
+    targets: Set<OwnCommentTarget>,
+    isSaving: Boolean,
+    isEditing: Boolean,
+    onSubmit: (String) -> Unit,
+    onCancelEdit: () -> Unit,
+    scene: GlassScene = GlassScene()
+) {
+    var comment by remember(initialComment) { mutableStateOf(initialComment) }
+    val isDark = isAppDarkTheme()
+    NeumorphicFrostedSurface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        isDark = isDark,
+        shape = RoundedCornerShape(18.dp),
+        elevation = 6.dp,
+        blurRadius = 16.dp,
+        shadowOffset = 5.dp,
+        backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.65f),
+        borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color(0xFFD0D5DC).copy(alpha = 0.9f),
+        darkShadowAlpha = if (isDark) 0.25f else 0.16f,
+        lightShadowAlpha = if (isDark) 0.08f else 0.65f,
+        hazeState = null,
+        glassRole = GlassSurfaceRole.Card,
+        scene = scene
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = stringResource(R.string.detail_own_comment_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = ownCommentSyncDescription(targets),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            OutlinedTextField(
+                value = comment,
+                onValueChange = { if (it.length <= 350) comment = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text(stringResource(R.string.detail_own_comment_hint)) },
+                textStyle = MaterialTheme.typography.bodyMedium,
+                minLines = 3,
+                maxLines = 5,
+                enabled = !isSaving,
+                shape = RoundedCornerShape(12.dp)
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (isEditing) {
+                    TextButton(onClick = onCancelEdit, enabled = !isSaving) {
+                        Text(stringResource(R.string.detail_own_comment_cancel))
+                    }
+                }
+                Button(
+                    onClick = { onSubmit(comment) },
+                    enabled = comment.isNotBlank() && !isSaving
+                ) {
+                    if (isSaving) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.Send,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(stringResource(R.string.detail_own_comment_publish))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun OwnCommentCard(
+    comment: String,
+    targets: Set<OwnCommentTarget>,
+    retryTargets: Set<OwnCommentTarget>,
+    isSaving: Boolean,
+    onEdit: () -> Unit,
+    onRetry: () -> Unit,
+    scene: GlassScene = GlassScene()
+) {
+    val isDark = isAppDarkTheme()
+    val retryTargetName = when {
+        OwnCommentTarget.TRAKT in retryTargets && OwnCommentTarget.DOUBAN in retryTargets ->
+            stringResource(R.string.detail_own_comment_targets_trakt_douban)
+        OwnCommentTarget.TRAKT in retryTargets -> stringResource(R.string.detail_own_comment_target_trakt)
+        else -> stringResource(R.string.detail_own_comment_target_douban)
+    }
+    NeumorphicFrostedSurface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        isDark = isDark,
+        shape = RoundedCornerShape(18.dp),
+        elevation = 6.dp,
+        blurRadius = 16.dp,
+        shadowOffset = 5.dp,
+        backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.65f),
+        borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color(0xFFD0D5DC).copy(alpha = 0.9f),
+        darkShadowAlpha = if (isDark) 0.25f else 0.16f,
+        lightShadowAlpha = if (isDark) 0.08f else 0.65f,
+        hazeState = null,
+        glassRole = GlassSurfaceRole.Card,
+        scene = scene
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.detail_own_comment_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = ownCommentSyncDescription(targets),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onEdit, enabled = !isSaving) {
+                    Icon(
+                        imageVector = Icons.Rounded.Edit,
+                        contentDescription = stringResource(R.string.detail_own_comment_edit),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            ExpandableText(text = comment, fadeColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White)
+            if (retryTargets.isNotEmpty()) {
+                TextButton(
+                    onClick = onRetry,
+                    enabled = !isSaving,
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(stringResource(R.string.detail_own_comment_retry, retryTargetName))
+                }
+            }
+        }
+    }
+}
 
 @Composable
 internal fun CommentItem(

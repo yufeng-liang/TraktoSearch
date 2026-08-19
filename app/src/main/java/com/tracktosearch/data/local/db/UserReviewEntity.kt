@@ -24,6 +24,8 @@ data class UserReviewEntity(
     val year: Int?,                        // 上映/首播年份
     val rating: Float?,                     // Trakt 评分 1-10
     val comment: String?,                   // 短评文本
+    val traktCommentId: Int? = null,        // Trakt 短评 ID（编辑时使用）
+    val commentCheckedAt: Long? = null,     // 上次校准本人短评缓存的时间（毫秒）
     val liked: Boolean?,                    // 是否点赞（Trakt like）
     val createdAt: Long?,                   // Trakt 创建时间（毫秒）
     val updatedAt: Long?,                   // Trakt 更新时间（毫秒）

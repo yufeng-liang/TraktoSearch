@@ -153,6 +153,22 @@ data class TraktCommentRequest(
     val spoiler: Boolean = false
 )
 
+/** PUT /comments/{id} 请求体。 */
+@Serializable
+data class TraktCommentEditRequest(
+    val comment: String,
+    val spoiler: Boolean = false
+)
+
+/** GET /users/me/comments 返回的本人评论及其关联条目。 */
+@Serializable
+data class TraktUserComment(
+    val type: String = "",
+    val comment: TraktComment = TraktComment(),
+    val movie: TraktMovie? = null,
+    val show: TraktShow? = null
+)
+
 @Serializable
 data class TraktCommentItem(
     val type: String,               // "movie" 或 "show"

@@ -2,6 +2,8 @@ package com.tracktosearch.data.local.db
 
 import android.content.Context
 import androidx.room.Room
+import androidx.sqlite.db.SupportSQLiteOpenHelper
+import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -18,6 +20,7 @@ class UserReviewDaoTest {
 
     private lateinit var db: AppDatabase
     private lateinit var dao: UserReviewDao
+    private var migrationHelper: SupportSQLiteOpenHelper? = null
 
     @Before
     fun setup() {
@@ -29,7 +32,10 @@ class UserReviewDaoTest {
     }
 
     @After
-    fun teardown() { db.close() }
+    fun teardown() {
+        db.close()
+        migrationHelper?.close()
+    }
 
     private fun sample(
         traktId: Long = 1L,
@@ -65,6 +71,72 @@ class UserReviewDaoTest {
         val result = dao.getByTraktId(1L)
         assertThat(result!!.rating).isEqualTo(9f)
         assertThat(result.comment).isEqualTo("新评")
+    }
+
+    @Test
+    fun upsert_短评同步元数据_可查到() = runTest {
+        dao.upsert(sample(traktId = 1L).copy(
+            traktCommentId = 12345,
+            commentCheckedAt = 1_700_000_000_000L
+        ))
+
+        val result = dao.getByTraktId(1L)
+
+        assertThat(result!!.traktCommentId).isEqualTo(12345)
+        assertThat(result.commentCheckedAt).isEqualTo(1_700_000_000_000L)
+    }
+
+    @Test
+    fun migration13to14_保留短评并新增同步元数据列() {
+        val context: Context = RuntimeEnvironment.getApplication()
+        val databaseName = "user-review-v13-to-v14-test.db"
+        context.deleteDatabase(databaseName)
+        migrationHelper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(databaseName)
+                .callback(object : SupportSQLiteOpenHelper.Callback(1) {
+                    override fun onCreate(database: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        database.execSQL(
+                            """
+                            CREATE TABLE user_review (
+                                traktId INTEGER NOT NULL PRIMARY KEY,
+                                tmdbId INTEGER,
+                                imdbId TEXT,
+                                mediaType TEXT NOT NULL,
+                                title TEXT,
+                                year INTEGER,
+                                rating REAL,
+                                comment TEXT,
+                                liked INTEGER,
+                                createdAt INTEGER,
+                                updatedAt INTEGER,
+                                syncedAt INTEGER NOT NULL DEFAULT 0
+                            )
+                            """.trimIndent()
+                        )
+                    }
+
+                    override fun onUpgrade(
+                        database: androidx.sqlite.db.SupportSQLiteDatabase,
+                        oldVersion: Int,
+                        newVersion: Int
+                    ) = Unit
+                })
+                .build()
+        )
+        val oldDatabase = migrationHelper!!.writableDatabase
+        oldDatabase.execSQL(
+            "INSERT INTO user_review (traktId, mediaType, comment, syncedAt) VALUES (1, 'movie', '旧短评', 100)"
+        )
+
+        DatabaseModule.MIGRATION_13_14.migrate(oldDatabase)
+
+        oldDatabase.query("SELECT comment, traktCommentId, commentCheckedAt FROM user_review WHERE traktId = 1").use { cursor ->
+            assertThat(cursor.moveToFirst()).isTrue()
+            assertThat(cursor.getString(0)).isEqualTo("旧短评")
+            assertThat(cursor.isNull(1)).isTrue()
+            assertThat(cursor.isNull(2)).isTrue()
+        }
     }
 
     @Test

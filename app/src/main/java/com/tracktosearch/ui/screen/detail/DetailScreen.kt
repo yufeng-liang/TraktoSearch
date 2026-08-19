@@ -291,6 +291,7 @@ fun DetailScreen(
             uiState.isLoading,
             uiState.isSearching,
             uiState.isTranslating,
+            uiState.isLoadingComments,
             uiState.isLoadingMoreComments,
             uiState.isLoadingVideosImages,
             uiState.isLoadingRecommendations,
@@ -606,7 +607,8 @@ fun DetailScreen(
 
                 // ===== 评论 Tab 内容 =====
                 if (uiState.sectionVisible.comments && selectedTab == 1) {
-                    val commentsToShow = uiState.comments
+                    val ownComment = uiState.userComment?.takeIf { it.isNotBlank() }
+                    val commentsToShow = uiState.comments.filter { it.id != uiState.traktCommentId }
                     // 豆瓣评论基本都是中文，无需翻译，只有存在非豆瓣评论时才显示全部翻译
                     val translatableComments = commentsToShow.filter { it.source != DOUBAN_COMMENT_SOURCE }
                     item(key = "comments_header") {
@@ -657,7 +659,47 @@ fun DetailScreen(
                         }
                     }
 
-                    if (uiState.commentsError && commentsToShow.isEmpty()) {
+                    item(key = "own_comment") {
+                        if (ownComment == null || uiState.isEditingOwnComment) {
+                            OwnCommentComposer(
+                                initialComment = ownComment.orEmpty(),
+                                targets = uiState.ownCommentTargets,
+                                isSaving = uiState.isSavingOwnComment,
+                                isEditing = uiState.isEditingOwnComment,
+                                onSubmit = viewModel::submitOwnComment,
+                                onCancelEdit = viewModel::cancelOwnCommentEdit,
+                                scene = detailGlassScene
+                            )
+                        } else {
+                            OwnCommentCard(
+                                comment = ownComment,
+                                targets = uiState.ownCommentTargets,
+                                retryTargets = uiState.retryOwnCommentTargets,
+                                isSaving = uiState.isSavingOwnComment,
+                                onEdit = viewModel::beginOwnCommentEdit,
+                                onRetry = viewModel::retryOwnCommentSync,
+                                scene = detailGlassScene
+                            )
+                        }
+                    }
+
+                    if (uiState.isLoadingComments) {
+                        item(key = "comments_loading") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 3.dp
+                                )
+                            }
+                        }
+                    }
+
+                    if (!uiState.isLoadingComments && uiState.commentsError && commentsToShow.isEmpty()) {
                         item(key = "comments_error") {
                             Box(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
@@ -671,7 +713,7 @@ fun DetailScreen(
                         }
                     }
 
-                    if (!uiState.commentsError && commentsToShow.isEmpty()) {
+                    if (!uiState.isLoadingComments && !uiState.commentsError && commentsToShow.isEmpty() && ownComment == null) {
                         item(key = "comments_empty") {
                             Box(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
@@ -1044,7 +1086,7 @@ fun DetailScreen(
             if (showRatingDialog || uiState.showRatingDialog) {
                 RatingDialog(
                     initialRating = uiState.userRating,
-                    initialComment = uiState.userComment,
+                    initialComment = uiState.pendingOwnComment ?: uiState.userComment,
                     isSubmitting = uiState.isRating,
                     onDismiss = {
                         showRatingDialog = false
@@ -1055,7 +1097,7 @@ fun DetailScreen(
                         view.performHaptic(HapticType.HEAVY_CLICK)
                         // 不调用 dismissRatingDialog():setRatingWithComment/removeRating 内部会关闭弹窗并处理豆瓣同步
                         // 否则会先 syncDoubanMark(COLLECT) 再 syncDoubanMarkWithRating,导致两次豆瓣同步 toast
-                        if (rating == null || rating == 0) viewModel.removeRating() else viewModel.setRatingWithComment(rating, comment)
+                        viewModel.confirmRatingWithComment(rating, comment)
                     }
                 )
             }
