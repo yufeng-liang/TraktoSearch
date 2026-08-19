@@ -77,6 +77,7 @@ import com.tracktosearch.ui.screen.statistics.StatisticsScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchScreen
 import com.tracktosearch.ui.screen.watchlist.WatchlistViewModel
 import com.tracktosearch.data.util.CurrentPageHolder
+import com.tracktosearch.data.util.StartupTrace
 import com.tracktosearch.data.util.UserActionTracker
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -339,6 +340,45 @@ fun AppNavigation(
     val scope = rememberCoroutineScope()
     var directTraktLoginActive by rememberSaveable { mutableStateOf(false) }
 
+    // 预热 onboarding 完成标记：登录成功时需要它决定默认 tab。
+    // 提前读取，避免 DataStore 冷读阻塞登录后导航（转圈消失 → 进入主界面之间 1-2s 停顿的根因）。
+    val onboardingStorage = remember { OnboardingStorage(context) }
+    var onboardingLoaded by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(Unit) {
+        StartupTrace.mark("login.onboarding.prewarm.begin")
+        onboardingLoaded = onboardingStorage.isCompleted.first()
+        StartupTrace.mark("login.onboarding.prewarm.end")
+    }
+
+    /**
+     * 登录成功后进入主界面的统一逻辑（Trakt 登录与豆瓣独立模式共用）。
+     * - 默认 tab：widget 搜索请求 → 搜索页(0)；老用户(已完成新手引导) → 我的页(2)；新用户 → 搜索页(0)
+     * - onboarding 标记已由组合期预热，导航不再等待 DataStore 冷读
+     */
+    fun navigateToMainAfterLogin() {
+        // 登录成功后清除访客模式标记
+        val guestModeStorage = EntryPointAccessors.fromApplication(context, GuestModeEntryPoint::class.java).guestModeStorage()
+        scope.launch { guestModeStorage.setGuestMode(false) }
+        scope.launch {
+            StartupTrace.mark("login.navigate.main.begin", "onboardingLoaded=$onboardingLoaded")
+            mainInitialTab = when {
+                SearchNavigator.pending.value -> 0
+                onboardingLoaded != null -> if (onboardingLoaded == true) 2 else 0
+                else -> {
+                    // 极端情况：预热协程尚未完成（用户极快完成登录），DataStore 已在读取中，此读会立即返回
+                    val completed = onboardingStorage.isCompleted.first()
+                    if (completed) 2 else 0
+                }
+            }
+            loginTabOverride = true  // 阻止 storedDefaultTab 覆盖登录意图
+            currentStartDest = Routes.MAIN
+            navController.navigate(Routes.MAIN) {
+                popUpTo(0) { inclusive = true }
+            }
+            StartupTrace.mark("login.navigate.main.end", "tab=$mainInitialTab")
+        }
+    }
+
     LaunchedEffect(directTraktLoginActive) {
         if (!directTraktLoginActive) return@LaunchedEffect
         kotlinx.coroutines.coroutineScope {
@@ -485,24 +525,8 @@ fun AppNavigation(
                                 // Trakt 登录成功：写入 SessionModeManager，由其驱动 UI 切换到 TRAKT 模式
                                 sessionModeManager.setTraktConnectionState(TraktConnectionState.CONNECTED)
                                 onLoginSuccess()
-                                // 登录成功后清除访客模式标记
-                                val guestModeStorage = EntryPointAccessors.fromApplication(context, GuestModeEntryPoint::class.java).guestModeStorage()
-                                scope.launch { guestModeStorage.setGuestMode(false) }
-                                // 新用户（未完成新手引导）登录后默认进搜索页(0)，避免我的页无谓加载 watchlist
-                                // 老用户默认进我的页(2)查看 watchlist
-                                scope.launch {
-                                    if (SearchNavigator.pending.value) {
-                                        mainInitialTab = 0
-                                    } else {
-                                        val onboardingCompleted = OnboardingStorage(context).isCompleted.first()
-                                        mainInitialTab = if (onboardingCompleted) 2 else 0
-                                    }
-                                    loginTabOverride = true  // 阻止 storedDefaultTab 覆盖登录意图
-                                    currentStartDest = Routes.MAIN
-                                    navController.navigate(Routes.MAIN) {
-                                        popUpTo(0) { inclusive = true }
-                                    }
-                                }
+                                // 清除访客模式标记、按 onboarding 状态决定默认 tab 并进入主页
+                                navigateToMainAfterLogin()
                             },
                             onDoubanLogin = {
                                 // 豆瓣登录入口：跳转到 DoubanLoginScreen，
@@ -1012,23 +1036,8 @@ fun AppNavigation(
                             onLoginSuccess = if (fromActivationLogin) {
                             {
                                 // 来自激活登录页：豆瓣登录成功后进入主页（豆瓣独立模式）
-                                // 复用 Trakt 登录的 onboarding/默认 tab 选择逻辑
-                                // 登录成功后清除访客模式标记，避免网关撤销后状态不一致
-                                val guestModeStorage = EntryPointAccessors.fromApplication(context, GuestModeEntryPoint::class.java).guestModeStorage()
-                                scope.launch {
-                                    guestModeStorage.setGuestMode(false)
-                                    if (SearchNavigator.pending.value) {
-                                        mainInitialTab = 0
-                                    } else {
-                                        val onboardingCompleted = OnboardingStorage(context).isCompleted.first()
-                                        mainInitialTab = if (onboardingCompleted) 2 else 0
-                                    }
-                                    loginTabOverride = true  // 阻止 storedDefaultTab 覆盖登录意图
-                                    currentStartDest = Routes.MAIN
-                                    navController.navigate(Routes.MAIN) {
-                                        popUpTo(0) { inclusive = true }
-                                    }
-                                }
+                                // 复用 Trakt 登录的 onboarding/默认 tab 选择逻辑（已预热，不阻塞导航）
+                                navigateToMainAfterLogin()
                             }
                         } else null
                         )
