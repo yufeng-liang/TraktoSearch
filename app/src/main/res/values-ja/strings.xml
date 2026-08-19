@@ -1143,7 +1143,13 @@
     <string name="search_sources_add_from_template">テンプレートから追加</string>
     <string name="search_sources_empty">カスタムソースはまだありません。\nテンプレートから追加するか、共有設定を貼り付けてください。</string>
     <string name="search_sources_manage_entry_title">検索ソース</string>
-    <string name="search_sources_manage_entry_subtitle">内蔵・カスタムソース</string>
+        <string name="search_sources_pansou">PanSou 盤捜</string>
+    <string name="search_sources_pansou_desc">公共パン検索API、テンプレート解析</string>
+    <string name="search_sources_panhub">Panhub 盤狐</string>
+    <string name="search_sources_panhub_desc">Panhub API、並列数とプラグインを設定可能</string>
+    <string name="search_sources_zreso">Zreso 資源庫</string>
+    <string name="search_sources_zreso_desc">zreso.cn 資源ライブラリ、テンプレート解析</string>
+<string name="search_sources_manage_entry_subtitle">内蔵・カスタムソース</string>
     <!-- テンプレートライブラリ -->
     <string name="template_library_title">テンプレートから追加</string>
     <string name="template_import_shortcut">共有設定をお持ちですか？テキストからインポート →</string>
@@ -1159,6 +1165,7 @@
     <string name="editor_prev">戻る</string>
     <string name="editor_applied_template">テンプレート「%1$s」を適用しました</string>
     <string name="editor_probe_start">解析開始</string>
+    <string name="editor_probe_hint">レスポンスのJSONPathを自動認識します。サンプルキーワードでサイトに1回リクエストします。</string>
     <string name="editor_probe_progress">サンプルキーワードでリクエスト中…</string>
     <string name="editor_probe_success">認識成功</string>
     <string name="editor_probe_failed">自動認識できませんでした。手動設定してください</string>

@@ -1245,7 +1245,13 @@
     <string name="search_sources_add_from_template">从模板添加搜索源</string>
     <string name="search_sources_empty">还没有自定义搜索源。\n可以从模板添加，或粘贴分享的配置。</string>
     <string name="search_sources_manage_entry_title">搜索源</string>
-    <string name="search_sources_manage_entry_subtitle">内置与自定义搜索源</string>
+        <string name="search_sources_pansou">PanSou 盘搜</string>
+    <string name="search_sources_pansou_desc">公共盘搜 API，模板解析</string>
+    <string name="search_sources_panhub">Panhub 盘狐</string>
+    <string name="search_sources_panhub_desc">Panhub API，可配置并发与插件</string>
+    <string name="search_sources_zreso">Zreso 资源库</string>
+    <string name="search_sources_zreso_desc">zreso.cn 资源库，模板解析</string>
+<string name="search_sources_manage_entry_subtitle">内置与自定义搜索源</string>
     <!-- 模板库 -->
     <string name="template_library_title">从模板添加</string>
     <string name="template_import_shortcut">有现成配置？从文本导入 →</string>
@@ -1261,6 +1267,7 @@
     <string name="editor_prev">上一步</string>
     <string name="editor_applied_template">已应用模板「%1$s」</string>
     <string name="editor_probe_start">开始解析</string>
+    <string name="editor_probe_hint">自动识别响应 JSONPath：会用示例关键词请求该站点一次。</string>
     <string name="editor_probe_progress">正在用示例关键词请求接口…</string>
     <string name="editor_probe_success">识别成功</string>
     <string name="editor_probe_failed">未能自动识别，可手动配置</string>

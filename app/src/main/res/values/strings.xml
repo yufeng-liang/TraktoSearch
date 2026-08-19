@@ -1245,7 +1245,13 @@ Config:
     <string name="search_sources_add_from_template">Add from template</string>
     <string name="search_sources_empty">No custom sources yet.\nAdd one from a template, or paste a shared config.</string>
     <string name="search_sources_manage_entry_title">Search sources</string>
-    <string name="search_sources_manage_entry_subtitle">Built-in &amp; custom sources</string>
+        <string name="search_sources_pansou">PanSou</string>
+    <string name="search_sources_pansou_desc">Public pan-search API, template parsing</string>
+    <string name="search_sources_panhub">Panhub</string>
+    <string name="search_sources_panhub_desc">Panhub API, configurable concurrency &amp; plugins</string>
+    <string name="search_sources_zreso">Zreso</string>
+    <string name="search_sources_zreso_desc">zreso.cn resource library, template parsing</string>
+<string name="search_sources_manage_entry_subtitle">Built-in &amp; custom sources</string>
     <!-- Template Library -->
     <string name="template_library_title">Add from template</string>
     <string name="template_import_shortcut">Have a shared config? Import from text</string>
@@ -1261,6 +1267,7 @@ Config:
     <string name="editor_prev">Back</string>
     <string name="editor_applied_template">Template "%1$s" applied</string>
     <string name="editor_probe_start">Start parsing</string>
+    <string name="editor_probe_hint">Automatically recognize the response JSONPath by requesting the site once with a sample keyword.</string>
     <string name="editor_probe_progress">Requesting with sample keyword…</string>
     <string name="editor_probe_success">Recognized</string>
     <string name="editor_probe_failed">Could not recognize automatically, you can configure manually</string>

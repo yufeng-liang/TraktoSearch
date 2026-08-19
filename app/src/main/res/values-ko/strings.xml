@@ -1143,7 +1143,13 @@
     <string name="search_sources_add_from_template">템플릿에서 추가</string>
     <string name="search_sources_empty">사용자 검색 소스가 없습니다.\n템플릿에서 추가하거나 공유 설정을 붙여넣으세요.</string>
     <string name="search_sources_manage_entry_title">검색 소스</string>
-    <string name="search_sources_manage_entry_subtitle">내장 · 사용자 소스</string>
+        <string name="search_sources_pansou">PanSou 판수</string>
+    <string name="search_sources_pansou_desc">공공 판검색 API, 템플릿 파싱</string>
+    <string name="search_sources_panhub">Panhub 판호</string>
+    <string name="search_sources_panhub_desc">Panhub API, 동시성 및 플러그인 설정 가능</string>
+    <string name="search_sources_zreso">Zreso 자원고</string>
+    <string name="search_sources_zreso_desc">zreso.cn 자원 라이브러리, 템플릿 파싱</string>
+<string name="search_sources_manage_entry_subtitle">내장 · 사용자 소스</string>
     <!-- 템플릿 라이브러리 -->
     <string name="template_library_title">템플릿에서 추가</string>
     <string name="template_import_shortcut">공유 설정이 있나요? 텍스트에서 가져오기 →</string>
@@ -1159,6 +1165,7 @@
     <string name="editor_prev">이전</string>
     <string name="editor_applied_template">템플릿「%1$s」적용됨</string>
     <string name="editor_probe_start">파싱 시작</string>
+    <string name="editor_probe_hint">응답 JSONPath를 자동으로 인식합니다. 샘플 키워드로 사이트에 한 번 요청합니다.</string>
     <string name="editor_probe_progress">샘플 키워드로 요청 중…</string>
     <string name="editor_probe_success">인식 성공</string>
     <string name="editor_probe_failed">자동 인식 실패, 수동으로 설정하세요</string>
