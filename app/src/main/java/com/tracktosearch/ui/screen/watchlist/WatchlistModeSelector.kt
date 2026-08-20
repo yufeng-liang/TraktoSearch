@@ -37,7 +37,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
-import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.floatingGlassControlShadow
 import com.tracktosearch.ui.component.isAppDarkTheme
@@ -72,12 +71,8 @@ internal fun WatchlistModeSelector(
     val unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
     val durationMillis = 240
     val selectionBounceScale = rememberGlassSelectionBounceScale(safeSelectedIndex)
-    // Backdrop 可用时由 GlassSurfaceImpl 的 backdropGlass 提供阴影，避免与手动悬浮阴影叠加；
-    // 仅无 Backdrop host 的 fallback 分支保留手动阴影以维持高度感。
-    val floatingGlassShadow = if (
-        LocalVisualEffectMode.current == VisualEffectMode.GLASS &&
-        LocalBackdrop.current == null
-    ) {
+    // GLASS 切换条保持分支样式：悬浮阴影 + Backdrop 采样阴影并存的立体感。
+    val floatingGlassShadow = if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
         Modifier.floatingGlassControlShadow(capsuleShape, isDark)
     } else {
         Modifier
