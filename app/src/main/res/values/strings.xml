@@ -518,6 +518,7 @@
     <string name="settings_material">Material</string>
     <string name="settings_visual_effect_glass">Glass (Experimental)</string>
     <string name="settings_accent_dynamic">Dynamic</string>
+    <string name="settings_accent_custom">Custom</string>
     <!-- Accent Color Names -->
     <string name="accent_vintage_ticket">Vintage Ticket</string>
     <string name="accent_water_lily">Water Lily Purple</string>

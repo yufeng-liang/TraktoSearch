@@ -259,6 +259,7 @@
     <string name="settings_material">素材</string>
     <string name="settings_visual_effect_glass">ガラス（実験的）</string>
     <string name="settings_accent_dynamic">ダイナミック</string>
+    <string name="settings_accent_custom">カスタム</string>
     <!-- アクセントカラー -->
     <string name="accent_vintage_ticket">レトロチケット</string>
     <string name="accent_water_lily">睡蓮紫</string>

@@ -518,6 +518,7 @@
     <string name="settings_material">材质</string>
     <string name="settings_visual_effect_glass">玻璃（实验性）</string>
     <string name="settings_accent_dynamic">跟随壁纸取色</string>
+    <string name="settings_accent_custom">自由调色</string>
     <!-- 应用色调 -->
     <string name="accent_vintage_ticket">复古票根</string>
     <string name="accent_water_lily">睡莲紫</string>

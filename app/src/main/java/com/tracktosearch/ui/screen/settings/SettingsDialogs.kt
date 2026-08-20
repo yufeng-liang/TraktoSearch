@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -61,6 +64,18 @@ import com.tracktosearch.ui.component.AdaptiveSingleLineText
 import com.tracktosearch.ui.component.DropdownAnchorMenu
 import com.tracktosearch.ui.component.StickyHeaderChangelogContent
 import com.tracktosearch.ui.theme.appSwitchColors
+import com.github.skydoves.colorpicker.compose.HsvColorPicker
+import com.github.skydoves.colorpicker.compose.rememberColorPickerController
+import com.github.skydoves.colorpicker.compose.BrightnessSlider
+import com.github.skydoves.colorpicker.compose.ColorEnvelope
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.foundation.layout.height
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import sh.calvin.reorderable.ReorderableItem
@@ -128,6 +143,8 @@ private fun ThemeOptionRow(
 internal fun AccentColorDialog(
     currentAccent: com.tracktosearch.ui.theme.MonetAccent?,
     onAccentSelected: (com.tracktosearch.ui.theme.MonetAccent?) -> Unit,
+    customAccentArgb: Long?,
+    onCustomAccentSelected: (Long?) -> Unit,
     currentMode: VisualEffectMode,
     currentVariant: GlassVariant,
     onVisualEffectSelected: (VisualEffectMode, GlassVariant) -> Unit,
@@ -136,6 +153,7 @@ internal fun AccentColorDialog(
 ) {
     val view = LocalView.current
     var materialMenuExpanded by remember { mutableStateOf(false) }
+    var showCustomPicker by remember { mutableStateOf(false) }
 
     // 壁纸取色选项的渐变色板与勾选图标对比色
     val dynamicColors = listOf(
@@ -258,7 +276,7 @@ internal fun AccentColorDialog(
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                // 色调区：壁纸取色 + 莫奈/印象派色块网格
+                // 色调区：壁纸取色 + 莫奈/印象派色块网格 + 自由调色
                 val swatches = listOf(null) + com.tracktosearch.ui.theme.MonetAccent.entries
                 val rows = swatches.chunked(4)
                 rows.forEach { row ->
@@ -320,7 +338,7 @@ internal fun AccentColorDialog(
                                         maxFontSize = 11.sp,
                                         minFontSize = 8.5.sp,
                                         modifier = Modifier.width(72.dp),
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        textAlign = TextAlign.Center,
                                         fillMaxWidth = true
                                     )
                                 }
@@ -330,6 +348,59 @@ internal fun AccentColorDialog(
                         repeat(4 - row.size) { Spacer(modifier = Modifier.weight(1f)) }
                     }
                 }
+                // 自由调色入口：独立圆盘行
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                view.performHaptic(HapticType.TICK)
+                                showCustomPicker = true
+                            }
+                            .padding(vertical = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    brush = if (customAccentArgb != null) {
+                                        androidx.compose.ui.graphics.SolidColor(Color(customAccentArgb.toInt()))
+                                    } else {
+                                        androidx.compose.ui.graphics.Brush.sweepGradient(
+                                            colors = listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)
+                                        )
+                                    }
+                                )
+                                .then(
+                                    if (customAccentArgb != null)
+                                        Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                                    else Modifier
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (customAccentArgb != null) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Check,
+                                    contentDescription = null,
+                                    tint = if (Color(customAccentArgb.toInt()).luminance() > 0.5f) Color.Black else Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(R.string.settings_accent_custom),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    repeat(3) { Spacer(modifier = Modifier.weight(1f)) }
+                }
             }
         },
         confirmButton = {
@@ -338,6 +409,101 @@ internal fun AccentColorDialog(
             }
         }
     )
+
+    // 自由调色弹窗
+    if (showCustomPicker) {
+        CustomAccentDialog(
+            initialArgb = customAccentArgb,
+            onColorSelected = { argb ->
+                onCustomAccentSelected(argb)
+                // 选择自定义色后同时清除预设色（互斥）
+                onAccentSelected(null)
+            },
+            onDismiss = { showCustomPicker = false }
+        )
+    }
+}
+
+/** 自由调色弹窗：HSV 圆形色轮 + 亮度滑杆 + HEX 显示 + 预览 */
+@Composable
+internal fun CustomAccentDialog(
+    initialArgb: Long?,
+    onColorSelected: (Long) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val initialColor = remember(initialArgb) {
+        initialArgb?.let { Color(it.toInt()) } ?: Color(0xFF9A6242)
+    }
+    val controller = rememberColorPickerController()
+    var selectedColor by remember { mutableStateOf(initialColor) }
+    val hexText = remember(selectedColor) {
+        String.format("#%06X", selectedColor.toArgb() and 0xFFFFFF)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        title = {
+            Text(
+                text = stringResource(R.string.settings_accent_custom),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                HsvColorPicker(
+                    modifier = Modifier.fillMaxWidth().height(280.dp),
+                    controller = controller,
+                    onColorChanged = { envelope -> selectedColor = envelope.color }
+                )
+                BrightnessSlider(
+                    modifier = Modifier.fillMaxWidth().height(36.dp),
+                    controller = controller
+                )
+                // HEX
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("HEX", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(40.dp))
+                    Text(hexText, style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace), color = MaterialTheme.colorScheme.onSurface)
+                }
+                // 预览
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(selectedColor))
+                        Spacer(Modifier.height(4.dp))
+                        Text("Primary", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        val containerColor = deriveContainerColor(selectedColor)
+                        Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(containerColor))
+                        Spacer(Modifier.height(4.dp))
+                        Text("Container", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Surface(shape = RoundedCornerShape(20.dp), color = selectedColor, modifier = Modifier.height(36.dp)) {
+                            Text("示例按钮", color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium)
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text("Button", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
+                    }
+                }
+                TextButton(onClick = { onColorSelected(0L); onDismiss() }, modifier = Modifier.fillMaxWidth()) {
+                    Text("恢复默认（跟随壁纸）", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        },
+        confirmButton = { Button(onClick = { onColorSelected(selectedColor.toArgb().toLong()); onDismiss() }) { Text("确定") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
+}
+
+private fun deriveContainerColor(seed: Color): Color {
+    val hct = com.tracktosearch.data.util.mcu.hct.Hct.fromInt(seed.toArgb())
+    val c = com.tracktosearch.data.util.mcu.hct.Hct.from(hct.hue, hct.chroma * 0.3, 90.0)
+    return Color(c.toInt())
 }
 
 /** 语言选择对话框 */

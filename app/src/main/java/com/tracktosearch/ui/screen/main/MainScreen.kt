@@ -285,6 +285,10 @@ fun MainScreen(
     if (showAccentOnboarding) {
         AccentColorDialog(
             currentAccent = currentAccent,
+            customAccentArgb = currentCustomAccentArgb,
+            onCustomAccentSelected = { argb ->
+                scope.launch { themeStorage.setCustomAccent(argb) }
+            },
             onAccentSelected = { accent ->
                 // 仅持久化色调选择，不关闭引导弹窗；由「完成」按钮统一推进
                 scope.launch { themeStorage.setAccentColor(accent) }

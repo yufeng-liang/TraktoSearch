@@ -270,7 +270,7 @@ dependencies {
 
     // See More 展开收起文本
     implementation(libs.seymour.text)
-implementation(libs.godaddy.colorpicker)
+implementation(libs.skydoves.colorpicker)
 
     // 单元测试
     testImplementation(libs.junit)
