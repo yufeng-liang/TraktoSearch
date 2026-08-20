@@ -782,12 +782,7 @@ fun SearchScreen(
                             interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                             searchQuery = ""
                         },
-                        onBack = if (isActive) {
-                            {
-                                interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                                onBack?.invoke()
-                            }
-                        } else null,
+                        onBack = null,
                         focusRequester = focusRequester,
                         onFocusChanged = {
                             if (it) interruptAiSprite(AiSpriteInterruptReason.FOCUS)
