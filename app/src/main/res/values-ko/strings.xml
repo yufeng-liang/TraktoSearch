@@ -257,7 +257,7 @@
     <!-- Accent Color -->
     <string name="settings_accent_color">톤 및 소재</string>
     <string name="settings_material">소재</string>
-    <string name="settings_visual_effect_glass">유리</string>
+    <string name="settings_visual_effect_glass">유리(실험적)</string>
     <string name="settings_accent_dynamic">다이나믹</string>
     <!-- 액센트 색상 -->
     <string name="accent_vintage_ticket">레트로 티켓</string>
@@ -519,6 +519,10 @@
     <string name="detail_own_comment_sync_douban">이 댓글은 Douban에 동기화됩니다</string>
     <string name="detail_own_comment_sync_trakt_douban">이 댓글은 Trakt와 Douban에 동기화됩니다</string>
     <string name="detail_own_comment_sync_unavailable">로그인하면 댓글을 게시하고 동기화할 수 있습니다</string>
+    <string name="detail_own_comment_placeholder_trakt">여기에 작성한 짧은 리뷰는 Trakt에 동기화됩니다</string>
+    <string name="detail_own_comment_placeholder_douban">여기에 작성한 짧은 리뷰는 Douban에 동기화됩니다</string>
+    <string name="detail_own_comment_placeholder_trakt_douban">여기에 작성한 짧은 리뷰는 Trakt와 Douban에 동기화됩니다</string>
+    <string name="detail_own_comment_placeholder_unavailable">로그인하면 댓글을 게시하고 동기화할 수 있습니다</string>
     <string name="detail_own_comment_edit">댓글 수정</string>
     <string name="detail_own_comment_publish">게시</string>
     <string name="detail_own_comment_cancel">취소</string>

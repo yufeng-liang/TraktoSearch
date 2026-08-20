@@ -179,10 +179,7 @@ internal fun AccentColorDialog(
         title = { Text(dialogTitle ?: stringResource(R.string.settings_accent_color)) },
         text = {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 350.dp)
-                    .verticalScroll(rememberScrollState()),
+                modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // 材质区：标题在左，当前值 + 下拉箭头在右；点击弹出 DropdownAnchorMenu
