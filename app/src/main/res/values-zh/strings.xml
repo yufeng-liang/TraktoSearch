@@ -558,7 +558,8 @@
     <string name="settings_feedback">反馈与建议</string>
     <string name="settings_feedback_subtitle">开发者在线营业，欢迎投喂建议和 Bug 🧑‍💻🍿</string>
     <string name="feedback_title">反馈与建议</string>
-    <string name="feedback_intro">每一条反馈，我都会认真读到。这里也是你的功能许愿池，说不定哪天，你许下的愿望就上线啦～</string>
+    <string name="feedback_intro">每一条反馈，我都会认真读到。
+这里也是你的功能许愿池，说不定哪天，你许下的愿望就上线啦～</string>
     <string name="feedback_new">写新反馈</string>
     <string name="feedback_my_feedbacks">我的反馈</string>
     <string name="feedback_empty">暂无反馈，点击上方按钮写下第一条</string>

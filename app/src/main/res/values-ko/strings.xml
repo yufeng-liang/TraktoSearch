@@ -638,7 +638,8 @@
     <string name="settings_feedback">피드백</string>
     <string name="settings_feedback_subtitle">개발자 영업 중! 아이디어와 버그를 마음껏 던져 주세요 🧑‍💻🍿</string>
     <string name="feedback_title">피드백</string>
-    <string name="feedback_intro">남겨 주신 피드백은 제가 하나하나 꼼꼼히 읽어요. 여기는 기능 소원함이기도 하니, 언젠가 당신의 바람이 이루어질지도 몰라요~</string>
+    <string name="feedback_intro">남겨 주신 피드백은 제가 하나하나 꼼꼼히 읽어요.
+여기는 기능 소원함이기도 하니, 언젠가 당신의 바람이 이루어질지도 몰라요~</string>
     <string name="feedback_new">새 피드백</string>
     <string name="feedback_my_feedbacks">내 피드백</string>
     <string name="feedback_empty">피드백이 없습니다</string>

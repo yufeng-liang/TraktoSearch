@@ -558,7 +558,8 @@
     <string name="settings_feedback">Feedback &amp; Suggestions</string>
     <string name="settings_feedback_subtitle">Developer on duty: send us your ideas and bugs 🧑‍💻🍿</string>
     <string name="feedback_title">Feedback</string>
-    <string name="feedback_intro">I read every piece of feedback carefully. This is also your feature wish pool—maybe one day, your wish will make it into the app~</string>
+    <string name="feedback_intro">I read every piece of feedback carefully.
+This is also your feature wish pool—maybe one day, your wish will make it into the app~</string>
     <string name="feedback_new">New Feedback</string>
     <string name="feedback_my_feedbacks">My Feedback</string>
     <string name="feedback_empty">No feedback yet. Tap above to write the first one.</string>
