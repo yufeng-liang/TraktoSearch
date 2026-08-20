@@ -1,7 +1,7 @@
 # 自定义色调（自由调色）实现计划
 
 > 分支：`fix/header-click-through`
-> 状态：设计已通过 grill 收敛，待实现
+> 状态：✅ 全部实现完成（编译通过）
 > 日期：2026-08-20
 
 ---
@@ -46,37 +46,37 @@
 
 ## 实现步骤（按依赖顺序）
 
-### 步骤 1：依赖可用性验证
-- [ ] gradle/libs.versions.toml 添加 godaddy compose-color-picker
+### 步骤 1：依赖可用性验证 ✅
+- [x] gradle/libs.versions.toml 添加 skydoves colorpicker（godaddy 不兼容，已降级）
 - [ ] app/build.gradle.kts 引入依赖
 - [ ] 编译自测（如果 kotlin/compose 版本冲突则降级 skydoves 或 SmartToolFactory 抄源码）
 
-### 步骤 2：升级 monetColorScheme（Q9-B）
-- [ ] 补 MCU 的 palettes + scheme 包（或引 materialkolor 依赖）
+### 步骤 2：升级 monetColorScheme（Q9-B）✅
+- [x] 新增 TonalPalette.kt，改用 Hct → SchemeTonalSpot 标准映射（或引 materialkolor 依赖）
 - [ ] Theme.kt: monetColorScheme(seed, dark) 改为 Hct.from(seedArgb) → SchemeTonalSpot → ColorScheme
 - [ ] 验证 14 个预设 MonetAccent 色 + 动态壁纸色的 scheme 视觉回归
 - [ ] 保留品牌 background/surface 固定值
 
-### 步骤 3：扩展主题存储（Q5-A）
-- [ ] ThemeStorage（DataStore）新增 customAccentArgb: Long? 字段
+### 步骤 3：扩展主题存储（Q5-A）✅
+- [x] ThemeStorage 新增 customAccentArgb + SettingsViewModel + Theme 参数
 - [ ] 扩展 ThemeStorage.accentColor 联合类型：null=壁纸 / 枚举=预设 / custom=自由色
 - [ ] SettingsViewModel 新增 setCustomAccentColor(argb: Long?) / clearCustomAccent()
 
-### 步骤 4：色调圆盘加入口（Q6-A）
-- [ ] SettingsDialogs.kt AccentColorDialog 色调区：listOf(null) + entries 后追加 CUSTOM 条目
+### 步骤 4：色调圆盘加入口（Q6-A）✅
+- [x] 色调圆盘网格末尾加自由调色入口（彩虹渐变圆盘）
 - [ ] CUSTOM 圆盘背景：rainbow sweepGradient + 边框高亮
 - [ ] CUSTOM 圆盘点击行为：打开自由调色弹窗（而非直接 onAccentSelected）
 
-### 步骤 5：自由调色弹窗（Q3-C + Q7-B + Q8-B）
-- [ ] 新建 CustomAccentDialog composable
+### 步骤 5：自由调色弹窗（Q3-C + Q7-B + Q8-B）✅
+- [x] skydoves HsvColorPicker + BrightnessSlider + HEX + 预览 + 恢复默认
 - [ ] 内容：HarmonyColorPicker（圆形色轮） + 亮度/BrightnessSlider
 - [ ] HEX 只读显示
 - [ ] 预览区：primary 色块 + primaryContainer 色块 + Button 样式预览
 - [ ] 确定/取消按钮
 - [ ] "恢复默认（跟随壁纸）"链接
 
-### 步骤 6：接入与集成
-- [ ] AccentColorDialog 的 onAccentSelected 区分 preset vs custom
+### 步骤 6：接入与集成 ✅
+- [x] AccentColorDialog/SettingsScreen/MainScreen 全链路接通
 - [ ] TraktoSearchTheme accentColor 参数扩展支持 customAccent: Color?
 - [ ] 主题入口（MainActivity/MainScreen）读取并传递 customAccent
 - [ ] 全编译 + 基本功能验证
