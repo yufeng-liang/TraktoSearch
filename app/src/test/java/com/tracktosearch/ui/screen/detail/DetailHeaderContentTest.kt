@@ -71,9 +71,9 @@ class DetailHeaderContentTest {
             }
         }
 
-        composeRule.onNodeWithText(expandLabel, substring = true).assertIsDisplayed()
-        // 折叠时只布局 3 行（第 4/5 行被截断，文本语义仍含全文）
-        assertThat(getTextLayouts(expandLabel).single().lineCount).isEqualTo(3)
+        composeRule.onNodeWithText(expandLabel).assertIsDisplayed()
+        // 折叠时正文只布局 3 行（第 4/5 行被省略号截断，文本语义仍含全文）
+        assertThat(getTextLayouts("Overview line 1").single().lineCount).isEqualTo(3)
     }
 
     @Test
@@ -86,11 +86,10 @@ class DetailHeaderContentTest {
             }
         }
 
-        // 展开链接是 Text 流式内联的 LinkAnnotation，语义树中为带 OnClick 的子节点
-        composeRule.onAllNodes(hasClickAction(), useUnmergedTree = true)[0]
-            .performSemanticsAction(SemanticsActions.OnClick)
-        composeRule.onNodeWithText(collapseLabel, substring = true).assertIsDisplayed()
-        // 展开后 5 行全部布局显示
-        assertThat(getTextLayouts(collapseLabel).single().lineCount).isEqualTo(5)
+        // 点击「展开」按钮（右对齐的独立 Text）
+        composeRule.onNodeWithText(expandLabel).performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.onNodeWithText(collapseLabel).assertIsDisplayed()
+        // 展开后正文 5 行全部布局显示
+        assertThat(getTextLayouts("Overview line 1").single().lineCount).isEqualTo(5)
     }
 }

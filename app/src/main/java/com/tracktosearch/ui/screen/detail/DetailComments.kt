@@ -202,7 +202,7 @@ internal fun OwnCommentCard(
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
-            ExpandableText(text = comment, fadeColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White)
+            ExpandableText(text = comment)
             if (retryTargets.isNotEmpty()) {
                 TextButton(
                     onClick = onRetry,
@@ -236,11 +236,6 @@ internal fun CommentItem(
 
     val displayText = if (showOriginal) comment.comment else (translatedText ?: comment.comment)
     val isDark = isAppDarkTheme()
-    val commentFadeColor = if (isDark) {
-        MaterialTheme.colorScheme.surface
-    } else {
-        Color.White
-    }
     val sourceLabel = if (comment.source == DOUBAN_COMMENT_SOURCE) {
         stringResource(R.string.detail_comment_source_douban)
     } else {
@@ -347,7 +342,7 @@ internal fun CommentItem(
                 }
             } else {
                 // 评论正文（折叠展开）
-                ExpandableText(text = displayText, fadeColor = commentFadeColor)
+                ExpandableText(text = displayText)
 
                 // 原文/译文切换
                 if (translatedText != null) {
