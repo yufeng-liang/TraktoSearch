@@ -217,6 +217,7 @@ fun MainScreen(
         EntryPointAccessors.fromApplication(context.applicationContext, ThemeStorageEntryPoint::class.java).themeStorage()
     }
     val currentAccent by themeStorage.accentColor.collectAsState()
+    val currentCustomAccentArgb by themeStorage.customAccentArgb.collectAsState()
     val currentVisualEffectMode by themeStorage.visualEffectMode.collectAsState()
     val currentGlassVariant by themeStorage.glassVariant.collectAsState()
     var showAccentOnboarding by remember { mutableStateOf(false) }

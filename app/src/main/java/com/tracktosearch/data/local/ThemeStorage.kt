@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.glance.appwidget.updateAll
@@ -58,6 +59,10 @@ class ThemeStorage private constructor(
     private val _glassVariant = MutableStateFlow(GlassVariant.CLEAR)
     val glassVariant: StateFlow<GlassVariant> = _glassVariant.asStateFlow()
 
+    /** 自定义色调 ARGB（null = 未设置，非 null = 用户自由调色激活） */
+    private val _customAccentArgb = MutableStateFlow<Long?>(null)
+    val customAccentArgb: StateFlow<Long?> = _customAccentArgb.asStateFlow()
+
     init {
         // 预加载 DataStore 首值到 StateFlow，避免 stateIn 默认值抖动。
         scope.launch {
@@ -66,6 +71,7 @@ class ThemeStorage private constructor(
             _accentColor.value = decodeAccentName(prefs[KEY_ACCENT_COLOR])
             _visualEffectMode.value = VisualEffectMode.fromStorageValue(prefs[KEY_VISUAL_EFFECT_MODE])
             _glassVariant.value = GlassVariant.fromStorageValue(prefs[KEY_GLASS_VARIANT])
+            _customAccentArgb.value = prefs[KEY_CUSTOM_ACCENT_ARGB]
             initializationComplete.complete(Unit)
         }.invokeOnCompletion { throwable ->
             if (throwable != null && !initializationComplete.isCompleted) {
@@ -124,6 +130,18 @@ class ThemeStorage private constructor(
         _glassVariant.value = GlassVariant.CLEAR
     }
 
+    suspend fun setCustomAccent(argb: Long?) {
+        initializationComplete.await()
+        dataStore.edit { prefs ->
+            if (argb != null) {
+                prefs[KEY_CUSTOM_ACCENT_ARGB] = argb
+            } else {
+                prefs.remove(KEY_CUSTOM_ACCENT_ARGB)
+            }
+        }
+        _customAccentArgb.value = argb
+    }
+
     suspend fun readAccentColorSnapshot(): MonetAccent? {
         initializationComplete.await()
         val prefs = dataStore.data.first()
@@ -148,5 +166,6 @@ class ThemeStorage private constructor(
         private val KEY_ACCENT_COLOR = stringPreferencesKey("accent_color")
         private val KEY_VISUAL_EFFECT_MODE = stringPreferencesKey("visual_effect_mode")
         private val KEY_GLASS_VARIANT = stringPreferencesKey("glass_variant")
+        private val KEY_CUSTOM_ACCENT_ARGB = longPreferencesKey("custom_accent_argb")
     }
 }
