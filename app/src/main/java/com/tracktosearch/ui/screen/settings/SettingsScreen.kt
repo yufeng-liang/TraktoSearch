@@ -695,6 +695,8 @@ fun SettingsScreen(
                         backdropOverride = settingsContentBackdrop,
                         scene = settingsGlassScene
                     )
+                    // 拦截点击：顶栏覆盖可滚动列表，不消费会让点击穿透到下方列表项
+                    .clickable(enabled = false, onClick = {})
             ) {
                 Column {
                     Spacer(modifier = Modifier.statusBarsPadding())
