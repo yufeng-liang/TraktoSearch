@@ -16,7 +16,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropUp
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -223,7 +223,7 @@ private fun ScrollToTopArrow(tint: Color) {
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            imageVector = Icons.Filled.ArrowDropUp,
+            imageVector = Icons.Filled.KeyboardArrowUp,
             contentDescription = null,
             tint = contrastHalo,
             modifier = Modifier
@@ -231,7 +231,7 @@ private fun ScrollToTopArrow(tint: Color) {
                 .offset(y = 1.dp)
         )
         Icon(
-            imageVector = Icons.Filled.ArrowDropUp,
+            imageVector = Icons.Filled.KeyboardArrowUp,
             contentDescription = stringResource(R.string.scroll_to_top),
             tint = tint,
             modifier = Modifier.size(80.dp)
