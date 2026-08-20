@@ -13,7 +13,7 @@
 | Q1 | 色域范围 | A | 只控制 primary + 相关 container，复用 scheme 生成器 |
 | Q2 | 明暗主题 | A | 一个颜色，light/dark 自动派生 |
 | Q3 | 控件形态 | C | 色轮 + 滑杆结合（HSV 圆盘选色 + 亮度滑杆微调） |
-| Q4 | 实现方式 | A | godaddy/compose-color-picker（MIT，Maven Central 可依赖），先编译自测 |
+| Q4 | 实现方式 | B（降级） | skydoves/colorpicker-compose 1.2.0（Apache-2.0，活跃维护）；godaddy 因 Compose 2026 二进制不兼容已弃用 |
 | Q5 | 保存撤销 | A | 新增 DataStore 字段 customAccentArgb: Long?，独立于 MonetAccent 枚举，提供"恢复默认" |
 | Q6 | 入口位置 | A | 色调圆盘网格末尾加"自由调色"圆盘（彩虹渐变背景） |
 | Q7 | 实时预览 | B | 弹窗内显示 primary/container 色块 + 按钮预览 |
@@ -24,7 +24,7 @@
 
 ## 调研结论摘要
 
-**选中依赖：godaddy/compose-color-picker**
+**选中依赖：skydoves/colorpicker-compose（godaddy 已因兼容性弃用）**
 - Maven: `com.godaddy.android.colorpicker:compose-color-picker-android:0.7.0`
 - 许可: MIT
 - 组件: HarmonyColorPicker（HSV 圆形色轮） + ClassicColorPicker + AlphaTile
