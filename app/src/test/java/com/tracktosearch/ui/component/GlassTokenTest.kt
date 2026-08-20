@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.ui.theme.GlassVariant
 import com.tracktosearch.ui.theme.VisualEffectMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import org.junit.Test
 
 class GlassTokenTest {
@@ -385,5 +386,82 @@ class GlassTokenTest {
                 fallbackColor = Color.Red
             )
         ).isEqualTo(Color.Transparent)
+    }
+
+    @Test
+    fun backdropRolesUseApprovedLensTable() {
+        val bottom = backdropGlassToken(GlassSurfaceRole.BottomNavigation, GlassVariant.CLEAR, false)
+        val top = backdropGlassToken(GlassSurfaceRole.TopBar, GlassVariant.CLEAR, false)
+        val search = backdropGlassToken(GlassSurfaceRole.SearchField, GlassVariant.CLEAR, false)
+        val card = backdropGlassToken(GlassSurfaceRole.Card, GlassVariant.CLEAR, false)
+        val circular = backdropGlassToken(GlassSurfaceRole.CircularControl, GlassVariant.CLEAR, false)
+        val detail = backdropGlassToken(GlassSurfaceRole.DetailAction, GlassVariant.CLEAR, false)
+
+        assertThat(bottom.blurRadius).isEqualTo(20.dp)
+        assertThat(bottom.refractionHeight).isEqualTo(8.dp)
+        assertThat(bottom.refractionAmount).isEqualTo(36.dp)
+        assertThat(top.blurRadius).isEqualTo(20.dp)
+        assertThat(top.refractionHeight).isEqualTo(8.dp)
+        assertThat(top.refractionAmount).isEqualTo(36.dp)
+        assertThat(search.blurRadius).isEqualTo(14.dp)
+        assertThat(search.refractionHeight).isEqualTo(8.dp)
+        assertThat(search.refractionAmount).isEqualTo(26.dp)
+        assertThat(card.blurRadius).isEqualTo(14.dp)
+        assertThat(card.refractionHeight).isEqualTo(8.dp)
+        assertThat(card.refractionAmount).isEqualTo(26.dp)
+        assertThat(card.depthEffect).isTrue()
+        assertThat(card.chromaticAberration).isTrue()
+        assertThat(card.highlightWidth).isEqualTo(search.highlightWidth)
+        assertThat(card.highlightAlpha).isEqualTo(search.highlightAlpha)
+        assertThat(card.shadowRadius).isEqualTo(search.shadowRadius)
+        assertThat(card.shadowAlpha).isEqualTo(search.shadowAlpha)
+        assertThat(circular.blurRadius).isEqualTo(12.dp)
+        assertThat(circular.refractionHeight).isEqualTo(6.dp)
+        assertThat(circular.refractionAmount).isEqualTo(18.dp)
+        assertThat(detail.blurRadius).isEqualTo(12.dp)
+        assertThat(detail.refractionHeight).isEqualTo(6.dp)
+        assertThat(detail.refractionAmount).isEqualTo(18.dp)
+    }
+
+    @Test
+    fun backdropChromaticFlagsMatchApprovedSceneTable() {
+        assertThat(backdropGlassToken(GlassSurfaceRole.BottomNavigation, GlassVariant.CLEAR, false).chromaticAberration).isTrue()
+        assertThat(backdropGlassToken(GlassSurfaceRole.TopBar, GlassVariant.CLEAR, false).chromaticAberration).isTrue()
+        assertThat(backdropGlassToken(GlassSurfaceRole.SearchField, GlassVariant.CLEAR, false).chromaticAberration).isTrue()
+        assertThat(backdropGlassToken(GlassSurfaceRole.Card, GlassVariant.CLEAR, false).chromaticAberration).isTrue()
+        assertThat(backdropGlassToken(GlassSurfaceRole.CircularControl, GlassVariant.CLEAR, false).chromaticAberration).isFalse()
+        assertThat(backdropGlassToken(GlassSurfaceRole.DetailAction, GlassVariant.CLEAR, false).chromaticAberration).isFalse()
+    }
+
+    @Test
+    fun navigationSelectionUsesAConcentratedWaterDropLensAndStrongerEdge() {
+        val selection = backdropNavigationSelectionToken(
+            variant = GlassVariant.CLEAR,
+            isDark = false
+        )
+        val panel = backdropGlassToken(
+            role = GlassSurfaceRole.BottomNavigation,
+            variant = GlassVariant.CLEAR,
+            isDark = false
+        )
+
+        assertThat(selection.blurRadius).isEqualTo(10.dp)
+        assertThat(selection.refractionHeight).isEqualTo(10.dp)
+        assertThat(selection.refractionAmount).isEqualTo(30.dp)
+        assertThat(selection.depthEffect).isTrue()
+        assertThat(selection.chromaticAberration).isTrue()
+        assertThat(selection.borderAlpha).isGreaterThan(panel.borderAlpha)
+        assertThat(selection.highlightAlpha).isGreaterThan(panel.highlightAlpha)
+    }
+
+    @Test
+    fun focusedVariantDoesNotChangeLensValues() {
+        GlassSurfaceRole.entries.forEach { role ->
+            val clear = backdropGlassToken(role, GlassVariant.CLEAR, false)
+            val focused = backdropGlassToken(role, GlassVariant.FOCUSED, false)
+            assertThat(focused.blurRadius).isEqualTo(clear.blurRadius)
+            assertThat(focused.refractionHeight).isEqualTo(clear.refractionHeight)
+            assertThat(focused.refractionAmount).isEqualTo(clear.refractionAmount)
+        }
     }
 }

@@ -25,14 +25,14 @@ import org.robolectric.annotation.Config
 class VisualEffectModeTest {
 
     @Test
-    fun `missing stored mode defaults to blur`() {
-        assertThat(VisualEffectMode.fromStorageValue(null)).isEqualTo(VisualEffectMode.BLUR)
+    fun `missing stored mode defaults to glass`() {
+        assertThat(VisualEffectMode.fromStorageValue(null)).isEqualTo(VisualEffectMode.GLASS)
     }
 
     @Test
-    fun `unknown stored mode defaults to blur`() {
+    fun `unknown stored mode defaults to glass`() {
         assertThat(VisualEffectMode.fromStorageValue("future_mode"))
-            .isEqualTo(VisualEffectMode.BLUR)
+            .isEqualTo(VisualEffectMode.GLASS)
     }
 
     @Test
@@ -54,11 +54,17 @@ class VisualEffectModeTest {
     }
 
     @Test
+    fun `old focused glass variant collapses to the single glass profile`() {
+        assertThat(GlassVariant.fromStorageValue("focused"))
+            .isEqualTo(GlassVariant.CLEAR)
+    }
+
+    @Test
     fun `glass variant uses stable storage values`() {
         assertThat(GlassVariant.CLEAR.storageValue).isEqualTo("clear")
         assertThat(GlassVariant.FOCUSED.storageValue).isEqualTo("focused")
         assertThat(GlassVariant.fromStorageValue("focused"))
-            .isEqualTo(GlassVariant.FOCUSED)
+            .isEqualTo(GlassVariant.CLEAR)
     }
 }
 
@@ -100,7 +106,7 @@ class ThemeStorageCompatibilityTest {
     }
 
     @Test
-    fun `setVisualEffectMode preserves previously selected glass variant`() = kotlinx.coroutines.test.runTest {
+    fun `setVisualEffectMode normalizes the legacy glass variant`() = kotlinx.coroutines.test.runTest {
         clearThemePrefs()
         val storage = ThemeStorage(context)
         storage.setVisualEffectSelection(VisualEffectMode.GLASS, GlassVariant.FOCUSED)
@@ -109,8 +115,9 @@ class ThemeStorageCompatibilityTest {
         val prefs = context.themeDataStore.data.first()
         assertThat(prefs[stringPreferencesKey("visual_effect_mode")])
             .isEqualTo(VisualEffectMode.BLUR.storageValue)
+        assertThat(storage.glassVariant.value).isEqualTo(GlassVariant.CLEAR)
         assertThat(prefs[stringPreferencesKey("glass_variant")])
-            .isEqualTo(GlassVariant.FOCUSED.storageValue)
+            .isEqualTo(GlassVariant.CLEAR.storageValue)
     }
 
     @Test
@@ -133,12 +140,12 @@ class ThemeStorageCompatibilityTest {
         setting.await()
 
         assertThat(storage.visualEffectMode.value).isEqualTo(VisualEffectMode.BLUR)
-        assertThat(storage.glassVariant.value).isEqualTo(GlassVariant.FOCUSED)
+        assertThat(storage.glassVariant.value).isEqualTo(GlassVariant.CLEAR)
         val prefs = context.themeDataStore.data.first()
         assertThat(prefs[stringPreferencesKey("visual_effect_mode")])
             .isEqualTo(VisualEffectMode.BLUR.storageValue)
         assertThat(prefs[stringPreferencesKey("glass_variant")])
-            .isEqualTo(GlassVariant.FOCUSED.storageValue)
+            .isEqualTo(GlassVariant.CLEAR.storageValue)
     }
 
     @Test

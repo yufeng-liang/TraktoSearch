@@ -88,11 +88,15 @@ import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
+import com.tracktosearch.ui.component.DetailTopBarIcon
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.ToastEffect
@@ -287,6 +291,7 @@ fun DetailScreen(
             uiState.isLoading,
             uiState.isSearching,
             uiState.isTranslating,
+            uiState.isLoadingComments,
             uiState.isLoadingMoreComments,
             uiState.isLoadingVideosImages,
             uiState.isLoadingRecommendations,
@@ -316,25 +321,39 @@ fun DetailScreen(
             .fillMaxSize()
             .padding(padding)
         ) {
-            // source 必须与浮动按钮保持兄弟层级：按钮不能成为 source 的子节点，
-            // 否则 Haze 会排除 source 自身，按钮就会退化为完全透明。
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .hazeSource(state = detailHazeState, zIndex = 0f)
-                    // 海报主色调垂直渐变背景(主色 0.70f 透明 → 背景色),实现沉浸式视觉
-                    .then(
-                        uiState.posterDominantColor?.let { c ->
-                            Modifier.background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        c.copy(alpha = 0.70f),
-                                        MaterialTheme.colorScheme.background
-                                    )
-                                )
-                            )
-                        } ?: Modifier
+            val isGlassMode = LocalVisualEffectMode.current == VisualEffectMode.GLASS
+            val immersiveBackgroundModifier = uiState.posterDominantColor?.let { color ->
+                Modifier.background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            color.copy(alpha = 0.70f),
+                            MaterialTheme.colorScheme.background
+                        )
                     )
+                )
+            } ?: Modifier
+
+            // Glass 只录制纯沉浸背景；滚动内容中的 Glass 控件作为 sibling 采样，
+            // 避免将 drawBackdrop 子树再次纳入同一个 source 造成 RenderThread 递归。
+            if (isGlassMode) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .backdropSource()
+                        .then(immersiveBackgroundModifier)
+                )
+            }
+
+            // Blur 维持原有的完整 Haze source 范围，Glass 则保持在背景 source 之上。
+            Box(
+                modifier = if (isGlassMode) {
+                    Modifier.fillMaxSize()
+                } else {
+                    Modifier
+                        .fillMaxSize()
+                        .hazeSource(state = detailHazeState, zIndex = 0f)
+                        .then(immersiveBackgroundModifier)
+                }
             ) {
             // Tab 栏底色/文字颜色计算(在 LazyColumn 之外定义,让内容区也能用)
             // - 非吸顶(tab 还在海报下方):底色透明,文字按海报主色亮度自适应
@@ -588,7 +607,8 @@ fun DetailScreen(
 
                 // ===== 评论 Tab 内容 =====
                 if (uiState.sectionVisible.comments && selectedTab == 1) {
-                    val commentsToShow = uiState.comments
+                    val ownComment = uiState.userComment?.takeIf { it.isNotBlank() }
+                    val commentsToShow = uiState.comments.filter { it.id != uiState.traktCommentId }
                     // 豆瓣评论基本都是中文，无需翻译，只有存在非豆瓣评论时才显示全部翻译
                     val translatableComments = commentsToShow.filter { it.source != DOUBAN_COMMENT_SOURCE }
                     item(key = "comments_header") {
@@ -639,7 +659,47 @@ fun DetailScreen(
                         }
                     }
 
-                    if (uiState.commentsError && commentsToShow.isEmpty()) {
+                    item(key = "own_comment") {
+                        if (ownComment == null || uiState.isEditingOwnComment) {
+                            OwnCommentComposer(
+                                initialComment = ownComment.orEmpty(),
+                                targets = uiState.ownCommentTargets,
+                                isSaving = uiState.isSavingOwnComment,
+                                isEditing = uiState.isEditingOwnComment,
+                                onSubmit = viewModel::submitOwnComment,
+                                onCancelEdit = viewModel::cancelOwnCommentEdit,
+                                scene = detailGlassScene
+                            )
+                        } else {
+                            OwnCommentCard(
+                                comment = ownComment,
+                                targets = uiState.ownCommentTargets,
+                                retryTargets = uiState.retryOwnCommentTargets,
+                                isSaving = uiState.isSavingOwnComment,
+                                onEdit = viewModel::beginOwnCommentEdit,
+                                onRetry = viewModel::retryOwnCommentSync,
+                                scene = detailGlassScene
+                            )
+                        }
+                    }
+
+                    if (uiState.isLoadingComments) {
+                        item(key = "comments_loading") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 3.dp
+                                )
+                            }
+                        }
+                    }
+
+                    if (!uiState.isLoadingComments && uiState.commentsError && commentsToShow.isEmpty()) {
                         item(key = "comments_error") {
                             Box(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
@@ -653,7 +713,7 @@ fun DetailScreen(
                         }
                     }
 
-                    if (!uiState.commentsError && commentsToShow.isEmpty()) {
+                    if (!uiState.isLoadingComments && !uiState.commentsError && commentsToShow.isEmpty() && ownComment == null) {
                         item(key = "comments_empty") {
                             Box(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
@@ -679,7 +739,8 @@ fun DetailScreen(
                                 else viewModel.translateSingleComment(commentId)
                             },
                             isTranslating = uiState.isTranslating,
-                            isThisTranslating = (uiState.translatingCommentId == comment.id)
+                            isThisTranslating = (uiState.translatingCommentId == comment.id),
+                            scene = detailGlassScene
                         )
                     }
 
@@ -833,11 +894,10 @@ fun DetailScreen(
                 buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
                 scene = detailGlassScene
             ) {
-                Icon(
-                    Icons.AutoMirrored.Rounded.ArrowBack,
+                DetailTopBarIcon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = stringResource(R.string.detail_back),
-                    tint = detailTopBarIconColor(),
-                    modifier = Modifier.size(24.dp)
+                    size = 24.dp
                 )
             }
 
@@ -875,11 +935,9 @@ fun DetailScreen(
                                 color = detailTopBarIconColor()
                             )
                         } else {
-                            Icon(
-                                Icons.Rounded.Refresh,
-                                contentDescription = stringResource(R.string.detail_douban_sync_retry),
-                                tint = detailTopBarIconColor(),
-                                modifier = Modifier.size(20.dp)
+                            DetailTopBarIcon(
+                                imageVector = Icons.Rounded.Refresh,
+                                contentDescription = stringResource(R.string.detail_douban_sync_retry)
                             )
                         }
                     }
@@ -918,11 +976,9 @@ fun DetailScreen(
                     buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
                     scene = detailGlassScene
                 ) {
-                    Icon(
-                        Icons.Rounded.Share,
-                        contentDescription = stringResource(R.string.detail_share),
-                        tint = detailTopBarIconColor(),
-                        modifier = Modifier.size(20.dp)
+                    DetailTopBarIcon(
+                        imageVector = Icons.Rounded.Share,
+                        contentDescription = stringResource(R.string.detail_share)
                     )
                 }
             }
@@ -1030,7 +1086,7 @@ fun DetailScreen(
             if (showRatingDialog || uiState.showRatingDialog) {
                 RatingDialog(
                     initialRating = uiState.userRating,
-                    initialComment = uiState.userComment,
+                    initialComment = uiState.pendingOwnComment ?: uiState.userComment,
                     isSubmitting = uiState.isRating,
                     onDismiss = {
                         showRatingDialog = false
@@ -1041,7 +1097,7 @@ fun DetailScreen(
                         view.performHaptic(HapticType.HEAVY_CLICK)
                         // 不调用 dismissRatingDialog():setRatingWithComment/removeRating 内部会关闭弹窗并处理豆瓣同步
                         // 否则会先 syncDoubanMark(COLLECT) 再 syncDoubanMarkWithRating,导致两次豆瓣同步 toast
-                        if (rating == null || rating == 0) viewModel.removeRating() else viewModel.setRatingWithComment(rating, comment)
+                        viewModel.confirmRatingWithComment(rating, comment)
                     }
                 )
             }

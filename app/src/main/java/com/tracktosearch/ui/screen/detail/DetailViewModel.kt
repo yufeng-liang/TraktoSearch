@@ -93,6 +93,11 @@ enum class CommentSource {
     FALLBACK
 }
 
+enum class OwnCommentTarget {
+    TRAKT,
+    DOUBAN
+}
+
 const val DOUBAN_COMMENT_SOURCE = "Douban"
 
 @Immutable
@@ -128,6 +133,12 @@ data class DetailUiState(
     // 用户评分（null=未评分）
     val userRating: Int? = null,
     val userComment: String? = null,             // 用户已提交的短评（用于回显到评分弹窗）
+    val traktCommentId: Int? = null,              // Trakt 本人短评 ID
+    val isEditingOwnComment: Boolean = false,
+    val isSavingOwnComment: Boolean = false,
+    val pendingOwnComment: String? = null,        // 豆瓣未评分时，等待评分弹窗确认的短评
+    val ownCommentTargets: Set<OwnCommentTarget> = emptySet(),
+    val retryOwnCommentTargets: Set<OwnCommentTarget> = emptySet(),
     val isRating: Boolean = false,               // 是否正在提交评分
     val isRatingLoading: Boolean = false,        // 是否正在加载已有评分
     val error: String? = null,
@@ -146,6 +157,7 @@ data class DetailUiState(
     val tmdbCommentPage: Int = 1,          // 当前 TMDB 评论页码
     val doubanCommentPage: Int = 1,        // 当前豆瓣评论页码
     val hasMoreComments: Boolean = false,   // 是否还有更多评论
+    val isLoadingComments: Boolean = false, // 是否正在加载首屏公共评论
     val isLoadingMoreComments: Boolean = false,  // 是否正在加载更多评论
     val seasons: List<TraktSeason> = emptyList(),
     val episodes: Map<Int, List<TraktEpisode>> = emptyMap(),
@@ -288,6 +300,7 @@ class DetailViewModel @Inject constructor(
     companion object {
         private const val CACHE_MAX_SIZE = 3
         private const val COMMENT_PAGE_SIZE = 10
+        private const val OWN_COMMENT_CACHE_TTL_MS = 6 * 60 * 60 * 1000L
         @Suppress("UNCHECKED_CAST")
         private val detailCache: MutableMap<DetailCacheKey, CachedDetailData> = java.util.Collections.synchronizedMap(
             object : java.util.LinkedHashMap<DetailCacheKey, CachedDetailData>(CACHE_MAX_SIZE, 0.75f, true) {
@@ -412,6 +425,7 @@ class DetailViewModel @Inject constructor(
     private var searchJob: Job? = null
     private var ratingsJob: Job? = null
     private var commentsJob: Job? = null
+    private var ownCommentJob: Job? = null
     private var seasonsJob: Job? = null
     private var delayedLoadJob: Job? = null
     private var doubanIdPrefetchJob: Job? = null
@@ -499,6 +513,7 @@ class DetailViewModel @Inject constructor(
             // 按需补启附属 fetch:缓存可能是在附属请求完成前被写入的(用户中途返回),
             // 此时 ratings/comments/credits/videos/seasons 等字段为空,需要重新拉取避免永久卡在骨架状态
             val visibility = cached.uiState.sectionVisible
+            startOwnCommentLoad()
             if (visibility.myRating && cached.uiState.ratings == null) fetchRatingsAsync(cached.currentTraktRating)
             if (visibility.comments && cached.uiState.comments.isEmpty()) fetchComments()
             if (cached.uiState.seasons.isEmpty() && cached.currentMediaType == MediaType.SHOW) fetchSeasons()
@@ -514,6 +529,7 @@ class DetailViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         userRating = localReview.rating?.toInt(),
                         userComment = localReview.comment,
+                        traktCommentId = localReview.traktCommentId,
                         isRatingLoading = false
                     )
                 } else {
@@ -565,6 +581,9 @@ class DetailViewModel @Inject constructor(
                 DetailRatingSource.UNKNOWN
             }
         )
+
+        // 本人短评独立于公共评论加载：先命中本地缓存，再按 TTL 后台校准。
+        startOwnCommentLoad()
 
         viewModelScope.launch {
             val doubanSupplement = loadDoubanSupplement(currentDoubanId, currentImdbId)
@@ -1011,6 +1030,10 @@ class DetailViewModel @Inject constructor(
 
     private fun fetchComments() {
         commentsJob?.cancel()
+        _uiState.value = _uiState.value.copy(
+            isLoadingComments = true,
+            commentsError = false
+        )
         commentsJob = viewModelScope.launch {
             try {
                 val doubanType = when (currentMediaType) {
@@ -1040,6 +1063,7 @@ class DetailViewModel @Inject constructor(
                         tmdbCommentPage = 0,
                         doubanCommentPage = 1,
                         hasMoreComments = doubanPage.start + doubanComments.size < doubanPage.total,
+                        isLoadingComments = false,
                         commentsError = false
                     )
                     return@launch
@@ -1079,12 +1103,16 @@ class DetailViewModel @Inject constructor(
                     tmdbCommentPage = 1,
                     doubanCommentPage = 0,
                     hasMoreComments = hasMoreTrakt || hasMoreTmdb,
+                    isLoadingComments = false,
                     commentsError = false
                 )
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(commentsError = true)
+                _uiState.value = _uiState.value.copy(
+                    isLoadingComments = false,
+                    commentsError = true
+                )
             }
         }
     }
@@ -1578,6 +1606,226 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /** 本人短评独立缓存链路，不依赖公共评论接口。 */
+    private fun startOwnCommentLoad() {
+        ownCommentJob?.cancel()
+        val detailTraktId = currentTraktId
+        if (detailTraktId <= 0) {
+            viewModelScope.launch {
+                _uiState.value = _uiState.value.copy(ownCommentTargets = resolveOwnCommentTargets())
+            }
+            return
+        }
+        ownCommentJob = viewModelScope.launch {
+            val local = withContext(Dispatchers.IO) {
+                runCatching { userReviewRepository.getReview(detailTraktId.toLong()) }.getOrNull()
+            }
+            if (detailTraktId != currentTraktId) return@launch
+
+            val targets = resolveOwnCommentTargets()
+            if (local != null) {
+                _uiState.value = _uiState.value.copy(
+                    userComment = local.comment ?: _uiState.value.userComment,
+                    traktCommentId = local.traktCommentId ?: _uiState.value.traktCommentId,
+                    ownCommentTargets = targets
+                )
+            } else {
+                _uiState.value = _uiState.value.copy(ownCommentTargets = targets)
+            }
+
+            val isFresh = local?.commentCheckedAt?.let {
+                System.currentTimeMillis() - it < OWN_COMMENT_CACHE_TTL_MS
+            } == true
+            if (OwnCommentTarget.TRAKT !in targets || isFresh) return@launch
+
+            val remote = traktRepository.findMyCommentForItem(detailTraktId, currentMediaType)
+                .getOrNull()
+            if (detailTraktId != currentTraktId) return@launch
+            val checkedAt = System.currentTimeMillis()
+            if (remote != null) {
+                _uiState.value = _uiState.value.copy(
+                    userComment = remote.comment,
+                    traktCommentId = remote.id,
+                    ownCommentTargets = targets
+                )
+                cacheOwnComment(remote.comment, remote.id, checkedAt)
+            } else {
+                // 只记录校准时间；豆瓣侧已有短评时不清空它。
+                cacheOwnComment(local?.comment, local?.traktCommentId, checkedAt)
+            }
+        }
+    }
+
+    private suspend fun resolveOwnCommentTargets(): Set<OwnCommentTarget> {
+        val targets = linkedSetOf<OwnCommentTarget>()
+        if (currentSessionMode != SessionMode.DOUBAN &&
+            sessionModeManager.traktConnected.value && currentTraktId > 0
+        ) {
+            targets += OwnCommentTarget.TRAKT
+        }
+        if (doubanAuthStorage.getCredentials() != null) {
+            targets += OwnCommentTarget.DOUBAN
+        }
+        return targets
+    }
+
+    private suspend fun cacheOwnComment(comment: String?, traktCommentId: Int?, checkedAt: Long) {
+        if (currentTraktId <= 0) return
+        val existing = userReviewRepository.getReview(currentTraktId.toLong())
+        val state = _uiState.value
+        val base = existing ?: UserReviewEntity(
+            traktId = currentTraktId.toLong(),
+            tmdbId = currentTmdbId.takeIf { it > 0 },
+            imdbId = currentImdbId.takeIf { it.isNotBlank() },
+            mediaType = currentMediaTypeStr(),
+            title = currentTitle.takeIf { it.isNotBlank() },
+            year = state.year,
+            rating = state.userRating?.toFloat(),
+            comment = null,
+            liked = null,
+            createdAt = null,
+            updatedAt = null
+        )
+        userReviewRepository.saveReview(
+            base.copy(
+                comment = comment?.takeIf { it.isNotBlank() },
+                traktCommentId = traktCommentId,
+                commentCheckedAt = checkedAt,
+                rating = state.userRating?.toFloat() ?: base.rating
+            )
+        )
+    }
+
+    fun beginOwnCommentEdit() {
+        _uiState.value = _uiState.value.copy(isEditingOwnComment = true)
+    }
+
+    fun cancelOwnCommentEdit() {
+        _uiState.value = _uiState.value.copy(isEditingOwnComment = false)
+    }
+
+    fun submitOwnComment(comment: String) {
+        val normalizedComment = comment.trim()
+        val current = _uiState.value
+        if (normalizedComment.isBlank() || current.isSavingOwnComment) return
+        ownCommentJob?.cancel()
+        viewModelScope.launch {
+            val targets = resolveOwnCommentTargets()
+            if (targets.isEmpty()) {
+                _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+                return@launch
+            }
+            if (OwnCommentTarget.DOUBAN in targets && current.userRating == null) {
+                _uiState.value = _uiState.value.copy(
+                    pendingOwnComment = normalizedComment,
+                    ownCommentTargets = targets,
+                    showRatingDialog = true
+                )
+                return@launch
+            }
+            saveOwnCommentToTargets(normalizedComment, targets)
+        }
+    }
+
+    fun retryOwnCommentSync() {
+        val current = _uiState.value
+        val comment = current.userComment ?: return
+        if (current.isSavingOwnComment || current.retryOwnCommentTargets.isEmpty()) return
+        viewModelScope.launch {
+            val availableTargets = resolveOwnCommentTargets()
+            val targets = current.retryOwnCommentTargets.intersect(availableTargets)
+            if (targets.isEmpty()) {
+                _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+                return@launch
+            }
+            saveOwnCommentToTargets(comment, targets)
+        }
+    }
+
+    fun confirmRatingWithComment(rating: Int?, comment: String) {
+        if (rating == null || rating == 0) {
+            if (_uiState.value.pendingOwnComment != null) {
+                viewModelScope.launch { _toastEvent.emit(R.string.detail_own_comment_rating_required) }
+                return
+            }
+            removeRating()
+            return
+        }
+        setRatingWithComment(rating, comment)
+    }
+
+    private suspend fun saveOwnCommentToTargets(comment: String, targets: Set<OwnCommentTarget>) {
+        val current = _uiState.value
+        val displayTargets = resolveOwnCommentTargets()
+        _uiState.value = current.copy(
+            isSavingOwnComment = true,
+            ownCommentTargets = displayTargets,
+            retryOwnCommentTargets = emptySet()
+        )
+        val (traktResult, doubanSuccess) = coroutineScope {
+            val traktDeferred = if (OwnCommentTarget.TRAKT in targets) {
+                async { upsertTraktComment(comment, current.traktCommentId) }
+            } else null
+            val doubanDeferred = if (OwnCommentTarget.DOUBAN in targets) {
+                async { updateDoubanOwnComment(comment) }
+            } else null
+            Pair(traktDeferred?.await(), doubanDeferred?.await())
+        }
+
+        val failedTargets = buildSet {
+            if (OwnCommentTarget.TRAKT in targets && traktResult?.isSuccess != true) add(OwnCommentTarget.TRAKT)
+            if (OwnCommentTarget.DOUBAN in targets && doubanSuccess != true) add(OwnCommentTarget.DOUBAN)
+        }
+        val traktCommentId = traktResult?.getOrNull()?.id ?: current.traktCommentId
+        _uiState.value = _uiState.value.copy(
+            userComment = comment,
+            traktCommentId = traktCommentId,
+            pendingOwnComment = null,
+            isEditingOwnComment = false,
+            isSavingOwnComment = false,
+            ownCommentTargets = displayTargets,
+            retryOwnCommentTargets = failedTargets,
+            isMarkedWatched = if (OwnCommentTarget.DOUBAN in targets) true else _uiState.value.isMarkedWatched,
+            watchedChanged = if (OwnCommentTarget.DOUBAN in targets) true else _uiState.value.watchedChanged
+        )
+        cacheOwnComment(comment, traktCommentId, System.currentTimeMillis())
+        if (OwnCommentTarget.DOUBAN in targets) {
+            _uiState.value.doubanIdForSync?.let { doubanId ->
+                upsertDoubanSyncedItem(
+                    doubanId = doubanId,
+                    status = "collect",
+                    pendingSync = OwnCommentTarget.DOUBAN in failedTargets
+                )
+            }
+        }
+        saveToCache()
+    }
+
+    private suspend fun upsertTraktComment(comment: String, knownCommentId: Int?): Result<TraktComment> {
+        val commentId = knownCommentId
+            ?: traktRepository.findMyCommentForItem(currentTraktId, currentMediaType).getOrNull()?.id
+        return if (commentId != null) {
+            traktRepository.editComment(commentId, comment)
+        } else {
+            traktRepository.postComment(currentTraktId, currentMediaType, comment)
+        }
+    }
+
+    private suspend fun updateDoubanOwnComment(comment: String): Boolean {
+        val rating = _uiState.value.userRating ?: return false
+        val doubanId = _uiState.value.doubanIdForSync ?: return false
+        val credentials = doubanAuthStorage.getCredentials() ?: return false
+        val ck = doubanRepository.fetchCsrfToken(doubanId, credentials.cookie) ?: return false
+        val doubanRating = Math.round(rating / 2.0).toInt()
+        return doubanRepository.markWatchedWithRating(
+            doubanId,
+            credentials.cookie,
+            ck,
+            doubanRating,
+            comment
+        ).success
+    }
+
     private fun fetchUserRating() {
         // 未登录跳过用户评分查询
         if (!sessionModeManager.traktConnected.value) return
@@ -1591,6 +1839,7 @@ class DetailViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     userRating = local.rating?.toInt(),
                     userComment = local.comment,
+                    traktCommentId = local.traktCommentId,
                     isRatingLoading = false
                 )
                 return@launch
@@ -1678,30 +1927,28 @@ class DetailViewModel @Inject constructor(
         if (!canWriteToTrakt()) return
         _uiState.value = current.copy(isRating = true, showRatingDialog = false, pendingDoubanAction = null)
         viewModelScope.launch {
-            // 1. Trakt 评分
             val traktRatingResult = traktRepository.addRating(currentTraktId, rating, currentMediaType)
-            // 2. Trakt 短评（非空时才发）
-            var traktCommentResult: Result<*>? = null
-            if (comment.isNotBlank()) {
-                traktCommentResult = traktRepository.postComment(currentTraktId, currentMediaType, comment)
-            }
-            // 3. 豆瓣评分+短评（Trakt 评分成功后才同步豆瓣）
-            val pending = current.pendingDoubanAction
-            if (traktRatingResult.isSuccess) {
-                _uiState.value = _uiState.value.copy(
-                    userRating = rating,
-                    userComment = comment.ifBlank { null },
-                    isRating = false,
-                    pendingDoubanAction = null
-                )
-                saveToCache()
-                saveUserReviewToLocal(rating, comment.ifBlank { null })
-                // 豆瓣同步:评分映射 Trakt 1-10 → 豆瓣 1-5
-                val doubanRating = Math.round(rating / 2.0).toInt()
-                syncDoubanMarkWithRating(doubanRating, comment, pending == DoubanSyncAction.COLLECT)
-            } else {
+            if (traktRatingResult.isFailure) {
                 _uiState.value = _uiState.value.copy(isRating = false)
+                return@launch
             }
+
+            _uiState.value = _uiState.value.copy(
+                userRating = rating,
+                isRating = false,
+                pendingDoubanAction = null,
+                pendingOwnComment = null
+            )
+            if (comment.isBlank()) {
+                saveToCache()
+                saveUserReviewToLocal(rating, _uiState.value.userComment)
+                val doubanRating = Math.round(rating / 2.0).toInt()
+                syncDoubanMarkWithRating(doubanRating, "", current.pendingDoubanAction == DoubanSyncAction.COLLECT)
+                return@launch
+            }
+
+            // 评分已成功后，短评按当前登录平台独立同步并分别记录失败端。
+            saveOwnCommentToTargets(comment, resolveOwnCommentTargets())
         }
     }
 
@@ -2309,7 +2556,11 @@ class DetailViewModel @Inject constructor(
     /** 关闭评分弹窗：用户未打分直接关闭时，若有待处理的豆瓣同步则仅同步看过（无评分无短评） */
     fun dismissRatingDialog() {
         val pending = _uiState.value.pendingDoubanAction
-        _uiState.value = _uiState.value.copy(showRatingDialog = false, pendingDoubanAction = null)
+        _uiState.value = _uiState.value.copy(
+            showRatingDialog = false,
+            pendingDoubanAction = null,
+            pendingOwnComment = null
+        )
         if (pending == DoubanSyncAction.COLLECT) {
             viewModelScope.launch { syncDoubanMark(DoubanSyncAction.COLLECT) }
         }
@@ -2673,7 +2924,11 @@ class DetailViewModel @Inject constructor(
             return
         }
         val doubanRating = Math.round(rating / 2.0).toInt()
-        _uiState.value = current.copy(isRating = true, showRatingDialog = false)
+        _uiState.value = current.copy(
+            isRating = true,
+            showRatingDialog = false,
+            pendingOwnComment = null
+        )
         viewModelScope.launch {
             // 豆瓣 markWatchedWithRating 需先 fetchCsrfToken 拿 ck
             val ck = doubanRepository.fetchCsrfToken(doubanId, cred.cookie)
@@ -2956,6 +3211,7 @@ class DetailViewModel @Inject constructor(
         if (currentTraktId <= 0) return
         viewModelScope.launch {
             runCatching {
+                val existing = userReviewRepository.getReview(currentTraktId.toLong())
                 userReviewRepository.saveReview(
                     UserReviewEntity(
                         traktId = currentTraktId.toLong(),
@@ -2966,6 +3222,8 @@ class DetailViewModel @Inject constructor(
                         year = _uiState.value.year,
                         rating = rating?.toFloat(),
                         comment = comment?.takeIf { it.isNotBlank() },
+                        traktCommentId = existing?.traktCommentId,
+                        commentCheckedAt = existing?.commentCheckedAt,
                         liked = null,
                         createdAt = null,
                         updatedAt = null

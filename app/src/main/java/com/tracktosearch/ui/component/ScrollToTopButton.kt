@@ -9,12 +9,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -175,12 +178,12 @@ private fun ScrollToTopButtonContent(
                 .appVisualEffect(
                     input = HazeInput.Sources(hazeState),
                     hazeStyle = resolvedHazeStyle,
-                    glassStyle = AppGlassStyles.circularControl(
-                        tint = MaterialTheme.colorScheme.surface.copy(
-                            alpha = if (isAppDarkTheme()) 0.18f else 0.72f
-                        ),
-                        scene = scene
+                    glassRole = GlassSurfaceRole.CircularControl,
+                    glassShape = RoundedCornerShape(50),
+                    glassTint = MaterialTheme.colorScheme.surface.copy(
+                        alpha = if (isAppDarkTheme()) 0.18f else 0.72f
                     ),
+                    scene = scene,
                     blurSampling = HazeSampling.Adaptive,
                     interactionSource = interactionSource
                 )
@@ -196,24 +199,42 @@ private fun ScrollToTopButtonContent(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Rounded.KeyboardArrowUp,
-                contentDescription = stringResource(R.string.scroll_to_top),
-                tint = arrowTint,
-                modifier = Modifier.size(32.dp)
-            )
+            ScrollToTopArrow(tint = arrowTint)
         }
     } else {
         FilledTonalIconButton(
             onClick = onClickWithHaptic,
             shape = CircleShape
         ) {
-            Icon(
-                imageVector = Icons.Rounded.KeyboardArrowUp,
-                contentDescription = stringResource(R.string.scroll_to_top),
-                tint = arrowTint,
-                modifier = Modifier.size(32.dp)
-            )
+            ScrollToTopArrow(tint = arrowTint)
         }
+    }
+}
+
+@Composable
+private fun ScrollToTopArrow(tint: Color) {
+    val contrastHalo = if (tint.luminance() < 0.5f) {
+        Color.White.copy(alpha = 0.68f)
+    } else {
+        Color.Black.copy(alpha = 0.62f)
+    }
+    Box(
+        modifier = Modifier.size(38.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Filled.ArrowDropUp,
+            contentDescription = null,
+            tint = contrastHalo,
+            modifier = Modifier
+                .size(36.dp)
+                .offset(y = 1.dp)
+        )
+        Icon(
+            imageVector = Icons.Filled.ArrowDropUp,
+            contentDescription = stringResource(R.string.scroll_to_top),
+            tint = tint,
+            modifier = Modifier.size(32.dp)
+        )
     }
 }

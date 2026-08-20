@@ -3,31 +3,34 @@
 package com.tracktosearch.ui.component
 
 import androidx.compose.foundation.interaction.InteractionSource
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.VisualEffectMode
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeSampling
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.hazeBlur
-import dev.chrisbanes.haze.glass.GlassReducedMotionPolicy
-import dev.chrisbanes.haze.glass.GlassStyle
-import dev.chrisbanes.haze.glass.GlassTransformPivot
-import dev.chrisbanes.haze.glass.GlassTransformTarget
-import dev.chrisbanes.haze.glass.hazeGlass
-import com.tracktosearch.ui.theme.LocalVisualEffectMode
-import com.tracktosearch.ui.theme.VisualEffectMode
 
-/** 根据全局视觉模式选择 Haze 模糊或官方 Glass 光学效果。 */
+/** 根据全局视觉模式选择成熟 Haze 模糊或 Backdrop Glass。 */
 @Composable
 fun Modifier.appVisualEffect(
     input: HazeInput,
     hazeStyle: HazeBlurStyle,
-    glassStyle: GlassStyle? = null,
+    glassRole: GlassSurfaceRole = GlassSurfaceRole.TopBar,
+    glassShape: RoundedCornerShape = RoundedCornerShape(0.dp),
+    glassTint: Color = Color.Transparent,
+    backdropOverride: LayerBackdrop? = null,
+    scene: GlassScene = GlassScene(),
+    glassEffectEnabled: Boolean = true,
     blurSampling: HazeSampling = HazeSampling.Adaptive,
-    interactionSource: InteractionSource? = null,
-    interactionTransformTarget: GlassTransformTarget = GlassTransformTarget.MaterialAndContent,
-    interactionTransformPivot: GlassTransformPivot = GlassTransformPivot.Pointer
+    interactionSource: InteractionSource? = null
 ): Modifier {
     return when (LocalVisualEffectMode.current) {
         VisualEffectMode.BLUR -> hazeBlur(
@@ -36,16 +39,20 @@ fun Modifier.appVisualEffect(
             sampling = blurSampling
         )
 
-        VisualEffectMode.GLASS -> hazeGlass(
-            input = input,
-            style = glassStyle ?: AppGlassStyles.topBar(),
-            // Glass 统一使用 alpha04 的默认采样；Blur 才接受调用点的降采样策略。
-            sampling = HazeSampling.Default,
-            interactionSource = interactionSource,
-            interactionTransformTarget = interactionTransformTarget,
-            interactionTransformPivot = interactionTransformPivot,
-            interactionReducedMotionPolicy = GlassReducedMotionPolicy.System
-        )
+        VisualEffectMode.GLASS -> if (glassEffectEnabled) {
+            then(
+                backdropEffectModifier(
+                    role = glassRole,
+                    shape = glassShape,
+                    tint = glassTint,
+                    backdropOverride = backdropOverride,
+                    scene = scene,
+                    interactionSource = interactionSource
+                )
+            )
+        } else {
+            this
+        }
     }
 }
 
@@ -53,17 +60,43 @@ fun Modifier.appVisualEffect(
 fun Modifier.appVisualEffect(
     state: HazeState,
     hazeStyle: HazeBlurStyle,
-    glassStyle: GlassStyle? = null,
+    glassRole: GlassSurfaceRole = GlassSurfaceRole.TopBar,
+    glassShape: RoundedCornerShape = RoundedCornerShape(0.dp),
+    glassTint: Color = Color.Transparent,
+    backdropOverride: LayerBackdrop? = null,
+    scene: GlassScene = GlassScene(),
+    glassEffectEnabled: Boolean = true,
     blurSampling: HazeSampling = HazeSampling.Adaptive,
-    interactionSource: InteractionSource? = null,
-    interactionTransformTarget: GlassTransformTarget = GlassTransformTarget.MaterialAndContent,
-    interactionTransformPivot: GlassTransformPivot = GlassTransformPivot.Pointer
+    interactionSource: InteractionSource? = null
 ): Modifier = appVisualEffect(
     input = HazeInput.Sources(state),
     hazeStyle = hazeStyle,
-    glassStyle = glassStyle,
+    glassRole = glassRole,
+    glassShape = glassShape,
+    glassTint = glassTint,
+    backdropOverride = backdropOverride,
+    scene = scene,
+    glassEffectEnabled = glassEffectEnabled,
     blurSampling = blurSampling,
-    interactionSource = interactionSource,
-    interactionTransformTarget = interactionTransformTarget,
-    interactionTransformPivot = interactionTransformPivot
+    interactionSource = interactionSource
 )
+
+@Composable
+private fun backdropEffectModifier(
+    role: GlassSurfaceRole,
+    shape: RoundedCornerShape,
+    tint: Color,
+    backdropOverride: LayerBackdrop?,
+    scene: GlassScene,
+    interactionSource: InteractionSource?
+): Modifier {
+    val backdrop = backdropOverride ?: LocalBackdrop.current ?: return Modifier
+    return rememberBackdropGlassEffectModifier(
+        backdrop = backdrop,
+        role = role,
+        shape = shape,
+        tint = tint.takeIf { it.alpha > 0f } ?: MaterialTheme.colorScheme.surface,
+        scene = scene,
+        interactionSource = interactionSource
+    )
+}

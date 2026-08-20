@@ -250,6 +250,7 @@
     <string name="settings_visual_effect_blur_desc">부드러운 반투명 스타일로 경계를 자연스럽게 표현</string>
     <string name="settings_visual_effect_glass_clear">Glass - 클리어</string>
     <string name="settings_visual_effect_glass_clear_desc">경계감이 낮고 가벼운 광학 유리 스타일</string>
+    <string name="settings_visual_effect_glass_desc">장면에 맞춰 깊이, 굴절, 하이라이트를 조정하는 광학 유리</string>
     <string name="settings_visual_effect_glass_focused">Glass - 포커스</string>
     <string name="settings_visual_effect_glass_focused_desc">탐색과 조작에 어울리는 더 선명한 유리 레이어</string>
 
@@ -512,6 +513,20 @@
     <string name="detail_actors">출연진</string>
     <string name="detail_comments">댓글</string>
     <string name="detail_no_comments">아직 댓글이 없습니다</string>
+    <string name="detail_own_comment_title">내 댓글</string>
+    <string name="detail_own_comment_hint">짧은 리뷰를 작성하세요</string>
+    <string name="detail_own_comment_sync_trakt">이 댓글은 Trakt에 동기화됩니다</string>
+    <string name="detail_own_comment_sync_douban">이 댓글은 Douban에 동기화됩니다</string>
+    <string name="detail_own_comment_sync_trakt_douban">이 댓글은 Trakt와 Douban에 동기화됩니다</string>
+    <string name="detail_own_comment_sync_unavailable">로그인하면 댓글을 게시하고 동기화할 수 있습니다</string>
+    <string name="detail_own_comment_edit">댓글 수정</string>
+    <string name="detail_own_comment_publish">게시</string>
+    <string name="detail_own_comment_cancel">취소</string>
+    <string name="detail_own_comment_retry">%1$s 재동기화</string>
+    <string name="detail_own_comment_target_trakt">Trakt</string>
+    <string name="detail_own_comment_target_douban">Douban</string>
+    <string name="detail_own_comment_targets_trakt_douban">Trakt 및 Douban</string>
+    <string name="detail_own_comment_rating_required">Douban에 동기화하기 전에 평점을 선택하세요</string>
     <string name="detail_seasons">시즌</string>
     <string name="detail_seasons_count">(총 %1$d시즌)</string>
     <string name="detail_seasons_show_all">전체 %1$d시즌 표시</string>
@@ -1457,7 +1472,7 @@
     <string name="help_tips_b8">인물 상세 페이지에서 좌우 스와이프로 여러 사진 보기, 사진 탭하여 전체 화면 보기 및 앨범에 저장</string>
     <string name="help_tips_b9">온라인 검색은 중국어 인물명 검색 지원(TMDB 기반), 인물 검색 시 자동으로 관련 작품 표시</string>
     <string name="help_tips_b10">발견 페이지 제목 표시줄 오른쪽을 탭하여 섹션 빠르게 사용자 정의</string>
-    <string name="help_tips_b11">블러는 부드러운 반투명 스타일을 사용하고, Glass는 클리어와 포커스 두 가지 독립적인 광학 스타일을 제공합니다</string>
+    <string name="help_tips_b11">블러는 부드러운 반투명 스타일을 사용하고, Glass는 장면에 맞춰 깊이, 굴절, 하이라이트를 조정합니다</string>
     <string name="help_tips_b12">설정에서 「크래시 로그 자동 업로드」를 켜면 크래시 로그가 다음 실행 시 자동으로 업로드됩니다. 업로드 기록은 피드백 페이지에서 확인할 수 있습니다</string>
 
     <!-- 이스터에그 메시지 (9애니메이션 × 3메시지) -->

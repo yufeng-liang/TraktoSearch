@@ -1,9 +1,5 @@
-@file:OptIn(dev.chrisbanes.haze.ExperimentalHazeApi::class)
-
 package com.tracktosearch.ui.component
 
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -13,9 +9,6 @@ import androidx.compose.ui.unit.dp
 import com.tracktosearch.ui.theme.GlassVariant
 import com.tracktosearch.ui.theme.LocalGlassVariant
 import com.tracktosearch.ui.theme.VisualEffectMode
-import dev.chrisbanes.haze.glass.GlassOptics
-import dev.chrisbanes.haze.glass.GlassStyle
-import dev.chrisbanes.haze.glass.SurfaceProfile
 
 /** Glass 表面的语义角色，页面不应自行组合光学参数。 */
 enum class GlassSurfaceRole {
@@ -23,10 +16,10 @@ enum class GlassSurfaceRole {
     CircularControl,
     BottomNavigation,
     SearchField,
+    Card,
     DetailAction,
     LoginSurface
 }
-
 /** 当前表面所处的内容环境。数值会被限制在 0..1，避免页面状态把光学参数推到非法范围。 */
 data class GlassScene(
     val contentLoad: Float = 0f,
@@ -70,7 +63,15 @@ internal fun glassSceneForContent(
     )
 }
 
-/** Glass 光学 token。所有正式角色都禁用色散，避免页面间出现不可控的色差。 */
+/**
+ * 组件 fallback 使用的光学 token。正式 Glass 渲染由 BackdropGlassToken 负责，
+ * 这里保留纯数据计算，避免没有 Backdrop host 时退化成完全不透明的普通卡片。
+ */
+enum class GlassSurfaceProfile {
+    Circle,
+    Lip,
+    Squircle
+}
 data class GlassToken(
     val tintAlpha: Float,
     val borderAlpha: Float,
@@ -78,7 +79,7 @@ data class GlassToken(
     val ambientResponse: Float,
     val environmentTintStrength: Float,
     val edgeSoftness: Dp,
-    val surfaceProfile: SurfaceProfile,
+    val surfaceProfile: GlassSurfaceProfile,
     val chromaticAberrationStrength: Float = 0f,
     val hoverLighting: Float,
     val pressLighting: Float,
@@ -117,7 +118,8 @@ fun glassToken(
 
         GlassSurfaceRole.TopBar -> if (focused) 0.56f else 0.34f
         GlassSurfaceRole.BottomNavigation -> if (focused) 0.50f else 0.34f
-        GlassSurfaceRole.SearchField -> if (focused) 0.52f else 0.32f
+        GlassSurfaceRole.SearchField,
+        GlassSurfaceRole.Card -> if (focused) 0.52f else 0.32f
         GlassSurfaceRole.LoginSurface -> if (focused) 0.58f else 0.40f
     }
     val specularProtection = when (role) {
@@ -152,6 +154,12 @@ fun glassToken(
             if (focused) 0.23f else 0.14f
         }
 
+        GlassSurfaceRole.Card -> if (isDark) {
+            if (focused) 0.28f else 0.18f
+        } else {
+            if (focused) 0.23f else 0.14f
+        }
+
         GlassSurfaceRole.LoginSurface -> if (isDark) {
             if (focused) 0.43f else 0.34f
         } else {
@@ -175,14 +183,15 @@ fun glassToken(
             GlassSurfaceRole.CircularControl,
             GlassSurfaceRole.DetailAction -> 3.dp
             GlassSurfaceRole.BottomNavigation -> 8.dp
-            GlassSurfaceRole.SearchField -> 4.dp
+            GlassSurfaceRole.SearchField,
+            GlassSurfaceRole.Card -> 4.dp
             GlassSurfaceRole.LoginSurface -> 8.dp
         },
         surfaceProfile = when (role) {
             GlassSurfaceRole.CircularControl,
-            GlassSurfaceRole.DetailAction -> SurfaceProfile.Circle
-            GlassSurfaceRole.BottomNavigation -> SurfaceProfile.Lip
-            else -> SurfaceProfile.Squircle
+            GlassSurfaceRole.DetailAction -> GlassSurfaceProfile.Circle
+            GlassSurfaceRole.BottomNavigation -> GlassSurfaceProfile.Lip
+            else -> GlassSurfaceProfile.Squircle
         },
         chromaticAberrationStrength = 0f,
         hoverLighting = if (focused) 0.48f else 0.28f,
@@ -259,145 +268,4 @@ internal fun resolveCachedPosterAmbientColor(
     val green = usableColors.sumOf { (it.green * it.alpha).toDouble() }.toFloat() / totalWeight
     val blue = usableColors.sumOf { (it.blue * it.alpha).toDouble() }.toFloat() / totalWeight
     return Color(red = red, green = green, blue = blue, alpha = 1f)
-}
-
-/** TrackToSearch 的集中 Glass 样式入口。 */
-object AppGlassStyles {
-    @Composable
-    fun style(
-        role: GlassSurfaceRole,
-        shape: RoundedCornerShape,
-        tint: Color = MaterialTheme.colorScheme.surface,
-        interactive: Boolean = false,
-        scene: GlassScene = GlassScene()
-    ): GlassStyle {
-        val variant = LocalGlassVariant.current
-        val isDark = isAppDarkTheme()
-        val token = glassToken(role, variant, isDark, scene)
-        val resolvedTint = tint.takeIf { it.alpha > 0f } ?: MaterialTheme.colorScheme.surface
-        val ambientColor = resolveGlassAmbientColor(
-            sceneAmbient = scene.ambientColor,
-            themeBackground = MaterialTheme.colorScheme.background
-        )
-        val callingAlpha = if (tint.alpha > 0f) tint.alpha else 1f
-
-        return GlassStyle {
-            tint(
-                resolveGlassEnvironmentTint(
-                    tint = resolvedTint,
-                    ambientColor = ambientColor,
-                    strength = token.environmentTintStrength
-                ).copy(alpha = resolveGlassTintAlpha(callingAlpha, token.tintAlpha))
-            )
-            optics(GlassOptics.Adaptive)
-            specularIntensity(token.specularIntensity)
-            ambientResponse(token.ambientResponse)
-            edgeSoftness(token.edgeSoftness)
-            shape(shape)
-            surfaceProfile(token.surfaceProfile)
-            chromaticAberrationStrength(token.chromaticAberrationStrength)
-            if (interactive) {
-                hovered {
-                    lightingIntensity(token.hoverLighting)
-                }
-                focused {
-                    lightingIntensity(token.hoverLighting)
-                }
-                pressed {
-                    lightingIntensity(token.pressLighting)
-                    refractionMultiplier(token.pressRefractionMultiplier)
-                    whitePointDelta(token.pressWhitePointDelta)
-                    scale(token.pressScale.coerceIn(Float.MIN_VALUE, 1f))
-                }
-            }
-        }
-    }
-
-    @Composable
-    fun topBar(
-        tint: Color = MaterialTheme.colorScheme.surface,
-        scene: GlassScene = GlassScene()
-    ): GlassStyle {
-        return style(
-            role = GlassSurfaceRole.TopBar,
-            shape = RoundedCornerShape(0.dp),
-            tint = tint,
-            scene = scene
-        )
-    }
-
-    @Composable
-    fun searchField(
-        tint: Color = MaterialTheme.colorScheme.surface,
-        shape: RoundedCornerShape = RoundedCornerShape(16.dp),
-        interactive: Boolean = true,
-        scene: GlassScene = GlassScene()
-    ): GlassStyle {
-        return style(
-            role = GlassSurfaceRole.SearchField,
-            shape = shape,
-            tint = tint,
-            interactive = interactive,
-            scene = scene
-        )
-    }
-
-    @Composable
-    fun circularControl(
-        tint: Color = MaterialTheme.colorScheme.surface,
-        interactive: Boolean = true,
-        scene: GlassScene = GlassScene()
-    ): GlassStyle {
-        return style(
-            role = GlassSurfaceRole.CircularControl,
-            shape = RoundedCornerShape(50),
-            tint = tint,
-            interactive = interactive,
-            scene = scene
-        )
-    }
-
-    @Composable
-    fun bottomNavigation(
-        tint: Color,
-        shape: RoundedCornerShape,
-        scene: GlassScene = GlassScene()
-    ): GlassStyle {
-        return style(
-            role = GlassSurfaceRole.BottomNavigation,
-            shape = shape,
-            tint = tint,
-            scene = scene
-        )
-    }
-
-    @Composable
-    fun detailAction(
-        tint: Color = MaterialTheme.colorScheme.surface,
-        shape: RoundedCornerShape = RoundedCornerShape(50),
-        interactive: Boolean = true,
-        scene: GlassScene = GlassScene()
-    ): GlassStyle {
-        return style(
-            role = GlassSurfaceRole.DetailAction,
-            shape = shape,
-            tint = tint,
-            interactive = interactive,
-            scene = scene
-        )
-    }
-
-    @Composable
-    fun loginSurface(
-        tint: Color = MaterialTheme.colorScheme.surface,
-        shape: RoundedCornerShape = RoundedCornerShape(24.dp),
-        scene: GlassScene = GlassScene()
-    ): GlassStyle {
-        return style(
-            role = GlassSurfaceRole.LoginSurface,
-            shape = shape,
-            tint = tint,
-            scene = scene
-        )
-    }
 }

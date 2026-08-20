@@ -88,6 +88,7 @@ import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.theme.appSwitchColors
@@ -195,7 +196,8 @@ fun DiscoverFilterScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .hazeSource(state = hazeState),
+                .hazeSource(state = hazeState)
+                .backdropSource(),
             contentPadding = PaddingValues(
                 start = 12.dp,
                 end = 12.dp,

@@ -81,6 +81,21 @@ interface TraktApiService {
     @POST("comments")
     suspend fun postComment(@Body body: TraktCommentRequest): Response<TraktComment>
 
+    /** PUT /comments/{id} 更新本人评论。 */
+    @PUT("comments/{id}")
+    suspend fun editComment(
+        @Path("id") id: Int,
+        @Body body: TraktCommentEditRequest
+    ): Response<TraktComment>
+
+    /** 获取当前用户在指定媒体类型下发表的评论，用于恢复旧缓存的评论 ID。 */
+    @GET("users/me/comments/all/{type}")
+    suspend fun getMyComments(
+        @Path("type") type: String,
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 100
+    ): Response<List<TraktUserComment>>
+
     @GET("shows/{id}/seasons")
     suspend fun getShowSeasons(
         @Path("id") id: String,

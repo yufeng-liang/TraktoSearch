@@ -62,6 +62,7 @@ import com.tracktosearch.data.repository.SyncMode
 import com.tracktosearch.data.repository.WatchlistMediaType
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.BackdropProvider
 import com.tracktosearch.ui.component.UpdateDialog
 import com.tracktosearch.ui.screen.crashlog.CrashLogDetailScreen
 import com.tracktosearch.ui.screen.detail.DetailScreen
@@ -520,11 +521,12 @@ fun AppNavigation(
             LocalSharedTransitionScope provides this@SharedTransitionLayout,
             com.tracktosearch.ui.component.LocalSharedTransitionEnabled provides sharedTransitionEnabled
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
-            ) {
+            BackdropProvider(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
             NavHost(
                 navController = navController,
                 startDestination = currentStartDest,
@@ -1297,7 +1299,6 @@ fun AppNavigation(
                     )
                 }
             }
-
             // ---- 剪贴板自动导入：冷启动/回前台检测到分享配置时直接弹导入弹层 ----
             // 仅已授权/离线（主界面可用）时检测；按文本指纹去重（会话内 + 跨启动持久化忽略）；
             // 更新弹窗优先展示
@@ -1399,6 +1400,7 @@ fun AppNavigation(
                 )
             }
             } // Box
+        } // BackdropProvider
         }
     }
 }

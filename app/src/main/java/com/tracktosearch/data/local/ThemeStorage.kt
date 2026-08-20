@@ -52,7 +52,7 @@ class ThemeStorage private constructor(
     private val _accentColor = MutableStateFlow<MonetAccent?>(MonetAccent.VINTAGE_TICKET)
     val accentColor: StateFlow<MonetAccent?> = _accentColor.asStateFlow()
 
-    private val _visualEffectMode = MutableStateFlow(VisualEffectMode.BLUR)
+    private val _visualEffectMode = MutableStateFlow(VisualEffectMode.GLASS)
     val visualEffectMode: StateFlow<VisualEffectMode> = _visualEffectMode.asStateFlow()
 
     private val _glassVariant = MutableStateFlow(GlassVariant.CLEAR)
@@ -103,12 +103,12 @@ class ThemeStorage private constructor(
 
     suspend fun setVisualEffectMode(mode: VisualEffectMode) {
         initializationComplete.await()
-        val currentGlassVariant = _glassVariant.value
         dataStore.edit { prefs ->
             prefs[KEY_VISUAL_EFFECT_MODE] = mode.storageValue
-            prefs[KEY_GLASS_VARIANT] = currentGlassVariant.storageValue
+            prefs[KEY_GLASS_VARIANT] = GlassVariant.CLEAR.storageValue
         }
         _visualEffectMode.value = mode
+        _glassVariant.value = GlassVariant.CLEAR
     }
 
     suspend fun setVisualEffectSelection(
@@ -118,10 +118,10 @@ class ThemeStorage private constructor(
         initializationComplete.await()
         dataStore.edit { prefs ->
             prefs[KEY_VISUAL_EFFECT_MODE] = mode.storageValue
-            prefs[KEY_GLASS_VARIANT] = glassVariant.storageValue
+            prefs[KEY_GLASS_VARIANT] = GlassVariant.CLEAR.storageValue
         }
         _visualEffectMode.value = mode
-        _glassVariant.value = glassVariant
+        _glassVariant.value = GlassVariant.CLEAR
     }
 
     suspend fun readAccentColorSnapshot(): MonetAccent? {

@@ -15,12 +15,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.kyant.backdrop.backdrops.LayerBackdrop
 import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
-import com.tracktosearch.ui.theme.LocalGlassVariant
 import com.tracktosearch.ui.theme.VisualEffectMode
 
 enum class VisualSurfaceKind {
@@ -77,7 +77,7 @@ internal fun blurSurfaceConfig(
 
 /**
  * 统一按用途和全局视觉模式分发表面。
- * Glass 内容与 Modal 分支不采样、不复用拟态阴影。
+ * Glass 通过 Backdrop 采样；Content 与 Modal 分支不采样、不复用拟态阴影。
  */
 @Composable
 fun AppVisualSurface(
@@ -85,6 +85,7 @@ fun AppVisualSurface(
     modifier: Modifier = Modifier,
     shape: Shape,
     hazeState: HazeState? = null,
+    backdropOverride: LayerBackdrop? = null,
     role: GlassSurfaceRole = GlassSurfaceRole.TopBar,
     sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
     interactionSource: MutableInteractionSource? = null,
@@ -103,41 +104,15 @@ fun AppVisualSurface(
         )
 
         LocalVisualEffectMode.current == VisualEffectMode.GLASS && kind == VisualSurfaceKind.Glass -> {
-            if (hazeState == null) {
-                val fallbackToken = glassToken(
-                    role = role,
-                    variant = LocalGlassVariant.current,
-                    isDark = isDark,
-                    scene = scene
-                )
-                PlainGlassSurface(
-                    modifier = modifier,
-                    shape = shape,
-                    backgroundColor = resolveGlassFallbackFill(
-                        backgroundColor = backgroundColor,
-                        themeSurface = MaterialTheme.colorScheme.surface,
-                        tokenAlpha = fallbackToken.tintAlpha,
-                        ambientColor = resolveGlassAmbientColor(
-                            sceneAmbient = scene.ambientColor,
-                            themeBackground = MaterialTheme.colorScheme.background
-                        ),
-                        environmentTintStrength = fallbackToken.environmentTintStrength
-                    ),
-                    borderColor = glassBorderColor(role, borderColor, scene),
-                    content = content
-                )
-                return
-            }
             GlassSurfaceImpl(
                 modifier = modifier,
                 hazeState = hazeState,
+                backdropOverride = backdropOverride,
                 role = role,
                 shape = requireRoundedGlassShape(shape, role),
                 sourceSelection = sourceSelection,
                 scene = scene,
                 interactionSource = interactionSource,
-                // 透明调用方仍需要让 Glass token 参与计算；透明只表示不覆盖 Blur 的旧底色，
-                // Glass 分支使用主题 surface 作为基准，再由角色 token 控制最终通透度。
                 tint = backgroundColor,
                 borderColor = borderColor,
                 content = content

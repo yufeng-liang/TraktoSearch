@@ -346,6 +346,20 @@
     <string name="detail_actors">Cast</string>
     <string name="detail_comments">Comments</string>
     <string name="detail_no_comments">No comments yet</string>
+    <string name="detail_own_comment_title">My comment</string>
+    <string name="detail_own_comment_hint">Share a short review</string>
+    <string name="detail_own_comment_sync_trakt">This comment will sync to Trakt</string>
+    <string name="detail_own_comment_sync_douban">This comment will sync to Douban</string>
+    <string name="detail_own_comment_sync_trakt_douban">This comment will sync to Trakt and Douban</string>
+    <string name="detail_own_comment_sync_unavailable">Sign in to publish and sync this comment</string>
+    <string name="detail_own_comment_edit">Edit comment</string>
+    <string name="detail_own_comment_publish">Publish</string>
+    <string name="detail_own_comment_cancel">Cancel</string>
+    <string name="detail_own_comment_retry">Retry %1$s</string>
+    <string name="detail_own_comment_target_trakt">Trakt</string>
+    <string name="detail_own_comment_target_douban">Douban</string>
+    <string name="detail_own_comment_targets_trakt_douban">Trakt and Douban</string>
+    <string name="detail_own_comment_rating_required">Choose a rating before syncing this comment to Douban</string>
     <string name="detail_seasons">Seasons</string>
     <string name="detail_seasons_count">(%1$d seasons)</string>
     <string name="detail_seasons_show_all">Show all %1$d seasons</string>
@@ -491,6 +505,7 @@
     <string name="settings_visual_effect_blur_desc">A soft frosted style with a gentle, diffused boundary</string>
     <string name="settings_visual_effect_glass_clear">Glass - Clear</string>
     <string name="settings_visual_effect_glass_clear_desc">A lighter optical glass style with a quieter boundary</string>
+    <string name="settings_visual_effect_glass_desc">Scene-aware optical glass with depth, refraction, and responsive highlights</string>
     <string name="settings_visual_effect_glass_focused">Glass - Focused</string>
     <string name="settings_visual_effect_glass_focused_desc">A more defined glass layer for navigation and controls</string>
 
@@ -723,7 +738,7 @@ Config:
     <string name="help_tips_b8">Person page supports horizontal swipe to view multiple images, tap for fullscreen and save</string>
     <string name="help_tips_b9">Online search supports Chinese name search (powered by TMDB), auto-populates related movies/shows when searching for a person</string>
     <string name="help_tips_b10">Quickly customize discover page sections from the toolbar icon</string>
-    <string name="help_tips_b11">Blur uses a soft frosted style; Glass offers two independent optical styles: Clear and Focused</string>
+    <string name="help_tips_b11">Blur uses a soft frosted style; Glass uses scene-aware optical depth, refraction, and responsive highlights</string>
     <string name="help_tips_b12">Crash logs are auto-uploaded after a crash if enabled in Settings; upload history can be viewed on the Feedback page</string>
     <string name="help_vpn">VPN Notice</string>
     <string name="help_vpn_b1">Some features require access to overseas services. VPN may be needed for normal access</string>

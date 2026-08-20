@@ -69,11 +69,12 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.OAuthCallback
 import com.tracktosearch.R
-import com.tracktosearch.ui.component.AppGlassStyles
 import com.tracktosearch.ui.component.DoubanLogo
 import com.tracktosearch.ui.component.GlassScene
+import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.appVisualEffect
 import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.monetDoubanGreen
 import com.tracktosearch.ui.theme.onMonetDoubanGreen
@@ -187,6 +188,7 @@ fun ActivationLoginScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .hazeSource(state = hazeState, zIndex = 0f)
+                    .backdropSource()
             ) {
                 Box(
                     modifier = Modifier
@@ -362,12 +364,10 @@ internal fun ActivationSecondaryActions(
                 .appVisualEffect(
                     input = HazeInput.Sources(hazeState),
                     hazeStyle = doubanHazeStyle,
-                    glassStyle = AppGlassStyles.detailAction(
-                        tint = doubanGreen.copy(alpha = if (doubanEnabled) 0.72f else 0.24f),
-                        shape = doubanButtonShape,
-                        interactive = doubanEnabled,
-                        scene = scene
-                    ),
+                    glassRole = GlassSurfaceRole.DetailAction,
+                    glassShape = doubanButtonShape,
+                    glassTint = doubanGreen.copy(alpha = if (doubanEnabled) 0.72f else 0.24f),
+                    scene = scene,
                     interactionSource = doubanInteractionSource
                 ),
             shape = doubanButtonShape,
@@ -494,11 +494,10 @@ private fun ActivationCard(
             .appVisualEffect(
                 input = HazeInput.Sources(hazeState),
                 hazeStyle = hazeStyle,
-                glassStyle = AppGlassStyles.loginSurface(
-                    tint = MaterialTheme.colorScheme.surface.copy(alpha = 0.48f),
-                    shape = shape,
-                    scene = scene
-                )
+                glassRole = GlassSurfaceRole.LoginSurface,
+                glassShape = shape,
+                glassTint = MaterialTheme.colorScheme.surface.copy(alpha = 0.48f),
+                scene = scene
             )
             .background(Color.Transparent, shape)
             .border(BorderStroke(1.dp, accent.copy(alpha = 0.30f)), shape)
