@@ -39,7 +39,6 @@ import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.floatingGlassControlShadow
-import com.tracktosearch.ui.component.neumorphicInnerShadow
 import com.tracktosearch.ui.component.neumorphicOuterShadow
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberGlassSelectionBounceScale
@@ -165,17 +164,10 @@ internal fun WatchlistModeSelector(
                 )
                 .clip(capsuleShape)
                 .height(42.dp)
+                // 未选中项底色与 BLUR 圆形按钮内部 blurFill 一致（浅色 White 0.72）
                 .background(
                     if (isDark) Color.White.copy(alpha = 0.10f)
-                    else Color.White.copy(alpha = 0.35f)
-                )
-                .neumorphicInnerShadow(
-                    shape = capsuleShape,
-                    isDark = isDark,
-                    elevation = 4.dp,
-                    lightAlpha = if (isDark) 0.08f else 0.35f,
-                    blurRadius = 10.dp,
-                    shadowOffset = 4.dp
+                    else Color.White.copy(alpha = 0.72f)
                 )
                 .padding(horizontal = 4.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically
