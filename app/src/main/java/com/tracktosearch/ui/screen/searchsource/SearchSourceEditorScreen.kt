@@ -92,7 +92,7 @@ fun SearchSourceEditorScreen(
 
     val title = stringResource(
         when {
-            importState is SearchSourceEditorViewModel.ImportUiState.Preview -> R.string.editor_title_import
+            importState !is SearchSourceEditorViewModel.ImportUiState.Empty -> R.string.editor_title_import
             else -> R.string.editor_title_add
         }
     )
@@ -102,53 +102,56 @@ fun SearchSourceEditorScreen(
         containerColor = MaterialTheme.colorScheme.background
     ) { _ ->
         Box(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .hazeSource(hazeState)
-                    .verticalScroll(rememberScrollState())
-            ) {
+            Column(modifier = Modifier.fillMaxSize()) {
                 EditorHeader(
                     title = title,
                     hazeState = hazeState,
                     onBack = onBack
                 )
-                StepIndicator(currentStep = step)
+                StepIndicator(currentStep = step, onStepClick = viewModel::goToStep)
 
-                when (step) {
-                    1 -> StepBasic(
-                        name = name, onNameChange = viewModel::setName,
-                        baseUrl = baseUrl, onBaseUrlChange = viewModel::setBaseUrl
-                    )
-                    2 -> StepAutoProbe(
-                        probeState = probeState,
-                        onStartProbe = viewModel::startProbe,
-                        onManual = viewModel::switchToManual
-                    )
-                    3 -> StepConfirm(
-                        name = name, onNameChange = viewModel::setName,
-                        baseUrl = baseUrl, onBaseUrlChange = viewModel::setBaseUrl,
-                        apiPath = apiPath, onApiPathChange = viewModel::setApiPath,
-                        keywordParam = keywordParam, onKeywordParamChange = viewModel::setKeywordParam,
-                        cloudTypesParam = cloudTypesParam, onCloudTypesParamChange = viewModel::setCloudTypesParam,
-                        cloudTypesValue = cloudTypesValue, onCloudTypesValueChange = viewModel::setCloudTypesValue,
-                        srcParam = srcParam, onSrcParamChange = viewModel::setSrcParam,
-                        srcValue = srcValue, onSrcValueChange = viewModel::setSrcValue,
-                        parseMode = parseMode, onParseModeChange = viewModel::setParseMode,
-                        listPath = listPath, onListPathChange = viewModel::setListPath,
-                        namePath = namePath, onNamePathChange = viewModel::setNamePath,
-                        urlPath = urlPath, onUrlPathChange = viewModel::setUrlPath,
-                        diskTypePath = diskTypePath, onDiskTypePathChange = viewModel::setDiskTypePath,
-                        datePath = datePath, onDatePathChange = viewModel::setDatePath,
-                        appliedTemplateName = appliedTemplateName,
-                        importState = importState,
-                        onApplyImported = viewModel::applyImportedSource,
-                        onImportRename = viewModel::renameForImport,
-                        advancedExpanded = advancedExpanded,
-                        onAdvancedToggle = { advancedExpanded = !advancedExpanded }
-                    )
-                }
-                Spacer(modifier = Modifier.height(16.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .hazeSource(hazeState)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                        when (step) {
+                        1 -> StepBasic(
+                            name = name, onNameChange = viewModel::setName,
+                            baseUrl = baseUrl, onBaseUrlChange = viewModel::setBaseUrl
+                        )
+                        2 -> StepAutoProbe(
+                            probeState = probeState,
+                            onStartProbe = viewModel::startProbe,
+                            onManual = viewModel::switchToManual
+                        )
+                        3 -> StepConfirm(
+                            name = name, onNameChange = viewModel::setName,
+                            baseUrl = baseUrl, onBaseUrlChange = viewModel::setBaseUrl,
+                            apiPath = apiPath, onApiPathChange = viewModel::setApiPath,
+                            keywordParam = keywordParam, onKeywordParamChange = viewModel::setKeywordParam,
+                            cloudTypesParam = cloudTypesParam, onCloudTypesParamChange = viewModel::setCloudTypesParam,
+                            cloudTypesValue = cloudTypesValue, onCloudTypesValueChange = viewModel::setCloudTypesValue,
+                            srcParam = srcParam, onSrcParamChange = viewModel::setSrcParam,
+                            srcValue = srcValue, onSrcValueChange = viewModel::setSrcValue,
+                            parseMode = parseMode, onParseModeChange = viewModel::setParseMode,
+                            listPath = listPath, onListPathChange = viewModel::setListPath,
+                            namePath = namePath, onNamePathChange = viewModel::setNamePath,
+                            urlPath = urlPath, onUrlPathChange = viewModel::setUrlPath,
+                            diskTypePath = diskTypePath, onDiskTypePathChange = viewModel::setDiskTypePath,
+                            datePath = datePath, onDatePathChange = viewModel::setDatePath,
+                            appliedTemplateName = appliedTemplateName,
+                            importState = importState,
+                            onApplyImported = viewModel::applyImportedSource,
+                            onImportRename = viewModel::renameForImport,
+                            advancedExpanded = advancedExpanded,
+                            onAdvancedToggle = { advancedExpanded = !advancedExpanded }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    }
             }
 
             EditorBottomBar(
@@ -248,9 +251,12 @@ private fun EditorHeader(
     }
 }
 
-/** 3 格步骤指示器 */
+/** 3 格步骤指示器：点击可直接切换步骤 */
 @Composable
-private fun StepIndicator(currentStep: Int) {
+private fun StepIndicator(
+    currentStep: Int,
+    onStepClick: (Int) -> Unit
+) {
     val labels = listOf(
         stringResource(R.string.editor_step_basic),
         stringResource(R.string.editor_step_auto),
@@ -269,6 +275,7 @@ private fun StepIndicator(currentStep: Int) {
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(8.dp))
+                    .clickable { onStepClick(index + 1) }
                     .background(
                         when {
                             isActive -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
@@ -310,17 +317,17 @@ private fun StepBasic(
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        RequiredFieldLabel(stringResource(R.string.settings_source_name))
         OutlinedTextField(
             value = name,
             onValueChange = onNameChange,
-            label = { Text(stringResource(R.string.settings_source_name)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
+        RequiredFieldLabel(stringResource(R.string.settings_source_base_url))
         OutlinedTextField(
             value = baseUrl,
             onValueChange = onBaseUrlChange,
-            label = { Text(stringResource(R.string.settings_source_base_url)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
@@ -472,10 +479,10 @@ private fun StepConfirm(
         // 导入预览态
         if (importState is SearchSourceEditorViewModel.ImportUiState.Preview) {
             val importSource = importState.source
+            RequiredFieldLabel(stringResource(R.string.import_preview_name))
             OutlinedTextField(
                 value = importSource.name,
                 onValueChange = onImportRename,
-                label = { Text(stringResource(R.string.import_preview_name)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -603,11 +610,16 @@ private fun EditorBottomBar(
                 ) { Text(stringResource(R.string.editor_prev)) }
             }
             when (step) {
-                1, 2 -> Button(
+                1 -> Button(
                     onClick = onNext,
                     enabled = canNext,
                     modifier = Modifier.weight(1f)
                 ) { Text(stringResource(R.string.editor_next)) }
+                2 -> Button(
+                    onClick = onNext,
+                    enabled = canNext,
+                    modifier = Modifier.weight(1f)
+                ) { Text(stringResource(R.string.editor_next_confirm)) }
                 else -> {
                     OutlinedButton(
                         onClick = onTest,

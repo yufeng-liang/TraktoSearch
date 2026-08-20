@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -16,9 +15,23 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.rememberScrollState
 import com.tracktosearch.R
+
+/** 必填字段标签：红色星号 + 字段名 */
+@Composable
+fun RequiredFieldLabel(text: String) {
+    Text(
+        text = buildAnnotatedString {
+            withStyle(SpanStyle(color = MaterialTheme.colorScheme.error)) { append("* ") }
+            append(text)
+        },
+        style = MaterialTheme.typography.bodySmall
+    )
+}
 
 /**
  * 手动配置表单：名称/地址/路径/关键词参数/网盘参数/src/解析模式/JSONPath。
@@ -43,64 +56,80 @@ fun CustomSourceFields(
     datePath: String, onDatePathChange: (String) -> Unit
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        RequiredFieldLabel(stringResource(R.string.settings_source_name))
         OutlinedTextField(
             value = name,
             onValueChange = onNameChange,
-            label = { Text(stringResource(R.string.settings_source_name)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
+        RequiredFieldLabel(stringResource(R.string.settings_source_base_url))
         OutlinedTextField(
             value = baseUrl,
             onValueChange = onBaseUrlChange,
-            label = { Text(stringResource(R.string.settings_source_base_url)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
+        )
+        Text(
+            text = stringResource(R.string.settings_source_api_path),
+            style = MaterialTheme.typography.bodySmall
         )
         OutlinedTextField(
             value = apiPath,
             onValueChange = onApiPathChange,
-            label = { Text(stringResource(R.string.settings_source_api_path)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
+        )
+        Text(
+            text = stringResource(R.string.settings_source_keyword_param),
+            style = MaterialTheme.typography.bodySmall
         )
         OutlinedTextField(
             value = keywordParam,
             onValueChange = onKeywordParamChange,
-            label = { Text(stringResource(R.string.settings_source_keyword_param)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
+        )
+        Text(
+            text = stringResource(R.string.settings_source_disk_param),
+            style = MaterialTheme.typography.bodySmall
         )
         OutlinedTextField(
             value = cloudTypesParam,
             onValueChange = onCloudTypesParamChange,
-            label = { Text(stringResource(R.string.settings_source_disk_param)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
+        )
+        Text(
+            text = stringResource(R.string.settings_source_disk_param_value),
+            style = MaterialTheme.typography.bodySmall
         )
         OutlinedTextField(
             value = cloudTypesValue,
             onValueChange = onCloudTypesValueChange,
-            label = { Text(stringResource(R.string.settings_source_disk_param_value)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
+        )
+        Text(
+            text = stringResource(R.string.settings_source_src_param),
+            style = MaterialTheme.typography.bodySmall
         )
         OutlinedTextField(
             value = srcParam,
             onValueChange = onSrcParamChange,
-            label = { Text(stringResource(R.string.settings_source_src_param)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
+        )
+        Text(
+            text = stringResource(R.string.settings_source_src_value),
+            style = MaterialTheme.typography.bodySmall
         )
         OutlinedTextField(
             value = srcValue,
             onValueChange = onSrcValueChange,
-            label = { Text(stringResource(R.string.settings_source_src_value)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
@@ -141,38 +170,53 @@ fun CustomSourceFields(
         if (parseMode == "custom") {
             Spacer(modifier = Modifier.height(4.dp))
             Text(stringResource(R.string.settings_source_jsonpath_title), style = MaterialTheme.typography.bodySmall)
+            Text(
+                text = stringResource(R.string.settings_source_jsonpath_list),
+                style = MaterialTheme.typography.bodySmall
+            )
             OutlinedTextField(
-                value = listPath,
-                onValueChange = onListPathChange,
-                label = { Text(stringResource(R.string.settings_source_jsonpath_list)) },
+            value = listPath,
+            onValueChange = onListPathChange,
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
+            Text(
+                text = stringResource(R.string.settings_source_jsonpath_name),
+                style = MaterialTheme.typography.bodySmall
+            )
             OutlinedTextField(
-                value = namePath,
-                onValueChange = onNamePathChange,
-                label = { Text(stringResource(R.string.settings_source_jsonpath_name)) },
+            value = namePath,
+            onValueChange = onNamePathChange,
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
+            Text(
+                text = stringResource(R.string.settings_source_jsonpath_url),
+                style = MaterialTheme.typography.bodySmall
+            )
             OutlinedTextField(
-                value = urlPath,
-                onValueChange = onUrlPathChange,
-                label = { Text(stringResource(R.string.settings_source_jsonpath_url)) },
+            value = urlPath,
+            onValueChange = onUrlPathChange,
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
+            Text(
+                text = stringResource(R.string.settings_source_jsonpath_disk),
+                style = MaterialTheme.typography.bodySmall
+            )
             OutlinedTextField(
-                value = diskTypePath,
-                onValueChange = onDiskTypePathChange,
-                label = { Text(stringResource(R.string.settings_source_jsonpath_disk)) },
+            value = diskTypePath,
+            onValueChange = onDiskTypePathChange,
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
+            Text(
+                text = stringResource(R.string.settings_source_jsonpath_date),
+                style = MaterialTheme.typography.bodySmall
+            )
             OutlinedTextField(
-                value = datePath,
-                onValueChange = onDatePathChange,
-                label = { Text(stringResource(R.string.settings_source_jsonpath_date)) },
+            value = datePath,
+            onValueChange = onDatePathChange,
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
