@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
@@ -26,7 +27,7 @@ fun Modifier.appVisualEffect(
     glassRole: GlassSurfaceRole = GlassSurfaceRole.TopBar,
     glassShape: RoundedCornerShape = RoundedCornerShape(0.dp),
     glassTint: Color = Color.Transparent,
-    backdropOverride: LayerBackdrop? = null,
+    backdropOverride: Backdrop? = null,
     scene: GlassScene = GlassScene(),
     glassEffectEnabled: Boolean = true,
     blurSampling: HazeSampling = HazeSampling.Adaptive,
@@ -63,7 +64,7 @@ fun Modifier.appVisualEffect(
     glassRole: GlassSurfaceRole = GlassSurfaceRole.TopBar,
     glassShape: RoundedCornerShape = RoundedCornerShape(0.dp),
     glassTint: Color = Color.Transparent,
-    backdropOverride: LayerBackdrop? = null,
+    backdropOverride: Backdrop? = null,
     scene: GlassScene = GlassScene(),
     glassEffectEnabled: Boolean = true,
     blurSampling: HazeSampling = HazeSampling.Adaptive,
@@ -86,7 +87,7 @@ private fun backdropEffectModifier(
     role: GlassSurfaceRole,
     shape: RoundedCornerShape,
     tint: Color,
-    backdropOverride: LayerBackdrop?,
+    backdropOverride: Backdrop?,
     scene: GlassScene,
     interactionSource: InteractionSource?
 ): Modifier {

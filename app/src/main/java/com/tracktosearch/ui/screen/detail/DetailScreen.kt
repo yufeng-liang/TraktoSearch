@@ -93,6 +93,7 @@ import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
@@ -110,6 +111,10 @@ import com.tracktosearch.ui.screen.ai.AiSpriteViewModel
 import com.tracktosearch.ui.screen.ai.automaticSpriteArt
 import com.tracktosearch.ui.screen.ai.sceneArtFor
 import com.tracktosearch.ui.screen.ai.shouldShowWatchlistAddedScene
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.tracktosearch.ui.component.LocalBackdrop
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -322,6 +327,27 @@ fun DetailScreen(
             .padding(padding)
         ) {
             val isGlassMode = LocalVisualEffectMode.current == VisualEffectMode.GLASS
+            // 多源采样：LayerBackdrop 只支持单一 source（后注册覆盖先注册），
+            // 背景/头部/tab 栏各用独立 backdrop，再合并供顶栏按钮采样。
+            // onDraw 是非 Composable 的 DrawScope，背景色需在组合期预计算。
+            val detailBackdropBackground = MaterialTheme.colorScheme.background
+            val detailBackgroundBackdrop = rememberLayerBackdrop {
+                drawRect(detailBackdropBackground)
+                drawContent()
+            }
+            val detailHeaderBackdrop = rememberLayerBackdrop {
+                drawRect(detailBackdropBackground)
+                drawContent()
+            }
+            val detailTabBackdrop = rememberLayerBackdrop {
+                drawRect(detailBackdropBackground)
+                drawContent()
+            }
+            val detailTopBarBackdrop = rememberCombinedBackdrop(
+                detailBackgroundBackdrop,
+                detailHeaderBackdrop,
+                detailTabBackdrop
+            )
             val immersiveBackgroundModifier = uiState.posterDominantColor?.let { color ->
                 Modifier.background(
                     Brush.verticalGradient(
@@ -339,7 +365,7 @@ fun DetailScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .backdropSource()
+                        .layerBackdrop(detailBackgroundBackdrop)
                         .then(immersiveBackgroundModifier)
                 )
             }
@@ -452,7 +478,8 @@ fun DetailScreen(
                         hazeState = detailHazeState,
                         // 头部下方内容(cast/视频/简介/季集)淡入,海报+标题+按钮始终可见
                         contentAlpha = contentAlpha,
-                        onHeaderAnchorBoundsChanged = { detailHeaderBounds = it }
+                        onHeaderAnchorBoundsChanged = { detailHeaderBounds = it },
+                        backdrop = detailHeaderBackdrop
                     )
                 }
 
@@ -468,7 +495,10 @@ fun DetailScreen(
                         selectedTabIndex = selectedTab,
                         containerColor = tabContainerColor,
                         contentColor = tabContentColor,
-                        modifier = Modifier.alpha(contentAlpha)
+                        modifier = Modifier
+                            // GLASS 模式将吸顶 tab 栏注册到独立 Backdrop 采样源
+                            .backdropContentSource(detailTabBackdrop)
+                            .alpha(contentAlpha)
                     ) {
                             Tab(
                                 selected = selectedTab == 0,
@@ -880,6 +910,8 @@ fun DetailScreen(
                 sceneRes = sceneArtFor(AiSceneEvent.DETAIL_WATCHLIST_ADDED).drawableRes
             )
 
+            // 顶栏按钮采样合并的多源 backdrop（背景 + 头部 + tab 栏）
+            CompositionLocalProvider(LocalBackdrop provides detailTopBarBackdrop) {
             // 返回按钮：与详情页其他操作统一使用拟态玻璃，并保留真实 Haze 背景采样。
             NeumorphicIconButton(
                 onClick = { view.performHaptic(HapticType.TICK); onBack(uiState.watchlistChanged, uiState.watchedChanged) },
@@ -992,6 +1024,7 @@ fun DetailScreen(
                 hazeStyle = HazeMaterials.ultraThin(),
                 scene = detailGlassScene
             )
+            } // CompositionLocalProvider
 
             // 海报大图查看
             val posterUrl = uiState.posterUrl

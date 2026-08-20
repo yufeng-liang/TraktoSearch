@@ -81,6 +81,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.local.DiscoverSectionStorage
 import com.tracktosearch.ui.animation.fadeSlideIn
 import com.tracktosearch.ui.component.AppIconButton
+import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.AppVisualSurface
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
@@ -895,6 +896,8 @@ fun DiscoverScreen(
                             letterSpacing = (-0.5).sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
+                        // 顶栏按钮采样发现页自身的列表 source（discoverContentBackdrop），与设置页一致
+                        CompositionLocalProvider(LocalBackdrop provides discoverContentBackdrop) {
                         // 圆形操作按钮在 Glass 下使用轻量光学层，在 Blur 下沿用拟态按钮。
                         Row(verticalAlignment = Alignment.CenterVertically) {
                         // 当从右上角图标进入筛选页时（activeFilterEntry == "icon"），给图标加 sharedElement 与筛选页返回箭头配对
@@ -940,6 +943,7 @@ fun DiscoverScreen(
                             )
                         }
                     }
+                        } // CompositionLocalProvider
                 }
             }
         }

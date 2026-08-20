@@ -11,12 +11,13 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.MaterialTheme
+import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 /** 当前屏幕的 Backdrop 采样源；缺少 host 时保持显式的 null fallback。 */
-val LocalBackdrop: ProvidableCompositionLocal<LayerBackdrop?> = staticCompositionLocalOf { null }
+val LocalBackdrop: ProvidableCompositionLocal<Backdrop?> = staticCompositionLocalOf { null }
 
 /** 控制页面内部是否允许注册 source，避免把包含 Glass overlay 的子树再次录制。 */
 val LocalBackdropSourceEnabled: ProvidableCompositionLocal<Boolean> = staticCompositionLocalOf { true }
@@ -75,7 +76,8 @@ fun Modifier.backdropSource(): Modifier {
  * 只有确认不含 Glass overlay 的影视列表才使用这个入口。
  */
 @Composable
-fun Modifier.backdropContentSource(): Modifier {
-    val backdrop = LocalBackdrop.current ?: return this
-    return then(Modifier.layerBackdrop(backdrop))
+fun Modifier.backdropContentSource(backdrop: LayerBackdrop? = null): Modifier {
+    // LocalBackdrop 可能是合并后的 Backdrop（Combined），只有 LayerBackdrop 可注册为 source
+    val resolved = backdrop ?: LocalBackdrop.current as? LayerBackdrop ?: return this
+    return then(Modifier.layerBackdrop(resolved))
 }

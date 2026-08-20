@@ -61,7 +61,6 @@ import com.tracktosearch.data.remote.trakt.dto.TraktTrendingMovieResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktTrendingShowResponse
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.ui.component.AppVisualSurface
-import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.DoubanHotCardSkeleton
 import com.tracktosearch.ui.component.SectionHeader
 import com.tracktosearch.ui.component.isAppDarkTheme
@@ -99,7 +98,7 @@ internal fun TmdbMovieSection(
         when {
             isLoading -> {
                 LazyRow(
-                    modifier = Modifier.backdropContentSource(),
+                    modifier = Modifier,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 5.dp)
                 ) {
@@ -121,7 +120,7 @@ internal fun TmdbMovieSection(
                 val effectiveState = lazyListState ?: internalState
                 LazyRow(
                     state = effectiveState,
-                    modifier = Modifier.backdropContentSource(),
+                    modifier = Modifier,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 5.dp)
                 ) {
@@ -172,7 +171,7 @@ internal fun TraktRecommendationSection(
             }
             isLoading -> {
                 LazyRow(
-                    modifier = Modifier.backdropContentSource(),
+                    modifier = Modifier,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 5.dp)
                 ) {
@@ -191,7 +190,7 @@ internal fun TraktRecommendationSection(
             }
             else -> {
                 LazyRow(
-                    modifier = Modifier.backdropContentSource(),
+                    modifier = Modifier,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 5.dp)
                 ) {
@@ -239,7 +238,7 @@ internal fun TraktTrendingMovieSection(
         when {
             isLoading -> {
                 LazyRow(
-                    modifier = Modifier.backdropContentSource(),
+                    modifier = Modifier,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 5.dp)
                 ) {
@@ -254,7 +253,7 @@ internal fun TraktTrendingMovieSection(
             items.isEmpty() -> EmptyRow()
             else -> {
                 LazyRow(
-                    modifier = Modifier.backdropContentSource(),
+                    modifier = Modifier,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 5.dp)
                 ) {
@@ -302,7 +301,7 @@ internal fun TraktTrendingShowSection(
         when {
             isLoading -> {
                 LazyRow(
-                    modifier = Modifier.backdropContentSource(),
+                    modifier = Modifier,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 5.dp)
                 ) {
@@ -317,7 +316,7 @@ internal fun TraktTrendingShowSection(
             items.isEmpty() -> EmptyRow()
             else -> {
                 LazyRow(
-                    modifier = Modifier.backdropContentSource(),
+                    modifier = Modifier,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 5.dp)
                 ) {
@@ -367,7 +366,7 @@ internal fun TraktAnticipatedSection(
         when {
             isLoading -> {
                 LazyRow(
-                    modifier = Modifier.backdropContentSource(),
+                    modifier = Modifier,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 5.dp)
                 ) {
@@ -382,7 +381,7 @@ internal fun TraktAnticipatedSection(
             anticipatedMovies.isEmpty() && anticipatedShows.isEmpty() -> EmptyRow()
             else -> {
                 LazyRow(
-                    modifier = Modifier.backdropContentSource(),
+                    modifier = Modifier,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 5.dp)
                 ) {
@@ -455,7 +454,7 @@ internal fun TraktShowRecommendationSection(
             }
             isLoading -> {
                 LazyRow(
-                    modifier = Modifier.backdropContentSource(),
+                    modifier = Modifier,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 5.dp)
                 ) {
@@ -470,7 +469,7 @@ internal fun TraktShowRecommendationSection(
             items.isEmpty() -> EmptyRow()
             else -> {
                 LazyRow(
-                    modifier = Modifier.backdropContentSource(),
+                    modifier = Modifier,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 5.dp)
                 ) {
@@ -671,7 +670,7 @@ internal fun DoubanRecommendSection(
 
             is DoubanRecommendState.Loading -> {
                 LazyRow(
-                    modifier = Modifier.backdropContentSource(),
+                    modifier = Modifier,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 5.dp)
                 ) {
@@ -698,7 +697,7 @@ internal fun DoubanRecommendSection(
                     val listState = if (state.currentTab == RecommendTab.MOVIE) movieListState else tvListState
                     LazyRow(
                         state = listState,
-                        modifier = Modifier.backdropContentSource(),
+                        modifier = Modifier,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = PaddingValues(horizontal = 5.dp)
                     ) {

@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
@@ -85,7 +86,7 @@ fun AppVisualSurface(
     modifier: Modifier = Modifier,
     shape: Shape,
     hazeState: HazeState? = null,
-    backdropOverride: LayerBackdrop? = null,
+    backdropOverride: Backdrop? = null,
     role: GlassSurfaceRole = GlassSurfaceRole.TopBar,
     sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
     interactionSource: MutableInteractionSource? = null,

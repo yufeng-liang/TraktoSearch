@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
@@ -328,7 +329,7 @@ private fun pilotParams(role: String, isDark: Boolean): BackdropGlassParams = wh
  */
 @Composable
 private fun Modifier.pilotBackdropGlass(
-    backdrop: LayerBackdrop,
+    backdrop: Backdrop,
     mode: VisualEffectMode,
     params: BackdropGlassParams,
     pressed: Boolean = false
@@ -698,7 +699,7 @@ private fun PilotGlassCard(
     engine: PilotEngine,
     mode: VisualEffectMode,
     hazeState: HazeState,
-    backdrop: LayerBackdrop,
+    backdrop: Backdrop,
     backdropParams: BackdropGlassParams,
     hazeParams: HazeBlurParams,
     modifier: Modifier = Modifier
@@ -754,7 +755,7 @@ private fun PilotGlassButton(
     engine: PilotEngine,
     mode: VisualEffectMode,
     hazeState: HazeState,
-    backdrop: LayerBackdrop,
+    backdrop: Backdrop,
     backdropParams: BackdropGlassParams,
     hazeParams: HazeBlurParams,
     onClick: () -> Unit
@@ -837,7 +838,7 @@ private fun PilotGlassBottomBar(
     engine: PilotEngine,
     mode: VisualEffectMode,
     hazeState: HazeState,
-    backdrop: LayerBackdrop,
+    backdrop: Backdrop,
     backdropParams: BackdropGlassParams,
     hazeParams: HazeBlurParams,
     modifier: Modifier = Modifier
@@ -907,7 +908,7 @@ private fun PilotBottomBarContent(
     icons: List<androidx.compose.ui.graphics.vector.ImageVector>,
     selectedIndex: Int,
     onSelected: (Int) -> Unit,
-    backdrop: LayerBackdrop? = null,
+    backdrop: Backdrop? = null,
     mode: VisualEffectMode = VisualEffectMode.GLASS,
     params: BackdropGlassParams? = null
 ) {

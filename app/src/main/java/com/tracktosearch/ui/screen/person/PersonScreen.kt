@@ -66,7 +66,7 @@ import com.tracktosearch.ui.component.DetailTopBarIcon
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.SectionHeader
 import com.tracktosearch.ui.component.glassSceneForContent
-import com.tracktosearch.ui.component.backdropSource
+import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.ToastEffect
@@ -168,7 +168,7 @@ fun PersonScreen(
                             .fillMaxSize()
                             .statusBarsPadding()
                             .hazeSource(state = hazeState)
-                            .backdropSource(),
+                            .backdropContentSource(),
                         contentPadding = PaddingValues(bottom = 80.dp)
                     ) {
                         item(key = "person_header") {

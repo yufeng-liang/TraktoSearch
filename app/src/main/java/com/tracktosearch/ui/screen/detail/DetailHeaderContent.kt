@@ -39,6 +39,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -80,8 +81,11 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
 import com.tracktosearch.data.util.PosterColorExtractor
+import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.tracktosearch.ui.component.ActionButtonRow
 import com.tracktosearch.ui.component.ActionItem
+import com.tracktosearch.ui.component.LocalBackdrop
+import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
@@ -124,7 +128,8 @@ internal fun DetailHeaderContent(
     // 1f=完全显示,0f=隐藏;海报+标题+按钮始终不透明
     contentAlpha: Float = 1f,
     hazeState: HazeState,
-    onHeaderAnchorBoundsChanged: (Rect) -> Unit = {}
+    onHeaderAnchorBoundsChanged: (Rect) -> Unit = {},
+    backdrop: LayerBackdrop? = null
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -138,7 +143,13 @@ internal fun DetailHeaderContent(
     val onPosterVariantColor = posterColor?.let { c ->
         if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.72f)
     } ?: MaterialTheme.colorScheme.onSurfaceVariant
-    Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 32.dp)) {
+    Column(
+        modifier = Modifier
+            // GLASS 模式将 tab 栏之上的全部头部内容注册为 Backdrop 采样源，
+            // 使悬浮的顶栏按钮能采到真实内容（海报/标题/评分/演职员等）而非透明背景
+            .backdropContentSource(backdrop)
+            .padding(start = 16.dp, end = 16.dp, top = 32.dp)
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -368,6 +379,9 @@ internal fun DetailHeaderContent(
                     }
                 }
                 // 操作按钮组：想看 / 已看 / 评分
+                // 按钮组属于 Glass overlay：置于采样源之外（LocalBackdrop=null），
+                // 避免把自身 drawBackdrop 录回头部采样源造成 RenderThread 递归。
+                CompositionLocalProvider(LocalBackdrop provides null) {
                 ActionButtonRow(
                     actions = listOf(
                         ActionItem(
@@ -408,6 +422,7 @@ internal fun DetailHeaderContent(
                     modifier = Modifier.padding(top = 8.dp),
                     verticalPadding = 5.dp
                 )
+                }
             }
         }
 

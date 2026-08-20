@@ -134,6 +134,7 @@ import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.appVisualEffect
@@ -1079,7 +1080,8 @@ private fun DiskSearchContent(
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                     modifier = Modifier
                         .hazeSource(state = hazeState)
-                        .backdropSource()
+                        // GLASS 模式将搜索结果注册为 Backdrop 采样源，回顶按钮等玻璃控件可采到内容
+                        .backdropContentSource()
                 ) {
                     // 搜索中时顶部显示紧凑进度条
                     if (diskState.isLoading && diskState.resources.isNotEmpty()) {

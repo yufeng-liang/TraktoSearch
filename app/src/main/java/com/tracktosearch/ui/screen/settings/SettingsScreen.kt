@@ -62,6 +62,7 @@ import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -99,6 +100,7 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.NeumorphicIconButton
+import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.DoubanLogo
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
@@ -712,6 +714,9 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(Modifier.weight(1f))
+                        // 顶栏按钮采样设置页独立的列表 source（settingsContentBackdrop），
+                        // 否则会采到 AppNavigation 全局 backdrop（空背景）显示透明。
+                        CompositionLocalProvider(LocalBackdrop provides settingsContentBackdrop) {
                         NeumorphicIconButton(
                             onClick = onMessagesClick,
                             isDark = isDark,
@@ -722,6 +727,7 @@ fun SettingsScreen(
                             BadgedBox(badge = { if (unreadCount > 0) { Badge { Text(if (unreadCount > 99) "99+" else unreadCount.toString()) } } }) {
                                 Icon(imageVector = Icons.Rounded.Email, contentDescription = stringResource(R.string.feedback_messages), modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurface)
                             }
+                        }
                         }
                     }
                 }

@@ -182,6 +182,7 @@ import com.tracktosearch.ui.component.TopBarBackdropSourcePadding
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
+import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
@@ -846,6 +847,8 @@ fun WatchlistScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .hazeSource(state = hazeState)
+                        // GLASS 模式将影视网格注册为 Backdrop 采样源，使玻璃控件（回顶按钮等）能采到内容
+                        .backdropContentSource()
                         .nestedScroll(pullToRefreshConnection)
                         .graphicsLayer { translationY = overscrollAnim.value }
                     ) {

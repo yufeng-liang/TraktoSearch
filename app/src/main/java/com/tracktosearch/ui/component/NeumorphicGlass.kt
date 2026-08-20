@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.ColorUtils
+import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeSampling
@@ -61,7 +62,7 @@ fun Modifier.hazeTopBar(
     style: HazeBlurStyle = HazeMaterials.thin(),
     blurRadius: Dp = 24.dp,
     isContentUnderTopBar: Boolean? = null,
-    backdropOverride: LayerBackdrop? = null,
+    backdropOverride: Backdrop? = null,
     scene: GlassScene = GlassScene()
 ): Modifier {
     // Blur 效果节点常驻、用透明度插值，避免布尔硬切换导致的新节点首帧未就绪闪透明。

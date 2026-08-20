@@ -67,7 +67,7 @@ import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.glassSceneForContent
-import com.tracktosearch.ui.component.backdropSource
+import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
@@ -133,7 +133,7 @@ fun MarkRecordScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .hazeSource(state = hazeState)
-                .backdropSource(),
+                .backdropContentSource(),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
             contentPadding = PaddingValues(

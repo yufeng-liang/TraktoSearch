@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.shadow.Shadow as ComposeShadow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -240,7 +241,7 @@ fun GlassTabIndicator(
 /** 底栏专用的选中水滴，显式采样主内容 source，避免把外层导航录回 source。 */
 @Composable
 fun GlassNavigationTabIndicator(
-    backdrop: LayerBackdrop,
+    backdrop: Backdrop,
     modifier: Modifier = Modifier,
     isDark: Boolean,
     shape: RoundedCornerShape = RoundedCornerShape(24.dp),
@@ -282,7 +283,7 @@ fun GlassNavigationTabIndicator(
 internal fun GlassSurfaceImpl(
     modifier: Modifier,
     hazeState: HazeState? = null,
-    backdropOverride: LayerBackdrop? = null,
+    backdropOverride: Backdrop? = null,
     role: GlassSurfaceRole,
     shape: RoundedCornerShape,
     sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
@@ -430,7 +431,7 @@ private fun backdropBorderColor(color: Color, token: BackdropGlassToken): Color 
 }
 
 internal fun Modifier.backdropGlass(
-    backdrop: LayerBackdrop,
+    backdrop: Backdrop,
     shape: RoundedCornerShape,
     token: BackdropGlassToken,
     surfaceColor: Color,
@@ -490,7 +491,7 @@ internal fun Modifier.backdropGlass(
 
 @Composable
 internal fun rememberBackdropGlassEffectModifier(
-    backdrop: LayerBackdrop,
+    backdrop: Backdrop,
     role: GlassSurfaceRole,
     shape: RoundedCornerShape,
     tint: Color,
