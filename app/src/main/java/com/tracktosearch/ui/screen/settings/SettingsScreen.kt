@@ -511,32 +511,12 @@ fun SettingsScreen(
                 }
             }
 
-            // 搜索源（独立管理页入口）
-            item(key = "group_search") {
-                SettingsGroupCard(
-                    title = stringResource(R.string.search_sources_manage_entry_title),
+            // 搜索源（独立管理页入口，与标记记录入口卡片同构）
+            item(key = "search_sources_entry") {
+                SearchSourcesEntryCard(
+                    onClick = onSearchSourcesClick,
                     hazeState = settingsHazeState
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSearchSourcesClick() }
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = stringResource(R.string.search_sources_manage_entry_subtitle),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Icon(
-                            Icons.Rounded.Search,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+                )
             }
 
             // 通知提醒（仅 Trakt 登录用户可见，通知依赖 Trakt 想看列表推送）
@@ -1209,6 +1189,81 @@ private fun MarkRecordsEntryCard(
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = stringResource(R.string.mark_records_settings_entry_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(22.dp)
+            )
+        }
+    }
+}
+
+/**
+ * 搜索源入口卡片（独立管理页入口）。
+ * 与 MarkRecordsEntryCard 风格保持一致，点击跳转搜索源管理页。
+ */
+@Composable
+private fun SearchSourcesEntryCard(
+    onClick: () -> Unit,
+    hazeState: dev.chrisbanes.haze.HazeState? = null
+) {
+    val view = LocalView.current
+    val isDark = isAppDarkTheme()
+    NeumorphicFrostedSurface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .clickable { view.performHaptic(HapticType.CLICK); onClick() },
+        isDark = isDark,
+        shape = RoundedCornerShape(20.dp),
+        backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f)
+                          else Color.White.copy(alpha = 0.70f),
+        borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
+                      else Color(0xFFE0E5EC).copy(alpha = 0.9f),
+        elevation = 6.dp,
+        blurRadius = 18.dp,
+        hazeState = hazeState,
+        hazeStyle = HazeMaterials.thin()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(
+                        color = settingsIconContainerColor(isDark),
+                        shape = RoundedCornerShape(14.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Search,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.search_sources_manage_entry_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = stringResource(R.string.search_sources_manage_entry_subtitle),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

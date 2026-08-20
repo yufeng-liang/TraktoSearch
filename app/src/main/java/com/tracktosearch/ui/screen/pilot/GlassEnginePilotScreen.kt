@@ -73,8 +73,12 @@ import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazeSampling
+import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
 import kotlin.math.roundToInt
@@ -120,9 +124,9 @@ fun GlassEnginePilotScreen(onBack: () -> Unit) {
     }
     val defaultHazeParams = remember(isDark) {
         mapOf(
-            "bottomBar" to HazeBlurParams(blurRadius = 24.dp, tintAlpha = if (isDark) 0.25f else 0.35f),
-            "card" to HazeBlurParams(blurRadius = 20.dp, tintAlpha = if (isDark) 0.30f else 0.40f),
-            "button" to HazeBlurParams(blurRadius = 16.dp, tintAlpha = if (isDark) 0.18f else 0.72f)
+            "bottomBar" to HazeBlurParams(blurRadius = 36.dp, tintAlpha = if (isDark) 0.12f else 0.20f),
+            "card" to HazeBlurParams(blurRadius = 40.dp, tintAlpha = if (isDark) 0.15f else 0.25f),
+            "button" to HazeBlurParams(blurRadius = 28.dp, tintAlpha = if (isDark) 0.08f else 0.15f)
         )
     }
     val sceneBackdropParams = remember {
@@ -149,7 +153,8 @@ fun GlassEnginePilotScreen(onBack: () -> Unit) {
             .fillMaxSize()
             .background(backgroundColor)
     ) {
-        // 背景内容：同时挂 hazeSource（供 haze 采样）与 layerBackdrop（供 backdrop 采样）
+        // 背景内容：Haze 引擎只挂 hazeSource；Backdrop 引擎挂 layerBackdrop。
+        // 刻意不共存，避免采样层互相干扰导致 Haze 模糊失效。
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -371,12 +376,13 @@ private fun Modifier.pilotBackdropGlass(
 /** Haze 模糊分支的 HazeBlurStyle：tint 透明度 + 模糊半径。 */
 @Composable
 private fun rememberHazeBlurStyle(params: HazeBlurParams): HazeBlurStyle {
-    val tintedSurface = HazeMaterials.thin(
-        MaterialTheme.colorScheme.surface.copy(alpha = params.tintAlpha)
-    )
-    return remember(params, tintedSurface) {
-        tintedSurface.then {
+    // 官方 Quick start 写法: HazeBlurStyle { blurRadius(...) },tint 用 backgroundColor。
+    // 不使用 HazeMaterials.thin 预设,避免其内置参数干扰模糊采样。
+    val tint = MaterialTheme.colorScheme.surface.copy(alpha = params.tintAlpha)
+    return remember(params, tint) {
+        HazeBlurStyle {
             blurRadius(params.blurRadius)
+            backgroundColor(tint)
         }
     }
 }
@@ -686,17 +692,35 @@ private fun PilotGlassCard(
 ) {
     Box(modifier) {
         when (engine) {
-            PilotEngine.HAZE -> CompositionLocalProvider(LocalVisualEffectMode provides mode) {
-                NeumorphicFrostedSurface(
-                    modifier = Modifier.size(width = 230.dp, height = 140.dp),
-                    isDark = isAppDarkTheme(),
-                    shape = RoundedCornerShape(24.dp),
-                    hazeState = hazeState,
-                    hazeStyle = rememberHazeBlurStyle(hazeParams),
-                    glassRole = GlassSurfaceRole.SearchField,
-                    scene = GlassScene(contentLoad = 0.2f, readabilityDemand = 0.4f)
-                ) {
-                    PilotSurfaceLabel("Haze·" + mode.name)
+            PilotEngine.HAZE -> {
+                if (mode == VisualEffectMode.BLUR) {
+                    // 官方直连方式：clip + hazeBlur，tint 走 style，不再叠加 background 覆盖模糊
+                    Box(
+                        Modifier
+                            .size(width = 230.dp, height = 140.dp)
+                            .clip(RoundedCornerShape(24.dp))
+                            .hazeBlur(
+                                input = HazeInput.Sources(hazeState, selection = HazeSourceSelection.Behind),
+                                style = rememberHazeBlurStyle(hazeParams),
+                                sampling = HazeSampling.Adaptive
+                            )
+                    ) {
+                        PilotSurfaceLabel("Haze·BLUR")
+                    }
+                } else {
+                    CompositionLocalProvider(LocalVisualEffectMode provides mode) {
+                        NeumorphicFrostedSurface(
+                            modifier = Modifier.size(width = 230.dp, height = 140.dp),
+                            isDark = isAppDarkTheme(),
+                            shape = RoundedCornerShape(24.dp),
+                            hazeState = hazeState,
+                            hazeStyle = rememberHazeBlurStyle(hazeParams),
+                            glassRole = GlassSurfaceRole.SearchField,
+                            scene = GlassScene(contentLoad = 0.2f, readabilityDemand = 0.4f)
+                        ) {
+                            PilotSurfaceLabel("Haze·GLASS")
+                        }
+                    }
                 }
             }
 
@@ -723,19 +747,43 @@ private fun PilotGlassButton(
     onClick: () -> Unit
 ) {
     when (engine) {
-        PilotEngine.HAZE -> CompositionLocalProvider(LocalVisualEffectMode provides mode) {
-            NeumorphicIconButton(
-                onClick = onClick,
-                isDark = isAppDarkTheme(),
-                hazeState = hazeState,
-                hazeStyle = rememberHazeBlurStyle(hazeParams),
-                size = 52.dp
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Favorite,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
+        PilotEngine.HAZE -> {
+            if (mode == VisualEffectMode.BLUR) {
+                // 官方直连方式：clip + hazeBlur
+                Box(
+                    Modifier
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(50))
+                        .hazeBlur(
+                            input = HazeInput.Sources(hazeState, selection = HazeSourceSelection.Behind),
+                            style = rememberHazeBlurStyle(hazeParams),
+                            sampling = HazeSampling.Adaptive
+                        )
+                        .clickable(onClick = onClick),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Favorite,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            } else {
+                CompositionLocalProvider(LocalVisualEffectMode provides mode) {
+                    NeumorphicIconButton(
+                        onClick = onClick,
+                        isDark = isAppDarkTheme(),
+                        hazeState = hazeState,
+                        hazeStyle = rememberHazeBlurStyle(hazeParams),
+                        size = 52.dp
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Favorite,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
             }
         }
 
@@ -775,19 +823,37 @@ private fun PilotGlassBottomBar(
             .height(76.dp)
     ) {
         when (engine) {
-            PilotEngine.HAZE -> CompositionLocalProvider(LocalVisualEffectMode provides mode) {
-                NeumorphicFrostedSurface(
-                    modifier = Modifier.fillMaxSize(),
-                    isDark = isAppDarkTheme(),
-                    shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
-                    hazeState = hazeState,
-                    hazeStyle = rememberHazeBlurStyle(hazeParams),
-                    glassRole = GlassSurfaceRole.BottomNavigation,
-                    scene = GlassScene(contentLoad = 0.1f, readabilityDemand = 0.3f)
-                ) {
-                    PilotBottomBarContent(icons)
+            PilotEngine.HAZE -> {
+                if (mode == VisualEffectMode.BLUR) {
+                    // 官方直连方式：clip + hazeBlur
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
+                            .hazeBlur(
+                                input = HazeInput.Sources(hazeState, selection = HazeSourceSelection.Behind),
+                                style = rememberHazeBlurStyle(hazeParams),
+                                sampling = HazeSampling.Adaptive
+                            )
+                    ) {
+                        PilotBottomBarContent(icons)
+                    }
+                } else {
+                    CompositionLocalProvider(LocalVisualEffectMode provides mode) {
+                        NeumorphicFrostedSurface(
+                            modifier = Modifier.fillMaxSize(),
+                            isDark = isAppDarkTheme(),
+                            shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
+                            hazeState = hazeState,
+                            hazeStyle = rememberHazeBlurStyle(hazeParams),
+                            glassRole = GlassSurfaceRole.BottomNavigation,
+                            scene = GlassScene(contentLoad = 0.1f, readabilityDemand = 0.3f)
+                        ) {
+                            PilotBottomBarContent(icons)
+                        }
+                        }
+                    }
                 }
-            }
 
             PilotEngine.BACKDROP -> Box(
                 Modifier

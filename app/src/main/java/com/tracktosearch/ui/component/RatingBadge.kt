@@ -34,8 +34,7 @@ private val RatingCorner = RoundedCornerShape(7.dp)
 /**
  * 评分徽章（星星 + 数字，scrim 半透明深色底）。
  *
- * 星星与数字均带黑色硬阴影描边，浅色/深色海报上都可读。
- * 底色用 scrim 半透明黑（alpha≈0.45）替代原 per-card Haze 毛玻璃层：
+ * 星星为金色主体，底色用 scrim 半透明黑（alpha≈0.45）替代原 per-card Haze 毛玻璃层：
  * 30+ 张卡不再各自注册 HazeState/hazeSource 离屏采样层，纯绘制层叠加即可。
  *
  * @param rating 评分值
@@ -60,47 +59,13 @@ fun RatingBadge(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        // 星星：四向黑色副本形成硬描边，上层金色主体保留海报上的识别度。
-        Box {
-            Icon(
-                imageVector = Icons.Rounded.Star,
-                contentDescription = null,
-                modifier = Modifier
-                    .offset(x = (-0.7).dp)
-                    .size(RatingIconSize),
-                tint = Color.Black.copy(alpha = 0.85f)
-            )
-            Icon(
-                imageVector = Icons.Rounded.Star,
-                contentDescription = null,
-                modifier = Modifier
-                    .offset(x = 0.7.dp)
-                    .size(RatingIconSize),
-                tint = Color.Black.copy(alpha = 0.85f)
-            )
-            Icon(
-                imageVector = Icons.Rounded.Star,
-                contentDescription = null,
-                modifier = Modifier
-                    .offset(y = (-0.7).dp)
-                    .size(RatingIconSize),
-                tint = Color.Black.copy(alpha = 0.85f)
-            )
-            Icon(
-                imageVector = Icons.Rounded.Star,
-                contentDescription = null,
-                modifier = Modifier
-                    .offset(y = 0.7.dp)
-                    .size(RatingIconSize),
-                tint = Color.Black.copy(alpha = 0.85f)
-            )
-            Icon(
-                imageVector = Icons.Rounded.Star,
-                contentDescription = null,
-                modifier = Modifier.size(RatingIconSize),
-                tint = RatingGold
-            )
-        }
+        // 星星：金色主体，半透明 scrim 底保证海报上的识别度。
+        Icon(
+            imageVector = Icons.Rounded.Star,
+            contentDescription = null,
+            modifier = Modifier.size(RatingIconSize),
+            tint = RatingGold
+        )
         Text(
             text = "%.1f".format(rating),
             color = Color.White,
