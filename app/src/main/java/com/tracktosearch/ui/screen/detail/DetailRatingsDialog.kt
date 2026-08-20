@@ -1,5 +1,9 @@
 package com.tracktosearch.ui.screen.detail
+import com.tracktosearch.ui.component.GlassSurfaceRole
+import com.tracktosearch.ui.component.glassBorderColor
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.RatingGold
+import com.tracktosearch.ui.theme.VisualEffectMode
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -185,6 +189,15 @@ private fun RatingCard(
     val darkTheme = isSystemInDarkTheme()
     val baseColor = immersionColor ?: MaterialTheme.colorScheme.surface
     val cardColor = ratingCardColor(baseColor, darkTheme)
+    // 玻璃边框：与搜索框/卡片角色统一；GLASS 模式按 Card token 调制透明度，Blur 分支保持普通边框
+    val cardBorderColor = if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
+        glassBorderColor(
+            role = GlassSurfaceRole.Card,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+    } else {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+    }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -192,7 +205,7 @@ private fun RatingCard(
             .testTag(RATING_CARD_TEST_TAG),
         shape = RoundedCornerShape(12.dp),
         color = cardColor,
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+        border = BorderStroke(1.dp, cardBorderColor),
         shadowElevation = 0.dp,
         tonalElevation = 0.dp
     ) {
