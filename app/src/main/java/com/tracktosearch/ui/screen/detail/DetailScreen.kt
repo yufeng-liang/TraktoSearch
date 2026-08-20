@@ -68,6 +68,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -520,7 +521,8 @@ fun DetailScreen(
                                     .alpha(contentAlpha)
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 4.dp)
-                                    .clickable { viewModel.toggleShowHighRelevanceOnly() }
+                                    .clickable { viewModel.toggleShowHighRelevanceOnly() },
+                                contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = stringResource(
@@ -528,7 +530,8 @@ fun DetailScreen(
                                         uiState.lowRelevanceHiddenCount
                                     ),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = MaterialTheme.colorScheme.primary,
+                                    textAlign = TextAlign.Center
                                 )
                             }
                         }
