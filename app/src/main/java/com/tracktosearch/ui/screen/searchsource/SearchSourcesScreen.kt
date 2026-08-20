@@ -61,6 +61,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
+import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.screen.settings.PanHubConfigDialog
@@ -246,13 +247,14 @@ fun SearchSourcesScreen(
     }
 }
 
-/** 毛玻璃吸顶标题栏：返回 + 标题 + 导入入口 */
+/** 毛玻璃吸顶标题栏：返回 + 标题 + 导入入口（间距与按钮样式对齐标记记录页） */
 @Composable
 private fun HeaderBar(
     hazeState: HazeState,
     onBack: () -> Unit,
     onImport: () -> Unit
 ) {
+    val isDark = isAppDarkTheme()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -267,7 +269,7 @@ private fun HeaderBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 8.dp),
+                .padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 1.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
@@ -279,18 +281,22 @@ private fun HeaderBar(
             }
             Text(
                 text = stringResource(R.string.search_sources_title),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
             )
-            Spacer(modifier = Modifier.weight(1f))
-            IconButton(onClick = onImport) {
+            NeumorphicIconButton(
+                onClick = onImport,
+                isDark = isDark,
+                lightBorderAlpha = 0.35f,
+                hazeState = hazeState
+            ) {
                 Icon(
                     imageVector = Icons.Rounded.FileDownload,
                     contentDescription = stringResource(R.string.search_sources_import),
-                    tint = MaterialTheme.colorScheme.primary
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
