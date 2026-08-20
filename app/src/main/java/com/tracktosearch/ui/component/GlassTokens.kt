@@ -137,7 +137,7 @@ private fun baseInnerShadowRadius(role: GlassSurfaceRole): Dp {
     return when (role) {
         GlassSurfaceRole.BottomNavigation -> 8.dp
         GlassSurfaceRole.TopBar -> 4.dp
-        GlassSurfaceRole.SearchField,
+        GlassSurfaceRole.SearchField -> 0.dp
         GlassSurfaceRole.Card -> 4.dp
         GlassSurfaceRole.CircularControl,
         GlassSurfaceRole.DetailAction -> 3.dp
