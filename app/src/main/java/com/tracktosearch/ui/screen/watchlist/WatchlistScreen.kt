@@ -24,6 +24,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -948,7 +949,11 @@ fun WatchlistScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable {
+                                    // 点击回顶：无涟漪（标题区是整块覆盖层，点击回顶属于导航语义，不显示波纹）
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
                                         if (isSearchExpanded) {
                                             collapseSearch()
                                         } else {
