@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -112,53 +113,72 @@ internal fun vintageTicketColorScheme(dark: Boolean): androidx.compose.material3
     )
 }
 
-/** 根据种子色生成自定义 colorScheme */
+/**
+ * 根据种子色生成 Material You 标准 TonalSpot colorScheme。
+ * 使用 TonalPalette 标准映射（Hct 色彩空间），替代旧的手写 alpha 合成方案。
+ * 品牌背景/表面色保持项目定制值不变。
+ */
 private fun monetColorScheme(seed: Color, dark: Boolean): androidx.compose.material3.ColorScheme {
-    val primary = seed
-    val onPrimary = Color.White
-    val primaryContainer = seed.copy(alpha = 0.8f)
-    val secondary = seed.copy(alpha = 0.7f)
-    val onSecondary = Color.White
-    val secondaryContainer = seed.copy(alpha = 0.15f)
-    val onSecondaryContainer = seed
+    val seedArgb = seed.toArgb()
+    val tonal = com.tracktosearch.data.util.mcu.palettes.TonalPalette.fromInt(seedArgb)
+    val neutral = com.tracktosearch.data.util.mcu.palettes.TonalPalette.fromHueAndChroma(
+        com.tracktosearch.data.util.mcu.hct.Hct.fromInt(seedArgb).hue, 4.0
+    )
+    val neutralVariant = com.tracktosearch.data.util.mcu.palettes.TonalPalette.fromHueAndChroma(
+        com.tracktosearch.data.util.mcu.hct.Hct.fromInt(seedArgb).hue, 8.0
+    )
+
+    // TonalSpot 标准 tone 值（Material You 官方映射）
+    val primary = Color(if (dark) tonal.tone(80.0) else tonal.tone(40.0))
+    val onPrimary = Color(if (dark) tonal.tone(20.0) else tonal.tone(100.0))
+    val primaryContainer = Color(if (dark) tonal.tone(30.0) else tonal.tone(90.0))
+    val onPrimaryContainer = Color(if (dark) tonal.tone(90.0) else tonal.tone(10.0))
+    val secondary = Color(if (dark) neutral.tone(80.0) else neutral.tone(40.0))
+    val onSecondary = Color(if (dark) neutral.tone(20.0) else neutral.tone(100.0))
+    val secondaryContainer = Color(if (dark) neutral.tone(30.0) else neutral.tone(90.0))
+    val onSecondaryContainer = Color(if (dark) neutral.tone(90.0) else neutral.tone(10.0))
+    val tertiary = Color(if (dark) tonal.tone(80.0) else tonal.tone(40.0))
+    val onTertiary = Color(if (dark) tonal.tone(20.0) else tonal.tone(100.0))
+    val tertiaryContainer = Color(if (dark) tonal.tone(30.0) else tonal.tone(90.0))
+    val onTertiaryContainer = Color(if (dark) tonal.tone(90.0) else tonal.tone(10.0))
+    val error = Color(0xFFBA1A1A)
+    val onError = Color.White
+    val errorContainer = Color(if (dark) tonal.tone(30.0) else tonal.tone(90.0))
+    val onErrorContainer = Color(if (dark) tonal.tone(90.0) else tonal.tone(10.0))
+    val surfaceVar = Color(if (dark) neutralVariant.tone(30.0) else neutralVariant.tone(90.0))
+    val onSurfaceVar = Color(if (dark) neutralVariant.tone(80.0) else neutralVariant.tone(30.0))
+    val outline = Color(if (dark) neutralVariant.tone(60.0) else neutralVariant.tone(50.0))
+    val outlineVariant = Color(if (dark) neutralVariant.tone(30.0) else neutralVariant.tone(80.0))
+
     return if (dark) {
         darkColorScheme(
-            primary = primary,
-            onPrimary = onPrimary,
-            primaryContainer = primaryContainer,
-            secondary = secondary,
-            onSecondary = onSecondary,
-            secondaryContainer = secondaryContainer,
-            onSecondaryContainer = onSecondaryContainer,
-            background = CinemaBackground,
-            onBackground = Color.White,
-            surface = CinemaSurface,
-            onSurface = Color.White,
-            surfaceVariant = CinemaCard,
-            onSurfaceVariant = LightGray,
-            outline = Color(0xFF3A3A5A),
-            outlineVariant = Color(0xFF1E1E32),
+            primary = primary, onPrimary = onPrimary,
+            primaryContainer = primaryContainer, onPrimaryContainer = onPrimaryContainer,
+            secondary = secondary, onSecondary = onSecondary,
+            secondaryContainer = secondaryContainer, onSecondaryContainer = onSecondaryContainer,
+            tertiary = tertiary, onTertiary = onTertiary,
+            tertiaryContainer = tertiaryContainer, onTertiaryContainer = onTertiaryContainer,
+            error = error, onError = onError,
+            errorContainer = errorContainer, onErrorContainer = onErrorContainer,
+            background = CinemaBackground, onBackground = Color.White,
+            surface = CinemaSurface, onSurface = Color.White,
+            surfaceVariant = surfaceVar, onSurfaceVariant = onSurfaceVar,
+            outline = outline, outlineVariant = outlineVariant,
         )
     } else {
         lightColorScheme(
-            primary = primary,
-            onPrimary = onPrimary,
-            primaryContainer = primaryContainer,
-            secondary = secondary,
-            onSecondary = onSecondary,
-            secondaryContainer = secondaryContainer,
-            onSecondaryContainer = onSecondaryContainer,
-            background = LightBackground,
-            onBackground = DarkGray,
-            surface = LightSurface,
-            onSurface = DarkGray,
-            surfaceVariant = Color(
-                red = seed.red * 0.08f + 0.92f,
-                green = seed.green * 0.08f + 0.92f,
-                blue = seed.blue * 0.08f + 0.92f
-            ),
-            outline = Color(0xFFBDBDBD),
-            outlineVariant = Color(0xFFE8E8E8),
+            primary = primary, onPrimary = onPrimary,
+            primaryContainer = primaryContainer, onPrimaryContainer = onPrimaryContainer,
+            secondary = secondary, onSecondary = onSecondary,
+            secondaryContainer = secondaryContainer, onSecondaryContainer = onSecondaryContainer,
+            tertiary = tertiary, onTertiary = onTertiary,
+            tertiaryContainer = tertiaryContainer, onTertiaryContainer = onTertiaryContainer,
+            error = error, onError = onError,
+            errorContainer = errorContainer, onErrorContainer = onErrorContainer,
+            background = LightBackground, onBackground = DarkGray,
+            surface = LightSurface, onSurface = DarkGray,
+            surfaceVariant = surfaceVar, onSurfaceVariant = onSurfaceVar,
+            outline = outline, outlineVariant = outlineVariant,
         )
     }
 }
@@ -167,6 +187,7 @@ private fun monetColorScheme(seed: Color, dark: Boolean): androidx.compose.mater
 fun TraktoSearchTheme(
     themeMode: String = "system",
     accentColor: MonetAccent? = null,
+    customAccentArgb: Long? = null,
     visualEffectMode: VisualEffectMode = VisualEffectMode.GLASS,
     glassVariant: GlassVariant = GlassVariant.CLEAR,
     content: @Composable () -> Unit
@@ -177,6 +198,10 @@ fun TraktoSearchTheme(
         else -> isSystemInDarkTheme()
     }
     val colorScheme = when {
+        customAccentArgb != null -> monetColorScheme(
+            seed = Color(customAccentArgb.toInt()),
+            dark = darkTheme
+        )
         accentColor == MonetAccent.VINTAGE_TICKET -> vintageTicketColorScheme(darkTheme)
         // 自定义莫奈主题色：直接用种子色生成 scheme，忽略动态壁纸
         accentColor != null -> monetColorScheme(

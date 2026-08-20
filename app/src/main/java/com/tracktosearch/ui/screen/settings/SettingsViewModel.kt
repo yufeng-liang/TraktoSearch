@@ -120,6 +120,8 @@ class SettingsViewModel @Inject constructor(
 
     val accentColor: StateFlow<com.tracktosearch.ui.theme.MonetAccent?> = themeStorage.accentColor
 
+    val customAccentArgb: StateFlow<Long?> = themeStorage.customAccentArgb
+
     val visualEffectMode: StateFlow<VisualEffectMode> = themeStorage.visualEffectMode
 
     val glassVariant: StateFlow<GlassVariant> = themeStorage.glassVariant
@@ -152,6 +154,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setAccentColor(accent: com.tracktosearch.ui.theme.MonetAccent?) {
         viewModelScope.launch { themeStorage.setAccentColor(accent) }
+    }
+
+    fun setCustomAccent(argb: Long?) {
+        viewModelScope.launch { themeStorage.setCustomAccent(argb) }
     }
 
     fun setVisualEffectMode(mode: VisualEffectMode) {

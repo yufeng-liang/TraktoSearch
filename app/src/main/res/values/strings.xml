@@ -352,6 +352,10 @@
     <string name="detail_own_comment_sync_douban">This comment will sync to Douban</string>
     <string name="detail_own_comment_sync_trakt_douban">This comment will sync to Trakt and Douban</string>
     <string name="detail_own_comment_sync_unavailable">Sign in to publish and sync this comment</string>
+    <string name="detail_own_comment_placeholder_trakt">The short review written here will sync to Trakt</string>
+    <string name="detail_own_comment_placeholder_douban">The short review written here will sync to Douban</string>
+    <string name="detail_own_comment_placeholder_trakt_douban">The short review written here will sync to Trakt and Douban</string>
+    <string name="detail_own_comment_placeholder_unavailable">Sign in to publish and sync this comment</string>
     <string name="detail_own_comment_edit">Edit comment</string>
     <string name="detail_own_comment_publish">Publish</string>
     <string name="detail_own_comment_cancel">Cancel</string>
@@ -512,8 +516,9 @@
     <!-- Accent Color -->
     <string name="settings_accent_color">Tone &amp; Material</string>
     <string name="settings_material">Material</string>
-    <string name="settings_visual_effect_glass">Glass</string>
+    <string name="settings_visual_effect_glass">Glass (Experimental)</string>
     <string name="settings_accent_dynamic">Dynamic</string>
+    <string name="settings_accent_custom">Custom</string>
     <!-- Accent Color Names -->
     <string name="accent_vintage_ticket">Vintage Ticket</string>
     <string name="accent_water_lily">Water Lily Purple</string>
@@ -558,7 +563,8 @@
     <string name="settings_feedback">Feedback &amp; Suggestions</string>
     <string name="settings_feedback_subtitle">Developer on duty: send us your ideas and bugs 🧑‍💻🍿</string>
     <string name="feedback_title">Feedback</string>
-    <string name="feedback_intro">I read every piece of feedback carefully. This is also your feature wish pool—maybe one day, your wish will make it into the app~</string>
+    <string name="feedback_intro">I read every piece of feedback carefully.
+This is also your feature wish pool—maybe one day, your wish will make it into the app~</string>
     <string name="feedback_new">New Feedback</string>
     <string name="feedback_my_feedbacks">My Feedback</string>
     <string name="feedback_empty">No feedback yet. Tap above to write the first one.</string>

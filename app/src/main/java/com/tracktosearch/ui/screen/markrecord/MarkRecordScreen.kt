@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.markrecord
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -242,6 +243,8 @@ fun MarkRecordScreen(
                     blurRadius = 24.dp,
                     scene = markRecordGlassScene
                 )
+                // 拦截点击：顶栏覆盖可滚动网格，不消费会让点击穿透到下方列表项
+                .clickable(enabled = false, onClick = {})
         ) {
             Spacer(modifier = Modifier.statusBarsPadding())
 

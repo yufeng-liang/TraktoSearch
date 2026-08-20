@@ -57,6 +57,16 @@ private fun ownCommentSyncDescription(targets: Set<OwnCommentTarget>): String = 
     else -> stringResource(R.string.detail_own_comment_sync_unavailable)
 }
 
+/** 输入框提示词：这里写下的短评将同步至 xx */
+@Composable
+private fun ownCommentPlaceholder(targets: Set<OwnCommentTarget>): String = when {
+    OwnCommentTarget.TRAKT in targets && OwnCommentTarget.DOUBAN in targets ->
+        stringResource(R.string.detail_own_comment_placeholder_trakt_douban)
+    OwnCommentTarget.TRAKT in targets -> stringResource(R.string.detail_own_comment_placeholder_trakt)
+    OwnCommentTarget.DOUBAN in targets -> stringResource(R.string.detail_own_comment_placeholder_douban)
+    else -> stringResource(R.string.detail_own_comment_placeholder_unavailable)
+}
+
 @Composable
 internal fun OwnCommentComposer(
     initialComment: String,
@@ -87,34 +97,17 @@ internal fun OwnCommentComposer(
         scene = scene
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = stringResource(R.string.detail_own_comment_title),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = ownCommentSyncDescription(targets),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            OutlinedTextField(
-                value = comment,
-                onValueChange = { if (it.length <= 350) comment = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text(stringResource(R.string.detail_own_comment_hint)) },
-                textStyle = MaterialTheme.typography.bodyMedium,
-                minLines = 3,
-                maxLines = 5,
-                enabled = !isSaving,
-                shape = RoundedCornerShape(12.dp)
-            )
+            // 标题行：标题在左，发布按钮右对齐
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                horizontalArrangement = Arrangement.End,
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Text(
+                    text = stringResource(R.string.detail_own_comment_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
                 if (isEditing) {
                     TextButton(onClick = onCancelEdit, enabled = !isSaving) {
                         Text(stringResource(R.string.detail_own_comment_cancel))
@@ -141,6 +134,19 @@ internal fun OwnCommentComposer(
                     Text(stringResource(R.string.detail_own_comment_publish))
                 }
             }
+            Spacer(modifier = Modifier.height(10.dp))
+            OutlinedTextField(
+                value = comment,
+                onValueChange = { if (it.length <= 350) comment = it },
+                modifier = Modifier.fillMaxWidth(),
+                // 同步说明作为输入框提示词
+                placeholder = { Text(ownCommentPlaceholder(targets)) },
+                textStyle = MaterialTheme.typography.bodyMedium,
+                minLines = 3,
+                maxLines = 5,
+                enabled = !isSaving,
+                shape = RoundedCornerShape(12.dp)
+            )
         }
     }
 }
@@ -202,7 +208,7 @@ internal fun OwnCommentCard(
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
-            ExpandableText(text = comment, fadeColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White)
+            ExpandableText(text = comment)
             if (retryTargets.isNotEmpty()) {
                 TextButton(
                     onClick = onRetry,
@@ -236,11 +242,6 @@ internal fun CommentItem(
 
     val displayText = if (showOriginal) comment.comment else (translatedText ?: comment.comment)
     val isDark = isAppDarkTheme()
-    val commentFadeColor = if (isDark) {
-        MaterialTheme.colorScheme.surface
-    } else {
-        Color.White
-    }
     val sourceLabel = if (comment.source == DOUBAN_COMMENT_SOURCE) {
         stringResource(R.string.detail_comment_source_douban)
     } else {
@@ -347,7 +348,7 @@ internal fun CommentItem(
                 }
             } else {
                 // 评论正文（折叠展开）
-                ExpandableText(text = displayText, fadeColor = commentFadeColor)
+                ExpandableText(text = displayText)
 
                 // 原文/译文切换
                 if (translatedText != null) {

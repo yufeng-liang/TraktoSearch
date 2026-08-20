@@ -352,6 +352,10 @@
     <string name="detail_own_comment_sync_douban">本条评论将同步至豆瓣</string>
     <string name="detail_own_comment_sync_trakt_douban">本条评论将同步至 Trakt、豆瓣</string>
     <string name="detail_own_comment_sync_unavailable">登录后可发布并同步本条评论</string>
+    <string name="detail_own_comment_placeholder_trakt">这里写下的短评将同步至 Trakt</string>
+    <string name="detail_own_comment_placeholder_douban">这里写下的短评将同步至豆瓣</string>
+    <string name="detail_own_comment_placeholder_trakt_douban">这里写下的短评将同步至 Trakt、豆瓣</string>
+    <string name="detail_own_comment_placeholder_unavailable">登录后可发布并同步本条评论</string>
     <string name="detail_own_comment_edit">编辑短评</string>
     <string name="detail_own_comment_publish">发布</string>
     <string name="detail_own_comment_cancel">取消</string>
@@ -512,8 +516,9 @@
     <!-- Accent Color -->
     <string name="settings_accent_color">色调与材质</string>
     <string name="settings_material">材质</string>
-    <string name="settings_visual_effect_glass">玻璃</string>
+    <string name="settings_visual_effect_glass">玻璃（实验性）</string>
     <string name="settings_accent_dynamic">跟随壁纸取色</string>
+    <string name="settings_accent_custom">自由调色</string>
     <!-- 应用色调 -->
     <string name="accent_vintage_ticket">复古票根</string>
     <string name="accent_water_lily">睡莲紫</string>
@@ -558,7 +563,8 @@
     <string name="settings_feedback">反馈与建议</string>
     <string name="settings_feedback_subtitle">开发者在线营业，欢迎投喂建议和 Bug 🧑‍💻🍿</string>
     <string name="feedback_title">反馈与建议</string>
-    <string name="feedback_intro">每一条反馈，我都会认真读到。这里也是你的功能许愿池，说不定哪天，你许下的愿望就上线啦～</string>
+    <string name="feedback_intro">每一条反馈，我都会认真读到。
+这里也是你的功能许愿池，说不定哪天，你许下的愿望就上线啦～</string>
     <string name="feedback_new">写新反馈</string>
     <string name="feedback_my_feedbacks">我的反馈</string>
     <string name="feedback_empty">暂无反馈，点击上方按钮写下第一条</string>

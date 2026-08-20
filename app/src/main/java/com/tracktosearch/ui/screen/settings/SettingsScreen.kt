@@ -200,6 +200,7 @@ fun SettingsScreen(
     val isDark = isAppDarkTheme()
     val currentTheme by viewModel.themeMode.collectAsStateWithLifecycle()
     val currentAccent by viewModel.accentColor.collectAsStateWithLifecycle()
+    val currentCustomAccentArgb by viewModel.customAccentArgb.collectAsStateWithLifecycle()
     val currentVisualEffectMode by viewModel.visualEffectMode.collectAsStateWithLifecycle()
     val currentGlassVariant by viewModel.glassVariant.collectAsStateWithLifecycle()
     val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
@@ -697,6 +698,8 @@ fun SettingsScreen(
                         backdropOverride = settingsContentBackdrop,
                         scene = settingsGlassScene
                     )
+                    // 拦截点击：顶栏覆盖可滚动列表，不消费会让点击穿透到下方列表项
+                    .clickable(enabled = false, onClick = {})
             ) {
                 Column {
                     Spacer(modifier = Modifier.statusBarsPadding())
@@ -746,6 +749,8 @@ fun SettingsScreen(
         AccentColorDialog(
             currentAccent = currentAccent,
             onAccentSelected = { viewModel.setAccentColor(it) },
+            customAccentArgb = currentCustomAccentArgb,
+            onCustomAccentSelected = { viewModel.setCustomAccent(it) },
             currentMode = currentVisualEffectMode,
             currentVariant = currentGlassVariant,
             onVisualEffectSelected = { mode, variant ->

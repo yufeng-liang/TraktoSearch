@@ -284,6 +284,8 @@ fun DiscoverFilterScreen(
                     blurRadius = 24.dp,
                     scene = discoverFilterGlassScene
                 )
+                // 拦截点击：顶栏覆盖可滚动列表，不消费会让点击穿透到下方列表项
+                .clickable(enabled = false, onClick = {})
         ) {
             Spacer(modifier = Modifier.statusBarsPadding())
             // 标题栏 + 返回箭头

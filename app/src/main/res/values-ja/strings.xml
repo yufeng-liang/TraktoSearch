@@ -257,8 +257,9 @@
     <!-- Accent Color -->
     <string name="settings_accent_color">トーンと素材</string>
     <string name="settings_material">素材</string>
-    <string name="settings_visual_effect_glass">ガラス</string>
+    <string name="settings_visual_effect_glass">ガラス（実験的）</string>
     <string name="settings_accent_dynamic">ダイナミック</string>
+    <string name="settings_accent_custom">カスタム</string>
     <!-- アクセントカラー -->
     <string name="accent_vintage_ticket">レトロチケット</string>
     <string name="accent_water_lily">睡蓮紫</string>
@@ -519,6 +520,10 @@
     <string name="detail_own_comment_sync_douban">このコメントは Douban に同期されます</string>
     <string name="detail_own_comment_sync_trakt_douban">このコメントは Trakt と Douban に同期されます</string>
     <string name="detail_own_comment_sync_unavailable">ログインするとコメントを公開・同期できます</string>
+    <string name="detail_own_comment_placeholder_trakt">ここで書いた短いレビューは Trakt に同期されます</string>
+    <string name="detail_own_comment_placeholder_douban">ここで書いた短いレビューは Douban に同期されます</string>
+    <string name="detail_own_comment_placeholder_trakt_douban">ここで書いた短いレビューは Trakt と Douban に同期されます</string>
+    <string name="detail_own_comment_placeholder_unavailable">ログインするとコメントを公開・同期できます</string>
     <string name="detail_own_comment_edit">コメントを編集</string>
     <string name="detail_own_comment_publish">公開</string>
     <string name="detail_own_comment_cancel">キャンセル</string>
@@ -638,7 +643,8 @@
     <string name="settings_feedback">フィードバック</string>
     <string name="settings_feedback_subtitle">開発者が営業中。アイデアやバグをどんどんどうぞ 🧑‍💻🍿</string>
     <string name="feedback_title">フィードバック</string>
-    <string name="feedback_intro">届いたフィードバックは、一つひとつ私が大切に読みます。ここは機能の願いごとボックスでもあります。いつか、あなたの願いが実現するかも〜</string>
+    <string name="feedback_intro">届いたフィードバックは、一つひとつ私が大切に読みます。
+ここは機能の願いごとボックスでもあります。いつか、あなたの願いが実現するかも〜</string>
     <string name="feedback_new">新規フィードバック</string>
     <string name="feedback_my_feedbacks">マイフィードバック</string>
     <string name="feedback_empty">まだフィードバックはありません</string>

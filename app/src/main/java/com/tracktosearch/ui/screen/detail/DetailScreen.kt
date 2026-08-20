@@ -68,6 +68,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -550,7 +551,8 @@ fun DetailScreen(
                                     .alpha(contentAlpha)
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 4.dp)
-                                    .clickable { viewModel.toggleShowHighRelevanceOnly() }
+                                    .clickable { viewModel.toggleShowHighRelevanceOnly() },
+                                contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = stringResource(
@@ -558,7 +560,8 @@ fun DetailScreen(
                                         uiState.lowRelevanceHiddenCount
                                     ),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = MaterialTheme.colorScheme.primary,
+                                    textAlign = TextAlign.Center
                                 )
                             }
                         }
@@ -641,21 +644,16 @@ fun DetailScreen(
                     val commentsToShow = uiState.comments.filter { it.id != uiState.traktCommentId }
                     // 豆瓣评论基本都是中文，无需翻译，只有存在非豆瓣评论时才显示全部翻译
                     val translatableComments = commentsToShow.filter { it.source != DOUBAN_COMMENT_SOURCE }
-                    item(key = "comments_header") {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = stringResource(R.string.detail_comments),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.weight(1f)
-                            )
-                            if (translatableComments.isNotEmpty() && uiState.translatedComments.size < translatableComments.size) {
+                    // 评论标题已移除，翻译按钮单独右对齐显示
+                    if (translatableComments.isNotEmpty() && uiState.translatedComments.size < translatableComments.size) {
+                        item(key = "comments_translate") {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.End
+                            ) {
                                 Surface(
                                     onClick = { viewModel.translateComments() },
                                     enabled = !uiState.isTranslating,
@@ -848,14 +846,7 @@ fun DetailScreen(
                             }
                         }
                         else -> {
-                            item(key = "rec_header") {
-                                Text(
-                                    text = stringResource(R.string.detail_recommendations_title),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)
-                                )
-                            }
+                            // 相关推荐标题已移除
                             recommendations.chunked(3).forEachIndexed { rowIndex, rowItems ->
                                 item(key = "rec_row_$rowIndex") {
                                     Row(
