@@ -12,7 +12,7 @@
 - 代码注释用中文，Git commit message 用中文
 - ViewModel error 用英文（非 UI 展示文字）
 - 命令行用 bash，Python 用 `py`
-- 善用 anysearch/firecrawl 查信息，涉及api的必须用context7查明用法，避免瞎猜用法
+- 网络搜索**优先**用 anysearch（首选）或 firecrawl；涉及 api 的必须用 context7 查明用法，避免瞎猜用法
 
 ## 项目架构概览
 
@@ -101,6 +101,7 @@
 - Android/Gradle 测试和构建可能超过默认工具超时但仍在运行；使用较长的单次超时，超时后先检查 Gradle 进程、`app/build/test-results`、`app/build/reports` 和 APK 输出，再判断成功或失败。不要把工具层 timeout 直接等同于 Gradle 失败。
 - `AuthManager.initialize()` 可能同时由 `MainActivity` 和 `AuthCheckWorker` 进入；刷新锁内必须按调用方看到的旧 access token 二次检查，避免串行等待后的第二次刷新再次轮换 refresh token。
 - Git worktree 建新分支后 `local.properties` 不在版本库，需手动从 `F:\trae-project\local.properties` 复制到 worktree 目录
+- `dsh plugin` 或 dshmarket 更新报 `ERR_PNPM_UNEXPECTED_STORE` 是 pnpm 11 store 位置漂移：**pnpm 11 配置键是驼峰 `storeDir`，且只认 `C:\Users\15778\AppData\Local\pnpm\config\config.yaml`**（profile `.npmrc` 的连字符 `store-dir` 无效）；已全局写入 `storeDir: C:\Users\15778\.pnpm\store\v11` 修复。git 源插件首次安装会被 pnpm 拦 prepare 脚本，需在 `~/.dsh/profiles/web/pnpm-workspace.yaml` 的 `allowBuilds` 把对应包置 true 后重跑。
 - 授权网关调试时，App 默认应使用可直连的 Pages 代理 `https://tracktosearch-gateway.pages.dev/gateway-api`，由其转发到 `auth-worker`；不要把 `workers.dev` 直连地址写入面向普通用户的构建，否则部分网络环境会超时。
 - 若激活后短暂进入主界面又回到激活页，先核对 worktree 的 `gateway.base.url` 和构建产物中的 `GATEWAY_BASE_URL`，再检查 auth `check` 请求是否带 Bearer；不能只根据页面现象判断是邀请码失效。
 - Trakt `users/me?extended=full` 可能只返回用户名而没有头像；补拉头像时优先请求 `users/{username}/profile`，若网关或上游返回 405，再回退到 `users/{username}`，并持久化成功返回的 `images.avatar.full`。
