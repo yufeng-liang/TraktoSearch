@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
+import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.floatingGlassControlShadow
 import com.tracktosearch.ui.component.isAppDarkTheme
@@ -71,7 +72,12 @@ internal fun WatchlistModeSelector(
     val unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
     val durationMillis = 240
     val selectionBounceScale = rememberGlassSelectionBounceScale(safeSelectedIndex)
-    val floatingGlassShadow = if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
+    // Backdrop 可用时由 GlassSurfaceImpl 的 backdropGlass 提供阴影，避免与手动悬浮阴影叠加；
+    // 仅无 Backdrop host 的 fallback 分支保留手动阴影以维持高度感。
+    val floatingGlassShadow = if (
+        LocalVisualEffectMode.current == VisualEffectMode.GLASS &&
+        LocalBackdrop.current == null
+    ) {
         Modifier.floatingGlassControlShadow(capsuleShape, isDark)
     } else {
         Modifier
@@ -109,61 +115,131 @@ internal fun WatchlistModeSelector(
         }
     }
 
-    NeumorphicFrostedSurface(
-        modifier = modifier
-            .height(42.dp)
-            .then(floatingGlassShadow),
-        isDark = isDark,
-        shape = capsuleShape,
-        elevation = 7.dp,
-        blurRadius = 16.dp,
-        shadowOffset = 7.dp,
-        backgroundColor = if (isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.35f),
-        borderColor = if (isDark) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.72f),
-        darkShadowAlpha = if (isDark) 0.42f else 0.22f,
-        lightShadowAlpha = if (isDark) 0.06f else 0.32f,
-        hazeState = hazeState,
-        glassRole = GlassSurfaceRole.CircularControl,
-        showGlassBorder = false,
-        scene = scene
-    ) {
+    val isGlassMode = LocalVisualEffectMode.current == VisualEffectMode.GLASS
+    if (isGlassMode) {
+        // GLASS：毛玻璃胶囊，Backdrop 采样自带阴影与内阴影。
+        NeumorphicFrostedSurface(
+            modifier = modifier
+                .height(42.dp)
+                .then(floatingGlassShadow),
+            isDark = isDark,
+            shape = capsuleShape,
+            elevation = 7.dp,
+            blurRadius = 16.dp,
+            shadowOffset = 7.dp,
+            backgroundColor = if (isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.35f),
+            borderColor = if (isDark) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.72f),
+            darkShadowAlpha = if (isDark) 0.42f else 0.22f,
+            lightShadowAlpha = if (isDark) 0.06f else 0.32f,
+            hazeState = hazeState,
+            glassRole = GlassSurfaceRole.CircularControl,
+            showGlassBorder = false,
+            scene = scene
+        ) {
+            WatchlistModeTabs(
+                tabs = tabs,
+                safeSelectedIndex = safeSelectedIndex,
+                onTabSelected = onTabSelected,
+                targetWidths = targetWidths,
+                durationMillis = durationMillis,
+                capsuleShape = capsuleShape,
+                selectedColor = selectedColor,
+                unselectedColor = unselectedColor,
+                isDark = isDark,
+                isGlassMode = true,
+                selectionBounceScale = selectionBounceScale,
+                hazeState = hazeState,
+                scene = scene
+            )
+        }
+    } else {
+        // BLUR：保持合并前样式——纯色胶囊背景 + 选中项拟态药丸，不叠加毛玻璃/外阴影。
         Row(
-            modifier = Modifier
-                .fillMaxHeight()
-                .wrapContentWidth(),
+            modifier = modifier
+                .clip(capsuleShape)
+                .height(42.dp)
+                .background(
+                    if (isDark) Color.White.copy(alpha = 0.10f)
+                    else Color.White.copy(alpha = 0.35f)
+                )
+                .padding(horizontal = 4.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            tabs.forEachIndexed { index, label ->
-                val selected = index == safeSelectedIndex
-                val targetWidth = targetWidths[index]
-                val itemWidth by animateDpAsState(
-                    targetValue = targetWidth,
-                    animationSpec = tween(durationMillis),
-                    label = "watchlist_mode_width_$index"
-                )
-                val fontSize by animateFloatAsState(
-                    targetValue = if (selected) 15f else 14f,
-                    animationSpec = tween(durationMillis),
-                    label = "watchlist_mode_font_size_$index"
-                )
-                val itemModifier = Modifier
-                    .width(itemWidth)
-                    .widthIn(min = 44.dp)
-                    .fillMaxHeight()
-                    .clip(capsuleShape)
-                    .testTag("watchlist_mode_tab_$index")
-                    .selectable(
-                        selected = selected,
-                        role = Role.Tab,
-                        onClick = { onTabSelected(index) }
-                    )
-                    .semantics(mergeDescendants = true) { this.selected = selected }
+            WatchlistModeTabs(
+                tabs = tabs,
+                safeSelectedIndex = safeSelectedIndex,
+                onTabSelected = onTabSelected,
+                targetWidths = targetWidths,
+                durationMillis = durationMillis,
+                capsuleShape = capsuleShape,
+                selectedColor = selectedColor,
+                unselectedColor = unselectedColor,
+                isDark = isDark,
+                isGlassMode = false,
+                selectionBounceScale = selectionBounceScale,
+                hazeState = hazeState,
+                scene = scene
+            )
+        }
+    }
+}
 
-                Box(
-                    modifier = itemModifier,
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (selected) {
+/** Tab 行内容：宽度/字号动画、选中态表面渲染。选中态按视觉模式分支。 */
+@Composable
+private fun WatchlistModeTabs(
+    tabs: List<String>,
+    safeSelectedIndex: Int,
+    onTabSelected: (Int) -> Unit,
+    targetWidths: List<androidx.compose.ui.unit.Dp>,
+    durationMillis: Int,
+    capsuleShape: RoundedCornerShape,
+    selectedColor: Color,
+    unselectedColor: Color,
+    isDark: Boolean,
+    isGlassMode: Boolean,
+    selectionBounceScale: Float,
+    hazeState: HazeState?,
+    scene: GlassScene
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxHeight()
+            .wrapContentWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        tabs.forEachIndexed { index, label ->
+            val selected = index == safeSelectedIndex
+            val targetWidth = targetWidths[index]
+            val itemWidth by animateDpAsState(
+                targetValue = targetWidth,
+                animationSpec = tween(durationMillis),
+                label = "watchlist_mode_width_$index"
+            )
+            val fontSize by animateFloatAsState(
+                targetValue = if (selected) 15f else 14f,
+                animationSpec = tween(durationMillis),
+                label = "watchlist_mode_font_size_$index"
+            )
+            val itemModifier = Modifier
+                .width(itemWidth)
+                .widthIn(min = 44.dp)
+                .fillMaxHeight()
+                .clip(capsuleShape)
+                .testTag("watchlist_mode_tab_$index")
+                .selectable(
+                    selected = selected,
+                    role = Role.Tab,
+                    onClick = { onTabSelected(index) }
+                )
+                .semantics(mergeDescendants = true) { this.selected = selected }
+
+            Box(
+                modifier = itemModifier,
+                contentAlignment = Alignment.Center
+            ) {
+                if (selected) {
+                    if (isGlassMode) {
+                        // GLASS：Backdrop 采样药丸，带按压缩放与导航选中描边。
                         NeumorphicFrostedSurface(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -197,13 +273,40 @@ internal fun WatchlistModeSelector(
                             }
                         }
                     } else {
-                        ModeLabel(
-                            text = label,
-                            fontSize = fontSize,
-                            color = unselectedColor,
-                            selected = false
-                        )
+                        // BLUR：合并前样式——仅拟态选中药丸，不参与 Backdrop 采样。
+                        NeumorphicFrostedSurface(
+                            modifier = Modifier.fillMaxSize(),
+                            isDark = isDark,
+                            shape = capsuleShape,
+                            elevation = 2.dp,
+                            blurRadius = 10.dp,
+                            backgroundColor = if (isDark) {
+                                selectedColor.copy(alpha = 0.30f)
+                            } else {
+                                selectedColor.copy(alpha = 0.18f)
+                            },
+                            borderColor = selectedColor.copy(alpha = if (isDark) 0.42f else 0.28f)
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                ModeLabel(
+                                    text = label,
+                                    fontSize = fontSize,
+                                    color = selectedColor,
+                                    selected = true
+                                )
+                            }
+                        }
                     }
+                } else {
+                    ModeLabel(
+                        text = label,
+                        fontSize = fontSize,
+                        color = unselectedColor,
+                        selected = false
+                    )
                 }
             }
         }
