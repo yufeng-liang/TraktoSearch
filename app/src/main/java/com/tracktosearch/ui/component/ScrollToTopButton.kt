@@ -219,7 +219,7 @@ private fun ScrollToTopArrow(tint: Color) {
         Color.Black.copy(alpha = 0.62f)
     }
     Box(
-        modifier = Modifier.size(38.dp),
+        modifier = Modifier.size(95.dp),
         contentAlignment = Alignment.Center
     ) {
         Icon(
@@ -227,14 +227,14 @@ private fun ScrollToTopArrow(tint: Color) {
             contentDescription = null,
             tint = contrastHalo,
             modifier = Modifier
-                .size(36.dp)
+                .size(90.dp)
                 .offset(y = 1.dp)
         )
         Icon(
             imageVector = Icons.Filled.ArrowDropUp,
             contentDescription = stringResource(R.string.scroll_to_top),
             tint = tint,
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier.size(80.dp)
         )
     }
 }

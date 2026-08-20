@@ -848,7 +848,7 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
                 contentDescription = stringResource(labelRes),
                 modifier = Modifier
                     .size(24.dp)
-                    .offset(y = 3.dp)
+                    .offset(y = 0.dp)
                     .clip(RoundedCornerShape(12.dp))
             )
         } else {
@@ -856,7 +856,7 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
                 Box(
                     modifier = Modifier
                         .size(26.dp)
-                        .offset(y = 3.dp),
+                        .offset(y = 0.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     if (contrastHalo.alpha > 0f) {
