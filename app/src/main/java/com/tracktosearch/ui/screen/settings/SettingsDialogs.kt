@@ -1,7 +1,9 @@
 package com.tracktosearch.ui.screen.settings
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +31,8 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.DragIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -162,6 +166,16 @@ internal fun AccentColorDialog(
         Color(0xFF4A7FB5), Color(0xFF7B68AE)
     )
     val dynamicCheckTint = if (dynamicColors.map { it.luminance() }.average() > 0.5) Color.Black else Color.White
+
+    // 壁纸取色后的真实主色预览（Android 12+），否则回退彩虹渐变
+    val context = LocalContext.current
+    val darkTheme = isSystemInDarkTheme()
+    val dynamicPrimaryColor = remember(darkTheme) {
+        if (Build.VERSION.SDK_INT >= 31) {
+            if (darkTheme) dynamicDarkColorScheme(context).primary
+            else dynamicLightColorScheme(context).primary
+        } else null
+    }
 
     data class MaterialOption(
         val mode: VisualEffectMode,
@@ -301,10 +315,10 @@ internal fun AccentColorDialog(
                                         .size(44.dp)
                                         .clip(CircleShape)
                                         .background(
-                                            brush = if (accent != null) {
-                                                androidx.compose.ui.graphics.SolidColor(accent.light)
-                                            } else {
-                                                androidx.compose.ui.graphics.Brush.sweepGradient(colors = dynamicColors)
+                                            brush = when {
+                                                accent != null -> androidx.compose.ui.graphics.SolidColor(accent.light)
+                                                dynamicPrimaryColor != null -> androidx.compose.ui.graphics.SolidColor(dynamicPrimaryColor)
+                                                else -> androidx.compose.ui.graphics.Brush.sweepGradient(colors = dynamicColors)
                                             }
                                         )
                                         .then(
