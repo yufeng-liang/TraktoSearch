@@ -85,8 +85,8 @@ internal fun Modifier.floatingGlassControlShadow(
         .dropShadow(
             shape = shape,
             shadow = ComposeShadow(
-                radius = if (isDark) 12.dp else 10.dp,
-                color = Color.Black.copy(alpha = if (isDark) 0.42f else 0.22f),
+                radius = if (isDark) 10.2.dp else 8.5.dp,
+                color = Color.Black.copy(alpha = if (isDark) 0.42f else 0.17f),
                 offset = DpOffset(5.dp, 7.dp)
             )
         )

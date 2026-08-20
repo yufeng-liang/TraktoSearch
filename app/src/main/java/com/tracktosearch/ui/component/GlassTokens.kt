@@ -91,7 +91,7 @@ private fun lensForRole(role: GlassSurfaceRole): LensDefinition {
         GlassSurfaceRole.Card -> lens(14.dp, 8.dp, 26.dp, true, true, 0.9.dp, 0.46f, 12.dp, 0.22f)
         // 详情页顶部圆形按钮与试点 button 场景使用同一组镜头参数。
         GlassSurfaceRole.CircularControl,
-        GlassSurfaceRole.DetailAction -> lens(12.dp, 6.dp, 18.dp, true, false, 0.7.dp, 0.76f, 14.dp, 0.32f)
+        GlassSurfaceRole.DetailAction -> lens(12.dp, 6.dp, 18.dp, true, false, 0.7.dp, 0.76f, 11.9.dp, 0.32f)
         GlassSurfaceRole.LoginSurface -> loginFormLens()
     }
 }

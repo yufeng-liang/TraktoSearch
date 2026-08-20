@@ -107,10 +107,14 @@ fun Modifier.neumorphicOuterShadow(
     darkAlpha: Float,
     blurRadius: Dp? = null,
     shadowOffset: Dp? = null,
-    darkColor: Color? = null
+    darkColor: Color? = null,
+    offsetX: Dp? = null,
+    offsetY: Dp? = null
 ): Modifier {
     val blur = blurRadius ?: elevation
-    val offset = shadowOffset ?: (elevation * 0.7f)
+    val baseOffset = shadowOffset ?: (elevation * 0.7f)
+    val dx = offsetX ?: baseOffset
+    val dy = offsetY ?: baseOffset
     val darkShadowColor = (darkColor ?: if (isDark) Color.Black else Color(0xFF6478B4))
         .copy(alpha = darkAlpha)
     return this.dropShadow(
@@ -118,7 +122,7 @@ fun Modifier.neumorphicOuterShadow(
         shadow = Shadow(
             radius = blur,
             color = darkShadowColor,
-            offset = DpOffset(offset, offset)
+            offset = DpOffset(dx, dy)
         )
     )
 }
@@ -557,9 +561,10 @@ fun NeumorphicIconButton(
                 shape = shape,
                 isDark = isDark,
                 elevation = 9.dp,
-                darkAlpha = if (isDark) 0.42f else 0.30f,
+                darkAlpha = if (isDark) 0.42f else 0.38f,
                 blurRadius = 18.dp,
-                shadowOffset = 8.dp,
+                offsetX = 5.dp,
+                offsetY = 7.dp,
                 darkColor = if (isDark) Color.Black else Color(0xFF68707C)
             )
             .clip(shape)

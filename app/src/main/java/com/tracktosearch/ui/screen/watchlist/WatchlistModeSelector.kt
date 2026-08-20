@@ -39,6 +39,8 @@ import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.floatingGlassControlShadow
+import com.tracktosearch.ui.component.neumorphicInnerShadow
+import com.tracktosearch.ui.component.neumorphicOuterShadow
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberGlassSelectionBounceScale
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
@@ -148,14 +150,32 @@ internal fun WatchlistModeSelector(
             )
         }
     } else {
-        // BLUR：保持合并前样式——纯色胶囊背景 + 选中项拟态药丸，不叠加毛玻璃/外阴影。
+        // BLUR：合并前样式（纯色胶囊 + 选中项拟态药丸）+ 与圆形按钮一致的拟态外阴影。
         Row(
             modifier = modifier
+                .neumorphicOuterShadow(
+                    shape = capsuleShape,
+                    isDark = isDark,
+                    elevation = 9.dp,
+                    darkAlpha = if (isDark) 0.42f else 0.38f,
+                    blurRadius = 18.dp,
+                    offsetX = 5.dp,
+                    offsetY = 7.dp,
+                    darkColor = if (isDark) Color.Black else Color(0xFF68707C)
+                )
                 .clip(capsuleShape)
                 .height(42.dp)
                 .background(
                     if (isDark) Color.White.copy(alpha = 0.10f)
                     else Color.White.copy(alpha = 0.35f)
+                )
+                .neumorphicInnerShadow(
+                    shape = capsuleShape,
+                    isDark = isDark,
+                    elevation = 4.dp,
+                    lightAlpha = if (isDark) 0.08f else 0.35f,
+                    blurRadius = 10.dp,
+                    shadowOffset = 4.dp
                 )
                 .padding(horizontal = 4.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically
