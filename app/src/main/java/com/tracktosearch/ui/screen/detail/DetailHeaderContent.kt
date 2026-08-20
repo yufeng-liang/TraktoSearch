@@ -428,24 +428,26 @@ internal fun DetailHeaderContent(
                     onPersonClick = onPersonClick
                 )
             } else {
-                // 加载中占位：固定高度骨架屏
+                // 加载中占位：栏目标题与「全部」为静态文字直接显示，仅卡片区保留骨架
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.width(56.dp).height(16.dp)
-                    ) {}
+                    Text(
+                        text = stringResource(R.string.detail_cast_crew),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                     Spacer(modifier = Modifier.weight(1f))
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.width(48.dp).height(14.dp)
-                    ) {}
+                    Text(
+                        text = stringResource(R.string.detail_cast_all),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable(onClick = { showFullCast = true })
+                    )
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -497,7 +499,7 @@ internal fun DetailHeaderContent(
                     sharedKeyPrefix = "backdrop-zoom-$tmdbId"
                 )
             } else {
-                // 骨架屏占位，防止加载后内容跳变
+                // 骨架屏占位，防止加载后内容跳变；栏目标题为静态文字直接显示，「全部」随数据到达后出现
                 Column(modifier = Modifier.padding(bottom = 12.dp)) {
                     Row(
                         modifier = Modifier
@@ -506,19 +508,11 @@ internal fun DetailHeaderContent(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .width(100.dp)
-                                .height(18.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                        )
-                        Box(
-                            modifier = Modifier
-                                .width(40.dp)
-                                .height(16.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                        Text(
+                            text = stringResource(R.string.detail_videos_section),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     LazyRow(
@@ -552,14 +546,13 @@ internal fun DetailHeaderContent(
                     ExpandableText(text = uiState.overview)
                 }
             } else if (uiState.isLoading) {
-                // 简介骨架占位，防止加载后推下下方内容
+                // 简介骨架占位，防止加载后推下下方内容；「简介」标签为静态文字直接显示，仅正文保留骨架
                 Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .width(48.dp)
-                            .height(18.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    Text(
+                        text = stringResource(R.string.detail_overview_label),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     repeat(3) { index ->

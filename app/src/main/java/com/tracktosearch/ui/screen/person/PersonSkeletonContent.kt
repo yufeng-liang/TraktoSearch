@@ -17,10 +17,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.tracktosearch.R
 
 @Composable
 internal fun PersonSkeletonContent() {
@@ -111,14 +116,13 @@ internal fun PersonSkeletonContent() {
                     }
                 }
 
-                // 简介区域骨架（标题 + 4 行不同宽度）
+                // 简介区域骨架（「简介」标签为静态文字直接显示，正文 4 行保留骨架）
                 Spacer(modifier = Modifier.height(12.dp))
-                Box(
-                    modifier = Modifier
-                        .width(48.dp)
-                        .height(18.dp)
-                        .clip(textShape)
-                        .background(skeletonColor)
+                Text(
+                    text = stringResource(R.string.detail_overview_label),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Box(
@@ -158,14 +162,13 @@ internal fun PersonSkeletonContent() {
         // 人物图片栏骨架（匹配实际的 110x165dp 图片 + 标题行）
         item(key = "skeleton_person_images") {
             Column(modifier = Modifier.padding(top = 16.dp)) {
-                // 标题骨架
-                Box(
-                    modifier = Modifier
-                        .padding(start = 16.dp, end = 16.dp, bottom = 2.dp)
-                        .width(80.dp)
-                        .height(20.dp)
-                        .clip(textShape)
-                        .background(skeletonColor)
+                // 「人物图片」标题为静态文字直接显示，仅图片区保留骨架
+                Text(
+                    text = stringResource(R.string.person_images),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 2.dp)
                 )
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -184,17 +187,15 @@ internal fun PersonSkeletonContent() {
             }
         }
 
-        // 电影作品区域骨架
+        // 电影作品区域骨架（「电影作品」标题为静态文字直接显示，仅卡片区保留骨架）
         item(key = "skeleton_movie_section") {
             Column(modifier = Modifier.padding(top = 32.dp)) {
-                // 标题骨架
-                Box(
-                    modifier = Modifier
-                        .padding(start = 16.dp)
-                        .width(120.dp)
-                        .height(20.dp)
-                        .clip(textShape)
-                        .background(skeletonColor)
+                Text(
+                    text = stringResource(R.string.person_movie_credits),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(start = 16.dp)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 // 横向滚动的卡片骨架
@@ -215,17 +216,15 @@ internal fun PersonSkeletonContent() {
             }
         }
 
-        // 电视剧作品区域骨架
+        // 电视剧作品区域骨架（「电视剧作品」标题为静态文字直接显示，仅卡片区保留骨架）
         item(key = "skeleton_tv_section") {
             Column(modifier = Modifier.padding(top = 32.dp)) {
-                // 标题骨架
-                Box(
-                    modifier = Modifier
-                        .padding(start = 16.dp)
-                        .width(120.dp)
-                        .height(20.dp)
-                        .clip(textShape)
-                        .background(skeletonColor)
+                Text(
+                    text = stringResource(R.string.person_tv_credits),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(start = 16.dp)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 // 横向滚动的卡片骨架
