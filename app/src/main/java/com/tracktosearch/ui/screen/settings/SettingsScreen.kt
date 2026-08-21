@@ -50,6 +50,7 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Notifications
@@ -68,6 +69,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -162,6 +164,21 @@ private fun resolveConsistencyCheckBlocker(
     checkRunning -> ConsistencyCheckBlocker.CHECK_RUNNING
     else -> null
 }
+
+/** 文件大小格式化（B/KB/MB/GB），与缓存管理卡片一致 */
+private fun formatFileSize(bytes: Long): String {
+    if (bytes <= 0) return "0 B"
+    val units = arrayOf("B", "KB", "MB", "GB")
+    var size = bytes.toDouble()
+    var unitIndex = 0
+    while (size >= 1024 && unitIndex < units.size - 1) {
+        size /= 1024
+        unitIndex++
+    }
+    return if (unitIndex == 0) "${size.toInt()} ${units[unitIndex]}"
+    else String.format("%.1f %s", size, units[unitIndex])
+}
+
 @OptIn(
     ExperimentalMaterial3Api::class,
     kotlinx.coroutines.FlowPreview::class,
@@ -666,6 +683,11 @@ fun SettingsScreen(
                             showClearCategoryDialog = true
                         },
                         onClearAll = { showClearCacheDialog = true },
+                        containerColor = Color.Transparent
+                    )
+                    // 图片下载流量统计
+                    ImageTrafficSectionItem(
+                        viewModel = viewModel,
                         containerColor = Color.Transparent
                     )
                 }
@@ -2048,6 +2070,59 @@ private fun CacheManagementSectionItem(
         onClearAll = onClearAll,
         containerColor = containerColor
     )
+}
+
+/**
+ * 图片下载流量统计 item：今日/累计字节 + 重置按钮。
+ */
+@Composable
+private fun ImageTrafficSectionItem(
+    viewModel: SettingsViewModel,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
+) {
+    val stats by viewModel.imageTraffic.collectAsStateWithLifecycle()
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = containerColor,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 6.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.CloudDownload,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.settings_image_traffic_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = stringResource(R.string.settings_image_traffic_today, formatFileSize(stats.todayBytes)) +
+                        " · " +
+                        stringResource(R.string.settings_image_traffic_total, formatFileSize(stats.totalBytes)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            OutlinedButton(
+                onClick = { viewModel.clearImageTraffic() },
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+            ) {
+                Text(stringResource(R.string.settings_image_traffic_clear))
+            }
+        }
+    }
 }
 
 /**

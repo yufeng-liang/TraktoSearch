@@ -90,6 +90,7 @@ import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
+import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
@@ -163,6 +164,17 @@ fun DiscoverFilterScreen(
                     viewModel.collapseAdvanced()
                 }
             }
+    }
+
+    // 列表滚动预取：与 DiscoverFilterListItem 内一致的 URL 生成规则，预热即将滚入视口的海报
+    if (uiState.items.isNotEmpty()) {
+        val prefetchUrls = remember(uiState.items) {
+            uiState.items.map { item ->
+                item.poster_path.takeIf { !it.isNullOrBlank() }
+                    ?.let { TmdbImageUrls.build(it, TmdbImageUrls.W185) }
+            }
+        }
+        rememberPosterPrefetch(listState, prefetchUrls)
     }
 
     // 首次进入自动搜索
@@ -631,7 +643,7 @@ private fun DiscoverFilterListItem(
         (item.first_air_date ?: "").takeIf { it.length >= 4 }?.substring(0, 4)
     }
     val posterUrl = if (!item.poster_path.isNullOrBlank()) {
-        TmdbImageUrls.build(item.poster_path, TmdbImageUrls.W200)
+        TmdbImageUrls.build(item.poster_path, TmdbImageUrls.W185)
     } else null
 
     var dominantColor by remember { mutableStateOf<Color?>(null) }

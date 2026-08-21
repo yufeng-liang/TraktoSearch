@@ -311,6 +311,11 @@
     <string name="settings_cache_category_database">오프라인 데이터베이스</string>
     <string name="settings_cache_category_database_desc">보고싶음/봄 목록 + 더우반 동기화 기록</string>
     <string name="settings_cache_clear_all">모두 지우기</string>
+    <string name="settings_image_traffic_title">이미지 트래픽</string>
+    <string name="settings_image_traffic_today">오늘: %1$s</string>
+    <string name="settings_image_traffic_total">누적: %1$s</string>
+    <string name="settings_image_traffic_desc">다운로드한 이미지 용량(포스터, 아바타, 스틸)</string>
+    <string name="settings_image_traffic_clear">초기화</string>
     <string name="settings_cache_clear_category_confirm">이 캐시를 지우시겠습니까?</string>
     <string name="settings_cache_clear_all_impact">모든 캐시 데이터를 지웁니다. 포스터/아바타 재다운로드, 영화/TV 상세 및 차트 재요청, ID 매핑 재구축. 캐시가 다시 쌓이기 전까지 앱이 약간 느릴 수 있습니다.</string>
     <string name="settings_cache_category_image_impact">포스터와 아바타가 다음 조회 시 네트워크에서 재다운로드됩니다. 이미지가 재캐시되기 전까지 앱이 약간 느릴 수 있습니다.</string>

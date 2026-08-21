@@ -18,7 +18,7 @@ import kotlinx.coroutines.coroutineScope
 
 private const val MAX_AMBIENT_POSTERS = 12
 private val POSTER_CACHE_SIZES = listOf(
-    TmdbImageUrls.W200,
+    TmdbImageUrls.W185,
     TmdbImageUrls.W342,
     TmdbImageUrls.W500,
     TmdbImageUrls.W780,

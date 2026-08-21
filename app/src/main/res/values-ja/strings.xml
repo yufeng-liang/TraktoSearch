@@ -311,6 +311,11 @@
     <string name="settings_cache_category_database">オフラインデータベース</string>
     <string name="settings_cache_category_database_desc">ウォッチリスト/視聴済み + 豆瓣同期記録</string>
     <string name="settings_cache_clear_all">すべてクリア</string>
+    <string name="settings_image_traffic_title">画像トラフィック</string>
+    <string name="settings_image_traffic_today">今日：%1$s</string>
+    <string name="settings_image_traffic_total">累計：%1$s</string>
+    <string name="settings_image_traffic_desc">ダウンロードした画像データ量（ポスター、アバター、スチル）</string>
+    <string name="settings_image_traffic_clear">リセット</string>
     <string name="settings_cache_clear_category_confirm">このキャッシュをクリアしますか？</string>
     <string name="settings_cache_clear_all_impact">すべてのキャッシュデータをクリアします。ポスター/アバターは再ダウンロード、映画/TV詳細とランキングは再取得、IDマッピングは再構築されます。キャッシュが再蓄積されるまでアプリが少し遅くなる場合があります。</string>
     <string name="settings_cache_category_image_impact">ポスターとアバターは次回表示時にネットワークから再ダウンロードされます。画像が再キャッシュされるまでアプリが少し遅くなる場合があります。</string>

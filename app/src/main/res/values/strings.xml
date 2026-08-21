@@ -797,6 +797,11 @@ Config:
     <string name="settings_cache_category_database">Offline Database</string>
     <string name="settings_cache_category_database_desc">Watchlist/watched + Douban sync records</string>
     <string name="settings_cache_clear_all">Clear All</string>
+    <string name="settings_image_traffic_title">Image Traffic</string>
+    <string name="settings_image_traffic_today">Today: %1$s</string>
+    <string name="settings_image_traffic_total">Total: %1$s</string>
+    <string name="settings_image_traffic_desc">Downloaded image bytes (posters, avatars, stills)</string>
+    <string name="settings_image_traffic_clear">Reset</string>
     <string name="settings_cache_clear_category_confirm">Clear this cache?</string>
     <string name="settings_cache_clear_all_impact">Clears all cached data. Images reload from network, movie/TV details and charts re-fetched, ID mappings rebuilt. App may feel slower until cache warms up again.</string>
     <string name="settings_cache_category_image_impact">Posters and avatars will be re-downloaded from network on next view. App may feel slower until images re-cache.</string>

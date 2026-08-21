@@ -16,7 +16,9 @@ object TmdbImageUrls {
     }
 
     val W92: String = "$BASE/w92"
-    val W200: String = "$BASE/w200"
+    // TMDB poster 合法尺寸为 w92/w154/w185/w342/w500/w780/original，
+    // w200 非法（网关回源返回 400），小卡片海报用 w185 最接近且清晰。
+    val W185: String = "$BASE/w185"
     val W342: String = "$BASE/w342"
     val W500: String = "$BASE/w500"
     val W780: String = "$BASE/w780"

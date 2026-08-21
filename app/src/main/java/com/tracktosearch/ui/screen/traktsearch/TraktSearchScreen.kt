@@ -142,6 +142,7 @@ import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.copyResourceLink
@@ -449,6 +450,14 @@ fun TraktSearchScreen(
         // 当前 tab 的状态
         val currentTabState = uiState.currentTabState
         val isDiskTab = uiState.selectedTab == MediaType.DISK
+
+        // 网格滚动预取：非网盘 tab 下预热即将滚入视口的海报（posterUrl 已是完整 URL）
+        if (!isDiskTab && currentTabState.results.isNotEmpty()) {
+            val posterUrls = remember(currentTabState.results) {
+                currentTabState.results.map { it.posterUrl }
+            }
+            rememberPosterPrefetch(currentGridState, posterUrls)
+        }
 
         // 根据当前 tab 选择 gridState
         val currentGridState = when (uiState.selectedTab) {
