@@ -66,6 +66,7 @@ import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
@@ -263,13 +264,47 @@ internal fun BackdropCard(
                 )
             }
         } else Modifier
-        AsyncImage(
-            model = backdropUrl,
-            contentDescription = null,
+        ProgressiveBackdrop(
+            backdropUrl = backdropUrl,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize().then(sharedModifier)
         )
     }
+}
+
+/**
+ * 剧照渐进占位：加载大图期间先用 w300 小尺寸版本垫底。
+ * 小图通常在列表预取或上次浏览时已进 Coil 磁盘缓存，可即时显示，避免大图回源前留白。
+ * 若 URL 非 TMDB 结构（无尺寸可换），退化为纯色占位，不额外发请求。
+ */
+@Composable
+private fun ProgressiveBackdrop(
+    backdropUrl: String,
+    contentScale: ContentScale,
+    modifier: Modifier = Modifier
+) {
+    val smallUrl = remember(backdropUrl) {
+        val swapped = TmdbImageUrls.swapSize(backdropUrl, "w300")
+        if (swapped == backdropUrl) null else swapped
+    }
+    if (smallUrl == null) {
+        Box(modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant))
+        return
+    }
+    SubcomposeAsyncImage(
+        model = backdropUrl,
+        contentDescription = null,
+        contentScale = contentScale,
+        modifier = modifier,
+        loading = {
+            AsyncImage(
+                model = smallUrl,
+                contentDescription = null,
+                contentScale = contentScale,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    )
 }
 
 // ==================== 全部预告片与截图弹窗 ====================
@@ -479,9 +514,8 @@ internal fun FullBackdropItem(
             .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
     ) {
-        AsyncImage(
-            model = backdropUrl,
-            contentDescription = null,
+        ProgressiveBackdrop(
+            backdropUrl = backdropUrl,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
         )
