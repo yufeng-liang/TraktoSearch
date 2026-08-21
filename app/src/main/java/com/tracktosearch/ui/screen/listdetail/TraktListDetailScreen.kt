@@ -64,6 +64,7 @@ import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
+import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.ScrollToTopButton
 import dev.chrisbanes.haze.HazeState
@@ -117,6 +118,14 @@ fun TraktListDetailScreen(
                     viewModel.loadMore()
                 }
             }
+    }
+
+    // 网格滚动预取：与 MovieCard 内一致的 URL 生成规则，预热即将滚入视口的海报
+    if (uiState.items.isNotEmpty()) {
+        val prefetchUrls = remember(uiState.items) {
+            uiState.items.map { it.posterUrl?.let { p -> TmdbImageUrls.build(p) } }
+        }
+        rememberPosterPrefetch(gridState, prefetchUrls)
     }
 
     // 点击 token,确保只有被点击的卡片参与转场

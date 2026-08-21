@@ -192,6 +192,7 @@ import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.rememberShimmerBrush
+import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.screen.douban.DoubanFirstSyncGuideDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
@@ -596,6 +597,11 @@ fun WatchlistScreen(
     // 海报 URL 列表：列表内容不变时复用同一实例，避免每次重组都 O(n) 重建导致
     // rememberCachedPosterAmbientColor 重新构建缓存 key 与重跑缓存读取。
     val posterUrls = remember(currentItems) { currentItems.mapNotNull { it.posterUrl } }
+    // 网格滚动预取：与卡片同一 posterUrl，预热即将滚入视口的海报
+    if (currentItems.isNotEmpty()) {
+        val prefetchUrls = remember(currentItems) { currentItems.map { it.posterUrl } }
+        rememberPosterPrefetch(currentGridState, prefetchUrls)
+    }
     val watchlistGlassScene = glassSceneForContent(
         contentCount = currentItems.size,
         readabilityDemand = when {

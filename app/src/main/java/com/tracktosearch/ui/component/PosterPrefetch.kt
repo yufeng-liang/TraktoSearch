@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.component
 
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -20,7 +21,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  * 只对可见窗口末尾之后 [prefetchAhead] 个条目发起一次预取，已预取过的索引不会重复。
  * 预取请求走 App 的 ImageLoader（同样的磁盘/内存缓存与连接池），命中即被后续 AsyncImage 复用。
  *
- * @param listState 目标列表的 LazyListState（LazyVerticalGrid 的 LazyGridState 继承自它）
+ * @param listState 目标 LazyRow / LazyColumn 的 LazyListState
  * @param urls 与列表条目顺序一致的海报 URL 列表，null 条目跳过
  * @param prefetchAhead 在可见窗口末尾之后额外预取的条目数
  */
@@ -30,13 +31,49 @@ fun rememberPosterPrefetch(
     urls: List<String?>,
     prefetchAhead: Int = 6
 ) {
+    rememberPosterPrefetchCore(
+        stateKey = listState,
+        lastVisibleIndex = { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 },
+        urls = urls,
+        prefetchAhead = prefetchAhead
+    )
+}
+
+/**
+ * LazyVerticalGrid 重载（LazyGridState 与 LazyListState 是兄弟类型，无公共基类可统一签名）。
+ */
+@Composable
+fun rememberPosterPrefetch(
+    gridState: LazyGridState,
+    urls: List<String?>,
+    prefetchAhead: Int = 6
+) {
+    rememberPosterPrefetchCore(
+        stateKey = gridState,
+        lastVisibleIndex = { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 },
+        urls = urls,
+        prefetchAhead = prefetchAhead
+    )
+}
+
+/**
+ * 预取核心逻辑：以 `stateKey` 作为 LaunchedEffect 的 key（列表状态切换即重启），
+ * 通过 [lastVisibleIndex] 读取当前可见窗口末尾索引。
+ */
+@Composable
+private fun rememberPosterPrefetchCore(
+    stateKey: Any,
+    lastVisibleIndex: () -> Int,
+    urls: List<String?>,
+    prefetchAhead: Int
+) {
     val context = LocalContext.current
     val imageLoader = remember(context) { context.imageLoader }
     val urlsRef by rememberUpdatedState(urls)
-    LaunchedEffect(listState) {
+    LaunchedEffect(stateKey) {
         // 已预取到的最大索引：只向前推进，避免滚动时对同一批 URL 重复 enqueue
         var prefetchedUpTo = -1
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
+        snapshotFlow { lastVisibleIndex() }
             .distinctUntilChanged()
             .collect { lastVisible ->
                 if (lastVisible < 0) return@collect
