@@ -126,6 +126,10 @@ class SettingsViewModel @Inject constructor(
 
     val glassVariant: StateFlow<GlassVariant> = themeStorage.glassVariant
 
+    // 主页面背景彩色弥散光晕
+    val meshPreset: StateFlow<String> = themeStorage.meshPreset
+    val meshEnabled: StateFlow<Boolean> = themeStorage.meshEnabled
+
     val defaultTab: StateFlow<Int> = defaultTabStorage.defaultTab
 
     val language: StateFlow<String> = languageStorage.language
@@ -204,6 +208,14 @@ class SettingsViewModel @Inject constructor(
 
     fun setSharedTransitionEnabled(enabled: Boolean) {
         viewModelScope.launch { sharedTransitionStorage.setEnabled(enabled) }
+    }
+
+    fun setMeshPreset(preset: String) {
+        viewModelScope.launch { themeStorage.setMeshPreset(preset) }
+    }
+
+    fun setMeshEnabled(enabled: Boolean) {
+        viewModelScope.launch { themeStorage.setMeshEnabled(enabled) }
     }
 
     // ========== PanHub 配置 ==========

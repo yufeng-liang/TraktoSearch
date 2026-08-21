@@ -107,6 +107,7 @@ import com.tracktosearch.ui.component.rememberGlassSelectionBounceScale
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.MeshPreset
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.screen.discover.DiscoverScreen
 import com.tracktosearch.ui.screen.feedback.FeedbackViewModel
@@ -220,6 +221,8 @@ fun MainScreen(
     val currentCustomAccentArgb by themeStorage.customAccentArgb.collectAsState()
     val currentVisualEffectMode by themeStorage.visualEffectMode.collectAsState()
     val currentGlassVariant by themeStorage.glassVariant.collectAsState()
+    val meshPreset by themeStorage.meshPreset.collectAsState()
+    val meshEnabled by themeStorage.meshEnabled.collectAsState()
     var showAccentOnboarding by remember { mutableStateOf(false) }
     var showOnboarding by remember { mutableStateOf(false) }
     val tabRects = remember { mutableStateOf<List<Rect>>(emptyList()) }
@@ -298,6 +301,14 @@ fun MainScreen(
             onVisualEffectSelected = { mode, variant ->
                 // 仅持久化材质选择，不关闭引导弹窗，用户仍需选择强调色
                 scope.launch { themeStorage.setVisualEffectSelection(mode, variant) }
+            },
+            currentMeshPreset = MeshPreset.fromStorage(meshPreset),
+            currentMeshEnabled = meshEnabled,
+            onMeshSelected = { preset ->
+                scope.launch {
+                    themeStorage.setMeshEnabled(preset != null)
+                    if (preset != null) themeStorage.setMeshPreset(preset.name)
+                }
             },
             onDismiss = {
                 scope.launch {
@@ -424,9 +435,11 @@ fun MainScreen(
                     .fillMaxSize()
                     .hazeSource(state = hazeState, zIndex = 0f)
             ) {
-                // 页面背景暂时只保留中性灰底，后续背景重做不影响内容采样层。
+                // 页面背景为彩色弥散光晕层：预设与开关由设置页持久化，经主题存储驱动。
                 PageBackground(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    preset = MeshPreset.fromStorage(meshPreset),
+                    enabled = meshEnabled,
                 )
 
                 // 主内容 backdrop 与页面级 backdrop 是两个独立实例：前者供底栏采样整页画面，

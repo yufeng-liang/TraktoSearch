@@ -1759,4 +1759,15 @@
     <string name="help_weather_data_b1">动态主题只使用小米天气 wtr-v3 接口，不直接请求 AccuWeather，也不叠加其他天气 API。</string>
     <string name="help_weather_data_b2">App 会先将定位坐标交给小米接口反查为 weathercn: 或 accu: 城市标识，再请求同一接口的当前天气。</string>
     <string name="help_weather_data_b3">当前天气按位置缓存最长 3 小时，减少重复请求；实际准确性和可用性以小米天气及其数据提供方为准。</string>
+
+    <!-- 主页面背景光晕 -->
+    <string name="bg_glow_title">背景光晕</string>
+    <string name="bg_glow_off">关闭</string>
+    <string name="bg_glow_aurora">极光</string>
+    <string name="bg_glow_lava">熔岩灯</string>
+    <string name="bg_glow_bloom">弥散绽放</string>
+    <string name="bg_glow_off_desc">不显示彩色弥散光晕背景</string>
+    <string name="bg_glow_aurora_desc">柔和流动的极光色带，随页面滑动连续运动</string>
+    <string name="bg_glow_lava_desc">颜色如熔岩灯般缓慢对流，慵懒舒缓</string>
+    <string name="bg_glow_bloom_desc">柔和弥散光斑，随滑动节奏缓缓呼吸</string>
 </resources>

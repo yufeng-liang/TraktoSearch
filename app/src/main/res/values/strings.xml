@@ -1759,4 +1759,14 @@ Config:
     <string name="help_weather_data_b1">Dynamic themes use the Xiaomi Weather wtr-v3 endpoint only; the app does not call AccuWeather or add another weather API.</string>
     <string name="help_weather_data_b2">The app first resolves your coordinates to a Xiaomi weathercn: or accu: location key, then requests current weather from the same endpoint.</string>
     <string name="help_weather_data_b3">Current weather is cached for up to three hours per location to reduce repeated requests. Accuracy and availability follow Xiaomi Weather and its data providers.</string>
+    <!-- Main screen background glow -->
+    <string name="bg_glow_title">Background Glow</string>
+    <string name="bg_glow_off">Off</string>
+    <string name="bg_glow_aurora">Aurora</string>
+    <string name="bg_glow_lava">Lava Lamp</string>
+    <string name="bg_glow_bloom">Bloom</string>
+    <string name="bg_glow_off_desc">No colored glow background</string>
+    <string name="bg_glow_aurora_desc">Soft flowing aurora ribbons that move continuously across pages</string>
+    <string name="bg_glow_lava_desc">Colors slowly convect like a lava lamp, calm and unhurried</string>
+    <string name="bg_glow_bloom_desc">Soft diffused light patches that gently breathe with scrolling</string>
 </resources>

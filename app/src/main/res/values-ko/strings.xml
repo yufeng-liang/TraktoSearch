@@ -1771,4 +1771,14 @@
     <string name="help_weather_data_b1">동적 테마는 Xiaomi Weather의 wtr-v3 엔드포인트만 사용하며, AccuWeather나 다른 날씨 API를 직접 호출하지 않습니다.</string>
     <string name="help_weather_data_b2">먼저 위치 좌표를 Xiaomi API에서 weathercn: 또는 accu: 도시 키로 변환한 뒤 같은 엔드포인트에서 현재 날씨를 가져옵니다.</string>
     <string name="help_weather_data_b3">현재 날씨는 중복 요청을 줄이기 위해 위치별로 최대 3시간 캐시됩니다. 정확성과 제공 여부는 Xiaomi Weather 및 데이터 제공업체에 따릅니다.</string>
+<!-- 메인 화면 배경 글로우 -->
+    <string name="bg_glow_title">배경 글로우</string>
+    <string name="bg_glow_off">끄기</string>
+    <string name="bg_glow_aurora">오로라</string>
+    <string name="bg_glow_lava">라바 램프</string>
+    <string name="bg_glow_bloom">블룸</string>
+    <string name="bg_glow_off_desc">배경 글로우를 표시하지 않음</string>
+    <string name="bg_glow_aurora_desc">부드럽게 흐르는 오로라 무늬가 페이지 사이에서 연속으로 움직임</string>
+    <string name="bg_glow_lava_desc">라바 램프처럼 색이 천천히 대류하며 잔잔하게 변함</string>
+    <string name="bg_glow_bloom_desc">부드러운 발광 무늬가 스크롤에 맞춰 천천히 깜빡임</string>
 </resources>

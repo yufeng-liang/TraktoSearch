@@ -139,7 +139,7 @@ fun PersonScreen(
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        uiState.avatarDominantColor?.copy(alpha = 0.70f)
+                        uiState.avatarDominantColor?.copy(alpha = 0.25f)
                             ?: MaterialTheme.colorScheme.surface,
                         MaterialTheme.colorScheme.background
                     )

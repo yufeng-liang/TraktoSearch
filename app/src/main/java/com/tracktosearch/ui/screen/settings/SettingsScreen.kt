@@ -126,6 +126,7 @@ import com.tracktosearch.ui.screen.feedback.FeedbackViewModel
 import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
+import com.tracktosearch.ui.theme.MeshPreset
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.component.isAppDarkTheme
@@ -341,6 +342,9 @@ fun SettingsScreen(
     var pendingClearCategory by remember { mutableStateOf<SettingsViewModel.CacheCategory?>(null) }
     var showDiscoverSectionsDialog by remember { mutableStateOf(false) }
     var showDetailSectionsDialog by remember { mutableStateOf(false) }
+    // 背景光晕：预设 + 开关（用于"色调与材质"弹窗内同材质的背景光晕菜单）
+    val currentMeshPreset by viewModel.meshPreset.collectAsStateWithLifecycle()
+    val currentMeshEnabled by viewModel.meshEnabled.collectAsStateWithLifecycle()
 
     val openUrl: (String) -> Unit = { url ->
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
@@ -755,6 +759,12 @@ fun SettingsScreen(
             currentVariant = currentGlassVariant,
             onVisualEffectSelected = { mode, variant ->
                 viewModel.setVisualEffectSelection(mode, variant)
+            },
+            currentMeshPreset = MeshPreset.fromStorage(currentMeshPreset),
+            currentMeshEnabled = currentMeshEnabled,
+            onMeshSelected = { preset ->
+                viewModel.setMeshEnabled(preset != null)
+                if (preset != null) viewModel.setMeshPreset(preset.name)
             },
             onDismiss = { showAccentColorDialog = false }
         )
