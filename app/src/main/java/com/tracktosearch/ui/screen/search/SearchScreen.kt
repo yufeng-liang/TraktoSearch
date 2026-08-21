@@ -176,6 +176,7 @@ import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.RatingBadge
 import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.neumorphicShadow
@@ -1901,7 +1902,12 @@ fun DoubanHotCategorySection(
                 onRetry = onRetry
             )
         } else {
+            val hotRowState = androidx.compose.foundation.lazy.rememberLazyListState()
+            // DoubanHotCard 使用 item.cover 作为海报 URL，预取命中同一缓存
+            val posterUrls = remember(category.items) { category.items.map { it.cover } }
+            rememberPosterPrefetch(hotRowState, posterUrls)
             androidx.compose.foundation.lazy.LazyRow(
+                state = hotRowState,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 itemsIndexed(category.items, key = { _, item -> item.id ?: item.title }) { index, item ->

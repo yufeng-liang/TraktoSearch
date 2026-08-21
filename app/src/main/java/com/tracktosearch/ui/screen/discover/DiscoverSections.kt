@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.douban.dto.DoubanRecommendItem
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.ui.animation.fadeSlideIn
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedMovieResponse
@@ -62,6 +63,7 @@ import com.tracktosearch.data.remote.trakt.dto.TraktTrendingShowResponse
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.ui.component.AppVisualSurface
 import com.tracktosearch.ui.component.DoubanHotCardSkeleton
+import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.component.SectionHeader
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.VisualSurfaceKind
@@ -118,6 +120,15 @@ internal fun TmdbMovieSection(
             else -> {
                 val internalState = rememberLazyListState()
                 val effectiveState = lazyListState ?: internalState
+                // 与 MovieCard 内保持一致的海报 URL 生成规则，保证预取命中同一缓存
+                val posterUrls = remember(movies) {
+                    movies.map { movie ->
+                        movie.poster_path?.let {
+                            if (it.startsWith("http")) it else TmdbImageUrls.build(it)
+                        }
+                    }
+                }
+                rememberPosterPrefetch(effectiveState, posterUrls)
                 LazyRow(
                     state = effectiveState,
                     modifier = Modifier,
@@ -695,6 +706,11 @@ internal fun DoubanRecommendSection(
                     val movieListState = rememberLazyListState()
                     val tvListState = rememberLazyListState()
                     val listState = if (state.currentTab == RecommendTab.MOVIE) movieListState else tvListState
+                    // 与 MovieCard 内 posterPath 取值规则一致，预取命中同一缓存
+                    val posterUrls = remember(items) {
+                        items.map { it.pic?.normal ?: it.pic?.large ?: it.cover }
+                    }
+                    rememberPosterPrefetch(listState, posterUrls)
                     LazyRow(
                         state = listState,
                         modifier = Modifier,

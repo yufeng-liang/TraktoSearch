@@ -59,6 +59,7 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.PosterCard
+import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
@@ -131,6 +132,9 @@ fun PersonScreen(
     // 将 gridState 提升到屏幕级，使用 rememberSaveable 保留导航往返后的滚动位置
     val movieCreditsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
     val tvCreditsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
+    // 作品横向滑动列表的滚动状态（配合海报预取）
+    val movieCreditsRowState = rememberLazyListState()
+    val tvCreditsRowState = rememberLazyListState()
 
     Scaffold(contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)) { padding ->
         Box(modifier = Modifier
@@ -295,7 +299,12 @@ fun PersonScreen(
                                             }
                                         }
                                     } else {
+                                        val moviePosterUrls = remember(uiState.movieCredits) {
+                                            uiState.movieCredits.map { it.poster_path?.let { p -> TmdbImageUrls.build(p) } }
+                                        }
+                                        rememberPosterPrefetch(movieCreditsRowState, moviePosterUrls)
                                         LazyRow(
+                                            state = movieCreditsRowState,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                                             contentPadding = PaddingValues(horizontal = 16.dp)
                                         ) {
@@ -369,7 +378,12 @@ fun PersonScreen(
                                             }
                                         }
                                     } else {
+                                        val tvPosterUrls = remember(uiState.tvCredits) {
+                                            uiState.tvCredits.map { it.poster_path?.let { p -> TmdbImageUrls.build(p) } }
+                                        }
+                                        rememberPosterPrefetch(tvCreditsRowState, tvPosterUrls)
                                         LazyRow(
+                                            state = tvCreditsRowState,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                                             contentPadding = PaddingValues(horizontal = 16.dp)
                                         ) {
