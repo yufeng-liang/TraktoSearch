@@ -621,9 +621,9 @@ This is also your feature wish pool—maybe one day, your wish will make it into
     <string name="help_watchlist_b1">Tap the want-to-watch / watched button on the detail page</string>
     <string name="help_watchlist_b2">Manage your lists on the \"Me\" tab</string>
     <string name="help_watchlist_b3">Mark as watched supports checking episodes by season, specials (season 0) placed last</string>
-    <string name="help_watchlist_b4">TV show count: requires watching all episodes of a full season</string>
+    <string name="help_watchlist_b4">TV show count: any watched episode counts the show; it counts as finished once watched episodes reach the aired total</string>
     <string name="help_statistics_b1">Access statistics from the first row of \"Settings\" page</string>
-    <string name="help_statistics_b2">View overview (total, this month, this year), watch time, and rating stats from Trakt and Douban</string>
+    <string name="help_statistics_b2">View overview (total, this month, this year), watch time, and rating stats from Trakt and Douban — the same title is de-duplicated across sources by IMDb/Trakt/TMDB id, and shows list two figures: watched and finished</string>
     <string name="help_statistics_b3">Genre pie chart and ranking show your viewing preferences</string>
     <string name="help_statistics_b4">Heatmap shows daily viewing activity over the past year</string>
     <string name="help_notification_b1">Enable notifications to get reminders for new releases and new seasons</string>
@@ -1124,6 +1124,7 @@ Config:
     <string name="statistics_this_month">This Month</string>
     <string name="statistics_this_year">This Year</string>
     <string name="statistics_shows">Shows</string>
+    <string name="statistics_shows_completed">%1$d completed</string>
     <string name="statistics_episodes">Episodes</string>
     <string name="statistics_heatmap">Watching Heatmap</string>
     <string name="statistics_genre_distribution">Genre Distribution</string>
@@ -1137,7 +1138,7 @@ Config:
     <string name="statistics_less">Less</string>
     <string name="statistics_more">More</string>
     <string name="statistics_info">Statistics Guide</string>
-    <string name="statistics_info_overview">Q: What do the numbers above mean?\nA: They combine Trakt watch history with Douban watched marks. For Douban shows, the cached episode count is added to watched episodes.</string>
+    <string name="statistics_info_overview">Q: What do the numbers above mean?\nA: They combine Trakt watch history with Douban watched marks, de-duplicated across both sources by IMDb / Trakt / TMDB id (falling back to title + year), so the same title is never counted twice. Movies count distinct titles — replays are not counted again. Shows use two figures: the big number is shows you watched at least one episode of, and the line below is shows you finished (watched episodes ≥ aired episodes). Douban has no per-episode detail for shows, so a Douban “watched” mark counts as finished, and the cached episode count is added to watched episodes.</string>
     <string name="statistics_info_heatmap">Q: What is the watching heatmap?\nA: Similar to GitHub\'s contribution graph, each square represents one day. The darker the color, the more you watched that day. It covers the past year.</string>
     <string name="statistics_info_genre_distribution">Q: What is the genre distribution pie chart?\nA: It shows genres from your Trakt history and Douban watched titles. Tap a slice to see the exact count and percentage.</string>
     <string name="statistics_info_genre_ranking">Q: What is the top genres ranking?\nA: Your most-watched genres ranked by count. The top three are marked with gold, silver, and bronze medals.</string>

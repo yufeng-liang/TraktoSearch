@@ -621,9 +621,9 @@
     <string name="help_watchlist_b1">在详情页点击想看/已看按钮进行标记</string>
     <string name="help_watchlist_b2">在"我的"页面查看和管理你的列表</string>
     <string name="help_watchlist_b3">标记已看支持按季勾选集数，第0季特别篇放在最后</string>
-    <string name="help_watchlist_b4">电视剧部数统计：需看完某一整季全部集数才计入</string>
+    <string name="help_watchlist_b4">电视剧部数统计：看过任意一集即计入剧数，已看集数达到已播出总集数才算整部看完</string>
     <string name="help_statistics_b1">在"设置"页面第一行进入观看统计</string>
-    <string name="help_statistics_b2">查看观影总览（总数、本月、本年）、观影时长和评分统计（合并 Trakt 与豆瓣数据）</string>
+    <string name="help_statistics_b2">查看观影总览（总数、本月、本年）、观影时长和评分统计（合并 Trakt 与豆瓣数据，同一部影视按 IMDb/Trakt/TMDB ID 跨来源去重；剧集分「有观看记录」和「整部看完」两个数字）</string>
     <string name="help_statistics_b3">类型分布饼图和类型排行展示你的观影偏好</string>
     <string name="help_statistics_b4">热力图展示过去一年的每日观影活跃度</string>
     <string name="help_notification_b1">开启通知后可自动提醒新上映和新季</string>
@@ -1124,6 +1124,7 @@
     <string name="statistics_this_month">本月</string>
     <string name="statistics_this_year">本年</string>
     <string name="statistics_shows">部剧</string>
+    <string name="statistics_shows_completed">%1$d 部看完</string>
     <string name="statistics_episodes">集</string>
     <string name="statistics_heatmap">观看热力图</string>
     <string name="statistics_genre_distribution">类型分布</string>
@@ -1137,7 +1138,7 @@
     <string name="statistics_less">少</string>
     <string name="statistics_more">多</string>
     <string name="statistics_info">统计说明</string>
-    <string name="statistics_info_overview">Q：上方的数字是什么意思？\nA：合并 Trakt 观看历史和豆瓣“看过”标记；豆瓣剧集会按已缓存的详情集数计入已观看集数。</string>
+    <string name="statistics_info_overview">Q：上方的数字是什么意思？\nA：合并 Trakt 观看历史和豆瓣“看过”标记，并按 IMDb / Trakt / TMDB ID（都缺失时用标题+年份）跨来源去重，同一部影视不会重复计数。电影按不同影片计数，重看不重复计。剧集显示两个口径：大数字是看过至少一集的剧数，下方一行是整部看完的剧数（已看集数 ≥ 已播出集数）。豆瓣“看过”的剧集不细分集数，标记看过即算整部看完；豆瓣剧集会按已缓存的详情集数计入已观看集数。</string>
     <string name="statistics_info_heatmap">Q：观看热力图是什么意思？\nA：类似 GitHub 的贡献图，每个方块代表一天，颜色越深表示当天观看越多，覆盖过去一整年。</string>
     <string name="statistics_info_genre_distribution">Q：类型分布饼图是什么意思？\nA：展示 Trakt 观看历史和豆瓣“看过”条目中的各类型占比。点击每一块可查看具体数量和百分比。</string>
     <string name="statistics_info_genre_ranking">Q：最常看的类型排行是什么意思？\nA：按观看数量对你的类型进行排名，前三名分别用金牌、银牌、铜牌标记。</string>

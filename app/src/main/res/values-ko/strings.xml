@@ -351,6 +351,7 @@
     <string name="statistics_this_month">이번 달</string>
     <string name="statistics_this_year">올해</string>
     <string name="statistics_shows">작품</string>
+    <string name="statistics_shows_completed">%1$d편 완주</string>
     <string name="statistics_episodes">에피소드</string>
     <string name="statistics_heatmap">시청 히트맵</string>
     <string name="statistics_genre_distribution">장르 분포</string>
@@ -706,7 +707,7 @@
     <string name="help_watchlist_b1">상세 페이지에서 관심목록/시청 버튼을 탭하여 표시</string>
     <string name="help_watchlist_b2">「마이」 페이지에서 목록 보기 및 관리</string>
     <string name="help_watchlist_b3">시청 표시는 시즌별 에피소드 선택 가능, 시즌0 특별편은 마지막에 표시</string>
-    <string name="help_watchlist_b4">TV 프로그램 시청 횟수: 한 시즌의 모든 에피소드 시청 완료 시 카운트</string>
+    <string name="help_watchlist_b4">TV 프로그램 시청 횟수: 한 편만 봐도 작품 수에 포함되고, 시청 에피소드 수가 방영 총수에 도달하면 완주로 계산</string>
     <string name="settings_licenses">오픈소스 라이선스</string>
 
     <!-- Data Management (추가) -->
@@ -986,7 +987,7 @@
 
     <!-- Statistics (추가) -->
     <string name="statistics_info">통계 설명</string>
-    <string name="statistics_info_overview">Q: 상단의 숫자는 무엇인가요?\nA: Trakt 시청 기록과 Douban의 ‘시청함’ 표시를 합산합니다. Douban 드라마는 캐시된 에피소드 수를 시청 에피소드로 더합니다.</string>
+    <string name="statistics_info_overview">Q: 상단의 숫자는 무엇인가요?\nA: Trakt 시청 기록과 Douban의 ‘시청함’ 표시를 합산하며, IMDb / Trakt / TMDB ID(모두 없으면 제목+연도)로 두 출처를 중복 제거하므로 같은 작품이 두 번 계산되지 않습니다. 영화는 다시 보기를 중복 계산하지 않고 서로 다른 작품 수로 셉니다. 드라마는 두 가지 지표를 보여줍니다: 큰 숫자는 한 편 이상 시청한 작품 수, 아래 줄은 완주한 작품 수(시청 에피소드 수 ≥ 방영 에피소드 수)입니다. Douban 드라마는 에피소드 단위 정보가 없어 ‘시청함’을 완주로 간주하고, 캐시된 에피소드 수를 시청 에피소드로 더합니다.</string>
     <string name="statistics_info_heatmap">Q: 시청 히트맵이란?\nA: GitHub의 기여 그래프와 유사하게 각 사각형은 하루를 나타냅니다. 색상이 진할수록 해당 날짜에 더 많이 시청했음을 의미하며, 지난 1년을 포함합니다.</string>
     <string name="statistics_info_genre_distribution">Q: 장르 분포 파이 차트란?\nA: Trakt 시청 기록과 Douban ‘시청함’ 작품의 장르 비율을 표시합니다. 각 조각을 탭하여 정확한 수와 백분율을 확인할 수 있습니다.</string>
     <string name="statistics_info_genre_ranking">Q: 인기 장르 순위란?\nA: 시청 수에 따라 장르를 순위별로 표시합니다. 상위 3개는 금, 은, 동 메달로 표시됩니다.</string>
@@ -995,7 +996,7 @@
 
     <!-- Help Statistics -->
     <string name="help_statistics_b1">"설정" 페이지 첫 번째 행에서 통계에 접근</string>
-    <string name="help_statistics_b2">Trakt와 Douban을 합친 시청 개요 (전체, 이번 달, 올해), 시청 시간, 평가 통계 확인</string>
+    <string name="help_statistics_b2">Trakt와 Douban을 합친 시청 개요 (전체, 이번 달, 올해), 시청 시간, 평가 통계 확인 (같은 작품은 IMDb/Trakt/TMDB ID로 출처 간 중복 제거, 드라마는 ‘시청한 작품’과 ‘완주한 작품’ 두 숫자로 표시)</string>
     <string name="help_statistics_b3">장르 분포 파이 차트와 순위로 시청 취향 표시</string>
     <string name="help_statistics_b4">히트맵으로 지난 1년간의 매일 시청 활동 표시</string>
     <string name="help_notification_b1">알림을 켜면 신작 개봉과 새 시즌을 자동 알림</string>
