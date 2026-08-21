@@ -185,14 +185,7 @@ class MarkRecordViewModel @Inject constructor(
         val ids = traktRepository.getWatchlistWatchedIds() ?: return
         val map = mutableMapOf<Int, CurrentMarkStatus>()
         for (item in items) {
-            val type = if (item.mediaType == "movie") MediaType.MOVIE else MediaType.SHOW
-            val inWl = ids.isInWatchlist(item.traktId, null, type)
-            val watched = ids.isWatched(item.traktId, null, type)
-            map[item.traktId] = when {
-                watched -> CurrentMarkStatus.WATCHED
-                inWl -> CurrentMarkStatus.IN_WATCHLIST
-                else -> CurrentMarkStatus.NONE
-            }
+            map[item.traktId] = currentStatusOf(item, ids)
         }
         _uiState.update { state ->
             state.copy(
@@ -203,8 +196,34 @@ class MarkRecordViewModel @Inject constructor(
         }
     }
 
+    private fun currentStatusOf(
+        item: MarkRecordItem,
+        ids: TraktRepository.WatchlistWatchedIds
+    ): CurrentMarkStatus {
+        val type = if (item.mediaType == "movie") MediaType.MOVIE else MediaType.SHOW
+        return when {
+            ids.isWatched(item.traktId, null, type) -> CurrentMarkStatus.WATCHED
+            ids.isInWatchlist(item.traktId, null, type) -> CurrentMarkStatus.IN_WATCHLIST
+            else -> CurrentMarkStatus.NONE
+        }
+    }
+
+    /**
+     * 用全局想看/已看 ID 缓存补上「当前标记状态」。
+     *
+     * [TraktRepository.getWatchlistWatchedIds] 只是读内存字段，渐进渲染每批算一次几乎没有成本；
+     * 不这样做的话状态徽标和「已移除」暗化会等到整页加载完才整片弹出。
+     */
+    private fun withCurrentStatus(items: List<MarkRecordItem>): List<MarkRecordItem> {
+        if (!sessionModeManager.traktConnected.value) return items
+        val ids = traktRepository.getWatchlistWatchedIds() ?: return items
+        return items.map { it.copy(currentStatus = currentStatusOf(it, ids)) }
+    }
+
     private suspend fun loadPage(page: Int) {
         val state = _uiState.value
+        // 渐进渲染期间会多次写入 items，必须先固定基准，否则最终合并会把已渲染的批次重复累加
+        val baseItems = if (page == 1) emptyList() else state.items
         try {
             // ALL Tab 需要同时拉本地流水和 Trakt 已看历史,记录本地条目数用于 hasMore 判断
             var allTabLocalItemCount = 0
@@ -214,15 +233,15 @@ class MarkRecordViewModel @Inject constructor(
                     loadFromTraktHistory(
                         page = page,
                         mediaTypesFilter = state.filterMediaTypes,
-                        onFirstBatch = { firstBatch ->
-                            _uiState.update { it.copy(items = firstBatch, isLoading = false) }
-                        }
+                        onBatch = { batch -> publishProgress(baseItems, batch) }
                     )
                 } else emptyList()
             }
             MarkRecordTab.ALL -> {
                 val localItems = loadFromDao(page, state)
                 allTabLocalItemCount = localItems.size
+                // 本地流水是 Room 查询，毫秒级可用：先渲染出来，不必等 Trakt 的上百次 TMDB 富化
+                if (localItems.isNotEmpty()) publishProgress(baseItems, localItems)
                 // Trakt 已看历史分页:首次(page=1)必拉以获取 totalPages,后续页按 totalPages 判断
                 val shouldFetchTrakt = sessionModeManager.traktConnected.value &&
                     (page == 1 ||
@@ -230,21 +249,26 @@ class MarkRecordViewModel @Inject constructor(
                     )
                 val traktItems = if (shouldFetchTrakt) {
                     try {
-                        loadFromTraktHistoryAll(page, state.filterMediaTypes)
+                        loadFromTraktHistory(
+                            page = page,
+                            mediaTypesFilter = state.filterMediaTypes,
+                            onBatch = { batch -> publishProgress(baseItems, localItems + batch) }
+                        )
                     } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
                 } else emptyList()
                 // 首次拉取后记录 Trakt 总页数,供后续页判断是否继续拉取
                 if (page == 1 && traktHistoryTotalPages == 0) {
                     traktHistoryTotalPages = traktRepository.getWatchHistoryTotalPages()
                 }
-                // 合并本地流水 + Trakt 已看历史,去重排序(不 take(pageSize),本页全部保留)
-                (localItems + traktItems)
-                    .distinctBy { itemKey(it) }
-                    .sortedByDescending { it.actedAt }
+                localItems + traktItems
             }
             else -> loadFromDao(page, state)
         }
-            val allItems = if (page == 1) newItems else _uiState.value.items + newItems
+            val allItems = withCurrentStatus(
+                (baseItems + newItems)
+                    .distinctBy { itemKey(it) }
+                    .sortedByDescending { it.actedAt }
+            )
             // hasMore 按 Tab 分别计算:
             // - ALL: 本地这页满 pageSize 说明本地可能还有更多;Trakt 当前页 < totalPages 说明 Trakt 还有更多
             // - 其他: 本页满 pageSize 说明可能还有更多
@@ -278,6 +302,17 @@ class MarkRecordViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /** 渐进渲染：把当前已就绪的部分结果并入基准列表并立即展示，退出加载态。 */
+    private fun publishProgress(baseItems: List<MarkRecordItem>, partial: List<MarkRecordItem>) {
+        if (partial.isEmpty()) return
+        val merged = withCurrentStatus(
+            (baseItems + partial)
+                .distinctBy { itemKey(it) }
+                .sortedByDescending { it.actedAt }
+        )
+        _uiState.update { it.copy(items = merged, isLoading = false, error = null) }
     }
 
     /** 将异常映射为用户友好的本地化错误提示。
@@ -317,14 +352,25 @@ class MarkRecordViewModel @Inject constructor(
         return records.map { it.toMarkRecordItem() }
     }
 
+    /**
+     * 拉取 Trakt 已看历史，逐批回调已就绪的部分结果。
+     *
+     * 仓库层的产出顺序是「磁盘旧快照 → 未富化占位全量 → 逐批富化结果（数量递增）→ 富化完成的权威全量」，
+     * 中间批次的条目数会少于占位全量，若直接整表替换列表会在「全量占位」和「部分富化」之间来回抖动。
+     * 因此这里用 key→最佳版本的映射累积：已富化条目不会被后续未富化占位盖回去。
+     *
+     * @param onBatch 每收到一批就回调当前累积的最佳结果（不含最终完成批，由返回值统一提交）
+     */
     private suspend fun loadFromTraktHistory(
         page: Int,
         mediaTypesFilter: Set<String> = emptySet(),
-        onFirstBatch: suspend (List<MarkRecordItem>) -> Unit
+        onBatch: suspend (List<MarkRecordItem>) -> Unit
     ): List<MarkRecordItem> {
-        var completed: List<MarkRecordItem>? = null
+        val best = LinkedHashMap<String, MarkRecordItem>()
+        val enrichedKeys = mutableSetOf<String>()
+        var finalItems: List<MarkRecordItem>? = null
         traktRepository.fetchWatchHistory(page).collect { emit ->
-            if (completed != null) return@collect
+            if (finalItems != null) return@collect
             if (emit.error != null) throw Exception(emit.error)
             // 应用媒体类型筛选（修复 bug：之前忽略 filterMediaTypes 导致选电视剧不生效）
             val filtered = if (mediaTypesFilter.isNotEmpty()) {
@@ -334,35 +380,22 @@ class MarkRecordViewModel @Inject constructor(
             }
             val mapped = filtered.map { it.toMarkRecordItem() }
             if (emit.isComplete) {
-                completed = mapped
-            } else {
-                onFirstBatch(mapped)
+                // 完成批是权威结果：直接以它为准，丢掉磁盘旧快照里可能已被删除的条目
+                finalItems = mapped
+                return@collect
             }
-        }
-        return completed ?: emptyList()
-    }
-
-    /**
-     * ALL Tab 用的 Trakt 已看历史拉取：不带流式更新，collect 到最终结果返回。
-     *
-     * 与 [loadFromTraktHistory] 区别：ALL Tab 是合并视图，等本地流水 + Trakt 都拿到再合并更简单，
-     * 不需要 onFirstBatch 渐进式更新。
-     */
-    private suspend fun loadFromTraktHistoryAll(
-        page: Int,
-        mediaTypesFilter: Set<String>
-    ): List<MarkRecordItem> {
-        var result: List<MarkRecordItem> = emptyList()
-        traktRepository.fetchWatchHistory(page).collect { emit ->
-            if (emit.error != null) throw Exception(emit.error)
-            val filtered = if (mediaTypesFilter.isNotEmpty()) {
-                emit.items.filter { it.mediaType in mediaTypesFilter }
-            } else {
-                emit.items
+            mapped.forEach { item ->
+                val key = itemKey(item)
+                if (emit.enriched) {
+                    best[key] = item
+                    enrichedKeys += key
+                } else if (key !in enrichedKeys) {
+                    best[key] = item
+                }
             }
-            result = filtered.map { it.toMarkRecordItem() }
+            onBatch(best.values.toList())
         }
-        return result
+        return finalItems ?: best.values.toList()
     }
 
     private fun computeTimeRange(state: MarkRecordUiState): Pair<Long, Long> {

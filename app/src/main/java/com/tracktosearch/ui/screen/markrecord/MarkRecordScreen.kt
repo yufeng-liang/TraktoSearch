@@ -78,6 +78,9 @@ import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 
+/** 首屏骨架卡片数量：两列，铺满一屏左右即可，多了只是白耗合成 */
+private const val SKELETON_ITEM_COUNT = 8
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MarkRecordScreen(
@@ -145,15 +148,9 @@ fun MarkRecordScreen(
         ) {
             when {
                 uiState.isLoading && uiState.items.isEmpty() -> {
-                    item(span = { GridItemSpan(2) }) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator()
-                        }
+                    // 骨架屏而非居中转圈：布局与真实卡片一致，数据到达时不跳动
+                    items(SKELETON_ITEM_COUNT) {
+                        MarkRecordItemSkeleton()
                     }
                 }
                 uiState.error != null -> {

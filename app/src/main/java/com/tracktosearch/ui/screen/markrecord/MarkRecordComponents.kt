@@ -57,10 +57,69 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.util.PosterColorExtractor
+import com.tracktosearch.ui.component.rememberShimmerBrush
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+/**
+ * 标记记录列表项骨架屏。
+ *
+ * 尺寸与 [MarkRecordItemRow] 一致（卡片圆角 16dp、海报 80×120dp、右侧信息列），
+ * 让真实数据到达时布局不跳动；替代原来居中的单个转圈指示器。
+ */
+@Composable
+fun MarkRecordItemSkeleton(modifier: Modifier = Modifier) {
+    val brush = rememberShimmerBrush()
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            .padding(horizontal = 6.dp, vertical = 6.dp)
+    ) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+            Box(
+                modifier = Modifier
+                    .width(80.dp)
+                    .height(120.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(brush)
+            )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(120.dp)
+                    .padding(start = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.85f)
+                        .height(15.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(brush)
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.5f)
+                        .height(11.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(brush)
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.6f)
+                        .height(11.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(brush)
+                )
+            }
+        }
+    }
+}
 
 /**
  * 标记记录列表项。
