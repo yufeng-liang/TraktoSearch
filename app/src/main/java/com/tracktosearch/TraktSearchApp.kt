@@ -12,6 +12,7 @@ import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import com.tracktosearch.di.NetworkModule
 import com.tracktosearch.data.auth.AuthCheckScheduler
+import com.tracktosearch.data.local.ImageTrafficStorage
 import com.tracktosearch.data.local.db.AppDatabase
 import com.tracktosearch.data.notification.NotificationScheduler
 import com.tracktosearch.data.util.DnsCache
@@ -38,6 +39,7 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     @Inject lateinit var notificationScheduler: NotificationScheduler
     @Inject lateinit var authCheckScheduler: AuthCheckScheduler
     @Inject lateinit var crashLogUploader: com.tracktosearch.data.util.CrashLogUploader
+    @Inject lateinit var imageTrafficStorage: ImageTrafficStorage
     // 惰性 Provider：注入本身不触发数据库创建，仅在使用时才解析 @Singleton 实例
     @Inject lateinit var appDatabaseProvider: Provider<AppDatabase>
 
@@ -122,8 +124,19 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
         // 3. 独立 Dispatcher 提升并发：默认 maxRequestsPerHost=5 是 3 列网格快速滚动的瓶颈，
         //    提升到 per-host 8 / 总 20（线程池 8 与 per-host 对齐）
         // 4. 显式声明 HTTP/2 优先：同一连接多路复用，批量海报下载更高效
+        // 5. 图片流量统计拦截器：仅统计图片 client 的实际下载字节（含压缩后 body 大小），
+        //    供设置页展示，判断是否值得接入国内 CDN
         val imageHttpClient = baseOkHttpClient.newBuilder()
             .addInterceptor(doubanRefererInterceptor)
+            .addInterceptor { chain ->
+                val response = chain.proceed(chain.request())
+                val body = response.body
+                // body.contentLength() 对分块/压缩响应可能为 -1，此时无法精确计数，跳过
+                if (body != null && body.contentLength() >= 0) {
+                    imageTrafficStorage.record(body.contentLength())
+                }
+                response
+            }
             .dns(dnsCache)
             .dispatcher(
                 Dispatcher(Executors.newFixedThreadPool(8)).apply {

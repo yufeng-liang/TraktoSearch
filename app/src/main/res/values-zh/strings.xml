@@ -797,6 +797,11 @@
     <string name="settings_cache_category_database">离线数据库</string>
     <string name="settings_cache_category_database_desc">想看/已看列表 + 豆瓣同步记录</string>
     <string name="settings_cache_clear_all">全部清除</string>
+    <string name="settings_image_traffic_title">图片流量</string>
+    <string name="settings_image_traffic_today">今日：%1$s</string>
+    <string name="settings_image_traffic_total">累计：%1$s</string>
+    <string name="settings_image_traffic_desc">已下载图片字节（海报、头像、剧照）</string>
+    <string name="settings_image_traffic_clear">重置</string>
     <string name="settings_cache_clear_category_confirm">清除此项缓存？</string>
     <string name="settings_cache_clear_all_impact">将清除所有缓存数据。海报/头像需重新下载，影视详情和榜单需重新请求，ID 映射需重建。缓存重新积累前 App 可能稍慢。</string>
     <string name="settings_cache_category_image_impact">海报和头像下次查看时需重新从网络下载。图片重新缓存前 App 可能稍慢。</string>

@@ -14,6 +14,8 @@ import com.tracktosearch.data.local.CloudFailureSyncMetaStorage
 import com.tracktosearch.data.local.DoubanSyncMetaStorage
 import com.tracktosearch.data.local.LastConsistencyCheckStorage
 import com.tracktosearch.data.local.CooldownStatus
+import com.tracktosearch.data.local.ImageTrafficStats
+import com.tracktosearch.data.local.ImageTrafficStorage
 import com.tracktosearch.data.local.DiscoverSectionConfig
 import com.tracktosearch.data.local.DetailSectionConfig
 import com.tracktosearch.data.local.DetailSectionStorage
@@ -112,6 +114,7 @@ class SettingsViewModel @Inject constructor(
     private val sharedTransitionStorage: SharedTransitionStorage,
     private val doubanSyncedItemDao: DoubanSyncedItemDao,
     private val sessionModeManager: SessionModeManager,
+    private val imageTrafficStorage: ImageTrafficStorage,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -456,6 +459,13 @@ class SettingsViewModel @Inject constructor(
 
     private val _cacheBreakdown = MutableStateFlow(CacheBreakdown())
     val cacheBreakdown: StateFlow<CacheBreakdown> = _cacheBreakdown.asStateFlow()
+
+    // ========== 图片下载流量统计 ==========
+    val imageTraffic: StateFlow<ImageTrafficStats> = imageTrafficStorage.stats
+
+    fun clearImageTraffic() {
+        imageTrafficStorage.clear()
+    }
 
     /** 按类目清除缓存 */
     fun clearCategory(category: CacheCategory) {
