@@ -247,9 +247,18 @@ class AiUiLogicTest {
 
     @Test
     fun activationSuccessBadgeIsShownOnlyForTheActivatedCharacter() {
-        assertThat(shouldShowActivationSuccessBadge("usagi", null)).isEqualTo(false)
-        assertThat(shouldShowActivationSuccessBadge("usagi", "hachiware")).isEqualTo(false)
-        assertThat(shouldShowActivationSuccessBadge("usagi", "usagi")).isEqualTo(true)
+        assertThat(shouldShowActivationSuccessBadge("usagi", null, isAuthorized = true)).isEqualTo(false)
+        assertThat(shouldShowActivationSuccessBadge("usagi", "hachiware", isAuthorized = true)).isEqualTo(false)
+        assertThat(shouldShowActivationSuccessBadge("usagi", "usagi", isAuthorized = false)).isEqualTo(false)
+        assertThat(shouldShowActivationSuccessBadge("usagi", "usagi", isAuthorized = true)).isEqualTo(true)
+    }
+
+    @Test
+    fun activatedContentRequiresTheSelectedActivatedCharacterAndAuthorization() {
+        assertThat(shouldShowActivatedCharacterContent("usagi", "usagi", isAuthorized = true)).isTrue()
+        assertThat(shouldShowActivatedCharacterContent("hachiware", "usagi", isAuthorized = true)).isFalse()
+        assertThat(shouldShowActivatedCharacterContent("usagi", "usagi", isAuthorized = false)).isFalse()
+        assertThat(shouldShowActivatedCharacterContent("usagi", null, isAuthorized = true)).isFalse()
     }
 
     @Test

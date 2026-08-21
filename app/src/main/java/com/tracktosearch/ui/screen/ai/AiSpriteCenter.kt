@@ -281,7 +281,13 @@ private fun SpriteCenterHome(
             }
         }
 
-        AnimatedVisibility(visible = state.activatedCharacterId != null) {
+        AnimatedVisibility(
+            visible = shouldShowActivatedCharacterContent(
+                selectedCharacterId = character.id,
+                activatedCharacterId = state.activatedCharacterId,
+                isAuthorized = state.isAuthorized
+            )
+        ) {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -334,6 +340,11 @@ private fun CharacterStage(
     state: AiSpriteUiState,
     onPlayAudio: (com.tracktosearch.data.ai.AiAudio) -> Unit
 ) {
+    val showActivatedContent = shouldShowActivatedCharacterContent(
+        selectedCharacterId = character.id,
+        activatedCharacterId = state.activatedCharacterId,
+        isAuthorized = state.isAuthorized
+    )
     val transition = rememberInfiniteTransition(label = "sprite_bob")
     val bob by transition.animateFloat(
         initialValue = 0.97f,
@@ -356,7 +367,7 @@ private fun CharacterStage(
                     .size(168.dp)
                     .scale(bob)
             )
-            if (shouldShowActivationSuccessBadge(character.id, state.activatedCharacterId)) {
+            if (shouldShowActivationSuccessBadge(character.id, state.activatedCharacterId, state.isAuthorized)) {
                 Surface(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -391,14 +402,14 @@ private fun CharacterStage(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = if (state.activationState == AiActivationState.SUCCESS) {
+                        text = if (showActivatedContent && state.activationState == AiActivationState.SUCCESS) {
                             state.greeting?.greeting ?: state.activationMessage.orEmpty()
                         } else character.auditionText,
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = 2,
                         textAlign = TextAlign.Center
                     )
-                    state.greeting?.audio?.let { audio ->
+                    state.greeting?.audio?.takeIf { showActivatedContent }?.let { audio ->
                         IconButton(onClick = { onPlayAudio(audio) }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.Rounded.VolumeUp, contentDescription = stringResource(R.string.ai_audio_play), modifier = Modifier.size(18.dp))
                         }

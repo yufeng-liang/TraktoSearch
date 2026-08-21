@@ -215,6 +215,14 @@ interface CloudThemeProvider {
 
 enum class SearchSourceType { DISK, MOVIE, SHOW, PERSON }
 
+internal fun shouldStartSearchCompletedOverlay(
+    trigger: AiSpriteOverlayTrigger,
+    hasBlockingState: Boolean,
+    hasResultAnchor: Boolean
+): Boolean =
+    !hasBlockingState &&
+        (trigger != AiSpriteOverlayTrigger.SEARCH_COMPLETED || hasResultAnchor)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
@@ -232,6 +240,7 @@ fun SearchScreen(
     modifier: Modifier = Modifier,
     viewModel: SearchViewModel = hiltViewModel(),
     spriteViewModel: AiSpriteViewModel = hiltViewModel(),
+    externallyControlledAiSpriteCenterVisible: Boolean? = null,
     onAiSpriteCenterVisibilityChanged: (Boolean) -> Unit = {}
 ) {
     val isDark = isAppDarkTheme()
@@ -302,12 +311,14 @@ fun SearchScreen(
     val easterEggRes by cloudThemeManager.easterEggRes.collectAsStateWithLifecycle()
     val easterMessageRes by cloudThemeManager.easterMessageRes.collectAsStateWithLifecycle()
     val aiSpriteCloudDescription = stringResource(R.string.ai_sprite_cloud_description)
-    var showAiSpriteCenter by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(showAiSpriteCenter) {
-        onAiSpriteCenterVisibilityChanged(showAiSpriteCenter)
-    }
-    DisposableEffect(Unit) {
-        onDispose { onAiSpriteCenterVisibilityChanged(false) }
+    var localAiSpriteCenterVisible by remember { mutableStateOf(false) }
+    val showAiSpriteCenter = externallyControlledAiSpriteCenterVisible ?: localAiSpriteCenterVisible
+
+    fun setAiSpriteCenterVisible(visible: Boolean) {
+        if (externallyControlledAiSpriteCenterVisible == null) {
+            localAiSpriteCenterVisible = visible
+        }
+        onAiSpriteCenterVisibilityChanged(visible)
     }
     var showAiSpriteMotion by rememberSaveable { mutableStateOf(false) }
     var activeSpriteAnchor by remember { mutableStateOf(AiSpriteAnchor.SearchBox) }
@@ -315,6 +326,8 @@ fun SearchScreen(
     var spriteInterruptRevision by remember { mutableStateOf(0L) }
     var spriteInterruptReason by remember { mutableStateOf(AiSpriteInterruptReason.BLOCKED) }
     var searchBoxBounds by remember { mutableStateOf<Rect?>(null) }
+    var firstResultBounds by remember { mutableStateOf<Rect?>(null) }
+    var firstResultAnchorKey by remember { mutableStateOf<String?>(null) }
     var lastInteractionAt by remember { mutableStateOf(System.currentTimeMillis()) }
     var overlayEntryHandled by rememberSaveable { mutableStateOf(false) }
     var wasSearchLoading by remember { mutableStateOf(false) }
@@ -343,6 +356,8 @@ fun SearchScreen(
             SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
         )
     }
+    val resultAnchorKey = uiState.keyword.trim()
+    val currentFirstResultBounds = firstResultBounds.takeIf { firstResultAnchorKey == resultAnchorKey }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -386,6 +401,8 @@ fun SearchScreen(
         showPermissionDialog,
         easterEggRes,
         searchBoxBounds,
+        firstResultBounds,
+        firstResultAnchorKey,
         showAiSpriteMotion
     ) {
         val nextBounds = searchBoxBounds
@@ -394,6 +411,12 @@ fun SearchScreen(
             easterEggRes != null ||
             isSearchFocused ||
             searchQuery.isNotBlank() ||
+            uiState.isLoading ||
+            nextBounds == null
+        val hasBlockingStateIgnoringQuery = showAiSpriteCenter ||
+            showPermissionDialog ||
+            easterEggRes != null ||
+            isSearchFocused ||
             uiState.isLoading ||
             nextBounds == null
         val trigger = nextAiSpriteOverlayTrigger(
@@ -412,9 +435,20 @@ fun SearchScreen(
                 isSearchFocused ||
                 searchQuery.isNotBlank()
         )
-        if (trigger != null && !hasBlockingState && !showAiSpriteMotion) {
+        if (trigger != null &&
+            shouldStartSearchCompletedOverlay(
+                trigger = trigger,
+                hasBlockingState = if (trigger == AiSpriteOverlayTrigger.SEARCH_COMPLETED) {
+                    hasBlockingStateIgnoringQuery
+                } else {
+                    hasBlockingState
+                },
+                hasResultAnchor = currentFirstResultBounds != null
+            ) &&
+            !showAiSpriteMotion
+        ) {
             if (trigger == AiSpriteOverlayTrigger.FIRST_ENTRY) overlayEntryHandled = true
-            activeSpriteAnchor = searchAnchorFor(trigger, hasResultAnchor = false)
+            activeSpriteAnchor = searchAnchorFor(trigger, hasResultAnchor = currentFirstResultBounds != null)
             activeSceneEvent = sceneEventForSearch(trigger)
             if (overlayPolicy.tryConsume(true, trigger, overlayDayKey)) {
                 showAiSpriteMotion = true
@@ -577,7 +611,7 @@ fun SearchScreen(
             isActive = isActive,
             onLongClick = {
                 interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                showAiSpriteCenter = true
+                setAiSpriteCenterVisible(true)
             },
             modifier = Modifier
                 .size(cloudIconSize)
@@ -818,12 +852,18 @@ fun SearchScreen(
         AiSpriteMotion(
             characterId = spriteState.activatedCharacterId.orEmpty(),
             anchor = activeSpriteAnchor,
-            anchorBounds = searchBoxBounds,
+            anchorBounds = when (activeSpriteAnchor) {
+                AiSpriteAnchor.ResultCard -> currentFirstResultBounds
+                else -> searchBoxBounds
+            },
             visible = showAiSpriteMotion && !showAiSpriteCenter &&
-                searchBoxBounds != null,
+                (when (activeSpriteAnchor) {
+                    AiSpriteAnchor.ResultCard -> currentFirstResultBounds
+                    else -> searchBoxBounds
+                } != null),
             onClick = {
                 interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                showAiSpriteCenter = true
+                setAiSpriteCenterVisible(true)
             },
             onFinished = {
                 showAiSpriteMotion = false
@@ -839,7 +879,7 @@ fun SearchScreen(
             visible = showAiSpriteCenter,
             onDismiss = {
                 interruptAiSprite(AiSpriteInterruptReason.NAVIGATION)
-                showAiSpriteCenter = false
+                setAiSpriteCenterVisible(false)
                 spriteViewModel.closeFeature()
             },
             onNavigateToLogin = { onNavigateToLogin?.invoke() },

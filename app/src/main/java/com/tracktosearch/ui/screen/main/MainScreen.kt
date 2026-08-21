@@ -206,8 +206,9 @@ fun MainScreen(
     var traktSearchQuery by rememberSaveable { mutableStateOf("") }
     var traktSearchType by rememberSaveable { mutableStateOf(SearchSourceType.MOVIE) }
     var showTraktSearch by rememberSaveable { mutableStateOf(false) }
-    var aiSpriteCenterVisible by rememberSaveable { mutableStateOf(false) }
+    var aiSpriteCenterVisible by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage = initialTab) { 4 }
+    val aiSpriteCenterVisibleOnCurrentPage = pagerState.currentPage == 0 && aiSpriteCenterVisible
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -325,6 +326,9 @@ fun MainScreen(
     // Pager 滑动 → 同步 selectedTab
     LaunchedEffect(pagerState.currentPage) {
         selectedTab = pagerState.currentPage
+        if (pagerState.currentPage != 0) {
+            aiSpriteCenterVisible = false
+        }
     }
 
     // 通知点击可能发生在 Activity 已经打开时，主动切到 Watchlist 页。
@@ -373,6 +377,10 @@ fun MainScreen(
     )
     // 进入/返回搜索结果页时重置底部导航为可见
     LaunchedEffect(showTraktSearch) {
+        isFabVisible = 1f
+        aiSpriteCenterVisible = false
+    }
+    LaunchedEffect(aiSpriteCenterVisible) {
         isFabVisible = 1f
     }
 
@@ -499,6 +507,7 @@ fun MainScreen(
                                         onRecommendationClick = onAiRecommendationClick,
                                         viewModel = viewModel,
                                         inlineMode = true,
+                                        externallyControlledAiSpriteCenterVisible = aiSpriteCenterVisibleOnCurrentPage,
                                         onAiSpriteCenterVisibilityChanged = { visible ->
                                             aiSpriteCenterVisible = visible
                                         }
@@ -519,6 +528,7 @@ fun MainScreen(
                                 searchSourceType = searchSourceType,
                                 onSearchSourceTypeChange = { searchSourceType = it },
                                 modifier = Modifier.fillMaxSize(),
+                                externallyControlledAiSpriteCenterVisible = aiSpriteCenterVisibleOnCurrentPage,
                                 onAiSpriteCenterVisibilityChanged = { visible ->
                                     aiSpriteCenterVisible = visible
                                 }
@@ -599,7 +609,7 @@ fun MainScreen(
                 ambientColor = MaterialTheme.colorScheme.background,
                 contentCapacity = 72
             )
-            if (isMainBottomNavigationVisible(aiSpriteCenterVisible)) {
+            if (isMainBottomNavigationVisible(pagerState.currentPage, aiSpriteCenterVisible)) {
                 AppVisualSurface(
                     kind = VisualSurfaceKind.Glass,
                     modifier = Modifier
