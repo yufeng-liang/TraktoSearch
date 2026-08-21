@@ -46,6 +46,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -398,6 +399,14 @@ fun StatisticsScreen(
                 }
                 Spacer(modifier = Modifier.weight(1f))
             }
+                // 展示上次快照并后台刷新时的细进度条：不遮挡内容，只提示数据可能不是最新
+                if (uiState.isRefreshing) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(2.dp)
+                    )
+                }
             }
         }
     }
@@ -476,7 +485,7 @@ private fun StatisticsInfoDialog(onDismiss: () -> Unit) {
 @Composable
 private fun OverviewCards(uiState: StatisticsUiState, isVisible: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // 第一行：电影部数 / 电视剧剧数 / 集数
+        // 第一行：电影部数 / 电视剧（在追·看完）/ 集数
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -487,10 +496,13 @@ private fun OverviewCards(uiState: StatisticsUiState, isVisible: Boolean) {
                 targetValue = uiState.totalMovieCount,
                 isVisible = isVisible
             )
-            AnimatedStatCard(
+            // 剧集有两个口径：有观看记录的剧数（含未看完）与整部看完的剧数。
+            // Trakt 的「已看」只要看过一集就计入，和「看完」差别很大，分开显示避免歧义。
+            ShowStatCard(
                 modifier = Modifier.weight(1f),
-                title = stringResource(R.string.statistics_shows),
-                targetValue = uiState.totalShowCount,
+                watchedCount = uiState.showsWatchedCount,
+                completedCount = uiState.showsCompletedCount,
+                completedReady = uiState.showsCompletedReady,
                 isVisible = isVisible
             )
             AnimatedStatCard(
@@ -517,6 +529,61 @@ private fun OverviewCards(uiState: StatisticsUiState, isVisible: Boolean) {
                 targetValue = uiState.thisYearWatched,
                 isVisible = isVisible
             )
+        }
+    }
+}
+
+/**
+ * 剧集统计卡片：主数字为有观看记录的剧数，副行补充其中「整部看完」的数量。
+ *
+ * 两个数字相等时（全部看完）副行是重复信息，隐藏它。
+ * 与 [AnimatedStatCard] 保持相同的卡片高度与数字动画，便于同一行对齐。
+ */
+@Composable
+private fun ShowStatCard(
+    watchedCount: Int,
+    completedCount: Int,
+    completedReady: Boolean,
+    modifier: Modifier = Modifier,
+    isVisible: Boolean = true
+) {
+    val animatedWatched = rememberOneShotAnimatedInt(watchedCount, isVisible)
+    val animatedCompleted = rememberOneShotAnimatedInt(completedCount, isVisible)
+    // 用目标值而非动画中间值判断，避免数字跳动过程中副行闪现
+    val showCompletedLine = completedReady && completedCount != watchedCount
+
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = animatedWatched.toString(),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.statistics_shows),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (showCompletedLine) {
+                Text(
+                    text = stringResource(R.string.statistics_shows_completed, animatedCompleted),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }

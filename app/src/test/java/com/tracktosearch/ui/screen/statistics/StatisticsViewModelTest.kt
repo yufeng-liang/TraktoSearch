@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.statistics
 
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.data.local.StatisticsSnapshotStore
 import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.local.db.UserReviewEntity
@@ -59,6 +60,7 @@ class StatisticsViewModelTest {
     private val traktConnected = MutableStateFlow(true)
     private val doubanMode = MutableStateFlow(false)
     private val sessionModeManager = mockk<SessionModeManager>(relaxed = true)
+    private val snapshotStore = mockk<StatisticsSnapshotStore>(relaxed = true)
     private lateinit var viewModel: StatisticsViewModel
 
     @Test
@@ -147,7 +149,9 @@ class StatisticsViewModelTest {
 
         val state = viewModel.uiState.value
         assertThat(state.totalMovieCount).isEqualTo(1)
-        assertThat(state.totalShowCount).isEqualTo(1)
+        // 豆瓣「看过」剧集不细分集数，标记看过即算整部看完，两个口径都计 1
+        assertThat(state.showsWatchedCount).isEqualTo(1)
+        assertThat(state.showsCompletedCount).isEqualTo(1)
         assertThat(state.totalEpisodeCount).isEqualTo(8)
         assertThat(state.totalWatchMinutes).isEqualTo(480)
         assertThat(state.genreDistribution).isEqualTo(mapOf("drama" to 2, "action" to 1, "mystery" to 1))
@@ -310,12 +314,16 @@ class StatisticsViewModelTest {
         every { sessionModeManager.isDoubanMode } returns doubanMode
         coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns emptyList()
         coEvery { doubanRepository.getDetailSnapshot() } returns emptyMap()
+        // 默认无快照：测试断言的是网络结果，不应被上次快照的旧值干扰
+        coEvery { snapshotStore.load() } returns null
+        coEvery { snapshotStore.save(any()) } returns Unit
         viewModel = StatisticsViewModel(
             traktRepository,
             userReviewRepository,
             doubanSyncedItemDao,
             doubanRepository,
             sessionModeManager,
+            snapshotStore,
             RuntimeEnvironment.getApplication()
         )
     }
@@ -509,19 +517,17 @@ class StatisticsViewModelTest {
     // ==================== 统计数据正确性测试 ====================
 
     /**
-     * 测试点9：totalShowCount 正确计算（看完一整季才算看完该剧）
+     * 测试点9：showsWatchedCount / showsCompletedCount 两个口径分别正确。
      *
-     * 场景：3 部剧
-     * - 剧集A：S1 全部 completed=1 → 计入
-     * - 剧集B：S1 部分 completed=0 → 不计入
-     * - 剧集C：S0（特别篇）全部 completed=1，S1 无 → 不计入（season.number > 0 排除特别篇）
+     * 「整部看完」= 已看常规集数（排除 S0 特别篇）≥ 已播出总集数 aired_episodes。
+     * /sync/watched/shows 只返回已看的集，无法靠它自身判断是否看完，必须比对 aired_episodes。
      */
     @Test
-    fun `loadStatistics_totalShowCount_看完一整季才算`() = runTest {
+    fun `loadStatistics_剧集两个口径_按已播出集数判断整部看完`() = runTest {
         val watchedShows = listOf(
-            // 剧集A：S1 全部看完
+            // 剧集A：已播 2 集，已看 2 集 → 整部看完
             TraktWatchedShow(
-                show = TraktShow(title = "剧集A"),
+                show = TraktShow(title = "剧集A", airedEpisodes = 2),
                 seasons = listOf(
                     TraktWatchedSeason(
                         number = 1,
@@ -532,28 +538,36 @@ class StatisticsViewModelTest {
                     )
                 )
             ),
-            // 剧集B：S1 部分看完
+            // 剧集B：已播 10 集，只看了 2 集 → 有记录但未看完
             TraktWatchedShow(
-                show = TraktShow(title = "剧集B"),
+                show = TraktShow(title = "剧集B", airedEpisodes = 10),
                 seasons = listOf(
                     TraktWatchedSeason(
                         number = 1,
                         episodes = listOf(
                             TraktWatchedEpisode(number = 1, completed = 1),
-                            TraktWatchedEpisode(number = 2, completed = 0)  // 未看完
+                            TraktWatchedEpisode(number = 2, completed = 1)
                         )
                     )
                 )
             ),
-            // 剧集C：仅 S0（特别篇）看完，S1 无
+            // 剧集C：aired_episodes 缺失（0）→ 无法判断，不计入看完
             TraktWatchedShow(
                 show = TraktShow(title = "剧集C"),
                 seasons = listOf(
                     TraktWatchedSeason(
-                        number = 0,  // 特别篇，被排除
-                        episodes = listOf(
-                            TraktWatchedEpisode(number = 1, completed = 1)
-                        )
+                        number = 1,
+                        episodes = listOf(TraktWatchedEpisode(number = 1, completed = 1))
+                    )
+                )
+            ),
+            // 剧集D：只看过 S0 特别篇 → 常规集数 0 < 5，不计入看完
+            TraktWatchedShow(
+                show = TraktShow(title = "剧集D", airedEpisodes = 5),
+                seasons = listOf(
+                    TraktWatchedSeason(
+                        number = 0,
+                        episodes = listOf(TraktWatchedEpisode(number = 1, completed = 1))
                     )
                 )
             )
@@ -563,29 +577,28 @@ class StatisticsViewModelTest {
         viewModel.loadStatistics()
         waitForLoadComplete()
 
-        // 只有剧集A满足"存在 number>0 的季且该季所有 episode completed>0"
-        assertThat(viewModel.uiState.value.totalShowCount).isEqualTo(1)
+        val state = viewModel.uiState.value
+        assertThat(state.showsWatchedCount).isEqualTo(4)
+        assertThat(state.showsCompletedCount).isEqualTo(1)
     }
 
     /**
-     * 测试点10：totalShowCount 多季任意一季看完即计入
+     * 测试点10：整部看完的已看集数跨季累计，不要求单季全看完
      */
     @Test
-    fun `loadStatistics_totalShowCount_多季任意一季看完即计入`() = runTest {
+    fun `loadStatistics_剧集看完_跨季累计已看集数`() = runTest {
         val watchedShows = listOf(
             TraktWatchedShow(
-                show = TraktShow(title = "剧集"),
+                show = TraktShow(title = "剧集", airedEpisodes = 3),
                 seasons = listOf(
                     TraktWatchedSeason(
                         number = 1,
-                        episodes = listOf(
-                            TraktWatchedEpisode(number = 1, completed = 0)  // S1 未看完
-                        )
+                        episodes = listOf(TraktWatchedEpisode(number = 1, completed = 1))
                     ),
                     TraktWatchedSeason(
                         number = 2,
                         episodes = listOf(
-                            TraktWatchedEpisode(number = 1, completed = 1),  // S2 全部看完
+                            TraktWatchedEpisode(number = 1, completed = 1),
                             TraktWatchedEpisode(number = 2, completed = 1)
                         )
                     )
@@ -597,8 +610,9 @@ class StatisticsViewModelTest {
         viewModel.loadStatistics()
         waitForLoadComplete()
 
-        // seasons.any { ... } → S2 满足条件，计入
-        assertThat(viewModel.uiState.value.totalShowCount).isEqualTo(1)
+        // S1 1 集 + S2 2 集 = 3 ≥ aired 3 → 整部看完
+        assertThat(viewModel.uiState.value.showsWatchedCount).isEqualTo(1)
+        assertThat(viewModel.uiState.value.showsCompletedCount).isEqualTo(1)
     }
 
     /**
@@ -877,8 +891,8 @@ class StatisticsViewModelTest {
         // watchedShows 未到达 → overviewReady=false
         assertThat(state.overviewReady).isFalse()
         assertThat(state.genreReady).isFalse()  // genre 需要 movies && watchedShows
-        // totalShowCount=0（watchedShows 未到达）
-        assertThat(state.totalShowCount).isEqualTo(0)
+        // 有记录的剧数=0（watchedShows 未到达）
+        assertThat(state.showsWatchedCount).isEqualTo(0)
         // error 来自 watchedShows 失败
         assertThat(state.error).contains("Network error")
     }
