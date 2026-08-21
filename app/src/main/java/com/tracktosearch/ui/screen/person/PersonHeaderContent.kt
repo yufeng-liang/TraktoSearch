@@ -25,10 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,6 +46,7 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.SocialMediaIcon
+import com.tracktosearch.ui.screen.detail.ExpandableText
 
 private data class AgeInfo(val age: Int, val isDeceased: Boolean)
 
@@ -81,7 +79,6 @@ internal fun PersonHeaderContent(
     val context = LocalContext.current
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-    var showFullBio by remember { mutableStateOf(false) }
 
     // 根据头像主色调亮度自适应文字颜色，增强沉浸背景下的可读性
     // 亮色主色 → 深色文字；暗色主色 → 浅色文字；无主色 → 回退主题色
@@ -497,18 +494,12 @@ internal fun PersonHeaderContent(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 if (displayBiography.isNotEmpty()) {
-                    Text(
+                    // 简介正文：折叠为 4 行，溢出时显示「展开/收起」按钮
+                    // scrim 渐隐色匹配下方卡片背景（surfaceVariant）
+                    ExpandableText(
                         text = displayBiography,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = if (showFullBio) Int.MAX_VALUE else 4,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) { showFullBio = !showFullBio }
+                        maxLines = 4,
+                        scrimColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                 } else if (isLoadingTrakt) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
