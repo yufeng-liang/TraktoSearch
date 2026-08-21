@@ -5,6 +5,8 @@ import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
+import com.tracktosearch.BuildConfig
+import com.tracktosearch.data.local.StatisticsSnapshotStore
 import com.tracktosearch.data.local.UserProfileStorage
 import com.tracktosearch.data.local.db.MarkActionRecordDao
 import com.tracktosearch.data.local.db.MarkActionRecordEntity
@@ -23,6 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
@@ -52,6 +55,7 @@ class TraktRepository @Inject constructor(
     private val userProfileStorage: UserProfileStorage,
     private val markActionRecordDao: MarkActionRecordDao,
     private val tmdbRepository: TmdbRepository,
+    private val statisticsSnapshotStore: StatisticsSnapshotStore,
     private val json: Json,
     @ApplicationContext private val context: Context
 ) {
@@ -71,6 +75,81 @@ class TraktRepository @Inject constructor(
         const val ENRICH_CONCURRENCY = 10
         /** 渐进提交批大小，每累计这么多条 emit 一批 */
         const val EMIT_BATCH_SIZE = 20
+        /** 首批更小，让列表尽快出现内容而不是一直转圈 */
+        const val FIRST_EMIT_BATCH_SIZE = 6
+        /**
+         * Trakt 分页请求页大小。官方当前上限为 250，且明确说明「不要假设请求的 limit 就是生效的 limit」，
+         * 因此翻页终止条件同时依赖响应头页数与空数组。
+         */
+        const val PAGE_LIMIT = 250
+        /**
+         * 并行翻页并发上限。Trakt 授权 GET 限额为每用户每 5 分钟 1000 次，并发 4 有充足余量，
+         * 同时避免一次性打出几十个请求触发网关限流。
+         */
+        private const val PAGE_FETCH_CONCURRENCY = 4
+        /** 翻页兜底上限，避免服务端返回异常页数时无限拉取 */
+        private const val MAX_PAGINATION_PAGES = 200
+    }
+
+    /**
+     * 通用并行翻页。
+     *
+     * 先取第 1 页读 `X-Pagination-Page-Count`，再用 [PAGE_FETCH_CONCURRENCY] 并发拉剩余页。
+     * 串行翻页的总耗时是「页数 × RTT」，并行后约为「2 × RTT」（首页 + 剩余页中最慢的一批）。
+     *
+     * 任一页失败即整体失败，与原串行实现的错误语义保持一致，避免统计页静默少算数据。
+     *
+     * @param fetchPage 拉取指定页，返回 Retrofit [Response] 以便读取分页响应头
+     */
+    private suspend fun <T> fetchAllPages(
+        fetchPage: suspend (page: Int) -> Response<List<T>>
+    ): Result<List<T>> = coroutineScope {
+        val firstResponse = try {
+            fetchPage(1)
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            return@coroutineScope Result.failure(e)
+        }
+        if (!firstResponse.isSuccessful) {
+            return@coroutineScope Result.failure(Exception("HTTP ${firstResponse.code()}"))
+        }
+        val firstItems = firstResponse.body() ?: emptyList()
+        val totalPages = (firstResponse.headers()["X-Pagination-Page-Count"]?.toIntOrNull() ?: 1)
+            .coerceIn(1, MAX_PAGINATION_PAGES)
+        if (BuildConfig.DEBUG) {
+            // Trakt 明确说明「不要假设请求的 limit 就是生效的 limit」。
+            // 记录实际生效的分页参数，便于核对是否被服务端截断。
+            Log.d(
+                "TraktPaging",
+                "${firstResponse.raw().request.url.encodedPath}" +
+                    " requestedLimit=$PAGE_LIMIT" +
+                    " appliedLimit=${firstResponse.headers()["X-Pagination-Limit"]}" +
+                    " itemCount=${firstResponse.headers()["X-Pagination-Item-Count"]}" +
+                    " pageCount=$totalPages firstPageSize=${firstItems.size}"
+            )
+        }
+        if (totalPages == 1 || firstItems.isEmpty()) {
+            return@coroutineScope Result.success(firstItems)
+        }
+
+        val semaphore = Semaphore(PAGE_FETCH_CONCURRENCY)
+        // async 内部不抛业务异常：否则子协程失败会取消整个 coroutineScope，无法降级为 Result.failure
+        val restPages = (2..totalPages).map { page ->
+            async {
+                semaphore.withPermit {
+                    try {
+                        val response = fetchPage(page)
+                        if (response.isSuccessful) Result.success(response.body() ?: emptyList())
+                        else Result.failure(Exception("HTTP ${response.code()} at page $page"))
+                    } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                        Result.failure(e)
+                    }
+                }
+            }
+        }.awaitAll()
+        restPages.firstNotNullOfOrNull { it.exceptionOrNull() }?.let {
+            return@coroutineScope Result.failure(it)
+        }
+        Result.success(firstItems + restPages.flatMap { it.getOrDefault(emptyList()) })
     }
 
     /** 全局想看/已看 ID 缓存，登录后加载一次，退出登录时清除 */
@@ -153,6 +232,7 @@ class TraktRepository @Inject constructor(
     }
 
     /** Trakt /sync/history 分页结果 */
+    @Serializable
     data class WatchHistoryPage(
         val items: List<WatchHistoryItem>,
         val currentPage: Int,
@@ -164,10 +244,13 @@ class TraktRepository @Inject constructor(
     data class WatchHistoryEmit(
         val items: List<WatchHistoryItem>,
         val isComplete: Boolean = false,
-        val error: String? = null
+        val error: String? = null,
+        /** 该批是否已完成 TMDB 富化；未富化时展示原始标题、无海报，后续批次原地替换 */
+        val enriched: Boolean = true
     )
 
     /** 已看记录（统一表示 movie/episode） */
+    @Serializable
     data class WatchHistoryItem(
         val traktId: Int,
         val tmdbId: Int,
@@ -200,6 +283,9 @@ class TraktRepository @Inject constructor(
             register { watchlistWatchedIdsCache.clearAll() }
             register { recommendationsCache.clearAll() }
             register { showRecommendationsCache.clearAll() }
+            register { watchHistoryPageCache.clearAll() }
+            // 统计快照是账号私有数据，切换账号必须清除，否则新账号会看到上一个账号的统计
+            register { statisticsSnapshotStore.clear() }
             register { clearUserProfileCacheInternal() }
         }
     }
@@ -519,27 +605,38 @@ class TraktRepository @Inject constructor(
     private val showSeasonsCache = persistentTtlCache<List<TraktSeason>>(
         TTL_ID_MAPPING, 200, persistentDataStore, json, "show_seasons_v1", persistentScope
     )
+    /**
+     * 已看历史第一页持久化缓存（永久，仅 1 条）。
+     *
+     * 冷启动时 [watchHistoryCache] 是空的，标记记录页只能干等两个 Trakt 请求 + 上百次 TMDB 富化。
+     * 这里落盘第一页结果，进页先秒出旧数据再后台刷新。只存第一页：
+     * 每页约 200 条、Preferences DataStore 每次写入重写整个文件，存满 10 页会有几百 KB 的写放大。
+     */
+    private val watchHistoryPageCache = persistentTtlCache<WatchHistoryPage>(
+        TTL_ID_MAPPING, 1, persistentDataStore, json, "watch_history_page1_v1", persistentScope
+    )
 
     // 短期内存缓存：人物详情和演字号搜索，App 进程内有效（10 分钟）
     private val personSummaryCache = TtlCache<Result<TraktPersonDetail>>(TTL_SEARCH_PERSON, maxSize = 50)
     private val personMovieCreditsCache = TtlCache<Result<TraktPersonCreditsResponse>>(TTL_SEARCH_PERSON, maxSize = 30)
     private val personShowCreditsCache = TtlCache<Result<TraktPersonCreditsResponse>>(TTL_SEARCH_PERSON, maxSize = 30)
 
-    /** 持久化缓存列表，供 Application 启动时批量加载 */
+    /** 持久化缓存列表，供设置页「清除全部缓存」批量清理 */
     val persistentCaches: List<PersistentTtlCache<*>> get() = listOf(
         searchByTmdbCache, searchByImdbCache, watchlistWatchedIdsCache, recommendationsCache,
         trendingMoviesCache, trendingShowsCache, anticipatedMoviesCache,
         anticipatedShowsCache, showRecommendationsCache, trendingListsCache,
-        showSeasonsCache
+        showSeasonsCache, watchHistoryPageCache
     )
 
     /** ID 映射持久化缓存（tmdb↔trakt、imdb↔trakt），用于设置页按类目清除 */
     val idMappingCaches: List<PersistentTtlCache<*>> get() = listOf(searchByTmdbCache, searchByImdbCache)
 
-    /** 影视数据持久化缓存（想看/已看 ID + 趋势/推荐/列表等 6 小时缓存），用于设置页按类目清除 */
+    /** 影视数据持久化缓存（想看/已看 ID + 趋势/推荐/列表 + 已看历史首页），用于设置页按类目清除 */
     val mediaDataCaches: List<PersistentTtlCache<*>> get() = listOf(
         watchlistWatchedIdsCache, recommendationsCache, trendingMoviesCache, trendingShowsCache,
-        anticipatedMoviesCache, anticipatedShowsCache, showRecommendationsCache, trendingListsCache
+        anticipatedMoviesCache, anticipatedShowsCache, showRecommendationsCache, trendingListsCache,
+        watchHistoryPageCache
     )
 
     /**
@@ -800,7 +897,7 @@ class TraktRepository @Inject constructor(
         }
     }
 
-    /** 获取全部电影观看历史（跨页拉取），用于统计。带 5 分钟 TTL 缓存 */
+    /** 获取全部电影观看历史（并行翻页），用于统计。带 5 分钟 TTL 缓存 */
     suspend fun getAllMovieHistory(
         extended: String = "full",
         forceRefresh: Boolean = false
@@ -812,23 +909,13 @@ class TraktRepository @Inject constructor(
                 return Result.success(requireCurrentSessionValue(sessionGeneration, cached))
             }
         }
-        val allItems = mutableListOf<TraktWatchlistMovieItem>()
-        var page = 1
-        var totalPages = 1
-        while (page <= totalPages) {
-            val result = getMovieHistory(page = page, limit = 200, extended = extended)
-            result.onSuccess { (items, tp) ->
-                allItems.addAll(items)
-                totalPages = tp
-            }.onFailure { e ->
-                return Result.failure(e)
-            }
-            page++
-        }
+        val allItems = fetchAllPages { page ->
+            traktApiService.getMovieHistory(page = page, limit = PAGE_LIMIT, extended = extended)
+        }.getOrElse { return Result.failure(it) }
         return Result.success(putSessionCache(sessionGeneration, movieHistoryCache, cacheKey, allItems))
     }
 
-    /** 获取全部电视剧观看历史（跨页拉取），用于统计。带 5 分钟 TTL 缓存 */
+    /** 获取全部电视剧观看历史（并行翻页），用于统计。带 5 分钟 TTL 缓存 */
     suspend fun getAllShowHistory(
         extended: String = "min",
         forceRefresh: Boolean = false
@@ -840,39 +927,32 @@ class TraktRepository @Inject constructor(
                 return Result.success(requireCurrentSessionValue(sessionGeneration, cached))
             }
         }
-        val allItems = mutableListOf<TraktWatchlistShowItem>()
-        var page = 1
-        var totalPages = 1
-        while (page <= totalPages) {
-            val result = getShowHistory(page = page, limit = 200, extended = extended)
-            result.onSuccess { (items, tp) ->
-                allItems.addAll(items)
-                totalPages = tp
-            }.onFailure { e ->
-                return Result.failure(e)
-            }
-            page++
-        }
+        val allItems = fetchAllPages { page ->
+            traktApiService.getShowHistory(page = page, limit = PAGE_LIMIT, extended = extended)
+        }.getOrElse { return Result.failure(it) }
         return Result.success(putSessionCache(sessionGeneration, showHistoryCache, cacheKey, allItems))
     }
 
-    /** 获取已看电视剧列表（含每部剧的已看集数），用于统计。带 5 分钟 TTL 缓存 */
+    /**
+     * 获取已看电视剧列表（含每部剧的已看集数），用于统计。带 5 分钟 TTL 缓存。
+     *
+     * Trakt 自 2026-06-30 起在该端点强制分页，且 `extended=full` 已失效——
+     * 季/集进度必须显式请求 `extended=progress`，否则 `seasons` 为空、
+     * 「全部看完的剧数」会算成 0。参考 trakt/trakt-api#775。
+     */
     suspend fun getWatchedShowsWithEpisodes(): Result<List<TraktWatchedShow>> {
         val sessionGeneration = sessionCacheRegistry.currentGeneration()
         watchedShowsCache.get("all")?.let { cached ->
             return Result.success(requireCurrentSessionValue(sessionGeneration, cached))
         }
-        return try {
-            val response = traktApiService.getWatchedShows()
-            if (response.isSuccessful) {
-                val shows = response.body() ?: emptyList()
-                Result.success(putSessionCache(sessionGeneration, watchedShowsCache, "all", shows))
-            } else {
-                Result.failure(Exception("Failed to get watched shows: ${response.code()}"))
-            }
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            Result.failure(e)
-        }
+        val shows = fetchAllPages { page ->
+            traktApiService.getWatchedShows(
+                extended = "progress",
+                page = page,
+                limit = PAGE_LIMIT
+            )
+        }.getOrElse { return Result.failure(it) }
+        return Result.success(putSessionCache(sessionGeneration, watchedShowsCache, "all", shows))
     }
 
     /** 获取全部电影想看列表（跨页拉取），用于通知检查 */
@@ -1134,7 +1214,10 @@ class TraktRepository @Inject constructor(
      * @return 总页数；缓存未命中返回 0
      */
     suspend fun getWatchHistoryTotalPages(): Int {
-        return watchHistoryCache.get("watch_history_page_1")?.totalPages ?: 0
+        watchHistoryCache.get("watch_history_page_1")?.totalPages?.let { return it }
+        // 冷启动内存未命中时回退到磁盘快照，避免 ALL Tab 误判「没有更多」
+        watchHistoryPageCache.awaitLoaded()
+        return watchHistoryPageCache.get("watch_history_page_1")?.totalPages ?: 0
     }
 
     fun fetchWatchHistory(page: Int): Flow<WatchHistoryEmit> = flow {
@@ -1145,6 +1228,14 @@ class TraktRepository @Inject constructor(
             sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) { }
             emit(WatchHistoryEmit(items = it.items, isComplete = true))
             return@flow
+        }
+        // 冷启动内存为空：先用磁盘快照秒出旧数据，再继续走网络刷新（stale-while-revalidate）。
+        if (page == 1) {
+            watchHistoryPageCache.awaitLoaded()
+            watchHistoryPageCache.get(cacheKey)?.let { stale ->
+                sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) { }
+                emit(WatchHistoryEmit(items = stale.items, isComplete = false))
+            }
         }
         try {
             coroutineScope {
@@ -1186,28 +1277,48 @@ class TraktRepository @Inject constructor(
                     ))
                 }
 
+                // 未富化的原始结果先出：标题用 Trakt 原名、暂无海报，让列表立刻有内容而不是转圈。
+                // 下游据 enriched=false 保留自己已有的富化结果，避免覆盖成原始标题。
+                if (rawItems.isNotEmpty()) {
+                    val rawShown = rawItems.map { it.toUnenrichedItem() }.sortedByDescending { it.watchedAt }
+                    sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) { }
+                    emit(WatchHistoryEmit(items = rawShown, isComplete = false, enriched = false))
+                }
+
+                // 按 (mediaType, tmdbId) 去重后再富化：同一部剧的多集共用一次 TMDB 请求。
+                // 原实现每条记录各发一次，一页 100 集同剧会打出 100 次重复请求。
+                val enrichmentKeys = rawItems
+                    .filter { it.tmdbId > 0 }
+                    .map { it.mediaType to it.tmdbId }
+                    .distinct()
                 val semaphore = Semaphore(ENRICH_CONCURRENCY)
-                val enriched = mutableListOf<WatchHistoryItem>()
-                val deferreds = rawItems.map { raw ->
+                val enrichmentJobs = enrichmentKeys.associateWith { (mediaType, tmdbId) ->
+                    val sample = rawItems.first { it.mediaType == mediaType && it.tmdbId == tmdbId }
                     async {
-                        semaphore.withPermit {
-                            enrichRaw(raw)
-                        }
+                        semaphore.withPermit { fetchEnrichment(sample) }
                     }
                 }
+
+                val enriched = mutableListOf<WatchHistoryItem>()
                 var emittedCount = 0
-                for (deferred in deferreds) {
-                    enriched.add(deferred.await())
+                for (raw in rawItems) {
+                    val enrichment = enrichmentJobs[raw.mediaType to raw.tmdbId]?.await()
+                    enriched.add(raw.toEnrichedItem(enrichment))
                     emittedCount++
-                    if (emittedCount % EMIT_BATCH_SIZE == 0) {
+                    // 首批阈值更小，尽快替换掉未富化的占位内容
+                    val batchSize = if (emittedCount <= FIRST_EMIT_BATCH_SIZE) FIRST_EMIT_BATCH_SIZE else EMIT_BATCH_SIZE
+                    if (emittedCount % batchSize == 0) {
                         val batch = enriched.sortedByDescending { it.watchedAt }
                         sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) { }
                         emit(WatchHistoryEmit(items = batch, isComplete = false))
                     }
                 }
                 val finalItems = enriched.sortedByDescending { it.watchedAt }
+                val finalPage = WatchHistoryPage(finalItems, page, totalPages, totalCount)
                 sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) {
-                    watchHistoryCache.put(cacheKey, WatchHistoryPage(finalItems, page, totalPages, totalCount))
+                    watchHistoryCache.put(cacheKey, finalPage)
+                    // 只落盘第一页，供下次冷启动秒出
+                    if (page == 1) watchHistoryPageCache.put(cacheKey, finalPage)
                 }
                 sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) { }
                 emit(WatchHistoryEmit(items = finalItems, isComplete = true))
@@ -1219,53 +1330,51 @@ class TraktRepository @Inject constructor(
         }
     }
 
-    /** 单条原始记录 enrich（并行调用，限流由调用方 Semaphore 控制） */
-    private suspend fun enrichRaw(raw: RawEntry): WatchHistoryItem {
-        return if (raw.mediaType == "movie") {
-            var displayTitle = raw.title
-            var posterUrl: String? = null
-            var year = raw.year
-            var imdbId = raw.imdbId
-            if (raw.tmdbId > 0) {
-                try {
-                    val enrichment = tmdbRepository.enrichMovie(raw.tmdbId, raw.title, year)
-                    displayTitle = enrichment.chineseTitle.ifBlank { raw.title }
-                    posterUrl = enrichment.posterUrl
-                    year = enrichment.year ?: year
-                    imdbId = enrichment.imdbId ?: imdbId
-                } catch (e: CancellationException) { throw e } catch (e: Exception) {
-                    Log.w("TraktRepository", "fetchWatchHistory movie enrich failed: ${e.message}")
-                }
+    /** 单条 TMDB 富化结果（movie/tv 共用的最小字段集） */
+    private data class RawEnrichment(
+        val displayTitle: String,
+        val posterUrl: String?,
+        val year: Int?,
+        val imdbId: String?
+    )
+
+    /** 按 tmdbId 拉一次 TMDB 富化；失败返回 null，由调用方回退到 Trakt 原始字段。 */
+    private suspend fun fetchEnrichment(raw: RawEntry): RawEnrichment? {
+        if (raw.tmdbId <= 0) return null
+        return try {
+            if (raw.mediaType == "movie") {
+                val e = tmdbRepository.enrichMovie(raw.tmdbId, raw.title, raw.year)
+                RawEnrichment(e.chineseTitle, e.posterUrl, e.year, e.imdbId)
+            } else {
+                val e = tmdbRepository.enrichTv(raw.tmdbId, raw.title, raw.year)
+                RawEnrichment(e.chineseTitle, e.posterUrl, e.year, e.imdbId)
             }
-            WatchHistoryItem(
-                traktId = raw.traktId, tmdbId = raw.tmdbId, imdbId = imdbId,
-                mediaType = "movie", title = raw.title, displayTitle = displayTitle,
-                posterUrl = posterUrl, year = year, watchedAt = raw.watchedAt, episodeInfo = null
-            )
-        } else {
-            var displayTitle = raw.title
-            var posterUrl: String? = null
-            var year = raw.year
-            var imdbId = raw.imdbId
-            if (raw.tmdbId > 0) {
-                try {
-                    val enrichment = tmdbRepository.enrichTv(raw.tmdbId, raw.title, year)
-                    displayTitle = enrichment.chineseTitle.ifBlank { raw.title }
-                    posterUrl = enrichment.posterUrl
-                    year = enrichment.year ?: year
-                    imdbId = enrichment.imdbId ?: imdbId
-                } catch (e: CancellationException) { throw e } catch (e: Exception) {
-                    Log.w("TraktRepository", "fetchWatchHistory episode enrich failed: ${e.message}")
-                }
-            }
-            WatchHistoryItem(
-                traktId = raw.traktId, tmdbId = raw.tmdbId, imdbId = imdbId,
-                mediaType = "show", title = raw.title, displayTitle = displayTitle,
-                posterUrl = posterUrl, year = year, watchedAt = raw.watchedAt,
-                episodeInfo = raw.episodeInfo
-            )
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            Log.w("TraktRepository", "fetchWatchHistory enrich failed (${raw.mediaType}/${raw.tmdbId}): ${e.message}")
+            null
         }
     }
+
+    /** 未富化的展示项：直接用 Trakt 返回的原始标题，无海报。 */
+    private fun RawEntry.toUnenrichedItem(): WatchHistoryItem = WatchHistoryItem(
+        traktId = traktId, tmdbId = tmdbId, imdbId = imdbId, mediaType = mediaType,
+        title = title, displayTitle = title, posterUrl = null, year = year,
+        watchedAt = watchedAt, episodeInfo = episodeInfo
+    )
+
+    /** 富化后的展示项；[enrichment] 为 null 时回退到 Trakt 原始字段。 */
+    private fun RawEntry.toEnrichedItem(enrichment: RawEnrichment?): WatchHistoryItem = WatchHistoryItem(
+        traktId = traktId,
+        tmdbId = tmdbId,
+        imdbId = enrichment?.imdbId?.takeIf { it.isNotBlank() } ?: imdbId,
+        mediaType = mediaType,
+        title = title,
+        displayTitle = enrichment?.displayTitle?.takeIf { it.isNotBlank() } ?: title,
+        posterUrl = enrichment?.posterUrl,
+        year = enrichment?.year ?: year,
+        watchedAt = watchedAt,
+        episodeInfo = episodeInfo
+    )
 
     /** 并行 enrich 用的原始记录载体 */
     private data class RawEntry(
@@ -1279,7 +1388,12 @@ class TraktRepository @Inject constructor(
         val episodeInfo: String?
     )
 
-    /** 清空已看历史缓存（下拉刷新时调用） */
+    /**
+     * 清空已看历史内存缓存（下拉刷新时调用）。
+     *
+     * 磁盘快照故意保留：它只作为下次冷启动的「先出旧数据」种子，之后必定跟一次网络刷新，
+     * 永远不会被当作权威结果。异步清盘还会和本次刷新的写盘竞争，把刚写好的新快照抹掉。
+     */
     fun clearWatchHistoryCache() {
         watchHistoryCache.clear()
     }
@@ -2382,23 +2496,13 @@ class TraktRepository @Inject constructor(
         } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
-    // 全量电影评分
-    suspend fun getAllMovieRatings(): Result<List<TraktRatingItem>> {
-        return try {
-            val response = traktApiService.getAllMovieRatings()
-            if (response.isSuccessful) Result.success(response.body() ?: emptyList())
-            else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
-    }
+    // 全量电影评分（并行翻页：不分页时 Trakt 只返回前 100 条）
+    suspend fun getAllMovieRatings(): Result<List<TraktRatingItem>> =
+        fetchAllPages { page -> traktApiService.getAllMovieRatings(page = page, limit = PAGE_LIMIT) }
 
-    // 全量剧集评分
-    suspend fun getAllShowRatings(): Result<List<TraktRatingItem>> {
-        return try {
-            val response = traktApiService.getAllShowRatings()
-            if (response.isSuccessful) Result.success(response.body() ?: emptyList())
-            else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
-    }
+    // 全量剧集评分（并行翻页：不分页时 Trakt 只返回前 100 条）
+    suspend fun getAllShowRatings(): Result<List<TraktRatingItem>> =
+        fetchAllPages { page -> traktApiService.getAllShowRatings(page = page, limit = PAGE_LIMIT) }
 
     // 合并全量评分（并行请求）。带 5 分钟 TTL 缓存
     suspend fun getAllUserRatings(): Result<List<TraktRatingItem>> {

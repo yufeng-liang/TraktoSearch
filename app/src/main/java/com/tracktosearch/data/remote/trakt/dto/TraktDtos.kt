@@ -42,6 +42,13 @@ data class TraktShow(
     val rating: Double = 0.0,
     val runtime: Int = 0,
     val genres: List<String> = emptyList(),
+    /**
+     * 已播出总集数（仅 extended=full / watched 端点默认返回时存在）。
+     * 统计页用它与已看集数比较判断「整部看完」，避免为每部剧再发一次
+     * `/shows/{id}/progress/watched`。
+     */
+    @kotlinx.serialization.SerialName("aired_episodes")
+    val airedEpisodes: Int = 0,
     @kotlinx.serialization.SerialName("poster_path")
     val posterPath: String? = null
 )

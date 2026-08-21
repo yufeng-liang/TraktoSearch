@@ -78,7 +78,7 @@ class TraktRepositoryTest {
 
         repository = TraktRepository(
             traktApiService, userProfileStorage, markActionRecordDao,
-            tmdbRepository, Json { ignoreUnknownKeys = true }, context
+            tmdbRepository, mockk(relaxed = true), Json { ignoreUnknownKeys = true }, context
         )
     }
 
@@ -480,8 +480,70 @@ class TraktRepositoryTest {
         val result = repository.fetchWatchHistory(1).toList()
         assertThat(result.isNotEmpty()).isTrue()
         assertThat(result.last().isComplete).isTrue()
-        val total = result.sumOf { it.items.size }
-        assertThat(total).isEqualTo(1)
+        assertThat(result.last().items).hasSize(1)
+        // 富化前先发一批未富化占位，让列表立刻有内容。
+        // 用 first { !enriched } 而不是 first()：磁盘快照命中时会先发一批已富化的旧数据。
+        val placeholder = result.first { !it.enriched }
+        assertThat(placeholder.isComplete).isFalse()
+        assertThat(placeholder.items).hasSize(1)
+    }
+
+    @Test
+    fun `fetchWatchHistory_首批未富化占位用Trakt原始标题且无海报`() = runTest {
+        coEvery { tmdbRepository.enrichMovie(any(), any(), any()) } returns TmdbRepository.MovieEnrichment(
+            posterUrl = "/poster.jpg",
+            chineseTitle = "中文名",
+            originalTitle = "Movie A",
+            overview = "",
+            genres = "",
+            year = 2024,
+            rating = 0.0,
+            runtime = 0,
+            releaseDate = "",
+            country = "",
+            status = "",
+            collectionId = null,
+            imdbId = "tt1"
+        )
+        val movieEntry = TraktWatchlistMovieItem(
+            watched_at = "2024-01-01T00:00:00.000Z",
+            movie = TraktMovie(title = "Movie A", year = 2024, ids = TraktIds(trakt = 1, tmdb = 10, imdb = "tt1"))
+        )
+        coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns
+            Response.success(listOf(movieEntry), Headers.headersOf("X-Pagination-Item-Count", "1", "X-Pagination-Page-Count", "1"))
+        coEvery { traktApiService.getEpisodeHistory(any(), any(), any(), any()) } returns
+            Response.success(emptyList(), Headers.headersOf("X-Pagination-Item-Count", "0", "X-Pagination-Page-Count", "1"))
+
+        val result = repository.fetchWatchHistory(1).toList()
+        val placeholder = result.first { !it.enriched }
+        assertThat(placeholder.items.single().displayTitle).isEqualTo("Movie A")
+        assertThat(placeholder.items.single().posterUrl).isNull()
+        // 富化完成的末批替换为中文名和海报
+        assertThat(result.last().isComplete).isTrue()
+        assertThat(result.last().items.single().displayTitle).isEqualTo("中文名")
+        assertThat(result.last().items.single().posterUrl).isEqualTo("/poster.jpg")
+    }
+
+    @Test
+    fun `fetchWatchHistory_同一tmdbId只富化一次`() = runTest {
+        // 同一部剧的 30 集：原实现每条各发一次 TMDB 请求，去重后只应发一次
+        val episodes = (1..30).map { i ->
+            TraktHistoryEntry(
+                watched_at = "2024-01-01T00:00:00.000Z",
+                show = TraktHistoryShow(title = "Show", year = 2024, ids = TraktHistoryIds(trakt = 7, tmdb = 700, imdb = "tt7")),
+                episode = TraktHistoryEpisode(season = 1, number = i, ids = TraktHistoryIds(trakt = 1000 + i))
+            )
+        }
+        coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns
+            Response.success(emptyList(), Headers.headersOf("X-Pagination-Item-Count", "0", "X-Pagination-Page-Count", "1"))
+        coEvery { traktApiService.getEpisodeHistory(any(), any(), any(), any()) } returns
+            Response.success(episodes, Headers.headersOf("X-Pagination-Item-Count", "30", "X-Pagination-Page-Count", "1"))
+
+        val result = repository.fetchWatchHistory(1).toList()
+
+        assertThat(result.last().isComplete).isTrue()
+        assertThat(result.last().items).hasSize(30)
+        coVerify(exactly = 1) { tmdbRepository.enrichTv(700, any(), any()) }
     }
 
     @Test
@@ -498,16 +560,16 @@ class TraktRepositoryTest {
             Response.success(emptyList(), Headers.headersOf("X-Pagination-Item-Count", "0", "X-Pagination-Page-Count", "1"))
 
         val result = repository.fetchWatchHistory(1).toList()
-        val middleBatches = result.filter { !it.isComplete }
         val finalBatch = result.last()
-        assertThat(middleBatches).isNotEmpty()
         assertThat(finalBatch.isComplete).isTrue()
         assertThat(finalBatch.error).isNull()
-        // 中间批累积包含之前全部 items（非增量），总 item 数 = 20 + 40 + 45 = 105
-        val total = result.sumOf { it.items.size }
-        assertThat(total).isEqualTo(105)
         // 末批包含全部 45 条
-        assertThat(result.last().items.size).isEqualTo(45)
+        assertThat(finalBatch.items).hasSize(45)
+        // 未富化占位批一次给出全部条目
+        assertThat(result.first { !it.enriched }.items).hasSize(45)
+        // 富化过程分批提交：首批阈值 6，之后每 20 条一批 → 6 / 20 / 40
+        val enrichedProgress = result.filter { it.enriched && !it.isComplete }.map { it.items.size }
+        assertThat(enrichedProgress).containsExactly(6, 20, 40).inOrder()
     }
 
     @Test
@@ -535,7 +597,7 @@ class TraktRepositoryTest {
         val result = repository.fetchWatchHistory(1).toList()
         assertThat(result.last().isComplete).isTrue()
         assertThat(result.last().error).isNull()
-        assertThat(result.sumOf { it.items.size }).isEqualTo(3)
+        assertThat(result.last().items).hasSize(3)
     }
 
     @Test

@@ -112,9 +112,19 @@ interface TraktApiService {
     @GET("shows/{id}/progress/watched")
     suspend fun getShowWatchedProgress(@Path("id") id: Int): Response<TraktShowProgress>
 
+    /**
+     * 已看剧集列表。
+     *
+     * Trakt 自 2026-06-30 起对 watched 端点强制分页：不传 page/limit 只返回前 100 条。
+     * 同时 `extended=full` 在该端点已失效（默认即完整剧信息但不含季进度），
+     * 需要季/集进度必须显式请求 `extended=progress`。
+     * 参考 https://github.com/trakt/trakt-api/discussions/775
+     */
     @GET("sync/watched/shows")
     suspend fun getWatchedShows(
-        @Query("extended") extended: String = "full"
+        @Query("extended") extended: String = "progress",
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 250
     ): Response<List<TraktWatchedShow>>
 
     @GET("movies/{id}/related")
@@ -277,12 +287,18 @@ interface TraktApiService {
         @Path("id") userId: String = "me"
     ): Response<TraktUserStatsResponse>
 
-    // 全量评分
+    // 全量评分（必须分页：不传 page/limit 时 Trakt 只返回前 100 条）
     @GET("sync/ratings/movies")
-    suspend fun getAllMovieRatings(): Response<List<TraktRatingItem>>
+    suspend fun getAllMovieRatings(
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 250
+    ): Response<List<TraktRatingItem>>
 
     @GET("sync/ratings/shows")
-    suspend fun getAllShowRatings(): Response<List<TraktRatingItem>>
+    suspend fun getAllShowRatings(
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 250
+    ): Response<List<TraktRatingItem>>
 
     @GET("movies/{id}/videos")
     suspend fun getMovieVideos(@Path("id") id: String): Response<List<TraktVideo>>
