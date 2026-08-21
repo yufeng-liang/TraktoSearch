@@ -1303,7 +1303,8 @@ private fun SearchSourcesEntryCard(
         elevation = 6.dp,
         blurRadius = 18.dp,
         hazeState = hazeState,
-        hazeStyle = HazeMaterials.thin()
+        hazeStyle = HazeMaterials.thin(),
+        glassRole = GlassSurfaceRole.Card
     ) {
         Row(
             modifier = Modifier
