@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -58,6 +59,7 @@ import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
@@ -428,6 +430,10 @@ fun PersonScreen(
                         }
                     }
 
+                    // 返回按钮与回顶按钮：置于采样源之外(LocalBackdrop=null)，glass 模式下
+                    // 由 appVisualEffect/GlassIconButton 退化到 Haze 实时采样后跟随滚动内容，
+                    // 避免 Backdrop 静态快照采样导致按钮停在渐变区时无法实时刷新。
+                    CompositionLocalProvider(LocalBackdrop provides null) {
                     // 返回按钮：与影视详情页统一使用拟态玻璃 + Haze 背景采样
                     val personIsDark = isAppDarkTheme()
                     NeumorphicIconButton(
@@ -460,6 +466,7 @@ fun PersonScreen(
                         hazeState = hazeState,
                         scene = personGlassScene
                     )
+                    } // CompositionLocalProvider(LocalBackdrop provides null)
 
                     // 全部参演电影
                     if (showAllMovies) {

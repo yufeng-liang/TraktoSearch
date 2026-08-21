@@ -40,19 +40,27 @@ fun Modifier.appVisualEffect(
             sampling = blurSampling
         )
 
-        VisualEffectMode.GLASS -> if (glassEffectEnabled) {
-            then(
-                backdropEffectModifier(
-                    role = glassRole,
-                    shape = glassShape,
-                    tint = glassTint,
-                    backdropOverride = backdropOverride,
-                    scene = scene,
-                    interactionSource = interactionSource
+        VisualEffectMode.GLASS -> when {
+            !glassEffectEnabled -> this
+            // 有可用的 Backdrop 源 → 走玻璃镜头采样
+            backdropOverride != null || LocalBackdrop.current != null ->
+                then(
+                    backdropEffectModifier(
+                        role = glassRole,
+                        shape = glassShape,
+                        tint = glassTint,
+                        backdropOverride = backdropOverride,
+                        scene = scene,
+                        interactionSource = interactionSource
+                    )
                 )
+            // 无 Backdrop 源时退化为 Haze 实时采样（伪影/透明度问题场景）。
+            // 例如悬浮按钮采不到滚动内容时，退化为实时模糊以始终跟随页面内容。
+            else -> hazeBlur(
+                input = input,
+                style = hazeStyle,
+                sampling = blurSampling
             )
-        } else {
-            this
         }
     }
 }

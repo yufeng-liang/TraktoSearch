@@ -507,6 +507,7 @@ fun NeumorphicIconButton(
             modifier = modifier,
             size = size,
             hazeState = hazeState,
+            hazeStyle = hazeStyle,
             role = if (buttonStyle == NeumorphicIconButtonStyle.DetailTopBar) {
                 GlassSurfaceRole.DetailAction
             } else {

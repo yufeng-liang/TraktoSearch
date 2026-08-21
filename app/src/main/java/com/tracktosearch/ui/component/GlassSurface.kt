@@ -45,8 +45,12 @@ import com.kyant.backdrop.highlight.HighlightStyle
 import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
 import com.tracktosearch.ui.theme.LocalGlassVariant
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazeSampling
 import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 
 /** 选中水滴切换时收缩、放大，再回到常规体积。 */
 @Composable
@@ -136,6 +140,7 @@ fun GlassIconButton(
     modifier: Modifier = Modifier,
     size: Dp = 42.dp,
     hazeState: HazeState? = null,
+    hazeStyle: HazeBlurStyle? = null,
     role: GlassSurfaceRole = GlassSurfaceRole.CircularControl,
     interactionSource: MutableInteractionSource? = null,
     enabled: Boolean = true,
@@ -176,25 +181,36 @@ fun GlassIconButton(
         Modifier
     }
     val backdrop = LocalBackdrop.current
+    val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin()
+    // Glass 采样源：优先 Backdrop 镜头光效；无 Backdrop 源且可实时采 Haze 时退化
+    // 为 Haze 实时模糊（悬浮按钮采不到滚动内容导致白底/透明的饱和度场景用此降级）。
+    val effectModifier = when {
+        backdrop != null -> Modifier.backdropGlass(
+            backdrop = backdrop,
+            shape = shape,
+            token = token,
+            surfaceColor = surfaceColor,
+            isDark = isDark,
+            pressed = pressed
+        )
+        hazeState != null -> Modifier.appVisualEffect(
+            input = HazeInput.Sources(hazeState),
+            hazeStyle = resolvedHazeStyle,
+            glassRole = role,
+            glassShape = shape,
+            glassTint = surfaceColor,
+            scene = scene,
+            blurSampling = HazeSampling.Adaptive,
+            interactionSource = resolvedInteractionSource
+        )
+        else -> Modifier.background(surfaceColor, shape)
+    }
     val surfaceModifier = modifier
         .alpha(if (enabled) 1f else 0.55f)
         .size(size)
         .then(floatingShadow)
         .clip(shape)
-        .then(
-            if (backdrop != null) {
-                Modifier.backdropGlass(
-                    backdrop = backdrop,
-                    shape = shape,
-                    token = token,
-                    surfaceColor = surfaceColor,
-                    isDark = isDark,
-                    pressed = pressed
-                )
-            } else {
-                Modifier.background(surfaceColor, shape)
-            }
-        )
+        .then(effectModifier)
         .border(1.dp, backdropBorderColor(borderColor, token), shape)
         .clickable(
             interactionSource = resolvedInteractionSource,

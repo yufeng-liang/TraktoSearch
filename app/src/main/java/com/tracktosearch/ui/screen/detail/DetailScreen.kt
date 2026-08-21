@@ -94,8 +94,6 @@ import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
-import com.tracktosearch.ui.component.backdropContentSource
-import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
@@ -112,9 +110,7 @@ import com.tracktosearch.ui.screen.ai.AiSpriteViewModel
 import com.tracktosearch.ui.screen.ai.automaticSpriteArt
 import com.tracktosearch.ui.screen.ai.sceneArtFor
 import com.tracktosearch.ui.screen.ai.shouldShowWatchlistAddedScene
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+
 import com.tracktosearch.ui.component.LocalBackdrop
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
@@ -327,28 +323,9 @@ fun DetailScreen(
             .fillMaxSize()
             .padding(padding)
         ) {
-            val isGlassMode = LocalVisualEffectMode.current == VisualEffectMode.GLASS
-            // 多源采样：LayerBackdrop 只支持单一 source（后注册覆盖先注册），
-            // 背景/头部/tab 栏各用独立 backdrop，再合并供顶栏按钮采样。
             // onDraw 是非 Composable 的 DrawScope，背景色需在组合期预计算。
-            val detailBackdropBackground = MaterialTheme.colorScheme.background
-            val detailBackgroundBackdrop = rememberLayerBackdrop {
-                drawRect(detailBackdropBackground)
-                drawContent()
-            }
-            val detailHeaderBackdrop = rememberLayerBackdrop {
-                drawRect(detailBackdropBackground)
-                drawContent()
-            }
-            val detailTabBackdrop = rememberLayerBackdrop {
-                drawRect(detailBackdropBackground)
-                drawContent()
-            }
-            val detailTopBarBackdrop = rememberCombinedBackdrop(
-                detailBackgroundBackdrop,
-                detailHeaderBackdrop,
-                detailTabBackdrop
-            )
+            // 悬浮按钮统一走 Haze 实时采样（LocalBackdrop=null），直接随滚动内容刷新，
+            // 不再用 Backdrop 静态快照（其坐标映射在滚动/吸顶时不稳，会造成白底/透明）。
             val immersiveBackgroundModifier = uiState.posterDominantColor?.let { color ->
                 Modifier.background(
                     Brush.verticalGradient(
@@ -360,27 +337,13 @@ fun DetailScreen(
                 )
             } ?: Modifier
 
-            // Glass 只录制纯沉浸背景；滚动内容中的 Glass 控件作为 sibling 采样，
-            // 避免将 drawBackdrop 子树再次纳入同一个 source 造成 RenderThread 递归。
-            if (isGlassMode) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .layerBackdrop(detailBackgroundBackdrop)
-                        .then(immersiveBackgroundModifier)
-                )
-            }
-
-            // Blur 维持原有的完整 Haze source 范围，Glass 则保持在背景 source 之上。
+            // Blur 与 Glass 都注册同一个 Haze source：Blur 直接用其采样，Glass 的悬浮按钮
+            // 用同一 Haze 状态做实时采样，保证沉浸渐变与滚动内容都能被按钮实时捕到。
             Box(
-                modifier = if (isGlassMode) {
-                    Modifier.fillMaxSize()
-                } else {
-                    Modifier
-                        .fillMaxSize()
-                        .hazeSource(state = detailHazeState, zIndex = 0f)
-                        .then(immersiveBackgroundModifier)
-                }
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = detailHazeState, zIndex = 0f)
+                    .then(immersiveBackgroundModifier)
             ) {
             // Tab 栏底色/文字颜色计算(在 LazyColumn 之外定义,让内容区也能用)
             // - 非吸顶(tab 还在海报下方):底色透明,文字按海报主色亮度自适应
@@ -479,8 +442,7 @@ fun DetailScreen(
                         hazeState = detailHazeState,
                         // 头部下方内容(cast/视频/简介/季集)淡入,海报+标题+按钮始终可见
                         contentAlpha = contentAlpha,
-                        onHeaderAnchorBoundsChanged = { detailHeaderBounds = it },
-                        backdrop = detailHeaderBackdrop
+                        onHeaderAnchorBoundsChanged = { detailHeaderBounds = it }
                     )
                 }
 
@@ -497,8 +459,6 @@ fun DetailScreen(
                         containerColor = tabContainerColor,
                         contentColor = tabContentColor,
                         modifier = Modifier
-                            // GLASS 模式将吸顶 tab 栏注册到独立 Backdrop 采样源
-                            .backdropContentSource(detailTabBackdrop)
                             .alpha(contentAlpha)
                     ) {
                             Tab(
@@ -901,8 +861,10 @@ fun DetailScreen(
                 sceneRes = sceneArtFor(AiSceneEvent.DETAIL_WATCHLIST_ADDED).drawableRes
             )
 
-            // 顶栏按钮采样合并的多源 backdrop（背景 + 头部 + tab 栏）
-            CompositionLocalProvider(LocalBackdrop provides detailTopBarBackdrop) {
+            // 顶栏按钮与回顶按钮置于采样源之外(LocalBackdrop=null)：glass 模式下由
+            // appVisualEffect/GlassIconButton 退化到 Haze 实时采样，随滚动内容实时刷新，
+            // 避免 Backdrop 静态快照停在渐变区时无法实时捕到按钮正后方的内容。
+            CompositionLocalProvider(LocalBackdrop provides null) {
             // 返回按钮：与详情页其他操作统一使用拟态玻璃，并保留真实 Haze 背景采样。
             NeumorphicIconButton(
                 onClick = { view.performHaptic(HapticType.TICK); onBack(uiState.watchlistChanged, uiState.watchedChanged) },
