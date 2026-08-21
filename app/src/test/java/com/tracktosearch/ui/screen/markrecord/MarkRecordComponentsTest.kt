@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.R
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.util.PosterColorExtractor
 import io.mockk.mockk
 import org.junit.Rule
@@ -83,14 +84,16 @@ class MarkRecordComponentsTest {
 
     @Test
     fun `buildFullPosterUrl_相对路径拼接TMDB基础URL`() {
+        // base 由网关配置决定，只锁定使用的尺寸（卡片海报 w342）和路径拼接方式
         val result = buildFullPosterUrl("/inception.jpg")
-        assertThat(result).isEqualTo("https://image.tmdb.org/t/p/w500/inception.jpg")
+        assertThat(result).isEqualTo("${TmdbImageUrls.W342}/inception.jpg")
     }
 
     @Test
     fun `buildFullPosterUrl_无斜杠相对路径也拼接`() {
+        // 不会替补斜杠，原样接在 base 后面
         val result = buildFullPosterUrl("inception.jpg")
-        assertThat(result).isEqualTo("https://image.tmdb.org/t/p/w500inception.jpg")
+        assertThat(result).isEqualTo("${TmdbImageUrls.W342}inception.jpg")
     }
 
     // ==================== isRecordChanged ====================

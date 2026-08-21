@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.component
 
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.ui.theme.GlassVariant
 import com.tracktosearch.ui.theme.VisualEffectMode
 import androidx.compose.ui.graphics.Color
@@ -101,12 +102,16 @@ class GlassTokenTest {
 
     @Test
     fun posterCacheCandidatesCoverTheKnownTmdbSizes() {
+        // 期望值从 TmdbImageUrls 取 base：图片走网关代理，base 由 local.properties 的
+        // gateway.base.url 决定，写死主机名会让测试随环境红。尺寸清单仍逐个列出，
+        // POSTER_CACHE_SIZES 增删或改序时本用例仍会失败。
         assertThat(posterCacheKeyCandidates("/poster.jpg"))
             .containsExactly(
-                "https://image.tmdb.org/t/p/w200/poster.jpg",
-                "https://image.tmdb.org/t/p/w500/poster.jpg",
-                "https://image.tmdb.org/t/p/w780/poster.jpg",
-                "https://image.tmdb.org/t/p/h632/poster.jpg"
+                "${TmdbImageUrls.W185}/poster.jpg",
+                "${TmdbImageUrls.W342}/poster.jpg",
+                "${TmdbImageUrls.W500}/poster.jpg",
+                "${TmdbImageUrls.W780}/poster.jpg",
+                "${TmdbImageUrls.H632}/poster.jpg"
             )
             .inOrder()
     }

@@ -4,6 +4,7 @@ import android.content.Context
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.remote.tmdb.TmdbApiService
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.*
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.test.MainDispatcherRule
@@ -224,7 +225,7 @@ class TmdbRepositoryTest {
 
         val result = repository.enrichMovie(tmdbId = 100, originalTitle = "Original", year = 2024)
 
-        assertThat(result.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/poster.jpg")
+        assertThat(result.posterUrl).isEqualTo("${TmdbImageUrls.W342}/poster.jpg")
     }
 
     @Test
@@ -1143,7 +1144,7 @@ class TmdbRepositoryTest {
     @Test
     fun buildProfileUrl_非null拼接URL() {
         val url = repository.buildProfileUrl("/abc.jpg")
-        assertThat(url).isEqualTo("https://image.tmdb.org/t/p/w500/abc.jpg")
+        assertThat(url).isEqualTo("${TmdbImageUrls.W342}/abc.jpg")
     }
 
     // ==================== getSimilarMovies / getSimilarShows（无缓存） ====================
