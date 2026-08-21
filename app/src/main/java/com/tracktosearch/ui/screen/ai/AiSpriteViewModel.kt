@@ -146,7 +146,12 @@ class AiSpriteViewModel @Inject constructor(
         initialized = true
         viewModelScope.launch {
             launch {
+                var previousAuthState = authManager.authState.value
                 authManager.authState.collect { authState ->
+                    if (previousAuthState != AuthState.UNAUTHORIZED && authState == AuthState.UNAUTHORIZED) {
+                        clearPrivateStateAfterUnauthorized()
+                    }
+                    previousAuthState = authState
                     _uiState.update {
                         it.copy(
                             authState = authState,
@@ -163,6 +168,41 @@ class AiSpriteViewModel @Inject constructor(
             loadCharacters()
             scheduleCharacterPreview()
             loadQuizHistory()
+        }
+    }
+
+    /** 撤销授权后丢弃当前账号的 AI 结果，但保留角色目录和游客试听能力。 */
+    private fun clearPrivateStateAfterUnauthorized() {
+        invalidateCurrentRequest()
+        previewJob?.cancel()
+        previewJob = null
+        recentQuizIds = emptyList()
+        quizCandidates = emptyList()
+        _uiState.update {
+            it.copy(
+                activatedCharacterId = null,
+                activationState = AiActivationState.IDLE,
+                activationAttempt = 0,
+                activationMessage = null,
+                quota = null,
+                isLoading = false,
+                loadingFeature = null,
+                activeFeature = null,
+                greeting = null,
+                taste = null,
+                tasteRevision = 0L,
+                quiz = null,
+                quizPreviewMovies = emptyList(),
+                quizReplacementCount = 0,
+                quizStarted = false,
+                quizIndex = 0,
+                quizAnswers = emptyMap(),
+                quizResult = null,
+                quizResultRevision = 0L,
+                quizHistory = null,
+                dailyKnowledge = null,
+                errorCode = null
+            )
         }
     }
 

@@ -4,9 +4,11 @@ import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.ai.AiDailyKnowledge
 import com.tracktosearch.data.ai.AiGreeting
 import com.tracktosearch.data.ai.AiQuiz
+import com.tracktosearch.data.ai.AiQuizHistory
 import com.tracktosearch.data.ai.AiQuizResult
 import com.tracktosearch.data.ai.AiQuota
 import com.tracktosearch.data.ai.AiRepository
+import com.tracktosearch.data.ai.AiTasteAnalysis
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
 import com.tracktosearch.data.repository.TraktRepository
@@ -158,12 +160,126 @@ class AiSpriteViewModelTest {
         assertThat(viewModel.uiState.value.isLoading).isFalse()
     }
 
-    private fun viewModel(): AiSpriteViewModel {
-        every { authManager.authState } returns MutableStateFlow(AuthState.AUTHORIZED)
+    @Test
+    fun unauthorized_clearsPrivateAiStateAndCancelsActiveFeatureRequest() = runTest {
+        val authState = MutableStateFlow(AuthState.AUTHORIZED)
+        val requestStarted = CompletableDeferred<Unit>()
+        val requestCancelled = CompletableDeferred<Unit>()
+        val viewModel = viewModel(authState)
+        coEvery { aiRepository.getGreeting("friend-a", "tomo", false) } coAnswers {
+            requestStarted.complete(Unit)
+            try {
+                awaitCancellation()
+            } finally {
+                requestCancelled.complete(Unit)
+            }
+        }
+        viewModel.seedState {
+            it.copy(
+                selectedCharacterId = "usagi",
+                activatedCharacterId = "tomo",
+                activationState = AiActivationState.SUCCESS,
+                activationMessage = "activated",
+                quota = quota(sessionUsed = 3, dailyUsed = 8),
+                activeFeature = AiFeature.GREETING,
+                greeting = greeting(),
+                taste = AiTasteAnalysis("吐槽", "画像", emptyList(), emptyList()),
+                quiz = quiz(),
+                quizResult = quizResult(quota()),
+                quizHistory = AiQuizHistory(bestScore = 90, lastResult = quizResult(quota())),
+                dailyKnowledge = dailyKnowledge(quota())
+            )
+        }
+
+        viewModel.ensureLoaded()
+        runCurrent()
+        viewModel.openFeature(AiFeature.GREETING)
+        runCurrent()
+        assertThat(requestStarted.isCompleted).isTrue()
+
+        authState.value = AuthState.UNAUTHORIZED
+        runCurrent()
+
+        assertThat(requestCancelled.isCompleted).isTrue()
+        val state = viewModel.uiState.value
+        assertThat(state.activatedCharacterId).isNull()
+        assertThat(state.activeFeature).isNull()
+        assertThat(state.greeting).isNull()
+        assertThat(state.taste).isNull()
+        assertThat(state.quiz).isNull()
+        assertThat(state.quizResult).isNull()
+        assertThat(state.quizHistory).isNull()
+        assertThat(state.dailyKnowledge).isNull()
+        assertThat(state.quota).isNull()
+        assertThat(state.activationState).isEqualTo(AiActivationState.IDLE)
+        assertThat(state.activationMessage).isNull()
+        assertThat(state.selectedCharacterId).isEqualTo("usagi")
+    }
+
+    @Test
+    fun unauthorized_cancelsCharacterPreviewAndKeepsGuestPreviewAvailable() = runTest {
+        val authState = MutableStateFlow(AuthState.AUTHORIZED)
+        val previewStarted = CompletableDeferred<Unit>()
+        val previewCancelled = CompletableDeferred<Unit>()
+        val viewModel = viewModel(authState)
+        coEvery { aiRepository.listCharacters() } returns Result.success(
+            listOf(viewModelCharacter("usagi"), viewModelCharacter("hachiware"))
+        )
+        coEvery { aiRepository.playTts("friend-a", any()) } coAnswers {
+            previewStarted.complete(Unit)
+            try {
+                awaitCancellation()
+            } finally {
+                previewCancelled.complete(Unit)
+            }
+        }
+        coEvery { aiRepository.playGuestTts(any()) } returns Result.success(audio())
+
+        viewModel.ensureLoaded()
+        runCurrent()
+        testScheduler.advanceTimeBy(350)
+        runCurrent()
+        assertThat(previewStarted.isCompleted).isTrue()
+
+        authState.value = AuthState.UNAUTHORIZED
+        runCurrent()
+
+        assertThat(previewCancelled.isCompleted).isTrue()
+        assertThat(viewModel.uiState.value.characters).isNotEmpty()
+        assertThat(viewModel.uiState.value.selectedCharacterId).isEqualTo("usagi")
+
+        viewModel.selectCharacter("hachiware")
+        testScheduler.advanceTimeBy(350)
+        runCurrent()
+        coVerify(exactly = 1) { aiRepository.playGuestTts(any()) }
+    }
+
+    private fun viewModel(
+        authState: MutableStateFlow<AuthState> = MutableStateFlow(AuthState.AUTHORIZED)
+    ): AiSpriteViewModel {
+        every { authManager.authState } returns authState
         every { authManager.nickname } returns MutableStateFlow("朋友")
         every { authManager.friendId } returns MutableStateFlow("friend-a")
+        coEvery { aiRepository.listCharacters() } returns Result.success(emptyList())
         return AiSpriteViewModel(aiRepository, authManager, traktRepository)
     }
+
+    private fun viewModelCharacter(id: String) = com.tracktosearch.data.ai.AiCharacter(
+        id = id,
+        name = id,
+        activationWord = id,
+        isAvailable = true,
+        auditionText = "试听"
+    )
+
+    private fun audio() = com.tracktosearch.data.ai.AiAudio(
+        audioDataUrl = "data:audio/mpeg;base64,ZmFrZQ==",
+        audioUrl = null,
+        mimeType = "audio/mpeg",
+        durationMs = 100,
+        cacheKey = null,
+        transcript = "试听"
+    )
 
     @Suppress("UNCHECKED_CAST")
     private fun AiSpriteViewModel.seedState(
