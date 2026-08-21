@@ -192,21 +192,45 @@ export async function reserveAiQuota(
 }
 
 export async function reserveAiTtsRequest(env: AiStoreEnvironment, clientIp: string): Promise<void> {
-    const state = await readTtsRateLimit(env, clientIp);
-    if (state.requestCount >= AI_TTS_REQUEST_LIMIT) {
-        throw new AppError('RATE_LIMITED', 'Too many TTS requests', 429);
+    if (isTestStore(env)) {
+        if (!(env.AI_TEST_RATE_LIMIT instanceof Map)) return;
+        const state = await readTestTtsRateLimit(env, clientIp);
+        if (state.requestCount >= AI_TTS_REQUEST_LIMIT) {
+            throw new AppError('RATE_LIMITED', 'Too many TTS requests', 429);
+        }
+        state.requestCount += 1;
+        await writeTestTtsRateLimit(env, clientIp, state);
+        return;
     }
-    state.requestCount += 1;
-    await writeTtsRateLimit(env, clientIp, state);
+
+    await reserveAiTtsCounter(
+        env,
+        clientIp,
+        'request_count',
+        AI_TTS_REQUEST_LIMIT,
+        'Too many TTS requests',
+    );
 }
 
 export async function reserveAiTtsMiss(env: AiStoreEnvironment, clientIp: string): Promise<void> {
-    const state = await readTtsRateLimit(env, clientIp);
-    if (state.missCount >= AI_TTS_MISS_LIMIT) {
-        throw new AppError('RATE_LIMITED', 'Too many uncached TTS requests', 429);
+    if (isTestStore(env)) {
+        if (!(env.AI_TEST_RATE_LIMIT instanceof Map)) return;
+        const state = await readTestTtsRateLimit(env, clientIp);
+        if (state.missCount >= AI_TTS_MISS_LIMIT) {
+            throw new AppError('RATE_LIMITED', 'Too many uncached TTS requests', 429);
+        }
+        state.missCount += 1;
+        await writeTestTtsRateLimit(env, clientIp, state);
+        return;
     }
-    state.missCount += 1;
-    await writeTtsRateLimit(env, clientIp, state);
+
+    await reserveAiTtsCounter(
+        env,
+        clientIp,
+        'miss_count',
+        AI_TTS_MISS_LIMIT,
+        'Too many uncached TTS requests',
+    );
 }
 
 export async function cacheKeyDigest(input: string): Promise<string> {
@@ -232,44 +256,94 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-async function readTtsRateLimit(env: AiStoreEnvironment, clientIp: string): Promise<TtsRateLimitRow> {
+async function readTestTtsRateLimit(env: AiStoreEnvironment, clientIp: string): Promise<TtsRateLimitRow> {
     const key = `ai:tts:rate:v1:${await cacheKeyDigest(clientIp || 'unknown')}`;
     const currentTime = now();
-    if (isTestStore(env) && env.AI_TEST_RATE_LIMIT instanceof Map) {
-        const current = readTtsRateLimitRow(env.AI_TEST_RATE_LIMIT.get(key));
-        if (!current || currentTime - current.windowStartedAt >= AI_TTS_RATE_WINDOW_SECONDS) {
-            return { windowStartedAt: currentTime, requestCount: 0, missCount: 0 };
-        }
-        return current;
+    const current = env.AI_TEST_RATE_LIMIT instanceof Map
+        ? readTtsRateLimitRow(env.AI_TEST_RATE_LIMIT.get(key))
+        : null;
+    if (!current || currentTime - current.windowStartedAt >= AI_TTS_RATE_WINDOW_SECONDS) {
+        return { windowStartedAt: currentTime, requestCount: 0, missCount: 0 };
     }
-
-    if (!env.KV) return { windowStartedAt: currentTime, requestCount: 0, missCount: 0 };
-    try {
-        const raw = await env.KV.get(key);
-        const current = raw ? readTtsRateLimitRow(JSON.parse(raw)) : null;
-        if (!current || currentTime - current.windowStartedAt >= AI_TTS_RATE_WINDOW_SECONDS) {
-            return { windowStartedAt: currentTime, requestCount: 0, missCount: 0 };
-        }
-        return current;
-    } catch {
-        throw new AppError('AI_STORAGE_ERROR', 'AI rate limit storage is unavailable', 503);
-    }
+    return current;
 }
 
-async function writeTtsRateLimit(
+async function writeTestTtsRateLimit(
     env: AiStoreEnvironment,
     clientIp: string,
     state: TtsRateLimitRow,
 ): Promise<void> {
     const key = `ai:tts:rate:v1:${await cacheKeyDigest(clientIp || 'unknown')}`;
-    if (isTestStore(env) && env.AI_TEST_RATE_LIMIT instanceof Map) {
+    if (env.AI_TEST_RATE_LIMIT instanceof Map) {
         env.AI_TEST_RATE_LIMIT.set(key, state);
-        return;
     }
-    if (!env.KV) return;
+}
+
+type TtsRateLimitCounter = 'request_count' | 'miss_count';
+
+/**
+ * D1 的单条 UPSERT 在数据库侧完成窗口重置、计数递增和上限判断，
+ * 避免 KV get + put 在并发请求之间互相覆盖。
+ */
+async function reserveAiTtsCounter(
+    env: AiStoreEnvironment,
+    clientIp: string,
+    counter: TtsRateLimitCounter,
+    limit: number,
+    limitMessage: string,
+): Promise<void> {
+    if (!env.DB) throw new AppError('AI_STORAGE_ERROR', 'AI rate limit storage is unavailable', 503);
+    const key = `ai:tts:rate:v1:${await cacheKeyDigest(clientIp || 'unknown')}`;
+    const currentTime = now();
+    const isRequest = counter === 'request_count';
+    const incrementColumn = isRequest ? 'request_count' : 'miss_count';
+    const initialRequestCount = isRequest ? 1 : 0;
+    const initialMissCount = isRequest ? 0 : 1;
+
     try {
-        await env.KV.put(key, JSON.stringify(state), { expirationTtl: AI_TTS_RATE_WINDOW_SECONDS });
-    } catch {
+        const result = await env.DB.prepare(`
+            INSERT INTO ai_tts_rate_limits (
+                client_key, window_started_at, request_count, miss_count, updated_at
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(client_key) DO UPDATE SET
+                window_started_at = CASE
+                    WHEN ai_tts_rate_limits.window_started_at + ? <= excluded.window_started_at
+                        THEN excluded.window_started_at
+                    ELSE ai_tts_rate_limits.window_started_at
+                END,
+                request_count = CASE
+                    WHEN ai_tts_rate_limits.window_started_at + ? <= excluded.window_started_at
+                        THEN ?
+                    ELSE ai_tts_rate_limits.request_count + ${isRequest ? '1' : '0'}
+                END,
+                miss_count = CASE
+                    WHEN ai_tts_rate_limits.window_started_at + ? <= excluded.window_started_at
+                        THEN ?
+                    ELSE ai_tts_rate_limits.miss_count + ${isRequest ? '0' : '1'}
+                END,
+                updated_at = excluded.updated_at
+            WHERE ai_tts_rate_limits.window_started_at + ? <= excluded.window_started_at
+               OR ai_tts_rate_limits.${incrementColumn} < ?
+        `).bind(
+            key,
+            currentTime,
+            initialRequestCount,
+            initialMissCount,
+            currentTime,
+            AI_TTS_RATE_WINDOW_SECONDS,
+            AI_TTS_RATE_WINDOW_SECONDS,
+            initialRequestCount,
+            AI_TTS_RATE_WINDOW_SECONDS,
+            initialMissCount,
+            AI_TTS_RATE_WINDOW_SECONDS,
+            limit,
+        ).run();
+
+        if (Number(result.meta?.changes || 0) !== 1) {
+            throw new AppError('RATE_LIMITED', limitMessage, 429);
+        }
+    } catch (error) {
+        if (error instanceof AppError) throw error;
         throw new AppError('AI_STORAGE_ERROR', 'AI rate limit storage is unavailable', 503);
     }
 }

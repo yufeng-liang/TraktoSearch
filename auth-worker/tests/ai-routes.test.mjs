@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 import { handleAiApi } from '../src/ai/handler.ts';
 import { callMimoJson } from '../src/ai/mimo.ts';
+import { reserveAiTtsMiss, reserveAiTtsRequest } from '../src/ai/store.ts';
 import { signAccessToken } from '../src/util/jwt.ts';
 
 function createTestEnv(overrides = {}) {
@@ -34,6 +35,7 @@ async function call(path, {
     method = 'GET',
     body,
     env,
+    origin = 'https://gateway.test',
     authorized = true,
     friendId = 'friend-1',
     deviceId = 'device-1',
@@ -41,7 +43,7 @@ async function call(path, {
 } = {}) {
     const headers = { ...extraHeaders };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
-    const request = new Request(`https://gateway.test${path}`, {
+    const request = new Request(`${origin}${path}`, {
         method,
         headers,
         body: body === undefined ? undefined : JSON.stringify(body),
@@ -596,6 +598,94 @@ test('TTS limits each IP to 20 requests and 5 cache misses per ten minutes', asy
     } finally {
         globalThis.fetch = originalFetch;
     }
+});
+
+test('TTS rate limiting prefers the gateway forwarded X-Real-IP over CF-Connecting-IP', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({
+        choices: [{ message: { audio: { data: 'AQI=', transcript: '到！' } } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+    try {
+        const env = createTestEnv({
+            AI_TEST_VOICE_DESIGN_READY: true,
+            AI_TEST_RATE_LIMIT: new Map(),
+        });
+        const result = await call('/api/ai/tts', {
+            method: 'POST',
+            body: { action: 'tts', characterId: 'usagi', text: '到！', scene: 'AUDITION' },
+            env,
+            origin: 'https://gateway.internal',
+            headers: {
+                'CF-Connecting-IP': '198.51.100.10',
+                'X-Real-IP': '203.0.113.7',
+            },
+        });
+
+        assert.equal(result.response.status, 200);
+        const keys = [...env.AI_TEST_RATE_LIMIT.keys()];
+        assert.equal(keys.length, 1);
+        const forwardedKey = await digestForTest('203.0.113.7');
+        assert.equal(keys[0], `ai:tts:rate:v1:${forwardedKey}`);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('TTS rate limiting ignores spoofed X-Real-IP on direct Worker requests', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({
+        choices: [{ message: { audio: { data: 'AQI=', transcript: '到！' } } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+    try {
+        const env = createTestEnv({
+            AI_TEST_VOICE_DESIGN_READY: true,
+            AI_TEST_RATE_LIMIT: new Map(),
+        });
+        const result = await call('/api/ai/tts', {
+            method: 'POST',
+            body: { action: 'tts', characterId: 'usagi', text: '到！', scene: 'AUDITION' },
+            env,
+            origin: 'https://auth-worker.example.workers.dev',
+            headers: {
+                'CF-Connecting-IP': '198.51.100.10',
+                'X-Real-IP': '203.0.113.7',
+            },
+        });
+
+        assert.equal(result.response.status, 200);
+        const keys = [...env.AI_TEST_RATE_LIMIT.keys()];
+        assert.equal(keys.length, 1);
+        const directKey = await digestForTest('198.51.100.10');
+        assert.equal(keys[0], `ai:tts:rate:v1:${directKey}`);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('TTS rate limiting atomically rejects the twenty-first concurrent request', async () => {
+    const env = { DB: createAtomicTtsRateLimitDb() };
+
+    const results = await Promise.allSettled(
+        Array.from({ length: 21 }, () => reserveAiTtsRequest(env, '203.0.113.8')),
+    );
+    const rejected = results.filter(result => result.status === 'rejected');
+
+    assert.equal(rejected.length, 1);
+    assert.equal(rejected[0].reason.code, 'RATE_LIMITED');
+});
+
+test('TTS rate limiting atomically rejects the sixth concurrent cache miss', async () => {
+    const env = { DB: createAtomicTtsRateLimitDb() };
+
+    const results = await Promise.allSettled(
+        Array.from({ length: 6 }, () => reserveAiTtsMiss(env, '203.0.113.9')),
+    );
+    const rejected = results.filter(result => result.status === 'rejected');
+
+    assert.equal(rejected.length, 1);
+    assert.equal(rejected[0].reason.code, 'RATE_LIMITED');
 });
 
 test('AI route rejects malformed JSON with a stable error', async () => {
@@ -1244,6 +1334,65 @@ test('taste rejects a watched media ID that is not in the verified whitelist', a
     }
 });
 
+test('taste rejects a recommendation whose title is not bound to its media ID', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({
+            roast: '小明的片单很会留白。',
+            taste: ['偏爱复杂人物'],
+            recommendations: [{ title: 'Wrong title', year: 2020, reason: '同样重视人物选择。', mediaIds: { tmdbId: 100 } }],
+        }) } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+    try {
+        const { response, json } = await call('/api/ai/taste', {
+            method: 'POST',
+            body: { action: 'taste', sessionId: 'taste-title-binding-session', watched: movies(), forceRefresh: true },
+            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+        });
+
+        assert.equal(response.status, 502);
+        assert.equal(json.code, 'INVALID_AI_OUTPUT');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('taste rejects a recommendation whose media type is not bound to its media ID', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({
+            roast: '小明的片单很会留白。',
+            taste: ['偏爱复杂人物'],
+            recommendations: [{ title: 'Movie 1', mediaType: 'show', reason: '同样重视人物选择。', mediaIds: { tmdbId: 100 } }],
+        }) } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+    try {
+        const { response, json } = await call('/api/ai/taste', {
+            method: 'POST',
+            body: { action: 'taste', sessionId: 'taste-type-binding-session', watched: movies(), forceRefresh: true },
+            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+        });
+
+        assert.equal(response.status, 502);
+        assert.equal(json.code, 'INVALID_AI_OUTPUT');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('taste fallback never emits watched titles as recommendations', async () => {
+    const { response, json } = await call('/api/ai/taste', {
+        method: 'POST',
+        body: { action: 'taste', sessionId: 'taste-fallback-session', watched: movies(), forceRefresh: true },
+        env: createTestEnv(),
+    });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(json.data.recommendations, []);
+});
+
 test('quiz accepts a valid Mimo question package without answerKeywords', async () => {
     const originalFetch = globalThis.fetch;
     let requestBody;
@@ -1381,6 +1530,46 @@ function validQuizUpstreamPayload() {
         };
     });
     return { choices: [{ message: { content: JSON.stringify({ questions }) } }] };
+}
+
+async function digestForTest(value) {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+    return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function createAtomicTtsRateLimitDb() {
+    const rows = new Map();
+    return {
+        prepare(sql) {
+            assert.match(sql, /INSERT INTO ai_tts_rate_limits/);
+            const counter = sql.includes('request_count < ?') ? 'requestCount' : 'missCount';
+            return {
+                bind(...bindings) {
+                    return {
+                        async run() {
+                            const [key, currentTime, initialRequestCount, initialMissCount] = bindings;
+                            const windowSeconds = bindings[5];
+                            const limit = bindings.at(-1);
+                            const current = rows.get(key);
+                            if (!current || current.windowStartedAt + windowSeconds <= currentTime) {
+                                rows.set(key, {
+                                    windowStartedAt: currentTime,
+                                    requestCount: initialRequestCount,
+                                    missCount: initialMissCount,
+                                });
+                                return { meta: { changes: 1 } };
+                            }
+                            if (current[counter] >= limit) {
+                                return { meta: { changes: 0 } };
+                            }
+                            current[counter] += 1;
+                            return { meta: { changes: 1 } };
+                        },
+                    };
+                },
+            };
+        },
+    };
 }
 
 function errorResponse(error) {
