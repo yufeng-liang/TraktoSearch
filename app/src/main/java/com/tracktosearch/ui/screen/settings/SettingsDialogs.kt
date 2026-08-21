@@ -57,6 +57,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.tracktosearch.ui.theme.MonetAccent
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
@@ -290,22 +291,47 @@ internal fun AccentColorDialog(
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                // 色调区：壁纸取色 + 莫奈/印象派色块网格 + 自由调色
-                val swatches = listOf(null) + com.tracktosearch.ui.theme.MonetAccent.entries
+                // 色调区：壁纸取色 + 莫奈/印象派色块网格 + 自由调色（自由调色紧跟船上午餐蓝）
+                val customMarker = Any()
+                val swatches: List<Any?> = buildList {
+                    add(null) // 壁纸取色
+                    MonetAccent.entries.forEach { accent ->
+                        add(accent)
+                        if (accent == MonetAccent.BOAT_BREAKFAST) add(customMarker) // 自由调色排在船上午餐蓝后
+                    }
+                }
                 val rows = swatches.chunked(4)
                 rows.forEach { row ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        row.forEach { accent ->
-                            val labelResId = if (accent != null) accent.labelResId else R.string.settings_accent_dynamic
+                        row.forEach { swatch ->
+                            val isCustom = swatch === customMarker
+                            val accent = swatch as? MonetAccent // null 表示壁纸取色
+                            val labelResId = when {
+                                isCustom -> R.string.settings_accent_custom
+                                accent != null -> accent.labelResId
+                                else -> R.string.settings_accent_dynamic
+                            }
+                            // 勾选态：壁纸取色仅在未启用自由调色时勾选，自定义色独立勾选
+                            val selected = when {
+                                isCustom -> customAccentArgb != null
+                                accent != null -> currentAccent == accent
+                                else -> currentAccent == null && customAccentArgb == null
+                            }
                             Column(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clickable {
                                         view.performHaptic(HapticType.TICK)
-                                        onAccentSelected(accent)
+                                        if (isCustom) {
+                                            showCustomPicker = true
+                                        } else {
+                                            // 选择预设/壁纸取色时清除自定义色，避免 Theme 优先走 customAccent
+                                            onCustomAccentSelected(null)
+                                            onAccentSelected(accent)
+                                        }
                                     }
                                     .padding(vertical = 4.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
@@ -316,26 +342,33 @@ internal fun AccentColorDialog(
                                         .clip(CircleShape)
                                         .background(
                                             brush = when {
+                                                isCustom -> if (customAccentArgb != null) {
+                                                    androidx.compose.ui.graphics.SolidColor(Color(customAccentArgb.toInt()))
+                                                } else {
+                                                    androidx.compose.ui.graphics.Brush.sweepGradient(
+                                                        colors = listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)
+                                                    )
+                                                }
                                                 accent != null -> androidx.compose.ui.graphics.SolidColor(accent.light)
                                                 dynamicPrimaryColor != null -> androidx.compose.ui.graphics.SolidColor(dynamicPrimaryColor)
                                                 else -> androidx.compose.ui.graphics.Brush.sweepGradient(colors = dynamicColors)
                                             }
                                         )
                                         .then(
-                                            if (currentAccent == accent)
+                                            if (selected)
                                                 Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
                                             else Modifier
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    if (currentAccent == accent) {
+                                    if (selected) {
                                         Icon(
                                             imageVector = Icons.Rounded.Check,
                                             contentDescription = null,
-                                            tint = if (accent != null) {
-                                                if (accent.light.luminance() > 0.5f) Color.Black else Color.White
-                                            } else {
-                                                dynamicCheckTint
+                                            tint = when {
+                                                isCustom -> if (Color(customAccentArgb!!.toInt()).luminance() > 0.5f) Color.Black else Color.White
+                                                accent != null -> if (accent.light.luminance() > 0.5f) Color.Black else Color.White
+                                                else -> dynamicCheckTint
                                             },
                                             modifier = Modifier.size(20.dp)
                                         )
@@ -362,59 +395,6 @@ internal fun AccentColorDialog(
                         repeat(4 - row.size) { Spacer(modifier = Modifier.weight(1f)) }
                     }
                 }
-                // 自由调色入口：独立圆盘行
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable {
-                                view.performHaptic(HapticType.TICK)
-                                showCustomPicker = true
-                            }
-                            .padding(vertical = 4.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    brush = if (customAccentArgb != null) {
-                                        androidx.compose.ui.graphics.SolidColor(Color(customAccentArgb.toInt()))
-                                    } else {
-                                        androidx.compose.ui.graphics.Brush.sweepGradient(
-                                            colors = listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)
-                                        )
-                                    }
-                                )
-                                .then(
-                                    if (customAccentArgb != null)
-                                        Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                                    else Modifier
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (customAccentArgb != null) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Check,
-                                    contentDescription = null,
-                                    tint = if (Color(customAccentArgb.toInt()).luminance() > 0.5f) Color.Black else Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = stringResource(R.string.settings_accent_custom),
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                    repeat(3) { Spacer(modifier = Modifier.weight(1f)) }
-                }
             }
         },
         confirmButton = {
@@ -433,6 +413,11 @@ internal fun AccentColorDialog(
                 // 选择自定义色后同时清除预设色（互斥）
                 onAccentSelected(null)
             },
+            onResetDefault = {
+                // 恢复默认：清除自定义色并回到壁纸取色
+                onCustomAccentSelected(null)
+                onAccentSelected(null)
+            },
             onDismiss = { showCustomPicker = false }
         )
     }
@@ -443,7 +428,8 @@ internal fun AccentColorDialog(
 internal fun CustomAccentDialog(
     initialArgb: Long?,
     onColorSelected: (Long) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onResetDefault: () -> Unit
 ) {
     val initialColor = remember(initialArgb) {
         initialArgb?.let { Color(it.toInt()) } ?: Color(0xFF9A6242)
@@ -504,8 +490,8 @@ internal fun CustomAccentDialog(
                         Text("Button", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
                     }
                 }
-                TextButton(onClick = { onColorSelected(0L); onDismiss() }, modifier = Modifier.fillMaxWidth()) {
-                    Text("恢复默认（跟随壁纸）", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = { onResetDefault(); onDismiss() }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.settings_accent_reset_default), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         },

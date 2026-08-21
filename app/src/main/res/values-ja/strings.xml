@@ -260,6 +260,7 @@
     <string name="settings_visual_effect_glass">ガラス（実験的）</string>
     <string name="settings_accent_dynamic">ダイナミック</string>
     <string name="settings_accent_custom">カスタム</string>
+    <string name="settings_accent_reset_default">デフォルトに戻す（壁紙）</string>
     <!-- アクセントカラー -->
     <string name="accent_vintage_ticket">レトロチケット</string>
     <string name="accent_water_lily">睡蓮紫</string>

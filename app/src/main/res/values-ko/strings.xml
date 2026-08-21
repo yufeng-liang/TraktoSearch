@@ -260,6 +260,7 @@
     <string name="settings_visual_effect_glass">유리(실험적)</string>
     <string name="settings_accent_dynamic">다이나믹</string>
     <string name="settings_accent_custom">사용자 지정</string>
+    <string name="settings_accent_reset_default">기본값으로 재설정(배경화면)</string>
     <!-- 액센트 색상 -->
     <string name="accent_vintage_ticket">레트로 티켓</string>
     <string name="accent_water_lily">연꽃 보라</string>
