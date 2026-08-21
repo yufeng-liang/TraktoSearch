@@ -49,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
@@ -61,7 +62,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -610,12 +610,16 @@ internal fun DetailHeaderContent(
 
 /**
  * 折叠/展开文本：折叠时正文用省略号截断，「展开/收起」按钮右对齐固定在下方，
- * 点击整段正文或按钮均可切换，高度变化带动画。
+ * 点击整段正文或按钮均可切换，高度变化带动画。折叠态下，「展开」按钮右对齐叠放在
+ * 超出行（最后一行）同一行右侧。传入 [scrimColor] 时，会在按钮左侧铺一层横向渐变淡出，
+ * 让正文向右渐隐；默认 null 即纯省略号截断、不加淡出。
+ * @param scrimColor 渐变淡出所用到的表层颜色，需与正文所在背景近似；传 null 关闭淡出。
  */
 @Composable
 internal fun ExpandableText(
     text: String,
-    maxLines: Int = 3
+    maxLines: Int = 3,
+    scrimColor: Color? = null
 ) {
     val effectiveMaxLines = maxLines.coerceAtLeast(1)
     val expandLabel = stringResource(R.string.detail_text_expand)
@@ -625,38 +629,69 @@ internal fun ExpandableText(
     val bodyStyle = MaterialTheme.typography.bodyMedium
 
     var expanded by rememberSaveable(text, effectiveMaxLines) { mutableStateOf(false) }
-    // 折叠且溢出时显示「展开」按钮；溢出检测由 onTextLayout 驱动
+    // 溢出检测由 onTextLayout 驱动：仅折叠且实际超出 maxLines 时置 true
     var hasOverflow by remember(text, effectiveMaxLines) { mutableStateOf(false) }
-    // 整段可点击切换展开/折叠（无涟漪，导航语义）
-    val toggleModifier = Modifier
-        .clickable(
+    // 仅溢出（或已展开）时才可点击；未溢出文本不响应点击、不显示按钮
+    val canToggle = hasOverflow || expanded
+    val toggleModifier = if (canToggle) {
+        Modifier.clickable(
             interactionSource = remember { MutableInteractionSource() },
             indication = null
         ) { expanded = !expanded }
+    } else Modifier
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .animateContentSize()
     ) {
-        Text(
-            text = text,
-            style = bodyStyle,
-            color = bodyColor,
-            maxLines = if (expanded) Int.MAX_VALUE else effectiveMaxLines,
-            overflow = TextOverflow.Ellipsis,
-            onTextLayout = { layoutResult ->
-                hasOverflow = !expanded && layoutResult.hasVisualOverflow
-            },
-            modifier = toggleModifier.fillMaxWidth()
-        )
-        // 展开/收起按钮：右对齐，始终位于最右边
-        if (hasOverflow || expanded) {
+        Box(modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = if (expanded) collapseLabel else expandLabel,
+                text = text,
+                style = bodyStyle,
+                color = bodyColor,
+                maxLines = if (expanded) Int.MAX_VALUE else effectiveMaxLines,
+                overflow = TextOverflow.Ellipsis,
+                onTextLayout = { layoutResult ->
+                    hasOverflow = !expanded && layoutResult.hasVisualOverflow
+                },
+                modifier = toggleModifier.fillMaxWidth()
+            )
+            // 折叠态：「展开」按钮右对齐叠放在超出行（最后一行）同一行右侧。
+            // 仅传入 scrimColor 时在其左侧铺横向渐变把正文向右渐隐，否则纯省略号截断
+            if (hasOverflow && !expanded) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .then(if (scrimColor != null) Modifier.width(72.dp) else Modifier)
+                ) {
+                    // 渐变淡出 scrim（仅启用时绘制）：左侧透明 → 右侧近似表层颜色
+                    if (scrimColor != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.horizontalGradient(
+                                        colors = listOf(Color.Transparent, scrimColor)
+                                    )
+                                )
+                        )
+                    }
+                    Text(
+                        text = expandLabel,
+                        style = bodyStyle.copy(fontWeight = FontWeight.SemiBold),
+                        color = primaryColor,
+                        modifier = toggleModifier.align(Alignment.CenterEnd)
+                    )
+                }
+            }
+        }
+        // 展开态：「收起」按钮放在正文下方右对齐
+        if (expanded) {
+            Text(
+                text = collapseLabel,
                 style = bodyStyle.copy(fontWeight = FontWeight.SemiBold),
                 color = primaryColor,
-                textAlign = TextAlign.End,
                 modifier = toggleModifier
                     .fillMaxWidth()
                     .padding(top = 4.dp)
