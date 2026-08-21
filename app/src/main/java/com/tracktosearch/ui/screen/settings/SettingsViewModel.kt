@@ -115,6 +115,7 @@ class SettingsViewModel @Inject constructor(
     private val doubanSyncedItemDao: DoubanSyncedItemDao,
     private val sessionModeManager: SessionModeManager,
     private val imageTrafficStorage: ImageTrafficStorage,
+    private val statisticsSnapshotStore: com.tracktosearch.data.local.StatisticsSnapshotStore,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -432,6 +433,7 @@ class SettingsViewModel @Inject constructor(
                 traktRepository.persistentCaches.forEach { it.clearAll() }
                 doubanHotCache.clearAll()
                 doubanDetailCache.clearAll()
+                statisticsSnapshotStore.clear()
                 refreshCacheInfo()
                 _exportImportState.value = _exportImportState.value.copy(
                     message = context.getString(R.string.snackbar_cache_cleared)
@@ -492,6 +494,8 @@ class SettingsViewModel @Inject constructor(
                         tmdbRepository.mediaDataCaches.forEach { it.clearAll() }
                         traktRepository.mediaDataCaches.forEach { it.clearAll() }
                         doubanHotCache.clearAll()
+                        // 统计页快照也是影视数据，单独一个 DataStore 文件，不在 PersistentTtlCache 列表里
+                        statisticsSnapshotStore.clear()
                     }
                     CacheCategory.ID_MAPPING -> {
                         traktRepository.idMappingCaches.forEach { it.clearAll() }
@@ -670,12 +674,13 @@ class SettingsViewModel @Inject constructor(
             try {
                 // DataStore 文件大小（含影视数据 + ID 映射 + 豆瓣详情，共用同一个目录）
                 val dataStoreTotal = offlineCacheManager.getDataStoreSizeBytes()
-                // 按 PersistentTtlCache.getSizeBytes() 比例拆分影视数据 vs ID 映射
+                // 按 PersistentTtlCache.getSizeBytes() 比例拆分影视数据 vs ID 映射。
+                // 统计页快照在独立 DataStore 文件，不计入 dataStoreTotal，单独相加。
                 val mediaDataBytes = (
                     tmdbRepository.mediaDataCaches.sumOf { it.getSizeBytes() } +
                         traktRepository.mediaDataCaches.sumOf { it.getSizeBytes() } +
                         doubanHotCache.getSizeBytes()
-                    ).coerceAtMost(dataStoreTotal)
+                    ).coerceAtMost(dataStoreTotal) + statisticsSnapshotStore.sizeBytes()
                 val idMappingBytes = (dataStoreTotal - mediaDataBytes).coerceAtLeast(0L)
                 _cacheBreakdown.value = CacheBreakdown(
                     imageBytes = offlineCacheManager.getImageCacheSizeBytes(),

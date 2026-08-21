@@ -199,6 +199,8 @@ class SettingsViewModelTest {
             sharedTransitionStorage = sharedTransitionStorage,
             doubanSyncedItemDao = doubanSyncedItemDao,
             sessionModeManager = sessionModeManager,
+            imageTrafficStorage = mockk(relaxed = true),
+            statisticsSnapshotStore = mockk(relaxed = true),
             context = context
         )
     }
