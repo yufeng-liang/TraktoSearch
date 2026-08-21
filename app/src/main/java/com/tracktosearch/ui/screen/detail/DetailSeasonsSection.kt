@@ -364,7 +364,7 @@ internal fun CollectionSection(
                 contentType = { "collection_movie" }
             ) { index ->
                 val part = collection.parts[index]
-                val posterUrl = part.poster_path?.let { TmdbImageUrls.build(it, TmdbImageUrls.W200) }
+                val posterUrl = part.poster_path?.let { TmdbImageUrls.build(it, TmdbImageUrls.W185) }
                 val isCurrent = part.id == currentTmdbId
                 Column(
                     modifier = Modifier

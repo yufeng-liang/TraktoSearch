@@ -631,7 +631,7 @@ private fun DiscoverFilterListItem(
         (item.first_air_date ?: "").takeIf { it.length >= 4 }?.substring(0, 4)
     }
     val posterUrl = if (!item.poster_path.isNullOrBlank()) {
-        TmdbImageUrls.build(item.poster_path, TmdbImageUrls.W200)
+        TmdbImageUrls.build(item.poster_path, TmdbImageUrls.W185)
     } else null
 
     var dominantColor by remember { mutableStateOf<Color?>(null) }
