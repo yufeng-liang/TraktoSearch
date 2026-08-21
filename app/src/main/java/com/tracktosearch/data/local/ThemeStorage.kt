@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.glance.appwidget.updateAll
@@ -63,6 +64,13 @@ class ThemeStorage private constructor(
     private val _customAccentArgb = MutableStateFlow<Long?>(null)
     val customAccentArgb: StateFlow<Long?> = _customAccentArgb.asStateFlow()
 
+    // 主页面背景彩色弥散光晕：预设(枚举名)与开关
+    private val _meshPreset = MutableStateFlow("AURORA")
+    val meshPreset: StateFlow<String> = _meshPreset.asStateFlow()
+
+    private val _meshEnabled = MutableStateFlow(true)
+    val meshEnabled: StateFlow<Boolean> = _meshEnabled.asStateFlow()
+
     init {
         // 预加载 DataStore 首值到 StateFlow，避免 stateIn 默认值抖动。
         scope.launch {
@@ -72,6 +80,8 @@ class ThemeStorage private constructor(
             _visualEffectMode.value = VisualEffectMode.fromStorageValue(prefs[KEY_VISUAL_EFFECT_MODE])
             _glassVariant.value = GlassVariant.fromStorageValue(prefs[KEY_GLASS_VARIANT])
             _customAccentArgb.value = prefs[KEY_CUSTOM_ACCENT_ARGB]
+            _meshPreset.value = prefs[KEY_MESH_PRESET] ?: "AURORA"
+            _meshEnabled.value = prefs[KEY_MESH_ENABLED] ?: true
             initializationComplete.complete(Unit)
         }.invokeOnCompletion { throwable ->
             if (throwable != null && !initializationComplete.isCompleted) {
@@ -157,6 +167,18 @@ class ThemeStorage private constructor(
         }
     }
 
+    suspend fun setMeshPreset(preset: String) {
+        initializationComplete.await()
+        dataStore.edit { prefs -> prefs[KEY_MESH_PRESET] = preset }
+        _meshPreset.value = preset
+    }
+
+    suspend fun setMeshEnabled(enabled: Boolean) {
+        initializationComplete.await()
+        dataStore.edit { prefs -> prefs[KEY_MESH_ENABLED] = enabled }
+        _meshEnabled.value = enabled
+    }
+
     companion object {
         const val MODE_SYSTEM = "system"
         const val MODE_DARK = "dark"
@@ -167,5 +189,7 @@ class ThemeStorage private constructor(
         private val KEY_VISUAL_EFFECT_MODE = stringPreferencesKey("visual_effect_mode")
         private val KEY_GLASS_VARIANT = stringPreferencesKey("glass_variant")
         private val KEY_CUSTOM_ACCENT_ARGB = longPreferencesKey("custom_accent_argb")
+        private val KEY_MESH_PRESET = stringPreferencesKey("mesh_preset")
+        private val KEY_MESH_ENABLED = booleanPreferencesKey("mesh_enabled")
     }
 }

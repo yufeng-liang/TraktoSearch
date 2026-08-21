@@ -1,26 +1,24 @@
 package com.tracktosearch.ui.component
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.lerp
+import com.tracktosearch.ui.theme.AmbientMeshBackground
+import com.tracktosearch.ui.theme.MeshPreset
 
-/** 暂时只保留低亮度中性灰底，并以 5% 主题色维持主题切换氛围。 */
+/**
+ * 主页面背景：彩色弥散光晕。作为独立于内容的背景层，置于 HorizontalPager 之下，
+ * 让搜索/发现/我的/设置四页共享同一层连续光晕，实现跨页运动连贯。
+ */
 @Composable
 fun PageBackground(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    preset: MeshPreset = MeshPreset.AURORA,
+    enabled: Boolean = true,
 ) {
-    val pageColor = lerp(
-        MaterialTheme.colorScheme.background,
-        MaterialTheme.colorScheme.primary,
-        0.05f
-    )
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(pageColor)
+    AmbientMeshBackground(
+        modifier = modifier.fillMaxSize(),
+        preset = preset,
+        enabled = enabled,
     )
 }

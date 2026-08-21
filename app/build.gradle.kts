@@ -252,6 +252,7 @@ dependencies {
     implementation(libs.glance.material3)
     implementation(libs.reorderable)
     implementation(libs.zoomable)
+    implementation(libs.compose.mesh.gradient)
 
     // Baseline Profile
     implementation(libs.profileinstaller)

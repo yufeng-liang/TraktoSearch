@@ -48,6 +48,7 @@ testExtJunit = "1.3.0"
 testCore = "1.7.0"
 testRunner = "1.7.0"
 hiltTesting = "2.60.1"
+composeMeshGradient = "0.3.0"
 
 [libraries]
 # AndroidX Core
@@ -128,6 +129,9 @@ reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.r
 
 # Zoomable
 zoomable = { group = "net.engawapg.lib", name = "zoomable", version.ref = "zoomable" }
+
+# Compose Mesh Gradient (彩色弥散背景光晕)
+compose-mesh-gradient = { group = "io.github.om252345", name = "composemeshgradient", version.ref = "composeMeshGradient" }
 
 # Error Prone (required by Hilt 2.60)
 errorprone-annotations = { group = "com.google.errorprone", name = "error_prone_annotations", version.ref = "errorproneAnnotations" }
