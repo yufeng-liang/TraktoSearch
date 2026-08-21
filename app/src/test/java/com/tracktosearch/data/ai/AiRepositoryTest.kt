@@ -10,6 +10,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Test
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.toResponseBody
 import retrofit2.Response
 import java.security.MessageDigest
 
@@ -73,6 +75,102 @@ class AiRepositoryTest {
         assertThat(error.errorCode).isEqualTo(AiErrorCode.QUOTA_EXCEEDED)
         assertThat(error.serverCode).isEqualTo("DAILY_QUOTA_EXCEEDED")
     }
+
+    @Test
+    fun repository_parsesAiQuotaErrorFromNon2xxErrorBody() = runTest {
+        val api = mockk<AiApiService>()
+        val storage = mockk<AiStorage>(relaxed = true)
+        coEvery { api.getGreeting(any()) } returns Response.error(
+            429,
+            """{"code":"AI_DAILY_QUOTA_EXCEEDED","message":"Daily AI quota exceeded"}"""
+                .toResponseBody("application/json".toMediaType())
+        )
+        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+
+        val result = repository.getGreeting("friend-a", "usagi", forceRefresh = true)
+
+        val error = result.exceptionOrNull() as AiApiException
+        assertThat(error.errorCode).isEqualTo(AiErrorCode.QUOTA_EXCEEDED)
+        assertThat(error.serverCode).isEqualTo("AI_DAILY_QUOTA_EXCEEDED")
+        assertThat(error.message).isEqualTo("Daily AI quota exceeded")
+    }
+
+    @Test
+    fun forceRefresh_businessErrorDoesNotFallBackToCachedValue() = runTest {
+        val api = mockk<AiApiService>()
+        val storage = mockk<AiStorage>(relaxed = true)
+        val cached = AiGreetingDto(greeting = "old greeting")
+        coEvery { storage.read("friend-a", AiCacheFeature.GREETING, "usagi") } returns
+            Json.encodeToString(AiGreeting.serializer(), cached.toDomain())
+        coEvery { api.getGreeting(any()) } returns Response.error(
+            429,
+            """{"code":"AI_SESSION_QUOTA_EXCEEDED","message":"Session quota exceeded"}"""
+                .toResponseBody("application/json".toMediaType())
+        )
+        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+
+        val result = repository.getGreeting("friend-a", "usagi", forceRefresh = true)
+
+        assertThat(result.isFailure).isTrue()
+        assertThat(result.exceptionOrNull()).isInstanceOf(AiApiException::class.java)
+    }
+
+    @Test
+    fun quizCacheKeyChangesWhenExcludedQuizIdsChange() = runTest {
+        val api = mockk<AiApiService>()
+        val storage = mockk<AiStorage>(relaxed = true)
+        coEvery { api.getQuiz(any()) } returns Response.success(
+            AiApiResponse(code = "SUCCESS", data = validQuizDto("quiz-1"))
+        )
+        val suffixes = mutableListOf<String?>()
+        coEvery { storage.write(any(), any(), any(), any()) } coAnswers {
+            suffixes += arg<String?>(3)
+        }
+        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+        val request = AiQuizRequest(
+            watched = listOf(AiWatchedTitleDto(mediaId = "tmdb:1", mediaType = "movie", title = "A")),
+            sessionId = "sprite-session",
+        )
+
+        repository.getQuiz("friend-a", request.copy(excludedQuizIds = listOf("quiz-old")))
+        repository.getQuiz("friend-a", request.copy(excludedQuizIds = listOf("quiz-new")))
+
+        assertThat(suffixes).hasSize(2)
+        assertThat(suffixes[0]).isNotEqualTo(suffixes[1])
+    }
+
+    private fun validQuizDto(quizId: String): AiQuizDto = AiQuizDto(
+        quizId = quizId,
+        questions = buildList {
+            repeat(10) { index ->
+                add(
+                    AiQuizQuestionDto(
+                        id = "single-$index",
+                        type = "single",
+                        prompt = "Question $index",
+                        options = listOf(AiQuizOption("a", "A"), AiQuizOption("b", "B")),
+                    )
+                )
+            }
+            repeat(2) { index ->
+                add(
+                    AiQuizQuestionDto(
+                        id = "multiple-$index",
+                        type = "multiple",
+                        prompt = "Question multiple $index",
+                        options = listOf(AiQuizOption("a", "A"), AiQuizOption("b", "B")),
+                    )
+                )
+            }
+            add(
+                AiQuizQuestionDto(
+                    id = "short",
+                    type = "short",
+                    prompt = "Question short",
+                )
+            )
+        }
+    )
 
     @Test
     fun repository_mergesOuterQuotaIntoGreetingDomain() = runTest {
