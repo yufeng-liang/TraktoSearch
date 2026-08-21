@@ -356,20 +356,26 @@ private fun CharacterStage(
                     .size(168.dp)
                     .scale(bob)
             )
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(18.dp),
-                shape = RoundedCornerShape(18.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+            if (shouldShowActivationSuccessBadge(character.id, state.activatedCharacterId)) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(18.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
                 ) {
-                    Text(character.name, fontWeight = FontWeight.Bold)
-                    Text(stringResource(R.string.ai_sprite_activation_success), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(character.name, fontWeight = FontWeight.Bold)
+                        Text(
+                            stringResource(R.string.ai_sprite_activation_success),
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
                 }
             }
             Surface(

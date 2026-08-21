@@ -238,6 +238,21 @@ class AiUiLogicTest {
     }
 
     @Test
+    fun completedSearchWithResultsUsesTheFirstResultAnchor() {
+        assertThat(searchAnchorFor(AiSpriteOverlayTrigger.SEARCH_COMPLETED, hasResultAnchor = true))
+            .isEqualTo(AiSpriteAnchor.ResultCard)
+        assertThat(searchAnchorFor(AiSpriteOverlayTrigger.SEARCH_COMPLETED, hasResultAnchor = false))
+            .isEqualTo(AiSpriteAnchor.SearchBox)
+    }
+
+    @Test
+    fun activationSuccessBadgeIsShownOnlyForTheActivatedCharacter() {
+        assertThat(shouldShowActivationSuccessBadge("usagi", null)).isEqualTo(false)
+        assertThat(shouldShowActivationSuccessBadge("usagi", "hachiware")).isEqualTo(false)
+        assertThat(shouldShowActivationSuccessBadge("usagi", "usagi")).isEqualTo(true)
+    }
+
+    @Test
     fun quizPreviewContainsSevenDistinctMoviesAndAllowsOnlyTwoReplacements() {
         val candidates = (1..10).map { id ->
             com.tracktosearch.data.ai.AiWatchedTitleDto(

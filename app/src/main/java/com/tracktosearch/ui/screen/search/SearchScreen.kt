@@ -231,7 +231,8 @@ fun SearchScreen(
     onSearchSourceTypeChange: ((SearchSourceType) -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: SearchViewModel = hiltViewModel(),
-    spriteViewModel: AiSpriteViewModel = hiltViewModel()
+    spriteViewModel: AiSpriteViewModel = hiltViewModel(),
+    onAiSpriteCenterVisibilityChanged: (Boolean) -> Unit = {}
 ) {
     val isDark = isAppDarkTheme()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -302,6 +303,12 @@ fun SearchScreen(
     val easterMessageRes by cloudThemeManager.easterMessageRes.collectAsStateWithLifecycle()
     val aiSpriteCloudDescription = stringResource(R.string.ai_sprite_cloud_description)
     var showAiSpriteCenter by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(showAiSpriteCenter) {
+        onAiSpriteCenterVisibilityChanged(showAiSpriteCenter)
+    }
+    DisposableEffect(Unit) {
+        onDispose { onAiSpriteCenterVisibilityChanged(false) }
+    }
     var showAiSpriteMotion by rememberSaveable { mutableStateOf(false) }
     var activeSpriteAnchor by remember { mutableStateOf(AiSpriteAnchor.SearchBox) }
     var activeSceneEvent by remember { mutableStateOf<AiSceneEvent?>(null) }

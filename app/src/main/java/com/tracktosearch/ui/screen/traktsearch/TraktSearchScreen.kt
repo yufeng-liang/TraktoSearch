@@ -190,7 +190,8 @@ fun TraktSearchScreen(
     onRecommendationClick: ((AiRecommendation) -> Unit)? = null,
     inlineMode: Boolean = false,
     viewModel: TraktSearchViewModel = hiltViewModel(),
-    spriteViewModel: AiSpriteViewModel = hiltViewModel()
+    spriteViewModel: AiSpriteViewModel = hiltViewModel(),
+    onAiSpriteCenterVisibilityChanged: (Boolean) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val watchlistWatchedIds by viewModel.watchlistWatchedIds.collectAsStateWithLifecycle()
@@ -208,6 +209,12 @@ fun TraktSearchScreen(
 
     var searchQuery by rememberSaveable { mutableStateOf(initialQuery) }
     var showAiSpriteCenter by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(showAiSpriteCenter) {
+        onAiSpriteCenterVisibilityChanged(showAiSpriteCenter)
+    }
+    DisposableEffect(Unit) {
+        onDispose { onAiSpriteCenterVisibilityChanged(false) }
+    }
     var showAiSpriteMotion by rememberSaveable { mutableStateOf(false) }
     var overlayEntryHandled by rememberSaveable { mutableStateOf(initialQuery.isNotBlank()) }
     var isSearchFocused by remember { mutableStateOf(false) }
