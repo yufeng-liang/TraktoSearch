@@ -290,7 +290,7 @@
     <string name="settings_title">設定</string>
     <string name="settings_appearance">外観</string>
     <string name="settings_shared_transition">共有要素トランジション</string>
-    <string name="settings_shared_transition_subtitle">画面間で共有要素にトランジションアニメーションを適用。パフォーマンスオーバーヘッドを下げるためデフォルトはオフ。</string>
+    <string name="settings_shared_transition_subtitle">画面間で共有要素にトランジションアニメーションを適用（全画面表示時のズーム遷移も含む）。オフにするとパフォーマンスオーバーヘッドを下げられます。</string>
     <string name="settings_search">検索</string>
     <string name="settings_storage">ストレージ</string>
     <string name="settings_clear_cache">キャッシュクリア</string>

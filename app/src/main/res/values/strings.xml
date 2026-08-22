@@ -549,7 +549,7 @@
     <string name="settings_title">Settings</string>
     <string name="settings_appearance">Appearance</string>
     <string name="settings_shared_transition">Shared Element Transitions</string>
-    <string name="settings_shared_transition_subtitle">Animate shared elements between screens. Off by default to reduce performance overhead.</string>
+    <string name="settings_shared_transition_subtitle">Animate shared elements between screens, including the zoom transition when opening a full-screen image. Turn it off to reduce performance overhead.</string>
     <string name="settings_search">Search Sources</string>
     <string name="settings_storage">Storage</string>
     <string name="settings_clear_cache">Clear Cache</string>

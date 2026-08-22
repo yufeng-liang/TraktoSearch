@@ -273,7 +273,8 @@ internal fun BackdropCard(
 /**
  * 剧照渐进占位：加载大图期间先用 w300 小尺寸版本垫底。
  * 小图通常在列表预取或上次浏览时已进 Coil 磁盘缓存，可即时显示，避免大图回源前留白。
- * 若 URL 非 TMDB 结构（无尺寸可换），退化为纯色占位，不额外发请求。
+ * 若 URL 非 TMDB 结构（豆瓣剧照、Trakt fanart，无尺寸可换），只用纯色垫底不额外发请求，
+ * 但主图照常加载——早先版本在这种情况下直接 return 掉了主图，导致豆瓣来源的截图永远空白。
  */
 @Composable
 private fun ProgressiveBackdrop(
@@ -285,22 +286,22 @@ private fun ProgressiveBackdrop(
         val swapped = TmdbImageUrls.swapSize(backdropUrl, "w300")
         if (swapped == backdropUrl) null else swapped
     }
-    if (smallUrl == null) {
-        Box(modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant))
-        return
-    }
     SubcomposeAsyncImage(
         model = backdropUrl,
         contentDescription = null,
         contentScale = contentScale,
-        modifier = modifier,
+        modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant),
         loading = {
-            AsyncImage(
-                model = smallUrl,
-                contentDescription = null,
-                contentScale = contentScale,
-                modifier = Modifier.fillMaxSize()
-            )
+            // 非 TMDB /t/p/ 结构（豆瓣剧照、Trakt fanart）没有小尺寸可换，
+            // 只留纯色底，不额外发请求；但主图一定要照常加载。
+            if (smallUrl != null) {
+                AsyncImage(
+                    model = smallUrl,
+                    contentDescription = null,
+                    contentScale = contentScale,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
     )
 }
