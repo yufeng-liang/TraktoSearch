@@ -4,7 +4,12 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Environment
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -68,12 +73,10 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.ZoomableImageOverlay
 import com.tracktosearch.ui.component.queryExistingFile
 import com.tracktosearch.ui.component.savePosterToGallery
+import com.tracktosearch.ui.component.zoomSharedSource
 import com.tracktosearch.ui.util.showToast
 import kotlinx.coroutines.launch
 
@@ -254,20 +257,15 @@ internal fun BackdropCard(
             .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
     ) {
-        // sharedKeyPrefix 非空且共享转场开启时,与全屏端 "$sharedKeyPrefix-$page" 配对,实现缩放转场
-        val sharedModifier = if (sharedKeyPrefix != null && LocalSharedTransitionScope.current != null && LocalAnimatedVisibilityScope.current != null && LocalSharedTransitionEnabled.current) {
-            val scope = LocalSharedTransitionScope.current
-            with(scope!!) {
-                Modifier.sharedElement(
-                    rememberSharedContentState(key = "$sharedKeyPrefix-$index"),
-                    animatedVisibilityScope = LocalAnimatedVisibilityScope.current!!
-                )
-            }
-        } else Modifier
+        // sharedKeyPrefix 非空且共享转场开启时,与全屏端 "$sharedKeyPrefix-$page" 配对,实现缩放转场。
+        // 用 caller-managed visibility(zoomSharedSource):全屏端打开本 key 时缩略图侧置不可见,
+        // 保证同一 key 同时只有一侧是 target,否则转场方向会反。
         ProgressiveBackdrop(
             backdropUrl = backdropUrl,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize().then(sharedModifier)
+            modifier = Modifier
+                .fillMaxSize()
+                .zoomSharedSource(key = sharedKeyPrefix?.let { "$it-$index" })
         )
     }
 }
@@ -275,7 +273,8 @@ internal fun BackdropCard(
 /**
  * 剧照渐进占位：加载大图期间先用 w300 小尺寸版本垫底。
  * 小图通常在列表预取或上次浏览时已进 Coil 磁盘缓存，可即时显示，避免大图回源前留白。
- * 若 URL 非 TMDB 结构（无尺寸可换），退化为纯色占位，不额外发请求。
+ * 若 URL 非 TMDB 结构（豆瓣剧照、Trakt fanart，无尺寸可换），只用纯色垫底不额外发请求，
+ * 但主图照常加载——早先版本在这种情况下直接 return 掉了主图，导致豆瓣来源的截图永远空白。
  */
 @Composable
 private fun ProgressiveBackdrop(
@@ -287,22 +286,22 @@ private fun ProgressiveBackdrop(
         val swapped = TmdbImageUrls.swapSize(backdropUrl, "w300")
         if (swapped == backdropUrl) null else swapped
     }
-    if (smallUrl == null) {
-        Box(modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant))
-        return
-    }
     SubcomposeAsyncImage(
         model = backdropUrl,
         contentDescription = null,
         contentScale = contentScale,
-        modifier = modifier,
+        modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant),
         loading = {
-            AsyncImage(
-                model = smallUrl,
-                contentDescription = null,
-                contentScale = contentScale,
-                modifier = Modifier.fillMaxSize()
-            )
+            // 非 TMDB /t/p/ 结构（豆瓣剧照、Trakt fanart）没有小尺寸可换，
+            // 只留纯色底，不额外发请求；但主图一定要照常加载。
+            if (smallUrl != null) {
+                AsyncImage(
+                    model = smallUrl,
+                    contentDescription = null,
+                    contentScale = contentScale,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
     )
 }
@@ -671,7 +670,9 @@ internal fun BackdropPagerOverlay(
     backdrops: List<String>,
     initialIndex: Int,
     sharedKeyPrefix: String?,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    enter: EnterTransition = fadeIn(animationSpec = tween(200)),
+    exit: ExitTransition = fadeOut(animationSpec = tween(200))
 ) {
     val context = LocalContext.current
     val alreadySavedToast = stringResource(R.string.poster_already_saved)
@@ -712,6 +713,8 @@ internal fun BackdropPagerOverlay(
                 }
             }
         },
-        isSavedAt = { idx -> idx in savedBackdrops.value }
+        isSavedAt = { idx -> idx in savedBackdrops.value },
+        enter = enter,
+        exit = exit
     )
 }

@@ -290,7 +290,7 @@
     <string name="settings_title">설정</string>
     <string name="settings_appearance">외관</string>
     <string name="settings_shared_transition">공유 요소 전환 애니메이션</string>
-    <string name="settings_shared_transition_subtitle">화면 간 공유 요소에 전환 애니메이션을 적용합니다. 성능 오버헤드를 줄이기 위해 기본값은 꺼짐입니다.</string>
+    <string name="settings_shared_transition_subtitle">화면 간 공유 요소에 전환 애니메이션을 적용합니다. 전체 화면 이미지를 열 때의 확대 전환도 포함됩니다. 끄면 성능 오버헤드를 줄일 수 있습니다.</string>
     <string name="settings_search">검색</string>
     <string name="settings_storage">저장소</string>
     <string name="settings_clear_cache">캐시 지우기</string>

@@ -22,8 +22,8 @@ private val Context.sharedTransitionDataStore: DataStore<Preferences> by prefere
 /**
  * 共享元素转场动画开关持久化存储。
  *
- * 默认关闭(false):首次使用时所有转场动画消失,设置页 scrollGate 保存机制也随之移除。
- * 用户可在设置页「外观」分组手动开启。
+ * 默认开启(true):海报/剧照/截图点击进大图的缩放过渡依赖它,关闭后全部降级为纯 fade。
+ * 用户可在设置页「外观」分组手动关闭。
  *
  * 使用 StateFlow 而非裸 DataStore Flow:StateFlow 始终持有当前值,
  * collectAsStateWithLifecycle 不需要 initialValue,App 启动预加载后首次组合即为真实值,彻底消除跳变。
@@ -56,8 +56,8 @@ class SharedTransitionStorage @Inject constructor(
     }
 
     companion object {
-        /** 默认关闭:转场动画默认不启用 */
-        const val DEFAULT_ENABLED = false
+        /** 默认开启:转场动画默认启用 */
+        const val DEFAULT_ENABLED = true
         private val KEY_ENABLED = booleanPreferencesKey("enabled")
     }
 }

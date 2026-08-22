@@ -2,6 +2,8 @@ package com.tracktosearch.ui.component
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -9,7 +11,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,13 +40,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.tracktosearch.R
 import kotlinx.coroutines.launch
 import net.engawapg.lib.zoomable.rememberZoomState
@@ -55,8 +52,14 @@ import net.engawapg.lib.zoomable.zoomable
  * 通用全屏图片查看 overlay：黑底 + 横滑翻页 + 双击/双指缩放 + 可选保存。
  * 用 AnimatedVisibility 包裹，`sharedKeyPrefix` 非空且共享转场开启时，
  * 每页图片以 `$sharedKeyPrefix-$page` 作为 sharedElement key，
- * 与缩略图端相同 key 配对，实现 Telegram 风格的小图→大图缩放过渡。
- * 注意：本组件必须一直处于组合中（用 `visible` 控制显隐），不能包在 `if` 里。
+ * 与缩略图端 [zoomSharedSource] 的相同 key 配对，实现 Telegram 风格的小图→大图缩放过渡。
+ *
+ * 手势：单击退出；若已放大则单击先复位到初始大小，再次单击才退出；双击切换 1x/2.5x。
+ *
+ * 注意：本组件必须一直处于组合中（用 `visible` 控制显隐），不能包在 `if` 里，
+ * 否则共享元素两侧无法在同一帧共存，转场不会发生。
+ * 例外：跨窗口场景（盖在 ModalBottomSheet 之上的 Dialog）本就无法共享元素，
+ * 此时传 `sharedKeyPrefix = null` 并用 [enter]/[exit] 指定 scale+fade 近似动画。
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -68,8 +71,9 @@ internal fun ZoomableImageOverlay(
     onDismiss: () -> Unit,
     onSave: ((Int) -> Unit)? = null,
     isSavedAt: (Int) -> Boolean = { false },
+    enter: EnterTransition = fadeIn(animationSpec = tween(200)),
+    exit: ExitTransition = fadeOut(animationSpec = tween(200)),
 ) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val safeInitial = initialIndex.coerceIn(0, (images.size - 1).coerceAtLeast(0))
     val pagerState = rememberPagerState(initialPage = safeInitial, pageCount = { images.size })
@@ -91,11 +95,9 @@ internal fun ZoomableImageOverlay(
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(animationSpec = tween(200)),
-        exit = fadeOut(animationSpec = tween(200))
+        enter = enter,
+        exit = exit
     ) {
-        val sharedTransitionScope = LocalSharedTransitionScope.current
-        val sharedEnabled = LocalSharedTransitionEnabled.current
         val animatedVisibilityScope = this
 
         BackHandler(enabled = true) {
@@ -129,43 +131,33 @@ internal fun ZoomableImageOverlay(
                     modifier = Modifier.fillMaxSize()
                 ) { page ->
                     val url = images.getOrNull(page) ?: return@HorizontalPager
-                    val sharedModifier = if (sharedTransitionScope != null && sharedEnabled && sharedKeyPrefix != null) {
-                        with(sharedTransitionScope) {
-                            Modifier.sharedElement(
-                                rememberSharedContentState(key = "$sharedKeyPrefix-$page"),
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                        }
-                    } else Modifier
-                    AsyncImage(
-                        model = remember(url) {
-                            ImageRequest.Builder(context)
-                                .data(url)
-                                .crossfade(false)
-                                .size(1080)
-                                .build()
-                        },
-                        contentDescription = null,
+                    ProgressiveFullscreenImage(
+                        model = url,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
                             .fillMaxSize()
-                            .then(sharedModifier)
-                            .pointerInput(zoomState) {
-                                detectTapGestures(
-                                    onDoubleTap = { tapOffset ->
-                                        if (zoomState.scale > 1f) {
-                                            scope.launch { zoomState.changeScale(1f, Offset.Zero) }
-                                        } else {
-                                            scope.launch { zoomState.changeScale(2.5f, tapOffset) }
-                                        }
+                            .zoomSharedTarget(
+                                key = sharedKeyPrefix?.let { "$it-$page" },
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                            // 单击退出（已放大时先复位）、双击缩放都交给 zoomable 自带回调，
+                            // 避免再叠一层 detectTapGestures 与它争抢手势
+                            .zoomable(
+                                zoomState,
+                                onTap = {
+                                    if (zoomState.scale > 1f) {
+                                        scope.launch { zoomState.changeScale(1f, Offset.Zero) }
+                                    } else {
+                                        onDismiss()
                                     }
-                                )
-                            }
-                            .zoomable(zoomState)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = {} // 拦截点击，不触发外层 dismiss
+                                },
+                                onDoubleTap = { tapOffset ->
+                                    if (zoomState.scale > 1f) {
+                                        zoomState.changeScale(1f, Offset.Zero)
+                                    } else {
+                                        zoomState.changeScale(2.5f, tapOffset)
+                                    }
+                                }
                             )
                     )
                 }

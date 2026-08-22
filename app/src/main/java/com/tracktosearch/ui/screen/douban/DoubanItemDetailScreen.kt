@@ -13,7 +13,6 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope.OverlayClip
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -147,9 +146,6 @@ import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.ActionButtonRow
 import com.tracktosearch.ui.component.ActionItem
 import com.tracktosearch.ui.component.DropdownAnchorMenu
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
 import com.tracktosearch.ui.component.DetailTopBarIcon
@@ -159,6 +155,8 @@ import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.LocalFullscreenSharedKey
+import com.tracktosearch.ui.component.zoomSharedSource
 import com.tracktosearch.ui.screen.detail.PosterFullscreenOverlay
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
@@ -1156,6 +1154,12 @@ fun DoubanItemDetailScreen(
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
+        // 海报全屏查看打开时，把该 key 广播给海报源，让源侧置不可见，
+        // 保证同一 key 同时只有一侧是 target（否则缩放转场方向会反）
+        CompositionLocalProvider(
+            LocalFullscreenSharedKey provides
+                if (showPosterFullscreen) "douban-poster-zoom-bounds-$doubanId" else null
+        ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -1680,7 +1684,7 @@ fun DoubanItemDetailScreen(
             val posterFailure = uiState.failure
             val posterUrl = posterFailure?.posterUrl
             if (posterUrl != null) {
-                // 必须一直处于组合中(用 visible 控制显隐),保证与海报源 sharedBounds 同时组合,缩放转场才能生效
+                // 必须一直处于组合中(用 visible 控制显隐),保证与海报源共享元素同时组合,缩放转场才能生效
                 PosterFullscreenOverlay(
                     visible = showPosterFullscreen,
                     posterUrl = posterUrl,
@@ -1702,6 +1706,7 @@ fun DoubanItemDetailScreen(
                 )
             }
         }
+        } // CompositionLocalProvider(LocalFullscreenSharedKey)
     }
 
     // 子标题编辑弹窗
@@ -1893,7 +1898,6 @@ private fun DoubanWritebackActions(
                     onClick = onRemove
                 )
             ),
-            hazeState = hazeState,
             modifier = Modifier.fillMaxWidth()
         )
     }
@@ -1953,19 +1957,10 @@ private fun DoubanItemHeader(
             ) {
                 if (failure.posterUrl != null) {
                     val context = LocalContext.current
-                    // 海报缩放转场:读取共享转场作用域,与全屏 overlay 的 sharedBounds 配对
-                    // (doubanId 为屏幕参数,两个使用点必须用同一 key 才能配对)
-                    val sharedTransitionScope = LocalSharedTransitionScope.current
-                    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-                    val boundsModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-                        with(sharedTransitionScope) {
-                            Modifier.sharedBounds(
-                                rememberSharedContentState(key = "douban-poster-zoom-bounds-$doubanId"),
-                                animatedVisibilityScope = animatedVisibilityScope,
-                                clipInOverlayDuringTransition = OverlayClip(RoundedCornerShape(8.dp))
-                            )
-                        }
-                    } else Modifier
+                    // 海报缩放转场:与全屏 overlay 的 zoomSharedTarget 配对
+                    // (doubanId 为屏幕参数,两个使用点必须用同一 key 才能配对)。
+                    // 本侧用 caller-managed visibility:overlay 打开该 key 时置不可见,
+                    // 避免两侧同时是 target 导致转场方向反转。
                     AsyncImage(
                         model = remember(failure.posterUrl) {
                             ImageRequest.Builder(context)
@@ -1988,7 +1983,12 @@ private fun DoubanItemHeader(
                         },
                         contentDescription = displayTitle,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize().then(boundsModifier)
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .zoomSharedSource(
+                                key = "douban-poster-zoom-bounds-$doubanId",
+                                clipShape = RoundedCornerShape(8.dp)
+                            )
                     )
                 } else {
                     Box(

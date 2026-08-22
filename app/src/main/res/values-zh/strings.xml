@@ -549,7 +549,7 @@
     <string name="settings_title">设置</string>
     <string name="settings_appearance">外观</string>
     <string name="settings_shared_transition">共享元素转场动画</string>
-    <string name="settings_shared_transition_subtitle">在页面间为共享元素添加转场动画。默认关闭，以降低性能开销。</string>
+    <string name="settings_shared_transition_subtitle">在页面间为共享元素添加转场动画，包括点开大图时的缩放过渡。关闭可降低性能开销。</string>
     <string name="settings_search">搜索源</string>
     <string name="settings_storage">存储</string>
     <string name="settings_clear_cache">清除缓存</string>

@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.person
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -30,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -49,6 +51,13 @@ import com.tracktosearch.ui.component.SocialMediaIcon
 import com.tracktosearch.ui.screen.detail.ExpandableText
 
 private data class AgeInfo(val age: Int, val isDeceased: Boolean)
+
+/**
+ * 人物详情页沉浸背景的头像主色叠加透明度。
+ * PersonScreen 用它绘制顶部渐变，PersonHeaderContent 用它反推真实底色以决定前景色，
+ * 两处必须共用同一个值，否则文字对比度判断会和实际背景脱节。
+ */
+internal const val PersonImmersiveTintAlpha = 0.25f
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -80,14 +89,27 @@ internal fun PersonHeaderContent(
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
-    // 根据头像主色调亮度自适应文字颜色，增强沉浸背景下的可读性
-    // 亮色主色 → 深色文字；暗色主色 → 浅色文字；无主色 → 回退主题色
-    val onImmersiveColor = avatarDominantColor?.let { c ->
-        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.92f) else Color.White
-    } ?: MaterialTheme.colorScheme.onSurface
-    val onImmersiveVariantColor = avatarDominantColor?.let { c ->
-        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.72f)
-    } ?: MaterialTheme.colorScheme.onSurfaceVariant
+    // 沉浸背景实际是「头像主色按 PersonImmersiveTintAlpha 叠在页面底色上」再向 background 过渡。
+    // 直接用主色亮度判断前景色会误判：浅色主题下 25% 的暗主色叠出来的底仍然很亮，却选了白字，
+    // 深色主题下亮主色同理会选出黑字。这里先合成出真实底色再判断。
+    val immersiveBase = MaterialTheme.colorScheme.background
+    val immersiveBackdrop = avatarDominantColor
+        ?.copy(alpha = PersonImmersiveTintAlpha)
+        ?.compositeOver(immersiveBase)
+        ?: immersiveBase
+    val backdropIsLight = immersiveBackdrop.luminance() > 0.5f
+    val themeIsLight = immersiveBase.luminance() > 0.5f
+    // 合成底色与主题明暗一致时沿用主题前景色（配色更统一）；只有主色浓到翻转明暗才降级为黑/白
+    val onImmersiveColor = when {
+        backdropIsLight == themeIsLight -> MaterialTheme.colorScheme.onSurface
+        backdropIsLight -> Color.Black.copy(alpha = 0.92f)
+        else -> Color.White
+    }
+    val onImmersiveVariantColor = when {
+        backdropIsLight == themeIsLight -> MaterialTheme.colorScheme.onSurfaceVariant
+        backdropIsLight -> Color.Black.copy(alpha = 0.65f)
+        else -> Color.White.copy(alpha = 0.72f)
+    }
 
     // 计算年龄数值
     val ageInfo = remember(birthday, deathday) {
@@ -480,9 +502,14 @@ internal fun PersonHeaderContent(
         Spacer(modifier = Modifier.height(14.dp))
 
         // 简介卡片
+        // 填充用不透明 surfaceVariant：半透明填充叠在沉浸渐变上会被底色吃掉，卡片轮廓看不出来。
+        // 再补一条 outlineVariant 描边，保证浅色主题下卡片与页面底色差异很小时仍有明确边界。
+        // 卡片内骨架条：卡片已是不透明 surfaceVariant，沿用外层 skeletonColor 会与卡片同色而看不见
+        val biographySkeletonColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
         Surface(
             shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -490,16 +517,16 @@ internal fun PersonHeaderContent(
                     text = stringResource(R.string.detail_overview_label),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    // 标题水平居中，正文仍左对齐
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 if (displayBiography.isNotEmpty()) {
-                    // 简介正文：折叠为 4 行，溢出时显示「展开/收起」按钮
-                    // scrim 渐隐色匹配下方卡片背景（surfaceVariant）
+                    // 简介正文：折叠为 4 行，溢出时在下方独立一行显示右对齐的「展开/收起」
                     ExpandableText(
                         text = displayBiography,
-                        maxLines = 4,
-                        scrimColor = MaterialTheme.colorScheme.surfaceVariant
+                        maxLines = 4
                     )
                 } else if (isLoadingTrakt) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -516,7 +543,7 @@ internal fun PersonHeaderContent(
                                     )
                                     .height(16.dp)
                                     .clip(RoundedCornerShape(4.dp))
-                                    .background(skeletonColor)
+                                    .background(biographySkeletonColor)
                             )
                         }
                     }

@@ -15,6 +15,7 @@ import com.tracktosearch.data.auth.AuthCheckScheduler
 import com.tracktosearch.data.local.ImageTrafficStorage
 import com.tracktosearch.data.local.db.AppDatabase
 import com.tracktosearch.data.notification.NotificationScheduler
+import com.tracktosearch.data.remote.ImageDownloadProgress
 import com.tracktosearch.data.util.DnsCache
 import com.tracktosearch.data.util.StartupTrace
 import dagger.hilt.android.HiltAndroidApp
@@ -128,6 +129,8 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
         //    供设置页展示，判断是否值得接入国内 CDN
         val imageHttpClient = baseOkHttpClient.newBuilder()
             .addInterceptor(doubanRefererInterceptor)
+            // 全屏大图查看器的下载进度：仅对被观察的 URL 生效，其余零开销透传
+            .addInterceptor(ImageDownloadProgress.interceptor)
             .addInterceptor { chain ->
                 val response = chain.proceed(chain.request())
                 val body = response.body
