@@ -454,13 +454,7 @@ internal fun AccentColorDialog(
                                         .clip(CircleShape)
                                         .background(
                                             brush = when {
-                                                isCustom -> if (customAccentArgb != null) {
-                                                    androidx.compose.ui.graphics.SolidColor(Color(customAccentArgb.toInt()))
-                                                } else {
-                                                    androidx.compose.ui.graphics.Brush.sweepGradient(
-                                                        colors = listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)
-                                                    )
-                                                }
+                                                isCustom -> androidx.compose.ui.graphics.Brush.sweepGradient(colors = dynamicColors)
                                                 accent != null -> androidx.compose.ui.graphics.SolidColor(accent.light)
                                                 dynamicPrimaryColor != null -> androidx.compose.ui.graphics.SolidColor(dynamicPrimaryColor)
                                                 else -> androidx.compose.ui.graphics.Brush.sweepGradient(colors = dynamicColors)
@@ -478,7 +472,6 @@ internal fun AccentColorDialog(
                                             imageVector = Icons.Rounded.Check,
                                             contentDescription = null,
                                             tint = when {
-                                                isCustom -> if (Color(customAccentArgb!!.toInt()).luminance() > 0.5f) Color.Black else Color.White
                                                 accent != null -> if (accent.light.luminance() > 0.5f) Color.Black else Color.White
                                                 else -> dynamicCheckTint
                                             },
