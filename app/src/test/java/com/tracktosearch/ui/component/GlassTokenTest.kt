@@ -405,9 +405,12 @@ class GlassTokenTest {
         assertThat(bottom.blurRadius).isEqualTo(20.dp)
         assertThat(bottom.refractionHeight).isEqualTo(8.dp)
         assertThat(bottom.refractionAmount).isEqualTo(36.dp)
+        // 顶栏是矩形（0.dp 圆角），lens 会在左右直边产生折射不连续，所以只做完整 blur，
+        // 折射三元组归零；blur 半径与 source 外扩保持一致（TopBarBackdropBlurRadius = 20.dp）
         assertThat(top.blurRadius).isEqualTo(20.dp)
-        assertThat(top.refractionHeight).isEqualTo(8.dp)
-        assertThat(top.refractionAmount).isEqualTo(36.dp)
+        assertThat(top.refractionHeight).isEqualTo(0.dp)
+        assertThat(top.refractionAmount).isEqualTo(0.dp)
+        assertThat(top.depthEffect).isFalse()
         assertThat(search.blurRadius).isEqualTo(14.dp)
         assertThat(search.refractionHeight).isEqualTo(8.dp)
         assertThat(search.refractionAmount).isEqualTo(26.dp)
@@ -431,7 +434,8 @@ class GlassTokenTest {
     @Test
     fun backdropChromaticFlagsMatchApprovedSceneTable() {
         assertThat(backdropGlassToken(GlassSurfaceRole.BottomNavigation, GlassVariant.CLEAR, false).chromaticAberration).isTrue()
-        assertThat(backdropGlassToken(GlassSurfaceRole.TopBar, GlassVariant.CLEAR, false).chromaticAberration).isTrue()
+        // 顶栏不走 lens，色散无折射可依附，一并关闭
+        assertThat(backdropGlassToken(GlassSurfaceRole.TopBar, GlassVariant.CLEAR, false).chromaticAberration).isFalse()
         assertThat(backdropGlassToken(GlassSurfaceRole.SearchField, GlassVariant.CLEAR, false).chromaticAberration).isTrue()
         assertThat(backdropGlassToken(GlassSurfaceRole.Card, GlassVariant.CLEAR, false).chromaticAberration).isTrue()
         assertThat(backdropGlassToken(GlassSurfaceRole.CircularControl, GlassVariant.CLEAR, false).chromaticAberration).isFalse()
