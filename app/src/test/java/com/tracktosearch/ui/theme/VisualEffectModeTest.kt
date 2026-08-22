@@ -25,14 +25,14 @@ import org.robolectric.annotation.Config
 class VisualEffectModeTest {
 
     @Test
-    fun `missing stored mode defaults to glass`() {
-        assertThat(VisualEffectMode.fromStorageValue(null)).isEqualTo(VisualEffectMode.GLASS)
+    fun `missing stored mode defaults to blur`() {
+        assertThat(VisualEffectMode.fromStorageValue(null)).isEqualTo(VisualEffectMode.BLUR)
     }
 
     @Test
-    fun `unknown stored mode defaults to glass`() {
+    fun `unknown stored mode defaults to blur`() {
         assertThat(VisualEffectMode.fromStorageValue("future_mode"))
-            .isEqualTo(VisualEffectMode.GLASS)
+            .isEqualTo(VisualEffectMode.BLUR)
     }
 
     @Test
@@ -93,7 +93,7 @@ class ThemeStorageCompatibilityTest {
     }
 
     @Test
-    fun `setVisualEffectSelection writes mode and variant atomically`() = kotlinx.coroutines.test.runTest {
+    fun `setVisualEffectSelection writes mode and normalized variant atomically`() = kotlinx.coroutines.test.runTest {
         clearThemePrefs()
         val storage = ThemeStorage(context)
         storage.setVisualEffectSelection(VisualEffectMode.GLASS, GlassVariant.FOCUSED)
@@ -101,8 +101,10 @@ class ThemeStorageCompatibilityTest {
         val prefs = context.themeDataStore.data.first()
         assertThat(prefs[stringPreferencesKey("visual_effect_mode")])
             .isEqualTo(VisualEffectMode.GLASS.storageValue)
+        // 产品只保留一套 Glass，传入的 legacy FOCUSED 会被归一为 CLEAR 后落盘
         assertThat(prefs[stringPreferencesKey("glass_variant")])
-            .isEqualTo(GlassVariant.FOCUSED.storageValue)
+            .isEqualTo(GlassVariant.CLEAR.storageValue)
+        assertThat(storage.glassVariant.value).isEqualTo(GlassVariant.CLEAR)
     }
 
     @Test
