@@ -125,6 +125,10 @@ test('AI character catalog is public through the main router', async () => {
     assert.equal(json.data.characters.length, 7);
     assert.equal(json.data.sessionLimit, 14);
     assert.equal(json.data.dailyLimit, 80);
+    const usagi = json.data.characters.find((character) => character.id === 'usagi');
+    assert.ok(usagi);
+    assert.ok(usagi.previewText.length > 0);
+    assert.equal(usagi.previewText.includes('到'), false);
 });
 
 test('AI protected routes still reject missing JWT', async () => {
@@ -155,7 +159,7 @@ test('guest audition uses voicedesign MP3 request without consuming quota', asyn
         assert.equal(requestBody.audio.optimize_text_preview, false);
         assert.match(requestBody.messages[0].content, /角色|场景|指导/);
         assert.equal(requestBody.messages[1].role, 'assistant');
-        assert.equal(requestBody.messages[1].content, '到！你的片单有点东西。');
+        assert.equal(requestBody.messages[1].content, '呀哈！你的片单有点东西。');
         return new Response(JSON.stringify({
             choices: [{ message: { audio: { data: 'AA==', transcript: '到！' } } }],
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -170,7 +174,7 @@ test('guest audition uses voicedesign MP3 request without consuming quota', asyn
                 body: JSON.stringify({
                     action: 'tts',
                     characterId: 'usagi',
-                    text: '到！你的片单有点东西。',
+                    text: '呀哈！你的片单有点东西。',
                     scene: 'AUDITION',
                     sessionId: 'guest-audition-session',
                 }),
@@ -184,7 +188,7 @@ test('guest audition uses voicedesign MP3 request without consuming quota', asyn
         const json = await response.json();
         assert.equal(response.status, 200);
         assert.equal(json.data.audioDataUrl, 'data:audio/mpeg;base64,AA==');
-        assert.equal(json.data.transcript, '到！你的片单有点东西。');
+        assert.equal(json.data.transcript, '呀哈！你的片单有点东西。');
         assert.equal(json.quota, undefined);
     } finally {
         globalThis.fetch = originalFetch;
@@ -206,7 +210,7 @@ test('final character voice designs keep the approved child voices and delivery 
     const cases = [
         ['吉伊', '女童', '今天也一起找一部好看的电影吧。', /1\.2倍/],
         ['小八', '男童', '我发现了一点有意思的片单线索哦。', /奶声|幼儿园/],
-        ['乌萨奇', '男童', '到！你的片单有点东西。', /尖叫|音量比普通说话更大/],
+        ['乌萨奇', '男童', '呀哈！你的片单有点东西。', /尖叫|音量比普通说话更大/],
         ['飞鼠', '女童', '让我看看，今天有什么值得你发光的电影。', /只朗读一遍|严禁重复/],
         ['狮萨', '女童', '欢迎回来，我帮你把片单整理得更清楚。', /明亮|片单/],
         ['栗子馒头', '男童', '先坐下来，慢慢看看你的观影口味。', /发音清晰|逐字读/],
@@ -243,8 +247,8 @@ test('final character voice designs keep the approved child voices and delivery 
         }
 
         const usagiPrompt = requests.get('乌萨奇').messages[0].content;
-        assert.match(usagiPrompt, /“到”只发一个音节|只喊一次“到”/);
-        assert.doesNotMatch(usagiPrompt, /持续拉长[“”]?到|持续.*拉长[“”]?到/);
+        assert.match(usagiPrompt, /不得在开头或任何位置添加“到”/);
+        assert.doesNotMatch(usagiPrompt, /开头的“到！”|“到”只发一个音节|只喊一次“到”/);
     } finally {
         globalThis.fetch = originalFetch;
     }
@@ -257,7 +261,7 @@ test('guest TTS rejects an unknown scene and ignores legacy style override', asy
     });
     const invalid = await call('/api/ai/tts', {
         method: 'POST',
-        body: { action: 'tts', characterId: 'usagi', text: '到！你的片单有点东西。', scene: 'UNKNOWN' },
+        body: { action: 'tts', characterId: 'usagi', text: '呀哈！你的片单有点东西。', scene: 'UNKNOWN' },
         env,
     });
     assert.equal(invalid.response.status, 400);
@@ -268,7 +272,7 @@ test('guest TTS rejects an unknown scene and ignores legacy style override', asy
         const requestBody = JSON.parse(init.body);
         assert.doesNotMatch(JSON.stringify(requestBody.messages), /这是用户自定义的音色/);
         return new Response(JSON.stringify({
-            choices: [{ message: { audio: { data: 'AA==', transcript: '到！你的片单有点东西。' } } }],
+            choices: [{ message: { audio: { data: 'AA==', transcript: '呀哈！你的片单有点东西。' } } }],
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     };
     try {
@@ -277,7 +281,7 @@ test('guest TTS rejects an unknown scene and ignores legacy style override', asy
             body: {
                 action: 'tts',
                 characterId: 'usagi',
-                text: '到！你的片单有点东西。',
+                text: '呀哈！你的片单有点东西。',
                 scene: 'AUDITION',
                 style: '这是用户自定义的音色',
             },

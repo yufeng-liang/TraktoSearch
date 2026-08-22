@@ -163,6 +163,7 @@ fun AiSpriteCenter(
                 onTextActivate = viewModel::activateByText,
                 onOpenFeature = viewModel::openFeature,
                 onPlayAudio = { audio -> audioPlayer.play(audio) },
+                onReplayAudition = viewModel::replaySelectedCharacter,
                 onClearError = viewModel::clearError
             )
         }
@@ -179,6 +180,7 @@ private fun SpriteCenterHome(
     onTextActivate: () -> Unit,
     onOpenFeature: (AiFeature) -> Unit,
     onPlayAudio: (com.tracktosearch.data.ai.AiAudio) -> Unit,
+    onReplayAudition: () -> Unit,
     onClearError: () -> Unit
 ) {
     val character = state.selectedCharacter ?: state.characters.first()
@@ -217,7 +219,8 @@ private fun SpriteCenterHome(
         CharacterStage(
             character = character,
             state = state,
-            onPlayAudio = onPlayAudio
+            onPlayAudio = onPlayAudio,
+            onReplayAudition = onReplayAudition
         )
 
         val characterLabel = stringResource(
@@ -338,7 +341,8 @@ private fun SpriteCenterHome(
 private fun CharacterStage(
     character: AiCharacter,
     state: AiSpriteUiState,
-    onPlayAudio: (com.tracktosearch.data.ai.AiAudio) -> Unit
+    onPlayAudio: (com.tracktosearch.data.ai.AiAudio) -> Unit,
+    onReplayAudition: () -> Unit
 ) {
     val showActivatedContent = shouldShowActivatedCharacterContent(
         selectedCharacterId = character.id,
@@ -401,6 +405,18 @@ private fun CharacterStage(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    if (!showActivatedContent) {
+                        IconButton(
+                            onClick = onReplayAudition,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Rounded.VolumeUp,
+                                contentDescription = stringResource(R.string.ai_audio_play),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                     Text(
                         text = if (showActivatedContent && state.activationState == AiActivationState.SUCCESS) {
                             state.greeting?.greeting ?: state.activationMessage.orEmpty()

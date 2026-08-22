@@ -16,12 +16,20 @@ import org.junit.Test
 class AiUiLogicTest {
 
     @Test
+    fun usagiAuditionTextDoesNotUseActivationAckPhrase() {
+        val usagi = com.tracktosearch.data.ai.AiCharacterCatalog.all.first { it.id == "usagi" }
+
+        assertThat(usagi.auditionText).doesNotContain("到")
+        assertThat(usagi.auditionText).isNotEmpty()
+    }
+
+    @Test
     fun auditionRequest_usesStaticTextAndAuditionScene() {
         val character = AiCharacter(
             id = "usagi",
             name = "乌萨奇",
             activationWord = "乌萨奇",
-            auditionText = "到！",
+            auditionText = "呀哈！你的片单有点东西。",
         )
 
         val request = buildAuditionTtsRequest(character, "sprite-test")
@@ -29,7 +37,7 @@ class AiUiLogicTest {
         assertThat(request).isEqualTo(
             AiTtsRequest(
                 characterId = "usagi",
-                text = "到！",
+                text = "呀哈！你的片单有点东西。",
                 sessionId = "sprite-test",
                 scene = AiTtsScene.AUDITION,
             )

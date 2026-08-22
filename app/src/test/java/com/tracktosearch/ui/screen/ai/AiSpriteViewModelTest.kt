@@ -20,8 +20,10 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -252,6 +254,39 @@ class AiSpriteViewModelTest {
         testScheduler.advanceTimeBy(350)
         runCurrent()
         coVerify(exactly = 1) { aiRepository.playGuestTts(any()) }
+    }
+
+    @Test
+    fun replaySelectedCharacter_requestsAuditionImmediately() = runTest {
+        val authState = MutableStateFlow(AuthState.UNAUTHORIZED)
+        val viewModel = viewModel(authState)
+        coEvery { aiRepository.listCharacters() } returns Result.success(
+            listOf(viewModelCharacter("usagi"))
+        )
+        coEvery { aiRepository.playGuestTts(any()) } returns Result.success(audio())
+
+        viewModel.ensureLoaded()
+        runCurrent()
+        viewModel.replaySelectedCharacter()
+        runCurrent()
+
+        coVerify(atLeast = 1) { aiRepository.playGuestTts(any()) }
+    }
+
+    @Test
+    fun authorizedAuditionFailure_fallsBackToSystemSpeech() = runTest {
+        val viewModel = viewModel()
+        coEvery { aiRepository.listCharacters() } returns Result.success(
+            listOf(viewModelCharacter("usagi"))
+        )
+        coEvery { aiRepository.playTts("friend-a", any()) } returns Result.failure(RuntimeException("TTS_UNAVAILABLE"))
+        val fallback = async { viewModel.guestPreviewFallbackEvents.first() }
+
+        viewModel.ensureLoaded()
+        testScheduler.advanceTimeBy(350)
+        runCurrent()
+
+        assertThat(fallback.await()).isEqualTo("试听")
     }
 
     private fun viewModel(

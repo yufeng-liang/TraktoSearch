@@ -497,6 +497,14 @@ class AiSpriteViewModel @Inject constructor(
         _uiState.update { it.copy(errorCode = null) }
     }
 
+    /** 手动重播当前角色的试听，供试听文案旁的播放按钮使用。 */
+    fun replaySelectedCharacter() {
+        previewJob?.cancel()
+        previewJob = viewModelScope.launch {
+            previewSelectedCharacter()
+        }
+    }
+
     private suspend fun loadCharacters() {
         aiRepository.listCharacters().onSuccess { remote ->
             val remoteById = remote.associateBy { it.id }
@@ -513,7 +521,7 @@ class AiSpriteViewModel @Inject constructor(
         val request = buildAuditionTtsRequest(character, spriteSessionId)
         when (auditionPlaybackRoute(authorized, character.isAvailable)) {
             AiAuditionPlaybackRoute.SYSTEM_TTS -> {
-                if (!authorized) emitGuestPreviewFallback(character)
+                emitGuestPreviewFallback(character)
             }
             AiAuditionPlaybackRoute.GUEST_TTS -> {
                 aiRepository.playGuestTts(request).fold(
@@ -525,10 +533,13 @@ class AiSpriteViewModel @Inject constructor(
                 )
             }
             AiAuditionPlaybackRoute.AUTHORIZED_TTS -> {
-                aiRepository.playTts(authManager.friendId.value.orEmpty(), request)
-                    .onSuccess { audio ->
+                aiRepository.playTts(authManager.friendId.value.orEmpty(), request).fold(
+                    onSuccess = { audio ->
                         if (audio.hasPlayableSource()) _audioEvents.emit(audio)
-                    }
+                        else emitGuestPreviewFallback(character)
+                    },
+                    onFailure = { emitGuestPreviewFallback(character) }
+                )
             }
         }
     }
