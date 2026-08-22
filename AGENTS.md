@@ -124,6 +124,9 @@
 
 ## Cloudflare 生产部署经验
 
+- AI TTS 的 IP 限流不能使用 KV `get → put` 读改写：并发请求会覆盖计数。需要用 D1 单条条件 UPSERT 原子完成窗口重置、递增和上限判断，并定期清理过期窗口行。
+- `X-Real-IP` 只能在已确认来自 `gateway.internal` service binding 的请求中信任；公开 `workers.dev` 请求必须使用 Cloudflare 注入的 `CF-Connecting-IP`，避免客户端伪造转发头绕过限流。
+
 - Pages 生产部署必须显式使用 `--branch master`：`npx wrangler pages deploy public --project-name app-config --branch master`。
 - 部署后不要只看 Wrangler 的成功输出；用 `npx wrangler pages deployment list --project-name app-config` 确认最新记录的 `Environment=Production`、`Branch=master` 和提交 SHA，并打开该部署 URL 检查实际静态资源版本。
 - Pages 受 Cloudflare Access 保护时，未带登录 Cookie 的 `curl`/`Invoke-WebRequest` 可能只拿到 302 或登录 HTML，不能据此判断页面代码未更新。应在已登录浏览器中强制刷新，或直接检查部署哈希 URL 的资源内容。

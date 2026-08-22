@@ -81,4 +81,31 @@ class AiSpriteCenterTest {
         composeRule.onAllNodesWithText(context.getString(R.string.ai_sprite_text_fallback))
             .assertCountEquals(1)
     }
+
+    @Test
+    fun inactiveCharacterDoesNotShowActivationSuccessBadge() {
+        val viewModel = mockk<AiSpriteViewModel>(relaxed = true)
+        every { viewModel.uiState } returns MutableStateFlow(
+            AiSpriteUiState(
+                characters = listOf(AiCharacter("usagi", "乌萨奇", "乌萨奇", isAvailable = true)),
+                selectedCharacterId = "usagi",
+                activatedCharacterId = null,
+                authState = AuthState.AUTHORIZED
+            )
+        )
+        every { viewModel.audioEvents } returns MutableSharedFlow<AiAudio>()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+
+        composeRule.setContent {
+            AiSpriteCenter(
+                visible = true,
+                onDismiss = {},
+                viewModel = viewModel
+            )
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onAllNodesWithText(context.getString(R.string.ai_sprite_activation_success))
+            .assertCountEquals(0)
+    }
 }

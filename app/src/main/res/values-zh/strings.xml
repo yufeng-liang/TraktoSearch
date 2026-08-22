@@ -1700,6 +1700,8 @@
     <string name="ai_sprite_overlay_message">%1$s有话想说</string>
     <string name="ai_sprite_overlay_hint">挑一个小小的影视挑战吧</string>
     <string name="ai_audio_play">播放语音</string>
+    <string name="ai_audio_loading">正在加载语音</string>
+    <string name="ai_audio_playing">正在播放语音</string>
     <string name="ai_feature_greeting">昵称欢迎</string>
     <string name="ai_feature_taste">锐评我的看单</string>
     <string name="ai_feature_quiz">你真的看懂这些影视了吗</string>

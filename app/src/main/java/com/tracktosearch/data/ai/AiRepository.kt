@@ -44,7 +44,7 @@ object AiErrorMapper {
     fun map(serverCode: String?, httpCode: Int): AiErrorCode {
         // 业务错误码优先：403+ACTIVATION_REQUIRED / 429+QUOTA_EXCEEDED 等服务端返回的业务语义
         // 比 HTTP 状态码更精确，先匹配 code 再回退到 http 启发式。
-        return when (serverCode.normalized()) {
+        return when (serverCode.normalized().removePrefix("AI_")) {
             "UNAUTHORIZED", "AUTH_REQUIRED", "TOKEN_EXPIRED", "INVALID_TOKEN" -> AiErrorCode.UNAUTHORIZED
             "QUOTA_EXCEEDED", "DAILY_QUOTA_EXCEEDED", "SESSION_QUOTA_EXCEEDED" -> AiErrorCode.QUOTA_EXCEEDED
             "RATE_LIMITED", "TOO_MANY_REQUESTS" -> AiErrorCode.RATE_LIMITED
@@ -176,7 +176,7 @@ class AiRepository @Inject constructor(
             feature = AiCacheFeature.QUIZ,
             forceRefresh = refresh,
             // 缓存 key 带会话 ID：每次进入精灵中心会话都拿新题包，避免重做上一局"开卷考"
-            suffix = sessionId,
+            suffix = quizCacheSuffix(sessionId, request.excludedQuizIds, watched),
             serializer = AiQuiz.serializer()
         ) {
             val payload = api.getQuiz(
@@ -329,10 +329,12 @@ class AiRepository @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            readCached(friendId, feature, serializer, suffix)
-                ?.takeIf(isCacheValid)
-                ?.let { Result.success(it) }
-                ?: Result.failure(if (e is AiApiException) e else AiErrorMapper.fromThrowable(e))
+            if (!forceRefresh) {
+                readCached(friendId, feature, serializer, suffix)
+                    ?.takeIf(isCacheValid)
+                    ?.let { return Result.success(it) }
+            }
+            Result.failure(if (e is AiApiException) e else AiErrorMapper.fromThrowable(e))
         }
     }
 
@@ -384,6 +386,16 @@ class AiRepository @Inject constructor(
     private fun watchedDigest(watched: List<AiWatchedTitleDto>): String =
         jsonForCacheKeys.encodeToString(ListSerializer(AiWatchedTitleDto.serializer()), watched).sha256Hex()
 
+    private fun quizCacheSuffix(
+        sessionId: String,
+        excludedQuizIds: List<String>,
+        watched: List<AiWatchedTitleDto>
+    ): String = listOf(
+        sessionId,
+        excludedQuizIds.sorted().joinToString(","),
+        watchedDigest(watched)
+    ).joinToString("|").sha256Hex()
+
     private fun currentUtcDate(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }.format(Date())
@@ -402,16 +414,25 @@ private data class AiResponsePayload<T>(
 
 private fun <T> Response<AiApiResponse<T>>.requirePayload(): AiResponsePayload<T> {
     val envelope = body()
-    val code = envelope?.code
+    val errorEnvelope = envelope ?: errorBody()?.string()?.let { raw ->
+        runCatching {
+            Json { ignoreUnknownKeys = true }.decodeFromString(AiErrorDto.serializer(), raw)
+        }.getOrNull()
+    }
+    val code = envelope?.code ?: (errorEnvelope as? AiErrorDto)?.code
     if (!isSuccessful || code == null || code.uppercase(Locale.ROOT) !in AI_SUCCESS_CODES) {
         throw AiErrorMapper.exception(
             serverCode = code ?: "HTTP_${code()}",
-            message = envelope?.message?.takeIf { it.isNotBlank() } ?: "HTTP ${code()}",
+            message = (envelope?.message ?: (errorEnvelope as? AiErrorDto)?.message)
+                ?.takeIf { it.isNotBlank() } ?: "HTTP ${code()}",
             httpCode = code()
         )
     }
+    val successEnvelope = envelope
+        ?: throw AiErrorMapper.exception("EMPTY_RESPONSE", "AI response data is empty", code())
     return AiResponsePayload(
-        data = envelope.data ?: throw AiErrorMapper.exception("EMPTY_RESPONSE", "AI response data is empty", code()),
-        quota = envelope.quota
+        data = successEnvelope.data
+            ?: throw AiErrorMapper.exception("EMPTY_RESPONSE", "AI response data is empty", code()),
+        quota = successEnvelope.quota
     )
 }

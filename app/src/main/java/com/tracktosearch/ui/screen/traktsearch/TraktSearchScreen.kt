@@ -190,7 +190,9 @@ fun TraktSearchScreen(
     onRecommendationClick: ((AiRecommendation) -> Unit)? = null,
     inlineMode: Boolean = false,
     viewModel: TraktSearchViewModel = hiltViewModel(),
-    spriteViewModel: AiSpriteViewModel = hiltViewModel()
+    spriteViewModel: AiSpriteViewModel = hiltViewModel(),
+    externallyControlledAiSpriteCenterVisible: Boolean? = null,
+    onAiSpriteCenterVisibilityChanged: (Boolean) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val watchlistWatchedIds by viewModel.watchlistWatchedIds.collectAsStateWithLifecycle()
@@ -207,7 +209,15 @@ fun TraktSearchScreen(
     val isDark = isAppDarkTheme()
 
     var searchQuery by rememberSaveable { mutableStateOf(initialQuery) }
-    var showAiSpriteCenter by rememberSaveable { mutableStateOf(false) }
+    var localAiSpriteCenterVisible by remember { mutableStateOf(false) }
+    val showAiSpriteCenter = externallyControlledAiSpriteCenterVisible ?: localAiSpriteCenterVisible
+
+    fun setAiSpriteCenterVisible(visible: Boolean) {
+        if (externallyControlledAiSpriteCenterVisible == null) {
+            localAiSpriteCenterVisible = visible
+        }
+        onAiSpriteCenterVisibilityChanged(visible)
+    }
     var showAiSpriteMotion by rememberSaveable { mutableStateOf(false) }
     var overlayEntryHandled by rememberSaveable { mutableStateOf(initialQuery.isNotBlank()) }
     var isSearchFocused by remember { mutableStateOf(false) }
@@ -307,7 +317,10 @@ fun TraktSearchScreen(
         )
             if (trigger != null && !blocked && !showAiSpriteMotion) {
             if (trigger == AiSpriteOverlayTrigger.FIRST_ENTRY) overlayEntryHandled = true
-            activeSpriteAnchor = searchAnchorFor(trigger)
+            activeSpriteAnchor = searchAnchorFor(
+                trigger,
+                hasResultAnchor = currentFirstResultBounds != null
+            )
             activeSceneEvent = sceneEventForSearch(trigger)
             if ((trigger != AiSpriteOverlayTrigger.SEARCH_COMPLETED || currentFirstResultBounds != null) &&
                 overlayPolicy.tryConsume(true, trigger, overlayDayKey)
@@ -962,7 +975,7 @@ fun TraktSearchScreen(
                     } != null),
                 onClick = {
                     interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                    showAiSpriteCenter = true
+                    setAiSpriteCenterVisible(true)
                 },
                 onFinished = {
                     showAiSpriteMotion = false
@@ -978,7 +991,7 @@ fun TraktSearchScreen(
                 visible = showAiSpriteCenter,
                 onDismiss = {
                     interruptAiSprite(AiSpriteInterruptReason.NAVIGATION)
-                    showAiSpriteCenter = false
+                    setAiSpriteCenterVisible(false)
                     spriteViewModel.closeFeature()
                 },
                 onNavigateToLogin = onNavigateToLogin,

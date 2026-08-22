@@ -130,6 +130,8 @@ class AiSpriteViewModel @Inject constructor(
     private var initialized = false
     private var previewJob: Job? = null
     private var requestJob: Job? = null
+    /** 请求代际用于隔离已取消请求的 finally，避免旧请求覆盖新请求的加载态。 */
+    private var requestGeneration = 0L
     private var recentQuizIds = emptyList<String>()
     private var quizCandidates = emptyList<AiWatchedTitleDto>()
     // 一次精灵中心会话共用一个会话 ID，让服务端会话配额按一次打开的精灵中心计算。
@@ -144,7 +146,12 @@ class AiSpriteViewModel @Inject constructor(
         initialized = true
         viewModelScope.launch {
             launch {
+                var previousAuthState = authManager.authState.value
                 authManager.authState.collect { authState ->
+                    if (previousAuthState != AuthState.UNAUTHORIZED && authState == AuthState.UNAUTHORIZED) {
+                        clearPrivateStateAfterUnauthorized()
+                    }
+                    previousAuthState = authState
                     _uiState.update {
                         it.copy(
                             authState = authState,
@@ -161,6 +168,41 @@ class AiSpriteViewModel @Inject constructor(
             loadCharacters()
             scheduleCharacterPreview()
             loadQuizHistory()
+        }
+    }
+
+    /** 撤销授权后丢弃当前账号的 AI 结果，但保留角色目录和游客试听能力。 */
+    private fun clearPrivateStateAfterUnauthorized() {
+        invalidateCurrentRequest()
+        previewJob?.cancel()
+        previewJob = null
+        recentQuizIds = emptyList()
+        quizCandidates = emptyList()
+        _uiState.update {
+            it.copy(
+                activatedCharacterId = null,
+                activationState = AiActivationState.IDLE,
+                activationAttempt = 0,
+                activationMessage = null,
+                quota = null,
+                isLoading = false,
+                loadingFeature = null,
+                activeFeature = null,
+                greeting = null,
+                taste = null,
+                tasteRevision = 0L,
+                quiz = null,
+                quizPreviewMovies = emptyList(),
+                quizReplacementCount = 0,
+                quizStarted = false,
+                quizIndex = 0,
+                quizAnswers = emptyMap(),
+                quizResult = null,
+                quizResultRevision = 0L,
+                quizHistory = null,
+                dailyKnowledge = null,
+                errorCode = null
+            )
         }
     }
 
@@ -327,12 +369,23 @@ class AiSpriteViewModel @Inject constructor(
     }
 
     fun closeFeature() {
-        _uiState.update { it.copy(activeFeature = null, loadingFeature = null, errorCode = null) }
+        invalidateCurrentRequest()
+        _uiState.update {
+            it.copy(
+                isLoading = false,
+                activeFeature = null,
+                loadingFeature = null,
+                errorCode = null
+            )
+        }
     }
 
     fun refreshFeature() {
         when (_uiState.value.activeFeature) {
-            AiFeature.GREETING -> loadGreeting(_uiState.value.selectedCharacterId, forceRefresh = true)
+            AiFeature.GREETING -> loadGreeting(
+                _uiState.value.activatedCharacterId ?: _uiState.value.selectedCharacterId,
+                forceRefresh = true
+            )
             AiFeature.TASTE -> loadTaste(forceRefresh = true)
             AiFeature.QUIZ -> prepareQuizPreview()
             AiFeature.DAILY -> loadDaily(forceRefresh = true)
@@ -367,7 +420,7 @@ class AiSpriteViewModel @Inject constructor(
     fun submitQuiz() {
         val state = _uiState.value
         val quiz = state.quiz?.takeIf { state.quizStarted } ?: return
-        requestJob?.cancel()
+        beginRequest()
         requestJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorCode = null) }
             aiRepository.submitQuiz(
@@ -380,7 +433,7 @@ class AiSpriteViewModel @Inject constructor(
                         isLoading = false,
                         quizResult = result,
                         quizResultRevision = it.quizResultRevision + 1L,
-                        quota = it.quota
+                        quota = result.quota ?: it.quota
                     )
                 }
                 // 保存最近/最高成绩与错题（离线可浏览闯关历史）
@@ -444,6 +497,14 @@ class AiSpriteViewModel @Inject constructor(
         _uiState.update { it.copy(errorCode = null) }
     }
 
+    /** 手动重播当前角色的试听，供试听文案旁的播放按钮使用。 */
+    fun replaySelectedCharacter() {
+        previewJob?.cancel()
+        previewJob = viewModelScope.launch {
+            previewSelectedCharacter()
+        }
+    }
+
     private suspend fun loadCharacters() {
         aiRepository.listCharacters().onSuccess { remote ->
             val remoteById = remote.associateBy { it.id }
@@ -460,7 +521,7 @@ class AiSpriteViewModel @Inject constructor(
         val request = buildAuditionTtsRequest(character, spriteSessionId)
         when (auditionPlaybackRoute(authorized, character.isAvailable)) {
             AiAuditionPlaybackRoute.SYSTEM_TTS -> {
-                if (!authorized) emitGuestPreviewFallback(character)
+                emitGuestPreviewFallback(character)
             }
             AiAuditionPlaybackRoute.GUEST_TTS -> {
                 aiRepository.playGuestTts(request).fold(
@@ -472,10 +533,13 @@ class AiSpriteViewModel @Inject constructor(
                 )
             }
             AiAuditionPlaybackRoute.AUTHORIZED_TTS -> {
-                aiRepository.playTts(authManager.friendId.value.orEmpty(), request)
-                    .onSuccess { audio ->
+                aiRepository.playTts(authManager.friendId.value.orEmpty(), request).fold(
+                    onSuccess = { audio ->
                         if (audio.hasPlayableSource()) _audioEvents.emit(audio)
-                    }
+                        else emitGuestPreviewFallback(character)
+                    },
+                    onFailure = { emitGuestPreviewFallback(character) }
+                )
             }
         }
     }
@@ -579,7 +643,11 @@ class AiSpriteViewModel @Inject constructor(
     private fun loadDaily(forceRefresh: Boolean = false) {
         runFeature(AiFeature.DAILY) {
             aiRepository.getDailyKnowledge(authManager.friendId.value.orEmpty(), forceRefresh)
-                .onSuccess { daily -> _uiState.update { it.copy(dailyKnowledge = daily) } }
+                .onSuccess { daily ->
+                    _uiState.update {
+                        it.copy(dailyKnowledge = daily, quota = daily.quota ?: it.quota)
+                    }
+                }
                 .getOrElse { throw it }
         }
     }
@@ -589,7 +657,7 @@ class AiSpriteViewModel @Inject constructor(
             setError("AUTH_REQUIRED")
             return
         }
-        requestJob?.cancel()
+        val requestId = beginRequest()
         requestJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, loadingFeature = feature, errorCode = null) }
             try {
@@ -598,11 +666,26 @@ class AiSpriteViewModel @Inject constructor(
                 // 新请求（切换功能/提交/激活）取消旧请求时，不能走 onFailure 画假错误或翻转状态
                 throw e
             } catch (e: Exception) {
-                _uiState.update { it.copy(errorCode = errorCode(e)) }
+                if (requestGeneration == requestId) {
+                    _uiState.update { it.copy(errorCode = errorCode(e)) }
+                }
             } finally {
-                _uiState.update { it.copy(isLoading = false, loadingFeature = null) }
+                if (requestGeneration == requestId) {
+                    _uiState.update { it.copy(isLoading = false, loadingFeature = null) }
+                }
             }
         }
+    }
+
+    private fun beginRequest(): Long {
+        invalidateCurrentRequest()
+        return requestGeneration
+    }
+
+    private fun invalidateCurrentRequest() {
+        requestGeneration += 1L
+        requestJob?.cancel()
+        requestJob = null
     }
 
     private suspend fun watchedTitles(): List<AiWatchedTitleDto> = withContext(Dispatchers.IO) {

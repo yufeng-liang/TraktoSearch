@@ -209,7 +209,9 @@ fun MainScreen(
     var traktSearchQuery by rememberSaveable { mutableStateOf("") }
     var traktSearchType by rememberSaveable { mutableStateOf(SearchSourceType.MOVIE) }
     var showTraktSearch by rememberSaveable { mutableStateOf(false) }
+    var aiSpriteCenterVisible by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage = initialTab) { 4 }
+    val aiSpriteCenterVisibleOnCurrentPage = pagerState.currentPage == 0 && aiSpriteCenterVisible
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -327,6 +329,9 @@ fun MainScreen(
     // Pager 滑动 → 同步 selectedTab
     LaunchedEffect(pagerState.currentPage) {
         selectedTab = pagerState.currentPage
+        if (pagerState.currentPage != 0) {
+            aiSpriteCenterVisible = false
+        }
     }
 
     // 通知点击可能发生在 Activity 已经打开时，主动切到 Watchlist 页。
@@ -375,6 +380,10 @@ fun MainScreen(
     )
     // 进入/返回搜索结果页时重置底部导航为可见
     LaunchedEffect(showTraktSearch) {
+        isFabVisible = 1f
+        aiSpriteCenterVisible = false
+    }
+    LaunchedEffect(aiSpriteCenterVisible) {
         isFabVisible = 1f
     }
 
@@ -529,7 +538,11 @@ fun MainScreen(
                                         onNavigateToLogin = onNavigateToLogin,
                                         onRecommendationClick = onAiRecommendationClick,
                                         viewModel = viewModel,
-                                        inlineMode = true
+                                        inlineMode = true,
+                                        externallyControlledAiSpriteCenterVisible = aiSpriteCenterVisibleOnCurrentPage,
+                                        onAiSpriteCenterVisibilityChanged = { visible ->
+                                            aiSpriteCenterVisible = visible
+                                        }
                                     )
                                 }
                             }
@@ -546,7 +559,11 @@ fun MainScreen(
                                 onMovieClick = onMovieClick,
                                 searchSourceType = searchSourceType,
                                 onSearchSourceTypeChange = { searchSourceType = it },
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier.fillMaxSize(),
+                                externallyControlledAiSpriteCenterVisible = aiSpriteCenterVisibleOnCurrentPage,
+                                onAiSpriteCenterVisibilityChanged = { visible ->
+                                    aiSpriteCenterVisible = visible
+                                }
                             )
                         }
                     }
@@ -624,32 +641,33 @@ fun MainScreen(
                 ambientColor = MaterialTheme.colorScheme.background,
                 contentCapacity = 72
             )
-            AppVisualSurface(
-                kind = VisualSurfaceKind.Glass,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = navBarHeight + 8.dp)
-                    .offset(y = fabOffset)
-                    .fillMaxWidth(navBarWidthFraction)
-                    .height(62.dp)
-                    .hazeSource(state = hazeState, zIndex = 1f),
+            if (isMainBottomNavigationVisible(pagerState.currentPage, aiSpriteCenterVisible)) {
+                AppVisualSurface(
+                    kind = VisualSurfaceKind.Glass,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = navBarHeight + 8.dp)
+                        .offset(y = fabOffset)
+                        .fillMaxWidth(navBarWidthFraction)
+                        .height(62.dp)
+                        .hazeSource(state = hazeState, zIndex = 1f),
                     // 让底部导航作为前景层，effect 明确采样 zIndex=0 的页面内容。
-                shape = navBarShape,
-                role = GlassSurfaceRole.BottomNavigation,
-                backgroundColor = if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
-                    MaterialTheme.colorScheme.surface.copy(alpha = 0.42f)
-                } else {
-                    Color.Transparent
-                },
-                borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.45f),
-                hazeState = hazeState,
-                backdropOverride = mainContentBackdrop,
-                interactionSource = tabInteractionSources[selectedTab],
-                // 底部导航自身作为 zIndex=1 的 source，effect 只采样 zIndex=0 的页面内容，
-                // 避免导航栏模糊自身导致重复模糊与无谓开销（Haze 最重的叠加场景）
-                sourceSelection = HazeSourceSelection.Behind.where { source -> source.zIndex < 1f },
-                scene = navigationScene
-            ) {
+                    shape = navBarShape,
+                    role = GlassSurfaceRole.BottomNavigation,
+                    backgroundColor = if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.42f)
+                    } else {
+                        Color.Transparent
+                    },
+                    borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.45f),
+                    hazeState = hazeState,
+                    backdropOverride = mainContentBackdrop,
+                    interactionSource = tabInteractionSources[selectedTab],
+                    // 底部导航自身作为 zIndex=1 的 source，effect 只采样 zIndex=0 的页面内容，
+                    // 避免导航栏模糊自身导致重复模糊与无谓开销（Haze 最重的叠加场景）
+                    sourceSelection = HazeSourceSelection.Behind.where { source -> source.zIndex < 1f },
+                    scene = navigationScene
+                ) {
                 val tabCount = tabs.size
                 val rowPadding = 8.dp
                 val navBarWidth = screenWidthDp.dp * navBarWidthFraction
@@ -733,6 +751,7 @@ fun MainScreen(
                             }
                         )
                     }
+                }
                 }
             }
 

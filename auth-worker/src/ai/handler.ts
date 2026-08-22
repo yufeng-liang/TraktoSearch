@@ -235,7 +235,7 @@ async function handleTts(
     // style 仅为旧客户端兼容保留，不能覆盖服务端的角色声线和场景指导。
     void body.style;
     const input = buildTtsInput(character, scene, text, audioOrigin);
-    const clientIp = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Real-IP') || 'unknown';
+    const clientIp = ttsClientIp(request);
     await reserveAiTtsRequest(env, clientIp);
     const cached = await readCachedTtsAudio(env, input);
     if (cached) return successResponse(toPublicAudio(cached), requestId);
@@ -327,7 +327,7 @@ async function handleTaste(
     const nickname = await getFriendNickname(env, payload.sub);
     const upstream = await callLlmJson(env, provider, model, tasteMessages(nickname, movies), {}, fallbackModel);
     const response = upstream
-        ? normalizeTaste(parseAssistantJson<unknown>(upstream), nickname, verifiedMediaIdWhitelist(movies))
+        ? normalizeTaste(parseAssistantJson<unknown>(upstream), nickname, movies)
         : fallbackTaste(nickname, movies);
     await writeAiCache(env, cacheKey, response, 7 * 24 * 60 * 60, payload.sub, 'taste');
     return successResponse(response, requestId, publicQuota(quota));
@@ -681,23 +681,25 @@ function normalizeGreeting(value: unknown) {
     };
 }
 
-function fallbackTaste(nickname: string, movies: WatchMovie[]) {
-    const candidates = movies.filter(movie => hasMediaId(movie.verifiedMediaIds)).slice(0, 3);
-    if (candidates.length === 0) throw new AppError('INVALID_MEDIA_ID', 'Recommendation media IDs are required', 400);
+function fallbackTaste(nickname: string, _movies: WatchMovie[]) {
     return {
         nickname,
         roast: `${nickname}的片单像一条有方向感的散步路线：看似随意，其实总在寻找一点余韵。`,
         taste: ['偏爱有情绪回声的故事', '愿意给人物留一点复杂空间'],
-        recommendations: candidates.map(movie => ({
-            title: movie.title,
-            year: movie.year,
-            reason: '它和你片单里的叙事气质有一处有趣的呼应。',
-            mediaIds: movie.verifiedMediaIds,
-        })),
+        recommendations: [],
     };
 }
 
-function normalizeTaste(value: unknown, nickname: string, allowedMediaIds: Set<string>) {
+function ttsClientIp(request: Request): string {
+    // 只有 gateway-pages 的 service binding 请求可以信任转发头；公开 workers.dev
+    // 请求必须使用 Cloudflare 注入的地址，避免客户端伪造 X-Real-IP 绕过限流。
+    const forwardedIp = new URL(request.url).hostname === 'gateway.internal'
+        ? request.headers.get('X-Real-IP')
+        : null;
+    return forwardedIp || request.headers.get('CF-Connecting-IP') || 'unknown';
+}
+
+function normalizeTaste(value: unknown, nickname: string, movies: WatchMovie[]) {
     const object = requireRecord(value, 'AI taste');
     const recommendations = object.recommendations;
     if (!Array.isArray(recommendations) || recommendations.length < 1 || recommendations.length > 3) {
@@ -707,20 +709,29 @@ function normalizeTaste(value: unknown, nickname: string, allowedMediaIds: Set<s
         nickname,
         roast: requiredText(object, ['roast', 'review'], 'roast'),
         taste: requiredTextArray(object, ['taste', 'traits'], 'taste'),
-        recommendations: recommendations.map((item, index) => normalizeRecommendation(item, index, allowedMediaIds)),
+        recommendations: recommendations.map((item, index) => normalizeRecommendation(item, index, movies)),
     };
 }
 
-function normalizeRecommendation(value: unknown, index: number, allowedMediaIds: Set<string>) {
+function normalizeRecommendation(value: unknown, index: number, movies: WatchMovie[]) {
     const object = requireRecord(value, `recommendation ${index + 1}`);
     const mediaIds = normalizeMediaIds(object.mediaIds ?? object.ids);
-    if (!hasMediaId(mediaIds) || !mediaIdsWithinWhitelist(mediaIds, allowedMediaIds)) {
+    const matchedMovies = movies.filter(movie => mediaIdsWithinWhitelist(mediaIds, new Set(mediaIdKeys(movie.verifiedMediaIds))));
+    if (!hasMediaId(mediaIds) || matchedMovies.length !== 1) {
         throw new AppError('INVALID_AI_OUTPUT', 'Recommendation media ID is invalid', 502);
     }
+    const matched = matchedMovies[0];
+    const title = requiredText(object, ['title', 'name'], 'recommendation title');
+    const mediaType = object.mediaType === undefined
+        ? matched.mediaType
+        : object.mediaType === 'show' ? 'show' : object.mediaType === 'movie' ? 'movie' : null;
+    if (title !== matched.title || mediaType !== matched.mediaType) {
+        throw new AppError('INVALID_AI_OUTPUT', 'Recommendation metadata does not match media ID', 502);
+    }
     return {
-        mediaType: object.mediaType === 'show' ? 'show' : 'movie',
-        title: requiredText(object, ['title', 'name'], 'recommendation title'),
-        year: optionalInteger(object.year),
+        mediaType: matched.mediaType,
+        title: matched.title,
+        year: matched.year,
         reason: requiredText(object, ['reason', 'why'], 'recommendation reason'),
         mediaIds,
     };

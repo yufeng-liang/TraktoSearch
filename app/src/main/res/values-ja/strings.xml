@@ -1712,6 +1712,8 @@
     <string name="ai_sprite_overlay_message">%1$sからひとこと</string>
     <string name="ai_sprite_overlay_hint">小さな映画チャレンジを選んでね</string>
     <string name="ai_audio_play">音声を再生</string>
+    <string name="ai_audio_loading">音声を読み込み中</string>
+    <string name="ai_audio_playing">音声を再生中</string>
     <string name="ai_feature_greeting">ニックネーム歓迎</string>
     <string name="ai_feature_taste">視聴リストを批評</string>
     <string name="ai_feature_quiz">本当に映画を理解した？</string>
