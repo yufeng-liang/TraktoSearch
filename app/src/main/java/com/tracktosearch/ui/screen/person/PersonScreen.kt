@@ -145,7 +145,8 @@ fun PersonScreen(
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        uiState.avatarDominantColor?.copy(alpha = 0.25f)
+                        // 透明度与 PersonImmersiveTintAlpha 共用，头部文字据此反推真实底色选前景色
+                        uiState.avatarDominantColor?.copy(alpha = PersonImmersiveTintAlpha)
                             ?: MaterialTheme.colorScheme.surface,
                         MaterialTheme.colorScheme.background
                     )
