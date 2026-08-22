@@ -253,6 +253,7 @@ dependencies {
     implementation(libs.reorderable)
     implementation(libs.zoomable)
     implementation(libs.compose.mesh.gradient)
+    implementation(libs.mirage)
 
     // Baseline Profile
     implementation(libs.profileinstaller)

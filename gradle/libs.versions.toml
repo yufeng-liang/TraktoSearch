@@ -49,6 +49,7 @@ testCore = "1.7.0"
 testRunner = "1.7.0"
 hiltTesting = "2.60.1"
 composeMeshGradient = "0.3.0"
+mirage = "0.1.0"
 
 [libraries]
 # AndroidX Core
@@ -130,8 +131,11 @@ reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.r
 # Zoomable
 zoomable = { group = "net.engawapg.lib", name = "zoomable", version.ref = "zoomable" }
 
-# Compose Mesh Gradient (彩色弥散背景光晕)
+# Compose Mesh Gradient (API 26~32 的背景光晕回退实现)
 compose-mesh-gradient = { group = "io.github.om252345", name = "composemeshgradient", version.ref = "composeMeshGradient" }
+
+# Mirage (AGSL 着色器背景光晕，API 33+ 主实现；Paper Shaders 的 AGSL 移植)
+mirage = { group = "io.github.androidpoet", name = "mirage", version.ref = "mirage" }
 
 # Error Prone (required by Hilt 2.60)
 errorprone-annotations = { group = "com.google.errorprone", name = "error_prone_annotations", version.ref = "errorproneAnnotations" }

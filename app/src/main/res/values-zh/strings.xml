@@ -1776,4 +1776,10 @@
     <string name="bg_glow_aurora_desc">柔和流动的极光色带，随页面滑动连续运动</string>
     <string name="bg_glow_lava_desc">颜色如熔岩灯般缓慢对流，慵懒舒缓</string>
     <string name="bg_glow_bloom_desc">柔和弥散光斑，随滑动节奏缓缓呼吸</string>
+    <string name="bg_glow_nebula">星云</string>
+    <string name="bg_glow_ink">水墨</string>
+    <string name="bg_glow_beach">海滩</string>
+    <string name="bg_glow_nebula_desc">深靛底上浮动玫粉与紫罗兰光斑，固定配色，不跟随主题色</string>
+    <string name="bg_glow_ink_desc">纯黑白高对比流动，视觉最强，也最挑正文可读性</string>
+    <string name="bg_glow_beach_desc">青蓝与沙黄极缓漂移，固定配色，不跟随主题色</string>
 </resources>

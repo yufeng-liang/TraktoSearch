@@ -13,7 +13,7 @@ import com.tracktosearch.ui.theme.MeshPreset
 @Composable
 fun PageBackground(
     modifier: Modifier = Modifier,
-    preset: MeshPreset = MeshPreset.AURORA,
+    preset: MeshPreset = MeshPreset.NEBULA,
     enabled: Boolean = true,
 ) {
     AmbientMeshBackground(

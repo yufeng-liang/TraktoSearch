@@ -1775,4 +1775,10 @@ Config:
     <string name="bg_glow_aurora_desc">Soft flowing aurora ribbons that move continuously across pages</string>
     <string name="bg_glow_lava_desc">Colors slowly convect like a lava lamp, calm and unhurried</string>
     <string name="bg_glow_bloom_desc">Soft diffused light patches that gently breathe with scrolling</string>
+    <string name="bg_glow_nebula">Nebula</string>
+    <string name="bg_glow_ink">Ink</string>
+    <string name="bg_glow_beach">Beach</string>
+    <string name="bg_glow_nebula_desc">Rose and violet spots drifting over deep indigo. Fixed palette, does not follow the theme color</string>
+    <string name="bg_glow_ink_desc">High-contrast black and white flow. Boldest look, and the hardest on text readability</string>
+    <string name="bg_glow_beach_desc">Cyan and sand yellow drifting very slowly. Fixed palette, does not follow the theme color</string>
 </resources>

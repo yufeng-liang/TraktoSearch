@@ -213,7 +213,7 @@ internal fun AccentColorDialog(
     val windowWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
     val menuWidth = (windowWidth - 32.dp).coerceAtLeast(0.dp).coerceAtMost(320.dp)
 
-    // 背景光晕选项：关闭 / 极光 / 熔岩灯 / 弥散绽放，null 表示关闭
+    // 背景光晕选项：关闭 / Paper Shaders 原配色的星云·水墨·海滩 / 主题色驱动的极光·熔岩灯·弥散绽放，null 表示关闭
     data class MeshOption(
         val preset: MeshPreset?,
         val title: String,
@@ -224,6 +224,21 @@ internal fun AccentColorDialog(
             preset = null,
             title = stringResource(R.string.bg_glow_off),
             description = stringResource(R.string.bg_glow_off_desc)
+        ),
+        MeshOption(
+            preset = MeshPreset.NEBULA,
+            title = stringResource(R.string.bg_glow_nebula),
+            description = stringResource(R.string.bg_glow_nebula_desc)
+        ),
+        MeshOption(
+            preset = MeshPreset.INK,
+            title = stringResource(R.string.bg_glow_ink),
+            description = stringResource(R.string.bg_glow_ink_desc)
+        ),
+        MeshOption(
+            preset = MeshPreset.BEACH,
+            title = stringResource(R.string.bg_glow_beach),
+            description = stringResource(R.string.bg_glow_beach_desc)
         ),
         MeshOption(
             preset = MeshPreset.AURORA,

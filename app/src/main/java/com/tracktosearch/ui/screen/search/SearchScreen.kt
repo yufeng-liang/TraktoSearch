@@ -74,6 +74,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -182,6 +183,7 @@ import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.neumorphicShadow
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
+import com.tracktosearch.ui.theme.ambientTextHalo
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import dagger.hilt.EntryPoint
@@ -559,7 +561,9 @@ fun SearchScreen(
                     fontSize = 28.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = (-0.5).sp,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    // 大标题直接压在背景光晕上，加柔光描边保证对比度
+                    style = LocalTextStyle.current.copy(shadow = ambientTextHalo())
                 )
             }
         }
@@ -1658,7 +1662,7 @@ private fun PopularSearchesSectionNew(
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = stringResource(R.string.hot_search),
-            style = MaterialTheme.typography.titleSmall,
+            style = MaterialTheme.typography.titleSmall.copy(shadow = ambientTextHalo()),
             color = if (isDark) Color.White else Color(0xFF37474F),
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(bottom = 10.dp)
@@ -1764,7 +1768,7 @@ private fun PopularSearchesSection(
     ) {
         Text(
             text = stringResource(R.string.hot_search),
-            style = MaterialTheme.typography.titleSmall,
+            style = MaterialTheme.typography.titleSmall.copy(shadow = ambientTextHalo()),
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 8.dp)
         )

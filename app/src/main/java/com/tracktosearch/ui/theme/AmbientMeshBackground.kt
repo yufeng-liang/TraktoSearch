@@ -1,158 +1,298 @@
 package com.tracktosearch.ui.theme
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.tooling.preview.Preview
-import io.github.om252345.composemeshgradient.MeshGradient
+import io.androidpoet.mirage.GrainGradient
+import io.androidpoet.mirage.GrainGradientShape
+import io.androidpoet.mirage.Metaballs
+import io.androidpoet.mirage.core.ShaderFit
+import io.androidpoet.mirage.core.SizingParams
+import io.androidpoet.mirage.MeshGradient as ShaderMeshGradient
+import io.github.om252345.composemeshgradient.MeshGradient as LegacyMeshGradient
+import io.github.om252345.composemeshgradient.rememberMeshGradientState
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * 主页面背景彩色弥散光晕预设。各预设共享同一组主题调色板（统一配色），
- * 仅运动方式不同，确保搜索/发现/我的/设置四个页面视觉连贯。
+ * 主页面背景彩色弥散光晕预设。
+ *
+ * 前三个是 Paper Shaders 官网 mesh-gradient 的原始预设（Default / Ink / Beach），
+ * 用它们自带的固定配色，不跟随主题色；Paper 的 Purple 预设按需求未收录。
+ * 后三个是主题色驱动：调色板取自当前主题种子色，四个页面共享同一层，仅运动方式不同。
+ *
+ * 枚举顺序与设置里的选项顺序一致；持久化按 name() 存，改顺序不影响已保存的值。
  */
 enum class MeshPreset {
-    AURORA,     // 极光：帘幕状缓慢横向流动
-    LAVA_LAMP,  // 熔岩灯：缓慢 blob 形变漂浮
-    BLOOM;      // 弥散绽放：呼吸式缩放漂移
+    NEBULA,     // Paper "Default"：淡蓝 / 深靛 / 玫粉 / 紫罗兰
+    INK,        // Paper "Ink"：纯黑白，旋转 90°
+    BEACH,      // Paper "Beach"：青蓝 / 湖蓝 / 亮青 / 沙黄
+    AURORA,     // 极光：色斑沿轨迹流动
+    LAVA_LAMP,  // 熔岩灯：blob 融合漂浮
+    BLOOM;      // 弥散绽放：呼吸式扩散
+
+    /** Paper 预设用固定配色，可读性蒙层也要更厚，因此需要区分。 */
+    internal val isPaperPreset: Boolean
+        get() = this == NEBULA || this == INK || this == BEACH
 
     fun toStorage(): String = name
 
     companion object {
+        /** 默认 NEBULA：Paper Shaders 的 Default 预设配色。 */
         fun fromStorage(value: String?): MeshPreset {
-            if (value == null) return AURORA
-            return runCatching { valueOf(value) }.getOrDefault(AURORA)
+            if (value == null) return NEBULA
+            return runCatching { valueOf(value) }.getOrDefault(NEBULA)
         }
     }
 }
-
+/**
+ * 背景光晕层。
+ *
+ * API 33+ 走 AGSL 着色器（mirage，Paper Shaders 的 AGSL 移植）：弥散完全在片元着色器里算，
+ * 没有网格控制点，因此不会出现网格塌陷造成的不规则硬边；自带 grain 噪声，顺带消掉
+ * 大面积渐变的色带。API 26~32 无 RuntimeShader，回退到 composemeshgradient 的 4x4 网格。
+ */
 @Composable
 fun AmbientMeshBackground(
     modifier: Modifier = Modifier,
-    preset: MeshPreset = MeshPreset.AURORA,
+    preset: MeshPreset = MeshPreset.NEBULA,
     enabled: Boolean = true,
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val isDark = colorScheme.background.luminance() < 0.5f
-
-    // 统一调色板：取自主题种子色，四页共享，仅相位不同 -> 视觉打通
-    val palette = remember(colorScheme) {
-        arrayOf(
-            colorScheme.primary,
-            colorScheme.secondary,
-            colorScheme.tertiary,
-            colorScheme.primary,
-            colorScheme.secondary,
-            colorScheme.tertiary,
-            colorScheme.primary,
-            colorScheme.secondary,
-            colorScheme.tertiary,
-        )
+    val palette = remember(colorScheme, isDark, preset) {
+        if (preset.isPaperPreset) {
+            paperPalette(preset, colorScheme.background, isDark)
+        } else {
+            themePalette(colorScheme, isDark)
+        }
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize().background(colorScheme.background)) {
         if (enabled) {
-            val transition = rememberInfiniteTransition(label = "mesh")
-            val duration = when (preset) {
-                MeshPreset.AURORA -> 14000
-                MeshPreset.LAVA_LAMP -> 18000
-                MeshPreset.BLOOM -> 11000
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ShaderAmbient(preset, palette, colorScheme.background)
+            } else {
+                LegacyMeshAmbient(preset, palette)
             }
-            val animatedT by transition.animateFloat(
-                initialValue = 0f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(duration, easing = LinearEasing),
-                    repeatMode = RepeatMode.Restart,
-                ),
-                label = "meshT",
-            )
-            val mesh = remember(animatedT, preset, palette, isDark) {
-                computeMesh(preset, animatedT, palette, isDark)
-            }
-            MeshGradient(
-                width = 3,
-                height = 3,
-                points = mesh.first,
-                colors = mesh.second,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            // 关闭时回退到原有的中性灰底，保证背景不空
-            val fallback = remember(colorScheme) {
-                lerp(colorScheme.background, colorScheme.primary, 0.05f)
-            }
-            Box(Modifier.fillMaxSize().background(fallback))
+            val scrim = colorScheme.background.copy(alpha = scrimAlpha(preset, isDark))
+            Box(Modifier.fillMaxSize().background(scrim))
         }
-
-        // 可读性蒙层：压低彩色亮度，保证文字对比度（类似 iOS 墙纸的暗化叠加）
-        val scrim = if (isDark) {
-            colorScheme.background.copy(alpha = 0.55f)
-        } else {
-            colorScheme.background.copy(alpha = 0.40f)
-        }
-        Box(Modifier.fillMaxSize().background(scrim))
     }
 }
 
-private const val TWO_PI = 2f * PI.toFloat()
+/**
+ * 可读性蒙层强度。
+ *
+ * 关键取舍：让背景"不喧宾夺主"主要靠 [paperPalette] / [themePalette] 在**源头**把配色向
+ * 背景色混合，而不是靠加厚这层灰蒙层。蒙层是全屏均匀降低对比度，加厚会把整片彩色一起
+ * 压成脏灰（就是旧实现 0.40/0.55 的结果）——花了 shader 的成本却看不到颜色。
+ * 源头降饱和只压极值，色相和弥散结构还留着，蒙层就能做得很薄。
+ */
+private fun scrimAlpha(preset: MeshPreset, isDark: Boolean): Float = when {
+    preset == MeshPreset.INK -> if (isDark) 0.30f else 0.26f
+    preset.isPaperPreset -> if (isDark) 0.22f else 0.16f
+    else -> if (isDark) 0.18f else 0.10f
+}
+/**
+ * 把主题色向背景色混合，得到低饱和的"弥散"光斑色。
+ * 直接用 primary/secondary/tertiary 原色会过艳，只能靠重蒙层压，结果发灰；
+ * 在源头降对比反而更干净，也让蒙层可以做薄。
+ */
+private fun themePalette(colorScheme: ColorScheme, isDark: Boolean): List<Color> {
+    val mix = if (isDark) 0.62f else 0.42f
+    fun soft(color: Color): Color = lerp(color, colorScheme.background, mix)
+    return listOf(
+        soft(colorScheme.primary),
+        soft(colorScheme.tertiary),
+        soft(colorScheme.secondary),
+        soft(colorScheme.primaryContainer),
+        soft(colorScheme.tertiaryContainer),
+    )
+}
 
 /**
- * 计算 3x3 网格的控制点与颜色。点随时间小幅漂移即形成"彩色弥散运动"，
- * 横向漂移分量让光晕在搜索页右溢、发现页左接，实现跨页连续。
+ * Paper Shaders mesh-gradient 官方预设配色，色相与相对关系照抄 paper-design/shaders 源码，
+ * 再统一向页面背景色混合一次，把亮度/饱和的极值收进来——这是"不喧宾夺主"的主要手段。
+ *
+ * INK 是纯黑白，混合比例必须更高，否则正文压在纯白或纯黑区域上必然有一处看不见。
  */
-private fun computeMesh(
+private fun paperPalette(preset: MeshPreset, background: Color, isDark: Boolean): List<Color> {
+    // 混合比例按"最暗/最亮那一档色与正文色的 WCAG 对比度"反推（浅色主题正文 #5D4638，
+    // 深色主题 #F7EDE3，叠加 scrimAlpha 后计算）：
+    //   NEBULA 的深靛 #241D9A 是最坏情况，浅色主题 0.52 才到约 3.4:1；不压则只有 2.1:1。
+    //   BEACH 全是亮色，0.32 就有约 5.4:1，不必多压，保留鲜艳。
+    //   INK 纯黑最难，浅色主题给 0.62（约 3.9:1）。
+    //   深色主题正文是浅色，宽松得多，0.40~0.50 即可全部过 4.5:1。
+    val mix = when (preset) {
+        MeshPreset.INK -> if (isDark) 0.50f else 0.62f
+        MeshPreset.BEACH -> if (isDark) 0.40f else 0.32f
+        else -> if (isDark) 0.45f else 0.52f
+    }
+    fun tame(color: Color): Color = lerp(color, background, mix)
+    return when (preset) {
+        MeshPreset.NEBULA -> listOf(
+            Color(0xFFE0EAFF), Color(0xFF241D9A), Color(0xFFF75092), Color(0xFF9F50D3),
+        )
+        MeshPreset.INK -> listOf(Color(0xFFFFFFFF), Color(0xFF000000))
+        MeshPreset.BEACH -> listOf(
+            Color(0xFFBCECF6), Color(0xFF00AAFF), Color(0xFF00F7FF), Color(0xFFFFD447),
+        )
+        else -> emptyList()
+    }.map(::tame)
+}
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+@Composable
+private fun ShaderAmbient(
     preset: MeshPreset,
-    t: Float,
-    palette: Array<Color>,
-    isDark: Boolean,
-): Pair<Array<Offset>, Array<Color>> {
-    val base = arrayOf(
-        Offset(0f, 0f), Offset(0.5f, 0f), Offset(1f, 0f),
-        Offset(0f, 0.5f), Offset(0.5f, 0.5f), Offset(1f, 0.5f),
-        Offset(0f, 1f), Offset(0.5f, 1f), Offset(1f, 1f),
-    )
-    val phase = t * TWO_PI
-    val points = Array(9) { i ->
-        val b = base[i]
-        when (preset) {
-            MeshPreset.AURORA -> Offset(
-                b.x + 0.05f * sin(phase + i * 0.6f) + 0.06f * t,
-                b.y + 0.10f * cos(phase + i * 0.5f),
-            )
-            MeshPreset.LAVA_LAMP -> Offset(
-                b.x + 0.12f * sin(phase * 0.8f + i.toFloat()),
-                b.y + 0.14f * cos(phase * 0.7f + i * 0.7f),
-            )
-            MeshPreset.BLOOM -> Offset(
-                b.x + 0.05f * sin(phase + i * 0.4f),
-                b.y + 0.05f * cos(phase * 1.1f + i * 0.4f),
+    palette: List<Color>,
+    backColor: Color,
+) {
+    // Cover：铺满并裁掉溢出。默认的 Contain 是给独立图形用的，长屏当背景会显小。
+    val sizing = remember { SizingParams(fit = ShaderFit.Cover) }
+    when (preset) {
+        MeshPreset.AURORA -> ShaderMeshGradient(
+            modifier = Modifier.fillMaxSize(),
+            colors = palette,
+            distortion = 0.9f,
+            swirl = 0.25f,
+            grainOverlay = 0.10f,
+            speed = 0.22f,
+            sizing = sizing,
+        )
+        MeshPreset.LAVA_LAMP -> Metaballs(
+            modifier = Modifier.fillMaxSize(),
+            colorBack = backColor,
+            colors = palette,
+            count = 7f,
+            size = 1.05f,
+            speed = 0.20f,
+            sizing = sizing,
+        )
+        MeshPreset.BLOOM -> GrainGradient(
+            modifier = Modifier.fillMaxSize(),
+            colorBack = backColor,
+            colors = palette,
+            shape = GrainGradientShape.Blob,
+            softness = 0.85f,
+            intensity = 0.50f,
+            noise = 0.20f,
+            speed = 0.25f,
+            sizing = sizing,
+        )
+        // distortion / swirl / rotation 与 Paper Shaders 官方预设一致；
+        // speed 按需求整体调慢（Paper 原值 NEBULA/INK 都是 1.0，BEACH 是 0.1）。
+        MeshPreset.NEBULA -> ShaderMeshGradient(
+            modifier = Modifier.fillMaxSize(),
+            colors = palette,
+            distortion = 0.8f,
+            swirl = 0.1f,
+            speed = 0.30f,
+            sizing = sizing,
+        )
+        MeshPreset.INK -> ShaderMeshGradient(
+            modifier = Modifier.fillMaxSize(),
+            colors = palette,
+            distortion = 1f,
+            swirl = 0.2f,
+            speed = 0.26f,
+            sizing = remember { SizingParams(fit = ShaderFit.Cover, rotation = 90f) },
+        )
+        MeshPreset.BEACH -> ShaderMeshGradient(
+            modifier = Modifier.fillMaxSize(),
+            colors = palette,
+            distortion = 0.8f,
+            swirl = 0.35f,
+            speed = 0.05f,
+            sizing = sizing,
+        )
+    }
+}
+private const val TWO_PI = 2f * PI.toFloat()
+private const val LEGACY_GRID = 4
+
+/**
+ * API 26~32 回退实现。AGSL 不可用，Paper 预设只能借用它的配色，运动方式退化为网格漂移。
+ *
+ * 两条硬约束：
+ *
+ * 1. 边界控制点必须钉死在矩形边上。网格只覆盖控制点围成的区域，一旦四角或边中点往内收，
+ *    网格就会从屏幕边缘缩进露出底色，看起来就是一条不规则的硬边——原实现是 3x3 且九个点
+ *    全在动，而 3x3 里除中心点外全是边界点，所以整块都在漏。
+ * 2. 运动只能用 phase 的整数倍谐波。像 cos(0.85 * phase) 这种非整数倍在 phase 绕回 2π
+ *    时不连续，会周期性地"跳"一下。
+ */
+@Composable
+private fun LegacyMeshAmbient(
+    preset: MeshPreset,
+    palette: List<Color>,
+) {
+    val basePoints = remember {
+        Array(LEGACY_GRID * LEGACY_GRID) { i ->
+            Offset(
+                x = (i % LEGACY_GRID) / (LEGACY_GRID - 1f),
+                y = (i / LEGACY_GRID) / (LEGACY_GRID - 1f),
             )
         }
     }
-    // 统一调色板；浅色主题下轻微降低饱和以避免过艳
-    val colors = Array(9) { i ->
-        val c = palette[i]
-        if (!isDark) c.copy(alpha = 0.9f) else c
+    val colors = remember(palette) {
+        Array(LEGACY_GRID * LEGACY_GRID) { i -> palette[i % palette.size] }
     }
-    return points to colors
+    val state = rememberMeshGradientState(points = basePoints, colors = colors)
+
+    val amplitude = when (preset) {
+        MeshPreset.LAVA_LAMP -> 0.16f
+        MeshPreset.BLOOM -> 0.07f
+        else -> 0.10f
+    }
+    val periodMs = when (preset) {
+        MeshPreset.LAVA_LAMP -> 29_000L
+        MeshPreset.BLOOM -> 18_000L
+        MeshPreset.BEACH -> 40_000L
+        else -> 23_000L
+    }
+    LaunchedEffect(preset, colors) {
+        val working = basePoints.toMutableList()
+        while (true) {
+            val frameNanos = withFrameNanos { it }
+            val phase = (frameNanos / 1_000_000L % periodMs) / periodMs.toFloat() * TWO_PI
+            for (i in working.indices) {
+                val col = i % LEGACY_GRID
+                val row = i / LEGACY_GRID
+                val isBorder =
+                    row == 0 || col == 0 || row == LEGACY_GRID - 1 || col == LEGACY_GRID - 1
+                if (isBorder) continue
+                val base = basePoints[i]
+                working[i] = Offset(
+                    x = base.x + amplitude * sin(phase + i * 0.9f),
+                    y = base.y + amplitude * cos(phase + i * 0.7f),
+                )
+            }
+            state.snapAllPoints(working)
+        }
+    }
+
+    LegacyMeshGradient(
+        modifier = Modifier.fillMaxSize(),
+        width = LEGACY_GRID,
+        height = LEGACY_GRID,
+        state = state,
+    )
 }
 
 @Preview
@@ -161,7 +301,7 @@ private fun AmbientMeshBackgroundPreview() {
     MaterialTheme {
         AmbientMeshBackground(
             modifier = Modifier.fillMaxSize(),
-            preset = MeshPreset.AURORA,
+            preset = MeshPreset.NEBULA,
             enabled = true,
         )
     }

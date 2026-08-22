@@ -64,8 +64,8 @@ class ThemeStorage private constructor(
     private val _customAccentArgb = MutableStateFlow<Long?>(null)
     val customAccentArgb: StateFlow<Long?> = _customAccentArgb.asStateFlow()
 
-    // 主页面背景彩色弥散光晕：预设(枚举名)与开关
-    private val _meshPreset = MutableStateFlow("AURORA")
+    // 主页面背景彩色弥散光晕：预设(枚举名)与开关。默认 NEBULA（Paper Shaders Default 预设配色）
+    private val _meshPreset = MutableStateFlow("NEBULA")
     val meshPreset: StateFlow<String> = _meshPreset.asStateFlow()
 
     private val _meshEnabled = MutableStateFlow(true)
@@ -80,7 +80,7 @@ class ThemeStorage private constructor(
             _visualEffectMode.value = VisualEffectMode.fromStorageValue(prefs[KEY_VISUAL_EFFECT_MODE])
             _glassVariant.value = GlassVariant.fromStorageValue(prefs[KEY_GLASS_VARIANT])
             _customAccentArgb.value = prefs[KEY_CUSTOM_ACCENT_ARGB]
-            _meshPreset.value = prefs[KEY_MESH_PRESET] ?: "AURORA"
+            _meshPreset.value = prefs[KEY_MESH_PRESET] ?: "NEBULA"
             _meshEnabled.value = prefs[KEY_MESH_ENABLED] ?: true
             initializationComplete.complete(Unit)
         }.invokeOnCompletion { throwable ->

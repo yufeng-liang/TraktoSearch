@@ -1787,4 +1787,10 @@
     <string name="bg_glow_aurora_desc">やわらかく流れるオーロラの帯が、ページ間で連続して動く</string>
     <string name="bg_glow_lava_desc">ラバランプのように色がゆっくり対流し、穏やかに変化する</string>
     <string name="bg_glow_bloom_desc">柔らかいグローがスクロールに合わせてゆっくり呼吸する</string>
+    <string name="bg_glow_nebula">ネビュラ</string>
+    <string name="bg_glow_ink">墨</string>
+    <string name="bg_glow_beach">ビーチ</string>
+    <string name="bg_glow_nebula_desc">深い藍の上をローズとバイオレットの光斑が漂う。固定配色でテーマ色に追従しない</string>
+    <string name="bg_glow_ink_desc">白黒の高コントラストな流れ。最も強い見た目で、本文の可読性には最も厳しい</string>
+    <string name="bg_glow_beach_desc">シアンとサンドイエローが非常にゆっくり漂う。固定配色でテーマ色に追従しない</string>
 </resources>
