@@ -504,6 +504,8 @@ class DetailViewModelTest {
     fun `setRatingWithComment_成功_更新评分和短评`() = runTest {
         setupLoggedInState()
         coEvery { traktRepository.addRating(any(), any(), any()) } returns Result.success(Unit)
+        // 短评走 upsert 语义：先查是否已有自己的短评，没有才 postComment
+        coEvery { traktRepository.findMyCommentForItem(any(), any()) } returns Result.success(null)
         coEvery { traktRepository.postComment(any(), any(), any()) } returns Result.success(mockk(relaxed = true))
 
         viewModel.setRatingWithComment(9, "很好看")
@@ -513,6 +515,7 @@ class DetailViewModelTest {
         assertThat(viewModel.uiState.value.userComment).isEqualTo("很好看")
         assertThat(viewModel.uiState.value.isRating).isFalse()
         assertThat(viewModel.uiState.value.showRatingDialog).isFalse()
+        coVerify(exactly = 1) { traktRepository.postComment(any(), any(), any()) }
     }
 
     /**
