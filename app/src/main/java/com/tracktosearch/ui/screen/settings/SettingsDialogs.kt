@@ -73,6 +73,7 @@ import com.tracktosearch.ui.theme.appSwitchColors
 import com.github.skydoves.colorpicker.compose.HsvColorPicker
 import com.github.skydoves.colorpicker.compose.rememberColorPickerController
 import com.github.skydoves.colorpicker.compose.BrightnessSlider
+import com.github.skydoves.colorpicker.compose.SaturationSlider
 import com.github.skydoves.colorpicker.compose.ColorEnvelope
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontFamily
@@ -543,10 +544,16 @@ internal fun CustomAccentDialog(
     onResetDefault: () -> Unit
 ) {
     val initialColor = remember(initialArgb) {
-        initialArgb?.let { Color(it.toInt()) } ?: Color(0xFF9A6242)
+        // 未设置自定义色时默认白色起步，使亮度条渐变与圆盘指针一致（白→黑）
+        initialArgb?.let { Color(it.toInt()) } ?: Color.White
     }
     val controller = rememberColorPickerController()
     var selectedColor by remember { mutableStateOf(initialColor) }
+
+    // 控制器需与弹窗初始颜色同步，否则圆盘指针与亮度条渐变使用不一致的内部状态
+    LaunchedEffect(initialColor) {
+        controller.selectByColor(initialColor, fromUser = false)
+    }
     val hexText = remember(selectedColor) {
         String.format("#%06X", selectedColor.toArgb() and 0xFFFFFF)
     }
@@ -570,6 +577,12 @@ internal fun CustomAccentDialog(
                     modifier = Modifier.fillMaxWidth().height(280.dp),
                     controller = controller,
                     onColorChanged = { envelope -> selectedColor = envelope.color }
+                )
+                // 饱和度滑轨：附加后亮度条渐变才按当前饱和度取色（圆心 sat=0 时渐变正确显示黑→白，
+                // 而非库默认固定的「当前 hue 满饱和→黑」）
+                SaturationSlider(
+                    modifier = Modifier.fillMaxWidth().height(36.dp),
+                    controller = controller
                 )
                 BrightnessSlider(
                     modifier = Modifier.fillMaxWidth().height(36.dp),
