@@ -38,6 +38,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Refresh
@@ -58,6 +59,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,6 +71,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -80,6 +84,12 @@ import com.tracktosearch.data.ai.AiCharacter
 import com.tracktosearch.data.ai.AiQuizQuestionType
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+
+private enum class AuditionPlaybackState {
+    IDLE,
+    LOADING,
+    PLAYING
+}
 
 @Composable
 fun AiSpriteCenter(
@@ -96,6 +106,8 @@ fun AiSpriteCenter(
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val audioPlayer = remember(context) { AiAudioPlayer(context) }
+    val mainScope = rememberCoroutineScope()
+    var auditionPlaybackState by remember { mutableStateOf(AuditionPlaybackState.IDLE) }
     var permissionRequested by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -107,14 +119,27 @@ fun AiSpriteCenter(
     LaunchedEffect(Unit) {
         viewModel.ensureLoaded()
         launch {
-            viewModel.audioEvents.collectLatest { audio -> audioPlayer.play(audio) }
+            viewModel.audioEvents.collectLatest { audio ->
+                audioPlayer.play(
+                    audio,
+                    onStarted = { mainScope.launch { auditionPlaybackState = AuditionPlaybackState.PLAYING } },
+                    onFinished = { mainScope.launch { auditionPlaybackState = AuditionPlaybackState.IDLE } }
+                )
+            }
         }
         launch {
-            viewModel.guestPreviewFallbackEvents.collectLatest { text -> audioPlayer.playText(text) }
+            viewModel.guestPreviewFallbackEvents.collectLatest { text ->
+                audioPlayer.playText(
+                    text,
+                    onStarted = { mainScope.launch { auditionPlaybackState = AuditionPlaybackState.PLAYING } },
+                    onFinished = { mainScope.launch { auditionPlaybackState = AuditionPlaybackState.IDLE } }
+                )
+            }
         }
     }
     LaunchedEffect(state.selectedCharacterId, state.isAuthorized) {
         audioPlayer.stop()
+        auditionPlaybackState = AuditionPlaybackState.LOADING
     }
     DisposableEffect(Unit) {
         onDispose { audioPlayer.stop() }
@@ -163,7 +188,12 @@ fun AiSpriteCenter(
                 onTextActivate = viewModel::activateByText,
                 onOpenFeature = viewModel::openFeature,
                 onPlayAudio = { audio -> audioPlayer.play(audio) },
-                onReplayAudition = viewModel::replaySelectedCharacter,
+                onReplayAudition = {
+                    audioPlayer.stop()
+                    auditionPlaybackState = AuditionPlaybackState.LOADING
+                    viewModel.replaySelectedCharacter()
+                },
+                auditionPlaybackState = auditionPlaybackState,
                 onClearError = viewModel::clearError
             )
         }
@@ -181,6 +211,7 @@ private fun SpriteCenterHome(
     onOpenFeature: (AiFeature) -> Unit,
     onPlayAudio: (com.tracktosearch.data.ai.AiAudio) -> Unit,
     onReplayAudition: () -> Unit,
+    auditionPlaybackState: AuditionPlaybackState,
     onClearError: () -> Unit
 ) {
     val character = state.selectedCharacter ?: state.characters.first()
@@ -220,7 +251,8 @@ private fun SpriteCenterHome(
             character = character,
             state = state,
             onPlayAudio = onPlayAudio,
-            onReplayAudition = onReplayAudition
+            onReplayAudition = onReplayAudition,
+            auditionPlaybackState = auditionPlaybackState
         )
 
         val characterLabel = stringResource(
@@ -342,7 +374,8 @@ private fun CharacterStage(
     character: AiCharacter,
     state: AiSpriteUiState,
     onPlayAudio: (com.tracktosearch.data.ai.AiAudio) -> Unit,
-    onReplayAudition: () -> Unit
+    onReplayAudition: () -> Unit,
+    auditionPlaybackState: AuditionPlaybackState
 ) {
     val showActivatedContent = shouldShowActivatedCharacterContent(
         selectedCharacterId = character.id,
@@ -406,15 +439,37 @@ private fun CharacterStage(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     if (!showActivatedContent) {
+                        val auditionContentDescription = when (auditionPlaybackState) {
+                            AuditionPlaybackState.LOADING -> stringResource(R.string.ai_audio_loading)
+                            AuditionPlaybackState.PLAYING -> stringResource(R.string.ai_audio_playing)
+                            AuditionPlaybackState.IDLE -> stringResource(R.string.ai_audio_play)
+                        }
                         IconButton(
                             onClick = onReplayAudition,
-                            modifier = Modifier.size(32.dp)
+                            enabled = auditionPlaybackState != AuditionPlaybackState.LOADING,
+                            modifier = Modifier
+                                .size(32.dp)
+                                .semantics {
+                                    contentDescription = auditionContentDescription
+                                }
                         ) {
-                            Icon(
-                                Icons.Rounded.VolumeUp,
-                                contentDescription = stringResource(R.string.ai_audio_play),
-                                modifier = Modifier.size(18.dp)
-                            )
+                            when (auditionPlaybackState) {
+                                AuditionPlaybackState.LOADING -> CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                AuditionPlaybackState.PLAYING -> Icon(
+                                    Icons.Rounded.GraphicEq,
+                                    contentDescription = stringResource(R.string.ai_audio_playing),
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                AuditionPlaybackState.IDLE -> Icon(
+                                    Icons.Rounded.VolumeUp,
+                                    contentDescription = stringResource(R.string.ai_audio_play),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
                     Text(

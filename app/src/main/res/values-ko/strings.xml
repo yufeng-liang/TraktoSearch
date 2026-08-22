@@ -1712,6 +1712,8 @@
     <string name="ai_sprite_overlay_message">%1$s가 할 말이 있어요</string>
     <string name="ai_sprite_overlay_hint">작은 영화 도전을 골라 보세요</string>
     <string name="ai_audio_play">음성 재생</string>
+    <string name="ai_audio_loading">음성 로드 중</string>
+    <string name="ai_audio_playing">음성 재생 중</string>
     <string name="ai_feature_greeting">닉네임 인사</string>
     <string name="ai_feature_taste">내 시청 목록 평론</string>
     <string name="ai_feature_quiz">정말 이 영화를 이해했나요?</string>

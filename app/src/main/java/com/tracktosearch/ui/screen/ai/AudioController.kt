@@ -10,6 +10,7 @@ import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.net.Uri
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Base64
 import androidx.core.content.ContextCompat
 import com.tracktosearch.data.ai.AiAudio
@@ -111,7 +112,11 @@ class AiAudioPlayer(private val context: Context) {
     @Volatile
     private var playEpoch = 0L
 
-    fun play(audio: AiAudio, onFinished: () -> Unit = {}) {
+    fun play(
+        audio: AiAudio,
+        onStarted: () -> Unit = {},
+        onFinished: () -> Unit = {}
+    ) {
         stop()
         val epoch = ++playEpoch
         val mediaPlayer = MediaPlayer()
@@ -140,27 +145,56 @@ class AiAudioPlayer(private val context: Context) {
             mediaPlayer.setOnErrorListener { _, _, _ ->
                 if (playEpoch != epoch) return@setOnErrorListener true
                 cleanup()
+                onFinished()
                 true
             }
-            mediaPlayer.prepareAsync()
             mediaPlayer.setOnPreparedListener { mp ->
-                if (playEpoch == epoch) mp.start()
+                if (playEpoch == epoch) {
+                    mp.start()
+                    onStarted()
+                }
             }
+            mediaPlayer.prepareAsync()
         } catch (_: Exception) {
-            if (playEpoch == epoch) cleanup()
+            if (playEpoch == epoch) {
+                cleanup()
+                onFinished()
+            }
         }
     }
 
     /** 访客试听没有网关身份时使用系统中文语音，只用于浏览阶段的即时反馈。 */
-    fun playText(text: String) {
+    fun playText(
+        text: String,
+        onStarted: () -> Unit = {},
+        onFinished: () -> Unit = {}
+    ) {
         if (text.isBlank()) return
         stop()
         val epoch = ++playEpoch
         val engine = TextToSpeech(context) { status ->
-            if (status != TextToSpeech.SUCCESS || playEpoch != epoch) return@TextToSpeech
+            if (status != TextToSpeech.SUCCESS || playEpoch != epoch) {
+                if (playEpoch == epoch) onFinished()
+                return@TextToSpeech
+            }
             val tts = textToSpeech ?: return@TextToSpeech
             tts.language = Locale.SIMPLIFIED_CHINESE
-            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "ai_preview_$epoch")
+            tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {
+                    if (playEpoch == epoch) onStarted()
+                }
+
+                override fun onDone(utteranceId: String?) {
+                    if (playEpoch == epoch) onFinished()
+                }
+
+                override fun onError(utteranceId: String?) {
+                    if (playEpoch == epoch) onFinished()
+                }
+            })
+            if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "ai_preview_$epoch") == TextToSpeech.ERROR) {
+                if (playEpoch == epoch) onFinished()
+            }
         }
         textToSpeech = engine
     }
