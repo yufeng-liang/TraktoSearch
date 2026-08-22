@@ -31,19 +31,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.chrisbanes.haze.HazeState
-import com.tracktosearch.ui.theme.LocalVisualEffectMode
 
 /**
  * 详情页操作按钮组（想看 / 已看 / 评分）
  *
+ * 不区分 blur / glass 视觉模式，统一用 blur 模式的拟态阴影样式，
+ * 避免 glass 模式下这三个按钮和页面其余控件风格割裂。
+ *
  * @param actions 操作项列表
- * @param hazeState Haze 模糊状态
  */
 @Composable
 fun ActionButtonRow(
     actions: List<ActionItem>,
-    hazeState: HazeState,
     modifier: Modifier = Modifier,
     verticalPadding: Dp = 5.dp
 ) {
@@ -76,9 +75,10 @@ fun ActionButtonRow(
                 MaterialTheme.colorScheme.onSurface
             }
             val contentAlpha = if (action.enabled && !action.isLoading) 1f else 0.5f
-            val useGlassSurface = surfaceTreatmentFor(LocalVisualEffectMode.current) == SurfaceTreatment.GLASS
 
-            val buttonModifier = Modifier
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 4.dp)
                     .scale(scale)
@@ -90,37 +90,19 @@ fun ActionButtonRow(
                     )
                     .alpha(contentAlpha)
                     .padding(vertical = verticalPadding)
-            if (useGlassSurface) {
-                AppVisualSurface(
-                    kind = VisualSurfaceKind.Glass,
-                    modifier = buttonModifier,
-                    shape = RoundedCornerShape(14.dp),
-                    hazeState = hazeState,
-                    role = GlassSurfaceRole.DetailAction,
-                    interactionSource = interactionSource,
-                    backgroundColor = bg,
-                    borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)
-                ) {
-                    ActionButtonContent(action, contentColor)
-                }
-            } else {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = buttonModifier
-                        .neumorphicShadow(
-                            shape = RoundedCornerShape(14.dp),
-                            isDark = !isLight,
-                            elevation = 4.dp,
-                            darkAlpha = if (isLight) 0.18f else 0.35f,
-                            lightAlpha = if (isLight) 0.55f else 0.10f,
-                            blurRadius = 10.dp,
-                            shadowOffset = 4.dp
-                        )
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(bg)
-                ) {
-                    ActionButtonContent(action, contentColor)
-                }
+                    .neumorphicShadow(
+                        shape = RoundedCornerShape(14.dp),
+                        isDark = !isLight,
+                        elevation = 4.dp,
+                        darkAlpha = if (isLight) 0.18f else 0.35f,
+                        lightAlpha = if (isLight) 0.55f else 0.10f,
+                        blurRadius = 10.dp,
+                        shadowOffset = 4.dp
+                    )
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(bg)
+            ) {
+                ActionButtonContent(action, contentColor)
             }
         }
     }

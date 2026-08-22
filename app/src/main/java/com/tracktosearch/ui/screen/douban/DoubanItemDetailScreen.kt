@@ -1898,7 +1898,6 @@ private fun DoubanWritebackActions(
                     onClick = onRemove
                 )
             ),
-            hazeState = hazeState,
             modifier = Modifier.fillMaxWidth()
         )
     }

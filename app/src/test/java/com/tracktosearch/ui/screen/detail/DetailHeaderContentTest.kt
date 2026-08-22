@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -91,5 +92,29 @@ class DetailHeaderContentTest {
         composeRule.onNodeWithText(collapseLabel).assertIsDisplayed()
         // 展开后正文 5 行全部布局显示
         assertThat(getTextLayouts("Overview line 1").single().lineCount).isEqualTo(5)
+    }
+
+    @Test
+    fun toggle_action_sits_below_body_and_aligns_to_end() {
+        composeRule.setContent {
+            MaterialTheme {
+                Box(modifier = Modifier.width(320.dp)) {
+                    ExpandableText(text = longOverview)
+                }
+            }
+        }
+
+        val bodyBottom = composeRule.onNodeWithText("Overview line 1", substring = true)
+            .getUnclippedBoundsInRoot().bottom.value
+        val expandBounds = composeRule.onNodeWithText(expandLabel).getUnclippedBoundsInRoot()
+        // 「展开」独占一行放在正文下方，不再叠在最后一行上遮挡文字
+        assertThat(expandBounds.top.value).isAtLeast(bodyBottom)
+        // 右对齐：按钮右边缘与 320.dp 容器右边缘一致
+        assertThat(expandBounds.right.value).isWithin(0.5f).of(320f)
+
+        // 展开后「收起」占用同一位置，仍然右对齐
+        composeRule.onNodeWithText(expandLabel).performSemanticsAction(SemanticsActions.OnClick)
+        val collapseBounds = composeRule.onNodeWithText(collapseLabel).getUnclippedBoundsInRoot()
+        assertThat(collapseBounds.right.value).isWithin(0.5f).of(320f)
     }
 }

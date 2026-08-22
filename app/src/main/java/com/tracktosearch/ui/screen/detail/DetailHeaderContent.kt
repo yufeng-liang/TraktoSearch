@@ -48,7 +48,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
@@ -404,7 +403,6 @@ internal fun DetailHeaderContent(
                             }
                         )
                     ),
-                    hazeState = hazeState,
                     modifier = Modifier.padding(top = 8.dp),
                     verticalPadding = 5.dp
                 )
@@ -605,17 +603,14 @@ internal fun DetailHeaderContent(
 // ==================== 折叠展开文本 ====================
 
 /**
- * 折叠/展开文本：折叠时正文用省略号截断，「展开/收起」按钮右对齐固定在下方，
- * 点击整段正文或按钮均可切换，高度变化带动画。折叠态下，「展开」按钮右对齐叠放在
- * 超出行（最后一行）同一行右侧。传入 [scrimColor] 时，会在按钮左侧铺一层横向渐变淡出，
- * 让正文向右渐隐；默认 null 即纯省略号截断、不加淡出。
- * @param scrimColor 渐变淡出所用到的表层颜色，需与正文所在背景近似；传 null 关闭淡出。
+ * 折叠/展开文本：折叠时正文用省略号截断，「展开」「收起」按钮都独占一行、右对齐放在正文下方，
+ * 两种状态下按钮位置一致。按钮不再叠放在正文最后一行上，避免遮挡文字。
+ * 点击整段正文或按钮均可切换，高度变化带动画。
  */
 @Composable
 internal fun ExpandableText(
     text: String,
-    maxLines: Int = 3,
-    scrimColor: Color? = null
+    maxLines: Int = 3
 ) {
     val effectiveMaxLines = maxLines.coerceAtLeast(1)
     val expandLabel = stringResource(R.string.detail_text_expand)
@@ -641,55 +636,26 @@ internal fun ExpandableText(
             .fillMaxWidth()
             .animateContentSize()
     ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = text,
+            style = bodyStyle,
+            color = bodyColor,
+            maxLines = if (expanded) Int.MAX_VALUE else effectiveMaxLines,
+            overflow = TextOverflow.Ellipsis,
+            onTextLayout = { layoutResult ->
+                hasOverflow = !expanded && layoutResult.hasVisualOverflow
+            },
+            modifier = toggleModifier.fillMaxWidth()
+        )
+        // 「展开」「收起」共用同一个位置：独占一行、右对齐。
+        // 旧实现把「展开」叠在正文最后一行右侧，会压住文字，故改为独立一行。
+        if (canToggle) {
             Text(
-                text = text,
-                style = bodyStyle,
-                color = bodyColor,
-                maxLines = if (expanded) Int.MAX_VALUE else effectiveMaxLines,
-                overflow = TextOverflow.Ellipsis,
-                onTextLayout = { layoutResult ->
-                    hasOverflow = !expanded && layoutResult.hasVisualOverflow
-                },
-                modifier = toggleModifier.fillMaxWidth()
-            )
-            // 折叠态：「展开」按钮右对齐叠放在超出行（最后一行）同一行右侧。
-            // 仅传入 scrimColor 时在其左侧铺横向渐变把正文向右渐隐，否则纯省略号截断
-            if (hasOverflow && !expanded) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .then(if (scrimColor != null) Modifier.width(72.dp) else Modifier)
-                ) {
-                    // 渐变淡出 scrim（仅启用时绘制）：左侧透明 → 右侧近似表层颜色
-                    if (scrimColor != null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.horizontalGradient(
-                                        colors = listOf(Color.Transparent, scrimColor)
-                                    )
-                                )
-                        )
-                    }
-                    Text(
-                        text = expandLabel,
-                        style = bodyStyle.copy(fontWeight = FontWeight.SemiBold),
-                        color = primaryColor,
-                        modifier = toggleModifier.align(Alignment.CenterEnd)
-                    )
-                }
-            }
-        }
-        // 展开态：「收起」按钮放在正文下方右对齐
-        if (expanded) {
-            Text(
-                text = collapseLabel,
+                text = if (expanded) collapseLabel else expandLabel,
                 style = bodyStyle.copy(fontWeight = FontWeight.SemiBold),
                 color = primaryColor,
                 modifier = toggleModifier
-                    .fillMaxWidth()
+                    .align(Alignment.End)
                     .padding(top = 4.dp)
             )
         }
