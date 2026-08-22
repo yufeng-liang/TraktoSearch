@@ -2,14 +2,14 @@ package com.tracktosearch.ui.theme
 
 import androidx.compose.runtime.staticCompositionLocalOf
 
-/** 全局视觉材质模式。新安装或无法识别持久化值时使用 Backdrop Glass。 */
+/** 全局视觉材质模式。新安装或无法识别持久化值时使用成熟 Haze Blur。 */
 enum class VisualEffectMode(val storageValue: String) {
     BLUR("blur"),
     GLASS("glass");
 
     companion object {
         fun fromStorageValue(value: String?): VisualEffectMode {
-            return entries.firstOrNull { it.storageValue == value } ?: GLASS
+            return entries.firstOrNull { it.storageValue == value } ?: BLUR
         }
     }
 }
@@ -29,5 +29,5 @@ enum class GlassVariant(val storageValue: String) {
     }
 }
 
-val LocalVisualEffectMode = staticCompositionLocalOf { VisualEffectMode.GLASS }
+val LocalVisualEffectMode = staticCompositionLocalOf { VisualEffectMode.BLUR }
 val LocalGlassVariant = staticCompositionLocalOf { GlassVariant.CLEAR }

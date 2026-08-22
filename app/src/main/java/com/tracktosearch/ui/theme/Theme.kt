@@ -188,7 +188,7 @@ fun TraktoSearchTheme(
     themeMode: String = "system",
     accentColor: MonetAccent? = null,
     customAccentArgb: Long? = null,
-    visualEffectMode: VisualEffectMode = VisualEffectMode.GLASS,
+    visualEffectMode: VisualEffectMode = VisualEffectMode.BLUR,
     glassVariant: GlassVariant = GlassVariant.CLEAR,
     content: @Composable () -> Unit
 ) {

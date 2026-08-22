@@ -54,7 +54,7 @@ class ThemeStorage private constructor(
     private val _accentColor = MutableStateFlow<MonetAccent?>(MonetAccent.VINTAGE_TICKET)
     val accentColor: StateFlow<MonetAccent?> = _accentColor.asStateFlow()
 
-    private val _visualEffectMode = MutableStateFlow(VisualEffectMode.GLASS)
+    private val _visualEffectMode = MutableStateFlow(VisualEffectMode.BLUR)
     val visualEffectMode: StateFlow<VisualEffectMode> = _visualEffectMode.asStateFlow()
 
     private val _glassVariant = MutableStateFlow(GlassVariant.CLEAR)

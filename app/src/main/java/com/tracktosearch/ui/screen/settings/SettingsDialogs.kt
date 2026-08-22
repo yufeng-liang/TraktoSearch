@@ -190,19 +190,19 @@ internal fun AccentColorDialog(
         val description: String
     )
 
-    // 材质选项：Backdrop Glass / 成熟 Haze Blur；Glass 的场景深度由组件自行适配。
+    // 材质选项：成熟 Haze Blur（默认）/ Backdrop Glass；Glass 的场景深度由组件自行适配。
     val materialOptions = listOf(
-        MaterialOption(
-            mode = VisualEffectMode.GLASS,
-            variant = GlassVariant.CLEAR,
-            title = stringResource(R.string.settings_visual_effect_glass),
-            description = stringResource(R.string.settings_visual_effect_glass_desc)
-        ),
         MaterialOption(
             mode = VisualEffectMode.BLUR,
             variant = GlassVariant.CLEAR,
             title = stringResource(R.string.settings_visual_effect_blur),
             description = stringResource(R.string.settings_visual_effect_blur_desc)
+        ),
+        MaterialOption(
+            mode = VisualEffectMode.GLASS,
+            variant = GlassVariant.CLEAR,
+            title = stringResource(R.string.settings_visual_effect_glass),
+            description = stringResource(R.string.settings_visual_effect_glass_desc)
         )
     )
 
@@ -277,7 +277,7 @@ internal fun AccentColorDialog(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 val currentLabel = materialOptions.firstOrNull {
                                     it.mode == currentMode
-                                }?.title ?: stringResource(R.string.settings_visual_effect_glass)
+                                }?.title ?: stringResource(R.string.settings_visual_effect_blur)
                                 Text(
                                     text = currentLabel,
                                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
