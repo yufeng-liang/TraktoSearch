@@ -528,7 +528,9 @@ class DetailViewModel @Inject constructor(
                 if (localReview != null && (localReview.rating != null || !localReview.comment.isNullOrBlank())) {
                     _uiState.value = _uiState.value.copy(
                         userRating = localReview.rating?.toInt(),
-                        userComment = localReview.comment,
+                        // 空白短评归一为 null:userComment 全局约定「无短评 = null」,
+                        // 留着空串会在写豆瓣本地表时把已存的备注覆盖成空
+                        userComment = localReview.comment?.takeIf { it.isNotBlank() },
                         traktCommentId = localReview.traktCommentId,
                         isRatingLoading = false
                     )
@@ -1625,7 +1627,8 @@ class DetailViewModel @Inject constructor(
             val targets = resolveOwnCommentTargets()
             if (local != null) {
                 _uiState.value = _uiState.value.copy(
-                    userComment = local.comment ?: _uiState.value.userComment,
+                    // 同上：空白短评归一为 null，避免空串覆盖豆瓣本地表已存备注
+                    userComment = local.comment?.takeIf { it.isNotBlank() } ?: _uiState.value.userComment,
                     traktCommentId = local.traktCommentId ?: _uiState.value.traktCommentId,
                     ownCommentTargets = targets
                 )
@@ -1838,7 +1841,8 @@ class DetailViewModel @Inject constructor(
             if (local != null && (local.rating != null || !local.comment.isNullOrBlank())) {
                 _uiState.value = _uiState.value.copy(
                     userRating = local.rating?.toInt(),
-                    userComment = local.comment,
+                    // 同上：空白短评归一为 null，避免空串覆盖豆瓣本地表已存备注
+                    userComment = local.comment?.takeIf { it.isNotBlank() },
                     traktCommentId = local.traktCommentId,
                     isRatingLoading = false
                 )
