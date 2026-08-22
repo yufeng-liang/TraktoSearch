@@ -46,10 +46,9 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.feedback.FeedbackReply
 import com.tracktosearch.data.remote.feedback.screenshotUrl
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.LocalFullscreenSharedKey
 import com.tracktosearch.ui.component.ZoomableImageOverlay
+import com.tracktosearch.ui.component.zoomSharedSource
 
 private const val MAX_REPLY_SCREENSHOTS = 5
 
@@ -120,6 +119,18 @@ fun FeedbackDetailScreen(
             viewModel.loadDetail(feedbackId)
         }
     }
+
+    // 全屏查看器打开时把该 key 广播给缩略图源侧，让源侧置不可见。
+    // 同一 key 两侧同时是 target 时，SharedTransitionStateMachine 会取先注册的源侧作为
+    // 目标边界提供者，打开方向会反转，观感上等于没有缩放动画。
+    val fullscreenSharedKey = when {
+        fullscreenIndex != null && fullscreenUrls.isNotEmpty() && fullscreenKeyPrefix != null ->
+            "$fullscreenKeyPrefix-${fullscreenIndex!!.coerceIn(0, fullscreenUrls.size - 1)}"
+        replyFullscreenIndex != null && replyScreenshots.isNotEmpty() ->
+            "fb-compose-${replyFullscreenIndex!!.coerceIn(0, replyScreenshots.size - 1)}"
+        else -> null
+    }
+    CompositionLocalProvider(LocalFullscreenSharedKey provides fullscreenSharedKey) {
 
     Scaffold(
         contentWindowInsets = feedbackDetailScaffoldContentWindowInsets(),
@@ -242,6 +253,7 @@ fun FeedbackDetailScreen(
         sharedKeyPrefix = "fb-compose",
         onDismiss = { replyFullscreenIndex = null }
     )
+    } // CompositionLocalProvider(LocalFullscreenSharedKey)
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -297,16 +309,6 @@ private fun OriginalFeedbackCard(feedback: com.tracktosearch.data.remote.feedbac
                     items(screenshots, key = { it }) { key ->
                         val index = screenshots.indexOf(key)
                         val url = screenshotUrl(key)
-                        // sharedKeyPrefix 非空且共享转场开启时,与全屏端 "$sharedKeyPrefix-$page" 配对,实现缩放转场
-                        val sharedModifier = if (sharedKeyPrefix != null && LocalSharedTransitionScope.current != null && LocalAnimatedVisibilityScope.current != null && LocalSharedTransitionEnabled.current) {
-                            val scope = LocalSharedTransitionScope.current
-                            with(scope!!) {
-                                Modifier.sharedElement(
-                                    rememberSharedContentState(key = "$sharedKeyPrefix-$index"),
-                                    animatedVisibilityScope = LocalAnimatedVisibilityScope.current!!
-                                )
-                            }
-                        } else Modifier
                         Box(
                             modifier = Modifier
                                 .width(112.dp)
@@ -324,7 +326,11 @@ private fun OriginalFeedbackCard(feedback: com.tracktosearch.data.remote.feedbac
                                 },
                                 contentDescription = stringResource(R.string.feedback_screenshots),
                                 contentScale = ContentScale.Fit,
-                                modifier = Modifier.fillMaxSize().then(sharedModifier)
+                                // 与全屏端 "$sharedKeyPrefix-$page" 配对；caller-managed visibility
+                                // 保证同一 key 同时只有一侧是 target
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .zoomSharedSource(key = sharedKeyPrefix?.let { "$it-$index" })
                             )
                         }
                     }
@@ -431,16 +437,7 @@ private fun ConversationBubble(reply: FeedbackReply, sharedKeyPrefix: String? = 
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             items(screenshots, key = { it }) { key ->
                                 val url = screenshotUrl(key)
-                                // sharedKeyPrefix 非空且共享转场开启时,与全屏端 "$sharedKeyPrefix-$page" 配对,实现缩放转场
-                                val sharedModifier = if (sharedKeyPrefix != null && LocalSharedTransitionScope.current != null && LocalAnimatedVisibilityScope.current != null && LocalSharedTransitionEnabled.current) {
-                                    val scope = LocalSharedTransitionScope.current
-                                    with(scope!!) {
-                                        Modifier.sharedElement(
-                                            rememberSharedContentState(key = "$sharedKeyPrefix-${screenshots.indexOf(key)}"),
-                                            animatedVisibilityScope = LocalAnimatedVisibilityScope.current!!
-                                        )
-                                    }
-                                } else Modifier
+                                val index = screenshots.indexOf(key)
                                 AsyncImage(
                                     model = remember(url) {
                                         ImageRequest.Builder(context).data(url).crossfade(true).build()
@@ -451,9 +448,11 @@ private fun ConversationBubble(reply: FeedbackReply, sharedKeyPrefix: String? = 
                                         .size(64.dp)
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.4f))
-                                        .then(sharedModifier)
+                                        // 与全屏端 "$sharedKeyPrefix-$page" 配对；caller-managed visibility
+                                        // 保证同一 key 同时只有一侧是 target
+                                        .zoomSharedSource(key = sharedKeyPrefix?.let { "$it-$index" })
                                         .clickable {
-                                            onScreenshotClick(screenshots.map(::screenshotUrl), screenshots.indexOf(key))
+                                            onScreenshotClick(screenshots.map(::screenshotUrl), index)
                                         }
                                 )
                             }
@@ -505,16 +504,6 @@ private fun ReplyBar(text: String, onTextChange: (String) -> Unit, screenshots: 
             if (screenshots.isNotEmpty()) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     itemsIndexed(screenshots, key = { _, pair -> pair.first }) { index, (bytes, _) ->
-                        // sharedKeyPrefix 非空且共享转场开启时,与全屏端 "$sharedKeyPrefix-$page" 配对,实现缩放转场
-                        val sharedModifier = if (sharedKeyPrefix != null && LocalSharedTransitionScope.current != null && LocalAnimatedVisibilityScope.current != null && LocalSharedTransitionEnabled.current) {
-                            val scope = LocalSharedTransitionScope.current
-                            with(scope!!) {
-                                Modifier.sharedElement(
-                                    rememberSharedContentState(key = "$sharedKeyPrefix-$index"),
-                                    animatedVisibilityScope = LocalAnimatedVisibilityScope.current!!
-                                )
-                            }
-                        } else Modifier
                         Box(
                             modifier = Modifier
                                 .size(64.dp)
@@ -528,7 +517,11 @@ private fun ReplyBar(text: String, onTextChange: (String) -> Unit, screenshots: 
                                 },
                                 contentDescription = stringResource(R.string.feedback_screenshots),
                                 contentScale = ContentScale.Fit,
-                                modifier = Modifier.fillMaxSize().then(sharedModifier)
+                                // 与全屏端 "$sharedKeyPrefix-$page" 配对；caller-managed visibility
+                                // 保证同一 key 同时只有一侧是 target
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .zoomSharedSource(key = sharedKeyPrefix?.let { "$it-$index" })
                             )
                             if (enabled) {
                                 IconButton(

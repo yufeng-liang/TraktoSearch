@@ -1,7 +1,6 @@
 package com.tracktosearch.ui.screen.detail
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope.OverlayClip
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -81,6 +80,7 @@ import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.zoomSharedSource
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
@@ -180,21 +180,17 @@ internal fun DetailHeaderContent(
                         } else {
                             Modifier.fillMaxSize()
                         }
-                        // 用 Box 承载全屏查看转场的 sharedBounds；AsyncImage 上保留导航用 sharedElement
-                        // （双 key 嵌套是文档支持的 sharedBounds+sharedElement 组合模式）
-                        val boundsModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-                            with(sharedTransitionScope) {
-                                Modifier.sharedBounds(
-                                    rememberSharedContentState(key = "poster-zoom-bounds-$tmdbId"),
-                                    animatedVisibilityScope = animatedVisibilityScope,
-                                    clipInOverlayDuringTransition = OverlayClip(RoundedCornerShape(8.dp))
-                                )
-                            }
-                        } else Modifier
+                        // 用 Box 承载全屏查看转场的共享元素；AsyncImage 上保留导航用 sharedElement
+                        // （双 key 嵌套是文档支持的组合模式）。
+                        // 全屏查看这一侧用 caller-managed visibility：全屏 overlay 打开该 key 时
+                        // 本侧置不可见，避免与 overlay 侧同时是 target 导致转场方向反转。
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .then(boundsModifier)
+                                .zoomSharedSource(
+                                    key = "poster-zoom-bounds-$tmdbId",
+                                    clipShape = RoundedCornerShape(8.dp)
+                                )
                         ) {
                             SubcomposeAsyncImage(
                                 model = remember(uiState.posterUrl) {

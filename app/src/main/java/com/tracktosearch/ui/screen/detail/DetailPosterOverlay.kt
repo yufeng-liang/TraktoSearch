@@ -4,14 +4,12 @@ import android.os.Environment
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope.OverlayClip
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,19 +37,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.ProgressiveFullscreenImage
 import com.tracktosearch.ui.component.queryExistingFile
 import com.tracktosearch.ui.component.savePosterToGallery
+import com.tracktosearch.ui.component.zoomSharedTarget
 import com.tracktosearch.ui.util.showToast
 import kotlinx.coroutines.launch
 import net.engawapg.lib.zoomable.rememberZoomState
@@ -62,8 +57,9 @@ import net.engawapg.lib.zoomable.zoomable
 /**
  * 海报全屏查看 overlay：黑底 + 双击/双指缩放 + 可选保存。
  * 用 AnimatedVisibility 包裹，`sharedKeyPrefix` 非空且共享转场开启时，
- * 图片以 `sharedKeyPrefix` 作为 sharedBounds key，与详情页头部海报源配对，
+ * 图片以 `sharedKeyPrefix` 作为 sharedElement key，与详情页头部海报源（zoomSharedSource）配对，
  * 实现 Telegram 风格的小图→大图缩放过渡。
+ * 手势：单击退出；若已放大则单击先复位，再次单击才退出；双击切换 1x/2.5x。
  * 注意：本组件必须一直处于组合中（用 `visible` 控制显隐），不能包在 `if` 里。
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -96,18 +92,7 @@ internal fun PosterFullscreenOverlay(
         enter = fadeIn(animationSpec = tween(200)),
         exit = fadeOut(animationSpec = tween(200))
     ) {
-        val sharedTransitionScope = LocalSharedTransitionScope.current
-        val sharedEnabled = LocalSharedTransitionEnabled.current
         val animatedVisibilityScope = this
-        val boundsModifier = if (sharedTransitionScope != null && sharedEnabled && sharedKeyPrefix != null) {
-            with(sharedTransitionScope) {
-                Modifier.sharedBounds(
-                    rememberSharedContentState(key = sharedKeyPrefix),
-                    animatedVisibilityScope = animatedVisibilityScope,
-                    clipInOverlayDuringTransition = OverlayClip(RoundedCornerShape(12.dp))
-                )
-            }
-        } else Modifier
 
         BackHandler(enabled = true) {
             if (zoomState.scale > 1f) {
@@ -135,42 +120,41 @@ internal fun PosterFullscreenOverlay(
             contentAlignment = Alignment.Center
         ) {
             // 海报图片（放大显示，拦截点击事件不触发外层dismiss）
-            AsyncImage(
-                model = remember(posterUrl) {
-                    ImageRequest.Builder(context)
-                        // 全屏查看用 original 原图:1080p 屏全屏显示约 1050px,
-                        // w500 源图放大到 1080 解码会模糊,original(2000px+) 保证清晰;
-                        // 下载大但仅在用户主动查看大图时触发
-                        .data(TmdbImageUrls.swapSize(posterUrl, "original"))
-                        .crossfade(false)
-                        .size(1080) // 加载高清大图
-                        .build()
-                },
-                contentDescription = title,
+            ProgressiveFullscreenImage(
+                // 全屏查看用 original 原图:1080p 屏全屏显示约 1050px,
+                // w500 源图放大到 1080 解码会模糊,original(2000px+) 保证清晰;
+                // 下载大但仅在用户主动查看大图时触发。
+                // 渐进底图为 w780（详情页头部已加载过，点开即可见），大图到位后覆盖。
+                model = remember(posterUrl) { TmdbImageUrls.swapSize(posterUrl, "original") },
                 contentScale = ContentScale.Fit,
+                contentDescription = title,
                 modifier = Modifier
                     .fillMaxWidth(0.85f)
                     .aspectRatio(2f / 3f)
-                    .then(boundsModifier)
-                    .pointerInput(zoomState) {
-                        detectTapGestures(
-                            onDoubleTap = { tapOffset ->
-                                // 双击切换放大/还原
-                                if (zoomState.scale > 1f) {
-                                    // 已放大 → 还原
-                                    scope.launch { zoomState.changeScale(1f, Offset.Zero) }
-                                } else {
-                                    // 未放大 → 放大到 2.5x,以双击位置为中心
-                                    scope.launch { zoomState.changeScale(2.5f, tapOffset) }
-                                }
+                    .zoomSharedTarget(
+                        key = sharedKeyPrefix,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        clipShape = RoundedCornerShape(12.dp)
+                    )
+                    // 单击退出（已放大时先复位）、双击缩放统一交给 zoomable 自带回调
+                    .zoomable(
+                        zoomState,
+                        onTap = {
+                            if (zoomState.scale > 1f) {
+                                scope.launch { zoomState.changeScale(1f, Offset.Zero) }
+                            } else {
+                                onDismiss()
                             }
-                        )
-                    }
-                    .zoomable(zoomState)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {} // 拦截点击，不触发外层 dismiss
+                        },
+                        onDoubleTap = { tapOffset ->
+                            if (zoomState.scale > 1f) {
+                                // 已放大 → 还原
+                                zoomState.changeScale(1f, Offset.Zero)
+                            } else {
+                                // 未放大 → 放大到 2.5x,以双击位置为中心
+                                zoomState.changeScale(2.5f, tapOffset)
+                            }
+                        }
                     )
             )
 

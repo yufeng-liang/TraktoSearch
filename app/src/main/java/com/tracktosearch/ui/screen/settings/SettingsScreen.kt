@@ -1495,7 +1495,7 @@ private fun AppearanceGroupItem(
                 containerColor = Color.Transparent
             )
         }
-        // 共享元素转场动画开关(默认关闭):关闭时所有页面间转场降级为 NavHost 默认过渡
+        // 共享元素转场动画开关(默认开启):关闭时所有页面间转场降级为 NavHost 默认过渡
         SharedTransitionSwitchCard(
             enabled = sharedTransitionEnabled,
             onToggle = { viewModel.setSharedTransitionEnabled(it) },

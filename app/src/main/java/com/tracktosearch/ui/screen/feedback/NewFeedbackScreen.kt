@@ -36,10 +36,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.LocalFullscreenSharedKey
 import com.tracktosearch.ui.component.ZoomableImageOverlay
+import com.tracktosearch.ui.component.zoomSharedSource
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -87,6 +86,13 @@ fun NewFeedbackScreen(
     }
 
     val isSubmitting = submitState is FeedbackViewModel.SubmitState.Uploading || submitState is FeedbackViewModel.SubmitState.Submitting
+
+    // 全屏查看器打开时把该 key 广播给缩略图源侧，让源侧置不可见，
+    // 保证同一 key 同时只有一侧是 target（否则缩放转场方向会反）
+    val fullscreenSharedKey = fullscreenIndex
+        ?.takeIf { screenshots.isNotEmpty() }
+        ?.let { "fb-new-${it.coerceIn(0, screenshots.size - 1)}" }
+    CompositionLocalProvider(LocalFullscreenSharedKey provides fullscreenSharedKey) {
 
     Scaffold(
         topBar = {
@@ -237,6 +243,7 @@ fun NewFeedbackScreen(
         sharedKeyPrefix = "fb-new",
         onDismiss = { fullscreenIndex = null }
     )
+    } // CompositionLocalProvider(LocalFullscreenSharedKey)
 }
 
 /**
@@ -300,17 +307,9 @@ private fun ScreenshotRow(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .size(80.dp)
-                            .then(
-                                if (sharedKeyPrefix != null && LocalSharedTransitionScope.current != null && LocalAnimatedVisibilityScope.current != null && LocalSharedTransitionEnabled.current) {
-                                    val scope = LocalSharedTransitionScope.current
-                                    with(scope!!) {
-                                        Modifier.sharedElement(
-                                            rememberSharedContentState(key = "$sharedKeyPrefix-$index"),
-                                            animatedVisibilityScope = LocalAnimatedVisibilityScope.current!!
-                                        )
-                                    }
-                                } else Modifier
-                            )
+                            // 与全屏端 "$sharedKeyPrefix-$page" 配对；caller-managed visibility
+                            // 保证同一 key 同时只有一侧是 target
+                            .zoomSharedSource(key = sharedKeyPrefix?.let { "$it-$index" })
                     )
                     // 右上角删除按钮
                     if (enabled) {

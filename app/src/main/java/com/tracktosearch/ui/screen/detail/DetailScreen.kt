@@ -3,6 +3,11 @@ package com.tracktosearch.ui.screen.detail
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -112,6 +117,7 @@ import com.tracktosearch.ui.screen.ai.sceneArtFor
 import com.tracktosearch.ui.screen.ai.shouldShowWatchlistAddedScene
 
 import com.tracktosearch.ui.component.LocalBackdrop
+import com.tracktosearch.ui.component.LocalFullscreenSharedKey
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -197,6 +203,10 @@ fun DetailScreen(
     var showPosterFullscreen by remember { mutableStateOf(false) }
     var playingVideoKey by remember { mutableStateOf<String?>(null) }
     var selectedBackdropIndex by remember { mutableIntStateOf(-1) }
+    // 截图查看器是否由「全部预告片与截图」sheet 触发：
+    // sheet 是独立 Dialog 窗口，内联层会被它遮住且返回键被它吃掉，
+    // 因此该来源要改走 Dialog 包裹（代价是跨窗口无法共享元素，用 scale+fade 近似）
+    var backdropFromSheet by remember { mutableStateOf(false) }
     var showAllVideos by remember { mutableStateOf(false) }
 
     // 内容就绪状态:沉浸背景优先显示,其他内容(cast/视频/简介/tab)淡入
@@ -345,6 +355,17 @@ fun DetailScreen(
                     .hazeSource(state = detailHazeState, zIndex = 0f)
                     .then(immersiveBackgroundModifier)
             ) {
+            // 全屏查看器打开时，把「正在被查看」的 key 广播给缩略图源侧，让源侧置不可见。
+            // 同一 key 若两侧同时是 target，SharedTransitionStateMachine 会取先注册的源侧作为
+            // 目标边界提供者，打开时边界从全屏动到缩略图（方向反了），观感上等于没有缩放动画。
+            // 从 sheet 打开走的是跨窗口 Dialog，本就无法共享元素，因此不隐藏横向栏缩略图。
+            val fullscreenSharedKey = when {
+                showPosterFullscreen -> "poster-zoom-bounds-$tmdbId"
+                selectedBackdropIndex >= 0 && !backdropFromSheet ->
+                    "backdrop-zoom-$tmdbId-$selectedBackdropIndex"
+                else -> null
+            }
+            CompositionLocalProvider(LocalFullscreenSharedKey provides fullscreenSharedKey) {
             // Tab 栏底色/文字颜色计算(在 LazyColumn 之外定义,让内容区也能用)
             // - 非吸顶(tab 还在海报下方):底色透明,文字按海报主色亮度自适应
             // - 吸顶(tab 滚动到顶部固定):底色为沉浸色与白色 0.5 混合,文字按底色亮度自适应
@@ -391,7 +412,7 @@ fun DetailScreen(
             val onToggleSeason = remember { { season: Int -> viewModel.toggleSeason(season) } }
             val onToggleEpisodeWatched = remember { { season: Int, episode: Int, traktId: Int -> viewModel.toggleEpisodeWatched(season, episode, traktId) } }
             val onVideoClick = remember { { video: TmdbVideo -> playingVideoKey = video.key } }
-            val onBackdropClick = remember { { index: Int -> selectedBackdropIndex = index } }
+            val onBackdropClick = remember { { index: Int -> backdropFromSheet = false; selectedBackdropIndex = index } }
             val onShowAllVideos = remember { { showAllVideos = true } }
             val onCollectionMovieClick = remember(onMovieClick) { { movieTmdbId: Int, movieTitle: String -> onMovieClick(0, movieTmdbId, movieTitle, "", 0.0) } }
             // Tab 数量计算（置于 LazyColumn 之前的 @Composable 上下文，并用副作用修正 selectedTab 范围）
@@ -1008,14 +1029,49 @@ fun DetailScreen(
                 }
             }
 
-            // 截图滑动查看（内联，不再用 Dialog，共享转场需同 window）
+            // 截图滑动查看（从详情页横向栏打开：内联，不用 Dialog，共享转场需同 window）
             BackdropPagerOverlay(
-                visible = selectedBackdropIndex >= 0 && uiState.backdrops.isNotEmpty(),
+                visible = selectedBackdropIndex >= 0 && !backdropFromSheet && uiState.backdrops.isNotEmpty(),
                 backdrops = uiState.backdrops,
                 initialIndex = selectedBackdropIndex.coerceAtLeast(0),
                 sharedKeyPrefix = "backdrop-zoom-$tmdbId",
                 onDismiss = { selectedBackdropIndex = -1 }
             )
+
+            // 截图滑动查看（从 sheet 内打开：Dialog 盖在 ModalBottomSheet 之上，
+            // sheet 保持打开，返回只关查看器，sheet 仍停在原滚动位置）
+            if (backdropFromSheet && selectedBackdropIndex >= 0 && uiState.backdrops.isNotEmpty()) {
+                // 首帧后再翻 true，AnimatedVisibility 才会播进入动画（初始即 true 不播）
+                var sheetViewerVisible by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) { sheetViewerVisible = true }
+                val closeSheetViewer: () -> Unit = {
+                    detailCoroutineScope.launch {
+                        sheetViewerVisible = false
+                        delay(220) // 等退出动画播完再移除 Dialog 窗口
+                        selectedBackdropIndex = -1
+                        backdropFromSheet = false
+                    }
+                }
+                Dialog(
+                    onDismissRequest = closeSheetViewer,
+                    properties = DialogProperties(
+                        usePlatformDefaultWidth = false,
+                        decorFitsSystemWindows = false
+                    )
+                ) {
+                    BackdropPagerOverlay(
+                        visible = sheetViewerVisible,
+                        backdrops = uiState.backdrops,
+                        initialIndex = selectedBackdropIndex.coerceAtLeast(0),
+                        sharedKeyPrefix = null, // 跨窗口无法配对共享元素
+                        onDismiss = closeSheetViewer,
+                        enter = scaleIn(initialScale = 0.85f, animationSpec = tween(220)) +
+                            fadeIn(animationSpec = tween(220)),
+                        exit = scaleOut(targetScale = 0.85f, animationSpec = tween(200)) +
+                            fadeOut(animationSpec = tween(200))
+                    )
+                }
+            }
 
             // 全部预告片与截图弹窗
             if (showAllVideos) {
@@ -1027,8 +1083,9 @@ fun DetailScreen(
                         playingVideoKey = video.key
                     },
                     onBackdropClick = { index ->
+                        // 不关 sheet：查看器走 Dialog 盖在 sheet 之上，返回后仍在 sheet 原位
+                        backdropFromSheet = true
                         selectedBackdropIndex = index
-                        showAllVideos = false // 关闭 sheet，全屏淡入（sheet 内元素无法参与共享转场）
                     }
                 )
             }
@@ -1087,6 +1144,7 @@ fun DetailScreen(
                     }
                 )
             }
+            } // CompositionLocalProvider(LocalFullscreenSharedKey)
         }
     }
     }

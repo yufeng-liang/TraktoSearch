@@ -45,11 +45,10 @@ import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.ZoomableImageOverlay
 import com.tracktosearch.ui.component.queryExistingFile
 import com.tracktosearch.ui.component.savePosterToGallery
+import com.tracktosearch.ui.component.zoomSharedSource
 import com.tracktosearch.ui.util.showToast
 
 // ==================== 人物图片大图查看 ====================
@@ -108,8 +107,8 @@ internal fun PersonImagePagerOverlay(
 
 /**
  * 全部人物图片内联面板（替代原 ModalBottomSheet）。
- * 用 AnimatedVisibility 包全屏网格，网格单元加 sharedElement，
- * 点击后从网格原位缩放飞出进入全屏查看器。
+ * 用 AnimatedVisibility 包全屏网格，网格单元用 caller-managed visibility 的共享元素，
+ * 点击后从网格原位缩放飞出进入全屏查看器；面板保持打开，返回即回到网格原位。
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -126,10 +125,9 @@ internal fun AllPersonImagesPanel(
         enter = fadeIn(animationSpec = tween(200)),
         exit = fadeOut(animationSpec = tween(200))
     ) {
-        val sharedTransitionScope = LocalSharedTransitionScope.current
-        val sharedEnabled = LocalSharedTransitionEnabled.current
-        val animatedVisibilityScope = this
-        // 返回键关闭面板（内联后屏幕级 BackHandler 仍生效，需在此拦截）
+        // 返回键关闭面板（内联后屏幕级 BackHandler 仍生效，需在此拦截）。
+        // 全屏查看器在 PersonScreen 中排在本面板之后组合，其 BackHandler 注册更晚、优先级更高，
+        // 所以查看器打开时返回键先关查看器，再按一次才关面板。
         BackHandler(enabled = true) { onDismiss() }
         Column(
             modifier = Modifier
@@ -161,14 +159,6 @@ internal fun AllPersonImagesPanel(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 itemsIndexed(images, key = { index, _ -> "person_img_all_$index" }, contentType = { _, _ -> "image" }) { index, url ->
-                    val sharedModifier = if (sharedTransitionScope != null && sharedEnabled) {
-                        with(sharedTransitionScope) {
-                            Modifier.sharedElement(
-                                rememberSharedContentState(key = "person-grid-$personId-$index"),
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                        }
-                    } else Modifier
                     SubcomposeAsyncImage(
                         model = remember(url) {
                             ImageRequest.Builder(context)
@@ -183,7 +173,9 @@ internal fun AllPersonImagesPanel(
                             .fillMaxWidth()
                             .aspectRatio(2f / 3f)
                             .clip(RoundedCornerShape(6.dp))
-                            .then(sharedModifier)
+                            // caller-managed visibility：查看器打开本 key 时网格项置不可见，
+                            // 面板本身可以保持打开，返回即回到网格原位
+                            .zoomSharedSource(key = "person-grid-$personId-$index")
                             .clickable { onImageClick(index) }
                     )
                 }

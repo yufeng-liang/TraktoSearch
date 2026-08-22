@@ -4,7 +4,12 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Environment
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -68,12 +73,10 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.ZoomableImageOverlay
 import com.tracktosearch.ui.component.queryExistingFile
 import com.tracktosearch.ui.component.savePosterToGallery
+import com.tracktosearch.ui.component.zoomSharedSource
 import com.tracktosearch.ui.util.showToast
 import kotlinx.coroutines.launch
 
@@ -254,20 +257,15 @@ internal fun BackdropCard(
             .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
     ) {
-        // sharedKeyPrefix 非空且共享转场开启时,与全屏端 "$sharedKeyPrefix-$page" 配对,实现缩放转场
-        val sharedModifier = if (sharedKeyPrefix != null && LocalSharedTransitionScope.current != null && LocalAnimatedVisibilityScope.current != null && LocalSharedTransitionEnabled.current) {
-            val scope = LocalSharedTransitionScope.current
-            with(scope!!) {
-                Modifier.sharedElement(
-                    rememberSharedContentState(key = "$sharedKeyPrefix-$index"),
-                    animatedVisibilityScope = LocalAnimatedVisibilityScope.current!!
-                )
-            }
-        } else Modifier
+        // sharedKeyPrefix 非空且共享转场开启时,与全屏端 "$sharedKeyPrefix-$page" 配对,实现缩放转场。
+        // 用 caller-managed visibility(zoomSharedSource):全屏端打开本 key 时缩略图侧置不可见,
+        // 保证同一 key 同时只有一侧是 target,否则转场方向会反。
         ProgressiveBackdrop(
             backdropUrl = backdropUrl,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize().then(sharedModifier)
+            modifier = Modifier
+                .fillMaxSize()
+                .zoomSharedSource(key = sharedKeyPrefix?.let { "$it-$index" })
         )
     }
 }
@@ -671,7 +669,9 @@ internal fun BackdropPagerOverlay(
     backdrops: List<String>,
     initialIndex: Int,
     sharedKeyPrefix: String?,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    enter: EnterTransition = fadeIn(animationSpec = tween(200)),
+    exit: ExitTransition = fadeOut(animationSpec = tween(200))
 ) {
     val context = LocalContext.current
     val alreadySavedToast = stringResource(R.string.poster_already_saved)
@@ -712,6 +712,8 @@ internal fun BackdropPagerOverlay(
                 }
             }
         },
-        isSavedAt = { idx -> idx in savedBackdrops.value }
+        isSavedAt = { idx -> idx in savedBackdrops.value },
+        enter = enter,
+        exit = exit
     )
 }
