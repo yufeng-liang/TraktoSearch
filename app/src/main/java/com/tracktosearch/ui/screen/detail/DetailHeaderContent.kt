@@ -407,7 +407,6 @@ internal fun DetailHeaderContent(
                             }
                         )
                     ),
-                    hazeState = hazeState,
                     modifier = Modifier.padding(top = 8.dp),
                     verticalPadding = 5.dp
                 )

@@ -12,7 +12,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
-import dev.chrisbanes.haze.HazeState
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -37,8 +36,7 @@ class ActionButtonRowTest {
                         isDestructive = false,
                         onClick = {}
                     )
-                ),
-                hazeState = HazeState()
+                )
             )
         }
         composeRule.onNodeWithText("想看").assertIsDisplayed()
@@ -52,8 +50,7 @@ class ActionButtonRowTest {
                     ActionItem(Icons.Rounded.Bookmark, "想看", false, true, false, false, {}),
                     ActionItem(Icons.Rounded.Check, "已看", false, true, false, false, {}),
                     ActionItem(Icons.Rounded.Star, "评分", false, true, false, false, {})
-                ),
-                hazeState = HazeState()
+                )
             )
         }
         composeRule.onNodeWithText("想看").assertIsDisplayed()
@@ -68,8 +65,7 @@ class ActionButtonRowTest {
             ActionButtonRow(
                 actions = listOf(
                     ActionItem(Icons.Rounded.Bookmark, "想看", false, true, false, false, { clicked = true })
-                ),
-                hazeState = HazeState()
+                )
             )
         }
         composeRule.onNodeWithText("想看").performClick()
@@ -83,8 +79,7 @@ class ActionButtonRowTest {
             ActionButtonRow(
                 actions = listOf(
                     ActionItem(Icons.Rounded.Bookmark, "禁用按钮", false, false, false, false, {})
-                ),
-                hazeState = HazeState()
+                )
             )
         }
         composeRule.onNodeWithText("禁用按钮").assertIsNotEnabled()
@@ -96,8 +91,7 @@ class ActionButtonRowTest {
             ActionButtonRow(
                 actions = listOf(
                     ActionItem(Icons.Rounded.Bookmark, "已想看", true, true, false, false, {})
-                ),
-                hazeState = HazeState()
+                )
             )
         }
         composeRule.onNodeWithText("已想看").assertIsDisplayed()
@@ -109,8 +103,7 @@ class ActionButtonRowTest {
             ActionButtonRow(
                 actions = listOf(
                     ActionItem(Icons.Rounded.Bookmark, "加载中", false, true, true, false, {})
-                ),
-                hazeState = HazeState()
+                )
             )
         }
         composeRule.waitForIdle()
@@ -124,8 +117,7 @@ class ActionButtonRowTest {
             ActionButtonRow(
                 actions = listOf(
                     ActionItem(Icons.Rounded.Delete, "删除", false, true, false, true, {})
-                ),
-                hazeState = HazeState()
+                )
             )
         }
         composeRule.onNodeWithText("删除").assertIsDisplayed()
@@ -138,8 +130,7 @@ class ActionButtonRowTest {
             ActionButtonRow(
                 actions = listOf(
                     ActionItem(Icons.Rounded.Bookmark, "禁用", false, false, false, false, { clicked = true })
-                ),
-                hazeState = HazeState()
+                )
             )
         }
         composeRule.onNodeWithText("禁用").performClick()
@@ -154,8 +145,7 @@ class ActionButtonRowTest {
                 actions = listOf(
                     ActionItem(Icons.Rounded.Bookmark, "想看", true, true, false, false, {}),
                     ActionItem(Icons.Rounded.Check, "已看", false, true, false, false, {})
-                ),
-                hazeState = HazeState()
+                )
             )
         }
         composeRule.onNodeWithText("想看").assertIsDisplayed()
