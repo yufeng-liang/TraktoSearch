@@ -67,7 +67,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.preferredFrameRate
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -100,6 +102,7 @@ import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.NeumorphicActiveTab
 import com.tracktosearch.ui.component.OnboardingOverlay
 import com.tracktosearch.ui.component.PageBackground
+import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.LocalBackdropSourceEnabled
 import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.isAppDarkTheme
@@ -409,12 +412,25 @@ fun MainScreen(
         MaterialTheme.colorScheme.primary,
         0.05f
     )
-    // 主内容宿主与底栏保持兄弟关系。页面内部的 Glass 仍采样外层 backdrop，
-    // 避免把 drawBackdrop 子树录回同一个 source 形成递归渲染。
+    val isGlassMode = LocalVisualEffectMode.current == VisualEffectMode.GLASS
+    // Glass 模式下才需要 backdrop 采样源；blur 模式走 hazeSource，注册 layer 是纯浪费。
+    val glowAsBackdrop = isGlassMode && meshEnabled
+
+    // 光晕单独一层：只录 PageBackground，子树内不含任何 drawBackdrop，因此可以安全地
+    // 供页面内部的 Glass 控件采样而不会形成 RenderThread 递归。
+    val glowBackdrop = rememberLayerBackdrop()
+
+    // 主内容宿主与底栏保持兄弟关系。底栏要同时看到光晕和内容列表，但 shader 只渲染一次：
+    // 这里直接把 glowBackdrop 已录好的 GraphicsLayer 贴进来，而不是让光晕再走一遍着色器。
+    // 绘制顺序上光晕层是先兄弟，本帧已录完，读到的是当帧内容，不滞后。
     val mainContentBackdrop = rememberLayerBackdrop(
-        onDraw = remember(pageBackdropColor) {
+        onDraw = remember(pageBackdropColor, glowBackdrop, glowAsBackdrop) {
             {
-                drawRect(pageBackdropColor)
+                if (glowAsBackdrop) {
+                    drawLayer(glowBackdrop.graphicsLayer)
+                } else {
+                    drawRect(pageBackdropColor)
+                }
                 drawContent()
             }
         }
@@ -436,11 +452,22 @@ fun MainScreen(
                     .hazeSource(state = hazeState, zIndex = 0f)
             ) {
                 // 页面背景为彩色弥散光晕层：预设与开关由设置页持久化，经主题存储驱动。
-                PageBackground(
-                    modifier = Modifier.fillMaxSize(),
-                    preset = MeshPreset.fromStorage(meshPreset),
-                    enabled = meshEnabled,
-                )
+                // preferredFrameRate：光晕是缓动大色块，30fps 足够，避免在 120Hz 屏上
+                // 让一个永不停止的全屏 shader 按刷新率满帧跑（Android 15+ 生效，低版本无副作用）。
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(
+                            if (glowAsBackdrop) Modifier.layerBackdrop(glowBackdrop) else Modifier
+                        )
+                        .preferredFrameRate(30f)
+                ) {
+                    PageBackground(
+                        modifier = Modifier.fillMaxSize(),
+                        preset = MeshPreset.fromStorage(meshPreset),
+                        enabled = meshEnabled,
+                    )
+                }
 
                 // 主内容 backdrop 与页面级 backdrop 是两个独立实例：前者供底栏采样整页画面，
                 // 后者供当前页的 Glass 控件采样内容列表。只开放当前页的 source，避免隐藏页
@@ -461,7 +488,12 @@ fun MainScreen(
                         // 只有当前可见 tab 的 MovieCard 参与 sharedElement 转场，避免 HorizontalPager 常驻的其他 tab 同 tmdbId 海报冲突
                         CompositionLocalProvider(
                             LocalBackdropSourceEnabled provides (page == pagerState.currentPage),
-                            LocalIsCurrentTab provides (page == pagerState.currentPage)
+                            LocalIsCurrentTab provides (page == pagerState.currentPage),
+                            // 页内 Glass（搜索框、热词 chip 等）改采样光晕层。原先落到 App 级
+                            // BackdropProvider 的空 source，只能采到一块主题平色，看不到光晕。
+                            // 光晕层不含 drawBackdrop，不会递归；不适用时保持原值不动。
+                            LocalBackdrop provides
+                                (if (glowAsBackdrop) glowBackdrop else LocalBackdrop.current)
                         ) {
                             when (page) {
                     0 -> {

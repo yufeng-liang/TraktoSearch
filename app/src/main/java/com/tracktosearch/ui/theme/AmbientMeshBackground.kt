@@ -9,6 +9,7 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
@@ -17,6 +18,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import io.androidpoet.mirage.GrainGradient
 import io.androidpoet.mirage.GrainGradientShape
 import io.androidpoet.mirage.Metaballs
@@ -83,12 +87,20 @@ fun AmbientMeshBackground(
         }
     }
 
+    // 息屏/切后台时冻结动画。mirage 的时间是逐帧累加进 MutableFloatState 的（见
+    // core/ShaderTime.kt），speed = 0f 停在当前累加值而不是回到 0，所以不会跳变；
+    // 且 time 不再变化后着色器不再失效，等于零帧开销。
+    // 注：Compose 的 MonotonicFrameClock 在窗口不可见时本就不发帧，这里主要是把
+    // "不可见还在跑" 的边界情况（分屏、被半透明 Activity 覆盖等）也确定性地掐掉。
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val speedScale = if (lifecycleState.isAtLeast(Lifecycle.State.STARTED)) 1f else 0f
+
     Box(modifier = modifier.fillMaxSize().background(colorScheme.background)) {
         if (enabled) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                ShaderAmbient(preset, palette, colorScheme.background)
+                ShaderAmbient(preset, palette, colorScheme.background, speedScale)
             } else {
-                LegacyMeshAmbient(preset, palette)
+                LegacyMeshAmbient(preset, palette, speedScale > 0f)
             }
             val scrim = colorScheme.background.copy(alpha = scrimAlpha(preset, isDark))
             Box(Modifier.fillMaxSize().background(scrim))
@@ -162,6 +174,7 @@ private fun ShaderAmbient(
     preset: MeshPreset,
     palette: List<Color>,
     backColor: Color,
+    speedScale: Float,
 ) {
     // Cover：铺满并裁掉溢出。默认的 Contain 是给独立图形用的，长屏当背景会显小。
     val sizing = remember { SizingParams(fit = ShaderFit.Cover) }
@@ -172,7 +185,7 @@ private fun ShaderAmbient(
             distortion = 0.9f,
             swirl = 0.25f,
             grainOverlay = 0.10f,
-            speed = 0.22f,
+            speed = 0.22f * speedScale,
             sizing = sizing,
         )
         MeshPreset.LAVA_LAMP -> Metaballs(
@@ -181,7 +194,7 @@ private fun ShaderAmbient(
             colors = palette,
             count = 7f,
             size = 1.05f,
-            speed = 0.20f,
+            speed = 0.20f * speedScale,
             sizing = sizing,
         )
         MeshPreset.BLOOM -> GrainGradient(
@@ -192,7 +205,7 @@ private fun ShaderAmbient(
             softness = 0.85f,
             intensity = 0.50f,
             noise = 0.20f,
-            speed = 0.25f,
+            speed = 0.25f * speedScale,
             sizing = sizing,
         )
         // distortion / swirl / rotation 与 Paper Shaders 官方预设一致；
@@ -202,7 +215,7 @@ private fun ShaderAmbient(
             colors = palette,
             distortion = 0.8f,
             swirl = 0.1f,
-            speed = 0.30f,
+            speed = 0.30f * speedScale,
             sizing = sizing,
         )
         MeshPreset.INK -> ShaderMeshGradient(
@@ -210,7 +223,7 @@ private fun ShaderAmbient(
             colors = palette,
             distortion = 1f,
             swirl = 0.2f,
-            speed = 0.26f,
+            speed = 0.26f * speedScale,
             sizing = remember { SizingParams(fit = ShaderFit.Cover, rotation = 90f) },
         )
         MeshPreset.BEACH -> ShaderMeshGradient(
@@ -218,7 +231,7 @@ private fun ShaderAmbient(
             colors = palette,
             distortion = 0.8f,
             swirl = 0.35f,
-            speed = 0.05f,
+            speed = 0.05f * speedScale,
             sizing = sizing,
         )
     }
@@ -241,6 +254,7 @@ private const val LEGACY_GRID = 4
 private fun LegacyMeshAmbient(
     preset: MeshPreset,
     palette: List<Color>,
+    animating: Boolean,
 ) {
     val basePoints = remember {
         Array(LEGACY_GRID * LEGACY_GRID) { i ->
@@ -266,11 +280,20 @@ private fun LegacyMeshAmbient(
         MeshPreset.BEACH -> 40_000L
         else -> 23_000L
     }
-    LaunchedEffect(preset, colors) {
+    // 累加"动画自己的时间"而不是直接用帧时间戳：冻结期间不累加，恢复后从原相位继续，
+    // 不会因为墙上时钟走过而跳一段。用裸数组而非 State，避免每帧写入触发重组。
+    val elapsedMs = remember { LongArray(1) }
+    LaunchedEffect(preset, colors, animating) {
+        if (!animating) return@LaunchedEffect
         val working = basePoints.toMutableList()
+        var lastNanos = 0L
         while (true) {
             val frameNanos = withFrameNanos { it }
-            val phase = (frameNanos / 1_000_000L % periodMs) / periodMs.toFloat() * TWO_PI
+            if (lastNanos != 0L) {
+                elapsedMs[0] += (frameNanos - lastNanos) / 1_000_000L
+            }
+            lastNanos = frameNanos
+            val phase = (elapsedMs[0] % periodMs) / periodMs.toFloat() * TWO_PI
             for (i in working.indices) {
                 val col = i % LEGACY_GRID
                 val row = i / LEGACY_GRID
