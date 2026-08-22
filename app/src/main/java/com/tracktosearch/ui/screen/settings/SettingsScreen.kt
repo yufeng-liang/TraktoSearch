@@ -685,11 +685,13 @@ fun SettingsScreen(
                         onClearAll = { showClearCacheDialog = true },
                         containerColor = Color.Transparent
                     )
-                    // 图片下载流量统计
-                    ImageTrafficSectionItem(
-                        viewModel = viewModel,
-                        containerColor = Color.Transparent
-                    )
+                    // 图片下载流量统计：尚未发布，仅 debug 构建显示
+                    if (BuildConfig.DEBUG) {
+                        ImageTrafficSectionItem(
+                            viewModel = viewModel,
+                            containerColor = Color.Transparent
+                        )
+                    }
                 }
             }
 
