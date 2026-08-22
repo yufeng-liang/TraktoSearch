@@ -123,7 +123,8 @@ internal fun MovieCard(
         label = "movie_card_scale"
     )
     val ratingValue = rating?.toDoubleOrNull()
-    val posterShape = RoundedCornerShape(16.dp)
+    // 影视卡片与右上角评分徽章统一圆角规格，避免同一张海报出现两套圆角。
+    val posterShape = RoundedCornerShape(7.dp)
     // 缓存顶部高光渐变 Brush,避免每次重组创建新实例
     val topHighlightBrush = remember { Brush.verticalGradient(0f to Color.White.copy(alpha = 0.15f), 1f to Color.Transparent) }
 
