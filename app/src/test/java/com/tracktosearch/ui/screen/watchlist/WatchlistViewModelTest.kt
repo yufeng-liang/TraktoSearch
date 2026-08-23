@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
@@ -73,8 +74,12 @@ import java.io.IOException
 @Config(sdk = [33], application = android.app.Application::class)
 class WatchlistViewModelTest {
 
+    // 与 Main 共用同一个 TestDispatcher：ViewModel 里的计算调度器也走虚拟时间，
+    // advanceUntilIdle 仍能确定性推进 withContext(computeDispatcher) 里的工作
+    private val testDispatcher = StandardTestDispatcher()
+
     @get:Rule
-    val mainDispatcherRule = MainDispatcherRule()
+    val mainDispatcherRule = MainDispatcherRule(testDispatcher)
 
     private lateinit var traktRepository: TraktRepository
     private lateinit var tmdbRepository: TmdbRepository
@@ -140,7 +145,7 @@ class WatchlistViewModelTest {
             traktRepository, tmdbRepository, offlineCacheManager,
             doubanSyncManager, doubanAuthStorage, doubanSyncMetaStorage,
             statusConsistencyChecker, doubanBatchRemovalManager,
-            sessionModeManager, doubanSyncedItemDao, context
+            sessionModeManager, doubanSyncedItemDao, testDispatcher, context
         )
     }
 
@@ -679,7 +684,7 @@ class WatchlistViewModelTest {
             traktRepository, tmdbRepository, offlineCacheManager,
             doubanSyncManager, doubanAuthStorage, doubanSyncMetaStorage,
             statusConsistencyChecker, doubanBatchRemovalManager,
-            sessionModeManager, doubanSyncedItemDao, context
+            sessionModeManager, doubanSyncedItemDao, testDispatcher, context
         )
         advanceUntilIdle()
         assertThat(viewModel.needFirstSyncGuide.value).isTrue()
@@ -699,7 +704,7 @@ class WatchlistViewModelTest {
             traktRepository, tmdbRepository, offlineCacheManager,
             doubanSyncManager, doubanAuthStorage, doubanSyncMetaStorage,
             statusConsistencyChecker, doubanBatchRemovalManager,
-            sessionModeManager, doubanSyncedItemDao, context
+            sessionModeManager, doubanSyncedItemDao, testDispatcher, context
         )
         advanceUntilIdle()
 

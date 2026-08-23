@@ -112,6 +112,11 @@ fun coalesceDoubanWatchlistEntries(
 /**
  * 合并 Trakt 与豆瓣 watchlist。结果按最新 listedAt 降序排列，时间相同或缺失时保持输入顺序。
  * 匹配只使用双方都存在的规范化 IMDb，标题、年份等字段不会触发错误去重。
+ *
+ * 匹配用 traktId / 规范化 IMDb 两张倒排索引（值为按原顺序排列的下标队列），
+ * 复杂度从「每条 Trakt 条目全量扫描豆瓣列表」的 O(n×m) 降到 O(n+m)：
+ * 队列头即原实现的"第一个未匹配项"，已被另一张索引消费掉的下标出队时跳过。
+ * 排序键（trim 后字符串 + 解析好的 Instant）每条只算一次，避免比较器里重复 Instant.parse。
  */
 fun mergeTraktAndDoubanWatchlist(
     traktEntries: List<TraktWatchlistRecord> = emptyList(),
@@ -119,21 +124,34 @@ fun mergeTraktAndDoubanWatchlist(
 ): List<MergedWatchlistItem> {
     val trakt = coalesceTraktWatchlistEntries(traktEntries)
     val douban = coalesceDoubanWatchlistEntries(doubanEntries)
-    val matchedDoubanIndexes = mutableSetOf<Int>()
-    val merged = mutableListOf<MergedWatchlistItem>()
+    val matchedDoubanIndexes = HashSet<Int>(douban.size * 2)
+    val merged = ArrayList<MergedWatchlistItem>(trakt.size + douban.size)
+
+    // 倒排索引：traktId / 规范化 IMDb → 豆瓣条目下标队列（保持原列表顺序）
+    val doubanByTraktId = HashMap<Int, ArrayDeque<Int>>()
+    val doubanByImdbId = HashMap<String, ArrayDeque<Int>>()
+    douban.forEachIndexed { index, entry ->
+        entry.traktId?.let { doubanByTraktId.getOrPut(it) { ArrayDeque() }.addLast(index) }
+        normalizeWatchlistImdbId(entry.imdbId)?.let {
+            doubanByImdbId.getOrPut(it) { ArrayDeque() }.addLast(index)
+        }
+    }
+
+    /** 取出该键下第一个尚未被匹配的下标；已匹配的下标直接丢弃（不会再被任何键复用）。 */
+    fun takeUnmatched(queue: ArrayDeque<Int>?): Int? {
+        if (queue == null) return null
+        while (queue.isNotEmpty()) {
+            val candidate = queue.removeFirst()
+            if (candidate !in matchedDoubanIndexes) return candidate
+        }
+        return null
+    }
 
     trakt.forEach { traktEntry ->
         val traktImdb = normalizeWatchlistImdbId(traktEntry.imdbId)
         // IMDb 可能缺失或被 Trakt 返回为空，优先用本地快照保留的 traktId 合并。
-        val doubanIndex = douban.withIndex().firstOrNull { (index, entry) ->
-            entry.traktId != null && entry.traktId == traktEntry.traktId &&
-                index !in matchedDoubanIndexes
-        }?.index ?: traktImdb?.let { imdb ->
-            douban.withIndex().firstOrNull { (index, entry) ->
-                normalizeWatchlistImdbId(entry.imdbId) == imdb &&
-                    index !in matchedDoubanIndexes
-            }?.index
-        }
+        val doubanIndex = traktEntry.traktId?.let { takeUnmatched(doubanByTraktId[it]) }
+            ?: traktImdb?.let { takeUnmatched(doubanByImdbId[it]) }
 
         if (doubanIndex != null) {
             matchedDoubanIndexes += doubanIndex
@@ -149,8 +167,38 @@ fun mergeTraktAndDoubanWatchlist(
         }
     }
 
-    return merged.sortedWith { first, second ->
-        compareListedAt(second.listedAt, first.listedAt)
+    return sortByListedAtDescending(merged)
+}
+
+/** listedAt 排序键：trim 后原串 + 预解析 Instant，避免比较器里重复解析。 */
+private class ListedAtSortKey(val text: String, val instant: Instant?)
+
+private fun listedAtSortKey(listedAt: String?): ListedAtSortKey {
+    val text = listedAt?.trim().orEmpty()
+    val instant = if (text.isEmpty()) null else runCatching { Instant.parse(text) }.getOrNull()
+    return ListedAtSortKey(text, instant)
+}
+
+/**
+ * 按 listedAt 降序稳定排序（时间相同或缺失时保持输入顺序）。
+ * 比较语义与 [compareListedAt] 完全一致，只是把解析结果提前算好复用。
+ */
+private fun sortByListedAtDescending(items: List<MergedWatchlistItem>): List<MergedWatchlistItem> {
+    if (items.size <= 1) return items
+    val keyed = items.map { it to listedAtSortKey(it.listedAt) }
+    return keyed.sortedWith { first, second ->
+        compareSortKeys(second.second, first.second)
+    }.map { it.first }
+}
+
+private fun compareSortKeys(first: ListedAtSortKey, second: ListedAtSortKey): Int {
+    if (first.text.isEmpty() || second.text.isEmpty()) {
+        return first.text.length.compareTo(second.text.length)
+    }
+    return if (first.instant != null && second.instant != null) {
+        first.instant.compareTo(second.instant)
+    } else {
+        first.text.compareTo(second.text)
     }
 }
 

@@ -34,10 +34,13 @@ import com.tracktosearch.data.repository.mapDoubanMediaType
 import com.tracktosearch.data.repository.normalizeWatchlistImdbId
 import com.tracktosearch.data.session.SessionMode
 import com.tracktosearch.data.session.SessionModeManager
+import com.tracktosearch.data.util.TtlCache
+import com.tracktosearch.di.DispatcherModule
 import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -62,6 +65,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import javax.inject.Inject
+import javax.inject.Named
 
 @Immutable
 data class MediaUiItem(
@@ -173,6 +177,15 @@ data class WatchlistUiState(
     }
 }
 
+/**
+ * 豆瓣 status 列表读表结果的保留时长（毫秒）。
+ * 只为让同一次加载中并发的三个 Tab 共享一次查询，不用于跨加载复用，所以取很短的值。
+ */
+private const val DOUBAN_STATUS_ITEMS_TTL_MS = 2_000L
+
+/** 已看历史剩余分页的并发上限：并发拉取但不把网关一次性打满。 */
+private const val HISTORY_PAGE_CONCURRENCY = 4
+
 @HiltViewModel
 class WatchlistViewModel @Inject constructor(
     private val traktRepository: TraktRepository,
@@ -185,6 +198,7 @@ class WatchlistViewModel @Inject constructor(
     private val doubanBatchRemovalManager: DoubanBatchRemovalManager,
     private val sessionModeManager: SessionModeManager,
     private val doubanSyncedItemDao: DoubanSyncedItemDao,
+    @Named(DispatcherModule.COMPUTE_DISPATCHER) private val computeDispatcher: CoroutineDispatcher,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -209,6 +223,8 @@ class WatchlistViewModel @Inject constructor(
     private var loadedSessionKey: SessionMode? = null
     private var doubanSyncBannerHideJob: Job? = null
     private val pendingWatchlistMutations = mutableListOf<TraktRepository.WatchlistMutation>()
+    /** 本次会话已用离线缓存兜过首帧的列表类型，避免每次刷新都多读一次 Room */
+    private val offlineCacheHydrated = mutableSetOf<String>()
     private val loadedTraktMovies = mutableListOf<MediaUiItem>()
     private val loadedTraktShows = mutableListOf<MediaUiItem>()
     private val loadedTraktHistoryMovies = mutableListOf<MediaUiItem>()
@@ -526,6 +542,7 @@ class WatchlistViewModel @Inject constructor(
                 isLoadingMovies = if (loadMore || !silent) true else _uiState.value.isLoadingMovies,
                 moviesError = if (silent) _uiState.value.moviesError else null
             )
+            if (!loadMore) hydrateFromOfflineCache(OfflineCacheManager.TYPE_WATCHLIST_MOVIE)
             val result = retryIO(maxRetries) { traktRepository.getMovieWatchlist(page = page, limit = 200, forceRefresh = forceReload) }
             result.onSuccess { (rawItems, totalPages) ->
                 val totalCount = traktRepository.getMovieWatchlistTotalCount(page, 200) ?: rawItems.size
@@ -646,6 +663,7 @@ class WatchlistViewModel @Inject constructor(
                 isLoadingShows = if (loadMore || !silent) true else _uiState.value.isLoadingShows,
                 showsError = if (silent) _uiState.value.showsError else null
             )
+            if (!loadMore) hydrateFromOfflineCache(OfflineCacheManager.TYPE_WATCHLIST_SHOW)
             val result = retryIO(maxRetries) { traktRepository.getShowWatchlist(page = page, limit = 200, forceRefresh = forceReload) }
             result.onSuccess { (rawItems, totalPages) ->
                 val totalCount = traktRepository.getShowWatchlistTotalCount(page, 200) ?: rawItems.size
@@ -739,7 +757,7 @@ class WatchlistViewModel @Inject constructor(
                     return@launch
                 }
                 SessionMode.TRAKT -> if (isDoubanLoggedIn()) {
-                    loadOthersWithDouban()
+                    loadOthersWithDouban(forceReload)
                     return@launch
                 }
                 else -> Unit
@@ -755,20 +773,28 @@ class WatchlistViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 拉取全部历史分页。
+     *
+     * 第一页拿到 totalPages 后，剩余页按 [HISTORY_PAGE_CONCURRENCY] 分批并发拉取：
+     * 原实现逐页串行，几千条历史要串十几个网络往返才出内容。
+     */
     private suspend fun <T> fetchAllHistoryPages(
         fetchPage: suspend (page: Int) -> Result<Pair<List<T>, Int>>
     ): Result<List<T>> {
-        val allItems = mutableListOf<T>()
-        var page = 1
-        var totalPages = 1
-        while (page <= totalPages) {
-            val result = retryIO(maxRetries) { fetchPage(page) }
-            val (items, pageCount) = result.getOrElse { error ->
-                return Result.failure(error)
+        val firstPage = retryIO(maxRetries) { fetchPage(1) }
+        val (firstItems, totalPages) = firstPage.getOrElse { error -> return Result.failure(error) }
+        if (totalPages <= 1) return Result.success(firstItems)
+
+        val allItems = ArrayList<T>(firstItems.size * totalPages)
+        allItems += firstItems
+        for (chunk in (2..totalPages).chunked(HISTORY_PAGE_CONCURRENCY)) {
+            val results = coroutineScope {
+                chunk.map { page -> async { retryIO(maxRetries) { fetchPage(page) } } }.awaitAll()
             }
-            allItems += items
-            totalPages = pageCount
-            page++
+            results.forEach { result ->
+                allItems += result.getOrElse { error -> return Result.failure(error) }.first
+            }
         }
         return Result.success(allItems)
     }
@@ -804,6 +830,7 @@ class WatchlistViewModel @Inject constructor(
                 isLoadingHistoryMovies = true,
                 historyMoviesError = null
             )
+            hydrateFromOfflineCache(OfflineCacheManager.TYPE_HISTORY_MOVIE)
             val result = fetchAllHistoryPages<TraktWatchlistMovieItem> { page ->
                 traktRepository.getMovieHistory(page = page, limit = 200)
             }
@@ -879,6 +906,7 @@ class WatchlistViewModel @Inject constructor(
                 isLoadingHistoryShows = true,
                 historyShowsError = null
             )
+            hydrateFromOfflineCache(OfflineCacheManager.TYPE_HISTORY_SHOW)
             val result = fetchAllHistoryPages<TraktWatchlistShowItem> { page ->
                 traktRepository.getShowHistory(page = page, limit = 200)
             }
@@ -928,11 +956,11 @@ class WatchlistViewModel @Inject constructor(
         loadHistoryOthersJob = viewModelScope.launch {
             when (sessionModeManager.sessionMode.first()) {
                 SessionMode.DOUBAN -> {
-                    loadHistoryOthersFromDouban()
+                    loadHistoryOthersFromDouban(forceReload)
                     return@launch
                 }
                 SessionMode.TRAKT -> if (isDoubanLoggedIn()) {
-                    loadHistoryOthersWithDouban()
+                    loadHistoryOthersWithDouban(forceReload)
                     return@launch
                 }
                 else -> Unit
@@ -956,6 +984,7 @@ class WatchlistViewModel @Inject constructor(
             isLoadingMovies = if (silent) _uiState.value.isLoadingMovies else true,
             moviesError = if (silent) _uiState.value.moviesError else null
         )
+        if (page == 1) hydrateFromOfflineCache(OfflineCacheManager.TYPE_WATCHLIST_MOVIE)
         if (forceReload && page == 1) loadedTraktMovies.clear()
         val result = retryIO(maxRetries) {
             traktRepository.getMovieWatchlist(page = page, limit = 200, forceRefresh = forceReload)
@@ -986,7 +1015,7 @@ class WatchlistViewModel @Inject constructor(
                     }.awaitAll()
             }
             replaceLoadedTraktItems(loadedTraktMovies, uiItems)
-            val doubanItems = getDoubanItemsForType("wish", WatchlistMediaType.MOVIE)
+            val doubanItems = getDoubanItemsForType("wish", WatchlistMediaType.MOVIE, forceReload)
             val merged = mergeWatchlistItems(loadedTraktMovies, doubanItems, WatchlistMediaType.MOVIE)
             val totalCount = traktRepository.getMovieWatchlistTotalCount(page, 200) ?: rawItems.size
             _uiState.value = _uiState.value.copy(
@@ -998,11 +1027,18 @@ class WatchlistViewModel @Inject constructor(
                 moviePage = page + 1,
                 moviesError = null
             )
+            // 想看列表首页成功后写离线缓存：豆瓣合并路径原先不落盘，导致冷启动只能白屏等网络
+            if (page == 1) {
+                offlineCacheManager.saveMediaItems(
+                    OfflineCacheManager.TYPE_WATCHLIST_MOVIE,
+                    uiItems.map { it.toMediaItemEntity(OfflineCacheManager.TYPE_WATCHLIST_MOVIE) }
+                )
+            }
             if (loadAllPages && page < totalPages) {
                 loadMovies(forceReload = true, silent = true, loadAllPages = true)
             }
         }.onFailure { error ->
-            val doubanItems = getDoubanItemsForType("wish", WatchlistMediaType.MOVIE)
+            val doubanItems = getDoubanItemsForType("wish", WatchlistMediaType.MOVIE, forceReload)
             val merged = mergeWatchlistItems(loadedTraktMovies, doubanItems, WatchlistMediaType.MOVIE)
             _uiState.value = _uiState.value.copy(
                 movies = if (merged.isNotEmpty()) merged else _uiState.value.movies,
@@ -1024,6 +1060,7 @@ class WatchlistViewModel @Inject constructor(
             isLoadingShows = if (silent) _uiState.value.isLoadingShows else true,
             showsError = if (silent) _uiState.value.showsError else null
         )
+        if (page == 1) hydrateFromOfflineCache(OfflineCacheManager.TYPE_WATCHLIST_SHOW)
         if (forceReload && page == 1) loadedTraktShows.clear()
         val result = retryIO(maxRetries) {
             traktRepository.getShowWatchlist(page = page, limit = 200, forceRefresh = forceReload)
@@ -1054,7 +1091,7 @@ class WatchlistViewModel @Inject constructor(
                     }.awaitAll()
             }
             replaceLoadedTraktItems(loadedTraktShows, uiItems)
-            val doubanItems = getDoubanItemsForType("wish", WatchlistMediaType.SHOW)
+            val doubanItems = getDoubanItemsForType("wish", WatchlistMediaType.SHOW, forceReload)
             val merged = mergeWatchlistItems(loadedTraktShows, doubanItems, WatchlistMediaType.SHOW)
             val totalCount = traktRepository.getShowWatchlistTotalCount(page, 200) ?: rawItems.size
             _uiState.value = _uiState.value.copy(
@@ -1066,11 +1103,18 @@ class WatchlistViewModel @Inject constructor(
                 showPage = page + 1,
                 showsError = null
             )
+            // 想看列表首页成功后写离线缓存：豆瓣合并路径原先不落盘，导致冷启动只能白屏等网络
+            if (page == 1) {
+                offlineCacheManager.saveMediaItems(
+                    OfflineCacheManager.TYPE_WATCHLIST_SHOW,
+                    uiItems.map { it.toMediaItemEntity(OfflineCacheManager.TYPE_WATCHLIST_SHOW) }
+                )
+            }
             if (loadAllPages && page < totalPages) {
                 loadShows(forceReload = true, silent = true, loadAllPages = true)
             }
         }.onFailure { error ->
-            val doubanItems = getDoubanItemsForType("wish", WatchlistMediaType.SHOW)
+            val doubanItems = getDoubanItemsForType("wish", WatchlistMediaType.SHOW, forceReload)
             val merged = mergeWatchlistItems(loadedTraktShows, doubanItems, WatchlistMediaType.SHOW)
             _uiState.value = _uiState.value.copy(
                 shows = if (merged.isNotEmpty()) merged else _uiState.value.shows,
@@ -1084,6 +1128,7 @@ class WatchlistViewModel @Inject constructor(
 
     private suspend fun loadHistoryMoviesWithDouban(forceReload: Boolean) {
         _uiState.value = _uiState.value.copy(isLoadingHistoryMovies = true, historyMoviesError = null)
+        hydrateFromOfflineCache(OfflineCacheManager.TYPE_HISTORY_MOVIE)
         if (forceReload) loadedTraktHistoryMovies.clear()
         val result = fetchAllHistoryPages<TraktWatchlistMovieItem> { page ->
             traktRepository.getMovieHistory(page = page, limit = 200)
@@ -1115,7 +1160,7 @@ class WatchlistViewModel @Inject constructor(
                     }.awaitAll()
             }
             replaceLoadedTraktItems(loadedTraktHistoryMovies, uiItems)
-            val doubanItems = getDoubanWatchlistItems("collect")
+            val doubanItems = getDoubanWatchlistItems("collect", forceReload)
             val merged = mergeWatchlistItems(loadedTraktHistoryMovies, doubanItems, WatchlistMediaType.MOVIE)
             _uiState.value = _uiState.value.copy(
                 historyMovies = merged,
@@ -1123,8 +1168,13 @@ class WatchlistViewModel @Inject constructor(
                 historyMoviesLoaded = true,
                 historyMoviesError = null
             )
+            // 已看列表成功后写离线缓存，供下次冷启动先出内容
+            offlineCacheManager.saveMediaItems(
+                OfflineCacheManager.TYPE_HISTORY_MOVIE,
+                uiItems.map { it.toMediaItemEntity(OfflineCacheManager.TYPE_HISTORY_MOVIE) }
+            )
         }.onFailure { error ->
-            val doubanItems = getDoubanWatchlistItems("collect")
+            val doubanItems = getDoubanWatchlistItems("collect", forceReload)
             val merged = mergeWatchlistItems(loadedTraktHistoryMovies, doubanItems, WatchlistMediaType.MOVIE)
             _uiState.value = _uiState.value.copy(
                 historyMovies = if (merged.isNotEmpty()) merged else _uiState.value.historyMovies,
@@ -1137,6 +1187,7 @@ class WatchlistViewModel @Inject constructor(
 
     private suspend fun loadHistoryShowsWithDouban(forceReload: Boolean) {
         _uiState.value = _uiState.value.copy(isLoadingHistoryShows = true, historyShowsError = null)
+        hydrateFromOfflineCache(OfflineCacheManager.TYPE_HISTORY_SHOW)
         if (forceReload) loadedTraktHistoryShows.clear()
         val result = fetchAllHistoryPages<TraktWatchlistShowItem> { page ->
             traktRepository.getShowHistory(page = page, limit = 200)
@@ -1168,7 +1219,7 @@ class WatchlistViewModel @Inject constructor(
                     }.awaitAll()
             }
             replaceLoadedTraktItems(loadedTraktHistoryShows, uiItems)
-            val doubanItems = getDoubanWatchlistItems("collect")
+            val doubanItems = getDoubanWatchlistItems("collect", forceReload)
             val merged = mergeWatchlistItems(loadedTraktHistoryShows, doubanItems, WatchlistMediaType.SHOW)
             _uiState.value = _uiState.value.copy(
                 historyShows = merged,
@@ -1176,8 +1227,13 @@ class WatchlistViewModel @Inject constructor(
                 historyShowsLoaded = true,
                 historyShowsError = null
             )
+            // 已看列表成功后写离线缓存，供下次冷启动先出内容
+            offlineCacheManager.saveMediaItems(
+                OfflineCacheManager.TYPE_HISTORY_SHOW,
+                uiItems.map { it.toMediaItemEntity(OfflineCacheManager.TYPE_HISTORY_SHOW) }
+            )
         }.onFailure { error ->
-            val doubanItems = getDoubanWatchlistItems("collect")
+            val doubanItems = getDoubanWatchlistItems("collect", forceReload)
             val merged = mergeWatchlistItems(loadedTraktHistoryShows, doubanItems, WatchlistMediaType.SHOW)
             _uiState.value = _uiState.value.copy(
                 historyShows = if (merged.isNotEmpty()) merged else _uiState.value.historyShows,
@@ -1188,9 +1244,9 @@ class WatchlistViewModel @Inject constructor(
         }
     }
 
-    private suspend fun loadOthersWithDouban() {
+    private suspend fun loadOthersWithDouban(forceReload: Boolean) {
         _uiState.value = _uiState.value.copy(isLoadingOthers = true, othersError = null)
-        val doubanItems = getDoubanWatchlistItems("wish")
+        val doubanItems = getDoubanWatchlistItems("wish", forceReload)
         val merged = mergeWatchlistItems(emptyList(), doubanItems, WatchlistMediaType.OTHER)
         _uiState.value = _uiState.value.copy(
             others = merged,
@@ -1202,9 +1258,9 @@ class WatchlistViewModel @Inject constructor(
         )
     }
 
-    private suspend fun loadHistoryOthersWithDouban() {
+    private suspend fun loadHistoryOthersWithDouban(forceReload: Boolean) {
         _uiState.value = _uiState.value.copy(isLoadingHistoryOthers = true, historyOthersError = null)
-        val doubanItems = getDoubanWatchlistItems("collect")
+        val doubanItems = getDoubanWatchlistItems("collect", forceReload)
         val merged = mergeWatchlistItems(emptyList(), doubanItems, WatchlistMediaType.OTHER)
         _uiState.value = _uiState.value.copy(
             historyOthers = merged,
@@ -1223,7 +1279,7 @@ class WatchlistViewModel @Inject constructor(
             moviesError = if (silent) _uiState.value.moviesError else null
         )
         // 豆瓣模式数据全量本地,不分页;forceReload 时重新读表(数据可能在后台同步更新)
-        val items = getDoubanItemsForType("wish", WatchlistMediaType.MOVIE)
+        val items = getDoubanItemsForType("wish", WatchlistMediaType.MOVIE, forceReload)
         val uiItems = items.map { it.toMediaUiItem() }
         _uiState.value = _uiState.value.copy(
             movies = uiItems,
@@ -1241,7 +1297,7 @@ class WatchlistViewModel @Inject constructor(
             isLoadingShows = !silent,
             showsError = if (silent) _uiState.value.showsError else null
         )
-        val items = getDoubanItemsForType("wish", WatchlistMediaType.SHOW)
+        val items = getDoubanItemsForType("wish", WatchlistMediaType.SHOW, forceReload)
         val uiItems = items.map { it.toMediaUiItem() }
         _uiState.value = _uiState.value.copy(
             shows = uiItems,
@@ -1259,7 +1315,7 @@ class WatchlistViewModel @Inject constructor(
             isLoadingOthers = !silent,
             othersError = if (silent) _uiState.value.othersError else null
         )
-        val items = getDoubanItemsForType("wish", WatchlistMediaType.OTHER)
+        val items = getDoubanItemsForType("wish", WatchlistMediaType.OTHER, forceReload)
         val uiItems = items.map { it.toMediaUiItem() }
         _uiState.value = _uiState.value.copy(
             others = uiItems,
@@ -1277,7 +1333,7 @@ class WatchlistViewModel @Inject constructor(
             isLoadingHistoryMovies = true,
             historyMoviesError = null
         )
-        val items = getDoubanItemsForType("collect", WatchlistMediaType.MOVIE)
+        val items = getDoubanItemsForType("collect", WatchlistMediaType.MOVIE, forceReload)
         val uiItems = items.map { it.toMediaUiItem() }
         _uiState.value = _uiState.value.copy(
             historyMovies = uiItems,
@@ -1293,7 +1349,7 @@ class WatchlistViewModel @Inject constructor(
             isLoadingHistoryShows = true,
             historyShowsError = null
         )
-        val items = getDoubanItemsForType("collect", WatchlistMediaType.SHOW)
+        val items = getDoubanItemsForType("collect", WatchlistMediaType.SHOW, forceReload)
         val uiItems = items.map { it.toMediaUiItem() }
         _uiState.value = _uiState.value.copy(
             historyShows = uiItems,
@@ -1304,12 +1360,12 @@ class WatchlistViewModel @Inject constructor(
     }
 
     /** 豆瓣模式：已看其他类型列表（status="collect"） */
-    private suspend fun loadHistoryOthersFromDouban() {
+    private suspend fun loadHistoryOthersFromDouban(forceReload: Boolean) {
         _uiState.value = _uiState.value.copy(
             isLoadingHistoryOthers = true,
             historyOthersError = null
         )
-        val items = getDoubanItemsForType("collect", WatchlistMediaType.OTHER)
+        val items = getDoubanItemsForType("collect", WatchlistMediaType.OTHER, forceReload)
         val uiItems = items.map { it.toMediaUiItem() }
         _uiState.value = _uiState.value.copy(
             historyOthers = uiItems,
@@ -1335,13 +1391,32 @@ class WatchlistViewModel @Inject constructor(
         mediaType = mapDoubanMediaType(mediaType)
     )
 
-    private suspend fun getDoubanWatchlistItems(status: String): List<DoubanSyncedItem> =
-        doubanSyncedItemDao.getByStatus(status)
+    /**
+     * 读取指定 status 的豆瓣本地条目。
+     *
+     * 同一次加载里电影/剧集/其他三个 Tab 都要整份 status 列表做并集匹配（跨类型错标也要能配上），
+     * 原实现让三个并发协程各查一次全表。这里用极短 TTL 的 TtlCache 主要取其飞行中去重能力：
+     * 并发的三次读共享一次查询；forceRefresh 时跳过缓存值但仍共享同一次查询，
+     * 保证标记/同步后立刻读到最新数据。
+     */
+    private suspend fun getDoubanWatchlistItems(
+        status: String,
+        forceRefresh: Boolean = false
+    ): List<DoubanSyncedItem> =
+        doubanStatusItemsCache.getOrAwait(status, skipCache = forceRefresh) {
+            doubanSyncedItemDao.getByStatus(status)
+        }
+
+    private val doubanStatusItemsCache = TtlCache<List<DoubanSyncedItem>>(
+        ttlMillis = DOUBAN_STATUS_ITEMS_TTL_MS,
+        maxSize = 4
+    )
 
     private suspend fun getDoubanItemsForType(
         status: String,
-        mediaType: WatchlistMediaType
-    ): List<DoubanSyncedItem> = getDoubanWatchlistItems(status)
+        mediaType: WatchlistMediaType,
+        forceRefresh: Boolean = false
+    ): List<DoubanSyncedItem> = getDoubanWatchlistItems(status, forceRefresh)
         .filter { mapDoubanMediaType(it.mediaType) == mediaType }
 
     private fun replaceLoadedTraktItems(target: MutableList<MediaUiItem>, items: List<MediaUiItem>) {
@@ -1351,19 +1426,19 @@ class WatchlistViewModel @Inject constructor(
         target += byTraktId.values
     }
 
-    /** 合并 Trakt 与豆瓣条目为 UI 列表（纯计算；保持在调用方上下文，runTest 可确定性推进） */
+    /** 合并 Trakt 与豆瓣条目为 UI 列表（纯计算，跑在计算调度器上，避免主线程整表映射+排序） */
     private suspend fun mergeWatchlistItems(
         traktItems: List<MediaUiItem>,
         doubanItems: List<DoubanSyncedItem>,
         mediaType: WatchlistMediaType
-    ): List<MediaUiItem> {
+    ): List<MediaUiItem> = withContext(computeDispatcher) {
         val mergedItems = mergeTraktAndDoubanWatchlist(
             traktEntries = traktItems.map { it.toTraktWatchlistRecord() },
             doubanEntries = doubanItems.map { it.toDoubanWatchlistRecord() }
         )
         val traktById = traktItems.associateBy { it.traktId }
         val doubanById = doubanItems.associateBy { it.doubanId }
-        return mergedItems
+        mergedItems
             .filter { it.mediaType == mediaType }
             .map { merged ->
                 val traktItem = merged.traktId?.let(traktById::get)
@@ -1421,11 +1496,11 @@ class WatchlistViewModel @Inject constructor(
         listedAt = listedAt
     )
 
-    private fun unionCount(
+    private suspend fun unionCount(
         traktTotalCount: Int,
         loadedTraktItems: List<MediaUiItem>,
         doubanItems: List<DoubanSyncedItem>
-    ): Int {
+    ): Int = withContext(computeDispatcher) {
         val loadedTraktImdbIds = loadedTraktItems.mapNotNull { normalizeWatchlistImdbId(it.imdbId) }.toSet()
         val loadedTraktIds = loadedTraktItems.mapNotNull { it.traktId.takeIf { id -> id > 0 } }.toSet()
         val doubanOnlyCount = doubanItems.count {
@@ -1435,7 +1510,7 @@ class WatchlistViewModel @Inject constructor(
             val matchesLoadedImdbId = imdbId != null && imdbId in loadedTraktImdbIds
             !matchesLoadedTraktId && !matchesLoadedImdbId
         }
-        return (traktTotalCount + doubanOnlyCount).coerceAtLeast(loadedTraktItems.size + doubanOnlyCount)
+        (traktTotalCount + doubanOnlyCount).coerceAtLeast(loadedTraktItems.size + doubanOnlyCount)
     }
 
     private suspend fun enrichMediaItem(
@@ -1482,6 +1557,51 @@ class WatchlistViewModel @Inject constructor(
         )
     }
 
+    /**
+     * 首帧先用 Room 离线缓存出内容。
+     *
+     * Trakt 想看/已看的列表数据只有内存缓存，冷启动必须等「Trakt 列表请求 + 全部 TMDB 富化」
+     * 完成才有内容，期间一直是骨架屏；豆瓣合并路径连占位列表都不发。
+     * 这里在发请求前把上次成功写入的快照（含海报/中文名/类型，足够完整渲染）先发布出去，
+     * 网络结果回来后整体覆盖。不置 loaded 标记，因此不会跳过后续网络请求。
+     */
+    private suspend fun hydrateFromOfflineCache(type: String) {
+        if (offlineCacheHydrated.contains(type)) return
+        offlineCacheHydrated += type
+        val state = _uiState.value
+        val alreadyHasData = when (type) {
+            OfflineCacheManager.TYPE_WATCHLIST_MOVIE -> state.movies.isNotEmpty()
+            OfflineCacheManager.TYPE_WATCHLIST_SHOW -> state.shows.isNotEmpty()
+            OfflineCacheManager.TYPE_HISTORY_MOVIE -> state.historyMovies.isNotEmpty()
+            OfflineCacheManager.TYPE_HISTORY_SHOW -> state.historyShows.isNotEmpty()
+            else -> true
+        }
+        if (alreadyHasData) return
+        val cached = offlineCacheManager.getMediaItems(type)
+        if (cached.isEmpty()) return
+        val items = withContext(computeDispatcher) {
+            cached.map { it.toMediaUiItem() }.sortedByDescending { it.listedAt }
+        }
+        _uiState.update { current ->
+            when (type) {
+                // 再次判空：网络结果可能在读盘期间先落地，此时不覆盖更新的数据
+                OfflineCacheManager.TYPE_WATCHLIST_MOVIE -> if (current.movies.isEmpty()) {
+                    current.copy(movies = items, movieTotalCount = current.movieTotalCount ?: items.size)
+                } else current
+                OfflineCacheManager.TYPE_WATCHLIST_SHOW -> if (current.shows.isEmpty()) {
+                    current.copy(shows = items, showTotalCount = current.showTotalCount ?: items.size)
+                } else current
+                OfflineCacheManager.TYPE_HISTORY_MOVIE -> if (current.historyMovies.isEmpty()) {
+                    current.copy(historyMovies = items)
+                } else current
+                OfflineCacheManager.TYPE_HISTORY_SHOW -> if (current.historyShows.isEmpty()) {
+                    current.copy(historyShows = items)
+                } else current
+                else -> current
+            }
+        }
+    }
+
     fun refresh() {
         reloadForSession(forceReload = true)
     }
@@ -1508,6 +1628,8 @@ class WatchlistViewModel @Inject constructor(
         loadedTraktShows.clear()
         loadedTraktHistoryMovies.clear()
         loadedTraktHistoryShows.clear()
+        // 列表被重置回空，允许再次用离线缓存兜首帧
+        offlineCacheHydrated.clear()
         _uiState.value = WatchlistUiState()
         refreshDoubanEmptyState()
         loadMovies(forceReload = forceReload)

@@ -115,6 +115,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.listSaver
@@ -547,33 +548,16 @@ fun WatchlistScreen(
     }
 
     // 根据搜索关键词和筛选条件过滤当前 Tab 的列表。
-    // 每个列表在数据不变时预计算一次 SearchIndex（小写标题、拼音全拼/缩写、类型集合、
-    // 预解析的 listedAt epochMillis），过滤循环内只做 contains 比较与数字比较，不再分配中间对象。
+    // 索引构建（拼音转换、标题小写、类型集合、listedAt 解析）与过滤/排序整体挪到
+    // Dispatchers.Default：原先在组合期执行，列表引用一变就在主线程整表重算，数据落地那一帧必掉帧。
+    // 索引按列表版本缓存一次，连续输入不重复构建；仅在真正需要（有搜索词/类型/时间筛选）时才构建。
     // 搜索使用防抖后的 debouncedQuery：输入期间只更新输入框，停止输入 120ms 后才重算。
-    val movieSearchIndex = remember(uiState.movies) { buildSearchIndex(uiState.movies) }
-    val showSearchIndex = remember(uiState.shows) { buildSearchIndex(uiState.shows) }
-    val otherSearchIndex = remember(uiState.others) { buildSearchIndex(uiState.others) }
-    val historyMovieSearchIndex = remember(uiState.historyMovies) { buildSearchIndex(uiState.historyMovies) }
-    val historyShowSearchIndex = remember(uiState.historyShows) { buildSearchIndex(uiState.historyShows) }
-    val historyOtherSearchIndex = remember(uiState.historyOthers) { buildSearchIndex(uiState.historyOthers) }
-    val filteredMovies = remember(uiState.movies, movieSearchIndex, debouncedQuery, filterState) {
-        applyFilterAndSort(uiState.movies, movieSearchIndex, debouncedQuery, filterState)
-    }
-    val filteredShows = remember(uiState.shows, showSearchIndex, debouncedQuery, filterState) {
-        applyFilterAndSort(uiState.shows, showSearchIndex, debouncedQuery, filterState)
-    }
-    val filteredOthers = remember(uiState.others, otherSearchIndex, debouncedQuery, filterState) {
-        applyFilterAndSort(uiState.others, otherSearchIndex, debouncedQuery, filterState)
-    }
-    val filteredHistoryMovies = remember(uiState.historyMovies, historyMovieSearchIndex, debouncedQuery, filterState) {
-        applyFilterAndSort(uiState.historyMovies, historyMovieSearchIndex, debouncedQuery, filterState)
-    }
-    val filteredHistoryShows = remember(uiState.historyShows, historyShowSearchIndex, debouncedQuery, filterState) {
-        applyFilterAndSort(uiState.historyShows, historyShowSearchIndex, debouncedQuery, filterState)
-    }
-    val filteredHistoryOthers = remember(uiState.historyOthers, historyOtherSearchIndex, debouncedQuery, filterState) {
-        applyFilterAndSort(uiState.historyOthers, historyOtherSearchIndex, debouncedQuery, filterState)
-    }
+    val filteredMovies = rememberFilteredItems(uiState.movies, debouncedQuery, filterState)
+    val filteredShows = rememberFilteredItems(uiState.shows, debouncedQuery, filterState)
+    val filteredOthers = rememberFilteredItems(uiState.others, debouncedQuery, filterState)
+    val filteredHistoryMovies = rememberFilteredItems(uiState.historyMovies, debouncedQuery, filterState)
+    val filteredHistoryShows = rememberFilteredItems(uiState.historyShows, debouncedQuery, filterState)
+    val filteredHistoryOthers = rememberFilteredItems(uiState.historyOthers, debouncedQuery, filterState)
 
     // 获取当前 tab 对应的 items（用于多选操作）
     val currentItems = when {
@@ -2465,6 +2449,47 @@ private fun buildSearchIndex(item: MediaUiItem): SearchIndex {
 
 private fun buildSearchIndex(items: List<MediaUiItem>): Map<String, SearchIndex> =
     items.associate { it.selectionKey to buildSearchIndex(it) }
+
+/** 单个列表的搜索索引持有者：按列表版本缓存，连续输入时不重复构建拼音索引。 */
+private class SearchIndexHolder {
+    @Volatile
+    var index: Map<String, SearchIndex>? = null
+}
+
+/**
+ * 是否需要 SearchIndex：只有搜索、类型筛选、标记时间筛选会用到索引；
+ * 排序用 listedAt 字符串直接比较，默认无筛选场景完全不用建索引。
+ */
+private fun needsSearchIndex(searchQuery: String, filter: FilterState): Boolean =
+    searchQuery.isNotBlank() ||
+        filter.selectedGenres.isNotEmpty() ||
+        filter.markedTimePreset != MarkedTimePreset.ALL
+
+/**
+ * 在 [Dispatchers.Default] 上构建索引并完成过滤 + 排序，结果作为 State 返回。
+ *
+ * 计算期间沿用上一次的结果（produceState 语义），因此不会出现"先清空再填充"的闪动；
+ * 相比原先在组合期同步计算，大列表落地时不再占用主线程。
+ */
+@Composable
+private fun rememberFilteredItems(
+    items: List<MediaUiItem>,
+    searchQuery: String,
+    filter: FilterState
+): List<MediaUiItem> {
+    val indexHolder = remember(items) { SearchIndexHolder() }
+    val result by produceState(initialValue = items, items, searchQuery, filter, indexHolder) {
+        value = withContext(Dispatchers.Default) {
+            val index = if (needsSearchIndex(searchQuery, filter)) {
+                indexHolder.index ?: buildSearchIndex(items).also { indexHolder.index = it }
+            } else {
+                emptyMap()
+            }
+            applyFilterAndSort(items, index, searchQuery, filter)
+        }
+    }
+    return result
+}
 
 /**
  * 应用搜索 + 筛选条件，并按标记时间排序。
