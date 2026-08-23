@@ -209,13 +209,14 @@ private fun ShaderAmbient(
             sizing = sizing,
         )
         // distortion / swirl / rotation 与 Paper Shaders 官方预设一致；
-        // speed 按需求整体调慢（Paper 原值 NEBULA/INK 都是 1.0，BEACH 是 0.1）。
+        // speed 按需求单独定档（Paper 原值 NEBULA/INK 都是 1.0，BEACH 是 0.1）：
+        // NEBULA / INK 都压到 0.20，BEACH 原值太慢近似静止，提到 0.15。
         MeshPreset.NEBULA -> ShaderMeshGradient(
             modifier = Modifier.fillMaxSize(),
             colors = palette,
             distortion = 0.8f,
             swirl = 0.1f,
-            speed = 0.30f * speedScale,
+            speed = 0.20f * speedScale,
             sizing = sizing,
         )
         MeshPreset.INK -> ShaderMeshGradient(
@@ -223,7 +224,7 @@ private fun ShaderAmbient(
             colors = palette,
             distortion = 1f,
             swirl = 0.2f,
-            speed = 0.26f * speedScale,
+            speed = 0.20f * speedScale,
             sizing = remember { SizingParams(fit = ShaderFit.Cover, rotation = 90f) },
         )
         MeshPreset.BEACH -> ShaderMeshGradient(
@@ -231,7 +232,7 @@ private fun ShaderAmbient(
             colors = palette,
             distortion = 0.8f,
             swirl = 0.35f,
-            speed = 0.05f * speedScale,
+            speed = 0.15f * speedScale,
             sizing = sizing,
         )
     }
