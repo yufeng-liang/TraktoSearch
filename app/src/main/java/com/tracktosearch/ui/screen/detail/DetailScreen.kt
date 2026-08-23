@@ -845,9 +845,9 @@ fun DetailScreen(
                                                 tmdbId = item.tmdbId,
                                                 onClick = {
                                                     if (mediaType == MediaType.MOVIE) {
-                                                        onMovieClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating)
+                                                        onMovieClick(item.traktId, item.tmdbId, item.displayTitle.ifEmpty { item.title }, item.imdbId, item.traktRating)
                                                     } else {
-                                                        onShowClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating)
+                                                        onShowClick(item.traktId, item.tmdbId, item.displayTitle.ifEmpty { item.title }, item.imdbId, item.traktRating)
                                                     }
                                                 },
                                                 modifier = Modifier.weight(1f),

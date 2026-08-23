@@ -671,12 +671,15 @@ class DetailViewModel @Inject constructor(
                     }
                 }.getOrNull()
 
-                val chineseTitle = doubanSupplement?.title
-                    ?: enrichment?.chineseTitle?.takeIf { it.isNotEmpty() }
+                // 主标题以 TMDB 中文标题为准，与列表卡片 displayTitle 保持一致；
+                // 豆瓣标题仅作纯豆瓣条目（无 TMDB 中文标题）时的兜底。
+                val chineseTitle = enrichment?.chineseTitle?.takeIf { it.isNotEmpty() }
+                    ?: doubanSupplement?.title
                     ?: title
                 currentKeyword = chineseTitle
-                currentOriginalTitle = doubanSupplement?.originalTitle
-                    ?: enrichment?.originalTitle?.takeIf { it.isNotEmpty() && it != chineseTitle }
+                // 原名以 TMDB 外文原名为准（与主标题同源），豆瓣副标题仅作纯豆瓣条目兜底
+                currentOriginalTitle = enrichment?.originalTitle?.takeIf { it.isNotEmpty() && it != chineseTitle }
+                    ?: doubanSupplement?.originalTitle
                     ?: ""
                 val displayOriginalTitle = currentOriginalTitle.ifEmpty {
                     // 如果 TMDB 没返回 originalTitle 或与中文标题相同，使用 Trakt 原始标题
@@ -687,7 +690,8 @@ class DetailViewModel @Inject constructor(
                     displayTitle = chineseTitle.replace("+", " "),
                     originalTitle = displayOriginalTitle,
                     overview = doubanSupplement?.overview ?: enrichment?.overview ?: "",
-                    genres = doubanSupplement?.genres ?: enrichment?.genres ?: "",
+                    // 类型以 TMDB 为准（与列表卡片 genres 一致），豆瓣类型仅作纯豆瓣条目兜底
+                    genres = enrichment?.genres ?: doubanSupplement?.genres ?: "",
                     country = doubanSupplement?.country ?: enrichment?.country ?: "",
                     // 海报 TMDB 优先；纯豆瓣条目(tmdbId=0 无 TMDB 海报)时用豆瓣海报兜底
                     posterUrl = enrichment?.posterUrl ?: doubanSupplement?.posterUrl,
@@ -849,7 +853,9 @@ class DetailViewModel @Inject constructor(
 
     private fun applyDoubanPresentation(presentation: DoubanDetailPresentation, doubanId: String) {
         val current = _uiState.value
-        val title = presentation.title ?: current.displayTitle
+        // 主标题保持列表一致的 TMDB 标题；豆瓣合并仅补充年份/简介等元数据，不再覆盖主标题
+        val title = current.displayTitle.takeIf { it.isNotBlank() }
+            ?: presentation.title ?: current.displayTitle
         val genres = presentation.genres.takeIf { it.isNotEmpty() }?.joinToString(" / ")
         val country = presentation.countries.takeIf { it.isNotEmpty() }?.joinToString(" / ")
         val runtime = presentation.runtime?.let { Regex("\\d+").find(it)?.value?.toIntOrNull() }
@@ -857,15 +863,16 @@ class DetailViewModel @Inject constructor(
             (current.ratings ?: MultiRatings()).copy(doubanRating = score)
         } ?: current.ratings
         currentKeyword = title
-        currentOriginalTitle = presentation.originalTitle ?: currentOriginalTitle
+        // 原名保持加载时确定的 TMDB 外文原名，不再被 rexxar/豆瓣合并覆盖
         _uiState.value = current.copy(
             title = title,
             displayTitle = title,
-            originalTitle = presentation.originalTitle ?: current.originalTitle,
+            originalTitle = current.originalTitle,
             year = presentation.year ?: current.year,
             releaseDate = presentation.releaseDates.firstOrNull() ?: current.releaseDate,
             overview = presentation.overview ?: current.overview,
-            genres = genres ?: current.genres,
+            // 类型保持列表一致的 TMDB 类型，rexxar 不再用豆瓣类型覆盖
+            genres = current.genres.takeIf { it.isNotBlank() } ?: genres ?: "",
             country = country ?: current.country,
             // 海报保持当前值（TMDB 优先，纯豆瓣为豆瓣图），rexxar 合并不再替换为豆瓣图
             posterUrl = current.posterUrl ?: presentation.posterUrl,

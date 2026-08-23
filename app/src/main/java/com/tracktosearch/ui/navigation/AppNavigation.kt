@@ -709,7 +709,7 @@ fun AppNavigation(
                                             type = type,
                                             traktId = item.traktId,
                                             tmdbId = item.tmdbId,
-                                            title = item.title,
+                                            title = item.displayTitle,
                                             imdbId = item.imdbId,
                                             traktRating = item.traktRating,
                                             inWatchlist = inWatchlist,
