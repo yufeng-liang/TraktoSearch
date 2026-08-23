@@ -162,6 +162,7 @@ import com.tracktosearch.ui.screen.ai.automaticSpriteArt
 import com.tracktosearch.ui.screen.ai.sceneArtFor
 import com.tracktosearch.ui.screen.ai.sceneEventForSearch
 import com.tracktosearch.ui.screen.ai.searchAnchorFor
+import com.tracktosearch.ui.screen.ai.rememberSharedAiSpriteViewModel
 import dagger.hilt.android.EntryPointAccessors
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeSampling
@@ -191,7 +192,7 @@ fun TraktSearchScreen(
     onRecommendationClick: ((AiRecommendation) -> Unit)? = null,
     inlineMode: Boolean = false,
     viewModel: TraktSearchViewModel = hiltViewModel(),
-    spriteViewModel: AiSpriteViewModel = hiltViewModel(),
+    spriteViewModel: AiSpriteViewModel = rememberSharedAiSpriteViewModel(),
     externallyControlledAiSpriteCenterVisible: Boolean? = null,
     onAiSpriteCenterVisibilityChanged: (Boolean) -> Unit = {}
 ) {

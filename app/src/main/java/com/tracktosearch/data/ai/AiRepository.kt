@@ -241,6 +241,26 @@ class AiRepository @Inject constructor(
         }
     }.getOrNull()
 
+    /**
+     * 读取上次激活的角色 ID。
+     *
+     * 激活态只放在内存里的话，杀进程或被系统回收后就没了，用户得重新喊一次名字、
+     * 再花一次配额和一次 TTS；详情页那种没有激活入口的页面则永远拿不到激活态。
+     */
+    suspend fun readActivatedCharacterId(friendId: String): String? = runCatching {
+        storage.read(friendId, AiCacheFeature.ACTIVATION)?.trim()?.takeIf { it.isNotEmpty() }
+    }.getOrNull()
+
+    suspend fun saveActivatedCharacterId(friendId: String, characterId: String) {
+        val normalized = characterId.trim()
+        if (normalized.isEmpty()) return
+        runCatching { storage.write(friendId, AiCacheFeature.ACTIVATION, normalized) }
+    }
+
+    suspend fun clearActivatedCharacterId(friendId: String) {
+        runCatching { storage.remove(friendId, AiCacheFeature.ACTIVATION) }
+    }
+
     /** 保存闯关历史：合并更新最高分，保留最近一次结果。 */
     suspend fun saveQuizHistory(friendId: String, result: AiQuizResult) {
         val previous = readQuizHistory(friendId)

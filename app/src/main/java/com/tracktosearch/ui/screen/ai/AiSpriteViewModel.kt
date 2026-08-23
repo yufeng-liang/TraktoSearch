@@ -137,6 +137,8 @@ class AiSpriteViewModel @Inject constructor(
     val guestPreviewFallbackEvents: SharedFlow<String> = _guestPreviewFallbackEvents.asSharedFlow()
 
     private var initialized = false
+    private var authObserved = false
+    private var activationRestored = false
     private var previewJob: Job? = null
     private var requestJob: Job? = null
     /** 请求代际用于隔离已取消请求的 finally，避免旧请求覆盖新请求的加载态。 */
@@ -147,14 +149,62 @@ class AiSpriteViewModel @Inject constructor(
     private var watchedTitlesCache: Pair<Long, List<AiWatchedTitleDto>>? = null
     // 一次精灵中心会话共用一个会话 ID，让服务端会话配额按一次打开的精灵中心计算。
     // 若每次请求都发新 UUID，会话配额形同虚设，只剩每日上限。
-    private val spriteSessionId = "sprite-${UUID.randomUUID()}"
+    // ViewModel 现在挂在 Activity 作用域跨页面共享，不能再按实例生成——否则整个 App
+    // 生命周期只有一个会话，会话配额到重启才重置。改由 onSpriteCenterOpened() 轮换。
+    private var spriteSessionId = newSpriteSessionId()
+
+    private fun newSpriteSessionId(): String = "sprite-${UUID.randomUUID()}"
+
+    /** 每次打开精灵中心换一个会话 ID，保持「一次打开 = 一个会话」的配额语义。 */
+    fun onSpriteCenterOpened() {
+        spriteSessionId = newSpriteSessionId()
+    }
 
     fun ensureLoaded() {
+        restoreActivation()
         if (initialized) {
             scheduleCharacterPreview()
             return
         }
         initialized = true
+        viewModelScope.launch {
+            loadCharacters()
+            scheduleCharacterPreview()
+            loadQuizHistory()
+        }
+    }
+
+    /**
+     * 恢复上次激活的角色，并开始跟随授权态。
+     *
+     * 与 [ensureLoaded] 分开：这条路径不拉角色目录也不播试听，
+     * 供详情页这类没有激活入口、但要用激活态的页面直接调用，
+     * 不会在详情页突然放出一段语音。
+     */
+    fun restoreActivation() {
+        observeAuthState()
+        if (activationRestored) return
+        activationRestored = true
+        viewModelScope.launch {
+            val friendId = authManager.friendId.value.orEmpty()
+            if (friendId.isBlank()) return@launch
+            val restored = aiRepository.readActivatedCharacterId(friendId) ?: return@launch
+            if (_uiState.value.characters.none { it.id == restored }) return@launch
+            _uiState.update { state ->
+                // 本次会话里已经激活过就不覆盖，避免落盘的旧值顶掉刚激活的角色
+                if (state.activatedCharacterId != null) state
+                else state.copy(
+                    activatedCharacterId = restored,
+                    selectedCharacterId = restored,
+                    activationState = AiActivationState.SUCCESS
+                )
+            }
+        }
+    }
+
+    private fun observeAuthState() {
+        if (authObserved) return
+        authObserved = true
         viewModelScope.launch {
             launch {
                 var previousAuthState = authManager.authState.value
@@ -176,9 +226,6 @@ class AiSpriteViewModel @Inject constructor(
                     _uiState.update { it.copy(nickname = nickname) }
                 }
             }
-            loadCharacters()
-            scheduleCharacterPreview()
-            loadQuizHistory()
         }
     }
 
@@ -190,6 +237,8 @@ class AiSpriteViewModel @Inject constructor(
         recentQuizIds = emptyList()
         quizCandidates = emptyList()
         watchedTitlesCache = null
+        // 重新登录后要能再从落盘值恢复，所以放开这道闸
+        activationRestored = false
         _uiState.update {
             it.copy(
                 activatedCharacterId = null,
@@ -312,7 +361,14 @@ class AiSpriteViewModel @Inject constructor(
                     )
                 }
                 activation.audio?.let { _audioEvents.emit(it) }
-                if (activation.activated) loadGreeting(character.id)
+                if (activation.activated) {
+                    // 落盘激活态：跨进程重启和详情页这类无激活入口的页面都要认这个角色
+                    aiRepository.saveActivatedCharacterId(
+                        authManager.friendId.value.orEmpty(),
+                        character.id
+                    )
+                    loadGreeting(character.id)
+                }
             }.onFailure { error ->
                 _uiState.update {
                     it.copy(
@@ -393,7 +449,14 @@ class AiSpriteViewModel @Inject constructor(
                     )
                 }
                 activation.audio?.let { _audioEvents.emit(it) }
-                if (activation.activated) loadGreeting(character.id)
+                if (activation.activated) {
+                    // 落盘激活态：跨进程重启和详情页这类无激活入口的页面都要认这个角色
+                    aiRepository.saveActivatedCharacterId(
+                        authManager.friendId.value.orEmpty(),
+                        character.id
+                    )
+                    loadGreeting(character.id)
+                }
             }.onFailure { error ->
                 _uiState.update { it.copy(activationState = AiActivationState.FAILED, errorCode = errorCode(error)) }
             }

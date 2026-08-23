@@ -89,7 +89,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiCharacter
@@ -114,7 +113,7 @@ fun AiSpriteCenter(
     onMovieClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
     onShowClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
     onRecommendationClick: ((com.tracktosearch.data.ai.AiRecommendation) -> Unit)? = null,
-    viewModel: AiSpriteViewModel = hiltViewModel()
+    viewModel: AiSpriteViewModel = rememberSharedAiSpriteViewModel()
 ) {
     if (!visible) return
 
@@ -133,6 +132,9 @@ fun AiSpriteCenter(
     }
 
     LaunchedEffect(Unit) {
+        // 每次打开精灵中心轮换会话 ID：ViewModel 现在跨页面共享，
+        // 不轮换的话会话配额要等 App 重启才重置
+        viewModel.onSpriteCenterOpened()
         viewModel.ensureLoaded()
         launch {
             viewModel.audioEvents.collectLatest { audio ->

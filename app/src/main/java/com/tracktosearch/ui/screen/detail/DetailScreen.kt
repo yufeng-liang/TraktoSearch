@@ -112,6 +112,7 @@ import com.tracktosearch.ui.screen.ai.AiSceneEvent
 import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
 import com.tracktosearch.ui.screen.ai.AiSpriteMotion
 import com.tracktosearch.ui.screen.ai.AiSpriteViewModel
+import com.tracktosearch.ui.screen.ai.rememberSharedAiSpriteViewModel
 import com.tracktosearch.ui.screen.ai.automaticSpriteArt
 import com.tracktosearch.ui.screen.ai.sceneArtFor
 import com.tracktosearch.ui.screen.ai.shouldShowWatchlistAddedScene
@@ -145,7 +146,7 @@ fun DetailScreen(
     viewModel: DetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val spriteViewModel: AiSpriteViewModel = hiltViewModel()
+    val spriteViewModel: AiSpriteViewModel = rememberSharedAiSpriteViewModel()
     val spriteState by spriteViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val view = LocalView.current
@@ -162,6 +163,10 @@ fun DetailScreen(
             showWatchlistScene = true
         }
     }
+
+    // 详情页没有激活入口，但加入看单的场景需要激活态。只恢复激活态，
+    // 不走 ensureLoaded()——那条路径会拉角色目录并播试听，详情页不该冒出语音。
+    LaunchedEffect(Unit) { spriteViewModel.restoreActivation() }
 
     // 拦截系统返回手势/返回键，统一走 onBack 回调以传递变更状态
     BackHandler(enabled = true) {

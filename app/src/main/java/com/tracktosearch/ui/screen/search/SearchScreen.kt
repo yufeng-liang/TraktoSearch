@@ -152,6 +152,7 @@ import com.tracktosearch.ui.component.CloudEasterEgg
 import com.tracktosearch.ui.component.CloudOverlay
 import com.tracktosearch.ui.component.CloudThemeManager
 import com.tracktosearch.ui.screen.ai.AiSpriteCenter
+import com.tracktosearch.ui.screen.ai.rememberSharedAiSpriteViewModel
 import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
 import com.tracktosearch.ui.screen.ai.AiSpriteInterruptReason
 import com.tracktosearch.ui.screen.ai.AiSpriteInterruptRequest
@@ -241,7 +242,7 @@ fun SearchScreen(
     onSearchSourceTypeChange: ((SearchSourceType) -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: SearchViewModel = hiltViewModel(),
-    spriteViewModel: AiSpriteViewModel = hiltViewModel(),
+    spriteViewModel: AiSpriteViewModel = rememberSharedAiSpriteViewModel(),
     externallyControlledAiSpriteCenterVisible: Boolean? = null,
     onAiSpriteCenterVisibilityChanged: (Boolean) -> Unit = {}
 ) {

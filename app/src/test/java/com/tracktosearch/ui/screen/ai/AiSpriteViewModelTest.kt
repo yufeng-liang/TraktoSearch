@@ -289,6 +289,94 @@ class AiSpriteViewModelTest {
         assertThat(fallback.await()).isEqualTo("试听")
     }
 
+    @Test
+    fun restoreActivation_bringsBackPersistedCharacterWithoutCatalogOrPreviewRequests() = runTest {
+        val viewModel = viewModel()
+        coEvery { aiRepository.readActivatedCharacterId("friend-a") } returns "hachiware"
+
+        viewModel.restoreActivation()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.activatedCharacterId).isEqualTo("hachiware")
+        assertThat(viewModel.uiState.value.selectedCharacterId).isEqualTo("hachiware")
+        assertThat(viewModel.uiState.value.activationState).isEqualTo(AiActivationState.SUCCESS)
+        // 详情页走这条路径，不能顺带拉角色目录或播试听
+        coVerify(exactly = 0) { aiRepository.listCharacters() }
+        coVerify(exactly = 0) { aiRepository.playTts(any(), any()) }
+    }
+
+    @Test
+    fun restoreActivation_ignoresPersistedCharacterOutsideCatalog() = runTest {
+        val viewModel = viewModel()
+        coEvery { aiRepository.readActivatedCharacterId("friend-a") } returns "not-a-character"
+
+        viewModel.restoreActivation()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.activatedCharacterId).isNull()
+    }
+
+    @Test
+    fun restoreActivation_doesNotOverrideCharacterActivatedInThisSession() = runTest {
+        val viewModel = viewModel()
+        viewModel.seedState { it.copy(activatedCharacterId = "usagi") }
+        coEvery { aiRepository.readActivatedCharacterId("friend-a") } returns "hachiware"
+
+        viewModel.restoreActivation()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.activatedCharacterId).isEqualTo("usagi")
+    }
+
+    @Test
+    fun activationSuccessPersistsCharacterForLaterProcesses() = runTest {
+        val viewModel = viewModel()
+        viewModel.seedState {
+            it.copy(
+                characters = listOf(viewModelCharacter("usagi")),
+                selectedCharacterId = "usagi",
+                textActivationOffered = true
+            )
+        }
+        coEvery { aiRepository.activate(any(), any()) } returns Result.success(
+            com.tracktosearch.data.ai.AiActivation(
+                activated = true,
+                activationPhrase = "到！",
+                character = null,
+                quota = null,
+                greeting = null,
+                audio = null
+            )
+        )
+
+        viewModel.activateByText("usagi")
+        advanceUntilIdle()
+
+        coVerify { aiRepository.saveActivatedCharacterId("friend-a", "usagi") }
+    }
+
+    @Test
+    fun openingSpriteCenterRotatesSessionIdSoSessionQuotaResetsPerOpen() = runTest {
+        val viewModel = viewModel()
+        viewModel.seedState {
+            it.copy(characters = listOf(viewModelCharacter("usagi")), selectedCharacterId = "usagi")
+        }
+        val requests = mutableListOf<com.tracktosearch.data.ai.AiTtsRequest>()
+        coEvery { aiRepository.playTts("friend-a", capture(requests)) } returns Result.success(audio())
+
+        viewModel.replaySelectedCharacter()
+        advanceUntilIdle()
+        viewModel.onSpriteCenterOpened()
+        viewModel.replaySelectedCharacter()
+        advanceUntilIdle()
+
+        assertThat(requests).hasSize(2)
+        // ViewModel 现在跨页面共享，会话 ID 必须按「打开一次精灵中心」轮换，
+        // 否则会话配额到 App 重启才重置
+        assertThat(requests[0].sessionId).isNotEqualTo(requests[1].sessionId)
+        assertThat(requests.map { it.sessionId.startsWith("sprite-") }).containsExactly(true, true)
+    }
+
     private fun viewModel(
         authState: MutableStateFlow<AuthState> = MutableStateFlow(AuthState.AUTHORIZED)
     ): AiSpriteViewModel {
