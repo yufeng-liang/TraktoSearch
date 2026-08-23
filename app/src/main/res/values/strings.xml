@@ -549,7 +549,7 @@
     <string name="settings_title">Settings</string>
     <string name="settings_appearance">Appearance</string>
     <string name="settings_shared_transition">Shared Element Transitions</string>
-    <string name="settings_shared_transition_subtitle">Animate shared elements between screens, including the zoom transition when opening a full-screen image. Turn it off to reduce performance overhead.</string>
+    <string name="settings_shared_transition_subtitle">Animate shared elements between screens, including the zoom transition when opening a full-screen image.</string>
     <string name="settings_search">Search Sources</string>
     <string name="settings_storage">Storage</string>
     <string name="settings_clear_cache">Clear Cache</string>
@@ -564,8 +564,7 @@
     <string name="settings_feedback">Feedback &amp; Suggestions</string>
     <string name="settings_feedback_subtitle">Developer on duty: send us your ideas and bugs 🧑‍💻🍿</string>
     <string name="feedback_title">Feedback</string>
-    <string name="feedback_intro">I read every piece of feedback carefully.
-This is also your feature wish pool—maybe one day, your wish will make it into the app~</string>
+    <string name="feedback_intro">I read every piece of feedback.\nThis is also your feature wish pool—maybe one day, your wish will make it into the app~</string>
     <string name="feedback_new">New Feedback</string>
     <string name="feedback_my_feedbacks">My Feedback</string>
     <string name="feedback_empty">No feedback yet. Tap above to write the first one.</string>
@@ -1220,7 +1219,7 @@ Config:
     <string name="settings_custom_search_source_subtitle">Supports PanSou/Zreso compatible or custom JSONPath</string>
     <string name="settings_add_source">Add Source</string>
     <!-- Settings: Card Layout -->
-    <string name="settings_view_statistics_desc">Watch count, watch time, ratings, heatmap, genres</string>
+    <string name="settings_view_statistics_desc">Watch count, ratings, heatmap, genres</string>
     <string name="settings_custom_section">Custom Sections</string>
     <string name="settings_discover_page">Discover</string>
     <string name="settings_detail_page">Details</string>
@@ -1768,7 +1767,7 @@ Config:
     <string name="help_weather_data_b2">The app first resolves your coordinates to a Xiaomi weathercn: or accu: location key, then requests current weather from the same endpoint.</string>
     <string name="help_weather_data_b3">Current weather is cached for up to three hours per location to reduce repeated requests. Accuracy and availability follow Xiaomi Weather and its data providers.</string>
     <!-- Main screen background glow -->
-    <string name="bg_glow_title">Background Glow</string>
+    <string name="bg_glow_title">Background Effect</string>
     <string name="bg_glow_off">Off</string>
     <string name="bg_glow_aurora">Aurora</string>
     <string name="bg_glow_lava">Lava Lamp</string>
@@ -1780,7 +1779,7 @@ Config:
     <string name="bg_glow_nebula">Nebula</string>
     <string name="bg_glow_ink">Ink</string>
     <string name="bg_glow_beach">Beach</string>
-    <string name="bg_glow_nebula_desc">Rose and violet spots drifting over deep indigo. Fixed palette, does not follow the theme color</string>
+    <string name="bg_glow_nebula_desc">Rose and violet spots drifting over deep indigo.</string>
     <string name="bg_glow_ink_desc">High-contrast black and white flow. Boldest look, and the hardest on text readability</string>
     <string name="bg_glow_beach_desc">Cyan and sand yellow drifting very slowly. Fixed palette, does not follow the theme color</string>
 </resources>

@@ -1979,7 +1979,7 @@ fun DoubanHotCategorySection(
                                     .width(40.dp)
                                     .height(172.dp)
                                     .clickable { onViewAll() },
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(13.dp),
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                                 ),
@@ -2032,8 +2032,9 @@ fun DoubanHotCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
-                .shadow(8.dp, RoundedCornerShape(14.dp))
-                .clip(RoundedCornerShape(14.dp))
+                // 与右上角评分徽章（RatingCorner = 13.dp）统一圆角规格，避免同一张海报出现两套圆角。
+                .shadow(8.dp, RoundedCornerShape(13.dp))
+                .clip(RoundedCornerShape(13.dp))
                 .clickable(
                     enabled = !isResolving,
                     interactionSource = interactionSource,
@@ -2189,7 +2190,8 @@ private fun DoubanHotGridItem(
     Card(
         onClick = { onClick() },
         enabled = !isResolving,
-        shape = RoundedCornerShape(10.dp),
+        // 与评分徽章统一 13.dp 圆角，保持豆瓣栏目卡片风格一致
+        shape = RoundedCornerShape(13.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
@@ -2200,7 +2202,7 @@ private fun DoubanHotGridItem(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
+                    .clip(RoundedCornerShape(topStart = 13.dp, topEnd = 13.dp))
             ) {
                 if (!item.cover.isNullOrBlank()) {
                     val imageRequest = remember(item.cover) {

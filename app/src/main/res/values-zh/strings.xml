@@ -549,7 +549,7 @@
     <string name="settings_title">设置</string>
     <string name="settings_appearance">外观</string>
     <string name="settings_shared_transition">共享元素转场动画</string>
-    <string name="settings_shared_transition_subtitle">在页面间为共享元素添加转场动画，包括点开大图时的缩放过渡。关闭可降低性能开销。</string>
+    <string name="settings_shared_transition_subtitle">在页面间为共享元素添加转场动画，包括点开大图时的缩放过渡。</string>
     <string name="settings_search">搜索源</string>
     <string name="settings_storage">存储</string>
     <string name="settings_clear_cache">清除缓存</string>
@@ -564,8 +564,7 @@
     <string name="settings_feedback">反馈与建议</string>
     <string name="settings_feedback_subtitle">开发者在线营业，欢迎投喂建议和 Bug 🧑‍💻🍿</string>
     <string name="feedback_title">反馈与建议</string>
-    <string name="feedback_intro">每一条反馈，我都会认真读到。
-这里也是你的功能许愿池，说不定哪天，你许下的愿望就上线啦～</string>
+    <string name="feedback_intro">每一条反馈，我都会读到。\n这里也是你的功能许愿池，说不定哪天，你许下的愿望就上线啦～</string>
     <string name="feedback_new">写新反馈</string>
     <string name="feedback_my_feedbacks">我的反馈</string>
     <string name="feedback_empty">暂无反馈，点击上方按钮写下第一条</string>
@@ -1220,7 +1219,7 @@
     <string name="settings_custom_search_source_subtitle">支持 PanSou/Zreso 兼容源或自定义 JSONPath</string>
     <string name="settings_add_source">添加搜索源</string>
     <!-- Settings: Card Layout -->
-    <string name="settings_view_statistics_desc">观看总数、观影时长、评分统计、热力图、类型分布</string>
+    <string name="settings_view_statistics_desc">观看总数、评分统计、热力图、类型分布</string>
     <string name="settings_custom_section">自定义板块</string>
     <string name="settings_discover_page">发现页</string>
     <string name="settings_detail_page">详情页</string>
@@ -1769,7 +1768,7 @@
     <string name="help_weather_data_b3">当前天气按位置缓存最长 3 小时，减少重复请求；实际准确性和可用性以小米天气及其数据提供方为准。</string>
 
     <!-- 主页面背景光晕 -->
-    <string name="bg_glow_title">背景光晕</string>
+    <string name="bg_glow_title">背景动效</string>
     <string name="bg_glow_off">关闭</string>
     <string name="bg_glow_aurora">极光</string>
     <string name="bg_glow_lava">熔岩灯</string>
@@ -1781,7 +1780,7 @@
     <string name="bg_glow_nebula">星云</string>
     <string name="bg_glow_ink">水墨</string>
     <string name="bg_glow_beach">海滩</string>
-    <string name="bg_glow_nebula_desc">深靛底上浮动玫粉与紫罗兰光斑，固定配色，不跟随主题色</string>
+    <string name="bg_glow_nebula_desc">深靛底上浮动玫粉与紫罗兰光斑</string>
     <string name="bg_glow_ink_desc">纯黑白高对比流动，视觉最强，也最挑正文可读性</string>
     <string name="bg_glow_beach_desc">青蓝与沙黄极缓漂移，固定配色，不跟随主题色</string>
 </resources>

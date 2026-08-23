@@ -57,7 +57,7 @@ fun MovieCardSkeleton(
     modifier: Modifier = Modifier
 ) {
     val brush = rememberShimmerBrush()
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(13.dp)
 
     Column(modifier = modifier) {
         Box(
@@ -95,7 +95,8 @@ fun DoubanHotCardSkeleton(
     modifier: Modifier = Modifier
 ) {
     val brush = rememberShimmerBrush()
-    val shape = RoundedCornerShape(10.dp)
+    // 与加载完成后的豆瓣卡片（DoubanHotCard）统一 13.dp 圆角
+    val shape = RoundedCornerShape(13.dp)
 
     Column(modifier = modifier.width(105.dp)) {
         Box(

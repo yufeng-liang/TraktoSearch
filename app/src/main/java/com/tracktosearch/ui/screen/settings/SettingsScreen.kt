@@ -1366,39 +1366,13 @@ private fun SharedTransitionSwitchCard(
     containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     val view = LocalView.current
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = containerColor,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.AutoAwesome,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.settings_shared_transition),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = stringResource(R.string.settings_shared_transition_subtitle),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
+    SettingsItemCard(
+        icon = Icons.Rounded.AutoAwesome,
+        title = stringResource(R.string.settings_shared_transition),
+        subtitle = stringResource(R.string.settings_shared_transition_subtitle),
+        onClick = { view.performHaptic(HapticType.CLICK); onToggle(!enabled) },
+        containerColor = containerColor,
+        trailing = {
             Switch(
                 checked = enabled,
                 onCheckedChange = { value ->
@@ -1408,7 +1382,7 @@ private fun SharedTransitionSwitchCard(
                 colors = appSwitchColors()
             )
         }
-    }
+    )
 }
 
 /**
@@ -1796,10 +1770,10 @@ private fun NotificationItem(
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(48.dp)
                     .background(
                         color = settingsIconContainerColor(isDark),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(14.dp)
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -1807,7 +1781,7 @@ private fun NotificationItem(
                     Icons.Rounded.Notifications,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(26.dp)
                 )
             }
             Spacer(modifier = Modifier.width(16.dp))
@@ -1855,10 +1829,10 @@ private fun NotificationItem(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(48.dp)
                             .background(
                                 color = settingsIconContainerColor(isDark),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(14.dp)
                             ),
                         contentAlignment = Alignment.Center
                     ) {
@@ -1866,7 +1840,7 @@ private fun NotificationItem(
                             Icons.Rounded.Movie,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(26.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(16.dp))
@@ -1903,10 +1877,10 @@ private fun NotificationItem(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(48.dp)
                             .background(
                                 color = settingsIconContainerColor(isDark),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(14.dp)
                             ),
                         contentAlignment = Alignment.Center
                     ) {
@@ -1914,7 +1888,7 @@ private fun NotificationItem(
                             Icons.Rounded.LiveTv,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(26.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(16.dp))

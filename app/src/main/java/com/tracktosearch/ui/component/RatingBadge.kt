@@ -29,7 +29,7 @@ import com.tracktosearch.ui.theme.RatingGold
 /** 评分徽章统一规格：星星 + 数字，scrim 半透明底 + 圆角 + 细边框，保证不同海报上的对比度。 */
 private val RatingFontSize = 13.sp
 private val RatingIconSize = 14.dp
-private val RatingCorner = RoundedCornerShape(7.dp)
+private val RatingCorner = RoundedCornerShape(13.dp)
 
 /**
  * 评分徽章（星星 + 数字，scrim 半透明深色底）。

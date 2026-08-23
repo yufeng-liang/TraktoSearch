@@ -290,7 +290,7 @@
     <string name="settings_title">設定</string>
     <string name="settings_appearance">外観</string>
     <string name="settings_shared_transition">共有要素トランジション</string>
-    <string name="settings_shared_transition_subtitle">画面間で共有要素にトランジションアニメーションを適用（全画面表示時のズーム遷移も含む）。オフにするとパフォーマンスオーバーヘッドを下げられます。</string>
+    <string name="settings_shared_transition_subtitle">画面間で共有要素にトランジションアニメーションを適用（全画面表示時のズーム遷移も含む）。</string>
     <string name="settings_search">検索</string>
     <string name="settings_storage">ストレージ</string>
     <string name="settings_clear_cache">キャッシュクリア</string>
@@ -650,8 +650,7 @@
     <string name="settings_feedback">フィードバック</string>
     <string name="settings_feedback_subtitle">開発者が営業中。アイデアやバグをどんどんどうぞ 🧑‍💻🍿</string>
     <string name="feedback_title">フィードバック</string>
-    <string name="feedback_intro">届いたフィードバックは、一つひとつ私が大切に読みます。
-ここは機能の願いごとボックスでもあります。いつか、あなたの願いが実現するかも〜</string>
+    <string name="feedback_intro">届いたフィードバックは、一つひとつ私が読みます。\nここは機能の願いごとボックスでもあります。いつか、あなたの願いが実現するかも〜</string>
     <string name="feedback_new">新規フィードバック</string>
     <string name="feedback_my_feedbacks">マイフィードバック</string>
     <string name="feedback_empty">まだフィードバックはありません</string>
@@ -1116,7 +1115,7 @@
     <string name="settings_custom_search_source_subtitle">PanSou/Zreso互換ソースまたはカスタムJSONPathに対応</string>
     <string name="settings_add_source">検索ソースを追加</string>
     <!-- Settings: Card Layout -->
-    <string name="settings_view_statistics_desc">視聴回数、視聴時間、評価統計、ヒートマップ、ジャンル分布</string>
+    <string name="settings_view_statistics_desc">視聴回数、評価統計、ヒートマップ、ジャンル分布</string>
     <string name="settings_custom_section">カスタムセクション</string>
     <string name="settings_discover_page">発見ページ</string>
     <string name="settings_detail_page">詳細ページ</string>
@@ -1780,7 +1779,7 @@
     <string name="help_weather_data_b2">まず位置情報の座標をXiaomi APIでweathercn:またはaccu:の都市キーに解決し、そのキーで現在の天気を取得します。</string>
     <string name="help_weather_data_b3">現在の天気は位置ごとに最大3時間キャッシュし、重複リクエストを減らします。正確性と可用性はXiaomi Weatherおよびデータ提供元に依存します。</string>
 <!-- メイン画面の背景グロー -->
-    <string name="bg_glow_title">背景グロー</string>
+    <string name="bg_glow_title">背景エフェクト</string>
     <string name="bg_glow_off">オフ</string>
     <string name="bg_glow_aurora">オーロラ</string>
     <string name="bg_glow_lava">ラバランプ</string>
@@ -1792,7 +1791,7 @@
     <string name="bg_glow_nebula">ネビュラ</string>
     <string name="bg_glow_ink">墨</string>
     <string name="bg_glow_beach">ビーチ</string>
-    <string name="bg_glow_nebula_desc">深い藍の上をローズとバイオレットの光斑が漂う。固定配色でテーマ色に追従しない</string>
+    <string name="bg_glow_nebula_desc">深い藍の上をローズとバイオレットの光斑が漂う</string>
     <string name="bg_glow_ink_desc">白黒の高コントラストな流れ。最も強い見た目で、本文の可読性には最も厳しい</string>
     <string name="bg_glow_beach_desc">シアンとサンドイエローが非常にゆっくり漂う。固定配色でテーマ色に追従しない</string>
 </resources>
