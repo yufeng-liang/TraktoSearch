@@ -93,6 +93,33 @@ internal class CacheDiskStore<T>(
         }
     }
 
+    /**
+     * 在一次 DataStore transaction 中写入一批已算好 expireAt 的条目。
+     *
+     * Preferences DataStore 每次 edit 都会整份序列化并原子替换文件，
+     * 逐 key 写入会把一次列表富化放大成上百次全文件重写；攒批写把它压成一次。
+     *
+     * [shouldWrite] 在 transaction 内逐条求值，保证代次校验和实际落盘之间没有窗口。
+     */
+    suspend fun writeBatch(
+        entries: List<CacheDiskWrite<T>>,
+        shouldWrite: (CacheDiskWrite<T>) -> Boolean = { true }
+    ): Int {
+        if (entries.isEmpty()) return 0
+        return mutationMutex.withLock {
+            var written = 0
+            dataStore.edit { prefs ->
+                entries.forEach { entry ->
+                    if (shouldWrite(entry)) {
+                        putValue(prefs, entry)
+                        written++
+                    }
+                }
+            }
+            written
+        }
+    }
+
     /** 在一次 DataStore transaction 中批量写入条目。 */
     suspend fun writeAll(
         entries: List<Pair<String, T>>,

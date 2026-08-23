@@ -45,9 +45,14 @@ class TmdbRepository @Inject constructor(
         private const val PERSON_CREDITS_PAGE_SIZE = 20      // 人物作品每页数量
     }
 
-    /** 根据当前语言设置返回 TMDB API 的 language 参数 */
+    /**
+     * 根据当前语言设置返回 TMDB API 的 language 参数。
+     *
+     * language 是 StateFlow，读 value 与 first() 语义相同（都取当前值、不等待），
+     * 但避免了每个列表条目富化时都新建一次 flow 收集。
+     */
     private suspend fun getTmdbLanguage(): String {
-        val lang = languageStorage.language.first()
+        val lang = languageStorage.language.value
         return when (lang) {
             LanguageStorage.LANGUAGE_CHINESE -> "zh-CN"
             LanguageStorage.LANGUAGE_ENGLISH -> "en-US"
@@ -73,7 +78,7 @@ class TmdbRepository @Inject constructor(
 
     /** 根据当前语言设置返回 TMDB alternative_titles 的 country 参数 */
     private suspend fun getTmdbCountry(): String {
-        val lang = languageStorage.language.first()
+        val lang = languageStorage.language.value
         return when (lang) {
             LanguageStorage.LANGUAGE_CHINESE -> "CN"
             LanguageStorage.LANGUAGE_ENGLISH -> "US"

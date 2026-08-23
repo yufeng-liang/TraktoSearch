@@ -11,6 +11,7 @@ import com.tracktosearch.data.local.UserProfileStorage
 import com.tracktosearch.data.local.db.MarkActionRecordDao
 import com.tracktosearch.data.local.db.MarkActionRecordEntity
 import com.tracktosearch.data.local.db.MarkActionType
+import com.tracktosearch.data.local.db.OfflineCacheManager
 import com.tracktosearch.data.remote.trakt.TraktApiService
 import com.tracktosearch.data.remote.trakt.TraktConnectionCheckResult
 import com.tracktosearch.data.remote.trakt.dto.*
@@ -57,6 +58,7 @@ class TraktRepository @Inject constructor(
     private val tmdbRepository: TmdbRepository,
     private val statisticsSnapshotStore: StatisticsSnapshotStore,
     private val json: Json,
+    private val offlineCacheManager: OfflineCacheManager,
     @ApplicationContext private val context: Context
 ) {
     companion object {
@@ -431,6 +433,13 @@ class TraktRepository @Inject constructor(
     /** 清理当前 Trakt 账号的全部本地数据，切换账号或重新授权后必须调用。 */
     suspend fun clearTraktAccountCaches() {
         clearWatchlistWatchedCache()
+        // 想看/已看的 Room 离线快照按设备存储、不区分账号；Watchlist 页会用它兜首帧，
+        // 切号后必须一并清掉，否则下次冷启动会先闪出上一个账号的列表。
+        try {
+            offlineCacheManager.clearWatchlistSnapshots()
+        } catch (e: CancellationException) { throw e } catch (_: Exception) {
+            // 清理失败不阻塞切号流程；下一次成功加载会整表替换
+        }
     }
 
     /** 将当前内存中的 watchlistWatchedIds 异步写回持久化缓存（增删后调用以保持一致） */
@@ -2116,7 +2125,7 @@ class TraktRepository @Inject constructor(
     suspend fun getRecommendations(limit: Int = 10): Result<List<TraktMovie>> {
         val key = "recommendations_${limit}"
         val sessionGeneration = sessionCacheRegistry.currentGeneration()
-        recommendationsCache.get(key)?.let { cached ->
+        recommendationsCache.getAfterLoad(key)?.let { cached ->
             return Result.success(
                 sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) { cached }
             )
@@ -2160,7 +2169,7 @@ class TraktRepository @Inject constructor(
 
     suspend fun getTrendingMovies(page: Int = 1, limit: Int = 10): Result<Pair<List<TraktTrendingMovieResponse>, Int>> {
         val key = "${page}_${limit}"
-        trendingMoviesCache.get(key)?.let { return Result.success(it) }
+        trendingMoviesCache.getAfterLoad(key)?.let { return Result.success(it) }
         return try {
             val response = traktApiService.getTrendingMovies(page = page, limit = limit)
             if (response.isSuccessful) {
@@ -2174,7 +2183,7 @@ class TraktRepository @Inject constructor(
 
     suspend fun getTrendingShows(page: Int = 1, limit: Int = 10): Result<Pair<List<TraktTrendingShowResponse>, Int>> {
         val key = "${page}_${limit}"
-        trendingShowsCache.get(key)?.let { return Result.success(it) }
+        trendingShowsCache.getAfterLoad(key)?.let { return Result.success(it) }
         return try {
             val response = traktApiService.getTrendingShows(page = page, limit = limit)
             if (response.isSuccessful) {
@@ -2188,7 +2197,7 @@ class TraktRepository @Inject constructor(
 
     suspend fun getAnticipatedMovies(page: Int = 1, limit: Int = 10): Result<Pair<List<TraktAnticipatedMovieResponse>, Int>> {
         val key = "${page}_${limit}"
-        anticipatedMoviesCache.get(key)?.let { return Result.success(it) }
+        anticipatedMoviesCache.getAfterLoad(key)?.let { return Result.success(it) }
         return try {
             val response = traktApiService.getAnticipatedMovies(page = page, limit = limit)
             if (response.isSuccessful) {
@@ -2202,7 +2211,7 @@ class TraktRepository @Inject constructor(
 
     suspend fun getAnticipatedShows(page: Int = 1, limit: Int = 10): Result<Pair<List<TraktAnticipatedShowResponse>, Int>> {
         val key = "${page}_${limit}"
-        anticipatedShowsCache.get(key)?.let { return Result.success(it) }
+        anticipatedShowsCache.getAfterLoad(key)?.let { return Result.success(it) }
         return try {
             val response = traktApiService.getAnticipatedShows(page = page, limit = limit)
             if (response.isSuccessful) {
@@ -2217,7 +2226,7 @@ class TraktRepository @Inject constructor(
     suspend fun getShowRecommendations(limit: Int = 10): Result<List<TraktRecommendationShowResponse>> {
         val key = "${limit}"
         val sessionGeneration = sessionCacheRegistry.currentGeneration()
-        showRecommendationsCache.get(key)?.let { cached ->
+        showRecommendationsCache.getAfterLoad(key)?.let { cached ->
             return Result.success(
                 sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) { cached }
             )
@@ -2333,7 +2342,7 @@ class TraktRepository @Inject constructor(
     // 社区热门列表
     suspend fun getTrendingLists(limit: Int = 10, page: Int = 1): Result<List<TraktTrendingListResponse>> {
         val key = "${limit}_${page}"
-        trendingListsCache.get(key)?.let { return Result.success(it) }
+        trendingListsCache.getAfterLoad(key)?.let { return Result.success(it) }
         return try {
             val response = traktApiService.getTrendingLists(limit, page)
             if (response.isSuccessful) {

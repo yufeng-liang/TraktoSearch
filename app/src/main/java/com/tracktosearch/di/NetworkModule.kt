@@ -35,6 +35,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
 import okhttp3.Cache
 import okhttp3.ConnectionPool
+import okhttp3.Dispatcher
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -108,6 +109,22 @@ object NetworkModule {
     @Singleton
     fun provideDnsCache(): DnsCache = DnsCache()
 
+    /**
+     * 网关专用请求调度器（Trakt + TMDB 共用）。
+     *
+     * OkHttp 默认 Dispatcher 的 maxRequestsPerHost 是 5，而 Trakt / TMDB 走同一个网关域名，
+     * 于是全部业务 API 并发被压到 5：一个 200 条的 watchlist 首次富化要排 40 轮。
+     * 网关走 HTTP/2，同一连接多路复用，提到 16 并发只是多开 stream，成本很低。
+     * 豆瓣等其它客户端仍用共享的默认 Dispatcher，避免抬高对豆瓣的并发触发反爬。
+     */
+    @Provides
+    @Singleton
+    @Named("gateway")
+    fun provideGatewayDispatcher(): Dispatcher = Dispatcher().apply {
+        maxRequests = 32
+        maxRequestsPerHost = 16
+    }
+
     @Provides
     @Singleton
     @Named("trakt")
@@ -116,10 +133,12 @@ object NetworkModule {
         loggingInterceptor: HttpLoggingInterceptor,
         cache: Cache,
         authInterceptor: AuthInterceptor,
-        connectivityObserver: ConnectivityObserver
+        connectivityObserver: ConnectivityObserver,
+        @Named("gateway") gatewayDispatcher: Dispatcher
     ): OkHttpClient {
         return baseClient.newBuilder()
             .cache(cache)
+            .dispatcher(gatewayDispatcher)
             .addInterceptor(authInterceptor)
             .addInterceptor(Interceptor { chain ->
                 val request = chain.request().newBuilder()
@@ -154,10 +173,12 @@ object NetworkModule {
         loggingInterceptor: HttpLoggingInterceptor,
         cache: Cache,
         authInterceptor: AuthInterceptor,
-        connectivityObserver: ConnectivityObserver
+        connectivityObserver: ConnectivityObserver,
+        @Named("gateway") gatewayDispatcher: Dispatcher
     ): OkHttpClient {
         return baseClient.newBuilder()
             .cache(cache)
+            .dispatcher(gatewayDispatcher)
             .addInterceptor(authInterceptor)
             .addInterceptor(Interceptor { chain ->
                 val request = chain.request().newBuilder()

@@ -95,11 +95,13 @@ open class TtlCache<T>(
      * 适用场景：多个 ViewModel 并发请求同一接口，希望只发一次网络请求，
      * 其他调用方等待结果后各自处理 UI 更新。
      *
+     * 子类可覆写以在走 fetch 前插入自己的命中判断（如 PersistentTtlCache 先等磁盘加载）。
+     *
      * @param key 缓存 key
      * @param skipCache 是否跳过缓存读取（如重试场景），仍享受飞行中去重
      * @param fetch 获取数据的 lambda，仅在无缓存且无飞行中请求时执行
      */
-    suspend fun getOrAwait(key: String, skipCache: Boolean = false, fetch: suspend () -> T): T {
+    open suspend fun getOrAwait(key: String, skipCache: Boolean = false, fetch: suspend () -> T): T {
         if (!skipCache) {
             get(key)?.let { return it }
         }
