@@ -23,6 +23,7 @@ import com.tracktosearch.data.ai.AiCharacter
  * 未激活的用户在那一页永远打不开精灵中心（那页只能点自动探头，而探头要求已激活）。
  *
  * 已激活时直接显示当前角色头像，顺带把「谁在陪你」这个状态也表达出来。
+ * 头像走 [AiCharacterGlyph]，和精灵中心里的角色条用同一份立绘，不再是另画一版简笔画。
  */
 @Composable
 fun AiSpriteCenterEntryButton(
@@ -36,7 +37,8 @@ fun AiSpriteCenterEntryButton(
         modifier = modifier.semantics { contentDescription = description }
     ) {
         if (activatedCharacter != null) {
-            AiCharacterGlyph(activatedCharacter, Modifier.size(26.dp))
+            // 比标准 24dp 图标略大：立绘是全身像，脸只占一半高度，太小认不出是谁
+            AiCharacterGlyph(activatedCharacter, Modifier.size(28.dp))
         } else {
             Icon(
                 imageVector = Icons.Rounded.AutoAwesome,
