@@ -345,6 +345,7 @@ fun HelpScreen(
                         HelpBullet(stringResource(R.string.help_ai_sprite_b4))
                         HelpBullet(stringResource(R.string.help_ai_sprite_b5))
                         HelpBullet(stringResource(R.string.help_ai_sprite_b6))
+                        HelpBullet(stringResource(R.string.help_ai_sprite_b7))
                         HelpBullet(stringResource(R.string.ai_sprite_long_press_hint))
                     }
                 }

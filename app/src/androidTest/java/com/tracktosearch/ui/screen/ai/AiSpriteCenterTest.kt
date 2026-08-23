@@ -158,4 +158,66 @@ class AiSpriteCenterTest {
         composeRule.onAllNodesWithText(context.getString(R.string.ai_sprite_activation_success))
             .assertCountEquals(0)
     }
+
+    @Test
+    fun activatedCharacterShowsStatusPanelInsteadOfDeadActivateButton() {
+        val viewModel = mockk<AiSpriteViewModel>(relaxed = true)
+        every { viewModel.uiState } returns MutableStateFlow(
+            AiSpriteUiState(
+                characters = listOf(AiCharacter("usagi", "乌萨奇", "乌萨奇", isAvailable = true)),
+                selectedCharacterId = "usagi",
+                activatedCharacterId = "usagi",
+                activationState = AiActivationState.SUCCESS,
+                authState = AuthState.AUTHORIZED
+            )
+        )
+        every { viewModel.audioEvents } returns MutableSharedFlow<AiAudio>()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+
+        composeRule.setContent {
+            AiSpriteCenter(
+                visible = true,
+                onDismiss = {},
+                viewModel = viewModel
+            )
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(context.getString(R.string.ai_sprite_activated_status, "乌萨奇"))
+            .assertIsDisplayed()
+        // 激活成功后不该再留一个灰掉的「喊名字来激活」按钮当摆设
+        composeRule.onAllNodesWithText(context.getString(R.string.ai_sprite_activate, "乌萨奇"))
+            .assertCountEquals(0)
+    }
+
+    @Test
+    fun characterCatalogFailureExplainsItselfAndOffersReload() {
+        val viewModel = mockk<AiSpriteViewModel>(relaxed = true)
+        every { viewModel.uiState } returns MutableStateFlow(
+            AiSpriteUiState(
+                characters = listOf(AiCharacter("usagi", "乌萨奇", "乌萨奇", isAvailable = false)),
+                selectedCharacterId = "usagi",
+                authState = AuthState.AUTHORIZED,
+                charactersLoadFailed = true
+            )
+        )
+        every { viewModel.audioEvents } returns MutableSharedFlow<AiAudio>()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+
+        composeRule.setContent {
+            AiSpriteCenter(
+                visible = true,
+                onDismiss = {},
+                viewModel = viewModel
+            )
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(context.getString(R.string.ai_error_characters_failed)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.ai_sprite_characters_retry)).performClick()
+        verify { viewModel.reloadCharacters() }
+        // 角色还没上线时激活按钮旁要说明原因，不能只是灰着
+        composeRule.onNodeWithText(context.getString(R.string.ai_sprite_activate_disabled_preparing))
+            .assertIsDisplayed()
+    }
 }

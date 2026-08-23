@@ -879,7 +879,9 @@ fun DetailScreen(
                 onClick = {},
                 onFinished = { showWatchlistScene = false },
                 modifier = Modifier.zIndex(5f),
-                sceneRes = sceneArtFor(AiSceneEvent.DETAIL_WATCHLIST_ADDED).drawableRes
+                sceneRes = sceneArtFor(AiSceneEvent.DETAIL_WATCHLIST_ADDED).drawableRes,
+                // 加入看单的庆祝插画，不该变成盖在详情页上的可点区域
+                interactive = false
             )
 
             // 顶栏按钮与回顶按钮置于采样源之外(LocalBackdrop=null)：glass 模式下由

@@ -59,6 +59,8 @@ enum class AiActivationState {
     FAILED
 }
 
+private const val WATCHED_TITLES_TTL_MS = 10 * 60 * 1000L
+
 data class AiSpriteUiState(
     val characters: List<AiCharacter> = AiCharacterCatalog.all,
     val selectedCharacterId: String = "usagi",
@@ -82,6 +84,8 @@ data class AiSpriteUiState(
     val quiz: AiQuiz? = null,
     val quizPreviewMovies: List<AiWatchedTitleDto> = emptyList(),
     val quizReplacementCount: Int = 0,
+    // 「换一部」是否还有没用过的候选：已看正好 7 部时候选会被用光，按钮必须跟着禁用
+    val quizReplaceAvailable: Boolean = false,
     val quizStarted: Boolean = false,
     val quizIndex: Int = 0,
     val quizAnswers: Map<String, AiQuizAnswer> = emptyMap(),
@@ -90,6 +94,8 @@ data class AiSpriteUiState(
     val quizResultRevision: Long = 0L,
     val quizHistory: com.tracktosearch.data.ai.AiQuizHistory? = null,
     val dailyKnowledge: AiDailyKnowledge? = null,
+    // 角色目录是否成功取回：失败时全部角色停在「准备中」，UI 要给出原因和重试入口
+    val charactersLoadFailed: Boolean = false,
     val errorCode: String? = null
 ) {
     val isAuthorized: Boolean
@@ -137,6 +143,8 @@ class AiSpriteViewModel @Inject constructor(
     private var requestGeneration = 0L
     private var recentQuizIds = emptyList<String>()
     private var quizCandidates = emptyList<AiWatchedTitleDto>()
+    /** 已看列表短期缓存（时间戳 to 列表），避免每次进功能页都全量重拉 Trakt 历史。 */
+    private var watchedTitlesCache: Pair<Long, List<AiWatchedTitleDto>>? = null
     // 一次精灵中心会话共用一个会话 ID，让服务端会话配额按一次打开的精灵中心计算。
     // 若每次请求都发新 UUID，会话配额形同虚设，只剩每日上限。
     private val spriteSessionId = "sprite-${UUID.randomUUID()}"
@@ -181,6 +189,7 @@ class AiSpriteViewModel @Inject constructor(
         previewJob = null
         recentQuizIds = emptyList()
         quizCandidates = emptyList()
+        watchedTitlesCache = null
         _uiState.update {
             it.copy(
                 activatedCharacterId = null,
@@ -199,6 +208,7 @@ class AiSpriteViewModel @Inject constructor(
                 quiz = null,
                 quizPreviewMovies = emptyList(),
                 quizReplacementCount = 0,
+                quizReplaceAvailable = false,
                 quizStarted = false,
                 quizIndex = 0,
                 quizAnswers = emptyMap(),
@@ -395,7 +405,8 @@ class AiSpriteViewModel @Inject constructor(
         when (feature) {
             AiFeature.GREETING -> loadGreeting(_uiState.value.activatedCharacterId ?: _uiState.value.selectedCharacterId)
             AiFeature.TASTE -> loadTaste()
-            AiFeature.QUIZ -> prepareQuizPreview()
+            // 返回后重进不能把答到一半的一轮题冲掉；只有没有未完成的一轮时才重新抽题
+            AiFeature.QUIZ -> if (!hasQuizInProgress(_uiState.value)) prepareQuizPreview()
             AiFeature.DAILY -> loadDaily()
         }
     }
@@ -412,6 +423,7 @@ class AiSpriteViewModel @Inject constructor(
         }
     }
 
+    /** 功能页刷新。答题页的刷新等于放弃这一轮，UI 必须先做二次确认再调用。 */
     fun refreshFeature() {
         when (_uiState.value.activeFeature) {
             AiFeature.GREETING -> loadGreeting(
@@ -419,7 +431,7 @@ class AiSpriteViewModel @Inject constructor(
                 forceRefresh = true
             )
             AiFeature.TASTE -> loadTaste(forceRefresh = true)
-            AiFeature.QUIZ -> prepareQuizPreview()
+            AiFeature.QUIZ -> replayQuiz()
             AiFeature.DAILY -> loadDaily(forceRefresh = true)
             null -> Unit
         }
@@ -491,6 +503,7 @@ class AiSpriteViewModel @Inject constructor(
                 quizIndex = 0,
                 quizAnswers = emptyMap(),
                 quizReplacementCount = 0,
+                quizReplaceAvailable = false,
                 quizPreviewMovies = emptyList()
             )
         }
@@ -516,10 +529,12 @@ class AiSpriteViewModel @Inject constructor(
             replacementCount = state.quizReplacementCount
         )
         if (next != state.quizPreviewMovies) {
+            val nextReplacementCount = state.quizReplacementCount + 1
             _uiState.update {
                 it.copy(
                     quizPreviewMovies = next,
-                    quizReplacementCount = it.quizReplacementCount + 1
+                    quizReplacementCount = nextReplacementCount,
+                    quizReplaceAvailable = canReplaceQuizPreview(next, quizCandidates, nextReplacementCount)
                 )
             }
         }
@@ -538,11 +553,28 @@ class AiSpriteViewModel @Inject constructor(
     }
 
     private suspend fun loadCharacters() {
-        aiRepository.listCharacters().onSuccess { remote ->
-            val remoteById = remote.associateBy { it.id }
-            _uiState.update { state ->
-                state.copy(characters = state.characters.map { local -> remoteById[local.id] ?: local })
-            }
+        aiRepository.listCharacters().fold(
+            onSuccess = { remote ->
+                val remoteById = remote.associateBy { it.id }
+                _uiState.update { state ->
+                    state.copy(
+                        characters = state.characters.map { local -> remoteById[local.id] ?: local },
+                        charactersLoadFailed = false
+                    )
+                }
+            },
+            // 本地目录默认 isAvailable=false，取不到远端可用态就全是「准备中」，
+            // 激活按钮会整片灰掉。必须显式标记失败，让 UI 给出原因和重试入口。
+            onFailure = { _uiState.update { it.copy(charactersLoadFailed = true) } }
+        )
+    }
+
+    /** 角色目录加载失败后的手动重试。 */
+    fun reloadCharacters() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(charactersLoadFailed = false, errorCode = null) }
+            loadCharacters()
+            if (_uiState.value.charactersLoadFailed) setError("CHARACTERS_LOAD_FAILED")
         }
     }
 
@@ -630,6 +662,7 @@ class AiSpriteViewModel @Inject constructor(
             val watched = watchedTitles()
             if (watched.size < 7) throw IllegalStateException("NOT_ENOUGH_MOVIES")
             quizCandidates = watched
+            val preview = selectQuizPreview(watched)
             _uiState.update {
                 it.copy(
                     quiz = null,
@@ -637,8 +670,9 @@ class AiSpriteViewModel @Inject constructor(
                     quizStarted = false,
                     quizIndex = 0,
                     quizAnswers = emptyMap(),
-                    quizPreviewMovies = selectQuizPreview(watched),
-                    quizReplacementCount = 0
+                    quizPreviewMovies = preview,
+                    quizReplacementCount = 0,
+                    quizReplaceAvailable = canReplaceQuizPreview(preview, watched, 0)
                 )
             }
         }
@@ -720,14 +754,23 @@ class AiSpriteViewModel @Inject constructor(
         requestJob = null
     }
 
-    private suspend fun watchedTitles(): List<AiWatchedTitleDto> = withContext(Dispatchers.IO) {
-        val results = listOf(
-            async { traktRepository.getAllMovieHistory(extended = "full") },
-            async { traktRepository.getAllShowHistory(extended = "full") }
-        ).awaitAll()
-        val movies = (results[0].getOrNull() as? List<TraktWatchlistMovieItem>).orEmpty().map { it.toAiWatched() }
-        val shows = (results[1].getOrNull() as? List<TraktWatchlistShowItem>).orEmpty().map { it.toAiWatched() }
-        (movies + shows).sortedByDescending { it.watchedAt.orEmpty() }.take(60)
+    private suspend fun watchedTitles(): List<AiWatchedTitleDto> {
+        // 「锐评」「闯关」每次进入都全量拉 Trakt 已看历史，导致每次都转圈。
+        // 已看列表短时间内基本不变，缓存 10 分钟即可，符合缓存优先原则。
+        watchedTitlesCache?.let { cached ->
+            if (System.currentTimeMillis() - cached.first < WATCHED_TITLES_TTL_MS) return cached.second
+        }
+        val loaded = withContext(Dispatchers.IO) {
+            val results = listOf(
+                async { traktRepository.getAllMovieHistory(extended = "full") },
+                async { traktRepository.getAllShowHistory(extended = "full") }
+            ).awaitAll()
+            val movies = (results[0].getOrNull() as? List<TraktWatchlistMovieItem>).orEmpty().map { it.toAiWatched() }
+            val shows = (results[1].getOrNull() as? List<TraktWatchlistShowItem>).orEmpty().map { it.toAiWatched() }
+            (movies + shows).sortedByDescending { it.watchedAt.orEmpty() }.take(60)
+        }
+        if (loaded.isNotEmpty()) watchedTitlesCache = System.currentTimeMillis() to loaded
+        return loaded
     }
 
     private fun isAuthorized(): Boolean =

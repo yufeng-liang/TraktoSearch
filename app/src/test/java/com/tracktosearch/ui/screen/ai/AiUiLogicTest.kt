@@ -1,7 +1,9 @@
 package com.tracktosearch.ui.screen.ai
 
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiCharacter
+import com.tracktosearch.data.ai.AiQuiz
 import com.tracktosearch.data.ai.AiTtsScene
 import com.tracktosearch.data.ai.AiTtsRequest
 import com.tracktosearch.data.ai.AiQuizAnswer
@@ -52,6 +54,123 @@ class AiUiLogicTest {
             .isEqualTo(AiAuditionPlaybackRoute.AUTHORIZED_TTS)
         assertThat(auditionPlaybackRoute(isAuthorized = false, isAvailable = false))
             .isEqualTo(AiAuditionPlaybackRoute.SYSTEM_TTS)
+    }
+
+    @Test
+    fun errorCodesMapToDistinctActionableMessages() {
+        // 之前所有码都渲染成 ai_error，用户看不出原因只能反复点重试
+        assertThat(aiErrorMessageRes("NOT_ENOUGH_MOVIES")).isEqualTo(R.string.ai_error_not_enough_movies)
+        assertThat(aiErrorMessageRes("WATCHED_LIST_EMPTY")).isEqualTo(R.string.ai_error_watched_list_empty)
+        assertThat(aiErrorMessageRes("QUOTA_EXCEEDED")).isEqualTo(R.string.ai_error_quota_exceeded)
+        assertThat(aiErrorMessageRes("ACTIVATION_NOT_MATCHED")).isEqualTo(R.string.ai_error_activation_not_matched)
+        assertThat(aiErrorMessageRes("AUDIO_UNAVAILABLE")).isEqualTo(R.string.ai_error_audio_unavailable)
+        assertThat(aiErrorMessageRes("UNAUTHORIZED")).isEqualTo(R.string.ai_error_unauthorized)
+        assertThat(aiErrorMessageRes("NETWORK")).isEqualTo(R.string.ai_error_network)
+        assertThat(aiErrorMessageRes("CHARACTERS_LOAD_FAILED")).isEqualTo(R.string.ai_error_characters_failed)
+        // 未识别的码仍回退到通用文案
+        assertThat(aiErrorMessageRes("SOMETHING_NEW")).isEqualTo(R.string.ai_error)
+        assertThat(aiErrorMessageRes(null)).isEqualTo(R.string.ai_error)
+    }
+
+    @Test
+    fun errorsThatRetryCannotFixDoNotOfferRetry() {
+        assertThat(aiErrorIsRetryable("NOT_ENOUGH_MOVIES")).isFalse()
+        assertThat(aiErrorIsRetryable("QUOTA_EXCEEDED")).isFalse()
+        assertThat(aiErrorIsRetryable("UNAUTHORIZED")).isFalse()
+        assertThat(aiErrorIsRetryable("WATCHED_LIST_EMPTY")).isFalse()
+        assertThat(aiErrorIsRetryable("NETWORK")).isTrue()
+        assertThat(aiErrorIsRetryable("SERVER")).isTrue()
+        assertThat(aiErrorIsRetryable(null)).isTrue()
+    }
+
+    @Test
+    fun activationBlockedReasonExplainsPreparingAndExhaustedInsteadOfSilentDisable() {
+        val ready = AiCharacter("usagi", "乌萨奇", "乌萨奇", isAvailable = true)
+        val preparing = ready.copy(isAvailable = false)
+        val authorized = AiSpriteUiState(
+            selectedCharacterId = ready.id,
+            authState = com.tracktosearch.data.auth.AuthState.AUTHORIZED
+        )
+
+        assertThat(activationBlockedReasonRes(ready, authorized)).isNull()
+        assertThat(activationBlockedReasonRes(preparing, authorized))
+            .isEqualTo(R.string.ai_sprite_activate_disabled_preparing)
+        assertThat(
+            activationBlockedReasonRes(
+                ready,
+                authorized.copy(activationAttempt = 5, textActivationAttempt = 5)
+            )
+        ).isEqualTo(R.string.ai_sprite_activate_disabled_exhausted)
+        // 语音用满但文字还有次数时不算堵死
+        assertThat(activationBlockedReasonRes(ready, authorized.copy(activationAttempt = 5))).isNull()
+    }
+
+    @Test
+    fun unansweredCountTreatsBlankTextAndEmptySelectionAsUnanswered() {
+        val quiz = AiQuiz(
+            quizId = "q",
+            title = "标题",
+            subtitle = "",
+            mediaTitles = emptyList(),
+            totalScore = 100,
+            questions = listOf(
+                AiQuizQuestion(id = "a", type = AiQuizQuestionType.SINGLE, prompt = "1"),
+                AiQuizQuestion(id = "b", type = AiQuizQuestionType.SHORT, prompt = "2"),
+                AiQuizQuestion(id = "c", type = AiQuizQuestionType.MULTIPLE, prompt = "3")
+            )
+        )
+        val answers = mapOf(
+            "a" to AiQuizAnswer("a", selectedOptionIds = listOf("x")),
+            "b" to AiQuizAnswer("b", selectedOptionIds = emptyList(), textAnswer = "   ")
+        )
+
+        assertThat(unansweredQuizCount(quiz, answers)).isEqualTo(2)
+        assertThat(answeredQuizCount(quiz, answers)).isEqualTo(1)
+        assertThat(unansweredQuizCount(null, answers)).isEqualTo(0)
+    }
+
+    @Test
+    fun quizInProgressOnlyWhileStartedAndBeforeResult() {
+        val quiz = AiQuiz(
+            quizId = "q",
+            title = "标题",
+            subtitle = "",
+            mediaTitles = emptyList(),
+            totalScore = 100,
+            questions = listOf(
+                AiQuizQuestion(id = "a", type = AiQuizQuestionType.SINGLE, prompt = "1")
+            )
+        )
+        val base = AiSpriteUiState(quiz = quiz, quizStarted = true)
+
+        assertThat(hasQuizInProgress(base)).isTrue()
+        assertThat(hasQuizInProgress(base.copy(quizStarted = false))).isFalse()
+        assertThat(hasQuizInProgress(base.copy(quiz = null))).isFalse()
+    }
+
+    @Test
+    fun replaceIsBlockedWhenCandidatesRunOutNotJustWhenCountUsedUp() {
+        val seven = (1..7).map { id ->
+            com.tracktosearch.data.ai.AiWatchedTitleDto(
+                mediaId = id.toString(),
+                mediaType = "movie",
+                title = "片名$id"
+            )
+        }
+        // 已看正好 7 部：候选全部在用，之前按钮仍可点但点了原样返回
+        assertThat(canReplaceQuizPreview(seven, seven, replacementCount = 0)).isFalse()
+
+        val nine = seven + (8..9).map { id ->
+            com.tracktosearch.data.ai.AiWatchedTitleDto(
+                mediaId = id.toString(),
+                mediaType = "movie",
+                title = "片名$id"
+            )
+        }
+        assertThat(canReplaceQuizPreview(seven, nine, replacementCount = 0)).isTrue()
+        assertThat(canReplaceQuizPreview(seven, nine, replacementCount = 2)).isFalse()
+        assertThat(remainingQuizReplacements(0)).isEqualTo(2)
+        assertThat(remainingQuizReplacements(3)).isEqualTo(0)
     }
 
     @Test

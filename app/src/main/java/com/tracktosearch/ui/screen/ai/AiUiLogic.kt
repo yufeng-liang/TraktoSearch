@@ -1,6 +1,9 @@
 package com.tracktosearch.ui.screen.ai
 
+import androidx.annotation.StringRes
+import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiCharacter
+import com.tracktosearch.data.ai.AiQuiz
 import com.tracktosearch.data.ai.AiQuizAnswer
 import com.tracktosearch.data.ai.AiQuizQuestion
 import com.tracktosearch.data.ai.AiQuizQuestionType
@@ -16,6 +19,59 @@ private const val MAX_TEXT_ACTIVATION_ATTEMPTS = 5
 private const val MAX_OVERLAY_SESSION_COUNT = 3
 private const val MAX_OVERLAY_DAILY_COUNT = 6
 private const val IDLE_TRIGGER_DELAY_MS = 8_000L
+private const val MAX_QUIZ_REPLACEMENTS = 2
+
+/**
+ * 错误码到用户可读文案的映射。
+ *
+ * 之前所有错误码都渲染成同一句「精灵正在休息」，用户看不出到底是片单不够、
+ * 配额用完还是名字没喊对，只能反复点重试。这里把 ViewModel 的本地码和
+ * AiErrorCode 的服务端码合到一张表上，各自给出能指导下一步动作的文案。
+ */
+@StringRes
+fun aiErrorMessageRes(errorCode: String?): Int = when (errorCode) {
+    null -> R.string.ai_error
+    // 本地码
+    "AUTH_REQUIRED" -> R.string.ai_error_auth_required
+    "ACTIVATION_RETRY_LIMIT" -> R.string.ai_error_activation_retry_limit
+    "ACTIVATION_UNAVAILABLE" -> R.string.ai_error_character_unavailable
+    "ACTIVATION_NAME_EMPTY" -> R.string.ai_error_name_empty
+    "ACTIVATION_NOT_MATCHED" -> R.string.ai_error_activation_not_matched
+    "AUDIO_UNAVAILABLE" -> R.string.ai_error_audio_unavailable
+    "NOT_ENOUGH_MOVIES" -> R.string.ai_error_not_enough_movies
+    "WATCHED_LIST_EMPTY" -> R.string.ai_error_watched_list_empty
+    "CHARACTERS_LOAD_FAILED" -> R.string.ai_error_characters_failed
+    // AiErrorCode.name
+    "UNAUTHORIZED" -> R.string.ai_error_unauthorized
+    "QUOTA_EXCEEDED" -> R.string.ai_error_quota_exceeded
+    "RATE_LIMITED" -> R.string.ai_error_rate_limited
+    "CHARACTER_UNAVAILABLE" -> R.string.ai_error_character_unavailable
+    "ACTIVATION_REQUIRED" -> R.string.ai_error_activation_required
+    "INVALID_REQUEST" -> R.string.ai_error_invalid_request
+    "INVALID_RESPONSE" -> R.string.ai_error_invalid_response
+    "NETWORK" -> R.string.ai_error_network
+    "SERVER" -> R.string.ai_error_server
+    else -> R.string.ai_error
+}
+
+/**
+ * 重试按钮是否有意义。
+ *
+ * 片单不够、配额用完、授权失效这几类靠重试永远解决不了，
+ * 继续给重试按钮只会让用户白点并多烧一次请求。
+ */
+fun aiErrorIsRetryable(errorCode: String?): Boolean = when (errorCode) {
+    "AUTH_REQUIRED",
+    "UNAUTHORIZED",
+    "QUOTA_EXCEEDED",
+    "NOT_ENOUGH_MOVIES",
+    "WATCHED_LIST_EMPTY",
+    "CHARACTER_UNAVAILABLE",
+    "ACTIVATION_UNAVAILABLE",
+    "ACTIVATION_RETRY_LIMIT",
+    "ACTIVATION_REQUIRED" -> false
+    else -> true
+}
 
 private val overlayTriggerCooldowns = mapOf(
     AiSpriteOverlayTrigger.FIRST_ENTRY to 0L,
@@ -189,6 +245,58 @@ fun canActivateCharacterByText(character: AiCharacter, state: AiSpriteUiState): 
         state.activationState != AiActivationState.VERIFYING &&
         state.activationState != AiActivationState.SUCCESS
 
+/**
+ * 激活入口整体不可用时的原因文案；可用时返回 null。
+ *
+ * 之前主按钮只是灰掉，用户看不出是角色没上线还是次数用完，只能干瞪眼。
+ */
+@StringRes
+fun activationBlockedReasonRes(character: AiCharacter, state: AiSpriteUiState): Int? = when {
+    !character.isAvailable -> R.string.ai_sprite_activate_disabled_preparing
+    state.activatedCharacterId == character.id -> null
+    !canRequestVoiceActivation(state.activationAttempt) &&
+        !canRequestTextActivation(state.textActivationAttempt) ->
+        R.string.ai_sprite_activate_disabled_exhausted
+    else -> null
+}
+
+/** 未作答题目数，用于提交前提醒，避免用户一路点「下一题」到底后白拿 0 分。 */
+fun unansweredQuizCount(quiz: AiQuiz?, answers: Map<String, AiQuizAnswer>): Int {
+    val questions = quiz?.questions ?: return 0
+    return questions.count { question ->
+        val answer = answers[question.id]
+        answer == null ||
+            (answer.selectedOptionIds.isEmpty() && answer.textAnswer.isNullOrBlank())
+    }
+}
+
+fun answeredQuizCount(quiz: AiQuiz?, answers: Map<String, AiQuizAnswer>): Int {
+    val total = quiz?.questions?.size ?: 0
+    return total - unansweredQuizCount(quiz, answers)
+}
+
+/** 答题进行中：有题目、已开始、还没出结果。刷新/重进都要先保住这份进度。 */
+fun hasQuizInProgress(state: AiSpriteUiState): Boolean =
+    state.quizStarted && state.quiz != null && state.quizResult == null
+
+/**
+ * 「换一部」是否还能点：次数没用满 **且** 还有没用过的候选。
+ *
+ * 已看正好 7 部时候选恰好被用光，之前按钮仍可点但点了原样返回，成了死按钮。
+ */
+fun canReplaceQuizPreview(
+    current: List<AiWatchedTitleDto>,
+    candidates: List<AiWatchedTitleDto>,
+    replacementCount: Int
+): Boolean {
+    if (replacementCount >= MAX_QUIZ_REPLACEMENTS) return false
+    val usedKeys = current.map { it.key() }.toSet()
+    return candidates.any { it.key() !in usedKeys }
+}
+
+fun remainingQuizReplacements(replacementCount: Int): Int =
+    (MAX_QUIZ_REPLACEMENTS - replacementCount).coerceAtLeast(0)
+
 private fun AiWatchedTitleDto.key(): String = "$mediaType:$mediaId"
 
 fun selectQuizPreview(
@@ -206,7 +314,7 @@ fun replaceQuizPreview(
     replacementCount: Int,
     random: Random = Random.Default
 ): List<AiWatchedTitleDto> {
-    if (replacementCount >= 2 || index !in current.indices) return current
+    if (replacementCount >= MAX_QUIZ_REPLACEMENTS || index !in current.indices) return current
     val usedKeys = current.map { it.key() }.toSet()
     val replacement = candidates
         .distinctBy { it.key() }
