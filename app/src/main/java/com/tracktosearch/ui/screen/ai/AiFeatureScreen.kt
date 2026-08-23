@@ -489,6 +489,14 @@ private fun RecommendationCard(recommendation: AiRecommendation, onOpen: () -> U
                 Text(recommendation.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 recommendation.year?.let { Text(it.toString(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 Text(recommendation.reason, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                // 不可点的卡片要说明原因，否则用户以为卡片坏了一直戳
+                if (!hasMediaId) {
+                    Text(
+                        text = stringResource(R.string.ai_taste_no_detail),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
             if (hasMediaId) {
                 Icon(Icons.Rounded.OpenInNew, contentDescription = stringResource(R.string.ai_taste_details), tint = MaterialTheme.colorScheme.primary)

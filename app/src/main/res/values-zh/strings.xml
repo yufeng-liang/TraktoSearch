@@ -1736,6 +1736,7 @@
     <string name="ai_taste_roast">我的锐评</string>
     <string name="ai_taste_profile">你的观影口味</string>
     <string name="ai_taste_highlights">我看到的亮点</string>
+    <string name="ai_taste_no_detail">这部暂时没有详情页</string>
     <string name="ai_taste_no_recommendations">暂时没有带直接详情的推荐</string>
     <string name="ai_daily_fact">冷知识事实</string>
     <string name="ai_daily_explanation">为什么有意思</string>
@@ -1786,7 +1787,7 @@
     <string name="ai_quiz_refresh_message">重新抽题会清空当前这一轮的作答，已答 %1$d 题。</string>
     <string name="ai_quiz_refresh_confirm">重新抽题</string>
     <string name="help_ai_sprite">AI 精灵</string>
-    <string name="help_ai_sprite_b1">短按云朵保留原彩蛋，长按云朵进入精灵中心</string>
+    <string name="help_ai_sprite_b1">点搜索页标题栏的精灵按钮进入精灵中心；云朵保留短按彩蛋和长按快捷方式</string>
     <string name="help_ai_sprite_b2">选好角色后喊一次名字激活，激活后不会持续监听；语音最多试 5 次，失败或麦克风不可用时可改用文字输入角色名激活</string>
     <string name="help_ai_sprite_b3">AI 会使用授权账号中的昵称和你的已看历史</string>
     <string name="help_ai_sprite_b4">目前有昵称欢迎、看单锐评、影视闯关和每日冷知识四项能力</string>

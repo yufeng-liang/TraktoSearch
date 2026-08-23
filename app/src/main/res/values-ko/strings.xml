@@ -1748,6 +1748,7 @@
     <string name="ai_taste_roast">매운맛 평론</string>
     <string name="ai_taste_profile">당신의 영화 취향</string>
     <string name="ai_taste_highlights">눈에 띈 점</string>
+    <string name="ai_taste_no_detail">이 작품은 아직 상세 페이지가 없습니다</string>
     <string name="ai_taste_no_recommendations">상세 페이지로 연결되는 추천이 아직 없습니다</string>
     <string name="ai_daily_fact">알쓸 영화 상식</string>
     <string name="ai_daily_explanation">왜 흥미로울까요?</string>
@@ -1798,7 +1799,7 @@
     <string name="ai_quiz_refresh_message">다시 뽑으면 이번 라운드 답변(%1$d문항)이 사라집니다.</string>
     <string name="ai_quiz_refresh_confirm">다시 뽑기</string>
     <string name="help_ai_sprite">AI 스프라이트</string>
-    <string name="help_ai_sprite_b1">구름을 짧게 누르면 기존 이스터 에그, 길게 누르면 스프라이트 센터가 열립니다</string>
+    <string name="help_ai_sprite_b1">검색 페이지 헤더의 스프라이트 버튼으로 스프라이트 센터를 엽니다. 구름은 기존의 짧게 누르기 이스터 에그와 길게 누르기 단축을 그대로 유지합니다</string>
     <string name="help_ai_sprite_b2">캐릭터 이름을 한 번 말해 활성화하며, 이후 계속 듣지 않습니다. 음성은 최대 5회까지 시도할 수 있고 실패하거나 마이크를 쓸 수 없으면 캐릭터 이름을 입력해 활성화할 수 있습니다</string>
     <string name="help_ai_sprite_b3">인증된 계정의 닉네임과 시청 기록을 사용합니다</string>
     <string name="help_ai_sprite_b4">닉네임 인사, 시청 목록 평론, 영화 퀴즈와 매일 영화 상식을 제공합니다</string>

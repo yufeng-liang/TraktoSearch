@@ -1748,6 +1748,7 @@
     <string name="ai_taste_roast">辛口コメント</string>
     <string name="ai_taste_profile">あなたの映画の好み</string>
     <string name="ai_taste_highlights">見えてきたこと</string>
+    <string name="ai_taste_no_detail">この作品の詳細ページはまだありません</string>
     <string name="ai_taste_no_recommendations">詳細にリンクできる作品はまだありません</string>
     <string name="ai_daily_fact">豆知識</string>
     <string name="ai_daily_explanation">なぜ面白い？</string>
@@ -1798,7 +1799,7 @@
     <string name="ai_quiz_refresh_message">引き直すと今回の回答（%1$d 問）が消えます。</string>
     <string name="ai_quiz_refresh_confirm">引き直す</string>
     <string name="help_ai_sprite">AI スプライト</string>
-    <string name="help_ai_sprite_b1">雲を短くタップすると従来のイースターエッグ、長押しするとスプライトセンターを開きます</string>
+    <string name="help_ai_sprite_b1">検索ページのヘッダーのスプライトボタンからスプライトセンターを開きます。雲は従来の短タップのイースターエッグと長押しのショートカットを維持します</string>
     <string name="help_ai_sprite_b2">キャラクター名を一度呼んで起動します。起動後は常時聞き取りません。音声は最大 5 回まで試せ、失敗やマイク不可のときは文字入力でも起動できます</string>
     <string name="help_ai_sprite_b3">認証済みアカウントのニックネームと視聴履歴を利用します</string>
     <string name="help_ai_sprite_b4">ニックネーム歓迎、視聴リスト批評、映画クイズ、毎日の豆知識を利用できます</string>

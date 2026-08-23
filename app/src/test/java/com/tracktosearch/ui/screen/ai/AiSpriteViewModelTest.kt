@@ -39,6 +39,7 @@ class AiSpriteViewModelTest {
     private val aiRepository = mockk<AiRepository>(relaxed = true)
     private val authManager = mockk<AuthManager>()
     private val traktRepository = mockk<TraktRepository>(relaxed = true)
+    private val overlayStorage = mockk<com.tracktosearch.data.local.AiSpriteOverlayStorage>(relaxed = true)
 
     @Test
     fun submitQuiz_mergesResultQuotaIntoUiState() = runTest {
@@ -384,7 +385,7 @@ class AiSpriteViewModelTest {
         every { authManager.nickname } returns MutableStateFlow("朋友")
         every { authManager.friendId } returns MutableStateFlow("friend-a")
         coEvery { aiRepository.listCharacters() } returns Result.success(emptyList())
-        return AiSpriteViewModel(aiRepository, authManager, traktRepository)
+        return AiSpriteViewModel(aiRepository, authManager, traktRepository, overlayStorage)
     }
 
     private fun viewModelCharacter(id: String) = com.tracktosearch.data.ai.AiCharacter(

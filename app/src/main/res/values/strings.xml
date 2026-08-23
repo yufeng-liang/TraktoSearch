@@ -1735,6 +1735,7 @@ Config:
     <string name="ai_taste_roast">The roast</string>
     <string name="ai_taste_profile">Your taste profile</string>
     <string name="ai_taste_highlights">What stood out</string>
+    <string name="ai_taste_no_detail">No detail page for this title yet</string>
     <string name="ai_taste_no_recommendations">No detail-linked picks yet</string>
     <string name="ai_daily_fact">The fact</string>
     <string name="ai_daily_explanation">Why it matters</string>
@@ -1786,7 +1787,7 @@ Config:
     <string name="ai_quiz_refresh_message">Drawing a new round clears this round\'s answers (%1$d answered).</string>
     <string name="ai_quiz_refresh_confirm">Draw a new round</string>
     <string name="help_ai_sprite">AI Sprite</string>
-    <string name="help_ai_sprite_b1">Short-tap the cloud for the original easter egg; long-press it to open Sprite Center</string>
+    <string name="help_ai_sprite_b1">Tap the sprite button in the search page header to open Sprite Center; the cloud keeps its short-tap easter egg and long-press shortcut</string>
     <string name="help_ai_sprite_b2">Choose a character and say its name once to activate it. The app does not keep listening. Voice allows up to 5 attempts; if voice fails or the microphone is unavailable, you can type the character name instead</string>
     <string name="help_ai_sprite_b3">AI uses the nickname attached to your authorized account and your watched history</string>
     <string name="help_ai_sprite_b4">The four features are nickname welcome, watchlist roast, film quiz, and daily film facts</string>

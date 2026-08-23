@@ -21,6 +21,29 @@ private const val MAX_OVERLAY_DAILY_COUNT = 6
 private const val IDLE_TRIGGER_DELAY_MS = 8_000L
 private const val MAX_QUIZ_REPLACEMENTS = 2
 
+/** 探头静止观察前的空闲等待时长，两个搜索页都用这个常量，别再各写一遍 8_000L。 */
+const val AI_SPRITE_IDLE_DELAY_MS = IDLE_TRIGGER_DELAY_MS
+
+/**
+ * 探头是否真的可以起来。
+ *
+ * 两个搜索页原来各抄了一套条件并且已经漂移：Trakt 搜索页漏了「锚点还没量到」这一条，
+ * 于是 anchorBounds 为 null 时也会消费一次展示额度，用户什么都没看到，
+ * 而 showAiSpriteMotion 又因为 visible 一直是 false 拿不到 onFinished 回调，
+ * 在用户下一次交互前这一页不会再出探头。统一收到这里。
+ */
+fun shouldStartSpriteOverlay(
+    trigger: AiSpriteOverlayTrigger,
+    hasBlockingState: Boolean,
+    hasAnchorBounds: Boolean,
+    hasResultAnchor: Boolean,
+    motionVisible: Boolean
+): Boolean =
+    !hasBlockingState &&
+        hasAnchorBounds &&
+        !motionVisible &&
+        (trigger != AiSpriteOverlayTrigger.SEARCH_COMPLETED || hasResultAnchor)
+
 /**
  * 错误码到用户可读文案的映射。
  *

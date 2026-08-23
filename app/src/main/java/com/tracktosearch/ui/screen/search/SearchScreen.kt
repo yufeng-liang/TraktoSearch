@@ -152,12 +152,12 @@ import com.tracktosearch.ui.component.CloudEasterEgg
 import com.tracktosearch.ui.component.CloudOverlay
 import com.tracktosearch.ui.component.CloudThemeManager
 import com.tracktosearch.ui.screen.ai.AiSpriteCenter
+import com.tracktosearch.ui.screen.ai.AiSpriteCenterEntryButton
 import com.tracktosearch.ui.screen.ai.rememberSharedAiSpriteViewModel
 import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
 import com.tracktosearch.ui.screen.ai.AiSpriteInterruptReason
 import com.tracktosearch.ui.screen.ai.AiSpriteInterruptRequest
 import com.tracktosearch.ui.screen.ai.AiSpriteMotion
-import com.tracktosearch.ui.screen.ai.AiSpriteOverlayPolicy
 import com.tracktosearch.ui.screen.ai.AiSpriteOverlayTrigger
 import com.tracktosearch.ui.screen.ai.AiSpriteViewModel
 import com.tracktosearch.ui.screen.ai.AiSceneEvent
@@ -166,6 +166,8 @@ import com.tracktosearch.ui.screen.ai.nextAiSpriteOverlayTrigger
 import com.tracktosearch.ui.screen.ai.sceneArtFor
 import com.tracktosearch.ui.screen.ai.sceneEventForSearch
 import com.tracktosearch.ui.screen.ai.searchAnchorFor
+import com.tracktosearch.ui.screen.ai.shouldStartSpriteOverlay
+import com.tracktosearch.ui.screen.ai.AI_SPRITE_IDLE_DELAY_MS
 import com.tracktosearch.ui.component.DiscoverModalBottomSheet
 import com.tracktosearch.ui.component.DoubanRatingBadge
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
@@ -217,14 +219,6 @@ interface CloudThemeProvider {
 }
 
 enum class SearchSourceType { DISK, MOVIE, SHOW, PERSON }
-
-internal fun shouldStartSearchCompletedOverlay(
-    trigger: AiSpriteOverlayTrigger,
-    hasBlockingState: Boolean,
-    hasResultAnchor: Boolean
-): Boolean =
-    !hasBlockingState &&
-        (trigger != AiSpriteOverlayTrigger.SEARCH_COMPLETED || hasResultAnchor)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -334,26 +328,6 @@ fun SearchScreen(
     var lastInteractionAt by remember { mutableStateOf(System.currentTimeMillis()) }
     var overlayEntryHandled by rememberSaveable { mutableStateOf(false) }
     var wasSearchLoading by remember { mutableStateOf(false) }
-    val overlayPreferences = remember(context.applicationContext) {
-        context.applicationContext.getSharedPreferences("ai_sprite_overlay_quota_v1", android.content.Context.MODE_PRIVATE)
-    }
-    val overlayPolicy = remember(overlayPreferences) {
-        AiSpriteOverlayPolicy(
-            readDailyCount = { dayKey ->
-                if (overlayPreferences.getString("day_key", null) == dayKey) {
-                    overlayPreferences.getInt("daily_count", 0)
-                } else {
-                    0
-                }
-            },
-            writeDailyCount = { dayKey, count ->
-                overlayPreferences.edit()
-                    .putString("day_key", dayKey)
-                    .putInt("daily_count", count)
-                    .apply()
-            }
-        )
-    }
     var overlayDayKey by remember {
         mutableStateOf(
             SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
@@ -429,7 +403,7 @@ fun SearchScreen(
             hasResults = uiState.resources.isNotEmpty(),
             isSearchFocused = isSearchFocused,
             searchQuery = searchQuery,
-            activated = spriteState.activatedCharacterId?.let { automaticSpriteArt(it) != null } == true,
+            activated = spriteViewModel.isSpriteActivatedForMotion(),
             nowMs = System.currentTimeMillis(),
             idleForMs = System.currentTimeMillis() - lastInteractionAt,
             hasBlockingOverlay = showAiSpriteCenter ||
@@ -439,21 +413,22 @@ fun SearchScreen(
                 searchQuery.isNotBlank()
         )
         if (trigger != null &&
-            shouldStartSearchCompletedOverlay(
+            shouldStartSpriteOverlay(
                 trigger = trigger,
                 hasBlockingState = if (trigger == AiSpriteOverlayTrigger.SEARCH_COMPLETED) {
                     hasBlockingStateIgnoringQuery
                 } else {
                     hasBlockingState
                 },
-                hasResultAnchor = currentFirstResultBounds != null
-            ) &&
-            !showAiSpriteMotion
+                hasAnchorBounds = nextBounds != null,
+                hasResultAnchor = currentFirstResultBounds != null,
+                motionVisible = showAiSpriteMotion
+            )
         ) {
             if (trigger == AiSpriteOverlayTrigger.FIRST_ENTRY) overlayEntryHandled = true
             activeSpriteAnchor = searchAnchorFor(trigger, hasResultAnchor = currentFirstResultBounds != null)
             activeSceneEvent = sceneEventForSearch(trigger)
-            if (overlayPolicy.tryConsume(true, trigger, overlayDayKey)) {
+            if (spriteViewModel.tryConsumeOverlay(trigger, overlayDayKey)) {
                 showAiSpriteMotion = true
             }
         }
@@ -479,15 +454,15 @@ fun SearchScreen(
             searchQuery.isNotBlank() ||
             uiState.isLoading ||
             showAiSpriteMotion
-        if (!blocked && spriteState.activatedCharacterId?.let { automaticSpriteArt(it) != null } == true) {
-            delay(8_000L)
-            if (System.currentTimeMillis() - lastInteractionAt >= 8_000L &&
+        if (!blocked && spriteViewModel.isSpriteActivatedForMotion()) {
+            delay(AI_SPRITE_IDLE_DELAY_MS)
+            if (System.currentTimeMillis() - lastInteractionAt >= AI_SPRITE_IDLE_DELAY_MS &&
                 searchBoxBounds != null &&
                 !showAiSpriteMotion
             ) {
                 activeSpriteAnchor = AiSpriteAnchor.SearchBox
                 activeSceneEvent = sceneEventForSearch(AiSpriteOverlayTrigger.IDLE)
-                if (overlayPolicy.tryConsume(true, AiSpriteOverlayTrigger.IDLE, overlayDayKey)) {
+                if (spriteViewModel.tryConsumeOverlay(AiSpriteOverlayTrigger.IDLE, overlayDayKey)) {
                     showAiSpriteMotion = true
                 }
             }
@@ -608,6 +583,15 @@ fun SearchScreen(
                     style = LocalTextStyle.current.copy(shadow = ambientTextHalo())
                 )
             }
+            // 精灵中心的显式入口：长按云朵这条路没有任何视觉提示，新用户发现不了
+            AiSpriteCenterEntryButton(
+                activatedCharacter = spriteState.activatedCharacter,
+                onClick = {
+                    interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                    setAiSpriteCenterVisible(true)
+                },
+                modifier = Modifier.align(Alignment.CenterEnd)
+            )
         }
 
         // 白云图标（搜索框未激活时显示在搜索框上方 16dp，水平居中）

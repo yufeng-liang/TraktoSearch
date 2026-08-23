@@ -112,7 +112,8 @@ data class AiSpriteUiState(
 class AiSpriteViewModel @Inject constructor(
     private val aiRepository: AiRepository,
     private val authManager: AuthManager,
-    private val traktRepository: TraktRepository
+    private val traktRepository: TraktRepository,
+    private val overlayStorage: com.tracktosearch.data.local.AiSpriteOverlayStorage
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(
         AiSpriteUiState(
@@ -154,6 +155,26 @@ class AiSpriteViewModel @Inject constructor(
     private var spriteSessionId = newSpriteSessionId()
 
     private fun newSpriteSessionId(): String = "sprite-${UUID.randomUUID()}"
+
+    /**
+     * 探头展示策略。
+     *
+     * 必须挂在共享 ViewModel 上：之前它是页面级 `remember`，导航离开再回来就重建，
+     * 会话上限 3 次实际退化成「每次进页面 3 次」，两个搜索页还各算一份，
+     * IDLE 的 90 秒冷却也跨页失效。
+     */
+    private val overlayPolicy = AiSpriteOverlayPolicy(
+        readDailyCount = overlayStorage::readDailyCount,
+        writeDailyCount = overlayStorage::writeDailyCount
+    )
+
+    /** 消费一次探头展示额度；未激活或额度用尽返回 false。 */
+    fun tryConsumeOverlay(trigger: AiSpriteOverlayTrigger, dayKey: String): Boolean =
+        overlayPolicy.tryConsume(isSpriteActivatedForMotion(), trigger, dayKey)
+
+    /** 自动探头要求角色已激活且有对应素材，没素材的角色不参与探头。 */
+    fun isSpriteActivatedForMotion(): Boolean =
+        _uiState.value.activatedCharacterId?.let { automaticSpriteArt(it) != null } == true
 
     /** 每次打开精灵中心换一个会话 ID，保持「一次打开 = 一个会话」的配额语义。 */
     fun onSpriteCenterOpened() {
