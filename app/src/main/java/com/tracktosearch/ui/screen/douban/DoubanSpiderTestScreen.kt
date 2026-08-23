@@ -45,6 +45,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -582,12 +583,24 @@ fun DoubanSpiderTestScreen(
                             FilterChip(
                                 selected = uiState.urlPreset == UrlPreset.ITEM,
                                 border = if (uiState.urlPreset == UrlPreset.ITEM) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                ),
                                 onClick = { viewModel.updateUrlPreset(UrlPreset.ITEM) },
                                 label = { Text(stringResource(R.string.douban_spider_test_url_preset_item)) }
                             )
                             FilterChip(
                                 selected = uiState.urlPreset == UrlPreset.USER_HOME,
                                 border = if (uiState.urlPreset == UrlPreset.USER_HOME) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                ),
                                 onClick = { viewModel.updateUrlPreset(UrlPreset.USER_HOME) },
                                 label = { Text(stringResource(R.string.douban_spider_test_url_preset_user)) }
                             )
@@ -618,12 +631,24 @@ fun DoubanSpiderTestScreen(
                             FilterChip(
                                 selected = uiState.ua == TestUa.PC,
                                 border = if (uiState.ua == TestUa.PC) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                ),
                                 onClick = { viewModel.updateUa(TestUa.PC) },
                                 label = { Text(stringResource(R.string.douban_spider_test_ua_pc)) }
                             )
                             FilterChip(
                                 selected = uiState.ua == TestUa.MOBILE,
                                 border = if (uiState.ua == TestUa.MOBILE) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                ),
                                 onClick = { viewModel.updateUa(TestUa.MOBILE) },
                                 label = { Text(stringResource(R.string.douban_spider_test_ua_mobile)) }
                             )
@@ -709,6 +734,12 @@ fun DoubanSpiderTestScreen(
                             FilterChip(
                                 selected = uiState.markRemoveMode == "web_remove",
                                 border = if (uiState.markRemoveMode == "web_remove") BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                ),
                                 onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateMarkRemoveMode("web_remove") },
                                 label = { Text(stringResource(R.string.douban_spider_test_mark_remove_empty)) },
                                 modifier = Modifier.height(32.dp)
@@ -717,6 +748,12 @@ fun DoubanSpiderTestScreen(
                             FilterChip(
                                 selected = uiState.markRemoveMode == "j_remove",
                                 border = if (uiState.markRemoveMode == "j_remove") BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                ),
                                 onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateMarkRemoveMode("j_remove") },
                                 label = { Text(stringResource(R.string.douban_spider_test_mark_remove_naked)) },
                                 modifier = Modifier.height(32.dp)
@@ -867,6 +904,12 @@ fun DoubanSpiderTestScreen(
                                 FilterChip(
                                     selected = selected,
                                     border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                    ),
                                     onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateRatingValue(star) },
                                     label = { Text(label) },
                                     modifier = Modifier.height(32.dp)
@@ -984,6 +1027,12 @@ fun DoubanSpiderTestScreen(
                             FilterChip(
                                 selected = uiState.recommendType == "movie",
                                 border = if (uiState.recommendType == "movie") BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                ),
                                 onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateRecommendType("movie") },
                                 label = { Text(stringResource(R.string.douban_spider_test_recommend_movie)) },
                                 modifier = Modifier.height(32.dp)
@@ -992,6 +1041,12 @@ fun DoubanSpiderTestScreen(
                             FilterChip(
                                 selected = uiState.recommendType == "tv",
                                 border = if (uiState.recommendType == "tv") BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                ),
                                 onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateRecommendType("tv") },
                                 label = { Text(stringResource(R.string.douban_spider_test_recommend_tv)) },
                                 modifier = Modifier.height(32.dp)

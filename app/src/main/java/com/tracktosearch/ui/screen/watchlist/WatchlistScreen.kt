@@ -86,6 +86,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -886,10 +887,11 @@ fun WatchlistScreen(
                                             } else {
                                                 // 兼容旧调用方；OTHER 不应因所在 tab 被误判为剧集。
                                                 when (item.mediaType) {
+                                                    // 进入详情传入中文展示名 displayTitle，避免初始标题为英文原名闪烁
                                                     WatchlistMediaType.SHOW -> onShowClick(
                                                         item.traktId,
                                                         item.tmdbId,
-                                                        item.title,
+                                                        item.displayTitle,
                                                         item.imdbId,
                                                         item.traktRating,
                                                         inWatchlist,
@@ -899,7 +901,7 @@ fun WatchlistScreen(
                                                     WatchlistMediaType.OTHER -> onMovieClick(
                                                         item.traktId,
                                                         item.tmdbId,
-                                                        item.title,
+                                                        item.displayTitle,
                                                         item.imdbId,
                                                         item.traktRating,
                                                         inWatchlist,
@@ -2164,6 +2166,12 @@ private fun WatchlistFilterSheet(
                     FilterChip(
                         selected = genre in filterState.selectedGenres,
                         border = if (genre in filterState.selectedGenres) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                        ),
                         onClick = {
                             val newSet = if (genre in filterState.selectedGenres) {
                                 filterState.selectedGenres - genre
@@ -2206,6 +2214,12 @@ private fun WatchlistFilterSheet(
                                 FilterChip(
                                     selected = decade in filterState.selectedDecadeKeys,
                                     border = if (decade in filterState.selectedDecadeKeys) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                    ),
                                     onClick = { onDecadeToggle(decade) },
                                     label = { Text("${decade}s") }
                                 )
@@ -2319,6 +2333,12 @@ private fun WatchlistFilterSheet(
                         FilterChip(
                             selected = filterState.markedTimePreset == preset,
                             border = if (filterState.markedTimePreset == preset) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                            ),
                             onClick = { onMarkedTimePresetChange(preset) },
                             label = {
                                 Text(stringResource(when (preset) {
@@ -2358,6 +2378,7 @@ private fun WatchlistFilterSheet(
                         selected = filterState.markedTimeOrder == SortOrder.DESC,
                         onClick = { onMarkedTimeOrderChange(SortOrder.DESC) },
                         shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                        colors = SegmentedButtonDefaults.colors(activeContainerColor = MaterialTheme.colorScheme.primary, activeContentColor = MaterialTheme.colorScheme.onPrimary),
                         modifier = Modifier.widthIn(min = 100.dp),
                         contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 0.dp, bottom = 0.dp),
                         label = { Text(stringResource(R.string.filter_sort_desc), maxLines = 1) },
@@ -2373,6 +2394,7 @@ private fun WatchlistFilterSheet(
                         selected = filterState.markedTimeOrder == SortOrder.ASC,
                         onClick = { onMarkedTimeOrderChange(SortOrder.ASC) },
                         shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                        colors = SegmentedButtonDefaults.colors(activeContainerColor = MaterialTheme.colorScheme.primary, activeContentColor = MaterialTheme.colorScheme.onPrimary),
                         modifier = Modifier.widthIn(min = 100.dp),
                         contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 0.dp, bottom = 0.dp),
                         label = { Text(stringResource(R.string.filter_sort_asc), maxLines = 1) },
