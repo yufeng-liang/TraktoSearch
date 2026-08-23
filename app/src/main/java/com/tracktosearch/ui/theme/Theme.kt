@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -125,18 +126,21 @@ private fun monetColorScheme(seed: Color, dark: Boolean): androidx.compose.mater
         com.tracktosearch.data.util.mcu.hct.Hct.fromInt(seedArgb).hue, 4.0
     )
     val neutralVariant = com.tracktosearch.data.util.mcu.palettes.TonalPalette.fromHueAndChroma(
-        com.tracktosearch.data.util.mcu.hct.Hct.fromInt(seedArgb).hue, 8.0
+        com.tracktosearch.data.util.mcu.hct.Hct.fromInt(seedArgb).hue, 4.0
     )
 
-    // TonalSpot 标准 tone 值（Material You 官方映射）
-    val primary = Color(if (dark) tonal.tone(80.0) else tonal.tone(40.0))
-    val onPrimary = Color(if (dark) tonal.tone(20.0) else tonal.tone(100.0))
+    // primary 直接用原色种子，不再用 tone 40/80 打暗，保证所见即所得（弹窗色块 = 实际主色）
+    val primary = seed
+    // primary 上的前景色按亮度自适应，避免浅色（黄/橙等）上白字看不清
+    val onPrimary = if (seed.luminance() > 0.5f) Color(0xFF000000) else Color.White
+    // container 深色档用 tone 30，浅色档用同一 hue 的浅变体 tone 90（light 更贴近原色，dark 保持深容器）
     val primaryContainer = Color(if (dark) tonal.tone(30.0) else tonal.tone(90.0))
     val onPrimaryContainer = Color(if (dark) tonal.tone(90.0) else tonal.tone(10.0))
-    val secondary = Color(if (dark) neutral.tone(80.0) else neutral.tone(40.0))
-    val onSecondary = Color(if (dark) neutral.tone(20.0) else neutral.tone(100.0))
-    val secondaryContainer = Color(if (dark) neutral.tone(30.0) else neutral.tone(90.0))
-    val onSecondaryContainer = Color(if (dark) neutral.tone(90.0) else neutral.tone(10.0))
+    // secondary 提升到同一 hue 较亮一档，与新 primary 协调（原为中性灰 tone 40，过暗）
+    val secondary = Color(if (dark) tonal.tone(70.0) else tonal.tone(45.0))
+    val onSecondary = if (secondary.luminance() > 0.5f) Color(0xFF000000) else Color.White
+    val secondaryContainer = Color(if (dark) tonal.tone(30.0) else tonal.tone(90.0))
+    val onSecondaryContainer = Color(if (dark) tonal.tone(90.0) else tonal.tone(10.0))
     val tertiary = Color(if (dark) tonal.tone(80.0) else tonal.tone(40.0))
     val onTertiary = Color(if (dark) tonal.tone(20.0) else tonal.tone(100.0))
     val tertiaryContainer = Color(if (dark) tonal.tone(30.0) else tonal.tone(90.0))

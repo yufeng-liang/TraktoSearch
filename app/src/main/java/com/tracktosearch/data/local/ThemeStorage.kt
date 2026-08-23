@@ -68,7 +68,8 @@ class ThemeStorage private constructor(
     private val _meshPreset = MutableStateFlow("NEBULA")
     val meshPreset: StateFlow<String> = _meshPreset.asStateFlow()
 
-    private val _meshEnabled = MutableStateFlow(true)
+    // 背景动效默认关闭，用户需要时再手动开启
+    private val _meshEnabled = MutableStateFlow(false)
     val meshEnabled: StateFlow<Boolean> = _meshEnabled.asStateFlow()
 
     init {
@@ -81,7 +82,7 @@ class ThemeStorage private constructor(
             _glassVariant.value = GlassVariant.fromStorageValue(prefs[KEY_GLASS_VARIANT])
             _customAccentArgb.value = prefs[KEY_CUSTOM_ACCENT_ARGB]
             _meshPreset.value = prefs[KEY_MESH_PRESET] ?: "NEBULA"
-            _meshEnabled.value = prefs[KEY_MESH_ENABLED] ?: true
+            _meshEnabled.value = prefs[KEY_MESH_ENABLED] ?: false
             initializationComplete.complete(Unit)
         }.invokeOnCompletion { throwable ->
             if (throwable != null && !initializationComplete.isCompleted) {
