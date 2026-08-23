@@ -42,6 +42,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -52,6 +53,8 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 
 /** 「猜你喜欢」Tab */
@@ -195,6 +198,9 @@ class DiscoverViewModel @Inject constructor(
 
         /** 预解析 imdbId 的最大条目数：只处理首屏可见数量，避免大量爬取触发反爬。 */
         private const val PREFETCH_IMDB_LIMIT = 8
+
+        /** 预解析启动前的让路延迟（毫秒）：先把首屏列表和海报的网络/线程留给渲染。 */
+        private const val PREFETCH_START_DELAY_MS = 3_000L
     }
 
     init {
@@ -450,25 +456,34 @@ class DiscoverViewModel @Inject constructor(
      * - 未命中：串行爬详情页（fetchDetail 内部带反爬延迟与一次重试），只处理首屏前 [PREFETCH_IMDB_LIMIT] 条
      * - 未登录（无 cookie）：跳过，点击时走原有解析路径
      * - 失败/取消：跳过不阻塞，不影响列表展示
+     *
+     * 4 个分类各自加载完就启动预解析，原实现会有 4 条爬取链同时跑、和首屏渲染抢网络与线程；
+     * 这里先延迟 [PREFETCH_START_DELAY_MS] 给首屏让路，再用 [prefetchMutex] 让各分类串行排队。
      */
     private suspend fun prefetchImdbIds(items: List<DoubanHotItem>) {
         val cookie = doubanAuthStorage.getCredentials()?.cookie ?: return
-        items.take(PREFETCH_IMDB_LIMIT).forEach { item ->
-            val itemId = item.id ?: return@forEach
-            if (prefetchedImdbIds.containsKey(itemId)) return@forEach
-            runCatching {
-                val (info, _) = doubanRepository.fetchDetail(
-                    doubanUrl = item.url,
-                    cookie = cookie,
-                    title = item.title,
-                    uploadToCloudPool = false
-                )
-                if (info != null && !info.imdbId.isNullOrBlank()) {
-                    prefetchedImdbIds[itemId] = info.imdbId.orEmpty()
+        delay(PREFETCH_START_DELAY_MS)
+        prefetchMutex.withLock {
+            items.take(PREFETCH_IMDB_LIMIT).forEach { item ->
+                val itemId = item.id ?: return@forEach
+                if (prefetchedImdbIds.containsKey(itemId)) return@forEach
+                runCatching {
+                    val (info, _) = doubanRepository.fetchDetail(
+                        doubanUrl = item.url,
+                        cookie = cookie,
+                        title = item.title,
+                        uploadToCloudPool = false
+                    )
+                    if (info != null && !info.imdbId.isNullOrBlank()) {
+                        prefetchedImdbIds[itemId] = info.imdbId.orEmpty()
+                    }
                 }
             }
         }
     }
+
+    /** 预解析串行锁：同一时间只允许一条豆瓣详情爬取链在跑。 */
+    private val prefetchMutex = Mutex()
 
     fun loadDoubanHotAll(categoryId: String, page: Int = 1, limit: Int = 25) {
         viewModelScope.launch {
@@ -653,6 +668,13 @@ class DiscoverViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 加载 Trakt 栏目（热门电影 / 热门剧集 / 最受期待 / 为你推荐剧集）。
+     *
+     * 每个栏目独立协程、独立发布：原实现把 5 个请求 + 约 50 次 TMDB 富化全部 await 完
+     * 才做一次 _uiState 更新，任一栏目慢就把其余栏目一起拖住。
+     * 「为你推荐剧集」失败/为空时要降级成热门剧集，因此只有它依赖热门剧集的结果。
+     */
     fun loadTraktData() {
         _uiState.value = _uiState.value.copy(
             isLoadingTrakt = true,
@@ -662,106 +684,121 @@ class DiscoverViewModel @Inject constructor(
             traktShowRecommendationsError = null
         )
         viewModelScope.launch {
+            val isLoggedIn = sessionModeManager.traktConnected.value
+            // 未连接 Trakt：为你推荐剧集栏目显示登录解锁卡片，不调 /recommendations/shows
+            _uiState.value = _uiState.value.copy(traktShowRecommendationsLoggedIn = isLoggedIn)
             try {
-                val isLoggedIn = sessionModeManager.traktConnected.value
-                // 未连接 Trakt：为你推荐剧集栏目显示登录解锁卡片，不调 /recommendations/shows
-                _uiState.value = _uiState.value.copy(
-                    traktShowRecommendationsLoggedIn = isLoggedIn
-                )
-                val deferredTrendingMovies = async { traktRepository.getTrendingMovies(limit = 10) }
-                val deferredTrendingShows = async { traktRepository.getTrendingShows(limit = 10) }
-                val deferredAnticipatedMovies = async { traktRepository.getAnticipatedMovies(limit = 10) }
-                val deferredAnticipatedShows = async { traktRepository.getAnticipatedShows(limit = 10) }
-                val deferredShowRecs = if (isLoggedIn) {
-                    async { traktRepository.getShowRecommendations(limit = 10) }
-                } else null
-
-                val trendingMoviesResult = deferredTrendingMovies.await()
-                val trendingShowsResult = deferredTrendingShows.await()
-                val anticipatedMoviesResult = deferredAnticipatedMovies.await()
-                val anticipatedShowsResult = deferredAnticipatedShows.await()
-                val showRecsResult = deferredShowRecs?.await()
-
-                // 增强 Trakt 电影数据（海报+本地化标题）— 并行增强
-                val enhancedTrendingMovies = trendingMoviesResult.getOrNull()?.first?.let { items ->
-                    coroutineScope { items.map { async { it.copy(movie = enhanceTraktMovie(it.movie)) } }.awaitAll() }
-                } ?: emptyList()
-                val enhancedAnticipatedMovies = anticipatedMoviesResult.getOrNull()?.first?.let { items ->
-                    coroutineScope { items.map { async { it.copy(movie = enhanceTraktMovie(it.movie)) } }.awaitAll() }
-                } ?: emptyList()
-
-                // 增强 Trakt 剧集数据（海报+本地化标题）— 并行增强
-                val enhancedTrendingShows = trendingShowsResult.getOrNull()?.first?.let { items ->
-                    coroutineScope { items.map { async { it.copy(show = enhanceTraktShow(it.show)) } }.awaitAll() }
-                } ?: emptyList()
-                val enhancedAnticipatedShows = anticipatedShowsResult.getOrNull()?.first?.let { items ->
-                    coroutineScope { items.map { async { it.copy(show = enhanceTraktShow(it.show)) } }.awaitAll() }
-                } ?: emptyList()
-                val enhancedShowRecs = showRecsResult?.getOrNull()?.let { items ->
-                    if (items.isNotEmpty()) {
-                        val enhanced = coroutineScope { items.map { async { it.copy(show = enhanceTraktShow(it.show)) } }.awaitAll() }
-                        // 过滤掉没有海报的项，若全部失败则降级为热门剧集
-                        val withPosters = enhanced.filter { !it.show.posterPath.isNullOrEmpty() }
-                        if (withPosters.isNotEmpty()) withPosters else enhancedTrendingShows.map { trending ->
-                            com.tracktosearch.data.remote.trakt.dto.TraktRecommendationShowResponse(show = trending.show)
-                        }
-                    } else {
-                        // 已登录但推荐列表为空时，降级为热门剧集
-                        enhancedTrendingShows.map { trending ->
-                            com.tracktosearch.data.remote.trakt.dto.TraktRecommendationShowResponse(
-                                show = trending.show
-                            )
-                        }
-                    }
-                } ?: (if (!isLoggedIn) {
-                    // 未登录：不降级填充，留空让 UI 显示登录解锁卡片（避免与"Trakt 热门剧集"栏目重复）
-                    emptyList()
-                } else {
-                    // 已登录但请求失败时，降级为热门剧集
-                    enhancedTrendingShows.map { trending ->
-                        com.tracktosearch.data.remote.trakt.dto.TraktRecommendationShowResponse(
-                            show = trending.show
-                        )
-                    }
-                })
-
-                // 记录各栏目的错误信息（result 失败时记录）
-                val trendingMoviesError = trendingMoviesResult.exceptionOrNull()?.toUserMessage(context, R.string.error_load_failed)
-                    ?: context.getString(R.string.error_load_failed).takeIf { trendingMoviesResult.isFailure }
-                val trendingShowsError = trendingShowsResult.exceptionOrNull()?.toUserMessage(context, R.string.error_load_failed)
-                    ?: context.getString(R.string.error_load_failed).takeIf { trendingShowsResult.isFailure }
-                // 最受期待电影/剧集合并为一个 error（用电影的失败状态，或剧集的）
-                val anticipatedError = anticipatedMoviesResult.exceptionOrNull()?.toUserMessage(context, R.string.error_load_failed)
-                    ?: anticipatedShowsResult.exceptionOrNull()?.toUserMessage(context, R.string.error_load_failed)
-                    ?: context.getString(R.string.error_load_failed).takeIf { anticipatedMoviesResult.isFailure && anticipatedShowsResult.isFailure }
-                val showRecsError = showRecsResult?.exceptionOrNull()?.toUserMessage(context, R.string.error_load_failed)
-                    ?: context.getString(R.string.error_load_failed).takeIf { showRecsResult != null && showRecsResult.isFailure && !isLoggedIn }
-
-                _uiState.value = _uiState.value.copy(
-                    traktTrendingMovies = enhancedTrendingMovies,
-                    traktTrendingShows = enhancedTrendingShows,
-                    traktAnticipatedMovies = enhancedAnticipatedMovies,
-                    traktAnticipatedShows = enhancedAnticipatedShows,
-                    traktShowRecommendations = enhancedShowRecs,
-                    traktTrendingMoviesError = trendingMoviesError,
-                    traktTrendingShowsError = trendingShowsError,
-                    traktAnticipatedError = anticipatedError,
-                    traktShowRecommendationsError = showRecsError,
-                    isLoadingTrakt = false
-                )
+                coroutineScope {
+                    val trendingShows = async { loadTraktTrendingShowsSection() }
+                    launch { loadTraktTrendingMoviesSection() }
+                    launch { loadTraktAnticipatedSection() }
+                    launch { loadTraktShowRecommendationsSection(isLoggedIn, trendingShows.await()) }
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                val message = e.toUserMessage(context, R.string.error_load_failed)
                 _uiState.value = _uiState.value.copy(
-                    isLoadingTrakt = false,
-                    traktTrendingMoviesError = e.toUserMessage(context, R.string.error_load_failed),
-                    traktTrendingShowsError = e.toUserMessage(context, R.string.error_load_failed),
-                    traktAnticipatedError = e.toUserMessage(context, R.string.error_load_failed),
-                    traktShowRecommendationsError = e.toUserMessage(context, R.string.error_load_failed)
+                    traktTrendingMoviesError = message,
+                    traktTrendingShowsError = message,
+                    traktAnticipatedError = message,
+                    traktShowRecommendationsError = message
                 )
+            } finally {
+                _uiState.value = _uiState.value.copy(isLoadingTrakt = false)
             }
         }
     }
+
+    /** Trakt 热门电影栏目：拉取 + TMDB 富化后单独发布。 */
+    private suspend fun loadTraktTrendingMoviesSection() {
+        val result = traktRepository.getTrendingMovies(limit = 10)
+        val enhanced = result.getOrNull()?.first?.let { items ->
+            coroutineScope { items.map { async { it.copy(movie = enhanceTraktMovie(it.movie)) } }.awaitAll() }
+        } ?: emptyList()
+        _uiState.value = _uiState.value.copy(
+            traktTrendingMovies = enhanced,
+            traktTrendingMoviesError = sectionError(result)
+        )
+    }
+
+    /** Trakt 热门剧集栏目：单独发布，并把富化结果回传给「为你推荐剧集」做降级兜底。 */
+    private suspend fun loadTraktTrendingShowsSection(): List<TraktTrendingShowResponse> {
+        val result = traktRepository.getTrendingShows(limit = 10)
+        val enhanced = result.getOrNull()?.first?.let { items ->
+            coroutineScope { items.map { async { it.copy(show = enhanceTraktShow(it.show)) } }.awaitAll() }
+        } ?: emptyList()
+        _uiState.value = _uiState.value.copy(
+            traktTrendingShows = enhanced,
+            traktTrendingShowsError = sectionError(result)
+        )
+        return enhanced
+    }
+
+    /** 最受期待栏目：电影与剧集并发拉取，共用一个错误态（两者都失败才算失败）。 */
+    private suspend fun loadTraktAnticipatedSection() {
+        val (moviesResult, showsResult) = coroutineScope {
+            val movies = async { traktRepository.getAnticipatedMovies(limit = 10) }
+            val shows = async { traktRepository.getAnticipatedShows(limit = 10) }
+            movies.await() to shows.await()
+        }
+        val enhancedMovies = moviesResult.getOrNull()?.first?.let { items ->
+            coroutineScope { items.map { async { it.copy(movie = enhanceTraktMovie(it.movie)) } }.awaitAll() }
+        } ?: emptyList()
+        val enhancedShows = showsResult.getOrNull()?.first?.let { items ->
+            coroutineScope { items.map { async { it.copy(show = enhanceTraktShow(it.show)) } }.awaitAll() }
+        } ?: emptyList()
+        _uiState.value = _uiState.value.copy(
+            traktAnticipatedMovies = enhancedMovies,
+            traktAnticipatedShows = enhancedShows,
+            traktAnticipatedError = moviesResult.exceptionOrNull()?.toUserMessage(context, R.string.error_load_failed)
+                ?: showsResult.exceptionOrNull()?.toUserMessage(context, R.string.error_load_failed)
+                ?: context.getString(R.string.error_load_failed)
+                    .takeIf { moviesResult.isFailure && showsResult.isFailure }
+        )
+    }
+
+    /**
+     * 为你推荐剧集栏目。
+     *
+     * 未登录留空让 UI 显示登录解锁卡片；已登录时请求失败、返回空、或富化后全部没有海报，
+     * 都降级为 [fallbackShows]（热门剧集）。
+     */
+    private suspend fun loadTraktShowRecommendationsSection(
+        isLoggedIn: Boolean,
+        fallbackShows: List<TraktTrendingShowResponse>
+    ) {
+        val fallback = { fallbackShows.map { TraktRecommendationShowResponse(show = it.show) } }
+        if (!isLoggedIn) {
+            _uiState.value = _uiState.value.copy(
+                traktShowRecommendations = emptyList(),
+                traktShowRecommendationsError = null
+            )
+            return
+        }
+        val result = traktRepository.getShowRecommendations(limit = 10)
+        val items = result.getOrNull()
+        val recommendations = if (items.isNullOrEmpty()) {
+            fallback()
+        } else {
+            val enhanced = coroutineScope {
+                items.map { async { it.copy(show = enhanceTraktShow(it.show)) } }.awaitAll()
+            }
+            // 过滤掉没有海报的项，若全部失败则降级为热门剧集
+            enhanced.filter { !it.show.posterPath.isNullOrEmpty() }.ifEmpty { fallback() }
+        }
+        _uiState.value = _uiState.value.copy(
+            traktShowRecommendations = recommendations,
+            // 与原实现一致：请求失败时既填热门剧集兜底内容，也记录错误文案
+            traktShowRecommendationsError = result.exceptionOrNull()
+                ?.toUserMessage(context, R.string.error_load_failed)
+        )
+    }
+
+    /** 栏目请求失败时的用户可见文案；成功返回 null。 */
+    private fun sectionError(result: Result<*>): String? =
+        result.exceptionOrNull()?.toUserMessage(context, R.string.error_load_failed)
+            ?: context.getString(R.string.error_load_failed).takeIf { result.isFailure }
 
     /** 加载社区热门列表 */
     fun loadTraktLists() {
