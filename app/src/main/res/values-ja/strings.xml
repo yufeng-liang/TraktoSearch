@@ -1698,9 +1698,13 @@
     <string name="ai_sprite_preparing">準備中</string>
     <string name="ai_sprite_guest_hint">ログインするとスプライトと AI を利用できます</string>
     <string name="ai_sprite_login">ログインする</string>
-    <string name="ai_sprite_try_again">もう一度</string>
     <string name="ai_sprite_text_fallback">文字で起動</string>
-    <string name="ai_sprite_text_fallback_hint">文字入力で起動します。録音は使いません</string>
+    <string name="ai_sprite_voice_limit_reached">音声の回数を使い切りました</string>
+    <string name="ai_sprite_text_fallback_available">音声で起動できませんか？キャラクター名を入力して起動できます</string>
+    <string name="ai_sprite_text_fallback_title">文字で起動</string>
+    <string name="ai_sprite_text_fallback_dialog_hint">「%1$s」と入力して確定すると、呼びかけと同じ効果です</string>
+    <string name="ai_sprite_text_fallback_label">キャラクター名</string>
+    <string name="ai_sprite_text_fallback_confirm">起動</string>
     <string name="ai_sprite_quota">今日 %1$d/%2$d · セッション %3$d/%4$d</string>
     <string name="ai_sprite_greeting_title">スプライトからのメッセージ</string>
     <string name="ai_sprite_welcome">%1$s、%2$sが来ました</string>
@@ -1769,7 +1773,7 @@
     <string name="ai_error">スプライトが休憩中です。後でもう一度お試しください。</string>
     <string name="help_ai_sprite">AI スプライト</string>
     <string name="help_ai_sprite_b1">雲を短くタップすると従来のイースターエッグ、長押しするとスプライトセンターを開きます</string>
-    <string name="help_ai_sprite_b2">キャラクター名を一度だけ呼んで起動します。起動後は常時聞き取りません</string>
+    <string name="help_ai_sprite_b2">キャラクター名を一度呼んで起動します。起動後は常時聞き取りません。音声は最大 5 回まで試せ、失敗やマイク不可のときは文字入力でも起動できます</string>
     <string name="help_ai_sprite_b3">認証済みアカウントのニックネームと視聴履歴を利用します</string>
     <string name="help_ai_sprite_b4">ニックネーム歓迎、視聴リスト批評、映画クイズ、毎日の豆知識を利用できます</string>
     <string name="help_ai_sprite_b5">AI には日次上限があります。オフラインでもキャッシュは読めます</string>

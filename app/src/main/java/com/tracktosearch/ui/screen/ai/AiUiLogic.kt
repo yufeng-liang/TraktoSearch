@@ -11,7 +11,8 @@ import com.tracktosearch.data.ai.AiTtsRequest
 import com.tracktosearch.data.ai.AiWatchedTitleDto
 import kotlin.random.Random
 
-private const val MAX_ACTIVATION_ATTEMPTS = 3
+private const val MAX_VOICE_ACTIVATION_ATTEMPTS = 5
+private const val MAX_TEXT_ACTIVATION_ATTEMPTS = 5
 private const val MAX_OVERLAY_SESSION_COUNT = 3
 private const val MAX_OVERLAY_DAILY_COUNT = 6
 private const val IDLE_TRIGGER_DELAY_MS = 8_000L
@@ -28,12 +29,6 @@ enum class AiSpriteOverlayTrigger {
     FIRST_ENTRY,
     SEARCH_COMPLETED,
     IDLE
-}
-
-enum class AiActivationRequestMode {
-    VOICE,
-    TEXT,
-    NONE
 }
 
 enum class AiAuditionPlaybackRoute {
@@ -99,14 +94,22 @@ class AiSpriteOverlayPolicy(
     }
 }
 
-/** 激活只允许首次尝试加两次重试，成功后不会进入持续监听。 */
-fun canRetryActivation(attempt: Int): Boolean = attempt in 1 until MAX_ACTIVATION_ATTEMPTS
+/**
+ * 语音激活共 5 次机会（首次 + 4 次重试）。
+ *
+ * 主按钮在次数用满前一直是语音，不再"第一次失败就把主按钮换成文字"——
+ * 那种设计让用户没法重试语音，且文字按钮直接拿角色预设名提交，用户根本没输入的机会。
+ * 成功后也不会进入持续监听。
+ */
+fun canRequestVoiceActivation(attempt: Int): Boolean = attempt < MAX_VOICE_ACTIVATION_ATTEMPTS
 
-fun activationRequestMode(attempt: Int): AiActivationRequestMode = when {
-    attempt == 0 -> AiActivationRequestMode.VOICE
-    canRetryActivation(attempt) -> AiActivationRequestMode.TEXT
-    else -> AiActivationRequestMode.NONE
-}
+/** 文字兜底同样限 5 次，避免输入框被反复提交刷服务端配额。 */
+fun canRequestTextActivation(attempt: Int): Boolean = attempt < MAX_TEXT_ACTIVATION_ATTEMPTS
+
+/** 用户手输的角色名先去掉首尾空白再比对，避免输入法带的空格造成必然失败。 */
+fun normalizeSpokenName(input: String): String = input.trim()
+
+fun isTextActivationInputValid(input: String): Boolean = normalizeSpokenName(input).isNotEmpty()
 
 fun shouldResetActivationAttempt(currentSelectedCharacterId: String, nextCharacterId: String): Boolean =
     currentSelectedCharacterId != nextCharacterId
@@ -161,7 +164,30 @@ fun canActivateCharacter(character: AiCharacter, state: AiSpriteUiState): Boolea
         state.activationState != AiActivationState.RECORDING &&
         state.activationState != AiActivationState.VERIFYING &&
         state.activationState != AiActivationState.SUCCESS &&
-        (state.activationAttempt == 0 || canRetryActivation(state.activationAttempt))
+        canRequestVoiceActivation(state.activationAttempt)
+
+/**
+ * 文字激活入口是否展示：语音失败过或麦克风不可用后才出现，且文字次数没用满。
+ *
+ * 用 state 里锁存的 textActivationOffered 而不是实时看 activationState，
+ * 否则用户重试语音的那几秒入口会闪走。
+ */
+fun shouldShowTextActivation(state: AiSpriteUiState): Boolean =
+    state.isAuthorized &&
+        state.textActivationOffered &&
+        canRequestTextActivation(state.textActivationAttempt) &&
+        state.selectedCharacterId != state.activatedCharacterId
+
+/** 文字激活按钮可点条件：入口已开放、没有请求在飞、该角色还没激活。 */
+fun canActivateCharacterByText(character: AiCharacter, state: AiSpriteUiState): Boolean =
+    character.isAvailable &&
+        state.isAuthorized &&
+        state.textActivationOffered &&
+        canRequestTextActivation(state.textActivationAttempt) &&
+        state.activatedCharacterId != character.id &&
+        state.activationState != AiActivationState.RECORDING &&
+        state.activationState != AiActivationState.VERIFYING &&
+        state.activationState != AiActivationState.SUCCESS
 
 private fun AiWatchedTitleDto.key(): String = "$mediaType:$mediaId"
 

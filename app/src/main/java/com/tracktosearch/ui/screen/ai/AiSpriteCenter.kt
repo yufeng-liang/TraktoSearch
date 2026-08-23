@@ -36,13 +36,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Keyboard
+import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Mic
-import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Quiz
+import androidx.compose.material.icons.rounded.RateReview
 import androidx.compose.material.icons.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.WavingHand
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -50,6 +54,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -113,7 +118,8 @@ fun AiSpriteCenter(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         permissionRequested = false
-        if (granted) viewModel.activate(context)
+        // 拒权后不能什么都不发生：直接判定语音走不通，把文字兜底入口开出来
+        if (granted) viewModel.activate(context) else viewModel.onVoiceActivationUnavailable()
     }
 
     LaunchedEffect(Unit) {
@@ -172,17 +178,12 @@ fun AiSpriteCenter(
                 onNavigateToLogin = onNavigateToLogin,
                 onSelectCharacter = viewModel::selectCharacter,
                 onActivate = {
-                    when (activationRequestMode(state.activationAttempt)) {
-                        AiActivationRequestMode.VOICE -> {
-                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                                viewModel.activate(context)
-                            } else if (!permissionRequested) {
-                                permissionRequested = true
-                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                            }
-                        }
-                        AiActivationRequestMode.TEXT -> viewModel.activateByText()
-                        AiActivationRequestMode.NONE -> viewModel.clearError()
+                    // 主按钮永远是语音：次数没用满就一直能重试，文字兜底是并列的第二入口
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        viewModel.activate(context)
+                    } else if (!permissionRequested) {
+                        permissionRequested = true
+                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     }
                 },
                 onTextActivate = viewModel::activateByText,
@@ -207,7 +208,7 @@ private fun SpriteCenterHome(
     onNavigateToLogin: () -> Unit,
     onSelectCharacter: (String) -> Unit,
     onActivate: () -> Unit,
-    onTextActivate: () -> Unit,
+    onTextActivate: (String) -> Unit,
     onOpenFeature: (AiFeature) -> Unit,
     onPlayAudio: (com.tracktosearch.data.ai.AiAudio) -> Unit,
     onReplayAudition: () -> Unit,
@@ -520,11 +521,16 @@ private fun ActivationPanel(
     state: AiSpriteUiState,
     character: AiCharacter,
     onActivate: () -> Unit,
-    onTextActivate: () -> Unit,
+    onTextActivate: (String) -> Unit,
     onClearError: () -> Unit
 ) {
+    var textDialogVisible by remember { mutableStateOf(false) }
+    val inFlight = state.activationState == AiActivationState.RECORDING ||
+        state.activationState == AiActivationState.VERIFYING
+    val voiceAvailable = canRequestVoiceActivation(state.activationAttempt)
+    val showTextActivation = shouldShowTextActivation(state)
+
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        val requestMode = activationRequestMode(state.activationAttempt)
         val activationText = when (state.activationState) {
             AiActivationState.RECORDING -> stringResource(R.string.ai_sprite_activating, character.activationWord)
             AiActivationState.VERIFYING -> stringResource(R.string.ai_sprite_activating, character.activationWord)
@@ -533,49 +539,57 @@ private fun ActivationPanel(
         }
         Text(activationText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text(
-            text = if (requestMode == AiActivationRequestMode.VOICE) {
-                stringResource(R.string.ai_sprite_listening)
-            } else {
-                stringResource(R.string.ai_sprite_text_fallback_hint)
-            },
+            text = stringResource(R.string.ai_sprite_listening),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp)
         )
         Spacer(Modifier.height(10.dp))
         Button(
-            onClick = {
-                if (requestMode == AiActivationRequestMode.TEXT) {
-                    onTextActivate()
-                } else {
-                    onActivate()
-                }
-            },
+            onClick = onActivate,
             enabled = canActivateCharacter(character, state),
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
             contentPadding = ButtonDefaults.ContentPadding
         ) {
-            if (state.activationState == AiActivationState.RECORDING || state.activationState == AiActivationState.VERIFYING) {
+            if (inFlight) {
                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
             } else {
-                Icon(
-                    imageVector = if (requestMode == AiActivationRequestMode.VOICE) {
-                        Icons.Rounded.Mic
-                    } else {
-                        Icons.Rounded.AutoAwesome
-                    },
-                    contentDescription = null
-                )
+                Icon(imageVector = Icons.Rounded.Mic, contentDescription = null)
             }
             Spacer(Modifier.size(8.dp))
             Text(
-                when (requestMode) {
-                    AiActivationRequestMode.VOICE -> stringResource(R.string.ai_sprite_activate, character.activationWord)
-                    AiActivationRequestMode.TEXT -> stringResource(R.string.ai_sprite_text_fallback)
-                    AiActivationRequestMode.NONE -> stringResource(R.string.ai_sprite_try_again)
+                if (voiceAvailable) {
+                    stringResource(R.string.ai_sprite_activate, character.activationWord)
+                } else {
+                    stringResource(R.string.ai_sprite_voice_limit_reached)
                 }
             )
+        }
+        // 语音失败或麦克风不可用之后才出现的第二入口，点开是输入框而不是直接提交预设名
+        AnimatedVisibility(visible = showTextActivation) {
+            Column {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = stringResource(R.string.ai_sprite_text_fallback_available),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(6.dp))
+                OutlinedButton(
+                    onClick = {
+                        onClearError()
+                        textDialogVisible = true
+                    },
+                    enabled = canActivateCharacterByText(character, state),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Rounded.Keyboard, contentDescription = null)
+                    Spacer(Modifier.size(8.dp))
+                    Text(stringResource(R.string.ai_sprite_text_fallback))
+                }
+            }
         }
         if (state.errorCode != null) {
             Text(
@@ -594,15 +608,69 @@ private fun ActivationPanel(
             )
         }
     }
+
+    if (textDialogVisible) {
+        TextActivationDialog(
+            character = character,
+            onDismiss = { textDialogVisible = false },
+            onConfirm = { typedName ->
+                textDialogVisible = false
+                onTextActivate(typedName)
+            }
+        )
+    }
+}
+
+/** 文字兜底输入框：用户自己敲角色名，敲对了才算激活。 */
+@Composable
+private fun TextActivationDialog(
+    character: AiCharacter,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var input by remember(character.id) { mutableStateOf("") }
+    val valid = isTextActivationInputValid(input)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        title = { Text(stringResource(R.string.ai_sprite_text_fallback_title)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(R.string.ai_sprite_text_fallback_dialog_hint, character.activationWord),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.ai_sprite_text_fallback_label)) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(input) }, enabled = valid) {
+                Text(stringResource(R.string.ai_sprite_text_fallback_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_cancel))
+            }
+        }
+    )
 }
 
 @Composable
 private fun FeatureList(state: AiSpriteUiState, onOpenFeature: (AiFeature) -> Unit) {
+    // 图标按各功能语义选：打招呼挥手 / 点评看单 / 答题闯关 / 冷知识灯泡
     val features = listOf(
-        AiFeature.GREETING to Icons.Rounded.AutoAwesome,
-        AiFeature.TASTE to Icons.Rounded.Refresh,
-        AiFeature.QUIZ to Icons.Rounded.AutoAwesome,
-        AiFeature.DAILY to Icons.Rounded.VolumeUp
+        AiFeature.GREETING to Icons.Rounded.WavingHand,
+        AiFeature.TASTE to Icons.Rounded.RateReview,
+        AiFeature.QUIZ to Icons.Rounded.Quiz,
+        AiFeature.DAILY to Icons.Rounded.Lightbulb
     )
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         features.forEach { (feature, icon) ->

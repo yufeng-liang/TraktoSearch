@@ -67,6 +67,9 @@ data class AiSpriteUiState(
     val nickname: String? = null,
     val activationState: AiActivationState = AiActivationState.IDLE,
     val activationAttempt: Int = 0,
+    // 文字兜底入口：语音失败或麦克风不可用后锁存为 true，换角色/撤销授权时复位
+    val textActivationOffered: Boolean = false,
+    val textActivationAttempt: Int = 0,
     val activationMessage: String? = null,
     val quota: com.tracktosearch.data.ai.AiQuota? = null,
     val isLoading: Boolean = false,
@@ -183,6 +186,8 @@ class AiSpriteViewModel @Inject constructor(
                 activatedCharacterId = null,
                 activationState = AiActivationState.IDLE,
                 activationAttempt = 0,
+                textActivationOffered = false,
+                textActivationAttempt = 0,
                 activationMessage = null,
                 quota = null,
                 isLoading = false,
@@ -223,8 +228,11 @@ class AiSpriteViewModel @Inject constructor(
                 activationState = if (it.activatedCharacterId == characterId) AiActivationState.SUCCESS else AiActivationState.IDLE,
                 activationMessage = null,
                 errorCode = null,
-                // 换角色重置失败尝试计数，避免某角色语音激活 3 次失败后永久锁死所有角色
-                activationAttempt = 0
+                // 换角色重置失败尝试计数，避免某角色语音激活 5 次失败后永久锁死所有角色
+                activationAttempt = 0,
+                // 文字兜底入口也跟着角色重置：新角色还没试过语音，先别急着给兜底
+                textActivationOffered = false,
+                textActivationAttempt = 0
             )
         }
         scheduleCharacterPreview()
@@ -241,19 +249,9 @@ class AiSpriteViewModel @Inject constructor(
             setError("CHARACTER_UNAVAILABLE")
             return
         }
-        when (activationRequestMode(state.activationAttempt)) {
-            AiActivationRequestMode.TEXT -> {
-                activateByText()
-                return
-            }
-            AiActivationRequestMode.NONE -> {
-                setError("ACTIVATION_RETRY_LIMIT")
-                return
-            }
-            AiActivationRequestMode.VOICE -> Unit
-        }
-        if (!canActivateCharacter(character, state) && state.activationAttempt > 0) {
-            setError("ACTIVATION_RETRY_LIMIT")
+        if (!canRequestVoiceActivation(state.activationAttempt)) {
+            // 语音次数用满：不再录音，但把文字兜底开出来，别把用户彻底堵死
+            _uiState.update { it.copy(textActivationOffered = true, errorCode = "ACTIVATION_RETRY_LIMIT") }
             return
         }
         if (!canActivateCharacter(character, state)) {
@@ -273,7 +271,13 @@ class AiSpriteViewModel @Inject constructor(
         requestJob = viewModelScope.launch {
             val audioDataUrl = AiAudioRecorder.recordOnce(context)
             if (audioDataUrl.isNullOrBlank()) {
-                _uiState.update { it.copy(activationState = AiActivationState.FAILED, errorCode = "AUDIO_UNAVAILABLE") }
+                _uiState.update {
+                    it.copy(
+                        activationState = AiActivationState.FAILED,
+                        textActivationOffered = true,
+                        errorCode = "AUDIO_UNAVAILABLE"
+                    )
+                }
                 return@launch
             }
             _uiState.update { it.copy(activationState = AiActivationState.VERIFYING) }
@@ -292,19 +296,42 @@ class AiSpriteViewModel @Inject constructor(
                         activationState = if (activation.activated) AiActivationState.SUCCESS else AiActivationState.FAILED,
                         activationMessage = activation.activationPhrase.takeIf { activation.activated && it.isNotBlank() },
                         quota = activation.quota ?: it.quota,
+                        // 语音没识别出来也算"走不通"，此时才把文字入口露出来
+                        textActivationOffered = it.textActivationOffered || !activation.activated,
                         errorCode = if (activation.activated) null else "ACTIVATION_NOT_MATCHED"
                     )
                 }
                 activation.audio?.let { _audioEvents.emit(it) }
                 if (activation.activated) loadGreeting(character.id)
             }.onFailure { error ->
-                _uiState.update { it.copy(activationState = AiActivationState.FAILED, errorCode = errorCode(error)) }
+                _uiState.update {
+                    it.copy(
+                        activationState = AiActivationState.FAILED,
+                        textActivationOffered = true,
+                        errorCode = errorCode(error)
+                    )
+                }
             }
         }
     }
 
-    /** 麦克风权限被拒绝或设备没有输入源时，提供一次明确的文字兜底。 */
-    fun activateByText() {
+    /** 麦克风权限被拒绝或设备没有录音源：语音这条路当场判死，直接把文字入口开出来。 */
+    fun onVoiceActivationUnavailable() {
+        _uiState.update {
+            it.copy(
+                activationState = AiActivationState.FAILED,
+                textActivationOffered = true,
+                errorCode = "AUDIO_UNAVAILABLE"
+            )
+        }
+    }
+
+    /**
+     * 文字兜底激活：用用户手输的角色名提交，不再直接拿角色预设名蒙过去。
+     *
+     * 只在语音失败或麦克风不可用之后可用（textActivationOffered），与语音次数分开计数。
+     */
+    fun activateByText(spokenName: String) {
         val state = _uiState.value
         if (!state.isAuthorized) {
             setError("AUTH_REQUIRED")
@@ -315,20 +342,25 @@ class AiSpriteViewModel @Inject constructor(
             setError("CHARACTER_UNAVAILABLE")
             return
         }
-        if (activationRequestMode(state.activationAttempt) == AiActivationRequestMode.VOICE) {
-            setError("VOICE_ACTIVATION_REQUIRED")
+        val typedName = normalizeSpokenName(spokenName)
+        if (typedName.isEmpty()) {
+            setError("ACTIVATION_NAME_EMPTY")
             return
         }
-        if (!canActivateCharacter(character, state)) {
+        if (!canRequestTextActivation(state.textActivationAttempt)) {
             setError("ACTIVATION_RETRY_LIMIT")
             return
         }
-        val attempt = state.activationAttempt + 1
+        if (!canActivateCharacterByText(character, state)) {
+            setError("ACTIVATION_UNAVAILABLE")
+            return
+        }
+        val attempt = state.textActivationAttempt + 1
         requestJob?.cancel()
         requestJob = viewModelScope.launch {
             _uiState.update {
                 it.copy(
-                    activationAttempt = attempt,
+                    textActivationAttempt = attempt,
                     activationState = AiActivationState.VERIFYING,
                     errorCode = null
                 )
@@ -337,7 +369,7 @@ class AiSpriteViewModel @Inject constructor(
                 authManager.friendId.value.orEmpty(),
                 AiActivateRequest(
                     characterId = character.id,
-                    spokenName = character.activationWord,
+                    spokenName = typedName,
                     sessionId = spriteSessionId
                 )
             ).onSuccess { activation ->

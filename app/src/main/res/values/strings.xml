@@ -1686,9 +1686,13 @@ Config:
     <string name="ai_sprite_preparing">Preparing</string>
     <string name="ai_sprite_guest_hint">Sign in to activate a sprite and use AI</string>
     <string name="ai_sprite_login">Sign in to continue</string>
-    <string name="ai_sprite_try_again">Try again</string>
     <string name="ai_sprite_text_fallback">Use text activation</string>
-    <string name="ai_sprite_text_fallback_hint">Activation now uses text; no microphone is needed</string>
+    <string name="ai_sprite_voice_limit_reached">Voice attempts used up</string>
+    <string name="ai_sprite_text_fallback_available">Voice didn\'t work? Type the character name instead</string>
+    <string name="ai_sprite_text_fallback_title">Text activation</string>
+    <string name="ai_sprite_text_fallback_dialog_hint">Type %1$s and confirm — same effect as saying it out loud</string>
+    <string name="ai_sprite_text_fallback_label">Character name</string>
+    <string name="ai_sprite_text_fallback_confirm">Activate</string>
     <string name="ai_sprite_quota">Today %1$d/%2$d · Session %3$d/%4$d</string>
     <string name="ai_sprite_greeting_title">A note from your sprite</string>
     <string name="ai_sprite_welcome">%1$s, %2$s is here</string>
@@ -1757,7 +1761,7 @@ Config:
     <string name="ai_error">The sprite is taking a break. Please try again.</string>
     <string name="help_ai_sprite">AI Sprite</string>
     <string name="help_ai_sprite_b1">Short-tap the cloud for the original easter egg; long-press it to open Sprite Center</string>
-    <string name="help_ai_sprite_b2">Choose a character and say its name once to activate it. The app does not keep listening</string>
+    <string name="help_ai_sprite_b2">Choose a character and say its name once to activate it. The app does not keep listening. Voice allows up to 5 attempts; if voice fails or the microphone is unavailable, you can type the character name instead</string>
     <string name="help_ai_sprite_b3">AI uses the nickname attached to your authorized account and your watched history</string>
     <string name="help_ai_sprite_b4">The four features are nickname welcome, watchlist roast, film quiz, and daily film facts</string>
     <string name="help_ai_sprite_b5">AI requests use a daily quota and may be unavailable offline; cached content remains readable</string>

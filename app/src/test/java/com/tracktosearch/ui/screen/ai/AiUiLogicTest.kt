@@ -55,18 +55,53 @@ class AiUiLogicTest {
     }
 
     @Test
-    fun activationAllowsTwoRetriesAndStopsAtThirdAttempt() {
-        assertThat(canRetryActivation(1)).isTrue()
-        assertThat(canRetryActivation(2)).isTrue()
-        assertThat(canRetryActivation(3)).isFalse()
+    fun voiceActivationAllowsFiveAttemptsThenStops() {
+        assertThat(canRequestVoiceActivation(0)).isTrue()
+        assertThat(canRequestVoiceActivation(4)).isTrue()
+        assertThat(canRequestVoiceActivation(5)).isFalse()
+        assertThat(canRequestVoiceActivation(6)).isFalse()
     }
 
     @Test
-    fun activationRecordsVoiceOnlyForTheFirstAttemptAndUsesTextFallbackAfterward() {
-        assertThat(activationRequestMode(0)).isEqualTo(AiActivationRequestMode.VOICE)
-        assertThat(activationRequestMode(1)).isEqualTo(AiActivationRequestMode.TEXT)
-        assertThat(activationRequestMode(2)).isEqualTo(AiActivationRequestMode.TEXT)
-        assertThat(activationRequestMode(3)).isEqualTo(AiActivationRequestMode.NONE)
+    fun textActivationIsCappedAtFiveAttemptsAndTrimsTypedName() {
+        assertThat(canRequestTextActivation(0)).isTrue()
+        assertThat(canRequestTextActivation(4)).isTrue()
+        assertThat(canRequestTextActivation(5)).isFalse()
+
+        assertThat(normalizeSpokenName("  乌萨奇 ")).isEqualTo("乌萨奇")
+        assertThat(isTextActivationInputValid("   ")).isFalse()
+        assertThat(isTextActivationInputValid(" 乌萨奇")).isTrue()
+    }
+
+    @Test
+    fun textActivationEntryAppearsOnlyAfterVoiceFailedAndBeforeItsOwnLimit() {
+        val ready = AiCharacter("usagi", "乌萨奇", "乌萨奇", isAvailable = true)
+        val authorized = AiSpriteUiState(
+            characters = listOf(ready),
+            selectedCharacterId = ready.id,
+            authState = com.tracktosearch.data.auth.AuthState.AUTHORIZED
+        )
+
+        // 语音还没失败过：不给文字入口，避免用户直接绕过语音
+        assertThat(shouldShowTextActivation(authorized)).isFalse()
+
+        val offered = authorized.copy(
+            activationAttempt = 1,
+            activationState = AiActivationState.FAILED,
+            textActivationOffered = true
+        )
+        assertThat(shouldShowTextActivation(offered)).isTrue()
+        assertThat(canActivateCharacterByText(ready, offered)).isTrue()
+
+        // 重试语音的这几秒入口要留着，不能闪走
+        val retryingVoice = offered.copy(activationState = AiActivationState.RECORDING)
+        assertThat(shouldShowTextActivation(retryingVoice)).isTrue()
+        assertThat(canActivateCharacterByText(ready, retryingVoice)).isFalse()
+
+        // 文字次数用满后收起入口
+        assertThat(shouldShowTextActivation(offered.copy(textActivationAttempt = 5))).isFalse()
+        // 已激活成功的角色不再展示激活入口
+        assertThat(shouldShowTextActivation(offered.copy(activatedCharacterId = ready.id))).isFalse()
     }
 
     @Test
@@ -225,14 +260,16 @@ class AiUiLogicTest {
     }
 
     @Test
-    fun activationRequiresReadyCharacterAndStopsAfterSuccessOrTwoRetries() {
+    fun activationRequiresReadyCharacterAndStopsAfterSuccessOrFiveVoiceAttempts() {
         val ready = AiCharacter("usagi", "乌萨奇", "乌萨奇", isAvailable = true)
         val unavailable = ready.copy(isAvailable = false)
         val authorized = AiSpriteUiState(authState = com.tracktosearch.data.auth.AuthState.AUTHORIZED)
 
         assertThat(canActivateCharacter(ready, authorized)).isTrue()
         assertThat(canActivateCharacter(unavailable, authorized)).isFalse()
-        assertThat(canActivateCharacter(ready, authorized.copy(activationAttempt = 3))).isFalse()
+        // 第 4 次失败后还能再喊一次，第 5 次用完才锁
+        assertThat(canActivateCharacter(ready, authorized.copy(activationAttempt = 4))).isTrue()
+        assertThat(canActivateCharacter(ready, authorized.copy(activationAttempt = 5))).isFalse()
         assertThat(
             canActivateCharacter(
                 ready,

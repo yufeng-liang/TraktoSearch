@@ -1686,9 +1686,13 @@
     <string name="ai_sprite_preparing">准备中</string>
     <string name="ai_sprite_guest_hint">登录后才能激活精灵并使用 AI</string>
     <string name="ai_sprite_login">去登录</string>
-    <string name="ai_sprite_try_again">再试一次</string>
     <string name="ai_sprite_text_fallback">改用文字激活</string>
-    <string name="ai_sprite_text_fallback_hint">改为输入角色名，不再录音</string>
+    <string name="ai_sprite_voice_limit_reached">语音次数已用完</string>
+    <string name="ai_sprite_text_fallback_available">语音没成功？可以改用文字输入角色名激活</string>
+    <string name="ai_sprite_text_fallback_title">文字激活</string>
+    <string name="ai_sprite_text_fallback_dialog_hint">输入「%1$s」后确认，效果和喊名字一样</string>
+    <string name="ai_sprite_text_fallback_label">角色名</string>
+    <string name="ai_sprite_text_fallback_confirm">激活</string>
     <string name="ai_sprite_quota">今日 %1$d/%2$d · 本轮 %3$d/%4$d</string>
     <string name="ai_sprite_greeting_title">精灵给你的话</string>
     <string name="ai_sprite_welcome">%1$s，%2$s来啦</string>
@@ -1757,7 +1761,7 @@
     <string name="ai_error">精灵正在休息，请稍后再试。</string>
     <string name="help_ai_sprite">AI 精灵</string>
     <string name="help_ai_sprite_b1">短按云朵保留原彩蛋，长按云朵进入精灵中心</string>
-    <string name="help_ai_sprite_b2">选好角色后只需喊一次名字激活，激活后不会持续监听</string>
+    <string name="help_ai_sprite_b2">选好角色后喊一次名字激活，激活后不会持续监听；语音最多试 5 次，失败或麦克风不可用时可改用文字输入角色名激活</string>
     <string name="help_ai_sprite_b3">AI 会使用授权账号中的昵称和你的已看历史</string>
     <string name="help_ai_sprite_b4">目前有昵称欢迎、看单锐评、影视闯关和每日冷知识四项能力</string>
     <string name="help_ai_sprite_b5">AI 请求有每日配额，离线时不能发起新请求，但已缓存内容仍可查看</string>
