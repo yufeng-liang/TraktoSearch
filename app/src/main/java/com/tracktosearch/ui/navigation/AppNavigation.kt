@@ -670,7 +670,7 @@ fun AppNavigation(
                             }
                         }
                         if (pendingCount > 0 && rollbackCount == 0 && !pendingDialogDismissed) {
-                            com.tracktosearch.ui.screen.douban.DoubanPendingItemsDialog(
+                            com.tracktosearch.ui.screen.douban.DoubanPendingItemsDialogWithDiscard(
                                 pendingCount = pendingCount,
                                 onDismiss = {
                                     // 关闭只代表稍后处理，保留 pending 供下次恢复。
@@ -698,6 +698,13 @@ fun AppNavigation(
                                             pendingDialogDismissed = false
                                             Toast.makeText(context, syncAlreadyRunningMessage, Toast.LENGTH_SHORT).show()
                                         }
+                                    }
+                                },
+                                onDiscardPending = {
+                                    scope.launch {
+                                        doubanSyncManager.discardPendingItems()
+                                        pendingCount = doubanSyncManager.getPendingItemsCount()
+                                        pendingDialogDismissed = true
                                     }
                                 }
                             )

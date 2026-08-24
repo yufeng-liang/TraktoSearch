@@ -83,7 +83,14 @@ data class DoubanSyncProgress(
     val isCancelling: Boolean = false, // true=用户已点击取消,正在停止中的中间态
     val processingItems: List<DoubanSyncQueueItem> = emptyList(),
     val pendingItems: List<DoubanSyncQueueItem> = emptyList(),
-    val pendingItemCount: Int = 0
+    val pendingItemCount: Int = 0,
+    /** 本次一致性检查发现的冲突数量。 */
+    val conflictsFound: Int = 0,
+    /** 本次一致性检查实际修复的冲突数量。 */
+    val conflictFixedCount: Int = 0,
+    /** 云端上传是否已经尝试/成功，供结果页明确展示同步落点。 */
+    val cloudUploadAttempted: Boolean = false,
+    val cloudUploadSucceeded: Boolean = false
 )
 
 internal data class DoubanBatchProgress(
@@ -712,7 +719,7 @@ class DoubanSyncManager @Inject constructor(
                     successCount = current.successCount,
                     skippedCount = current.skippedCount,
                     failedCount = current.failedCount,
-                    conflictFixedCount = 0,
+                    conflictFixedCount = current.conflictFixedCount,
                     pendingCount = doubanSyncPendingItemDao.count(),
                     isComplete = current.isComplete
                 )
@@ -2073,6 +2080,10 @@ class DoubanSyncManager @Inject constructor(
      * @param isFullComplete true=完整同步完成（更新 lastFullSyncAt，触发 id_mappings 上传）
      */
     private suspend fun uploadToCloudAfterSync(mode: String, isFullComplete: Boolean): Boolean {
+        _progress.value = _progress.value.copy(
+            cloudUploadAttempted = true,
+            cloudUploadSucceeded = false
+        )
         progressPublisher.clearQueue()
         progressPublisher.publishStage(
             stage = DoubanSyncStage.UPLOADING,
@@ -2096,6 +2107,10 @@ class DoubanSyncManager @Inject constructor(
             statusConsistencyChecker.checkAndUnify()
         }
         android.util.Log.i("DoubanSync", "同步后状态一致性检查: $consistencyResult")
+        _progress.value = _progress.value.copy(
+            conflictsFound = consistencyResult.conflictsFound,
+            conflictFixedCount = consistencyResult.traktUpdated + consistencyResult.doubanUpdated
+        )
         if (consistencyResult.errors > 0) {
             // 一致性修复失败只保留可恢复任务，不阻断已确认的本地数据上传。
             // 下一次检查会优先消费持久化的 RETRY 任务。
@@ -2175,6 +2190,9 @@ class DoubanSyncManager @Inject constructor(
                     errorMessage = "Media type completion failed: ${it.message ?: "unknown error"}"
                 )
             }
+        _progress.value = _progress.value.copy(
+            cloudUploadSucceeded = personalUploadSucceeded
+        )
         return personalUploadSucceeded
     }
 

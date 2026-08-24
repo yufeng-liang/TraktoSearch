@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.settings
 
+import android.widget.Toast
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -1015,6 +1016,7 @@ fun SettingsScreen(
             syncedCount = syncedCount,
             cooldownStatus = cooldownStatus,
             neverSynced = cooldownStatus?.neverSynced == true,
+            isDoubanOnly = isDoubanMode,
             onDismiss = { showSyncModePicker = false },
             onModeSelected = { mode ->
                 showSyncModePicker = false
@@ -1134,7 +1136,20 @@ fun SettingsScreen(
                 // 用户主动关闭结果弹窗 → 清除进度（结果常驻，手动关闭而非自动消失）
                 viewModel.clearConsistencyCheckResult()
             },
-            onBackground = { showConsistencyDialog = false }
+            onBackground = { showConsistencyDialog = false },
+            onLogin = {
+                showConsistencyDialog = false
+                onNavigateToDoubanLogin()
+            },
+            onRetry = { viewModel.startManualConsistencyCheck() },
+            onViewConflicts = { /* 结果页已展示冲突统计，保留弹窗上下文 */ },
+            onBackgroundUnavailable = {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.douban_sync_background_unavailable),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         )
     }
 

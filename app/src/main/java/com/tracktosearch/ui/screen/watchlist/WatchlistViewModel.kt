@@ -20,6 +20,7 @@ import com.tracktosearch.data.repository.ConsistencyCheckResult
 import com.tracktosearch.data.repository.DoubanBatchRemovalManager
 import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.DoubanSyncProgress
+import com.tracktosearch.data.repository.DoubanSyncStage
 import com.tracktosearch.data.repository.DoubanTraktStatusConsistencyChecker
 import com.tracktosearch.data.repository.DoubanWatchlistRecord
 import com.tracktosearch.data.repository.DoubanWatchlistStatus
@@ -253,11 +254,9 @@ class WatchlistViewModel @Inject constructor(
         doubanSyncBannerHideJob?.cancel()
         _uiState.update {
             it.copy(
-                doubanSyncProgress = null,
                 doubanSyncBannerVisible = false
             )
         }
-        doubanSyncManager.resetProgress()
     }
 
     /** 是否需要首次同步引导（已登录豆瓣 + 从未同步过） */
@@ -432,13 +431,18 @@ class WatchlistViewModel @Inject constructor(
                     refreshDoubanEmptyState()
                     _syncCompleteEvent.emit(Unit)
                     val completedProgress = progress
-                    doubanSyncBannerHideJob = viewModelScope.launch {
-                        delay(5000)
-                        _uiState.update { state ->
-                            if (state.doubanSyncProgress == completedProgress) {
-                                state.copy(doubanSyncBannerVisible = false)
-                            } else {
-                                state
+                    val keepResultVisible = progress.stage == DoubanSyncStage.CANCELLING ||
+                        progress.failedCount > 0 ||
+                        progress.pendingItemCount > 0 ||
+                        progress.conflictsFound > 0 ||
+                        (progress.cloudUploadAttempted && !progress.cloudUploadSucceeded)
+                    if (!keepResultVisible) {
+                        doubanSyncBannerHideJob = viewModelScope.launch {
+                            delay(5000)
+                            _uiState.update { state ->
+                                if (state.doubanSyncProgress == completedProgress) {
+                                    state.copy(doubanSyncBannerVisible = false)
+                                } else state
                             }
                         }
                     }

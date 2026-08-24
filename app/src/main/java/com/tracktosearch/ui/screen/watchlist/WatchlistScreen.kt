@@ -1288,9 +1288,25 @@ fun WatchlistScreen(
                                                 } else if (syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.FAILED) {
                                                     stringResource(R.string.douban_sync_stage_failed)
                                                 } else if (syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.CANCELLING) {
-                                                    stringResource(R.string.douban_sync_cancelled_banner)
+                                                    if (syncProgress.pendingItemCount > 0) {
+                                                        stringResource(
+                                                            R.string.douban_sync_cancelled_with_pending,
+                                                            syncProgress.pendingItemCount
+                                                        )
+                                                    } else stringResource(R.string.douban_sync_cancelled_banner)
                                                 } else if (syncProgress.isComplete) {
-                                                    stringResource(R.string.douban_sync_complete_banner, syncProgress.successCount)
+                                                    if (syncProgress.failedCount > 0) {
+                                                        stringResource(
+                                                            R.string.douban_sync_complete_with_failures_banner,
+                                                            syncProgress.successCount,
+                                                            syncProgress.failedCount
+                                                        )
+                                                    } else {
+                                                        stringResource(
+                                                            R.string.douban_sync_complete_banner,
+                                                            syncProgress.successCount
+                                                        )
+                                                    }
                                                 } else if (hasLiveCountProgress && targetLabel != null) {
                                                     stringResource(
                                                         R.string.douban_sync_notification_progress_format,
@@ -1687,10 +1703,17 @@ fun WatchlistScreen(
                             viewModel.clearDoubanSyncResult()
                         }
                     },
-                    onBackground = {
+                                    onBackground = {
                         // 「转后台」:仅隐藏弹窗,同步在 Application scope 继续运行,横幅会继续显示进度
-                        showSyncDialog = false
-                    },
+                                        showSyncDialog = false
+                                    },
+                                    onBackgroundUnavailable = {
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.douban_sync_background_unavailable),
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    },
                     onRelogin = {
                         showSyncDialog = false
                         viewModel.clearDoubanSyncResult()
@@ -1715,13 +1738,25 @@ fun WatchlistScreen(
                             viewModel.clearConsistencyCheckResult()
                         }
                     },
-                    onBackground = { showConsistencyDialog = false }
+                    onBackground = { showConsistencyDialog = false },
+                    onLogin = {
+                        showConsistencyDialog = false
+                        onNavigateToDoubanLogin()
+                    },
+                    onBackgroundUnavailable = {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.douban_sync_background_unavailable),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
                 )
             }
     
             // 首次同步引导弹窗（已登录豆瓣但从未同步过时自动弹出）
             if (showFirstSyncGuide && !isDoubanSyncRunning) {
                 DoubanFirstSyncGuideDialog(
+                    isDoubanOnly = isDoubanMode,
                     onDismiss = { showFirstSyncGuide = false },
                     onStartImport = {
                         showFirstSyncGuide = false
@@ -1736,6 +1771,7 @@ fun WatchlistScreen(
                     syncedCount = 0,
                     cooldownStatus = null,
                     neverSynced = true,
+                    isDoubanOnly = isDoubanMode,
                     onDismiss = { showSyncModePicker = false },
                     onModeSelected = { mode ->
                         showSyncModePicker = false

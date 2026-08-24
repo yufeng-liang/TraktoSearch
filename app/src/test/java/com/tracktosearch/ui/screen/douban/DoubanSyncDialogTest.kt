@@ -553,4 +553,25 @@ class DoubanSyncDialogTest {
         // TRAKT_NOT_FOUND 子组默认折叠 → 条目不显示
         composeRule.onNodeWithText("Trakt Not Found Movie").assertDoesNotExist()
     }
+    @Test
+    fun `completion summary exposes actionable counts`() {
+        emit(
+            DoubanSyncProgress(
+                isComplete = true,
+                stage = DoubanSyncStage.COMPLETED,
+                successCount = 20,
+                skippedCount = 3,
+                cacheHitCount = 4,
+                failedCount = 2,
+                conflictsFound = 5,
+                conflictFixedCount = 4,
+                cloudUploadAttempted = true,
+                cloudUploadSucceeded = false
+            )
+        )
+        setContent()
+        composeRule.onNodeWithText("Sync summary").assertIsDisplayed()
+        composeRule.onNodeWithText("Failed, retry available").assertIsDisplayed()
+        composeRule.onNodeWithText("Upload needs retry").assertIsDisplayed()
+    }
 }
