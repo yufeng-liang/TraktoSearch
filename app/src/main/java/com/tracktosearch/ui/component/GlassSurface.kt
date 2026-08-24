@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.shadow.Shadow as ComposeShadow
 import androidx.compose.ui.unit.Dp
@@ -261,6 +262,8 @@ fun GlassTabIndicator(
  * 观感对齐官方 catalog LiquidBottomTabs 的选中态：静止时只是一层 10% 淡填充，
  * 按压时才逐步给出 lens 折射（带色散）、高光、外阴影与内阴影，形成"液态被压出来"的手感。
  * 保留本应用的主色描边作为身份标识。
+ *
+ * pressProgress / pillLayerBlock 都以 lambda 传入并只在绘制阶段读取：按住拖动全程不重组。
  */
 @Composable
 fun GlassNavigationTabIndicator(
@@ -269,32 +272,23 @@ fun GlassNavigationTabIndicator(
     isDark: Boolean,
     shape: RoundedCornerShape = RoundedCornerShape(24.dp),
     scene: GlassScene = GlassScene(),
-    interactionSource: InteractionSource? = null
+    pressProgress: () -> Float = { 0f },
+    pillLayerBlock: (GraphicsLayerScope.() -> Unit)? = null
 ) {
     val token = backdropNavigationSelectionToken(
         variant = LocalGlassVariant.current,
         isDark = isDark,
         scene = scene
     )
-    val fallbackInteractionSource = remember { MutableInteractionSource() }
-    val pressed by (interactionSource ?: fallbackInteractionSource).collectIsPressedAsState()
-    val pressProgress by animateFloatAsState(
-        targetValue = if (pressed) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
-        label = "nav_selection_press_progress"
-    )
     val restFill = if (isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.10f)
     Box(
         modifier = modifier
-            .clip(shape)
             .navigationSelectionGlass(
                 backdrop = backdrop,
                 shape = shape,
                 pressProgress = pressProgress,
-                restFill = restFill
+                restFill = restFill,
+                layerBlock = pillLayerBlock
             )
             .strongGlassSelectionBorder(
                 shape = shape,
@@ -310,30 +304,35 @@ fun GlassNavigationTabIndicator(
 private fun Modifier.navigationSelectionGlass(
     backdrop: Backdrop,
     shape: RoundedCornerShape,
-    pressProgress: Float,
-    restFill: Color
+    pressProgress: () -> Float,
+    restFill: Color,
+    layerBlock: (GraphicsLayerScope.() -> Unit)?
 ): Modifier {
-    val progress = pressProgress.coerceIn(0f, 1f)
     return drawBackdrop(
         backdrop = backdrop,
         shape = { shape },
         effects = {
+            val progress = pressProgress().coerceIn(0f, 1f)
             lens(
                 refractionHeight = 10.dp.toPx() * progress,
                 refractionAmount = 14.dp.toPx() * progress,
                 chromaticAberration = true
             )
         },
-        highlight = { Highlight(width = 0.5.dp, blurRadius = 2.dp, alpha = progress) },
+        layerBlock = layerBlock ?: {},
+        highlight = {
+            Highlight(width = 0.5.dp, blurRadius = 2.dp, alpha = pressProgress().coerceIn(0f, 1f))
+        },
         shadow = {
             Shadow(
                 radius = 24.dp,
                 offset = DpOffset(0.dp, 6.dp),
                 color = Color.Black.copy(alpha = 0.1f),
-                alpha = progress
+                alpha = pressProgress().coerceIn(0f, 1f)
             )
         },
         innerShadow = {
+            val progress = pressProgress().coerceIn(0f, 1f)
             InnerShadow(
                 radius = 8.dp * progress,
                 color = Color.Black.copy(alpha = 0.15f),
@@ -341,6 +340,7 @@ private fun Modifier.navigationSelectionGlass(
             )
         },
         onDrawSurface = {
+            val progress = pressProgress().coerceIn(0f, 1f)
             drawRect(restFill, alpha = 1f - progress)
             drawRect(Color.Black.copy(alpha = 0.03f * progress))
         }
@@ -424,7 +424,8 @@ internal fun GlassSurfaceImpl(
     val resolvedBorder = backdropBorderColor(borderColor, token)
     val backdrop = backdropOverride ?: LocalBackdrop.current
     val surfaceModifier = modifier
-        .clip(shape)
+        // 底栏不裁剪内容：选中水滴按住时会按官方比例涨出面板轮廓，裁掉就没有"顶出来"的手感。
+        .then(if (role == GlassSurfaceRole.BottomNavigation) Modifier else Modifier.clip(shape))
         .then(
             if (backdrop != null) {
                 Modifier.backdropGlass(

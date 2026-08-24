@@ -69,6 +69,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.preferredFrameRate
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -107,7 +108,9 @@ import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.LocalBackdropSourceEnabled
 import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.navPanelPressGlow
 import com.tracktosearch.ui.component.rememberGlassSelectionBounceScale
+import com.tracktosearch.ui.component.rememberNavPillDragState
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
@@ -682,11 +685,35 @@ fun MainScreen(
                 ambientColor = MaterialTheme.colorScheme.background,
                 contentCapacity = 72
             )
+            // 底栏几何：水滴位置/拖动换算都用这些 px 值，避免在绘制阶段再做 Dp 转换。
+            val navDensity = LocalDensity.current
+            val navTabWidthDp = (screenWidthDp.dp * navBarWidthFraction - 16.dp) / tabs.size
+            val navTabWidthPx = with(navDensity) { navTabWidthDp.toPx() }
+            val navRowPaddingPx = with(navDensity) { 8.dp.toPx() }
+            val navBarWidthPx = with(navDensity) { (screenWidthDp.dp * navBarWidthFraction).toPx() }
+            val navPanelMaxOffsetPx = with(navDensity) { 4.dp.toPx() }
+            // 按住水滴可以左右拖动切 tab（对齐官方 catalog 的 DampedDragAnimation）：
+            // 松手吸附到最近的 tab 并驱动 Pager。
+            val navPillDrag = rememberNavPillDragState(
+                tabCount = tabs.size,
+                selectedIndex = selectedTab,
+                tabWidthPx = { navTabWidthPx },
+                panelWidthPx = { navBarWidthPx },
+                maxPanelOffsetPx = { navPanelMaxOffsetPx },
+                onIndexSettled = { index ->
+                    if (selectedTab != index) {
+                        view.performHaptic(HapticType.CLICK)
+                        scope.launch { pagerState.scrollToPage(index) }
+                    }
+                }
+            )
             if (isMainBottomNavigationVisible(pagerState.currentPage, aiSpriteCenterVisible)) {
                 AppVisualSurface(
                     kind = VisualSurfaceKind.Glass,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
+                        // 拖动水滴时整块面板给一个上限 4dp 的橡皮筋位移（官方 catalog 的 panelOffset）
+                        .graphicsLayer { translationX = navPillDrag.panelOffsetPx }
                         .drawWithContent {
                             // 读取 tick 与采样版本号建立 draw 阶段快照依赖：源重录后本节点随之
                             // 重绘并重采 backdrop 层，修复初始透明与滚动后混入旧帧画面。
@@ -713,50 +740,35 @@ fun MainScreen(
                     hazeState = hazeState,
                     backdropOverride = mainContentBackdrop,
                     exportedBackdrop = if (isGlassMode) navPanelBackdrop else null,
-                    interactionSource = tabInteractionSources[selectedTab],
+                    interactionSource = navPillDrag.interactionSource,
                     // 底部导航自身作为 zIndex=1 的 source，effect 只采样 zIndex=0 的页面内容，
                     // 避免导航栏模糊自身导致重复模糊与无谓开销（Haze 最重的叠加场景）
                     sourceSelection = HazeSourceSelection.Behind.where { source -> source.zIndex < 1f },
                     scene = navigationScene
                 ) {
-                val tabCount = tabs.size
                 val rowPadding = 8.dp
-                val navBarWidth = screenWidthDp.dp * navBarWidthFraction
-                val tabWidth = (navBarWidth - rowPadding * 2) / tabCount
-                val indicatorSelectionScale = rememberGlassSelectionBounceScale(selectedTab)
-                val indicatorOffsetX by animateDpAsState(
-                    targetValue = rowPadding + tabWidth * selectedTab,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    ),
-                    label = "indicatorOffset"
-                )
 
                 // 选中水滴采样「面板玻璃成品 + tab 图标层」：静止时与面板像素一致，
                 // 按压时 lens 同时折射面板画面与图标（官方 catalog 的 combinedBackdrop 做法）。
                 val navSelectionBackdrop = rememberCombinedBackdrop(navPanelBackdrop, navTabsBackdrop)
-                Box(
-                    modifier = Modifier
-                        .offset(x = indicatorOffsetX)
-                        .align(Alignment.CenterStart)
-                        .width(tabWidth)
-                        .height(48.dp)
-                        .padding(horizontal = 4.dp)
-                        .scale(indicatorSelectionScale),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
-                        GlassNavigationTabIndicator(
-                            backdrop = navSelectionBackdrop,
-                            modifier = Modifier.fillMaxSize(),
-                            isDark = isDark,
-                            shape = RoundedCornerShape(24.dp),
-                            scene = navigationScene,
-                            // 按压当前选中 tab 时，水滴按官方配方逐步给出折射/高光/阴影
-                            interactionSource = tabInteractionSources[selectedTab]
-                        )
-                    } else {
+                // 水滴几何：位置由拖动状态的浮点 tab 序号驱动，写在 graphicsLayer 里只走绘制阶段。
+                val pillModifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .width(navTabWidthDp)
+                    .height(48.dp)
+                    .padding(horizontal = 4.dp)
+
+                // Blur 模式的拟态药丸是不透明填充，压在图标上会挡住图标，仍画在图标下方。
+                if (!isGlassMode) {
+                    val indicatorSelectionScale = rememberGlassSelectionBounceScale(selectedTab)
+                    Box(
+                        modifier = pillModifier
+                            .graphicsLayer {
+                                translationX = navRowPaddingPx + navTabWidthPx * navPillDrag.value
+                            }
+                            .scale(indicatorSelectionScale),
+                        contentAlignment = Alignment.Center
+                    ) {
                         NeumorphicActiveTab(
                             modifier = Modifier.fillMaxSize(),
                             isDark = isDark,
@@ -765,13 +777,26 @@ fun MainScreen(
                     }
                 }
 
-                // Tab 内容（绘制在药丸上方）
-                // 同时注册为 tab 图标层 source：水滴用 combinedBackdrop 采样它，按压折射时
-                // 图标随之变形。该层只含图标行、不含水滴，因此不构成自采样环。
+                // Tab 内容
+                // 同时注册为 tab 图标层 source：Glass 模式下水滴画在图标上方，靠 combinedBackdrop
+                // 把图标原位重绘出来（官方做法），按压折射时图标随之变形。该层只含图标行与按压高光、
+                // 不含水滴，因此不构成自采样环。
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
                         .then(if (isGlassMode) Modifier.layerBackdrop(navTabsBackdrop) else Modifier)
+                        .then(
+                            if (isGlassMode) {
+                                Modifier.navPanelPressGlow(
+                                    progress = { navPillDrag.pressProgress },
+                                    centerX = {
+                                        navRowPaddingPx + navTabWidthPx * (navPillDrag.value + 0.5f)
+                                    }
+                                )
+                            } else {
+                                Modifier
+                            }
+                        )
                         .padding(horizontal = rowPadding),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -807,6 +832,32 @@ fun MainScreen(
                                 current[index] = rect
                                 tabRects.value = current
                             }
+                        )
+                    }
+                }
+
+                // 水滴与拖动手势层，始终画在最上：官方 catalog 也把它声明在图标行之后，
+                // 这样按住/拖动的指针先落到水滴上（inspectDragGestures 不消费事件，
+                // 点其他 tab 仍走各自的 clickable）。Glass 模式下水滴同时是可视层。
+                Box(
+                    modifier = pillModifier
+                        .graphicsLayer {
+                            translationX = navRowPaddingPx + navTabWidthPx * navPillDrag.value
+                        }
+                        .then(navPillDrag.modifier),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isGlassMode) {
+                        GlassNavigationTabIndicator(
+                            backdrop = navSelectionBackdrop,
+                            modifier = Modifier.fillMaxSize(),
+                            isDark = isDark,
+                            shape = RoundedCornerShape(24.dp),
+                            scene = navigationScene,
+                            // 按住/拖动时水滴按官方配方逐步给出折射/高光/阴影，
+                            // 缩放与速度挤压写进 drawBackdrop 的 layerBlock，背景不跟着拉伸
+                            pressProgress = { navPillDrag.pressProgress },
+                            pillLayerBlock = { navPillDrag.applyPillScale(this) }
                         )
                     }
                 }
