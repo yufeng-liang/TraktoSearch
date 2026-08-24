@@ -1459,11 +1459,13 @@ private fun SearchActionButton(
             role = GlassSurfaceRole.CircularControl,
             scene = scene
         ) {
+            // 不传 tint：跟随 GlassIconButton 的自适应中性墨色。原先用 primary（#9A6242）
+            // 压在近白玻璃上只有 3.29:1，观感发暗；中性墨在同一背景下是 5.76:1。
+            // Blur 模式那支是实心 primary 圆 + 白图标，本身对比度足够，保持不变。
             Icon(
                 Icons.Rounded.Search,
                 contentDescription = null,
-                modifier = Modifier.size(iconSize),
-                tint = MaterialTheme.colorScheme.primary
+                modifier = Modifier.size(iconSize)
             )
         }
         return
