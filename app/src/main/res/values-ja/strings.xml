@@ -163,6 +163,7 @@
     <string name="douban_sync_trakt_login_required_banner">Trakt にログインしてください。タップしてログイン</string>
     <string name="douban_sync_complete_banner">同期完了、%1$d件追加</string>
     <string name="douban_sync_cancelled_banner">同期をキャンセルしました</string>
+    <string name="douban_sync_cancelled_with_pending">同期をキャンセルしました。%1$d件を再開できます</string>
     <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
     <string name="douban_sync_error_detail">エラー：%1$s</string>
     <string name="douban_sync_eta_format">残り約 %1$s</string>
@@ -171,6 +172,7 @@
     <string name="douban_sync_delay_list_crawl">リストページクロール遅延</string>
     <string name="douban_sync_delay_retry">リトライ待機</string>
     <string name="douban_sync_summary_format">成功 %1$d · スキップ %2$d · キャッシュ %3$d</string>
+    <string name="douban_sync_summary_with_failures">一部完了：成功 %1$d · スキップ %2$d · キャッシュ %3$d · 失敗 %4$d</string>
 
     <!-- 豆瓣同期失敗項目リトライ -->
     <string name="douban_retry_title">Douban同期失敗項目をリトライ</string>
@@ -768,9 +770,11 @@
     <string name="consistency_check_phase_update_douban">豆瓣更新中</string>
     <string name="consistency_check_phase_done">完了</string>
     <string name="consistency_check_summary">%1$d件チェック、%2$d件の競合、Trakt更新%3$d件、豆瓣更新%4$d件、エラー%5$d件</string>
+    <string name="consistency_check_summary_with_errors">一部完了：%1$d件チェック、競合%2$d件、Trakt更新%3$d件、豆瓣更新%4$d件、エラー%5$d件</string>
     <string name="consistency_check_notification_progress">%1$s（%2$d/%3$d）</string>
     <string name="consistency_check_notification_progress_with_subphase">%1$s · %2$s（%3$d/%4$d）</string>
     <string name="consistency_check_notification_stage_with_subphase">%1$s · %2$s</string>
+    <string name="consistency_check_notification_batch">%1$s · 一括処理中</string>
     <string name="consistency_check_notification_current">現在：%1$s</string>
     <string name="consistency_check_notification_eta">残り時間：%1$s</string>
     <string name="consistency_check_notification_public">状態チェック：%1$s</string>

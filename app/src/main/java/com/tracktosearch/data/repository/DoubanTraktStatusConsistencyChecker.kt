@@ -706,7 +706,7 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             phase = uiStrings().updateTrakt,
             subPhase = "",
             current = 0,
-            total = traktNeedWatched.size + traktNeedWatchlist.size
+            total = 0
         )
         val traktResult = batchUpdateTrakt(traktNeedWatched, traktNeedWatchlist)
         var traktUpdated = traktResult.updated
@@ -719,9 +719,9 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         _checkProgress.value = _checkProgress.value.copy(
             traktUpdated = traktUpdated,
             conflictsFound = conflicts,
-            current = traktUpdated,
+            current = 0,
             errors = errors,
-            total = traktNeedWatched.size + traktNeedWatchlist.size
+            total = 0
         )
 
         // ========== 阶段4: 逐条更新豆瓣侧 ==========

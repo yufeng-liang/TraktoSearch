@@ -528,6 +528,7 @@ class DoubanSyncManager @Inject constructor(
 
     /** 取消后台收尾后发布可终止服务生命周期的最终取消态。 */
     private suspend fun publishCancelledFinal() {
+        val pendingCount = runCatching { doubanSyncPendingItemDao.count() }.getOrDefault(0)
         progressPublisher.publishFinal { currentProgress, _ ->
             currentProgress.copy(
                 isRunning = false,
@@ -538,8 +539,7 @@ class DoubanSyncManager @Inject constructor(
                 delayInfo = null,
                 recentItems = emptyList(),
                 processingItems = emptyList(),
-                pendingItems = emptyList(),
-                pendingItemCount = 0,
+                pendingItemCount = pendingCount,
                 currentTitle = null,
                 etaSeconds = 0,
                 isCancelling = true
@@ -1109,11 +1109,12 @@ class DoubanSyncManager @Inject constructor(
                 current = currentProgress.current,
                 total = currentProgress.total,
                 successCount = totalSuccess,
-                failedCount = allFailed.size,
+                failedCount = allFailed.size + currentProgress.failedCount,
                 skippedCount = totalSkipped,
                 cacheHitCount = totalCacheHit,
                 failedItems = allFailed,
-                phase = if (wasCancelled) "已取消" else "同步完成",
+                phase = if (wasCancelled) "已取消" else if (currentProgress.failedCount > 0) "同步部分完成" else "同步完成",
+                errorMessage = currentProgress.errorMessage,
                 startTimeMs = startTime,
                 etaSeconds = 0,
                 recentFailures = recentFailuresBuffer.toList(),
@@ -1396,11 +1397,12 @@ class DoubanSyncManager @Inject constructor(
                 current = currentProgress.current,
                 total = currentProgress.total,
                 successCount = totalSuccess,
-                failedCount = allFailed.size,
+                failedCount = allFailed.size + currentProgress.failedCount,
                 skippedCount = totalSkipped,
                 cacheHitCount = totalCacheHit,
                 failedItems = allFailed,
-                phase = if (wasCancelled) "已取消" else "$modeLabel 完成",
+                phase = if (wasCancelled) "已取消" else if (currentProgress.failedCount > 0) "$modeLabel 部分完成" else "$modeLabel 完成",
+                errorMessage = currentProgress.errorMessage,
                 startTimeMs = startTime,
                 etaSeconds = 0,
                 recentFailures = recentFailuresBuffer.toList(),
@@ -1847,11 +1849,12 @@ class DoubanSyncManager @Inject constructor(
                 current = currentProgress.current,
                 total = currentProgress.total,
                 successCount = totalSuccess,
-                failedCount = allFailed.size,
+                failedCount = allFailed.size + currentProgress.failedCount,
                 skippedCount = totalSkipped,
                 cacheHitCount = totalCacheHit,
                 failedItems = allFailed,
-                phase = if (wasCancelled) "已取消" else "续传完成",
+                phase = if (wasCancelled) "已取消" else if (currentProgress.failedCount > 0) "续传部分完成" else "续传完成",
+                errorMessage = currentProgress.errorMessage,
                 startTimeMs = startTime,
                 etaSeconds = 0,
                 recentFailures = recentFailuresBuffer.toList(),
@@ -1994,11 +1997,12 @@ class DoubanSyncManager @Inject constructor(
                 current = currentProgress.current,
                 total = currentProgress.total,
                 successCount = totalSuccess,
-                failedCount = allStillFailed.size,
+                failedCount = allStillFailed.size + currentProgress.failedCount,
                 skippedCount = totalSkipped,
                 cacheHitCount = totalCacheHit,
                 failedItems = allStillFailed,
-                phase = if (wasCancelled) "已取消" else "重试完成",
+                phase = if (wasCancelled) "已取消" else if (currentProgress.failedCount > 0) "重试部分完成" else "重试完成",
+                errorMessage = currentProgress.errorMessage,
                 startTimeMs = startTime,
                 etaSeconds = 0,
                 recentFailures = recentFailuresBuffer.toList(),
@@ -2075,14 +2079,17 @@ class DoubanSyncManager @Inject constructor(
             subStage = DoubanSyncSubStage.PREPARING_UPLOAD,
             phase = "准备云端上传"
         )
-        progressPublisher.publishStage(
-            stage = DoubanSyncStage.UPLOADING,
-            subStage = DoubanSyncSubStage.CHECKING_CONSISTENCY,
-            phase = "检查状态一致性"
-        )
+        val doubanMode = isDoubanMode()
+        if (!doubanMode) {
+            progressPublisher.publishStage(
+                stage = DoubanSyncStage.UPLOADING,
+                subStage = DoubanSyncSubStage.CHECKING_CONSISTENCY,
+                phase = "检查状态一致性"
+            )
+        }
         // 状态一致性检查（前移到上传之前）：统一豆瓣与 Trakt 状态并回写本地表，
         // 确保上传到云端的 synced_items.json 中的 status 是统一后的值
-        val consistencyResult = if (isDoubanMode()) {
+        val consistencyResult = if (doubanMode) {
             // 豆瓣独立模式没有 Trakt 状态可供对比，跳过检查但继续上传本地同步数据。
             ConsistencyCheckResult(isComplete = true)
         } else {
@@ -2104,13 +2111,23 @@ class DoubanSyncManager @Inject constructor(
             phase = "上传个人同步数据"
         )
         // 上传个人数据（含统一后的 status）
+        var personalUploadError: Throwable? = null
         val personalUploadSucceeded = runCatching {
             cloudPersonalSyncManager.uploadAll(
                 lastSyncMode = mode,
                 isFullComplete = isFullComplete,
                 uploadIdMappings = isFullComplete  // 仅完整同步完成时上传 IMDb 映射
             )
-        }.getOrDefault(false)
+        }.getOrElse {
+            personalUploadError = it
+            false
+        }
+        if (!personalUploadSucceeded) {
+            _progress.value = _progress.value.copy(
+                failedCount = _progress.value.failedCount + 1,
+                errorMessage = "Personal data upload failed: ${personalUploadError?.message ?: "unknown error"}"
+            )
+        }
         // 云端个人数据确认完整上传后，才更新本地同步元信息；
         // 上传失败时保留旧的完整同步时间，避免误进入 7 天冷却期。
         if (personalUploadSucceeded) {
@@ -2124,6 +2141,12 @@ class DoubanSyncManager @Inject constructor(
         )
         // 上传失败项（保留原有逻辑）
         runCatching { cloudFailureSyncManager.uploadIfHasFailures() }
+            .onFailure {
+                _progress.value = _progress.value.copy(
+                    failedCount = _progress.value.failedCount + 1,
+                    errorMessage = "Failure record upload failed: ${it.message ?: "unknown error"}"
+                )
+            }
 
         progressPublisher.publishStage(
             stage = DoubanSyncStage.UPLOADING,
@@ -2132,6 +2155,12 @@ class DoubanSyncManager @Inject constructor(
         )
         // 一次性批量上传 dirty 详情到全局池
         runCatching { uploadDirtyDetails() }
+            .onFailure {
+                _progress.value = _progress.value.copy(
+                    failedCount = _progress.value.failedCount + 1,
+                    errorMessage = "Detail upload failed: ${it.message ?: "unknown error"}"
+                )
+            }
 
         progressPublisher.publishStage(
             stage = DoubanSyncStage.UPLOADING,
@@ -2140,6 +2169,12 @@ class DoubanSyncManager @Inject constructor(
         )
         // 从全局池批量填充本地未标注类型的失败项（其他用户已标注的类型）
         runCatching { fillMediaTypeFromCloudPool() }
+            .onFailure {
+                _progress.value = _progress.value.copy(
+                    failedCount = _progress.value.failedCount + 1,
+                    errorMessage = "Media type completion failed: ${it.message ?: "unknown error"}"
+                )
+            }
         return personalUploadSucceeded
     }
 
@@ -2768,7 +2803,8 @@ class DoubanSyncManager @Inject constructor(
         }
 
         // ===== 阶段 4：批量 POST Trakt =====
-        onProgress(items.size, "写入 Trakt", 0, null, null)
+        // Trakt 写入是一次批量请求，没有逐条完成事件；不要把批量调用伪装成条目进度。
+        onProgress(0, DoubanSyncSubStage.WRITING_TARGET.name, 0, null, null)
         if (cancelled) return BatchSyncResult(0, failed, skippedCount, cacheHit)
         var writeFailedCount = 0
         try {
@@ -3085,7 +3121,8 @@ class DoubanSyncManager @Inject constructor(
 
         // ===== 阶段 3+4: TMDB 富化 + 写本地表（跳过 trakt 写入） =====
         progressPublisher.clearQueue()
-        onProgress(items.size, "写入本地", 0, null, null)
+        // 本地写入同样是批量落库，进度只表达阶段，不伪造条目完成数。
+        onProgress(0, DoubanSyncSubStage.WRITING_LOCAL.name, 0, null, null)
         if (cancelled) return BatchSyncResult(0, failed, skippedCount, cacheHit)
 
         val batchToInsert = mutableListOf<DoubanSyncedItem>()

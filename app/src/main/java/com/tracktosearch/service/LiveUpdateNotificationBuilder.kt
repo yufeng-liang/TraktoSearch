@@ -43,6 +43,7 @@ object LiveUpdateNotificationBuilder {
         contentText: String? = null,
         expandedText: String? = null,
         publicText: String? = null,
+        terminalActionText: String? = null,
         isTerminal: Boolean = false,
     ): Notification {
         val resolvedContentText = contentText ?: if (total > 0) "$phase ($current/$total)" else phase
@@ -59,6 +60,10 @@ object LiveUpdateNotificationBuilder {
             builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, cancelText, cancelIntent)
         } else {
             builder.setAutoCancel(true)
+            if (!terminalActionText.isNullOrBlank()) {
+                // 終態通知保留显式结果入口，用户可直接回到同步结果页。
+                builder.addAction(android.R.drawable.ic_menu_view, terminalActionText, contentIntent)
+            }
         }
         if (!expandedText.isNullOrBlank()) {
             builder.setSubText(expandedText)

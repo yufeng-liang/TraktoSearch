@@ -269,6 +269,7 @@
     <string name="douban_sync_trakt_login_required_banner">需要登录 Trakt，点此登录</string>
     <string name="douban_sync_complete_banner">同步完成，新增 %1$d 条</string>
     <string name="douban_sync_cancelled_banner">同步已取消</string>
+    <string name="douban_sync_cancelled_with_pending">同步已取消，可继续处理 %1$d 项</string>
     <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
     <string name="douban_sync_error_detail">错误：%1$s</string>
     <string name="douban_sync_eta_format">预计剩余 %1$s</string>
@@ -277,6 +278,7 @@
     <string name="douban_sync_delay_list_crawl">列表页爬取延迟</string>
     <string name="douban_sync_delay_retry">重试前等待</string>
     <string name="douban_sync_summary_format">成功 %1$d · 跳过 %2$d · 缓存命中 %3$d</string>
+    <string name="douban_sync_summary_with_failures">同步部分完成：成功 %1$d · 跳过 %2$d · 缓存命中 %3$d · 失败 %4$d</string>
 
     <!-- 豆瓣同步失败项重试 -->
     <string name="douban_retry_title">重试豆瓣同步失败项</string>
@@ -875,9 +877,11 @@
     <string name="consistency_check_phase_update_douban">更新豆瓣</string>
     <string name="consistency_check_phase_done">完成</string>
     <string name="consistency_check_summary">检查 %1$d 项，发现 %2$d 个冲突，Trakt 更新 %3$d 项，豆瓣更新 %4$d 项，错误 %5$d 项</string>
+    <string name="consistency_check_summary_with_errors">检查部分完成：检查 %1$d 项，发现 %2$d 个冲突，Trakt 更新 %3$d 项，豆瓣更新 %4$d 项，错误 %5$d 项</string>
     <string name="consistency_check_notification_progress">%1$s（%2$d/%3$d）</string>
     <string name="consistency_check_notification_progress_with_subphase">%1$s · %2$s（%3$d/%4$d）</string>
     <string name="consistency_check_notification_stage_with_subphase">%1$s · %2$s</string>
+    <string name="consistency_check_notification_batch">%1$s · 批量处理中</string>
     <string name="consistency_check_notification_current">当前：%1$s</string>
     <string name="consistency_check_notification_eta">预计剩余：%1$s</string>
     <string name="consistency_check_notification_public">状态检查：%1$s</string>

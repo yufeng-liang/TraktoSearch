@@ -269,6 +269,7 @@
     <string name="douban_sync_trakt_login_required_banner">Trakt login required, tap to log in</string>
     <string name="douban_sync_complete_banner">Sync complete, %1$d items added</string>
     <string name="douban_sync_cancelled_banner">Sync cancelled</string>
+    <string name="douban_sync_cancelled_with_pending">Sync cancelled. %1$d items can be resumed.</string>
     <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
     <string name="douban_sync_error_detail">Error: %1$s</string>
     <string name="douban_sync_eta_format">about %1$s remaining</string>
@@ -277,6 +278,7 @@
     <string name="douban_sync_delay_list_crawl">List page crawl delay</string>
     <string name="douban_sync_delay_retry">Retry backoff</string>
     <string name="douban_sync_summary_format">Success %1$d · Skipped %2$d · Cached %3$d</string>
+    <string name="douban_sync_summary_with_failures">Completed with issues: success %1$d · skipped %2$d · cached %3$d · failed %4$d</string>
 
     <!-- Douban sync failure retry -->
     <string name="douban_retry_title">Retry Douban Sync Failures</string>
@@ -875,9 +877,11 @@ Config:
     <string name="consistency_check_phase_update_douban">Updating Douban</string>
     <string name="consistency_check_phase_done">Done</string>
     <string name="consistency_check_summary">Checked %1$d items, found %2$d conflicts, Trakt updated %3$d, Douban updated %4$d, errors %5$d</string>
+    <string name="consistency_check_summary_with_errors">Partially completed: checked %1$d items, found %2$d conflicts, Trakt updated %3$d, Douban updated %4$d, errors %5$d</string>
     <string name="consistency_check_notification_progress">%1$s (%2$d/%3$d)</string>
     <string name="consistency_check_notification_progress_with_subphase">%1$s · %2$s (%3$d/%4$d)</string>
     <string name="consistency_check_notification_stage_with_subphase">%1$s · %2$s</string>
+    <string name="consistency_check_notification_batch">%1$s · batch processing</string>
     <string name="consistency_check_notification_current">Current: %1$s</string>
     <string name="consistency_check_notification_eta">ETA: %1$s</string>
     <string name="consistency_check_notification_public">Status check: %1$s</string>
