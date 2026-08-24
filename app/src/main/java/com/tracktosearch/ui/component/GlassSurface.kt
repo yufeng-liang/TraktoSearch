@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.shadow.Shadow as ComposeShadow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
@@ -184,6 +185,13 @@ fun GlassIconButton(
     }
     val backdrop = LocalBackdrop.current
     val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin()
+    // 自适应亮度只给"有 Backdrop 源的圆形玻璃按钮"开：顶栏按钮、悬浮按钮都是这一类。
+    // Haze 降级路径拿不到背后内容的图层，测不了亮度。
+    val luminanceProbe = if (backdrop != null && role.supportsAdaptiveLuminance) {
+        rememberGlassLuminanceProbe()
+    } else {
+        null
+    }
     // Glass 采样源：优先 Backdrop 镜头光效；无 Backdrop 源且可实时采 Haze 时退化
     // 为 Haze 实时模糊（悬浮按钮采不到滚动内容导致白底/透明的饱和度场景用此降级）。
     val effectModifier = when {
@@ -193,7 +201,8 @@ fun GlassIconButton(
             token = token,
             surfaceColor = surfaceColor,
             isDark = isDark,
-            pressed = pressed
+            pressed = pressed,
+            luminanceProbe = luminanceProbe
         )
         hazeState != null -> Modifier.appVisualEffect(
             input = HazeInput.Sources(hazeState, selection = sourceSelection),
@@ -519,7 +528,10 @@ internal fun Modifier.backdropGlass(
     pressGrow: Dp = 0.dp,
     // 把本表面「模糊层 + 填充」的成品导出成一层，供子级控件（底栏选中水滴）当作 backdrop 采样：
     // 子级因此能与父面板像素对齐，静止时无缝，不会露出未模糊的原始页面。
-    exportedBackdrop: LayerBackdrop? = null
+    exportedBackdrop: LayerBackdrop? = null,
+    // 自适应亮度探针：非空时把效果前的原始背景多录一份给它读回测亮度，并按实测亮度推
+    // brightness / contrast / blur。见 [GlassLuminanceProbe]。
+    luminanceProbe: GlassLuminanceProbe? = null
 ): Modifier {
     val highlightAlpha = (
         token.highlightAlpha * highlightScale * if (pressed) token.pressLighting else 1f
@@ -528,13 +540,20 @@ internal fun Modifier.backdropGlass(
         backdrop = backdrop,
         shape = { shape },
         effects = {
-            if (token.chromaticAberration) {
+            val signedLuminance = luminanceProbe?.signedLuminance ?: 0f
+            if (signedLuminance == 0f && token.chromaticAberration) {
+                // 库里 vibrancy() 用的是缓存好的 ColorFilter，无探针时保持这条零分配路径。
                 vibrancy()
             } else {
-                colorControls(contrast = 1.03f, saturation = 1.05f)
+                val baseContrast = if (token.chromaticAberration) 1f else 1.03f
+                colorControls(
+                    brightness = adaptiveBrightness(signedLuminance),
+                    contrast = adaptiveContrast(baseContrast, signedLuminance),
+                    saturation = if (token.chromaticAberration) 1.5f else 1.05f
+                )
             }
             blur(
-                radius = token.blurRadius.toPx(),
+                radius = token.blurRadius.toPx() * adaptiveBlurScale(signedLuminance),
                 edgeTreatment = token.blurEdgeTreatment
             )
             lens(
@@ -582,9 +601,22 @@ internal fun Modifier.backdropGlass(
         onDrawSurface = {
             drawRect(surfaceColor)
         },
+        // 官方 AdaptiveLuminanceGlass 的取样点：这里拿到的是**效果前**的背景绘制，
+        // 先照常画，再原样多录一份进探针图层，供读回测亮度（测自己的输出会自激）。
+        onDrawBackdrop = if (luminanceProbe != null) {
+            { drawBackdrop ->
+                drawBackdrop()
+                luminanceProbe.layer.record { drawBackdrop() }
+            }
+        } else {
+            PassThroughDrawBackdrop
+        },
         exportedBackdrop = exportedBackdrop
     )
 }
+
+/** drawBackdrop 的 onDrawBackdrop 默认值在库里是私有的，这里自备一个常量避免每次组合新建 lambda。 */
+private val PassThroughDrawBackdrop: DrawScope.(DrawScope.() -> Unit) -> Unit = { it() }
 
 @Composable
 internal fun rememberBackdropGlassEffectModifier(
@@ -605,12 +637,18 @@ internal fun rememberBackdropGlassEffectModifier(
     val fallbackInteractionSource = remember { MutableInteractionSource() }
     val resolvedInteractionSource = interactionSource ?: fallbackInteractionSource
     val pressed by resolvedInteractionSource.collectIsPressedAsState()
+    val luminanceProbe = if (role.supportsAdaptiveLuminance) {
+        rememberGlassLuminanceProbe()
+    } else {
+        null
+    }
     return Modifier.backdropGlass(
         backdrop = backdrop,
         shape = shape,
         token = token,
         surfaceColor = backdropSurfaceColor(tint, token, scene),
         isDark = isDark,
-        pressed = pressed
+        pressed = pressed,
+        luminanceProbe = luminanceProbe
     )
 }

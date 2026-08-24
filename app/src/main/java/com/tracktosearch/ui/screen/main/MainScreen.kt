@@ -104,6 +104,7 @@ import com.tracktosearch.ui.component.GlassTabIndicator
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.NeumorphicActiveTab
 import com.tracktosearch.ui.component.OnboardingOverlay
+import com.tracktosearch.ui.component.LocalAmbientMotionActive
 import com.tracktosearch.ui.component.PageBackground
 import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.LocalBackdropSourceEnabled
@@ -480,6 +481,9 @@ fun MainScreen(
     // 背景动效停帧信号：mirage 的 shader 时间逐帧累加，跑着就等于整窗满帧重绘。
     // 无指针事件 3s 后停帧，一有触摸立刻恢复。底栏重采也复用这份信号。
     val ambientMotion = rememberAmbientMotionState()
+    // 下发给页内组件（玻璃按钮的亮度探针）：static local 的值必须 remember 住，
+    // 每次组合换一个新 lambda 会让整棵子树失效。
+    val ambientMotionActive = remember(ambientMotion) { { ambientMotion.active } }
 
     var backdropResampleTick by remember { mutableIntStateOf(0) }
     LaunchedEffect(isGlassMode, pagerState.currentPage) {
@@ -567,6 +571,7 @@ fun MainScreen(
                         CompositionLocalProvider(
                             LocalBackdropSourceEnabled provides (page == pagerState.currentPage),
                             LocalIsCurrentTab provides (page == pagerState.currentPage),
+                            LocalAmbientMotionActive provides ambientMotionActive,
                             // 页内 Glass（搜索框、热词 chip 等）改采样光晕层。原先落到 App 级
                             // BackdropProvider 的空 source，只能采到一块主题平色，看不到光晕。
                             // 光晕层不含 drawBackdrop，不会递归；不适用时保持原值不动。

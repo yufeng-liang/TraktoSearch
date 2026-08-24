@@ -3,12 +3,14 @@ package com.tracktosearch.ui.component
 import android.os.SystemClock
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -76,6 +78,15 @@ fun rememberAmbientMotionState(idleDelayMillis: Long = 3000L): AmbientMotionStat
     LaunchedEffect(state) { state.ping() }
     return state
 }
+
+/**
+ * 「有人在操作」信号的下发通道，给需要跟着停的组件用（背景光晕、[GlassLuminanceProbe] 的读回）。
+ *
+ * 默认恒为 true：没有提供者的页面（详情页等）保持各自的退避策略，不受影响。
+ * 提供时务必传一个 remember 住的 lambda——这是 static local，每次组合换新实例会让整棵子树失效。
+ */
+val LocalAmbientMotionActive: ProvidableCompositionLocal<() -> Boolean> =
+    staticCompositionLocalOf { { true } }
 
 /** 挂在页面根节点：用 Initial pass 抢在子节点之前看到所有指针事件，且全程不消费。 */
 fun Modifier.ambientMotionPing(state: AmbientMotionState): Modifier =
