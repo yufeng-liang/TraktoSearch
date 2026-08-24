@@ -630,20 +630,7 @@
     <string name="help_notification_b3">提醒基于你的 Trakt 想看列表</string>
     <string name="help_notification_b4">权限被拒时开关会自动关闭</string>
     <string name="help_notification_b5">豆瓣同步、一致性检查等后台任务的进度通知，在 Android 16 及以上会以实时更新（Live Update）样式置顶展示，状态栏还会显示当前阶段</string>
-    <string name="help_data_export_title">数据导出</string>
-    <string name="help_data_export_b1">导出为 JSON 格式,包含想看列表和已看历史,适合备份/迁移</string>
-    <string name="help_data_import_title">数据导入</string>
-    <string name="help_data_import_b1">从 IMDb 导出的 CSV 导入想看列表,会自动同步到 Trakt 想看列表</string>
-    <string name="help_data_import_sources">导入来源对照</string>
-    <string name="help_import_src_imdb">IMDb</string>
-    <string name="help_import_src_imdb_how">登录 IMDb → Your Watchlist → 右上角菜单 → Export 下载 CSV</string>
-    <string name="help_import_src_imdb_effect">通过标题搜索匹配并同步到 Trakt 想看列表</string>
-    <string name="help_data_douban_title">豆瓣标记同步</string>
-    <string name="help_data_douban_b1">在登录页点击「或从豆瓣导入标记」，通过 WebView 登录豆瓣账号，App 会自动爬取您的想看和看过标记并显示在 Watchlist；连接 Trakt 后还可以同步到 Trakt</string>
-    <string name="help_data_douban_b2">在设置 → 数据管理点击「同步豆瓣」可同步豆瓣标记</string>
-    <string name="help_data_douban_b3">连接 Trakt 时的冲突策略：豆瓣「看过」覆盖 Trakt「想看」；豆瓣「想看」不覆盖 Trakt「看过」；评分以豆瓣为准（5 星制转 10 分制）</string>
-    <string name="help_data_douban_b4">所有导入的豆瓣标记都会显示在 Watchlist。带 IMDb ID 的条目使用正常详情页，不带 IMDb ID 的条目使用豆瓣详情页。</string>
-    <string name="help_data_douban_b5">豆瓣导入支持自动续传和重试。处理过程中的技术异常不会让已导入标记从 Watchlist 消失。</string>
+    
     <string name="help_data_table_title">数据导入导出总览</string>
     <string name="help_dc_export_t">导出标记数据</string>
     <string name="help_dc_export_entry">设置页 → 数据管理</string>
@@ -739,11 +726,11 @@
     <string name="help_tips_b3">电视剧详情页可展开全部季信息查看进度</string>
     <string name="help_tips_b4">设置中可自定义发现页栏目显示和排序</string>
     <string name="help_tips_b5">详情页点击海报可大图查看，再次点击保存到相册</string>
-    <string name="help_tips_b6">已保存的海报再次点击不会重复保存</string>
+    
     <string name="help_tips_b7">详情页演职员头像点击可查看该演员作品</string>
     <string name="help_tips_b8">人物详情页可横向滑动查看多张图片，点击图片可全屏查看并保存到相册</string>
     <string name="help_tips_b9">在线搜索支持中文人名搜索（基于 TMDB），搜索人物时自动填充相关影视作品</string>
-    <string name="help_tips_b10">发现页标题栏右侧可点击快速自定义栏目</string>
+    
     <string name="help_tips_b11">模糊采用柔和的毛玻璃风格；玻璃按场景自适应深度、折射与响应式高光</string>
     <string name="help_tips_b12">开启「自动上报崩溃日志」后，崩溃日志将在下次启动时自动上传；上传记录可在反馈与建议页查看</string>
     <string name="help_vpn">VPN 说明</string>
@@ -1762,10 +1749,6 @@
     <string name="help_ai_sprite_b4">目前有昵称欢迎、看单锐评、影视闯关和每日冷知识四项能力</string>
     <string name="help_ai_sprite_b5">AI 请求有每日配额，离线时不能发起新请求，但已缓存内容仍可查看</string>
     <string name="help_ai_sprite_b6">V1 使用角色与场景的音色设计提示词；试听失败时回退到系统语音</string>
-    <string name="help_weather_data">天气数据</string>
-    <string name="help_weather_data_b1">动态主题只使用小米天气 wtr-v3 接口，不直接请求 AccuWeather，也不叠加其他天气 API。</string>
-    <string name="help_weather_data_b2">App 会先将定位坐标交给小米接口反查为 weathercn: 或 accu: 城市标识，再请求同一接口的当前天气。</string>
-    <string name="help_weather_data_b3">当前天气按位置缓存最长 3 小时，减少重复请求；实际准确性和可用性以小米天气及其数据提供方为准。</string>
 
     <!-- 主页面背景光晕 -->
     <string name="bg_glow_title">背景动效</string>

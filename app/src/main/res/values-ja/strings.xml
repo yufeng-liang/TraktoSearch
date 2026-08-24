@@ -70,14 +70,7 @@
     <string name="help_col_format">フォーマット</string>
     <string name="help_col_how_to_get">取得方法</string>
     <string name="help_col_import_effect">インポート効果</string>
-    <string name="help_data_export_title">データエクスポート</string>
-    <string name="help_data_export_b1">JSON 形式でエクスポート(見たいリストと視聴履歴を含む、バックアップ/移行に適しています)</string>
-    <string name="help_data_import_title">データインポート</string>
-    <string name="help_data_import_b1">IMDb からエクスポートした CSV で見たいリストをインポート、Trakt 見たいリストに自動同期します</string>
-    <string name="help_data_import_sources">インポートソース一覧</string>
-    <string name="help_import_src_imdb">IMDb</string>
-    <string name="help_import_src_imdb_how">IMDb にログイン → Your Watchlist → メニュー → Export で CSV をダウンロード</string>
-    <string name="help_import_src_imdb_effect">タイトルで検索して Trakt 見たいリストに同期</string>
+    
     <string name="notification_release_title">公開リマインダー：%1$s</string>
     <string name="notification_release_text">%1$s に公開されました。チェックしてみましょう！</string>
     <string name="notification_new_season_text">シーズン %1$d が %2$s に放送開始</string>
@@ -1378,12 +1371,7 @@
     <string name="watchlist_empty_start_douban_import">豆瓣のマークをインポート</string>
 
     <!-- Douban Sync Help -->
-    <string name="help_data_douban_title">豆瓣マーク同期</string>
-    <string name="help_data_douban_b1">ログインページで「または豆瓣からインポート」をタップし、WebViewで豆瓣にログインすると、豆瓣の「見たい」「見た」マークを自動的にクロールしてWatchlistに表示します。Traktに接続するとTraktにも同期できます。</string>
-    <string name="help_data_douban_b2">設定 → データ管理で「豆瓣を同期」をタップすると同期できます。</string>
-    <string name="help_data_douban_b3">Traktに接続している場合の競合戦略：豆瓣「見た」はTrakt「見たい」を上書き；豆瓣「見たい」はTrakt「見た」を上書きしない；評価は豆瓣に従う（5スター→10点制に変換）。</string>
-    <string name="help_data_douban_b4">インポートした豆瓣のマークはすべてWatchlistに表示されます。IMDb IDがある項目は通常の詳細ページ、ない項目は豆瓣詳細ページを使用します。</string>
-    <string name="help_data_douban_b5">豆瓣のインポートは自動的に再開・再試行できます。処理中の技術的なエラーで、インポート済みのマークがWatchlistから消えることはありません。</string>
+    
     <string name="help_data_table_title">データインポート/エクスポート概览</string>
     <string name="help_dc_export_t">マークデータをエクスポート</string>
     <string name="help_dc_export_entry">設定 → データ管理</string>
@@ -1479,11 +1467,11 @@
     <string name="help_tips_b3">テレビ番組の詳細ページで全シーズンを展開して進捗を表示</string>
     <string name="help_tips_b4">設定で発見ページのセクション表示と並べ替えをカスタマイズ</string>
     <string name="help_tips_b5">詳細ページでポスターをタップして拡大表示、もう一度タップでアルバムに保存</string>
-    <string name="help_tips_b6">保存済みのポスターは再タップしても重複保存しない</string>
+    
     <string name="help_tips_b7">詳細ページのキャストアバターをタップして俳優の作品を表示</string>
     <string name="help_tips_b8">人物詳細ページで横スワイプして複数の写真を表示、写真をタップして全画面表示しアルバムに保存</string>
     <string name="help_tips_b9">オンライン検索は中国語人名検索に対応（TMDBベース）、人物検索時に自動的に関連作品を表示</string>
-    <string name="help_tips_b10">発見ページのタイトルバー右側をタップしてセクションを素早くカスタマイズ</string>
+    
     <string name="help_tips_b11">ぼかしは柔らかなすりガラス風、Glass はシーンに応じて深度、屈折、ハイライトを調整します</string>
     <string name="help_tips_b12">設定で「クラッシュログを自動アップロード」を有効にすると、クラッシュログは次回起動時に自動的にアップロードされます。アップロード履歴はフィードバックページで確認できます</string>
 
@@ -1774,10 +1762,6 @@
     <string name="help_ai_sprite_b4">ニックネーム歓迎、視聴リスト批評、映画クイズ、毎日の豆知識を利用できます</string>
     <string name="help_ai_sprite_b5">AI には日次上限があります。オフラインでもキャッシュは読めます</string>
     <string name="help_ai_sprite_b6">V1 はキャラクターとシーンの音声設計プロンプトを使い、試聴に失敗した場合はシステム音声に戻ります</string>
-    <string name="help_weather_data">天気データ</string>
-    <string name="help_weather_data_b1">動的テーマはXiaomi Weatherのwtr-v3エンドポイントのみを使用し、AccuWeatherや別の天気APIには直接アクセスしません。</string>
-    <string name="help_weather_data_b2">まず位置情報の座標をXiaomi APIでweathercn:またはaccu:の都市キーに解決し、そのキーで現在の天気を取得します。</string>
-    <string name="help_weather_data_b3">現在の天気は位置ごとに最大3時間キャッシュし、重複リクエストを減らします。正確性と可用性はXiaomi Weatherおよびデータ提供元に依存します。</string>
 <!-- メイン画面の背景グロー -->
     <string name="bg_glow_title">背景エフェクト</string>
     <string name="bg_glow_off">オフ</string>

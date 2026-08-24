@@ -70,14 +70,7 @@
     <string name="help_col_format">포맷</string>
     <string name="help_col_how_to_get">획득 방법</string>
     <string name="help_col_import_effect">가져오기 효과</string>
-    <string name="help_data_export_title">데이터 내보내기</string>
-    <string name="help_data_export_b1">JSON 형식으로 내보내기 (보고싶다 목록과 시청 기록 포함, 백업/이전에 적합)</string>
-    <string name="help_data_import_title">데이터 가져오기</string>
-    <string name="help_data_import_b1">IMDb에서 내보낸 CSV로 보고싶다 목록 가져오기, Trakt 보고싶다 목록에 자동 동기화</string>
-    <string name="help_data_import_sources">가져오기 소스</string>
-    <string name="help_import_src_imdb">IMDb</string>
-    <string name="help_import_src_imdb_how">IMDb 로그인 → Your Watchlist → 메뉴 → Export에서 CSV 다운로드</string>
-    <string name="help_import_src_imdb_effect">제목으로 검색하여 Trakt 보고싶다 목록에 동기화</string>
+    
     <string name="notification_release_title">개봉 알림: %1$s</string>
     <string name="notification_release_text">%1$s 에 개봉했습니다. 확인해 보세요!</string>
     <string name="notification_new_season_text">시즌 %1$d 이 %2$s 에 방영 시작</string>
@@ -1378,12 +1371,7 @@
     <string name="watchlist_empty_start_douban_import">더우반 마크 가져오기</string>
 
     <!-- Douban Sync Help -->
-    <string name="help_data_douban_title">더우반 마크 동기화</string>
-    <string name="help_data_douban_b1">로그인 페이지에서 \"또는 더우반에서 가져오기\"를 탭하고 WebView로 더우반에 로그인하면, 더우반의 보고싶다/봤어요 마크를 자동으로 크롤링하여 Watchlist에 표시합니다. Trakt에 연결하면 Trakt에도 동기화할 수 있습니다.</string>
-    <string name="help_data_douban_b2">설정 → 데이터 관리에서 \"더우반 동기화\"를 탭하여 동기화할 수 있습니다.</string>
-    <string name="help_data_douban_b3">Trakt에 연결된 경우의 충돌 전략: 더우반 \"봤어요\"는 Trakt \"보고싶다\"를 덮어씀; 더우반 \"보고싶다\"는 Trakt \"봤어요\"를 덮어쓰지 않음; 평점은 더우반 기준 (5스타 → 10점 변환).</string>
-    <string name="help_data_douban_b4">가져온 더우반 마크는 모두 Watchlist에 표시됩니다. IMDb ID가 있는 항목은 일반 상세 페이지를, 없는 항목은 더우반 상세 페이지를 사용합니다.</string>
-    <string name="help_data_douban_b5">더우반 가져오기는 자동으로 재개하고 다시 시도할 수 있습니다. 처리 중 기술 오류가 발생해도 가져온 마크가 Watchlist에서 사라지지 않습니다.</string>
+    
     <string name="help_data_table_title">데이터 가져오기/내보내기 개요</string>
     <string name="help_dc_export_t">표시 데이터 내보내기</string>
     <string name="help_dc_export_entry">설정 → 데이터 관리</string>
@@ -1479,11 +1467,11 @@
     <string name="help_tips_b3">TV 프로그램 상세 페이지에서 전체 시즌을 펼쳐 진행 상황 보기</string>
     <string name="help_tips_b4">설정에서 발견 페이지 섹션 표시와 정렬 사용자 정의</string>
     <string name="help_tips_b5">상세 페이지에서 포스터를 탭하여 크게 보기, 다시 탭하면 앨범에 저장</string>
-    <string name="help_tips_b6">이미 저장된 포스터는 다시 탭해도 중복 저장하지 않음</string>
+    
     <string name="help_tips_b7">상세 페이지의 출연진 아바타를 탭하여 해당 배우의 작품 보기</string>
     <string name="help_tips_b8">인물 상세 페이지에서 좌우 스와이프로 여러 사진 보기, 사진 탭하여 전체 화면 보기 및 앨범에 저장</string>
     <string name="help_tips_b9">온라인 검색은 중국어 인물명 검색 지원(TMDB 기반), 인물 검색 시 자동으로 관련 작품 표시</string>
-    <string name="help_tips_b10">발견 페이지 제목 표시줄 오른쪽을 탭하여 섹션 빠르게 사용자 정의</string>
+    
     <string name="help_tips_b11">블러는 부드러운 반투명 스타일을 사용하고, Glass는 장면에 맞춰 깊이, 굴절, 하이라이트를 조정합니다</string>
     <string name="help_tips_b12">설정에서 「크래시 로그 자동 업로드」를 켜면 크래시 로그가 다음 실행 시 자동으로 업로드됩니다. 업로드 기록은 피드백 페이지에서 확인할 수 있습니다</string>
 
@@ -1774,10 +1762,6 @@
     <string name="help_ai_sprite_b4">닉네임 인사, 시청 목록 평론, 영화 퀴즈와 매일 영화 상식을 제공합니다</string>
     <string name="help_ai_sprite_b5">AI에는 일일 한도가 있으며 오프라인에서도 캐시된 내용은 볼 수 있습니다</string>
     <string name="help_ai_sprite_b6">V1은 캐릭터와 장면별 음성 설계 프롬프트를 사용하며, 미리듣기에 실패하면 시스템 음성으로 전환합니다</string>
-    <string name="help_weather_data">날씨 데이터</string>
-    <string name="help_weather_data_b1">동적 테마는 Xiaomi Weather의 wtr-v3 엔드포인트만 사용하며, AccuWeather나 다른 날씨 API를 직접 호출하지 않습니다.</string>
-    <string name="help_weather_data_b2">먼저 위치 좌표를 Xiaomi API에서 weathercn: 또는 accu: 도시 키로 변환한 뒤 같은 엔드포인트에서 현재 날씨를 가져옵니다.</string>
-    <string name="help_weather_data_b3">현재 날씨는 중복 요청을 줄이기 위해 위치별로 최대 3시간 캐시됩니다. 정확성과 제공 여부는 Xiaomi Weather 및 데이터 제공업체에 따릅니다.</string>
 <!-- 메인 화면 배경 글로우 -->
     <string name="bg_glow_title">배경 모션</string>
     <string name="bg_glow_off">끄기</string>
