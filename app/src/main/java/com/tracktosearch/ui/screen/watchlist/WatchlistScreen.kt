@@ -211,6 +211,8 @@ import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
 import com.tracktosearch.ui.navigation.NotificationNavigator
 import com.tracktosearch.ui.navigation.NotificationTarget
 import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
 import dagger.hilt.android.EntryPointAccessors
@@ -478,6 +480,8 @@ fun WatchlistScreen(
     // 正后方有海报就折射海报、没有则折射页面渐变，而非一块平色（避免顶部退化成纯色/白）。
     val watchlistBackdropBackground = MaterialTheme.colorScheme.background
     val ambientBackdropLayer = (LocalBackdrop.current as? LayerBackdrop)?.graphicsLayer
+    // Glass 模式才需要录制内容 backdrop 层；BLUR 模式无人消费，见下方 layerBackdrop 门控。
+    val isWatchlistGlassMode = LocalVisualEffectMode.current == VisualEffectMode.GLASS
     val watchlistContentBackdrop = rememberLayerBackdrop(
         onDraw = remember(watchlistBackdropBackground, ambientBackdropLayer) {
             {
@@ -736,7 +740,15 @@ fun WatchlistScreen(
                         modifier = Modifier
                             .requiredWidth(maxWidth + TopBarBackdropSourcePadding * 2)
                             .fillMaxHeight()
-                            .layerBackdrop(watchlistContentBackdrop)
+                            // 只有 Glass 模式的顶栏才采样这一层；BLUR 模式走 hazeSource，
+                            // 这份全屏离屏录制写了没人读，每帧纯浪费。
+                            .then(
+                                if (isWatchlistGlassMode) {
+                                    Modifier.layerBackdrop(watchlistContentBackdrop)
+                                } else {
+                                    Modifier
+                                }
+                            )
                     ) {
                         Box(
                             modifier = Modifier
@@ -966,7 +978,8 @@ fun WatchlistScreen(
                             style = hazeStyle,
                             blurRadius = TopBarBackdropBlurRadius,
                             isContentUnderTopBar = hasContentUnderTopBar,
-                            backdropOverride = watchlistContentBackdrop,
+                            // 与 layerBackdrop 门控保持一致：BLUR 模式没录这一层，就不该再传。
+                            backdropOverride = if (isWatchlistGlassMode) watchlistContentBackdrop else null,
                             scene = watchlistGlassScene
                         )
                 ) {

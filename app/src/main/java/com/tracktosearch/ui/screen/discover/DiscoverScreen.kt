@@ -106,6 +106,8 @@ import com.tracktosearch.ui.screen.search.DoubanHotCategorySection
 import com.tracktosearch.ui.screen.settings.DiscoverSectionsDialog
 import com.tracktosearch.ui.screen.settings.SettingsViewModel
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.util.ToastEffect
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
@@ -188,6 +190,8 @@ fun DiscoverScreen(
     // 顶栏按钮正后方有内容折射内容、没有则折射页面渐变，而非平色白或页面粉色 mesh。
     val discoverBackdropBackground = MaterialTheme.colorScheme.background
     val discoverAmbientBackdropLayer = (LocalBackdrop.current as? LayerBackdrop)?.graphicsLayer
+    // Glass 模式才需要录制内容 backdrop 层；BLUR 模式无人消费，见下方 layerBackdrop 门控。
+    val isDiscoverGlassMode = LocalVisualEffectMode.current == VisualEffectMode.GLASS
     val discoverContentBackdrop = rememberLayerBackdrop(
         onDraw = remember(discoverBackdropBackground, discoverAmbientBackdropLayer) {
             {
@@ -304,7 +308,15 @@ fun DiscoverScreen(
                     // requiredWidth 会将超出父约束的 source 自动居中，左右各保留 blur 采样余量。
                     .requiredWidth(maxWidth + TopBarBackdropSourcePadding * 2)
                     .fillMaxHeight()
-                    .layerBackdrop(discoverContentBackdrop)
+                    // 只有 Glass 模式的顶栏才采样这一层；BLUR 模式走 hazeSource，
+                    // 这份全屏离屏录制写了没人读，每帧纯浪费。
+                    .then(
+                        if (isDiscoverGlassMode) {
+                            Modifier.layerBackdrop(discoverContentBackdrop)
+                        } else {
+                            Modifier
+                        }
+                    )
             ) {
                 Box(
                     modifier = Modifier
@@ -885,7 +897,8 @@ fun DiscoverScreen(
                         style = discoverHazeStyle,
                         blurRadius = TopBarBackdropBlurRadius,
                         isContentUnderTopBar = discoverHasContentUnderTopBar,
-                        backdropOverride = discoverContentBackdrop,
+                        // 与 layerBackdrop 门控保持一致：BLUR 模式没录这一层，就不该再传。
+                        backdropOverride = if (isDiscoverGlassMode) discoverContentBackdrop else null,
                         scene = discoverGlassScene
                     )
                     // 拦截点击：顶栏覆盖可滚动列表，不消费会让点击穿透到下方列表项

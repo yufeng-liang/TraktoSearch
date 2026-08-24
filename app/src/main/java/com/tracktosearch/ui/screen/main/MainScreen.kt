@@ -83,6 +83,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -557,19 +558,31 @@ fun MainScreen(
                         beyondViewportPageCount = 2,
                         modifier = Modifier
                             .fillMaxSize()
-                            // 读取采样版本号/短窗口 tick：让本节点的 draw 失效，从而重新执行
-                            // 下游 layerBackdrop 的录制，使底栏采到的是当帧内容而非旧帧。
-                            .drawWithContent {
-                                @Suppress("UNUSED_EXPRESSION") contentSampleVersion.intValue
-                                @Suppress("UNUSED_EXPRESSION") backdropResampleTick
-                                drawContent()
-                            }
-                            .layerBackdrop(mainContentBackdrop)
+                            // 只有 Glass 模式的底栏才通过 backdropOverride 采样这一层。
+                            // BLUR 模式底栏走 hazeSource + NeumorphicFrostedSurface，后者根本没有
+                            // backdropOverride 入参，这份全屏离屏录制写了没人读——每帧纯浪费，
+                            // 与上面 glowBackdrop / navTabsBackdrop 已有的 isGlassMode 门控同理。
+                            // 读采样版本号/tick 让本节点 draw 失效也只为驱动 layerBackdrop 重录，
+                            // 没有 layerBackdrop 时一并省掉。
+                            .then(
+                                if (isGlassMode) {
+                                    Modifier
+                                        .drawWithContent {
+                                            @Suppress("UNUSED_EXPRESSION") contentSampleVersion.intValue
+                                            @Suppress("UNUSED_EXPRESSION") backdropResampleTick
+                                            drawContent()
+                                        }
+                                        .layerBackdrop(mainContentBackdrop)
+                                } else {
+                                    Modifier
+                                }
+                            )
                     ) { page ->
+                        val isCurrentPage = page == pagerState.currentPage
                         // 只有当前可见 tab 的 MovieCard 参与 sharedElement 转场，避免 HorizontalPager 常驻的其他 tab 同 tmdbId 海报冲突
                         CompositionLocalProvider(
-                            LocalBackdropSourceEnabled provides (page == pagerState.currentPage),
-                            LocalIsCurrentTab provides (page == pagerState.currentPage),
+                            LocalBackdropSourceEnabled provides isCurrentPage,
+                            LocalIsCurrentTab provides isCurrentPage,
                             LocalAmbientMotionActive provides ambientMotionActive,
                             // 页内 Glass（搜索框、热词 chip 等）改采样光晕层。原先落到 App 级
                             // BackdropProvider 的空 source，只能采到一块主题平色，看不到光晕。
@@ -577,6 +590,20 @@ fun MainScreen(
                             LocalBackdrop provides
                                 (if (glowAsBackdrop) glowBackdrop else LocalBackdrop.current)
                         ) {
+                            // beyondViewportPageCount=2 让 4 个 tab 常驻组合，语义树里就同时挂着
+                            // 4 页的全部节点。无障碍代理每帧要遍历整棵树并给全部节点重排遍历序
+                            // （实测 getCurrentSemanticsNodes + setTraversalValues 合计占应用采样
+                            // 11-17%），其中 3 页用户根本看不见。这里把非当前页的语义子树整体剪掉：
+                            // 只影响无障碍暴露，不动组合/布局/绘制，切回该页时语义自然恢复。
+                            Box(
+                                modifier = if (isCurrentPage) {
+                                    Modifier.fillMaxSize()
+                                } else {
+                                    Modifier
+                                        .fillMaxSize()
+                                        .clearAndSetSemantics {}
+                                }
+                            ) {
                             when (page) {
                     0 -> {
                         if (showTraktSearch) {
@@ -689,6 +716,7 @@ fun MainScreen(
                         modifier = Modifier.fillMaxSize()
                     )
                             }
+                            } // Box：非当前页语义剪枝
                         } // CompositionLocalProvider
                     }
             }
@@ -767,7 +795,9 @@ fun MainScreen(
                     },
                     borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.45f),
                     hazeState = hazeState,
-                    backdropOverride = mainContentBackdrop,
+                    // 与上面 layerBackdrop 的门控保持一致：BLUR 模式不录这一层，也就不该再传，
+                    // 免得日后 blur 分支接上 backdropOverride 时读到一层没录过的空层。
+                    backdropOverride = if (isGlassMode) mainContentBackdrop else null,
                     exportedBackdrop = if (isGlassMode) navPanelBackdrop else null,
                     interactionSource = navPillDrag.interactionSource,
                     // 底部导航自身作为 zIndex=1 的 source，effect 只采样 zIndex=0 的页面内容，

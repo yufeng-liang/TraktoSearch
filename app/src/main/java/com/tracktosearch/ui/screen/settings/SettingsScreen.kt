@@ -131,6 +131,8 @@ import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
 import com.tracktosearch.ui.theme.MeshPreset
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.component.isAppDarkTheme
@@ -433,6 +435,8 @@ fun SettingsScreen(
     // 正后方有内容折射内容、没有则折射页面渐变，而非平色白。
     val settingsBackdropBackground = MaterialTheme.colorScheme.background
     val settingsAmbientBackdropLayer = (LocalBackdrop.current as? LayerBackdrop)?.graphicsLayer
+    // Glass 模式才需要录制内容 backdrop 层；BLUR 模式无人消费，见下方 layerBackdrop 门控。
+    val isSettingsGlassMode = LocalVisualEffectMode.current == VisualEffectMode.GLASS
     val settingsContentBackdrop = rememberLayerBackdrop(
         onDraw = remember(settingsBackdropBackground, settingsAmbientBackdropLayer) {
             {
@@ -485,7 +489,16 @@ fun SettingsScreen(
                     // requiredWidth 会将超出父约束的 source 自动居中，左右各保留 blur 采样余量。
                     .requiredWidth(maxWidth + TopBarBackdropSourcePadding * 2)
                     .fillMaxHeight()
-                    .layerBackdrop(settingsContentBackdrop)
+                    // 只有 Glass 模式的顶栏才通过 backdropOverride / LocalBackdrop 采样这一层。
+                    // BLUR 模式顶栏走 hazeSource + NeumorphicFrostedSurface（无 backdropOverride 入参），
+                    // 这份全屏离屏录制写了没人读，每帧纯浪费。
+                    .then(
+                        if (isSettingsGlassMode) {
+                            Modifier.layerBackdrop(settingsContentBackdrop)
+                        } else {
+                            Modifier
+                        }
+                    )
             ) {
                 Box(
                     modifier = Modifier
@@ -733,7 +746,8 @@ fun SettingsScreen(
                         style = settingsHazeStyle,
                         blurRadius = TopBarBackdropBlurRadius,
                         isContentUnderTopBar = settingsHasContentUnderTopBar,
-                        backdropOverride = settingsContentBackdrop,
+                        // 与 layerBackdrop 门控保持一致：BLUR 模式没录这一层，就不该再传。
+                        backdropOverride = if (isSettingsGlassMode) settingsContentBackdrop else null,
                         scene = settingsGlassScene
                     )
                     // 拦截点击：顶栏覆盖可滚动列表，不消费会让点击穿透到下方列表项
