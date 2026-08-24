@@ -59,6 +59,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -145,6 +146,7 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.where
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -475,6 +477,10 @@ fun MainScreen(
     // haze 消费者失效 → 页面重绘 → 又推进版本号 → 死循环（实测空闲 246fps）。
     // 改为定时驱动的单向重采：进入/切换 tab 后 5Hz 推进 tick 约 6s，覆盖数据与海报陆续加载的窗口；
     // 窗口结束后不再产生帧，滚动本身也会让底栏重绘重采。
+    // 背景动效停帧信号：mirage 的 shader 时间逐帧累加，跑着就等于整窗满帧重绘。
+    // 无指针事件 3s 后停帧，一有触摸立刻恢复。底栏重采也复用这份信号。
+    val ambientMotion = rememberAmbientMotionState()
+
     var backdropResampleTick by remember { mutableIntStateOf(0) }
     LaunchedEffect(isGlassMode, pagerState.currentPage) {
         if (!isGlassMode) return@LaunchedEffect
@@ -483,10 +489,20 @@ fun MainScreen(
             backdropResampleTick++
         }
     }
-
-    // 背景动效停帧：mirage 的 shader 时间逐帧累加，跑着就等于整窗满帧重绘。
-    // 无指针事件 3s 后停帧，一有触摸立刻恢复。
-    val ambientMotion = rememberAmbientMotionState()
+    // 程序化滚动（回顶按钮的 animateScrollToItem）不经过 NestedScrollConnection，
+    // contentSampleVersion 不会推进，底栏也就不会重采：动画结束那一刻底栏停在一帧无效采样上，
+    // 表现为整条导航透明、底下文字清晰可见。这里改为「有交互就重采」——指针事件已由
+    // ambientMotion 统一跟踪（背景动效停帧用的同一份信号），静止后自动停止，不增加空闲开销。
+    LaunchedEffect(isGlassMode, ambientMotion) {
+        if (!isGlassMode) return@LaunchedEffect
+        snapshotFlow { ambientMotion.active }.collectLatest { active ->
+            if (!active) return@collectLatest
+            while (true) {
+                delay(200)
+                backdropResampleTick++
+            }
+        }
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
