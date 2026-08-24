@@ -64,6 +64,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import com.tracktosearch.ui.navigation.DetailSeedStore
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
@@ -429,6 +430,7 @@ class DetailViewModel @Inject constructor(
     private var seasonsJob: Job? = null
     private var delayedLoadJob: Job? = null
     private var doubanIdPrefetchJob: Job? = null
+    private var watchStateJob: Job? = null
     private var doubanRexxarJob: Job? = null
     // 全量结果（未按 filter 过滤）
     private var allResources: List<ResourceItem> = emptyList()
@@ -437,7 +439,7 @@ class DetailViewModel @Inject constructor(
     // 初始 null:sessionMode flow 未发出首值前降级到 trakt 原逻辑,避免误判
     private var currentSessionMode: SessionMode? = null
 
-    suspend fun loadDetail(traktId: Int, tmdbId: Int, title: String, mediaType: MediaType, year: Int? = null, imdbId: String = "", traktRating: Double = 0.0, inWatchlist: Boolean = false, isWatched: Boolean = false, doubanId: String? = null) {
+    suspend fun loadDetail(traktId: Int, tmdbId: Int, title: String, mediaType: MediaType, year: Int? = null, imdbId: String = "", traktRating: Double = 0.0, inWatchlist: Boolean = false, isWatched: Boolean = false, doubanId: String? = null, seedPosterUrl: String? = null) {
         val cacheKey = DetailCacheKey(
             traktId = traktId,
             tmdbId = tmdbId,
@@ -447,6 +449,7 @@ class DetailViewModel @Inject constructor(
         // 已加载相同影视则用缓存（从子详情页返回时不重新请求）
         if (currentDetailCacheKey == cacheKey && detailLoaded) return
         doubanIdPrefetchJob?.cancel()
+        watchStateJob?.cancel()
 
         // 尝试从静态缓存恢复
         val cached = cacheGet(cacheKey)
@@ -470,7 +473,8 @@ class DetailViewModel @Inject constructor(
             currentHighRelevanceMap = emptyMap()
             // 从全局缓存获取真实的想看/已看状态，不依赖路由参数（从推荐列表进入时默认为 false）
             // 豆瓣独立模式从本地 douban_synced_items 表读取,其他模式走 trakt API
-            val (realInWatchlist, realWatched) = resolveWatchStates(traktId, cached.currentMediaType, cached.currentImdbId)
+            // 同步拿不到时先用缓存里的旧值，由 applyWatchStates 在后台校正，不阻塞状态恢复
+            val peekedStates = peekWatchStates(traktId, cached.currentMediaType)
             val restoredRatingSource = if (
                 cached.uiState.ratingSource == DetailRatingSource.UNKNOWN &&
                 !currentDoubanId.isNullOrBlank()
@@ -480,10 +484,13 @@ class DetailViewModel @Inject constructor(
                 cached.uiState.ratingSource
             }
             _uiState.value = cached.uiState.withoutTransientSceneState().copy(
-                isMarkedWatchlist = realInWatchlist,
-                isMarkedWatched = realWatched,
+                isMarkedWatchlist = peekedStates?.first ?: cached.uiState.isMarkedWatchlist,
+                isMarkedWatched = peekedStates?.second ?: cached.uiState.isMarkedWatched,
                 ratingSource = restoredRatingSource
             )
+            if (peekedStates == null) {
+                applyWatchStates(cacheKey, traktId, cached.currentMediaType, cached.currentImdbId)
+            }
             // 海报 TMDB 优先：旧缓存若残留豆瓣海报 URL 且条目有 TMDB(tmdbId>0)，异步补拉 TMDB 海报替换；
             // 纯豆瓣条目(tmdbId=0)无 TMDB 海报，保留豆瓣海报
             val cachedPoster = cached.uiState.posterUrl
@@ -567,12 +574,24 @@ class DetailViewModel @Inject constructor(
         currentScoreMap = emptyMap()
         currentHighRelevanceMap = emptyMap()
 
+        // 首帧种子：TMDB 内存缓存 peek → 调用方传入 → 列表卡片点击时暂存的海报/年份。
+        // 目的是让海报/标题在第一帧就正确，既消掉「空白→弹入」，也让共享元素转场有落点。
+        val seed = peekDetailSeed(tmdbId, mediaType, title, year)
+        // 发现页等栏目的海报来自 TMDB 列表接口，不写详情缓存，peek 必然落空，靠卡片暂存兜底
+        val cardSeed = if (seed?.posterUrl == null || year == null) DetailSeedStore.peek(tmdbId) else null
+        val seededPoster = seed?.posterUrl ?: seedPosterUrl ?: cardSeed?.posterUrl
+        val seededYear = year ?: cardSeed?.year
         _uiState.value = DetailUiState(
             isLoading = true,
             isSearching = true,
             title = title.replace("+", " "),
-            displayTitle = title.replace("+", " "),
-            year = year,
+            displayTitle = (seed?.displayTitle ?: title).replace("+", " "),
+            originalTitle = seed?.originalTitle.orEmpty(),
+            genres = seed?.genres.orEmpty(),
+            releaseDate = seed?.releaseDate.orEmpty(),
+            status = seed?.status.orEmpty(),
+            posterUrl = seededPoster,
+            year = seededYear,
             isMarkedWatchlist = inWatchlist,
             isMarkedWatched = isWatched,
             isLoadingVideosImages = true,
@@ -583,11 +602,20 @@ class DetailViewModel @Inject constructor(
                 DetailRatingSource.UNKNOWN
             }
         )
+        // 海报已就位时立刻预查主色，让沉浸背景与海报同帧出现而不是滞后一拍
+        if (seededPoster != null) prefetchPosterColor(seededPoster)
+        if (seed != null) currentOriginalTitle = seed.originalTitle
 
         // 本人短评独立于公共评论加载：先命中本地缓存，再按 TTL 后台校准。
         startOwnCommentLoad()
 
         viewModelScope.launch {
+            // 海报/标题只依赖 tmdbId，提前并发发起，不排在豆瓣补充、登录态、标记态后面
+            val enrichmentDeferred = if (tmdbId > 0) {
+                async { fetchEnrichment(tmdbId, mediaType, title, year) }
+            } else {
+                null
+            }
             val doubanSupplement = loadDoubanSupplement(currentDoubanId, currentImdbId)
             if (doubanSupplement != null) {
                 currentDoubanId = doubanSupplement.doubanId
@@ -595,16 +623,31 @@ class DetailViewModel @Inject constructor(
                 currentDoubanRating = doubanSupplement.publicRating
                 currentDoubanUserRating = doubanSupplement.userRating
                 val current = _uiState.value
+                // tmdbId > 0 时主标题/原名/海报都以 TMDB 为准（随后的富化必然覆盖），
+                // 这里不再写豆瓣值，消掉「路由标题→豆瓣标题→TMDB 标题」与海报换图两次跳变。
+                val preferTmdb = tmdbId > 0
                 _uiState.value = current.copy(
-                    title = doubanSupplement.title ?: current.title,
-                    displayTitle = doubanSupplement.title ?: current.displayTitle,
-                    originalTitle = doubanSupplement.originalTitle ?: current.originalTitle,
+                    title = if (preferTmdb) current.title else doubanSupplement.title ?: current.title,
+                    displayTitle = if (preferTmdb) {
+                        current.displayTitle
+                    } else {
+                        doubanSupplement.title ?: current.displayTitle
+                    },
+                    originalTitle = if (preferTmdb) {
+                        current.originalTitle
+                    } else {
+                        doubanSupplement.originalTitle ?: current.originalTitle
+                    },
                     year = doubanSupplement.year ?: current.year,
                     overview = doubanSupplement.overview ?: current.overview,
-                    genres = doubanSupplement.genres ?: current.genres,
+                    genres = if (preferTmdb) {
+                        current.genres.ifBlank { doubanSupplement.genres.orEmpty() }
+                    } else {
+                        doubanSupplement.genres ?: current.genres
+                    },
                     country = doubanSupplement.country ?: current.country,
                     // 海报先以豆瓣兜底，后续 TMDB enrichment 存在时覆盖为 TMDB（TMDB 优先）
-                    posterUrl = current.posterUrl ?: doubanSupplement.posterUrl,
+                    posterUrl = if (preferTmdb) current.posterUrl else current.posterUrl ?: doubanSupplement.posterUrl,
                     runtime = doubanSupplement.runtimeMinutes ?: current.runtime,
                     userRating = doubanSupplement.userRating ?: current.userRating,
                     userComment = doubanSupplement.item?.comment ?: current.userComment,
@@ -629,11 +672,7 @@ class DetailViewModel @Inject constructor(
 
             // 从全局缓存校正想看/已看状态（路由参数从推荐列表进入时可能为 false）
             // 豆瓣独立模式从本地 douban_synced_items 表读取,其他模式走 trakt API
-            val (realInWatchlist, realWatched) = resolveWatchStates(currentTraktId, currentMediaType, currentImdbId)
-            _uiState.value = _uiState.value.copy(
-                isMarkedWatchlist = realInWatchlist,
-                isMarkedWatched = realWatched
-            )
+            applyWatchStates(cacheKey, currentTraktId, currentMediaType, currentImdbId)
 
             var tmdbRating = 0.0
             var collectionId = 0
@@ -644,32 +683,17 @@ class DetailViewModel @Inject constructor(
                 saveToCache()
                 startSearch()
             } else {
-                val enrichment: EnrichmentData? = runCatching {
-                    when (mediaType) {
-                        MediaType.MOVIE -> {
-                            val e = tmdbRepository.enrichMovie(tmdbId, title, year)
-                            tmdbRating = e.rating
-                            // enrichMovie 已返回 collectionId 和 imdbId，无需第二次 getMovieDetail
-                            collectionId = e.collectionId ?: 0
-                            currentCollectionId = collectionId
-                            if (currentImdbId.isBlank()) {
-                                e.imdbId?.takeIf { it.isNotBlank() }?.let { currentImdbId = it }
-                            }
-                            EnrichmentData(e.chineseTitle, e.originalTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.runtime, e.releaseDate, e.country, e.status)
-                        }
-                        MediaType.SHOW -> {
-                            val e = tmdbRepository.enrichTv(tmdbId, title, year)
-                            tmdbRating = e.rating
-                            // enrichTv 已返回 imdbId，无需第二次 getTvDetail
-                            if (currentImdbId.isBlank()) {
-                                e.imdbId?.takeIf { it.isNotBlank() }?.let { currentImdbId = it }
-                            }
-                            EnrichmentData(e.chineseTitle, e.originalTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.episodeRunTime, e.releaseDate, e.country, e.status)
-                        }
-                        MediaType.PERSON -> null
-                        MediaType.DISK -> null
+                val prepared = enrichmentDeferred?.await()
+                if (prepared != null) {
+                    tmdbRating = prepared.rating
+                    // enrichMovie/enrichTv 已返回 collectionId 和 imdbId，无需第二次 getDetail
+                    collectionId = prepared.collectionId
+                    currentCollectionId = collectionId
+                    if (currentImdbId.isBlank()) {
+                        prepared.imdbId?.takeIf { it.isNotBlank() }?.let { currentImdbId = it }
                     }
-                }.getOrNull()
+                }
+                val enrichment: EnrichmentData? = prepared?.data
 
                 // 主标题以 TMDB 中文标题为准，与列表卡片 displayTitle 保持一致；
                 // 豆瓣标题仅作纯豆瓣条目（无 TMDB 中文标题）时的兜底。
@@ -853,9 +877,15 @@ class DetailViewModel @Inject constructor(
 
     private fun applyDoubanPresentation(presentation: DoubanDetailPresentation, doubanId: String) {
         val current = _uiState.value
-        // 主标题保持列表一致的 TMDB 标题；豆瓣合并仅补充年份/简介等元数据，不再覆盖主标题
-        val title = current.displayTitle.takeIf { it.isNotBlank() }
-            ?: presentation.title ?: current.displayTitle
+        // 主标题保持列表一致的 TMDB 标题；豆瓣合并仅补充年份/简介等元数据，不再覆盖主标题。
+        // 纯豆瓣条目（tmdbId=0）没有 TMDB 标题可用，必须采纳豆瓣合并标题，
+        // 否则标题永远停在进入时的兜底值（本地快照标题 / 路由标题），豆瓣正式标题永不生效。
+        val title = if (currentTmdbId > 0) {
+            current.displayTitle.takeIf { it.isNotBlank() }
+                ?: presentation.title ?: current.displayTitle
+        } else {
+            presentation.title?.takeIf { it.isNotBlank() } ?: current.displayTitle
+        }
         val genres = presentation.genres.takeIf { it.isNotEmpty() }?.joinToString(" / ")
         val country = presentation.countries.takeIf { it.isNotEmpty() }?.joinToString(" / ")
         val runtime = presentation.runtime?.let { Regex("\\d+").find(it)?.value?.toIntOrNull() }
@@ -3134,6 +3164,152 @@ class DetailViewModel @Inject constructor(
         val country: String = "",
         val status: String = ""
     )
+
+    /** TMDB 富化结果 + 只在富化里才拿得到的附带字段（评分、系列 ID、IMDb ID）。 */
+    private data class PreparedEnrichment(
+        val data: EnrichmentData,
+        val rating: Double,
+        val collectionId: Int,
+        val imdbId: String?
+    )
+
+    /**
+     * 拉取 TMDB 富化结果。只依赖 tmdbId/标题/年份，与豆瓣补充、登录态、标记态互不依赖，
+     * 因此 loadDetail 里用 async 提前并发发起，海报和标题不必排在那些请求后面。
+     */
+    private suspend fun fetchEnrichment(
+        tmdbId: Int,
+        mediaType: MediaType,
+        title: String,
+        year: Int?
+    ): PreparedEnrichment? = runCatching {
+        when (mediaType) {
+            MediaType.MOVIE -> {
+                val e = tmdbRepository.enrichMovie(tmdbId, title, year)
+                PreparedEnrichment(
+                    data = EnrichmentData(
+                        e.chineseTitle, e.originalTitle, e.overview, e.genres, e.posterUrl,
+                        e.year, e.rating, e.runtime, e.releaseDate, e.country, e.status
+                    ),
+                    rating = e.rating,
+                    collectionId = e.collectionId ?: 0,
+                    imdbId = e.imdbId
+                )
+            }
+            MediaType.SHOW -> {
+                val e = tmdbRepository.enrichTv(tmdbId, title, year)
+                PreparedEnrichment(
+                    data = EnrichmentData(
+                        e.chineseTitle, e.originalTitle, e.overview, e.genres, e.posterUrl,
+                        e.year, e.rating, e.episodeRunTime, e.releaseDate, e.country, e.status
+                    ),
+                    rating = e.rating,
+                    collectionId = 0,
+                    imdbId = e.imdbId
+                )
+            }
+            MediaType.PERSON, MediaType.DISK -> null
+        }
+    }.getOrNull()
+
+    /**
+     * 首帧种子：只包含「TMDB 是最终来源」的字段。
+     *
+     * 刻意不含 year / overview / country / runtime —— 这几项的最终取值优先豆瓣
+     * （见 loadDetail 里的合并顺序），提前填 TMDB 值反而会造成二次跳变。
+     */
+    private data class DetailSeed(
+        val posterUrl: String?,
+        val displayTitle: String,
+        val originalTitle: String,
+        val genres: String,
+        val releaseDate: String,
+        val status: String
+    )
+
+    /**
+     * 同步 peek TMDB 内存缓存，拿到进入详情页第一帧就能显示的字段。
+     *
+     * 列表页渲染海报时已经调过 enrichMovie/enrichTv，所以从列表进入时基本必然命中；
+     * 命中即海报与标题零帧就位，共享元素转场也能立刻找到落点。
+     */
+    private fun peekDetailSeed(
+        tmdbId: Int,
+        mediaType: MediaType,
+        title: String,
+        year: Int?
+    ): DetailSeed? {
+        if (tmdbId <= 0) return null
+        return when (mediaType) {
+            MediaType.MOVIE -> tmdbRepository.peekMovieEnrichment(tmdbId, title, year)?.let {
+                buildSeed(it.posterUrl, it.chineseTitle, it.originalTitle, it.genres, it.releaseDate, it.status, title)
+            }
+            MediaType.SHOW -> tmdbRepository.peekTvEnrichment(tmdbId, title, year)?.let {
+                buildSeed(it.posterUrl, it.chineseTitle, it.originalTitle, it.genres, it.releaseDate, it.status, title)
+            }
+            MediaType.PERSON, MediaType.DISK -> null
+        }
+    }
+
+    /**
+     * 组装种子。原名的取舍与 loadDetail 里的完整逻辑保持一致：
+     * 与主标题相同或为空时视为「没有原名」，避免首帧把中文标题重复显示成原名。
+     */
+    private fun buildSeed(
+        posterUrl: String?,
+        chineseTitle: String,
+        originalTitle: String,
+        genres: String,
+        releaseDate: String,
+        status: String,
+        routeTitle: String
+    ): DetailSeed {
+        val displayTitle = chineseTitle.takeIf { it.isNotEmpty() } ?: routeTitle
+        return DetailSeed(
+            posterUrl = posterUrl,
+            displayTitle = displayTitle,
+            originalTitle = originalTitle.takeIf { it.isNotEmpty() && it != displayTitle }.orEmpty(),
+            genres = genres,
+            releaseDate = releaseDate,
+            status = status
+        )
+    }
+
+    /**
+     * 同步读取标记态；需要读库或读网络才能确定时返回 null，由调用方放到后台校正。
+     * 与 [resolveWatchStates] 的分支保持一致，只是去掉了所有会挂起的路径。
+     */
+    private fun peekWatchStates(traktId: Int, mediaType: MediaType): Pair<Boolean, Boolean>? {
+        // 豆瓣模式/纯豆瓣条目要查本地表，无法同步得到
+        if (currentSessionMode == SessionMode.DOUBAN || (traktId <= 0 && currentDoubanId != null)) return null
+        if (!sessionModeManager.traktConnected.value || traktId <= 0) return Pair(false, false)
+        return traktRepository.peekWatchStates(traktId, mediaType)
+    }
+
+    /**
+     * 应用标记态：能同步确定就立刻写入，否则保留调用方（列表卡片/路由参数）传入的值，
+     * 并在后台协程里等解析完成后校正，避免把首屏渲染压在一次想看/已看全量加载后面。
+     */
+    private fun applyWatchStates(cacheKey: DetailCacheKey, traktId: Int, mediaType: MediaType, imdbId: String) {
+        val peeked = peekWatchStates(traktId, mediaType)
+        if (peeked != null) {
+            _uiState.value = _uiState.value.copy(
+                isMarkedWatchlist = peeked.first,
+                isMarkedWatched = peeked.second
+            )
+            return
+        }
+        watchStateJob?.cancel()
+        watchStateJob = viewModelScope.launch {
+            val (inWatchlist, watched) = resolveWatchStates(traktId, mediaType, imdbId)
+            if (currentDetailCacheKey == cacheKey) {
+                _uiState.value = _uiState.value.copy(
+                    isMarkedWatchlist = inWatchlist,
+                    isMarkedWatched = watched
+                )
+            }
+        }
+    }
 
     /** 获取系列信息 */
     private fun fetchCollection(collectionId: Int) {

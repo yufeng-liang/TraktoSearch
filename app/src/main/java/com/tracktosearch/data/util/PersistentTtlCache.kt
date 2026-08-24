@@ -7,6 +7,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -15,6 +17,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 持久化 TTL 缓存：内存缓存（一级）+ DataStore（二级）。
@@ -97,22 +100,41 @@ class PersistentTtlCache<T>(
         loadedDeferred.await()
     }
 
+    /**
+     * 内存未命中时等磁盘加载完再查一次，仍未命中返回 null。
+     *
+     * 供只做 `get()` 判断的调用方替换使用：直接 `get()` 会在冷启动（内存空、磁盘有效）时
+     * 误判未命中而白发一次网络请求。
+     */
+    suspend fun getAfterLoad(key: String): T? {
+        get(key)?.let { return it }
+        awaitLoaded()
+        return get(key)
+    }
+
+    /**
+     * 覆写以补齐"内存未命中先等磁盘"这一步。
+     *
+     * 基类只查内存就走 fetch，冷启动时磁盘上仍有效的缓存会被整体跳过；
+     * 这里先等磁盘回填并复查，命中即返回，未命中才交给基类做飞行中去重 + fetch。
+     */
+    override suspend fun getOrAwait(key: String, skipCache: Boolean, fetch: suspend () -> T): T {
+        if (!skipCache) {
+            get(key)?.let { return it }
+            awaitLoaded()
+            get(key)?.let { return it }
+        }
+        // 已确认内存 + 磁盘都未命中，交给基类只做飞行中去重（不再重复查内存）
+        return super.getOrAwait(key, skipCache = true, fetch = fetch)
+    }
+
     /** 导入外部缓存时保留原始 expireAt，避免命中公共池后重新计算完整 TTL。 */
     fun putWithExpireAt(key: String, value: T, expireAt: Long) {
         if (expireAt != Long.MAX_VALUE && expireAt <= System.currentTimeMillis()) return
         withGenerationLock {
             markKeyWrittenDuringLoad(key)
             putInternal(key, value, expireAt)
-            val writeGeneration = currentGeneration()
-            scope.launch {
-                try {
-                    diskStore.write(CacheDiskWrite(key, value, expireAt)) {
-                        isCurrentGeneration(writeGeneration)
-                    }
-                } catch (e: CancellationException) { throw e } catch (_: Exception) {
-                    // 磁盘写入失败不影响内存缓存
-                }
-            }
+            schedulePersist(key, value, expireAt, currentGeneration())
         }
     }
 
@@ -120,18 +142,9 @@ class PersistentTtlCache<T>(
         withGenerationLock {
             markKeyWrittenDuringLoad(key)
             super.put(key, value)
-            val writeGeneration = currentGeneration()
-            // 异步写入磁盘，不阻塞内存写入返回
             val expireAt = getExpireAt(key) ?: return@withGenerationLock
-            scope.launch {
-                try {
-                    diskStore.write(CacheDiskWrite(key, value, expireAt)) {
-                        isCurrentGeneration(writeGeneration)
-                    }
-                } catch (e: CancellationException) { throw e } catch (e: Exception) {
-                    // 磁盘写入失败静默处理，不影响内存缓存
-                }
-            }
+            // 攒批异步落盘，不阻塞内存写入返回
+            schedulePersist(key, value, expireAt, currentGeneration())
         }
     }
 
@@ -218,8 +231,77 @@ class PersistentTtlCache<T>(
             synchronized(loadStateLock) {
                 if (activeLoadId != 0L) clearedDuringLoad = true
             }
+            // 待落盘条目属于旧代次，直接丢弃（drain 里的代次校验也会拦，这里顺带释放内存）
+            synchronized(pendingWriteLock) { pendingWrites.clear() }
             super.clear()
         }
+    }
+
+    // ========== 攒批落盘 ==========
+
+    /** 待落盘条目：同 key 多次写入按最后一次生效。 */
+    private class PendingDiskWrite<V>(val value: V, val expireAt: Long, val generation: Long)
+
+    private val pendingWrites = LinkedHashMap<String, PendingDiskWrite<T>>()
+    private val pendingWriteLock = Any()
+    private val persistSignal = Channel<Unit>(Channel.CONFLATED)
+    private val persistWorkerStarted = AtomicBoolean(false)
+
+    /**
+     * 登记一条待落盘数据并唤醒落盘协程。
+     *
+     * Preferences DataStore 每次 edit 都整份序列化并原子替换文件，逐 key 写会把
+     * 「一屏列表富化」放大成上百次全文件重写，把磁盘和 GC 都拖满。
+     * 这里先攒 [PERSIST_DEBOUNCE_MS]，再一次事务写完整批。
+     */
+    private fun schedulePersist(key: String, value: T, expireAt: Long, writeGeneration: Long) {
+        synchronized(pendingWriteLock) {
+            pendingWrites[key] = PendingDiskWrite(value, expireAt, writeGeneration)
+        }
+        startPersistWorkerIfNeeded()
+        persistSignal.trySend(Unit)
+    }
+
+    private fun startPersistWorkerIfNeeded() {
+        if (!persistWorkerStarted.compareAndSet(false, true)) return
+        scope.launch {
+            for (unused in persistSignal) {
+                // 攒批窗口：让同一批富化产生的多次写入合并成一次 DataStore 事务
+                delay(PERSIST_DEBOUNCE_MS)
+                drainPendingWrites()
+            }
+        }
+    }
+
+    private suspend fun drainPendingWrites() {
+        while (true) {
+            val batch = synchronized(pendingWriteLock) {
+                if (pendingWrites.isEmpty()) return
+                val snapshot = pendingWrites.toList()
+                pendingWrites.clear()
+                snapshot
+            }
+            val generations = batch.associate { (key, pending) -> key to pending.generation }
+            val writes = batch.map { (key, pending) ->
+                CacheDiskWrite(key, pending.value, pending.expireAt)
+            }
+            try {
+                // 代次校验在 transaction 内逐条执行：clear()/clearAll() 之后的旧代次数据不回写磁盘
+                diskStore.writeBatch(writes) { entry ->
+                    generations[entry.key]?.let { isCurrentGeneration(it) } == true
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // 磁盘写入失败静默处理，不影响内存缓存
+                Log.w("PersistentTtlCache", "batch write failed for prefix=$keyPrefix: ${e.message}")
+            }
+        }
+    }
+
+    private companion object {
+        /** 攒批窗口（毫秒）：足够合并一屏列表的富化写入，又不至于让缓存长时间只在内存里。 */
+        const val PERSIST_DEBOUNCE_MS = 400L
     }
 
     private fun beginDiskLoad(): Long = synchronized(loadStateLock) {

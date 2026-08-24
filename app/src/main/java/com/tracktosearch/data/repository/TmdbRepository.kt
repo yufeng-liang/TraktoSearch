@@ -45,9 +45,15 @@ class TmdbRepository @Inject constructor(
         private const val PERSON_CREDITS_PAGE_SIZE = 20      // 人物作品每页数量
     }
 
-    /** 根据当前语言设置返回 TMDB API 的 language 参数 */
-    private suspend fun getTmdbLanguage(): String {
-        val lang = languageStorage.language.first()
+    /**
+     * 根据当前语言设置返回 TMDB API 的 language 参数。
+     *
+     * language 是 StateFlow，读 value 与 first() 语义相同（都取当前值、不等待），
+     * 所以这里不需要挂起：非 suspend 让 [langKey] 也能同步调用，
+     * 详情页得以在组合期同步 peek 内存缓存（见 [peekMovieEnrichment]）。
+     */
+    private fun getTmdbLanguage(): String {
+        val lang = languageStorage.language.value
         return when (lang) {
             LanguageStorage.LANGUAGE_CHINESE -> "zh-CN"
             LanguageStorage.LANGUAGE_ENGLISH -> "en-US"
@@ -58,7 +64,7 @@ class TmdbRepository @Inject constructor(
     }
 
     /** 构造带语言后缀的缓存 key，避免切换语言后命中旧语言缓存 */
-    private suspend fun langKey(id: Any): String = "${id}_${getTmdbLanguage()}"
+    private fun langKey(id: Any): String = "${id}_${getTmdbLanguage()}"
 
     /**
      * TMDB 图片接口的 include_image_language 参数。
@@ -69,11 +75,11 @@ class TmdbRepository @Inject constructor(
      *
      * 返回值示例：zh-CN,null / en-US,null / ja-JP,null / ko-KR,null
      */
-    private suspend fun getTmdbImageLanguage(): String = "${getTmdbLanguage()},null"
+    private fun getTmdbImageLanguage(): String = "${getTmdbLanguage()},null"
 
     /** 根据当前语言设置返回 TMDB alternative_titles 的 country 参数 */
-    private suspend fun getTmdbCountry(): String {
-        val lang = languageStorage.language.first()
+    private fun getTmdbCountry(): String {
+        val lang = languageStorage.language.value
         return when (lang) {
             LanguageStorage.LANGUAGE_CHINESE -> "CN"
             LanguageStorage.LANGUAGE_ENGLISH -> "US"
@@ -218,29 +224,55 @@ class TmdbRepository @Inject constructor(
         val imdbId: String? = null
     )
 
+    /** 把已缓存的 TMDB 电影详情映射为富化结果（三处调用点共用：内存命中/磁盘命中/同步 peek）。 */
+    private fun buildMovieEnrichment(
+        detail: TmdbMovieDetail,
+        chineseTitle: String,
+        year: Int?
+    ): MovieEnrichment {
+        val tmdbLang = getTmdbLanguage()
+        return MovieEnrichment(
+            posterUrl = detail.poster_path?.let { "$IMAGE_BASE_URL$it" },
+            chineseTitle = chineseTitle,
+            originalTitle = detail.original_title,
+            overview = detail.overview,
+            genres = detail.genres.joinToString(" · ") { it.name },
+            year = detail.release_date.take(4).toIntOrNull() ?: year,
+            rating = detail.vote_average,
+            runtime = detail.runtime,
+            releaseDate = detail.release_date,
+            country = detail.production_countries.map { codeToCountryName(it.iso_3166_1, tmdbLang) }.joinToString(" · "),
+            status = detail.status,
+            collectionId = detail.belongs_to_collection?.id,
+            imdbId = detail.imdb_id
+        )
+    }
+
+    /**
+     * 同步读取内存缓存里的电影富化结果，未命中返回 null。
+     *
+     * 不挂起、不读盘、不发网络：详情页用它在首帧就填好海报与标题，
+     * 避免「先空白再弹入」以及共享元素转场找不到落点。
+     * 中文标题优先用详情自带的本地化 title，其次别名缓存，最后退回调用方标题。
+     */
+    fun peekMovieEnrichment(tmdbId: Int, originalTitle: String, year: Int? = null): MovieEnrichment? {
+        if (tmdbId <= 0) return null
+        val key = langKey(tmdbId)
+        val detail = movieDetailCache.get(key) ?: return null
+        val chineseTitle = detail.title.takeIf { it.isNotEmpty() }
+            ?: movieTitleCache.get(key)
+            ?: originalTitle
+        return buildMovieEnrichment(detail, chineseTitle, year)
+    }
+
     suspend fun enrichMovie(tmdbId: Int, originalTitle: String, year: Int?): MovieEnrichment {
         val key = langKey(tmdbId)
-        val tmdbLang = getTmdbLanguage()
         val cached = movieDetailCache.get(key)
         if (cached != null) {
             val chineseTitle = movieTitleCache.getOrPut(key) {
                 resolveMovieChineseTitle(tmdbId, originalTitle, cached)
             }
-            return MovieEnrichment(
-                posterUrl = cached.poster_path?.let { "$IMAGE_BASE_URL$it" },
-                chineseTitle = chineseTitle,
-                originalTitle = cached.original_title,
-                overview = cached.overview,
-                genres = cached.genres.joinToString(" · ") { it.name },
-                year = cached.release_date.take(4).toIntOrNull() ?: year,
-                rating = cached.vote_average,
-                runtime = cached.runtime,
-                releaseDate = cached.release_date,
-                country = cached.production_countries.map { codeToCountryName(it.iso_3166_1, tmdbLang) }.joinToString(" · "),
-                status = cached.status,
-                collectionId = cached.belongs_to_collection?.id,
-                imdbId = cached.imdb_id
-            )
+            return buildMovieEnrichment(cached, chineseTitle, year)
         }
         // 内存未命中：等待磁盘加载完成后再查一次，避免 loadFromDisk 未完成时误判为缓存未命中
         movieDetailCache.awaitLoaded()
@@ -249,45 +281,17 @@ class TmdbRepository @Inject constructor(
             val chineseTitle = movieTitleCache.getOrPut(key) {
                 resolveMovieChineseTitle(tmdbId, originalTitle, cachedAfterLoad)
             }
-            return MovieEnrichment(
-                posterUrl = cachedAfterLoad.poster_path?.let { "$IMAGE_BASE_URL$it" },
-                chineseTitle = chineseTitle,
-                originalTitle = cachedAfterLoad.original_title,
-                overview = cachedAfterLoad.overview,
-                genres = cachedAfterLoad.genres.joinToString(" · ") { it.name },
-                year = cachedAfterLoad.release_date.take(4).toIntOrNull() ?: year,
-                rating = cachedAfterLoad.vote_average,
-                runtime = cachedAfterLoad.runtime,
-                releaseDate = cachedAfterLoad.release_date,
-                country = cachedAfterLoad.production_countries.map { codeToCountryName(it.iso_3166_1, tmdbLang) }.joinToString(" · "),
-                status = cachedAfterLoad.status,
-                collectionId = cachedAfterLoad.belongs_to_collection?.id,
-                imdbId = cachedAfterLoad.imdb_id
-            )
+            return buildMovieEnrichment(cachedAfterLoad, chineseTitle, year)
         }
 
         return try {
-            val response = tmdbApiService.getMovieDetail(tmdbId, language = tmdbLang)
+            val response = tmdbApiService.getMovieDetail(tmdbId, language = getTmdbLanguage())
             if (response.isSuccessful) {
                 val detail = response.body() ?: return fallbackMovie(originalTitle, year)
                 movieDetailCache.put(key, detail)
                 val chineseTitle = resolveMovieChineseTitle(tmdbId, originalTitle, detail)
                 movieTitleCache.put(key, chineseTitle)
-                MovieEnrichment(
-                    posterUrl = detail.poster_path?.let { "$IMAGE_BASE_URL$it" },
-                    chineseTitle = chineseTitle,
-                    originalTitle = detail.original_title,
-                    overview = detail.overview,
-                    genres = detail.genres.joinToString(" · ") { it.name },
-                    year = detail.release_date.take(4).toIntOrNull() ?: year,
-                    rating = detail.vote_average,
-                    runtime = detail.runtime,
-                    releaseDate = detail.release_date,
-                    country = detail.production_countries.map { codeToCountryName(it.iso_3166_1, tmdbLang) }.joinToString(" · "),
-                    status = detail.status,
-                    collectionId = detail.belongs_to_collection?.id,
-                    imdbId = detail.imdb_id
-                )
+                buildMovieEnrichment(detail, chineseTitle, year)
             } else {
                 fallbackMovie(originalTitle, year)
             }
@@ -299,28 +303,48 @@ class TmdbRepository @Inject constructor(
         }
     }
 
+    /** 把已缓存的 TMDB 剧集详情映射为富化结果（三处调用点共用：内存命中/磁盘命中/同步 peek）。 */
+    private fun buildTvEnrichment(
+        detail: TmdbTvDetail,
+        chineseTitle: String,
+        year: Int?
+    ): TvEnrichment {
+        val tmdbLang = getTmdbLanguage()
+        return TvEnrichment(
+            posterUrl = detail.poster_path?.let { "$IMAGE_BASE_URL$it" },
+            chineseTitle = chineseTitle,
+            originalTitle = detail.original_name,
+            overview = detail.overview,
+            genres = detail.genres.joinToString(" · ") { it.name },
+            year = detail.first_air_date.take(4).toIntOrNull() ?: year,
+            rating = detail.vote_average,
+            episodeRunTime = detail.episode_run_time?.firstOrNull(),
+            releaseDate = detail.first_air_date,
+            country = detail.origin_country.map { codeToCountryName(it, tmdbLang) }.joinToString(" · "),
+            status = detail.status,
+            imdbId = detail.imdb_id
+        )
+    }
+
+    /** 同步读取内存缓存里的剧集富化结果，未命中返回 null。语义同 [peekMovieEnrichment]。 */
+    fun peekTvEnrichment(tmdbId: Int, originalName: String, year: Int? = null): TvEnrichment? {
+        if (tmdbId <= 0) return null
+        val key = langKey(tmdbId)
+        val detail = tvDetailCache.get(key) ?: return null
+        val chineseTitle = detail.name.takeIf { it.isNotEmpty() }
+            ?: tvTitleCache.get(key)
+            ?: originalName
+        return buildTvEnrichment(detail, chineseTitle, year)
+    }
+
     suspend fun enrichTv(tmdbId: Int, originalName: String, year: Int?): TvEnrichment {
         val key = langKey(tmdbId)
-        val tmdbLang = getTmdbLanguage()
         val cached = tvDetailCache.get(key)
         if (cached != null) {
             val chineseTitle = tvTitleCache.getOrPut(key) {
                 resolveTvChineseTitle(tmdbId, originalName, cached)
             }
-            return TvEnrichment(
-                posterUrl = cached.poster_path?.let { "$IMAGE_BASE_URL$it" },
-                chineseTitle = chineseTitle,
-                originalTitle = cached.original_name,
-                overview = cached.overview,
-                genres = cached.genres.joinToString(" · ") { it.name },
-                year = cached.first_air_date.take(4).toIntOrNull() ?: year,
-                rating = cached.vote_average,
-                episodeRunTime = cached.episode_run_time?.firstOrNull(),
-                releaseDate = cached.first_air_date,
-                country = cached.origin_country.map { codeToCountryName(it, tmdbLang) }.joinToString(" · "),
-                status = cached.status,
-                imdbId = cached.imdb_id
-            )
+            return buildTvEnrichment(cached, chineseTitle, year)
         }
         // 内存未命中：等待磁盘加载完成后再查一次，避免 loadFromDisk 未完成时误判为缓存未命中
         tvDetailCache.awaitLoaded()
@@ -329,43 +353,17 @@ class TmdbRepository @Inject constructor(
             val chineseTitle = tvTitleCache.getOrPut(key) {
                 resolveTvChineseTitle(tmdbId, originalName, cachedAfterLoad)
             }
-            return TvEnrichment(
-                posterUrl = cachedAfterLoad.poster_path?.let { "$IMAGE_BASE_URL$it" },
-                chineseTitle = chineseTitle,
-                originalTitle = cachedAfterLoad.original_name,
-                overview = cachedAfterLoad.overview,
-                genres = cachedAfterLoad.genres.joinToString(" · ") { it.name },
-                year = cachedAfterLoad.first_air_date.take(4).toIntOrNull() ?: year,
-                rating = cachedAfterLoad.vote_average,
-                episodeRunTime = cachedAfterLoad.episode_run_time?.firstOrNull(),
-                releaseDate = cachedAfterLoad.first_air_date,
-                country = cachedAfterLoad.origin_country.map { codeToCountryName(it, tmdbLang) }.joinToString(" · "),
-                status = cachedAfterLoad.status,
-                imdbId = cachedAfterLoad.imdb_id
-            )
+            return buildTvEnrichment(cachedAfterLoad, chineseTitle, year)
         }
 
         return try {
-            val response = tmdbApiService.getTvDetail(tmdbId, language = tmdbLang)
+            val response = tmdbApiService.getTvDetail(tmdbId, language = getTmdbLanguage())
             if (response.isSuccessful) {
                 val detail = response.body() ?: return fallbackTv(originalName, year)
                 tvDetailCache.put(key, detail)
                 val chineseTitle = resolveTvChineseTitle(tmdbId, originalName, detail)
                 tvTitleCache.put(key, chineseTitle)
-                TvEnrichment(
-                    posterUrl = detail.poster_path?.let { "$IMAGE_BASE_URL$it" },
-                    chineseTitle = chineseTitle,
-                    originalTitle = detail.original_name,
-                    overview = detail.overview,
-                    genres = detail.genres.joinToString(" · ") { it.name },
-                    year = detail.first_air_date.take(4).toIntOrNull() ?: year,
-                    rating = detail.vote_average,
-                    episodeRunTime = detail.episode_run_time?.firstOrNull(),
-                    releaseDate = detail.first_air_date,
-                    country = detail.origin_country.map { codeToCountryName(it, tmdbLang) }.joinToString(" · "),
-                    status = detail.status,
-                    imdbId = detail.imdb_id
-                )
+                buildTvEnrichment(detail, chineseTitle, year)
             } else {
                 fallbackTv(originalName, year)
             }
@@ -499,6 +497,17 @@ class TmdbRepository @Inject constructor(
         }
     }
 
+    /**
+     * 同步读取内存缓存里的人物详情，未命中返回 null。
+     *
+     * 不挂起、不读盘、不发网络：人物页用它在首帧就把姓名、简介、生日、出生地填好，
+     * 二次进入同一人物时不再先显示骨架屏再整块弹入。语义同 [peekMovieEnrichment]。
+     */
+    fun peekPersonDetail(personId: Int): TmdbPerson? {
+        if (personId <= 0) return null
+        return personDetailCache.get(langKey(personId))
+    }
+
     suspend fun getPersonDetail(personId: Int): TmdbPerson? {
         val key = langKey(personId)
         return personDetailCache.getOrAwait(key) {
@@ -515,12 +524,11 @@ class TmdbRepository @Inject constructor(
 
     suspend fun getPersonMovieCredits(personId: Int, page: Int = 1): PersonCreditsPage<TmdbPersonMovieCredit> {
         val key = langKey(personId)
+        // getOrAwait 而非 get + 手动 fetch：同一人物的并发请求（例如快速返回再进入）合并成一次
         val full = try {
-            personMovieCreditsCache.get(key) ?: run {
+            personMovieCreditsCache.getOrAwait(key) {
                 val response = tmdbApiService.getPersonMovieCredits(personId, language = getTmdbLanguage(), page = 1)
-                val result = response.body()?.cast?.sortedByDescending { it.vote_average } ?: emptyList()
-                personMovieCreditsCache.put(key, result)
-                result
+                response.body()?.cast?.sortedByDescending { it.vote_average } ?: emptyList()
             }
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
             emptyList()
@@ -534,11 +542,9 @@ class TmdbRepository @Inject constructor(
     suspend fun getPersonTvCredits(personId: Int, page: Int = 1): PersonCreditsPage<TmdbPersonTvCredit> {
         val key = langKey(personId)
         val full = try {
-            personTvCreditsCache.get(key) ?: run {
+            personTvCreditsCache.getOrAwait(key) {
                 val response = tmdbApiService.getPersonTvCredits(personId, language = getTmdbLanguage(), page = 1)
-                val result = response.body()?.cast?.sortedByDescending { it.vote_average } ?: emptyList()
-                personTvCreditsCache.put(key, result)
-                result
+                response.body()?.cast?.sortedByDescending { it.vote_average } ?: emptyList()
             }
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
             emptyList()

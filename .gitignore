@@ -46,6 +46,10 @@ icon.png
 backup.kt
 .claude/worktrees/
 
+# JVM 崩溃与 JIT 回放日志（Gradle / 模拟器进程崩溃时落在任意目录）
+hs_err_pid*.log
+replay_pid*.log
+
 # Local directories (not tracked in git)
 docs/
 .superpowers/

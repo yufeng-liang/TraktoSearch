@@ -151,10 +151,10 @@ import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
 import com.tracktosearch.ui.screen.ai.AiSpriteCenter
+import com.tracktosearch.ui.screen.ai.AiSpriteCenterEntryButton
 import com.tracktosearch.ui.screen.ai.AiSpriteInterruptReason
 import com.tracktosearch.ui.screen.ai.AiSpriteInterruptRequest
 import com.tracktosearch.ui.screen.ai.AiSpriteMotion
-import com.tracktosearch.ui.screen.ai.AiSpriteOverlayPolicy
 import com.tracktosearch.ui.screen.ai.AiSpriteOverlayTrigger
 import com.tracktosearch.ui.screen.ai.AiSpriteViewModel
 import com.tracktosearch.ui.screen.ai.AiSceneEvent
@@ -162,9 +162,12 @@ import com.tracktosearch.ui.screen.ai.automaticSpriteArt
 import com.tracktosearch.ui.screen.ai.sceneArtFor
 import com.tracktosearch.ui.screen.ai.sceneEventForSearch
 import com.tracktosearch.ui.screen.ai.searchAnchorFor
+import com.tracktosearch.ui.screen.ai.shouldStartSpriteOverlay
+import com.tracktosearch.ui.screen.ai.AI_SPRITE_IDLE_DELAY_MS
+import com.tracktosearch.ui.screen.ai.rememberSharedAiSpriteViewModel
 import dagger.hilt.android.EntryPointAccessors
 import dev.chrisbanes.haze.HazeInput
-import dev.chrisbanes.haze.HazeSampling
+import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.hazeSource
@@ -191,7 +194,7 @@ fun TraktSearchScreen(
     onRecommendationClick: ((AiRecommendation) -> Unit)? = null,
     inlineMode: Boolean = false,
     viewModel: TraktSearchViewModel = hiltViewModel(),
-    spriteViewModel: AiSpriteViewModel = hiltViewModel(),
+    spriteViewModel: AiSpriteViewModel = rememberSharedAiSpriteViewModel(),
     externallyControlledAiSpriteCenterVisible: Boolean? = null,
     onAiSpriteCenterVisibilityChanged: (Boolean) -> Unit = {}
 ) {
@@ -231,24 +234,6 @@ fun TraktSearchScreen(
     var firstResultBounds by remember { mutableStateOf<Rect?>(null) }
     var firstResultAnchorKey by remember { mutableStateOf<String?>(null) }
     var lastInteractionAt by remember { mutableStateOf(System.currentTimeMillis()) }
-    val overlayPreferences = remember(context.applicationContext) {
-        context.applicationContext.getSharedPreferences("ai_sprite_overlay_quota_v1", android.content.Context.MODE_PRIVATE)
-    }
-    val overlayPolicy = remember(overlayPreferences) {
-        AiSpriteOverlayPolicy(
-            readDailyCount = { dayKey ->
-                if (overlayPreferences.getString("day_key", null) == dayKey) {
-                    overlayPreferences.getInt("daily_count", 0)
-                } else 0
-            },
-            writeDailyCount = { dayKey, count ->
-                overlayPreferences.edit()
-                    .putString("day_key", dayKey)
-                    .putInt("daily_count", count)
-                    .apply()
-            }
-        )
-    }
     var overlayDayKey by remember {
         mutableStateOf(java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(java.util.Date()))
     }
@@ -303,6 +288,8 @@ fun TraktSearchScreen(
         } else {
             uiState.currentTabState.results.isNotEmpty()
         }
+        // 阻塞条件与主搜索页对齐：原来漏了「有查询词」和「锚点还没量到」，
+        // 后者会在 anchorBounds 还是 null 时白消费一次展示额度，用户什么都看不到
         val blocked = showAiSpriteCenter || isLoading || isSearchFocused
         val trigger = com.tracktosearch.ui.screen.ai.nextAiSpriteOverlayTrigger(
             entryHandled = overlayEntryHandled,
@@ -311,21 +298,31 @@ fun TraktSearchScreen(
             hasResults = hasResults,
             isSearchFocused = isSearchFocused,
             searchQuery = searchQuery,
-            activated = spriteState.activatedCharacterId?.let { automaticSpriteArt(it) != null } == true,
+            activated = spriteViewModel.isSpriteActivatedForMotion(),
             nowMs = System.currentTimeMillis(),
             idleForMs = System.currentTimeMillis() - lastInteractionAt,
-            hasBlockingOverlay = blocked
+            hasBlockingOverlay = blocked || searchQuery.isNotBlank()
         )
-            if (trigger != null && !blocked && !showAiSpriteMotion) {
+        if (trigger != null &&
+            shouldStartSpriteOverlay(
+                trigger = trigger,
+                hasBlockingState = if (trigger == AiSpriteOverlayTrigger.SEARCH_COMPLETED) {
+                    blocked
+                } else {
+                    blocked || searchQuery.isNotBlank()
+                },
+                hasAnchorBounds = searchBoxBounds != null,
+                hasResultAnchor = currentFirstResultBounds != null,
+                motionVisible = showAiSpriteMotion
+            )
+        ) {
             if (trigger == AiSpriteOverlayTrigger.FIRST_ENTRY) overlayEntryHandled = true
             activeSpriteAnchor = searchAnchorFor(
                 trigger,
                 hasResultAnchor = currentFirstResultBounds != null
             )
             activeSceneEvent = sceneEventForSearch(trigger)
-            if ((trigger != AiSpriteOverlayTrigger.SEARCH_COMPLETED || currentFirstResultBounds != null) &&
-                overlayPolicy.tryConsume(true, trigger, overlayDayKey)
-            ) {
+            if (spriteViewModel.tryConsumeOverlay(trigger, overlayDayKey)) {
                 showAiSpriteMotion = true
             }
         }
@@ -338,12 +335,15 @@ fun TraktSearchScreen(
         } else {
             uiState.currentTabState.isLoading
         }
-        if (spriteState.activatedCharacterId?.let { automaticSpriteArt(it) != null } == true &&
+        if (spriteViewModel.isSpriteActivatedForMotion() &&
             !isLoading && searchQuery.isBlank() && !isSearchFocused && !showAiSpriteMotion && !showAiSpriteCenter
         ) {
-            kotlinx.coroutines.delay(8_000L)
-            if (System.currentTimeMillis() - lastInteractionAt >= 8_000L &&
-                overlayPolicy.tryConsume(true, AiSpriteOverlayTrigger.IDLE, overlayDayKey)
+            kotlinx.coroutines.delay(AI_SPRITE_IDLE_DELAY_MS)
+            // 锚点还没量到就别消费额度，否则用户什么都看不到但额度掉一格
+            if (System.currentTimeMillis() - lastInteractionAt >= AI_SPRITE_IDLE_DELAY_MS &&
+                searchBoxBounds != null &&
+                !showAiSpriteMotion &&
+                spriteViewModel.tryConsumeOverlay(AiSpriteOverlayTrigger.IDLE, overlayDayKey)
             ) {
                 activeSpriteAnchor = AiSpriteAnchor.SearchBox
                 activeSceneEvent = sceneEventForSearch(AiSpriteOverlayTrigger.IDLE)
@@ -829,6 +829,15 @@ fun TraktSearchScreen(
                             }
                         )
                     }
+                    // 这一页原来完全没有精灵中心入口：只能点自动探头，而探头要求已激活，
+                    // 未激活的用户在这一页永远打不开精灵中心
+                    AiSpriteCenterEntryButton(
+                        activatedCharacter = spriteState.activatedCharacter,
+                        onClick = {
+                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                            setAiSpriteCenterVisible(true)
+                        }
+                    )
                 }
 
                 // Tab 栏
@@ -939,7 +948,7 @@ fun TraktSearchScreen(
                             glassShape = RoundedCornerShape(50),
                             glassTint = hazeSurface.copy(alpha = 0.6f),
                             scene = traktSearchGlassScene,
-                            blurSampling = HazeSampling.Adaptive,
+                            blurPerformanceMode = HazePerformanceMode.Adaptive,
                             interactionSource = interactionSource
                         )
                         .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), CircleShape)

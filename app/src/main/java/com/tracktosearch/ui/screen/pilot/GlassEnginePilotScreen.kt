@@ -85,7 +85,7 @@ import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import dev.chrisbanes.haze.HazeInput
-import dev.chrisbanes.haze.HazeSampling
+import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
@@ -723,7 +723,7 @@ private fun PilotGlassCard(
                             .hazeBlur(
                                 input = HazeInput.Sources(hazeState, selection = HazeSourceSelection.Behind),
                                 style = rememberHazeBlurStyle(hazeParams),
-                                sampling = HazeSampling.Adaptive
+                                performanceMode = HazePerformanceMode.Adaptive
                             )
                     ) {
                         PilotSurfaceLabel("Haze·BLUR")
@@ -788,7 +788,7 @@ private fun PilotGlassButton(
                         .hazeBlur(
                             input = HazeInput.Sources(hazeState, selection = HazeSourceSelection.Behind),
                             style = rememberHazeBlurStyle(hazeParams),
-                            sampling = HazeSampling.Adaptive
+                            performanceMode = HazePerformanceMode.Adaptive
                         )
                         .clickable(onClick = onClick),
                     contentAlignment = Alignment.Center
@@ -870,7 +870,7 @@ private fun PilotGlassBottomBar(
                             .hazeBlur(
                                 input = HazeInput.Sources(hazeState, selection = HazeSourceSelection.Behind),
                                 style = rememberHazeBlurStyle(hazeParams),
-                                sampling = HazeSampling.Adaptive
+                                performanceMode = HazePerformanceMode.Adaptive
                             )
                     ) {
                         PilotBottomBarContent(icons, selectedIndex, { selectedIndex = it })

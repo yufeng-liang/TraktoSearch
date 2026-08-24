@@ -18,7 +18,6 @@ import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.HiltTestActivity
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CooldownStatus
-import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.DoubanUserProfile
 import com.tracktosearch.data.remote.panhub.PanHubConfig
 import com.tracktosearch.data.remote.trakt.dto.TraktUserProfileResponse
@@ -401,8 +400,6 @@ class SettingsScreenTest {
         every { mock.pansouEnabled } returns MutableStateFlow(pansouEnabled)
         every { mock.panhubEnabled } returns MutableStateFlow(false)
         every { mock.zresoEnabled } returns MutableStateFlow(false)
-        every { mock.customSources } returns MutableStateFlow(emptyList<CustomSearchSource>())
-        every { mock.testResults } returns MutableStateFlow(emptyMap())
         every { mock.panHubConfig } returns MutableStateFlow(PanHubConfig())
         every { mock.notificationEnabled } returns MutableStateFlow(notificationEnabled)
         every { mock.releaseReminderEnabled } returns MutableStateFlow(false)

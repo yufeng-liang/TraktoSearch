@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.LinearProgressIndicator
@@ -24,7 +25,12 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
@@ -64,6 +70,7 @@ fun AiQuizScreen(
         QuizPreviewScreen(
             movies = state.quizPreviewMovies,
             replacementCount = state.quizReplacementCount,
+            replaceAvailable = state.quizReplaceAvailable,
             isLoading = state.isLoading,
             onReplace = viewModel::replaceQuizMovie,
             onStart = viewModel::startQuiz
@@ -81,6 +88,8 @@ fun AiQuizScreen(
     val question = quiz.questions[questionIndex]
     val answer = state.quizAnswers[question.id]
     val progress = quizProgress(questionIndex + 1, quiz.questions.size)
+    val unanswered = unansweredQuizCount(quiz, state.quizAnswers)
+    var unansweredConfirmVisible by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -103,9 +112,21 @@ fun AiQuizScreen(
             }
         }
         item {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                LinearProgressIndicator(progress = { progress }, modifier = Modifier.weight(1f))
-                Text(stringResource(R.string.ai_quiz_progress, questionIndex + 1, quiz.questions.size), style = MaterialTheme.typography.labelMedium)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    LinearProgressIndicator(progress = { progress }, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.ai_quiz_progress, questionIndex + 1, quiz.questions.size), style = MaterialTheme.typography.labelMedium)
+                }
+                // 已答数常驻，用户能看出自己漏了几题，不用翻回去数
+                Text(
+                    stringResource(
+                        R.string.ai_quiz_answered_count,
+                        quiz.questions.size - unanswered,
+                        quiz.questions.size
+                    ),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
         item {
@@ -133,7 +154,10 @@ fun AiQuizScreen(
                 }
                 if (questionIndex == quiz.questions.lastIndex) {
                     Button(
-                        onClick = viewModel::submitQuiz,
+                        onClick = {
+                            // 有漏题先提醒：未作答直接算 0 分，提交后没有回头路
+                            if (unanswered > 0) unansweredConfirmVisible = true else viewModel.submitQuiz()
+                        },
                         enabled = !state.isLoading,
                         modifier = Modifier.weight(1f)
                     ) {
@@ -151,12 +175,35 @@ fun AiQuizScreen(
         }
         item { Spacer(Modifier.height(8.dp)) }
     }
+
+    if (unansweredConfirmVisible) {
+        AlertDialog(
+            onDismissRequest = { unansweredConfirmVisible = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            title = { Text(stringResource(R.string.ai_quiz_unanswered_title)) },
+            text = { Text(stringResource(R.string.ai_quiz_unanswered_message, unanswered)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    unansweredConfirmVisible = false
+                    viewModel.submitQuiz()
+                }) {
+                    Text(stringResource(R.string.ai_quiz_submit_anyway))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { unansweredConfirmVisible = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            }
+        )
+    }
 }
 
 @Composable
 private fun QuizPreviewScreen(
     movies: List<AiWatchedTitleDto>,
     replacementCount: Int,
+    replaceAvailable: Boolean,
     isLoading: Boolean,
     onReplace: (Int) -> Unit,
     onStart: () -> Unit
@@ -212,7 +259,8 @@ private fun QuizPreviewScreen(
                     }
                     OutlinedButton(
                         onClick = { onReplace(index) },
-                        enabled = replacementCount < 2 && !isLoading
+                        // 候选被用光（已看正好 7 部）时必须禁用，否则是个点了没反应的死按钮
+                        enabled = replaceAvailable && !isLoading
                     ) {
                         Text(stringResource(R.string.ai_quiz_replace))
                     }
@@ -221,7 +269,11 @@ private fun QuizPreviewScreen(
         }
         item {
             Text(
-                stringResource(R.string.ai_quiz_replace_remaining, (2 - replacementCount).coerceAtLeast(0)),
+                if (!replaceAvailable && remainingQuizReplacements(replacementCount) > 0) {
+                    stringResource(R.string.ai_quiz_replace_exhausted)
+                } else {
+                    stringResource(R.string.ai_quiz_replace_remaining, remainingQuizReplacements(replacementCount))
+                },
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -403,15 +455,23 @@ private fun QuizResultScreen(
                 color = if (item.correct) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.errorContainer
             ) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    // 错题卡底色是 errorContainer，文字必须用 onErrorContainer；
+                    // 之前用 error / primary 压在 errorContainer 上既对比度低又撞色
+                    val labelColor = if (item.correct) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onErrorContainer
+                    }
                     Text(
                         text = stringResource(R.string.ai_quiz_question_score, item.score),
                         style = MaterialTheme.typography.labelLarge,
-                        color = if (item.correct) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        fontWeight = FontWeight.Bold,
+                        color = labelColor
                     )
                     Text(
                         stringResource(R.string.ai_quiz_answer_review),
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
+                        color = labelColor
                     )
                     correctAnswerText?.let { text ->
                         Text(

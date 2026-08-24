@@ -285,11 +285,9 @@ fun HelpScreen(
                         HelpBullet(stringResource(R.string.help_tips_b3))
                         HelpBullet(stringResource(R.string.help_tips_b4))
                         HelpBullet(stringResource(R.string.help_tips_b5))
-                        HelpBullet(stringResource(R.string.help_tips_b6))
                         HelpBullet(stringResource(R.string.help_tips_b7))
                         HelpBullet(stringResource(R.string.help_tips_b8))
                         HelpBullet(stringResource(R.string.help_tips_b9))
-                        HelpBullet(stringResource(R.string.help_tips_b10))
                         HelpBullet(stringResource(R.string.help_tips_b11))
                         HelpBullet(stringResource(R.string.help_tips_b12))
                     }
@@ -345,20 +343,8 @@ fun HelpScreen(
                         HelpBullet(stringResource(R.string.help_ai_sprite_b4))
                         HelpBullet(stringResource(R.string.help_ai_sprite_b5))
                         HelpBullet(stringResource(R.string.help_ai_sprite_b6))
+                        HelpBullet(stringResource(R.string.help_ai_sprite_b7))
                         HelpBullet(stringResource(R.string.ai_sprite_long_press_hint))
-                    }
-                }
-
-                // 天气数据说明
-                item {
-                    HelpSection(
-                        title = stringResource(R.string.help_weather_data),
-                        isExpanded = expandedIndex == 14,
-                        onToggle = { expandedIndex = if (expandedIndex == 14) -1 else 14 }
-                    ) {
-                        HelpBullet(stringResource(R.string.help_weather_data_b1))
-                        HelpBullet(stringResource(R.string.help_weather_data_b2))
-                        HelpBullet(stringResource(R.string.help_weather_data_b3))
                     }
                 }
             }

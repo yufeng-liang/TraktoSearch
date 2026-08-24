@@ -48,6 +48,19 @@ class OfflineCacheManager @Inject constructor(
         mediaItemDao.deleteItem(type, traktId)
     }
 
+    /**
+     * 清除想看/已看列表快照（切换 Trakt 账号时调用）。
+     *
+     * 这些行按设备存储、不带账号标识，Watchlist 页会用它们兜首帧渲染，
+     * 切号后不清理会在下次冷启动闪出上一个账号的列表。详情缓存与豆瓣本地数据不受影响。
+     */
+    suspend fun clearWatchlistSnapshots() {
+        mediaItemDao.deleteByType(TYPE_WATCHLIST_MOVIE)
+        mediaItemDao.deleteByType(TYPE_WATCHLIST_SHOW)
+        mediaItemDao.deleteByType(TYPE_HISTORY_MOVIE)
+        mediaItemDao.deleteByType(TYPE_HISTORY_SHOW)
+    }
+
     // ========== 详情页 ==========
 
     suspend fun saveMediaDetail(detail: MediaDetailEntity) {

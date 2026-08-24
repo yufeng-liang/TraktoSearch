@@ -52,7 +52,8 @@ class TraktRepositoryCacheTest {
 
         repository = TraktRepository(
             traktApiService, userProfileStorage, markActionRecordDao,
-            tmdbRepository, mockk(relaxed = true), Json { ignoreUnknownKeys = true }, context
+            tmdbRepository, mockk(relaxed = true), Json { ignoreUnknownKeys = true },
+            mockk(relaxed = true), context
         )
     }
 

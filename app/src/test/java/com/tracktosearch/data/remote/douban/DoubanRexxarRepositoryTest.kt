@@ -1,5 +1,7 @@
 package com.tracktosearch.data.remote.douban
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.google.common.truth.Truth.assertThat
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -23,6 +25,9 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
@@ -404,9 +409,10 @@ class DoubanRexxarRepositoryTest {
         coVerify(exactly = 1) {
             publicPool.getComments("public-comments", DoubanRexxarMediaType.MOVIE, 0, 20)
         }
-        Thread.sleep(100)
-        val preferences = context.rexxarTestDataStore.data.first()
-        val expireAt = preferences[longPreferencesKey("$prefix:movie:public-comments:0:20:exp")]
+        val expireAt = awaitPersistedLong(
+            context.rexxarTestDataStore,
+            "$prefix:movie:public-comments:0:20:exp"
+        )
         assertThat(expireAt).isNotNull()
         assertThat(expireAt!!).isAtMost(fetchedAt + commentsTtlMillis + 1_000L)
     }
@@ -646,6 +652,27 @@ class DoubanRexxarRepositoryTest {
         }
 
         assertThat(thrown).isNotNull()
+    }
+
+    /**
+     * 等落盘完成后读回 Long 值。
+     *
+     * PersistentTtlCache 的写盘是异步攒批，窗口大小属于实现细节；固定 sleep 会把用例
+     * 绑死在某个具体窗口值上（攒批窗口从 0 改成 400ms 就会失败）。这里轮询到 key 出现
+     * 即返回，超时返回 null 交给断言报错。
+     */
+    private suspend fun awaitPersistedLong(
+        dataStore: DataStore<Preferences>,
+        key: String,
+        timeoutMillis: Long = 5_000L
+    ): Long? = withContext(Dispatchers.IO) {
+        val deadline = System.currentTimeMillis() + timeoutMillis
+        var value: Long? = null
+        while (value == null && System.currentTimeMillis() < deadline) {
+            value = dataStore.data.first()[longPreferencesKey(key)]
+            if (value == null) delay(20)
+        }
+        value
     }
 
     private fun createRepository(

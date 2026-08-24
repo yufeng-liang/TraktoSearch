@@ -61,6 +61,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.tracktosearch.ui.navigation.DetailSeedStore
 import java.util.concurrent.atomic.AtomicReference
 
 @EntryPoint
@@ -164,10 +165,13 @@ fun MovieCard(
 
     // 包装点击回调:点击时记录当前海报为活跃状态,并获取新的 token
     // remember 包裹避免每次重组创建新 lambda 实例,减少不必要 recomposition
-    val wrappedOnClick = remember(onClick, tmdbId) {
+    val wrappedOnClick = remember(onClick, tmdbId, posterUrl, year) {
         {
             if (tmdbId > 0) {
                 myClickToken = setActivePosterTmdbId(tmdbId)
+                // 把卡片已渲染的海报/年份交给详情页做首帧种子：
+                // 发现页等栏目的海报来自 TMDB 列表接口，不会写入详情缓存，详情页 peek 落空
+                DetailSeedStore.remember(tmdbId, posterUrl, year)
             }
             onClick()
         }

@@ -24,9 +24,11 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -35,6 +37,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.ResponseBody.Companion.toResponseBody
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -78,8 +81,33 @@ class TraktRepositoryTest {
 
         repository = TraktRepository(
             traktApiService, userProfileStorage, markActionRecordDao,
-            tmdbRepository, mockk(relaxed = true), Json { ignoreUnknownKeys = true }, context
+            tmdbRepository, mockk(relaxed = true), Json { ignoreUnknownKeys = true },
+            mockk(relaxed = true), context
         )
+        // 持久化缓存写在进程级 DataStore（preferencesDataStore 委托是进程单例）上，
+        // 每个用例新建的 repository 仍读同一份磁盘数据。开跑前清空，避免上一个用例
+        // 落盘的 watch_history_page1 / watchlist_watched_ids 被当成本用例的磁盘快照命中。
+        clearPersistentCaches()
+    }
+
+    @After
+    fun tearDown() = runTest {
+        // 落盘是 400ms 攒批异步、且跑在 repository 私有的 persistentScope 上（不受 runTest 约束），
+        // 用例结束后仍可能补写磁盘并污染下一个用例。先掐断落盘协程，再清掉本用例写入的数据。
+        cancelPersistentScope()
+        clearPersistentCaches()
+    }
+
+    /** 清空 repository 全部持久化缓存的内存条目、待落盘队列与 DataStore 中的对应 key。 */
+    private suspend fun clearPersistentCaches() {
+        repository.persistentCaches.forEach { it.clearAll() }
+    }
+
+    /** 取消 repository 的持久化写盘作用域，阻止用例结束后的延迟落盘跨用例生效。 */
+    private fun cancelPersistentScope() {
+        val field = TraktRepository::class.java.getDeclaredField("persistentScope")
+        field.isAccessible = true
+        (field.get(repository) as CoroutineScope).cancel()
     }
 
     private fun emptySuccessResponse(): Response<List<TraktWatchlistMovieItem>> {

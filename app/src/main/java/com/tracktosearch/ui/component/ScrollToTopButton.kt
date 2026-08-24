@@ -41,7 +41,7 @@ import com.tracktosearch.R
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeInput
-import dev.chrisbanes.haze.HazeSampling
+import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
@@ -190,7 +190,7 @@ private fun ScrollToTopButtonContent(
                         alpha = if (isAppDarkTheme()) 0.18f else 0.72f
                     ),
                     scene = scene,
-                    blurSampling = HazeSampling.Adaptive,
+                    blurPerformanceMode = HazePerformanceMode.Adaptive,
                     interactionSource = interactionSource
                 )
                 .border(

@@ -97,8 +97,14 @@ class PersonViewModel @Inject constructor(
         val initialColor = avatarColor
             ?: PersonAvatarColorStore.get(personId)?.let { Color(it) }
 
+        // 同步 peek 人物详情内存缓存：命中则姓名/简介/生日/出生地首帧就位，
+        // 二次进入同一人物不再先显示骨架屏再整块弹入
+        val peekedPerson = tmdbRepository.peekPersonDetail(personId)
+
         _uiState.value = PersonUiState(
-            isLoading = true,
+            isLoading = peekedPerson == null,
+            person = peekedPerson,
+            originalName = peekedPerson?.let(::pickOriginalName),
             isLoadingMovies = true,
             isLoadingTvShows = true,
             isLoadingPersonImages = true,
@@ -128,9 +134,7 @@ class PersonViewModel @Inject constructor(
                     // 异步加载 Trakt 人物数据（静默失败）
                     loadTraktPerson(personId, person.name)
                     // 从 TMDB also_known_as 获取原名（英文名）
-                    val originalName = person.also_known_as.firstOrNull { name ->
-                        name.all { c -> c.isLetter() || c == ' ' || c == '.' || c == '-' || c == '\'' }
-                    }
+                    val originalName = pickOriginalName(person)
                     if (originalName != null) {
                         _uiState.value = _uiState.value.copy(originalName = originalName)
                     }
@@ -162,6 +166,12 @@ class PersonViewModel @Inject constructor(
             }
         }
     }
+
+    /** 从 TMDB also_known_as 里挑出可作为「原名」展示的纯拉丁字母姓名 */
+    private fun pickOriginalName(person: TmdbPerson): String? =
+        person.also_known_as.firstOrNull { name ->
+            name.all { c -> c.isLetter() || c == ' ' || c == '.' || c == '-' || c == '\'' }
+        }
 
     /**
      * 预取头像主色：先查持久化缓存命中则瞬间生效，未命中则用 Coil 加载头像 bitmap
@@ -398,10 +408,21 @@ class PersonViewModel @Inject constructor(
         isMovie: Boolean,
         onNavigate: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit
     ) {
+        val type = if (isMovie) MediaType.MOVIE else MediaType.SHOW
+        // tmdb→trakt 映射是永久缓存（映射本身不变）：命中就同步跳转，不显示卡片转圈。
+        // 负缓存返回 0，表示之前搜过确实没有，直接提示而不再发一次注定失败的请求。
+        val cachedTraktId = traktRepository.getCachedTraktId(tmdbId, type)
+        if (cachedTraktId != null) {
+            if (cachedTraktId > 0) {
+                onNavigate(cachedTraktId, tmdbId, title, traktRepository.getCachedImdbId(tmdbId, type).orEmpty(), 0.0)
+            } else {
+                viewModelScope.launch { _toastEvent.emit(R.string.card_resolve_not_found) }
+            }
+            return
+        }
         _uiState.value = _uiState.value.copy(resolvingTmdbId = tmdbId)
         viewModelScope.launch {
             try {
-                val type = if (isMovie) MediaType.MOVIE else MediaType.SHOW
                 val result = traktRepository.searchByTmdb(tmdbId, type)
                 result.onSuccess { searchResults ->
                     val first = searchResults.firstOrNull()
