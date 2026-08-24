@@ -172,6 +172,12 @@ export class KeyPool {
         const updated = states.map((state) => {
             if (state.fingerprint !== candidate.fingerprint) return state;
             if (status === 429) {
+                // 已在冷却窗口内的 key 不再延长冷却：TMDB 这类按 IP 限流的上游会让
+                // 同一个 key 连续拿到 429，若每次都刷新 cooldownUntilMs，状态就每次都变、
+                // 每次都要写一次 KV。保持原截止时间可让重复 429 变成幂等操作。
+                if (state.status === 'COOLING' && state.cooldownUntilMs > this.nowMs()) {
+                    return state;
+                }
                 return {
                     ...state,
                     status: 'COOLING' as const,

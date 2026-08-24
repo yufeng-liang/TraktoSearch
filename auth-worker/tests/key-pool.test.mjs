@@ -158,6 +158,29 @@ test('repeated cooling failures on the same key stop writing KV', async () => {
     assert.equal(kv.counters.puts, putsAfterCooling);
 });
 
+test('a cooling key is not re-cooled while its window is still open', async () => {
+    resetKeyPoolStateCache();
+    const kv = createKv();
+    let currentTime = 1_000;
+    const pool = new KeyPool('tmdb', 'first,second', kv, () => currentTime);
+    const [first] = await pool.getCandidates();
+
+    await pool.markFailure(first, 429);
+    const stateAfterFirstCooling = kv.values.get('key-pool:tmdb');
+    const putsAfterFirstCooling = kv.counters.puts;
+
+    // 时钟前进但仍在冷却窗口内：按 IP 限流的上游会让同一个 key 连续 429，
+    // 此时截止时间不应被刷新，状态不变也就不该再写 KV
+    currentTime += 30 * 1000;
+    await pool.markFailure(first, 429);
+    assert.equal(kv.counters.puts, putsAfterFirstCooling);
+    assert.equal(kv.values.get('key-pool:tmdb'), stateAfterFirstCooling);
+
+    // 冷却到期后仍可正常放回
+    currentTime = 1_000 + 5 * 60 * 1000;
+    assert.deepEqual((await pool.getCandidates()).map((candidate) => candidate.key), ['first', 'second']);
+});
+
 test('isolate state cache skips the per-request KV read', async () => {
     resetKeyPoolStateCache();
     const kv = createKv();
