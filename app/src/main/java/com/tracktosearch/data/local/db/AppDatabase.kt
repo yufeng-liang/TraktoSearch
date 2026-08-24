@@ -4,8 +4,8 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [MediaItemEntity::class, MediaDetailEntity::class, NotificationRecordEntity::class, DoubanSyncedItem::class, DoubanSyncFailureEntity::class, DoubanSyncPendingItemEntity::class, DoubanSyncRollbackEntity::class, UserReviewEntity::class, MarkActionRecordEntity::class],
-    version = 14,
+    entities = [MediaItemEntity::class, MediaDetailEntity::class, NotificationRecordEntity::class, DoubanSyncedItem::class, DoubanSyncFailureEntity::class, DoubanSyncPendingItemEntity::class, DoubanSyncRollbackEntity::class, DoubanConsistencyCheckRunEntity::class, DoubanConsistencyCheckTaskEntity::class, DoubanConsistencyConflictEntity::class, UserReviewEntity::class, MarkActionRecordEntity::class],
+    version = 15,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -16,6 +16,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun doubanSyncFailureDao(): DoubanSyncFailureDao
     abstract fun doubanSyncPendingItemDao(): DoubanSyncPendingItemDao
     abstract fun doubanSyncRollbackDao(): DoubanSyncRollbackDao
+    abstract fun doubanConsistencyCheckDao(): DoubanConsistencyCheckDao
     abstract fun userReviewDao(): UserReviewDao
     abstract fun markActionRecordDao(): MarkActionRecordDao
 }

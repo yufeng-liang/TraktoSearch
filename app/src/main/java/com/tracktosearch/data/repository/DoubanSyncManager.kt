@@ -389,6 +389,9 @@ class DoubanSyncManager @Inject constructor(
     @Volatile
     private var cancelled = false
 
+    @Volatile
+    private var activeSyncMode: String = "UNKNOWN"
+
     private val cancellationLock = Any()
 
     @Volatile
@@ -524,7 +527,7 @@ class DoubanSyncManager @Inject constructor(
     }
 
     /** 取消后台收尾后发布可终止服务生命周期的最终取消态。 */
-    private fun publishCancelledFinal() {
+    private suspend fun publishCancelledFinal() {
         progressPublisher.publishFinal { currentProgress, _ ->
             currentProgress.copy(
                 isRunning = false,
@@ -542,6 +545,7 @@ class DoubanSyncManager @Inject constructor(
                 isCancelling = true
             )
         }
+        persistLastSyncSummary()
     }
 
     /** 同步是否在运行中 */
@@ -641,6 +645,7 @@ class DoubanSyncManager @Inject constructor(
                         )
                     }
                 } finally {
+                    persistLastSyncSummary()
                     cloudDetailsPoolManager.resetDownloadSuppression()
                     releaseWakeLock()
                 }
@@ -654,8 +659,10 @@ class DoubanSyncManager @Inject constructor(
      * @param forceOverwrite true=强制重新同步已同步过的条目；false=跳过已同步条目（断点续传）
      * @return true=已启动；false=已有同步在运行（防重入）
      */
-    fun startSync(forceOverwrite: Boolean = false): Boolean =
-        startManagedSync { runSyncLegacy(forceOverwrite) }
+    fun startSync(forceOverwrite: Boolean = false): Boolean {
+        activeSyncMode = "LEGACY"
+        return startManagedSync { runSyncLegacy(forceOverwrite) }
+    }
 
     /**
      * 启动同步(指定模式,非 suspend,立即返回)。
@@ -664,8 +671,10 @@ class DoubanSyncManager @Inject constructor(
      *
      * @param forceCrawl true=强制爬取豆瓣列表,忽略 7 天冷却期(用户在冷却期内选择「强制同步」时用)
      */
-    fun startSync(mode: SyncMode, forceCrawl: Boolean = false): Boolean =
-        startManagedSync { runSync(mode, forceCrawl) }
+    fun startSync(mode: SyncMode, forceCrawl: Boolean = false): Boolean {
+        activeSyncMode = mode.name
+        return startManagedSync { runSync(mode, forceCrawl) }
+    }
 
     /**
      * 启动续传同步(非 suspend,立即返回)。
@@ -679,12 +688,40 @@ class DoubanSyncManager @Inject constructor(
      *
      * @return true=已启动;false=已有同步在运行(防重入)或无 pending items
      */
-    fun startResume(): Boolean = startManagedSync { runResume() }
+    fun startResume(): Boolean {
+        activeSyncMode = "RESUME"
+        return startManagedSync { runResume() }
+    }
 
     /**
      * 清空 pending items 表(用户选择「完整同步」时调用)。
      */
     suspend fun clearPendingItems() {
+        doubanSyncPendingItemDao.clearAll()
+    }
+
+    /** 将最终进度压缩为单条最近摘要，供进程重建后的恢复入口读取。 */
+    private suspend fun persistLastSyncSummary() {
+        val current = _progress.value
+        if (!current.isComplete && !current.isCancelling) return
+        runCatching {
+            doubanSyncMetaStorage.recordLastSyncSummary(
+                com.tracktosearch.data.local.DoubanSyncSummary(
+                    mode = activeSyncMode,
+                    completedAt = System.currentTimeMillis(),
+                    successCount = current.successCount,
+                    skippedCount = current.skippedCount,
+                    failedCount = current.failedCount,
+                    conflictFixedCount = 0,
+                    pendingCount = doubanSyncPendingItemDao.count(),
+                    isComplete = current.isComplete
+                )
+            )
+        }
+    }
+
+    /** 用户明确确认放弃未处理数据后调用。关闭续传提示不会调用此方法。 */
+    suspend fun discardPendingItems() {
         doubanSyncPendingItemDao.clearAll()
     }
 
@@ -811,7 +848,10 @@ class DoubanSyncManager @Inject constructor(
     fun startRetry(
         failures: List<DoubanSyncFailure>,
         selectedReasons: Set<FailureReason>
-    ): Boolean = startManagedSync { runRetry(failures, selectedReasons) }
+    ): Boolean {
+        activeSyncMode = "RETRY"
+        return startManagedSync { runRetry(failures, selectedReasons) }
+    }
 
     private suspend fun runSync(mode: SyncMode, forceCrawl: Boolean = false) {
         when (mode) {
@@ -1571,6 +1611,8 @@ class DoubanSyncManager @Inject constructor(
                 subStage = DoubanSyncSubStage.CONNECTING,
                 phase = "重新应用豆瓣状态"
             )
+            // 已通过登录检查并真正进入完整同步后，才替换旧的续传队列。
+            discardPendingItems()
             runSyncLegacy(forceOverwrite = true)
             return
         }
@@ -1586,6 +1628,9 @@ class DoubanSyncManager @Inject constructor(
         )
 
         traktRepository.loadWatchlistWatchedIds()
+
+        // 已通过 Trakt 登录检查并进入完整重写后，才清理旧 pending；启动失败时保留。
+        discardPendingItems()
 
         val allSynced = doubanSyncedItemDao.getAllSyncedItems()
         val wishMovieIds = mutableListOf<Int>()
@@ -2045,7 +2090,12 @@ class DoubanSyncManager @Inject constructor(
         }
         android.util.Log.i("DoubanSync", "同步后状态一致性检查: $consistencyResult")
         if (consistencyResult.errors > 0) {
-            throw IllegalStateException("Automatic consistency check failed: ${consistencyResult.errors} errors")
+            // 一致性修复失败只保留可恢复任务，不阻断已确认的本地数据上传。
+            // 下一次检查会优先消费持久化的 RETRY 任务。
+            _progress.value = _progress.value.copy(
+                failedCount = _progress.value.failedCount + consistencyResult.errors,
+                errorMessage = "Consistency repair pending: ${consistencyResult.errors}"
+            )
         }
 
         progressPublisher.publishStage(

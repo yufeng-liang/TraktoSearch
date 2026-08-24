@@ -251,6 +251,43 @@ class DoubanWatchlistDataLayerTest {
         }
     }
 
+    @Test
+    fun migration14To15_createsRecoveryTablesIdempotentlyAndPreservesPendingRows() {
+        val context: Context = RuntimeEnvironment.getApplication()
+        val databaseName = "douban-migration-14-15-${System.nanoTime()}.db"
+        migrationHelper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(databaseName)
+                .callback(object : SupportSQLiteOpenHelper.Callback(14) {
+                    override fun onCreate(db: SupportSQLiteDatabase) {
+                        db.execSQL("CREATE TABLE douban_sync_pending_items (doubanId TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, posterUrl TEXT, rating INTEGER, comment TEXT, markedAt TEXT NOT NULL, doubanUrl TEXT NOT NULL, status TEXT NOT NULL, crawledAt INTEGER NOT NULL)")
+                        db.execSQL("INSERT INTO douban_sync_pending_items(doubanId,title,markedAt,doubanUrl,status,crawledAt) VALUES ('pending-1','保留','2024-01-01','https://douban.test/1','wish',1)")
+                    }
+
+                    override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+                })
+                .build()
+        )
+        val oldDatabase = migrationHelper!!.writableDatabase
+
+        DatabaseModule.MIGRATION_14_15.migrate(oldDatabase)
+        DatabaseModule.MIGRATION_14_15.migrate(oldDatabase)
+
+        oldDatabase.query("SELECT title FROM douban_sync_pending_items WHERE doubanId = 'pending-1'").use { cursor ->
+            assertThat(cursor.moveToFirst()).isTrue()
+            assertThat(cursor.getString(0)).isEqualTo("保留")
+        }
+        oldDatabase.query("SELECT COUNT(*) FROM douban_consistency_check_runs").use { cursor ->
+            assertThat(cursor.moveToFirst()).isTrue()
+            assertThat(cursor.getInt(0)).isEqualTo(0)
+        }
+        oldDatabase.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('douban_consistency_check_tasks', 'douban_consistency_conflicts')").use { cursor ->
+            var count = 0
+            while (cursor.moveToNext()) count++
+            assertThat(count).isEqualTo(2)
+        }
+    }
+
     private fun snapshot(
         doubanId: String = "d1",
         title: String = "电影A",

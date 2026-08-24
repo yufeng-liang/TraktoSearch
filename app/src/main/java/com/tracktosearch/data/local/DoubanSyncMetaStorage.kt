@@ -15,6 +15,18 @@ import javax.inject.Singleton
 
 private val Context.doubanSyncMetaStore: DataStore<Preferences> by preferencesDataStore(name = "douban_sync_meta")
 
+/** 最近一次同步摘要，供进程重建后的恢复入口和结果页读取。 */
+data class DoubanSyncSummary(
+    val mode: String,
+    val completedAt: Long,
+    val successCount: Int,
+    val skippedCount: Int,
+    val failedCount: Int,
+    val conflictFixedCount: Int,
+    val pendingCount: Int,
+    val isComplete: Boolean
+)
+
 /**
  * 豆瓣同步元信息本地存储。
  *
@@ -32,6 +44,14 @@ class DoubanSyncMetaStorage @Inject constructor(
     private val lastSyncAtKey = longPreferencesKey("last_sync_at")
     private val lastSyncModeKey = stringPreferencesKey("last_sync_mode")
     private val cloudSyncSourceKey = stringPreferencesKey("cloud_sync_source")  // 上次拉取来源（"cloud" / "local"）
+    private val lastSummaryModeKey = stringPreferencesKey("last_summary_mode")
+    private val lastSummaryCompletedAtKey = longPreferencesKey("last_summary_completed_at")
+    private val lastSummarySuccessCountKey = longPreferencesKey("last_summary_success_count")
+    private val lastSummarySkippedCountKey = longPreferencesKey("last_summary_skipped_count")
+    private val lastSummaryFailedCountKey = longPreferencesKey("last_summary_failed_count")
+    private val lastSummaryConflictFixedCountKey = longPreferencesKey("last_summary_conflict_fixed_count")
+    private val lastSummaryPendingCountKey = longPreferencesKey("last_summary_pending_count")
+    private val lastSummaryCompleteKey = longPreferencesKey("last_summary_complete")
 
     /** 上次完整同步完成时间戳（首次为 0） */
     suspend fun getLastFullSyncAt(): Long =
@@ -44,6 +64,36 @@ class DoubanSyncMetaStorage @Inject constructor(
     /** 上次同步模式（"INCREMENTAL_WITH_CHANGES" / "FULL_REWRITE" / "RESUME" / "RETRY" / "CANCELLED"） */
     suspend fun getLastSyncMode(): String? =
         context.doubanSyncMetaStore.data.map { it[lastSyncModeKey] }.first()
+
+    /** 读取最近一次同步摘要；旧版本未写摘要时返回 null。 */
+    suspend fun getLastSyncSummary(): DoubanSyncSummary? =
+        context.doubanSyncMetaStore.data.map { prefs ->
+            val mode = prefs[lastSummaryModeKey] ?: return@map null
+            DoubanSyncSummary(
+                mode = mode,
+                completedAt = prefs[lastSummaryCompletedAtKey] ?: 0L,
+                successCount = (prefs[lastSummarySuccessCountKey] ?: 0L).toInt(),
+                skippedCount = (prefs[lastSummarySkippedCountKey] ?: 0L).toInt(),
+                failedCount = (prefs[lastSummaryFailedCountKey] ?: 0L).toInt(),
+                conflictFixedCount = (prefs[lastSummaryConflictFixedCountKey] ?: 0L).toInt(),
+                pendingCount = (prefs[lastSummaryPendingCountKey] ?: 0L).toInt(),
+                isComplete = (prefs[lastSummaryCompleteKey] ?: 0L) == 1L
+            )
+        }.first()
+
+    /** 原子替换最近摘要，始终只保留一条记录，避免 DataStore 无限增长。 */
+    suspend fun recordLastSyncSummary(summary: DoubanSyncSummary) {
+        context.doubanSyncMetaStore.edit { prefs ->
+            prefs[lastSummaryModeKey] = summary.mode
+            prefs[lastSummaryCompletedAtKey] = summary.completedAt
+            prefs[lastSummarySuccessCountKey] = summary.successCount.toLong()
+            prefs[lastSummarySkippedCountKey] = summary.skippedCount.toLong()
+            prefs[lastSummaryFailedCountKey] = summary.failedCount.toLong()
+            prefs[lastSummaryConflictFixedCountKey] = summary.conflictFixedCount.toLong()
+            prefs[lastSummaryPendingCountKey] = summary.pendingCount.toLong()
+            prefs[lastSummaryCompleteKey] = if (summary.isComplete) 1L else 0L
+        }
+    }
 
     /**
      * 记录本次同步完成（本地完成）。

@@ -250,6 +250,13 @@ class DoubanSyncManagerCancelTest {
         assertThat(manager.progress.value.cookieExpired).isEqualTo(cookieExpiredBefore)
     }
 
+    @Test
+    fun 放弃未处理数据才清空pending() = runBlocking {
+        manager.discardPendingItems()
+
+        coVerify(exactly = 1) { doubanSyncPendingItemDao.clearAll() }
+    }
+
     // ============================================================
     // 辅助函数
     // ============================================================

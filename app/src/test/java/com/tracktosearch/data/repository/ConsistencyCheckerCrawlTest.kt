@@ -7,6 +7,7 @@ import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.DoubanCredentials
 import com.tracktosearch.data.local.LastConsistencyCheckStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
+import com.tracktosearch.data.local.db.DoubanConsistencyCheckDao
 import com.tracktosearch.data.remote.douban.DelayInfo
 import com.tracktosearch.data.remote.douban.DoubanMarkItem
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
@@ -55,6 +56,7 @@ class ConsistencyCheckerCrawlTest {
     }
     private val doubanAuthStorage = mockk<DoubanAuthStorage>(relaxed = true)
     private val lastConsistencyCheckStorage = mockk<LastConsistencyCheckStorage>(relaxed = true)
+    private val consistencyCheckDao = mockk<DoubanConsistencyCheckDao>(relaxed = true)
     private val appContext: Context = RuntimeEnvironment.getApplication()
 
     private lateinit var checker: DoubanTraktStatusConsistencyChecker
@@ -67,7 +69,8 @@ class ConsistencyCheckerCrawlTest {
             traktRepository,
             doubanRepository,
             doubanAuthStorage,
-            lastConsistencyCheckStorage
+            lastConsistencyCheckStorage,
+            consistencyCheckDao
         )
         // 重新 stub delayEvent(clearMocks 后需重新设置,否则 init 块 collect 会 NPE)
         every { doubanRepository.delayEvent } returns delayEventFlow
@@ -82,6 +85,7 @@ class ConsistencyCheckerCrawlTest {
             doubanRepository,
             doubanAuthStorage,
             lastConsistencyCheckStorage,
+            consistencyCheckDao,
             appContext
         )
     }
