@@ -862,7 +862,6 @@ fun MainScreen(
                             modifier = Modifier.fillMaxSize(),
                             isDark = isDark,
                             shape = RoundedCornerShape(24.dp),
-                            scene = navigationScene,
                             // 按住/拖动时水滴按官方配方逐步给出折射/高光/阴影，
                             // 缩放与速度挤压写进 drawBackdrop 的 layerBlock，背景不跟着拉伸
                             pressProgress = { navPillDrag.pressProgress },

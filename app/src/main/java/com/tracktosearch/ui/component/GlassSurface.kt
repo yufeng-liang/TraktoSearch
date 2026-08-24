@@ -259,9 +259,9 @@ fun GlassTabIndicator(
 /**
  * 底栏专用的选中水滴，显式采样主内容 source，避免把外层导航录回 source。
  *
- * 观感对齐官方 catalog LiquidBottomTabs 的选中态：静止时只是一层 10% 淡填充，
+ * 观感对齐官方 catalog LiquidBottomTabs 的选中态：静止时只是一层 10% 淡填充、没有描边，
  * 按压时才逐步给出 lens 折射（带色散）、高光、外阴影与内阴影，形成"液态被压出来"的手感。
- * 保留本应用的主色描边作为身份标识。
+ * 选中项靠图标与文案的主色区分，不再额外画主题色边框。
  *
  * pressProgress / pillLayerBlock 都以 lambda 传入并只在绘制阶段读取：按住拖动全程不重组。
  */
@@ -271,32 +271,18 @@ fun GlassNavigationTabIndicator(
     modifier: Modifier = Modifier,
     isDark: Boolean,
     shape: RoundedCornerShape = RoundedCornerShape(24.dp),
-    scene: GlassScene = GlassScene(),
     pressProgress: () -> Float = { 0f },
     pillLayerBlock: (GraphicsLayerScope.() -> Unit)? = null
 ) {
-    val token = backdropNavigationSelectionToken(
-        variant = LocalGlassVariant.current,
-        isDark = isDark,
-        scene = scene
-    )
     val restFill = if (isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.10f)
     Box(
-        modifier = modifier
-            .navigationSelectionGlass(
-                backdrop = backdrop,
-                shape = shape,
-                pressProgress = pressProgress,
-                restFill = restFill,
-                layerBlock = pillLayerBlock
-            )
-            .strongGlassSelectionBorder(
-                shape = shape,
-                token = token,
-                isDark = isDark,
-                primaryColor = MaterialTheme.colorScheme.primary,
-                borderWidth = if (isDark) 1.8.dp else 2.4.dp
-            )
+        modifier = modifier.navigationSelectionGlass(
+            backdrop = backdrop,
+            shape = shape,
+            pressProgress = pressProgress,
+            restFill = restFill,
+            layerBlock = pillLayerBlock
+        )
     )
 }
 
