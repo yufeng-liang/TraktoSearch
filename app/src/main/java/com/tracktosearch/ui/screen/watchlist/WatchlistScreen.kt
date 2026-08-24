@@ -159,6 +159,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.backdrops.LayerBackdrop
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
@@ -185,6 +187,7 @@ import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.backdropContentSource
+import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
@@ -454,11 +457,19 @@ fun WatchlistScreen(
     val hazeStyle = HazeMaterials.thin()
     val isDark = isAppDarkTheme()
     // 顶栏单独采样本页内容，避免搜索展开时全局 source 层级变化导致 Glass 失效。
+    // 底垫先画页面环境层（MainScreen 光晕/页面背景），再叠影视内容：玻璃控件采本 backdrop 时，
+    // 正后方有海报就折射海报、没有则折射页面渐变，而非一块平色（避免顶部退化成纯色/白）。
     val watchlistBackdropBackground = MaterialTheme.colorScheme.background
-    val watchlistContentBackdrop = rememberLayerBackdrop {
-        drawRect(watchlistBackdropBackground)
-        drawContent()
-    }
+    val ambientBackdropLayer = (LocalBackdrop.current as? LayerBackdrop)?.graphicsLayer
+    val watchlistContentBackdrop = rememberLayerBackdrop(
+        onDraw = remember(watchlistBackdropBackground, ambientBackdropLayer) {
+            {
+                if (ambientBackdropLayer != null) drawLayer(ambientBackdropLayer)
+                else drawRect(watchlistBackdropBackground)
+                drawContent()
+            }
+        }
+    )
     // 为6种 (mode, tab) 组合各自创建独立的 gridState，彻底隔离滚动位置，
     // 避免切 tab 时列表位置互相影响。
     //
@@ -926,6 +937,8 @@ fun WatchlistScreen(
                     }
                 }
     
+                // 回顶按钮采样本页 content backdrop（含影视网格），折射正后方海报而非页面粉色渐变。
+                CompositionLocalProvider(LocalBackdrop provides watchlistContentBackdrop) {
                 ScrollToTopButton(
                     gridState = currentGridState,
                     modifier = Modifier
@@ -934,7 +947,11 @@ fun WatchlistScreen(
                     hazeState = hazeState,
                     scene = watchlistGlassScene
                 )
+                }
     
+                // 顶栏内玻璃控件统一采本页 content backdrop（光晕底垫+影视网格），与那条 hazeTopBar 一致：
+                // 滚动时折射正后方海报、静止时折射页面渐变，而不是页面粉色 mesh。
+                CompositionLocalProvider(LocalBackdrop provides watchlistContentBackdrop) {
                 // Haze 模糊覆盖层 - 搜索框 + 胶囊切换 + PrimaryTabRow 或 多选操作栏
                 Box(
                     modifier = Modifier
@@ -1669,6 +1686,8 @@ fun WatchlistScreen(
                     }
                 }
     
+                } // CompositionLocalProvider(LocalBackdrop) 顶栏结束
+
                 // 骨架屏：首次加载且列表为空时显示（避免 TMDB 富化过程中部分卡片已显示但骨架仍叠加）
                 val isLoading = if (selectedMode == 0) {
                     when (selectedTab) {

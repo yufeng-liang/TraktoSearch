@@ -62,6 +62,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -108,6 +109,7 @@ import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberGlassSelectionBounceScale
 import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.MeshPreset
@@ -387,9 +389,16 @@ fun MainScreen(
         isFabVisible = 1f
     }
 
+    // Backdrop 采样版本号：滚动时推进，驱动「源重新录制 + 底栏重采」两端同时刷新。
+    // 只有消费者重绘是不够的：kyant 的源层（layerBackdrop）不会因子树滚动而重录，
+    // 消费者再采到的仍是旧帧，表现为底栏里混着上一次滚动位置的画面。
+    val contentSampleVersion = remember { mutableIntStateOf(0) }
+
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                // 滚动即推进采样版本号（所有 tab 都要，早于下面的提前返回）
+                if (available.y != 0f) contentSampleVersion.intValue++
                 // 搜索页（tab 0）且非搜索结果页时始终显示底部导航
                 if (pagerState.currentPage == 0 && !showTraktSearch) return androidx.compose.ui.geometry.Offset.Zero
                 val delta = available.y
@@ -445,6 +454,31 @@ fun MainScreen(
         }
     )
 
+    // 底栏 tab 图标层：供选中水滴用 combinedBackdrop 合并采样，使按压折射同时作用于图标。
+    val navTabsBackdrop = rememberLayerBackdrop()
+    // 底栏面板玻璃成品层（模糊 + 填充，不含内容）。水滴采样它而不是原始页面：
+    // 官方 catalog 用一份 alpha(0f) 的面板副本达成同样效果，这里改用 drawBackdrop 的
+    // exportedBackdrop，少一次全量 blur。静止（按压进度 0、lens 为 0）时水滴贴出的像素与
+    // 面板完全一致，因此看不出边界；直接采原始页面会在水滴里露出未模糊的清晰画面。
+    val navPanelBackdrop = rememberLayerBackdrop()
+
+    // kyant LayerBackdrop 没有内容版本状态（只有 layerCoordinates 是 MutableState）：
+    // 消费者（底部导航）只在自身重绘时采样已录制的层，源重新录制不会通知消费者。
+    // 于是首帧/切 tab 后导航采到的是空层，表现为初始透明，直到滑动改变 fabOffset 触发重绘才出模糊。
+    //
+    // 不能反过来「源绘制后推进版本号」：底栏本身是 hazeSource(zIndex=1)，底栏重绘会让页面内
+    // haze 消费者失效 → 页面重绘 → 又推进版本号 → 死循环（实测空闲 246fps）。
+    // 改为定时驱动的单向重采：进入/切换 tab 后 5Hz 推进 tick 约 6s，覆盖数据与海报陆续加载的窗口；
+    // 窗口结束后不再产生帧，滚动本身也会让底栏重绘重采。
+    var backdropResampleTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(isGlassMode, pagerState.currentPage) {
+        if (!isGlassMode) return@LaunchedEffect
+        repeat(30) {
+            delay(200)
+            backdropResampleTick++
+        }
+    }
+
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = Color.Transparent
@@ -492,6 +526,13 @@ fun MainScreen(
                         beyondViewportPageCount = 2,
                         modifier = Modifier
                             .fillMaxSize()
+                            // 读取采样版本号/短窗口 tick：让本节点的 draw 失效，从而重新执行
+                            // 下游 layerBackdrop 的录制，使底栏采到的是当帧内容而非旧帧。
+                            .drawWithContent {
+                                @Suppress("UNUSED_EXPRESSION") contentSampleVersion.intValue
+                                @Suppress("UNUSED_EXPRESSION") backdropResampleTick
+                                drawContent()
+                            }
                             .layerBackdrop(mainContentBackdrop)
                     ) { page ->
                         // 只有当前可见 tab 的 MovieCard 参与 sharedElement 转场，避免 HorizontalPager 常驻的其他 tab 同 tmdbId 海报冲突
@@ -646,6 +687,13 @@ fun MainScreen(
                     kind = VisualSurfaceKind.Glass,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
+                        .drawWithContent {
+                            // 读取 tick 与采样版本号建立 draw 阶段快照依赖：源重录后本节点随之
+                            // 重绘并重采 backdrop 层，修复初始透明与滚动后混入旧帧画面。
+                            @Suppress("UNUSED_EXPRESSION") backdropResampleTick
+                            @Suppress("UNUSED_EXPRESSION") contentSampleVersion.intValue
+                            drawContent()
+                        }
                         .padding(bottom = navBarHeight + 8.dp)
                         .offset(y = fabOffset)
                         .fillMaxWidth(navBarWidthFraction)
@@ -655,13 +703,16 @@ fun MainScreen(
                     shape = navBarShape,
                     role = GlassSurfaceRole.BottomNavigation,
                     backgroundColor = if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.42f)
+                        // Glass 净填充 alpha 由 BottomNavigation token 决定（对齐官方 0.4），
+                        // 这里必须传不透明色，否则会与 token 再乘一次导致填充过淡。
+                        MaterialTheme.colorScheme.surface
                     } else {
                         Color.Transparent
                     },
                     borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.45f),
                     hazeState = hazeState,
                     backdropOverride = mainContentBackdrop,
+                    exportedBackdrop = if (isGlassMode) navPanelBackdrop else null,
                     interactionSource = tabInteractionSources[selectedTab],
                     // 底部导航自身作为 zIndex=1 的 source，effect 只采样 zIndex=0 的页面内容，
                     // 避免导航栏模糊自身导致重复模糊与无谓开销（Haze 最重的叠加场景）
@@ -682,7 +733,9 @@ fun MainScreen(
                     label = "indicatorOffset"
                 )
 
-                // 选中水滴与外层导航共用主内容 source，始终保持 source 的兄弟采样关系。
+                // 选中水滴采样「面板玻璃成品 + tab 图标层」：静止时与面板像素一致，
+                // 按压时 lens 同时折射面板画面与图标（官方 catalog 的 combinedBackdrop 做法）。
+                val navSelectionBackdrop = rememberCombinedBackdrop(navPanelBackdrop, navTabsBackdrop)
                 Box(
                     modifier = Modifier
                         .offset(x = indicatorOffsetX)
@@ -695,11 +748,13 @@ fun MainScreen(
                 ) {
                     if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
                         GlassNavigationTabIndicator(
-                            backdrop = mainContentBackdrop,
+                            backdrop = navSelectionBackdrop,
                             modifier = Modifier.fillMaxSize(),
                             isDark = isDark,
                             shape = RoundedCornerShape(24.dp),
-                            scene = navigationScene
+                            scene = navigationScene,
+                            // 按压当前选中 tab 时，水滴按官方配方逐步给出折射/高光/阴影
+                            interactionSource = tabInteractionSources[selectedTab]
                         )
                     } else {
                         NeumorphicActiveTab(
@@ -711,9 +766,12 @@ fun MainScreen(
                 }
 
                 // Tab 内容（绘制在药丸上方）
+                // 同时注册为 tab 图标层 source：水滴用 combinedBackdrop 采样它，按压折射时
+                // 图标随之变形。该层只含图标行、不含水滴，因此不构成自采样环。
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
+                        .then(if (isGlassMode) Modifier.layerBackdrop(navTabsBackdrop) else Modifier)
                         .padding(horizontal = rowPadding),
                     verticalAlignment = Alignment.CenterVertically
                 ) {

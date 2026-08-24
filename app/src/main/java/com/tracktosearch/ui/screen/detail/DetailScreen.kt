@@ -119,6 +119,7 @@ import com.tracktosearch.ui.screen.ai.shouldShowWatchlistAddedScene
 import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.LocalFullscreenSharedKey
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.delay
@@ -867,8 +868,14 @@ fun DetailScreen(
                 } // end if (contentReady)
                 }
             } // CompositionLocalProvider
-            }
+            } // CompositionLocalProvider(LocalFullscreenSharedKey)
+            } // hazeSource Box 结束：采样源只包住状态栏底色 + 滚动内容
 
+            // 悬浮控件与全屏覆盖层必须与 hazeSource 保持兄弟关系。
+            // Haze 2.x 的默认 HazeSourceSelection.Behind 会先找 hazeBlur 节点最近的祖先
+            // hazeSource（同一 HazeState），再只保留 zIndex 小于它的源；顶栏按钮/回顶按钮
+            // 一旦落在采样源子树内，祖先源 zIndex=0 会把自己过滤掉（0 < 0 不成立），
+            // 结果 blur/glass 两种模式下模糊都静默失效（源列表为空，不报错也不模糊）。
             AiSpriteMotion(
                 characterId = spriteState.activatedCharacterId.orEmpty(),
                 anchor = AiSpriteAnchor.DetailHeader,
@@ -885,6 +892,9 @@ fun DetailScreen(
             // 顶栏按钮与回顶按钮置于采样源之外(LocalBackdrop=null)：glass 模式下由
             // appVisualEffect/GlassIconButton 退化到 Haze 实时采样，随滚动内容实时刷新，
             // 避免 Backdrop 静态快照停在渐变区时无法实时捕到按钮正后方的内容。
+            // 且显式用 HazeSourceSelection.All 采样全部源：这些控件与 hazeSource 是兄弟关系、
+            // 无同 state 祖先源，若未来被重新嵌回源子树，Behind 会因 0<0 静默丢源导致模糊失效，
+            // All 直接强制采样内容源，blur/glass 两种模式都稳定生效。
             CompositionLocalProvider(LocalBackdrop provides null) {
             // 返回按钮：与详情页其他操作统一使用拟态玻璃，并保留真实 Haze 背景采样。
             NeumorphicIconButton(
@@ -898,7 +908,8 @@ fun DetailScreen(
                 hazeStyle = HazeMaterials.ultraThin(),
                 size = 40.dp,
                 buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
-                scene = detailGlassScene
+                scene = detailGlassScene,
+                sourceSelection = HazeSourceSelection.All
             ) {
                 DetailTopBarIcon(
                     imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
@@ -932,7 +943,8 @@ fun DetailScreen(
                         hazeStyle = HazeMaterials.ultraThin(),
                         size = 40.dp,
                         buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
-                        scene = detailGlassScene
+                        scene = detailGlassScene,
+                        sourceSelection = HazeSourceSelection.All
                     ) {
                         if (uiState.isDoubanSyncing) {
                             CircularProgressIndicator(
@@ -980,7 +992,8 @@ fun DetailScreen(
                     hazeStyle = HazeMaterials.ultraThin(),
                     size = 40.dp,
                     buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
-                    scene = detailGlassScene
+                    scene = detailGlassScene,
+                    sourceSelection = HazeSourceSelection.All
                 ) {
                     DetailTopBarIcon(
                         imageVector = Icons.Rounded.Share,
@@ -996,6 +1009,7 @@ fun DetailScreen(
                     .padding(bottom = 16.dp, end = 16.dp),
                 hazeState = detailHazeState,
                 hazeStyle = HazeMaterials.ultraThin(),
+                sourceSelection = HazeSourceSelection.All,
                 scene = detailGlassScene
             )
             } // CompositionLocalProvider
@@ -1144,7 +1158,6 @@ fun DetailScreen(
                     }
                 )
             }
-            } // CompositionLocalProvider(LocalFullscreenSharedKey)
         }
     }
     }

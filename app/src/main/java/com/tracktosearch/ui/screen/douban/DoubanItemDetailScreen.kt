@@ -154,13 +154,11 @@ import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
-import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.LocalFullscreenSharedKey
+import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.zoomSharedSource
 import com.tracktosearch.ui.screen.detail.PosterFullscreenOverlay
-import com.tracktosearch.ui.theme.LocalVisualEffectMode
-import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.util.copyResourceLink
@@ -171,6 +169,7 @@ import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -1166,7 +1165,6 @@ fun DoubanItemDetailScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            val isGlassMode = LocalVisualEffectMode.current == VisualEffectMode.GLASS
             val immersiveBackgroundModifier = uiState.posterDominantColor?.let { color ->
                 Modifier.background(
                     Brush.verticalGradient(
@@ -1178,27 +1176,14 @@ fun DoubanItemDetailScreen(
                 )
             } ?: Modifier
 
-            // Glass source 只录制纯沉浸背景，内容和 Glass 控件保持兄弟层级，
-            // 避免 LazyColumn 内的 drawBackdrop 子树被同一 source 再次采样。
-            if (isGlassMode) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .backdropSource()
-                        .then(immersiveBackgroundModifier)
-                )
-            }
-
-            // Blur 保持原有的完整 Haze source 范围，Glass 内容位于背景 source 之上。
+            // blur 与 glass 都注册同一 Haze source：blur 直接采样，glass 悬浮控件用同一
+            // Haze 状态做实时采样（悬浮控件处 LocalBackdrop=null 强制退化），保证沉浸渐变与
+            // 滚动内容都能被采到。
             Box(
-                modifier = if (isGlassMode) {
-                    Modifier.fillMaxSize()
-                } else {
-                    Modifier
-                        .fillMaxSize()
-                        .hazeSource(state = hazeState, zIndex = 0f)
-                        .then(immersiveBackgroundModifier)
-                }
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState, zIndex = 0f)
+                    .then(immersiveBackgroundModifier)
             ) {
             val failure = uiState.failure
 
@@ -1466,7 +1451,12 @@ fun DoubanItemDetailScreen(
                     }
                 }
             }
+            } // 内容 source Box 结束：只包状态栏底色 + 滚动内容
 
+            // 悬浮控件与全屏覆盖层与 hazeSource 保持兄弟关系（避免落入采样源子树被 Behind
+            // 以 zIndex 0<0 过滤掉自身导致模糊静默失效）；LocalBackdrop=null 让 glass 退化到
+            // Haze 实时采样，再配合 HazeSourceSelection.All 强制采样内容源，blur/glass 都生效。
+            CompositionLocalProvider(LocalBackdrop provides null) {
             // 返回按钮：使用与正常详情页一致的拟态玻璃和 ultraThin Haze。
             NeumorphicIconButton(
                 onClick = { view.performHaptic(HapticType.TICK); handleBack() },
@@ -1479,7 +1469,8 @@ fun DoubanItemDetailScreen(
                 hazeStyle = dev.chrisbanes.haze.blur.materials.HazeMaterials.ultraThin(),
                 size = 40.dp,
                 buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
-                scene = doubanGlassScene
+                scene = doubanGlassScene,
+                sourceSelection = HazeSourceSelection.All
             ) {
                 DetailTopBarIcon(
                     imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
@@ -1524,7 +1515,8 @@ fun DoubanItemDetailScreen(
                             hazeStyle = dev.chrisbanes.haze.blur.materials.HazeMaterials.ultraThin(),
                             size = 40.dp,
                             buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
-                            scene = doubanGlassScene
+                            scene = doubanGlassScene,
+                            sourceSelection = HazeSourceSelection.All
                         ) {
                             DetailTopBarIcon(
                                 imageVector = Icons.Rounded.Edit,
@@ -1671,7 +1663,8 @@ fun DoubanItemDetailScreen(
                     hazeStyle = dev.chrisbanes.haze.blur.materials.HazeMaterials.ultraThin(),
                     size = 40.dp,
                     buttonStyle = NeumorphicIconButtonStyle.DetailTopBar,
-                    scene = doubanGlassScene
+                    scene = doubanGlassScene,
+                    sourceSelection = HazeSourceSelection.All
                 ) {
                     DetailTopBarIcon(
                         imageVector = Icons.Rounded.Share,
@@ -1703,6 +1696,7 @@ fun DoubanItemDetailScreen(
                         .align(Alignment.BottomEnd)
                         .padding(bottom = 16.dp, end = 16.dp),
                     hazeState = hazeState,
+                    sourceSelection = HazeSourceSelection.All,
                     scene = doubanGlassScene
                 )
             }

@@ -83,7 +83,10 @@ private fun loginFormLens(): LensDefinition {
 
 private fun lensForRole(role: GlassSurfaceRole): LensDefinition {
     return when (role) {
-        GlassSurfaceRole.BottomNavigation -> lens(20.dp, 8.dp, 36.dp, true, true, 1.2.dp, 0.52f, 26.dp, 0.38f)
+        // 对齐官方 catalog LiquidBottomTabs 面板：弱 blur + 深折射，不开 depthEffect/色散，
+        // highlight/shadow 采用库默认值（0.5dp/alpha 1、24dp/Black 0.1）。
+        // 玻璃"厚度"由 lens 折射表达，而非靠大半径 blur 糊成磨砂。
+        GlassSurfaceRole.BottomNavigation -> lens(8.dp, 0.dp, 0.dp, false, false, 0.5.dp, 1f, 24.dp, 0.10f)
         // 顶栏是矩形（0.dp 圆角），按官方约束不使用 lens；lens 在矩形左右边缘会产生不连续。
         // 顶栏只做完整 blur，真实内容边缘也随采样一起模糊。水滴等圆角控件仍保留 lens。
         GlassSurfaceRole.TopBar -> lens(TopBarBackdropSourcePadding, 0.dp, 0.dp, false, false, 0.9.dp, 0.36f, 18.dp, 0.28f)
@@ -98,7 +101,9 @@ private fun lensForRole(role: GlassSurfaceRole): LensDefinition {
 
 private fun baseTintAlpha(role: GlassSurfaceRole, isDark: Boolean): Float {
     return when (role) {
-        GlassSurfaceRole.BottomNavigation -> if (isDark) 0.22f else 0.34f
+        // 官方底栏容器填充为 0.4（浅 0xFFFAFAFA / 深 0xFF121212）。叠加 protection 后净值
+        // 约 0.40/0.36，调用方需传入不透明表面色（净 alpha = 传入 alpha × 本值）。
+        GlassSurfaceRole.BottomNavigation -> if (isDark) 0.30f else 0.34f
         // 吸顶栏承载稳定标题。滚动内容即使采样首帧尚未完成，也不能让底层文字清晰透出。
         GlassSurfaceRole.TopBar -> if (isDark) 0.70f else 0.62f
         GlassSurfaceRole.SearchField,

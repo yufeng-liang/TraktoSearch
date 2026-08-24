@@ -499,6 +499,7 @@ fun NeumorphicIconButton(
     lightBorderAlpha: Float = 0.55f,
     scene: GlassScene = GlassScene(),
     buttonStyle: NeumorphicIconButtonStyle = NeumorphicIconButtonStyle.Default,
+    sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
     content: @Composable () -> Unit
 ) {
     if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
@@ -516,6 +517,7 @@ fun NeumorphicIconButton(
             interactionSource = interactionSource,
             enabled = enabled,
             scene = scene,
+            sourceSelection = sourceSelection,
             content = content
         )
         return
@@ -539,7 +541,7 @@ fun NeumorphicIconButton(
     }
     val hazeModifier = if (hazeState != null) {
         Modifier.appVisualEffect(
-            input = HazeInput.Sources(hazeState),
+            input = HazeInput.Sources(hazeState, selection = sourceSelection),
             hazeStyle = resolvedHazeStyle,
             glassRole = if (isDetailTopBar) {
                 GlassSurfaceRole.DetailAction

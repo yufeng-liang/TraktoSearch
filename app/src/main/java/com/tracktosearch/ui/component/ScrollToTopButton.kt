@@ -42,6 +42,7 @@ import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeSampling
+import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -64,6 +65,7 @@ fun ScrollToTopButton(
     modifier: Modifier = Modifier,
     hazeState: HazeState? = null,
     hazeStyle: HazeBlurStyle? = null,
+    sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
     scene: GlassScene = GlassScene()
 ) {
     val scope = rememberCoroutineScope()
@@ -101,6 +103,7 @@ fun ScrollToTopButton(
             onClick = { scope.launch { listState.animateScrollToItem(0) } },
             hazeState = hazeState,
             hazeStyle = hazeStyle,
+            sourceSelection = sourceSelection,
             scene = scene
         )
     }
@@ -112,6 +115,7 @@ fun ScrollToTopButton(
     modifier: Modifier = Modifier,
     hazeState: HazeState? = null,
     hazeStyle: HazeBlurStyle? = null,
+    sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
     scene: GlassScene = GlassScene()
 ) {
     val scope = rememberCoroutineScope()
@@ -149,6 +153,7 @@ fun ScrollToTopButton(
             onClick = { scope.launch { gridState.animateScrollToItem(0) } },
             hazeState = hazeState,
             hazeStyle = hazeStyle,
+            sourceSelection = sourceSelection,
             scene = scene
         )
     }
@@ -159,6 +164,7 @@ private fun ScrollToTopButtonContent(
     onClick: () -> Unit,
     hazeState: HazeState?,
     hazeStyle: HazeBlurStyle?,
+    sourceSelection: HazeSourceSelection,
     scene: GlassScene
 ) {
     val view = LocalView.current
@@ -176,7 +182,7 @@ private fun ScrollToTopButtonContent(
                 .size(HAZE_BUTTON_SIZE)
                 .clip(CircleShape)
                 .appVisualEffect(
-                    input = HazeInput.Sources(hazeState),
+                    input = HazeInput.Sources(hazeState, selection = sourceSelection),
                     hazeStyle = resolvedHazeStyle,
                     glassRole = GlassSurfaceRole.CircularControl,
                     glassShape = RoundedCornerShape(50),

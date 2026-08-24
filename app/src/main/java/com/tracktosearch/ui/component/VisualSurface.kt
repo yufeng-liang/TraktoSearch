@@ -87,6 +87,8 @@ fun AppVisualSurface(
     shape: Shape,
     hazeState: HazeState? = null,
     backdropOverride: Backdrop? = null,
+    /** Glass 分支专用：把本表面的玻璃成品导出成一层，供子级控件对齐采样（如底栏选中水滴）。 */
+    exportedBackdrop: LayerBackdrop? = null,
     role: GlassSurfaceRole = GlassSurfaceRole.TopBar,
     sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
     interactionSource: MutableInteractionSource? = null,
@@ -109,6 +111,7 @@ fun AppVisualSurface(
                 modifier = modifier,
                 hazeState = hazeState,
                 backdropOverride = backdropOverride,
+                exportedBackdrop = exportedBackdrop,
                 role = role,
                 shape = requireRoundedGlassShape(shape, role),
                 sourceSelection = sourceSelection,

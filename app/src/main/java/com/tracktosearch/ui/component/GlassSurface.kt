@@ -145,6 +145,7 @@ fun GlassIconButton(
     interactionSource: MutableInteractionSource? = null,
     enabled: Boolean = true,
     scene: GlassScene = GlassScene(),
+    sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
     content: @Composable () -> Unit
 ) {
     val resolvedInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
@@ -194,7 +195,7 @@ fun GlassIconButton(
             pressed = pressed
         )
         hazeState != null -> Modifier.appVisualEffect(
-            input = HazeInput.Sources(hazeState),
+            input = HazeInput.Sources(hazeState, selection = sourceSelection),
             hazeStyle = resolvedHazeStyle,
             glassRole = role,
             glassShape = shape,
@@ -254,35 +255,46 @@ fun GlassTabIndicator(
     )
 }
 
-/** 底栏专用的选中水滴，显式采样主内容 source，避免把外层导航录回 source。 */
+/**
+ * 底栏专用的选中水滴，显式采样主内容 source，避免把外层导航录回 source。
+ *
+ * 观感对齐官方 catalog LiquidBottomTabs 的选中态：静止时只是一层 10% 淡填充，
+ * 按压时才逐步给出 lens 折射（带色散）、高光、外阴影与内阴影，形成"液态被压出来"的手感。
+ * 保留本应用的主色描边作为身份标识。
+ */
 @Composable
 fun GlassNavigationTabIndicator(
     backdrop: Backdrop,
     modifier: Modifier = Modifier,
     isDark: Boolean,
     shape: RoundedCornerShape = RoundedCornerShape(24.dp),
-    scene: GlassScene = GlassScene()
+    scene: GlassScene = GlassScene(),
+    interactionSource: InteractionSource? = null
 ) {
     val token = backdropNavigationSelectionToken(
         variant = LocalGlassVariant.current,
         isDark = isDark,
         scene = scene
     )
-    val surfaceColor = backdropSurfaceColor(
-        tint = MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.76f else 0.70f),
-        token = token,
-        scene = scene
+    val fallbackInteractionSource = remember { MutableInteractionSource() }
+    val pressed by (interactionSource ?: fallbackInteractionSource).collectIsPressedAsState()
+    val pressProgress by animateFloatAsState(
+        targetValue = if (pressed) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "nav_selection_press_progress"
     )
+    val restFill = if (isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.10f)
     Box(
         modifier = modifier
             .clip(shape)
-            .backdropGlass(
+            .navigationSelectionGlass(
                 backdrop = backdrop,
                 shape = shape,
-                token = token,
-                surfaceColor = surfaceColor,
-                isDark = isDark,
-                pressed = false
+                pressProgress = pressProgress,
+                restFill = restFill
             )
             .strongGlassSelectionBorder(
                 shape = shape,
@@ -294,12 +306,54 @@ fun GlassNavigationTabIndicator(
     )
 }
 
+/** 官方选中水滴配方：无 blur / 无 vibrancy，折射与阴影全部随按压进度插值。 */
+private fun Modifier.navigationSelectionGlass(
+    backdrop: Backdrop,
+    shape: RoundedCornerShape,
+    pressProgress: Float,
+    restFill: Color
+): Modifier {
+    val progress = pressProgress.coerceIn(0f, 1f)
+    return drawBackdrop(
+        backdrop = backdrop,
+        shape = { shape },
+        effects = {
+            lens(
+                refractionHeight = 10.dp.toPx() * progress,
+                refractionAmount = 14.dp.toPx() * progress,
+                chromaticAberration = true
+            )
+        },
+        highlight = { Highlight(width = 0.5.dp, blurRadius = 2.dp, alpha = progress) },
+        shadow = {
+            Shadow(
+                radius = 24.dp,
+                offset = DpOffset(0.dp, 6.dp),
+                color = Color.Black.copy(alpha = 0.1f),
+                alpha = progress
+            )
+        },
+        innerShadow = {
+            InnerShadow(
+                radius = 8.dp * progress,
+                color = Color.Black.copy(alpha = 0.15f),
+                alpha = progress
+            )
+        },
+        onDrawSurface = {
+            drawRect(restFill, alpha = 1f - progress)
+            drawRect(Color.Black.copy(alpha = 0.03f * progress))
+        }
+    )
+}
+
 /** 统一的 Backdrop surface，旧的 hazeState/sourceSelection 参数仅为 Blur 兼容保留且不参与 Glass 采样。 */
 @Composable
 internal fun GlassSurfaceImpl(
     modifier: Modifier,
     hazeState: HazeState? = null,
     backdropOverride: Backdrop? = null,
+    exportedBackdrop: LayerBackdrop? = null,
     role: GlassSurfaceRole,
     shape: RoundedCornerShape,
     sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
@@ -335,8 +389,23 @@ internal fun GlassSurfaceImpl(
     }
     val pressed by (interactionSource ?: remember { MutableInteractionSource() })
         .collectIsPressedAsState()
+    // 底栏按官方 catalog 的做法：按压时整块面板略微放大（缩放写入 drawBackdrop 的 layerBlock，
+    // 采样到的背景不跟着拉伸），因此不再叠加内容缩小。其他角色沿用原有内容微缩。
+    val usesPanelPressGrow = role == GlassSurfaceRole.BottomNavigation && interactionSource != null
+    val pressProgress by animateFloatAsState(
+        targetValue = if (pressed && usesPanelPressGrow) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "backdrop_${role.name}_panel_press_progress"
+    )
     val contentScale by animateFloatAsState(
-        targetValue = if (pressed && interactionSource != null) token.pressScale else 1f,
+        targetValue = if (pressed && interactionSource != null && !usesPanelPressGrow) {
+            token.pressScale
+        } else {
+            1f
+        },
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMedium
@@ -369,7 +438,10 @@ internal fun GlassSurfaceImpl(
                         specularHighlightAlphaScale
                     } else {
                         1f
-                    }
+                    },
+                    pressProgress = pressProgress,
+                    pressGrow = if (usesPanelPressGrow) 16.dp else 0.dp,
+                    exportedBackdrop = exportedBackdrop
                 )
             } else {
                 Modifier.background(resolvedTint, shape)
@@ -453,7 +525,14 @@ internal fun Modifier.backdropGlass(
     surfaceColor: Color,
     isDark: Boolean,
     pressed: Boolean,
-    highlightScale: Float = 1f
+    highlightScale: Float = 1f,
+    // 官方 catalog 的按压反馈：缩放写进 drawBackdrop 的 layerBlock，内容与表面一起放大，
+    // 但采样到的 backdrop 不随之缩放（写在外层 graphicsLayer 会让背景一起拉伸）。
+    pressProgress: Float = 0f,
+    pressGrow: Dp = 0.dp,
+    // 把本表面「模糊层 + 填充」的成品导出成一层，供子级控件（底栏选中水滴）当作 backdrop 采样：
+    // 子级因此能与父面板像素对齐，静止时无缝，不会露出未模糊的原始页面。
+    exportedBackdrop: LayerBackdrop? = null
 ): Modifier {
     val highlightAlpha = (
         token.highlightAlpha * highlightScale * if (pressed) token.pressLighting else 1f
@@ -478,6 +557,20 @@ internal fun Modifier.backdropGlass(
                 chromaticAberration = token.chromaticAberration
             )
         },
+        layerBlock = if (pressGrow > 0.dp) {
+            {
+                val grow = pressGrow.toPx()
+                val scale = if (size.width > 0f) {
+                    1f + grow / size.width * pressProgress.coerceIn(0f, 1f)
+                } else {
+                    1f
+                }
+                scaleX = scale
+                scaleY = scale
+            }
+        } else {
+            {}
+        },
         highlight = {
             Highlight(
                 width = token.highlightWidth,
@@ -501,7 +594,8 @@ internal fun Modifier.backdropGlass(
         },
         onDrawSurface = {
             drawRect(surfaceColor)
-        }
+        },
+        exportedBackdrop = exportedBackdrop
     )
 }
 

@@ -63,7 +63,6 @@ import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -100,9 +99,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.backdrops.LayerBackdrop
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.runtime.CompositionLocalProvider
+import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.NeumorphicIconButton
-import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.DoubanLogo
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
@@ -427,11 +429,19 @@ fun SettingsScreen(
     // LazyListState 由 NavGraph backstack 自然 remember,返回设置页时位置自动恢复,无需手动持久化
     val settingsListState = rememberLazyListState()
     // 顶栏采样独立的列表 source，不能与列表内 Glass 卡片共用同一个 source。
+    // 底垫先画页面环境层（MainScreen 光晕/页面背景），再叠列表内容：顶栏按钮采本 backdrop 时，
+    // 正后方有内容折射内容、没有则折射页面渐变，而非平色白。
     val settingsBackdropBackground = MaterialTheme.colorScheme.background
-    val settingsContentBackdrop = rememberLayerBackdrop {
-        drawRect(settingsBackdropBackground)
-        drawContent()
-    }
+    val settingsAmbientBackdropLayer = (LocalBackdrop.current as? LayerBackdrop)?.graphicsLayer
+    val settingsContentBackdrop = rememberLayerBackdrop(
+        onDraw = remember(settingsBackdropBackground, settingsAmbientBackdropLayer) {
+            {
+                if (settingsAmbientBackdropLayer != null) drawLayer(settingsAmbientBackdropLayer)
+                else drawRect(settingsBackdropBackground)
+                drawContent()
+            }
+        }
+    )
     val settingsHasContentUnderTopBar by remember {
         derivedStateOf {
             hasListScrolled(
@@ -745,8 +755,8 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(Modifier.weight(1f))
-                        // 顶栏按钮采样设置页独立的列表 source（settingsContentBackdrop），
-                        // 否则会采到 AppNavigation 全局 backdrop（空背景）显示透明。
+                        // 顶栏按钮采本页 content backdrop（光晕底垫+列表）：静止折射页面渐变、
+                        // 列表滚到栏下时折射内容，避免只采到页面粉色 mesh 或平色白。
                         CompositionLocalProvider(LocalBackdrop provides settingsContentBackdrop) {
                         NeumorphicIconButton(
                             onClick = onMessagesClick,

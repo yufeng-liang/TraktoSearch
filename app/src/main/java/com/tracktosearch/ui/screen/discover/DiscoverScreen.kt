@@ -74,6 +74,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.backdrops.LayerBackdrop
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -182,12 +184,19 @@ fun DiscoverScreen(
     }
 
     val discoverHazeState = remember { HazeState() }
-    // 顶栏只采样本页面的滚动内容；列表内 Glass 卡片仍采样全局背景，避免同源递归。
+    // 顶栏采样本页 content backdrop；底垫先画页面环境层（光晕/渐变）再叠列表内容，
+    // 顶栏按钮正后方有内容折射内容、没有则折射页面渐变，而非平色白或页面粉色 mesh。
     val discoverBackdropBackground = MaterialTheme.colorScheme.background
-    val discoverContentBackdrop = rememberLayerBackdrop {
-        drawRect(discoverBackdropBackground)
-        drawContent()
-    }
+    val discoverAmbientBackdropLayer = (LocalBackdrop.current as? LayerBackdrop)?.graphicsLayer
+    val discoverContentBackdrop = rememberLayerBackdrop(
+        onDraw = remember(discoverBackdropBackground, discoverAmbientBackdropLayer) {
+            {
+                if (discoverAmbientBackdropLayer != null) drawLayer(discoverAmbientBackdropLayer)
+                else drawRect(discoverBackdropBackground)
+                drawContent()
+            }
+        }
+    )
     // HazeMaterials.thin() 读取 MaterialTheme.colorScheme，是 @Composable 函数，不能用 remember 缓存
     // DiscoverScreen 仅在 uiState 变化时重组，主题不变时 HazeStyle 开销可接受
     val discoverHazeStyle = HazeMaterials.thin()
@@ -898,9 +907,10 @@ fun DiscoverScreen(
                             letterSpacing = (-0.5).sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        // 顶栏按钮采样发现页自身的列表 source（discoverContentBackdrop），与设置页一致
-                        CompositionLocalProvider(LocalBackdrop provides discoverContentBackdrop) {
+                        // 顶栏按钮采本页 content backdrop（光晕底垫+列表）：静止折射页面渐变、
+                        // 列表滚到栏下时折射内容，避免只采到页面粉色 mesh 或平色白。
                         // 圆形操作按钮在 Glass 下使用轻量光学层，在 Blur 下沿用拟态按钮。
+                        CompositionLocalProvider(LocalBackdrop provides discoverContentBackdrop) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                         // 当从右上角图标进入筛选页时（activeFilterEntry == "icon"），给图标加 sharedElement 与筛选页返回箭头配对
                         val iconModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && activeFilterEntry == "icon" && LocalSharedTransitionEnabled.current) {
@@ -945,7 +955,7 @@ fun DiscoverScreen(
                             )
                         }
                     }
-                        } // CompositionLocalProvider
+                    } // CompositionLocalProvider(LocalBackdrop)
                 }
             }
         }
