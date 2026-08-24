@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -41,6 +43,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -95,6 +98,9 @@ fun AiFeatureScreen(
     var featureAnchorBounds by remember(feature) { mutableStateOf<Rect?>(null) }
     var showFeatureScene by remember(feature) { mutableStateOf(false) }
     var handledSceneRevision by remember(feature) { mutableStateOf(sceneRevision) }
+    var discardQuizConfirmVisible by remember(feature) { mutableStateOf(false) }
+    // 答题进行中点刷新等于放弃这一轮：必须先确认，不能手滑就把 13 题作答清空
+    val refreshNeedsConfirm = feature == AiFeature.QUIZ && hasQuizInProgress(state)
 
     LaunchedEffect(feature, sceneRevision, sceneEvent) {
         if (sceneEvent == null) {
@@ -128,7 +134,20 @@ fun AiFeatureScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onRefresh, enabled = !state.isLoading) {
+                    // 刷新是最主要的配额消耗入口，把今日用量摆在按钮旁边
+                    state.quota?.let { quota ->
+                        Text(
+                            text = stringResource(R.string.ai_quota_short, quota.dailyUsed, quota.dailyLimit),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            if (refreshNeedsConfirm) discardQuizConfirmVisible = true else onRefresh()
+                        },
+                        enabled = !state.isLoading
+                    ) {
                         Icon(
                             Icons.Rounded.Refresh,
                             contentDescription = stringResource(R.string.ai_feature_refresh)
@@ -145,6 +164,8 @@ fun AiFeatureScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
+                    // 简答题输入框在 LazyColumn 里，没有这层 imePadding 会被软键盘完全盖住
+                    .imePadding()
                     .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
             ) {
                 when (feature) {
@@ -186,11 +207,40 @@ fun AiFeatureScreen(
 
                 if (state.errorCode != null) {
                     FeatureError(
-                        modifier = Modifier.align(Alignment.Center),
+                        errorCode = state.errorCode,
                         onRetry = onRefresh
                     )
                 }
             }
+        }
+
+        if (discardQuizConfirmVisible) {
+            AlertDialog(
+                onDismissRequest = { discardQuizConfirmVisible = false },
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                title = { Text(stringResource(R.string.ai_quiz_refresh_title)) },
+                text = {
+                    Text(
+                        stringResource(
+                            R.string.ai_quiz_refresh_message,
+                            answeredQuizCount(state.quiz, state.quizAnswers)
+                        )
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        discardQuizConfirmVisible = false
+                        onRefresh()
+                    }) {
+                        Text(stringResource(R.string.ai_quiz_refresh_confirm))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { discardQuizConfirmVisible = false }) {
+                        Text(stringResource(R.string.common_cancel))
+                    }
+                }
+            )
         }
 
         AiSpriteMotion(
@@ -204,7 +254,9 @@ fun AiFeatureScreen(
             onClick = {},
             onFinished = { showFeatureScene = false },
             modifier = Modifier.zIndex(5f),
-            sceneRes = sceneEvent?.let { sceneArtFor(it).drawableRes }
+            sceneRes = sceneEvent?.let { sceneArtFor(it).drawableRes },
+            // 功能页内的场景图只是庆祝插画，不要变成一块盖在内容上的可点区域
+            interactive = false
         )
     }
 }
@@ -437,6 +489,14 @@ private fun RecommendationCard(recommendation: AiRecommendation, onOpen: () -> U
                 Text(recommendation.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 recommendation.year?.let { Text(it.toString(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 Text(recommendation.reason, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                // 不可点的卡片要说明原因，否则用户以为卡片坏了一直戳
+                if (!hasMediaId) {
+                    Text(
+                        text = stringResource(R.string.ai_taste_no_detail),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
             if (hasMediaId) {
                 Icon(Icons.Rounded.OpenInNew, contentDescription = stringResource(R.string.ai_taste_details), tint = MaterialTheme.colorScheme.primary)
@@ -519,20 +579,42 @@ private fun FeatureUnavailable() {
     }
 }
 
+/**
+ * 错误态。
+ *
+ * 两处修正：一是按错误码给出具体原因（片单不够 / 配额用完 / 授权失效…），
+ * 不再一律「精灵正在休息」；二是加遮罩挡住底层列表，之前是一张浮在内容上、
+ * 底下照样能滚能点的贴纸；三是重试解决不了的错误不给重试按钮，免得白点还烧请求。
+ */
 @Composable
-private fun FeatureError(modifier: Modifier = Modifier, onRetry: () -> Unit) {
-    Surface(
-        modifier = modifier.padding(24.dp),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.errorContainer
+private fun FeatureError(errorCode: String, onRetry: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
+            .clickable(enabled = false, onClick = {}),
+        contentAlignment = Alignment.Center
     ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        Surface(
+            modifier = Modifier.padding(24.dp),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.errorContainer,
+            tonalElevation = 6.dp
         ) {
-            Text(stringResource(R.string.ai_error), color = MaterialTheme.colorScheme.onErrorContainer, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-            OutlinedButton(onClick = onRetry) { Text(stringResource(R.string.ai_feature_retry)) }
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = stringResource(aiErrorMessageRes(errorCode)),
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                if (aiErrorIsRetryable(errorCode)) {
+                    OutlinedButton(onClick = onRetry) { Text(stringResource(R.string.ai_feature_retry)) }
+                }
+            }
         }
     }
 }

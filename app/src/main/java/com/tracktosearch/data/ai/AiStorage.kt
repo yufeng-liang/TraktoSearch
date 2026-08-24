@@ -29,6 +29,8 @@ enum class AiCacheFeature(val wireName: String) {
     QUIZ("quiz"),
     DAILY_KNOWLEDGE("daily_knowledge"),
     QUIZ_RESULT("quiz_result"),
+    // 已激活角色：不落盘的话杀进程后激活即失效，用户得再喊一次名字并再烧一次配额
+    ACTIVATION("activation"),
     TTS("tts")
 }
 

@@ -59,6 +59,8 @@ enum class AiActivationState {
     FAILED
 }
 
+private const val WATCHED_TITLES_TTL_MS = 10 * 60 * 1000L
+
 data class AiSpriteUiState(
     val characters: List<AiCharacter> = AiCharacterCatalog.all,
     val selectedCharacterId: String = "usagi",
@@ -67,6 +69,9 @@ data class AiSpriteUiState(
     val nickname: String? = null,
     val activationState: AiActivationState = AiActivationState.IDLE,
     val activationAttempt: Int = 0,
+    // 文字兜底入口：语音失败或麦克风不可用后锁存为 true，换角色/撤销授权时复位
+    val textActivationOffered: Boolean = false,
+    val textActivationAttempt: Int = 0,
     val activationMessage: String? = null,
     val quota: com.tracktosearch.data.ai.AiQuota? = null,
     val isLoading: Boolean = false,
@@ -79,6 +84,8 @@ data class AiSpriteUiState(
     val quiz: AiQuiz? = null,
     val quizPreviewMovies: List<AiWatchedTitleDto> = emptyList(),
     val quizReplacementCount: Int = 0,
+    // 「换一部」是否还有没用过的候选：已看正好 7 部时候选会被用光，按钮必须跟着禁用
+    val quizReplaceAvailable: Boolean = false,
     val quizStarted: Boolean = false,
     val quizIndex: Int = 0,
     val quizAnswers: Map<String, AiQuizAnswer> = emptyMap(),
@@ -87,6 +94,8 @@ data class AiSpriteUiState(
     val quizResultRevision: Long = 0L,
     val quizHistory: com.tracktosearch.data.ai.AiQuizHistory? = null,
     val dailyKnowledge: AiDailyKnowledge? = null,
+    // 角色目录是否成功取回：失败时全部角色停在「准备中」，UI 要给出原因和重试入口
+    val charactersLoadFailed: Boolean = false,
     val errorCode: String? = null
 ) {
     val isAuthorized: Boolean
@@ -103,7 +112,8 @@ data class AiSpriteUiState(
 class AiSpriteViewModel @Inject constructor(
     private val aiRepository: AiRepository,
     private val authManager: AuthManager,
-    private val traktRepository: TraktRepository
+    private val traktRepository: TraktRepository,
+    private val overlayStorage: com.tracktosearch.data.local.AiSpriteOverlayStorage
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(
         AiSpriteUiState(
@@ -128,22 +138,94 @@ class AiSpriteViewModel @Inject constructor(
     val guestPreviewFallbackEvents: SharedFlow<String> = _guestPreviewFallbackEvents.asSharedFlow()
 
     private var initialized = false
+    private var authObserved = false
+    private var activationRestored = false
     private var previewJob: Job? = null
     private var requestJob: Job? = null
     /** 请求代际用于隔离已取消请求的 finally，避免旧请求覆盖新请求的加载态。 */
     private var requestGeneration = 0L
     private var recentQuizIds = emptyList<String>()
     private var quizCandidates = emptyList<AiWatchedTitleDto>()
+    /** 已看列表短期缓存（时间戳 to 列表），避免每次进功能页都全量重拉 Trakt 历史。 */
+    private var watchedTitlesCache: Pair<Long, List<AiWatchedTitleDto>>? = null
     // 一次精灵中心会话共用一个会话 ID，让服务端会话配额按一次打开的精灵中心计算。
     // 若每次请求都发新 UUID，会话配额形同虚设，只剩每日上限。
-    private val spriteSessionId = "sprite-${UUID.randomUUID()}"
+    // ViewModel 现在挂在 Activity 作用域跨页面共享，不能再按实例生成——否则整个 App
+    // 生命周期只有一个会话，会话配额到重启才重置。改由 onSpriteCenterOpened() 轮换。
+    private var spriteSessionId = newSpriteSessionId()
+
+    private fun newSpriteSessionId(): String = "sprite-${UUID.randomUUID()}"
+
+    /**
+     * 探头展示策略。
+     *
+     * 必须挂在共享 ViewModel 上：之前它是页面级 `remember`，导航离开再回来就重建，
+     * 会话上限 3 次实际退化成「每次进页面 3 次」，两个搜索页还各算一份，
+     * IDLE 的 90 秒冷却也跨页失效。
+     */
+    private val overlayPolicy = AiSpriteOverlayPolicy(
+        readDailyCount = overlayStorage::readDailyCount,
+        writeDailyCount = overlayStorage::writeDailyCount
+    )
+
+    /** 消费一次探头展示额度；未激活或额度用尽返回 false。 */
+    fun tryConsumeOverlay(trigger: AiSpriteOverlayTrigger, dayKey: String): Boolean =
+        overlayPolicy.tryConsume(isSpriteActivatedForMotion(), trigger, dayKey)
+
+    /** 自动探头要求角色已激活且有对应素材，没素材的角色不参与探头。 */
+    fun isSpriteActivatedForMotion(): Boolean =
+        _uiState.value.activatedCharacterId?.let { automaticSpriteArt(it) != null } == true
+
+    /** 每次打开精灵中心换一个会话 ID，保持「一次打开 = 一个会话」的配额语义。 */
+    fun onSpriteCenterOpened() {
+        spriteSessionId = newSpriteSessionId()
+    }
 
     fun ensureLoaded() {
+        restoreActivation()
         if (initialized) {
             scheduleCharacterPreview()
             return
         }
         initialized = true
+        viewModelScope.launch {
+            loadCharacters()
+            scheduleCharacterPreview()
+            loadQuizHistory()
+        }
+    }
+
+    /**
+     * 恢复上次激活的角色，并开始跟随授权态。
+     *
+     * 与 [ensureLoaded] 分开：这条路径不拉角色目录也不播试听，
+     * 供详情页这类没有激活入口、但要用激活态的页面直接调用，
+     * 不会在详情页突然放出一段语音。
+     */
+    fun restoreActivation() {
+        observeAuthState()
+        if (activationRestored) return
+        activationRestored = true
+        viewModelScope.launch {
+            val friendId = authManager.friendId.value.orEmpty()
+            if (friendId.isBlank()) return@launch
+            val restored = aiRepository.readActivatedCharacterId(friendId) ?: return@launch
+            if (_uiState.value.characters.none { it.id == restored }) return@launch
+            _uiState.update { state ->
+                // 本次会话里已经激活过就不覆盖，避免落盘的旧值顶掉刚激活的角色
+                if (state.activatedCharacterId != null) state
+                else state.copy(
+                    activatedCharacterId = restored,
+                    selectedCharacterId = restored,
+                    activationState = AiActivationState.SUCCESS
+                )
+            }
+        }
+    }
+
+    private fun observeAuthState() {
+        if (authObserved) return
+        authObserved = true
         viewModelScope.launch {
             launch {
                 var previousAuthState = authManager.authState.value
@@ -165,9 +247,6 @@ class AiSpriteViewModel @Inject constructor(
                     _uiState.update { it.copy(nickname = nickname) }
                 }
             }
-            loadCharacters()
-            scheduleCharacterPreview()
-            loadQuizHistory()
         }
     }
 
@@ -178,11 +257,16 @@ class AiSpriteViewModel @Inject constructor(
         previewJob = null
         recentQuizIds = emptyList()
         quizCandidates = emptyList()
+        watchedTitlesCache = null
+        // 重新登录后要能再从落盘值恢复，所以放开这道闸
+        activationRestored = false
         _uiState.update {
             it.copy(
                 activatedCharacterId = null,
                 activationState = AiActivationState.IDLE,
                 activationAttempt = 0,
+                textActivationOffered = false,
+                textActivationAttempt = 0,
                 activationMessage = null,
                 quota = null,
                 isLoading = false,
@@ -194,6 +278,7 @@ class AiSpriteViewModel @Inject constructor(
                 quiz = null,
                 quizPreviewMovies = emptyList(),
                 quizReplacementCount = 0,
+                quizReplaceAvailable = false,
                 quizStarted = false,
                 quizIndex = 0,
                 quizAnswers = emptyMap(),
@@ -223,8 +308,11 @@ class AiSpriteViewModel @Inject constructor(
                 activationState = if (it.activatedCharacterId == characterId) AiActivationState.SUCCESS else AiActivationState.IDLE,
                 activationMessage = null,
                 errorCode = null,
-                // 换角色重置失败尝试计数，避免某角色语音激活 3 次失败后永久锁死所有角色
-                activationAttempt = 0
+                // 换角色重置失败尝试计数，避免某角色语音激活 5 次失败后永久锁死所有角色
+                activationAttempt = 0,
+                // 文字兜底入口也跟着角色重置：新角色还没试过语音，先别急着给兜底
+                textActivationOffered = false,
+                textActivationAttempt = 0
             )
         }
         scheduleCharacterPreview()
@@ -241,19 +329,9 @@ class AiSpriteViewModel @Inject constructor(
             setError("CHARACTER_UNAVAILABLE")
             return
         }
-        when (activationRequestMode(state.activationAttempt)) {
-            AiActivationRequestMode.TEXT -> {
-                activateByText()
-                return
-            }
-            AiActivationRequestMode.NONE -> {
-                setError("ACTIVATION_RETRY_LIMIT")
-                return
-            }
-            AiActivationRequestMode.VOICE -> Unit
-        }
-        if (!canActivateCharacter(character, state) && state.activationAttempt > 0) {
-            setError("ACTIVATION_RETRY_LIMIT")
+        if (!canRequestVoiceActivation(state.activationAttempt)) {
+            // 语音次数用满：不再录音，但把文字兜底开出来，别把用户彻底堵死
+            _uiState.update { it.copy(textActivationOffered = true, errorCode = "ACTIVATION_RETRY_LIMIT") }
             return
         }
         if (!canActivateCharacter(character, state)) {
@@ -273,7 +351,13 @@ class AiSpriteViewModel @Inject constructor(
         requestJob = viewModelScope.launch {
             val audioDataUrl = AiAudioRecorder.recordOnce(context)
             if (audioDataUrl.isNullOrBlank()) {
-                _uiState.update { it.copy(activationState = AiActivationState.FAILED, errorCode = "AUDIO_UNAVAILABLE") }
+                _uiState.update {
+                    it.copy(
+                        activationState = AiActivationState.FAILED,
+                        textActivationOffered = true,
+                        errorCode = "AUDIO_UNAVAILABLE"
+                    )
+                }
                 return@launch
             }
             _uiState.update { it.copy(activationState = AiActivationState.VERIFYING) }
@@ -292,19 +376,49 @@ class AiSpriteViewModel @Inject constructor(
                         activationState = if (activation.activated) AiActivationState.SUCCESS else AiActivationState.FAILED,
                         activationMessage = activation.activationPhrase.takeIf { activation.activated && it.isNotBlank() },
                         quota = activation.quota ?: it.quota,
+                        // 语音没识别出来也算"走不通"，此时才把文字入口露出来
+                        textActivationOffered = it.textActivationOffered || !activation.activated,
                         errorCode = if (activation.activated) null else "ACTIVATION_NOT_MATCHED"
                     )
                 }
                 activation.audio?.let { _audioEvents.emit(it) }
-                if (activation.activated) loadGreeting(character.id)
+                if (activation.activated) {
+                    // 落盘激活态：跨进程重启和详情页这类无激活入口的页面都要认这个角色
+                    aiRepository.saveActivatedCharacterId(
+                        authManager.friendId.value.orEmpty(),
+                        character.id
+                    )
+                    loadGreeting(character.id)
+                }
             }.onFailure { error ->
-                _uiState.update { it.copy(activationState = AiActivationState.FAILED, errorCode = errorCode(error)) }
+                _uiState.update {
+                    it.copy(
+                        activationState = AiActivationState.FAILED,
+                        textActivationOffered = true,
+                        errorCode = errorCode(error)
+                    )
+                }
             }
         }
     }
 
-    /** 麦克风权限被拒绝或设备没有输入源时，提供一次明确的文字兜底。 */
-    fun activateByText() {
+    /** 麦克风权限被拒绝或设备没有录音源：语音这条路当场判死，直接把文字入口开出来。 */
+    fun onVoiceActivationUnavailable() {
+        _uiState.update {
+            it.copy(
+                activationState = AiActivationState.FAILED,
+                textActivationOffered = true,
+                errorCode = "AUDIO_UNAVAILABLE"
+            )
+        }
+    }
+
+    /**
+     * 文字兜底激活：用用户手输的角色名提交，不再直接拿角色预设名蒙过去。
+     *
+     * 只在语音失败或麦克风不可用之后可用（textActivationOffered），与语音次数分开计数。
+     */
+    fun activateByText(spokenName: String) {
         val state = _uiState.value
         if (!state.isAuthorized) {
             setError("AUTH_REQUIRED")
@@ -315,20 +429,25 @@ class AiSpriteViewModel @Inject constructor(
             setError("CHARACTER_UNAVAILABLE")
             return
         }
-        if (activationRequestMode(state.activationAttempt) == AiActivationRequestMode.VOICE) {
-            setError("VOICE_ACTIVATION_REQUIRED")
+        val typedName = normalizeSpokenName(spokenName)
+        if (typedName.isEmpty()) {
+            setError("ACTIVATION_NAME_EMPTY")
             return
         }
-        if (!canActivateCharacter(character, state)) {
+        if (!canRequestTextActivation(state.textActivationAttempt)) {
             setError("ACTIVATION_RETRY_LIMIT")
             return
         }
-        val attempt = state.activationAttempt + 1
+        if (!canActivateCharacterByText(character, state)) {
+            setError("ACTIVATION_UNAVAILABLE")
+            return
+        }
+        val attempt = state.textActivationAttempt + 1
         requestJob?.cancel()
         requestJob = viewModelScope.launch {
             _uiState.update {
                 it.copy(
-                    activationAttempt = attempt,
+                    textActivationAttempt = attempt,
                     activationState = AiActivationState.VERIFYING,
                     errorCode = null
                 )
@@ -337,7 +456,7 @@ class AiSpriteViewModel @Inject constructor(
                 authManager.friendId.value.orEmpty(),
                 AiActivateRequest(
                     characterId = character.id,
-                    spokenName = character.activationWord,
+                    spokenName = typedName,
                     sessionId = spriteSessionId
                 )
             ).onSuccess { activation ->
@@ -351,7 +470,14 @@ class AiSpriteViewModel @Inject constructor(
                     )
                 }
                 activation.audio?.let { _audioEvents.emit(it) }
-                if (activation.activated) loadGreeting(character.id)
+                if (activation.activated) {
+                    // 落盘激活态：跨进程重启和详情页这类无激活入口的页面都要认这个角色
+                    aiRepository.saveActivatedCharacterId(
+                        authManager.friendId.value.orEmpty(),
+                        character.id
+                    )
+                    loadGreeting(character.id)
+                }
             }.onFailure { error ->
                 _uiState.update { it.copy(activationState = AiActivationState.FAILED, errorCode = errorCode(error)) }
             }
@@ -363,7 +489,8 @@ class AiSpriteViewModel @Inject constructor(
         when (feature) {
             AiFeature.GREETING -> loadGreeting(_uiState.value.activatedCharacterId ?: _uiState.value.selectedCharacterId)
             AiFeature.TASTE -> loadTaste()
-            AiFeature.QUIZ -> prepareQuizPreview()
+            // 返回后重进不能把答到一半的一轮题冲掉；只有没有未完成的一轮时才重新抽题
+            AiFeature.QUIZ -> if (!hasQuizInProgress(_uiState.value)) prepareQuizPreview()
             AiFeature.DAILY -> loadDaily()
         }
     }
@@ -380,6 +507,7 @@ class AiSpriteViewModel @Inject constructor(
         }
     }
 
+    /** 功能页刷新。答题页的刷新等于放弃这一轮，UI 必须先做二次确认再调用。 */
     fun refreshFeature() {
         when (_uiState.value.activeFeature) {
             AiFeature.GREETING -> loadGreeting(
@@ -387,7 +515,7 @@ class AiSpriteViewModel @Inject constructor(
                 forceRefresh = true
             )
             AiFeature.TASTE -> loadTaste(forceRefresh = true)
-            AiFeature.QUIZ -> prepareQuizPreview()
+            AiFeature.QUIZ -> replayQuiz()
             AiFeature.DAILY -> loadDaily(forceRefresh = true)
             null -> Unit
         }
@@ -459,6 +587,7 @@ class AiSpriteViewModel @Inject constructor(
                 quizIndex = 0,
                 quizAnswers = emptyMap(),
                 quizReplacementCount = 0,
+                quizReplaceAvailable = false,
                 quizPreviewMovies = emptyList()
             )
         }
@@ -484,10 +613,12 @@ class AiSpriteViewModel @Inject constructor(
             replacementCount = state.quizReplacementCount
         )
         if (next != state.quizPreviewMovies) {
+            val nextReplacementCount = state.quizReplacementCount + 1
             _uiState.update {
                 it.copy(
                     quizPreviewMovies = next,
-                    quizReplacementCount = it.quizReplacementCount + 1
+                    quizReplacementCount = nextReplacementCount,
+                    quizReplaceAvailable = canReplaceQuizPreview(next, quizCandidates, nextReplacementCount)
                 )
             }
         }
@@ -506,11 +637,28 @@ class AiSpriteViewModel @Inject constructor(
     }
 
     private suspend fun loadCharacters() {
-        aiRepository.listCharacters().onSuccess { remote ->
-            val remoteById = remote.associateBy { it.id }
-            _uiState.update { state ->
-                state.copy(characters = state.characters.map { local -> remoteById[local.id] ?: local })
-            }
+        aiRepository.listCharacters().fold(
+            onSuccess = { remote ->
+                val remoteById = remote.associateBy { it.id }
+                _uiState.update { state ->
+                    state.copy(
+                        characters = state.characters.map { local -> remoteById[local.id] ?: local },
+                        charactersLoadFailed = false
+                    )
+                }
+            },
+            // 本地目录默认 isAvailable=false，取不到远端可用态就全是「准备中」，
+            // 激活按钮会整片灰掉。必须显式标记失败，让 UI 给出原因和重试入口。
+            onFailure = { _uiState.update { it.copy(charactersLoadFailed = true) } }
+        )
+    }
+
+    /** 角色目录加载失败后的手动重试。 */
+    fun reloadCharacters() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(charactersLoadFailed = false, errorCode = null) }
+            loadCharacters()
+            if (_uiState.value.charactersLoadFailed) setError("CHARACTERS_LOAD_FAILED")
         }
     }
 
@@ -598,6 +746,7 @@ class AiSpriteViewModel @Inject constructor(
             val watched = watchedTitles()
             if (watched.size < 7) throw IllegalStateException("NOT_ENOUGH_MOVIES")
             quizCandidates = watched
+            val preview = selectQuizPreview(watched)
             _uiState.update {
                 it.copy(
                     quiz = null,
@@ -605,8 +754,9 @@ class AiSpriteViewModel @Inject constructor(
                     quizStarted = false,
                     quizIndex = 0,
                     quizAnswers = emptyMap(),
-                    quizPreviewMovies = selectQuizPreview(watched),
-                    quizReplacementCount = 0
+                    quizPreviewMovies = preview,
+                    quizReplacementCount = 0,
+                    quizReplaceAvailable = canReplaceQuizPreview(preview, watched, 0)
                 )
             }
         }
@@ -688,14 +838,23 @@ class AiSpriteViewModel @Inject constructor(
         requestJob = null
     }
 
-    private suspend fun watchedTitles(): List<AiWatchedTitleDto> = withContext(Dispatchers.IO) {
-        val results = listOf(
-            async { traktRepository.getAllMovieHistory(extended = "full") },
-            async { traktRepository.getAllShowHistory(extended = "full") }
-        ).awaitAll()
-        val movies = (results[0].getOrNull() as? List<TraktWatchlistMovieItem>).orEmpty().map { it.toAiWatched() }
-        val shows = (results[1].getOrNull() as? List<TraktWatchlistShowItem>).orEmpty().map { it.toAiWatched() }
-        (movies + shows).sortedByDescending { it.watchedAt.orEmpty() }.take(60)
+    private suspend fun watchedTitles(): List<AiWatchedTitleDto> {
+        // 「锐评」「闯关」每次进入都全量拉 Trakt 已看历史，导致每次都转圈。
+        // 已看列表短时间内基本不变，缓存 10 分钟即可，符合缓存优先原则。
+        watchedTitlesCache?.let { cached ->
+            if (System.currentTimeMillis() - cached.first < WATCHED_TITLES_TTL_MS) return cached.second
+        }
+        val loaded = withContext(Dispatchers.IO) {
+            val results = listOf(
+                async { traktRepository.getAllMovieHistory(extended = "full") },
+                async { traktRepository.getAllShowHistory(extended = "full") }
+            ).awaitAll()
+            val movies = (results[0].getOrNull() as? List<TraktWatchlistMovieItem>).orEmpty().map { it.toAiWatched() }
+            val shows = (results[1].getOrNull() as? List<TraktWatchlistShowItem>).orEmpty().map { it.toAiWatched() }
+            (movies + shows).sortedByDescending { it.watchedAt.orEmpty() }.take(60)
+        }
+        if (loaded.isNotEmpty()) watchedTitlesCache = System.currentTimeMillis() to loaded
+        return loaded
     }
 
     private fun isAuthorized(): Boolean =

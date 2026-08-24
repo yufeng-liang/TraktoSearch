@@ -108,6 +108,18 @@ class AiSpriteMotionController {
     }
 }
 
+/**
+ * 探头动效各阶段时长。
+ *
+ * 原来 PEEK/OBSERVE/REACT 只有 560/640/460ms，加上淡入淡出总共约 2 秒，
+ * 而角色全程在动——用户基本不可能在这个窗口里点中它，"点精灵进中心" 形同没有。
+ * 拉长 OBSERVE 这个静态观察段，把可点窗口做到约 3 秒。
+ */
+private const val PEEK_DURATION_MS = 700L
+private const val OBSERVE_DURATION_MS = 1_500L
+private const val REACT_DURATION_MS = 800L
+private const val RETREAT_DURATION_MS = 240L
+
 @Composable
 fun AiSpriteMotion(
     characterId: String,
@@ -118,6 +130,7 @@ fun AiSpriteMotion(
     onFinished: () -> Unit,
     modifier: Modifier = Modifier,
     sceneRes: Int? = null,
+    interactive: Boolean = true,
     interruptRequest: AiSpriteInterruptRequest? = null
 ) {
     val art = automaticSpriteArt(characterId) ?: return
@@ -159,16 +172,16 @@ fun AiSpriteMotion(
         delay(120L)
         controller.advance(AiSpriteMotionState.PEEK)
         state = controller.state
-        delay(560L)
+        delay(PEEK_DURATION_MS)
         controller.advance(AiSpriteMotionState.OBSERVE)
         state = controller.state
-        delay(640L)
+        delay(OBSERVE_DURATION_MS)
         controller.advance(AiSpriteMotionState.REACT)
         state = controller.state
-        delay(460L)
+        delay(REACT_DURATION_MS)
         controller.interrupt(AiSpriteInterruptReason.NAVIGATION)
         state = controller.state
-        delay(240L)
+        delay(RETREAT_DURATION_MS)
         controller.finishRetreat()
         state = controller.state
         onFinished()
@@ -181,6 +194,7 @@ fun AiSpriteMotion(
         state = state,
         onClick = onClick,
         sceneRes = sceneRes,
+        interactive = interactive,
         modifier = modifier
     )
 }
@@ -193,6 +207,7 @@ private fun SpriteMotionVisual(
     state: AiSpriteMotionState,
     onClick: () -> Unit,
     sceneRes: Int?,
+    interactive: Boolean,
     modifier: Modifier = Modifier
 ) {
     if (state == AiSpriteMotionState.HIDDEN) return
@@ -273,7 +288,9 @@ private fun SpriteMotionVisual(
     )
     val contentDescription = stringResource(R.string.ai_sprite_open_center)
 
-    val isInteractive = sceneRes == null && (state == AiSpriteMotionState.PEEK ||
+    // 场景图之前被排除在可点范围外，等于搜索页精灵冒了个头但完全点不动。
+    // 现在由调用方用 interactive 决定：搜索页可点进精灵中心，功能页内的场景图不可点。
+    val isInteractive = interactive && (state == AiSpriteMotionState.PEEK ||
         state == AiSpriteMotionState.OBSERVE ||
         state == AiSpriteMotionState.REACT)
     val layeredArt = art.layerArt

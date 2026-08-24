@@ -13,7 +13,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -30,29 +29,37 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Keyboard
+import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Mic
-import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Quiz
+import androidx.compose.material.icons.rounded.RateReview
 import androidx.compose.material.icons.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.WavingHand
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -65,19 +72,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiCharacter
@@ -91,6 +96,9 @@ private enum class AuditionPlaybackState {
     PLAYING
 }
 
+/** 试听 LOADING 的兜底超时：TTS 请求挂住时把按钮还给用户。 */
+private const val AUDITION_LOADING_TIMEOUT_MS = 8_000L
+
 @Composable
 fun AiSpriteCenter(
     visible: Boolean,
@@ -99,7 +107,7 @@ fun AiSpriteCenter(
     onMovieClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
     onShowClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
     onRecommendationClick: ((com.tracktosearch.data.ai.AiRecommendation) -> Unit)? = null,
-    viewModel: AiSpriteViewModel = hiltViewModel()
+    viewModel: AiSpriteViewModel = rememberSharedAiSpriteViewModel()
 ) {
     if (!visible) return
 
@@ -113,10 +121,14 @@ fun AiSpriteCenter(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         permissionRequested = false
-        if (granted) viewModel.activate(context)
+        // 拒权后不能什么都不发生：直接判定语音走不通，把文字兜底入口开出来
+        if (granted) viewModel.activate(context) else viewModel.onVoiceActivationUnavailable()
     }
 
     LaunchedEffect(Unit) {
+        // 每次打开精灵中心轮换会话 ID：ViewModel 现在跨页面共享，
+        // 不轮换的话会话配额要等 App 重启才重置
+        viewModel.onSpriteCenterOpened()
         viewModel.ensureLoaded()
         launch {
             viewModel.audioEvents.collectLatest { audio ->
@@ -140,6 +152,14 @@ fun AiSpriteCenter(
     LaunchedEffect(state.selectedCharacterId, state.isAuthorized) {
         audioPlayer.stop()
         auditionPlaybackState = AuditionPlaybackState.LOADING
+    }
+    // 试听请求挂住时不能永久转圈：超时自动回到可重播状态，否则重播按钮永久禁用
+    LaunchedEffect(auditionPlaybackState, state.selectedCharacterId) {
+        if (auditionPlaybackState != AuditionPlaybackState.LOADING) return@LaunchedEffect
+        kotlinx.coroutines.delay(AUDITION_LOADING_TIMEOUT_MS)
+        if (auditionPlaybackState == AuditionPlaybackState.LOADING) {
+            auditionPlaybackState = AuditionPlaybackState.IDLE
+        }
     }
     DisposableEffect(Unit) {
         onDispose { audioPlayer.stop() }
@@ -172,21 +192,17 @@ fun AiSpriteCenter(
                 onNavigateToLogin = onNavigateToLogin,
                 onSelectCharacter = viewModel::selectCharacter,
                 onActivate = {
-                    when (activationRequestMode(state.activationAttempt)) {
-                        AiActivationRequestMode.VOICE -> {
-                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                                viewModel.activate(context)
-                            } else if (!permissionRequested) {
-                                permissionRequested = true
-                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                            }
-                        }
-                        AiActivationRequestMode.TEXT -> viewModel.activateByText()
-                        AiActivationRequestMode.NONE -> viewModel.clearError()
+                    // 主按钮永远是语音：次数没用满就一直能重试，文字兜底是并列的第二入口
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        viewModel.activate(context)
+                    } else if (!permissionRequested) {
+                        permissionRequested = true
+                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     }
                 },
                 onTextActivate = viewModel::activateByText,
                 onOpenFeature = viewModel::openFeature,
+                onReloadCharacters = viewModel::reloadCharacters,
                 onPlayAudio = { audio -> audioPlayer.play(audio) },
                 onReplayAudition = {
                     audioPlayer.stop()
@@ -200,6 +216,7 @@ fun AiSpriteCenter(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SpriteCenterHome(
     state: AiSpriteUiState,
@@ -207,8 +224,9 @@ private fun SpriteCenterHome(
     onNavigateToLogin: () -> Unit,
     onSelectCharacter: (String) -> Unit,
     onActivate: () -> Unit,
-    onTextActivate: () -> Unit,
+    onTextActivate: (String) -> Unit,
     onOpenFeature: (AiFeature) -> Unit,
+    onReloadCharacters: () -> Unit,
     onPlayAudio: (com.tracktosearch.data.ai.AiAudio) -> Unit,
     onReplayAudition: () -> Unit,
     auditionPlaybackState: AuditionPlaybackState,
@@ -216,156 +234,268 @@ private fun SpriteCenterHome(
 ) {
     val character = state.selectedCharacter ?: state.characters.first()
     val scrollState = rememberScrollState()
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(WindowInsets.statusBars.asPaddingValues())
-            .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 20.dp)
+    Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            text = stringResource(R.string.ai_sprite_center_title),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            text = stringResource(R.string.ai_sprite_center_subtitle),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.ai_sprite_close))
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .verticalScroll(scrollState)
+                .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 20.dp)
+        ) {
+            CharacterStage(
+                character = character,
+                state = state,
+                onPlayAudio = onPlayAudio,
+                onReplayAudition = onReplayAudition,
+                auditionPlaybackState = auditionPlaybackState
+            )
+
+            val characterLabel = stringResource(
+                R.string.ai_sprite_character_selection,
+                character.name,
+                character.personalityPrompt
+            )
+            Text(
+                text = characterLabel,
+                modifier = Modifier.padding(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 8.dp),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                state.characters.forEach { item ->
+                    CharacterChoice(
+                        character = item,
+                        selected = item.id == state.selectedCharacterId,
+                        onClick = { onSelectCharacter(item.id) }
+                    )
+                }
+            }
+
+            // 角色目录取不回来时全员「准备中」，这里明确说原因并给重试，而不是让按钮干灰着
+            if (state.charactersLoadFailed) {
+                Spacer(Modifier.height(12.dp))
+                Surface(
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.errorContainer
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.ai_error_characters_failed),
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        TextButton(onClick = onReloadCharacters) {
+                            Text(stringResource(R.string.ai_sprite_characters_retry))
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            if (!state.isAuthorized) {
+                GuestHintCard(onNavigateToLogin = onNavigateToLogin)
+            } else if (shouldShowActivatedCharacterContent(
+                    selectedCharacterId = character.id,
+                    activatedCharacterId = state.activatedCharacterId,
+                    isAuthorized = state.isAuthorized
+                )
+            ) {
+                ActivatedStatusPanel(state = state, character = character)
+            } else {
+                ActivationPanel(
+                    state = state,
+                    character = character,
+                    onActivate = onActivate,
+                    onTextActivate = onTextActivate,
+                    onClearError = onClearError
+                )
+            }
+
+            AnimatedVisibility(
+                visible = shouldShowActivatedCharacterContent(
+                    selectedCharacterId = character.id,
+                    activatedCharacterId = state.activatedCharacterId,
+                    isAuthorized = state.isAuthorized
+                )
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp)) {
+                    GreetingSummaryCard(
+                        state = state,
+                        onOpenGreeting = { onOpenFeature(AiFeature.GREETING) },
+                        onPlayAudio = onPlayAudio
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    FeatureList(state = state, onOpenFeature = onOpenFeature)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuestHintCard(onNavigateToLogin: () -> Unit) {
+    Surface(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column {
-                Text(
-                    text = stringResource(R.string.ai_sprite_center_title),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.ExtraBold
-                )
-                Text(
-                    text = stringResource(R.string.ai_sprite_center_subtitle),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            IconButton(onClick = onDismiss) {
-                Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.ai_sprite_close))
+            Icon(Icons.Rounded.Lock, contentDescription = null)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.ai_sprite_guest_hint), style = MaterialTheme.typography.bodyMedium)
+                TextButton(
+                    onClick = onNavigateToLogin,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                ) {
+                    Text(stringResource(R.string.ai_sprite_login))
+                }
             }
         }
+    }
+}
 
-        CharacterStage(
-            character = character,
-            state = state,
-            onPlayAudio = onPlayAudio,
-            onReplayAudition = onReplayAudition,
-            auditionPlaybackState = auditionPlaybackState
-        )
-
-        val characterLabel = stringResource(
-            R.string.ai_sprite_character_selection,
-            character.name,
-            character.personalityPrompt
-        )
-        Text(
-            text = characterLabel,
-            modifier = Modifier.padding(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 8.dp),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+/** 激活成功后取代激活面板：不再留一个灰掉的「喊名字来激活」按钮当摆设。 */
+@Composable
+private fun ActivatedStatusPanel(state: AiSpriteUiState, character: AiCharacter) {
+    Surface(
+        modifier = Modifier
+            .padding(horizontal = 16.dp)
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.primaryContainer
+    ) {
         Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(Icons.Rounded.CheckCircle, contentDescription = null)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.ai_sprite_activated_status, character.name),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.ai_sprite_activated_hint),
+                    style = MaterialTheme.typography.bodySmall
+                )
+                state.quota?.let { quota ->
+                    Text(
+                        stringResource(
+                            R.string.ai_sprite_quota,
+                            quota.dailyUsed,
+                            quota.dailyLimit,
+                            quota.sessionUsed,
+                            quota.sessionLimit
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 首页只展示问候正文一句，完整解读/点评留给「昵称欢迎」功能页。
+ * 之前首页把三段全铺出来，功能页再原样重复一遍，多一层导航零信息增量。
+ */
+@Composable
+private fun GreetingSummaryCard(
+    state: AiSpriteUiState,
+    onOpenGreeting: () -> Unit,
+    onPlayAudio: (com.tracktosearch.data.ai.AiAudio) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = stringResource(R.string.ai_sprite_greeting_title),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+        state.greeting?.audio?.let { audio ->
+            IconButton(onClick = { onPlayAudio(audio) }) {
+                Icon(Icons.Rounded.VolumeUp, contentDescription = stringResource(R.string.ai_audio_play))
+            }
+        }
+    }
+    val greeting = state.greeting
+    if (greeting != null) {
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .clickable(onClick = onOpenGreeting),
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant
         ) {
-            state.characters.forEach { item ->
-                CharacterChoice(
-                    character = item,
-                    selected = item.id == state.selectedCharacterId,
-                    onClick = { onSelectCharacter(item.id) }
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(greeting.greeting, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.ai_sprite_greeting_expand),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         }
-
-        Spacer(Modifier.height(14.dp))
-        if (state.isAuthorized) {
-            ActivationPanel(
-                state = state,
-                character = character,
-                onActivate = onActivate,
-                onTextActivate = onTextActivate,
-                onClearError = onClearError
-            )
-        } else {
-            Surface(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Icon(Icons.Rounded.Lock, contentDescription = null)
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.ai_sprite_guest_hint), style = MaterialTheme.typography.bodyMedium)
-                        TextButton(
-                            onClick = onNavigateToLogin,
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                        ) {
-                            Text(stringResource(R.string.ai_sprite_login))
-                        }
-                    }
-                }
-            }
-        }
-
-        AnimatedVisibility(
-            visible = shouldShowActivatedCharacterContent(
-                selectedCharacterId = character.id,
-                activatedCharacterId = state.activatedCharacterId,
-                isAuthorized = state.isAuthorized
-            )
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.ai_sprite_greeting_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    state.greeting?.audio?.let { audio ->
-                        IconButton(onClick = { onPlayAudio(audio) }) {
-                            Icon(Icons.Rounded.VolumeUp, contentDescription = stringResource(R.string.ai_audio_play))
-                        }
-                    }
-                }
-                state.greeting?.let { greeting ->
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(greeting.greeting, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                            Spacer(Modifier.height(8.dp))
-                            Text(greeting.nicknameMeaning, style = MaterialTheme.typography.bodyMedium)
-                            Spacer(Modifier.height(4.dp))
-                            Text(greeting.comment, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-                }
-                if (state.greeting == null && !state.isLoading) {
-                    Text(
-                        text = state.activationMessage.orEmpty(),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-                Spacer(Modifier.height(16.dp))
-                FeatureList(state = state, onOpenFeature = onOpenFeature)
-            }
-        }
+    } else if (!state.isLoading && !state.activationMessage.isNullOrBlank()) {
+        Text(
+            text = state.activationMessage,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
     }
 }
 
@@ -476,6 +606,9 @@ private fun CharacterStage(
                         text = if (showActivatedContent && state.activationState == AiActivationState.SUCCESS) {
                             state.greeting?.greeting ?: state.activationMessage.orEmpty()
                         } else character.auditionText,
+                        // 必须给 weight：Row 里非 weight 子项按顺序吃满剩余宽度，
+                        // 长文案会把后面那个播放按钮挤成 0 宽看不见
+                        modifier = Modifier.weight(1f, fill = false),
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = 2,
                         textAlign = TextAlign.Center
@@ -493,10 +626,18 @@ private fun CharacterStage(
 
 @Composable
 private fun CharacterChoice(character: AiCharacter, selected: Boolean, onClick: () -> Unit) {
+    val preparingLabel = stringResource(R.string.ai_sprite_preparing)
+    // 选中态之前只靠底色和抬升表达，读屏读不出选了谁；补 selected 语义与单选 role
+    val choiceDescription = if (character.isAvailable) character.name else "${character.name}, $preparingLabel"
     Surface(
         onClick = onClick,
         modifier = Modifier
-            .size(width = 88.dp, height = 112.dp),
+            .size(width = 88.dp, height = 112.dp)
+            .semantics {
+                this.selected = selected
+                role = Role.RadioButton
+                contentDescription = choiceDescription
+            },
         shape = RoundedCornerShape(18.dp),
         color = if (selected) characterTint(character).copy(alpha = 0.24f) else MaterialTheme.colorScheme.surfaceVariant,
         tonalElevation = if (selected) 4.dp else 0.dp
@@ -509,7 +650,7 @@ private fun CharacterChoice(character: AiCharacter, selected: Boolean, onClick: 
             AiCharacterGlyph(character, Modifier.size(58.dp))
             Text(character.name, style = MaterialTheme.typography.labelMedium, maxLines = 1)
             if (!character.isAvailable) {
-                Text(stringResource(R.string.ai_sprite_preparing), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(preparingLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -520,66 +661,84 @@ private fun ActivationPanel(
     state: AiSpriteUiState,
     character: AiCharacter,
     onActivate: () -> Unit,
-    onTextActivate: () -> Unit,
+    onTextActivate: (String) -> Unit,
     onClearError: () -> Unit
 ) {
+    var textDialogVisible by remember { mutableStateOf(false) }
+    val inFlight = state.activationState == AiActivationState.RECORDING ||
+        state.activationState == AiActivationState.VERIFYING
+    val voiceAvailable = canRequestVoiceActivation(state.activationAttempt)
+    val showTextActivation = shouldShowTextActivation(state)
+    val blockedReasonRes = activationBlockedReasonRes(character, state)
+
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        val requestMode = activationRequestMode(state.activationAttempt)
         val activationText = when (state.activationState) {
             AiActivationState.RECORDING -> stringResource(R.string.ai_sprite_activating, character.activationWord)
             AiActivationState.VERIFYING -> stringResource(R.string.ai_sprite_activating, character.activationWord)
-            AiActivationState.SUCCESS -> state.activationMessage ?: stringResource(R.string.ai_sprite_activation_success)
             else -> stringResource(R.string.ai_sprite_activate, character.activationWord)
         }
         Text(activationText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text(
-            text = if (requestMode == AiActivationRequestMode.VOICE) {
-                stringResource(R.string.ai_sprite_listening)
-            } else {
-                stringResource(R.string.ai_sprite_text_fallback_hint)
-            },
+            // 激活入口整体不可用时说明原因，而不是留一个没有解释的灰按钮
+            text = blockedReasonRes?.let { stringResource(it) } ?: stringResource(R.string.ai_sprite_listening),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (blockedReasonRes != null) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
             modifier = Modifier.padding(top = 4.dp)
         )
         Spacer(Modifier.height(10.dp))
         Button(
-            onClick = {
-                if (requestMode == AiActivationRequestMode.TEXT) {
-                    onTextActivate()
-                } else {
-                    onActivate()
-                }
-            },
+            onClick = onActivate,
             enabled = canActivateCharacter(character, state),
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
             contentPadding = ButtonDefaults.ContentPadding
         ) {
-            if (state.activationState == AiActivationState.RECORDING || state.activationState == AiActivationState.VERIFYING) {
+            if (inFlight) {
                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
             } else {
-                Icon(
-                    imageVector = if (requestMode == AiActivationRequestMode.VOICE) {
-                        Icons.Rounded.Mic
-                    } else {
-                        Icons.Rounded.AutoAwesome
-                    },
-                    contentDescription = null
-                )
+                Icon(imageVector = Icons.Rounded.Mic, contentDescription = null)
             }
             Spacer(Modifier.size(8.dp))
             Text(
-                when (requestMode) {
-                    AiActivationRequestMode.VOICE -> stringResource(R.string.ai_sprite_activate, character.activationWord)
-                    AiActivationRequestMode.TEXT -> stringResource(R.string.ai_sprite_text_fallback)
-                    AiActivationRequestMode.NONE -> stringResource(R.string.ai_sprite_try_again)
+                if (voiceAvailable) {
+                    stringResource(R.string.ai_sprite_activate, character.activationWord)
+                } else {
+                    stringResource(R.string.ai_sprite_voice_limit_reached)
                 }
             )
         }
+        // 语音失败或麦克风不可用之后才出现的第二入口，点开是输入框而不是直接提交预设名
+        AnimatedVisibility(visible = showTextActivation) {
+            Column {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = stringResource(R.string.ai_sprite_text_fallback_available),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(6.dp))
+                OutlinedButton(
+                    onClick = {
+                        onClearError()
+                        textDialogVisible = true
+                    },
+                    enabled = canActivateCharacterByText(character, state),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Rounded.Keyboard, contentDescription = null)
+                    Spacer(Modifier.size(8.dp))
+                    Text(stringResource(R.string.ai_sprite_text_fallback))
+                }
+            }
+        }
         if (state.errorCode != null) {
             Text(
-                text = stringResource(R.string.ai_error),
+                text = stringResource(aiErrorMessageRes(state.errorCode)),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 8.dp)
@@ -594,15 +753,69 @@ private fun ActivationPanel(
             )
         }
     }
+
+    if (textDialogVisible) {
+        TextActivationDialog(
+            character = character,
+            onDismiss = { textDialogVisible = false },
+            onConfirm = { typedName ->
+                textDialogVisible = false
+                onTextActivate(typedName)
+            }
+        )
+    }
+}
+
+/** 文字兜底输入框：用户自己敲角色名，敲对了才算激活。 */
+@Composable
+private fun TextActivationDialog(
+    character: AiCharacter,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var input by remember(character.id) { mutableStateOf("") }
+    val valid = isTextActivationInputValid(input)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        title = { Text(stringResource(R.string.ai_sprite_text_fallback_title)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(R.string.ai_sprite_text_fallback_dialog_hint, character.activationWord),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.ai_sprite_text_fallback_label)) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(input) }, enabled = valid) {
+                Text(stringResource(R.string.ai_sprite_text_fallback_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_cancel))
+            }
+        }
+    )
 }
 
 @Composable
 private fun FeatureList(state: AiSpriteUiState, onOpenFeature: (AiFeature) -> Unit) {
+    // 图标按各功能语义选：打招呼挥手 / 点评看单 / 答题闯关 / 冷知识灯泡
     val features = listOf(
-        AiFeature.GREETING to Icons.Rounded.AutoAwesome,
-        AiFeature.TASTE to Icons.Rounded.Refresh,
-        AiFeature.QUIZ to Icons.Rounded.AutoAwesome,
-        AiFeature.DAILY to Icons.Rounded.VolumeUp
+        AiFeature.GREETING to Icons.Rounded.WavingHand,
+        AiFeature.TASTE to Icons.Rounded.RateReview,
+        AiFeature.QUIZ to Icons.Rounded.Quiz,
+        AiFeature.DAILY to Icons.Rounded.Lightbulb
     )
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         features.forEach { (feature, icon) ->
@@ -631,54 +844,4 @@ private fun FeatureList(state: AiSpriteUiState, onOpenFeature: (AiFeature) -> Un
             }
         }
     }
-}
-
-@Composable
-fun AiCharacterGlyph(character: AiCharacter, modifier: Modifier = Modifier) {
-    val tint = characterTint(character)
-    Canvas(modifier = modifier.clip(CircleShape).background(tint.copy(alpha = 0.22f))) {
-        drawCharacterFace(this, character, tint)
-    }
-}
-
-private fun drawCharacterFace(scope: DrawScope, character: AiCharacter, tint: Color) {
-    with(scope) {
-        val centerX = size.width / 2f
-        val centerY = size.height / 2f + 8f
-        val radius = size.minDimension * 0.28f
-        val earHeight = radius * 1.25f
-        val earWidth = radius * 0.72f
-        val leftEar = Path().apply {
-            moveTo(centerX - radius * 0.56f, centerY - radius * 0.55f)
-            quadraticBezierTo(centerX - radius * 1.05f, centerY - earHeight, centerX - radius * 0.35f, centerY - radius * 0.86f)
-            close()
-        }
-        val rightEar = Path().apply {
-            moveTo(centerX + radius * 0.56f, centerY - radius * 0.55f)
-            quadraticBezierTo(centerX + radius * 1.05f, centerY - earHeight, centerX + radius * 0.35f, centerY - radius * 0.86f)
-            close()
-        }
-        if (character.id == "usagi" || character.id == "hachiware" || character.id == "chiikawa") {
-            drawPath(leftEar, tint, style = Fill)
-            drawPath(rightEar, tint, style = Fill)
-        }
-        drawCircle(tint, radius, androidx.compose.ui.geometry.Offset(centerX, centerY))
-        val eyeY = centerY - radius * 0.05f
-        drawCircle(Color(0xFF302B3B), radius * 0.10f, androidx.compose.ui.geometry.Offset(centerX - radius * 0.42f, eyeY))
-        drawCircle(Color(0xFF302B3B), radius * 0.10f, androidx.compose.ui.geometry.Offset(centerX + radius * 0.42f, eyeY))
-        drawLine(Color(0xFF302B3B), androidx.compose.ui.geometry.Offset(centerX - radius * 0.18f, centerY + radius * 0.34f), androidx.compose.ui.geometry.Offset(centerX + radius * 0.18f, centerY + radius * 0.34f), strokeWidth = radius * 0.09f)
-        if (character.id == "usagi") {
-            drawCircle(Color(0xFF302B3B), radius * 0.13f, androidx.compose.ui.geometry.Offset(centerX, centerY - radius * 0.52f))
-        }
-    }
-}
-
-private fun characterTint(character: AiCharacter): Color = when (character.id) {
-    "chiikawa" -> Color(0xFFFFC8D8)
-    "hachiware" -> Color(0xFF9DD8F2)
-    "usagi" -> Color(0xFFFFD66B)
-    "momonga", "flying-squirrel" -> Color(0xFFD3B3F3)
-    "shisa" -> Color(0xFFFFAA80)
-    "kurimanju" -> Color(0xFFB68C69)
-    else -> Color(0xFFAED9C2)
 }
