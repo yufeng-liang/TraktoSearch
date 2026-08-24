@@ -14,7 +14,7 @@ import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import dev.chrisbanes.haze.HazeInput
-import dev.chrisbanes.haze.HazeSampling
+import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.hazeBlur
@@ -30,14 +30,14 @@ fun Modifier.appVisualEffect(
     backdropOverride: Backdrop? = null,
     scene: GlassScene = GlassScene(),
     glassEffectEnabled: Boolean = true,
-    blurSampling: HazeSampling = HazeSampling.Adaptive,
+    blurPerformanceMode: HazePerformanceMode = HazePerformanceMode.Adaptive,
     interactionSource: InteractionSource? = null
 ): Modifier {
     return when (LocalVisualEffectMode.current) {
         VisualEffectMode.BLUR -> hazeBlur(
             input = input,
             style = hazeStyle,
-            sampling = blurSampling
+            performanceMode = blurPerformanceMode
         )
 
         VisualEffectMode.GLASS -> when {
@@ -59,7 +59,7 @@ fun Modifier.appVisualEffect(
             else -> hazeBlur(
                 input = input,
                 style = hazeStyle,
-                sampling = blurSampling
+                performanceMode = blurPerformanceMode
             )
         }
     }
@@ -75,7 +75,7 @@ fun Modifier.appVisualEffect(
     backdropOverride: Backdrop? = null,
     scene: GlassScene = GlassScene(),
     glassEffectEnabled: Boolean = true,
-    blurSampling: HazeSampling = HazeSampling.Adaptive,
+    blurPerformanceMode: HazePerformanceMode = HazePerformanceMode.Adaptive,
     interactionSource: InteractionSource? = null
 ): Modifier = appVisualEffect(
     input = HazeInput.Sources(state),
@@ -86,7 +86,7 @@ fun Modifier.appVisualEffect(
     backdropOverride = backdropOverride,
     scene = scene,
     glassEffectEnabled = glassEffectEnabled,
-    blurSampling = blurSampling,
+    blurPerformanceMode = blurPerformanceMode,
     interactionSource = interactionSource
 )
 

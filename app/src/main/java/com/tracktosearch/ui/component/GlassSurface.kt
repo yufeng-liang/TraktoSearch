@@ -46,7 +46,7 @@ import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
 import com.tracktosearch.ui.theme.LocalGlassVariant
 import dev.chrisbanes.haze.HazeInput
-import dev.chrisbanes.haze.HazeSampling
+import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
@@ -200,7 +200,7 @@ fun GlassIconButton(
             glassShape = shape,
             glassTint = surfaceColor,
             scene = scene,
-            blurSampling = HazeSampling.Adaptive,
+            blurPerformanceMode = HazePerformanceMode.Adaptive,
             interactionSource = resolvedInteractionSource
         )
         else -> Modifier.background(surfaceColor, shape)

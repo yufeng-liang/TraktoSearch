@@ -35,7 +35,7 @@ import com.tracktosearch.ui.theme.LocalGlassVariant
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import dev.chrisbanes.haze.HazeInput
-import dev.chrisbanes.haze.HazeSampling
+import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 
@@ -145,7 +145,7 @@ fun GlassSearchBar(
                         glassShape = RoundedCornerShape(28.dp),
                         glassTint = containerColor,
                         scene = scene,
-                        blurSampling = HazeSampling.Adaptive,
+                        blurPerformanceMode = HazePerformanceMode.Adaptive,
                         interactionSource = interactionSource
                     )
                 } else Modifier

@@ -39,7 +39,7 @@ import androidx.core.graphics.ColorUtils
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import dev.chrisbanes.haze.HazeInput
-import dev.chrisbanes.haze.HazeSampling
+import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
@@ -94,7 +94,7 @@ fun Modifier.hazeTopBar(
         scene = scene,
         glassEffectEnabled = isContentUnderTopBar != false,
         // 渲染降采样：Haze 官方基准显示可降低 5-20% 开销，肉眼几乎不可见
-        blurSampling = HazeSampling.Adaptive
+        blurPerformanceMode = HazePerformanceMode.Adaptive
     )
 }
 
@@ -448,7 +448,7 @@ fun NeumorphicFrostedSurface(
                 selection = sourceSelection
             ),
             hazeStyle = resolvedHazeStyle,
-            blurSampling = HazeSampling.Adaptive,
+            blurPerformanceMode = HazePerformanceMode.Adaptive,
             interactionSource = interactionSource
         )
     } else Modifier
@@ -549,7 +549,7 @@ fun NeumorphicIconButton(
             glassShape = RoundedCornerShape(50),
             glassTint = MaterialTheme.colorScheme.surface.copy(alpha = blurTintAlpha),
             scene = scene,
-            blurSampling = HazeSampling.Adaptive,
+            blurPerformanceMode = HazePerformanceMode.Adaptive,
             interactionSource = resolvedInteractionSource
         )
     } else {

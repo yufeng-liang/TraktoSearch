@@ -167,7 +167,7 @@ import com.tracktosearch.ui.screen.ai.AI_SPRITE_IDLE_DELAY_MS
 import com.tracktosearch.ui.screen.ai.rememberSharedAiSpriteViewModel
 import dagger.hilt.android.EntryPointAccessors
 import dev.chrisbanes.haze.HazeInput
-import dev.chrisbanes.haze.HazeSampling
+import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.hazeSource
@@ -948,7 +948,7 @@ fun TraktSearchScreen(
                             glassShape = RoundedCornerShape(50),
                             glassTint = hazeSurface.copy(alpha = 0.6f),
                             scene = traktSearchGlassScene,
-                            blurSampling = HazeSampling.Adaptive,
+                            blurPerformanceMode = HazePerformanceMode.Adaptive,
                             interactionSource = interactionSource
                         )
                         .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), CircleShape)
