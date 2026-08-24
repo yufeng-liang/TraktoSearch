@@ -877,9 +877,15 @@ class DetailViewModel @Inject constructor(
 
     private fun applyDoubanPresentation(presentation: DoubanDetailPresentation, doubanId: String) {
         val current = _uiState.value
-        // 主标题保持列表一致的 TMDB 标题；豆瓣合并仅补充年份/简介等元数据，不再覆盖主标题
-        val title = current.displayTitle.takeIf { it.isNotBlank() }
-            ?: presentation.title ?: current.displayTitle
+        // 主标题保持列表一致的 TMDB 标题；豆瓣合并仅补充年份/简介等元数据，不再覆盖主标题。
+        // 纯豆瓣条目（tmdbId=0）没有 TMDB 标题可用，必须采纳豆瓣合并标题，
+        // 否则标题永远停在进入时的兜底值（本地快照标题 / 路由标题），豆瓣正式标题永不生效。
+        val title = if (currentTmdbId > 0) {
+            current.displayTitle.takeIf { it.isNotBlank() }
+                ?: presentation.title ?: current.displayTitle
+        } else {
+            presentation.title?.takeIf { it.isNotBlank() } ?: current.displayTitle
+        }
         val genres = presentation.genres.takeIf { it.isNotEmpty() }?.joinToString(" / ")
         val country = presentation.countries.takeIf { it.isNotEmpty() }?.joinToString(" / ")
         val runtime = presentation.runtime?.let { Regex("\\d+").find(it)?.value?.toIntOrNull() }
