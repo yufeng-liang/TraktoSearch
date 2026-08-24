@@ -108,7 +108,9 @@ import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.LocalBackdropSourceEnabled
 import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.ambientMotionPing
 import com.tracktosearch.ui.component.navPanelPressGlow
+import com.tracktosearch.ui.component.rememberAmbientMotionState
 import com.tracktosearch.ui.component.rememberGlassSelectionBounceScale
 import com.tracktosearch.ui.component.rememberNavPillDragState
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -482,6 +484,10 @@ fun MainScreen(
         }
     }
 
+    // 背景动效停帧：mirage 的 shader 时间逐帧累加，跑着就等于整窗满帧重绘。
+    // 无指针事件 3s 后停帧，一有触摸立刻恢复。
+    val ambientMotion = rememberAmbientMotionState()
+
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = Color.Transparent
@@ -490,6 +496,8 @@ fun MainScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                // 背景动效的停帧开关：Initial pass 抢先看到本页所有指针事件，不消费
+                .ambientMotionPing(ambientMotion)
                 .nestedScroll(nestedScrollConnection)
         ) {
             Box(
@@ -498,8 +506,8 @@ fun MainScreen(
                     .hazeSource(state = hazeState, zIndex = 0f)
             ) {
                 // 页面背景为彩色弥散光晕层：预设与开关由设置页持久化，经主题存储驱动。
-                // preferredFrameRate：光晕是缓动大色块，30fps 足够，避免在 120Hz 屏上
-                // 让一个永不停止的全屏 shader 按刷新率满帧跑（Android 15+ 生效，低版本无副作用）。
+                // preferredFrameRate 只是刷新率投票，实测压不住（会被玻璃消费者图层盖掉），
+                // 真正的省电靠 ambientMotion：没人操作就把 shader 停帧。
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -512,6 +520,7 @@ fun MainScreen(
                         modifier = Modifier.fillMaxSize(),
                         preset = MeshPreset.fromStorage(meshPreset),
                         enabled = meshEnabled,
+                        motionActive = { ambientMotion.active },
                     )
                 }
 

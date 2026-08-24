@@ -76,6 +76,7 @@ fun AmbientMeshBackground(
     modifier: Modifier = Modifier,
     preset: MeshPreset = MeshPreset.NEBULA,
     enabled: Boolean = true,
+    motionActive: () -> Boolean = { true },
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val isDark = colorScheme.background.luminance() < 0.5f
@@ -93,7 +94,13 @@ fun AmbientMeshBackground(
     // 注：Compose 的 MonotonicFrameClock 在窗口不可见时本就不发帧，这里主要是把
     // "不可见还在跑" 的边界情况（分屏、被半透明 Activity 覆盖等）也确定性地掐掉。
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
-    val speedScale = if (lifecycleState.isAtLeast(Lifecycle.State.STARTED)) 1f else 0f
+    // motionActive：没人操作时也停帧。shader 时间是逐帧累加的，只要还在跑就等于整窗满帧重绘，
+    // 静止阅读时白烧 GPU；停帧后时间冻在当前值，恢复时不跳变。
+    val speedScale = if (lifecycleState.isAtLeast(Lifecycle.State.STARTED) && motionActive()) {
+        1f
+    } else {
+        0f
+    }
 
     Box(modifier = modifier.fillMaxSize().background(colorScheme.background)) {
         if (enabled) {
