@@ -64,6 +64,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import com.tracktosearch.ui.navigation.DetailSeedStore
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
@@ -573,10 +574,13 @@ class DetailViewModel @Inject constructor(
         currentScoreMap = emptyMap()
         currentHighRelevanceMap = emptyMap()
 
-        // 首帧种子：调用方传入的海报 + TMDB 内存缓存同步 peek。
+        // 首帧种子：TMDB 内存缓存 peek → 调用方传入 → 列表卡片点击时暂存的海报/年份。
         // 目的是让海报/标题在第一帧就正确，既消掉「空白→弹入」，也让共享元素转场有落点。
         val seed = peekDetailSeed(tmdbId, mediaType, title, year)
-        val seededPoster = seed?.posterUrl ?: seedPosterUrl
+        // 发现页等栏目的海报来自 TMDB 列表接口，不写详情缓存，peek 必然落空，靠卡片暂存兜底
+        val cardSeed = if (seed?.posterUrl == null || year == null) DetailSeedStore.peek(tmdbId) else null
+        val seededPoster = seed?.posterUrl ?: seedPosterUrl ?: cardSeed?.posterUrl
+        val seededYear = year ?: cardSeed?.year
         _uiState.value = DetailUiState(
             isLoading = true,
             isSearching = true,
@@ -587,7 +591,7 @@ class DetailViewModel @Inject constructor(
             releaseDate = seed?.releaseDate.orEmpty(),
             status = seed?.status.orEmpty(),
             posterUrl = seededPoster,
-            year = year,
+            year = seededYear,
             isMarkedWatchlist = inWatchlist,
             isMarkedWatched = isWatched,
             isLoadingVideosImages = true,

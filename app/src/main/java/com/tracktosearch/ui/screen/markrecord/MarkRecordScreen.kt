@@ -67,6 +67,7 @@ import com.tracktosearch.R
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.navigation.DetailSeedStore
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
@@ -206,6 +207,8 @@ fun MarkRecordScreen(
                             posterColorExtractor = viewModel.posterColorExtractor,
                             onClick = {
                                 val onClick = if (item.mediaType == "movie") onMovieClick else onShowClick
+                                // 标记记录卡片已有海报与年份，交给详情页做首帧种子
+                                DetailSeedStore.remember(item.tmdbId, item.posterUrl, item.year)
                                 onClick(
                                     item.traktId, item.tmdbId,
                                     item.displayTitle.ifBlank { item.title },

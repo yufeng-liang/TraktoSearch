@@ -87,6 +87,7 @@ import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.navigation.DetailSeedStore
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
@@ -248,6 +249,13 @@ fun DiscoverFilterScreen(
                             posterColorExtractor = viewModel.posterColorExtractor,
                             onClick = {
                                 val title = if (item.title.isNotBlank()) item.title else (item.name ?: "")
+                                // 卡片海报来自 TMDB 列表接口（不写详情缓存），交给详情页做首帧种子
+                                DetailSeedStore.remember(
+                                    item.id,
+                                    item.poster_path?.let { TmdbImageUrls.W342 + it },
+                                    (item.release_date.ifBlank { item.first_air_date.orEmpty() })
+                                        .take(4).toIntOrNull()
+                                )
                                 if (uiState.type == TmdbRepository.DiscoverType.MOVIE) {
                                     onMovieClick(item.id, title)
                                 } else {
