@@ -1165,10 +1165,11 @@ fun WatchlistScreen(
                                                         Icon(
                                                             imageVector = Icons.Rounded.Search,
                                                             contentDescription = stringResource(R.string.watchlist_search),
+                                                            // 有关键词时保持主色（激活语义优先），否则跟随玻璃自适应
                                                             tint = if (searchQuery.isNotBlank()) {
                                                                 MaterialTheme.colorScheme.primary
                                                             } else {
-                                                                MaterialTheme.colorScheme.onSurface
+                                                                LocalContentColor.current
                                                             },
                                                             modifier = Modifier.size(22.dp)
                                                         )
@@ -1190,7 +1191,12 @@ fun WatchlistScreen(
                                             Icon(
                                                 imageVector = Icons.Rounded.Tune,
                                                 contentDescription = stringResource(R.string.filter_title),
-                                                tint = if (hasActiveFilters) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                                // 筛选生效时保持主色，未生效才跟随玻璃自适应
+                                                tint = if (hasActiveFilters) {
+                                                    MaterialTheme.colorScheme.primary
+                                                } else {
+                                                    LocalContentColor.current
+                                                },
                                                 modifier = Modifier.size(22.dp)
                                             )
                                         }

@@ -936,8 +936,7 @@ fun DiscoverScreen(
                         ) {
                             Icon(
                                 Icons.Rounded.FilterList,
-                                contentDescription = stringResource(R.string.discover_filter_title),
-                                tint = MaterialTheme.colorScheme.onSurface
+                                contentDescription = stringResource(R.string.discover_filter_title)
                             )
                         }
                         Spacer(modifier = Modifier.width(8.dp))
@@ -950,8 +949,7 @@ fun DiscoverScreen(
                         ) {
                             Icon(
                                 Icons.Rounded.FormatListNumbered,
-                                contentDescription = stringResource(R.string.settings_discover_sections),
-                                tint = MaterialTheme.colorScheme.onSurface
+                                contentDescription = stringResource(R.string.settings_discover_sections)
                             )
                         }
                     }

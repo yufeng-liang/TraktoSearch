@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -230,12 +232,26 @@ fun GlassIconButton(
             onClick = onClick
         )
 
+    // 图标色跟着实测亮度翻极性。没有探针（Haze 降级 / Blur 模式）时给 onSurface——
+    // 这与调用点原先显式写的 tint 一致，所以调用点去掉 tint 后行为不变。
+    val contentColor = if (luminanceProbe != null) {
+        rememberAdaptiveContentColor(
+            probe = luminanceProbe,
+            surfaceColor = surfaceColor,
+            neutralColor = MaterialTheme.colorScheme.onSurface
+        )
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+
     Box(
         modifier = surfaceModifier,
         contentAlignment = Alignment.Center
     ) {
         Box(Modifier.scale(contentScale), contentAlignment = Alignment.Center) {
-            content()
+            CompositionLocalProvider(LocalContentColor provides contentColor) {
+                content()
+            }
         }
     }
 }

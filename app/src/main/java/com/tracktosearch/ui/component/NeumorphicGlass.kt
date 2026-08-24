@@ -15,8 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -613,7 +615,11 @@ fun NeumorphicIconButton(
             alphaScale = if (isDetailTopBar) 0.5f else 1f,
             compact = true
         )
-        content()
+        // 与 GlassIconButton 对齐：图标不传 tint 时拿到 onSurface。Blur 模式不做亮度自适应，
+        // 这里显式提供是为了让调用点可以统一省掉 tint，而两种模式的静止观感保持一致。
+        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+            content()
+        }
     }
 }
 

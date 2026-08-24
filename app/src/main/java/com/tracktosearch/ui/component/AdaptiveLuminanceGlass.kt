@@ -1,17 +1,22 @@
 package com.tracktosearch.ui.component
 
 import android.graphics.Bitmap
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.util.lerp
 import androidx.lifecycle.Lifecycle
@@ -109,6 +114,47 @@ internal fun rememberGlassLuminanceProbe(): GlassLuminanceProbe {
  */
 internal val GlassSurfaceRole.supportsAdaptiveLuminance: Boolean
     get() = this == GlassSurfaceRole.CircularControl || this == GlassSurfaceRole.DetailAction
+
+/**
+ * 图标色自适应。官方按平均亮度在纯 Black / White 之间切；这里换成主题里现成的一对反极性
+ * 中性色（onSurface 与 inverseOnSurface，谁暗谁当深色墨），保持本项目的配色语言。
+ *
+ * 判定用的是"叠完玻璃填充和 brightness 偏移之后"的有效亮度，不是原始背景亮度：浅色主题下
+ * 那层近白填充（约 25% alpha）会把 0.35 的背景抬到 0.5 以上，直接拿原始值会晚一档才翻色。
+ *
+ * 用 derivedStateOf 只暴露"该用深色还是浅色"这个布尔量：亮度动画每帧都在变，但组合只在
+ * 极性真的翻转时重跑一次，再交给 animateColorAsState 做交叉淡入。
+ */
+@Composable
+internal fun rememberAdaptiveContentColor(
+    probe: GlassLuminanceProbe,
+    surfaceColor: Color,
+    neutralColor: Color
+): Color {
+    val inverseColor = MaterialTheme.colorScheme.inverseOnSurface
+    val darkContent = if (neutralColor.luminance() <= inverseColor.luminance()) {
+        neutralColor
+    } else {
+        inverseColor
+    }
+    val lightContent = if (darkContent == neutralColor) inverseColor else neutralColor
+    val fillLuminance = surfaceColor.luminance()
+    val fillAlpha = surfaceColor.alpha
+    val prefersDarkContent by remember(probe, fillLuminance, fillAlpha) {
+        derivedStateOf {
+            val effective = probe.luminance * (1f - fillAlpha) +
+                fillLuminance * fillAlpha +
+                adaptiveBrightness(probe.signedLuminance)
+            effective > 0.5f
+        }
+    }
+    val target by animateColorAsState(
+        targetValue = if (prefersDarkContent) darkContent else lightContent,
+        animationSpec = tween(AdaptDurationMillis),
+        label = "adaptive_glass_content_color"
+    )
+    return target
+}
 
 /** blur 缩放：背后偏亮 → 更糊（最多 2x），偏暗 → 更清透（最低 0.35x）。官方是 8dp→16dp / 8dp→2dp。 */
 internal fun adaptiveBlurScale(signedLuminance: Float): Float =
