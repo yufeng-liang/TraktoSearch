@@ -2,6 +2,31 @@ import { AppError } from './errors.ts';
 
 const COOLDOWN_MS = 5 * 60 * 1000;
 
+/**
+ * isolate 内状态缓存有效期。
+ *
+ * KV 本身是最终一致存储（写入后最长 60s 才全球可见），因此额外的 10s 内存缓存
+ * 不会引入新的一致性问题，但能把「每个代理请求读一次 KV」降到每 10s 一次。
+ */
+const STATE_CACHE_TTL_MS = 10 * 1000;
+
+interface CachedKeyPoolState {
+    /** 缓存对应的 KV 绑定实例；不同绑定（含测试里的不同 stub）不复用缓存。 */
+    kv: unknown;
+    /** JSON.stringify 后的规范形式，用于判断是否需要真正写 KV。 */
+    canonical: string;
+    states: StoredKeyState[];
+    fetchedAtMs: number;
+}
+
+/** isolate 级状态缓存，随 isolate 回收自动释放。 */
+const stateCache = new Map<string, CachedKeyPoolState>();
+
+/** 测试用：清空 isolate 级状态缓存。 */
+export function resetKeyPoolStateCache(): void {
+    stateCache.clear();
+}
+
 export type KeyStatus = 'ACTIVE' | 'COOLING' | 'INVALID';
 
 interface StoredKeyState {
@@ -58,6 +83,13 @@ export async function fingerprintKey(key: string): Promise<string> {
 /**
  * Worker 侧的 API key 状态机。
  * KV 只存指纹，不存明文 key；Secret 变化时按指纹保留旧状态并激活新 key。
+ *
+ * KV 配额优化（免费版每天 1000 次写）：
+ * - 单 key 池完全不碰 KV：只有一个候选时，COOLING / INVALID 状态没有可切换对象，
+ *   getCandidates 最终必然回退到这唯一的 key，读写 KV 不影响任何行为。
+ * - saveStates 状态未变化时跳过写入：markFailure 会对已经是 INVALID / 已在冷却中的
+ *   key 反复调用，无条件写会让每个失败的上游请求都消耗 1 次写配额。
+ * - 读取走 isolate 级缓存（[STATE_CACHE_TTL_MS]），同一 isolate 的连续请求不重复读 KV。
  */
 export class KeyPool {
     private readonly storageKey: string;
@@ -65,6 +97,8 @@ export class KeyPool {
     private readonly secret: string | undefined;
     private readonly kv: KVNamespace;
     private readonly nowMs: () => number;
+    /** 最近一次读到/写入的规范化状态，用于跳过无变化的写入。 */
+    private lastCanonical: string | null = null;
 
     constructor(
         service: string,
@@ -92,6 +126,11 @@ export class KeyPool {
                 `${this.service} upstream credential is not configured`,
                 500,
             );
+        }
+
+        // 单 key 池：状态机没有可轮换对象，直接返回，省掉每请求 1 次 KV 读。
+        if (keys.length === 1) {
+            return [{ key: keys[0], fingerprint: await fingerprintKey(keys[0]) }];
         }
 
         const configured = await Promise.all(keys.map(async (key) => ({
@@ -123,7 +162,8 @@ export class KeyPool {
         if (status !== 429 && status !== 401 && status !== 403) return;
 
         const keys = parseSecretKeys(this.secret);
-        if (keys.length === 0) return;
+        // 单 key 池：状态落盘不会改变后续取 key 的结果，跳过以免每次上游失败都写 KV。
+        if (keys.length <= 1) return;
         const configured = await Promise.all(keys.map(async (key) => ({
             key,
             fingerprint: await fingerprintKey(key),
@@ -144,8 +184,7 @@ export class KeyPool {
     }
 
     private async syncStates(configured: KeyCandidate[]): Promise<StoredKeyState[]> {
-        const raw = await this.kv.get(this.storageKey);
-        const previous = parseStoredStates(raw);
+        const previous = await this.readStates();
         const previousByFingerprint = new Map(
             previous.map((state) => [state.fingerprint, state]),
         );
@@ -160,14 +199,43 @@ export class KeyPool {
             return oldState;
         });
 
-        if (JSON.stringify(previous) !== JSON.stringify(states)) {
-            await this.saveStates(states);
-        }
+        await this.saveStates(states);
         return states;
     }
 
+    /**
+     * 读取状态：优先用 isolate 缓存，未命中才读 KV。
+     * TTL 用真实时钟判断，避免注入的固定测试时钟让缓存永久有效。
+     */
+    private async readStates(): Promise<StoredKeyState[]> {
+        const cached = stateCache.get(this.storageKey);
+        if (cached && cached.kv === this.kv && Date.now() - cached.fetchedAtMs < STATE_CACHE_TTL_MS) {
+            this.lastCanonical = cached.canonical;
+            return cached.states;
+        }
+        const raw = await this.kv.get(this.storageKey);
+        const states = parseStoredStates(raw);
+        this.rememberStates(states);
+        return states;
+    }
+
+    private rememberStates(states: StoredKeyState[]): void {
+        const canonical = JSON.stringify(states);
+        this.lastCanonical = canonical;
+        stateCache.set(this.storageKey, {
+            kv: this.kv,
+            canonical,
+            states,
+            fetchedAtMs: Date.now(),
+        });
+    }
+
     private async saveStates(states: StoredKeyState[]): Promise<void> {
-        await this.kv.put(this.storageKey, JSON.stringify(states));
+        const canonical = JSON.stringify(states);
+        // 状态与最近一次读到/写入的完全一致时不写，直接省掉一次写配额。
+        if (canonical === this.lastCanonical) return;
+        await this.kv.put(this.storageKey, canonical);
+        this.rememberStates(states);
     }
 }
 

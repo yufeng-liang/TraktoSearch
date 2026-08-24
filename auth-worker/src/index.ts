@@ -133,12 +133,9 @@ export default {
                         '/api/ai/audio/:token',
                     );
                     console.warn(`[AUTH_FAIL] ${err.code} status=${err.statusCode} ip=${clientIp} path=${failPath} method=${request.method} requestId=${requestId}`);
-                    // KV 计数：按 IP+路径维度，1 小时 TTL，超阈值可在 admin 面板查看
-                    try {
-                        const counterKey = `auth_fail:${clientIp}:${failPath}`;
-                        const current = parseInt(await env.KV.get(counterKey) || '0', 10);
-                        await env.KV.put(counterKey, String(current + 1), { expirationTtl: 3600 });
-                    } catch { /* KV 写入失败不影响响应 */ }
+                    // KV 计数：按 IP+路径维度，1 小时 TTL，超阈值可在 admin 面板查看。
+                    // 写入放到 waitUntil 并按窗口合并，避免突发 401/403 打满每日 KV 写配额。
+                    recordAuthFailure(env, ctx, `auth_fail:${clientIp}:${failPath}`);
                 }
                 return applySecurityHeaders(addCorsHeaders(errorResponse(err, requestId)));
             }
@@ -157,6 +154,35 @@ export default {
         ]);
     },
 };
+
+/**
+ * 鉴权失败计数窗口：同一 (IP, 路径) 在窗口内的失败先在 isolate 内累加，
+ * 窗口到期后由下一次失败一次性写回，把「每次 401/403 一读一写」降到每分钟一次。
+ */
+const AUTH_FAIL_FLUSH_WINDOW_MS = 60 * 1000;
+/** isolate 内累积的待写计数；isolate 回收时丢弃（安全告警计数容许少量丢失）。 */
+const authFailBuffer = new Map<string, { pending: number; lastFlushMs: number }>();
+
+function recordAuthFailure(env: Env, ctx: ExecutionContext, counterKey: string): void {
+    const nowMs = Date.now();
+    // 键基数由请求方的 IP/路径组合决定，超过上限整体丢弃，避免 isolate 内存无界增长
+    if (authFailBuffer.size > 500) authFailBuffer.clear();
+    const entry = authFailBuffer.get(counterKey) ?? { pending: 0, lastFlushMs: 0 };
+    entry.pending += 1;
+    authFailBuffer.set(counterKey, entry);
+    // lastFlushMs 初始为 0，首次失败立即写入，保证异常访问能被立刻看到
+    if (nowMs - entry.lastFlushMs < AUTH_FAIL_FLUSH_WINDOW_MS) return;
+
+    const delta = entry.pending;
+    entry.pending = 0;
+    entry.lastFlushMs = nowMs;
+    ctx.waitUntil((async () => {
+        try {
+            const current = parseInt(await env.KV.get(counterKey) || '0', 10);
+            await env.KV.put(counterKey, String(current + delta), { expirationTtl: 3600 });
+        } catch { /* KV 写入失败不影响响应 */ }
+    })());
+}
 
 // CORS 处理
 function handleCors(): Response {

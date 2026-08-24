@@ -4,16 +4,21 @@ import {
     KeyPool,
     fetchWithKeyRotation,
     parseSecretKeys,
+    resetKeyPoolStateCache,
 } from '../src/util/key-pool.ts';
 
 function createKv() {
     const values = new Map();
+    const counters = { gets: 0, puts: 0 };
     return {
         values,
+        counters,
         async get(key) {
+            counters.gets += 1;
             return values.get(key) ?? null;
         },
         async put(key, value) {
+            counters.puts += 1;
             values.set(key, value);
         },
     };
@@ -43,6 +48,7 @@ test('missing Secret fails closed before any upstream request', async () => {
 });
 
 test('key state persists only fingerprints and rotates after 429', async () => {
+    resetKeyPoolStateCache();
     const kv = createKv();
     const pool = new KeyPool('tmdb', 'first,second', kv, () => 1_000);
     const candidates = await pool.getCandidates();
@@ -58,6 +64,7 @@ test('key state persists only fingerprints and rotates after 429', async () => {
 });
 
 test('cooling key returns after five minutes', async () => {
+    resetKeyPoolStateCache();
     const kv = createKv();
     let currentTime = 1_000;
     const pool = new KeyPool('tmdb', 'first,second', kv, () => currentTime);
@@ -71,6 +78,7 @@ test('cooling key returns after five minutes', async () => {
 });
 
 test('401 and 403 invalidate a key until configuration changes', async () => {
+    resetKeyPoolStateCache();
     const kv = createKv();
     const pool = new KeyPool('trakt', 'first,second', kv, () => 1_000);
     const [first, second] = await pool.getCandidates();
@@ -84,6 +92,7 @@ test('401 and 403 invalidate a key until configuration changes', async () => {
 });
 
 test('proxy helper tries the next configured key after a rotatable response', async () => {
+    resetKeyPoolStateCache();
     const kv = createKv();
     const pool = new KeyPool('omdb', 'first,second', kv, () => 1_000);
     const used = [];
@@ -99,4 +108,69 @@ test('proxy helper tries the next configured key after a rotatable response', as
     assert.equal(response.status, 200);
     assert.equal(await response.text(), 'ok');
     assert.deepEqual(used, ['first', 'second']);
+});
+
+test('a single key pool never reads or writes KV', async () => {
+    resetKeyPoolStateCache();
+    const kv = createKv();
+    const pool = new KeyPool('tmdb', 'only-key', kv, () => 1_000);
+
+    const candidates = await pool.getCandidates();
+    assert.deepEqual(candidates.map((candidate) => candidate.key), ['only-key']);
+
+    // 唯一 key 被上游拒绝时状态也无处可切，不应产生任何 KV 操作
+    await pool.markFailure(candidates[0], 429);
+    await pool.markFailure(candidates[0], 403);
+
+    assert.equal(kv.counters.gets, 0);
+    assert.equal(kv.counters.puts, 0);
+    assert.deepEqual((await pool.getCandidates()).map((candidate) => candidate.key), ['only-key']);
+    assert.equal(kv.counters.puts, 0);
+});
+
+test('repeated failures on an already invalid key stop writing KV', async () => {
+    resetKeyPoolStateCache();
+    const kv = createKv();
+    const pool = new KeyPool('trakt', 'first,second', kv, () => 1_000);
+    const [first, second] = await pool.getCandidates();
+
+    await pool.markFailure(first, 401);
+    await pool.markFailure(second, 403);
+    const putsAfterInvalidation = kv.counters.puts;
+
+    // 状态已经是全 INVALID，后续同样的失败不改变状态，不应再消耗写配额
+    await pool.markFailure(first, 401);
+    await pool.markFailure(second, 403);
+    assert.equal(kv.counters.puts, putsAfterInvalidation);
+});
+
+test('repeated cooling failures on the same key stop writing KV', async () => {
+    resetKeyPoolStateCache();
+    const kv = createKv();
+    const pool = new KeyPool('douban', 'first,second', kv, () => 1_000);
+    const [first] = await pool.getCandidates();
+
+    await pool.markFailure(first, 429);
+    const putsAfterCooling = kv.counters.puts;
+
+    // 冷却截止时间由固定时钟算出，重复 429 得到完全相同的状态
+    await pool.markFailure(first, 429);
+    assert.equal(kv.counters.puts, putsAfterCooling);
+});
+
+test('isolate state cache skips the per-request KV read', async () => {
+    resetKeyPoolStateCache();
+    const kv = createKv();
+    await new KeyPool('omdb', 'first,second', kv, () => 1_000).getCandidates();
+    const getsAfterFirstRequest = kv.counters.gets;
+    assert.ok(getsAfterFirstRequest > 0);
+
+    // 同一 isolate、同一 KV 绑定的后续请求命中内存缓存
+    await new KeyPool('omdb', 'first,second', kv, () => 1_000).getCandidates();
+    assert.equal(kv.counters.gets, getsAfterFirstRequest);
+
+    // 换一个 KV 绑定实例（等价于另一个环境/测试）不复用缓存
+    const otherKv = createKv();
+    await new KeyPool('omdb', 'first,second', otherKv, () => 1_000).getCandidates();
+    assert.ok(otherKv.counters.gets > 0);
 });
