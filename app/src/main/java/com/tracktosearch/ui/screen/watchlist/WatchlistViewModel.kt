@@ -1486,6 +1486,22 @@ class WatchlistViewModel @Inject constructor(
         reloadForSession(forceReload = true)
     }
 
+    /**
+     * 下拉刷新：已有数据时保留列表与计数，只重置分页后强制重拉。
+     * 不走 refresh()，因为那条路会把 uiState 整体重置，导致下拉一松手内容清空、
+     * 计数跳成 0 并闪一屏骨架屏。首次（尚无数据）才退回全量加载。
+     */
+    fun pullToRefresh() {
+        val state = _uiState.value
+        val anyLoaded = state.moviesLoaded || state.showsLoaded || state.othersLoaded ||
+            state.historyMoviesLoaded || state.historyShowsLoaded || state.historyOthersLoaded
+        if (anyLoaded) {
+            refreshIfLoaded(silent = false)
+        } else {
+            refresh()
+        }
+    }
+
     /** 会话模式发生变化时重新读取当前账号的数据；同一会话重复调用不重置列表，避免返回页面时骨架屏闪烁。 */
     fun onSessionModeChanged(sessionKey: SessionMode) {
         if (loadedSessionKey == sessionKey) return

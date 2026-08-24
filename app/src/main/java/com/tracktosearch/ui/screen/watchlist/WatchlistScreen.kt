@@ -9,6 +9,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -20,6 +21,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -112,6 +114,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -128,9 +131,13 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -368,33 +375,28 @@ fun WatchlistScreen(
             .collect { debouncedQuery = it }
     }
     var isRefreshing by remember { mutableStateOf(false) }
-    // 弹性下拉刷新状态
-    var overscrollOffset by remember { mutableStateOf(0f) }
+    // 下拉刷新：唯一真源是一个 float 状态，拖动阶段由 NestedScrollConnection 直接写入
+    // （不再经 snapshotFlow → Animatable.snapTo 中转，少一帧延迟），松手与收起用 spring 写回同一状态。
+    // 指示器与网格都只在 graphicsLayer / Canvas 的绘制阶段读取它，下拉全程零重组。
+    val pullOffset = remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current
-    val triggerThreshold = with(density) { 80.dp.toPx() } // 触发刷新的阈值
-    // 弹性下拉偏移动画值（px）：指示器与 grid 只在 graphicsLayer 绘制阶段读取该值，
-    // 不参与组合期读取，避免下拉过程中每帧驱动整屏重组。
-    val overscrollAnim = remember { Animatable(0f) }
-    // 在协程中通过 snapshotFlow 观察下拉偏移（不产生组合期状态依赖）：
-    // 拖动中瞬时跟随，松手（offset 归零）后弹簧回弹。
-    LaunchedEffect(Unit) {
-        snapshotFlow { overscrollOffset }
-            .collect { target ->
-                if (target == 0f) {
-                    overscrollAnim.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 400f))
-                } else {
-                    overscrollAnim.snapTo(target)
-                }
-            }
-    }
+    val pullThresholdPx = with(density) { 80.dp.toPx() } // 触发刷新的阈值
+    // 刷新中把指示器停在阈值内侧，等数据回来再收起。原实现松手立即归零，刷新态一闪而过。
+    val pullHoldPx = with(density) { 56.dp.toPx() }
+    // 阻尼之外再夹一个上限，避免一直下拉把内容拖到屏幕中部
+    val pullMaxPx = with(density) { 132.dp.toPx() }
     val gridCoroutineScope = rememberCoroutineScope()
     val pullToRefreshConnection = remember {
         object : NestedScrollConnection {
+            /** 已越过阈值：用于只在跨越瞬间给一次触感，而不是每帧都给。 */
+            private var armed = false
+
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                // 下拉时消耗 overscroll 偏移
-                if (overscrollOffset > 0f && available.y < 0f) {
-                    val consumed = minOf(-available.y, overscrollOffset)
-                    overscrollOffset -= consumed
+                // 反向滑动优先把下拉偏移收回去，再交给列表滚动
+                val current = pullOffset.floatValue
+                if (current > 0f && available.y < 0f) {
+                    val consumed = minOf(-available.y, current)
+                    pullOffset.floatValue = current - consumed
                     return Offset(0f, -consumed)
                 }
                 return Offset.Zero
@@ -402,25 +404,39 @@ fun WatchlistScreen(
 
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                 // 列表滚到顶部后，继续下拉产生弹性偏移（带阻尼）
-                if (available.y > 0f && source == NestedScrollSource.UserInput) {
-                    val damped = available.y * 0.4f / (1f + overscrollOffset / triggerThreshold)
-                    overscrollOffset += damped
-                    return Offset(0f, available.y)
+                if (available.y <= 0f || source != NestedScrollSource.UserInput) return Offset.Zero
+                if (isRefreshing) return Offset.Zero
+                val current = pullOffset.floatValue
+                val damped = available.y * 0.5f / (1f + current / pullThresholdPx)
+                val next = (current + damped).coerceAtMost(pullMaxPx)
+                pullOffset.floatValue = next
+                if (next >= pullThresholdPx && !armed) {
+                    armed = true
+                    view.performHaptic(HapticType.CLICK)
+                } else if (next < pullThresholdPx && armed) {
+                    armed = false
                 }
-                return Offset.Zero
+                return Offset(0f, available.y)
             }
 
             override suspend fun onPreFling(available: Velocity): Velocity {
-                // 松手时：如果达到阈值则触发刷新，否则弹回
-                if (overscrollOffset >= triggerThreshold && !isRefreshing) {
+                armed = false
+                val current = pullOffset.floatValue
+                if (current <= 0f) return Velocity.Zero
+                if (current >= pullThresholdPx && !isRefreshing) {
                     isRefreshing = true
-                    viewModel.refresh()
+                    viewModel.pullToRefresh()
                     animatedIds.value = mutableSetOf()
                     refreshPending = true
-                    isRefreshing = false
+                    // 停在 hold 位等数据；收起交给 refreshPending 完成后的效果
+                    animate(current, pullHoldPx, animationSpec = spring(0.9f, 900f)) { value, _ ->
+                        pullOffset.floatValue = value
+                    }
+                } else {
+                    animate(current, 0f, animationSpec = spring(0.62f, 380f)) { value, _ ->
+                        pullOffset.floatValue = value
+                    }
                 }
-                // 始终弹回
-                overscrollOffset = 0f
                 return Velocity.Zero
             }
         }
@@ -663,6 +679,13 @@ fun WatchlistScreen(
         }
             .dropWhile { !it }
             .first { !it }
+        // 数据落地即收起指示器，卡片入场动画同时进行
+        if (isRefreshing) {
+            animate(pullOffset.floatValue, 0f, animationSpec = spring(0.7f, 420f)) { value, _ ->
+                pullOffset.floatValue = value
+            }
+            isRefreshing = false
+        }
         delay(600)
         enterMode = EnterMode.DEFAULT
         refreshPending = false
@@ -714,15 +737,13 @@ fun WatchlistScreen(
             ) {
                 val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     
-                // 弹性下拉刷新指示器：可见性/偏移/阈值都在指示器局部 composable 内通过
-                // lambda 惰性读取，下拉过程中 overscrollOffset 每帧变化只重组指示器自身，
-                // 不再驱动整屏重组。
+                // 下拉刷新指示器：锚在列表内容顶部，位移/透明度/进度只在绘制阶段读取，
+                // 下拉过程不产生重组。
                 PullToRefreshIndicator(
-                    statusBarHeight = statusBarHeight,
-                    offsetVisible = { overscrollOffset > 0f || isRefreshing },
+                    contentTop = statusBarHeight + 122.dp,
+                    thresholdPx = pullThresholdPx,
                     refreshing = { isRefreshing },
-                    thresholdReached = { overscrollOffset >= triggerThreshold },
-                    offsetY = { overscrollAnim.value }
+                    offsetY = { pullOffset.floatValue }
                 )
     
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -869,7 +890,7 @@ fun WatchlistScreen(
                         // GLASS 模式将影视网格注册为 Backdrop 采样源，使玻璃控件（回顶按钮等）能采到内容
                         .backdropContentSource()
                         .nestedScroll(pullToRefreshConnection)
-                        .graphicsLayer { translationY = overscrollAnim.value }
+                        .graphicsLayer { translationY = pullOffset.floatValue }
                     ) {
                         // 根据 selectedMode 和 selectedTab 渲染对应列表
                         val items = currentItems
@@ -1707,6 +1728,9 @@ fun WatchlistScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(top = 124.dp + statusBarHeight)
+                            // 骨架屏也跟着下拉偏移：刷新中指示器停在内容上方的空隙里，
+                            // 骨架屏若不一起下移就会被指示器压住
+                            .graphicsLayer { translationY = pullOffset.floatValue }
                     )
                 }
             }
@@ -2047,40 +2071,77 @@ private fun WatchlistPosterCard(
 }
 
 /**
- * 弹性下拉刷新指示器：状态读取收敛到本 composable 内部（通过 lambda 惰性读取），
- * 下拉偏移每帧变化时只重组指示器自身，不影响整屏；偏移位移在 graphicsLayer 绘制阶段读取。
+ * 下拉刷新指示器：只画一圈进度弧，不再带文案——原文案固定在「统计行」高度上，
+ * 下拉时会和"电影/电视剧/其他"那一行叠在一起。
+ *
+ * 位置锚在列表内容顶部（statusBar + 顶栏高度），以半速跟随下拉，正好停在内容让出的空隙里；
+ * 位移、透明度、缩放、旋转、弧长全部在 graphicsLayer 与 Canvas 的绘制阶段读取，下拉全程零重组。
  */
 @Composable
 private fun PullToRefreshIndicator(
-    statusBarHeight: Dp,
-    offsetVisible: () -> Boolean,
+    contentTop: Dp,
+    thresholdPx: Float,
     refreshing: () -> Boolean,
-    thresholdReached: () -> Boolean,
     offsetY: () -> Float
 ) {
-    if (offsetVisible()) {
-        Column(
+    val spinning = refreshing()
+    val spin = if (spinning) {
+        rememberInfiniteTransition(label = "pull_refresh_spin").animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(tween(durationMillis = 900, easing = LinearEasing)),
+            label = "pull_refresh_spin_angle"
+        )
+    } else {
+        null
+    }
+    val idleColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+    val activeColor = MaterialTheme.colorScheme.primary
+    val trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.14f)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = contentTop),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        Canvas(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = statusBarHeight + 60.dp)
+                .size(28.dp)
                 // 参数名避开 GraphicsLayerScope.translationY（同名会遮蔽作用域属性导致无法赋值）
-                .graphicsLayer { translationY = offsetY() },
-            horizontalAlignment = Alignment.CenterHorizontally
+                .graphicsLayer {
+                    val offset = offsetY()
+                    val progress = (offset / thresholdPx).coerceIn(0f, 1f)
+                    translationY = offset * 0.5f - size.height * 0.5f
+                    // 起手一小段保持不可见，避免在半透明顶栏后面透出来
+                    alpha = (offset / (thresholdPx * 0.55f)).coerceIn(0f, 1f)
+                    val scale = 0.72f + 0.28f * progress
+                    scaleX = scale
+                    scaleY = scale
+                    rotationZ = spin?.value ?: (progress * 300f)
+                }
         ) {
-            val reached = thresholdReached()
-            Icon(
-                imageVector = Icons.Rounded.Refresh,
-                contentDescription = null,
-                modifier = Modifier.size(26.dp),
-                tint = if (reached) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            val progress = (offsetY() / thresholdPx).coerceIn(0f, 1f)
+            val stroke = 2.6.dp.toPx()
+            val arcTopLeft = Offset(stroke / 2f, stroke / 2f)
+            val arcSize = Size(size.width - stroke, size.height - stroke)
+            val style = Stroke(width = stroke, cap = StrokeCap.Round)
+            drawArc(
+                color = trackColor,
+                startAngle = 0f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = arcTopLeft,
+                size = arcSize,
+                style = style
             )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = if (refreshing()) stringResource(R.string.watchlist_refreshing)
-                else if (reached) stringResource(R.string.watchlist_release_to_refresh)
-                else stringResource(R.string.watchlist_pull_to_refresh),
-                style = MaterialTheme.typography.labelSmall,
-                color = if (reached) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            drawArc(
+                color = lerp(idleColor, activeColor, progress),
+                startAngle = -90f,
+                sweepAngle = if (spin != null) 100f else 320f * progress,
+                useCenter = false,
+                topLeft = arcTopLeft,
+                size = arcSize,
+                style = style
             )
         }
     }
