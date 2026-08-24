@@ -95,7 +95,15 @@ fun AmbientMeshBackground(
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     val speedScale = if (lifecycleState.isAtLeast(Lifecycle.State.STARTED)) 1f else 0f
 
-    Box(modifier = modifier.fillMaxSize().background(colorScheme.background)) {
+    // 关闭动效时，默认底色既更灰一点又轻微掺入主题主色，避免纯灰白/黑蓝显得单调。
+    // 浅色主题掺入更明显（10%），深色主题收敛（8%），同时保证正文对比度。
+    val baseBackground = if (enabled) {
+        colorScheme.background
+    } else {
+        lerp(colorScheme.background, colorScheme.primary, if (isDark) 0.08f else 0.10f)
+    }
+
+    Box(modifier = modifier.fillMaxSize().background(baseBackground)) {
         if (enabled) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 ShaderAmbient(preset, palette, colorScheme.background, speedScale)
