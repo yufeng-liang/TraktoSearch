@@ -718,6 +718,23 @@ class TraktRepository @Inject constructor(
         return 0
     }
 
+    /**
+     * 同步取 tmdbId → imdbId 映射（不触发网络请求），配合 [getCachedTraktId] 用于秒进跳转。
+     * 缓存未命中或结果里没有 imdbId 时返回 null，调用方可留空由详情页从 TMDB 富化补齐。
+     */
+    fun getCachedImdbId(tmdbId: Int, type: MediaType): String? {
+        val cached = searchByTmdbCache.get("${tmdbId}_${type.name}") ?: return null
+        for (result in cached) {
+            val imdbId = when (type) {
+                MediaType.MOVIE -> result.movie?.ids?.imdb
+                MediaType.SHOW -> result.show?.ids?.imdb
+                else -> null
+            }
+            if (!imdbId.isNullOrBlank()) return imdbId
+        }
+        return null
+    }
+
     /** 同步查询 imdbId → traktId 缓存（不触发网络请求）。返回值约定同 getCachedTraktId：null=未查过，0=已查无有效ID，正数=有效traktId */
     fun getCachedTraktIdByImdb(imdbId: String, type: MediaType): Int? {
         val key = "${imdbId}_${type.name}"
@@ -1603,6 +1620,18 @@ class TraktRepository @Inject constructor(
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    /**
+     * 同步读取全局想看/已看缓存里的标记状态，缓存尚未加载时返回 null。
+     *
+     * 与 [checkInWatchlist] / [checkWatched] 的区别：绝不触发 [loadWatchlistWatchedIds]。
+     * 详情页用它避免把海报和标题的首屏渲染压在一次网络加载后面 —— 缓存未就绪时
+     * 先沿用调用方（列表卡片/路由参数）已知的状态，等后台加载完再校正。
+     */
+    fun peekWatchStates(traktId: Int, type: MediaType): Pair<Boolean, Boolean>? {
+        val ids = watchlistWatchedIds ?: return null
+        return Pair(ids.isInWatchlist(traktId, null, type), ids.isWatched(traktId, null, type))
     }
 
     /** 检查某个影视是否在想看列表中（优先用全局缓存，避免网络请求） */

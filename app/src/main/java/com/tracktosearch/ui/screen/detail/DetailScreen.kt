@@ -137,6 +137,8 @@ fun DetailScreen(
     initialInWatchlist: Boolean = false,
     initialIsWatched: Boolean = false,
     doubanId: String? = null,
+    /** 首帧种子海报：列表卡片已知的海报 URL，用于消除进入详情页时的空白期 */
+    seedPosterUrl: String? = null,
     onBack: (watchlistChanged: Boolean, watchedChanged: Boolean) -> Unit = { _, _ -> },
     onPersonClick: (personId: Int, personName: String, profileUrl: String?, avatarColor: Color?) -> Unit = { _, _, _, _ -> },
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit = { _, _, _, _, _ -> },
@@ -179,7 +181,8 @@ fun DetailScreen(
             traktRating,
             inWatchlist = initialInWatchlist,
             isWatched = initialIsWatched,
-            doubanId = doubanId
+            doubanId = doubanId,
+            seedPosterUrl = seedPosterUrl
         )
     }
 

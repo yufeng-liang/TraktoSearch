@@ -139,7 +139,7 @@ interface DoubanAuthStorageEntryPoint {
 object Routes {
     const val LOGIN = "login"
     const val MAIN = "main"
-    const val DETAIL = "detail/{type}/{traktId}/{tmdbId}/{title}/{imdbId}/{traktRating}?inWatchlist={inWatchlist}&isWatched={isWatched}&doubanId={doubanId}"
+    const val DETAIL = "detail/{type}/{traktId}/{tmdbId}/{title}/{imdbId}/{traktRating}?inWatchlist={inWatchlist}&isWatched={isWatched}&doubanId={doubanId}&posterUrl={posterUrl}&year={year}"
     const val SEARCH = "search/{keyword}"
     const val PERSON = "person/{personId}/{personName}/{profileUrl}"
     const val STATISTICS = "statistics"
@@ -180,16 +180,27 @@ object Routes {
         return "traktSearch/$type/$encodedQuery"
     }
 
-    fun detailRoute(type: String, traktId: Int, tmdbId: Int, title: String, imdbId: String = "", traktRating: Double = 0.0, inWatchlist: Boolean = false, isWatched: Boolean = false, doubanId: String? = null): String {
+    /**
+     * 详情页路由。
+     *
+     * posterUrl / year 是「首帧种子」：调用方（列表卡片）已经知道海报和年份时一并带上，
+     * 详情页第一帧就能把它们渲染出来，不必等 TMDB 富化回来才从空白弹入。
+     * 两者都可省略，省略时详情页退回同步 peek TMDB 内存缓存。
+     */
+    fun detailRoute(type: String, traktId: Int, tmdbId: Int, title: String, imdbId: String = "", traktRating: Double = 0.0, inWatchlist: Boolean = false, isWatched: Boolean = false, doubanId: String? = null, posterUrl: String? = null, year: Int? = null): String {
         val encodedTitle = java.net.URLEncoder.encode(title, "UTF-8")
         val encodedImdbId = java.net.URLEncoder.encode(imdbId, "UTF-8")
         val encodedDoubanId = doubanId?.let { java.net.URLEncoder.encode(it, "UTF-8") }
+        val encodedPosterUrl = posterUrl?.takeIf { it.isNotBlank() }
+            ?.let { java.net.URLEncoder.encode(it, "UTF-8") }
         var route = "detail/$type/$traktId/$tmdbId/$encodedTitle/$encodedImdbId/$traktRating"
-        if (inWatchlist || isWatched || encodedDoubanId != null) {
+        if (inWatchlist || isWatched || encodedDoubanId != null || encodedPosterUrl != null || year != null) {
             val params = mutableListOf<String>()
             if (inWatchlist) params.add("inWatchlist=true")
             if (isWatched) params.add("isWatched=true")
             encodedDoubanId?.let { params.add("doubanId=$it") }
+            encodedPosterUrl?.let { params.add("posterUrl=$it") }
+            year?.let { params.add("year=$it") }
             route += "?${params.joinToString("&")}"
         }
         return route
@@ -714,7 +725,12 @@ fun AppNavigation(
                                             traktRating = item.traktRating,
                                             inWatchlist = inWatchlist,
                                             isWatched = isWatched,
-                                            doubanId = doubanId
+                                            doubanId = doubanId,
+                                            // 卡片已经渲染过的海报和年份直接带给详情页当首帧种子：
+                                            // 想看列表冷启动是从 Room 快照恢复的，此时 TMDB 内存缓存还是空的，
+                                            // 详情页 peek 不到，只有靠这里传下去才能第一帧就有海报。
+                                            posterUrl = item.posterUrl,
+                                            year = item.year
                                         )
                                     )
                                 }
@@ -822,7 +838,9 @@ fun AppNavigation(
                         navArgument("traktRating") { type = NavType.FloatType; defaultValue = 0.0f },
                         navArgument("inWatchlist") { type = NavType.BoolType; defaultValue = false },
                          navArgument("isWatched") { type = NavType.BoolType; defaultValue = false },
-                         navArgument("doubanId") { type = NavType.StringType; defaultValue = "" }
+                         navArgument("doubanId") { type = NavType.StringType; defaultValue = "" },
+                         navArgument("posterUrl") { type = NavType.StringType; defaultValue = "" },
+                         navArgument("year") { type = NavType.IntType; defaultValue = 0 }
                     )
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
@@ -835,6 +853,11 @@ fun AppNavigation(
                          val inWatchlist = backStackEntry.arguments?.getBoolean("inWatchlist") ?: false
                          val isWatched = backStackEntry.arguments?.getBoolean("isWatched") ?: false
                          val doubanId = backStackEntry.arguments?.getString("doubanId")?.takeIf { it.isNotBlank() }
+                         // 首帧种子：列表卡片已知的海报与年份，缺省时为空串/0
+                         val seedPosterUrl = backStackEntry.arguments?.getString("posterUrl")
+                             ?.takeIf { it.isNotBlank() }
+                             ?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+                         val seedYear = backStackEntry.arguments?.getInt("year")?.takeIf { it > 0 }
 
                         // 用于在标记已看/想看后通知上级列表页刷新
                         // 同时检查从子详情页（推荐跳转）传递回来的变更标记
@@ -849,11 +872,13 @@ fun AppNavigation(
                             tmdbId = tmdbId,
                             title = title,
                             mediaType = if (type == "show") MediaType.SHOW else MediaType.MOVIE,
+                            year = seedYear,
                             imdbId = imdbId,
                             traktRating = traktRating,
                              initialInWatchlist = inWatchlist,
                              initialIsWatched = isWatched,
                              doubanId = doubanId,
+                             seedPosterUrl = seedPosterUrl,
                             onBack = { wlChanged, wChanged -> goBack(wlChanged, wChanged) },
                             onPersonClick = { personId, personName, profileUrl, avatarColor ->
                                 navController.navigate(Routes.personRoute(personId, personName, profileUrl ?: ""))

@@ -398,10 +398,21 @@ class PersonViewModel @Inject constructor(
         isMovie: Boolean,
         onNavigate: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit
     ) {
+        val type = if (isMovie) MediaType.MOVIE else MediaType.SHOW
+        // tmdb→trakt 映射是永久缓存（映射本身不变）：命中就同步跳转，不显示卡片转圈。
+        // 负缓存返回 0，表示之前搜过确实没有，直接提示而不再发一次注定失败的请求。
+        val cachedTraktId = traktRepository.getCachedTraktId(tmdbId, type)
+        if (cachedTraktId != null) {
+            if (cachedTraktId > 0) {
+                onNavigate(cachedTraktId, tmdbId, title, traktRepository.getCachedImdbId(tmdbId, type).orEmpty(), 0.0)
+            } else {
+                viewModelScope.launch { _toastEvent.emit(R.string.card_resolve_not_found) }
+            }
+            return
+        }
         _uiState.value = _uiState.value.copy(resolvingTmdbId = tmdbId)
         viewModelScope.launch {
             try {
-                val type = if (isMovie) MediaType.MOVIE else MediaType.SHOW
                 val result = traktRepository.searchByTmdb(tmdbId, type)
                 result.onSuccess { searchResults ->
                     val first = searchResults.firstOrNull()
