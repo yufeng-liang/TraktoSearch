@@ -497,6 +497,17 @@ class TmdbRepository @Inject constructor(
         }
     }
 
+    /**
+     * 同步读取内存缓存里的人物详情，未命中返回 null。
+     *
+     * 不挂起、不读盘、不发网络：人物页用它在首帧就把姓名、简介、生日、出生地填好，
+     * 二次进入同一人物时不再先显示骨架屏再整块弹入。语义同 [peekMovieEnrichment]。
+     */
+    fun peekPersonDetail(personId: Int): TmdbPerson? {
+        if (personId <= 0) return null
+        return personDetailCache.get(langKey(personId))
+    }
+
     suspend fun getPersonDetail(personId: Int): TmdbPerson? {
         val key = langKey(personId)
         return personDetailCache.getOrAwait(key) {
@@ -513,12 +524,11 @@ class TmdbRepository @Inject constructor(
 
     suspend fun getPersonMovieCredits(personId: Int, page: Int = 1): PersonCreditsPage<TmdbPersonMovieCredit> {
         val key = langKey(personId)
+        // getOrAwait 而非 get + 手动 fetch：同一人物的并发请求（例如快速返回再进入）合并成一次
         val full = try {
-            personMovieCreditsCache.get(key) ?: run {
+            personMovieCreditsCache.getOrAwait(key) {
                 val response = tmdbApiService.getPersonMovieCredits(personId, language = getTmdbLanguage(), page = 1)
-                val result = response.body()?.cast?.sortedByDescending { it.vote_average } ?: emptyList()
-                personMovieCreditsCache.put(key, result)
-                result
+                response.body()?.cast?.sortedByDescending { it.vote_average } ?: emptyList()
             }
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
             emptyList()
@@ -532,11 +542,9 @@ class TmdbRepository @Inject constructor(
     suspend fun getPersonTvCredits(personId: Int, page: Int = 1): PersonCreditsPage<TmdbPersonTvCredit> {
         val key = langKey(personId)
         val full = try {
-            personTvCreditsCache.get(key) ?: run {
+            personTvCreditsCache.getOrAwait(key) {
                 val response = tmdbApiService.getPersonTvCredits(personId, language = getTmdbLanguage(), page = 1)
-                val result = response.body()?.cast?.sortedByDescending { it.vote_average } ?: emptyList()
-                personTvCreditsCache.put(key, result)
-                result
+                response.body()?.cast?.sortedByDescending { it.vote_average } ?: emptyList()
             }
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
             emptyList()
