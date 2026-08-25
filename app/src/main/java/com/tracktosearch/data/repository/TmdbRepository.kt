@@ -21,6 +21,7 @@ import kotlinx.serialization.json.Json
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
+import retrofit2.HttpException
 
 /** 持久化缓存专用 DataStore（共享一个文件，通过 key 前缀区分不同缓存类型） */
 private val Context.persistentCacheDataStore: DataStore<Preferences> by preferencesDataStore(name = "persistent_cache")
@@ -988,9 +989,13 @@ class TmdbRepository @Inject constructor(
             if (response.isSuccessful) {
                 val body = response.body() ?: TmdbSearchResponse()
                 DiscoverPage(body.results, body.total_pages, body.total_results)
-            } else DiscoverPage(emptyList(), 0, 0)
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            DiscoverPage(emptyList(), 0, 0)
+            } else {
+                // 失败必须抛给调用方：以前这里和 catch 一起把失败降级成空页，筛选页于是显示
+                // 「没有符合条件的结果」，用户以为条件太严去改条件，真实原因是这次请求没成功
+                throw HttpException(response)
+            }
+        } catch (e: CancellationException) {
+            throw e
         }
     }
 }

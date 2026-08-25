@@ -24,6 +24,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import retrofit2.Response
 import java.io.IOException
+import okhttp3.ResponseBody.Companion.toResponseBody
 
 /**
  * TmdbRepository 单元测试。
@@ -1407,7 +1408,7 @@ class TmdbRepositoryTest {
     }
 
     @Test
-    fun discover_网络失败_返回空结果() = runTest {
+    fun discover_网络失败_抛出异常给调用方() = runTest {
         coEvery {
             tmdbApiService.discoverMovie(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
         } throws IOException("网络错误")
@@ -1421,10 +1422,38 @@ class TmdbRepositoryTest {
             sortBy = TmdbRepository.DiscoverSort.POPULARITY_DESC,
             hideWatched = false
         )
-        val result = repository.discover(filter, page = 1)
 
-        assertThat(result.items).isEmpty()
-        assertThat(result.totalPages).isEqualTo(0)
+        // 失败不再降级成空页：筛选页要靠这个异常区分「请求失败」与「确实没有符合条件的结果」
+        try {
+            repository.discover(filter, page = 1)
+            throw AssertionError("expected IOException")
+        } catch (e: IOException) {
+            assertThat(e).hasMessageThat().isEqualTo("网络错误")
+        }
+    }
+
+    @Test
+    fun discover_HTTP失败_抛出异常给调用方() = runTest {
+        coEvery {
+            tmdbApiService.discoverMovie(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } returns Response.error(500, "".toResponseBody(null))
+
+        val filter = TmdbRepository.DiscoverFilter(
+            type = TmdbRepository.DiscoverType.MOVIE,
+            genreIds = emptyList(), originCountries = emptyList(),
+            keywordIds = emptyList(),
+            voteAverageMin = 0f, voteAverageMax = 10f,
+            releaseDateStart = null, releaseDateEnd = null,
+            sortBy = TmdbRepository.DiscoverSort.POPULARITY_DESC,
+            hideWatched = false
+        )
+
+        try {
+            repository.discover(filter, page = 1)
+            throw AssertionError("expected HttpException")
+        } catch (e: retrofit2.HttpException) {
+            assertThat(e.code()).isEqualTo(500)
+        }
     }
 
     @Test
