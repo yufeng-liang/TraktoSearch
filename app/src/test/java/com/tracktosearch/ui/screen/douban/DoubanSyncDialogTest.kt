@@ -575,6 +575,6 @@ class DoubanSyncDialogTest {
         setContent()
         composeRule.onNodeWithText("Sync summary").assertIsDisplayed()
         composeRule.onNodeWithText("Failed, retry available").assertIsDisplayed()
-        composeRule.onAllNodesWithText("Upload needs retry").assertCountEquals(2)
+        composeRule.onAllNodesWithText("Upload needs retry")[1].performScrollTo().assertIsDisplayed()
     }
 }
