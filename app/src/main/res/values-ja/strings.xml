@@ -2,9 +2,6 @@
     <string name="auth_migration_invite_hint">自動復元を完了できませんでした。移行用の招待コードを入力して続行してください。</string>
     <string name="auth_offline_mode">オフラインモード: キャッシュデータを使用しています。</string>
     <string name="app_name">TraktoSearch</string>
-    <string name="splash_slogan">観たいから、見つけて、観たへ</string>
-    <string name="auth_title">アクセスを有効化</string>
-    <string name="auth_subtitle">管理者から提供された招待コードを入力してください。</string>
     <string name="auth_expired_message">ネットワークに接続して、アクセスを再度有効化してください。</string>
     <string name="auth_invite_code">12桁のアクティベーションコードを入力</string>
     <string name="auth_activate">有効化</string>
@@ -29,7 +26,6 @@
 
     <!-- Discover Screen -->
     <string name="discover_title">発見</string>
-    <string name="discover_popular">人気</string>
     <string name="discover_upcoming">公開予定</string>
     <string name="discover_recommended">おすすめ</string>
 
@@ -50,7 +46,6 @@
     <string name="content_desc_save">保存</string>
     <string name="content_desc_view_all">すべて表示</string>
     <string name="content_desc_back">戻る</string>
-    <string name="content_desc_refresh">更新</string>
     <string name="gallery_save_failed">保存に失敗しました</string>
     <string name="gallery_already_exists">既に存在します: %1$s</string>
     <string name="gallery_saved">保存しました: %1$s/%2$s</string>
@@ -59,50 +54,35 @@
     <string name="link_copied">リンクがコピーされました</string>
     <string name="cannot_open_link">このリンクを開けません</string>
     <string name="install_success">インストール成功</string>
-    <string name="update_new_version">新しいバージョン v%1$s が利用可能です</string>
     <string name="update_download_builtin">内蔵ダウンロード</string>
     <string name="update_download_browser">ブラウザダウンロード</string>
     <string name="update_release_page">リリースページへ</string>
     <string name="update_download_unavailable">直接ダウンロードは一時的に利用できません。リリースページからAPKを取得できます。</string>
     <string name="update_close">閉じる</string>
     <string name="install_failed">インストール失敗 (code=%1$d)</string>
-    <string name="help_col_source">ソース</string>
-    <string name="help_col_format">フォーマット</string>
-    <string name="help_col_how_to_get">取得方法</string>
-    <string name="help_col_import_effect">インポート効果</string>
     
     <string name="notification_release_title">公開リマインダー：%1$s</string>
     <string name="notification_release_text">%1$s に公開されました。チェックしてみましょう！</string>
     <string name="notification_new_season_text">シーズン %1$d が %2$s に放送開始</string>
     <string name="notification_new_season_title">新シーズン：%1$s</string>
-    <string name="search_button">検索</string>
     <string name="search_loading">検索中…</string>
-    <string name="search_failed">検索失敗: %1$s</string>
     <string name="search_no_results">リソースが見つかりません</string>
     <string name="search_empty_hint">キーワードを入力して検索を開始</string>
-    <string name="search_default_hint">映画やテレビ番組を検索</string>
-    <string name="search_results">検索結果 (%1$d)</string>
     <string name="search_clear_input">クリア</string>
     <string name="search_history_title">検索履歴</string>
     <string name="search_history_clear_all">すべてクリア</string>
     <string name="search_history_delete">削除</string>
-    <string name="search_popular_title">人気の検索</string>
     <string name="search_suggestions_title">サジェスチョン</string>
     <string name="search_loading_disk">クラウドリソースを検索中...</string>
     <string name="search_loading_disk_progress">検索中 %1$d/%2$d ソース...</string>
 
     <!-- Watchlist Screen -->
-    <string name="watchlist_title">マイウォッチリスト</string>
     <string name="watchlist_search">検索</string>
-    <string name="watchlist_refresh">更新</string>
-    <string name="logout">ログアウト</string>
     <string name="watchlist_tab_movies">映画</string>
     <string name="watchlist_tab_shows">テレビ</string>
     <string name="watchlist_retry">再試行</string>
-    <string name="watchlist_loading">読み込み中…</string>
     <string name="watchlist_mode_watchlist">ウォッチリスト</string>
     <string name="watchlist_mode_watched">視聴済</string>
-    <string name="watchlist_tab_history">履歴</string>
 
     <!-- Detail Screen -->
     <string name="detail_back">戻る</string>
@@ -115,7 +95,6 @@
     <string name="detail_mark_watched">視聴済みにする</string>
     <string name="detail_mark_watched_title">視聴済みにするエピソードを選択</string>
     <string name="detail_loading_episodes">エピソードを読み込み中…</string>
-    <string name="detail_no_overview">あらすじがありません</string>
     <string name="detail_overview_label">あらすじ</string>
     <string name="detail_text_expand">展開</string>
     <string name="detail_text_collapse">折りたたむ</string>
@@ -141,15 +120,12 @@
 
     <!-- Douban Sync -->
     <string name="douban_login_title">豆瓣にログイン</string>
-    <string name="douban_login_hint">豆瓣にログインすると、見たい/見たマークをWatchlistで確認できます。Traktに接続するとTraktにも同期できます。</string>
     <string name="douban_login_privacy_short">このページは公開マーク（見たい/見た）を読み取るため豆瓣にログインします。認証情報は今回の同期にのみ使用され、第三者サーバーにアップロードされません。</string>
-    <string name="douban_login_privacy_detail_title">詳細</string>
     <string name="douban_login_privacy_detail">• ログインの理由：豆瓣マーク（見たい、見た、評価）を読み取るため\n• 保存内容：CookieとuserId（今回のクロール用）のみ、豆瓣パスワードは保存しません\n• Cookieの用途：movie.douban.com/people/{userId}/wish|collectページのリクエストのみ\n• 同期完了後：設定で豆瓣認証情報をいつでも削除可能\n• データフロー：豆瓣 → アプリ。Traktに接続するとTraktにも同期できます。</string>
     <string name="douban_login_privacy_expand">詳細を表示</string>
     <string name="douban_login_privacy_collapse">折りたたむ</string>
     <string name="douban_login_success_snackbar">豆瓣ログイン成功</string>
     <string name="douban_login_load_failed">読み込み失敗</string>
-    <string name="douban_login_notification_rationale">バックグラウンド同期に通知権限が必要です。付与してください</string>
     <string name="douban_sync_title">豆瓣マーク同期</string>
     <string name="douban_sync_complete">同期完了</string>
     <string name="douban_sync_cancelling">キャンセル中...</string>
@@ -173,27 +149,7 @@
     <string name="douban_sync_summary_format">成功 %1$d · スキップ %2$d · キャッシュ %3$d</string>
 
     <!-- 豆瓣同期失敗項目リトライ -->
-    <string name="douban_retry_title">Douban同期失敗項目をリトライ</string>
-    <string name="douban_retry_subtitle">前回の同期で %1$d 項目が失敗しました。操作を選択</string>
-    <string name="douban_retry_option_local">前回の失敗 %1$d 項目をリトライ</string>
-    <string name="douban_retry_option_local_desc">リカバリ可能 %1$d · リカバリ不可 %2$d</string>
-    <string name="douban_retry_option_incremental">増分同期で新規マーク</string>
-    <string name="douban_retry_option_incremental_desc">Doubanの新規wish/collectのみ同期</string>
-    <string name="douban_retry_option_json">JSONファイルから失敗項目をインポートしてリトライ</string>
-    <string name="douban_retry_option_json_desc">エクスポートされた失敗データファイルから読み込み</string>
-    <string name="douban_retry_select_reasons">リトライする失敗タイプを選択</string>
-    <string name="douban_retry_reason_recoverable">%1$s (リカバリ可能)</string>
-    <string name="douban_retry_reason_non_recoverable">%1$s (デフォルトスキップ)</string>
-    <string name="douban_retry_start">リトライ開始</string>
     <string name="douban_retry_cancel">キャンセル</string>
-    <string name="douban_retry_clear">失敗記録をクリア</string>
-    <string name="douban_retry_clear_confirm">すべての失敗記録をクリアしますか？この操作は取り消せません。</string>
-    <string name="douban_retry_clear_confirm_yes">クリア</string>
-    <string name="douban_retry_clear_confirm_no">キャンセル</string>
-    <string name="douban_retry_max_attempt">%1$d 回リトライ済み、自動リトライ非推奨</string>
-    <string name="douban_retry_no_failures">リトライする失敗項目がありません</string>
-    <string name="douban_retry_json_import_failed">JSONファイルの解析に失敗</string>
-    <string name="douban_retry_json_import_empty">ファイルに失敗項目がありません</string>
 
     <!-- 失敗理由のローカライズ -->
     <string name="douban_failure_reason_no_imdb_id">IMDb IDなし</string>
@@ -205,7 +161,6 @@
 
     <!-- 同期結果ダイアログ -->
     <string name="douban_sync_current_processing">処理中：%1$s</string>
-    <string name="douban_sync_retry_complete_banner">リトライ完了、%1$d 項目が成功</string>
 
     <!-- 豆瓣同期レジューム(キャンセル後の復元) -->
     <string name="douban_resume_title">前回の同期を再開</string>
@@ -215,8 +170,6 @@
     <string name="douban_resume_continue_desc">リストクロールをスキップし、クロール済みデータを直接処理</string>
     <string name="douban_resume_full_desc">未処理データをクリアし、最初から開始</string>
     <string name="douban_resume_cancel">キャンセル</string>
-    <string name="douban_resume_phase">未処理リストを再開中</string>
-    <string name="douban_resume_complete">レジューム完了</string>
     <string name="sync_already_running">同期タスクが実行中です。しばらくお待ちください</string>
 
     <!-- Douban sync rollback (after failed full rewrite) -->
@@ -241,11 +194,7 @@
     <!-- 視覚効果 -->
     <string name="settings_visual_effect_blur">ぼかし</string>
     <string name="settings_visual_effect_blur_desc">柔らかなすりガラス風で、境界を自然に見せるスタイル</string>
-    <string name="settings_visual_effect_glass_clear">Glass - クリア</string>
-    <string name="settings_visual_effect_glass_clear_desc">軽やかな光学ガラス風で、境界を控えめに見せるスタイル</string>
     <string name="settings_visual_effect_glass_desc">シーンに応じて深度、屈折、ハイライトを調整する光学ガラス</string>
-    <string name="settings_visual_effect_glass_focused">Glass - フォーカス</string>
-    <string name="settings_visual_effect_glass_focused_desc">ナビゲーションや操作に適した、輪郭の明確なガラス階層</string>
 
     <!-- Accent Color -->
     <string name="settings_accent_color">トーンと素材</string>
@@ -284,7 +233,6 @@
     <string name="settings_appearance">外観</string>
     <string name="settings_shared_transition">共有要素トランジション</string>
     <string name="settings_shared_transition_subtitle">画面間で共有要素にトランジションアニメーションを適用（全画面表示時のズーム遷移も含む）。</string>
-    <string name="settings_search">検索</string>
     <string name="settings_storage">ストレージ</string>
     <string name="settings_clear_cache">キャッシュクリア</string>
     <string name="settings_about">について</string>
@@ -298,16 +246,13 @@
     <string name="settings_cache_category_media_data">メディアデータキャッシュ</string>
     <string name="settings_cache_category_media_data_desc">詳細、クレジット、チャート（TMDB + Trakt + 豆瓣）</string>
     <string name="settings_cache_category_id_mapping">ID マッピングキャッシュ</string>
-    <string name="settings_cache_category_id_mapping_desc">TMDB↔Trakt、豆瓣→IMDb（永続）</string>
     <string name="settings_cache_category_http">HTTP キャッシュ</string>
     <string name="settings_cache_category_http_desc">ネットワーク応答キャッシュ（OkHttp）</string>
     <string name="settings_cache_category_database">オフラインデータベース</string>
-    <string name="settings_cache_category_database_desc">ウォッチリスト/視聴済み + 豆瓣同期記録</string>
     <string name="settings_cache_clear_all">すべてクリア</string>
     <string name="settings_image_traffic_title">画像トラフィック</string>
     <string name="settings_image_traffic_today">今日：%1$s</string>
     <string name="settings_image_traffic_total">累計：%1$s</string>
-    <string name="settings_image_traffic_desc">ダウンロードした画像データ量（ポスター、アバター、スチル）</string>
     <string name="settings_image_traffic_clear">リセット</string>
     <string name="settings_cache_clear_category_confirm">このキャッシュをクリアしますか？</string>
     <string name="settings_cache_clear_all_impact">すべてのキャッシュデータをクリアします。ポスター/アバターは再ダウンロード、映画/TV詳細とランキングは再取得、IDマッピングは再構築されます。キャッシュが再蓄積されるまでアプリが少し遅くなる場合があります。</string>
@@ -320,10 +265,8 @@
     <string name="settings_already_latest">最新です v%1$s</string>
     <string name="settings_new_version">新バージョン v%1$s</string>
     <string name="settings_discover_sections">発見セクション</string>
-    <string name="settings_discover_sections_desc">発見ページのセクション表示と並び順</string>
     <string name="settings_discover_sections_hint">ドラッグで並べ替え、スイッチで表示/非表示</string>
     <string name="settings_detail_sections">カスタム詳細ページ</string>
-    <string name="settings_detail_sections_desc">詳細ページの各モジュールの表示/非表示を設定</string>
     <string name="settings_drag_to_reorder">ドラッグで並び替え</string>
     <string name="settings_logout_button">ログアウト</string>
 
@@ -359,29 +302,15 @@
     <string name="statistics_more">多</string>
 
     <!-- Search Filter -->
-    <string name="search_filter_type">タイプ</string>
-    <string name="search_filter_disk">ディスクタイプ</string>
 
     <!-- Watchlist Screen (追加) -->
     <string name="watchlist_poster_error">ポスターと中国語タイトルの読み込みに失敗しました。ネットワークプロキシを有効にして更新してください</string>
-    <string name="watchlist_load_failed">読み込み失敗: %1$s</string>
-    <string name="watchlist_empty_movies">ウォッチリストが空です</string>
-    <string name="watchlist_empty_shows">ウォッチリストが空です</string>
-    <string name="watchlist_search_no_movies">一致する映画がありません</string>
-    <string name="watchlist_search_no_shows">一致するテレビ番組がありません</string>
-    <string name="watchlist_logout">ログアウト</string>
     <string name="watchlist_search_watchlist">ウォッチリスト検索</string>
     <string name="watchlist_search_history">視聴履歴検索</string>
-    <string name="history_empty_movies">視聴した映画はまだありません</string>
-    <string name="history_empty_shows">視聴したテレビ番組はまだありません</string>
-    <string name="watchlist_search_on_trakt">Traktで検索</string>
     <string name="watchlist_selected_count">%d件選択中</string>
     <string name="watchlist_remove_watchlist">ウォッチリストから削除</string>
     <string name="watchlist_remove_history">履歴から削除</string>
     <string name="watchlist_batch_remove_partial_failed">一部の項目の削除に失敗しました</string>
-    <string name="watchlist_pull_to_refresh">下に引っ張って更新</string>
-    <string name="watchlist_release_to_refresh">離して更新</string>
-    <string name="watchlist_refreshing">更新中…</string>
     <string name="common_cancel">キャンセル</string>
     <string name="permission_cloud_title">雲が変身するのを見たいですか？</string>
     <string name="permission_cloud_message">位置情報を許可すると、あなたの都市のリアルタイムの天気や祝日テーマに合わせて変化します！</string>
@@ -393,16 +322,10 @@
     <string name="trakt_search_hint_shows">Traktでテレビ番組を検索</string>
     <string name="trakt_search_no_movies">Traktで映画が見つかりません</string>
     <string name="trakt_search_no_shows">Traktでテレビ番組が見つかりません</string>
-    <string name="trakt_search_result_count_movies">全 %d 本の映画</string>
-    <string name="trakt_search_result_count_shows">全 %d 本のテレビ番組</string>
     <string name="trakt_search_tab_movies">映画</string>
     <string name="trakt_search_tab_shows">テレビ番組</string>
-    <string name="trakt_search_tab_movies_count">映画(%d)</string>
-    <string name="trakt_search_tab_shows_count">テレビ番組(%d)</string>
     <string name="trakt_search_tab_persons">人物</string>
-    <string name="trakt_search_tab_persons_count">人物(%d)</string>
     <string name="trakt_search_tab_disk">クラウド</string>
-    <string name="trakt_search_tab_disk_count">クラウド(%d)</string>
     <string name="trakt_search_hint_disk">クラウドリソースを検索</string>
     <string name="trakt_search_hint_persons">Traktで人物を検索</string>
     <string name="trakt_search_no_persons">Traktで人物が見つかりません</string>
@@ -413,9 +336,7 @@
     <string name="common_undo">元に戻す</string>
     <string name="detail_watchlist_added_toast">見たいリストに追加しました</string>
     <string name="detail_watchlist_removed_toast">見たいリストから削除しました</string>
-    <string name="detail_watched_added_toast">視聴済みにしました</string>
     <string name="detail_watched_removed_toast">視聴済みを解除しました</string>
-    <string name="detail_mark_processing">処理中</string>
     <string name="detail_rate">評価</string>
     <string name="detail_rated">評価済み</string>
     <string name="detail_login_required_title">ログインが必要</string>
@@ -444,16 +365,12 @@
     <string name="detail_year_suffix">%d年</string>
     <string name="detail_watched">視聴済み</string>
     <string name="detail_not_watched">未視聴</string>
-    <string name="detail_saved">保存済み</string>
-    <string name="detail_save">保存</string>
     <string name="detail_comment_source">(出典: %s)</string>
 
     <string name="detail_comment_source_douban">豆瓣</string>
 
     <!-- Resource Item Card -->
     <string name="resource_viewed">閲覧済み</string>
-    <string name="resource_scan">スキャン</string>
-    <string name="resource_invalid">無効</string>
     <string name="resource_file_count">%1$dファイル</string>
     <string name="detail_collection_title">コレクション：%s</string>
 
@@ -506,21 +423,17 @@
     <string name="login_denied">認証が拒否されました</string>
     <string name="login_success">ログイン成功、読み込み中…</string>
     <string name="login_sync_hint">ログイン後、Traktのウォッチリストが同期されます</string>
-    <string name="login_activation_hint">アクセスを有効にするとTraktのウォッチリストを同期できます</string>
     <string name="login_activation_locked">○ 未認証 · コードを入力して視聴スペースを解放</string>
     <string name="login_activation_choose_path">有効化済み · Traktにログインするか、ゲストとして続行してください</string>
     <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
 
     <!-- Ratings -->
-    <string name="rating_trakt">Trakt</string>
 
     <!-- Detail Info (追加) -->
     <string name="detail_director">監督</string>
-    <string name="detail_actors">キャスト</string>
     <string name="detail_comments">コメント</string>
     <string name="detail_no_comments">コメントはまだありません</string>
     <string name="detail_own_comment_title">自分のコメント</string>
-    <string name="detail_own_comment_hint">短いレビューを書く</string>
     <string name="detail_own_comment_sync_trakt">このコメントは Trakt に同期されます</string>
     <string name="detail_own_comment_sync_douban">このコメントは Douban に同期されます</string>
     <string name="detail_own_comment_sync_trakt_douban">このコメントは Trakt と Douban に同期されます</string>
@@ -538,11 +451,9 @@
     <string name="detail_own_comment_targets_trakt_douban">Trakt と Douban</string>
     <string name="detail_own_comment_rating_required">Douban に同期する前に評価を選択してください</string>
     <string name="detail_seasons">シーズン</string>
-    <string name="detail_seasons_count">(全%1$dシーズン)</string>
     <string name="detail_seasons_show_all">全%1$dシーズンを表示</string>
     <string name="detail_seasons_collapse">折りたたむ</string>
     <string name="detail_season">シーズン%1$d</string>
-    <string name="detail_episode_count">%1$d エピソード</string>
     <string name="detail_episode">第%1$d話 %2$s</string>
     <string name="detail_original_title">原題: %1$s</string>
     <string name="detail_runtime_hours">%1$d時間%2$d分</string>
@@ -560,7 +471,6 @@
     <string name="detail_recommendations_title">関連おすすめ</string>
     <string name="detail_translating">翻訳中…</string>
     <string name="detail_translating_progress">翻訳中 %1$s…</string>
-    <string name="detail_translate_failed">翻訳失敗</string>
     <string name="detail_translate">翻訳</string>
     <string name="detail_translate_all">すべて翻訳</string>
     <string name="detail_translated">翻訳を表示</string>
@@ -604,7 +514,6 @@
     <string name="detail_rating_dialog_title">評価</string>
     <string name="detail_rating_confirm">確定</string>
     <string name="detail_rating_cancel">キャンセル</string>
-    <string name="detail_rating_no_rating">未評価</string>
     <string name="detail_rating_hint">星の左右をタップしてハーフ/全体を選択、もう一度タップで解除</string>
     <string name="detail_rating_comment_hint">コメント（任意）</string>
     <string name="detail_videos_section">予告編とスクリーンショット</string>
@@ -615,10 +524,8 @@
     <string name="detail_video_trailer">予告編</string>
     <string name="detail_video_teaser">ティザー予告</string>
     <string name="detail_video_clip">クリップ</string>
-    <string name="detail_video_load_error">動画の読み込みに失敗、YouTubeが現在の地域で利用できない可能性があります</string>
     <string name="detail_video_open_browser">ブラウザで開く</string>
     <string name="detail_video_play">再生</string>
-    <string name="detail_video_retry">再試行</string>
     <string name="trailer_youtube_restricted">YouTubeは現在の地域で制限されています\nVPNをご使用ください</string>
 
     <!-- Person Screen -->
@@ -629,7 +536,6 @@
     <string name="person_images">写真</string>
     <string name="person_homepage">ホームページ</string>
     <string name="poster_already_saved">保存済み</string>
-    <string name="person_load_more">さらに読み込む</string>
     <string name="detail_close">閉じる</string>
     <string name="person_no_biography">経歴はありません</string>
     <string name="person_age">歳</string>
@@ -644,7 +550,6 @@
     <string name="settings_changelog">更新履歴</string>
     <string name="settings_account">アカウント</string>
     <string name="settings_logout_confirm">ログアウトしてもよろしいですか？</string>
-    <string name="settings_source_repo">ソースコード</string>
     <string name="settings_feedback">フィードバック</string>
     <string name="settings_feedback_subtitle">開発者が営業中。アイデアやバグをどんどんどうぞ 🧑‍💻🍿</string>
     <string name="feedback_title">フィードバック</string>
@@ -659,27 +564,21 @@
     <string name="feedback_content_label">本文</string>
     <string name="feedback_content_placeholder">提案や問題を記述（5-2000文字）…</string>
     <string name="feedback_content_too_short">本文は5文字以上必要です</string>
-    <string name="feedback_content_too_long">本文は2000文字以内です</string>
     <string name="feedback_select_type">タイプを選択してください</string>
     <string name="feedback_screenshots">スクリーンショット（任意、最大5枚）</string>
     <string name="feedback_uploading">スクリーンショットをアップロード中（%1$d/%2$d）</string>
     <string name="feedback_submit">送信</string>
     <string name="feedback_submitting">送信中…</string>
-    <string name="feedback_submit_success">フィードバックを送信しました</string>
     <string name="feedback_submit_failed">送信失敗、再試行してください</string>
-    <string name="feedback_loading">読み込み中…</string>
-    <string name="feedback_load_failed">読み込み失敗</string>
     <string name="feedback_status_pending">保留中</string>
     <string name="feedback_status_replied">返信済み</string>
     <string name="feedback_status_closed">クローズ</string>
-    <string name="feedback_dev_reply">開発者返信</string>
     <string name="feedback_app_info">アプリ情報</string>
     <string name="feedback_app_version">アプリ %1$s</string>
     <string name="feedback_device_model">デバイス %1$s</string>
     <string name="feedback_trakt_username">Trakt: %1$s</string>
     <string name="feedback_douban_username">Douban: %1$s</string>
     <string name="feedback_contact_value">連絡先: %1$s</string>
-    <string name="feedback_screenshot_expired">スクリーンショット期限切れ</string>
     <string name="feedback_retry">再試行</string>
     <string name="feedback_time_just_now">たった今</string>
     <string name="feedback_time_minutes_ago">%1$d 分前</string>
@@ -706,7 +605,6 @@
     <string name="help_watchlist_b2">「マイ」ページでリストを表示・管理</string>
     <string name="help_watchlist_b3">視聴済みマークはシーズンごとにエピソードを選択可能、シーズン0の特別編は最後に表示</string>
     <string name="help_watchlist_b4">テレビ番組の視聴カウント：1話でも視聴すれば作品数に計上、視聴エピソード数が放送済み総数に達すると完走扱い</string>
-    <string name="settings_licenses">オープンソースライセンス</string>
 
     <!-- Data Management (追加) -->
     <string name="settings_import_imdb">IMDbからインポート</string>
@@ -745,8 +643,6 @@
     <string name="douban_sync_mode_warning_c">完全上書きは全ての同期記録をクリアし、豆瓣リストを再クロールします。\n\n豆瓣には厳格なアンチクロール機構があり、頻繁なクロールでIPアドレスがブラックリストに登録される可能性があります。自己責任で続行してください。\n\n本当に続行しますか?</string>
 
     <!-- Douban retry dialog - export option -->
-    <string name="douban_retry_option_export">失敗記録をエクスポート</string>
-    <string name="douban_retry_option_export_desc">JSONファイルとして保存、バックアップや共有に使用</string>
 
     <!-- Douban failures viewer -->
     <string name="settings_douban_status_consistency">ステータス一貫性チェック</string>
@@ -812,24 +708,10 @@
     <string name="consistency_check_time_minutes_ago">%1$d 分前</string>
     <string name="consistency_check_time_hours_ago">%1$d 時間前</string>
     <string name="consistency_check_time_days_ago">%1$d 日前</string>
-    <string name="screen_douban_failures_title">同期失敗項目</string>
-    <string name="share_failures_json">失敗項目 JSON を共有</string>
 
     <!-- クラウド失敗データ同期 -->
 
     <!-- Manual cloud sync (settings page) -->
-    <string name="screen_douban_failures_empty_wish">ウォッチリストの同期が全て成功しました</string>
-    <string name="screen_douban_failures_empty_collect">視聴済みリストの同期が全て成功しました</string>
-    <string name="screen_douban_failures_empty_all">同期失敗項目はありません</string>
-    <string name="screen_douban_failures_empty_search">一致する失敗項目はありません</string>
-    <string name="screen_douban_failures_empty_filter">条件に一致する失敗項目はありません</string>
-    <string name="screen_douban_failures_empty_movie">映画リストは空です</string>
-    <string name="screen_douban_failures_empty_show">ドラマリストは空です</string>
-    <string name="screen_douban_failures_empty_uncategorized">未分類リストは空です</string>
-    <string name="screen_douban_failures_empty_variety">バラエティリストは空です</string>
-    <string name="screen_douban_failures_empty_documentary">ドキュメンタリーリストは空です</string>
-    <string name="screen_douban_failures_clear_all">全てクリア</string>
-    <string name="screen_douban_failures_clear_all_confirm">全ての失敗記録をクリアします?この操作は取り消せません。</string>
     <string name="screen_douban_failures_mark_as_movie">映画としてマーク</string>
     <string name="screen_douban_failures_mark_as_show">TVドラマとしてマーク</string>
     <string name="screen_douban_failures_mark_as_variety">バラエティとしてマーク</string>
@@ -839,13 +721,6 @@
     <string name="screen_douban_failures_marked_as_show">TVドラマとしてマーク済み</string>
     <string name="screen_douban_failures_marked_as_variety">バラエティとしてマーク済み</string>
     <string name="screen_douban_failures_marked_as_documentary">ドキュメンタリーとしてマーク済み</string>
-    <string name="screen_douban_failures_delete_item">この項目を削除</string>
-    <string name="screen_douban_failures_tab_uncategorized">未分類</string>
-    <string name="screen_douban_failures_tab_variety">バラエティ</string>
-    <string name="screen_douban_failures_tab_documentary">ドキュメンタリー</string>
-    <string name="screen_douban_failures_selected_count">%1$d件選択中</string>
-    <string name="screen_douban_failures_select_all">全て選択</string>
-    <string name="screen_douban_failures_deselect_all">全て解除</string>
 
     <!-- 豆瓣詳細ページ:クロール進捗とラベル付け通知 -->
     <string name="douban_detail_fetching">豆瓣詳細を取得中…</string>
@@ -926,12 +801,9 @@
     <string name="filter_reset">リセット</string>
     <string name="filter_apply">適用</string>
     <string name="filter_genre">ジャンル</string>
-    <string name="filter_genre_empty">ジャンルデータなし(先に詳細を取得してください)</string>
     <string name="filter_year">年</string>
     <string name="filter_rating">Trakt 評価</string>
     <string name="filter_rating_label">評価</string>
-    <string name="douban_failure_search_hint">タイトルやサブタイトルを検索</string>
-    <string name="douban_failure_filter_reason">失敗の理由</string>
 
     <!-- Douban item detail -->
     <string name="screen_douban_item_detail_not_synced">この項目はTraktに未収録、同期できません</string>
@@ -973,14 +845,10 @@
     <string name="settings_notification_new_season_desc">新しいシーズンが放送されたら通知</string>
 
     <!-- Update -->
-    <string name="update_title">新しいバージョンがあります</string>
     <string name="update_download">今すぐ更新</string>
     <string name="update_later">後で通知</string>
-    <string name="update_browser_download">ブラウザでダウンロード</string>
-    <string name="update_downloading">ダウンロード中…</string>
     <string name="update_download_failed">ダウンロードに失敗しました。ブラウザでダウンロードしてください</string>
     <string name="update_signature_invalid">APK 署名検証失敗、インストールをブロックしました</string>
-    <string name="update_install">インストール中…</string>
     <string name="update_version_suffix">アップデート</string>
 
     <!-- Statistics (追加) -->
@@ -1027,7 +895,6 @@
     <string name="help_consistency_act_douban_watched">豆瓣で見たをマーク</string>
     <string name="help_consistency_act_douban_wish">豆瓣で見たいをマーク</string>
     <string name="settings_restart_onboarding">チュートリアル</string>
-    <string name="settings_restart_onboarding_desc">アプリの機能ガイドを再表示</string>
     <string name="onboarding_skip">スキップ</string>
     <string name="onboarding_next">次へ</string>
     <string name="onboarding_done">了解</string>
@@ -1043,7 +910,6 @@
     <string name="onboarding_step4_desc">アカウント、メッセージ、視聴統計、検索ソース、ヘルプはすべてここにあります</string>
 
     <!-- Common UI -->
-    <string name="common_retry">再試行</string>
     <string name="common_close">閉じる</string>
     <string name="common_confirm">確認</string>
     <string name="common_load_failed">読み込み失敗</string>
@@ -1051,11 +917,7 @@
     <string name="error_detail_close">閉じる</string>
     <string name="common_no_data">データがありません</string>
     <string name="common_loading">読み込み中…</string>
-    <string name="common_save_success">アルバムに保存しました</string>
-    <string name="common_save_failed">保存失敗</string>
-    <string name="common_save_exists">既に存在: %1$s</string>
     <string name="common_saved_path">保存先: %1$s/%2$s</string>
-    <string name="common_copy_success">コピーしました</string>
     <string name="common_open_failed">このリンクを開けません</string>
     <string name="common_done">完了</string>
     <string name="error_load_failed">読み込み失敗</string>
@@ -1073,21 +935,16 @@
     <string name="snackbar_import_no_data">有効なレコードが見つかりません</string>
     <string name="snackbar_sync_progress">同期中 %1$d/%2$d: %3$s</string>
     <string name="snackbar_import_done_imdb">IMDb インポート完了: %1$d 件一致、%2$d 件不一致</string>
-    <string name="snackbar_import_done_json">%1$d 件の失敗データをインポートしました</string>
     <string name="error_not_imdb_csv">有効な IMDb CSV ではありません（必須列 Title、Created、Title Type が不足）</string>
     <string name="error_empty_csv">ファイルが空かデータ行がありません</string>
     <string name="error_parse_failed">ファイルの解析に失敗: %1$s</string>
     <string name="error_read_file_failed">ファイルを読み込めません</string>
-    <string name="error_invalid_json_format">失敗項 JSON ファイルの形式が無効です</string>
     <string name="snackbar_cache_cleared">キャッシュをクリア</string>
     <string name="snackbar_cache_clear_failed">キャッシュクリア失敗</string>
     <string name="snackbar_already_latest">最新バージョンです</string>
     <string name="snackbar_check_update_failed">更新チェック失敗</string>
 
     <!-- Search Filter (追加) -->
-    <string name="search_filter_all">すべて</string>
-    <string name="search_filter_movie">映画</string>
-    <string name="search_filter_show">テレビ番組</string>
     <string name="search_view_all">すべて表示</string>
     <string name="search_view_all_count">すべて表示(%d)</string>
     <string name="error_no_data">データがありません</string>
@@ -1103,27 +960,20 @@
 
     <!-- Content Descriptions -->
     <string name="cd_watched">視聴済み</string>
-    <string name="cd_not_watched">未視聴</string>
     <string name="cd_saved">保存済み</string>
     <string name="cd_save">保存</string>
     <string name="cd_edit">編集</string>
     <string name="cd_delete">削除</string>
-    <string name="cd_close">閉じる</string>
     <string name="cd_back_to_top">トップに戻る</string>
-    <string name="cd_clear">クリア</string>
 
     <!-- Settings: Custom Search Source -->
-    <string name="settings_custom_search_source_title">カスタム検索ソースを追加</string>
-    <string name="settings_custom_search_source_subtitle">PanSou/Zreso互換ソースまたはカスタムJSONPathに対応</string>
     <string name="settings_add_source">検索ソースを追加</string>
     <!-- Settings: Card Layout -->
     <string name="settings_view_statistics_desc">視聴回数、評価統計、ヒートマップ、ジャンル分布</string>
     <string name="settings_custom_section">カスタムセクション</string>
     <string name="settings_discover_page">発見ページ</string>
     <string name="settings_detail_page">詳細ページ</string>
-    <string name="settings_panhub_advanced">高度な設定に対応</string>
     <string name="settings_panhub_enabled">Panhubを有効化</string>
-    <string name="settings_edit_source">検索ソースを編集</string>
     <string name="settings_delete_source">検索ソースを削除</string>
     <string name="settings_delete_source_confirm">「%1$s」を削除してもよろしいですか？</string>
     <string name="settings_source_name">名前</string>
@@ -1147,15 +997,10 @@
     <string name="settings_source_test">テスト</string>
     <string name="settings_source_save">保存</string>
     <string name="settings_source_unnamed">無名</string>
-    <string name="settings_source_test_success">テスト成功、%1$d 件の結果を解析</string>
-    <string name="settings_source_test_empty">接続成功しましたが、結果が解析されませんでした</string>
-    <string name="settings_cache_cleared">キャッシュをクリアしました</string>
-    <string name="settings_cache_clear_failed">キャッシュクリア失敗: %1$s</string>
     <string name="settings_no_changelog">更新履歴はありません</string>
 
     <!-- PanHub Config -->
     <string name="settings_panhub_config">設定</string>
-    <string name="settings_panhub_desc">プラグイン、チャンネル、並列数、タイムアウトの設定</string>
     <string name="panhub_config_title">PanHub 検索設定</string>
     <string name="panhub_concurrency">並列数</string>
     <string name="panhub_timeout">タイムアウト (ms)</string>
@@ -1169,7 +1014,6 @@
     <string name="search_sources_import">設定をインポート</string>
     <string name="search_sources_builtin">内蔵ソース</string>
     <string name="search_sources_custom">カスタムソース</string>
-    <string name="search_sources_add_from_template">テンプレートから追加</string>
     <string name="search_sources_empty">カスタムソースはまだありません。\nテンプレートから追加するか、共有設定を貼り付けてください。</string>
     <string name="search_sources_manage_entry_title">検索ソース</string>
         <string name="search_sources_pansou">PanSou</string>
@@ -1184,7 +1028,6 @@
     <string name="template_import_shortcut">共有設定をお持ちですか？テキストからインポート →</string>
     <!-- ウィザード -->
     <string name="editor_title_add">検索ソースを追加</string>
-    <string name="editor_title_edit">検索ソースを編集</string>
     <string name="editor_title_import">テキストからインポート</string>
     <string name="editor_step_basic">基本情報</string>
     <string name="editor_step_auto">自動解析</string>
@@ -1196,7 +1039,6 @@
     <string name="editor_probe_start">解析開始</string>
     <string name="editor_probe_hint">レスポンスのJSONPathを自動認識します。サンプルキーワードでサイトに1回リクエストします。</string>
     <string name="editor_probe_progress">サンプルキーワードでリクエスト中…</string>
-    <string name="editor_probe_success">認識成功</string>
     <string name="editor_probe_failed">自動認識できませんでした。手動設定してください</string>
     <string name="editor_probe_result_list">結果リスト</string>
     <string name="editor_probe_result_title">タイトル</string>
@@ -1205,10 +1047,7 @@
     <string name="editor_probe_result_date">日時</string>
     <string name="editor_probe_keyword_param">キーワードパラメータ</string>
     <string name="editor_probe_manual">認識が不正確？JSONPath を手動調整 →</string>
-    <string name="editor_confirm_url_preview">リクエスト URL プレビュー</string>
     <string name="editor_advanced_expand">詳細パラメータをすべて表示</string>
-    <string name="editor_advanced_collapse">詳細パラメータを隠す</string>
-    <string name="editor_parse_mode_label">解析モード</string>
     <string name="import_paste">貼り付け</string>
     <!-- 共有/インポート -->
     <string name="share_source_title">「%1$s」を共有</string>
@@ -1227,8 +1066,6 @@
     <string name="import_success">検索ソースをインポートしました</string>
     <string name="cd_share">共有</string>
 
-    <string name="settings_add_custom_source">カスタム検索ソースを追加</string>
-    <string name="settings_add_custom_source_desc">PanSou/Zreso互換ソースまたはカスタムJSONPathに対応</string>
     <string name="discover_douban_new_movies">新作映画</string>
     <string name="discover_douban_weekly">今週のベスト</string>
     <string name="discover_douban_top250">トップ250</string>
@@ -1270,12 +1107,10 @@
     <string name="discover_filter_hide_watched">未視聴のみ</string>
     <string name="discover_filter_apply">適用</string>
     <string name="discover_filter_reset">リセット</string>
-    <string name="discover_filter_clear">クリア</string>
     <string name="discover_filter_empty">結果が見つかりません。フィルターを調整してみてください</string>
     <string name="discover_filter_select_genres">ジャンルを選択</string>
     <string name="discover_filter_select_regions">地域を選択</string>
     <string name="discover_filter_select_tags">タグを選択</string>
-    <string name="discover_filter_select_decades">年代を選択</string>
     <string name="discover_filter_tag">タグ</string>
     <string name="discover_filter_decade">年代</string>
     <string name="discover_filter_decade_all">すべて</string>
@@ -1358,15 +1193,7 @@
     <string name="watchlist_empty_title">Traktプラットフォームでまだウォッチリストに追加していません</string>
     <string name="watched_empty_title">まだ視聴済みとしてマークしていません</string>
     <string name="watchlist_search_no_result">\"%1$s\" を含む作品が見つかりません</string>
-    <string name="watchlist_empty_hint_prefix">こちらを試す：</string>
-    <string name="watchlist_empty_go_trakt">Trakt</string>
-    <string name="watchlist_empty_hint_middle">でウォッチリストに追加、</string>
     <string name="watchlist_empty_go_discover">発見ページ</string>
-    <string name="watchlist_empty_hint_suffix">でさらに探索</string>
-    <string name="watchlist_empty_douban_import_prefix">、または</string>
-    <string name="watchlist_empty_douban_import_link">Doubanからインポート</string>
-    <string name="watched_empty_hint_prefix">こちらを試す：</string>
-    <string name="watched_empty_hint_middle">で視聴済みにマーク、</string>
     <string name="watchlist_empty_no_accounts">Trakt または豆瓣にログインして、リストを作成しましょう。</string>
     <string name="watched_empty_no_accounts">Trakt または豆瓣にログインして、視聴済み作品を記録しましょう。</string>
     <string name="watchlist_empty_trakt_only">Trakt のリストは空です。豆瓣にログインしてマークをインポートするか、発見ページで作品を探しましょう。</string>
@@ -1518,9 +1345,7 @@
     <string name="settings_account_connection_expired">接続の有効期限が切れました。再度ログインしてください</string>
     <string name="settings_account_reconnect">再ログイン</string>
     <string name="settings_account_douban">Douban</string>
-    <string name="settings_account_douban_logged_in">Douban · ログイン済み</string>
     <string name="settings_account_douban_login">ログイン</string>
-    <string name="settings_account_douban_logout">ログアウト</string>
     <string name="settings_douban_logout_done">Douban からログアウトしました</string>
     <string name="douban_logout_confirm_title">Douban からログアウト</string>
     <string name="douban_logout_confirm_message">ログアウトするとローカルの %1$d 件の Douban マークが削除されます。続行しますか？</string>
@@ -1575,11 +1400,6 @@
     <string name="mark_records_current_in_watchlist_short">ウォッチリスト</string>
     <string name="mark_records_current_watched_short">視聴済み</string>
     <string name="mark_records_current_none_short">削除済み</string>
-    <string name="mark_records_current_changed">変更済み</string>
-    <string name="mark_records_action_add_watchlist">ウォッチリストに追加</string>
-    <string name="mark_records_action_remove_watchlist">ウォッチリストから削除</string>
-    <string name="mark_records_action_unmark_watched">視聴済み解除</string>
-    <string name="mark_records_action_watched">視聴済み</string>
     <string name="mark_records_pill_watched">視聴済み</string>
     <string name="mark_records_pill_watchlist">ウォッチリスト</string>
     <string name="mark_records_pill_remove">削除</string>
@@ -1598,12 +1418,6 @@
     <string name="mark_records_help_history_limit">機能リリース前のウォッチリスト/削除操作は追溯できません（Traktに保存されないため）</string>
 
     <!-- Settings Section Titles -->
-    <string name="settings_section_account">アカウントとログイン</string>
-    <string name="settings_section_sync">同期とデータ</string>
-    <string name="settings_section_appearance">外観</string>
-    <string name="settings_section_cache">キャッシュ管理</string>
-    <string name="settings_section_data">インポートとエクスポート</string>
-    <string name="settings_section_about">について</string>
 
     <!-- フィードバックメッセージ -->
     <string name="feedback_messages">メッセージ</string>
@@ -1613,17 +1427,13 @@
     <string name="feedback_filter_all">すべて</string>
     <string name="feedback_filter_unread">未読</string>
     <string name="feedback_filter_developer">開発者</string>
-    <string name="feedback_filter_mine">自分</string>
     <string name="feedback_role_developer">開発者</string>
     <string name="feedback_role_me">自分</string>
     <string name="feedback_conversation">会話</string>
     <string name="feedback_reply_placeholder">詳細を追加…</string>
     <string name="feedback_reply_send">送信</string>
-    <string name="feedback_reply_uploading">スクリーンショットをアップロード中 (%1$d/%2$d)</string>
-    <string name="feedback_reply_failed">返信に失敗しました。再試行してください</string>
     <string name="feedback_closed_hint">このフィードバックは閉じられました</string>
     <string name="feedback_load_more">もっと読み込む</string>
-    <string name="feedback_unread_count_format">未読 %1$d</string>
     <string name="feedback_id_format">#%1$s</string>
     <string name="douban_sync_stage_idle">待機中</string>
     <string name="douban_sync_stage_preparing">同期を準備中</string>
@@ -1676,7 +1486,6 @@
     <string name="douban_sync_eta_hours">%1$d 時間 %2$d 分</string>
     <string name="douban_sync_notification_progress_format">%1$s · %2$s (%3$d/%4$d)</string>
     <string name="douban_sync_notification_stage_format">%1$s · %2$s</string>
-    <string name="douban_sync_notification_eta_format">%1$s · %2$s</string>
     <string name="douban_sync_notification_current">現在：%1$s</string>
     <string name="douban_sync_notification_latest">取得済み：%1$s</string>
     <string name="douban_sync_notification_public">豆瓣同期：%1$s</string>
@@ -1743,7 +1552,6 @@
     <string name="ai_feature_nickname">ニックネームを解読</string>
     <string name="ai_feature_meaning">ニックネームの意味</string>
     <string name="ai_feature_comment">スプライトのひとこと</string>
-    <string name="ai_feature_audio_ready">音声の準備完了</string>
     <string name="ai_taste_roast">辛口コメント</string>
     <string name="ai_taste_profile">あなたの映画の好み</string>
     <string name="ai_taste_highlights">見えてきたこと</string>
@@ -1821,4 +1629,83 @@
     <string name="bg_glow_nebula_desc">深い藍の上をローズとバイオレットの光斑が漂う</string>
     <string name="bg_glow_ink_desc">白黒の高コントラストな流れ。最も強い見た目で、本文の可読性には最も厳しい</string>
     <string name="bg_glow_beach_desc">シアンとサンドイエローが非常にゆっくり漂う。固定配色でテーマ色に追従しない</string>
+    <!-- 影视筛选页：类型/标签/地区（原本硬编码中文，英/日/韩用户看到中文） -->
+    <string name="filter_genre_action">アクション</string>
+    <string name="filter_genre_adventure">アドベンチャー</string>
+    <string name="filter_genre_animation">アニメーション</string>
+    <string name="filter_genre_comedy">コメディ</string>
+    <string name="filter_genre_crime">クライム</string>
+    <string name="filter_genre_documentary">ドキュメンタリー</string>
+    <string name="filter_genre_drama">ドラマ</string>
+    <string name="filter_genre_family">ファミリー</string>
+    <string name="filter_genre_fantasy">ファンタジー</string>
+    <string name="filter_genre_history">歴史</string>
+    <string name="filter_genre_horror">ホラー</string>
+    <string name="filter_genre_music">音楽</string>
+    <string name="filter_genre_mystery">ミステリー</string>
+    <string name="filter_genre_romance">ロマンス</string>
+    <string name="filter_genre_sci_fi">サイエンスフィクション</string>
+    <string name="filter_genre_tv_movie">テレビ映画</string>
+    <string name="filter_genre_thriller">スリラー</string>
+    <string name="filter_genre_war">戦争</string>
+    <string name="filter_genre_western">西部劇</string>
+    <string name="filter_genre_action_adventure">アクション＆アドベンチャー</string>
+    <string name="filter_genre_kids">キッズ</string>
+    <string name="filter_genre_news">ニュース</string>
+    <string name="filter_genre_reality">リアリティ</string>
+    <string name="filter_genre_sci_fi_fantasy">SF＆ファンタジー</string>
+    <string name="filter_genre_soap">メロドラマ</string>
+    <string name="filter_genre_talk">トーク</string>
+    <string name="filter_genre_war_politics">戦争＆政治</string>
+    <string name="filter_tag_marvel">マーベル</string>
+    <string name="filter_tag_dc">DCユニバース</string>
+    <string name="filter_tag_superhero">スーパーヒーロー</string>
+    <string name="filter_tag_campus">学園</string>
+    <string name="filter_tag_zombie">ゾンビ</string>
+    <string name="filter_tag_vampire">吸血鬼</string>
+    <string name="filter_tag_undead">アンデッド</string>
+    <string name="filter_tag_apocalypse">終末</string>
+    <string name="filter_tag_revenge">復讐</string>
+    <string name="filter_tag_time_travel">タイムトラベル</string>
+    <string name="filter_tag_alien">エイリアン</string>
+    <string name="filter_tag_dystopia">ディストピア</string>
+    <string name="filter_tag_cyberpunk">サイバーパンク</string>
+    <string name="filter_tag_space">宇宙</string>
+    <string name="filter_tag_war">戦争</string>
+    <string name="filter_tag_spy">スパイ</string>
+    <string name="filter_tag_gangster">ギャング</string>
+    <string name="filter_tag_whodunit">推理</string>
+    <string name="filter_tag_musical">音楽</string>
+    <string name="filter_tag_dance">ダンス</string>
+    <string name="filter_tag_sports">スポーツ</string>
+    <string name="filter_tag_food">料理</string>
+    <string name="filter_tag_friendship">友情</string>
+    <string name="filter_tag_love_story">恋愛</string>
+    <string name="filter_tag_coming_of_age">成長</string>
+    <string name="filter_tag_road_trip">ロードムービー</string>
+    <string name="filter_tag_wilderness">荒野</string>
+    <string name="filter_tag_remake">リメイク</string>
+    <string name="filter_tag_sequel">続編</string>
+    <string name="filter_tag_martial_arts">武術</string>
+    <string name="filter_tag_kung_fu">カンフー</string>
+    <string name="filter_tag_magic">魔法</string>
+    <string name="filter_tag_christmas">クリスマス</string>
+    <string name="filter_tag_kidnapping">誘拐</string>
+    <string name="filter_tag_dog">犬</string>
+    <string name="filter_tag_cat">猫</string>
+    <string name="filter_tag_ai">人工知能</string>
+    <string name="filter_tag_fairy_tale">おとぎ話</string>
+    <string name="filter_tag_police">警察</string>
+    <string name="filter_tag_detective">探偵</string>
+    <string name="filter_tag_docudrama">ドキュメンタリー風</string>
+    <string name="filter_tag_hacker">ハッカー</string>
+    <string name="filter_tag_drug_trade">麻薬取引</string>
+    <string name="filter_tag_medieval">中世</string>
+    <string name="filter_tag_steampunk">スチームパンク</string>
+    <string name="filter_tag_psychological">心理</string>
+    <string name="filter_tag_monster">モンスター</string>
+    <string name="filter_tag_ghost">幽霊</string>
+    <string name="filter_region_cn">中国本土</string>
+    <string name="filter_region_hk">中国香港</string>
+    <string name="filter_region_tw">中国台湾</string>
 </resources>

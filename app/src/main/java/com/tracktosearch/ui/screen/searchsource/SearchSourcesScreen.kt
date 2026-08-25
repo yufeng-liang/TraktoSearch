@@ -361,7 +361,7 @@ private fun BuiltinSourcesSection(
                 IconButton(onClick = onOpenPanHubConfig) {
                     Icon(
                         imageVector = Icons.Rounded.Settings,
-                        contentDescription = null,
+                        contentDescription = stringResource(R.string.settings_panhub_config),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

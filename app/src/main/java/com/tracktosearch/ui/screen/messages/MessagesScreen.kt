@@ -49,7 +49,14 @@ fun MessagesScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.feedback_messages_title), fontWeight = FontWeight.ExtraBold) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null) } },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = stringResource(R.string.content_desc_back)
+                        )
+                    }
+                },
                 actions = {
                     TextButton(onClick = { viewModel.markAllRead() }) {
                         Icon(Icons.Rounded.DoneAll, contentDescription = null, modifier = Modifier.size(16.dp))

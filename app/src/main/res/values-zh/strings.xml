@@ -2,9 +2,6 @@
     <string name="auth_migration_invite_hint">静默恢复未完成，请输入迁移类型的邀请码继续。</string>
     <string name="auth_offline_mode">当前处于离线模式，将使用本地缓存数据。</string>
     <string name="app_name">TraktoSearch</string>
-    <string name="splash_slogan">从想看到找到，再到看过</string>
-    <string name="auth_title">激活访问权限</string>
-    <string name="auth_subtitle">请输入管理员提供的邀请码。</string>
     <string name="auth_expired_message">请连接网络后重新激活访问权限。</string>
     <string name="auth_invite_code">输入 12 位激活码</string>
     <string name="auth_activate">激活</string>
@@ -29,7 +26,6 @@
 
     <!-- Discover Screen -->
     <string name="discover_title">发现</string>
-    <string name="discover_popular">热门电影</string>
     <string name="discover_upcoming">即将上映</string>
     <string name="discover_recommended">为你推荐电影</string>
 
@@ -50,7 +46,6 @@
     <string name="content_desc_save">保存</string>
     <string name="content_desc_view_all">查看全部</string>
     <string name="content_desc_back">返回</string>
-    <string name="content_desc_refresh">刷新</string>
     <string name="gallery_save_failed">保存失败</string>
     <string name="gallery_already_exists">已存在: %1$s</string>
     <string name="gallery_saved">已保存: %1$s/%2$s</string>
@@ -59,70 +54,41 @@
     <string name="link_copied">链接已复制</string>
     <string name="cannot_open_link">无法打开此链接</string>
     <string name="install_success">安装成功</string>
-    <string name="update_new_version">发现新版本 v%1$s</string>
     <string name="update_download_builtin">内置下载</string>
     <string name="update_download_browser">浏览器下载</string>
     <string name="update_release_page">前往发布页</string>
     <string name="update_download_unavailable">直接下载暂不可用，可前往发布页获取 APK。</string>
     <string name="update_close">关闭</string>
     <string name="install_failed">安装失败 (code=%1$d)</string>
-    <string name="help_col_source">来源</string>
-    <string name="help_col_format">格式</string>
-    <string name="help_col_how_to_get">如何获取</string>
-    <string name="help_col_import_effect">导入效果</string>
     <string name="notification_release_title">上映提醒：%1$s</string>
     <string name="notification_release_text">已于 %1$s 上映/上线，快去看看吧</string>
     <string name="notification_new_season_text">第 %1$d 季已于 %2$s 开播</string>
     <string name="notification_new_season_title">新季提醒：%1$s</string>
-    <string name="search_button">搜索</string>
     <string name="search_loading">搜索中…</string>
-    <string name="search_failed">搜索失败: %1$s</string>
     <string name="search_no_results">未找到相关资源，换个关键词试试</string>
     <string name="search_empty_hint">输入关键词开始搜索</string>
-    <string name="search_default_hint">搜索你感兴趣的影视资源</string>
-    <string name="search_results">搜索结果 (%1$d)</string>
-    <string name="search_filter_type">影视类型</string>
-    <string name="search_filter_disk">网盘类型</string>
     <string name="search_clear_input">清空</string>
     <string name="search_history_title">搜索历史</string>
     <string name="search_history_clear_all">清空全部</string>
     <string name="search_history_delete">删除</string>
-    <string name="search_popular_title">热门搜索</string>
     <string name="search_suggestions_title">搜索建议</string>
     <string name="search_loading_disk">正在搜索网盘资源...</string>
     <string name="search_loading_disk_progress">搜索中 %1$d/%2$d 源...</string>
 
     <!-- Watchlist Screen -->
-    <string name="watchlist_title">我的想看</string>
     <string name="watchlist_search">搜索</string>
-    <string name="watchlist_refresh">刷新</string>
-    <string name="logout">登出</string>
     <string name="watchlist_poster_error">海报和中文名加载失败，请开启网络代理后刷新</string>
     <string name="watchlist_tab_movies">电影</string>
     <string name="watchlist_tab_shows">电视剧</string>
-    <string name="watchlist_load_failed">加载失败: %1$s</string>
     <string name="watchlist_retry">重试</string>
-    <string name="watchlist_loading">正在加载想看列表…</string>
-    <string name="watchlist_empty_movies">想看列表为空</string>
-    <string name="watchlist_empty_shows">想看列表为空</string>
-    <string name="watchlist_search_no_movies">没有匹配的电影</string>
-    <string name="watchlist_search_no_shows">没有匹配的电视剧</string>
-    <string name="watchlist_logout">退出登录</string>
     <string name="watchlist_mode_watchlist">想看</string>
     <string name="watchlist_mode_watched">已看</string>
-    <string name="watchlist_tab_history">已看历史</string>
     <string name="watchlist_search_watchlist">搜索想看</string>
     <string name="watchlist_search_history">搜索已看</string>
-    <string name="history_empty_movies">还没有已看的电影</string>
-    <string name="history_empty_shows">还没有已看的电视剧</string>
-    <string name="watchlist_search_on_trakt">在 Trakt 上搜索</string>
     <string name="watchlist_selected_count">已选%d项</string>
     <string name="watchlist_remove_watchlist">移除想看</string>
     <string name="watchlist_remove_history">移除记录</string>
     <string name="watchlist_batch_remove_partial_failed">部分条目移除失败</string>
-    <string name="watchlist_pull_to_refresh">继续下拉触发刷新</string>
-    <string name="watchlist_release_to_refresh">释放触发刷新</string>
-    <string name="watchlist_refreshing">刷新中…</string>
     <string name="common_cancel">取消</string>
     <string name="permission_cloud_title">想知道白云会变身吗？</string>
     <string name="permission_cloud_message">授权位置后，它会随您所在城市的实时天气和节日主题变化哦~</string>
@@ -134,16 +100,10 @@
     <string name="trakt_search_hint_shows">在 Trakt 上搜索电视剧</string>
     <string name="trakt_search_no_movies">在 Trakt 上未找到电影</string>
     <string name="trakt_search_no_shows">在 Trakt 上未找到电视剧</string>
-    <string name="trakt_search_result_count_movies">共 %d 部电影</string>
-    <string name="trakt_search_result_count_shows">共 %d 部电视剧</string>
     <string name="trakt_search_tab_movies">电影</string>
     <string name="trakt_search_tab_shows">电视剧</string>
-    <string name="trakt_search_tab_movies_count">电影(%d)</string>
-    <string name="trakt_search_tab_shows_count">电视剧(%d)</string>
     <string name="trakt_search_tab_persons">人物</string>
-    <string name="trakt_search_tab_persons_count">人物(%d)</string>
     <string name="trakt_search_tab_disk">资源</string>
-    <string name="trakt_search_tab_disk_count">资源(%d)</string>
     <string name="trakt_search_hint_disk">搜索资源</string>
     <string name="trakt_search_hint_persons">在 Trakt 上搜索人物</string>
     <string name="trakt_search_no_persons">在 Trakt 上未找到人物</string>
@@ -164,15 +124,12 @@
     <string name="common_undo">撤销</string>
     <string name="detail_watchlist_added_toast">已加入想看</string>
     <string name="detail_watchlist_removed_toast">已从想看移除</string>
-    <string name="detail_watched_added_toast">已标记看过</string>
     <string name="detail_watched_removed_toast">已取消看过</string>
-    <string name="detail_mark_processing">处理中</string>
     <string name="detail_rate">评分</string>
     <string name="detail_rated">已评分</string>
     <string name="detail_login_required_title">需要登录</string>
     <string name="detail_login_required_message">请先登录，即可使用想看、已看和评分功能。</string>
     <string name="detail_login_go">去登录</string>
-    <string name="detail_no_overview">暂无简介</string>
     <string name="detail_overview_label">简介</string>
     <string name="detail_text_expand">展开</string>
     <string name="detail_text_collapse">收起</string>
@@ -200,16 +157,12 @@
     <string name="detail_year_suffix">%d年</string>
     <string name="detail_watched">已看</string>
     <string name="detail_not_watched">未看</string>
-    <string name="detail_saved">已保存</string>
-    <string name="detail_save">保存</string>
     <string name="detail_comment_source">(来源:%s)</string>
 
     <string name="detail_comment_source_douban">豆瓣</string>
 
     <!-- Resource Item Card -->
     <string name="resource_viewed">已查看</string>
-    <string name="resource_scan">扫码</string>
-    <string name="resource_invalid">失效</string>
     <string name="resource_file_count">%1$d文件</string>
 
     <!-- Disk Type Labels -->
@@ -236,7 +189,6 @@
     <string name="login_guest">以访客身份进入</string>
     <string name="login_douban_import">或从豆瓣导入标记</string>
     <string name="login_douban">豆瓣登录</string>
-    <string name="login_activation_hint">激活后同步你的 Trakt 想看列表</string>
     <string name="login_activation_locked">○ 尚未激活 · 输入邀请码解锁观影空间</string>
     <string name="login_activation_choose_path">已激活 · 请选择登录 Trakt，或暂时以访客身份进入</string>
     <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
@@ -252,15 +204,12 @@
 
     <!-- Douban Sync -->
     <string name="douban_login_title">登录豆瓣</string>
-    <string name="douban_login_hint">登录豆瓣后，想看/看过标记会显示在 Watchlist；连接 Trakt 后还可以同步到 Trakt</string>
     <string name="douban_login_privacy_short">本页用于登录豆瓣以读取你的公开标记（想看/看过）。登录凭据仅用于本次同步，不会上传到任何第三方服务器。</string>
-    <string name="douban_login_privacy_detail_title">详细说明</string>
     <string name="douban_login_privacy_detail">• 为什么需要登录：读取你的豆瓣标记列表（想看、看过、评分）\n• 存储什么：仅存储 Cookie 和 userId（用于本次爬取），不存储豆瓣密码\n• Cookie 用途：仅用于请求 movie.douban.com/people/{userId}/wish|collect 页面\n• 同步完成后：可随时在设置页清除豆瓣凭据\n• 数据流向：豆瓣 → App；连接 Trakt 后可继续同步到 Trakt</string>
     <string name="douban_login_privacy_expand">查看详细说明</string>
     <string name="douban_login_privacy_collapse">收起</string>
     <string name="douban_login_success_snackbar">豆瓣登录成功</string>
     <string name="douban_login_load_failed">加载失败</string>
-    <string name="douban_login_notification_rationale">后台同步需要通知权限以显示进度，请授予</string>
     <string name="douban_sync_title">豆瓣标记同步</string>
     <string name="douban_sync_complete">同步完成</string>
     <string name="douban_sync_cancelling">正在取消...</string>
@@ -284,27 +233,7 @@
     <string name="douban_sync_summary_format">成功 %1$d · 跳过 %2$d · 缓存命中 %3$d</string>
 
     <!-- 豆瓣同步失败项重试 -->
-    <string name="douban_retry_title">重试豆瓣同步失败项</string>
-    <string name="douban_retry_subtitle">上次同步有 %1$d 项失败，请选择操作</string>
-    <string name="douban_retry_option_local">重试上次失败的 %1$d 项</string>
-    <string name="douban_retry_option_local_desc">可恢复 %1$d 项 · 不可恢复 %2$d 项</string>
-    <string name="douban_retry_option_incremental">增量同步新增标记</string>
-    <string name="douban_retry_option_incremental_desc">仅同步豆瓣新加的想看/已看</string>
-    <string name="douban_retry_option_json">从 JSON 文件导入失败项重试</string>
-    <string name="douban_retry_option_json_desc">从导出的失败数据文件加载</string>
-    <string name="douban_retry_select_reasons">选择要重试的失败类型</string>
-    <string name="douban_retry_reason_recoverable">%1$s (可恢复)</string>
-    <string name="douban_retry_reason_non_recoverable">%1$s (默认跳过)</string>
-    <string name="douban_retry_start">开始重试</string>
     <string name="douban_retry_cancel">取消</string>
-    <string name="douban_retry_clear">清空失败记录</string>
-    <string name="douban_retry_clear_confirm">确定清空所有失败记录吗？此操作不可撤销。</string>
-    <string name="douban_retry_clear_confirm_yes">清空</string>
-    <string name="douban_retry_clear_confirm_no">取消</string>
-    <string name="douban_retry_max_attempt">已重试 %1$d 次，不再建议自动重试</string>
-    <string name="douban_retry_no_failures">无失败项需要重试</string>
-    <string name="douban_retry_json_import_failed">JSON 文件解析失败</string>
-    <string name="douban_retry_json_import_empty">文件中没有失败项</string>
 
     <!-- 失败原因本地化 -->
     <string name="douban_failure_reason_no_imdb_id">无 IMDb ID</string>
@@ -316,7 +245,6 @@
 
     <!-- 同步结果对话框 -->
     <string name="douban_sync_current_processing">正在处理：%1$s</string>
-    <string name="douban_sync_retry_complete_banner">重试完成，成功 %1$d 项</string>
 
     <!-- 豆瓣同步续传(取消后恢复) -->
     <string name="douban_resume_title">继续上次同步</string>
@@ -326,8 +254,6 @@
     <string name="douban_resume_continue_desc">跳过列表爬取，直接处理已爬到的数据</string>
     <string name="douban_resume_full_desc">清空未处理数据，从头开始</string>
     <string name="douban_resume_cancel">取消</string>
-    <string name="douban_resume_phase">续传上次未处理完的列表</string>
-    <string name="douban_resume_complete">续传完成</string>
     <string name="sync_already_running">已有同步任务正在运行，请稍后</string>
 
     <!-- Douban sync rollback (after failed full rewrite) -->
@@ -344,15 +270,12 @@
     <string name="error_retry">重试</string>
 
     <!-- Ratings -->
-    <string name="rating_trakt">Trakt</string>
 
     <!-- Detail Info -->
     <string name="detail_director">导演</string>
-    <string name="detail_actors">演员</string>
     <string name="detail_comments">评论</string>
     <string name="detail_no_comments">暂无评论</string>
     <string name="detail_own_comment_title">我的短评</string>
-    <string name="detail_own_comment_hint">写下你的短评</string>
     <string name="detail_own_comment_sync_trakt">本条评论将同步至 Trakt</string>
     <string name="detail_own_comment_sync_douban">本条评论将同步至豆瓣</string>
     <string name="detail_own_comment_sync_trakt_douban">本条评论将同步至 Trakt、豆瓣</string>
@@ -370,11 +293,9 @@
     <string name="detail_own_comment_targets_trakt_douban">Trakt、豆瓣</string>
     <string name="detail_own_comment_rating_required">同步至豆瓣前请先选择评分</string>
     <string name="detail_seasons">季信息</string>
-    <string name="detail_seasons_count">(共%1$d季)</string>
     <string name="detail_seasons_show_all">展开全部%1$d季</string>
     <string name="detail_seasons_collapse">收起</string>
     <string name="detail_season">第 %1$d 季</string>
-    <string name="detail_episode_count">%1$d 集</string>
     <string name="detail_episode">第%1$d集 %2$s</string>
     <string name="detail_original_title">原名: %1$s</string>
     <string name="detail_runtime_hours">%1$d小时%2$d分</string>
@@ -393,7 +314,6 @@
     <string name="detail_recommendations_title">相关推荐</string>
     <string name="detail_translating">正在翻译…</string>
     <string name="detail_translating_progress">正在翻译 %1$s…</string>
-    <string name="detail_translate_failed">翻译失败</string>
     <string name="detail_translate">翻译</string>
     <string name="detail_translate_all">全部翻译</string>
     <string name="detail_translated">查看译文</string>
@@ -437,7 +357,6 @@
     <string name="detail_rating_dialog_title">评分</string>
     <string name="detail_rating_confirm">确定</string>
     <string name="detail_rating_cancel">取消</string>
-    <string name="detail_rating_no_rating">未评分</string>
     <string name="detail_rating_hint">点击星星左右两侧选择半星/整星，再次点击已选区域可取消评分</string>
     <string name="detail_rating_comment_hint">短评（可选）</string>
     <string name="detail_videos_section">预告片与截图</string>
@@ -448,10 +367,8 @@
     <string name="detail_video_trailer">预告片</string>
     <string name="detail_video_teaser">先导预告</string>
     <string name="detail_video_clip">片段</string>
-    <string name="detail_video_load_error">视频加载失败，YouTube 在当前地区可能无法访问</string>
     <string name="detail_video_open_browser">在浏览器中打开</string>
     <string name="detail_video_play">播放</string>
-    <string name="detail_video_retry">重试</string>
     <string name="trailer_youtube_restricted">YouTube在国内访问受限\n请使用VPN</string>
 
     <!-- Crash Dialog -->
@@ -494,7 +411,6 @@
     <string name="person_images">图片</string>
     <string name="person_homepage">个人主页</string>
     <string name="poster_already_saved">已保存</string>
-    <string name="person_load_more">加载更多</string>
     <string name="detail_close">关闭</string>
     <string name="person_no_biography">暂无简介</string>
     <string name="person_age">岁</string>
@@ -512,11 +428,7 @@
     <!-- 视觉效果 -->
     <string name="settings_visual_effect_blur">模糊</string>
     <string name="settings_visual_effect_blur_desc">柔和的毛玻璃风格，边界过渡更自然</string>
-    <string name="settings_visual_effect_glass_clear">玻璃 - 清透</string>
-    <string name="settings_visual_effect_glass_clear_desc">更轻薄的光学玻璃，边界存在感更低</string>
     <string name="settings_visual_effect_glass_desc">按场景自适应深度、折射与响应式高光的光学玻璃</string>
-    <string name="settings_visual_effect_glass_focused">玻璃 - 聚焦</string>
-    <string name="settings_visual_effect_glass_focused_desc">更明确的玻璃层次，适合导航与操作</string>
 
     <!-- Accent Color -->
     <string name="settings_accent_color">色调与材质</string>
@@ -555,7 +467,6 @@
     <string name="settings_appearance">外观</string>
     <string name="settings_shared_transition">共享元素转场动画</string>
     <string name="settings_shared_transition_subtitle">在页面间为共享元素添加转场动画，包括点开大图时的缩放过渡。</string>
-    <string name="settings_search">搜索源</string>
     <string name="settings_storage">存储</string>
     <string name="settings_clear_cache">清除缓存</string>
     <string name="settings_clear_cache_confirm">确定要清除所有缓存数据吗？</string>
@@ -565,7 +476,6 @@
     <string name="settings_changelog">更新日志</string>
     <string name="settings_account">账户</string>
     <string name="settings_logout_confirm">确定要退出登录吗？</string>
-    <string name="settings_source_repo">源代码仓库</string>
     <string name="settings_feedback">反馈与建议</string>
     <string name="settings_feedback_subtitle">开发者在线营业，欢迎投喂建议和 Bug 🧑‍💻🍿</string>
     <string name="feedback_title">反馈与建议</string>
@@ -580,27 +490,21 @@
     <string name="feedback_content_label">正文</string>
     <string name="feedback_content_placeholder">描述你的建议或问题（5-2000 字）…</string>
     <string name="feedback_content_too_short">正文至少 5 个字</string>
-    <string name="feedback_content_too_long">正文最多 2000 个字</string>
     <string name="feedback_select_type">请选择反馈类型</string>
     <string name="feedback_screenshots">截图（选填，最多 5 张）</string>
     <string name="feedback_uploading">正在上传截图（%1$d/%2$d）</string>
     <string name="feedback_submit">提交</string>
     <string name="feedback_submitting">提交中…</string>
-    <string name="feedback_submit_success">反馈已提交</string>
     <string name="feedback_submit_failed">提交失败，请重试</string>
-    <string name="feedback_loading">加载中…</string>
-    <string name="feedback_load_failed">加载失败</string>
     <string name="feedback_status_pending">待处理</string>
     <string name="feedback_status_replied">已回复</string>
     <string name="feedback_status_closed">已关闭</string>
-    <string name="feedback_dev_reply">开发者回复</string>
     <string name="feedback_app_info">应用信息</string>
     <string name="feedback_app_version">应用 %1$s</string>
     <string name="feedback_device_model">设备 %1$s</string>
     <string name="feedback_trakt_username">Trakt：%1$s</string>
     <string name="feedback_douban_username">豆瓣：%1$s</string>
     <string name="feedback_contact_value">联系方式：%1$s</string>
-    <string name="feedback_screenshot_expired">截图已过期</string>
     <string name="feedback_retry">重试</string>
     <string name="feedback_time_just_now">刚刚</string>
     <string name="feedback_time_minutes_ago">%1$d 分钟前</string>
@@ -762,7 +666,6 @@
     <string name="help_consistency_act_douban_watched">豆瓣标记已看</string>
     <string name="help_consistency_act_douban_wish">豆瓣标记想看</string>
     <string name="settings_restart_onboarding">新手引导</string>
-    <string name="settings_restart_onboarding_desc">重新查看App功能引导</string>
     <string name="onboarding_skip">跳过</string>
     <string name="onboarding_next">下一步</string>
     <string name="onboarding_done">知道了</string>
@@ -776,7 +679,6 @@
     <string name="onboarding_prev">上一步</string>
     <string name="onboarding_step4_title">设置</string>
     <string name="onboarding_step4_desc">账号、消息、观看统计、搜索源与帮助都在这里</string>
-    <string name="settings_licenses">开源许可证</string>
     <string name="settings_cache">缓存</string>
     <string name="settings_cache_clear">清除</string>
     <string name="settings_cache_management">缓存管理</string>
@@ -786,16 +688,13 @@
     <string name="settings_cache_category_media_data">影视数据缓存</string>
     <string name="settings_cache_category_media_data_desc">详情、演职员、榜单（TMDB + Trakt + 豆瓣）</string>
     <string name="settings_cache_category_id_mapping">ID 映射缓存</string>
-    <string name="settings_cache_category_id_mapping_desc">TMDB↔Trakt、豆瓣→IMDb 映射（永久）</string>
     <string name="settings_cache_category_http">HTTP 缓存</string>
     <string name="settings_cache_category_http_desc">网络响应临时缓存</string>
     <string name="settings_cache_category_database">离线数据库</string>
-    <string name="settings_cache_category_database_desc">想看/已看列表 + 豆瓣同步记录</string>
     <string name="settings_cache_clear_all">全部清除</string>
     <string name="settings_image_traffic_title">图片流量</string>
     <string name="settings_image_traffic_today">今日：%1$s</string>
     <string name="settings_image_traffic_total">累计：%1$s</string>
-    <string name="settings_image_traffic_desc">已下载图片字节（海报、头像、剧照）</string>
     <string name="settings_image_traffic_clear">重置</string>
     <string name="settings_cache_clear_category_confirm">清除此项缓存？</string>
     <string name="settings_cache_clear_all_impact">将清除所有缓存数据。海报/头像需重新下载，影视详情和榜单需重新请求，ID 映射需重建。缓存重新积累前 App 可能稍慢。</string>
@@ -808,10 +707,8 @@
     <string name="settings_already_latest">已是最新版本 v%1$s</string>
     <string name="settings_new_version">新版本 v%1$s</string>
     <string name="settings_discover_sections">发现页栏目</string>
-    <string name="settings_discover_sections_desc">设置发现页各栏目的显示与排序</string>
     <string name="settings_discover_sections_hint">拖动排序，开关控制显示/隐藏</string>
     <string name="settings_detail_sections">自定义详情页</string>
-    <string name="settings_detail_sections_desc">设置详情页各模块的显示与隐藏</string>
     <string name="settings_drag_to_reorder">拖动排序</string>
     <string name="settings_logout_button">登出</string>
 
@@ -855,8 +752,6 @@
     <string name="douban_sync_mode_warning_c">完全重写会清空所有同步记录并重新爬取豆瓣列表。\n\n豆瓣有严格的反爬机制,频繁多次爬取可能导致你的 IP 地址被列入黑名单。继续操作请自行承担风险。\n\n确定要继续吗?</string>
 
     <!-- Douban retry dialog - export option -->
-    <string name="douban_retry_option_export">导出失败记录</string>
-    <string name="douban_retry_option_export_desc">保存为 JSON 文件,用于备份或分享</string>
 
     <!-- Douban failures viewer -->
     <string name="settings_douban_status_consistency">检查状态一致性</string>
@@ -922,24 +817,10 @@
     <string name="consistency_check_time_minutes_ago">%1$d 分钟前</string>
     <string name="consistency_check_time_hours_ago">%1$d 小时前</string>
     <string name="consistency_check_time_days_ago">%1$d 天前</string>
-    <string name="screen_douban_failures_title">同步失败项</string>
-    <string name="share_failures_json">分享失败项 JSON</string>
 
     <!-- 云端失败数据同步 -->
 
     <!-- Manual cloud sync (settings page) -->
-    <string name="screen_douban_failures_empty_wish">想看列表同步全部成功</string>
-    <string name="screen_douban_failures_empty_collect">已看列表同步全部成功</string>
-    <string name="screen_douban_failures_empty_all">没有同步失败项</string>
-    <string name="screen_douban_failures_empty_search">没有匹配的失败项</string>
-    <string name="screen_douban_failures_empty_filter">没有符合条件的失败项</string>
-    <string name="screen_douban_failures_empty_movie">电影列表为空</string>
-    <string name="screen_douban_failures_empty_show">电视剧列表为空</string>
-    <string name="screen_douban_failures_empty_uncategorized">未分类列表为空</string>
-    <string name="screen_douban_failures_empty_variety">综艺列表为空</string>
-    <string name="screen_douban_failures_empty_documentary">纪录片列表为空</string>
-    <string name="screen_douban_failures_clear_all">清空全部</string>
-    <string name="screen_douban_failures_clear_all_confirm">确定清空全部失败项?此操作不可撤销</string>
     <string name="screen_douban_failures_mark_as_movie">标注为电影</string>
     <string name="screen_douban_failures_mark_as_show">标注为电视剧</string>
     <string name="screen_douban_failures_mark_as_variety">标注为综艺</string>
@@ -949,13 +830,6 @@
     <string name="screen_douban_failures_marked_as_show">已标为电视剧</string>
     <string name="screen_douban_failures_marked_as_variety">已标为综艺</string>
     <string name="screen_douban_failures_marked_as_documentary">已标为纪录片</string>
-    <string name="screen_douban_failures_delete_item">删除此条目</string>
-    <string name="screen_douban_failures_tab_uncategorized">未分类</string>
-    <string name="screen_douban_failures_tab_variety">综艺</string>
-    <string name="screen_douban_failures_tab_documentary">纪录片</string>
-    <string name="screen_douban_failures_selected_count">已选 %1$d 项</string>
-    <string name="screen_douban_failures_select_all">全选</string>
-    <string name="screen_douban_failures_deselect_all">取消全选</string>
 
     <!-- 豆瓣详情页:爬取进度与标注提示 -->
     <string name="douban_detail_fetching">正在爬取豆瓣详情…</string>
@@ -1050,12 +924,9 @@
     <string name="filter_reset">重置</string>
     <string name="filter_apply">应用</string>
     <string name="filter_genre">类型</string>
-    <string name="filter_genre_empty">暂无类型数据(需先爬取详情)</string>
     <string name="filter_year">年份</string>
     <string name="filter_rating">Trakt 评分</string>
     <string name="filter_rating_label">评分</string>
-    <string name="douban_failure_search_hint">搜索标题或副标题</string>
-    <string name="douban_failure_filter_reason">失败原因</string>
 
     <!-- Douban item detail -->
     <string name="screen_douban_item_detail_not_synced">此条目 Trakt 未收录,无法同步</string>
@@ -1102,14 +973,10 @@
     <string name="settings_notification_new_season_desc">想看的电视剧新一季开播时提醒</string>
 
     <!-- Update -->
-    <string name="update_title">发现新版本</string>
     <string name="update_download">立即更新</string>
     <string name="update_later">稍后提醒</string>
-    <string name="update_browser_download">浏览器下载</string>
-    <string name="update_downloading">正在下载…</string>
     <string name="update_download_failed">下载失败，请尝试浏览器下载</string>
     <string name="update_signature_invalid">APK 签名校验失败，已阻止安装</string>
-    <string name="update_install">正在安装…</string>
     <string name="update_version_suffix">版本更新</string>
 
     <!-- Statistics -->
@@ -1141,7 +1008,6 @@
     <string name="statistics_info_ratings">Q：评分统计是什么意思？\nA：合并 Trakt 和豆瓣个人评分，显示评分总数、平均分和评分分布；豆瓣 1-5 星会换算为 10 分制。</string>
 
     <!-- Common UI -->
-    <string name="common_retry">重试</string>
     <string name="common_close">关闭</string>
     <string name="common_confirm">确定</string>
     <string name="common_load_failed">加载失败</string>
@@ -1149,11 +1015,7 @@
     <string name="error_detail_close">关闭</string>
     <string name="common_no_data">暂无数据</string>
     <string name="common_loading">加载中…</string>
-    <string name="common_save_success">已保存到相册</string>
-    <string name="common_save_failed">保存失败</string>
-    <string name="common_save_exists">已存在: %1$s</string>
     <string name="common_saved_path">已保存: %1$s/%2$s</string>
-    <string name="common_copy_success">已复制</string>
     <string name="common_open_failed">无法打开此链接</string>
     <string name="common_done">完成</string>
     <string name="error_load_failed">加载失败</string>
@@ -1171,21 +1033,16 @@
     <string name="snackbar_import_no_data">未找到有效记录</string>
     <string name="snackbar_sync_progress">正在同步 %1$d/%2$d: %3$s</string>
     <string name="snackbar_import_done_imdb">IMDb 导入完成：成功 %1$d 条，未匹配 %2$d 条</string>
-    <string name="snackbar_import_done_json">已导入 %1$d 条失败数据</string>
     <string name="error_not_imdb_csv">不是有效的 IMDb CSV 文件（缺少必填列：Title、Created、Title Type）</string>
     <string name="error_empty_csv">文件为空或没有数据行</string>
     <string name="error_parse_failed">解析文件失败：%1$s</string>
     <string name="error_read_file_failed">无法读取文件</string>
-    <string name="error_invalid_json_format">失败项 JSON 文件格式无效</string>
     <string name="snackbar_cache_cleared">缓存已清除</string>
     <string name="snackbar_cache_clear_failed">清除缓存失败</string>
     <string name="snackbar_already_latest">已是最新版本</string>
     <string name="snackbar_check_update_failed">检查更新失败，请稍后重试</string>
 
     <!-- Search Filter -->
-    <string name="search_filter_all">全部</string>
-    <string name="search_filter_movie">电影</string>
-    <string name="search_filter_show">电视剧</string>
     <string name="search_view_all">查看全部</string>
     <string name="search_view_all_count">查看全部(%d)</string>
     <string name="error_no_data">暂无数据</string>
@@ -1201,27 +1058,20 @@
 
     <!-- Content Descriptions -->
     <string name="cd_watched">已看</string>
-    <string name="cd_not_watched">未看</string>
     <string name="cd_saved">已保存</string>
     <string name="cd_save">保存</string>
     <string name="cd_edit">编辑</string>
     <string name="cd_delete">删除</string>
-    <string name="cd_close">关闭</string>
     <string name="cd_back_to_top">返回顶部</string>
-    <string name="cd_clear">清除</string>
 
     <!-- Settings: Custom Search Source -->
-    <string name="settings_custom_search_source_title">添加自定义搜索源</string>
-    <string name="settings_custom_search_source_subtitle">支持 PanSou/Zreso 兼容源或自定义 JSONPath</string>
     <string name="settings_add_source">添加搜索源</string>
     <!-- Settings: Card Layout -->
     <string name="settings_view_statistics_desc">观看总数、评分统计、热力图、类型分布</string>
     <string name="settings_custom_section">自定义板块</string>
     <string name="settings_discover_page">发现页</string>
     <string name="settings_detail_page">详情页</string>
-    <string name="settings_panhub_advanced">支持高级设置</string>
     <string name="settings_panhub_enabled">启用 Panhub</string>
-    <string name="settings_edit_source">编辑搜索源</string>
     <string name="settings_delete_source">删除搜索源</string>
     <string name="settings_delete_source_confirm">确定要删除「%1$s」吗？</string>
     <string name="settings_source_name">名称</string>
@@ -1245,15 +1095,10 @@
     <string name="settings_source_test">测试</string>
     <string name="settings_source_save">保存</string>
     <string name="settings_source_unnamed">未命名</string>
-    <string name="settings_source_test_success">测试成功，解析到 %1$d 条结果</string>
-    <string name="settings_source_test_empty">连接成功，但未解析到结果</string>
-    <string name="settings_cache_cleared">缓存已清除</string>
-    <string name="settings_cache_clear_failed">清除缓存失败：%1$s</string>
     <string name="settings_no_changelog">暂无更新日志</string>
 
     <!-- PanHub Config -->
     <string name="settings_panhub_config">配置</string>
-    <string name="settings_panhub_desc">支持自定义插件、频道启用、并发数与超时设置</string>
     <string name="panhub_config_title">PanHub 搜索配置</string>
     <string name="panhub_concurrency">并发数</string>
     <string name="panhub_timeout">超时 (ms)</string>
@@ -1267,7 +1112,6 @@
     <string name="search_sources_import">导入配置</string>
     <string name="search_sources_builtin">内置源</string>
     <string name="search_sources_custom">自定义源</string>
-    <string name="search_sources_add_from_template">从模板添加搜索源</string>
     <string name="search_sources_empty">还没有自定义搜索源。\n可以从模板添加，或粘贴分享的配置。</string>
     <string name="search_sources_manage_entry_title">搜索源</string>
         <string name="search_sources_pansou">PanSou</string>
@@ -1282,7 +1126,6 @@
     <string name="template_import_shortcut">有现成配置？从文本导入 →</string>
     <!-- 向导 -->
     <string name="editor_title_add">添加搜索源</string>
-    <string name="editor_title_edit">编辑搜索源</string>
     <string name="editor_title_import">从文本导入</string>
     <string name="editor_step_basic">基本信息</string>
     <string name="editor_step_auto">自动解析</string>
@@ -1294,7 +1137,6 @@
     <string name="editor_probe_start">开始解析</string>
     <string name="editor_probe_hint">自动识别响应 JSONPath：会用示例关键词请求该站点一次。</string>
     <string name="editor_probe_progress">正在用示例关键词请求接口…</string>
-    <string name="editor_probe_success">识别成功</string>
     <string name="editor_probe_failed">未能自动识别，可手动配置</string>
     <string name="editor_probe_result_list">结果列表</string>
     <string name="editor_probe_result_title">标题</string>
@@ -1303,10 +1145,7 @@
     <string name="editor_probe_result_date">时间</string>
     <string name="editor_probe_keyword_param">关键词参数</string>
     <string name="editor_probe_manual">识别不准？手动调整 JSONPath →</string>
-    <string name="editor_confirm_url_preview">请求地址预览</string>
     <string name="editor_advanced_expand">展开全部高级参数</string>
-    <string name="editor_advanced_collapse">收起高级参数</string>
-    <string name="editor_parse_mode_label">解析模式</string>
     <string name="import_paste">粘贴</string>
     <!-- 分享/导入 -->
     <string name="share_source_title">分享「%1$s」</string>
@@ -1325,8 +1164,6 @@
     <string name="import_success">已导入搜索源</string>
     <string name="cd_share">分享</string>
 
-    <string name="settings_add_custom_source">添加自定义搜索源</string>
-    <string name="settings_add_custom_source_desc">支持 PanSou/Zreso 兼容源或自定义 JSONPath</string>
     <string name="discover_douban_new_movies">新片榜</string>
     <string name="discover_douban_weekly">口碑榜</string>
     <string name="discover_douban_top250">Top250</string>
@@ -1368,12 +1205,10 @@
     <string name="discover_filter_hide_watched">仅展示未标看过</string>
     <string name="discover_filter_apply">应用</string>
     <string name="discover_filter_reset">重置</string>
-    <string name="discover_filter_clear">清除</string>
     <string name="discover_filter_empty">没有找到结果，试试调整筛选条件</string>
     <string name="discover_filter_select_genres">选择类型</string>
     <string name="discover_filter_select_regions">选择地区</string>
     <string name="discover_filter_select_tags">选择标签</string>
-    <string name="discover_filter_select_decades">选择年代</string>
     <string name="discover_filter_tag">标签</string>
     <string name="discover_filter_decade">年代</string>
     <string name="discover_filter_decade_all">全部</string>
@@ -1466,15 +1301,7 @@
     <string name="watchlist_empty_title">在Trakt平台上还没有标记想看的影视</string>
     <string name="watched_empty_title">还没有标记已看过的影视</string>
     <string name="watchlist_search_no_result">未找到包含 \"%1$s\" 的影视</string>
-    <string name="watchlist_empty_hint_prefix">你可以尝试：去</string>
-    <string name="watchlist_empty_go_trakt">Trakt</string>
-    <string name="watchlist_empty_hint_middle">标记想看的影视，去</string>
     <string name="watchlist_empty_go_discover">发现页</string>
-    <string name="watchlist_empty_hint_suffix">探索更多影视</string>
-    <string name="watchlist_empty_douban_import_prefix">，或从</string>
-    <string name="watchlist_empty_douban_import_link">豆瓣导入标记</string>
-    <string name="watched_empty_hint_prefix">你可以尝试：去</string>
-    <string name="watched_empty_hint_middle">标记已看过的影视，去</string>
     <string name="watchlist_empty_no_accounts">登录 Trakt 或豆瓣，开始建立你的列表。</string>
     <string name="watched_empty_no_accounts">登录 Trakt 或豆瓣，开始标记已看过的影视。</string>
     <string name="watchlist_empty_trakt_only">Trakt 列表为空。登录豆瓣导入标记，或去发现页探索更多影视。</string>
@@ -1521,9 +1348,7 @@
     <string name="settings_account_connection_expired">连接已失效，请重新登录</string>
     <string name="settings_account_reconnect">重新登录</string>
     <string name="settings_account_douban">豆瓣</string>
-    <string name="settings_account_douban_logged_in">豆瓣 · 已登录</string>
     <string name="settings_account_douban_login">登录</string>
-    <string name="settings_account_douban_logout">退出</string>
     <string name="settings_douban_logout_done">已退出豆瓣</string>
     <string name="douban_logout_confirm_title">退出豆瓣账号</string>
     <string name="douban_logout_confirm_message">退出后将清除本地 %1$d 条豆瓣标记，是否继续？</string>
@@ -1534,10 +1359,6 @@
     <string name="statistics_info_wordcloud">Q：短评词云是什么？\nA：提取你豆瓣短评中的高频词汇，按出现频率生成词云，词越大表示出现越多，帮你快速回顾观影感受。</string>
 
     <!-- 标记记录（临时，任务 9 会补充完整 4 语言） -->
-    <string name="mark_records_action_add_watchlist">加入想看</string>
-    <string name="mark_records_action_remove_watchlist">移除想看</string>
-    <string name="mark_records_action_unmark_watched">取消已看</string>
-    <string name="mark_records_action_watched">标记已看</string>
     <string name="mark_records_pill_watched">标记已看</string>
     <string name="mark_records_pill_watchlist">标记想看</string>
     <string name="mark_records_pill_remove">标记移除</string>
@@ -1547,7 +1368,6 @@
     <string name="mark_records_current_in_watchlist_short">想看</string>
     <string name="mark_records_current_watched_short">已看</string>
     <string name="mark_records_current_none_short">已移除</string>
-    <string name="mark_records_current_changed">已变更</string>
     <string name="mark_records_time_just_now">刚刚</string>
     <string name="mark_records_time_minutes_ago">%1$d 分钟前</string>
     <string name="mark_records_time_hours_ago">%1$d 小时前</string>
@@ -1584,12 +1404,6 @@
     <string name="mark_records_help_history_limit">功能上线前的想看/移除操作无法追溯（Trakt 不留存）</string>
 
     <!-- Settings Section Titles -->
-    <string name="settings_section_account">账号与登录</string>
-    <string name="settings_section_sync">同步与数据</string>
-    <string name="settings_section_appearance">外观</string>
-    <string name="settings_section_cache">缓存管理</string>
-    <string name="settings_section_data">导入与导出</string>
-    <string name="settings_section_about">关于</string>
 
     <!-- 反馈消息 -->
     <string name="feedback_messages">消息</string>
@@ -1599,17 +1413,13 @@
     <string name="feedback_filter_all">全部</string>
     <string name="feedback_filter_unread">未读</string>
     <string name="feedback_filter_developer">开发者</string>
-    <string name="feedback_filter_mine">我的</string>
     <string name="feedback_role_developer">开发者</string>
     <string name="feedback_role_me">我</string>
     <string name="feedback_conversation">对话</string>
     <string name="feedback_reply_placeholder">补充更多细节…</string>
     <string name="feedback_reply_send">发送</string>
-    <string name="feedback_reply_uploading">上传截图 (%1$d/%2$d)</string>
-    <string name="feedback_reply_failed">回复失败，请重试</string>
     <string name="feedback_closed_hint">该反馈已关闭</string>
     <string name="feedback_load_more">加载更多</string>
-    <string name="feedback_unread_count_format">未读 %1$d</string>
     <string name="feedback_id_format">#%1$s</string>
     <!-- 豆瓣同步稳定阶段文案 -->
     <string name="douban_sync_stage_idle">空闲</string>
@@ -1663,7 +1473,6 @@
     <string name="douban_sync_eta_hours">%1$d 小时 %2$d 分钟</string>
     <string name="douban_sync_notification_progress_format">%1$s · %2$s（%3$d/%4$d）</string>
     <string name="douban_sync_notification_stage_format">%1$s · %2$s</string>
-    <string name="douban_sync_notification_eta_format">%1$s · %2$s</string>
     <string name="douban_sync_notification_current">当前：%1$s</string>
     <string name="douban_sync_notification_latest">刚获取：%1$s</string>
     <string name="douban_sync_notification_public">豆瓣同步：%1$s</string>
@@ -1730,7 +1539,6 @@
     <string name="ai_feature_nickname">你的昵称，让我来解读</string>
     <string name="ai_feature_meaning">昵称的寓意</string>
     <string name="ai_feature_comment">精灵的小评断</string>
-    <string name="ai_feature_audio_ready">语音已准备好</string>
     <string name="ai_taste_roast">我的锐评</string>
     <string name="ai_taste_profile">你的观影口味</string>
     <string name="ai_taste_highlights">我看到的亮点</string>
@@ -1809,4 +1617,83 @@
     <string name="bg_glow_nebula_desc">深靛底上浮动玫粉与紫罗兰光斑</string>
     <string name="bg_glow_ink_desc">纯黑白高对比流动，视觉最强，也最挑正文可读性</string>
     <string name="bg_glow_beach_desc">青蓝与沙黄极缓漂移，固定配色，不跟随主题色</string>
+    <!-- 影视筛选页：类型/标签/地区（原本硬编码中文，英/日/韩用户看到中文） -->
+    <string name="filter_genre_action">动作</string>
+    <string name="filter_genre_adventure">冒险</string>
+    <string name="filter_genre_animation">动画</string>
+    <string name="filter_genre_comedy">喜剧</string>
+    <string name="filter_genre_crime">犯罪</string>
+    <string name="filter_genre_documentary">纪录片</string>
+    <string name="filter_genre_drama">剧情</string>
+    <string name="filter_genre_family">家庭</string>
+    <string name="filter_genre_fantasy">奇幻</string>
+    <string name="filter_genre_history">历史</string>
+    <string name="filter_genre_horror">恐怖</string>
+    <string name="filter_genre_music">音乐</string>
+    <string name="filter_genre_mystery">悬疑</string>
+    <string name="filter_genre_romance">爱情</string>
+    <string name="filter_genre_sci_fi">科幻</string>
+    <string name="filter_genre_tv_movie">电视电影</string>
+    <string name="filter_genre_thriller">惊悚</string>
+    <string name="filter_genre_war">战争</string>
+    <string name="filter_genre_western">西部</string>
+    <string name="filter_genre_action_adventure">动作冒险</string>
+    <string name="filter_genre_kids">儿童</string>
+    <string name="filter_genre_news">新闻</string>
+    <string name="filter_genre_reality">真人秀</string>
+    <string name="filter_genre_sci_fi_fantasy">科幻奇幻</string>
+    <string name="filter_genre_soap">肥皂剧</string>
+    <string name="filter_genre_talk">谈话</string>
+    <string name="filter_genre_war_politics">战争政治</string>
+    <string name="filter_tag_marvel">漫威</string>
+    <string name="filter_tag_dc">DC宇宙</string>
+    <string name="filter_tag_superhero">超级英雄</string>
+    <string name="filter_tag_campus">校园</string>
+    <string name="filter_tag_zombie">僵尸</string>
+    <string name="filter_tag_vampire">吸血鬼</string>
+    <string name="filter_tag_undead">丧尸</string>
+    <string name="filter_tag_apocalypse">末日</string>
+    <string name="filter_tag_revenge">复仇</string>
+    <string name="filter_tag_time_travel">时间旅行</string>
+    <string name="filter_tag_alien">外星人</string>
+    <string name="filter_tag_dystopia">反乌托邦</string>
+    <string name="filter_tag_cyberpunk">赛博朋克</string>
+    <string name="filter_tag_space">太空</string>
+    <string name="filter_tag_war">战争</string>
+    <string name="filter_tag_spy">间谍</string>
+    <string name="filter_tag_gangster">黑帮</string>
+    <string name="filter_tag_whodunit">推理</string>
+    <string name="filter_tag_musical">音乐</string>
+    <string name="filter_tag_dance">舞蹈</string>
+    <string name="filter_tag_sports">体育</string>
+    <string name="filter_tag_food">美食</string>
+    <string name="filter_tag_friendship">友谊</string>
+    <string name="filter_tag_love_story">爱情片</string>
+    <string name="filter_tag_coming_of_age">成长</string>
+    <string name="filter_tag_road_trip">公路</string>
+    <string name="filter_tag_wilderness">荒野</string>
+    <string name="filter_tag_remake">翻拍</string>
+    <string name="filter_tag_sequel">续集</string>
+    <string name="filter_tag_martial_arts">武术</string>
+    <string name="filter_tag_kung_fu">功夫</string>
+    <string name="filter_tag_magic">魔法</string>
+    <string name="filter_tag_christmas">圣诞</string>
+    <string name="filter_tag_kidnapping">绑架</string>
+    <string name="filter_tag_dog">狗</string>
+    <string name="filter_tag_cat">猫</string>
+    <string name="filter_tag_ai">人工智能</string>
+    <string name="filter_tag_fairy_tale">童话</string>
+    <string name="filter_tag_police">警察</string>
+    <string name="filter_tag_detective">侦探</string>
+    <string name="filter_tag_docudrama">纪实</string>
+    <string name="filter_tag_hacker">黑客</string>
+    <string name="filter_tag_drug_trade">毒贩</string>
+    <string name="filter_tag_medieval">中世纪</string>
+    <string name="filter_tag_steampunk">蒸汽朋克</string>
+    <string name="filter_tag_psychological">心理</string>
+    <string name="filter_tag_monster">怪物</string>
+    <string name="filter_tag_ghost">鬼</string>
+    <string name="filter_region_cn">中国大陆</string>
+    <string name="filter_region_hk">中国香港</string>
+    <string name="filter_region_tw">中国台湾</string>
 </resources>

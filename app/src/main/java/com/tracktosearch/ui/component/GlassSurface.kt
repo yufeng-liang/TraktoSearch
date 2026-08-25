@@ -109,32 +109,6 @@ internal fun Modifier.floatingGlassControlShadow(
         )
 }
 
-/** Glass 表面只负责 Backdrop 采样、边框和内容，不叠加拟态阴影。 */
-@Composable
-fun GlassSurface(
-    modifier: Modifier = Modifier,
-    hazeState: HazeState? = null,
-    role: GlassSurfaceRole,
-    shape: RoundedCornerShape,
-    sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
-    interactionSource: MutableInteractionSource? = null,
-    scene: GlassScene = GlassScene(),
-    content: @Composable () -> Unit
-) {
-    GlassSurfaceImpl(
-        modifier = modifier,
-        hazeState = hazeState,
-        role = role,
-        shape = shape,
-        sourceSelection = sourceSelection,
-        scene = scene,
-        interactionSource = interactionSource,
-        tint = MaterialTheme.colorScheme.surface,
-        borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
-        content = content
-    )
-}
-
 /**
  * Glass 图标按钮。交互源只控制内容层的按压反馈，Backdrop 外壳的尺寸和采样坐标保持稳定。
  */

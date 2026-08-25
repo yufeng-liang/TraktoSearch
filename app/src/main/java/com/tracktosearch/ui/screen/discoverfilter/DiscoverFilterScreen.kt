@@ -118,6 +118,8 @@ fun DiscoverFilterScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isLoggedIn by viewModel.isLoggedIn.collectAsStateWithLifecycle()
+    // 地区名走系统本地化译名，需要 Context
+    val filterContext = LocalContext.current
     val hazeState = remember { HazeState() }
     val hazeStyle = HazeMaterials.thin()
     val discoverFilterGlassScene = glassSceneForContent(
@@ -605,9 +607,12 @@ fun DiscoverFilterScreen(
 
     // 类型多选弹窗（点外部消失也触发搜索）
     if (showGenreDialog) {
-        val options = if (uiState.type == TmdbRepository.DiscoverType.MOVIE)
-            DiscoverFilterConstants.MOVIE_GENRES.map { it.first.toString() to it.second }
-        else DiscoverFilterConstants.TV_GENRES.map { it.first.toString() to it.second }
+        val genreEntries = if (uiState.type == TmdbRepository.DiscoverType.MOVIE) {
+            DiscoverFilterConstants.MOVIE_GENRES
+        } else {
+            DiscoverFilterConstants.TV_GENRES
+        }
+        val options = genreEntries.map { (id, labelRes) -> id.toString() to stringResource(labelRes) }
         MultiSelectDialog(
             title = stringResource(R.string.discover_filter_select_genres),
             options = options,
@@ -624,7 +629,9 @@ fun DiscoverFilterScreen(
     if (showRegionDialog) {
         MultiSelectDialog(
             title = stringResource(R.string.discover_filter_select_regions),
-            options = DiscoverFilterConstants.REGIONS.map { it.first to it.second },
+            options = DiscoverFilterConstants.REGION_CODES.map { code ->
+                code to DiscoverFilterConstants.regionName(filterContext, code)
+            },
             selectedIds = uiState.selectedCountries,
             onToggle = { code -> viewModel.toggleCountry(code) },
             onDismiss = {
@@ -639,7 +646,9 @@ fun DiscoverFilterScreen(
     if (showTagDialog) {
         MultiSelectDialog(
             title = stringResource(R.string.discover_filter_select_tags),
-            options = DiscoverFilterConstants.TAGS.map { it.first.toString() to it.second },
+            options = DiscoverFilterConstants.TAGS.map { (id, labelRes) ->
+                id.toString() to stringResource(labelRes)
+            },
             selectedIds = uiState.selectedKeywordIds.map { it.toString() }.toSet(),
             onToggle = { idStr -> viewModel.toggleKeyword(idStr.toInt()) },
             onDismiss = {
@@ -795,10 +804,10 @@ private fun DiscoverFilterListItem(
             // 地区：紧贴标题下方一行；优先用 origin_country（TV），为空时用 original_language 推断（movie 回退）
             val regionText = if (item.origin_country.isNotEmpty()) {
                 item.origin_country.joinToString(" / ") { code ->
-                    DiscoverFilterConstants.regionNameByCode(code)
+                    DiscoverFilterConstants.regionName(context, code)
                 }
             } else if (item.original_language.isNotBlank()) {
-                DiscoverFilterConstants.countryByLanguage(item.original_language)?.second
+                DiscoverFilterConstants.countryByLanguage(context, item.original_language)?.second
             } else null
             if (regionText != null) {
                 Text(
@@ -833,7 +842,7 @@ private fun DiscoverFilterListItem(
             }
             // 类型
             val genreNames = item.genre_ids.mapNotNull { id ->
-                DiscoverFilterConstants.genreNameById(id, isMovie).takeIf { it.isNotBlank() }
+                DiscoverFilterConstants.genreName(context, id, isMovie).takeIf { it.isNotBlank() }
             }
             if (genreNames.isNotEmpty()) {
                 Text(

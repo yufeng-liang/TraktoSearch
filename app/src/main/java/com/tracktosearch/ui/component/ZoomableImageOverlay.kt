@@ -47,6 +47,8 @@ import com.tracktosearch.R
 import kotlinx.coroutines.launch
 import net.engawapg.lib.zoomable.rememberZoomState
 import net.engawapg.lib.zoomable.zoomable
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 
 /**
  * 通用全屏图片查看 overlay：黑底 + 横滑翻页 + 双击/双指缩放 + 可选保存。
@@ -210,7 +212,13 @@ internal fun ZoomableImageOverlay(
                 if (onSave != null) {
                     val idx = pagerState.currentPage
                     val saved = isSavedAt(idx)
-                    IconButton(onClick = { onSave(idx) }) {
+                    val saveDescription = stringResource(
+                        if (saved) R.string.cd_saved else R.string.cd_save
+                    )
+                    IconButton(
+                        onClick = { onSave(idx) },
+                        modifier = Modifier.semantics { contentDescription = saveDescription }
+                    ) {
                         Box(
                             modifier = Modifier
                                 .size(40.dp)

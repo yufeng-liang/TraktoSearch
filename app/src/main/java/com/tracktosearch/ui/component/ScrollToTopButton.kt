@@ -36,6 +36,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.ui.util.HapticType
@@ -169,6 +171,8 @@ private fun ScrollToTopButtonContent(
 ) {
     val view = LocalView.current
     val arrowTint = MaterialTheme.colorScheme.primary
+    // 整颗回顶按钮此前没有无障碍标签：图标是 Canvas 画的箭头，读屏只能读出「按钮」
+    val backToTopDescription = stringResource(R.string.cd_back_to_top)
     val onClickWithHaptic = { view.performHaptic(HapticType.TICK); onClick() }
     val interactionSource = remember { MutableInteractionSource() }
     if (hazeState != null) {
@@ -202,7 +206,8 @@ private fun ScrollToTopButtonContent(
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = onClickWithHaptic
-                ),
+                )
+                .semantics { contentDescription = backToTopDescription },
             contentAlignment = Alignment.Center
         ) {
             ScrollToTopArrow(tint = arrowTint)
@@ -210,7 +215,8 @@ private fun ScrollToTopButtonContent(
     } else {
         FilledTonalIconButton(
             onClick = onClickWithHaptic,
-            shape = CircleShape
+            shape = CircleShape,
+            modifier = Modifier.semantics { contentDescription = backToTopDescription }
         ) {
             ScrollToTopArrow(tint = arrowTint)
         }

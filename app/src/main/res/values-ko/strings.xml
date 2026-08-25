@@ -2,9 +2,6 @@
     <string name="auth_migration_invite_hint">자동 복구를 완료하지 못했습니다. 마이그레이션 초대 코드를 입력하여 계속하세요.</string>
     <string name="auth_offline_mode">오프라인 모드: 캐시된 데이터를 사용합니다.</string>
     <string name="app_name">TraktoSearch</string>
-    <string name="splash_slogan">보고 싶은 것에서 찾고, 본 기록까지</string>
-    <string name="auth_title">접근 권한 활성화</string>
-    <string name="auth_subtitle">관리자가 제공한 초대 코드를 입력하세요.</string>
     <string name="auth_expired_message">네트워크에 연결한 후 접근 권한을 다시 활성화하세요.</string>
     <string name="auth_invite_code">12자리 활성화 코드 입력</string>
     <string name="auth_activate">활성화</string>
@@ -29,7 +26,6 @@
 
     <!-- Discover Screen -->
     <string name="discover_title">발견</string>
-    <string name="discover_popular">인기</string>
     <string name="discover_upcoming">예정</string>
     <string name="discover_recommended">추천</string>
 
@@ -50,7 +46,6 @@
     <string name="content_desc_save">저장</string>
     <string name="content_desc_view_all">모두 보기</string>
     <string name="content_desc_back">뒤로</string>
-    <string name="content_desc_refresh">새로고침</string>
     <string name="gallery_save_failed">저장 실패</string>
     <string name="gallery_already_exists">이미 존재합니다: %1$s</string>
     <string name="gallery_saved">저장됨: %1$s/%2$s</string>
@@ -59,50 +54,35 @@
     <string name="link_copied">링크가 복사되었습니다</string>
     <string name="cannot_open_link">이 링크를 열 수 없습니다</string>
     <string name="install_success">설치 성공</string>
-    <string name="update_new_version">새 버전 v%1$s 사용 가능</string>
     <string name="update_download_builtin">내장 다운로드</string>
     <string name="update_download_browser">브라우저 다운로드</string>
     <string name="update_release_page">릴리스 페이지로</string>
     <string name="update_download_unavailable">직접 다운로드를 일시적으로 사용할 수 없습니다. 릴리스 페이지에서 APK를 받을 수 있습니다.</string>
     <string name="update_close">닫기</string>
     <string name="install_failed">설치 실패 (code=%1$d)</string>
-    <string name="help_col_source">출처</string>
-    <string name="help_col_format">포맷</string>
-    <string name="help_col_how_to_get">획득 방법</string>
-    <string name="help_col_import_effect">가져오기 효과</string>
     
     <string name="notification_release_title">개봉 알림: %1$s</string>
     <string name="notification_release_text">%1$s 에 개봉했습니다. 확인해 보세요!</string>
     <string name="notification_new_season_text">시즌 %1$d 이 %2$s 에 방영 시작</string>
     <string name="notification_new_season_title">새 시즌: %1$s</string>
-    <string name="search_button">검색</string>
     <string name="search_loading">검색 중…</string>
-    <string name="search_failed">검색 실패: %1$s</string>
     <string name="search_no_results">리소스를 찾을 수 없습니다</string>
     <string name="search_empty_hint">키워드를 입력하여 검색 시작</string>
-    <string name="search_default_hint">영화 및 TV 프로그램 검색</string>
-    <string name="search_results">검색 결과 (%1$d)</string>
     <string name="search_clear_input">지우기</string>
     <string name="search_history_title">검색 기록</string>
     <string name="search_history_clear_all">전체 지우기</string>
     <string name="search_history_delete">삭제</string>
-    <string name="search_popular_title">인기 검색</string>
     <string name="search_suggestions_title">제안</string>
     <string name="search_loading_disk">클라우드 리소스 검색 중...</string>
     <string name="search_loading_disk_progress">검색 중 %1$d/%2$d 소스...</string>
 
     <!-- Watchlist Screen -->
-    <string name="watchlist_title">내 관심목록</string>
     <string name="watchlist_search">검색</string>
-    <string name="watchlist_refresh">새로고침</string>
-    <string name="logout">로그아웃</string>
     <string name="watchlist_tab_movies">영화</string>
     <string name="watchlist_tab_shows">TV</string>
     <string name="watchlist_retry">재시도</string>
-    <string name="watchlist_loading">로딩 중…</string>
     <string name="watchlist_mode_watchlist">관심목록</string>
     <string name="watchlist_mode_watched">시청</string>
-    <string name="watchlist_tab_history">기록</string>
 
     <!-- Detail Screen -->
     <string name="detail_back">뒤로</string>
@@ -115,7 +95,6 @@
     <string name="detail_mark_watched">시청한 것으로 표시</string>
     <string name="detail_mark_watched_title">시청 완료로 표시할 에피소드 선택</string>
     <string name="detail_loading_episodes">에피소드 로딩 중…</string>
-    <string name="detail_no_overview">줄거리 없음</string>
     <string name="detail_overview_label">줄거리</string>
     <string name="detail_text_expand">펼치기</string>
     <string name="detail_text_collapse">접기</string>
@@ -141,15 +120,12 @@
 
     <!-- Douban Sync -->
     <string name="douban_login_title">더우반 로그인</string>
-    <string name="douban_login_hint">Douban에 로그인하면 관심/시청 마크를 Watchlist에서 볼 수 있으며, Trakt에 연결하면 Trakt에도 동기화할 수 있습니다.</string>
     <string name="douban_login_privacy_short">이 페이지는 공개 마크(보고싶음/봄)를 읽기 위해 더우반에 로그인합니다. 인증 정보는 이번 동기화에만 사용되며 제3자 서버에 업로드되지 않습니다.</string>
-    <string name="douban_login_privacy_detail_title">상세 정보</string>
     <string name="douban_login_privacy_detail">• 로그인 이유: 더우반 마크(보고싶음, 봄, 평점) 읽기\n• 저장 내용: Cookie와 userId(이번 크롤링용)만 저장, 더우반 비밀번호는 저장하지 않음\n• Cookie 용도: movie.douban.com/people/{userId}/wish|collect 페이지 요청에만 사용\n• 동기화 완료 후: 설정에서 더우반 인증 정보를 언제든 삭제 가능\n• 데이터 흐름: 더우반 → 앱. Trakt에 연결하면 Trakt에도 동기화할 수 있습니다.</string>
     <string name="douban_login_privacy_expand">상세 정보 보기</string>
     <string name="douban_login_privacy_collapse">접기</string>
     <string name="douban_login_success_snackbar">더우반 로그인 성공</string>
     <string name="douban_login_load_failed">로딩 실패</string>
-    <string name="douban_login_notification_rationale">백그라운드 동기화에 알림 권한이 필요합니다. 부여해 주세요</string>
     <string name="douban_sync_title">더우반 마크 동기화</string>
     <string name="douban_sync_complete">동기화 완료</string>
     <string name="douban_sync_cancelling">취소 중...</string>
@@ -173,27 +149,7 @@
     <string name="douban_sync_summary_format">성공 %1$d · 건너뜀 %2$d · 캐시 %3$d</string>
 
     <!-- Douban 동기화 실패 항목 재시도 -->
-    <string name="douban_retry_title">Douban 동기화 실패 항목 재시도</string>
-    <string name="douban_retry_subtitle">지난 동기화에서 %1$d 항목이 실패했습니다. 작업을 선택하세요</string>
-    <string name="douban_retry_option_local">지난 실패 %1$d 항목 재시도</string>
-    <string name="douban_retry_option_local_desc">복구 가능 %1$d · 복구 불가 %2$d</string>
-    <string name="douban_retry_option_incremental">증분 동기화 새 마크</string>
-    <string name="douban_retry_option_incremental_desc">Douban의 새 wish/collect만 동기화</string>
-    <string name="douban_retry_option_json">JSON 파일에서 실패 항목 가져오기 재시도</string>
-    <string name="douban_retry_option_json_desc">내보낸 실패 데이터 파일에서 로드</string>
-    <string name="douban_retry_select_reasons">재시도할 실패 유형 선택</string>
-    <string name="douban_retry_reason_recoverable">%1$s (복구 가능)</string>
-    <string name="douban_retry_reason_non_recoverable">%1$s (기본 건너뜀)</string>
-    <string name="douban_retry_start">재시도 시작</string>
     <string name="douban_retry_cancel">취소</string>
-    <string name="douban_retry_clear">실패 기록 삭제</string>
-    <string name="douban_retry_clear_confirm">모든 실패 기록을 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.</string>
-    <string name="douban_retry_clear_confirm_yes">삭제</string>
-    <string name="douban_retry_clear_confirm_no">취소</string>
-    <string name="douban_retry_max_attempt">%1$d회 재시도됨, 자동 재시도 비권장</string>
-    <string name="douban_retry_no_failures">재시도할 실패 항목이 없습니다</string>
-    <string name="douban_retry_json_import_failed">JSON 파일 파싱 실패</string>
-    <string name="douban_retry_json_import_empty">파일에 실패 항목이 없습니다</string>
 
     <!-- 실패 이유 현지화 -->
     <string name="douban_failure_reason_no_imdb_id">IMDb ID 없음</string>
@@ -205,7 +161,6 @@
 
     <!-- 동기화 결과 대화상자 -->
     <string name="douban_sync_current_processing">처리 중: %1$s</string>
-    <string name="douban_sync_retry_complete_banner">재시도 완료, %1$d 항목 성공</string>
 
     <!-- Douban 동기화 재개 (취소 후 복원) -->
     <string name="douban_resume_title">이전 동기화 재개</string>
@@ -215,8 +170,6 @@
     <string name="douban_resume_continue_desc">리스트 크롤링 건너뛰기, 크롤링된 데이터 직접 처리</string>
     <string name="douban_resume_full_desc">미처리 데이터 삭제, 처음부터 시작</string>
     <string name="douban_resume_cancel">취소</string>
-    <string name="douban_resume_phase">미처리 리스트 재개 중</string>
-    <string name="douban_resume_complete">재개 완료</string>
     <string name="sync_already_running">동기화 작업이 이미 실행 중입니다. 잠시 기다려주세요</string>
 
     <!-- Douban sync rollback (after failed full rewrite) -->
@@ -241,11 +194,7 @@
     <!-- 시각 효과 -->
     <string name="settings_visual_effect_blur">블러</string>
     <string name="settings_visual_effect_blur_desc">부드러운 반투명 스타일로 경계를 자연스럽게 표현</string>
-    <string name="settings_visual_effect_glass_clear">Glass - 클리어</string>
-    <string name="settings_visual_effect_glass_clear_desc">경계감이 낮고 가벼운 광학 유리 스타일</string>
     <string name="settings_visual_effect_glass_desc">장면에 맞춰 깊이, 굴절, 하이라이트를 조정하는 광학 유리</string>
-    <string name="settings_visual_effect_glass_focused">Glass - 포커스</string>
-    <string name="settings_visual_effect_glass_focused_desc">탐색과 조작에 어울리는 더 선명한 유리 레이어</string>
 
     <!-- Accent Color -->
     <string name="settings_accent_color">톤 및 소재</string>
@@ -284,7 +233,6 @@
     <string name="settings_appearance">외관</string>
     <string name="settings_shared_transition">공유 요소 전환 애니메이션</string>
     <string name="settings_shared_transition_subtitle">화면 간 공유 요소에 전환 애니메이션을 적용합니다. 전체 화면 이미지를 열 때의 확대 전환도 포함됩니다.</string>
-    <string name="settings_search">검색</string>
     <string name="settings_storage">저장소</string>
     <string name="settings_clear_cache">캐시 지우기</string>
     <string name="settings_about">정보</string>
@@ -298,16 +246,13 @@
     <string name="settings_cache_category_media_data">미디어 데이터 캐시</string>
     <string name="settings_cache_category_media_data_desc">상세, 출연진, 차트 (TMDB + Trakt + 더우반)</string>
     <string name="settings_cache_category_id_mapping">ID 매핑 캐시</string>
-    <string name="settings_cache_category_id_mapping_desc">TMDB↔Trakt, 더우반→IMDb (영구)</string>
     <string name="settings_cache_category_http">HTTP 캐시</string>
     <string name="settings_cache_category_http_desc">네트워크 응답 캐시 (OkHttp)</string>
     <string name="settings_cache_category_database">오프라인 데이터베이스</string>
-    <string name="settings_cache_category_database_desc">보고싶음/봄 목록 + 더우반 동기화 기록</string>
     <string name="settings_cache_clear_all">모두 지우기</string>
     <string name="settings_image_traffic_title">이미지 트래픽</string>
     <string name="settings_image_traffic_today">오늘: %1$s</string>
     <string name="settings_image_traffic_total">누적: %1$s</string>
-    <string name="settings_image_traffic_desc">다운로드한 이미지 용량(포스터, 아바타, 스틸)</string>
     <string name="settings_image_traffic_clear">초기화</string>
     <string name="settings_cache_clear_category_confirm">이 캐시를 지우시겠습니까?</string>
     <string name="settings_cache_clear_all_impact">모든 캐시 데이터를 지웁니다. 포스터/아바타 재다운로드, 영화/TV 상세 및 차트 재요청, ID 매핑 재구축. 캐시가 다시 쌓이기 전까지 앱이 약간 느릴 수 있습니다.</string>
@@ -320,10 +265,8 @@
     <string name="settings_already_latest">최신 버전 v%1$s</string>
     <string name="settings_new_version">새 버전 v%1$s</string>
     <string name="settings_discover_sections">발견 섹션</string>
-    <string name="settings_discover_sections_desc">발견 페이지 섹션 표시 및 정렬</string>
     <string name="settings_discover_sections_hint">드래그로 정렬, 스위치로 표시/숨기기</string>
     <string name="settings_detail_sections">사용자 정의 상세 페이지</string>
-    <string name="settings_detail_sections_desc">상세 페이지의 각 모듈 표시/숨기기 설정</string>
     <string name="settings_drag_to_reorder">드래그하여 정렬</string>
     <string name="settings_logout_button">로그아웃</string>
 
@@ -359,29 +302,15 @@
     <string name="statistics_more">많음</string>
 
     <!-- Search Filter -->
-    <string name="search_filter_type">유형</string>
-    <string name="search_filter_disk">디스크 유형</string>
 
     <!-- Watchlist Screen (추가) -->
     <string name="watchlist_poster_error">포스터 및 중국어 제목 로딩 실패. 네트워크 프록시를 활성화하고 새로고침해주세요</string>
-    <string name="watchlist_load_failed">로딩 실패: %1$s</string>
-    <string name="watchlist_empty_movies">관심목록이 비어 있습니다</string>
-    <string name="watchlist_empty_shows">관심목록이 비어 있습니다</string>
-    <string name="watchlist_search_no_movies">일치하는 영화가 없습니다</string>
-    <string name="watchlist_search_no_shows">일치하는 TV 프로그램이 없습니다</string>
-    <string name="watchlist_logout">로그아웃</string>
     <string name="watchlist_search_watchlist">관심목록 검색</string>
     <string name="watchlist_search_history">시청 기록 검색</string>
-    <string name="history_empty_movies">시청한 영화가 아직 없습니다</string>
-    <string name="history_empty_shows">시청한 TV 프로그램이 아직 없습니다</string>
-    <string name="watchlist_search_on_trakt">Trakt에서 검색</string>
     <string name="watchlist_selected_count">%d개 선택됨</string>
     <string name="watchlist_remove_watchlist">관심목록에서 삭제</string>
     <string name="watchlist_remove_history">기록에서 삭제</string>
     <string name="watchlist_batch_remove_partial_failed">일부 항목 제거 실패</string>
-    <string name="watchlist_pull_to_refresh">당겨서 새로고침</string>
-    <string name="watchlist_release_to_refresh">놓아서 새로고침</string>
-    <string name="watchlist_refreshing">새로고침 중…</string>
     <string name="common_cancel">취소</string>
     <string name="permission_cloud_title">구름이 변신하는 걸 보고 싶으신가요?</string>
     <string name="permission_cloud_message">위치 권한을 허용하면 도시의 실시간 날씨와 명절 테마에 따라 변화합니다!</string>
@@ -393,16 +322,10 @@
     <string name="trakt_search_hint_shows">Trakt에서 TV 프로그램 검색</string>
     <string name="trakt_search_no_movies">Trakt에서 영화를 찾을 수 없습니다</string>
     <string name="trakt_search_no_shows">Trakt에서 TV 프로그램을 찾을 수 없습니다</string>
-    <string name="trakt_search_result_count_movies">총 %d 편의 영화</string>
-    <string name="trakt_search_result_count_shows">총 %d 편의 TV 프로그램</string>
     <string name="trakt_search_tab_movies">영화</string>
     <string name="trakt_search_tab_shows">TV 프로그램</string>
-    <string name="trakt_search_tab_movies_count">영화(%d)</string>
-    <string name="trakt_search_tab_shows_count">TV 프로그램(%d)</string>
     <string name="trakt_search_tab_persons">인물</string>
-    <string name="trakt_search_tab_persons_count">인물(%d)</string>
     <string name="trakt_search_tab_disk">클라우드</string>
-    <string name="trakt_search_tab_disk_count">클라우드(%d)</string>
     <string name="trakt_search_hint_disk">클라우드 리소스 검색</string>
     <string name="trakt_search_hint_persons">Trakt에서 인물 검색</string>
     <string name="trakt_search_no_persons">Trakt에서 인물을 찾을 수 없습니다</string>
@@ -413,9 +336,7 @@
     <string name="common_undo">실행 취소</string>
     <string name="detail_watchlist_added_toast">보고 싶은 목록에 추가했습니다</string>
     <string name="detail_watchlist_removed_toast">보고 싶은 목록에서 제거했습니다</string>
-    <string name="detail_watched_added_toast">시청 완료로 표시했습니다</string>
     <string name="detail_watched_removed_toast">시청 완료를 해제했습니다</string>
-    <string name="detail_mark_processing">처리 중</string>
     <string name="detail_rate">평가</string>
     <string name="detail_rated">평가 완료</string>
     <string name="detail_login_required_title">로그인 필요</string>
@@ -444,16 +365,12 @@
     <string name="detail_year_suffix">%d년</string>
     <string name="detail_watched">시청함</string>
     <string name="detail_not_watched">미시청</string>
-    <string name="detail_saved">저장됨</string>
-    <string name="detail_save">저장</string>
     <string name="detail_comment_source">(출처: %s)</string>
 
     <string name="detail_comment_source_douban">Douban</string>
 
     <!-- Resource Item Card -->
     <string name="resource_viewed">조회함</string>
-    <string name="resource_scan">스캔</string>
-    <string name="resource_invalid">유효하지 않음</string>
     <string name="resource_file_count">%1$d개 파일</string>
     <string name="detail_collection_title">시리즈: %s</string>
 
@@ -506,21 +423,17 @@
     <string name="login_denied">인증이 거부되었습니다</string>
     <string name="login_success">로그인 성공, 로딩 중…</string>
     <string name="login_sync_hint">로그인 후 Trakt 관심목록이 동기화됩니다</string>
-    <string name="login_activation_hint">액세스를 활성화하면 Trakt 관심목록을 동기화할 수 있습니다</string>
     <string name="login_activation_locked">○ 미활성화 · 코드를 입력해 관람 공간 잠금 해제</string>
     <string name="login_activation_choose_path">활성화됨 · Trakt로 로그인하거나 게스트로 계속하세요</string>
     <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
 
     <!-- Ratings -->
-    <string name="rating_trakt">Trakt</string>
 
     <!-- Detail Info (추가) -->
     <string name="detail_director">감독</string>
-    <string name="detail_actors">출연진</string>
     <string name="detail_comments">댓글</string>
     <string name="detail_no_comments">아직 댓글이 없습니다</string>
     <string name="detail_own_comment_title">내 댓글</string>
-    <string name="detail_own_comment_hint">짧은 리뷰를 작성하세요</string>
     <string name="detail_own_comment_sync_trakt">이 댓글은 Trakt에 동기화됩니다</string>
     <string name="detail_own_comment_sync_douban">이 댓글은 Douban에 동기화됩니다</string>
     <string name="detail_own_comment_sync_trakt_douban">이 댓글은 Trakt와 Douban에 동기화됩니다</string>
@@ -538,11 +451,9 @@
     <string name="detail_own_comment_targets_trakt_douban">Trakt 및 Douban</string>
     <string name="detail_own_comment_rating_required">Douban에 동기화하기 전에 평점을 선택하세요</string>
     <string name="detail_seasons">시즌</string>
-    <string name="detail_seasons_count">(총 %1$d시즌)</string>
     <string name="detail_seasons_show_all">전체 %1$d시즌 표시</string>
     <string name="detail_seasons_collapse">접기</string>
     <string name="detail_season">시즌 %1$d</string>
-    <string name="detail_episode_count">%1$d 에피소드</string>
     <string name="detail_episode">제%1$d화 %2$s</string>
     <string name="detail_original_title">원제: %1$s</string>
     <string name="detail_runtime_hours">%1$d시간 %2$d분</string>
@@ -560,7 +471,6 @@
     <string name="detail_recommendations_title">관련 추천</string>
     <string name="detail_translating">번역 중…</string>
     <string name="detail_translating_progress">번역 중 %1$s…</string>
-    <string name="detail_translate_failed">번역 실패</string>
     <string name="detail_translate">번역</string>
     <string name="detail_translate_all">모두 번역</string>
     <string name="detail_translated">번역 보기</string>
@@ -604,7 +514,6 @@
     <string name="detail_rating_dialog_title">평가</string>
     <string name="detail_rating_confirm">확인</string>
     <string name="detail_rating_cancel">취소</string>
-    <string name="detail_rating_no_rating">미평가</string>
     <string name="detail_rating_hint">별 좌우를 탭하여 반점/전체 선택, 다시 탭하면 평가 취소</string>
     <string name="detail_rating_comment_hint">코멘트 (선택)</string>
     <string name="detail_videos_section">예고편과 스크린샷</string>
@@ -615,10 +524,8 @@
     <string name="detail_video_trailer">예고편</string>
     <string name="detail_video_teaser">티저 예고편</string>
     <string name="detail_video_clip">클립</string>
-    <string name="detail_video_load_error">동영상 로드 실패, YouTube가 현재 지역에서 접근할 수 없을 수 있습니다</string>
     <string name="detail_video_open_browser">브라우저에서 열기</string>
     <string name="detail_video_play">재생</string>
-    <string name="detail_video_retry">재시도</string>
     <string name="trailer_youtube_restricted">YouTube가 현재 지역에서 접근 제한됨\nVPN을 사용해 주세요</string>
 
     <!-- Person Screen -->
@@ -629,7 +536,6 @@
     <string name="person_images">사진</string>
     <string name="person_homepage">홈페이지</string>
     <string name="poster_already_saved">이미 저장됨</string>
-    <string name="person_load_more">더 불러오기</string>
     <string name="detail_close">닫기</string>
     <string name="person_no_biography">약력이 없습니다</string>
     <string name="person_age">세</string>
@@ -644,7 +550,6 @@
     <string name="settings_changelog">업데이트 내역</string>
     <string name="settings_account">계정</string>
     <string name="settings_logout_confirm">로그아웃하시겠습니까?</string>
-    <string name="settings_source_repo">소스 코드</string>
     <string name="settings_feedback">피드백</string>
     <string name="settings_feedback_subtitle">개발자 영업 중! 아이디어와 버그를 마음껏 던져 주세요 🧑‍💻🍿</string>
     <string name="feedback_title">피드백</string>
@@ -659,27 +564,21 @@
     <string name="feedback_content_label">본문</string>
     <string name="feedback_content_placeholder">제안이나 문제를 설명해주세요 (5-2000자)…</string>
     <string name="feedback_content_too_short">본문은 최소 5자</string>
-    <string name="feedback_content_too_long">본문은 최대 2000자</string>
     <string name="feedback_select_type">유형을 선택하세요</string>
     <string name="feedback_screenshots">스크린샷 (선택, 최대 5장)</string>
     <string name="feedback_uploading">스크린샷 업로드 중 (%1$d/%2$d)</string>
     <string name="feedback_submit">제출</string>
     <string name="feedback_submitting">제출 중…</string>
-    <string name="feedback_submit_success">피드백 제출됨</string>
     <string name="feedback_submit_failed">제출 실패, 재시도하세요</string>
-    <string name="feedback_loading">로딩 중…</string>
-    <string name="feedback_load_failed">로딩 실패</string>
     <string name="feedback_status_pending">대기 중</string>
     <string name="feedback_status_replied">답변됨</string>
     <string name="feedback_status_closed">종료됨</string>
-    <string name="feedback_dev_reply">개발자 답변</string>
     <string name="feedback_app_info">앱 정보</string>
     <string name="feedback_app_version">앱 %1$s</string>
     <string name="feedback_device_model">기기 %1$s</string>
     <string name="feedback_trakt_username">Trakt: %1$s</string>
     <string name="feedback_douban_username">Douban: %1$s</string>
     <string name="feedback_contact_value">연락처: %1$s</string>
-    <string name="feedback_screenshot_expired">스크린샷 만료</string>
     <string name="feedback_retry">재시도</string>
     <string name="feedback_time_just_now">방금</string>
     <string name="feedback_time_minutes_ago">%1$d분 전</string>
@@ -706,7 +605,6 @@
     <string name="help_watchlist_b2">「마이」 페이지에서 목록 보기 및 관리</string>
     <string name="help_watchlist_b3">시청 표시는 시즌별 에피소드 선택 가능, 시즌0 특별편은 마지막에 표시</string>
     <string name="help_watchlist_b4">TV 프로그램 시청 횟수: 한 편만 봐도 작품 수에 포함되고, 시청 에피소드 수가 방영 총수에 도달하면 완주로 계산</string>
-    <string name="settings_licenses">오픈소스 라이선스</string>
 
     <!-- Data Management (추가) -->
     <string name="settings_import_imdb">IMDb에서 가져오기</string>
@@ -745,8 +643,6 @@
     <string name="douban_sync_mode_warning_c">완전 재작성은 모든 동기화 기록을 지우고 더우반 리스트를 다시 크롤링합니다.\n\n더우반에는 엄격한 안티 크롤링 메커니즘이 있어, 잦은 반복 크롤링 시 IP 주소가 블랙리스트에 등록될 수 있습니다. 본인 책임하에 진행하세요.\n\n정말 계속하시겠습니까?</string>
 
     <!-- Douban retry dialog - export option -->
-    <string name="douban_retry_option_export">실패 기록 내보내기</string>
-    <string name="douban_retry_option_export_desc">JSON 파일로 저장, 백업이나 공유에 사용</string>
 
     <!-- Douban failures viewer -->
     <string name="settings_douban_status_consistency">상태 일관성 확인</string>
@@ -812,24 +708,10 @@
     <string name="consistency_check_time_minutes_ago">%1$d분 전</string>
     <string name="consistency_check_time_hours_ago">%1$d시간 전</string>
     <string name="consistency_check_time_days_ago">%1$d일 전</string>
-    <string name="screen_douban_failures_title">동기화 실패 항목</string>
-    <string name="share_failures_json">실패 항목 JSON 공유</string>
 
     <!-- 클라우드 실패 데이터 동기화 -->
 
     <!-- Manual cloud sync (settings page) -->
-    <string name="screen_douban_failures_empty_wish">관심목록 동기화가 모두 성공했습니다</string>
-    <string name="screen_douban_failures_empty_collect">시청 목록 동기화가 모두 성공했습니다</string>
-    <string name="screen_douban_failures_empty_all">동기화 실패 항목이 없습니다</string>
-    <string name="screen_douban_failures_empty_search">일치하는 실패 항목이 없습니다</string>
-    <string name="screen_douban_failures_empty_filter">조건에 맞는 실패 항목이 없습니다</string>
-    <string name="screen_douban_failures_empty_movie">영화 목록이 비어 있습니다</string>
-    <string name="screen_douban_failures_empty_show">드라마 목록이 비어 있습니다</string>
-    <string name="screen_douban_failures_empty_uncategorized">미분류 목록이 비어 있습니다</string>
-    <string name="screen_douban_failures_empty_variety">예능 목록이 비어 있습니다</string>
-    <string name="screen_douban_failures_empty_documentary">다큐멘터리 목록이 비어 있습니다</string>
-    <string name="screen_douban_failures_clear_all">전체 비우기</string>
-    <string name="screen_douban_failures_clear_all_confirm">모든 실패 기록을 비우시겠습니까? 이 작업은 되돌릴 수 없습니다.</string>
     <string name="screen_douban_failures_mark_as_movie">영화로 표시</string>
     <string name="screen_douban_failures_mark_as_show">TV 드라마로 표시</string>
     <string name="screen_douban_failures_mark_as_variety">예능으로 표시</string>
@@ -839,13 +721,6 @@
     <string name="screen_douban_failures_marked_as_show">TV 드라마로 표시됨</string>
     <string name="screen_douban_failures_marked_as_variety">예능으로 표시됨</string>
     <string name="screen_douban_failures_marked_as_documentary">다큐멘터리로 표시됨</string>
-    <string name="screen_douban_failures_delete_item">이 항목 삭제</string>
-    <string name="screen_douban_failures_tab_uncategorized">미분류</string>
-    <string name="screen_douban_failures_tab_variety">예능</string>
-    <string name="screen_douban_failures_tab_documentary">다큐멘터리</string>
-    <string name="screen_douban_failures_selected_count">%1$d개 선택됨</string>
-    <string name="screen_douban_failures_select_all">전체 선택</string>
-    <string name="screen_douban_failures_deselect_all">전체 해제</string>
 
     <!--豆瓣 상세 페이지:크롤링 진행률 및 라벨링 알림 -->
     <string name="douban_detail_fetching">두반 상세 정보 불러오는 중…</string>
@@ -926,12 +801,9 @@
     <string name="filter_reset">초기화</string>
     <string name="filter_apply">적용</string>
     <string name="filter_genre">장르</string>
-    <string name="filter_genre_empty">장르 데이터 없음(먼저 상세 정보를 크롤링하세요)</string>
     <string name="filter_year">연도</string>
     <string name="filter_rating">Trakt 평점</string>
     <string name="filter_rating_label">평점</string>
-    <string name="douban_failure_search_hint">제목 또는 부제 검색</string>
-    <string name="douban_failure_filter_reason">실패 원인</string>
 
     <!-- Douban item detail -->
     <string name="screen_douban_item_detail_not_synced">이 항목은 Trakt에 없어 동기화할 수 없습니다</string>
@@ -973,14 +845,10 @@
     <string name="settings_notification_new_season_desc">새 시즌이 방영되면 알림</string>
 
     <!-- Update -->
-    <string name="update_title">새 버전이 있습니다</string>
     <string name="update_download">지금 업데이트</string>
     <string name="update_later">나중에 알림</string>
-    <string name="update_browser_download">브라우저에서 다운로드</string>
-    <string name="update_downloading">다운로드 중…</string>
     <string name="update_download_failed">다운로드 실패. 브라우저에서 다운로드해주세요</string>
     <string name="update_signature_invalid">APK 서명 검증 실패, 설치가 차단되었습니다</string>
-    <string name="update_install">설치 중…</string>
     <string name="update_version_suffix">업데이트</string>
 
     <!-- Statistics (추가) -->
@@ -1027,7 +895,6 @@
     <string name="help_consistency_act_douban_watched">더우반에서 본 표시</string>
     <string name="help_consistency_act_douban_wish">더우반에서 보고 싶음 표시</string>
     <string name="settings_restart_onboarding">튜토리얼</string>
-    <string name="settings_restart_onboarding_desc">앱 기능 가이드 다시 보기</string>
     <string name="onboarding_skip">건너뛰기</string>
     <string name="onboarding_next">다음</string>
     <string name="onboarding_done">확인</string>
@@ -1043,7 +910,6 @@
     <string name="onboarding_step4_desc">계정, 메시지, 시청 통계, 검색 소스, 도움말이 모두 여기 있습니다</string>
 
     <!-- Common UI -->
-    <string name="common_retry">재시도</string>
     <string name="common_close">닫기</string>
     <string name="common_confirm">확인</string>
     <string name="common_load_failed">로딩 실패</string>
@@ -1051,11 +917,7 @@
     <string name="error_detail_close">닫기</string>
     <string name="common_no_data">데이터 없음</string>
     <string name="common_loading">로딩 중…</string>
-    <string name="common_save_success">앨범에 저장되었습니다</string>
-    <string name="common_save_failed">저장 실패</string>
-    <string name="common_save_exists">이미 존재: %1$s</string>
     <string name="common_saved_path">저장 위치: %1$s/%2$s</string>
-    <string name="common_copy_success">복사되었습니다</string>
     <string name="common_open_failed">이 링크를 열 수 없습니다</string>
     <string name="common_done">완료</string>
     <string name="error_load_failed">로드 실패</string>
@@ -1073,21 +935,16 @@
     <string name="snackbar_import_no_data">유효한 레코드를 찾을 수 없음</string>
     <string name="snackbar_sync_progress">동기화 중 %1$d/%2$d: %3$s</string>
     <string name="snackbar_import_done_imdb">IMDb 가져오기 완료: %1$d 개 일치, %2$d 개 불일치</string>
-    <string name="snackbar_import_done_json">실패 데이터 %1$d건을 가져왔습니다</string>
     <string name="error_not_imdb_csv">유효한 IMDb CSV가 아닙니다 (필수 열 Title, Created, Title Type 누락)</string>
     <string name="error_empty_csv">파일이 비어 있거나 데이터 행이 없습니다</string>
     <string name="error_parse_failed">파일 파싱 실패: %1$s</string>
     <string name="error_read_file_failed">파일을 읽을 수 없습니다</string>
-    <string name="error_invalid_json_format">실패 항목 JSON 파일 형식이 잘못되었습니다</string>
     <string name="snackbar_cache_cleared">캐시 삭제 완료</string>
     <string name="snackbar_cache_clear_failed">캐시 삭제 실패</string>
     <string name="snackbar_already_latest">이미 최신 버전</string>
     <string name="snackbar_check_update_failed">업데이트 확인 실패</string>
 
     <!-- Search Filter (추가) -->
-    <string name="search_filter_all">전체</string>
-    <string name="search_filter_movie">영화</string>
-    <string name="search_filter_show">TV 프로그램</string>
     <string name="search_view_all">전체 보기</string>
     <string name="search_view_all_count">전체 보기(%d)</string>
     <string name="error_no_data">데이터 없음</string>
@@ -1103,27 +960,20 @@
 
     <!-- Content Descriptions -->
     <string name="cd_watched">시청함</string>
-    <string name="cd_not_watched">시청 안함</string>
     <string name="cd_saved">저장됨</string>
     <string name="cd_save">저장</string>
     <string name="cd_edit">편집</string>
     <string name="cd_delete">삭제</string>
-    <string name="cd_close">닫기</string>
     <string name="cd_back_to_top">맨 위로</string>
-    <string name="cd_clear">지우기</string>
 
     <!-- Settings: Custom Search Source -->
-    <string name="settings_custom_search_source_title">사용자 정의 검색 소스 추가</string>
-    <string name="settings_custom_search_source_subtitle">PanSou/Zreso 호환 소스 또는 사용자 정의 JSONPath 지원</string>
     <string name="settings_add_source">검색 소스 추가</string>
     <!-- Settings: Card Layout -->
     <string name="settings_view_statistics_desc">시청 횟수, 평가 통계, 히트맵, 장르 분포</string>
     <string name="settings_custom_section">사용자 정의 섹션</string>
     <string name="settings_discover_page">발견 페이지</string>
     <string name="settings_detail_page">상세 페이지</string>
-    <string name="settings_panhub_advanced">고급 설정 지원</string>
     <string name="settings_panhub_enabled">Panhub 활성화</string>
-    <string name="settings_edit_source">검색 소스 편집</string>
     <string name="settings_delete_source">검색 소스 삭제</string>
     <string name="settings_delete_source_confirm">「%1$s」을(를) 삭제하시겠습니까?</string>
     <string name="settings_source_name">이름</string>
@@ -1147,15 +997,10 @@
     <string name="settings_source_test">테스트</string>
     <string name="settings_source_save">저장</string>
     <string name="settings_source_unnamed">이름 없음</string>
-    <string name="settings_source_test_success">테스트 성공, %1$d개 결과 파싱</string>
-    <string name="settings_source_test_empty">연결 성공했지만 결과를 파싱하지 못했습니다</string>
-    <string name="settings_cache_cleared">캐시가 지워졌습니다</string>
-    <string name="settings_cache_clear_failed">캐시 지우기 실패: %1$s</string>
     <string name="settings_no_changelog">업데이트 내역이 없습니다</string>
 
     <!-- PanHub Config -->
     <string name="settings_panhub_config">설정</string>
-    <string name="settings_panhub_desc">플러그인, 채널, 동시성 및 타임아웃 설정</string>
     <string name="panhub_config_title">PanHub 검색 설정</string>
     <string name="panhub_concurrency">동시성</string>
     <string name="panhub_timeout">타임아웃 (ms)</string>
@@ -1169,7 +1014,6 @@
     <string name="search_sources_import">설정 가져오기</string>
     <string name="search_sources_builtin">내장 소스</string>
     <string name="search_sources_custom">사용자 소스</string>
-    <string name="search_sources_add_from_template">템플릿에서 추가</string>
     <string name="search_sources_empty">사용자 검색 소스가 없습니다.\n템플릿에서 추가하거나 공유 설정을 붙여넣으세요.</string>
     <string name="search_sources_manage_entry_title">검색 소스</string>
         <string name="search_sources_pansou">PanSou</string>
@@ -1184,7 +1028,6 @@
     <string name="template_import_shortcut">공유 설정이 있나요? 텍스트에서 가져오기 →</string>
     <!-- 마법사 -->
     <string name="editor_title_add">검색 소스 추가</string>
-    <string name="editor_title_edit">검색 소스 편집</string>
     <string name="editor_title_import">텍스트에서 가져오기</string>
     <string name="editor_step_basic">기본 정보</string>
     <string name="editor_step_auto">자동 파싱</string>
@@ -1196,7 +1039,6 @@
     <string name="editor_probe_start">파싱 시작</string>
     <string name="editor_probe_hint">응답 JSONPath를 자동으로 인식합니다. 샘플 키워드로 사이트에 한 번 요청합니다.</string>
     <string name="editor_probe_progress">샘플 키워드로 요청 중…</string>
-    <string name="editor_probe_success">인식 성공</string>
     <string name="editor_probe_failed">자동 인식 실패, 수동으로 설정하세요</string>
     <string name="editor_probe_result_list">결과 목록</string>
     <string name="editor_probe_result_title">제목</string>
@@ -1205,10 +1047,7 @@
     <string name="editor_probe_result_date">날짜</string>
     <string name="editor_probe_keyword_param">키워드 파라미터</string>
     <string name="editor_probe_manual">인식이 정확하지 않나요? JSONPath 수동 조정 →</string>
-    <string name="editor_confirm_url_preview">요청 URL 미리보기</string>
     <string name="editor_advanced_expand">고급 파라미터 모두 표시</string>
-    <string name="editor_advanced_collapse">고급 파라미터 숨기기</string>
-    <string name="editor_parse_mode_label">파싱 모드</string>
     <string name="import_paste">붙여넣기</string>
     <!-- 공유/가져오기 -->
     <string name="share_source_title">「%1$s」공유</string>
@@ -1227,8 +1066,6 @@
     <string name="import_success">검색 소스를 가져왔습니다</string>
     <string name="cd_share">공유</string>
 
-    <string name="settings_add_custom_source">사용자 정의 검색 소스 추가</string>
-    <string name="settings_add_custom_source_desc">PanSou/Zreso 호환 소스 또는 사용자 정의 JSONPath 지원</string>
     <string name="discover_douban_new_movies">신작 영화</string>
     <string name="discover_douban_weekly">이번 주 베스트</string>
     <string name="discover_douban_top250">Top 250</string>
@@ -1270,12 +1107,10 @@
     <string name="discover_filter_hide_watched">미시청만</string>
     <string name="discover_filter_apply">적용</string>
     <string name="discover_filter_reset">초기화</string>
-    <string name="discover_filter_clear">지우기</string>
     <string name="discover_filter_empty">결과가 없습니다. 필터를 조정해 보세요</string>
     <string name="discover_filter_select_genres">장르 선택</string>
     <string name="discover_filter_select_regions">지역 선택</string>
     <string name="discover_filter_select_tags">태그 선택</string>
-    <string name="discover_filter_select_decades">연대 선택</string>
     <string name="discover_filter_tag">태그</string>
     <string name="discover_filter_decade">연대</string>
     <string name="discover_filter_decade_all">전체</string>
@@ -1358,15 +1193,7 @@
     <string name="watchlist_empty_title">Trakt 플랫폼에서 아직 관심 목록에 추가하지 않았습니다</string>
     <string name="watched_empty_title">아직 본 것으로 표시하지 않았습니다</string>
     <string name="watchlist_search_no_result">\"%1$s\"가 포함된 작품을 찾을 수 없습니다</string>
-    <string name="watchlist_empty_hint_prefix">시도해 보세요: </string>
-    <string name="watchlist_empty_go_trakt">Trakt</string>
-    <string name="watchlist_empty_hint_middle">에서 관심 목록 추가, </string>
     <string name="watchlist_empty_go_discover">발견</string>
-    <string name="watchlist_empty_hint_suffix">에서 더 탐색</string>
-    <string name="watchlist_empty_douban_import_prefix">, 또는 </string>
-    <string name="watchlist_empty_douban_import_link">Douban에서 가져오기</string>
-    <string name="watched_empty_hint_prefix">시도해 보세요: </string>
-    <string name="watched_empty_hint_middle">에서 시청 표시, </string>
     <string name="watchlist_empty_no_accounts">Trakt 또는 더우반에 로그인하여 목록을 시작하세요.</string>
     <string name="watched_empty_no_accounts">Trakt 또는 더우반에 로그인하여 본 작품을 표시하세요.</string>
     <string name="watchlist_empty_trakt_only">Trakt 목록이 비어 있습니다. 더우반에 로그인해 마크를 가져오거나 발견에서 작품을 찾아보세요.</string>
@@ -1518,9 +1345,7 @@
     <string name="settings_account_connection_expired">연결이 만료되었습니다. 다시 로그인하세요</string>
     <string name="settings_account_reconnect">다시 로그인</string>
     <string name="settings_account_douban">Douban</string>
-    <string name="settings_account_douban_logged_in">Douban · 로그인됨</string>
     <string name="settings_account_douban_login">로그인</string>
-    <string name="settings_account_douban_logout">로그아웃</string>
     <string name="settings_douban_logout_done">Douban에서 로그아웃되었습니다</string>
     <string name="douban_logout_confirm_title">Douban에서 로그아웃</string>
     <string name="douban_logout_confirm_message">로그아웃하면 로컬의 %1$d개 Douban 마크가 삭제됩니다. 계속하시겠습니까?</string>
@@ -1575,11 +1400,6 @@
     <string name="mark_records_current_in_watchlist_short">관심목록</string>
     <string name="mark_records_current_watched_short">시청함</string>
     <string name="mark_records_current_none_short">제거됨</string>
-    <string name="mark_records_current_changed">변경됨</string>
-    <string name="mark_records_action_add_watchlist">관심목록 추가</string>
-    <string name="mark_records_action_remove_watchlist">관심목록 제거</string>
-    <string name="mark_records_action_unmark_watched">시청 해제</string>
-    <string name="mark_records_action_watched">시청함</string>
     <string name="mark_records_pill_watched">시청함</string>
     <string name="mark_records_pill_watchlist">관심목록</string>
     <string name="mark_records_pill_remove">제거</string>
@@ -1598,12 +1418,6 @@
     <string name="mark_records_help_history_limit">기능 출시 전의 관심목록/제거 작업은 추적할 수 없습니다 (Trakt에 보관되지 않음)</string>
 
     <!-- Settings Section Titles -->
-    <string name="settings_section_account">계정 및 로그인</string>
-    <string name="settings_section_sync">동기화 및 데이터</string>
-    <string name="settings_section_appearance">외관</string>
-    <string name="settings_section_cache">캐시 관리</string>
-    <string name="settings_section_data">가져오기 및 내보내기</string>
-    <string name="settings_section_about">정보</string>
 
     <!-- 피드백 메시지 -->
     <string name="feedback_messages">메시지</string>
@@ -1613,17 +1427,13 @@
     <string name="feedback_filter_all">전체</string>
     <string name="feedback_filter_unread">읽지 않음</string>
     <string name="feedback_filter_developer">개발자</string>
-    <string name="feedback_filter_mine">내 것</string>
     <string name="feedback_role_developer">개발자</string>
     <string name="feedback_role_me">나</string>
     <string name="feedback_conversation">대화</string>
     <string name="feedback_reply_placeholder">더 많은 세부정보 추가…</string>
     <string name="feedback_reply_send">보내기</string>
-    <string name="feedback_reply_uploading">스크린샷 업로드 중 (%1$d/%2$d)</string>
-    <string name="feedback_reply_failed">답장 실패, 다시 시도하세요</string>
     <string name="feedback_closed_hint">이 피드백은 닫혔습니다</string>
     <string name="feedback_load_more">더 불러오기</string>
-    <string name="feedback_unread_count_format">읽지 않음 %1$d</string>
     <string name="feedback_id_format">#%1$s</string>
     <string name="douban_sync_stage_idle">대기 중</string>
     <string name="douban_sync_stage_preparing">동기화 준비 중</string>
@@ -1676,7 +1486,6 @@
     <string name="douban_sync_eta_hours">%1$d시간 %2$d분</string>
     <string name="douban_sync_notification_progress_format">%1$s · %2$s (%3$d/%4$d)</string>
     <string name="douban_sync_notification_stage_format">%1$s · %2$s</string>
-    <string name="douban_sync_notification_eta_format">%1$s · %2$s</string>
     <string name="douban_sync_notification_current">현재: %1$s</string>
     <string name="douban_sync_notification_latest">최근 가져옴: %1$s</string>
     <string name="douban_sync_notification_public">더우반 동기화: %1$s</string>
@@ -1743,7 +1552,6 @@
     <string name="ai_feature_nickname">닉네임을 해석해 볼까요</string>
     <string name="ai_feature_meaning">닉네임의 의미</string>
     <string name="ai_feature_comment">스프라이트의 한마디</string>
-    <string name="ai_feature_audio_ready">음성 준비 완료</string>
     <string name="ai_taste_roast">매운맛 평론</string>
     <string name="ai_taste_profile">당신의 영화 취향</string>
     <string name="ai_taste_highlights">눈에 띈 점</string>
@@ -1821,4 +1629,83 @@
     <string name="bg_glow_nebula_desc">짙은 인디고 위로 로즈와 바이올렛 광점이 떠다님</string>
     <string name="bg_glow_ink_desc">흑백 고대비 흐름. 가장 강한 인상이지만 본문 가독성에는 가장 불리함</string>
     <string name="bg_glow_beach_desc">시안과 샌드 옐로가 아주 느리게 흐름. 고정 배색으로 테마 색을 따르지 않음</string>
+    <!-- 影视筛选页：类型/标签/地区（原本硬编码中文，英/日/韩用户看到中文） -->
+    <string name="filter_genre_action">액션</string>
+    <string name="filter_genre_adventure">어드벤처</string>
+    <string name="filter_genre_animation">애니메이션</string>
+    <string name="filter_genre_comedy">코미디</string>
+    <string name="filter_genre_crime">범죄</string>
+    <string name="filter_genre_documentary">다큐멘터리</string>
+    <string name="filter_genre_drama">드라마</string>
+    <string name="filter_genre_family">가족</string>
+    <string name="filter_genre_fantasy">판타지</string>
+    <string name="filter_genre_history">역사</string>
+    <string name="filter_genre_horror">공포</string>
+    <string name="filter_genre_music">음악</string>
+    <string name="filter_genre_mystery">미스터리</string>
+    <string name="filter_genre_romance">로맨스</string>
+    <string name="filter_genre_sci_fi">SF</string>
+    <string name="filter_genre_tv_movie">TV 영화</string>
+    <string name="filter_genre_thriller">스릴러</string>
+    <string name="filter_genre_war">전쟁</string>
+    <string name="filter_genre_western">서부</string>
+    <string name="filter_genre_action_adventure">액션 &amp; 어드벤처</string>
+    <string name="filter_genre_kids">어린이</string>
+    <string name="filter_genre_news">뉴스</string>
+    <string name="filter_genre_reality">리얼리티</string>
+    <string name="filter_genre_sci_fi_fantasy">SF &amp; 판타지</string>
+    <string name="filter_genre_soap">연속극</string>
+    <string name="filter_genre_talk">토크</string>
+    <string name="filter_genre_war_politics">전쟁 &amp; 정치</string>
+    <string name="filter_tag_marvel">마블</string>
+    <string name="filter_tag_dc">DC 유니버스</string>
+    <string name="filter_tag_superhero">슈퍼히어로</string>
+    <string name="filter_tag_campus">캠퍼스</string>
+    <string name="filter_tag_zombie">좀비</string>
+    <string name="filter_tag_vampire">뱀파이어</string>
+    <string name="filter_tag_undead">언데드</string>
+    <string name="filter_tag_apocalypse">종말</string>
+    <string name="filter_tag_revenge">복수</string>
+    <string name="filter_tag_time_travel">시간 여행</string>
+    <string name="filter_tag_alien">외계인</string>
+    <string name="filter_tag_dystopia">디스토피아</string>
+    <string name="filter_tag_cyberpunk">사이버펑크</string>
+    <string name="filter_tag_space">우주</string>
+    <string name="filter_tag_war">전쟁</string>
+    <string name="filter_tag_spy">스파이</string>
+    <string name="filter_tag_gangster">갱스터</string>
+    <string name="filter_tag_whodunit">추리</string>
+    <string name="filter_tag_musical">음악</string>
+    <string name="filter_tag_dance">댄스</string>
+    <string name="filter_tag_sports">스포츠</string>
+    <string name="filter_tag_food">음식</string>
+    <string name="filter_tag_friendship">우정</string>
+    <string name="filter_tag_love_story">로맨스</string>
+    <string name="filter_tag_coming_of_age">성장</string>
+    <string name="filter_tag_road_trip">로드무비</string>
+    <string name="filter_tag_wilderness">야생</string>
+    <string name="filter_tag_remake">리메이크</string>
+    <string name="filter_tag_sequel">속편</string>
+    <string name="filter_tag_martial_arts">무술</string>
+    <string name="filter_tag_kung_fu">쿵후</string>
+    <string name="filter_tag_magic">마법</string>
+    <string name="filter_tag_christmas">크리스마스</string>
+    <string name="filter_tag_kidnapping">납치</string>
+    <string name="filter_tag_dog">개</string>
+    <string name="filter_tag_cat">고양이</string>
+    <string name="filter_tag_ai">인공지능</string>
+    <string name="filter_tag_fairy_tale">동화</string>
+    <string name="filter_tag_police">경찰</string>
+    <string name="filter_tag_detective">탐정</string>
+    <string name="filter_tag_docudrama">다큐드라마</string>
+    <string name="filter_tag_hacker">해커</string>
+    <string name="filter_tag_drug_trade">마약 밀매</string>
+    <string name="filter_tag_medieval">중세</string>
+    <string name="filter_tag_steampunk">스팀펑크</string>
+    <string name="filter_tag_psychological">심리</string>
+    <string name="filter_tag_monster">몬스터</string>
+    <string name="filter_tag_ghost">유령</string>
+    <string name="filter_region_cn">중국 본토</string>
+    <string name="filter_region_hk">중국 홍콩</string>
+    <string name="filter_region_tw">중국 대만</string>
 </resources>

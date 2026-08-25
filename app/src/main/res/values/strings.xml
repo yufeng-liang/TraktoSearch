@@ -2,9 +2,6 @@
     <string name="auth_migration_invite_hint">Silent recovery was not completed. Enter a migration invitation code to continue.</string>
     <string name="auth_offline_mode">Offline mode: using cached data.</string>
     <string name="app_name">TraktoSearch</string>
-    <string name="splash_slogan">From Wanting to Watch, to Finding It, to Having Watched It</string>
-    <string name="auth_title">Activate access</string>
-    <string name="auth_subtitle">Enter the invitation code provided by the administrator.</string>
     <string name="auth_expired_message">Connect to the internet and activate access again.</string>
     <string name="auth_invite_code">Enter 12-digit activation code</string>
     <string name="auth_activate">Activate</string>
@@ -29,7 +26,6 @@
 
     <!-- Discover Screen -->
     <string name="discover_title">Discover</string>
-    <string name="discover_popular">Popular</string>
     <string name="discover_upcoming">Upcoming</string>
     <string name="discover_recommended">Recommended Movies</string>
 
@@ -50,7 +46,6 @@
     <string name="content_desc_save">Save</string>
     <string name="content_desc_view_all">View all</string>
     <string name="content_desc_back">Back</string>
-    <string name="content_desc_refresh">Refresh</string>
     <string name="gallery_save_failed">Save failed</string>
     <string name="gallery_already_exists">Already exists: %1$s</string>
     <string name="gallery_saved">Saved: %1$s/%2$s</string>
@@ -59,70 +54,41 @@
     <string name="link_copied">Link copied</string>
     <string name="cannot_open_link">Cannot open this link</string>
     <string name="install_success">Installation successful</string>
-    <string name="update_new_version">New version v%1$s available</string>
     <string name="update_download_builtin">Built-in download</string>
     <string name="update_download_browser">Browser download</string>
     <string name="update_release_page">Go to release page</string>
     <string name="update_download_unavailable">Direct download is temporarily unavailable. You can get the APK from the release page.</string>
     <string name="update_close">Close</string>
     <string name="install_failed">Installation failed (code=%1$d)</string>
-    <string name="help_col_source">Source</string>
-    <string name="help_col_format">Format</string>
-    <string name="help_col_how_to_get">How to get</string>
-    <string name="help_col_import_effect">Import effect</string>
     <string name="notification_release_title">Release alert: %1$s</string>
     <string name="notification_release_text">Released on %1$s, go check it out!</string>
     <string name="notification_new_season_text">Season %1$d premiered on %2$s</string>
     <string name="notification_new_season_title">New season: %1$s</string>
-    <string name="search_button">Search</string>
     <string name="search_loading">Searching…</string>
-    <string name="search_failed">Search failed: %1$s</string>
     <string name="search_no_results">No resources found, try another keyword</string>
     <string name="search_empty_hint">Enter a keyword to start searching</string>
-    <string name="search_default_hint">Search for movies and TV shows</string>
-    <string name="search_results">Search results (%1$d)</string>
-    <string name="search_filter_type">Type</string>
-    <string name="search_filter_disk">Disk Type</string>
     <string name="search_clear_input">Clear</string>
     <string name="search_history_title">Search History</string>
     <string name="search_history_clear_all">Clear All</string>
     <string name="search_history_delete">Delete</string>
-    <string name="search_popular_title">Popular Searches</string>
     <string name="search_suggestions_title">Suggestions</string>
     <string name="search_loading_disk">Searching disk resources...</string>
     <string name="search_loading_disk_progress">Searching %1$d/%2$d sources...</string>
 
     <!-- Watchlist Screen -->
-    <string name="watchlist_title">My Watchlist</string>
     <string name="watchlist_search">Search</string>
-    <string name="watchlist_refresh">Refresh</string>
-    <string name="logout">Logout</string>
     <string name="watchlist_poster_error">Failed to load posters and Chinese titles. Please enable network proxy and refresh.</string>
     <string name="watchlist_tab_movies">Movies</string>
     <string name="watchlist_tab_shows">TV Shows</string>
-    <string name="watchlist_load_failed">Load failed: %1$s</string>
     <string name="watchlist_retry">Retry</string>
-    <string name="watchlist_loading">Loading watchlist…</string>
-    <string name="watchlist_empty_movies">Watchlist is empty</string>
-    <string name="watchlist_empty_shows">Watchlist is empty</string>
-    <string name="watchlist_search_no_movies">No movies match your search</string>
-    <string name="watchlist_search_no_shows">No TV shows match your search</string>
-    <string name="watchlist_logout">Logout</string>
     <string name="watchlist_mode_watchlist">Watchlist</string>
     <string name="watchlist_mode_watched">Watched</string>
-    <string name="watchlist_tab_history">History</string>
     <string name="watchlist_search_watchlist">Search watchlist</string>
     <string name="watchlist_search_history">Search watched</string>
-    <string name="history_empty_movies">No watched movies yet</string>
-    <string name="history_empty_shows">No watched TV shows yet</string>
-    <string name="watchlist_search_on_trakt">Search on Trakt</string>
     <string name="watchlist_selected_count">Selected %d</string>
     <string name="watchlist_remove_watchlist">Remove from watchlist</string>
     <string name="watchlist_remove_history">Remove from history</string>
     <string name="watchlist_batch_remove_partial_failed">Some items failed to remove</string>
-    <string name="watchlist_pull_to_refresh">Pull down to refresh</string>
-    <string name="watchlist_release_to_refresh">Release to refresh</string>
-    <string name="watchlist_refreshing">Refreshing…</string>
     <string name="common_cancel">Cancel</string>
     <string name="permission_cloud_title">Want to see clouds transform?</string>
     <string name="permission_cloud_message">After granting location permission, it will change with your city\'s real-time weather and holiday themes!</string>
@@ -134,16 +100,10 @@
     <string name="trakt_search_hint_shows">Search TV shows on Trakt</string>
     <string name="trakt_search_no_movies">No movies found on Trakt</string>
     <string name="trakt_search_no_shows">No TV shows found on Trakt</string>
-    <string name="trakt_search_result_count_movies">%d movies found</string>
-    <string name="trakt_search_result_count_shows">%d TV shows found</string>
     <string name="trakt_search_tab_movies">Movies</string>
     <string name="trakt_search_tab_shows">TV Shows</string>
-    <string name="trakt_search_tab_movies_count">Movies (%d)</string>
-    <string name="trakt_search_tab_shows_count">TV Shows (%d)</string>
     <string name="trakt_search_tab_persons">Person</string>
-    <string name="trakt_search_tab_persons_count">Person (%d)</string>
     <string name="trakt_search_tab_disk">Disk</string>
-    <string name="trakt_search_tab_disk_count">Disk (%d)</string>
     <string name="trakt_search_hint_disk">Search disk resources</string>
     <string name="trakt_search_hint_persons">Search people on Trakt</string>
     <string name="trakt_search_no_persons">No people found on Trakt</string>
@@ -164,15 +124,12 @@
     <string name="common_undo">Undo</string>
     <string name="detail_watchlist_added_toast">Added to Watchlist</string>
     <string name="detail_watchlist_removed_toast">Removed from Watchlist</string>
-    <string name="detail_watched_added_toast">Marked as Watched</string>
     <string name="detail_watched_removed_toast">Unmarked as Watched</string>
-    <string name="detail_mark_processing">Processing</string>
     <string name="detail_rate">Rate</string>
     <string name="detail_rated">Rated</string>
     <string name="detail_login_required_title">Login Required</string>
     <string name="detail_login_required_message">Please log in to use watchlist, watched, and rating features.</string>
     <string name="detail_login_go">Log In</string>
-    <string name="detail_no_overview">No overview available</string>
     <string name="detail_overview_label">Overview</string>
     <string name="detail_text_expand">Expand</string>
     <string name="detail_text_collapse">Collapse</string>
@@ -200,16 +157,12 @@
     <string name="detail_year_suffix">%d</string>
     <string name="detail_watched">Watched</string>
     <string name="detail_not_watched">Not watched</string>
-    <string name="detail_saved">Saved</string>
-    <string name="detail_save">Save</string>
     <string name="detail_comment_source">(Source: %s)</string>
 
     <string name="detail_comment_source_douban">Douban</string>
 
     <!-- Resource Item Card -->
     <string name="resource_viewed">Viewed</string>
-    <string name="resource_scan">Scan</string>
-    <string name="resource_invalid">Invalid</string>
     <string name="resource_file_count">%1$d files</string>
 
     <!-- Disk Type Labels -->
@@ -236,7 +189,6 @@
     <string name="login_guest">Continue as guest</string>
     <string name="login_douban_import">Or import from Douban</string>
     <string name="login_douban">Login with Douban</string>
-    <string name="login_activation_hint">Activate access to sync your Trakt watchlist</string>
     <string name="login_activation_locked">○ Not activated · Enter your code to unlock</string>
     <string name="login_activation_choose_path">Activated · choose to sign in with Trakt or continue as a guest</string>
     <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
@@ -252,15 +204,12 @@
 
     <!-- Douban Sync -->
     <string name="douban_login_title">Login to Douban</string>
-    <string name="douban_login_hint">Log in to Douban to view your wish/watched marks in Watchlist; connect Trakt to sync them there.</string>
     <string name="douban_login_privacy_short">This page is used to log in to Douban to read your public marks (wishlist/watched). Credentials are used only for this sync and are not uploaded to any third-party server.</string>
-    <string name="douban_login_privacy_detail_title">Details</string>
     <string name="douban_login_privacy_detail">• Why login: to read your Douban marks (wishlist, watched, ratings)\n• What is stored: only Cookie and userId (for this crawl), NOT your Douban password\n• Cookie usage: only for requesting movie.douban.com/people/{userId}/wish|collect pages\n• After sync: you can clear Douban credentials anytime in Settings\n• Data flow: Douban → App; when Trakt is connected, marks can also sync to Trakt</string>
     <string name="douban_login_privacy_expand">View details</string>
     <string name="douban_login_privacy_collapse">Collapse</string>
     <string name="douban_login_success_snackbar">Douban login successful</string>
     <string name="douban_login_load_failed">Load failed</string>
-    <string name="douban_login_notification_rationale">Background sync needs notification permission to show progress. Please grant it.</string>
     <string name="douban_sync_title">Douban Marks Sync</string>
     <string name="douban_sync_complete">Sync Complete</string>
     <string name="douban_sync_cancelling">Cancelling...</string>
@@ -284,27 +233,7 @@
     <string name="douban_sync_summary_format">Success %1$d · Skipped %2$d · Cached %3$d</string>
 
     <!-- Douban sync failure retry -->
-    <string name="douban_retry_title">Retry Douban Sync Failures</string>
-    <string name="douban_retry_subtitle">%1$d items failed in last sync. Choose an action</string>
-    <string name="douban_retry_option_local">Retry %1$d failed items</string>
-    <string name="douban_retry_option_local_desc">Recoverable %1$d · Non-recoverable %2$d</string>
-    <string name="douban_retry_option_incremental">Incremental sync new marks</string>
-    <string name="douban_retry_option_incremental_desc">Only sync new Douban wish/collect</string>
-    <string name="douban_retry_option_json">Import failures from JSON file</string>
-    <string name="douban_retry_option_json_desc">Load from exported failure data file</string>
-    <string name="douban_retry_select_reasons">Select failure types to retry</string>
-    <string name="douban_retry_reason_recoverable">%1$s (Recoverable)</string>
-    <string name="douban_retry_reason_non_recoverable">%1$s (Skipped by default)</string>
-    <string name="douban_retry_start">Start Retry</string>
     <string name="douban_retry_cancel">Cancel</string>
-    <string name="douban_retry_clear">Clear failure records</string>
-    <string name="douban_retry_clear_confirm">Clear all failure records? This cannot be undone.</string>
-    <string name="douban_retry_clear_confirm_yes">Clear</string>
-    <string name="douban_retry_clear_confirm_no">Cancel</string>
-    <string name="douban_retry_max_attempt">Retried %1$d times, no longer recommended</string>
-    <string name="douban_retry_no_failures">No failures to retry</string>
-    <string name="douban_retry_json_import_failed">Failed to parse JSON file</string>
-    <string name="douban_retry_json_import_empty">No failures in the file</string>
 
     <!-- Failure reason localization -->
     <string name="douban_failure_reason_no_imdb_id">No IMDb ID</string>
@@ -316,7 +245,6 @@
 
     <!-- Sync result dialog -->
     <string name="douban_sync_current_processing">Processing: %1$s</string>
-    <string name="douban_sync_retry_complete_banner">Retry complete, %1$d items succeeded</string>
 
     <!-- Douban sync resume (after cancel) -->
     <string name="douban_resume_title">Continue Last Sync</string>
@@ -326,8 +254,6 @@
     <string name="douban_resume_continue_desc">Skip list crawling, process crawled data directly</string>
     <string name="douban_resume_full_desc">Clear unprocessed data, start from scratch</string>
     <string name="douban_resume_cancel">Cancel</string>
-    <string name="douban_resume_phase">Resuming unprocessed list</string>
-    <string name="douban_resume_complete">Resume complete</string>
     <string name="sync_already_running">A sync task is already running, please wait</string>
 
     <!-- Douban sync rollback (after failed full rewrite) -->
@@ -344,15 +270,12 @@
     <string name="error_retry">Retry</string>
 
     <!-- Ratings -->
-    <string name="rating_trakt">Trakt</string>
 
     <!-- Detail Info -->
     <string name="detail_director">Director</string>
-    <string name="detail_actors">Cast</string>
     <string name="detail_comments">Comments</string>
     <string name="detail_no_comments">No comments yet</string>
     <string name="detail_own_comment_title">My comment</string>
-    <string name="detail_own_comment_hint">Share a short review</string>
     <string name="detail_own_comment_sync_trakt">This comment will sync to Trakt</string>
     <string name="detail_own_comment_sync_douban">This comment will sync to Douban</string>
     <string name="detail_own_comment_sync_trakt_douban">This comment will sync to Trakt and Douban</string>
@@ -370,11 +293,9 @@
     <string name="detail_own_comment_targets_trakt_douban">Trakt and Douban</string>
     <string name="detail_own_comment_rating_required">Choose a rating before syncing this comment to Douban</string>
     <string name="detail_seasons">Seasons</string>
-    <string name="detail_seasons_count">(%1$d seasons)</string>
     <string name="detail_seasons_show_all">Show all %1$d seasons</string>
     <string name="detail_seasons_collapse">Collapse</string>
     <string name="detail_season">Season %1$d</string>
-    <string name="detail_episode_count">%1$d episodes</string>
     <string name="detail_episode">E%1$d %2$s</string>
     <string name="detail_original_title">Original: %1$s</string>
     <string name="detail_runtime_hours">%1$dh %2$dm</string>
@@ -393,7 +314,6 @@
     <string name="detail_recommendations_title">Related Recommendations</string>
     <string name="detail_translating">Translating…</string>
     <string name="detail_translating_progress">Translating %1$s…</string>
-    <string name="detail_translate_failed">Translation failed</string>
     <string name="detail_translate">Translate</string>
     <string name="detail_translate_all">Translate All</string>
     <string name="detail_translated">View Translation</string>
@@ -437,7 +357,6 @@
     <string name="detail_rating_dialog_title">Rate</string>
     <string name="detail_rating_confirm">Confirm</string>
     <string name="detail_rating_cancel">Cancel</string>
-    <string name="detail_rating_no_rating">Not rated</string>
     <string name="detail_rating_hint">Tap left/right of a star for half/full point. Tap again to clear.</string>
     <string name="detail_rating_comment_hint">Comment (optional)</string>
     <string name="detail_videos_section">Videos &amp; Images</string>
@@ -448,10 +367,8 @@
     <string name="detail_video_trailer">Trailer</string>
     <string name="detail_video_teaser">Teaser</string>
     <string name="detail_video_clip">Clip</string>
-    <string name="detail_video_load_error">Failed to load video. YouTube may be unavailable in your region.</string>
     <string name="detail_video_open_browser">Open in Browser</string>
     <string name="detail_video_play">Play</string>
-    <string name="detail_video_retry">Retry</string>
     <string name="trailer_youtube_restricted">YouTube is restricted in China\nPlease use VPN</string>
 
     <!-- Crash Dialog -->
@@ -494,7 +411,6 @@
     <string name="person_images">Photos</string>
     <string name="person_homepage">Homepage</string>
     <string name="poster_already_saved">Already saved</string>
-    <string name="person_load_more">Load more</string>
     <string name="detail_close">Close</string>
     <string name="person_no_biography">No biography available</string>
     <string name="person_age"> years old</string>
@@ -512,11 +428,7 @@
     <!-- Visual Effect -->
     <string name="settings_visual_effect_blur">Blur</string>
     <string name="settings_visual_effect_blur_desc">A soft frosted style with a gentle, diffused boundary</string>
-    <string name="settings_visual_effect_glass_clear">Glass - Clear</string>
-    <string name="settings_visual_effect_glass_clear_desc">A lighter optical glass style with a quieter boundary</string>
     <string name="settings_visual_effect_glass_desc">Scene-aware optical glass with depth, refraction, and responsive highlights</string>
-    <string name="settings_visual_effect_glass_focused">Glass - Focused</string>
-    <string name="settings_visual_effect_glass_focused_desc">A more defined glass layer for navigation and controls</string>
 
     <!-- Accent Color -->
     <string name="settings_accent_color">Tone &amp; Material</string>
@@ -555,7 +467,6 @@
     <string name="settings_appearance">Appearance</string>
     <string name="settings_shared_transition">Shared Element Transitions</string>
     <string name="settings_shared_transition_subtitle">Animate shared elements between screens, including the zoom transition when opening a full-screen image.</string>
-    <string name="settings_search">Search Sources</string>
     <string name="settings_storage">Storage</string>
     <string name="settings_clear_cache">Clear Cache</string>
     <string name="settings_clear_cache_confirm">Are you sure you want to clear all cached data?</string>
@@ -565,7 +476,6 @@
     <string name="settings_changelog">Changelog</string>
     <string name="settings_account">Account</string>
     <string name="settings_logout_confirm">Are you sure you want to log out?</string>
-    <string name="settings_source_repo">Source Code</string>
     <string name="settings_feedback">Feedback &amp; Suggestions</string>
     <string name="settings_feedback_subtitle">Developer on duty: send us your ideas and bugs 🧑‍💻🍿</string>
     <string name="feedback_title">Feedback</string>
@@ -580,27 +490,21 @@
     <string name="feedback_content_label">Content</string>
     <string name="feedback_content_placeholder">Describe your suggestion or issue (5-2000 characters)…</string>
     <string name="feedback_content_too_short">Content must be at least 5 characters</string>
-    <string name="feedback_content_too_long">Content must be at most 2000 characters</string>
     <string name="feedback_select_type">Please select a type</string>
     <string name="feedback_screenshots">Screenshots (optional, max 5)</string>
     <string name="feedback_uploading">Uploading screenshots (%1$d/%2$d)</string>
     <string name="feedback_submit">Submit</string>
     <string name="feedback_submitting">Submitting…</string>
-    <string name="feedback_submit_success">Feedback submitted</string>
     <string name="feedback_submit_failed">Submit failed, please retry</string>
-    <string name="feedback_loading">Loading…</string>
-    <string name="feedback_load_failed">Load failed</string>
     <string name="feedback_status_pending">Pending</string>
     <string name="feedback_status_replied">Replied</string>
     <string name="feedback_status_closed">Closed</string>
-    <string name="feedback_dev_reply">Developer Reply</string>
     <string name="feedback_app_info">App Info</string>
     <string name="feedback_app_version">App %1$s</string>
     <string name="feedback_device_model">Device %1$s</string>
     <string name="feedback_trakt_username">Trakt: %1$s</string>
     <string name="feedback_douban_username">Douban: %1$s</string>
     <string name="feedback_contact_value">Contact: %1$s</string>
-    <string name="feedback_screenshot_expired">Screenshot expired</string>
     <string name="feedback_retry">Retry</string>
     <string name="feedback_time_just_now">Just now</string>
     <string name="feedback_time_minutes_ago">%1$d min ago</string>
@@ -762,7 +666,6 @@ Config:
     <string name="help_consistency_act_douban_watched">Douban mark watched</string>
     <string name="help_consistency_act_douban_wish">Douban mark wishlist</string>
     <string name="settings_restart_onboarding">Tutorial</string>
-    <string name="settings_restart_onboarding_desc">Re-run the app feature tour</string>
     <string name="onboarding_skip">Skip</string>
     <string name="onboarding_next">Next</string>
     <string name="onboarding_done">Got it</string>
@@ -776,7 +679,6 @@ Config:
     <string name="onboarding_prev">Back</string>
     <string name="onboarding_step4_title">Settings</string>
     <string name="onboarding_step4_desc">Accounts, messages, watch stats, search sources and help all live here</string>
-    <string name="settings_licenses">Open Source Licenses</string>
     <string name="settings_cache">Cache</string>
     <string name="settings_cache_clear">Clear</string>
     <string name="settings_cache_management">Cache Management</string>
@@ -786,16 +688,13 @@ Config:
     <string name="settings_cache_category_media_data">Media Data Cache</string>
     <string name="settings_cache_category_media_data_desc">Details, credits, charts (TMDB + Trakt + Douban)</string>
     <string name="settings_cache_category_id_mapping">ID Mapping Cache</string>
-    <string name="settings_cache_category_id_mapping_desc">TMDB↔Trakt, Douban→IMDb (permanent)</string>
     <string name="settings_cache_category_http">HTTP Cache</string>
     <string name="settings_cache_category_http_desc">Network response cache (OkHttp)</string>
     <string name="settings_cache_category_database">Offline Database</string>
-    <string name="settings_cache_category_database_desc">Watchlist/watched + Douban sync records</string>
     <string name="settings_cache_clear_all">Clear All</string>
     <string name="settings_image_traffic_title">Image Traffic</string>
     <string name="settings_image_traffic_today">Today: %1$s</string>
     <string name="settings_image_traffic_total">Total: %1$s</string>
-    <string name="settings_image_traffic_desc">Downloaded image bytes (posters, avatars, stills)</string>
     <string name="settings_image_traffic_clear">Reset</string>
     <string name="settings_cache_clear_category_confirm">Clear this cache?</string>
     <string name="settings_cache_clear_all_impact">Clears all cached data. Images reload from network, movie/TV details and charts re-fetched, ID mappings rebuilt. App may feel slower until cache warms up again.</string>
@@ -808,10 +707,8 @@ Config:
     <string name="settings_already_latest">Already up to date v%1$s</string>
     <string name="settings_new_version">New version v%1$s</string>
     <string name="settings_discover_sections">Discover Sections</string>
-    <string name="settings_discover_sections_desc">Toggle visibility and reorder discover sections</string>
     <string name="settings_discover_sections_hint">Drag to reorder, toggle to show/hide</string>
     <string name="settings_detail_sections">Detail Sections</string>
-    <string name="settings_detail_sections_desc">Toggle visibility of detail page sections</string>
     <string name="settings_drag_to_reorder">Drag to reorder</string>
     <string name="settings_logout_button">Logout</string>
 
@@ -855,8 +752,6 @@ Config:
     <string name="douban_sync_mode_warning_c">Full rewrite will clear all sync records and re-crawl the Douban list.\n\nDouban has strict anti-crawl measures. Frequent repeated crawls may get your IP blacklisted. Proceed at your own risk.\n\nAre you sure you want to continue?</string>
 
     <!-- Douban retry dialog - export option -->
-    <string name="douban_retry_option_export">Export failure records</string>
-    <string name="douban_retry_option_export_desc">Save as JSON file for backup or sharing</string>
 
     <!-- Douban failures viewer -->
     <string name="settings_douban_status_consistency">Check Status Consistency</string>
@@ -922,24 +817,10 @@ Config:
     <string name="consistency_check_time_minutes_ago">%1$d minutes ago</string>
     <string name="consistency_check_time_hours_ago">%1$d hours ago</string>
     <string name="consistency_check_time_days_ago">%1$d days ago</string>
-    <string name="screen_douban_failures_title">Sync failures</string>
-    <string name="share_failures_json">Share failures JSON</string>
 
     <!-- Cloud failure sync -->
 
     <!-- Manual cloud sync (settings page) -->
-    <string name="screen_douban_failures_empty_wish">Wishlist sync all succeeded</string>
-    <string name="screen_douban_failures_empty_collect">Watched list sync all succeeded</string>
-    <string name="screen_douban_failures_empty_all">No sync failures</string>
-    <string name="screen_douban_failures_empty_search">No matching failures</string>
-    <string name="screen_douban_failures_empty_filter">No failures match the filters</string>
-    <string name="screen_douban_failures_empty_movie">Movie list is empty</string>
-    <string name="screen_douban_failures_empty_show">TV show list is empty</string>
-    <string name="screen_douban_failures_empty_uncategorized">Uncategorized list is empty</string>
-    <string name="screen_douban_failures_empty_variety">Variety list is empty</string>
-    <string name="screen_douban_failures_empty_documentary">Documentary list is empty</string>
-    <string name="screen_douban_failures_clear_all">Clear all</string>
-    <string name="screen_douban_failures_clear_all_confirm">Clear all failure records? This cannot be undone.</string>
     <string name="screen_douban_failures_mark_as_movie">Mark as movie</string>
     <string name="screen_douban_failures_mark_as_show">Mark as TV show</string>
     <string name="screen_douban_failures_mark_as_variety">Mark as variety</string>
@@ -949,13 +830,6 @@ Config:
     <string name="screen_douban_failures_marked_as_show">Marked as TV show</string>
     <string name="screen_douban_failures_marked_as_variety">Marked as variety</string>
     <string name="screen_douban_failures_marked_as_documentary">Marked as documentary</string>
-    <string name="screen_douban_failures_delete_item">Delete this item</string>
-    <string name="screen_douban_failures_tab_uncategorized">Uncategorized</string>
-    <string name="screen_douban_failures_tab_variety">Variety</string>
-    <string name="screen_douban_failures_tab_documentary">Documentary</string>
-    <string name="screen_douban_failures_selected_count">%1$d selected</string>
-    <string name="screen_douban_failures_select_all">Select all</string>
-    <string name="screen_douban_failures_deselect_all">Deselect all</string>
 
     <!-- 豆瓣详情页:爬取进度与标注提示 -->
     <string name="douban_detail_fetching">Fetching Douban details…</string>
@@ -1050,12 +924,9 @@ Config:
     <string name="filter_reset">Reset</string>
     <string name="filter_apply">Apply</string>
     <string name="filter_genre">Genre</string>
-    <string name="filter_genre_empty">No genres available (crawl details first)</string>
     <string name="filter_year">Year</string>
     <string name="filter_rating">Trakt rating</string>
     <string name="filter_rating_label">Rating</string>
-    <string name="douban_failure_search_hint">Search title or subtitle</string>
-    <string name="douban_failure_filter_reason">Failure reason</string>
 
     <!-- Douban item detail -->
     <string name="screen_douban_item_detail_not_synced">This item is not in Trakt, cannot sync</string>
@@ -1102,14 +973,10 @@ Config:
     <string name="settings_notification_new_season_desc">Notify when a new season of a show airs</string>
 
     <!-- Update -->
-    <string name="update_title">New version available</string>
     <string name="update_download">Update now</string>
     <string name="update_later">Remind me later</string>
-    <string name="update_browser_download">Download in browser</string>
-    <string name="update_downloading">Downloading…</string>
     <string name="update_download_failed">Download failed, try browser download</string>
     <string name="update_signature_invalid">APK signature verification failed, installation blocked</string>
-    <string name="update_install">Installing…</string>
     <string name="update_version_suffix">update</string>
 
     <!-- Statistics -->
@@ -1141,7 +1008,6 @@ Config:
     <string name="statistics_info_ratings">Q: What are rating statistics?\nA: Shows ratings from Trakt and Douban, including the total, average, and distribution. Douban 1-5 star ratings are converted to the 10-point scale.</string>
 
     <!-- Common UI -->
-    <string name="common_retry">Retry</string>
     <string name="common_close">Close</string>
     <string name="common_confirm">Confirm</string>
     <string name="common_load_failed">Load failed</string>
@@ -1149,11 +1015,7 @@ Config:
     <string name="error_detail_close">Close</string>
     <string name="common_no_data">No data</string>
     <string name="common_loading">Loading…</string>
-    <string name="common_save_success">Saved to album</string>
-    <string name="common_save_failed">Save failed</string>
-    <string name="common_save_exists">Already saved: %1$s</string>
     <string name="common_saved_path">Saved: %1$s/%2$s</string>
-    <string name="common_copy_success">Copied</string>
     <string name="common_open_failed">Cannot open this link</string>
     <string name="common_done">Done</string>
     <string name="error_load_failed">Load failed</string>
@@ -1171,21 +1033,16 @@ Config:
     <string name="snackbar_import_no_data">No valid records found</string>
     <string name="snackbar_sync_progress">Syncing %1$d/%2$d: %3$s</string>
     <string name="snackbar_import_done_imdb">IMDb import done: %1$d matched, %2$d unmatched</string>
-    <string name="snackbar_import_done_json">Imported %1$d failure items</string>
     <string name="error_not_imdb_csv">Not a valid IMDb CSV (missing required columns: Title, Created, Title Type)</string>
     <string name="error_empty_csv">File is empty or has no data rows</string>
     <string name="error_parse_failed">Failed to parse file: %1$s</string>
     <string name="error_read_file_failed">Unable to read file</string>
-    <string name="error_invalid_json_format">Invalid JSON format for failures file</string>
     <string name="snackbar_cache_cleared">Cache cleared</string>
     <string name="snackbar_cache_clear_failed">Failed to clear cache</string>
     <string name="snackbar_already_latest">Already up to date</string>
     <string name="snackbar_check_update_failed">Update check failed, please try again</string>
 
     <!-- Search Filter -->
-    <string name="search_filter_all">All</string>
-    <string name="search_filter_movie">Movie</string>
-    <string name="search_filter_show">TV Show</string>
     <string name="search_view_all">View all</string>
     <string name="search_view_all_count">View all (%d)</string>
 
@@ -1201,27 +1058,20 @@ Config:
 
     <!-- Content Descriptions -->
     <string name="cd_watched">Watched</string>
-    <string name="cd_not_watched">Not watched</string>
     <string name="cd_saved">Saved</string>
     <string name="cd_save">Save</string>
     <string name="cd_edit">Edit</string>
     <string name="cd_delete">Delete</string>
-    <string name="cd_close">Close</string>
     <string name="cd_back_to_top">Back to top</string>
-    <string name="cd_clear">Clear</string>
 
     <!-- Settings: Custom Search Source -->
-    <string name="settings_custom_search_source_title">Custom Search Source</string>
-    <string name="settings_custom_search_source_subtitle">Supports PanSou/Zreso compatible or custom JSONPath</string>
     <string name="settings_add_source">Add Source</string>
     <!-- Settings: Card Layout -->
     <string name="settings_view_statistics_desc">Watch count, ratings, heatmap, genres</string>
     <string name="settings_custom_section">Custom Sections</string>
     <string name="settings_discover_page">Discover</string>
     <string name="settings_detail_page">Details</string>
-    <string name="settings_panhub_advanced">Advanced settings available</string>
     <string name="settings_panhub_enabled">Enable Panhub</string>
-    <string name="settings_edit_source">Edit Search Source</string>
     <string name="settings_delete_source">Delete Search Source</string>
     <string name="settings_delete_source_confirm">Are you sure you want to delete "%1$s"?</string>
     <string name="settings_source_name">Name</string>
@@ -1245,15 +1095,10 @@ Config:
     <string name="settings_source_test">Test</string>
     <string name="settings_source_save">Save</string>
     <string name="settings_source_unnamed">Unnamed</string>
-    <string name="settings_source_test_success">Test success, parsed %1$d results</string>
-    <string name="settings_source_test_empty">Connection successful, but no results parsed</string>
-    <string name="settings_cache_cleared">Cache cleared</string>
-    <string name="settings_cache_clear_failed">Clear cache failed: %1$s</string>
     <string name="settings_no_changelog">No changelog available</string>
 
     <!-- PanHub Config -->
     <string name="settings_panhub_config">Configure</string>
-    <string name="settings_panhub_desc">Customize plugins, channels, concurrency and timeout</string>
     <string name="panhub_config_title">PanHub Search Config</string>
     <string name="panhub_concurrency">Concurrency</string>
     <string name="panhub_timeout">Timeout (ms)</string>
@@ -1267,7 +1112,6 @@ Config:
     <string name="search_sources_import">Import config</string>
     <string name="search_sources_builtin">Built-in</string>
     <string name="search_sources_custom">Custom</string>
-    <string name="search_sources_add_from_template">Add from template</string>
     <string name="search_sources_empty">No custom sources yet.\nAdd one from a template, or paste a shared config.</string>
     <string name="search_sources_manage_entry_title">Search sources</string>
         <string name="search_sources_pansou">PanSou</string>
@@ -1282,7 +1126,6 @@ Config:
     <string name="template_import_shortcut">Have a shared config? Import from text</string>
     <!-- Wizard -->
     <string name="editor_title_add">Add search source</string>
-    <string name="editor_title_edit">Edit search source</string>
     <string name="editor_title_import">Import from text</string>
     <string name="editor_step_basic">Basic info</string>
     <string name="editor_step_auto">Auto parse</string>
@@ -1294,7 +1137,6 @@ Config:
     <string name="editor_probe_start">Start parsing</string>
     <string name="editor_probe_hint">Automatically recognize the response JSONPath by requesting the site once with a sample keyword.</string>
     <string name="editor_probe_progress">Requesting with sample keyword…</string>
-    <string name="editor_probe_success">Recognized</string>
     <string name="editor_probe_failed">Could not recognize automatically, you can configure manually</string>
     <string name="editor_probe_result_list">Result list</string>
     <string name="editor_probe_result_title">Title</string>
@@ -1303,10 +1145,7 @@ Config:
     <string name="editor_probe_result_date">Date</string>
     <string name="editor_probe_keyword_param">Keyword param</string>
     <string name="editor_probe_manual">Wrong? Adjust JSONPath manually</string>
-    <string name="editor_confirm_url_preview">Request URL preview</string>
     <string name="editor_advanced_expand">Show all advanced params</string>
-    <string name="editor_advanced_collapse">Hide advanced params</string>
-    <string name="editor_parse_mode_label">Parse mode</string>
     <string name="import_paste">Paste</string>
     <!-- Share/Import -->
     <string name="share_source_title">Share "%1$s"</string>
@@ -1325,8 +1164,6 @@ Config:
     <string name="import_success">Search source imported</string>
     <string name="cd_share">Share</string>
 
-    <string name="settings_add_custom_source">Add Custom Search Source</string>
-    <string name="settings_add_custom_source_desc">Support PanSou/Zreso compatible sources or custom JSONPath</string>
     <string name="discover_douban_new_movies">New Movies</string>
     <string name="discover_douban_weekly">Weekly Best</string>
     <string name="discover_douban_top250">Top 250</string>
@@ -1368,12 +1205,10 @@ Config:
     <string name="discover_filter_hide_watched">Hide watched</string>
     <string name="discover_filter_apply">Apply</string>
     <string name="discover_filter_reset">Reset</string>
-    <string name="discover_filter_clear">Clear</string>
     <string name="discover_filter_empty">No results found, try adjusting filters</string>
     <string name="discover_filter_select_genres">Select genres</string>
     <string name="discover_filter_select_regions">Select regions</string>
     <string name="discover_filter_select_tags">Select tags</string>
-    <string name="discover_filter_select_decades">Select decades</string>
     <string name="discover_filter_tag">Tag</string>
     <string name="discover_filter_decade">Decade</string>
     <string name="discover_filter_decade_all">All</string>
@@ -1466,15 +1301,7 @@ Config:
     <string name="watchlist_empty_title">No watchlisted movies or shows yet</string>
     <string name="watched_empty_title">No watched movies or shows yet</string>
     <string name="watchlist_search_no_result">No movies or shows found for \"%1$s\"</string>
-    <string name="watchlist_empty_hint_prefix">You can try: go to </string>
-    <string name="watchlist_empty_go_trakt">Trakt</string>
-    <string name="watchlist_empty_hint_middle"> to add to watchlist, </string>
     <string name="watchlist_empty_go_discover">Discover</string>
-    <string name="watchlist_empty_hint_suffix"> to explore more</string>
-    <string name="watchlist_empty_douban_import_prefix">, or </string>
-    <string name="watchlist_empty_douban_import_link">import from Douban</string>
-    <string name="watched_empty_hint_prefix">You can try: go to </string>
-    <string name="watched_empty_hint_middle"> to mark as watched, </string>
     <string name="watchlist_empty_no_accounts">Sign in to Trakt or Douban to start building your list.</string>
     <string name="watched_empty_no_accounts">Sign in to Trakt or Douban to start marking what you have watched.</string>
     <string name="watchlist_empty_trakt_only">Your Trakt list is empty. Sign in to Douban to import your marks, or discover something new.</string>
@@ -1521,9 +1348,7 @@ Config:
     <string name="settings_account_connection_expired">Connection expired. Sign in again.</string>
     <string name="settings_account_reconnect">Sign in again</string>
     <string name="settings_account_douban">Douban</string>
-    <string name="settings_account_douban_logged_in">Douban · Logged in</string>
     <string name="settings_account_douban_login">Login</string>
-    <string name="settings_account_douban_logout">Logout</string>
     <string name="settings_douban_logout_done">Douban logged out</string>
     <string name="douban_logout_confirm_title">Log out of Douban</string>
     <string name="douban_logout_confirm_message">Logging out will clear %1$d local Douban marks. Continue?</string>
@@ -1534,10 +1359,6 @@ Config:
     <string name="statistics_info_wordcloud">Q: What is the review word cloud?\nA: It extracts high-frequency words from your Douban short reviews and renders them as a word cloud. Larger words appear more often, helping you quickly recall your viewing impressions.</string>
 
     <!-- Mark Records (temporary, task 9 will complete 4 languages) -->
-    <string name="mark_records_action_add_watchlist">Added to Watchlist</string>
-    <string name="mark_records_action_remove_watchlist">Removed from Watchlist</string>
-    <string name="mark_records_action_unmark_watched">Unmarked Watched</string>
-    <string name="mark_records_action_watched">Watched</string>
     <string name="mark_records_pill_watched">Watched</string>
     <string name="mark_records_pill_watchlist">Watchlist</string>
     <string name="mark_records_pill_remove">Removed</string>
@@ -1547,7 +1368,6 @@ Config:
     <string name="mark_records_current_in_watchlist_short">Watchlist</string>
     <string name="mark_records_current_watched_short">Watched</string>
     <string name="mark_records_current_none_short">Removed</string>
-    <string name="mark_records_current_changed">Changed</string>
     <string name="mark_records_time_just_now">Just now</string>
     <string name="mark_records_time_minutes_ago">%1$d minutes ago</string>
     <string name="mark_records_time_hours_ago">%1$d hours ago</string>
@@ -1584,12 +1404,6 @@ Config:
     <string name="mark_records_help_history_limit">Watchlist/removal actions before feature launch cannot be traced (Trakt doesn\'t retain them)</string>
 
     <!-- Settings Section Titles -->
-    <string name="settings_section_account">Account &amp; Login</string>
-    <string name="settings_section_sync">Sync &amp; Data</string>
-    <string name="settings_section_appearance">Appearance</string>
-    <string name="settings_section_cache">Cache</string>
-    <string name="settings_section_data">Import &amp; Export</string>
-    <string name="settings_section_about">About</string>
 
     <!-- Feedback Messages -->
     <string name="feedback_messages">Messages</string>
@@ -1599,17 +1413,13 @@ Config:
     <string name="feedback_filter_all">All</string>
     <string name="feedback_filter_unread">Unread</string>
     <string name="feedback_filter_developer">Developer</string>
-    <string name="feedback_filter_mine">Mine</string>
     <string name="feedback_role_developer">Developer</string>
     <string name="feedback_role_me">Me</string>
     <string name="feedback_conversation">Conversation</string>
     <string name="feedback_reply_placeholder">Add more details…</string>
     <string name="feedback_reply_send">Send</string>
-    <string name="feedback_reply_uploading">Uploading screenshots (%1$d/%2$d)</string>
-    <string name="feedback_reply_failed">Reply failed, please retry</string>
     <string name="feedback_closed_hint">This feedback is closed</string>
     <string name="feedback_load_more">Load more</string>
-    <string name="feedback_unread_count_format">Unread %1$d</string>
     <string name="feedback_id_format">#%1$s</string>
     <!-- Stable Douban sync stage labels -->
     <string name="douban_sync_stage_idle">Idle</string>
@@ -1663,7 +1473,6 @@ Config:
     <string name="douban_sync_eta_hours">%1$d hr %2$d min</string>
     <string name="douban_sync_notification_progress_format">%1$s · %2$s (%3$d/%4$d)</string>
     <string name="douban_sync_notification_stage_format">%1$s · %2$s</string>
-    <string name="douban_sync_notification_eta_format">%1$s · %2$s</string>
     <string name="douban_sync_notification_current">Current: %1$s</string>
     <string name="douban_sync_notification_latest">Latest: %1$s</string>
     <string name="douban_sync_notification_public">Douban sync: %1$s</string>
@@ -1729,7 +1538,6 @@ Config:
     <string name="ai_feature_nickname">Your nickname, decoded</string>
     <string name="ai_feature_meaning">What your nickname means</string>
     <string name="ai_feature_comment">A tiny verdict</string>
-    <string name="ai_feature_audio_ready">Voice ready</string>
     <string name="ai_taste_roast">The roast</string>
     <string name="ai_taste_profile">Your taste profile</string>
     <string name="ai_taste_highlights">What stood out</string>
@@ -1808,4 +1616,83 @@ Config:
     <string name="bg_glow_nebula_desc">Rose and violet spots drifting over deep indigo.</string>
     <string name="bg_glow_ink_desc">High-contrast black and white flow. Boldest look, and the hardest on text readability</string>
     <string name="bg_glow_beach_desc">Cyan and sand yellow drifting very slowly. Fixed palette, does not follow the theme color</string>
+    <!-- 影视筛选页：类型/标签/地区（原本硬编码中文，英/日/韩用户看到中文） -->
+    <string name="filter_genre_action">Action</string>
+    <string name="filter_genre_adventure">Adventure</string>
+    <string name="filter_genre_animation">Animation</string>
+    <string name="filter_genre_comedy">Comedy</string>
+    <string name="filter_genre_crime">Crime</string>
+    <string name="filter_genre_documentary">Documentary</string>
+    <string name="filter_genre_drama">Drama</string>
+    <string name="filter_genre_family">Family</string>
+    <string name="filter_genre_fantasy">Fantasy</string>
+    <string name="filter_genre_history">History</string>
+    <string name="filter_genre_horror">Horror</string>
+    <string name="filter_genre_music">Music</string>
+    <string name="filter_genre_mystery">Mystery</string>
+    <string name="filter_genre_romance">Romance</string>
+    <string name="filter_genre_sci_fi">Science Fiction</string>
+    <string name="filter_genre_tv_movie">TV Movie</string>
+    <string name="filter_genre_thriller">Thriller</string>
+    <string name="filter_genre_war">War</string>
+    <string name="filter_genre_western">Western</string>
+    <string name="filter_genre_action_adventure">Action &amp; Adventure</string>
+    <string name="filter_genre_kids">Kids</string>
+    <string name="filter_genre_news">News</string>
+    <string name="filter_genre_reality">Reality</string>
+    <string name="filter_genre_sci_fi_fantasy">Sci-Fi &amp; Fantasy</string>
+    <string name="filter_genre_soap">Soap</string>
+    <string name="filter_genre_talk">Talk</string>
+    <string name="filter_genre_war_politics">War &amp; Politics</string>
+    <string name="filter_tag_marvel">Marvel</string>
+    <string name="filter_tag_dc">DC Universe</string>
+    <string name="filter_tag_superhero">Superhero</string>
+    <string name="filter_tag_campus">Campus</string>
+    <string name="filter_tag_zombie">Zombies</string>
+    <string name="filter_tag_vampire">Vampires</string>
+    <string name="filter_tag_undead">Undead</string>
+    <string name="filter_tag_apocalypse">Apocalypse</string>
+    <string name="filter_tag_revenge">Revenge</string>
+    <string name="filter_tag_time_travel">Time Travel</string>
+    <string name="filter_tag_alien">Aliens</string>
+    <string name="filter_tag_dystopia">Dystopia</string>
+    <string name="filter_tag_cyberpunk">Cyberpunk</string>
+    <string name="filter_tag_space">Space</string>
+    <string name="filter_tag_war">War</string>
+    <string name="filter_tag_spy">Spy</string>
+    <string name="filter_tag_gangster">Gangster</string>
+    <string name="filter_tag_whodunit">Whodunit</string>
+    <string name="filter_tag_musical">Musical</string>
+    <string name="filter_tag_dance">Dance</string>
+    <string name="filter_tag_sports">Sports</string>
+    <string name="filter_tag_food">Food</string>
+    <string name="filter_tag_friendship">Friendship</string>
+    <string name="filter_tag_love_story">Love Story</string>
+    <string name="filter_tag_coming_of_age">Coming of Age</string>
+    <string name="filter_tag_road_trip">Road Trip</string>
+    <string name="filter_tag_wilderness">Wilderness</string>
+    <string name="filter_tag_remake">Remake</string>
+    <string name="filter_tag_sequel">Sequel</string>
+    <string name="filter_tag_martial_arts">Martial Arts</string>
+    <string name="filter_tag_kung_fu">Kung Fu</string>
+    <string name="filter_tag_magic">Magic</string>
+    <string name="filter_tag_christmas">Christmas</string>
+    <string name="filter_tag_kidnapping">Kidnapping</string>
+    <string name="filter_tag_dog">Dogs</string>
+    <string name="filter_tag_cat">Cats</string>
+    <string name="filter_tag_ai">Artificial Intelligence</string>
+    <string name="filter_tag_fairy_tale">Fairy Tale</string>
+    <string name="filter_tag_police">Police</string>
+    <string name="filter_tag_detective">Detective</string>
+    <string name="filter_tag_docudrama">Docudrama</string>
+    <string name="filter_tag_hacker">Hacker</string>
+    <string name="filter_tag_drug_trade">Drug Trade</string>
+    <string name="filter_tag_medieval">Medieval</string>
+    <string name="filter_tag_steampunk">Steampunk</string>
+    <string name="filter_tag_psychological">Psychological</string>
+    <string name="filter_tag_monster">Monster</string>
+    <string name="filter_tag_ghost">Ghost</string>
+    <string name="filter_region_cn">Chinese Mainland</string>
+    <string name="filter_region_hk">Hong Kong, China</string>
+    <string name="filter_region_tw">Taiwan, China</string>
 </resources>

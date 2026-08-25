@@ -110,7 +110,9 @@ fun CacheManagementItem(
                 IconButton(onClick = { expanded = !expanded }) {
                     Icon(
                         imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                        contentDescription = null,
+                        contentDescription = stringResource(
+                            if (expanded) R.string.detail_collapse else R.string.detail_expand
+                        ),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
