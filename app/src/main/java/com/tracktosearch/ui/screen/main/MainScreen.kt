@@ -59,7 +59,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -147,7 +146,6 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -496,23 +494,40 @@ fun MainScreen(
     val ambientMotionActive = remember(ambientMotion) { { ambientMotion.active } }
 
     var backdropResampleTick by remember { mutableIntStateOf(0) }
-    LaunchedEffect(isGlassMode, pagerState.currentPage) {
-        if (!isGlassMode) return@LaunchedEffect
-        repeat(30) {
-            delay(200)
-            backdropResampleTick++
-        }
+    // 切 tab / 首次进入后的兜底重采窗口：程序化换页与「回顶」按钮的 animateScrollToItem 都不经过
+    // NestedScrollConnection，contentSampleVersion 不会推进，底栏会停在换页那一刻的采样上（表现为
+    // 整条导航透明、底下文字清晰可见）。这段窗口负责把陆续加载进来的数据与海报刷进底栏采样。
+    //
+    // 窗口内改用「先密后疏」：前 1.5s 用 5Hz（换页直后布局与首屏图变化最密集），之后到 6s 用 2Hz。
+    // 覆盖时长不变，但这段窗口产生的帧数从 30 降到 16。这不是省下几次采样的问题——GLASS 下每一次
+    // 重采都要把整页内容再光栅化一遍（见下），而空闲时这些帧全是白烧：实测 GLASS 静置 20s 渲染
+    // 30 帧、每帧 29-36ms，BLUR 静置是 0 帧。1.5s 后把间隔放宽到 500ms，对一层模糊背景的滞后
+    // 完全看不出来。
+    var resampleElapsedMs by remember { mutableIntStateOf(Int.MAX_VALUE) }
+    LaunchedEffect(pagerState.currentPage) {
+        resampleElapsedMs = 0
     }
-    // 程序化滚动（回顶按钮的 animateScrollToItem）不经过 NestedScrollConnection，
-    // contentSampleVersion 不会推进，底栏也就不会重采：动画结束那一刻底栏停在一帧无效采样上，
-    // 表现为整条导航透明、底下文字清晰可见。这里改为「有交互就重采」——指针事件已由
-    // ambientMotion 统一跟踪（背景动效停帧用的同一份信号），静止后自动停止，不增加空闲开销。
+    // 单一 ticker。
+    //
+    // 原先是两个各自 delay(200) 的 LaunchedEffect：一个跑「切 tab 后 6s」窗口，另一个在
+    // ambientMotion.active（最后一次指针事件后 3s 内）期间无限循环。两个循环推进同一个 tick，
+    // 合并成一个后行为不变、少一处相位漂移隐患。
+    //
+    // 关键成本（从 kyant backdrop 2.0.0 的 LayerBackdropNode.draw 字节码确认）：该节点每次 draw
+    // 会先 drawContent() 画到屏幕，再 recordLayer() 把同样的内容录进 GraphicsLayer，录制尺寸取
+    // DrawScope.size，即整页全屏，库没有留降分辨率或限区域的入口。所以 GLASS 相对 BLUR 的固定
+    // 开销就是「每帧多一次全屏光栅化」，tick 每推进一次就买一次。能省的只有次数。
     LaunchedEffect(isGlassMode, ambientMotion) {
         if (!isGlassMode) return@LaunchedEffect
-        snapshotFlow { ambientMotion.active }.collectLatest { active ->
-            if (!active) return@collectLatest
-            while (true) {
-                delay(200)
+        while (true) {
+            val dense = resampleElapsedMs < 1_500
+            val step = if (dense) 200 else 500
+            delay(step.toLong())
+            val windowActive = resampleElapsedMs < 6_000
+            if (windowActive) {
+                resampleElapsedMs += step
+            }
+            if (windowActive || ambientMotion.active) {
                 backdropResampleTick++
             }
         }
