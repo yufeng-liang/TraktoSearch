@@ -1797,4 +1797,7 @@ Config:
     <string name="bg_glow_nebula_desc">Rose and violet spots drifting over deep indigo.</string>
     <string name="bg_glow_ink_desc">High-contrast black and white flow. Boldest look, and the hardest on text readability</string>
     <string name="bg_glow_beach_desc">Cyan and sand yellow drifting very slowly. Fixed palette, does not follow the theme color</string>
+    <string name="common_load_more_loading">Loading more…</string>
+    <string name="common_load_more_failed">Failed to load more. Tap to retry</string>
+    <string name="common_load_more_complete">Everything is loaded</string>
 </resources>

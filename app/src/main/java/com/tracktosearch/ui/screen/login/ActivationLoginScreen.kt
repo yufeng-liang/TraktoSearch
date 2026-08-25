@@ -70,6 +70,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.OAuthCallback
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.DoubanLogo
+import com.tracktosearch.ui.component.CinemaClapperIcon
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.appVisualEffect
@@ -407,53 +408,6 @@ internal fun ActivationSecondaryActions(
 }
 
 /** v7 原型中的场记板图标：三条斜切片、圆角棕色底和双层镜头圆环。 */
-@Composable
-private fun CinemaClapperIcon() {
-    val accent = MaterialTheme.colorScheme.primary
-    val paper = MaterialTheme.colorScheme.surface
-    Box(
-        modifier = Modifier.size(width = 84.dp, height = 66.dp),
-        contentAlignment = Alignment.TopCenter
-    ) {
-        Box(
-            modifier = Modifier
-                .size(width = 84.dp, height = 66.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(accent)
-                .drawBehind {
-                    val bandWidth = 9.dp.toPx()
-                    val bandStep = 19.dp.toPx()
-                    val firstBand = 16.dp.toPx()
-                    drawLine(
-                        color = accent,
-                        start = Offset(0f, 0f),
-                        end = Offset(size.width, 0f),
-                        strokeWidth = 1.dp.toPx()
-                    )
-                    repeat(3) { index ->
-                        val left = firstBand + index * bandStep
-                        val path = Path().apply {
-                            moveTo(left + 6.dp.toPx(), 0f)
-                            lineTo(left + bandWidth + 6.dp.toPx(), 0f)
-                            lineTo(left + bandWidth, 12.dp.toPx())
-                            lineTo(left, 12.dp.toPx())
-                            close()
-                        }
-                        drawPath(path = path, color = paper)
-                    }
-                }
-        )
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 12.dp)
-                .width(60.dp)
-                .height(2.dp)
-                .background(paper.copy(alpha = 0.28f))
-        )
-    }
-}
-
 @Composable
 private fun ActivationCard(
     authState: com.tracktosearch.ui.screen.auth.AuthUiState,

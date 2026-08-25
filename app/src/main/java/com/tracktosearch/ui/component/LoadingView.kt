@@ -45,10 +45,10 @@ fun EmptyView(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = displayMessage,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+        EmptyStateCard(
+            isDark = isAppDarkTheme(),
+            title = displayMessage,
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }

@@ -97,6 +97,7 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.hasListScrolled
@@ -734,13 +735,12 @@ fun DiscoverScreen(
                                     } else if (listsError != null) {
                                         ErrorRetryRow(error = listsError, onRetry = { viewModel.loadTraktLists() })
                                     } else if (uiState.trendingLists.isEmpty()) {
-                                        Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                                            Text(
-                                                text = stringResource(R.string.discover_list_empty),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
+                                        EmptyStateCard(
+                                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                            isDark = isDark,
+                                            icon = Icons.Rounded.FormatListNumbered,
+                                            title = stringResource(R.string.discover_list_empty)
+                                        )
                                     } else {
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             uiState.trendingLists.take(5).forEachIndexed { index, listResponse ->

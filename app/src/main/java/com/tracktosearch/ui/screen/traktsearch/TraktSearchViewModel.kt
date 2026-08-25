@@ -55,6 +55,7 @@ data class SearchTabState(
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
     val error: String? = null,
+    val loadMoreError: Boolean = false,
     val hasSearched: Boolean = false,
     val totalCount: Int = 0,
     val currentPage: Int = 1,
@@ -535,7 +536,7 @@ class TraktSearchViewModel @Inject constructor(
 
         viewModelScope.launch {
             val nextPage = tabState.currentPage + 1
-            updateTabState(current.selectedTab, tabState.copy(isLoadingMore = true))
+            updateTabState(current.selectedTab, tabState.copy(isLoadingMore = true, loadMoreError = false))
 
             val result = when (current.selectedTab) {
                 MediaType.MOVIE -> traktRepository.searchMovies(current.query, page = nextPage)
@@ -554,13 +555,14 @@ class TraktSearchViewModel @Inject constructor(
                 updateTabState(current.selectedTab, updatedState.copy(
                     results = mergedResults,
                     isLoadingMore = false,
+                    loadMoreError = false,
                     totalCount = effectiveTotal,
                     currentPage = nextPage,
                     hasMore = mergedResults.size < effectiveTotal
                 ))
             }.onFailure {
                 val updatedState = _uiState.value.currentTabState
-                updateTabState(current.selectedTab, updatedState.copy(isLoadingMore = false))
+                updateTabState(current.selectedTab, updatedState.copy(isLoadingMore = false, loadMoreError = true))
             }
         }
     }

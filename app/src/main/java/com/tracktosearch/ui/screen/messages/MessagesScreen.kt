@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.DoneAll
+import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +29,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.feedback.MessageItem
 import com.tracktosearch.ui.screen.feedback.FeedbackViewModel
+import com.tracktosearch.ui.component.EmptyStateCard
+import com.tracktosearch.ui.component.isAppDarkTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -72,7 +75,18 @@ fun MessagesScreen(
                 is FeedbackViewModel.MessagesState.Error -> { Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) { Text(state.message, color = MaterialTheme.colorScheme.error); Spacer(Modifier.height(8.dp)); TextButton(onClick = { viewModel.loadMessages(refresh = true) }) { Text(stringResource(R.string.feedback_retry)) } } }
                 is FeedbackViewModel.MessagesState.Success -> {
                     val visibleItems = state.items.filter { it.author_role == "developer" }
-                    if (visibleItems.isEmpty()) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.feedback_messages_empty), color = MaterialTheme.colorScheme.onSurfaceVariant) } }
+                    if (visibleItems.isEmpty()) {
+                        Box(
+                            Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            EmptyStateCard(
+                                isDark = isAppDarkTheme(),
+                                title = stringResource(R.string.feedback_messages_empty),
+                                icon = Icons.Rounded.Inbox
+                            )
+                        }
+                    }
                     else {
                         LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(visibleItems, key = { it.id }) { item -> MessageItemRow(item = item, onClick = { onMessageClick(item.feedback_id, item.id) }) }

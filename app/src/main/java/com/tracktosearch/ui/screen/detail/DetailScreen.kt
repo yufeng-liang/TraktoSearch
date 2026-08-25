@@ -36,6 +36,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -97,6 +99,9 @@ import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
 import com.tracktosearch.ui.component.DetailTopBarIcon
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.EmptyStateCard
+import com.tracktosearch.ui.component.LoadMoreFooter
+import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
@@ -281,7 +286,7 @@ fun DetailScreen(
     val shouldLoadMore by remember {
         derivedStateOf {
             val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
-            lastVisibleItem != null && lastVisibleItem.index >= listState.layoutInfo.totalItemsCount - 2
+            lastVisibleItem != null && lastVisibleItem.index >= listState.layoutInfo.totalItemsCount - 3
         }
     }
     LaunchedEffect(shouldLoadMore, selectedTab) {
@@ -599,29 +604,15 @@ fun DetailScreen(
                             }
                             if (displayedCount < items.size) {
                                 item(key = "load_more") {
-                                    Box(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = stringResource(R.string.detail_load_more_text, displayedCount, items.size),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
+                                    Spacer(modifier = Modifier.fillMaxWidth().height(56.dp))
                                 }
                             } else if (items.size > initialCount) {
                                 item(key = "all_loaded") {
-                                    Box(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = stringResource(R.string.detail_all_loaded, items.size),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
+                                    LoadMoreFooter(
+                                        state = LoadMoreFooterState.Complete,
+                                        onRetry = {},
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
                                 }
                             }
                         }
@@ -723,9 +714,10 @@ fun DetailScreen(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = stringResource(R.string.detail_load_error),
-                                    color = MaterialTheme.colorScheme.error
+                                EmptyStateCard(
+                                    isDark = detailIsDark,
+                                    icon = Icons.Rounded.ChatBubbleOutline,
+                                    title = stringResource(R.string.detail_load_error)
                                 )
                             }
                         }
@@ -737,9 +729,10 @@ fun DetailScreen(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = stringResource(R.string.detail_no_comments),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                EmptyStateCard(
+                                    isDark = detailIsDark,
+                                    icon = Icons.Rounded.ChatBubbleOutline,
+                                    title = stringResource(R.string.detail_no_comments)
                                 )
                             }
                         }
@@ -762,35 +755,18 @@ fun DetailScreen(
                         )
                     }
 
-                    if (uiState.hasMoreComments || uiState.isLoadingMoreComments) {
+                    if (commentsToShow.isNotEmpty()) {
                         item(key = "load_more_comments") {
-                            Box(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (uiState.isLoadingMoreComments) {
-                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
-                                } else {
-                                    Text(
-                                        text = stringResource(R.string.detail_load_more_comments),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    } else if (commentsToShow.size > 5) {
-                        item(key = "all_comments_loaded") {
-                            Box(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.detail_all_comments_loaded, commentsToShow.size),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            LoadMoreFooter(
+                                state = when {
+                                    uiState.isLoadingMoreComments -> LoadMoreFooterState.Loading
+                                    uiState.commentsError -> LoadMoreFooterState.Error
+                                    !uiState.hasMoreComments && commentsToShow.size > 5 -> LoadMoreFooterState.Complete
+                                    else -> LoadMoreFooterState.Hidden
+                                },
+                                onRetry = viewModel::loadMoreComments,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
                 }
@@ -1210,19 +1186,18 @@ private fun EmptyState(onRetry: () -> Unit) {
             .padding(vertical = 32.dp),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = stringResource(R.string.detail_no_resources),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            OutlinedButton(onClick = { view.performHaptic(HapticType.CLICK); onRetry() }) {
-                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(stringResource(R.string.detail_retry))
+        EmptyStateCard(
+            isDark = isAppDarkTheme(),
+            icon = Icons.Rounded.Search,
+            title = stringResource(R.string.detail_no_resources),
+            actions = {
+                OutlinedButton(onClick = { view.performHaptic(HapticType.CLICK); onRetry() }) {
+                    Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(stringResource(R.string.detail_retry))
+                }
             }
-        }
+        )
     }
 }
 

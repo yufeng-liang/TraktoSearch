@@ -65,6 +65,8 @@ import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
 import com.tracktosearch.ui.component.DetailTopBarIcon
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.LoadMoreFooter
+import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.component.SectionHeader
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropContentSource
@@ -329,21 +331,21 @@ fun PersonScreen(
                                                     }
                                                 )
                                             }
-                                            if (uiState.hasMoreMovies) {
+                                            if (uiState.movieCredits.isNotEmpty()) {
                                                 item(key = "movie_load_more") {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .width(60.dp)
-                                                            .height(90.dp),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        if (uiState.isLoadingMoreMovies) {
-                                                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                                                        } else {
-                                                            LaunchedEffect(Unit) { viewModel.loadMoreMovies() }
-                                                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                                                        }
+                                                    if (uiState.hasMoreMovies && !uiState.isLoadingMoreMovies && !uiState.loadMoreMoviesError) {
+                                                        LaunchedEffect(Unit) { viewModel.loadMoreMovies() }
                                                     }
+                                                    LoadMoreFooter(
+                                                        state = when {
+                                                            uiState.isLoadingMoreMovies -> LoadMoreFooterState.Loading
+                                                            uiState.loadMoreMoviesError -> LoadMoreFooterState.Error
+                                                            !uiState.hasMoreMovies -> LoadMoreFooterState.Complete
+                                                            else -> LoadMoreFooterState.Hidden
+                                                        },
+                                                        onRetry = viewModel::loadMoreMovies,
+                                                        modifier = Modifier.width(180.dp)
+                                                    )
                                                 }
                                             }
                                         }
@@ -408,21 +410,21 @@ fun PersonScreen(
                                                     }
                                                 )
                                             }
-                                            if (uiState.hasMoreTvShows) {
+                                            if (uiState.tvCredits.isNotEmpty()) {
                                                 item(key = "tv_load_more") {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .width(60.dp)
-                                                            .height(90.dp),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        if (uiState.isLoadingMoreTvShows) {
-                                                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                                                        } else {
-                                                            LaunchedEffect(Unit) { viewModel.loadMoreTvShows() }
-                                                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                                                        }
+                                                    if (uiState.hasMoreTvShows && !uiState.isLoadingMoreTvShows && !uiState.loadMoreTvShowsError) {
+                                                        LaunchedEffect(Unit) { viewModel.loadMoreTvShows() }
                                                     }
+                                                    LoadMoreFooter(
+                                                        state = when {
+                                                            uiState.isLoadingMoreTvShows -> LoadMoreFooterState.Loading
+                                                            uiState.loadMoreTvShowsError -> LoadMoreFooterState.Error
+                                                            !uiState.hasMoreTvShows -> LoadMoreFooterState.Complete
+                                                            else -> LoadMoreFooterState.Hidden
+                                                        },
+                                                        onRetry = viewModel::loadMoreTvShows,
+                                                        modifier = Modifier.width(180.dp)
+                                                    )
                                                 }
                                             }
                                         }
@@ -477,6 +479,8 @@ fun PersonScreen(
                             credits = uiState.movieCredits,
                             resolvingTmdbId = uiState.resolvingTmdbId,
                             hasMore = uiState.hasMoreMovies,
+                            isLoadingMore = uiState.isLoadingMoreMovies,
+                            loadMoreError = uiState.loadMoreMoviesError,
                             onLoadMore = { viewModel.loadMoreMovies() },
                             onMovieClick = onMovieClick,
                             viewModel = viewModel,
@@ -492,6 +496,8 @@ fun PersonScreen(
                             credits = uiState.tvCredits,
                             resolvingTmdbId = uiState.resolvingTmdbId,
                             hasMore = uiState.hasMoreTvShows,
+                            isLoadingMore = uiState.isLoadingMoreTvShows,
+                            loadMoreError = uiState.loadMoreTvShowsError,
                             onLoadMore = { viewModel.loadMoreTvShows() },
                             onShowClick = onShowClick,
                             viewModel = viewModel,

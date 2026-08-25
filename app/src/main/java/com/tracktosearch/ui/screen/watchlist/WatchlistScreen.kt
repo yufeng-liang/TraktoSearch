@@ -188,6 +188,9 @@ import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.AppIconButton
+import com.tracktosearch.ui.component.CinemaClapperIcon
+import com.tracktosearch.ui.component.LoadMoreFooter
+import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
 import com.tracktosearch.ui.component.TopBarBackdropSourcePadding
@@ -609,6 +612,22 @@ fun WatchlistScreen(
         selectedMode == 1 && selectedTab == 1 -> uiState.isLoadingHistoryShows
         else -> uiState.isLoadingHistoryOthers
     }
+    val currentSupportsPaging = selectedMode == 0 && selectedTab in 0..1
+    val currentHasMore = currentSupportsPaging && when (selectedTab) {
+        0 -> uiState.hasMoreMovies
+        1 -> uiState.hasMoreShows
+        else -> false
+    }
+    val currentIsLoadingMore = selectedMode == 0 && when (selectedTab) {
+        0 -> uiState.isLoadingMovies && uiState.moviesLoaded && uiState.movies.isNotEmpty() && uiState.moviePage > 1
+        1 -> uiState.isLoadingShows && uiState.showsLoaded && uiState.shows.isNotEmpty() && uiState.showPage > 1
+        else -> false
+    }
+    val currentLoadError = selectedMode == 0 && when (selectedTab) {
+        0 -> uiState.moviesError != null && uiState.movies.isNotEmpty()
+        1 -> uiState.showsError != null && uiState.shows.isNotEmpty()
+        else -> false
+    }
 
     // 海报 URL 列表：列表内容不变时复用同一实例，避免每次重组都 O(n) 重建导致
     // rememberCachedPosterAmbientColor 重新构建缓存 key 与重跑缓存读取。
@@ -781,12 +800,7 @@ fun WatchlistScreen(
                                     .fillMaxWidth()
                                     .padding(horizontal = 24.dp, vertical = 32.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Movie,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(64.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                                )
+                                CinemaClapperIcon()
                                 Spacer(modifier = Modifier.height(16.dp))
                                 if (searchQuery.isNotEmpty()) {
                                     // 搜索无结果：只显示贴切文案，不显示引导链接
@@ -947,6 +961,23 @@ fun WatchlistScreen(
                                     }
                                 )
                             }
+                        }
+                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }, key = "load_more_footer") {
+                            LoadMoreFooter(
+                                state = when {
+                                    currentIsLoadingMore -> LoadMoreFooterState.Loading
+                                    currentLoadError -> LoadMoreFooterState.Error
+                                    currentSupportsPaging && !currentHasMore && items.isNotEmpty() -> LoadMoreFooterState.Complete
+                                    else -> LoadMoreFooterState.Hidden
+                                },
+                                onRetry = {
+                                    when (selectedTab) {
+                                        0 -> viewModel.loadMoreMovies()
+                                        1 -> viewModel.loadMoreShows()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
                             }
