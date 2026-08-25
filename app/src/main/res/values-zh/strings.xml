@@ -295,8 +295,9 @@
     <string name="douban_sync_view_details">查看活动详情</string>
     <string name="douban_sync_hide_details">收起活动详情</string>
     <string name="douban_sync_view_failures">查看失败项</string>
+    <string name="douban_sync_failure_remaining">还有 %1$d 个失败项</string>
     <string name="douban_sync_retry_failures">重试失败项</string>
-    <string name="douban_sync_view_conflicts">查看冲突</string>
+    <string name="douban_sync_view_conflicts">查看一致性结果</string>
 
     <!-- 豆瓣同步失败项重试 -->
     <string name="douban_retry_title">重试豆瓣同步失败项</string>

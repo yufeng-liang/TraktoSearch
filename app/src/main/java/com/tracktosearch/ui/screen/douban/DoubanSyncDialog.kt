@@ -81,6 +81,7 @@ fun DoubanSyncDialog(
     val progress by viewModel.progress.collectAsStateWithLifecycle()
     val p = progress
     var showActivityDetails by remember { mutableStateOf(false) }
+    var showFailureItems by remember { mutableStateOf(false) }
 
     var delayRemainingSeconds by remember { mutableIntStateOf(0) }
     LaunchedEffect(p.delayInfo) {
@@ -398,8 +399,12 @@ fun DoubanSyncDialog(
                     }
                     if (showActivityDetails) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (p.failedCount > 0 && onViewFailures != null) {
-                                TextButton(onClick = onViewFailures) {
+                            if (p.failedItems.isNotEmpty()) {
+                                TextButton(onClick = {
+                                    showActivityDetails = true
+                                    showFailureItems = !showFailureItems
+                                    onViewFailures?.invoke()
+                                }) {
                                     Text(stringResource(R.string.douban_sync_view_failures))
                                 }
                             }
@@ -409,9 +414,31 @@ fun DoubanSyncDialog(
                                 }
                             }
                             if (p.conflictsFound > 0 && onViewConflicts != null) {
-                                TextButton(onClick = onViewConflicts) {
+                                TextButton(onClick = {
+                                    showActivityDetails = true
+                                    onViewConflicts()
+                                }) {
                                     Text(stringResource(R.string.douban_sync_view_conflicts))
                                 }
+                            }
+                        }
+                        if (showFailureItems && p.failedItems.isNotEmpty()) {
+                            p.failedItems.take(5).forEach { failure ->
+                                Text(
+                                    failure.title,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            val remaining = p.failedItems.size - 5
+                            if (remaining > 0) {
+                                Text(
+                                    stringResource(R.string.douban_sync_failure_remaining, remaining),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }

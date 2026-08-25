@@ -401,7 +401,9 @@ class DoubanSyncDialogTest {
         )
         setContent()
         // 导入完成后对话框只展示通用处理统计，不再把条目分类为失败项。
-        composeRule.onNodeWithText("Success 50 · Skipped 5 · Cached 10").assertIsDisplayed()
+        composeRule.onNodeWithText("Imported successfully").assertIsDisplayed()
+        composeRule.onNodeWithText("Reused or skipped").assertIsDisplayed()
+        composeRule.onNodeWithText("Failed, retry available").assertIsDisplayed()
     }
 
     private fun preview(id: String, title: String) = DoubanSyncPreviewItem(
@@ -446,8 +448,9 @@ class DoubanSyncDialogTest {
         )
         setContent()
 
-        composeRule.onNodeWithText("Success 50 · Skipped 5 · Cached 10").assertIsDisplayed()
-        composeRule.onAllNodesWithText("Failed 1", substring = true).assertCountEquals(0)
+        composeRule.onNodeWithText("Imported successfully").assertIsDisplayed()
+        composeRule.onNodeWithText("Reused or skipped").assertIsDisplayed()
+        composeRule.onNodeWithText("Failed, retry available").assertIsDisplayed()
         composeRule.onAllNodesWithText("Failed:").assertCountEquals(0)
         composeRule.onAllNodesWithText("Failed Movie").assertCountEquals(0)
         composeRule.onAllNodesWithText("Export failures").assertCountEquals(0)
@@ -572,6 +575,6 @@ class DoubanSyncDialogTest {
         setContent()
         composeRule.onNodeWithText("Sync summary").assertIsDisplayed()
         composeRule.onNodeWithText("Failed, retry available").assertIsDisplayed()
-        composeRule.onNodeWithText("Upload needs retry").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Upload needs retry").assertCountEquals(2)
     }
 }

@@ -189,8 +189,9 @@
     <string name="douban_sync_view_details">処理の詳細を表示</string>
     <string name="douban_sync_hide_details">処理の詳細を閉じる</string>
     <string name="douban_sync_view_failures">失敗項目を表示</string>
+    <string name="douban_sync_failure_remaining">失敗項目があと %1$d 件</string>
     <string name="douban_sync_retry_failures">失敗項目を再試行</string>
-    <string name="douban_sync_view_conflicts">競合を表示</string>
+    <string name="douban_sync_view_conflicts">整合性の結果を表示</string>
 
     <!-- 豆瓣同期失敗項目リトライ -->
     <string name="douban_retry_title">Douban同期失敗項目をリトライ</string>

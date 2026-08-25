@@ -1723,7 +1723,24 @@ fun WatchlistScreen(
                         showSyncDialog = false
                         viewModel.clearDoubanSyncResult()
                         onTraktLogin()
-                    }
+                    },
+                    onViewFailures = {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.douban_sync_view_failures),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    },
+                    onRetry = {
+                        if (!viewModel.retryLatestDoubanFailures()) {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.douban_retry_no_failures),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    },
+                    onViewConflicts = { showConsistencyDialog = true }
                 )
             }
     

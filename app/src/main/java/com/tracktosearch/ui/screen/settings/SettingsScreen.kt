@@ -1142,7 +1142,6 @@ fun SettingsScreen(
                 onNavigateToDoubanLogin()
             },
             onRetry = { viewModel.startManualConsistencyCheck() },
-            onViewConflicts = { /* 结果页已展示冲突统计，保留弹窗上下文 */ },
             onBackgroundUnavailable = {
                 Toast.makeText(
                     context,

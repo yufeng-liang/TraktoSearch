@@ -259,6 +259,17 @@ class WatchlistViewModel @Inject constructor(
         }
     }
 
+    /** 直接重试结果页中仍可恢复的失败项；返回 false 表示没有可重试项或已有任务运行。 */
+    fun retryLatestDoubanFailures(): Boolean {
+        val failures = _uiState.value.doubanSyncProgress?.failedItems.orEmpty()
+        val recoverableReasons = failures
+            .map { it.failureReason }
+            .filter { it.recoverable }
+            .toSet()
+        if (recoverableReasons.isEmpty()) return false
+        return doubanSyncManager.startRetry(failures, recoverableReasons)
+    }
+
     /** 是否需要首次同步引导（已登录豆瓣 + 从未同步过） */
     private val _needFirstSyncGuide = MutableStateFlow(false)
     val needFirstSyncGuide: StateFlow<Boolean> = _needFirstSyncGuide.asStateFlow()

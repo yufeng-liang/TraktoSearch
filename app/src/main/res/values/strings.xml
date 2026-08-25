@@ -295,8 +295,9 @@
     <string name="douban_sync_view_details">View activity details</string>
     <string name="douban_sync_hide_details">Hide activity details</string>
     <string name="douban_sync_view_failures">View failures</string>
+    <string name="douban_sync_failure_remaining">%1$d more failed items</string>
     <string name="douban_sync_retry_failures">Retry failures</string>
-    <string name="douban_sync_view_conflicts">View conflicts</string>
+    <string name="douban_sync_view_conflicts">View consistency result</string>
 
     <!-- Douban sync failure retry -->
     <string name="douban_retry_title">Retry Douban Sync Failures</string>

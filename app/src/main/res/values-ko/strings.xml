@@ -189,8 +189,9 @@
     <string name="douban_sync_view_details">활동 세부정보 보기</string>
     <string name="douban_sync_hide_details">활동 세부정보 접기</string>
     <string name="douban_sync_view_failures">실패 항목 보기</string>
+    <string name="douban_sync_failure_remaining">실패 항목 %1$d개 더 있음</string>
     <string name="douban_sync_retry_failures">실패 항목 다시 시도</string>
-    <string name="douban_sync_view_conflicts">충돌 보기</string>
+    <string name="douban_sync_view_conflicts">일관성 결과 보기</string>
 
     <!-- Douban 동기화 실패 항목 재시도 -->
     <string name="douban_retry_title">Douban 동기화 실패 항목 재시도</string>
