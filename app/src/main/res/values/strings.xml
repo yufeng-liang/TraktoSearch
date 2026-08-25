@@ -767,6 +767,9 @@ Config:
     <string name="onboarding_step2_desc">Browse personalized recommendations (generated after Douban login) and other charts</string>
     <string name="onboarding_step3_title">My List</string>
     <string name="onboarding_step3_desc">View your Trakt and Douban wish/watched lists in one place</string>
+    <string name="onboarding_prev">Back</string>
+    <string name="onboarding_step4_title">Settings</string>
+    <string name="onboarding_step4_desc">Accounts, messages, watch stats, search sources and help all live here</string>
     <string name="settings_licenses">Open Source Licenses</string>
     <string name="settings_cache">Cache</string>
     <string name="settings_cache_clear">Clear</string>

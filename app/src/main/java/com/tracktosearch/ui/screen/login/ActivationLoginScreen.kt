@@ -3,6 +3,8 @@
 package com.tracktosearch.ui.screen.login
 
 import android.net.Uri
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -10,6 +12,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +28,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.HelpOutline
@@ -55,12 +61,16 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -465,6 +475,7 @@ private fun ActivationCard(
     scene: GlassScene = GlassScene(),
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val shape = RoundedCornerShape(20.dp)
     val accent = MaterialTheme.colorScheme.primary
     val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
@@ -528,6 +539,11 @@ private fun ActivationCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             val inputShape = RoundedCornerShape(13.dp)
+            // 邀请码可提交的条件：非空、不在提交中、还没激活。原来空输入也可点，
+            // 点了才被 AuthViewModel 本地拦成 INVALID_INVITE，让用户先白撞一次错。
+            val canActivate = authState.inviteCode.isNotBlank() &&
+                !authState.isLoading &&
+                !authState.activated
             BasicTextField(
                 value = authState.inviteCode,
                 onValueChange = authViewModel::updateInviteCode,
@@ -547,10 +563,22 @@ private fun ActivationCard(
                     )
                     .padding(horizontal = 14.dp),
                 singleLine = true,
+                // 邀请码是字母数字串：关掉自动纠错与首字母大写，回车直接提交。
+                // 缺这些设置时输入法会插空格、改大小写，用户以为码错了。
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Ascii,
+                    autoCorrectEnabled = false,
+                    capitalization = KeyboardCapitalization.None,
+                    imeAction = ImeAction.Go
+                ),
+                keyboardActions = KeyboardActions(
+                    onGo = { if (canActivate) authViewModel.activate() }
+                ),
                 textStyle = TextStyle(
                     color = inputTextColor,
                     fontFamily = FontFamily.Monospace,
-                    fontSize = 13.sp
+                    fontSize = 15.sp,
+                    letterSpacing = 0.6.sp
                 ),
                 cursorBrush = SolidColor(accent),
                 decorationBox = { innerTextField ->
@@ -563,16 +591,38 @@ private fun ActivationCard(
                                 text = stringResource(R.string.auth_invite_code),
                                 color = inputPlaceholderColor,
                                 fontFamily = FontFamily.Monospace,
-                                fontSize = 13.sp
+                                fontSize = 15.sp
                             )
                         }
                         innerTextField()
                     }
                 }
             )
+            // 邀请码基本都是从聊天软件复制过来的：输入为空时给一键粘贴。
+            // 只在点按时读剪贴板，不做后台静默读取。
+            if (authState.inviteCode.isBlank() && !authState.activated) {
+                TextButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.primaryClip
+                            ?.takeIf { it.itemCount > 0 }
+                            ?.getItemAt(0)?.text?.toString()
+                            ?.trim()
+                            ?.takeIf { it.isNotEmpty() }
+                            ?.let { authViewModel.updateInviteCode(it) }
+                    },
+                    contentPadding = PaddingValues(horizontal = 8.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.import_paste),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = accent
+                    )
+                }
+            }
             Button(
                 onClick = authViewModel::activate,
-                enabled = !authState.isLoading && !authState.activated,
+                enabled = canActivate,
                 modifier = Modifier
                     .padding(start = 8.dp)
                     .height(48.dp),

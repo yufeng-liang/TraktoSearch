@@ -1032,6 +1032,9 @@
     <string name="onboarding_step2_desc">パーソナライズされたおすすめ（豆瓣ログイン後に生成）と各種ランキングを閲覧</string>
     <string name="onboarding_step3_title">マイ</string>
     <string name="onboarding_step3_desc">Traktと豆瓣の見たいリスト・視聴済みリストを一か所で表示</string>
+    <string name="onboarding_prev">戻る</string>
+    <string name="onboarding_step4_title">設定</string>
+    <string name="onboarding_step4_desc">アカウント、メッセージ、視聴統計、検索ソース、ヘルプはすべてここにあります</string>
 
     <!-- Common UI -->
     <string name="common_retry">再試行</string>

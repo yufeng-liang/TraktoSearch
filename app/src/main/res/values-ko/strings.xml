@@ -1032,6 +1032,9 @@
     <string name="onboarding_step2_desc">개인 맞춤 추천(더우반 로그인 후 생성) 및 기타 차트 탐색</string>
     <string name="onboarding_step3_title">마이</string>
     <string name="onboarding_step3_desc">Trakt와 더우반의 관심목록 및 시청 목록을 한곳에서 표시</string>
+    <string name="onboarding_prev">이전</string>
+    <string name="onboarding_step4_title">설정</string>
+    <string name="onboarding_step4_desc">계정, 메시지, 시청 통계, 검색 소스, 도움말이 모두 여기 있습니다</string>
 
     <!-- Common UI -->
     <string name="common_retry">재시도</string>

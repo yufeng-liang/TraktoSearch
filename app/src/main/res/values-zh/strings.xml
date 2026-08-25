@@ -767,6 +767,9 @@
     <string name="onboarding_step2_desc">浏览个性化推荐（豆瓣登录后生成）和其他榜单</string>
     <string name="onboarding_step3_title">我的</string>
     <string name="onboarding_step3_desc">在同一处展示 Trakt 与豆瓣的想看、已看列表</string>
+    <string name="onboarding_prev">上一步</string>
+    <string name="onboarding_step4_title">设置</string>
+    <string name="onboarding_step4_desc">账号、消息、观看统计、搜索源与帮助都在这里</string>
     <string name="settings_licenses">开源许可证</string>
     <string name="settings_cache">缓存</string>
     <string name="settings_cache_clear">清除</string>

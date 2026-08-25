@@ -91,7 +91,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
-import com.tracktosearch.data.local.CloudPermissionStorage
 import com.tracktosearch.data.local.OnboardingStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.repository.MediaType
@@ -124,7 +123,6 @@ import com.tracktosearch.ui.theme.MeshPreset
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.screen.discover.DiscoverScreen
 import com.tracktosearch.ui.screen.feedback.FeedbackViewModel
-import com.tracktosearch.ui.screen.search.CloudThemeProvider
 import com.tracktosearch.ui.screen.search.SearchScreen
 import com.tracktosearch.ui.screen.search.SearchSourceType
 import com.tracktosearch.ui.screen.settings.AccentColorDialog
@@ -242,14 +240,6 @@ fun MainScreen(
     var showOnboarding by remember { mutableStateOf(false) }
     val tabRects = remember { mutableStateOf<List<Rect>>(emptyList()) }
     val density = LocalDensity.current
-
-    // 白云主题管理器（用于新手引导完成后触发权限提示）
-    val cloudThemeManager = remember {
-        EntryPointAccessors.fromApplication(context.applicationContext, CloudThemeProvider::class.java).cloudThemeManager()
-    }
-    val cloudPermissionStorage = remember {
-        CloudPermissionStorage(context.applicationContext)
-    }
 
     // 用户头像：登录后从对应来源获取
     // - 豆瓣模式：从 DoubanAuthStorage.doubanProfile.avatarUrl 读取（StateFlow 直读，登录后即可拿到）
@@ -933,20 +923,36 @@ fun MainScreen(
                 }
             }
 
-            // 新手引导遮罩：搜索、发现、我的三个 Tab 高亮
-            val onboardingTabMap = listOf(0, 1, 2)
-            if (showOnboarding && tabRects.value.size == 4) {
+            // 新手引导遮罩：搜索、发现、我的、设置四个 Tab 依次高亮。
+            // 设置 Tab 补进引导：账号、未读消息、观看统计的入口都只在那一屏。
+            val onboardingTabMap = listOf(0, 1, 2, 3)
+            val onboardingRects = tabRects.value.take(4)
+            val onboardingRectsReady = onboardingRects.size == 4 && onboardingRects.none { it == Rect.Zero }
+            // Tab 位置量不到时原来直接不渲染引导，用户可能永远看不到、标记也不会重置。
+            // 现在等一会儿再退化为无高亮的纯信息步骤，至少把四个 Tab 讲清楚。
+            var onboardingMeasureTimedOut by remember { mutableStateOf(false) }
+            LaunchedEffect(showOnboarding, onboardingRectsReady) {
+                if (showOnboarding && !onboardingRectsReady) {
+                    delay(1500)
+                    onboardingMeasureTimedOut = true
+                } else {
+                    onboardingMeasureTimedOut = false
+                }
+            }
+            if (showOnboarding && (onboardingRectsReady || onboardingMeasureTimedOut)) {
                 OnboardingOverlay(
-                    targetRects = tabRects.value.take(3),
+                    targetRects = if (onboardingRectsReady) onboardingRects else List(4) { Rect.Zero },
                     titles = listOf(
                         stringResource(R.string.onboarding_step1_title),
                         stringResource(R.string.onboarding_step2_title),
-                        stringResource(R.string.onboarding_step3_title)
+                        stringResource(R.string.onboarding_step3_title),
+                        stringResource(R.string.onboarding_step4_title)
                     ),
                     descriptions = listOf(
                         stringResource(R.string.onboarding_step1_desc),
                         stringResource(R.string.onboarding_step2_desc),
-                        stringResource(R.string.onboarding_step3_desc)
+                        stringResource(R.string.onboarding_step3_desc),
+                        stringResource(R.string.onboarding_step4_desc)
                     ),
                     onComplete = {
                         showOnboarding = false
@@ -956,16 +962,9 @@ fun MainScreen(
                             pagerState.scrollToPage(0)
                             selectedTab = 0
                         }
-                        // 新手引导完成 1.2s 后弹出位置权限提示（仅当未授权且未取消过时）
-                        scope.launch {
-                            delay(1200)
-                            val hasPermission = context.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
-                                android.content.pm.PackageManager.PERMISSION_GRANTED
-                            val dismissed = cloudPermissionStorage.isDismissed.first()
-                            if (!hasPermission && !dismissed) {
-                                cloudThemeManager.requestPermissionPrompt()
-                            }
-                        }
+                        // 这里原来会在 1.2s 后弹定位权限。那个权限只服务白云主题彩蛋，新用户此刻
+                        // 对它零感知，而且「点完成会弹、点跳过不弹」本身就不一致。改为用户主动点
+                        // 白云时再申请（CloudThemeManager.onCloudClicked 未授权时就会弹）。
                     },
                     onSkip = {
                         showOnboarding = false

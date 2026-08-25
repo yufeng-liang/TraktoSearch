@@ -2,7 +2,8 @@ package com.tracktosearch.ui.component
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,9 +20,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -35,6 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -42,6 +46,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import kotlin.math.roundToInt
+
+/** 气泡高度还没量到时的兜底值：仅用于首帧定位，量到真实高度后立即换掉。 */
+private val FallbackBubbleHeight = 160.dp
 
 /**
  * 新手引导遮罩层
@@ -78,8 +85,10 @@ fun OnboardingOverlay(
     val highlightPaddingPx = with(density) { 8.dp.toPx() }
     val cornerRadiusPx = with(density) { 12.dp.toPx() }
     val bubbleGapPx = with(density) { 12.dp.toPx() }
-    // 气泡预估高度
-    val estimatedBubbleHeightPx = with(density) { 160.dp.toPx() }
+    // 气泡高度按实测值定位：写死 160.dp 时日/韩长文案会撑高气泡，导致气泡压住高亮区或溢出屏幕
+    var measuredBubbleHeightPx by remember { mutableFloatStateOf(0f) }
+    val fallbackBubbleHeightPx = with(density) { FallbackBubbleHeight.toPx() }
+    val bubbleHeightPx = if (measuredBubbleHeightPx > 0f) measuredBubbleHeightPx else fallbackBubbleHeightPx
 
     // 是否为纯信息步骤（无高亮目标）
     val isInfoStep = targetRect == Rect.Zero
@@ -97,7 +106,6 @@ fun OnboardingOverlay(
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val screenWidthPx = maxWidth.value * density.density
         val screenHeightPx = maxHeight.value * density.density
 
         var bubbleTopPx: Float
@@ -107,23 +115,40 @@ fun OnboardingOverlay(
             bubbleTopPx = screenHeightPx * 0.35f
         } else {
             // 有目标：根据空间判断上下
-            val placeAbove = (highlightRect.bottom + bubbleGapPx + estimatedBubbleHeightPx) > screenHeightPx
+            val placeAbove = (highlightRect.bottom + bubbleGapPx + bubbleHeightPx) > screenHeightPx
 
             bubbleTopPx = if (placeAbove) {
-                highlightRect.top - bubbleGapPx - estimatedBubbleHeightPx
+                highlightRect.top - bubbleGapPx - bubbleHeightPx
             } else {
                 highlightRect.bottom + bubbleGapPx
             }
 
             // 安全边界（赋值给变量，否则 coerceIn 结果被丢弃）
-            bubbleTopPx = bubbleTopPx.coerceIn(16f, (screenHeightPx - estimatedBubbleHeightPx - 16f).coerceAtLeast(16f))
+            bubbleTopPx = bubbleTopPx.coerceIn(16f, (screenHeightPx - bubbleHeightPx - 16f).coerceAtLeast(16f))
         }
 
-        // 半透明遮罩 + 挖洞（拦截触摸事件，防止穿透点击）
+        // 半透明遮罩 + 挖洞。挖洞区之外拦触摸防穿透，挖洞区内不消费事件，
+        // 让用户能真的点一下被高亮的 Tab，边学边试。
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(Unit) { detectTapGestures { } }
+                .pointerInput(highlightRect, isInfoStep) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val insideHole = !isInfoStep &&
+                            highlightRect != Rect.Zero &&
+                            highlightRect.contains(down.position)
+                        // 挖洞区内不消费：事件继续下传，用户能真的点一下被高亮的 Tab，边学边试
+                        if (insideHole) return@awaitEachGesture
+                        // 挖洞区之外：消费整串事件，遮罩下面的内容点不到
+                        down.consume()
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            event.changes.forEach { it.consume() }
+                            if (event.changes.all { !it.pressed }) break
+                        }
+                    }
+                }
         ) {
             val scrimColor = Color.Black.copy(alpha = 0.6f)
 
@@ -161,6 +186,7 @@ fun OnboardingOverlay(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .onSizeChanged { measuredBubbleHeightPx = it.height.toFloat() }
                     .background(
                         color = MaterialTheme.colorScheme.surface,
                         shape = RoundedCornerShape(12.dp)
@@ -191,6 +217,19 @@ fun OnboardingOverlay(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.weight(1f))
+                    // 上一步：只在有上一步时出现，让引导可回退
+                    if (currentStep > 0) {
+                        TextButton(
+                            onClick = {
+                                currentStep--
+                                onStepChanged(currentStep)
+                            },
+                            contentPadding = ButtonDefaults.TextButtonContentPadding
+                        ) {
+                            Text(stringResource(R.string.onboarding_prev))
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
                     OutlinedButton(
                         onClick = onSkip,
                         contentPadding = ButtonDefaults.ContentPadding
