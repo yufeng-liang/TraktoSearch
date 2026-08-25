@@ -91,6 +91,11 @@ import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
 import com.tracktosearch.ui.component.TopBarBackdropSourcePadding
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.ui.component.rememberAppPullToRefreshState
+import com.tracktosearch.ui.component.AppPullToRefreshIndicator
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
@@ -113,6 +118,9 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 
 
@@ -207,6 +215,29 @@ fun DiscoverScreen(
     // rememberSaveable + Saver：进入详情页（MAIN 整体销毁）返回后恢复原滚动位置，
     // 不再回到顶部（与 Watchlist 的 grid 状态策略一致）
     val discoverListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    // 下拉刷新：发现页 10+ 个榜单原来只能靠切页/重进触发重载，没有任何显式刷新入口。
+    // forceRefreshAll 本就是为下拉刷新准备的入口（注释里写了「供下拉刷新用」），只是没有 UI。
+    var discoverRefreshPending by remember { mutableStateOf(false) }
+    val discoverPullToRefreshState = rememberAppPullToRefreshState {
+        viewModel.forceRefreshAll()
+        discoverRefreshPending = true
+    }
+    LaunchedEffect(discoverRefreshPending) {
+        if (!discoverRefreshPending) return@LaunchedEffect
+        // 各栏目独立加载：等首屏这几个主栏目都落地即收起；超时兜底避免指示器一直停着
+        withTimeoutOrNull(10_000) {
+            snapshotFlow {
+                uiState.isLoadingPopular ||
+                    uiState.isLoadingUpcoming ||
+                    uiState.isLoadingTrakt ||
+                    uiState.isLoadingRecommendations ||
+                    uiState.isLoadingTraktLists ||
+                    uiState.doubanHotCategories.any { it.isLoading }
+            }.dropWhile { !it }.first { !it }
+        }
+        discoverPullToRefreshState.finishRefresh()
+        discoverRefreshPending = false
+    }
     val discoverHasContentUnderTopBar by remember {
         derivedStateOf {
             hasListScrolled(
@@ -323,11 +354,17 @@ fun DiscoverScreen(
                         .fillMaxSize()
                         .padding(horizontal = TopBarBackdropSourcePadding)
                 ) {
+                    AppPullToRefreshIndicator(
+                        state = discoverPullToRefreshState,
+                        contentTop = statusBarHeight + 80.dp
+                    )
                     LazyColumn(
                         state = discoverListState,
                         modifier = modifier
                             .fillMaxSize()
-                            .hazeSource(state = discoverHazeState),
+                            .hazeSource(state = discoverHazeState)
+                            .nestedScroll(discoverPullToRefreshState.connection)
+                            .graphicsLayer { translationY = discoverPullToRefreshState.offset.floatValue },
                         contentPadding = PaddingValues(
                             start = 16.dp,
                             end = 16.dp,
