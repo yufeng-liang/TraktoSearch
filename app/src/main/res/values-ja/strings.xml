@@ -155,14 +155,17 @@
     <string name="douban_sync_cancelling">キャンセル中...</string>
     <string name="douban_sync_cancel">キャンセル</string>
     <string name="douban_sync_background">バックグラウンド</string>
+    <string name="douban_sync_background_unavailable">バックグラウンド実行を開始できません。画面を開いたままにするか、通知を有効にしてください。</string>
     <string name="douban_sync_relogin">再ログイン</string>
     <string name="douban_sync_login_trakt">Trakt にログイン</string>
     <string name="douban_sync_login_douban">Douban にログイン</string>
     <string name="douban_sync_cookie_expired_banner">豆瓣ログイン期限切れ、タップして再ログイン</string>
     <string name="douban_sync_douban_login_required_banner">Douban にログインしてください。タップしてログイン</string>
     <string name="douban_sync_trakt_login_required_banner">Trakt にログインしてください。タップしてログイン</string>
-    <string name="douban_sync_complete_banner">同期完了、%1$d件追加</string>
+    <string name="douban_sync_complete_banner">同期完了、%1$d件を処理</string>
+    <string name="douban_sync_complete_with_failures_banner">同期は一部完了：成功 %1$d件、%2$d件は再試行待ち</string>
     <string name="douban_sync_cancelled_banner">同期をキャンセルしました</string>
+    <string name="douban_sync_cancelled_with_pending">同期をキャンセルしました。%1$d件を再開できます</string>
     <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
     <string name="douban_sync_error_detail">エラー：%1$s</string>
     <string name="douban_sync_eta_format">残り約 %1$s</string>
@@ -171,6 +174,24 @@
     <string name="douban_sync_delay_list_crawl">リストページクロール遅延</string>
     <string name="douban_sync_delay_retry">リトライ待機</string>
     <string name="douban_sync_summary_format">成功 %1$d · スキップ %2$d · キャッシュ %3$d</string>
+    <string name="douban_sync_summary_with_failures">一部完了：成功 %1$d · スキップ %2$d · キャッシュ %3$d · 失敗 %4$d</string>
+    <string name="douban_sync_summary_title">同期の概要</string>
+    <string name="douban_sync_summary_success">正常に取り込み</string>
+    <string name="douban_sync_summary_reused">再利用またはスキップ</string>
+    <string name="douban_sync_summary_failed">失敗（再試行可能）</string>
+    <string name="douban_sync_summary_conflicts">競合を修復</string>
+    <string name="douban_sync_summary_conflicts_found">%1$d 件の競合を検出</string>
+    <string name="douban_sync_summary_pending">再開待ち</string>
+    <string name="douban_sync_summary_cloud">クラウドへのアップロード</string>
+    <string name="douban_sync_cloud_not_attempted">未実行</string>
+    <string name="douban_sync_cloud_succeeded">アップロード済み</string>
+    <string name="douban_sync_cloud_failed">再試行が必要</string>
+    <string name="douban_sync_view_details">処理の詳細を表示</string>
+    <string name="douban_sync_hide_details">処理の詳細を閉じる</string>
+    <string name="douban_sync_view_failures">失敗項目を表示</string>
+    <string name="douban_sync_failure_remaining">失敗項目があと %1$d 件</string>
+    <string name="douban_sync_retry_failures">失敗項目を再試行</string>
+    <string name="douban_sync_view_conflicts">整合性の結果を表示</string>
 
     <!-- 豆瓣同期失敗項目リトライ -->
     <string name="douban_retry_title">Douban同期失敗項目をリトライ</string>
@@ -215,6 +236,11 @@
     <string name="douban_resume_continue_desc">リストクロールをスキップし、クロール済みデータを直接処理</string>
     <string name="douban_resume_full_desc">未処理データをクリアし、最初から開始</string>
     <string name="douban_resume_cancel">キャンセル</string>
+    <string name="douban_resume_discard">未処理データを破棄</string>
+    <string name="douban_resume_discard_title">未完了の同期を破棄しますか？</string>
+    <string name="douban_resume_discard_message">処理前の %1$d 件を完全に削除します。後から再開できません。</string>
+    <string name="douban_resume_discard_confirm">破棄</string>
+    <string name="douban_resume_discard_cancel">データを保持</string>
     <string name="douban_resume_phase">未処理リストを再開中</string>
     <string name="douban_resume_complete">レジューム完了</string>
     <string name="sync_already_running">同期タスクが実行中です。しばらくお待ちください</string>
@@ -719,6 +745,7 @@
     <string name="cooldown_available">同期可能</string>
     <string name="douban_first_sync_title">Doubanからインポート</string>
     <string name="douban_first_sync_message">Doubanにログイン済みですが、まだマークをインポートしていません。Doubanからウォッチリストと視聴履歴をインポートして素早く開始しましょう。</string>
+    <string name="douban_first_sync_message_douban_only">初回取り込みでは Douban の見たい／視聴済みリストを読み込みます。専用モードではアプリと個人クラウドに保存し、Trakt は変更しません。</string>
     <string name="douban_first_sync_start">インポート開始</string>
     <string name="douban_first_sync_later">後で</string>
     <string name="cooldown_guidance_title">クールダウン期間中</string>
@@ -729,6 +756,8 @@
     <!-- Douban sync mode picker -->
     <string name="douban_sync_mode_picker_title">再同期モードを選択</string>
     <string name="douban_sync_mode_picker_title_first">同期モードを選択</string>
+    <string name="douban_sync_mode_scope_trakt">Douban のマークを取り込み、Trakt 接続時は状態変更を書き込みます。</string>
+    <string name="douban_sync_mode_scope_douban_only">Douban 専用モード：マークをローカル保存して個人クラウドへ送信します。Trakt は変更しません。</string>
     <string name="douban_sync_mode_b_title">増分同期</string>
     <string name="douban_sync_mode_b_desc">豆瓣の新規ウォッチ/視聴済みマークを同期し、同期済み項目の状態変化を検出。同期完了後に自動で状態一致性チェックを行い、豆瓣とTraktのデータ一致を確保します。</string>
     <string name="douban_sync_mode_b_example">例:ある映画がウォッチリストとして同期済み、豆瓣で視聴済みに変更した場合、このモードはTraktを視聴済みに更新します。同期後に状態不一致があれば自動修復します。</string>
@@ -751,6 +780,9 @@
     <string name="consistency_check_background">バックグラウンド</string>
     <string name="consistency_check_cancelling">キャンセル中...</string>
     <string name="consistency_check_cancel">キャンセル</string>
+    <string name="consistency_check_login">ログイン</string>
+    <string name="consistency_check_retry">再試行</string>
+    <string name="consistency_check_view_conflicts">競合を表示</string>
     <string name="consistency_check_phase_preparing">チェックを準備中...</string>
     <string name="consistency_check_channel_desc">状態一貫性チェックの進行状況</string>
     <string name="consistency_check_complete_banner">チェック完了</string>
@@ -768,9 +800,11 @@
     <string name="consistency_check_phase_update_douban">豆瓣更新中</string>
     <string name="consistency_check_phase_done">完了</string>
     <string name="consistency_check_summary">%1$d件チェック、%2$d件の競合、Trakt更新%3$d件、豆瓣更新%4$d件、エラー%5$d件</string>
+    <string name="consistency_check_summary_with_errors">一部完了：%1$d件チェック、競合%2$d件、Trakt更新%3$d件、豆瓣更新%4$d件、エラー%5$d件</string>
     <string name="consistency_check_notification_progress">%1$s（%2$d/%3$d）</string>
     <string name="consistency_check_notification_progress_with_subphase">%1$s · %2$s（%3$d/%4$d）</string>
     <string name="consistency_check_notification_stage_with_subphase">%1$s · %2$s</string>
+    <string name="consistency_check_notification_batch">%1$s · 一括処理中</string>
     <string name="consistency_check_notification_current">現在：%1$s</string>
     <string name="consistency_check_notification_eta">残り時間：%1$s</string>
     <string name="consistency_check_notification_public">状態チェック：%1$s</string>

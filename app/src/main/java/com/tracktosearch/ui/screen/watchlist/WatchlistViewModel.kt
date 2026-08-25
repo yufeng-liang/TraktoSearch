@@ -20,6 +20,7 @@ import com.tracktosearch.data.repository.ConsistencyCheckResult
 import com.tracktosearch.data.repository.DoubanBatchRemovalManager
 import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.DoubanSyncProgress
+import com.tracktosearch.data.repository.DoubanSyncStage
 import com.tracktosearch.data.repository.DoubanTraktStatusConsistencyChecker
 import com.tracktosearch.data.repository.DoubanWatchlistRecord
 import com.tracktosearch.data.repository.DoubanWatchlistStatus
@@ -260,6 +261,17 @@ class WatchlistViewModel @Inject constructor(
         doubanSyncManager.resetProgress()
     }
 
+    /** 直接重试结果页中仍可恢复的失败项；返回 false 表示没有可重试项或已有任务运行。 */
+    fun retryLatestDoubanFailures(): Boolean {
+        val failures = _uiState.value.doubanSyncProgress?.failedItems.orEmpty()
+        val recoverableReasons = failures
+            .map { it.failureReason }
+            .filter { it.recoverable }
+            .toSet()
+        if (recoverableReasons.isEmpty()) return false
+        return doubanSyncManager.startRetry(failures, recoverableReasons)
+    }
+
     /** 是否需要首次同步引导（已登录豆瓣 + 从未同步过） */
     private val _needFirstSyncGuide = MutableStateFlow(false)
     val needFirstSyncGuide: StateFlow<Boolean> = _needFirstSyncGuide.asStateFlow()
@@ -432,13 +444,18 @@ class WatchlistViewModel @Inject constructor(
                     refreshDoubanEmptyState()
                     _syncCompleteEvent.emit(Unit)
                     val completedProgress = progress
-                    doubanSyncBannerHideJob = viewModelScope.launch {
-                        delay(5000)
-                        _uiState.update { state ->
-                            if (state.doubanSyncProgress == completedProgress) {
-                                state.copy(doubanSyncBannerVisible = false)
-                            } else {
-                                state
+                    val keepResultVisible = progress.stage == DoubanSyncStage.CANCELLING ||
+                        progress.failedCount > 0 ||
+                        progress.pendingItemCount > 0 ||
+                        progress.conflictsFound > 0 ||
+                        (progress.cloudUploadAttempted && !progress.cloudUploadSucceeded)
+                    if (!keepResultVisible) {
+                        doubanSyncBannerHideJob = viewModelScope.launch {
+                            delay(5000)
+                            _uiState.update { state ->
+                                if (state.doubanSyncProgress == completedProgress) {
+                                    state.copy(doubanSyncBannerVisible = false)
+                                } else state
                             }
                         }
                     }

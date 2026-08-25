@@ -155,14 +155,17 @@
     <string name="douban_sync_cancelling">취소 중...</string>
     <string name="douban_sync_cancel">취소</string>
     <string name="douban_sync_background">백그라운드</string>
+    <string name="douban_sync_background_unavailable">백그라운드 진행을 시작할 수 없습니다. 이 화면을 열어 두거나 알림을 사용 설정하세요.</string>
     <string name="douban_sync_relogin">재로그인</string>
     <string name="douban_sync_login_trakt">Trakt 로그인</string>
     <string name="douban_sync_login_douban">Douban 로그인</string>
     <string name="douban_sync_cookie_expired_banner">더우반 로그인 만료, 탭하여 재로그인</string>
     <string name="douban_sync_douban_login_required_banner">더우반 로그인이 필요합니다. 탭하여 로그인</string>
     <string name="douban_sync_trakt_login_required_banner">Trakt 로그인이 필요합니다. 탭하여 로그인</string>
-    <string name="douban_sync_complete_banner">동기화 완료, %1$d건 추가</string>
+    <string name="douban_sync_complete_banner">동기화 완료, %1$d건 처리</string>
+    <string name="douban_sync_complete_with_failures_banner">동기화 일부 완료: 성공 %1$d건, %2$d건 재시도 필요</string>
     <string name="douban_sync_cancelled_banner">동기화 취소됨</string>
+    <string name="douban_sync_cancelled_with_pending">동기화가 취소되었습니다. %1$d개 항목을 계속할 수 있습니다</string>
     <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
     <string name="douban_sync_error_detail">오류: %1$s</string>
     <string name="douban_sync_eta_format">약 %1$s 남음</string>
@@ -171,6 +174,24 @@
     <string name="douban_sync_delay_list_crawl">목록 페이지 크롤링 지연</string>
     <string name="douban_sync_delay_retry">재시도 대기</string>
     <string name="douban_sync_summary_format">성공 %1$d · 건너뜀 %2$d · 캐시 %3$d</string>
+    <string name="douban_sync_summary_with_failures">부분 완료: 성공 %1$d · 건너뜀 %2$d · 캐시 %3$d · 실패 %4$d</string>
+    <string name="douban_sync_summary_title">동기화 요약</string>
+    <string name="douban_sync_summary_success">성공적으로 가져옴</string>
+    <string name="douban_sync_summary_reused">재사용 또는 건너뜀</string>
+    <string name="douban_sync_summary_failed">실패, 다시 시도 가능</string>
+    <string name="douban_sync_summary_conflicts">충돌 해결</string>
+    <string name="douban_sync_summary_conflicts_found">충돌 %1$d개 발견</string>
+    <string name="douban_sync_summary_pending">재개 대기</string>
+    <string name="douban_sync_summary_cloud">클라우드 업로드</string>
+    <string name="douban_sync_cloud_not_attempted">시도하지 않음</string>
+    <string name="douban_sync_cloud_succeeded">업로드됨</string>
+    <string name="douban_sync_cloud_failed">다시 시도 필요</string>
+    <string name="douban_sync_view_details">활동 세부정보 보기</string>
+    <string name="douban_sync_hide_details">활동 세부정보 접기</string>
+    <string name="douban_sync_view_failures">실패 항목 보기</string>
+    <string name="douban_sync_failure_remaining">실패 항목 %1$d개 더 있음</string>
+    <string name="douban_sync_retry_failures">실패 항목 다시 시도</string>
+    <string name="douban_sync_view_conflicts">일관성 결과 보기</string>
 
     <!-- Douban 동기화 실패 항목 재시도 -->
     <string name="douban_retry_title">Douban 동기화 실패 항목 재시도</string>
@@ -215,6 +236,11 @@
     <string name="douban_resume_continue_desc">리스트 크롤링 건너뛰기, 크롤링된 데이터 직접 처리</string>
     <string name="douban_resume_full_desc">미처리 데이터 삭제, 처음부터 시작</string>
     <string name="douban_resume_cancel">취소</string>
+    <string name="douban_resume_discard">미처리 데이터 삭제</string>
+    <string name="douban_resume_discard_title">완료되지 않은 동기화를 삭제할까요?</string>
+    <string name="douban_resume_discard_message">처리되지 않은 %1$d개 항목을 영구적으로 삭제합니다. 나중에 다시 시작할 수 없습니다.</string>
+    <string name="douban_resume_discard_confirm">삭제</string>
+    <string name="douban_resume_discard_cancel">데이터 유지</string>
     <string name="douban_resume_phase">미처리 리스트 재개 중</string>
     <string name="douban_resume_complete">재개 완료</string>
     <string name="sync_already_running">동기화 작업이 이미 실행 중입니다. 잠시 기다려주세요</string>
@@ -719,6 +745,7 @@
     <string name="cooldown_available">동기화 가능</string>
     <string name="douban_first_sync_title">Douban에서 가져오기</string>
     <string name="douban_first_sync_message">Douban에 로그인했지만 아직 마크를 가져오지 않았습니다. Douban에서 관심 목록과 시청 기록을 가져와 빠르게 시작하세요.</string>
+    <string name="douban_first_sync_message_douban_only">첫 가져오기는 Douban의 보고 싶은 목록과 시청 기록을 읽습니다. 전용 모드에서는 앱과 개인 클라우드에만 저장하고 Trakt는 변경하지 않습니다.</string>
     <string name="douban_first_sync_start">가져오기 시작</string>
     <string name="douban_first_sync_later">나중에</string>
     <string name="cooldown_guidance_title">쿨다운 기간 중</string>
@@ -729,6 +756,8 @@
     <!-- Douban sync mode picker -->
     <string name="douban_sync_mode_picker_title">재동기화 모드 선택</string>
     <string name="douban_sync_mode_picker_title_first">동기화 모드 선택</string>
+    <string name="douban_sync_mode_scope_trakt">Douban 표시를 가져오며 Trakt 연결 시 상태 변경을 기록합니다.</string>
+    <string name="douban_sync_mode_scope_douban_only">Douban 전용 모드: 표시를 로컬에 저장하고 개인 클라우드에 업로드하며 Trakt는 변경하지 않습니다.</string>
     <string name="douban_sync_mode_b_title">증분 동기화</string>
     <string name="douban_sync_mode_b_desc">더우반의 새 관심/시청 표시를 동기화하고 동기화된 항목의 상태 변화를 감지합니다. 동기화 완료 후 자동으로 상태 일관성 검사를 실행하여 더우반과 Trakt 데이터 일치를 보장합니다.</string>
     <string name="douban_sync_mode_b_example">예: 어떤 영화가 관심으로 동기화됨, 더우반에서 시청으로 변경함, 이 모드는 Trakt를 시청으로 업데이트합니다. 동기화 후 상태 불일치가 있으면 자동으로 수정합니다.</string>
@@ -748,9 +777,12 @@
     <string name="settings_douban_status_consistency_checking">확인 중…</string>
     <string name="settings_douban_status_consistency_done">충돌 %1$d건, Trakt 업데이트 %2$d건, 더우반 업데이트 %3$d건</string>
     <string name="consistency_check_title">상태 일관성 확인</string>
-    <string name="consistency_check_background">백그라운ด</string>
+    <string name="consistency_check_background">백그라운드</string>
     <string name="consistency_check_cancelling">취소 중...</string>
     <string name="consistency_check_cancel">취소</string>
+    <string name="consistency_check_login">로그인</string>
+    <string name="consistency_check_retry">다시 시도</string>
+    <string name="consistency_check_view_conflicts">충돌 보기</string>
     <string name="consistency_check_phase_preparing">확인 준비 중...</string>
     <string name="consistency_check_channel_desc">상태 일관성 확인 진행 상황</string>
     <string name="consistency_check_complete_banner">확인 완료</string>
@@ -768,9 +800,11 @@
     <string name="consistency_check_phase_update_douban">더우반 업데이트 중</string>
     <string name="consistency_check_phase_done">완료</string>
     <string name="consistency_check_summary">%1$d건 확인, %2$d개 충돌, Trakt 업데이트 %3$d건, 더우반 업데이트 %4$d건, 오류 %5$d건</string>
+    <string name="consistency_check_summary_with_errors">부분 완료: %1$d건 확인, 충돌 %2$d개, Trakt 업데이트 %3$d건, 더우반 업데이트 %4$d건, 오류 %5$d건</string>
     <string name="consistency_check_notification_progress">%1$s (%2$d/%3$d)</string>
     <string name="consistency_check_notification_progress_with_subphase">%1$s · %2$s (%3$d/%4$d)</string>
     <string name="consistency_check_notification_stage_with_subphase">%1$s · %2$s</string>
+    <string name="consistency_check_notification_batch">%1$s · 일괄 처리 중</string>
     <string name="consistency_check_notification_current">현재: %1$s</string>
     <string name="consistency_check_notification_eta">예상 남은 시간: %1$s</string>
     <string name="consistency_check_notification_public">상태 확인: %1$s</string>

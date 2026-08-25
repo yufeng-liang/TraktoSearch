@@ -7,6 +7,9 @@ import com.tracktosearch.data.local.DoubanCredentials
 import com.tracktosearch.data.local.LastConsistencyCheckStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
+import com.tracktosearch.data.local.db.DoubanConsistencyCheckDao
+import com.tracktosearch.data.local.db.DoubanConsistencyCheckRunEntity
+import com.tracktosearch.data.local.db.DoubanConsistencyCheckTaskEntity
 import com.tracktosearch.data.remote.douban.DelayInfo
 import com.tracktosearch.data.remote.douban.DoubanNetworkException
 import com.tracktosearch.data.remote.douban.DoubanRepository
@@ -68,6 +71,7 @@ class DoubanTraktStatusConsistencyCheckerTest {
     }
     private val doubanAuthStorage = mockk<DoubanAuthStorage>(relaxed = true)
     private val lastConsistencyCheckStorage = mockk<LastConsistencyCheckStorage>(relaxed = true)
+    private val consistencyCheckDao = mockk<DoubanConsistencyCheckDao>(relaxed = true)
     private val appContext: Context = RuntimeEnvironment.getApplication()
 
     private lateinit var checker: DoubanTraktStatusConsistencyChecker
@@ -75,7 +79,7 @@ class DoubanTraktStatusConsistencyCheckerTest {
     @Before
     fun setUp() {
         // 清除前序测试的 stub 和调用记录，确保 coVerify(exactly = 0) 不受干扰
-        clearMocks(doubanSyncedItemDao, traktRepository, doubanRepository, doubanAuthStorage, lastConsistencyCheckStorage)
+        clearMocks(doubanSyncedItemDao, traktRepository, doubanRepository, doubanAuthStorage, lastConsistencyCheckStorage, consistencyCheckDao)
         // 重新 stub delayEvent（init 块已 collect 过，保持 stub 一致避免后续访问 NPE）
         every { doubanRepository.delayEvent } returns delayEventFlow
         // 每个测试创建新的 checker 实例，避免 checkProgress/checkJob 状态泄漏
@@ -85,6 +89,7 @@ class DoubanTraktStatusConsistencyCheckerTest {
             doubanRepository,
             doubanAuthStorage,
             lastConsistencyCheckStorage,
+            consistencyCheckDao,
             appContext
         )
     }
@@ -409,6 +414,61 @@ class DoubanTraktStatusConsistencyCheckerTest {
 
         assertThat(result.isComplete).isTrue()
         coVerify(exactly = 1) { lastConsistencyCheckStorage.recordCheck() }
+    }
+
+    @Test
+    fun checkAndUnify_存在同账号未完成任务_只续传待处理任务() = runTest {
+        every { doubanAuthStorage.getCredentials() } returns null
+        val run = DoubanConsistencyCheckRunEntity(
+            accountKey = "unknown",
+            dataVersion = 1,
+            status = "RUNNING",
+            phase = "APPLYING",
+            current = 0,
+            total = 1,
+            startedAt = 1,
+            updatedAt = 1,
+            completedAt = null,
+            invalidReason = null
+        )
+        val task = DoubanConsistencyCheckTaskEntity("1", "db-1", "TRAKT_WATCHED|movie|42", "PENDING", updatedAt = 1)
+        coEvery { consistencyCheckDao.getRun() } returns run
+        coEvery { consistencyCheckDao.getPendingTasks("1") } returns listOf(task)
+        coEvery { consistencyCheckDao.getTasks("1") } returns listOf(task.copy(status = "DONE"))
+        coEvery { consistencyCheckDao.getConflicts("1") } returns emptyList()
+        coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns emptyList()
+        coEvery { traktRepository.batchMarkAsWatched(listOf(42), emptyList()) } returns Result.success(TraktSyncResponse())
+
+        val result = checker.checkAndUnify()
+
+        assertThat(result.errors).isEqualTo(0)
+        assertThat(result.traktUpdated).isEqualTo(1)
+        coVerify(exactly = 1) { traktRepository.batchMarkAsWatched(listOf(42), emptyList()) }
+    }
+
+    @Test
+    fun checkAndUnify_账号变化_使旧任务失效并提示重新检查() = runTest {
+        stubLoggedIn()
+        val run = DoubanConsistencyCheckRunEntity(
+            accountKey = "old-user",
+            dataVersion = 1,
+            status = "RETRY",
+            phase = "RETRY",
+            current = 0,
+            total = 1,
+            startedAt = 1,
+            updatedAt = 1,
+            completedAt = null,
+            invalidReason = null
+        )
+        coEvery { consistencyCheckDao.getRun() } returns run
+
+        val result = checker.checkAndUnify()
+
+        assertThat(result.phase).contains("重新检查")
+        assertThat(result.errors).isEqualTo(1)
+        coVerify(exactly = 0) { traktRepository.batchMarkAsWatched(any(), any()) }
+        coVerify { consistencyCheckDao.upsertRun(match { it.status == "INVALID" }) }
     }
 
     // ============================================================

@@ -8,6 +8,10 @@ import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.LastConsistencyCheckStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
+import com.tracktosearch.data.local.db.DoubanConsistencyCheckDao
+import com.tracktosearch.data.local.db.DoubanConsistencyCheckRunEntity
+import com.tracktosearch.data.local.db.DoubanConsistencyCheckTaskEntity
+import com.tracktosearch.data.local.db.DoubanConsistencyConflictEntity
 import com.tracktosearch.data.remote.douban.DelayInfo
 import com.tracktosearch.data.remote.douban.DoubanCookieExpiredException
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
@@ -64,6 +68,16 @@ data class ConsistencyCheckResult(
     val isCancelled: Boolean = false    // true=检查已被用户取消(区分正常完成与取消,避免 WatchlistScreen 自动弹窗)
 )
 
+data class ConsistencyConflictRecord(
+    val doubanId: String,
+    val title: String,
+    val doubanStatus: String,
+    val traktStatus: String,
+    val conflictType: String,
+    val resolutionStatus: String,
+    val errorMessage: String? = null
+)
+
 /**
  * 豆瓣与 Trakt 影视状态一致性检查器。
  *
@@ -91,10 +105,12 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
     private val doubanRepository: DoubanRepository,
     private val doubanAuthStorage: DoubanAuthStorage,
     private val lastConsistencyCheckStorage: LastConsistencyCheckStorage,
+    private val consistencyCheckDao: DoubanConsistencyCheckDao,
     @ApplicationContext private val context: Context
 ) {
     companion object {
         private const val TAG = "StatusConsistency"
+        private const val CHECK_RUN_ID = "1"
         /** 豆瓣标记并发度（单条操作+反爬延迟，控制并发避免封禁） */
         private const val DOUBAN_CONCURRENCY = 2
     }
@@ -283,6 +299,7 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             )
         }
         try {
+            val accountKey = currentAccountKey()
             val allItems = try {
                 doubanSyncedItemDao.getAllSyncedItems()
             } catch (e: CancellationException) {
@@ -290,7 +307,31 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             } catch (e: Exception) {
                 return@withContext failureResult(e)
             }
+            val dataVersion = computeDataVersion(allItems)
+            val existingRun = consistencyCheckDao.getRun()
+            if (existingRun != null && existingRun.status in setOf("RUNNING", "RETRY")) {
+                if (existingRun.accountKey != accountKey || existingRun.dataVersion != dataVersion) {
+                    val now = System.currentTimeMillis()
+                    consistencyCheckDao.upsertRun(
+                        existingRun.copy(
+                            status = "INVALID",
+                            phase = "需要重新检查",
+                            updatedAt = now,
+                            completedAt = now,
+                            invalidReason = "ACCOUNT_OR_DATA_VERSION_CHANGED"
+                        )
+                    )
+                    return@withContext ConsistencyCheckResult(
+                        isComplete = true,
+                        errors = 1,
+                        phase = "账号或数据版本已变化，请重新检查"
+                    )
+                }
+                return@withContext executePersistedTasks(existingRun)
+            }
+
             if (allItems.isEmpty()) {
+                persistEmptyRun(accountKey)
                 return@withContext ConsistencyCheckResult(isComplete = true)
             }
 
@@ -308,6 +349,8 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             val doubanNeedUpdate = classifyResult.doubanNeedUpdate
             val conflicts = classifyResult.conflicts
             val skipped = classifyResult.skipped
+            val persistentPlan = buildPersistentPlan(allItems, watchedIds)
+            persistRunningPlan(accountKey, dataVersion, allItems.size, persistentPlan)
 
             // 1. 批量更新 Trakt 侧
             val traktResult = batchUpdateTrakt(traktNeedWatched, traktNeedWatchlist)
@@ -315,7 +358,6 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             var errors = traktResult.errors
 
             // 1b. 全量清理 Trakt 侧想看+已看双状态冲突（覆盖非豆瓣来源的纯 Trakt 数据）
-            //     取最新缓存快照（batchUpdateTrakt 已同步更新缓存），避免与豆瓣表内冲突重复计数
             val traktConflictResult = resolveTraktWatchlistWatchedConflicts(traktRepository.getWatchlistWatchedIds())
             traktUpdated += traktConflictResult.updated
             errors += traktConflictResult.errors
@@ -333,8 +375,9 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                 errors = errors,
                 isComplete = true
             )
+            persistCompletedPlan(accountKey, dataVersion, allItems.size, persistentPlan, result)
             // 记录检查完成时间（供设置页二次确认弹窗显示）
-            runCatching { lastConsistencyCheckStorage.recordCheck() }
+            if (result.errors == 0) runCatching { lastConsistencyCheckStorage.recordCheck() }
             Log.i(TAG, "状态一致性检查完成（本地表对比）: $result")
             result
         } finally {
@@ -663,7 +706,7 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             phase = uiStrings().updateTrakt,
             subPhase = "",
             current = 0,
-            total = traktNeedWatched.size + traktNeedWatchlist.size
+            total = 0
         )
         val traktResult = batchUpdateTrakt(traktNeedWatched, traktNeedWatchlist)
         var traktUpdated = traktResult.updated
@@ -676,9 +719,9 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         _checkProgress.value = _checkProgress.value.copy(
             traktUpdated = traktUpdated,
             conflictsFound = conflicts,
-            current = traktUpdated,
+            current = 0,
             errors = errors,
-            total = traktNeedWatched.size + traktNeedWatchlist.size
+            total = 0
         )
 
         // ========== 阶段4: 逐条更新豆瓣侧 ==========
@@ -1005,6 +1048,233 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         )
     }
 
+    private suspend fun currentAccountKey(): String =
+        doubanAuthStorage.getCredentials()?.userId.orEmpty().ifBlank { "unknown" }
+
+    private fun computeDataVersion(items: List<DoubanSyncedItem>): Long =
+        items.fold(1L) { hash, item ->
+            hash * 31 + item.doubanId.hashCode() + item.status.hashCode() + (item.traktId ?: 0)
+        }
+
+    private suspend fun persistEmptyRun(accountKey: String) {
+        val now = System.currentTimeMillis()
+        consistencyCheckDao.upsertRun(
+            DoubanConsistencyCheckRunEntity(
+                accountKey = accountKey,
+                    dataVersion = computeDataVersion(emptyList()),
+                status = "COMPLETED",
+                phase = "DONE",
+                current = 0,
+                total = 0,
+                startedAt = now,
+                updatedAt = now,
+                completedAt = now,
+                invalidReason = null
+            )
+        )
+        consistencyCheckDao.clearTasks(CHECK_RUN_ID)
+        consistencyCheckDao.clearConflicts(CHECK_RUN_ID)
+    }
+
+    private suspend fun persistRunningPlan(
+        accountKey: String,
+        dataVersion: Long,
+        total: Int,
+        plan: PersistentPlan
+    ) {
+        val now = System.currentTimeMillis()
+        consistencyCheckDao.clearTasks(CHECK_RUN_ID)
+        consistencyCheckDao.clearConflicts(CHECK_RUN_ID)
+        consistencyCheckDao.upsertRun(
+            DoubanConsistencyCheckRunEntity(
+                accountKey = accountKey,
+                dataVersion = dataVersion,
+                status = "RUNNING",
+                phase = "APPLYING",
+                current = 0,
+                total = total,
+                startedAt = now,
+                updatedAt = now,
+                completedAt = null,
+                invalidReason = null
+            )
+        )
+        if (plan.tasks.isNotEmpty()) consistencyCheckDao.upsertTasks(plan.tasks)
+        if (plan.conflicts.isNotEmpty()) consistencyCheckDao.upsertConflicts(plan.conflicts)
+    }
+
+    private suspend fun persistCompletedPlan(
+        accountKey: String,
+        dataVersion: Long,
+        total: Int,
+        plan: PersistentPlan,
+        result: ConsistencyCheckResult
+    ) {
+        val now = System.currentTimeMillis()
+        consistencyCheckDao.upsertRun(
+            DoubanConsistencyCheckRunEntity(
+                accountKey = accountKey,
+                dataVersion = dataVersion,
+                status = if (result.errors == 0) "COMPLETED" else "RETRY",
+                phase = if (result.errors == 0) "DONE" else "RETRY",
+                current = total,
+                total = total,
+                startedAt = now,
+                updatedAt = now,
+                completedAt = if (result.errors == 0) now else null,
+                invalidReason = null
+            )
+        )
+        if (plan.tasks.isNotEmpty()) {
+            consistencyCheckDao.upsertTasks(
+                plan.tasks.map { task -> task.copy(status = if (result.errors == 0) "DONE" else "RETRY", attemptCount = 1, errorMessage = if (result.errors == 0) null else "Check completed with errors", updatedAt = now) }
+            )
+        }
+        if (plan.conflicts.isNotEmpty()) {
+            consistencyCheckDao.upsertConflicts(
+                plan.conflicts.map { conflict -> conflict.copy(resolutionStatus = if (result.errors == 0) "FIXED" else "RETRY", errorMessage = if (result.errors == 0) null else "Check completed with errors", updatedAt = now) }
+            )
+        }
+    }
+
+    private data class PersistentPlan(
+        val tasks: List<DoubanConsistencyCheckTaskEntity>,
+        val conflicts: List<DoubanConsistencyConflictEntity>,
+        val skipped: Int
+    )
+
+    private fun buildPersistentPlan(
+        allItems: List<DoubanSyncedItem>,
+        watchedIds: TraktRepository.WatchlistWatchedIds
+    ): PersistentPlan {
+        val tasks = mutableListOf<DoubanConsistencyCheckTaskEntity>()
+        val conflicts = mutableListOf<DoubanConsistencyConflictEntity>()
+        var skipped = 0
+        val now = System.currentTimeMillis()
+        for (item in allItems) {
+            val traktId = item.traktId
+            if (traktId == null || traktId <= 0) {
+                skipped++
+                continue
+            }
+            val mediaType = if (item.mediaType == "show") MediaType.SHOW else MediaType.MOVIE
+            val traktWatched = watchedIds.isWatched(traktId, null, mediaType)
+            val traktWatchlist = watchedIds.isInWatchlist(traktId, null, mediaType)
+            val doubanCollect = item.status == "collect"
+            val doubanWish = item.status == "wish"
+            val runId = CHECK_RUN_ID
+            val mediaValue = if (mediaType == MediaType.SHOW) "show" else "movie"
+            fun traktAction(name: String) = "$name|$mediaValue|$traktId"
+            fun addTask(action: String) {
+                tasks += DoubanConsistencyCheckTaskEntity(runId, item.doubanId, action, "PENDING", updatedAt = now)
+            }
+            fun addConflict(type: String, traktStatus: String, action: String) {
+                val status = if (action.isBlank()) "RESOLVED" else "PENDING"
+                conflicts += DoubanConsistencyConflictEntity(
+                    id = "$runId:${item.doubanId}:$type",
+                    runId = runId,
+                    doubanId = item.doubanId,
+                    title = item.title,
+                    doubanStatus = item.status,
+                    traktStatus = traktStatus,
+                    conflictType = type,
+                    resolutionStatus = status,
+                    updatedAt = now
+                )
+                if (action.isNotBlank()) addTask(action)
+            }
+            if (traktWatched && traktWatchlist) {
+                addConflict("TRAKT_DUAL_STATUS", "WATCHED_AND_WATCHLIST", if (doubanWish) "DOUBAN_COLLECT" else traktAction("TRAKT_REMOVE_WATCHLIST"))
+            } else when {
+                doubanCollect && traktWatchlist -> addConflict("STATUS_CONFLICT", "WATCHLIST", traktAction("TRAKT_WATCHED"))
+                doubanCollect && !traktWatched -> addTask(traktAction("TRAKT_WATCHED"))
+                doubanWish && traktWatched -> addConflict("STATUS_CONFLICT", "WATCHED", "DOUBAN_COLLECT")
+                doubanWish && !traktWatchlist -> addTask(traktAction("TRAKT_WATCHLIST"))
+                !doubanCollect && traktWatched -> addTask("DOUBAN_COLLECT")
+                !doubanWish && traktWatchlist -> addTask("DOUBAN_WISH")
+            }
+        }
+        return PersistentPlan(tasks, conflicts, skipped)
+    }
+
+    private suspend fun executePersistedTasks(
+        run: DoubanConsistencyCheckRunEntity,
+        skipped: Int = 0
+    ): ConsistencyCheckResult {
+        val tasks = consistencyCheckDao.getPendingTasks(runId = CHECK_RUN_ID)
+        var traktUpdated = 0
+        var doubanUpdated = 0
+        var errors = 0
+        for (task in tasks) {
+            val result = runCatching {
+                val actionParts = task.action.split('|')
+                when (actionParts.first()) {
+                    "TRAKT_WATCHED" -> {
+                        val type = if (actionParts[1] == "show") MediaType.SHOW else MediaType.MOVIE
+                        val traktId = actionParts[2].toInt()
+                        traktRepository.batchMarkAsWatched(
+                            if (type == MediaType.MOVIE) listOf(traktId) else emptyList(),
+                            if (type == MediaType.SHOW) listOf(traktId) else emptyList()
+                        ).isSuccess
+                    }
+                    "TRAKT_WATCHLIST" -> {
+                        val type = if (actionParts[1] == "show") MediaType.SHOW else MediaType.MOVIE
+                        val traktId = actionParts[2].toInt()
+                        traktRepository.batchAddToWatchlist(
+                            if (type == MediaType.MOVIE) listOf(traktId) else emptyList(),
+                            if (type == MediaType.SHOW) listOf(traktId) else emptyList()
+                        ).isSuccess
+                    }
+                    "TRAKT_REMOVE_WATCHLIST" -> {
+                        val type = if (actionParts[1] == "show") MediaType.SHOW else MediaType.MOVIE
+                        val traktId = actionParts[2].toInt()
+                        traktRepository.batchRemoveFromWatchlist(
+                            if (type == MediaType.MOVIE) listOf(traktId) else emptyList(),
+                            if (type == MediaType.SHOW) listOf(traktId) else emptyList()
+                        ).isSuccess
+                    }
+                    "DOUBAN_COLLECT", "DOUBAN_WISH" -> {
+                        val cred = doubanAuthStorage.getCredentials() ?: return@runCatching false
+                        val action = if (task.action == "DOUBAN_COLLECT") "collect" else "wish"
+                        val ck = doubanRepository.fetchCsrfToken(task.doubanId, cred.cookie) ?: return@runCatching false
+                        val marked = doubanRepository.markInterestByCk(action, task.doubanId, cred.cookie, ck).success
+                        if (marked) doubanSyncedItemDao.updateStatus(task.doubanId, action)
+                        marked
+                    }
+                    else -> false
+                }
+            }.getOrDefault(false)
+            val nextStatus = if (result) "DONE" else "RETRY"
+            consistencyCheckDao.updateTaskStatus(CHECK_RUN_ID, task.doubanId, task.action, nextStatus, task.attemptCount + 1, if (result) null else "Task failed", System.currentTimeMillis())
+            if (result) {
+                if (task.action.startsWith("TRAKT")) traktUpdated++ else doubanUpdated++
+            } else errors++
+        }
+        val completed = errors == 0
+        val now = System.currentTimeMillis()
+        val allTasks = consistencyCheckDao.getTasks(CHECK_RUN_ID)
+        val conflicts = consistencyCheckDao.getConflicts(CHECK_RUN_ID).map { conflict ->
+            val related = allTasks.filter { it.doubanId == conflict.doubanId }
+            val retry = related.firstOrNull { it.status != "DONE" }
+            conflict.copy(
+                resolutionStatus = if (retry == null) "FIXED" else "RETRY",
+                errorMessage = retry?.errorMessage,
+                updatedAt = now
+            )
+        }
+        if (conflicts.isNotEmpty()) consistencyCheckDao.upsertConflicts(conflicts)
+        consistencyCheckDao.upsertRun(run.copy(status = if (completed) "COMPLETED" else "RETRY", phase = if (completed) "DONE" else "RETRY", current = tasks.size, updatedAt = now, completedAt = if (completed) now else null))
+        return ConsistencyCheckResult(
+            totalChecked = run.total,
+            conflictsFound = conflicts.size,
+            doubanUpdated = doubanUpdated,
+            traktUpdated = traktUpdated,
+            skipped = skipped,
+            errors = errors,
+            isComplete = completed
+        )
+    }
+
     private data class TraktUpdateResult(
         val updated: Int = 0,
         val errors: Int = 0
@@ -1022,6 +1292,7 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         val traktNeedWatchlist: List<Pair<Int, MediaType>>,
         val doubanNeedUpdate: List<DoubanStatusUpdate>,
         val conflicts: Int,
-        val skipped: Int
+        val skipped: Int,
+        val conflictRecords: List<ConsistencyConflictRecord> = emptyList()
     )
 }

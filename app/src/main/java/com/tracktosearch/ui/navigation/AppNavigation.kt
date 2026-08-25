@@ -629,47 +629,57 @@ fun AppNavigation(
                         // 回滚检测(最高优先级:用户标记数据安全)
                         var rollbackCount by rememberSaveable { mutableIntStateOf(0) }
                         var rollbackChecked by rememberSaveable { mutableStateOf(false) }
+                        var rollbackDialogDismissed by rememberSaveable { mutableStateOf(false) }
                         LaunchedEffect(Unit) {
                             if (!rollbackChecked) {
                                 rollbackChecked = true
                                 rollbackCount = doubanSyncManager.getRollbackCount()
+                                rollbackDialogDismissed = false
                             }
                         }
-                        if (rollbackCount > 0) {
+                        if (rollbackCount > 0 && !rollbackDialogDismissed) {
                             com.tracktosearch.ui.screen.douban.DoubanRollbackDialog(
                                 rollbackCount = rollbackCount,
-                                onDismiss = { rollbackCount = 0 },
+                                // 关闭只隐藏当前弹窗，保留 rollback 数据；pending 弹窗仍被阻断。
+                                onDismiss = { rollbackDialogDismissed = true },
                                 onRestore = {
-                                    rollbackCount = 0
-                                    scope.launch { doubanSyncManager.restoreRollback() }
+                                    rollbackDialogDismissed = true
+                                    scope.launch {
+                                        doubanSyncManager.restoreRollback()
+                                        rollbackCount = doubanSyncManager.getRollbackCount()
+                                    }
                                 },
                                 onDiscard = {
-                                    rollbackCount = 0
-                                    scope.launch { doubanSyncManager.discardRollback() }
+                                    rollbackDialogDismissed = true
+                                    scope.launch {
+                                        doubanSyncManager.discardRollback()
+                                        rollbackCount = doubanSyncManager.getRollbackCount()
+                                    }
                                 }
                             )
                         }
 
                         var pendingCount by rememberSaveable { mutableIntStateOf(0) }
                         var pendingChecked by rememberSaveable { mutableStateOf(false) }
+                        var pendingDialogDismissed by rememberSaveable { mutableStateOf(false) }
                         LaunchedEffect(Unit) {
                             if (!pendingChecked) {
                                 pendingChecked = true
                                 pendingCount = doubanSyncManager.getPendingItemsCount()
+                                pendingDialogDismissed = false
                             }
                         }
-                        if (pendingCount > 0) {
-                            com.tracktosearch.ui.screen.douban.DoubanPendingItemsDialog(
+                        if (pendingCount > 0 && rollbackCount == 0 && !pendingDialogDismissed) {
+                            com.tracktosearch.ui.screen.douban.DoubanPendingItemsDialogWithDiscard(
                                 pendingCount = pendingCount,
                                 onDismiss = {
-                                    // 用户点取消:清空数据库 pending items,避免下次启动再次弹窗
-                                    // pending items 只是已爬到但未处理的列表数据,丢弃不影响已同步标记
-                                    pendingCount = 0
-                                    scope.launch { doubanSyncManager.clearPendingItems() }
+                                    // 关闭只代表稍后处理，保留 pending 供下次恢复。
+                                    pendingDialogDismissed = true
                                 },
                                 onContinue = {
                                     // 继续同步:走 startResume,跳过列表爬取
                                     // 留在 MainScreen，Watchlist 横幅会显示进度
+                                    pendingDialogDismissed = true
                                     pendingCount = 0
                                     val started = doubanSyncManager.startResume()
                                     if (!started) {
@@ -677,15 +687,24 @@ fun AppNavigation(
                                     }
                                 },
                                 onFullSync = {
-                                    // 完整同步:清空 pending items,走 FULL_REWRITE
+                                    // 完整同步:由同步任务在真正启动后清理 pending。
                                     // 留在 MainScreen，Watchlist 横幅会显示进度
+                                    pendingDialogDismissed = true
                                     pendingCount = 0
                                     scope.launch {
-                                        doubanSyncManager.clearPendingItems()
                                         val started = doubanSyncManager.startSync(SyncMode.FULL_REWRITE)
                                         if (!started) {
+                                            pendingCount = doubanSyncManager.getPendingItemsCount()
+                                            pendingDialogDismissed = false
                                             Toast.makeText(context, syncAlreadyRunningMessage, Toast.LENGTH_SHORT).show()
                                         }
+                                    }
+                                },
+                                onDiscardPending = {
+                                    scope.launch {
+                                        doubanSyncManager.discardPendingItems()
+                                        pendingCount = doubanSyncManager.getPendingItemsCount()
+                                        pendingDialogDismissed = true
                                     }
                                 }
                             )

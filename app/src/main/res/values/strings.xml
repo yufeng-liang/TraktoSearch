@@ -261,14 +261,17 @@
     <string name="douban_sync_cancelling">Cancelling...</string>
     <string name="douban_sync_cancel">Cancel</string>
     <string name="douban_sync_background">Background</string>
+    <string name="douban_sync_background_unavailable">Background progress is unavailable. Keep this screen open or enable notifications.</string>
     <string name="douban_sync_relogin">Re-login</string>
     <string name="douban_sync_login_trakt">Login Trakt</string>
     <string name="douban_sync_login_douban">Login Douban</string>
     <string name="douban_sync_cookie_expired_banner">Douban login expired, tap to re-login</string>
     <string name="douban_sync_douban_login_required_banner">Douban login required, tap to log in</string>
     <string name="douban_sync_trakt_login_required_banner">Trakt login required, tap to log in</string>
-    <string name="douban_sync_complete_banner">Sync complete, %1$d items added</string>
+    <string name="douban_sync_complete_banner">Sync complete, %1$d items processed</string>
+    <string name="douban_sync_complete_with_failures_banner">Sync partly complete: %1$d succeeded, %2$d need retry</string>
     <string name="douban_sync_cancelled_banner">Sync cancelled</string>
+    <string name="douban_sync_cancelled_with_pending">Sync cancelled. %1$d items can be resumed.</string>
     <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
     <string name="douban_sync_error_detail">Error: %1$s</string>
     <string name="douban_sync_eta_format">about %1$s remaining</string>
@@ -277,6 +280,24 @@
     <string name="douban_sync_delay_list_crawl">List page crawl delay</string>
     <string name="douban_sync_delay_retry">Retry backoff</string>
     <string name="douban_sync_summary_format">Success %1$d · Skipped %2$d · Cached %3$d</string>
+    <string name="douban_sync_summary_with_failures">Completed with issues: success %1$d · skipped %2$d · cached %3$d · failed %4$d</string>
+    <string name="douban_sync_summary_title">Sync summary</string>
+    <string name="douban_sync_summary_success">Imported successfully</string>
+    <string name="douban_sync_summary_reused">Reused or skipped</string>
+    <string name="douban_sync_summary_failed">Failed, retry available</string>
+    <string name="douban_sync_summary_conflicts">Conflicts repaired</string>
+    <string name="douban_sync_summary_conflicts_found">Found %1$d conflicts</string>
+    <string name="douban_sync_summary_pending">Pending resume</string>
+    <string name="douban_sync_summary_cloud">Cloud upload</string>
+    <string name="douban_sync_cloud_not_attempted">Not attempted</string>
+    <string name="douban_sync_cloud_succeeded">Uploaded</string>
+    <string name="douban_sync_cloud_failed">Upload needs retry</string>
+    <string name="douban_sync_view_details">View activity details</string>
+    <string name="douban_sync_hide_details">Hide activity details</string>
+    <string name="douban_sync_view_failures">View failures</string>
+    <string name="douban_sync_failure_remaining">%1$d more failed items</string>
+    <string name="douban_sync_retry_failures">Retry failures</string>
+    <string name="douban_sync_view_conflicts">View consistency result</string>
 
     <!-- Douban sync failure retry -->
     <string name="douban_retry_title">Retry Douban Sync Failures</string>
@@ -321,6 +342,11 @@
     <string name="douban_resume_continue_desc">Skip list crawling, process crawled data directly</string>
     <string name="douban_resume_full_desc">Clear unprocessed data, start from scratch</string>
     <string name="douban_resume_cancel">Cancel</string>
+    <string name="douban_resume_discard">Discard pending data</string>
+    <string name="douban_resume_discard_title">Discard unfinished sync?</string>
+    <string name="douban_resume_discard_message">This will permanently remove %1$d crawled items that have not been processed. You cannot resume them later.</string>
+    <string name="douban_resume_discard_confirm">Discard</string>
+    <string name="douban_resume_discard_cancel">Keep data</string>
     <string name="douban_resume_phase">Resuming unprocessed list</string>
     <string name="douban_resume_complete">Resume complete</string>
     <string name="sync_already_running">A sync task is already running, please wait</string>
@@ -826,6 +852,7 @@ Config:
     <string name="cooldown_available">Available</string>
     <string name="douban_first_sync_title">Import from Douban</string>
     <string name="douban_first_sync_message">You\'ve logged in to Douban but haven\'t imported your marks yet. Import your watchlist and watched history from Douban to get started quickly.</string>
+    <string name="douban_first_sync_message_douban_only">Your first import reads your Douban wish list and watched history. In Douban-only mode, data stays in the app and is uploaded to your private cloud backup; Trakt is not changed.</string>
     <string name="douban_first_sync_start">Start Import</string>
     <string name="douban_first_sync_later">Later</string>
     <string name="cooldown_guidance_title">Within cooldown period</string>
@@ -836,6 +863,8 @@ Config:
     <!-- Douban sync mode picker -->
     <string name="douban_sync_mode_picker_title">Choose Re-sync Mode</string>
     <string name="douban_sync_mode_picker_title_first">Choose Sync Mode</string>
+    <string name="douban_sync_mode_scope_trakt">Imports Douban marks locally and writes status changes to Trakt when connected.</string>
+    <string name="douban_sync_mode_scope_douban_only">Douban-only mode: saves marks locally and uploads your personal data; Trakt is not changed.</string>
     <string name="douban_sync_mode_b_title">Incremental sync</string>
     <string name="douban_sync_mode_b_desc">Sync new Douban wish/collect marks and detect status changes of synced items. A status consistency check runs automatically after sync to ensure Douban and Trakt are aligned.</string>
     <string name="douban_sync_mode_b_example">Example: a movie synced as wish, you changed it to watched on Douban, this mode will update Trakt to watched. A consistency check runs after sync to fix any mismatches.</string>
@@ -858,6 +887,9 @@ Config:
     <string name="consistency_check_background">Background</string>
     <string name="consistency_check_cancelling">Cancelling...</string>
     <string name="consistency_check_cancel">Cancel</string>
+    <string name="consistency_check_login">Log in</string>
+    <string name="consistency_check_retry">Retry</string>
+    <string name="consistency_check_view_conflicts">View conflicts</string>
     <string name="consistency_check_phase_preparing">Preparing check...</string>
     <string name="consistency_check_channel_desc">Status consistency check progress</string>
     <string name="consistency_check_complete_banner">Check complete</string>
@@ -875,9 +907,11 @@ Config:
     <string name="consistency_check_phase_update_douban">Updating Douban</string>
     <string name="consistency_check_phase_done">Done</string>
     <string name="consistency_check_summary">Checked %1$d items, found %2$d conflicts, Trakt updated %3$d, Douban updated %4$d, errors %5$d</string>
+    <string name="consistency_check_summary_with_errors">Partially completed: checked %1$d items, found %2$d conflicts, Trakt updated %3$d, Douban updated %4$d, errors %5$d</string>
     <string name="consistency_check_notification_progress">%1$s (%2$d/%3$d)</string>
     <string name="consistency_check_notification_progress_with_subphase">%1$s · %2$s (%3$d/%4$d)</string>
     <string name="consistency_check_notification_stage_with_subphase">%1$s · %2$s</string>
+    <string name="consistency_check_notification_batch">%1$s · batch processing</string>
     <string name="consistency_check_notification_current">Current: %1$s</string>
     <string name="consistency_check_notification_eta">ETA: %1$s</string>
     <string name="consistency_check_notification_public">Status check: %1$s</string>

@@ -91,4 +91,24 @@ class DoubanPendingItemsDialogTest {
         assertThat(continueCalls.get()).isEqualTo(0)
         assertThat(fullSyncCalls.get()).isEqualTo(0)
     }
+    @Test
+    fun `discard pending data requires confirmation`() {
+        val discardCalls = AtomicInteger(0)
+        composeRule.setContent {
+            MaterialTheme {
+                DoubanPendingItemsDialogWithDiscard(
+                    pendingCount = 12,
+                    onDismiss = {},
+                    onContinue = {},
+                    onFullSync = {},
+                    onDiscardPending = { discardCalls.incrementAndGet() }
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Discard pending data").performClick()
+        assertThat(discardCalls.get()).isEqualTo(0)
+        composeRule.onNodeWithText("Discard").performClick()
+        assertThat(discardCalls.get()).isEqualTo(1)
+    }
 }

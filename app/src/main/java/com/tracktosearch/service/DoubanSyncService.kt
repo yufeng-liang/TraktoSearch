@@ -65,8 +65,9 @@ class DoubanSyncService : Service() {
                 if (!granted) return false
             }
             val intent = Intent(context, DoubanSyncService::class.java).setAction(ACTION_START)
-            context.startForegroundService(intent)
-            return true
+            return runCatching {
+                context.startForegroundService(intent)
+            }.isSuccess
         }
 
         fun cancel(context: Context) {
@@ -192,6 +193,9 @@ internal fun buildDoubanSyncNotification(context: Context, progress: DoubanSyncP
             else -> null
         }
         val isUploading = progress.stage == DoubanSyncStage.UPLOADING
+        val isBatchWrite = progress.subStage == DoubanSyncSubStage.WRITING_TARGET ||
+            progress.subStage == DoubanSyncSubStage.WRITING_LOCAL
+        val hasTerminalFailure = progress.failedCount > 0 || !progress.errorMessage.isNullOrBlank()
         val contentText = when {
             progress.cookieExpired -> context.getString(R.string.douban_sync_cookie_expired_banner)
             progress.isComplete && progress.stage == DoubanSyncStage.LOGIN_REQUIRED -> when (progress.loginTarget) {
@@ -199,6 +203,19 @@ internal fun buildDoubanSyncNotification(context: Context, progress: DoubanSyncP
                 DoubanSyncLoginTarget.TRAKT -> context.getString(R.string.douban_sync_trakt_login_required_banner)
                 null -> stageLabel
             }
+            progress.isComplete && progress.stage == DoubanSyncStage.CANCELLING ->
+                if (progress.pendingItemCount > 0) {
+                    context.getString(R.string.douban_sync_cancelled_with_pending, progress.pendingItemCount)
+                } else {
+                    context.getString(R.string.douban_sync_cancelled_banner)
+                }
+            progress.isComplete && hasTerminalFailure -> context.getString(
+                R.string.douban_sync_summary_with_failures,
+                progress.successCount,
+                progress.skippedCount,
+                progress.cacheHitCount,
+                progress.failedCount
+            )
             progress.isComplete && progress.stage == DoubanSyncStage.COMPLETED ->
                 context.getString(
                     R.string.douban_sync_summary_format,
@@ -208,14 +225,17 @@ internal fun buildDoubanSyncNotification(context: Context, progress: DoubanSyncP
                 )
             progress.isComplete && progress.stage == DoubanSyncStage.FAILED ->
                 context.getString(R.string.douban_sync_stage_failed)
-            progress.isComplete && progress.stage == DoubanSyncStage.CANCELLING ->
-                context.getString(R.string.douban_sync_cancelled_banner)
             isUploading && subStageLabel != null -> context.getString(
                 R.string.douban_sync_notification_stage_format,
                 stageLabel,
                 subStageLabel
             )
             isUploading -> stageLabel
+            isBatchWrite && subStageLabel != null -> context.getString(
+                R.string.douban_sync_notification_stage_format,
+                stageLabel,
+                subStageLabel
+            )
             progress.total > 0 && targetLabel != null -> context.getString(
                 R.string.douban_sync_notification_progress_format,
                 stageLabel,
@@ -276,14 +296,15 @@ internal fun buildDoubanSyncNotification(context: Context, progress: DoubanSyncP
             channelId = DoubanSyncService.CHANNEL_ID,
             title = context.getString(R.string.douban_sync_title),
             phase = compactLabel,
-            current = if (isUploading) 0 else progress.current,
-            total = if (isUploading) 0 else progress.total,
+            current = if (isUploading || isBatchWrite) 0 else progress.current,
+            total = if (isUploading || isBatchWrite) 0 else progress.total,
             contentIntent = contentIntent,
             cancelIntent = cancelIntent,
             cancelText = context.getString(R.string.douban_sync_cancel),
             contentText = contentText,
             expandedText = expandedText,
             publicText = context.getString(R.string.douban_sync_notification_public, stageLabel),
+            terminalActionText = if (progress.isComplete) context.getString(R.string.douban_sync_complete) else null,
             isTerminal = progress.isComplete
         )
 }

@@ -52,6 +52,7 @@ fun DoubanSyncModePickerDialog(
     syncedCount: Int,
     cooldownStatus: CooldownStatus? = null,
     neverSynced: Boolean = false,
+    isDoubanOnly: Boolean = false,
     onDismiss: () -> Unit,
     onModeSelected: (SyncMode) -> Unit
 ) {
@@ -88,6 +89,15 @@ fun DoubanSyncModePickerDialog(
         title = { Text(stringResource(if (neverSynced) R.string.douban_sync_mode_picker_title_first else R.string.douban_sync_mode_picker_title)) },
         text = {
             Column {
+                Text(
+                    stringResource(
+                        if (isDoubanOnly) R.string.douban_sync_mode_scope_douban_only
+                        else R.string.douban_sync_mode_scope_trakt
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(12.dp))
                 ModeOptionItem(
                     icon = Icons.Rounded.Refresh,
                     title = stringResource(R.string.douban_sync_mode_b_title),
@@ -217,14 +227,22 @@ private fun CooldownBadge(cooldownStatus: CooldownStatus?) {
 @Composable
 fun DoubanFirstSyncGuideDialog(
     onDismiss: () -> Unit,
-    onStartImport: () -> Unit
+    onStartImport: () -> Unit,
+    isDoubanOnly: Boolean = false
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
         icon = { Icon(Icons.Rounded.AddCircle, contentDescription = null) },
         title = { Text(stringResource(R.string.douban_first_sync_title)) },
-        text = { Text(stringResource(R.string.douban_first_sync_message)) },
+        text = {
+            Text(
+                stringResource(
+                    if (isDoubanOnly) R.string.douban_first_sync_message_douban_only
+                    else R.string.douban_first_sync_message
+                )
+            )
+        },
         confirmButton = {
             TextButton(onClick = onStartImport) {
                 Text(stringResource(R.string.douban_first_sync_start))

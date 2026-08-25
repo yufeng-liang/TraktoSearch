@@ -49,6 +49,10 @@ internal fun consistencySubPhaseForDisplay(phase: String, subPhase: String): Str
 fun ConsistencyCheckDialog(
     onDismiss: () -> Unit,
     onBackground: () -> Unit,
+    onLogin: (() -> Unit)? = null,
+    onRetry: (() -> Unit)? = null,
+    onViewConflicts: (() -> Unit)? = null,
+    onBackgroundUnavailable: (() -> Unit)? = null,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val progress by viewModel.checkProgress.collectAsStateWithLifecycle()
@@ -207,9 +211,8 @@ fun ConsistencyCheckDialog(
                             // 正在取消时禁用"转后台":避免用户在取消过程中触发前台服务启动导致状态混乱
                             enabled = !p.isCancelling,
                             onClick = {
-                                if (ConsistencyCheckService.start(context)) {
-                                    onBackground()
-                                }
+                                if (ConsistencyCheckService.start(context)) onBackground()
+                                else onBackgroundUnavailable?.invoke()
                             }
                         ) {
                             Text(stringResource(R.string.consistency_check_background))
@@ -232,8 +235,19 @@ fun ConsistencyCheckDialog(
                     }
                 }
                 p.isComplete -> {
-                    TextButton(onClick = onDismiss) {
-                        Text(stringResource(R.string.consistency_check_phase_done))
+                    Row {
+                        if ((p.cookieExpired || p.neverLoggedInDouban) && onLogin != null) {
+                            TextButton(onClick = onLogin) { Text(stringResource(R.string.consistency_check_login)) }
+                        }
+                        if (p.errors > 0 && onRetry != null) {
+                            TextButton(onClick = onRetry) { Text(stringResource(R.string.consistency_check_retry)) }
+                        }
+                        if (p.conflictsFound > 0 && onViewConflicts != null) {
+                            TextButton(onClick = onViewConflicts) { Text(stringResource(R.string.consistency_check_view_conflicts)) }
+                        }
+                        TextButton(onClick = onDismiss) {
+                            Text(stringResource(R.string.consistency_check_phase_done))
+                        }
                     }
                 }
                 else -> {

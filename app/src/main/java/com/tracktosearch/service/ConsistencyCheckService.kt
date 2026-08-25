@@ -139,8 +139,19 @@ class ConsistencyCheckService : Service() {
         val subPhase = progress.subPhase
             .takeIf { it.isNotBlank() && !phase.contains(it) }
         val contentText = when {
+            progress.isComplete && (progress.neverLoggedInDouban || progress.cookieExpired) ->
+                if (progress.neverLoggedInDouban) getString(R.string.consistency_check_not_logged_in_prompt)
+                else getString(R.string.consistency_check_cookie_expired_prompt)
             progress.isComplete && progress.isCancelled ->
                 getString(R.string.consistency_check_phase_cancelled)
+            progress.isComplete && progress.errors > 0 -> getString(
+                R.string.consistency_check_summary_with_errors,
+                progress.totalChecked,
+                progress.conflictsFound,
+                progress.traktUpdated,
+                progress.doubanUpdated,
+                progress.errors
+            )
             progress.isComplete -> getString(
                 R.string.consistency_check_summary,
                 progress.totalChecked,
@@ -148,6 +159,10 @@ class ConsistencyCheckService : Service() {
                 progress.traktUpdated,
                 progress.doubanUpdated,
                 progress.errors
+            )
+            phase == getString(R.string.consistency_check_phase_update_trakt) -> getString(
+                R.string.consistency_check_notification_batch,
+                phase
             )
             progress.total > 0 && subPhase != null -> getString(
                 R.string.consistency_check_notification_progress_with_subphase,
@@ -185,14 +200,15 @@ class ConsistencyCheckService : Service() {
             channelId = CHANNEL_ID,
             title = getString(R.string.consistency_check_title),
             phase = phase,
-            current = progress.current,
-            total = progress.total,
+            current = if (phase == getString(R.string.consistency_check_phase_update_trakt)) 0 else progress.current,
+            total = if (phase == getString(R.string.consistency_check_phase_update_trakt)) 0 else progress.total,
             contentIntent = contentIntent,
             cancelIntent = cancelIntent,
             cancelText = getString(R.string.consistency_check_cancel),
             contentText = contentText,
             expandedText = expandedParts.joinToString(" | ").ifBlank { contentText },
             publicText = getString(R.string.consistency_check_notification_public, phase),
+            terminalActionText = if (progress.isComplete) getString(R.string.consistency_check_complete_banner) else null,
             isTerminal = progress.isComplete
         )
     }
