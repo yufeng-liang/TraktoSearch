@@ -161,6 +161,11 @@
     <string name="detail_loading_episodes">Loading episodes…</string>
     <string name="detail_mark_watchlist">Watchlist</string>
     <string name="detail_marked_watchlist">In Watchlist</string>
+    <string name="common_undo">Undo</string>
+    <string name="detail_watchlist_added_toast">Added to Watchlist</string>
+    <string name="detail_watchlist_removed_toast">Removed from Watchlist</string>
+    <string name="detail_watched_added_toast">Marked as Watched</string>
+    <string name="detail_watched_removed_toast">Unmarked as Watched</string>
     <string name="detail_mark_processing">Processing</string>
     <string name="detail_rate">Rate</string>
     <string name="detail_rated">Rated</string>
@@ -604,6 +609,7 @@
     <string name="feedback_time_months_ago">%1$d mo ago</string>
     <string name="settings_help">Help &amp; Tips</string>
     <string name="help_title">Help &amp; Tips</string>
+    <string name="help_search_hint">Search help</string>
     <string name="help_search">Search</string>
     <string name="help_watchlist">Watchlist &amp; Watched</string>
     <string name="help_statistics">Watch Statistics</string>

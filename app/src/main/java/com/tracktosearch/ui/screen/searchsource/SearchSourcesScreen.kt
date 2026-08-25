@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Delete
@@ -85,6 +86,8 @@ fun SearchSourcesScreen(
     onBack: () -> Unit,
     onEditSource: (String) -> Unit,
     onAddFromTemplate: (String) -> Unit,
+    /** 跳到帮助页「自定义搜索源」那一段：配置字段的说明都在那里 */
+    onHelpClick: () -> Unit = {},
     viewModel: SearchSourcesViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -184,7 +187,8 @@ fun SearchSourcesScreen(
             HeaderBar(
                 hazeState = hazeState,
                 onBack = onBack,
-                onImport = { showImportDialog = true }
+                onImport = { showImportDialog = true },
+                onHelpClick = onHelpClick
             )
         }
     }
@@ -251,12 +255,13 @@ fun SearchSourcesScreen(
     }
 }
 
-/** 毛玻璃吸顶标题栏：返回 + 标题 + 导入入口（间距与按钮样式对齐标记记录页） */
+/** 毛玻璃吸顶标题栏：返回 + 标题 + 帮助 + 导入入口（间距与按钮样式对齐标记记录页） */
 @Composable
 private fun HeaderBar(
     hazeState: HazeState,
     onBack: () -> Unit,
-    onImport: () -> Unit
+    onImport: () -> Unit,
+    onHelpClick: () -> Unit = {}
 ) {
     val isDark = isAppDarkTheme()
     Column(
@@ -293,6 +298,20 @@ private fun HeaderBar(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
+            // 帮助入口：自定义源的字段含义写在帮助页「自定义搜索源」段，之前只能自己去设置里翻
+            NeumorphicIconButton(
+                onClick = onHelpClick,
+                isDark = isDark,
+                lightBorderAlpha = 0.35f,
+                hazeState = hazeState
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.HelpOutline,
+                    contentDescription = stringResource(R.string.help_title),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
             NeumorphicIconButton(
                 onClick = onImport,
                 isDark = isDark,

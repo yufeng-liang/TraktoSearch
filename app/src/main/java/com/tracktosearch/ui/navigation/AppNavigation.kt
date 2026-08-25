@@ -84,6 +84,7 @@ import com.tracktosearch.ui.screen.searchsource.SearchSourcesScreen
 import com.tracktosearch.ui.screen.searchsource.SearchSourcesViewModel
 import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
 import com.tracktosearch.ui.screen.help.HelpScreen
+import com.tracktosearch.ui.screen.help.HelpSections
 import com.tracktosearch.ui.screen.listdetail.TraktListDetailScreen
 import com.tracktosearch.ui.screen.login.ActivationLoginScreen
 import com.tracktosearch.ui.screen.main.MainScreen
@@ -144,7 +145,8 @@ object Routes {
     const val PERSON = "person/{personId}/{personName}/{profileUrl}"
     const val STATISTICS = "statistics"
     const val TRAKT_SEARCH = "traktSearch/{type}/{query}"
-    const val HELP = "help"
+    // section 是可选参数：不带参数导航用 helpRoute()，功能页跳对应段用 helpRoute(HelpSections.X)
+    const val HELP = "help?section={section}"
     const val LIST_DETAIL = "listDetail/{listId}/{listName}"
     const val DISCOVER_FILTER = "discoverFilter"
     const val DOUBAN_LOGIN = "doubanLogin"
@@ -159,6 +161,9 @@ object Routes {
     const val MESSAGES = "messages"
     const val SEARCH_SOURCES = "searchSources"
     const val SEARCH_SOURCE_EDITOR = "searchSourceEditor/{mode}/{payload}"
+
+    fun helpRoute(section: String? = null): String =
+        if (section == null) "help" else "help?section=$section"
 
     fun searchSourceEditorRoute(mode: String, payload: String = ""): String =
         "searchSourceEditor/$mode/${java.net.URLEncoder.encode(payload.ifBlank { " " }, "UTF-8")}"
@@ -784,7 +789,7 @@ fun AppNavigation(
                                 // 不修改 currentStartDest，不导航；MainScreen 的「我的」tab 会自动显示登录提示
                             },
                             onHelpClick = {
-                                navController.navigate(Routes.HELP)
+                                navController.navigate(Routes.helpRoute())
                             },
                             onRestartOnboarding = {
                                 // 重置引导标记，重新显示新手引导
@@ -1051,10 +1056,20 @@ fun AppNavigation(
                     }
                 }
 
-                composable(Routes.HELP) {
+                composable(
+                    route = Routes.HELP,
+                    arguments = listOf(
+                        navArgument("section") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    )
+                ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         HelpScreen(
-                            onBack = { navController.popBackStack() }
+                            onBack = { navController.popBackStack() },
+                            initialSection = backStackEntry.arguments?.getString("section")
                         )
                     }
                 }
@@ -1167,6 +1182,9 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         SearchSourcesScreen(
                             onBack = { navController.popBackStack() },
+                            onHelpClick = {
+                                navController.navigate(Routes.helpRoute(HelpSections.CUSTOM_SOURCE))
+                            },
                             onAddFromTemplate = { templateId ->
                                 navController.navigate(
                                     Routes.searchSourceEditorRoute(

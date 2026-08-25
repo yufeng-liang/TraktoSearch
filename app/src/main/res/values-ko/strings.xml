@@ -410,6 +410,11 @@
     <!-- Detail Screen (추가) -->
     <string name="detail_mark_watchlist">관심목록</string>
     <string name="detail_marked_watchlist">관심목록에 추가됨</string>
+    <string name="common_undo">실행 취소</string>
+    <string name="detail_watchlist_added_toast">보고 싶은 목록에 추가했습니다</string>
+    <string name="detail_watchlist_removed_toast">보고 싶은 목록에서 제거했습니다</string>
+    <string name="detail_watched_added_toast">시청 완료로 표시했습니다</string>
+    <string name="detail_watched_removed_toast">시청 완료를 해제했습니다</string>
     <string name="detail_mark_processing">처리 중</string>
     <string name="detail_rate">평가</string>
     <string name="detail_rated">평가 완료</string>
@@ -683,6 +688,7 @@
     <string name="feedback_time_months_ago">%1$d개월 전</string>
     <string name="settings_help">도움말 &amp; 팁</string>
     <string name="help_title">도움말과 설명</string>
+    <string name="help_search_hint">도움말 검색</string>
     <string name="help_search">검색 기능</string>
     <string name="help_watchlist">관심목록과 시청</string>
     <string name="help_statistics">시청 통계</string>

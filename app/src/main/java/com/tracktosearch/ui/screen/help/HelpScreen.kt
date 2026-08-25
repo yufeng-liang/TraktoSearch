@@ -25,15 +25,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,14 +44,18 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -58,14 +65,150 @@ import com.tracktosearch.R
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import kotlinx.coroutines.launch
 
+/**
+ * 帮助页各段落的可检索文案。
+ *
+ * 段落内容是手写的 Composable（含表格、代码块、数据卡），无法自动内省，这里把每段用到的
+ * 字符串资源列一遍供段内搜索匹配。新增段落时同步补一行。
+ */
+private val HelpSectionSearchIndex: List<List<Int>> = listOf(
+    // 0 搜索功能
+    listOf(
+        R.string.help_search, R.string.help_search_b1, R.string.help_search_b2,
+        R.string.help_search_b3, R.string.help_search_b4, R.string.help_person_search
+    ),
+    // 1 想看与已看
+    listOf(
+        R.string.help_watchlist, R.string.help_watchlist_b1, R.string.help_watchlist_b2,
+        R.string.help_watchlist_b3, R.string.help_watchlist_b4
+    ),
+    // 2 观看统计
+    listOf(
+        R.string.help_statistics, R.string.help_statistics_b1, R.string.help_statistics_b2,
+        R.string.help_statistics_b3, R.string.help_statistics_b4
+    ),
+    // 3 标记记录
+    listOf(
+        R.string.mark_records_settings_entry, R.string.mark_records_help_entry_location,
+        R.string.mark_records_help_data_source, R.string.mark_records_help_history_limit
+    ),
+    // 4 通知提醒
+    listOf(
+        R.string.help_notification, R.string.help_notification_b1, R.string.help_notification_b2,
+        R.string.help_notification_b3, R.string.help_notification_b4, R.string.help_notification_b5
+    ),
+    // 5 数据管理
+    listOf(
+        R.string.help_data, R.string.help_data_table_title,
+        R.string.help_dc_export_t, R.string.help_dc_export_entry, R.string.help_dc_export_desc,
+        R.string.help_dc_imdb_t, R.string.help_dc_imdb_entry, R.string.help_dc_imdb_desc,
+        R.string.help_dc_douban_t, R.string.help_dc_douban_entry, R.string.help_dc_douban_desc,
+        R.string.help_dc_cooldown
+    ),
+    // 6 自定义搜索源
+    listOf(
+        R.string.help_custom_source, R.string.help_custom_source_b1, R.string.help_custom_source_b2,
+        R.string.help_custom_source_b3, R.string.help_custom_source_b4, R.string.help_custom_source_b5,
+        R.string.help_custom_source_params, R.string.help_custom_source_parse_title,
+        R.string.help_custom_source_parse_b1, R.string.help_custom_source_parse_b2,
+        R.string.help_custom_source_parse_b3, R.string.help_custom_source_example_title
+    ),
+    // 7 详情页
+    listOf(R.string.help_detail, R.string.help_detail_custom, R.string.help_videos_images),
+    // 8 影视筛选
+    listOf(
+        R.string.help_discover_filter, R.string.help_discover_filter_b1,
+        R.string.help_discover_filter_b2, R.string.help_discover_filter_b3,
+        R.string.help_discover_filter_b4, R.string.help_discover_filter_b6
+    ),
+    // 9 使用技巧
+    listOf(
+        R.string.help_tips, R.string.help_tips_b1, R.string.help_tips_b2, R.string.help_tips_b3,
+        R.string.help_tips_b4, R.string.help_tips_b5, R.string.help_tips_b7, R.string.help_tips_b8,
+        R.string.help_tips_b9, R.string.help_tips_b11, R.string.help_tips_b12
+    ),
+    // 10 网络环境
+    listOf(R.string.help_vpn, R.string.help_vpn_b1, R.string.help_vpn_b2),
+    // 11 豆瓣回写
+    listOf(
+        R.string.help_douban_writeback, R.string.help_douban_writeback_b1,
+        R.string.help_douban_writeback_b3
+    ),
+    // 12 一致性检查
+    listOf(R.string.help_consistency_check, R.string.help_consistency_intro),
+    // 13 AI 精灵
+    listOf(
+        R.string.help_ai_sprite, R.string.help_ai_sprite_b1, R.string.help_ai_sprite_b2,
+        R.string.help_ai_sprite_b3, R.string.help_ai_sprite_b4, R.string.help_ai_sprite_b5,
+        R.string.help_ai_sprite_b6, R.string.help_ai_sprite_b7, R.string.ai_sprite_long_press_hint
+    )
+)
+
+/** 功能页跳帮助用的段落 key → 段落序号。key 走导航参数，改动时注意调用方。 */
+private val HelpSectionKeys: Map<String, Int> = mapOf(
+    HelpSections.SEARCH to 0,
+    HelpSections.WATCHLIST to 1,
+    HelpSections.STATISTICS to 2,
+    HelpSections.MARK_RECORDS to 3,
+    HelpSections.NOTIFICATION to 4,
+    HelpSections.DATA to 5,
+    HelpSections.CUSTOM_SOURCE to 6,
+    HelpSections.DETAIL to 7,
+    HelpSections.DISCOVER_FILTER to 8,
+    HelpSections.TIPS to 9,
+    HelpSections.VPN to 10,
+    HelpSections.DOUBAN_WRITEBACK to 11,
+    HelpSections.CONSISTENCY_CHECK to 12,
+    HelpSections.AI_SPRITE to 13
+)
+
+/** 帮助段落 key 常量，供功能页带参数跳转。 */
+object HelpSections {
+    const val SEARCH = "search"
+    const val WATCHLIST = "watchlist"
+    const val STATISTICS = "statistics"
+    const val MARK_RECORDS = "markRecords"
+    const val NOTIFICATION = "notification"
+    const val DATA = "data"
+    const val CUSTOM_SOURCE = "customSource"
+    const val DETAIL = "detail"
+    const val DISCOVER_FILTER = "discoverFilter"
+    const val TIPS = "tips"
+    const val VPN = "vpn"
+    const val DOUBAN_WRITEBACK = "doubanWriteback"
+    const val CONSISTENCY_CHECK = "consistencyCheck"
+    const val AI_SPRITE = "aiSprite"
+}
+
+/** 段内搜索：命中段落标题或段落内任一条目文案即视为匹配。 */
+@Composable
+private fun helpSectionMatches(index: Int, query: String): Boolean {
+    if (query.isBlank()) return true
+    val context = LocalContext.current
+    val ids = HelpSectionSearchIndex.getOrNull(index) ?: return true
+    val keyword = query.trim()
+    return ids.any { context.getString(it).contains(keyword, ignoreCase = true) }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HelpScreen(
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    /** 功能页带过来的段落 key：进入后自动展开并滚到该段 */
+    initialSection: String? = null
 ) {
-    var expandedIndex by remember { mutableIntStateOf(0) }
+    // rememberSaveable：旋屏/进程重建后保留展开位置，之前用 remember 一转屏就回到第一段
+    var expandedIndex by rememberSaveable { mutableIntStateOf(0) }
+    var helpQuery by rememberSaveable { mutableStateOf("") }
+    var searchVisible by rememberSaveable { mutableStateOf(false) }
     val lazyListState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    // 功能页带 section 参数进来时：展开对应段并滚到它，省得用户在 12 段里自己找
+    LaunchedEffect(initialSection) {
+        val target = initialSection?.let { HelpSectionKeys[it] } ?: return@LaunchedEffect
+        expandedIndex = target
+        lazyListState.animateScrollToItem(target)
+    }
     // 状态栏回顶
     val scrollToTopProvider = LocalScrollToTopProvider.current
     DisposableEffect(Unit) {
@@ -97,8 +240,10 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_search),
-                        isExpanded = expandedIndex == 0,
-                        onToggle = { expandedIndex = if (expandedIndex == 0) -1 else 0 }
+                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
+                        isExpanded = expandedIndex == 0 || helpQuery.isNotBlank(),
+                        onToggle = { expandedIndex = if (expandedIndex == 0) -1 else 0 },
+                        visible = helpSectionMatches(0, helpQuery)
                     ) {
                         HelpBullet(stringResource(R.string.help_search_b1))
                         HelpBullet(stringResource(R.string.help_search_b2))
@@ -112,8 +257,10 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_watchlist),
-                        isExpanded = expandedIndex == 1,
-                        onToggle = { expandedIndex = if (expandedIndex == 1) -1 else 1 }
+                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
+                        isExpanded = expandedIndex == 1 || helpQuery.isNotBlank(),
+                        onToggle = { expandedIndex = if (expandedIndex == 1) -1 else 1 },
+                        visible = helpSectionMatches(1, helpQuery)
                     ) {
                         HelpBullet(stringResource(R.string.help_watchlist_b1))
                         HelpBullet(stringResource(R.string.help_watchlist_b2))
@@ -126,8 +273,10 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_statistics),
-                        isExpanded = expandedIndex == 2,
-                        onToggle = { expandedIndex = if (expandedIndex == 2) -1 else 2 }
+                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
+                        isExpanded = expandedIndex == 2 || helpQuery.isNotBlank(),
+                        onToggle = { expandedIndex = if (expandedIndex == 2) -1 else 2 },
+                        visible = helpSectionMatches(2, helpQuery)
                     ) {
                         HelpBullet(stringResource(R.string.help_statistics_b1))
                         HelpBullet(stringResource(R.string.help_statistics_b2))
@@ -140,8 +289,10 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.mark_records_settings_entry),
-                        isExpanded = expandedIndex == 3,
-                        onToggle = { expandedIndex = if (expandedIndex == 3) -1 else 3 }
+                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
+                        isExpanded = expandedIndex == 3 || helpQuery.isNotBlank(),
+                        onToggle = { expandedIndex = if (expandedIndex == 3) -1 else 3 },
+                        visible = helpSectionMatches(3, helpQuery)
                     ) {
                         HelpBullet(stringResource(R.string.mark_records_help_entry_location))
                         HelpBullet(stringResource(R.string.mark_records_help_data_source))
@@ -153,8 +304,10 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_notification),
-                        isExpanded = expandedIndex == 4,
-                        onToggle = { expandedIndex = if (expandedIndex == 4) -1 else 4 }
+                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
+                        isExpanded = expandedIndex == 4 || helpQuery.isNotBlank(),
+                        onToggle = { expandedIndex = if (expandedIndex == 4) -1 else 4 },
+                        visible = helpSectionMatches(4, helpQuery)
                     ) {
                         HelpBullet(stringResource(R.string.help_notification_b1))
                         HelpBullet(stringResource(R.string.help_notification_b2))
@@ -168,8 +321,10 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_data),
-                        isExpanded = expandedIndex == 5,
-                        onToggle = { expandedIndex = if (expandedIndex == 5) -1 else 5 }
+                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
+                        isExpanded = expandedIndex == 5 || helpQuery.isNotBlank(),
+                        onToggle = { expandedIndex = if (expandedIndex == 5) -1 else 5 },
+                        visible = helpSectionMatches(5, helpQuery)
                     ) {
                         HelpSubtitle(stringResource(R.string.help_data_table_title))
                         Spacer(modifier = Modifier.height(4.dp))
@@ -215,8 +370,10 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_custom_source),
-                        isExpanded = expandedIndex == 6,
-                        onToggle = { expandedIndex = if (expandedIndex == 6) -1 else 6 }
+                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
+                        isExpanded = expandedIndex == 6 || helpQuery.isNotBlank(),
+                        onToggle = { expandedIndex = if (expandedIndex == 6) -1 else 6 },
+                        visible = helpSectionMatches(6, helpQuery)
                     ) {
                         HelpBullet(stringResource(R.string.help_custom_source_b1))
                         HelpBullet(stringResource(R.string.help_custom_source_b2))
@@ -250,8 +407,10 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_detail),
-                        isExpanded = expandedIndex == 7,
-                        onToggle = { expandedIndex = if (expandedIndex == 7) -1 else 7 }
+                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
+                        isExpanded = expandedIndex == 7 || helpQuery.isNotBlank(),
+                        onToggle = { expandedIndex = if (expandedIndex == 7) -1 else 7 },
+                        visible = helpSectionMatches(7, helpQuery)
                     ) {
                         HelpBullet(stringResource(R.string.help_detail_custom))
                         HelpBullet(stringResource(R.string.help_videos_images))
@@ -262,8 +421,10 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_discover_filter),
-                        isExpanded = expandedIndex == 8,
-                        onToggle = { expandedIndex = if (expandedIndex == 8) -1 else 8 }
+                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
+                        isExpanded = expandedIndex == 8 || helpQuery.isNotBlank(),
+                        onToggle = { expandedIndex = if (expandedIndex == 8) -1 else 8 },
+                        visible = helpSectionMatches(8, helpQuery)
                     ) {
                         HelpBullet(stringResource(R.string.help_discover_filter_b1))
                         HelpBullet(stringResource(R.string.help_discover_filter_b2))
@@ -277,8 +438,10 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_tips),
-                        isExpanded = expandedIndex == 9,
-                        onToggle = { expandedIndex = if (expandedIndex == 9) -1 else 9 }
+                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
+                        isExpanded = expandedIndex == 9 || helpQuery.isNotBlank(),
+                        onToggle = { expandedIndex = if (expandedIndex == 9) -1 else 9 },
+                        visible = helpSectionMatches(9, helpQuery)
                     ) {
                         HelpBullet(stringResource(R.string.help_tips_b1))
                         HelpBullet(stringResource(R.string.help_tips_b2))
@@ -297,8 +460,10 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_vpn),
-                        isExpanded = expandedIndex == 10,
-                        onToggle = { expandedIndex = if (expandedIndex == 10) -1 else 10 }
+                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
+                        isExpanded = expandedIndex == 10 || helpQuery.isNotBlank(),
+                        onToggle = { expandedIndex = if (expandedIndex == 10) -1 else 10 },
+                        visible = helpSectionMatches(10, helpQuery)
                     ) {
                         HelpBullet(stringResource(R.string.help_vpn_b1))
                         HelpBullet(stringResource(R.string.help_vpn_b2))
@@ -309,8 +474,10 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_douban_writeback),
-                        isExpanded = expandedIndex == 11,
-                        onToggle = { expandedIndex = if (expandedIndex == 11) -1 else 11 }
+                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
+                        isExpanded = expandedIndex == 11 || helpQuery.isNotBlank(),
+                        onToggle = { expandedIndex = if (expandedIndex == 11) -1 else 11 },
+                        visible = helpSectionMatches(11, helpQuery)
                     ) {
                         HelpBullet(stringResource(R.string.help_douban_writeback_b1))
                         HelpBullet(stringResource(R.string.help_douban_writeback_b3))
@@ -321,8 +488,10 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_consistency_check),
-                        isExpanded = expandedIndex == 12,
-                        onToggle = { expandedIndex = if (expandedIndex == 12) -1 else 12 }
+                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
+                        isExpanded = expandedIndex == 12 || helpQuery.isNotBlank(),
+                        onToggle = { expandedIndex = if (expandedIndex == 12) -1 else 12 },
+                        visible = helpSectionMatches(12, helpQuery)
                     ) {
                         HelpBullet(stringResource(R.string.help_consistency_intro))
                         Spacer(modifier = Modifier.height(8.dp))
@@ -334,8 +503,10 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_ai_sprite),
-                        isExpanded = expandedIndex == 13,
-                        onToggle = { expandedIndex = if (expandedIndex == 13) -1 else 13 }
+                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
+                        isExpanded = expandedIndex == 13 || helpQuery.isNotBlank(),
+                        onToggle = { expandedIndex = if (expandedIndex == 13) -1 else 13 },
+                        visible = helpSectionMatches(13, helpQuery)
                     ) {
                         HelpBullet(stringResource(R.string.help_ai_sprite_b1))
                         HelpBullet(stringResource(R.string.help_ai_sprite_b2))
@@ -374,8 +545,44 @@ fun HelpScreen(
                             )
                         }
                     },
+                    actions = {
+                        // 段内搜索：12 段手风琴靠翻找效率太低
+                        IconButton(onClick = {
+                            searchVisible = !searchVisible
+                            if (!searchVisible) helpQuery = ""
+                        }) {
+                            Icon(
+                                imageVector = if (searchVisible) Icons.Rounded.Close else Icons.Rounded.Search,
+                                contentDescription = stringResource(
+                                    if (searchVisible) R.string.common_cancel else R.string.help_search_hint
+                                ),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    },
                     windowInsets = WindowInsets(0, 0, 0, 0)
                 )
+                if (searchVisible) {
+                    OutlinedTextField(
+                        value = helpQuery,
+                        onValueChange = { helpQuery = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        singleLine = true,
+                        placeholder = { Text(stringResource(R.string.help_search_hint)) },
+                        trailingIcon = {
+                            if (helpQuery.isNotEmpty()) {
+                                IconButton(onClick = { helpQuery = "" }) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Close,
+                                        contentDescription = stringResource(R.string.common_cancel)
+                                    )
+                                }
+                            }
+                        }
+                    )
+                }
             }
         }
     }
@@ -386,8 +593,11 @@ private fun HelpSection(
     title: String,
     isExpanded: Boolean,
     onToggle: () -> Unit,
+    /** 段内搜索未命中时整段不渲染 */
+    visible: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    if (!visible) return
     Column(
         modifier = Modifier
             .fillMaxWidth()

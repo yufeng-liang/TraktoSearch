@@ -410,6 +410,11 @@
     <!-- Detail Screen (追加) -->
     <string name="detail_mark_watchlist">ウォッチリスト</string>
     <string name="detail_marked_watchlist">ウォッチリストに追加済み</string>
+    <string name="common_undo">元に戻す</string>
+    <string name="detail_watchlist_added_toast">見たいリストに追加しました</string>
+    <string name="detail_watchlist_removed_toast">見たいリストから削除しました</string>
+    <string name="detail_watched_added_toast">視聴済みにしました</string>
+    <string name="detail_watched_removed_toast">視聴済みを解除しました</string>
     <string name="detail_mark_processing">処理中</string>
     <string name="detail_rate">評価</string>
     <string name="detail_rated">評価済み</string>
@@ -683,6 +688,7 @@
     <string name="feedback_time_months_ago">%1$d か月前</string>
     <string name="settings_help">ヘルプ＆ヒント</string>
     <string name="help_title">ヘルプと説明</string>
+    <string name="help_search_hint">ヘルプを検索</string>
     <string name="help_search">検索機能</string>
     <string name="help_watchlist">見たいと視聴済</string>
     <string name="help_statistics">視聴統計</string>
