@@ -44,6 +44,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -60,6 +64,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -69,6 +74,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -89,6 +96,8 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.AppErrorState
+import com.tracktosearch.ui.component.rememberAppPullToRefreshState
+import com.tracktosearch.ui.component.AppPullToRefreshIndicator
 import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
@@ -126,6 +135,9 @@ import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
@@ -197,7 +209,51 @@ fun DetailScreen(
     // 豆瓣同步 Toast 提示（成功/失败/ID未就绪）
     ToastEffect(viewModel.toastEvent)
 
+    // 标记想看/取消看过：给一条带「撤销」的 Snackbar。误点之前只能自己再点回去。
+    val markSnackbarHostState = remember { SnackbarHostState() }
+    val undoLabel = stringResource(R.string.common_undo)
+    val watchlistAddedMsg = stringResource(R.string.detail_watchlist_added_toast)
+    val watchlistRemovedMsg = stringResource(R.string.detail_watchlist_removed_toast)
+    val watchedRemovedMsg = stringResource(R.string.detail_watched_removed_toast)
+    LaunchedEffect(viewModel) {
+        viewModel.markEvent.collect { event ->
+            val message = when {
+                event.kind == DetailMarkKind.WATCHLIST && event.added -> watchlistAddedMsg
+                event.kind == DetailMarkKind.WATCHLIST -> watchlistRemovedMsg
+                else -> watchedRemovedMsg
+            }
+            val result = markSnackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = undoLabel,
+                duration = SnackbarDuration.Short
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                // 撤销就是再调一次同一个 toggle：两个 toggle 都是幂等的状态翻转
+                when (event.kind) {
+                    DetailMarkKind.WATCHLIST -> viewModel.toggleWatchlist()
+                    DetailMarkKind.WATCHED -> viewModel.toggleWatched()
+                }
+            }
+        }
+    }
+
     val listState = rememberLazyListState()
+    // 下拉刷新：重拉评分/演职员/季/短评/推荐这几个分区（资源区代价太高，另有自己的重搜入口）
+    var detailRefreshPending by remember { mutableStateOf(false) }
+    val detailPullToRefreshState = rememberAppPullToRefreshState {
+        viewModel.pullToRefresh()
+        detailRefreshPending = true
+    }
+    LaunchedEffect(detailRefreshPending) {
+        if (!detailRefreshPending) return@LaunchedEffect
+        withTimeoutOrNull(10_000) {
+            snapshotFlow { uiState.isLoadingComments || uiState.isLoadingRecommendations }
+                .dropWhile { !it }
+                .first { !it }
+        }
+        detailPullToRefreshState.finishRefresh()
+        detailRefreshPending = false
+    }
     val scrollToTopProvider = LocalScrollToTopProvider.current
     val detailCoroutineScope = rememberCoroutineScope()
     DisposableEffect(Unit) {
@@ -439,11 +495,18 @@ fun DetailScreen(
                 androidx.compose.material3.LocalContentColor provides tabContentColor
             ) {
             // 将详情内容整体作为唯一内容 source，避免 LazyColumn 自身的绘制层影响 Haze 采样。
+            AppPullToRefreshIndicator(
+                state = detailPullToRefreshState,
+                contentTop = 8.dp,
+                modifier = Modifier.statusBarsPadding()
+            )
             LazyColumn(
                 state = listState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .statusBarsPadding(),
+                    .statusBarsPadding()
+                    .nestedScroll(detailPullToRefreshState.connection)
+                    .graphicsLayer { translationY = detailPullToRefreshState.offset.floatValue },
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
                 // 头部信息（随内容滚动）
@@ -1032,6 +1095,14 @@ fun DetailScreen(
                 hazeStyle = HazeMaterials.ultraThin(),
                 sourceSelection = HazeSourceSelection.All,
                 scene = detailGlassScene
+            )
+
+            // 标记操作的撤销 Snackbar：贴底显示，避开回顶按钮
+            SnackbarHost(
+                hostState = markSnackbarHostState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 16.dp)
             )
             } // CompositionLocalProvider
 

@@ -101,6 +101,17 @@ enum class OwnCommentTarget {
 
 const val DOUBAN_COMMENT_SOURCE = "Douban"
 
+/** 标记类操作的种类 */
+enum class DetailMarkKind { WATCHLIST, WATCHED }
+
+/**
+ * 标记结果事件：added=true 表示刚加上，false 表示刚取消。
+ *
+ * 只在「没有其他反馈」的路径上发：标记看过之后紧接着弹评分弹窗，本身就是明确反馈，
+ * 再叠一条可撤销的 Snackbar 只会互相打断。
+ */
+data class DetailMarkEvent(val kind: DetailMarkKind, val added: Boolean)
+
 @Immutable
 data class DetailUiState(
     val isLoading: Boolean = false,
@@ -340,6 +351,15 @@ class DetailViewModel @Inject constructor(
     /** Toast 事件(参考 PersonViewModel 模式),用于豆瓣同步成功/失败提示 */
     private val _toastEvent = MutableSharedFlow<Int>()
     val toastEvent = _toastEvent.asSharedFlow()
+
+    /**
+     * 标记类操作成功事件，供 UI 弹带「撤销」的 Snackbar。
+     *
+     * 标记想看/已看是一次点击就写远端的操作，误点之前只能自己再点回去；这里给一条可撤销的
+     * 反馈，撤销就是再调一次同一个 toggle。
+     */
+    private val _markEvent = MutableSharedFlow<DetailMarkEvent>()
+    val markEvent = _markEvent.asSharedFlow()
 
     /** 海报主色调提取完成后更新 UiState(由 DetailHeaderContent 在图片加载成功回调中调用) */
     fun updatePosterColor(color: Color) {
@@ -1074,6 +1094,20 @@ class DetailViewModel @Inject constructor(
     fun retryRecommendations() {
         _uiState.value = _uiState.value.copy(recommendationsError = false)
         fetchRecommendations()
+    }
+
+    /**
+     * 下拉刷新：重拉本页各分区。
+     *
+     * 不含资源搜索：资源区是多源爬取，代价远高于其他分区，且它自己已有「重新搜索」入口，
+     * 混进下拉刷新会让一次下拉悄悄打一轮全源请求。
+     */
+    fun pullToRefresh() {
+        retryRatings()
+        retryCredits()
+        retrySeasons()
+        retryComments()
+        retryRecommendations()
     }
 
     private fun fetchRatingsAsync(tmdbRating: Double) {
@@ -2571,6 +2605,7 @@ class DetailViewModel @Inject constructor(
                             isMarkingWatched = false
                         )
                         publishWatchlistMutation(TraktRepository.WatchlistMutationAction.ADD)
+                        _markEvent.emit(DetailMarkEvent(DetailMarkKind.WATCHED, added = false))
                         saveToCache()
                         // 豆瓣双向同步:取消已看→豆瓣标记想看(加回 wish)
                         syncDoubanMark(DoubanSyncAction.REMOVE_COLLECT)
@@ -2732,6 +2767,7 @@ class DetailViewModel @Inject constructor(
                     if (targetState) TraktRepository.WatchlistMutationAction.ADD
                     else TraktRepository.WatchlistMutationAction.REMOVE
                 )
+                _markEvent.emit(DetailMarkEvent(DetailMarkKind.WATCHLIST, added = targetState))
                 saveToCache()
                 // 豆瓣双向同步:标记想看→豆瓣 wish,取消想看→豆瓣 remove
                 syncDoubanMark(if (targetState) DoubanSyncAction.WISH else DoubanSyncAction.REMOVE_WISH)
