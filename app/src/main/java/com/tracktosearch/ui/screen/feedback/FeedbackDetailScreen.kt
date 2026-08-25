@@ -44,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.data.remote.feedback.FeedbackReply
 import com.tracktosearch.data.remote.feedback.screenshotUrl
 import com.tracktosearch.ui.component.LocalFullscreenSharedKey
@@ -170,11 +171,12 @@ fun FeedbackDetailScreen(
                 Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             }
             is FeedbackViewModel.DetailState.Error -> {
-                Column(Modifier.fillMaxSize().padding(padding).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Text(state.message, color = MaterialTheme.colorScheme.error)
-                    Spacer(Modifier.height(8.dp))
-                    TextButton(onClick = { viewModel.loadDetail(feedbackId) }) { Text(stringResource(R.string.feedback_retry)) }
-                }
+                AppErrorState(
+                    message = state.message,
+                    onRetry = { viewModel.loadDetail(feedbackId) },
+                    modifier = Modifier.fillMaxSize().padding(padding),
+                    retryLabel = stringResource(R.string.feedback_retry)
+                )
             }
             is FeedbackViewModel.DetailState.Success -> {
                 val feedback = state.data.feedback

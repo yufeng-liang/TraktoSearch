@@ -85,6 +85,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
@@ -148,24 +149,12 @@ fun StatisticsScreen(
         ) {
             val errorMsg = uiState.error
             if (errorMsg != null && !uiState.watchTimeReady && !uiState.overviewReady) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = errorMsg,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = { viewModel.loadStatistics() }) {
-                        Text(stringResource(R.string.watchlist_retry))
-                    }
-                }
+                AppErrorState(
+                    message = errorMsg,
+                    onRetry = { viewModel.loadStatistics() },
+                    modifier = Modifier.fillMaxSize(),
+                    retryLabel = stringResource(R.string.watchlist_retry)
+                )
             } else {
                 val listState = rememberLazyListState()
                 val scrollToTopProvider = LocalScrollToTopProvider.current

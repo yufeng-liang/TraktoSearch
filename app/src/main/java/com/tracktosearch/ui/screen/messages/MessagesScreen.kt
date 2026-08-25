@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.data.remote.feedback.MessageItem
 import com.tracktosearch.ui.screen.feedback.FeedbackViewModel
 import java.text.SimpleDateFormat
@@ -69,7 +70,14 @@ fun MessagesScreen(
             }
             when (val state = messagesState) {
                 is FeedbackViewModel.MessagesState.Loading -> { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
-                is FeedbackViewModel.MessagesState.Error -> { Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) { Text(state.message, color = MaterialTheme.colorScheme.error); Spacer(Modifier.height(8.dp)); TextButton(onClick = { viewModel.loadMessages(refresh = true) }) { Text(stringResource(R.string.feedback_retry)) } } }
+                is FeedbackViewModel.MessagesState.Error -> {
+                    AppErrorState(
+                        message = state.message,
+                        onRetry = { viewModel.loadMessages(refresh = true) },
+                        modifier = Modifier.fillMaxSize(),
+                        retryLabel = stringResource(R.string.feedback_retry)
+                    )
+                }
                 is FeedbackViewModel.MessagesState.Success -> {
                     val visibleItems = state.items.filter { it.author_role == "developer" }
                     if (visibleItems.isEmpty()) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.feedback_messages_empty), color = MaterialTheme.colorScheme.onSurfaceVariant) } }

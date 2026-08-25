@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.ScrollToTopButton
@@ -156,20 +157,12 @@ fun MarkRecordScreen(
                 }
                 uiState.error != null -> {
                     item(span = { GridItemSpan(2) }) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                uiState.error!!,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                            TextButton(onClick = { viewModel.retry() }) {
-                                Text(stringResource(R.string.mark_records_retry))
-                            }
-                        }
+                        AppErrorState(
+                            message = uiState.error!!,
+                            onRetry = { viewModel.retry() },
+                            modifier = Modifier.padding(32.dp),
+                            retryLabel = stringResource(R.string.mark_records_retry)
+                        )
                     }
                 }
                 uiState.items.isEmpty() -> {

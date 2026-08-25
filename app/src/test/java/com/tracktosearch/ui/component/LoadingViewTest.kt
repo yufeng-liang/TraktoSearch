@@ -61,12 +61,4 @@ class LoadingViewTest {
         }
         composeRule.onNodeWithText("加载中...").assertIsDisplayed()
     }
-
-    @Test
-    fun `EmptyView 自定义消息显示`() {
-        composeRule.setContent {
-            EmptyView(message = "暂无数据")
-        }
-        composeRule.onNodeWithText("暂无数据").assertIsDisplayed()
-    }
 }

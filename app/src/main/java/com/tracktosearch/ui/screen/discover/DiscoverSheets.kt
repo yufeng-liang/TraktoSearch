@@ -51,6 +51,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.AppErrorState
+import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedMovieResponse
@@ -254,22 +256,14 @@ internal fun TmdbAllSheet(
                         }
                     }
                 }
-                // 加载更多失败：显示可点击的重试提示
+                // 加载更多失败：原因 + 显式重试按钮（以前是整块可点的文字，重试入口不可发现）
                 if (errorMessage != null && !isLoading) {
                     item(span = { GridItemSpan(3) }) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onRetry?.invoke() }
-                                .padding(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = errorMessage,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
+                        AppErrorState(
+                            message = errorMessage,
+                            onRetry = onRetry,
+                            variant = AppErrorVariant.Inline
+                        )
                     }
                 }
             }
@@ -360,22 +354,14 @@ internal fun TraktMovieAllSheet(
                         }
                     }
                 }
-                // 加载更多失败：显示可点击的重试提示
+                // 加载更多失败：原因 + 显式重试按钮（以前是整块可点的文字，重试入口不可发现）
                 if (errorMessage != null && !isLoading) {
                     item(span = { GridItemSpan(3) }) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onRetry?.invoke() }
-                                .padding(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = errorMessage,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
+                        AppErrorState(
+                            message = errorMessage,
+                            onRetry = onRetry,
+                            variant = AppErrorVariant.Inline
+                        )
                     }
                 }
             }

@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.AppErrorState
 import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -140,13 +141,12 @@ fun FeedbackScreen(
                 }
                 is FeedbackViewModel.ListState.Error -> {
                     item {
-                        Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(state.message, color = MaterialTheme.colorScheme.error)
-                            Spacer(Modifier.height(8.dp))
-                            TextButton(onClick = { viewModel.loadList(refresh = true) }) {
-                                Text(stringResource(R.string.feedback_retry))
-                            }
-                        }
+                        AppErrorState(
+                            message = state.message,
+                            onRetry = { viewModel.loadList(refresh = true) },
+                            modifier = Modifier.padding(32.dp),
+                            retryLabel = stringResource(R.string.feedback_retry)
+                        )
                     }
                 }
                 is FeedbackViewModel.ListState.Success -> {

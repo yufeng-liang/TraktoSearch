@@ -120,7 +120,7 @@ import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.util.PersonAvatarColorStore
 import com.tracktosearch.data.ai.AiRecommendation
-import com.tracktosearch.ui.component.EmptyView
+import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
@@ -513,6 +513,7 @@ fun TraktSearchScreen(
                             interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                             openResourceLink(context, it)
                         },
+                        onRetry = { viewModel.searchDiskInternal(uiState.query) },
                         listState = diskListState,
                         hazeState = hazeState,
                         statusBarHeight = statusBarHeight,
@@ -564,13 +565,11 @@ fun TraktSearchScreen(
                             .backdropSource(),
                         contentAlignment = Alignment.Center
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            EmptyView(message = currentTabState.error)
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Button(onClick = { viewModel.search(uiState.query, uiState.selectedTab) }) {
-                                Text(stringResource(R.string.watchlist_retry))
-                            }
-                        }
+                        AppErrorState(
+                            message = currentTabState.error,
+                            onRetry = { viewModel.search(uiState.query, uiState.selectedTab) },
+                            retryLabel = stringResource(R.string.watchlist_retry)
+                        )
                     }
                 }
                 currentTabState.results.isEmpty() && currentTabState.hasSearched -> {
@@ -1025,6 +1024,7 @@ private fun DiskSearchContent(
     onToggleSource: (String) -> Unit,
     onToggleDiskType: (DiskType) -> Unit,
     onItemClick: (ResourceItem) -> Unit,
+    onRetry: () -> Unit = {},
     listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
     hazeState: HazeState = remember { HazeState() },
     statusBarHeight: Dp = 0.dp,
@@ -1082,9 +1082,11 @@ private fun DiskSearchContent(
                     .backdropSource(),
                 contentAlignment = Alignment.Center
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    EmptyView(message = diskState.error)
-                }
+                // 以前这里只有一行错误文字，网盘搜索失败后用户没有任何出路
+                AppErrorState(
+                    message = diskState.error,
+                    onRetry = onRetry
+                )
             }
         }
         // 搜索完成但筛选后无结果

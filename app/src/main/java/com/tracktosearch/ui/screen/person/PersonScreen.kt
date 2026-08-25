@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.LocalFullscreenSharedKey
@@ -168,9 +169,9 @@ fun PersonScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = uiState.error!!,
-                            color = MaterialTheme.colorScheme.error
+                        AppErrorState(
+                            message = uiState.error!!,
+                            onRetry = { viewModel.loadPerson(personId, profileUrl, avatarColor) }
                         )
                     }
                 }

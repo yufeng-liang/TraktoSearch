@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
@@ -219,19 +220,10 @@ fun TraktListDetailScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = uiState.error!!,
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                            Button(
-                                onClick = { viewModel.retry() },
-                                modifier = Modifier.padding(top = 12.dp)
-                            ) {
-                                Text(stringResource(R.string.common_retry))
-                            }
-                        }
+                        AppErrorState(
+                            message = uiState.error!!,
+                            onRetry = { viewModel.retry() }
+                        )
                     }
                 }
 

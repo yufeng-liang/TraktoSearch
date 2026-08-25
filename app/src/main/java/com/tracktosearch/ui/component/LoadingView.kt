@@ -81,21 +81,3 @@ fun LoadingView(
         }
     }
 }
-
-@Composable
-fun EmptyView(
-    message: String = "",
-    modifier: Modifier = Modifier
-) {
-    val displayMessage = message.ifBlank { stringResource(R.string.empty_default) }
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = displayMessage,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
