@@ -1,7 +1,6 @@
 package com.tracktosearch.ui.screen.search
 
 import com.google.common.truth.Truth.assertThat
-import com.tracktosearch.R
 import com.tracktosearch.data.local.SearchHistoryItem
 import com.tracktosearch.data.local.SearchHistoryStorage
 import com.tracktosearch.data.local.ViewedItemStorage
@@ -10,10 +9,6 @@ import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.douban.DoubanRexxarApiService
 import com.tracktosearch.data.remote.douban.dto.DoubanHotData
 import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
-import com.tracktosearch.data.remote.dto.DiskType
-import com.tracktosearch.data.remote.dto.ResourceItem
-import com.tracktosearch.data.remote.dto.ResourceType
-import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.util.PersistentTtlCache
@@ -24,11 +19,9 @@ import io.mockk.coVerify
 import io.mockk.every
 import android.content.Context
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
@@ -44,19 +37,18 @@ import java.io.IOException
  *
  * 验证搜索页的核心行为：
  * - loadHotSearches() 成功填充热词 / 本地缓存命中不重复请求
- * - search() 成功/空查询/竞态取消/网络失败
- * - setTypeFilter/clearResults 同步方法状态更新
  * - clearHistory/removeHistory/markViewed 委托到 Storage
  * - getSuggestions 从搜索历史过滤建议
+ *
+ * 搜索结果相关行为不在这里：搜索提交后由 TraktSearchScreen / TraktSearchViewModel 承载。
  *
  * 测试策略：
  * 1. init 块会收集 searchHistoryStorage.history 并调用 loadHotSearches()。
  *    @Before 中默认桩 getOrAwait 抛异常 + get 返回 null，使 init 的 loadHotSearches
  *    静默失败，不污染 hotSearchCache，不干扰后续测试。
  * 2. 测 loadHotSearches 的测试点（1、2）在 createViewModel 前覆盖 getOrAwait 桩为返回数据。
- * 3. 同步方法（setTypeFilter/clearResults/getSuggestions）直接验证 uiState.value 字段，无需 advanceUntilIdle。
- * 4. 异步方法（search/loadHotSearches/removeHistory/clearHistory/markViewed）需 advanceUntilIdle 推进协程。
- * 5. searchResourcesFlow 是非 suspend 函数返回 Flow，用 every + flowOf/flow 桩。
+ * 3. 同步方法（getSuggestions）直接验证 uiState.value 字段，无需 advanceUntilIdle。
+ * 4. 异步方法（loadHotSearches/removeHistory/clearHistory/markViewed）需 advanceUntilIdle 推进协程。
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -66,7 +58,6 @@ class SearchViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private val resourceRepository = mockk<ResourceRepository>(relaxed = true)
     private val searchHistoryStorage = mockk<SearchHistoryStorage>(relaxed = true)
     private val viewedItemStorage = mockk<ViewedItemStorage>(relaxed = true)
     private val doubanRexxarApi = mockk<DoubanRexxarApiService>(relaxed = true)
@@ -83,22 +74,6 @@ class SearchViewModelTest {
 
     // ==================== 测试数据 ====================
 
-    private val resourceItemA = ResourceItem(
-        name = "盗梦空间.2010.BluRay",
-        diskType = DiskType.QUARK,
-        fileSize = "10GB",
-        url = "https://example.com/a",
-        source = "sourceA"
-    )
-
-    private val resourceItemB = ResourceItem(
-        name = "星际穿越.2014.BluRay",
-        diskType = DiskType.BAIDU,
-        fileSize = "15GB",
-        url = "https://example.com/b",
-        source = "sourceB"
-    )
-
     /** 豆瓣热榜数据（带【评分】前缀，模拟 getOrAwait 返回值） */
     private val doubanHotDataWithItems = DoubanHotData(
         items = listOf(
@@ -114,7 +89,7 @@ class SearchViewModelTest {
     @Before
     fun setup() {
         clearMocks(
-            resourceRepository, searchHistoryStorage, viewedItemStorage,
+            searchHistoryStorage, viewedItemStorage,
             doubanRexxarApi, doubanRepository, doubanAuthStorage,
             tmdbRepository, traktRepository, sharedDoubanHotCache
         )
@@ -130,7 +105,6 @@ class SearchViewModelTest {
 
     private fun createViewModel(): SearchViewModel {
         return SearchViewModel(
-            resourceRepository = resourceRepository,
             searchHistoryStorage = searchHistoryStorage,
             viewedItemStorage = viewedItemStorage,
             doubanRexxarApi = doubanRexxarApi,
@@ -186,133 +160,6 @@ class SearchViewModelTest {
 
         // 仍然只调用 1 次（第二次命中本地缓存未到达 sharedDoubanHotCache）
         coVerify(exactly = 1) { sharedDoubanHotCache.getOrAwait(any(), any(), any()) }
-    }
-
-    /**
-     * 测试点3：search("盗梦空间") 成功 → uiState.resources 填充，isLoading=false
-     *
-     * search() 收集 searchResourcesFlow 返回的 Flow，成功时缓存结果并更新 resources。
-     * 额外验证：第二次 search 同一关键词命中 searchResultCache，不重复调用 searchResourcesFlow。
-     */
-    @Test
-    fun `search_成功_resources填充且isLoading为false`() = runTest {
-        every {
-            resourceRepository.searchResourcesFlow(any(), any(), any(), any(), any())
-        } returns flowOf(listOf(resourceItemA))
-
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        viewModel.search("盗梦空间")
-        advanceUntilIdle()
-
-        val state = viewModel.uiState.value
-        assertThat(state.resources).hasSize(1)
-        assertThat(state.resources[0].name).isEqualTo("盗梦空间.2010.BluRay")
-        assertThat(state.isLoading).isFalse()
-        assertThat(state.keyword).isEqualTo("盗梦空间")
-        assertThat(state.error).isNull()
-
-        // 额外验证：searchResultCache 缓存命中，第二次 search 同一关键词不调 searchResourcesFlow
-        viewModel.search("盗梦空间")
-        advanceUntilIdle()
-
-        verify(exactly = 1) { resourceRepository.searchResourcesFlow(any(), any(), any(), any(), any()) }
-    }
-
-    /**
-     * 测试点4：search("") 空关键词 → 不触发搜索
-     *
-     * search() 第 458 行 `if (keyword.isBlank()) return`，直接返回不启动协程。
-     */
-    @Test
-    fun `search_空关键词_不触发搜索`() = runTest {
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        viewModel.search("")
-        advanceUntilIdle()
-
-        verify(exactly = 0) { resourceRepository.searchResourcesFlow(any(), any(), any(), any(), any()) }
-        assertThat(viewModel.uiState.value.resources).isEmpty()
-        assertThat(viewModel.uiState.value.isLoading).isFalse()
-    }
-
-    /**
-     * 测试点5：快速连续两次 search → 只保留第二次结果（searchJob?.cancel 取消旧任务）
-     *
-     * StandardTestDispatcher 下，第一次 search 的协程尚未执行即被第二次 search 的
-     * searchJob?.cancel 取消。advanceUntilIdle 后只有第二次结果存活。
-     */
-    @Test
-    fun `search_快速连续两次_只保留第二次结果`() = runTest {
-        // 用 answers + firstArg 按 keyword 返回不同结果，避免使用 eq 匹配器
-        every {
-            resourceRepository.searchResourcesFlow(any(), any(), any(), any(), any())
-        } answers {
-            when (firstArg<String>()) {
-                "query1" -> flowOf(listOf(resourceItemA))
-                else -> flowOf(listOf(resourceItemB))
-            }
-        }
-
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        viewModel.search("query1")
-        viewModel.search("query2")
-        advanceUntilIdle()
-
-        val state = viewModel.uiState.value
-        assertThat(state.resources).hasSize(1)
-        assertThat(state.resources[0].name).isEqualTo("星际穿越.2014.BluRay")
-        assertThat(state.keyword).isEqualTo("query2")
-    }
-
-    /**
-     * 测试点6：setTypeFilter(MOVIE) → uiState.typeFilter 更新
-     *
-     * setTypeFilter 是同步方法，直接修改 _uiState，无需 advanceUntilIdle。
-     */
-    @Test
-    fun `setTypeFilter_设置MOVIE_typeFilter更新`() = runTest {
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        assertThat(viewModel.uiState.value.typeFilter).isEqualTo(ResourceType.ALL)
-
-        viewModel.setTypeFilter(ResourceType.MOVIE)
-
-        assertThat(viewModel.uiState.value.typeFilter).isEqualTo(ResourceType.MOVIE)
-    }
-
-    /**
-     * 测试点7：clearResults() → resources 清空，keyword 清空
-     *
-     * clearResults 是同步方法，直接重置 _uiState，无需 advanceUntilIdle。
-     */
-    @Test
-    fun `clearResults_清空resources和keyword`() = runTest {
-        every {
-            resourceRepository.searchResourcesFlow(any(), any(), any(), any(), any())
-        } returns flowOf(listOf(resourceItemA))
-
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        viewModel.search("盗梦空间")
-        advanceUntilIdle()
-
-        // 确认有结果
-        assertThat(viewModel.uiState.value.resources).hasSize(1)
-        assertThat(viewModel.uiState.value.keyword).isEqualTo("盗梦空间")
-
-        viewModel.clearResults()
-
-        assertThat(viewModel.uiState.value.resources).isEmpty()
-        assertThat(viewModel.uiState.value.keyword).isEmpty()
-        assertThat(viewModel.uiState.value.error).isNull()
-        assertThat(viewModel.uiState.value.isLoading).isFalse()
     }
 
     /**
@@ -405,33 +252,6 @@ class SearchViewModelTest {
         assertThat(suggestions).hasSize(2)
         assertThat(suggestions[0].keyword).isEqualTo("测试电影")
         assertThat(suggestions[1].keyword).isEqualTo("测试剧集")
-    }
-
-    /**
-     * 测试点11：search() 网络失败（Flow 抛异常）→ uiState.error 非空
-     *
-     * searchResourcesFlow 返回的 Flow 在 collect 时抛 IOException，
-     * search() 第 501 行 catch 分支设置 error = e.message。
-     */
-    @Test
-    fun `search_网络失败_error非空`() = runTest {
-        every {
-            resourceRepository.searchResourcesFlow(any(), any(), any(), any(), any())
-        } returns flow<List<ResourceItem>> {
-            throw IOException("网络错误")
-        }
-        every { context.getString(R.string.error_network_unavailable) } returns "网络错误"
-
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        viewModel.search("盗梦空间")
-        advanceUntilIdle()
-
-        val state = viewModel.uiState.value
-        assertThat(state.error).isEqualTo("网络错误")
-        assertThat(state.resources).isEmpty()
-        assertThat(state.isLoading).isFalse()
     }
 
     /**

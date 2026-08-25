@@ -323,18 +323,14 @@ fun SearchScreen(
     var spriteInterruptRevision by remember { mutableStateOf(0L) }
     var spriteInterruptReason by remember { mutableStateOf(AiSpriteInterruptReason.BLOCKED) }
     var searchBoxBounds by remember { mutableStateOf<Rect?>(null) }
-    var firstResultBounds by remember { mutableStateOf<Rect?>(null) }
-    var firstResultAnchorKey by remember { mutableStateOf<String?>(null) }
+    // 结果锚点由承载搜索结果的 TraktSearchScreen 自己维护，本页只有搜索框锚点
     var lastInteractionAt by remember { mutableStateOf(System.currentTimeMillis()) }
     var overlayEntryHandled by rememberSaveable { mutableStateOf(false) }
-    var wasSearchLoading by remember { mutableStateOf(false) }
     var overlayDayKey by remember {
         mutableStateOf(
             SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
         )
     }
-    val resultAnchorKey = uiState.keyword.trim()
-    val currentFirstResultBounds = firstResultBounds.takeIf { firstResultAnchorKey == resultAnchorKey }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -369,8 +365,6 @@ fun SearchScreen(
 
     LaunchedEffect(
         spriteState.activatedCharacterId,
-        uiState.isLoading,
-        uiState.resources.size,
         isSearchFocused,
         searchQuery,
         overlayDayKey,
@@ -378,8 +372,6 @@ fun SearchScreen(
         showPermissionDialog,
         easterEggRes,
         searchBoxBounds,
-        firstResultBounds,
-        firstResultAnchorKey,
         showAiSpriteMotion
     ) {
         val nextBounds = searchBoxBounds
@@ -388,19 +380,14 @@ fun SearchScreen(
             easterEggRes != null ||
             isSearchFocused ||
             searchQuery.isNotBlank() ||
-            uiState.isLoading ||
             nextBounds == null
-        val hasBlockingStateIgnoringQuery = showAiSpriteCenter ||
-            showPermissionDialog ||
-            easterEggRes != null ||
-            isSearchFocused ||
-            uiState.isLoading ||
-            nextBounds == null
+        // SEARCH_COMPLETED 由 TraktSearchScreen 用它真实的加载态驱动：本页提交后就切到那一屏，
+        // 结果与加载态都不在这里，硬塞 false 免得再出现「输入恒为初始值、彩蛋永不触发」的死状态。
         val trigger = nextAiSpriteOverlayTrigger(
             entryHandled = overlayEntryHandled,
-            wasSearchLoading = wasSearchLoading,
-            isSearchLoading = uiState.isLoading,
-            hasResults = uiState.resources.isNotEmpty(),
+            wasSearchLoading = false,
+            isSearchLoading = false,
+            hasResults = false,
             isSearchFocused = isSearchFocused,
             searchQuery = searchQuery,
             activated = spriteViewModel.isSpriteActivatedForMotion(),
@@ -415,30 +402,24 @@ fun SearchScreen(
         if (trigger != null &&
             shouldStartSpriteOverlay(
                 trigger = trigger,
-                hasBlockingState = if (trigger == AiSpriteOverlayTrigger.SEARCH_COMPLETED) {
-                    hasBlockingStateIgnoringQuery
-                } else {
-                    hasBlockingState
-                },
+                hasBlockingState = hasBlockingState,
                 hasAnchorBounds = nextBounds != null,
-                hasResultAnchor = currentFirstResultBounds != null,
+                hasResultAnchor = false,
                 motionVisible = showAiSpriteMotion
             )
         ) {
             if (trigger == AiSpriteOverlayTrigger.FIRST_ENTRY) overlayEntryHandled = true
-            activeSpriteAnchor = searchAnchorFor(trigger, hasResultAnchor = currentFirstResultBounds != null)
+            activeSpriteAnchor = searchAnchorFor(trigger, hasResultAnchor = false)
             activeSceneEvent = sceneEventForSearch(trigger)
             if (spriteViewModel.tryConsumeOverlay(trigger, overlayDayKey)) {
                 showAiSpriteMotion = true
             }
         }
-        wasSearchLoading = uiState.isLoading
     }
 
     LaunchedEffect(
         lastInteractionAt,
         spriteState.activatedCharacterId,
-        uiState.isLoading,
         isSearchFocused,
         searchQuery,
         overlayDayKey,
@@ -452,7 +433,6 @@ fun SearchScreen(
             easterEggRes != null ||
             isSearchFocused ||
             searchQuery.isNotBlank() ||
-            uiState.isLoading ||
             showAiSpriteMotion
         if (!blocked && spriteViewModel.isSpriteActivatedForMotion()) {
             delay(AI_SPRITE_IDLE_DELAY_MS)
@@ -496,9 +476,7 @@ fun SearchScreen(
         },
         ambientColor = MaterialTheme.colorScheme.background,
         contentCapacity = 32,
-        loadingCount =
-            (if (uiState.isLoading) 1 else 0) +
-                uiState.doubanHotCategories.count { it.isLoading },
+        loadingCount = uiState.doubanHotCategories.count { it.isLoading },
         loadingItemWeight = 4
     )
 
@@ -722,6 +700,18 @@ fun SearchScreen(
                         )
                     }
                 } else {
+                    // 无输入且没有历史时给出引导：search_empty_hint 四语言早就写好，之前没有任何调用方
+                    if (uiState.searchHistory.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.search_empty_hint),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 24.dp)
+                        )
+                    }
                     if (uiState.searchHistory.isNotEmpty()) {
                         SearchHistoryTwoRow(
                             history = uiState.searchHistory,
@@ -841,15 +831,9 @@ fun SearchScreen(
         AiSpriteMotion(
             characterId = spriteState.activatedCharacterId.orEmpty(),
             anchor = activeSpriteAnchor,
-            anchorBounds = when (activeSpriteAnchor) {
-                AiSpriteAnchor.ResultCard -> currentFirstResultBounds
-                else -> searchBoxBounds
-            },
-            visible = showAiSpriteMotion && !showAiSpriteCenter &&
-                (when (activeSpriteAnchor) {
-                    AiSpriteAnchor.ResultCard -> currentFirstResultBounds
-                    else -> searchBoxBounds
-                } != null),
+            // 本页只有搜索框锚点：结果卡锚点属于承载结果的 TraktSearchScreen
+            anchorBounds = searchBoxBounds,
+            visible = showAiSpriteMotion && !showAiSpriteCenter && searchBoxBounds != null,
             onClick = {
                 interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                 setAiSpriteCenterVisible(true)
@@ -880,343 +864,7 @@ fun SearchScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SearchBarTop(
-    searchQuery: String,
-    onQueryChange: (String) -> Unit,
-    onSearch: () -> Unit,
-    onClear: () -> Unit,
-    onBack: (() -> Unit)?,
-    focusRequester: FocusRequester,
-    onFocusChanged: (Boolean) -> Unit,
-    searchSourceType: SearchSourceType = SearchSourceType.DISK,
-    onSearchSourceTypeChange: ((SearchSourceType) -> Unit)? = null
-) {
-    val context = LocalContext.current
-    val view = LocalView.current
-    val isDark = isAppDarkTheme()
-    var showTypeDropdown by remember { mutableStateOf(false) }
-    val typeColorMap = mapOf(
-        SearchSourceType.DISK to Color(0xFF26A69A),    // Teal
-        SearchSourceType.MOVIE to Color(0xFF7986CB),   // Indigo
-        SearchSourceType.SHOW to Color(0xFFFFD54F),    // Amber
-        SearchSourceType.PERSON to Color(0xFFF48FB1)   // Rose
-    )
-    // 搜索类型菜单：标签映射与固定宽度（最长文字 + 打勾 + 间隔 + 内边距，多语言适配）
-    val orderedTypes = listOf(SearchSourceType.MOVIE, SearchSourceType.SHOW, SearchSourceType.PERSON, SearchSourceType.DISK)
-    val typeLabelMap = orderedTypes.associateWith { type ->
-        stringResource(
-            when (type) {
-                SearchSourceType.DISK -> R.string.search_type_disk
-                SearchSourceType.MOVIE -> R.string.search_type_movie
-                SearchSourceType.SHOW -> R.string.search_type_show
-                SearchSourceType.PERSON -> R.string.search_type_person
-            }
-        )
-    }
-    val textMeasurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    val typeLabelStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
-    val typeMenuWidth = with(density) {
-        typeLabelMap.values.maxOf { textMeasurer.measure(AnnotatedString(it), typeLabelStyle).size.width }.toDp()
-    } + 24.dp + 8.dp + 16.dp
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (onBack != null) {
-            IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.search_back), tint = MaterialTheme.colorScheme.primary)
-            }
-            Spacer(modifier = Modifier.width(4.dp))
-        }
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onQueryChange,
-            modifier = Modifier
-                .weight(1f)
-                .focusRequester(focusRequester)
-                .onFocusChanged { focusState ->
-                    onFocusChanged(focusState.isFocused)
-                },
-            placeholder = {
-                val placeholderText = stringResource(
-                    when (searchSourceType) {
-                        SearchSourceType.MOVIE -> R.string.search_placeholder_movie
-                        SearchSourceType.SHOW -> R.string.search_placeholder_show
-                        SearchSourceType.PERSON -> R.string.search_placeholder_person
-                        SearchSourceType.DISK -> R.string.search_placeholder
-                    }
-                )
-                AdaptivePlaceholderText(
-                    text = placeholderText,
-                    color = if (isDark) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)
-                )
-            },
-            leadingIcon = {
-                if (onSearchSourceTypeChange != null) {
-                    DropdownAnchorMenu(
-                        expanded = showTypeDropdown,
-                        onDismissRequest = { showTypeDropdown = false },
-                        menuWidth = typeMenuWidth,
-                        anchor = {
-                            TextButton(
-                                onClick = { showTypeDropdown = true },
-                                contentPadding = PaddingValues(start = 8.dp, top = 0.dp, end = 4.dp, bottom = 0.dp),
-                                modifier = Modifier.height(32.dp)
-                            ) {
-                                Text(
-                                    text = typeLabelMap[searchSourceType] ?: "",
-                                    fontSize = 15.sp,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    maxLines = 1
-                                )
-                                Icon(
-                                    Icons.Rounded.ArrowDropDown,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = typeColorMap[searchSourceType] ?: Color(0xFF4CAF50)
-                                )
-                            }
-                        }
-                    ) {
-                        orderedTypes.forEach { type ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        view.performHaptic(HapticType.TICK)
-                                        showTypeDropdown = false
-                                        if (type != searchSourceType) {
-                                            onSearchSourceTypeChange.invoke(type)
-                                        }
-                                    }
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = typeLabelMap[type] ?: "",
-                                    style = typeLabelStyle,
-                                    color = typeColorMap[type] ?: Color(0xFF4CAF50),
-                                    modifier = Modifier.weight(1f)
-                                )
-                                if (type == searchSourceType) {
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Icon(
-                                        Icons.Rounded.Check,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(24.dp),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.Transparent,
-                unfocusedContainerColor = Color.Transparent,
-                disabledContainerColor = Color.Transparent,
-                errorContainerColor = Color.Transparent,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-                disabledIndicatorColor = Color.Transparent,
-                errorIndicatorColor = Color.Transparent,
-                focusedTextColor = MaterialTheme.colorScheme.onBackground,
-                unfocusedTextColor = MaterialTheme.colorScheme.onBackground
-            ),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-            trailingIcon = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(end = 4.dp)
-                ) {
-                    if (searchQuery.isEmpty()) {
-                        Icon(
-                            Icons.Rounded.Search,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        IconButton(
-                            onClick = onClear,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                Icons.Rounded.Close,
-                                contentDescription = stringResource(R.string.search_clear_input),
-                                modifier = Modifier.size(18.dp),
-                                tint = if (isDark) Color.White.copy(alpha = 0.72f) else Color(0xFF546E7A)
-                            )
-                        }
-                        TextButton(
-                            onClick = { view.performHaptic(HapticType.CLICK); onSearch() },
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Text(stringResource(R.string.search_button))
-                        }
-                    }
-                }
-            }
-        )
-        // 当有返回按钮时，右侧添加等宽 Spacer 保持左右边距一致
-        if (onBack != null) {
-            Spacer(modifier = Modifier.width(44.dp))
-        }
-    }
-}
 
-@Composable
-private fun SearchHistoryInline(
-    history: List<SearchHistoryItem>,
-    onHistoryClick: (SearchHistoryItem) -> Unit,
-    onHistoryDelete: (SearchHistoryItem) -> Unit,
-    onClearAll: () -> Unit,
-    selectedKeyword: String? = null,
-    isDark: Boolean = false
-) {
-    val typeColorMap = mapOf(
-        "disk" to Color(0xFF26A69A),
-        "movie" to Color(0xFF7986CB),
-        "show" to Color(0xFFFFD54F),
-        "person" to Color(0xFFF48FB1)
-    )
-    val typeNameMap = mapOf(
-        "disk" to stringResource(R.string.search_type_disk),
-        "movie" to stringResource(R.string.search_type_movie),
-        "show" to stringResource(R.string.search_type_show),
-        "person" to stringResource(R.string.search_type_person)
-    )
-    Column(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.search_history_title),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            TextButton(onClick = onClearAll, contentPadding = PaddingValues(0.dp)) {
-                Text(
-                    text = stringResource(R.string.search_history_clear_all),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(history, key = { "${it.type}_${it.keyword}" }) { item ->
-                val tagColor = typeColorMap[item.type] ?: Color(0xFF4CAF50)
-                val isSelected = item.keyword == selectedKeyword
-                val interactionSource = remember { MutableInteractionSource() }
-                val isPressed by interactionSource.collectIsPressedAsState()
-                val scale by animateFloatAsState(
-                    targetValue = if (isPressed) 0.96f else 1f,
-                    label = "history_chip_scale"
-                )
-                val bgColor = if (isSelected) {
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.12f)
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                }
-                val borderColor = if (isSelected) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-                } else {
-                    MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
-                }
-                val textColor = if (isSelected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                }
-                val iconTint = if (isSelected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
-                val shadowColor = if (isSelected) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                } else {
-                    Color.Black.copy(alpha = 0.1f)
-                }
-                Box(
-                    modifier = Modifier
-                        .scale(scale)
-                        .shadow(
-                            elevation = if (isDark) 4.dp else 2.dp,
-                            shape = DesignToken.Tag,
-                            ambientColor = if (isSelected) shadowColor else Color.Black.copy(alpha = if (isDark) 0.25f else 0.08f),
-                            spotColor = if (isSelected) shadowColor else Color.Black.copy(alpha = if (isDark) 0.20f else 0.06f),
-                        )
-                        .border(1.dp, borderColor, DesignToken.Tag)
-                        .clip(DesignToken.Tag)
-                        .background(color = bgColor)
-                        .clickable(
-                            interactionSource = interactionSource,
-                            indication = null,
-                            onClick = { onHistoryClick(item) }
-                        )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Rounded.History,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = iconTint
-                        )
-                        Spacer(modifier = Modifier.width(5.dp))
-                        Text(
-                            text = typeNameMap[item.type] ?: item.type,
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                            color = if (isSelected) MaterialTheme.colorScheme.primary else tagColor,
-                            maxLines = 1
-                        )
-                        Spacer(modifier = Modifier.width(5.dp))
-                        Text(
-                            text = item.keyword,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = textColor,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.width(5.dp))
-                        IconButton(
-                            onClick = { onHistoryDelete(item) },
-                            modifier = Modifier.size(18.dp)
-                        ) {
-                            Icon(
-                                Icons.Rounded.Close,
-                                contentDescription = stringResource(R.string.search_history_delete),
-                                modifier = Modifier.size(14.dp),
-                                tint = iconTint
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1789,113 +1437,6 @@ private fun SearchSuggestionsInline(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun PopularSearchesSection(
-    popularSearches: List<String>,
-    onPopularClick: (String) -> Unit,
-    selectedKeyword: String? = null,
-    isDark: Boolean = false
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Text(
-            text = stringResource(R.string.hot_search),
-            style = MaterialTheme.typography.titleSmall.copy(shadow = ambientTextHalo()),
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            popularSearches.forEach { keyword ->
-                val isSelected = keyword == selectedKeyword
-                val interactionSource = remember { MutableInteractionSource() }
-                val isPressed by interactionSource.collectIsPressedAsState()
-                val scale by animateFloatAsState(
-                    targetValue = if (isPressed) 0.96f else 1f,
-                    label = "popular_chip_scale"
-                )
-                val bgColor = if (isSelected) {
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.12f)
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                }
-                val borderColor = if (isSelected) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-                } else {
-                    MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
-                }
-                val textColor = if (isSelected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                }
-                val iconTint = if (isSelected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
-                val shadowColor = if (isSelected) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                } else {
-                    Color.Black.copy(alpha = 0.1f)
-                }
-                Box(
-                    modifier = Modifier
-                        .scale(scale)
-                        .shadow(
-                            elevation = if (isDark) 4.dp else 2.dp,
-                            shape = DesignToken.Tag,
-                            ambientColor = if (isSelected) shadowColor else Color.Black.copy(alpha = if (isDark) 0.25f else 0.08f),
-                            spotColor = if (isSelected) shadowColor else Color.Black.copy(alpha = if (isDark) 0.20f else 0.06f),
-                        )
-                        .border(1.dp, borderColor, DesignToken.Tag)
-                        .clip(DesignToken.Tag)
-                        .background(color = bgColor)
-                        .clickable(
-                            interactionSource = interactionSource,
-                            indication = null,
-                            onClick = { onPopularClick(keyword) }
-                        )
-                ) {
-                    // 顶部高光层
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    0.0f to Color.White.copy(alpha = if (isDark) 0.06f else 0.12f),
-                                    0.3f to Color.White.copy(alpha = if (isDark) 0.02f else 0.04f),
-                                    1.0f to Color.Transparent,
-                                )
-                            )
-                    )
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Rounded.Search,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = iconTint
-                        )
-                        Spacer(modifier = Modifier.width(5.dp))
-                        Text(
-                            text = keyword,
-                            color = textColor,
-                            style = MaterialTheme.typography.bodySmall,
-                            maxLines = 1
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
 
 // ========== 豆瓣热榜组件（供 DiscoverScreen 复用） ==========
 

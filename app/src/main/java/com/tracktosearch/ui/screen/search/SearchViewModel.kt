@@ -14,10 +14,7 @@ import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.douban.dto.DoubanHotData
 import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
 import com.tracktosearch.data.remote.douban.dto.toDoubanHotItem
-import com.tracktosearch.data.remote.dto.ResourceItem
-import com.tracktosearch.data.remote.dto.ResourceType
 import com.tracktosearch.data.repository.MediaType
-import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.util.PersistentTtlCache
@@ -26,7 +23,6 @@ import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -47,21 +43,22 @@ data class DoubanHotCategory(
     val total: Int = 0
 )
 
+/**
+ * 搜索页状态。
+ *
+ * 这里不含搜索结果：搜索提交后由内联的 TraktSearchScreen 承载结果与其加载/错误态，
+ * 本页只负责输入、历史、热词与豆瓣热榜。以前这里还有 isLoading / resources / error /
+ * typeFilter 四个字段，从没有任何 UI 渲染方，恒为初始值。
+ */
 @Immutable
 data class SearchUiState(
-    val isLoading: Boolean = false,
-    val keyword: String = "",
-    val resources: List<ResourceItem> = emptyList(),
-    val error: String? = null,
     val searchHistory: List<SearchHistoryItem> = emptyList(),
     val doubanHotCategories: List<DoubanHotCategory> = emptyList(),
-    val typeFilter: ResourceType = ResourceType.ALL,
     val resolvingItemId: Int? = null
 )
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
-    private val resourceRepository: ResourceRepository,
     private val searchHistoryStorage: SearchHistoryStorage,
     private val viewedItemStorage: ViewedItemStorage,
     private val doubanRexxarApi: DoubanRexxarApiService,
@@ -76,8 +73,6 @@ class SearchViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
-    private var searchJob: Job? = null
-
     // 热门搜索词 - 从豆瓣新片榜实时获取
     private val _hotSearches = MutableStateFlow<List<String>>(emptyList())
     val hotSearches: StateFlow<List<String>> = _hotSearches.asStateFlow()
@@ -86,7 +81,6 @@ class SearchViewModel @Inject constructor(
     private val hotSearchCache = TtlCache<List<String>>(TTL_DOUBAN)
 
     companion object {
-        private const val TTL_SEARCH = 10 * 60 * 1000L      // 资源搜索 10 分钟
         private const val TTL_DOUBAN = 6 * 60 * 60 * 1000L      // 豆瓣热榜 6 小时
 
         private val DOUBAN_CATEGORIES = listOf(
@@ -107,9 +101,6 @@ class SearchViewModel @Inject constructor(
             else -> "movie_hot" // douban-movie 新片榜
         }
     }
-
-    // 搜索结果缓存
-    private val searchResultCache = TtlCache<List<ResourceItem>>(TTL_SEARCH)
 
     // 搜索历史 - SearchHistoryStorage 已用 StateFlow 暴露，直接收集
     private val searchHistoryFlow = searchHistoryStorage.history
@@ -368,61 +359,6 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    fun search(keyword: String) {
-        if (keyword.isBlank()) return
-
-        // 缓存检查在协程启动前,命中则同步返回,避免 isLoading=true→false 闪烁
-        val cached = searchResultCache.get(keyword.trim())
-        if (cached != null) {
-            searchJob?.cancel()
-            _uiState.value = _uiState.value.copy(
-                isLoading = false,
-                keyword = keyword,
-                resources = cached,
-                error = null,
-                typeFilter = ResourceType.ALL
-            )
-            // 搜索历史仍需记录(异步,不阻塞 UI)
-            viewModelScope.launch { searchHistoryStorage.add(keyword, "disk") }
-            return
-        }
-
-        searchJob?.cancel()
-        searchJob = viewModelScope.launch {
-            searchHistoryStorage.add(keyword, "disk")
-            _uiState.value = _uiState.value.copy(
-                isLoading = true,
-                keyword = keyword,
-                resources = emptyList(),
-                error = null,
-                typeFilter = ResourceType.ALL
-            )
-
-            try {
-                resourceRepository.searchResourcesFlow(keyword = keyword)
-                    .collect { items ->
-                        if (items.isNotEmpty()) {
-                            searchResultCache.put(keyword.trim(), items)
-                            _uiState.value = _uiState.value.copy(
-                                isLoading = false,
-                                resources = items
-                            )
-                        }
-                    }
-                if (_uiState.value.resources.isEmpty()) {
-                    _uiState.value = _uiState.value.copy(isLoading = false)
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = e.toUserMessage(context, R.string.error_search_failed)
-                )
-            }
-        }
-    }
-
     fun removeHistory(keyword: String, type: String? = null) {
         viewModelScope.launch {
             searchHistoryStorage.remove(keyword, type)
@@ -448,21 +384,6 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch {
             searchHistoryStorage.clear()
         }
-    }
-
-    fun clearResults() {
-        searchJob?.cancel()
-        _uiState.value = _uiState.value.copy(
-            resources = emptyList(),
-            error = null,
-            isLoading = false,
-            keyword = "",
-            typeFilter = ResourceType.ALL
-        )
-    }
-
-    fun setTypeFilter(filter: ResourceType) {
-        _uiState.value = _uiState.value.copy(typeFilter = filter)
     }
 
     // 豆瓣热榜卡片点击：通过 TMDB 搜索标题，再转换为 Trakt ID 后跳转详情页
