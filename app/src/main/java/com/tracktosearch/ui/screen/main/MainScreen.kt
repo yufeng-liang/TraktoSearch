@@ -30,11 +30,13 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Search
@@ -83,6 +85,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.zIndex
+import com.tracktosearch.data.util.ConnectivityObserver
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -169,6 +173,13 @@ interface DoubanAuthStorageEntryPoint {
     fun doubanAuthStorage(): com.tracktosearch.data.local.DoubanAuthStorage
 }
 
+/** EntryPoint 用于在 MainScreen 读取网络状态（此前只有 OkHttp 拦截器层消费，UI 从不提示离线） */
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface ConnectivityObserverEntryPoint {
+    fun connectivityObserver(): ConnectivityObserver
+}
+
 @Composable
 fun MainScreen(
     initialTab: Int = 0,
@@ -239,6 +250,12 @@ fun MainScreen(
     var showAccentOnboarding by remember { mutableStateOf(false) }
     var showOnboarding by remember { mutableStateOf(false) }
     val tabRects = remember { mutableStateOf<List<Rect>>(emptyList()) }
+    val connectivityObserver = remember {
+        EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            ConnectivityObserverEntryPoint::class.java
+        ).connectivityObserver()
+    }
     val density = LocalDensity.current
 
     // 用户头像：登录后从对应来源获取
@@ -688,6 +705,7 @@ fun MainScreen(
                             onNavigateToDoubanLogin = onNavigateToDoubanLogin,
                             onNavigateToLogin = onNavigateToLogin,
                             onTraktLogin = onTraktLogin,
+                            onStatisticsClick = onStatisticsClick,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -920,6 +938,41 @@ fun MainScreen(
                         )
                     }
                 }
+                }
+            }
+
+            // 全局离线横幅：网络断开时给一条常驻提示，说明看到的是本地缓存。
+            // 注意：这里只提示状态，不弹 Toast，避免与启动期的离线提示重复打扰。
+            val networkStatus by connectivityObserver.status.collectAsState()
+            androidx.compose.animation.AnimatedVisibility(
+                visible = networkStatus == ConnectivityObserver.NetworkStatus.OFFLINE,
+                enter = androidx.compose.animation.slideInVertically { -it } + androidx.compose.animation.fadeIn(),
+                exit = androidx.compose.animation.slideOutVertically { -it } + androidx.compose.animation.fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .zIndex(4f)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.94f))
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.CloudOff,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.auth_offline_mode),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
                 }
             }
 

@@ -9,19 +9,16 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -77,6 +74,7 @@ import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
@@ -114,7 +112,6 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -132,13 +129,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -161,7 +154,6 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Velocity
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -188,6 +180,8 @@ import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.AppIconButton
+import com.tracktosearch.ui.component.AppPullToRefreshIndicator
+import com.tracktosearch.ui.component.rememberAppPullToRefreshState
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
@@ -244,6 +238,8 @@ fun WatchlistScreen(
     onNavigateToLogin: () -> Unit = {},
     // 直接发起 Trakt 授权（CustomTabs 打开授权页）；未提供时回退到导航激活登录页
     onTraktLogin: () -> Unit = onNavigateToLogin,
+    // 观看统计入口：设置 Tab 里的入口保留，这里只是多一条更浅的路径
+    onStatisticsClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: WatchlistViewModel = hiltViewModel()
 ) {
@@ -378,72 +374,13 @@ fun WatchlistScreen(
             .debounce(120)
             .collect { debouncedQuery = it }
     }
-    var isRefreshing by remember { mutableStateOf(false) }
-    // 下拉刷新：唯一真源是一个 float 状态，拖动阶段由 NestedScrollConnection 直接写入
-    // （不再经 snapshotFlow → Animatable.snapTo 中转，少一帧延迟），松手与收起用 spring 写回同一状态。
-    // 指示器与网格都只在 graphicsLayer / Canvas 的绘制阶段读取它，下拉全程零重组。
-    val pullOffset = remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current
-    val pullThresholdPx = with(density) { 80.dp.toPx() } // 触发刷新的阈值
-    // 刷新中把指示器停在阈值内侧，等数据回来再收起。原实现松手立即归零，刷新态一闪而过。
-    val pullHoldPx = with(density) { 56.dp.toPx() }
-    // 阻尼之外再夹一个上限，避免一直下拉把内容拖到屏幕中部
-    val pullMaxPx = with(density) { 132.dp.toPx() }
     val gridCoroutineScope = rememberCoroutineScope()
-    val pullToRefreshConnection = remember {
-        object : NestedScrollConnection {
-            /** 已越过阈值：用于只在跨越瞬间给一次触感，而不是每帧都给。 */
-            private var armed = false
-
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                // 反向滑动优先把下拉偏移收回去，再交给列表滚动
-                val current = pullOffset.floatValue
-                if (current > 0f && available.y < 0f) {
-                    val consumed = minOf(-available.y, current)
-                    pullOffset.floatValue = current - consumed
-                    return Offset(0f, -consumed)
-                }
-                return Offset.Zero
-            }
-
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                // 列表滚到顶部后，继续下拉产生弹性偏移（带阻尼）
-                if (available.y <= 0f || source != NestedScrollSource.UserInput) return Offset.Zero
-                if (isRefreshing) return Offset.Zero
-                val current = pullOffset.floatValue
-                val damped = available.y * 0.5f / (1f + current / pullThresholdPx)
-                val next = (current + damped).coerceAtMost(pullMaxPx)
-                pullOffset.floatValue = next
-                if (next >= pullThresholdPx && !armed) {
-                    armed = true
-                    view.performHaptic(HapticType.CLICK)
-                } else if (next < pullThresholdPx && armed) {
-                    armed = false
-                }
-                return Offset(0f, available.y)
-            }
-
-            override suspend fun onPreFling(available: Velocity): Velocity {
-                armed = false
-                val current = pullOffset.floatValue
-                if (current <= 0f) return Velocity.Zero
-                if (current >= pullThresholdPx && !isRefreshing) {
-                    isRefreshing = true
-                    viewModel.pullToRefresh()
-                    animatedIds.value = mutableSetOf()
-                    refreshPending = true
-                    // 停在 hold 位等数据；收起交给 refreshPending 完成后的效果
-                    animate(current, pullHoldPx, animationSpec = spring(0.9f, 900f)) { value, _ ->
-                        pullOffset.floatValue = value
-                    }
-                } else {
-                    animate(current, 0f, animationSpec = spring(0.62f, 380f)) { value, _ ->
-                        pullOffset.floatValue = value
-                    }
-                }
-                return Velocity.Zero
-            }
-        }
+    // 下拉刷新用共享实现（AppPullToRefresh），手感参数与原本地实现一致
+    val pullToRefreshState = rememberAppPullToRefreshState {
+        viewModel.pullToRefresh()
+        animatedIds.value = mutableSetOf()
+        refreshPending = true
     }
     val focusRequester = remember { FocusRequester() }
     val searchInteractionSource = remember { MutableInteractionSource() }
@@ -683,12 +620,7 @@ fun WatchlistScreen(
             .dropWhile { !it }
             .first { !it }
         // 数据落地即收起指示器，卡片入场动画同时进行
-        if (isRefreshing) {
-            animate(pullOffset.floatValue, 0f, animationSpec = spring(0.7f, 420f)) { value, _ ->
-                pullOffset.floatValue = value
-            }
-            isRefreshing = false
-        }
+        pullToRefreshState.finishRefresh()
         delay(600)
         enterMode = EnterMode.DEFAULT
         refreshPending = false
@@ -742,11 +674,9 @@ fun WatchlistScreen(
     
                 // 下拉刷新指示器：锚在列表内容顶部，位移/透明度/进度只在绘制阶段读取，
                 // 下拉过程不产生重组。
-                PullToRefreshIndicator(
-                    contentTop = statusBarHeight + 122.dp,
-                    thresholdPx = pullThresholdPx,
-                    refreshing = { isRefreshing },
-                    offsetY = { pullOffset.floatValue }
+                AppPullToRefreshIndicator(
+                    state = pullToRefreshState,
+                    contentTop = statusBarHeight + 122.dp
                 )
     
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -910,8 +840,8 @@ fun WatchlistScreen(
                         .hazeSource(state = hazeState)
                         // GLASS 模式将影视网格注册为 Backdrop 采样源，使玻璃控件（回顶按钮等）能采到内容
                         .backdropContentSource()
-                        .nestedScroll(pullToRefreshConnection)
-                        .graphicsLayer { translationY = pullOffset.floatValue }
+                        .nestedScroll(pullToRefreshState.connection)
+                        .graphicsLayer { translationY = pullToRefreshState.offset.floatValue }
                     ) {
                         // 根据 selectedMode 和 selectedTab 渲染对应列表
                         val items = currentItems
@@ -1048,13 +978,30 @@ fun WatchlistScreen(
                                             exit = fadeOut(animationSpec = tween(240)),
                                             modifier = Modifier.align(Alignment.CenterStart)
                                         ) {
-                                            Text(
-                                                text = stringResource(R.string.tab_me),
-                                                fontSize = 28.sp,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                letterSpacing = (-0.5).sp,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = stringResource(R.string.tab_me),
+                                                    fontSize = 28.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    letterSpacing = (-0.5).sp,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                // 观看统计入口：以前只能从设置 Tab 进，热力图/词云这类高价值内容
+                                                // 埋得太深。放在标题右侧的空白处，搜索展开时随标题一起淡出。
+                                                IconButton(
+                                                    onClick = onStatisticsClick,
+                                                    modifier = Modifier
+                                                        .padding(start = 4.dp)
+                                                        .size(32.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.Insights,
+                                                        contentDescription = stringResource(R.string.statistics_title),
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                            }
                                         }
                                     val searchHintColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
                                     val searchPlaceholder = if (searchQuery.isBlank()) {
@@ -1758,7 +1705,7 @@ fun WatchlistScreen(
                             .padding(top = 124.dp + statusBarHeight)
                             // 骨架屏也跟着下拉偏移：刷新中指示器停在内容上方的空隙里，
                             // 骨架屏若不一起下移就会被指示器压住
-                            .graphicsLayer { translationY = pullOffset.floatValue }
+                            .graphicsLayer { translationY = pullToRefreshState.offset.floatValue }
                     )
                 }
             }
@@ -2098,82 +2045,6 @@ private fun WatchlistPosterCard(
     }
 }
 
-/**
- * 下拉刷新指示器：只画一圈进度弧，不再带文案——原文案固定在「统计行」高度上，
- * 下拉时会和"电影/电视剧/其他"那一行叠在一起。
- *
- * 位置锚在列表内容顶部（statusBar + 顶栏高度），以半速跟随下拉，正好停在内容让出的空隙里；
- * 位移、透明度、缩放、旋转、弧长全部在 graphicsLayer 与 Canvas 的绘制阶段读取，下拉全程零重组。
- */
-@Composable
-private fun PullToRefreshIndicator(
-    contentTop: Dp,
-    thresholdPx: Float,
-    refreshing: () -> Boolean,
-    offsetY: () -> Float
-) {
-    val spinning = refreshing()
-    val spin = if (spinning) {
-        rememberInfiniteTransition(label = "pull_refresh_spin").animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(tween(durationMillis = 900, easing = LinearEasing)),
-            label = "pull_refresh_spin_angle"
-        )
-    } else {
-        null
-    }
-    val idleColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
-    val activeColor = MaterialTheme.colorScheme.primary
-    val trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.14f)
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = contentTop),
-        contentAlignment = Alignment.TopCenter
-    ) {
-        Canvas(
-            modifier = Modifier
-                .size(28.dp)
-                // 参数名避开 GraphicsLayerScope.translationY（同名会遮蔽作用域属性导致无法赋值）
-                .graphicsLayer {
-                    val offset = offsetY()
-                    val progress = (offset / thresholdPx).coerceIn(0f, 1f)
-                    translationY = offset * 0.5f - size.height * 0.5f
-                    // 起手一小段保持不可见，避免在半透明顶栏后面透出来
-                    alpha = (offset / (thresholdPx * 0.55f)).coerceIn(0f, 1f)
-                    val scale = 0.72f + 0.28f * progress
-                    scaleX = scale
-                    scaleY = scale
-                    rotationZ = spin?.value ?: (progress * 300f)
-                }
-        ) {
-            val progress = (offsetY() / thresholdPx).coerceIn(0f, 1f)
-            val stroke = 2.6.dp.toPx()
-            val arcTopLeft = Offset(stroke / 2f, stroke / 2f)
-            val arcSize = Size(size.width - stroke, size.height - stroke)
-            val style = Stroke(width = stroke, cap = StrokeCap.Round)
-            drawArc(
-                color = trackColor,
-                startAngle = 0f,
-                sweepAngle = 360f,
-                useCenter = false,
-                topLeft = arcTopLeft,
-                size = arcSize,
-                style = style
-            )
-            drawArc(
-                color = lerp(idleColor, activeColor, progress),
-                startAngle = -90f,
-                sweepAngle = if (spin != null) 100f else 320f * progress,
-                useCenter = false,
-                topLeft = arcTopLeft,
-                size = arcSize,
-                style = style
-            )
-        }
-    }
-}
 
 /** 骨架屏网格 - 3列，海报占位 + 标题条 + 类型条，呼吸动画 */
 @Composable
