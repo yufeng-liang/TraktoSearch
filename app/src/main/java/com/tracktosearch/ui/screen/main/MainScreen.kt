@@ -30,7 +30,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -944,20 +943,24 @@ fun MainScreen(
             // 全局离线横幅：网络断开时给一条常驻提示，说明看到的是本地缓存。
             // 注意：这里只提示状态，不弹 Toast，避免与启动期的离线提示重复打扰。
             val networkStatus by connectivityObserver.status.collectAsState()
+            val offlineBannerBottom = WindowInsets.navigationBars
+                .asPaddingValues()
+                .calculateBottomPadding() + 78.dp
             androidx.compose.animation.AnimatedVisibility(
                 visible = networkStatus == ConnectivityObserver.NetworkStatus.OFFLINE,
-                enter = androidx.compose.animation.slideInVertically { -it } + androidx.compose.animation.fadeIn(),
-                exit = androidx.compose.animation.slideOutVertically { -it } + androidx.compose.animation.fadeOut(),
+                enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(),
+                exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut(),
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
+                    .align(Alignment.BottomCenter)
                     .zIndex(4f)
             ) {
+                // 贴在悬浮底栏上方的胶囊：顶部放会压住各 Tab 的大标题
                 Row(
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .padding(bottom = offlineBannerBottom, start = 24.dp, end = 24.dp)
+                        .clip(RoundedCornerShape(18.dp))
                         .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.94f))
-                        .statusBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
