@@ -39,7 +39,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -66,6 +65,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.AppErrorState
+import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.data.ai.AiAudio
 import com.tracktosearch.data.ai.AiDailyKnowledge
 import com.tracktosearch.data.ai.AiGreeting
@@ -582,41 +583,19 @@ private fun FeatureUnavailable() {
 /**
  * 错误态。
  *
- * 两处修正：一是按错误码给出具体原因（片单不够 / 配额用完 / 授权失效…），
- * 不再一律「精灵正在休息」；二是加遮罩挡住底层列表，之前是一张浮在内容上、
- * 底下照样能滚能点的贴纸；三是重试解决不了的错误不给重试按钮，免得白点还烧请求。
+ * 三条既有行为由共享的 [AppErrorState]（Overlay 形态）承接，输出不变：
+ * 按错误码给出具体原因（片单不够 / 配额用完 / 授权失效…）而非一律「精灵正在休息」；
+ * 带遮罩挡住底层列表，不让底下照样能滚能点；重试解决不了的错误不给重试按钮，免得白点还烧请求。
  */
 @Composable
 private fun FeatureError(errorCode: String, onRetry: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
-            .clickable(enabled = false, onClick = {}),
-        contentAlignment = Alignment.Center
-    ) {
-        Surface(
-            modifier = Modifier.padding(24.dp),
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.errorContainer,
-            tonalElevation = 6.dp
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = stringResource(aiErrorMessageRes(errorCode)),
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-                if (aiErrorIsRetryable(errorCode)) {
-                    OutlinedButton(onClick = onRetry) { Text(stringResource(R.string.ai_feature_retry)) }
-                }
-            }
-        }
-    }
+    AppErrorState(
+        message = stringResource(aiErrorMessageRes(errorCode)),
+        onRetry = onRetry,
+        variant = AppErrorVariant.Overlay,
+        retryable = aiErrorIsRetryable(errorCode),
+        retryLabel = stringResource(R.string.ai_feature_retry)
+    )
 }
 
 @Composable

@@ -1,11 +1,12 @@
 package com.tracktosearch.ui.component
 
+import androidx.compose.material3.Text
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasProgressBarRangeInfo
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -15,6 +16,43 @@ class LoadingViewTest {
 
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun `Full 形态显示自定义消息`() {
+        composeRule.setContent {
+            AppLoadingState(message = "加载中...")
+        }
+        composeRule.onNodeWithText("加载中...").assertIsDisplayed()
+    }
+
+    @Test
+    fun `Full 形态未传消息时用默认文案`() {
+        composeRule.setContent {
+            AppLoadingState()
+        }
+        // loading_default 在 Robolectric 默认 locale 下为 "Loading…"
+        composeRule.onNodeWithText("Loading…").assertIsDisplayed()
+    }
+
+    @Test
+    fun `Inline 形态显示不确定进度指示器`() {
+        composeRule.setContent {
+            AppLoadingState(variant = AppLoadingVariant.Inline)
+        }
+        composeRule.onNode(hasProgressBarRangeInfo(ProgressBarRangeInfo.Indeterminate))
+            .assertExists()
+    }
+
+    @Test
+    fun `Skeleton 形态渲染调用方传入的骨架`() {
+        composeRule.setContent {
+            AppLoadingState(
+                variant = AppLoadingVariant.Skeleton,
+                skeleton = { Text("骨架占位") }
+            )
+        }
+        composeRule.onNodeWithText("骨架占位").assertIsDisplayed()
+    }
 
     @Test
     fun `LoadingView 自定义消息显示`() {
@@ -30,25 +68,5 @@ class LoadingViewTest {
             EmptyView(message = "暂无数据")
         }
         composeRule.onNodeWithText("暂无数据").assertIsDisplayed()
-    }
-
-    @Test
-    fun `ErrorView 显示错误消息`() {
-        composeRule.setContent {
-            ErrorView(message = "网络错误")
-        }
-        composeRule.onNodeWithText("网络错误").assertIsDisplayed()
-    }
-
-    @Test
-    fun `ErrorView 点击重试触发回调`() {
-        var retryClicked = false
-        composeRule.setContent {
-            ErrorView(message = "错误", onRetry = { retryClicked = true })
-        }
-        // ErrorView 重试按钮文案来自 stringResource(R.string.error_retry)，Robolectric 默认 locale 下为 "Retry"
-        composeRule.onNodeWithText("Retry").performClick()
-        composeRule.waitForIdle()
-        assertThat(retryClicked).isTrue()
     }
 }

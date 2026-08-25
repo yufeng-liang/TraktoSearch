@@ -10,9 +10,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,16 +21,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bookmark
-import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Visibility
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -65,6 +58,8 @@ import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
+import com.tracktosearch.ui.component.AppErrorState
+import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.ui.component.AppVisualSurface
 import com.tracktosearch.ui.component.DoubanRatingBadge
 import com.tracktosearch.ui.component.RatingBadge
@@ -322,60 +317,17 @@ internal fun MovieCard(
     }
 }
 
+/**
+ * 发现页分区错误条。实现已收敛到共享的 [AppErrorState]（Inline 形态），
+ * 这里只保留薄包装，13 处调用点不变。
+ */
 @Composable
 internal fun ErrorRetryRow(error: String, onRetry: () -> Unit) {
-    var showError by remember { mutableStateOf(false) }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = stringResource(R.string.common_load_failed),
-            modifier = Modifier.clickable { showError = true },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error
-        )
-        // 点击 info 图标弹出错误详情对话框
-        IconButton(
-            onClick = { showError = true },
-            modifier = Modifier.size(20.dp)
-        ) {
-            Icon(
-                Icons.Rounded.Info,
-                contentDescription = stringResource(R.string.error_detail_title),
-                modifier = Modifier.size(14.dp),
-                tint = MaterialTheme.colorScheme.error
-            )
-        }
-        Spacer(Modifier.width(4.dp))
-        TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)) {
-            Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(stringResource(R.string.error_retry), style = MaterialTheme.typography.labelSmall)
-        }
-    }
-
-    if (showError) {
-        AlertDialog(
-            onDismissRequest = { showError = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            title = { Text(stringResource(R.string.error_detail_title)) },
-            text = {
-                Text(
-                    text = error,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { showError = false }) {
-                    Text(stringResource(R.string.error_detail_close))
-                }
-            }
-        )
-    }
+    AppErrorState(
+        message = error,
+        onRetry = onRetry,
+        variant = AppErrorVariant.Inline
+    )
 }
 
 @Composable
