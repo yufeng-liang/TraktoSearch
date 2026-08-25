@@ -254,9 +254,11 @@ class WatchlistViewModel @Inject constructor(
         doubanSyncBannerHideJob?.cancel()
         _uiState.update {
             it.copy(
+                doubanSyncProgress = null,
                 doubanSyncBannerVisible = false
             )
         }
+        doubanSyncManager.resetProgress()
     }
 
     /** 直接重试结果页中仍可恢复的失败项；返回 false 表示没有可重试项或已有任务运行。 */
