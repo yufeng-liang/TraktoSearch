@@ -519,6 +519,8 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             )
 
             if (!ok) {
+                // 持久化 Cookie 失效标记：以前失效只出现在检查弹窗里，设置页账号卡照常显示已登录
+                doubanAuthStorage.markCookieInvalid()
                 _checkProgress.value = _checkProgress.value.copy(
                     isRunning = false,
                     isComplete = true,
@@ -995,6 +997,8 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             }
         }
         val cookieExpired = exception is DoubanCookieExpiredException
+        // 持久化失效标记，供设置页账号卡区分「已登录」与「连接失效」
+        if (cookieExpired) doubanAuthStorage.markCookieInvalid()
         return (base ?: ConsistencyCheckResult()).copy(
             isRunning = false,
             isComplete = true,

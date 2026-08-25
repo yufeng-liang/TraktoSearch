@@ -984,6 +984,8 @@ class DoubanSyncManager @Inject constructor(
                     scheduleCancellationFinalization()
                     return
                 }
+                // 同步持久化 Cookie 失效标记，让设置页账号卡显示「连接失效」而不是照常显示已登录
+                doubanAuthStorage.markCookieInvalid()
                 _progress.value = _progress.value.copy(
                     stage = DoubanSyncStage.LOGIN_REQUIRED,
                     subStage = DoubanSyncSubStage.NONE,
@@ -995,6 +997,9 @@ class DoubanSyncManager @Inject constructor(
             }
 
             if (cancelled) break
+
+            // 列表抓到了就说明 Cookie 还有效，清掉之前可能留下的失效标记
+            doubanAuthStorage.markCookieValid()
 
             // 列表抓取结束后进入详情解析，隐藏列表预览，后续只展示真实处理队列。
             recentPreviewBuffer.clear()
@@ -1254,6 +1259,8 @@ class DoubanSyncManager @Inject constructor(
                     scheduleCancellationFinalization()
                     return
                 }
+                // 同步持久化 Cookie 失效标记，让设置页账号卡显示「连接失效」而不是照常显示已登录
+                doubanAuthStorage.markCookieInvalid()
                 _progress.value = _progress.value.copy(
                     stage = DoubanSyncStage.LOGIN_REQUIRED,
                     subStage = DoubanSyncSubStage.NONE,
@@ -1265,6 +1272,9 @@ class DoubanSyncManager @Inject constructor(
             }
 
             if (cancelled) break
+
+            // 列表抓到了就说明 Cookie 还有效，清掉之前可能留下的失效标记
+            doubanAuthStorage.markCookieValid()
 
             recentPreviewBuffer.clear()
             progressPublisher.clearQueue()

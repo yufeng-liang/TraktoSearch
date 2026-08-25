@@ -1509,6 +1509,8 @@
     <!-- 账户区：Trakt 标签 / 豆瓣一栏 -->
     <string name="settings_account_trakt_label">Trakt</string>
     <string name="settings_account_trakt_login">登录</string>
+    <string name="settings_account_connection_expired">连接已失效，请重新登录</string>
+    <string name="settings_account_reconnect">重新登录</string>
     <string name="settings_account_douban">豆瓣</string>
     <string name="settings_account_douban_logged_in">豆瓣 · 已登录</string>
     <string name="settings_account_douban_login">登录</string>

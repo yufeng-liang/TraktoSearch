@@ -1506,6 +1506,8 @@
     <!-- 계정: Trakt 라벨 / Douban 항목 -->
     <string name="settings_account_trakt_label">Trakt</string>
     <string name="settings_account_trakt_login">로그인</string>
+    <string name="settings_account_connection_expired">연결이 만료되었습니다. 다시 로그인하세요</string>
+    <string name="settings_account_reconnect">다시 로그인</string>
     <string name="settings_account_douban">Douban</string>
     <string name="settings_account_douban_logged_in">Douban · 로그인됨</string>
     <string name="settings_account_douban_login">로그인</string>

@@ -65,6 +65,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -523,6 +524,19 @@ class SettingsViewModel @Inject constructor(
 
     // ========== 豆瓣登录态（账户区展示用） ==========
     val doubanLoggedIn: StateFlow<Boolean> = doubanAuthStorage.isLoggedIn
+
+    /**
+     * Trakt 连接失效：本地还留着上次登录成功的用户资料，但当前连接检查判定为断开。
+     * 用于让账号卡区分「从未登录」与「登录过但连接已失效」。
+     */
+    val traktConnectionInvalid: StateFlow<Boolean> = combine(
+        sessionModeManager.traktConnected,
+        traktRepository.userProfile
+    ) { connected, profile -> !connected && profile != null }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /** 豆瓣 Cookie 失效：登录态还在，但豆瓣已不认这份 Cookie */
+    val doubanCookieInvalid: StateFlow<Boolean> = doubanAuthStorage.cookieInvalid
 
     // 豆瓣用户资料（头像/昵称）：从加密存储恢复，登录后异步抓取
     val doubanProfile: StateFlow<com.tracktosearch.data.local.DoubanUserProfile?> = doubanAuthStorage.doubanProfile

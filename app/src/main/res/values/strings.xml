@@ -1509,6 +1509,8 @@ Config:
     <!-- 账户区：Trakt 标签 / 豆瓣一栏 -->
     <string name="settings_account_trakt_label">Trakt</string>
     <string name="settings_account_trakt_login">Login</string>
+    <string name="settings_account_connection_expired">Connection expired. Sign in again.</string>
+    <string name="settings_account_reconnect">Sign in again</string>
     <string name="settings_account_douban">Douban</string>
     <string name="settings_account_douban_logged_in">Douban · Logged in</string>
     <string name="settings_account_douban_login">Login</string>

@@ -1506,6 +1506,8 @@
     <!-- アカウント：Trakt ラベル / 豆瓣欄 -->
     <string name="settings_account_trakt_label">Trakt</string>
     <string name="settings_account_trakt_login">ログイン</string>
+    <string name="settings_account_connection_expired">接続の有効期限が切れました。再度ログインしてください</string>
+    <string name="settings_account_reconnect">再ログイン</string>
     <string name="settings_account_douban">Douban</string>
     <string name="settings_account_douban_logged_in">Douban · ログイン済み</string>
     <string name="settings_account_douban_login">ログイン</string>

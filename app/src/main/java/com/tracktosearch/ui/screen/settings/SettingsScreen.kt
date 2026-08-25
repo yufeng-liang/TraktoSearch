@@ -2156,6 +2156,9 @@ private fun AccountItem(
     val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
     val doubanLoggedIn by viewModel.doubanLoggedIn.collectAsStateWithLifecycle()
     val doubanProfile by viewModel.doubanProfile.collectAsStateWithLifecycle()
+    // 第三态：登录过但凭据已失效。以前只有「已登录 / 未登录」两态，失效时账号卡与正常已登录无差别
+    val traktConnectionInvalid by viewModel.traktConnectionInvalid.collectAsStateWithLifecycle()
+    val doubanCookieInvalid by viewModel.doubanCookieInvalid.collectAsStateWithLifecycle()
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -2179,12 +2182,36 @@ private fun AccountItem(
                     isVip = userProfile?.vip == true,
                     onLogout = onTraktLogout
                 )
+            } else if (traktConnectionInvalid) {
+                AccountExpiredRow(
+                    brandLogo = {
+                        TraktLogo(
+                            contentDescription = stringResource(R.string.settings_account_trakt_label),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    },
+                    primaryName = userProfile?.username,
+                    onReconnect = onTraktLogin,
+                    onLogout = onTraktLogout
+                )
             } else {
                 TraktLoginPromptRow(onLogin = onTraktLogin)
             }
             GroupDivider()
             val doubanCreds = doubanProfile
-            if (doubanLoggedIn) {
+            if (doubanLoggedIn && doubanCookieInvalid) {
+                AccountExpiredRow(
+                    brandLogo = {
+                        DoubanLogo(
+                            contentDescription = stringResource(R.string.settings_account_douban),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    },
+                    primaryName = doubanCreds?.nickname ?: doubanCreds?.userId,
+                    onReconnect = onDoubanLogin,
+                    onLogout = onDoubanLogout
+                )
+            } else if (doubanLoggedIn) {
                 AccountRow(
                     brandLogo = {
                         DoubanLogo(
