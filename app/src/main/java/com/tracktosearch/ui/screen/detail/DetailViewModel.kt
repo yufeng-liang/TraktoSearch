@@ -142,7 +142,6 @@ data class DetailUiState(
     val retryOwnCommentTargets: Set<OwnCommentTarget> = emptySet(),
     val isRating: Boolean = false,               // 是否正在提交评分
     val isRatingLoading: Boolean = false,        // 是否正在加载已有评分
-    val error: String? = null,
     val searchAttempted: Boolean = false,
     val ratings: MultiRatings? = null,
     val ratingSource: DetailRatingSource = DetailRatingSource.UNKNOWN,
@@ -409,6 +408,8 @@ class DetailViewModel @Inject constructor(
     private var currentHighRelevanceMap: Map<String, Boolean> = emptyMap()
     private var currentImdbId: String = ""
     private var currentTraktRating: Double = 0.0
+    // 评分聚合的 TMDB 评分入参：重试时要用同一份入参重新聚合
+    private var lastRatingsTmdbRating: Double = 0.0
     private var currentTmdbId: Int = 0
     private var currentCollectionId: Int = 0
     private var currentDoubanId: String? = null
@@ -1045,7 +1046,38 @@ class DetailViewModel @Inject constructor(
         }.getOrNull()
     }
 
+    /**
+     * 分区级重试入口。
+     *
+     * 这几个分区的失败以前只落在 uiState 的布尔标志位上、没有任何渲染方，区块直接空着或一直
+     * 显示骨架；现在 UI 会展示失败并调这里重新拉取，进入前先清掉错误标志，避免加载中还显示失败。
+     */
+    fun retryRatings() {
+        _uiState.value = _uiState.value.copy(ratingsError = false)
+        fetchRatingsAsync(lastRatingsTmdbRating)
+    }
+
+    fun retryCredits() {
+        _uiState.value = _uiState.value.copy(creditsError = false)
+        fetchCredits()
+    }
+
+    fun retrySeasons() {
+        _uiState.value = _uiState.value.copy(seasonsError = false)
+        fetchSeasons()
+    }
+
+    fun retryComments() {
+        fetchComments()
+    }
+
+    fun retryRecommendations() {
+        _uiState.value = _uiState.value.copy(recommendationsError = false)
+        fetchRecommendations()
+    }
+
     private fun fetchRatingsAsync(tmdbRating: Double) {
+        lastRatingsTmdbRating = tmdbRating
         ratingsJob?.cancel()
         ratingsJob = viewModelScope.launch {
             try {
@@ -2200,7 +2232,6 @@ class DetailViewModel @Inject constructor(
             val customNames = customSources.associate { it.id to it.name }
             _uiState.value = _uiState.value.copy(
                 isSearching = true,
-                error = null,
                 completedSources = 0,
                 totalSources = storageEnabledSources.size,
                 availableSources = storageEnabledSources.toList(),
@@ -2381,7 +2412,6 @@ class DetailViewModel @Inject constructor(
             )
             _uiState.value = state.copy(
                 isSearching = true,
-                error = null,
                 completedSources = 0
             )
             val isShow = currentMediaType == MediaType.SHOW

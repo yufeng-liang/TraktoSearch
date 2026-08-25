@@ -88,6 +88,8 @@ import coil.request.SuccessResult
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
 import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.ui.component.AppErrorState
+import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
@@ -462,6 +464,9 @@ fun DetailScreen(
                         onPersonClick = onPersonClick,
                         onToggleSeason = onToggleSeason,
                         onToggleEpisodeWatched = onToggleEpisodeWatched,
+                        onRetryRatings = viewModel::retryRatings,
+                        onRetryCredits = viewModel::retryCredits,
+                        onRetrySeasons = viewModel::retrySeasons,
                         onVideoClick = onVideoClick,
                         onBackdropClick = onBackdropClick,
                         onShowAllVideos = onShowAllVideos,
@@ -723,9 +728,12 @@ fun DetailScreen(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = stringResource(R.string.detail_load_error),
-                                    color = MaterialTheme.colorScheme.error
+                                AppErrorState(
+                                    message = stringResource(R.string.detail_load_error),
+                                    onRetry = viewModel::retryComments,
+                                    variant = AppErrorVariant.Inline,
+                                    inlineLabel = stringResource(R.string.detail_load_error),
+                                    showDetail = false
                                 )
                             }
                         }
@@ -815,9 +823,12 @@ fun DetailScreen(
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        text = stringResource(R.string.detail_load_error),
-                                        color = MaterialTheme.colorScheme.error
+                                    AppErrorState(
+                                        message = stringResource(R.string.detail_load_error),
+                                        onRetry = viewModel::retryRecommendations,
+                                        variant = AppErrorVariant.Inline,
+                                        inlineLabel = stringResource(R.string.detail_load_error),
+                                        showDetail = false
                                     )
                                 }
                             }

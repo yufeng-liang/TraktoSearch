@@ -40,6 +40,8 @@ enum class AppErrorVariant { Inline, Full, Overlay }
  * @param retryable 该错误重试是否有意义（如配额用完、授权失效重试无用）。false 时即便传了
  *        [onRetry] 也不显示重试按钮，免得用户白点还多烧一次请求。
  * @param inlineLabel [AppErrorVariant.Inline] 的可见短文案，默认 common_load_failed。
+ * @param showDetail [AppErrorVariant.Inline] 是否提供「看错误详情」入口。失败原因只有一个
+ *        布尔标志位、没有具体信息时传 false，免得点开对话框看到的还是同一句话。
  * @param retryLabel 重试按钮文案，默认 error_retry。
  */
 @Composable
@@ -51,6 +53,7 @@ fun AppErrorState(
     retryable: Boolean = true,
     icon: ImageVector = Icons.Rounded.CloudOff,
     inlineLabel: String? = null,
+    showDetail: Boolean = true,
     retryLabel: String? = null
 ) {
     val retry = onRetry?.takeIf { retryable }
@@ -61,6 +64,7 @@ fun AppErrorState(
             label = inlineLabel ?: stringResource(R.string.common_load_failed),
             retryText = retryText,
             onRetry = retry,
+            showDetail = showDetail,
             modifier = modifier
         )
         AppErrorVariant.Full -> FullErrorState(
@@ -85,6 +89,7 @@ private fun InlineErrorState(
     label: String,
     retryText: String,
     onRetry: (() -> Unit)?,
+    showDetail: Boolean,
     modifier: Modifier = Modifier
 ) {
     var showError by remember { mutableStateOf(false) }
@@ -97,21 +102,23 @@ private fun InlineErrorState(
     ) {
         Text(
             text = label,
-            modifier = Modifier.clickable { showError = true },
+            modifier = if (showDetail) Modifier.clickable { showError = true } else Modifier,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error
         )
-        // 点击 info 图标弹出错误详情对话框
-        IconButton(
-            onClick = { showError = true },
-            modifier = Modifier.size(20.dp)
-        ) {
-            Icon(
-                Icons.Rounded.Info,
-                contentDescription = stringResource(R.string.error_detail_title),
-                modifier = Modifier.size(14.dp),
-                tint = MaterialTheme.colorScheme.error
-            )
+        if (showDetail) {
+            // 点击 info 图标弹出错误详情对话框
+            IconButton(
+                onClick = { showError = true },
+                modifier = Modifier.size(20.dp)
+            ) {
+                Icon(
+                    Icons.Rounded.Info,
+                    contentDescription = stringResource(R.string.error_detail_title),
+                    modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
         }
         if (onRetry != null) {
             Spacer(Modifier.width(4.dp))
@@ -151,9 +158,10 @@ private fun FullErrorState(
     icon: ImageVector,
     modifier: Modifier = Modifier
 ) {
+    // 高度交给调用方：整页错误传 Modifier.fillMaxSize() 居中，卡片内错误按内容高度包裹。
     Column(
         modifier = modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .padding(horizontal = 32.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally

@@ -86,6 +86,8 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.util.PosterColorExtractor
+import com.tracktosearch.ui.component.AppErrorState
+import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.navigation.DetailSeedStore
 import com.tracktosearch.ui.component.glassSceneForContent
@@ -224,6 +226,17 @@ fun DiscoverFilterScreen(
                 uiState.isLoading && uiState.items.isEmpty() -> {
                     items(3) { DiscoverFilterItemSkeleton() }
                 }
+                // 请求失败：必须排在空结果分支之前。否则失败会落进「没有符合条件的结果」，
+                // 用户以为条件太严去改条件，而真正的原因是这次请求没成功。
+                uiState.error != null && uiState.items.isEmpty() && !uiState.isLoading -> {
+                    item {
+                        AppErrorState(
+                            message = uiState.error!!,
+                            onRetry = { viewModel.search() },
+                            modifier = Modifier.padding(top = 80.dp)
+                        )
+                    }
+                }
                 // 空结果
                 uiState.hasSearched && uiState.items.isEmpty() && !uiState.isLoading -> {
                     item {
@@ -275,6 +288,16 @@ fun DiscoverFilterScreen(
                             ) {
                                 CircularProgressIndicator(modifier = Modifier.size(24.dp))
                             }
+                        }
+                    }
+                    // 翻页失败：已有结果还在，底部给一条可重试的错误条，不清空列表
+                    if (uiState.error != null && !uiState.isLoadingMore) {
+                        item {
+                            AppErrorState(
+                                message = uiState.error!!,
+                                onRetry = { viewModel.loadMore() },
+                                variant = AppErrorVariant.Inline
+                            )
                         }
                     }
                 }

@@ -74,6 +74,8 @@ import com.tracktosearch.data.util.PosterColorExtractor
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.tracktosearch.ui.component.ActionButtonRow
 import com.tracktosearch.ui.component.ActionItem
+import com.tracktosearch.ui.component.AppErrorState
+import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
@@ -105,6 +107,10 @@ internal fun DetailHeaderContent(
     onPersonClick: (personId: Int, personName: String, profileUrl: String?, avatarColor: Color?) -> Unit = { _, _, _, _ -> },
     onToggleSeason: (Int) -> Unit = {},
     onToggleEpisodeWatched: (seasonNumber: Int, episodeNumber: Int, episodeTraktId: Int) -> Unit = { _, _, _ -> },
+    // 分区加载失败时的重试入口（评分聚合 / 演职员 / 季信息）
+    onRetryRatings: () -> Unit = {},
+    onRetryCredits: () -> Unit = {},
+    onRetrySeasons: () -> Unit = {},
     onVideoClick: (TmdbVideo) -> Unit = {},
     onBackdropClick: (Int) -> Unit = {},
     onShowAllVideos: () -> Unit = {},
@@ -359,6 +365,15 @@ internal fun DetailHeaderContent(
                             ratingSource = uiState.ratingSource,
                             immersionColor = posterColor
                         )
+                    } else if (uiState.ratingsError) {
+                        // 评分聚合失败：以前这里一直转圈，用户看不出是「这部片没有评分」还是「没加载上」
+                        AppErrorState(
+                            message = stringResource(R.string.detail_load_error),
+                            onRetry = onRetryRatings,
+                            variant = AppErrorVariant.Inline,
+                            inlineLabel = stringResource(R.string.detail_load_error),
+                            showDetail = false
+                        )
                     } else {
                         RatingsLoadingPlaceholder(immersionColor = posterColor)
                     }
@@ -452,6 +467,16 @@ internal fun DetailHeaderContent(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    if (uiState.creditsError) {
+                        // 加载失败：以前失败也照样显示骨架，用户永远等不到内容也不知道该重试
+                        AppErrorState(
+                            message = stringResource(R.string.detail_load_error),
+                            onRetry = onRetryCredits,
+                            variant = AppErrorVariant.Inline,
+                            inlineLabel = stringResource(R.string.detail_load_error),
+                            showDetail = false
+                        )
+                    } else {
                     repeat(5) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Surface(
@@ -472,6 +497,7 @@ internal fun DetailHeaderContent(
                                 modifier = Modifier.width(40.dp).height(8.dp)
                             ) {}
                         }
+                    }
                     }
                 }
             }
@@ -595,6 +621,23 @@ internal fun DetailHeaderContent(
                 onToggleSeason = onToggleSeason,
                 onToggleEpisodeWatched = onToggleEpisodeWatched
             )
+        } else if (uiState.seasonsError) {
+            // 季信息加载失败：以前整个区块直接消失，用户分不清「这部剧没有季信息」和「没加载上」
+            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                Text(
+                    text = stringResource(R.string.detail_seasons),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                AppErrorState(
+                    message = stringResource(R.string.detail_load_error),
+                    onRetry = onRetrySeasons,
+                    variant = AppErrorVariant.Inline,
+                    inlineLabel = stringResource(R.string.detail_load_error),
+                    showDetail = false
+                )
+            }
         }
         } // end Column(alpha = contentAlpha)
     }

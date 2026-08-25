@@ -70,4 +70,30 @@ class WatchlistEmptyStateTest {
             )
         ).isEqualTo(WatchlistEmptyState.IMPORTED_EMPTY)
     }
+
+    @Test
+    fun `六个分区各自取自己的失败原因`() {
+        val state = WatchlistUiState(
+            moviesError = "movies failed",
+            showsError = "shows failed",
+            othersError = "others failed",
+            historyMoviesError = "history movies failed",
+            historyShowsError = "history shows failed",
+            historyOthersError = "history others failed"
+        )
+        assertThat(resolveWatchlistSectionError(state, 0, 0)).isEqualTo("movies failed")
+        assertThat(resolveWatchlistSectionError(state, 0, 1)).isEqualTo("shows failed")
+        assertThat(resolveWatchlistSectionError(state, 0, 2)).isEqualTo("others failed")
+        assertThat(resolveWatchlistSectionError(state, 1, 0)).isEqualTo("history movies failed")
+        assertThat(resolveWatchlistSectionError(state, 1, 1)).isEqualTo("history shows failed")
+        assertThat(resolveWatchlistSectionError(state, 1, 2)).isEqualTo("history others failed")
+    }
+
+    @Test
+    fun `分区没有失败时返回 null`() {
+        val state = WatchlistUiState(showsError = "shows failed")
+        assertThat(resolveWatchlistSectionError(state, 0, 0)).isNull()
+        assertThat(resolveWatchlistSectionError(state, 0, 1)).isEqualTo("shows failed")
+        assertThat(resolveWatchlistSectionError(state, 1, 1)).isNull()
+    }
 }

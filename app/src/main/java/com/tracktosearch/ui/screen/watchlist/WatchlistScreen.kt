@@ -188,6 +188,7 @@ import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.AppIconButton
+import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
 import com.tracktosearch.ui.component.TopBarBackdropSourcePadding
@@ -610,6 +611,20 @@ fun WatchlistScreen(
         else -> uiState.isLoadingHistoryOthers
     }
 
+    // 当前列表的加载失败原因。ViewModel 只在缓存也为空时才置错误（缓存非空时降级为静默失败），
+    // 所以这里非 null 就意味着列表确实没有内容可显示，应当替代空态引导给出原因与重试。
+    val currentError = resolveWatchlistSectionError(uiState, selectedMode, selectedTab)
+
+    // 重试当前分区：强制重新拉取，绕过「已加载过就跳过」的短路
+    val retryCurrent: () -> Unit = when {
+        selectedMode == 0 && selectedTab == 0 -> { { viewModel.loadMovies(forceReload = true) } }
+        selectedMode == 0 && selectedTab == 1 -> { { viewModel.loadShows(forceReload = true) } }
+        selectedMode == 0 && selectedTab == 2 -> { { viewModel.loadOthers(forceReload = true) } }
+        selectedMode == 1 && selectedTab == 0 -> { { viewModel.loadHistoryMovies(forceReload = true) } }
+        selectedMode == 1 && selectedTab == 1 -> { { viewModel.loadHistoryShows(forceReload = true) } }
+        else -> { { viewModel.loadHistoryOthers(forceReload = true) } }
+    }
+
     // 海报 URL 列表：列表内容不变时复用同一实例，避免每次重组都 O(n) 重建导致
     // rememberCachedPosterAmbientColor 重新构建缓存 key 与重跑缓存读取。
     val posterUrls = remember(currentItems) { currentItems.mapNotNull { it.posterUrl } }
@@ -774,6 +789,15 @@ fun WatchlistScreen(
                             hazeState = hazeState,
                             hazeStyle = HazeMaterials.thin()
                         ) {
+                            if (currentError != null) {
+                                // 加载失败态：以前这里和「列表本来就是空的」共用同一套空态引导，
+                                // 断网时用户只看到一个空列表，既没有原因也没有出路。
+                                AppErrorState(
+                                    message = currentError,
+                                    onRetry = retryCurrent,
+                                    modifier = Modifier.padding(vertical = 32.dp)
+                                )
+                            } else {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center,
@@ -865,6 +889,7 @@ fun WatchlistScreen(
                                         }
                                     }
                                 }
+                            }
                             }
                         }
                                 }
