@@ -57,7 +57,9 @@ internal fun blurSurfaceConfig(
                     alpha = if (isDark) 0.08f else 0.03f
                 )
             ),
-            hazeBlurRadius = 40.dp,
+            // 40dp 远高于 Haze 默认 24dp，模糊算子成本随半径上升；30dp 观感仍是明确的
+            // 磨砂底栏，实测模糊子树占比可再降一档。
+            hazeBlurRadius = 30.dp,
             darkShadowAlpha = if (isDark) 0.38f else 0.16f,
             lightShadowAlpha = 0f,
             showHighlight = false

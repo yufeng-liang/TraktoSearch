@@ -42,6 +42,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -184,6 +186,32 @@ fun MovieCard(
         label = "movie_card_scale"
     )
 
+    // 整卡合并成一个无障碍节点。
+    //
+    // 原先一张卡片会向语义树贡献 6-7 个节点（海报、状态角标文字、评分、年份、标题、类型），
+    // 3 列网格同屏 9-12 张就是 60-80 个节点，滚动时还在不断进出。设备上只要有订阅
+    // TYPE_WINDOW_CONTENT_CHANGED 的无障碍服务（本机是 GKD + 小米 AI 引擎），每帧都要重建、
+    // 比对并下发整棵树：Simpleperf 实测 getCurrentSemanticsNodes + setTraversalValues 合计占
+    // me_scroll 应用采样 25.8%。
+    //
+    // mergeDescendants 把子树折叠成单个节点，节点数降一个量级；对读屏用户也更好——网格项本来
+    // 就该是「一格一个可聚焦项 + 一句完整描述」，而不是 6 个碎片。clickable 的点击动作仍在本
+    // 节点上，无障碍激活不受影响。
+    val cardSemanticsLabel = remember(title, year, genres, isWatched, isInWatchlist) {
+        buildString {
+            append(title)
+            if (year != null) append(" ($year)")
+            if (genres.isNotBlank()) append(" · $genres")
+        }
+    }
+    val watchedBadgeText = stringResource(R.string.cd_watched_badge)
+    val watchlistBadgeText = stringResource(R.string.cd_watchlist_badge)
+    val cardStateSuffix = when {
+        isWatched -> watchedBadgeText
+        isInWatchlist -> watchlistBadgeText
+        else -> null
+    }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -203,7 +231,14 @@ fun MovieCard(
                         onClick = wrappedOnClick
                     )
                 }
-            ),
+            )
+            .semantics(mergeDescendants = true) {
+                contentDescription = if (cardStateSuffix != null) {
+                    "$cardSemanticsLabel，$cardStateSuffix"
+                } else {
+                    cardSemanticsLabel
+                }
+            },
         shape = RoundedCornerShape(13.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -232,7 +267,8 @@ fun MovieCard(
             Box {
                 SubcomposeAsyncImage(
                     model = imageRequest,
-                    contentDescription = title,
+                    // 描述由卡片根节点的合并语义统一承担，这里不再单独出节点。
+                    contentDescription = null,
                     modifier = imageModifier,
                     contentScale = ContentScale.Crop,
                     // 低分辨率 w92 缩略图占位:先显示轮廓再替换为 w342 清晰图,改善加载白屏感知;

@@ -1238,6 +1238,8 @@ private fun MarkRecordsEntryCard(
 ) {
     val view = LocalView.current
     val isDark = isAppDarkTheme()
+    // BLUR 模式列表卡片不再各自开一层离屏做真模糊，改用更实的填充；GLASS 模式不变。
+    val realBlur = LocalVisualEffectMode.current == VisualEffectMode.GLASS
     NeumorphicFrostedSurface(
         modifier = Modifier
             .fillMaxWidth()
@@ -1246,13 +1248,17 @@ private fun MarkRecordsEntryCard(
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
         isDark = isDark,
         shape = RoundedCornerShape(20.dp),
-        backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f)
-                          else Color.White.copy(alpha = 0.70f),
+        backgroundColor = if (realBlur) {
+            if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.70f)
+        } else {
+            if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+            else Color.White.copy(alpha = 0.82f)
+        },
         borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
                       else Color(0xFFE0E5EC).copy(alpha = 0.9f),
         elevation = 6.dp,
         blurRadius = 18.dp,
-        hazeState = hazeState,
+        hazeState = if (realBlur) hazeState else null,
         hazeStyle = HazeMaterials.thin(),
         glassRole = GlassSurfaceRole.Card
     ) {
@@ -1314,6 +1320,8 @@ private fun SearchSourcesEntryCard(
 ) {
     val view = LocalView.current
     val isDark = isAppDarkTheme()
+    // BLUR 模式列表卡片不再各自开一层离屏做真模糊，改用更实的填充；GLASS 模式不变。
+    val realBlur = LocalVisualEffectMode.current == VisualEffectMode.GLASS
     NeumorphicFrostedSurface(
         modifier = Modifier
             .fillMaxWidth()
@@ -1322,13 +1330,17 @@ private fun SearchSourcesEntryCard(
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
         isDark = isDark,
         shape = RoundedCornerShape(20.dp),
-        backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f)
-                          else Color.White.copy(alpha = 0.70f),
+        backgroundColor = if (realBlur) {
+            if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.70f)
+        } else {
+            if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+            else Color.White.copy(alpha = 0.82f)
+        },
         borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
                       else Color(0xFFE0E5EC).copy(alpha = 0.9f),
         elevation = 6.dp,
         blurRadius = 18.dp,
-        hazeState = hazeState,
+        hazeState = if (realBlur) hazeState else null,
         hazeStyle = HazeMaterials.thin(),
         glassRole = GlassSurfaceRole.Card
     ) {

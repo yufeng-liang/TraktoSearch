@@ -402,11 +402,21 @@ fun MainScreen(
     // 消费者再采到的仍是旧帧，表现为底栏里混着上一次滚动位置的画面。
     val contentSampleVersion = remember { mutableIntStateOf(0) }
 
+    // 滚动期间冻结背景 shader：内容滚动 + 毛玻璃重算已经吃满一帧预算，再叠一层全屏
+    // shader 重绘是纯亏，而滚动时眼睛在追内容，背景是否流动基本无感。
+    // 复用 AmbientMotionState 的「最近有活动 + 超时归零」语义，idle 取 140ms：
+    // 略大于一帧间隔，fling 期间会被持续 ping 住，滚动真正停下才恢复流动。
+    // shader 时间是逐帧累加值，冻结只是停止累加，恢复时相位不跳变。
+    val scrollMotion = rememberAmbientMotionState(idleDelayMillis = 140L)
+
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: NestedScrollSource): androidx.compose.ui.geometry.Offset {
                 // 滚动即推进采样版本号（所有 tab 都要，早于下面的提前返回）
-                if (available.y != 0f) contentSampleVersion.intValue++
+                if (available.y != 0f) {
+                    contentSampleVersion.intValue++
+                    scrollMotion.ping()
+                }
                 // 搜索页（tab 0）且非搜索结果页时始终显示底部导航
                 if (pagerState.currentPage == 0 && !showTraktSearch) return androidx.compose.ui.geometry.Offset.Zero
                 val delta = available.y
@@ -540,7 +550,8 @@ fun MainScreen(
                         modifier = Modifier.fillMaxSize(),
                         preset = MeshPreset.fromStorage(meshPreset),
                         enabled = meshEnabled,
-                        motionActive = { ambientMotion.active },
+                        // 无人操作 3s 后停帧（ambientMotion），滚动进行中也停帧（scrollMotion）。
+                        motionActive = { ambientMotion.active && !scrollMotion.active },
                     )
                 }
 

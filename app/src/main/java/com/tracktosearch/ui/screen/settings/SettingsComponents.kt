@@ -55,8 +55,35 @@ import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.VisualEffectMode
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
+
+/**
+ * 列表卡片是否走「真模糊」。
+ *
+ * 设置页同屏有 6-10 个分组卡片，每个都作为独立 hazeEffect 消费者时，每张卡片都要额外
+ * 一层离屏图层 + 一次模糊卷积。Simpleperf 实测 settings_scroll 的 renderLayersImpl
+ * 占应用采样 38.8%，正是这些小离屏层堆出来的。
+ *
+ * 卡片自身填充本就盖住了大部分区域，背后内容的模糊折射几乎看不见，因此 BLUR 模式下
+ * 列表卡片改用不透明度更高的纯色填充，把真模糊留给顶栏吸顶与底部导航——那两处是大面积
+ * 半透明，模糊是观感重点。GLASS 模式走 GlassSurfaceImpl，不受影响。
+ */
+@Composable
+private fun listCardUsesRealBlur(): Boolean =
+    LocalVisualEffectMode.current == VisualEffectMode.GLASS
+
+/** 取消真模糊后用于替代的卡片填充：把原本靠模糊撑起来的层次改由更实的填充承担。 */
+@Composable
+private fun solidCardFill(isDark: Boolean, blurFill: Color): Color = if (isDark) {
+    // 深色主题原填充只有 white 8%，完全依赖模糊才立得住；改为主题 surface 高不透明度打底。
+    MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+} else {
+    // 浅色主题原填充已接近实色，仅再抬一档补足失去的模糊层次。
+    blurFill.copy(alpha = (blurFill.alpha + 0.12f).coerceAtMost(0.92f))
+}
 
 /**
  * 设置分组卡片：玻璃拟态圆角卡片，顶部显示 13sp 分组标题。
@@ -70,6 +97,9 @@ fun SettingsGroupCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val isDark = isAppDarkTheme()
+    val realBlur = listCardUsesRealBlur()
+    val blurFill = if (isDark) Color.White.copy(alpha = 0.08f)
+                   else Color.White.copy(alpha = 0.70f)
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Text(
             text = title,
@@ -83,13 +113,12 @@ fun SettingsGroupCard(
             modifier = Modifier.fillMaxWidth(),
             isDark = isDark,
             shape = RoundedCornerShape(20.dp),
-             backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f)
-                               else Color.White.copy(alpha = 0.70f),
+             backgroundColor = if (realBlur) blurFill else solidCardFill(isDark, blurFill),
              borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
                            else Color(0xFFE0E5EC).copy(alpha = 0.9f),
             elevation = 6.dp,
             blurRadius = 18.dp,
-            hazeState = hazeState,
+            hazeState = if (realBlur) hazeState else null,
             hazeStyle = HazeMaterials.thin(),
             glassRole = GlassSurfaceRole.Card
         ) {
@@ -365,6 +394,9 @@ internal fun StatisticsCard(
 ) {
     val view = LocalView.current
     val isDark = isAppDarkTheme()
+    val realBlur = listCardUsesRealBlur()
+    val blurFill = if (isDark) Color.White.copy(alpha = 0.08f)
+                   else Color.White.copy(alpha = 0.70f)
     NeumorphicFrostedSurface(
         modifier = modifier
             .fillMaxWidth()
@@ -373,13 +405,12 @@ internal fun StatisticsCard(
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
         isDark = isDark,
         shape = RoundedCornerShape(20.dp),
-        backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f)
-                          else Color.White.copy(alpha = 0.70f),
+        backgroundColor = if (realBlur) blurFill else solidCardFill(isDark, blurFill),
         borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
                       else Color(0xFFE0E5EC).copy(alpha = 0.9f),
         elevation = 6.dp,
         blurRadius = 18.dp,
-        hazeState = hazeState,
+        hazeState = if (realBlur) hazeState else null,
         hazeStyle = HazeMaterials.thin(),
         glassRole = GlassSurfaceRole.Card
     ) {
@@ -442,6 +473,9 @@ fun SettingsSectionCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val isDark = isAppDarkTheme()
+    val realBlur = listCardUsesRealBlur()
+    val blurFill = if (isDark) Color.White.copy(alpha = 0.08f)
+                   else Color.White.copy(alpha = 0.55f)
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = title,
@@ -455,13 +489,12 @@ fun SettingsSectionCard(
             modifier = Modifier.fillMaxWidth(),
             isDark = isDark,
             shape = RoundedCornerShape(20.dp),
-             backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f)
-                               else Color.White.copy(alpha = 0.55f),
+             backgroundColor = if (realBlur) blurFill else solidCardFill(isDark, blurFill),
              borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
                            else Color.White.copy(alpha = 0.75f),
             elevation = 4.dp,
             blurRadius = 16.dp,
-            hazeState = hazeState,
+            hazeState = if (realBlur) hazeState else null,
             hazeStyle = HazeMaterials.thin(),
             glassRole = GlassSurfaceRole.Card
         ) {
