@@ -8,9 +8,16 @@ import androidx.compose.animation.fadeOut
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -24,9 +31,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import android.content.ClipboardManager
 import android.content.Context
 import android.net.Uri
@@ -51,6 +61,7 @@ import com.tracktosearch.data.local.OnboardingStorage
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
+import com.tracktosearch.data.util.ConnectivityObserver
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.ShareCodec
@@ -87,6 +98,7 @@ import com.tracktosearch.ui.screen.help.HelpScreen
 import com.tracktosearch.ui.screen.help.HelpSections
 import com.tracktosearch.ui.screen.listdetail.TraktListDetailScreen
 import com.tracktosearch.ui.screen.login.ActivationLoginScreen
+import com.tracktosearch.ui.screen.main.ConnectivityObserverEntryPoint
 import com.tracktosearch.ui.screen.main.MainScreen
 import com.tracktosearch.ui.screen.markrecord.MarkRecordScreen
 import com.tracktosearch.ui.screen.person.PersonScreen
@@ -346,6 +358,21 @@ fun AppNavigation(
     val loginDeniedMessage = stringResource(R.string.login_denied)
     val authOfflineMessage = stringResource(R.string.auth_offline_mode)
     val syncAlreadyRunningMessage = stringResource(R.string.sync_already_running)
+    val importSuccessMessage = stringResource(R.string.import_success)
+    /**
+     * 导航层共享的 Snackbar 宿主：登录失败/授权被拒/离线/导入成功这些反馈原来各自弹 Toast，
+     * 与详情页、设置页已有的 Snackbar 风格不一致，且 Toast 在系统里可被用户整体关闭。
+     * 这里挂一个宿主给 NavHost 之外的导航级回调用，页面内的反馈仍由各页自己的宿主负责。
+     */
+    val appSnackbarHostState = remember { SnackbarHostState() }
+    /**
+     * 网络状态：MainScreen 的离线胶囊用的就是 auth_offline_mode 这同一句文案，断网时它已常驻显示，
+     * 鉴权离线提示再说一遍属于重复打扰。只在网络可用、单纯是鉴权校验没通过时才提示。
+     */
+    val connectivityObserver = remember {
+        EntryPointAccessors.fromApplication(context, ConnectivityObserverEntryPoint::class.java)
+            .connectivityObserver()
+    }
     // 页面变化追踪（错误日志上下文）
     navController.addOnDestinationChangedListener { _, destination, _ ->
         val route = destination.route ?: ""
@@ -433,7 +460,8 @@ fun AppNavigation(
                             sessionModeManager.setTraktConnectionState(TraktConnectionState.CONNECTED)
                             onLoginSuccess()
                         } else {
-                            Toast.makeText(context, loginFailedMessage, Toast.LENGTH_SHORT).show()
+                            // 用 scope 另起协程：showSnackbar 会挂起到消失，直接在 collect 里调用会卡住后续回调
+                            scope.launch { appSnackbarHostState.showSnackbar(loginFailedMessage) }
                         }
                     }
             }
@@ -443,7 +471,7 @@ fun AppNavigation(
                     .collect {
                         OAuthCallback.setAuthDenied(false)
                         directTraktLoginActive = false
-                        Toast.makeText(context, loginDeniedMessage, Toast.LENGTH_SHORT).show()
+                        scope.launch { appSnackbarHostState.showSnackbar(loginDeniedMessage) }
                     }
             }
         }
@@ -459,7 +487,7 @@ fun AppNavigation(
                 }
                 .onFailure {
                     directTraktLoginActive = false
-                    Toast.makeText(context, loginFailedMessage, Toast.LENGTH_SHORT).show()
+                    scope.launch { appSnackbarHostState.showSnackbar(loginFailedMessage) }
                 }
         }
     }
@@ -505,8 +533,14 @@ fun AppNavigation(
         // 只有状态稳定为 OFFLINE 才提示离线，避免网络正常时误报。
         if (currentAuthState == AuthState.OFFLINE) {
             delay(3_000)
-            if (authStateHolder.authState.value == AuthState.OFFLINE) {
-                Toast.makeText(context, authOfflineMessage, Toast.LENGTH_LONG).show()
+            if (authStateHolder.authState.value == AuthState.OFFLINE &&
+                connectivityObserver.status.value != ConnectivityObserver.NetworkStatus.OFFLINE
+            ) {
+                // 不用 scope.launch：留在本 effect 里，网络/鉴权状态一变 effect 取消，Snackbar 随之收起
+                appSnackbarHostState.showSnackbar(
+                    message = authOfflineMessage,
+                    duration = SnackbarDuration.Long
+                )
             }
         }
         if ((currentAuthState == AuthState.UNAUTHORIZED || currentAuthState == AuthState.EXPIRED) &&
@@ -1401,7 +1435,7 @@ fun AppNavigation(
                             autoImportHit?.let { autoImportVm.markAutoImportIgnored(it) }
                             autoImportHit = null
                             autoImportVm.importSource(source)
-                            Toast.makeText(context, R.string.import_success, Toast.LENGTH_SHORT).show()
+                            scope.launch { appSnackbarHostState.showSnackbar(importSuccessMessage) }
                         }
                     },
                     onDismiss = {
@@ -1428,7 +1462,7 @@ fun AppNavigation(
                             autoImportHit?.let { autoImportVm.markAutoImportIgnored(it) }
                             autoImportHit = null
                             autoImportVm.importSource(source, overwrite = true)
-                            Toast.makeText(context, R.string.import_success, Toast.LENGTH_SHORT).show()
+                            scope.launch { appSnackbarHostState.showSnackbar(importSuccessMessage) }
                         }) { Text(stringResource(R.string.import_confirm)) }
                     },
                     dismissButton = {
@@ -1442,6 +1476,19 @@ fun AppNavigation(
                     }
                 )
             }
+
+            // 导航级 Snackbar 宿主：盖在 NavHost 之上，登录页/主界面/子页面的导航级反馈共用一处。
+            // 主界面有悬浮底栏，抬到底栏上方（与离线胶囊同一高度带），其余路由只避开系统导航栏。
+            SnackbarHost(
+                hostState = appSnackbarHostState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .zIndex(5f)
+                    .padding(
+                        bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
+                            if (currentRoute == Routes.MAIN) 78.dp else 16.dp
+                    )
+            )
             } // Box
         } // BackdropProvider
         }

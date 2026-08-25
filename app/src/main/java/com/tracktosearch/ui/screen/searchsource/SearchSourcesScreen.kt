@@ -1,6 +1,5 @@
 package com.tracktosearch.ui.screen.searchsource
 
-import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,6 +42,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,6 +51,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,7 +59,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -76,6 +78,7 @@ import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import kotlinx.coroutines.launch
 
 /**
  * 搜索源管理页：内置搜索源启停、PanHub 配置入口、自定义搜索源列表与增删改测试。
@@ -90,7 +93,6 @@ fun SearchSourcesScreen(
     onHelpClick: () -> Unit = {},
     viewModel: SearchSourcesViewModel = hiltViewModel()
 ) {
-    val context = LocalContext.current
     val hazeState = remember { HazeState() }
     val listState = rememberLazyListState()
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -104,10 +106,23 @@ fun SearchSourcesScreen(
     var showShareSource by remember { mutableStateOf<CustomSearchSource?>(null) }
     var showImportDialog by remember { mutableStateOf(false) }
     var pendingImport by remember { mutableStateOf<CustomSearchSource?>(null) }
+    // 导入成功反馈改走 Snackbar：与详情页标记、设置页清缓存的反馈风格一致，也不受系统「关闭通知/Toast」影响
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val importSuccessMessage = stringResource(R.string.import_success)
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = {
+            SnackbarHost(
+                hostState = snackbarHostState,
+                // 本页 contentWindowInsets 置零，Snackbar 得自己避开系统导航栏
+                modifier = Modifier.padding(
+                    bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 12.dp
+                )
+            )
+        }
     ) { _ ->
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
@@ -225,7 +240,7 @@ fun SearchSourcesScreen(
                     pendingImport = source
                 } else {
                     viewModel.importSource(source)
-                    Toast.makeText(context, R.string.import_success, Toast.LENGTH_SHORT).show()
+                    scope.launch { snackbarHostState.showSnackbar(importSuccessMessage) }
                 }
             },
             onDismiss = { showImportDialog = false }
@@ -243,7 +258,7 @@ fun SearchSourcesScreen(
                 TextButton(onClick = {
                     pendingImport = null
                     viewModel.importSource(source, overwrite = true)
-                    Toast.makeText(context, R.string.import_success, Toast.LENGTH_SHORT).show()
+                    scope.launch { snackbarHostState.showSnackbar(importSuccessMessage) }
                 }) { Text(stringResource(R.string.import_confirm)) }
             },
             dismissButton = {

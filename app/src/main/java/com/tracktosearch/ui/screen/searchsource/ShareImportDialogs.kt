@@ -62,6 +62,7 @@ fun ShareSourceDialog(
                     onClick = {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         clipboard.setPrimaryClip(ClipData.newPlainText("source-config", text))
+                        // 这里保留 Toast：复制后弹层不关，Snackbar 由下层 Scaffold 承载会被弹层窗口盖住看不见
                         Toast.makeText(context, R.string.share_copy_success, Toast.LENGTH_SHORT).show()
                     },
                     modifier = Modifier.weight(1f)

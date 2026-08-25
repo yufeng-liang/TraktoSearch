@@ -372,6 +372,7 @@ fun UpdateDialog(
     val scope = rememberCoroutineScope()
 
     // 统一封装浏览器跳转：设备无可用浏览器时显示 Toast,避免崩溃
+    // 失败分支不关弹窗，所以这里必须用 Toast——Snackbar 会被更新弹窗的窗口挡住
     fun openUrl(url: String) {
         try {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
