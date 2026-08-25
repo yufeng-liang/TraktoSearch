@@ -40,6 +40,8 @@ data class PersonUiState(
     val hasMoreTvShows: Boolean = false,
     val isLoadingMoreMovies: Boolean = false,
     val isLoadingMoreTvShows: Boolean = false,
+    val loadMoreMoviesError: Boolean = false,
+    val loadMoreTvShowsError: Boolean = false,
     val isLoadingMovies: Boolean = false, // 电影作品是否正在加载
     val isLoadingTvShows: Boolean = false, // 剧集作品是否正在加载
     val error: String? = null,
@@ -365,7 +367,7 @@ class PersonViewModel @Inject constructor(
         if (state.isLoadingMoreMovies || !state.hasMoreMovies) return
         val nextPage = movieCreditsPage + 1
 
-        _uiState.value = state.copy(isLoadingMoreMovies = true)
+        _uiState.value = state.copy(isLoadingMoreMovies = true, loadMoreMoviesError = false)
         viewModelScope.launch {
             try {
                 val result = tmdbRepository.getPersonMovieCredits(currentPersonId, page = nextPage)
@@ -373,10 +375,11 @@ class PersonViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     movieCredits = _uiState.value.movieCredits + result.items,
                     hasMoreMovies = result.hasMore,
-                    isLoadingMoreMovies = false
+                    isLoadingMoreMovies = false,
+                    loadMoreMoviesError = false
                 )
             } catch (_: Exception) {
-                _uiState.value = _uiState.value.copy(isLoadingMoreMovies = false)
+                _uiState.value = _uiState.value.copy(isLoadingMoreMovies = false, loadMoreMoviesError = true)
             }
         }
     }
@@ -386,7 +389,7 @@ class PersonViewModel @Inject constructor(
         if (state.isLoadingMoreTvShows || !state.hasMoreTvShows) return
         val nextPage = tvCreditsPage + 1
 
-        _uiState.value = state.copy(isLoadingMoreTvShows = true)
+        _uiState.value = state.copy(isLoadingMoreTvShows = true, loadMoreTvShowsError = false)
         viewModelScope.launch {
             try {
                 val result = tmdbRepository.getPersonTvCredits(currentPersonId, page = nextPage)
@@ -394,10 +397,11 @@ class PersonViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     tvCredits = _uiState.value.tvCredits + result.items,
                     hasMoreTvShows = result.hasMore,
-                    isLoadingMoreTvShows = false
+                    isLoadingMoreTvShows = false,
+                    loadMoreTvShowsError = false
                 )
             } catch (_: Exception) {
-                _uiState.value = _uiState.value.copy(isLoadingMoreTvShows = false)
+                _uiState.value = _uiState.value.copy(isLoadingMoreTvShows = false, loadMoreTvShowsError = true)
             }
         }
     }

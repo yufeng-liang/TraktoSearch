@@ -13,6 +13,7 @@ import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Error
 import androidx.compose.material.icons.rounded.HourglassTop
+import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Schedule
@@ -31,6 +32,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.EmptyStateCard
+import com.tracktosearch.ui.component.isAppDarkTheme
 import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -152,13 +155,12 @@ fun FeedbackScreen(
                 is FeedbackViewModel.ListState.Success -> {
                     if (state.items.isEmpty()) {
                         item {
-                            Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = stringResource(R.string.feedback_empty),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
-                            }
+                            EmptyStateCard(
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                isDark = isAppDarkTheme(),
+                                icon = Icons.Rounded.Inbox,
+                                title = stringResource(R.string.feedback_empty)
+                            )
                         }
                     } else {
                         items(state.items, key = { it.id }) { item ->

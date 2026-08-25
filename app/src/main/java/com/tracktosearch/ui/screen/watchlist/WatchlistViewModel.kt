@@ -603,6 +603,7 @@ class WatchlistViewModel @Inject constructor(
                     isLoadingMovies = false,
                     moviesLoaded = true,
                     hasMoreMovies = page < totalPages,
+                    moviesError = null,
                     moviePage = page + 1
                 )
                 applyPendingWatchlistMutations(MediaType.MOVIE)
@@ -615,9 +616,11 @@ class WatchlistViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isLoadingMovies = false,
                     moviesLoaded = true,
-                    movies = if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() } else _uiState.value.movies,
+                    movies = if (loadMore) _uiState.value.movies
+                    else if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() }
+                    else _uiState.value.movies,
                     movieTotalCount = _uiState.value.movieTotalCount ?: cached.size.takeIf { it > 0 },
-                    moviesError = if (cached.isNotEmpty()) null else e.toUserMessage(context, R.string.error_load_failed)
+                    moviesError = if (loadMore || cached.isEmpty()) e.toUserMessage(context, R.string.error_load_failed) else null
                 )
             }
         }
@@ -727,6 +730,7 @@ class WatchlistViewModel @Inject constructor(
                     isLoadingShows = false,
                     showsLoaded = true,
                     hasMoreShows = page < totalPages,
+                    showsError = null,
                     showPage = page + 1
                 )
                 applyPendingWatchlistMutations(MediaType.SHOW)
@@ -739,9 +743,11 @@ class WatchlistViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isLoadingShows = false,
                     showsLoaded = true,
-                    shows = if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() } else _uiState.value.shows,
+                    shows = if (loadMore) _uiState.value.shows
+                    else if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() }
+                    else _uiState.value.shows,
                     showTotalCount = _uiState.value.showTotalCount ?: cached.size.takeIf { it > 0 },
-                    showsError = if (cached.isNotEmpty()) null else e.toUserMessage(context, R.string.error_load_failed)
+                    showsError = if (loadMore || cached.isEmpty()) e.toUserMessage(context, R.string.error_load_failed) else null
                 )
             }
         }
@@ -981,8 +987,8 @@ class WatchlistViewModel @Inject constructor(
         page: Int
     ) {
         _uiState.value = _uiState.value.copy(
-            isLoadingMovies = if (silent) _uiState.value.isLoadingMovies else true,
-            moviesError = if (silent) _uiState.value.moviesError else null
+            isLoadingMovies = if (page > 1 || !silent) true else _uiState.value.isLoadingMovies,
+            moviesError = if (page > 1 || !silent) null else _uiState.value.moviesError
         )
         if (page == 1) hydrateFromOfflineCache(OfflineCacheManager.TYPE_WATCHLIST_MOVIE)
         if (forceReload && page == 1) loadedTraktMovies.clear()
@@ -1045,7 +1051,7 @@ class WatchlistViewModel @Inject constructor(
                 movieTotalCount = merged.size.takeIf { it > 0 } ?: _uiState.value.movieTotalCount,
                 isLoadingMovies = false,
                 moviesLoaded = true,
-                moviesError = if (merged.isNotEmpty()) null else error.toUserMessage(context, R.string.error_load_failed)
+                moviesError = if (page > 1 || merged.isEmpty()) error.toUserMessage(context, R.string.error_load_failed) else null
             )
         }
     }
@@ -1057,8 +1063,8 @@ class WatchlistViewModel @Inject constructor(
         page: Int
     ) {
         _uiState.value = _uiState.value.copy(
-            isLoadingShows = if (silent) _uiState.value.isLoadingShows else true,
-            showsError = if (silent) _uiState.value.showsError else null
+            isLoadingShows = if (page > 1 || !silent) true else _uiState.value.isLoadingShows,
+            showsError = if (page > 1 || !silent) null else _uiState.value.showsError
         )
         if (page == 1) hydrateFromOfflineCache(OfflineCacheManager.TYPE_WATCHLIST_SHOW)
         if (forceReload && page == 1) loadedTraktShows.clear()
@@ -1121,7 +1127,7 @@ class WatchlistViewModel @Inject constructor(
                 showTotalCount = merged.size.takeIf { it > 0 } ?: _uiState.value.showTotalCount,
                 isLoadingShows = false,
                 showsLoaded = true,
-                showsError = if (merged.isNotEmpty()) null else error.toUserMessage(context, R.string.error_load_failed)
+                showsError = if (page > 1 || merged.isEmpty()) error.toUserMessage(context, R.string.error_load_failed) else null
             )
         }
     }

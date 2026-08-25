@@ -1798,4 +1798,7 @@
     <string name="bg_glow_nebula_desc">深靛底上浮动玫粉与紫罗兰光斑</string>
     <string name="bg_glow_ink_desc">纯黑白高对比流动，视觉最强，也最挑正文可读性</string>
     <string name="bg_glow_beach_desc">青蓝与沙黄极缓漂移，固定配色，不跟随主题色</string>
+    <string name="common_load_more_loading">正在加载更多…</string>
+    <string name="common_load_more_failed">加载更多失败，点击重试</string>
+    <string name="common_load_more_complete">已加载全部</string>
 </resources>

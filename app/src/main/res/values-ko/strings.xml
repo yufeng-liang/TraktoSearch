@@ -1810,4 +1810,7 @@
     <string name="bg_glow_nebula_desc">짙은 인디고 위로 로즈와 바이올렛 광점이 떠다님</string>
     <string name="bg_glow_ink_desc">흑백 고대비 흐름. 가장 강한 인상이지만 본문 가독성에는 가장 불리함</string>
     <string name="bg_glow_beach_desc">시안과 샌드 옐로가 아주 느리게 흐름. 고정 배색으로 테마 색을 따르지 않음</string>
+    <string name="common_load_more_loading">더 불러오는 중…</string>
+    <string name="common_load_more_failed">더 불러오지 못했습니다. 탭하여 다시 시도</string>
+    <string name="common_load_more_complete">모두 불러왔습니다</string>
 </resources>

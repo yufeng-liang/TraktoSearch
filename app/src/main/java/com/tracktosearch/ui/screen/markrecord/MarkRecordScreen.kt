@@ -1,7 +1,14 @@
 package com.tracktosearch.ui.screen.markrecord
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,17 +17,24 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -37,8 +51,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -49,23 +61,43 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.NeumorphicIconButton
+import com.tracktosearch.ui.component.NeumorphicFrostedSurface
+import com.tracktosearch.ui.component.EmptyStateCard
+import com.tracktosearch.ui.component.LoadMoreFooter
+import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.navigation.DetailSeedStore
 import com.tracktosearch.ui.component.glassSceneForContent
@@ -73,11 +105,14 @@ import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.animation.EnterMode
+import com.tracktosearch.ui.animation.cardEnter
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import androidx.compose.runtime.saveable.listSaver
 
 /** 首屏骨架卡片数量：两列，铺满一屏左右即可，多了只是白耗合成 */
 private const val SKELETON_ITEM_COUNT = 8
@@ -96,7 +131,35 @@ fun MarkRecordScreen(
     val hazeStyle = HazeMaterials.thin()
     val listState = rememberLazyGridState()
     var showFilterSheet by remember { mutableStateOf(false) }
-    var searchExpanded by remember { mutableStateOf(false) }
+    var searchExpanded by rememberSaveable { mutableStateOf(false) }
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val density = LocalDensity.current
+    var rootPositionInRoot by remember { mutableStateOf(Offset.Zero) }
+    var searchBoundsInRoot by remember { mutableStateOf<Rect?>(null) }
+    val searchBoundsInRootLocal = searchBoundsInRoot?.let { bounds ->
+        Rect(
+            left = bounds.left - rootPositionInRoot.x,
+            top = bounds.top - rootPositionInRoot.y,
+            right = bounds.right - rootPositionInRoot.x,
+            bottom = bounds.bottom - rootPositionInRoot.y
+        )
+    }
+    val currentSearchBoundsInRootLocal by rememberUpdatedState(searchBoundsInRootLocal)
+    val collapseSearch = {
+        searchExpanded = false
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
+    }
+    val isImeVisible = WindowInsets.ime.getBottom(density) > 0
+    var enterMode by remember { mutableStateOf(EnterMode.DEFAULT) }
+    val animatedIds = rememberSaveable(
+        saver = listSaver(
+            save = { it.value.toList() },
+            restore = { mutableStateOf(it.toMutableSet()) }
+        )
+    ) { mutableStateOf(mutableSetOf<Long>()) }
     val markRecordGlassScene = glassSceneForContent(
         contentCount = uiState.items.size,
         readabilityDemand = when {
@@ -116,6 +179,33 @@ fun MarkRecordScreen(
         .asPaddingValues().calculateTopPadding()
     val stickyHeaderHeight = statusBarHeight + 100.dp
 
+    LaunchedEffect(searchExpanded) {
+        if (searchExpanded) {
+            focusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
+
+    BackHandler(enabled = searchExpanded) {
+        if (isImeVisible) {
+            focusManager.clearFocus()
+        } else {
+            collapseSearch()
+        }
+    }
+
+    // 数据集切换后清空动画登记，避免旧 Tab 的播放状态影响新列表。
+    LaunchedEffect(
+        uiState.currentTab,
+        uiState.filterMediaTypes,
+        uiState.filterDatePreset,
+        uiState.filterDateRange,
+        uiState.sortAscending
+    ) {
+        animatedIds.value = mutableSetOf()
+        enterMode = EnterMode.DEFAULT
+    }
+
     // 滚动到底部前若干条时加载下一页
     LaunchedEffect(listState, uiState.items) {
         snapshotFlow {
@@ -130,6 +220,17 @@ fun MarkRecordScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .onGloballyPositioned { rootPositionInRoot = it.positionInRoot() }
+            .pointerInput(searchExpanded) {
+                if (!searchExpanded) return@pointerInput
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val up = waitForUpOrCancellation()
+                    if (up != null && currentSearchBoundsInRootLocal?.contains(down.position) != true) {
+                        collapseSearch()
+                    }
+                }
+            }
     ) {
         // ========== 网格内容 ==========
         LazyVerticalGrid(
@@ -154,7 +255,7 @@ fun MarkRecordScreen(
                         MarkRecordItemSkeleton()
                     }
                 }
-                uiState.error != null -> {
+                uiState.error != null && uiState.items.isEmpty() -> {
                     item(span = { GridItemSpan(2) }) {
                         Column(
                             modifier = Modifier
@@ -174,35 +275,36 @@ fun MarkRecordScreen(
                 }
                 uiState.items.isEmpty() -> {
                     item(span = { GridItemSpan(2) }) {
-                        Column(
+                        EmptyStateCard(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                Icons.Rounded.Inbox,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp)
-                            )
-                            Text(
+                                .padding(horizontal = 20.dp, vertical = 28.dp),
+                            isDark = isDark,
+                            hazeState = hazeState,
+                            hazeStyle = hazeStyle,
+                            icon = Icons.Rounded.Inbox,
+                            title =
                                 stringResource(when (uiState.currentTab) {
                                     MarkRecordTab.ALL -> R.string.mark_records_empty_all
                                     MarkRecordTab.WATCHLIST -> R.string.mark_records_empty_watchlist
                                     MarkRecordTab.WATCHED -> R.string.mark_records_empty_watched
                                     MarkRecordTab.REMOVED -> R.string.mark_records_empty_removed
-                                }),
-                                modifier = Modifier.padding(top = 8.dp)
-                            )
-                        }
+                                })
+                        )
                     }
                 }
                 else -> {
-                    items(
+                    itemsIndexed(
                         uiState.items,
-                        key = { "${it.traktId}_${it.actedAt}_${it.actionType}" }
-                    ) { item ->
-                        MarkRecordItemRow(
+                        key = { _, it -> "${it.traktId}_${it.actedAt}_${it.actionType}" }
+                    ) { index, item ->
+                        Box(modifier = Modifier.cardEnter(
+                            id = "${item.traktId}_${item.actedAt}_${item.actionType}".hashCode().toLong(),
+                            index = index,
+                            enterMode = enterMode,
+                            animatedIds = animatedIds
+                        )) {
+                            MarkRecordItemRow(
                             item = item,
                             posterColorExtractor = viewModel.posterColorExtractor,
                             onClick = {
@@ -215,19 +317,20 @@ fun MarkRecordScreen(
                                     item.imdbId, 0.0
                                 )
                             }
-                        )
-                    }
-                    if (uiState.isLoadingMore) {
-                        item(span = { GridItemSpan(2) }) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                            }
+                            )
                         }
+                    }
+                    item(span = { GridItemSpan(2) }, key = "load_more_footer") {
+                        LoadMoreFooter(
+                            state = when {
+                                uiState.isLoadingMore -> LoadMoreFooterState.Loading
+                                uiState.error != null -> LoadMoreFooterState.Error
+                                !uiState.hasMore -> LoadMoreFooterState.Complete
+                                else -> LoadMoreFooterState.Hidden
+                            },
+                            onRetry = { viewModel.loadNextPage() },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
             }
@@ -256,93 +359,152 @@ fun MarkRecordScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
-                    if (searchExpanded) {
-                        IconButton(onClick = {
-                            searchExpanded = false
-                            viewModel.updateSearchQuery("")
-                        }) {
-                            Icon(
-                                Icons.Rounded.Close,
-                                contentDescription = stringResource(R.string.content_desc_back)
-                            )
-                        }
-                        OutlinedTextField(
-                            value = uiState.searchQuery,
-                            onValueChange = { viewModel.updateSearchQuery(it) },
-                            modifier = Modifier.weight(1f),
-                            placeholder = { Text(stringResource(R.string.mark_records_search_hint), color = if (isDark) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(999.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                unfocusedBorderColor = Color.Transparent,
-                                focusedBorderColor = Color.Transparent,
-                                focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                unfocusedTextColor = MaterialTheme.colorScheme.onSurface
-                            ),
-                            keyboardOptions = KeyboardOptions(
-                                capitalization = KeyboardCapitalization.None,
-                                imeAction = ImeAction.Search
-                            )
+                    IconButton(onClick = {
+                        if (searchExpanded) collapseSearch() else onBack()
+                    }) {
+                        Icon(
+                            Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = stringResource(R.string.content_desc_back),
+                            tint = MaterialTheme.colorScheme.primary
                         )
-                        NeumorphicIconButton(
-                            onClick = { showFilterSheet = true },
-                            isDark = isDark,
-                            lightBorderAlpha = 0.35f,
-                            hazeState = hazeState,
-                            scene = markRecordGlassScene
-                        ) {
-                            Icon(
-                                Icons.Rounded.FilterList,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    } else {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                Icons.AutoMirrored.Rounded.ArrowBack,
-                                contentDescription = stringResource(R.string.content_desc_back),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
+                    }
+                    AnimatedVisibility(
+                        visible = !searchExpanded,
+                        enter = androidx.compose.animation.fadeIn(tween(240)),
+                        exit = androidx.compose.animation.fadeOut(tween(240)),
+                        modifier = Modifier.weight(1f)
+                    ) {
                         Text(
                             text = stringResource(R.string.mark_records_title),
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold
-                            ),
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
+                            overflow = TextOverflow.Ellipsis
                         )
-                        NeumorphicIconButton(
-                            onClick = { searchExpanded = true },
-                            isDark = isDark,
-                            lightBorderAlpha = 0.35f,
-                            hazeState = hazeState,
-                            scene = markRecordGlassScene
+                    }
+                    BoxWithConstraints(
+                        modifier = if (searchExpanded) Modifier.weight(1f).height(42.dp)
+                        else Modifier.height(42.dp).width(42.dp),
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
+                        val searchWidth by animateDpAsState(
+                            targetValue = if (searchExpanded) maxWidth else 42.dp,
+                            animationSpec = tween(durationMillis = 240),
+                            label = "mark_record_search_width"
+                        )
+                        Box(
+                            modifier = Modifier
+                                .width(searchWidth)
+                                .fillMaxHeight()
+                                .onGloballyPositioned { searchBoundsInRoot = it.boundsInRoot() }
                         ) {
-                            Icon(
-                                Icons.Rounded.Search,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            if (searchExpanded) {
+                                NeumorphicFrostedSurface(
+                                    modifier = Modifier.fillMaxSize(),
+                                    isDark = isDark,
+                                    shape = RoundedCornerShape(21.dp),
+                                    backgroundColor = if (isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.55f),
+                                    borderColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.75f),
+                                    elevation = 4.dp,
+                                    blurRadius = 16.dp,
+                                    hazeState = hazeState,
+                                    hazeStyle = HazeMaterials.thin(),
+                                    scene = markRecordGlassScene
+                                ) {
+                                    BasicTextField(
+                                        value = uiState.searchQuery,
+                                        onValueChange = viewModel::updateSearchQuery,
+                                        singleLine = true,
+                                        textStyle = TextStyle(
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontSize = 14.sp
+                                        ),
+                                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .then(Modifier.focusRequester(focusRequester))
+                                            .testTag("mark_record_search_input")
+                                            .padding(horizontal = 12.dp),
+                                        keyboardOptions = KeyboardOptions(
+                                            capitalization = KeyboardCapitalization.None,
+                                            imeAction = ImeAction.Search
+                                        ),
+                                        keyboardActions = KeyboardActions(onSearch = {
+                                            focusManager.clearFocus()
+                                            keyboardController?.hide()
+                                        }),
+                                        decorationBox = { innerTextField ->
+                                            Row(
+                                                modifier = Modifier.fillMaxSize(),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    Icons.Rounded.Search,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                                Box(
+                                                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                                                    contentAlignment = Alignment.CenterStart
+                                                ) {
+                                                    if (uiState.searchQuery.isEmpty()) {
+                                                        Text(
+                                                            stringResource(R.string.mark_records_search_hint),
+                                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                                                            fontSize = 14.sp
+                                                        )
+                                                    }
+                                                    innerTextField()
+                                                }
+                                                if (uiState.searchQuery.isNotEmpty()) {
+                                                    IconButton(
+                                                        onClick = { viewModel.updateSearchQuery("") },
+                                                        modifier = Modifier.size(28.dp)
+                                                    ) {
+                                                        Icon(
+                                                            Icons.Rounded.Close,
+                                                            contentDescription = stringResource(R.string.content_desc_clear),
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+                            } else {
+                                NeumorphicIconButton(
+                                    onClick = { searchExpanded = true },
+                                    isDark = isDark,
+                                    lightBorderAlpha = 0.35f,
+                                    hazeState = hazeState,
+                                    scene = markRecordGlassScene
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Search,
+                                        contentDescription = stringResource(R.string.mark_records_search_hint),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        NeumorphicIconButton(
-                            onClick = { showFilterSheet = true },
-                            isDark = isDark,
-                            lightBorderAlpha = 0.35f,
-                            hazeState = hazeState,
-                            scene = markRecordGlassScene
-                        ) {
-                            Icon(
-                                Icons.Rounded.FilterList,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    NeumorphicIconButton(
+                        onClick = {
+                            collapseSearch()
+                            showFilterSheet = true
+                        },
+                        isDark = isDark,
+                        lightBorderAlpha = 0.35f,
+                        hazeState = hazeState,
+                        scene = markRecordGlassScene
+                    ) {
+                        Icon(
+                            Icons.Rounded.FilterList,
+                            contentDescription = stringResource(R.string.filter_title),
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
             }
@@ -355,7 +517,10 @@ fun MarkRecordScreen(
                 MarkRecordTab.entries.forEach { tab ->
                     Tab(
                         selected = uiState.currentTab == tab,
-                        onClick = { viewModel.switchTab(tab) },
+                        onClick = {
+                            collapseSearch()
+                            viewModel.switchTab(tab)
+                        },
                         text = {
                             Text(stringResource(when (tab) {
                                 MarkRecordTab.ALL -> R.string.mark_records_tab_all

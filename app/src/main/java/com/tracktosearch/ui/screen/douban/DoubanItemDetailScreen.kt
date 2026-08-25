@@ -150,6 +150,7 @@ import com.tracktosearch.ui.component.DropdownAnchorMenu
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
 import com.tracktosearch.ui.component.DetailTopBarIcon
+import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.detailTopBarIconColor
@@ -2455,19 +2456,12 @@ private fun DoubanSearchingState() {
 @Composable
 private fun DoubanEmptyState(onRetry: () -> Unit) {
     val view = LocalView.current
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 32.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = stringResource(R.string.screen_douban_item_detail_no_resources),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(12.dp))
+    EmptyStateCard(
+        isDark = isAppDarkTheme(),
+        title = stringResource(R.string.screen_douban_item_detail_no_resources),
+        icon = Icons.Rounded.Movie,
+        modifier = Modifier.padding(vertical = 16.dp),
+        actions = {
             OutlinedButton(onClick = {
                 view.performHaptic(HapticType.CLICK)
                 onRetry()
@@ -2477,7 +2471,7 @@ private fun DoubanEmptyState(onRetry: () -> Unit) {
                 Text(stringResource(R.string.detail_retry))
             }
         }
-    }
+    )
 }
 
 // ==================== 详情信息 Tab ====================
