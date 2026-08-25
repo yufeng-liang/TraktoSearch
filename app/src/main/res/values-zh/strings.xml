@@ -379,7 +379,7 @@
     <string name="crash_auth_dialog_agree">同意并上报</string>
     <string name="crash_auth_dialog_decline">拒绝</string>
     <string name="settings_crash_log_title">自动上报崩溃日志</string>
-    <string name="settings_crash_log_subtitle">开启后崩溃日志将在下次启动时自动上传</string>
+    <string name="settings_crash_log_subtitle">下次启动时上传崩溃堆栈、机型、系统版本与 App 版本，接收方是本应用的反馈服务，仅用于定位崩溃</string>
 
     <!-- 崩溃上报反馈与记录 -->
     <string name="crash_upload_success">崩溃日志上报成功</string>
@@ -687,10 +687,8 @@
     <string name="settings_cache_category_image_desc">海报、头像等图片文件</string>
     <string name="settings_cache_category_media_data">影视数据缓存</string>
     <string name="settings_cache_category_media_data_desc">详情、演职员、榜单（TMDB + Trakt + 豆瓣）</string>
-    <string name="settings_cache_category_id_mapping">ID 映射缓存</string>
-    <string name="settings_cache_category_http">HTTP 缓存</string>
+    <string name="settings_cache_category_http">网络请求缓存</string>
     <string name="settings_cache_category_http_desc">网络响应临时缓存</string>
-    <string name="settings_cache_category_database">离线数据库</string>
     <string name="settings_cache_clear_all">全部清除</string>
     <string name="settings_image_traffic_title">图片流量</string>
     <string name="settings_image_traffic_today">今日：%1$s</string>
@@ -700,9 +698,7 @@
     <string name="settings_cache_clear_all_impact">将清除所有缓存数据。海报/头像需重新下载，影视详情和榜单需重新请求，ID 映射需重建。缓存重新积累前 App 可能稍慢。</string>
     <string name="settings_cache_category_image_impact">海报和头像下次查看时需重新从网络下载。图片重新缓存前 App 可能稍慢。</string>
     <string name="settings_cache_category_media_data_impact">影视详情、演职员、榜单数据需重新从网络请求。永久详情缓存（海报路径、ID）和 6 小时列表缓存都会被重置。</string>
-    <string name="settings_cache_category_id_mapping_impact">TMDB↔Trakt、豆瓣→IMDb 映射被清除。下次查询需重新请求 API（较慢），之后重新永久缓存。</string>
     <string name="settings_cache_category_http_impact">网络响应缓存被清除。后续请求直接走网络。随使用自动重建。</string>
-    <string name="settings_cache_category_database_impact">想看/已看离线数据和豆瓣同步记录被清除。下次同步前离线浏览不可用。</string>
     <string name="settings_latest_version">最新版本 v%1$s</string>
     <string name="settings_already_latest">已是最新版本 v%1$s</string>
     <string name="settings_new_version">新版本 v%1$s</string>
@@ -1696,4 +1692,14 @@
     <string name="filter_region_cn">中国大陆</string>
     <string name="filter_region_hk">中国香港</string>
     <string name="filter_region_tw">中国台湾</string>
+    <string name="settings_logout_confirm_impact">退出后想看/已看与评分将停止同步，需要重新登录才能继续；本地已缓存的数据会保留。</string>
+    <string name="settings_notification_requires_trakt">需要连接 Trakt 账号才能使用，通知基于 Trakt 想看列表推送。</string>
+    <string name="settings_restart_onboarding_subtitle">重新播放四步功能引导，不会删除任何数据</string>
+    <string name="settings_custom_section_subtitle_discover">选择发现页显示哪些榜单及顺序</string>
+    <string name="settings_custom_section_subtitle_detail">选择详情页显示哪些区块及顺序</string>
+    <string name="settings_developer_section">开发者选项</string>
+    <string name="settings_glass_pilot_entry">玻璃引擎试点（对比 haze / backdrop）</string>
+    <string name="settings_image_traffic_reset_confirm">重置图片流量统计？</string>
+    <string name="settings_image_traffic_reset_impact">今日与累计字节数归零，已缓存的图片不会被删除。</string>
+    <string name="snackbar_image_traffic_reset">图片流量统计已重置</string>
 </resources>

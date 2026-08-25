@@ -245,10 +245,8 @@
     <string name="settings_cache_category_image_desc">ポスター、アバター（Coil ディスク）</string>
     <string name="settings_cache_category_media_data">メディアデータキャッシュ</string>
     <string name="settings_cache_category_media_data_desc">詳細、クレジット、チャート（TMDB + Trakt + 豆瓣）</string>
-    <string name="settings_cache_category_id_mapping">ID マッピングキャッシュ</string>
-    <string name="settings_cache_category_http">HTTP キャッシュ</string>
+    <string name="settings_cache_category_http">ネットワークリクエストキャッシュ</string>
     <string name="settings_cache_category_http_desc">ネットワーク応答キャッシュ（OkHttp）</string>
-    <string name="settings_cache_category_database">オフラインデータベース</string>
     <string name="settings_cache_clear_all">すべてクリア</string>
     <string name="settings_image_traffic_title">画像トラフィック</string>
     <string name="settings_image_traffic_today">今日：%1$s</string>
@@ -258,9 +256,7 @@
     <string name="settings_cache_clear_all_impact">すべてのキャッシュデータをクリアします。ポスター/アバターは再ダウンロード、映画/TV詳細とランキングは再取得、IDマッピングは再構築されます。キャッシュが再蓄積されるまでアプリが少し遅くなる場合があります。</string>
     <string name="settings_cache_category_image_impact">ポスターとアバターは次回表示時にネットワークから再ダウンロードされます。画像が再キャッシュされるまでアプリが少し遅くなる場合があります。</string>
     <string name="settings_cache_category_media_data_impact">映画/TV詳細、キャスト、ランキングデータをネットワークから再取得します。永久詳細キャッシュ（ポスター路径、ID）と6時間リストキャッシュの両方がリセットされます。</string>
-    <string name="settings_cache_category_id_mapping_impact">TMDB↔Trakt、Douban→IMDbマッピングをクリアします。次回検索はAPIに再リクエストします（遅くなる）、その後再キャッシュされます。</string>
     <string name="settings_cache_category_http_impact">ネットワーク応答キャッシュをクリアします。次回リクエストはキャッシュではなくネットワークに直接行きます。使用とともに自動再構築されます。</string>
-    <string name="settings_cache_category_database_impact">ウォッチリスト/視聴済みオフラインデータとDouban同期レコードをクリアします。次回同期までオフライン閲覧は不可用です。</string>
     <string name="settings_latest_version">最新バージョン v%1$s</string>
     <string name="settings_already_latest">最新です v%1$s</string>
     <string name="settings_new_version">新バージョン v%1$s</string>
@@ -382,7 +378,7 @@
     <string name="crash_auth_dialog_agree">同意して送信</string>
     <string name="crash_auth_dialog_decline">拒否</string>
     <string name="settings_crash_log_title">クラッシュログを自動アップロード</string>
-    <string name="settings_crash_log_subtitle">クラッシュログは次回起動時に自動的にアップロードされます</string>
+    <string name="settings_crash_log_subtitle">次回起動時にクラッシュのスタックトレース、端末モデル、OS バージョン、アプリバージョンを本アプリのフィードバックサービスへ送信します。クラッシュの原因特定にのみ使用します</string>
 
     <!-- クラッシュログのアップロードと記録 -->
     <string name="crash_upload_success">クラッシュログのアップロードに成功しました</string>
@@ -1708,4 +1704,14 @@
     <string name="filter_region_cn">中国本土</string>
     <string name="filter_region_hk">中国香港</string>
     <string name="filter_region_tw">中国台湾</string>
+    <string name="settings_logout_confirm_impact">ログアウトすると見たい/視聴済みと評価の同期が止まり、再ログインするまで再開しません。ローカルのキャッシュは保持されます。</string>
+    <string name="settings_notification_requires_trakt">Trakt アカウントの接続が必要です。通知は Trakt の見たいリストを基に配信されます。</string>
+    <string name="settings_restart_onboarding_subtitle">4 ステップの機能ガイドを再生します。データは削除されません</string>
+    <string name="settings_custom_section_subtitle_discover">見つけるページに表示するランキングと並び順を選びます</string>
+    <string name="settings_custom_section_subtitle_detail">詳細ページに表示するブロックと並び順を選びます</string>
+    <string name="settings_developer_section">開発者向けオプション</string>
+    <string name="settings_glass_pilot_entry">ガラスエンジンの試験（haze / backdrop の比較）</string>
+    <string name="settings_image_traffic_reset_confirm">画像通信量の統計をリセットしますか？</string>
+    <string name="settings_image_traffic_reset_impact">本日と累計のバイト数が 0 に戻ります。キャッシュ済みの画像は削除されません。</string>
+    <string name="snackbar_image_traffic_reset">画像通信量の統計をリセットしました</string>
 </resources>

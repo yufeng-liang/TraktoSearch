@@ -452,12 +452,17 @@ class SettingsViewModel @Inject constructor(
     // ========== 缓存管理（分项显示与清除） ==========
 
     /** 缓存类目 */
+    /**
+     * 可单独清除的缓存类目。
+     *
+     * 只保留界面上真正渲染的三项。原来还有 ID_MAPPING 与 DATABASE 两个枚举值，界面从没有
+     * 对应入口，但确认弹窗仍为它们准备了标题与后果文案，属于不可达的死分支。
+     * 需要整体清掉时走 clearCache()。
+     */
     enum class CacheCategory {
         IMAGE,       // 图片缓存（Coil 磁盘）
         MEDIA_DATA,  // 影视数据缓存（TMDB 详情/演职员 + Trakt 趋势/列表 + 豆瓣热榜）
-        ID_MAPPING,  // ID 映射缓存（TMDB↔Trakt、IMDb↔Trakt、豆瓣→IMDb）
-        HTTP,        // HTTP 缓存（OkHttp 响应）
-        DATABASE     // 离线数据库（Room DB）
+        HTTP         // 网络请求缓存（OkHttp 响应）
     }
 
     /** 缓存分项明细 */
@@ -480,6 +485,10 @@ class SettingsViewModel @Inject constructor(
 
     fun clearImageTraffic() {
         imageTrafficStorage.clear()
+        // 成功反馈走与清缓存同一条 Snackbar 通道，之前重置后界面只有数字变化
+        _exportImportState.value = _exportImportState.value.copy(
+            message = context.getString(R.string.snackbar_image_traffic_reset)
+        )
     }
 
     /** 按类目清除缓存 */
@@ -489,7 +498,6 @@ class SettingsViewModel @Inject constructor(
                 when (category) {
                     CacheCategory.IMAGE -> offlineCacheManager.clearImageCache()
                     CacheCategory.HTTP -> offlineCacheManager.clearHttpCache()
-                    CacheCategory.DATABASE -> offlineCacheManager.clearDatabase()
                     CacheCategory.MEDIA_DATA -> {
                         // 清除影视数据类的所有 PersistentTtlCache（按 key 前缀删 DataStore）
                         tmdbRepository.mediaDataCaches.forEach { it.clearAll() }
@@ -497,10 +505,6 @@ class SettingsViewModel @Inject constructor(
                         doubanHotCache.clearAll()
                         // 统计页快照也是影视数据，单独一个 DataStore 文件，不在 PersistentTtlCache 列表里
                         statisticsSnapshotStore.clear()
-                    }
-                    CacheCategory.ID_MAPPING -> {
-                        traktRepository.idMappingCaches.forEach { it.clearAll() }
-                        doubanDetailCache.clearAll()
                     }
                 }
                 refreshCacheInfo()

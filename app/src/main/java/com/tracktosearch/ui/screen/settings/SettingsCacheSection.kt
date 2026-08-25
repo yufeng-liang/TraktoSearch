@@ -42,12 +42,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.isAppDarkTheme
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 
 /**
- * 缓存管理项：初始只显示总概览，点击展开 5 个类目分项大小与清除按钮。
+ * 缓存管理项：初始只显示总概览，点击展开三个类目的分项大小与清除按钮。
  *
- * - 概览行：图标 + 「缓存管理」标题 + 总大小 + 右侧展开箭头
- * - 展开后：5 个 CacheCategoryRow（图片/影视数据/ID 映射/HTTP/数据库），每个独立清除
+ * - 概览行：图标 + 「缓存管理」标题 + 总大小 + 右侧展开箭头（整行一个热区）
+ * - 展开后：3 个 CacheCategoryRow（图片 / 影视数据 / 网络请求），每个独立清除
  * - 底部：「全部清除」按钮
  */
 @Composable
@@ -69,10 +71,14 @@ fun CacheManagementItem(
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // 概览行（整卡可点击展开/收起）
+            val toggleDescription = stringResource(
+                if (expanded) R.string.detail_collapse else R.string.detail_expand
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { expanded = !expanded }
+                    .semantics { contentDescription = toggleDescription }
                     .padding(horizontal = 6.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -107,15 +113,14 @@ fun CacheManagementItem(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                IconButton(onClick = { expanded = !expanded }) {
-                    Icon(
-                        imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                        contentDescription = stringResource(
-                            if (expanded) R.string.detail_collapse else R.string.detail_expand
-                        ),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                // 展开箭头只作指示：整行已经是同一个展开热区，再套一个 IconButton 等于同一目标
+                // 有两个可点区域，读屏也会读出两个按钮
+                Icon(
+                    imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
             }
 
             // 展开后：保留 图片/影视数据/HTTP 三个类目（去掉 ID 映射、离线数据库）

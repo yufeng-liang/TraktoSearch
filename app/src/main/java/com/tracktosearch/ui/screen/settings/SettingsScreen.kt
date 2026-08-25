@@ -560,27 +560,32 @@ fun SettingsScreen(
                 )
             }
 
-            // 玻璃引擎试点（仅 DEBUG）：对比 haze / backdrop 两套引擎的模糊与玻璃效果
+            // 开发者选项（仅 DEBUG）：与正式条目分组隔开，文案也走资源不再硬编码中文
             if (BuildConfig.DEBUG) {
-                item(key = "glass_pilot_entry") {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(onClick = onGlassPilot)
-                            .padding(horizontal = 20.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                item(key = "group_developer") {
+                    SettingsGroupCard(
+                        title = stringResource(R.string.settings_developer_section),
+                        hazeState = settingsHazeState
                     ) {
-                        Text(
-                            text = "玻璃引擎试点（对比 haze / backdrop）",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(Modifier.weight(1f))
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(onClick = onGlassPilot)
+                                .padding(horizontal = 14.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = stringResource(R.string.settings_glass_pilot_entry),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.weight(1f))
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
@@ -595,16 +600,27 @@ fun SettingsScreen(
 
             // 通知提醒（仅 Trakt 登录用户可见，通知依赖 Trakt 想看列表推送）
             // 豆瓣独立模式: 无 trakt token,通知功能无法触发,隐藏入口
-            if (isLoggedIn && !isDoubanMode) {
+            if (isLoggedIn) {
                 item(key = "group_notification") {
                     SettingsGroupCard(
                         title = stringResource(R.string.settings_notification),
                         hazeState = settingsHazeState
                     ) {
-                        NotificationItem(
-                            viewModel = viewModel,
-                            containerColor = Color.Transparent
-                        )
+                        if (isDoubanMode) {
+                            // 豆瓣独立模式没有 trakt token，通知无法触发。原来整组直接消失，
+                            // 界面不给消失原因，用户以为功能没了；现在保留位置并说明前提。
+                            Text(
+                                text = stringResource(R.string.settings_notification_requires_trakt),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                            )
+                        } else {
+                            NotificationItem(
+                                viewModel = viewModel,
+                                containerColor = Color.Transparent
+                            )
+                        }
                     }
                 }
             }
@@ -619,10 +635,12 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        // 原来只写「发现页」「详情页」，不说能自定义什么
                         SettingsCard(
                             modifier = Modifier.weight(1f),
                             icon = Icons.Rounded.Explore,
                             title = stringResource(R.string.settings_discover_page),
+                            subtitle = stringResource(R.string.settings_custom_section_subtitle_discover),
                             onClick = { showDiscoverSectionsDialog = true },
                             containerColor = Color.Transparent
                         )
@@ -630,6 +648,7 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f),
                             icon = Icons.Rounded.Movie,
                             title = stringResource(R.string.settings_detail_page),
+                            subtitle = stringResource(R.string.settings_custom_section_subtitle_detail),
                             onClick = { showDetailSectionsDialog = true },
                             containerColor = Color.Transparent
                         )
@@ -854,12 +873,35 @@ fun SettingsScreen(
             onDismissRequest = { showLogoutDialog = false },
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.settings_account)) },
-            text = { Text(stringResource(R.string.settings_logout_confirm)) },
+            text = {
+                // 原来只有一句「确定要退出登录吗」，不说影响范围；豆瓣退出那侧早有条数提示与撤销入口
+                Column {
+                    Text(stringResource(R.string.settings_logout_confirm))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = stringResource(R.string.settings_logout_confirm_impact),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
             confirmButton = {
+                val traktLogoutDone = stringResource(R.string.settings_logout_button)
+                val reloginLabel = stringResource(R.string.settings_account_reconnect)
                 TextButton(onClick = {
                     showLogoutDialog = false
                     viewModel.clearUserProfile()
                     onLogout()
+                    scope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = traktLogoutDone,
+                            actionLabel = reloginLabel,
+                            duration = androidx.compose.material3.SnackbarDuration.Long
+                        )
+                        if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                            onTraktLogin()
+                        }
+                    }
                 }) {
                     Text(stringResource(R.string.settings_logout_button))
                 }
@@ -966,16 +1008,12 @@ fun SettingsScreen(
                 val labelRes = when (cat) {
                     SettingsViewModel.CacheCategory.IMAGE -> R.string.settings_cache_category_image
                     SettingsViewModel.CacheCategory.MEDIA_DATA -> R.string.settings_cache_category_media_data
-                    SettingsViewModel.CacheCategory.ID_MAPPING -> R.string.settings_cache_category_id_mapping
                     SettingsViewModel.CacheCategory.HTTP -> R.string.settings_cache_category_http
-                    SettingsViewModel.CacheCategory.DATABASE -> R.string.settings_cache_category_database
                 }
                 val impactRes = when (cat) {
                     SettingsViewModel.CacheCategory.IMAGE -> R.string.settings_cache_category_image_impact
                     SettingsViewModel.CacheCategory.MEDIA_DATA -> R.string.settings_cache_category_media_data_impact
-                    SettingsViewModel.CacheCategory.ID_MAPPING -> R.string.settings_cache_category_id_mapping_impact
                     SettingsViewModel.CacheCategory.HTTP -> R.string.settings_cache_category_http_impact
-                    SettingsViewModel.CacheCategory.DATABASE -> R.string.settings_cache_category_database_impact
                 }
                 Column {
                     Text(
@@ -2060,6 +2098,7 @@ private fun AboutItem(
             modifier = Modifier.weight(1f),
             icon = Icons.Rounded.School,
             title = stringResource(R.string.settings_restart_onboarding),
+            subtitle = stringResource(R.string.settings_restart_onboarding_subtitle),
             onClick = onRestartOnboarding,
             containerColor = containerColor
         )
@@ -2094,6 +2133,8 @@ private fun ImageTrafficSectionItem(
     containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     val stats by viewModel.imageTraffic.collectAsStateWithLifecycle()
+    // 重置是破坏性动作（计数归零不可恢复），原来点了就执行，既无确认也无反馈
+    var showResetConfirm by remember { mutableStateOf(false) }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -2129,12 +2170,40 @@ private fun ImageTrafficSectionItem(
                 )
             }
             OutlinedButton(
-                onClick = { viewModel.clearImageTraffic() },
+                onClick = { showResetConfirm = true },
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp)
             ) {
                 Text(stringResource(R.string.settings_image_traffic_clear))
             }
         }
+    }
+
+    if (showResetConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetConfirm = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            title = { Text(stringResource(R.string.settings_image_traffic_reset_confirm)) },
+            text = {
+                Text(
+                    text = stringResource(R.string.settings_image_traffic_reset_impact),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showResetConfirm = false
+                    viewModel.clearImageTraffic()
+                }) {
+                    Text(stringResource(R.string.settings_image_traffic_clear))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetConfirm = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            }
+        )
     }
 }
 
