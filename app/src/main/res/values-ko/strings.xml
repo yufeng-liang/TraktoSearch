@@ -1754,4 +1754,40 @@
     <string name="common_load_more_loading">더 불러오는 중…</string>
     <string name="common_load_more_failed">더 불러오지 못했습니다. 탭하여 다시 시도</string>
     <string name="common_load_more_complete">모두 불러왔습니다</string>
+
+    <!-- 오픈소스 페이지 -->
+    <string name="opensource_title">오픈소스</string>
+    <string name="opensource_group_ui">UI 및 효과</string>
+    <string name="opensource_group_framework">핵심 프레임워크</string>
+    <string name="opensource_group_data">데이터 저장</string>
+    <string name="opensource_group_image">이미지</string>
+    <string name="opensource_group_text">텍스트 및 파싱</string>
+    <string name="opensource_license_label">라이선스: %1$s</string>
+    <string name="opensource_developer_label">저작권/개발자: %1$s</string>
+    <string name="opensource_version_label">버전: %1$s</string>
+    <string name="opensource_usage_label">이 앱에서의 용도</string>
+    <string name="opensource_view_repo">저장소 보기</string>
+    <string name="opensource_use_compose">모든 화면과 Material 3 컴포넌트의 기반이 되는 선언형 UI 프레임워크</string>
+    <string name="opensource_use_navigation">화면 라우팅 및 뒤로 가기 스택 관리</string>
+    <string name="opensource_use_haze">상단 바와 배경 유리층에 쓰이는 흐린 유리 블러 효과</string>
+    <string name="opensource_use_lottie">JSON 벡터 애니메이션 재생(로딩, 빈 상태 등)</string>
+    <string name="opensource_use_richtext">Markdown 리치 텍스트 렌더링(업데이트 로그)</string>
+    <string name="opensource_use_reorderable">목록 길게 눌러 드래그 정렬</string>
+    <string name="opensource_use_zoomable">포스터와 스틸 사진의 핀치 줌 및 드래그</string>
+    <string name="opensource_use_backdrop">리퀴드 글래스 효과의 화면 단위 샘플링 배경</string>
+    <string name="opensource_use_mesh_gradient">Android 12 이하 배경 글로우 대체 구현(메시 그라데이션 애니메이션)</string>
+    <string name="opensource_use_mirage">Android 13 이상 배경 글로우 구현(AGSL 셰이더 애니메이션)</string>
+    <string name="opensource_use_colorpicker">테마 사용자 지정 색상 피커</string>
+    <string name="opensource_use_kotlin">코루틴 비동기 처리와 JSON 직렬화</string>
+    <string name="opensource_use_hilt">의존성 주입(Repository, ViewModel 조립)</string>
+    <string name="opensource_use_square">HTTP 네트워크 요청(Trakt, TMDB, 인증 게이트웨이 등)</string>
+    <string name="opensource_use_room">관람 마크, 검색 기록, 캐시 인덱스를 저장하는 로컬 DB</string>
+    <string name="opensource_use_sqlcipher">로컬 DB 투명 암호화로 개인정보 보호</string>
+    <string name="opensource_use_datastore">키-값 설정 저장(설정 항목과 경량 캐시)</string>
+    <string name="opensource_use_workmanager">백그라운드 작업(인증 상태 주기 확인, 알림 예약 등)</string>
+    <string name="opensource_use_glance">홈 화면 빠른 검색 위젯</string>
+    <string name="opensource_use_coil">이미지 로딩 및 디스크 캐시(포스터, 아바타, 스틸)</string>
+    <string name="opensource_use_jsoup">더우반 페이지 HTML 파싱(작품 정보와 평점 추출)</string>
+    <string name="opensource_use_jieba">중국어 형태소 분석(워드 클라우드, 키워드 통계)</string>
+    <string name="opensource_use_pinyin">한자→병음 변환(워치리스트 병음 검색)</string>
 </resources>

@@ -1754,4 +1754,40 @@
     <string name="common_load_more_loading">さらに読み込み中…</string>
     <string name="common_load_more_failed">追加読み込みに失敗しました。タップして再試行</string>
     <string name="common_load_more_complete">すべて読み込みました</string>
+
+    <!-- オープンソースページ -->
+    <string name="opensource_title">オープンソース</string>
+    <string name="opensource_group_ui">UI とエフェクト</string>
+    <string name="opensource_group_framework">基盤フレームワーク</string>
+    <string name="opensource_group_data">データ保存</string>
+    <string name="opensource_group_image">画像</string>
+    <string name="opensource_group_text">テキストと解析</string>
+    <string name="opensource_license_label">ライセンス：%1$s</string>
+    <string name="opensource_developer_label">著作権/開発者：%1$s</string>
+    <string name="opensource_version_label">バージョン：%1$s</string>
+    <string name="opensource_usage_label">本アプリでの用途</string>
+    <string name="opensource_view_repo">リポジトリを見る</string>
+    <string name="opensource_use_compose">全画面の宣言的 UI フレームワーク。Material 3 コンポーネントもこれに基づく</string>
+    <string name="opensource_use_navigation">画面ルーティングと戻るスタック管理</string>
+    <string name="opensource_use_haze">すりガラスぼかし。固定トップバーや背景ガラス層に使用</string>
+    <string name="opensource_use_lottie">JSON ベクターアニメーションの再生（ロード中・空状態など）</string>
+    <string name="opensource_use_richtext">Markdown リッチテキストの描画（更新履歴）</string>
+    <string name="opensource_use_reorderable">リストの長押しドラッグ並べ替え</string>
+    <string name="opensource_use_zoomable">ポスター・シーンのピンチズームとドラッグ</string>
+    <string name="opensource_use_backdrop">リキッドガラス効果のための画面単位サンプリング基盤</string>
+    <string name="opensource_use_mesh_gradient">Android 12 以下での背景グロー代替（メッシュグラデーションアニメーション）</string>
+    <string name="opensource_use_mirage">Android 13 以上の背景グロー（AGSL シェーダーアニメーション）</string>
+    <string name="opensource_use_colorpicker">テーマカラーのカラーピッカー</string>
+    <string name="opensource_use_kotlin">コルーチンによる非同期処理と JSON シリアライズ</string>
+    <string name="opensource_use_hilt">依存性注入（Repository や ViewModel の組み立て）</string>
+    <string name="opensource_use_square">HTTP 通信（Trakt・TMDB・認証ゲートウェイなど）</string>
+    <string name="opensource_use_room">視聴マーク・検索履歴・キャッシュ索引を保存するローカル DB</string>
+    <string name="opensource_use_sqlcipher">ローカル DB の透過的暗号化でプライバシーを保護</string>
+    <string name="opensource_use_datastore">キーバリュー設定保存（設定項目と軽量キャッシュ）</string>
+    <string name="opensource_use_workmanager">バックグラウンド処理（認証状態の定期チェック・通知スケジュール）</string>
+    <string name="opensource_use_glance">ホーム画面のクイック検索ウィジェット</string>
+    <string name="opensource_use_coil">画像読み込みとディスクキャッシュ（ポスター・アバター・シーン）</string>
+    <string name="opensource_use_jsoup">豆瓣ページ HTML の解析（作品情報と評価の抽出）</string>
+    <string name="opensource_use_jieba">中国語分かち書き（ワードクラウド・キーワード集計）</string>
+    <string name="opensource_use_pinyin">中国語のピンイン変換（ウォッチリストのピンイン検索）</string>
 </resources>
