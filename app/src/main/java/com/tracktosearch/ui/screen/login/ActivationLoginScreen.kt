@@ -490,8 +490,10 @@ private fun ActivationCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             val inputShape = RoundedCornerShape(13.dp)
-            // 激活码用点阵字体，字号必须落在 12px 网格的整数倍上，否则像素边缘被插值成灰边
-            val codeFontSize = pixelFontSize(14.dp)
+            // 激活码用点阵字体，字号必须落在 12px 网格的整数倍上，否则像素边缘被插值成灰边。
+            // 18.dp 在常见高分屏上取到 5 倍（60px）：中文占位「输入 12 位激活码」仍在框内不裁切，
+            // 再大一档（6 倍 72px）中文就会顶到右边缘。
+            val codeFontSize = pixelFontSize(18.dp)
             // 邀请码可提交的条件：非空、不在提交中、还没激活。原来空输入也可点，
             // 点了才被 AuthViewModel 本地拦成 INVALID_INVITE，让用户先白撞一次错。
             val canActivate = authState.inviteCode.isNotBlank() &&
