@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.opensource
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -12,7 +13,10 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,8 +43,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -75,6 +82,9 @@ fun OpenSourceScreen(
                     bottom = 80.dp
                 )
             ) {
+                item(key = "thanks_card") {
+                    OssThanksCard()
+                }
                 OpenSourceData.groups.forEach { group ->
                     item(key = "group_${group.titleRes}") {
                         Text(
@@ -126,6 +136,88 @@ fun OpenSourceScreen(
 
     selected?.let { lib ->
         OssLibraryDialog(lib) { selected = null }
+    }
+}
+
+/**
+ * 顶部感谢卡片：左右麦穗弧 + 致谢文案。
+ * 麦穗素材为 OpenClipart 公有领域金色麦穗花环（Public Domain / CC0），
+ * 整幅图按 150dp 高缩放，左右各裁出 58dp 宽的弧段，与视觉伴侣定稿一致。
+ */
+@Composable
+private fun OssThanksCard() {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 150.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            val wreath = painterResource(R.drawable.wheat_wreath)
+            val arcHeight = 150.dp
+            val arcWidth = 58.dp
+            // 源图 549x600，等比缩放后宽约 137dp；裁窗只露左右弧段
+            val imageWidth = arcHeight * (549f / 600f)
+            val cropOffset = (imageWidth - arcWidth) / 2
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .size(arcWidth, arcHeight)
+                    .clipToBounds()
+            ) {
+                Image(
+                    painter = wreath,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(imageWidth, arcHeight)
+                        .offset(x = -cropOffset)
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .size(arcWidth, arcHeight)
+                    .clipToBounds()
+            ) {
+                Image(
+                    painter = wreath,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(imageWidth, arcHeight)
+                        .offset(x = cropOffset)
+                )
+            }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(horizontal = 64.dp, vertical = 22.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.opensource_thanks_line1),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = stringResource(R.string.opensource_thanks_line2),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(7.dp))
+                Text(
+                    text = stringResource(R.string.opensource_thanks_line3),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
     }
 }
 
