@@ -3,8 +3,6 @@
 package com.tracktosearch.ui.screen.login
 
 import android.net.Uri
-import android.content.ClipboardManager
-import android.content.Context
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -12,7 +10,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Spacer
@@ -61,7 +58,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
@@ -87,7 +83,9 @@ import com.tracktosearch.ui.component.appVisualEffect
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.theme.PixelFontFamily
 import com.tracktosearch.ui.theme.monetDoubanGreen
+import com.tracktosearch.ui.theme.pixelFontSize
 import com.tracktosearch.ui.theme.onMonetDoubanGreen
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeState
@@ -429,7 +427,6 @@ private fun ActivationCard(
     scene: GlassScene = GlassScene(),
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     val shape = RoundedCornerShape(20.dp)
     val accent = MaterialTheme.colorScheme.primary
     val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
@@ -493,6 +490,8 @@ private fun ActivationCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             val inputShape = RoundedCornerShape(13.dp)
+            // 激活码用点阵字体，字号必须落在 12px 网格的整数倍上，否则像素边缘被插值成灰边
+            val codeFontSize = pixelFontSize(14.dp)
             // 邀请码可提交的条件：非空、不在提交中、还没激活。原来空输入也可点，
             // 点了才被 AuthViewModel 本地拦成 INVALID_INVITE，让用户先白撞一次错。
             val canActivate = authState.inviteCode.isNotBlank() &&
@@ -530,9 +529,8 @@ private fun ActivationCard(
                 ),
                 textStyle = TextStyle(
                     color = inputTextColor,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 15.sp,
-                    letterSpacing = 0.6.sp
+                    fontFamily = PixelFontFamily,
+                    fontSize = codeFontSize
                 ),
                 cursorBrush = SolidColor(accent),
                 decorationBox = { innerTextField ->
@@ -544,36 +542,14 @@ private fun ActivationCard(
                             Text(
                                 text = stringResource(R.string.auth_invite_code),
                                 color = inputPlaceholderColor,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 15.sp
+                                fontFamily = PixelFontFamily,
+                                fontSize = codeFontSize
                             )
                         }
                         innerTextField()
                     }
                 }
             )
-            // 邀请码基本都是从聊天软件复制过来的：输入为空时给一键粘贴。
-            // 只在点按时读剪贴板，不做后台静默读取。
-            if (authState.inviteCode.isBlank() && !authState.activated) {
-                TextButton(
-                    onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.primaryClip
-                            ?.takeIf { it.itemCount > 0 }
-                            ?.getItemAt(0)?.text?.toString()
-                            ?.trim()
-                            ?.takeIf { it.isNotEmpty() }
-                            ?.let { authViewModel.updateInviteCode(it) }
-                    },
-                    contentPadding = PaddingValues(horizontal = 8.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.import_paste),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = accent
-                    )
-                }
-            }
             Button(
                 onClick = authViewModel::activate,
                 enabled = canActivate,
