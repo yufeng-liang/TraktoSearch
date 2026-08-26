@@ -936,6 +936,69 @@ test('daily fallback always includes a source URL', async () => {
     assert.match(json.data.sourceUrl, /^https?:\/\//);
 });
 
+test('daily nullifies the source URL when the HEAD check returns 404', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (_input, init) => {
+        if (init?.method === 'HEAD') return new Response('', { status: 404 });
+        return new Response(JSON.stringify({
+            choices: [{ message: { content: JSON.stringify({
+                title: '《公民凯恩》的玻璃雪球',
+                fact: '片头的玻璃雪球是影史最著名的道具意象之一。',
+                explanation: '道具把人物的内心记忆压缩成了一个可凝视的物件。',
+                sourceName: '维基百科',
+                sourceUrl: 'https://example.com/citizen-kane',
+                characterLine: '原来这个雪球还有故事！',
+            }) } }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+
+    try {
+        const { response, json } = await call('/api/ai/daily', {
+            method: 'POST',
+            body: { action: 'daily', sessionId: 'daily-head-404-session', forceRefresh: true },
+            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+        });
+
+        assert.equal(response.status, 200);
+        assert.equal(json.data.sourceUrl, null);
+        assert.equal(json.data.sourceName, '维基百科');
+        assert.equal(json.data.title, '《公民凯恩》的玻璃雪球');
+        assert.equal(json.data.characterLine, '原来这个雪球还有故事！');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('daily keeps the source URL when the HEAD check is blocked by anti-scraping 403', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (_input, init) => {
+        if (init?.method === 'HEAD') return new Response('', { status: 403 });
+        return new Response(JSON.stringify({
+            choices: [{ message: { content: JSON.stringify({
+                title: '《公民凯恩》的玻璃雪球',
+                fact: '片头的玻璃雪球是影史最著名的道具意象之一。',
+                explanation: '道具把人物的内心记忆压缩成了一个可凝视的物件。',
+                sourceName: '维基百科',
+                sourceUrl: 'https://example.com/citizen-kane',
+                characterLine: '原来这个雪球还有故事！',
+            }) } }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+
+    try {
+        const { response, json } = await call('/api/ai/daily', {
+            method: 'POST',
+            body: { action: 'daily', sessionId: 'daily-head-403-session', forceRefresh: true },
+            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+        });
+
+        assert.equal(response.status, 200);
+        assert.equal(json.data.sourceUrl, 'https://example.com/citizen-kane');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
 test('quiz submission reveals score and explanations after the quiz', async () => {
     const env = createTestEnv();
     const started = await call('/api/ai/quiz', {
@@ -1038,13 +1101,13 @@ test('greeting cache prevents a second Mimo request', async () => {
     }
 });
 
-test('recommendations reject an upstream item without a valid media ID', async () => {
+test('recommendations reject an upstream item without a valid year', async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async () => new Response(JSON.stringify({
         choices: [{ message: { content: JSON.stringify({
             roast: '你的片单像一场有趣的夜行。',
             taste: ['偏爱有余韵的故事'],
-            recommendations: [{ title: 'Unknown', reason: 'Because', mediaIds: {} }],
+            recommendations: [{ title: 'Unknown film', reason: 'Because' }],
         }) } }],
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
@@ -1231,7 +1294,7 @@ test('taste, quiz, and daily cache hits do not consume AI quota', async () => {
     assert.equal(usage.dailyCount, 3);
 });
 
-test('daily cache is isolated by friend and UTC date', async () => {
+test('daily cache is isolated by friend and Shanghai calendar day', async () => {
     const env = createTestEnv();
     const first = await call('/api/ai/daily', {
         method: 'POST',
@@ -1263,7 +1326,7 @@ test('taste defaults to the pro model and includes the nickname in the prompt', 
             choices: [{ message: { content: JSON.stringify({
                 roast: '小明的片单很会留白。',
                 taste: ['偏爱复杂人物'],
-                recommendations: [{ title: 'Movie 1', year: 2020, reason: '同样重视人物选择。', mediaIds: { tmdbId: 100 } }],
+                recommendations: [{ title: '十二怒汉', year: 1957, mediaType: 'movie', reason: '同样重视人物在限制中的选择。' }],
             }) } }],
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     };
@@ -1278,26 +1341,28 @@ test('taste defaults to the pro model and includes the nickname in the prompt', 
         assert.equal(response.status, 200);
         assert.equal(requestBody.model, 'mimo-v2.5-pro');
         assert.ok(requestBody.messages.some(message => String(message.content).includes('小明')));
-        assert.equal(json.data.recommendations[0].mediaIds.tmdbId, 100);
+        assert.deepEqual(json.data.recommendations, [
+            { mediaType: 'movie', title: '十二怒汉', year: 1957, reason: '同样重视人物在限制中的选择。' },
+        ]);
     } finally {
         globalThis.fetch = originalFetch;
     }
 });
 
-test('taste rejects a recommendation containing an ID outside the watched whitelist', async () => {
+test('taste rejects a recommendation that repeats a watched title case-insensitively', async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async () => new Response(JSON.stringify({
         choices: [{ message: { content: JSON.stringify({
             roast: '小明的片单很会留白。',
             taste: ['偏爱复杂人物'],
-            recommendations: [{ title: 'Unknown', year: 2024, reason: '因为模型说了算。', mediaIds: { tmdbId: 999999 } }],
+            recommendations: [{ title: 'movie 1', year: 2024, reason: '因为模型说了算。' }],
         }) } }],
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
     try {
         const { response, json } = await call('/api/ai/taste', {
             method: 'POST',
-            body: { action: 'taste', sessionId: 'taste-whitelist-session', watched: movies(), forceRefresh: true },
+            body: { action: 'taste', sessionId: 'taste-watched-title-session', watched: movies(), forceRefresh: true },
             env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
         });
 
@@ -1308,26 +1373,46 @@ test('taste rejects a recommendation containing an ID outside the watched whitel
     }
 });
 
-test('taste rejects a watched media ID that is not in the verified whitelist', async () => {
+test('taste ignores upstream media IDs because recommendations are unwatched titles', async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async () => new Response(JSON.stringify({
         choices: [{ message: { content: JSON.stringify({
             roast: '小明的片单很会留白。',
             taste: ['偏爱复杂人物'],
-            recommendations: [{ title: 'Movie 1', year: 2020, reason: '同样重视人物选择。', mediaIds: { tmdbId: 100 } }],
+            recommendations: [{ title: '十二怒汉', year: 1957, reason: '同样重视人物选择。', mediaIds: { tmdbId: 999999 } }],
         }) } }],
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
     try {
-        const watched = movies();
-        watched[0] = {
-            ...watched[0],
-            mediaIds: { traktId: '42', tmdbId: 100 },
-            verifiedMediaIds: { traktId: '42' },
-        };
         const { response, json } = await call('/api/ai/taste', {
             method: 'POST',
-            body: { action: 'taste', sessionId: 'taste-verified-whitelist-session', watched, forceRefresh: true },
+            body: { action: 'taste', sessionId: 'taste-ignore-media-ids-session', watched: movies(), forceRefresh: true },
+            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+        });
+
+        assert.equal(response.status, 200);
+        assert.deepEqual(json.data.recommendations, [
+            { mediaType: 'movie', title: '十二怒汉', year: 1957, reason: '同样重视人物选择。' },
+        ]);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('taste rejects a recommendation with an unsupported mediaType', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({
+            roast: '小明的片单很会留白。',
+            taste: ['偏爱复杂人物'],
+            recommendations: [{ title: 'Some film', year: 2000, mediaType: 'documentary', reason: '同样重视人物选择。' }],
+        }) } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+    try {
+        const { response, json } = await call('/api/ai/taste', {
+            method: 'POST',
+            body: { action: 'taste', sessionId: 'taste-media-type-session', watched: movies(), forceRefresh: true },
             env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
         });
 
@@ -1338,44 +1423,54 @@ test('taste rejects a watched media ID that is not in the verified whitelist', a
     }
 });
 
-test('taste rejects a recommendation whose title is not bound to its media ID', async () => {
+test('taste defaults an omitted mediaType to movie and accepts show', async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async () => new Response(JSON.stringify({
         choices: [{ message: { content: JSON.stringify({
             roast: '小明的片单很会留白。',
             taste: ['偏爱复杂人物'],
-            recommendations: [{ title: 'Wrong title', year: 2020, reason: '同样重视人物选择。', mediaIds: { tmdbId: 100 } }],
+            recommendations: [
+                { title: 'Some film', year: 2000, reason: '同样重视人物选择。' },
+                { title: 'Some show', year: 2010, mediaType: 'show', reason: '适合喜欢长线叙事的你。' },
+            ],
         }) } }],
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
     try {
         const { response, json } = await call('/api/ai/taste', {
             method: 'POST',
-            body: { action: 'taste', sessionId: 'taste-title-binding-session', watched: movies(), forceRefresh: true },
+            body: { action: 'taste', sessionId: 'taste-media-type-default-session', watched: movies(), forceRefresh: true },
             env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
         });
 
-        assert.equal(response.status, 502);
-        assert.equal(json.code, 'INVALID_AI_OUTPUT');
+        assert.equal(response.status, 200);
+        assert.deepEqual(
+            json.data.recommendations.map(item => item.mediaType),
+            ['movie', 'show'],
+        );
     } finally {
         globalThis.fetch = originalFetch;
     }
 });
 
-test('taste rejects a recommendation whose media type is not bound to its media ID', async () => {
+test('taste rejects more than eight recommendations', async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async () => new Response(JSON.stringify({
         choices: [{ message: { content: JSON.stringify({
             roast: '小明的片单很会留白。',
             taste: ['偏爱复杂人物'],
-            recommendations: [{ title: 'Movie 1', mediaType: 'show', reason: '同样重视人物选择。', mediaIds: { tmdbId: 100 } }],
+            recommendations: Array.from({ length: 9 }, (_, index) => ({
+                title: `New film ${index}`,
+                year: 2000 + index,
+                reason: '口味契合。',
+            })),
         }) } }],
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
     try {
         const { response, json } = await call('/api/ai/taste', {
             method: 'POST',
-            body: { action: 'taste', sessionId: 'taste-type-binding-session', watched: movies(), forceRefresh: true },
+            body: { action: 'taste', sessionId: 'taste-too-many-session', watched: movies(), forceRefresh: true },
             env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
         });
 
