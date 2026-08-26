@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -68,6 +69,8 @@ import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.LoadMoreFooter
+import com.tracktosearch.ui.component.LoadMoreFooterState
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -115,7 +118,7 @@ fun TraktListDetailScreen(
     LaunchedEffect(gridState) {
         snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
             .collect { lastVisibleIndex ->
-                if (lastVisibleIndex != null && lastVisibleIndex >= uiState.items.size - 6) {
+                if (lastVisibleIndex != null && lastVisibleIndex >= uiState.items.size - 3) {
                     viewModel.loadMore()
                 }
             }
@@ -261,11 +264,17 @@ fun TraktListDetailScreen(
                             )
                         }
 
-                        // 底部加载更多骨架
-                        if (uiState.isLoadingMore) {
-                            items(3) {
-                                MovieCardSkeleton()
-                            }
+                        item(span = { GridItemSpan(3) }, key = "load_more_footer") {
+                            LoadMoreFooter(
+                                state = when {
+                                    uiState.isLoadingMore -> LoadMoreFooterState.Loading
+                                    uiState.error != null && uiState.items.isNotEmpty() -> LoadMoreFooterState.Error
+                                    uiState.items.isNotEmpty() && !uiState.hasMore -> LoadMoreFooterState.Complete
+                                    else -> LoadMoreFooterState.Hidden
+                                },
+                                onRetry = viewModel::loadMore,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
 

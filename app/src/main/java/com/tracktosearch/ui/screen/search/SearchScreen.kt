@@ -169,6 +169,8 @@ import com.tracktosearch.ui.screen.ai.searchAnchorFor
 import com.tracktosearch.ui.screen.ai.shouldStartSpriteOverlay
 import com.tracktosearch.ui.screen.ai.AI_SPRITE_IDLE_DELAY_MS
 import com.tracktosearch.ui.component.DiscoverModalBottomSheet
+import com.tracktosearch.ui.component.LoadMoreFooter
+import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.component.DoubanRatingBadge
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.AppVisualSurface
@@ -1686,17 +1688,20 @@ fun DoubanHotAllSheet(
                         }
                     )
                 }
-                if (category.hasMore) {
+                if (category.items.isNotEmpty()) {
                     item(span = { GridItemSpan(3) }) {
-                        LaunchedEffect(category.currentPage) { onLoadMore() }
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 12.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        if (category.hasMore && category.error == null) {
+                            LaunchedEffect(category.currentPage) { onLoadMore() }
                         }
+                        LoadMoreFooter(
+                            state = when {
+                                category.error != null -> LoadMoreFooterState.Error
+                                category.hasMore -> LoadMoreFooterState.Loading
+                                else -> LoadMoreFooterState.Complete
+                            },
+                            onRetry = onLoadMore,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
             }

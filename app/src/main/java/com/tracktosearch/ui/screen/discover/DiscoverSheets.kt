@@ -69,6 +69,8 @@ import com.tracktosearch.ui.component.RatingBadge
 import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.YearBadge
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.LoadMoreFooter
+import com.tracktosearch.ui.component.LoadMoreFooterState
 
 /** Sheet 内影视卡片：海报 + 下方标题/副标题 */
 @Composable
@@ -244,28 +246,19 @@ internal fun TmdbAllSheet(
                         onClick = { onItemClick(movie) }
                     )
                 }
-                if (isLoading) {
-                    item(span = { GridItemSpan(3) }) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                        }
-                    }
+                item(span = { GridItemSpan(3) }) {
+                    LoadMoreFooter(
+                        state = when {
+                            isLoading -> LoadMoreFooterState.Loading
+                            errorMessage != null -> LoadMoreFooterState.Error
+                            !hasMore && items.isNotEmpty() -> LoadMoreFooterState.Complete
+                            else -> LoadMoreFooterState.Hidden
+                        },
+                        onRetry = onRetry ?: onLoadMore,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
-                // 加载更多失败：原因 + 显式重试按钮（以前是整块可点的文字，重试入口不可发现）
-                if (errorMessage != null && !isLoading) {
-                    item(span = { GridItemSpan(3) }) {
-                        AppErrorState(
-                            message = errorMessage,
-                            onRetry = onRetry,
-                            variant = AppErrorVariant.Inline
-                        )
-                    }
-                }
+                // 加载更多失败：显示可点击的重试提示
             }
         }
     }
@@ -342,28 +335,19 @@ internal fun TraktMovieAllSheet(
                         onClick = { onItemClick(movie) }
                     )
                 }
-                if (isLoading) {
-                    item(span = { GridItemSpan(3) }) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                        }
-                    }
+                item(span = { GridItemSpan(3) }) {
+                    LoadMoreFooter(
+                        state = when {
+                            isLoading -> LoadMoreFooterState.Loading
+                            errorMessage != null -> LoadMoreFooterState.Error
+                            !hasMore && items.isNotEmpty() -> LoadMoreFooterState.Complete
+                            else -> LoadMoreFooterState.Hidden
+                        },
+                        onRetry = onRetry ?: onLoadMore,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
-                // 加载更多失败：原因 + 显式重试按钮（以前是整块可点的文字，重试入口不可发现）
-                if (errorMessage != null && !isLoading) {
-                    item(span = { GridItemSpan(3) }) {
-                        AppErrorState(
-                            message = errorMessage,
-                            onRetry = onRetry,
-                            variant = AppErrorVariant.Inline
-                        )
-                    }
-                }
+                // 加载更多失败：显示可点击的重试提示
             }
         }
     }

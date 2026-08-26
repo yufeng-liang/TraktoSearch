@@ -353,3 +353,92 @@ interface DoubanSyncRollbackDao {
         insertAll(items)
     }
 }
+
+/** 可恢复的一致性检查批次。单例 id=1，账号或数据版本变化时批次失效。 */
+@Entity(
+    tableName = "douban_consistency_check_runs",
+    indices = [Index("status"), Index("accountKey", "dataVersion")]
+)
+data class DoubanConsistencyCheckRunEntity(
+    @PrimaryKey val id: Int = 1,
+    val accountKey: String,
+    val dataVersion: Long,
+    val status: String,
+    val phase: String,
+    val current: Int,
+    val total: Int,
+    val startedAt: Long,
+    val updatedAt: Long,
+    val completedAt: Long?,
+    val invalidReason: String?
+)
+
+/** 一致性批次中的幂等待处理/修复任务。 */
+@Entity(
+    tableName = "douban_consistency_check_tasks",
+    primaryKeys = ["runId", "doubanId", "action"],
+    indices = [Index("runId", "status"), Index("doubanId")]
+)
+data class DoubanConsistencyCheckTaskEntity(
+    val runId: String,
+    val doubanId: String,
+    val action: String,
+    val status: String,
+    val attemptCount: Int = 0,
+    val errorMessage: String? = null,
+    val updatedAt: Long
+)
+
+/** 结构化冲突记录，区分普通冲突、Trakt 双状态脏数据、已修复、待重试和错误。 */
+@Entity(
+    tableName = "douban_consistency_conflicts",
+    indices = [Index("runId", "resolutionStatus"), Index("doubanId")]
+)
+data class DoubanConsistencyConflictEntity(
+    @PrimaryKey val id: String,
+    val runId: String,
+    val doubanId: String,
+    val title: String,
+    val doubanStatus: String,
+    val traktStatus: String,
+    val conflictType: String,
+    val resolutionStatus: String,
+    val errorMessage: String? = null,
+    val updatedAt: Long
+)
+
+@Dao
+interface DoubanConsistencyCheckDao {
+    @Query("SELECT * FROM douban_consistency_check_runs WHERE id = 1")
+    suspend fun getRun(): DoubanConsistencyCheckRunEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertRun(run: DoubanConsistencyCheckRunEntity)
+
+    @Query("DELETE FROM douban_consistency_check_runs WHERE id = 1")
+    suspend fun clearRun()
+
+    @Query("SELECT * FROM douban_consistency_check_tasks WHERE runId = :runId AND status IN ('PENDING', 'RETRY')")
+    suspend fun getPendingTasks(runId: String): List<DoubanConsistencyCheckTaskEntity>
+
+    @Query("SELECT * FROM douban_consistency_check_tasks WHERE runId = :runId")
+    suspend fun getTasks(runId: String): List<DoubanConsistencyCheckTaskEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertTasks(tasks: List<DoubanConsistencyCheckTaskEntity>)
+
+    @Query("UPDATE douban_consistency_check_tasks SET status = :status, attemptCount = :attemptCount, errorMessage = :errorMessage, updatedAt = :updatedAt WHERE runId = :runId AND doubanId = :doubanId AND action = :action")
+    suspend fun updateTaskStatus(runId: String, doubanId: String, action: String, status: String, attemptCount: Int, errorMessage: String?, updatedAt: Long)
+
+    @Query("DELETE FROM douban_consistency_check_tasks WHERE runId = :runId")
+    suspend fun clearTasks(runId: String)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertConflicts(conflicts: List<DoubanConsistencyConflictEntity>)
+
+    @Query("SELECT * FROM douban_consistency_conflicts WHERE runId = :runId ORDER BY updatedAt DESC")
+    suspend fun getConflicts(runId: String): List<DoubanConsistencyConflictEntity>
+
+    @Query("DELETE FROM douban_consistency_conflicts WHERE runId = :runId")
+    suspend fun clearConflicts(runId: String)
+}

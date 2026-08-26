@@ -22,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,12 +70,18 @@ fun DoubanSyncDialog(
     onDismiss: () -> Unit,
     onRelogin: (() -> Unit)? = null,
     onBackground: () -> Unit = onDismiss,
+    onBackgroundUnavailable: (() -> Unit)? = null,
     onTraktLogin: (() -> Unit)? = null,
+    onViewFailures: (() -> Unit)? = null,
+    onRetry: (() -> Unit)? = null,
+    onViewConflicts: (() -> Unit)? = null,
     viewModel: DoubanSyncViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val progress by viewModel.progress.collectAsStateWithLifecycle()
     val p = progress
+    var showActivityDetails by remember { mutableStateOf(false) }
+    var showFailureItems by remember { mutableStateOf(false) }
 
     var delayRemainingSeconds by remember { mutableIntStateOf(0) }
     LaunchedEffect(p.delayInfo) {
@@ -322,14 +329,119 @@ fun DoubanSyncDialog(
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                     Text(
+                        stringResource(R.string.douban_sync_summary_title),
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    SyncSummaryRow(
+                        label = stringResource(R.string.douban_sync_summary_success),
+                        value = p.successCount
+                    )
+                    SyncSummaryRow(
+                        label = stringResource(R.string.douban_sync_summary_reused),
+                        value = p.skippedCount + p.cacheHitCount
+                    )
+                    SyncSummaryRow(
+                        label = stringResource(R.string.douban_sync_summary_failed),
+                        value = p.failedCount
+                    )
+                    SyncSummaryRow(
+                        label = stringResource(R.string.douban_sync_summary_conflicts),
+                        value = p.conflictFixedCount,
+                        suffix = if (p.conflictsFound > 0) {
+                            stringResource(R.string.douban_sync_summary_conflicts_found, p.conflictsFound)
+                        } else null
+                    )
+                    SyncSummaryRow(
+                        label = stringResource(R.string.douban_sync_summary_cloud),
+                        value = null,
+                        suffix = when {
+                            !p.cloudUploadAttempted -> stringResource(R.string.douban_sync_cloud_not_attempted)
+                            p.cloudUploadSucceeded -> stringResource(R.string.douban_sync_cloud_succeeded)
+                            else -> stringResource(R.string.douban_sync_cloud_failed)
+                        }
+                    )
+                    // 保留紧凑摘要，便于快速扫读及兼容旧的无障碍/自动化查找。
+                    Text(
                         stringResource(
                             R.string.douban_sync_summary_format,
                             p.successCount,
                             p.skippedCount,
                             p.cacheHitCount
                         ),
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Text(
+                        when {
+                            !p.cloudUploadAttempted -> stringResource(R.string.douban_sync_cloud_not_attempted)
+                            p.cloudUploadSucceeded -> stringResource(R.string.douban_sync_cloud_succeeded)
+                            else -> stringResource(R.string.douban_sync_cloud_failed)
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (p.cloudUploadAttempted && !p.cloudUploadSucceeded) {
+                            MaterialTheme.colorScheme.error
+                        } else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (p.pendingItemCount > 0) {
+                        SyncSummaryRow(
+                            label = stringResource(R.string.douban_sync_summary_pending),
+                            value = p.pendingItemCount
+                        )
+                    }
+                    TextButton(onClick = { showActivityDetails = !showActivityDetails }) {
+                        Text(
+                            stringResource(
+                                if (showActivityDetails) R.string.douban_sync_hide_details
+                                else R.string.douban_sync_view_details
+                            )
+                        )
+                    }
+                    if (showActivityDetails) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (p.failedItems.isNotEmpty()) {
+                                TextButton(onClick = {
+                                    showActivityDetails = true
+                                    showFailureItems = !showFailureItems
+                                    onViewFailures?.invoke()
+                                }) {
+                                    Text(stringResource(R.string.douban_sync_view_failures))
+                                }
+                            }
+                            if (p.failedCount > 0 && onRetry != null) {
+                                TextButton(onClick = onRetry) {
+                                    Text(stringResource(R.string.douban_sync_retry_failures))
+                                }
+                            }
+                            if (p.conflictsFound > 0 && onViewConflicts != null) {
+                                TextButton(onClick = {
+                                    showActivityDetails = true
+                                    onViewConflicts()
+                                }) {
+                                    Text(stringResource(R.string.douban_sync_view_conflicts))
+                                }
+                            }
+                        }
+                        if (showFailureItems && p.failedItems.isNotEmpty()) {
+                            p.failedItems.take(5).forEach { failure ->
+                                Text(
+                                    failure.title,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            val remaining = p.failedItems.size - 5
+                            if (remaining > 0) {
+                                Text(
+                                    stringResource(R.string.douban_sync_failure_remaining, remaining),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -389,6 +501,8 @@ fun DoubanSyncDialog(
                             onClick = {
                                 if (DoubanSyncService.start(context)) {
                                     onBackground()
+                                } else {
+                                    onBackgroundUnavailable?.invoke()
                                 }
                             }
                         ) { Text(stringResource(R.string.douban_sync_background)) }
@@ -409,4 +523,32 @@ fun DoubanSyncDialog(
             }
         }
     )
+}
+
+@Composable
+private fun SyncSummaryRow(
+    label: String,
+    value: Int?,
+    suffix: String? = null
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, style = MaterialTheme.typography.bodySmall)
+        Text(
+            text = value?.toString() ?: suffix.orEmpty(),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+    if (value != null && suffix != null) {
+        Text(
+            suffix,
+            modifier = Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }

@@ -2,7 +2,6 @@ package com.tracktosearch.ui.screen.person
 
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -17,7 +16,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -27,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -35,6 +34,8 @@ import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonMovieCredit
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonTvCredit
+import com.tracktosearch.ui.component.LoadMoreFooter
+import com.tracktosearch.ui.component.LoadMoreFooterState
 
 /** 全部参演电影弹窗 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -44,12 +45,23 @@ internal fun AllMovieCreditsSheet(
     credits: List<TmdbPersonMovieCredit>,
     resolvingTmdbId: Int?,
     hasMore: Boolean,
+    isLoadingMore: Boolean,
+    loadMoreError: Boolean,
     onLoadMore: () -> Unit,
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
     viewModel: PersonViewModel,
     onDismiss: () -> Unit,
     gridState: LazyGridState
 ) {
+    LaunchedEffect(gridState, credits.size, hasMore, isLoadingMore, loadMoreError) {
+        snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
+            .collect { lastVisibleIndex ->
+                if (hasMore && !isLoadingMore && !loadMoreError && lastVisibleIndex != null && lastVisibleIndex >= credits.size - 3) {
+                    onLoadMore()
+                }
+            }
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -103,17 +115,18 @@ internal fun AllMovieCreditsSheet(
                         }
                     )
                 }
-                if (hasMore) {
+                if (credits.isNotEmpty()) {
                     item(span = { GridItemSpan(3) }) {
-                        LaunchedEffect(credits.size) { onLoadMore() }
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 12.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                        }
+                        LoadMoreFooter(
+                            state = when {
+                                isLoadingMore -> LoadMoreFooterState.Loading
+                                loadMoreError -> LoadMoreFooterState.Error
+                                !hasMore -> LoadMoreFooterState.Complete
+                                else -> LoadMoreFooterState.Hidden
+                            },
+                            onRetry = onLoadMore,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
             }
@@ -129,12 +142,23 @@ internal fun AllTvCreditsSheet(
     credits: List<TmdbPersonTvCredit>,
     resolvingTmdbId: Int?,
     hasMore: Boolean,
+    isLoadingMore: Boolean,
+    loadMoreError: Boolean,
     onLoadMore: () -> Unit,
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
     viewModel: PersonViewModel,
     onDismiss: () -> Unit,
     gridState: LazyGridState
 ) {
+    LaunchedEffect(gridState, credits.size, hasMore, isLoadingMore, loadMoreError) {
+        snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
+            .collect { lastVisibleIndex ->
+                if (hasMore && !isLoadingMore && !loadMoreError && lastVisibleIndex != null && lastVisibleIndex >= credits.size - 3) {
+                    onLoadMore()
+                }
+            }
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -188,17 +212,18 @@ internal fun AllTvCreditsSheet(
                         }
                     )
                 }
-                if (hasMore) {
+                if (credits.isNotEmpty()) {
                     item(span = { GridItemSpan(3) }) {
-                        LaunchedEffect(credits.size) { onLoadMore() }
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 12.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                        }
+                        LoadMoreFooter(
+                            state = when {
+                                isLoadingMore -> LoadMoreFooterState.Loading
+                                loadMoreError -> LoadMoreFooterState.Error
+                                !hasMore -> LoadMoreFooterState.Complete
+                                else -> LoadMoreFooterState.Hidden
+                            },
+                            onRetry = onLoadMore,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
             }

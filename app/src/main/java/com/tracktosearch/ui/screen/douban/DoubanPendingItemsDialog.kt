@@ -20,6 +20,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -213,4 +217,75 @@ private fun ResumeOptionItem(
             )
         }
     }
+}
+
+@Composable
+fun DoubanPendingItemsDialogWithDiscard(
+    pendingCount: Int,
+    onDismiss: () -> Unit,
+    onContinue: () -> Unit,
+    onFullSync: () -> Unit,
+    onDiscardPending: () -> Unit
+) {
+    var showDiscardConfirmation by remember { mutableStateOf(false) }
+    if (showDiscardConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showDiscardConfirmation = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            title = { Text(stringResource(R.string.douban_resume_discard_title)) },
+            text = { Text(stringResource(R.string.douban_resume_discard_message, pendingCount)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDiscardConfirmation = false
+                    onDiscardPending()
+                    onDismiss()
+                }) { Text(stringResource(R.string.douban_resume_discard_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardConfirmation = false }) {
+                    Text(stringResource(R.string.douban_resume_discard_cancel))
+                }
+            }
+        )
+        return
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        title = { Text(stringResource(R.string.douban_resume_title)) },
+        text = {
+            Column {
+                Text(
+                    stringResource(R.string.douban_resume_subtitle, pendingCount),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                ResumeOptionItem(
+                    icon = Icons.Rounded.PlayArrow,
+                    title = stringResource(R.string.douban_resume_continue),
+                    subtitle = stringResource(R.string.douban_resume_continue_desc),
+                    onClick = onContinue,
+                    isRecommended = true
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                ResumeOptionItem(
+                    icon = Icons.Rounded.Refresh,
+                    title = stringResource(R.string.douban_resume_full),
+                    subtitle = stringResource(R.string.douban_resume_full_desc),
+                    onClick = onFullSync
+                )
+            }
+        },
+        confirmButton = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { showDiscardConfirmation = true }) {
+                    Text(stringResource(R.string.douban_resume_discard))
+                }
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.douban_resume_cancel))
+                }
+            }
+        }
+    )
 }

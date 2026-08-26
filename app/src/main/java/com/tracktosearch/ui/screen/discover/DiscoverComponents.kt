@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -62,9 +63,11 @@ import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.ui.component.AppVisualSurface
 import com.tracktosearch.ui.component.DoubanRatingBadge
+import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.RatingBadge
 import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.YearBadge
+import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 
@@ -332,20 +335,12 @@ internal fun ErrorRetryRow(error: String, onRetry: () -> Unit) {
 
 @Composable
 internal fun EmptyRow() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(120.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = stringResource(R.string.empty_default),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-        )
-    }
+    EmptyStateCard(
+        isDark = isAppDarkTheme(),
+        title = stringResource(R.string.empty_default),
+        icon = Icons.Rounded.Movie,
+        modifier = Modifier.padding(vertical = 8.dp)
+    )
 }
 
 /** 通用栏目标题 */

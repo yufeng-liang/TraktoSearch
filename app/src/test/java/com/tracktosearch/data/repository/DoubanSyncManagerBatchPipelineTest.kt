@@ -648,7 +648,7 @@ class DoubanSyncManagerBatchPipelineTest {
         // 阶段2成功调用 onProgress(done, "Trakt 查询", 0, title, null),failure=null 表示成功
         assertThat(progressCalls.any { it.subPhase == "Trakt 查询" && it.failure == null }).isTrue()
         // 阶段4开始时调用 onProgress(withTraktId.size, "写入 Trakt", 0, null, null)
-        assertThat(progressCalls.any { it.subPhase == "写入 Trakt" }).isTrue()
+        assertThat(progressCalls.any { it.subPhase == DoubanSyncSubStage.WRITING_TARGET.name }).isTrue()
     }
 
     /**

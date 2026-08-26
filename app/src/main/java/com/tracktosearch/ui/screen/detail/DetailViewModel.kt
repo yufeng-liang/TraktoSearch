@@ -1234,7 +1234,7 @@ class DetailViewModel @Inject constructor(
 
         val nextTraktPage = current.commentPage + 1
         val nextTmdbPage = current.tmdbCommentPage + 1
-        _uiState.value = current.copy(isLoadingMoreComments = true)
+        _uiState.value = current.copy(isLoadingMoreComments = true, commentsError = false)
 
         viewModelScope.launch {
             try {
@@ -1279,7 +1279,7 @@ class DetailViewModel @Inject constructor(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (_: Exception) {
-                _uiState.value = _uiState.value.copy(isLoadingMoreComments = false)
+                _uiState.value = _uiState.value.copy(isLoadingMoreComments = false, commentsError = true)
             }
         }
     }
@@ -1297,7 +1297,7 @@ class DetailViewModel @Inject constructor(
         }
 
         val nextStart = current.doubanCommentPage.coerceAtLeast(1) * COMMENT_PAGE_SIZE
-        _uiState.value = current.copy(isLoadingMoreComments = true)
+        _uiState.value = current.copy(isLoadingMoreComments = true, commentsError = false)
         viewModelScope.launch {
             try {
                 val page = doubanRexxarRepository.getShortComments(
@@ -1307,7 +1307,7 @@ class DetailViewModel @Inject constructor(
                     count = COMMENT_PAGE_SIZE
                 ).getOrNull()
                 if (page == null) {
-                    _uiState.value = _uiState.value.copy(isLoadingMoreComments = false)
+                    _uiState.value = _uiState.value.copy(isLoadingMoreComments = false, commentsError = true)
                     return@launch
                 }
                 val newComments = page.comments.map { it.toTraktComment() }
@@ -1324,7 +1324,7 @@ class DetailViewModel @Inject constructor(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (_: Exception) {
-                _uiState.value = _uiState.value.copy(isLoadingMoreComments = false)
+                _uiState.value = _uiState.value.copy(isLoadingMoreComments = false, commentsError = true)
             }
         }
     }

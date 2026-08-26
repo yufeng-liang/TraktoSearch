@@ -310,6 +310,7 @@ class DiscoverFilterViewModel @Inject constructor(
         val s = _uiState.value
         if (s.isLoading || s.isLoadingMore) return
         if (s.currentPage >= s.totalPages) return
+        _uiState.value = s.copy(isLoadingMore = true, error = null)
         loadPage(s.currentPage + 1)
     }
 

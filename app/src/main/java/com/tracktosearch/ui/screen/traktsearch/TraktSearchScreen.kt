@@ -56,6 +56,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -121,6 +122,7 @@ import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.util.PersonAvatarColorStore
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.ui.component.AppErrorState
+import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
@@ -143,6 +145,8 @@ import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.LoadMoreFooter
+import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
@@ -580,28 +584,27 @@ fun TraktSearchScreen(
                             .backdropSource(),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = when (uiState.selectedTab) {
+                        EmptyStateCard(
+                            modifier = Modifier.padding(horizontal = 24.dp),
+                            isDark = isDark,
+                            icon = Icons.Rounded.Search,
+                            title = when (uiState.selectedTab) {
                                 MediaType.MOVIE -> stringResource(R.string.trakt_search_no_movies)
                                 MediaType.SHOW -> stringResource(R.string.trakt_search_no_shows)
                                 MediaType.PERSON -> stringResource(R.string.trakt_search_no_persons)
                                 MediaType.DISK -> stringResource(R.string.trakt_search_no_movies)
                             },
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 24.dp)
                         )
                     }
                 }
                 else -> {
                     // 自动触发加载更多
-                    LaunchedEffect(currentGridState, currentTabState.hasMore, currentTabState.isLoadingMore) {
+                    LaunchedEffect(currentGridState, currentTabState.hasMore, currentTabState.isLoadingMore, currentTabState.loadMoreError) {
                         snapshotFlow { currentGridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
                             .collect { lastVisibleIndex ->
                                 if (lastVisibleIndex != null &&
-                                    lastVisibleIndex >= currentTabState.results.size - 6 &&
-                                    currentTabState.hasMore && !currentTabState.isLoadingMore
+                                    lastVisibleIndex >= currentTabState.results.size - 3 &&
+                                    currentTabState.hasMore && !currentTabState.isLoadingMore && !currentTabState.loadMoreError
                                 ) {
                                     viewModel.loadMore()
                                 }
@@ -642,14 +645,18 @@ fun TraktSearchScreen(
                                     }
                                 )
                             }
-                            if (currentTabState.isLoadingMore) {
+                            if (currentTabState.results.isNotEmpty()) {
                                 item(span = { GridItemSpan(3) }) {
-                                    Box(
-                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                                    }
+                                    LoadMoreFooter(
+                                        state = when {
+                                            currentTabState.isLoadingMore -> LoadMoreFooterState.Loading
+                                            currentTabState.loadMoreError -> LoadMoreFooterState.Error
+                                            !currentTabState.hasMore -> LoadMoreFooterState.Complete
+                                            else -> LoadMoreFooterState.Hidden
+                                        },
+                                        onRetry = viewModel::loadMore,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
                                 }
                             }
                         }
@@ -688,14 +695,18 @@ fun TraktSearchScreen(
                                     }
                                 )
                             }
-                            if (currentTabState.isLoadingMore) {
+                            if (currentTabState.results.isNotEmpty()) {
                                 item(span = { GridItemSpan(3) }) {
-                                    Box(
-                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                                    }
+                                    LoadMoreFooter(
+                                        state = when {
+                                            currentTabState.isLoadingMore -> LoadMoreFooterState.Loading
+                                            currentTabState.loadMoreError -> LoadMoreFooterState.Error
+                                            !currentTabState.hasMore -> LoadMoreFooterState.Complete
+                                            else -> LoadMoreFooterState.Hidden
+                                        },
+                                        onRetry = viewModel::loadMore,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
                                 }
                             }
                         }
@@ -1098,13 +1109,12 @@ private fun DiskSearchContent(
                     .backdropSource(),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = stringResource(R.string.search_no_results),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 24.dp)
-                )
+                    EmptyStateCard(
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                        isDark = isAppDarkTheme(),
+                        icon = Icons.Rounded.Search,
+                        title = stringResource(R.string.search_no_results)
+                    )
             }
         }
         // 有结果（搜索中或搜索完成）：先到先显示

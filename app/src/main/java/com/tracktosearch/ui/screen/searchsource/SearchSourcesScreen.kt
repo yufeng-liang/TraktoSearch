@@ -69,6 +69,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.ui.component.NeumorphicIconButton
+import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.screen.settings.PanHubConfigDialog
@@ -459,23 +460,14 @@ private fun EmptyCustomSourceCard(
     onImport: () -> Unit
 ) {
     var showTemplateSheet by remember { mutableStateOf(false) }
-    Surface(
+    EmptyStateCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = stringResource(R.string.search_sources_empty),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(12.dp))
+        isDark = isAppDarkTheme(),
+        title = stringResource(R.string.search_sources_empty),
+        icon = Icons.Rounded.Language,
+        actions = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { showTemplateSheet = true }) {
                     Icon(
@@ -497,7 +489,7 @@ private fun EmptyCustomSourceCard(
                 }
             }
         }
-    }
+    )
 
     if (showTemplateSheet) {
         SourceTemplateSheet(

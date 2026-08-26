@@ -215,14 +215,17 @@
     <string name="douban_sync_cancelling">正在取消...</string>
     <string name="douban_sync_cancel">取消</string>
     <string name="douban_sync_background">转后台</string>
+    <string name="douban_sync_background_unavailable">暂时无法转入后台，请留在当前页面或开启通知权限。</string>
     <string name="douban_sync_relogin">重新登录</string>
     <string name="douban_sync_login_trakt">登录 Trakt</string>
     <string name="douban_sync_login_douban">登录豆瓣</string>
     <string name="douban_sync_cookie_expired_banner">豆瓣登录已过期，点此重新登录</string>
     <string name="douban_sync_douban_login_required_banner">需要登录豆瓣，点此登录</string>
     <string name="douban_sync_trakt_login_required_banner">需要登录 Trakt，点此登录</string>
-    <string name="douban_sync_complete_banner">同步完成，新增 %1$d 条</string>
+    <string name="douban_sync_complete_banner">同步完成，处理成功 %1$d 条</string>
+    <string name="douban_sync_complete_with_failures_banner">同步部分完成：成功 %1$d 条，%2$d 条待重试</string>
     <string name="douban_sync_cancelled_banner">同步已取消</string>
+    <string name="douban_sync_cancelled_with_pending">同步已取消，可继续处理 %1$d 项</string>
     <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
     <string name="douban_sync_error_detail">错误：%1$s</string>
     <string name="douban_sync_eta_format">预计剩余 %1$s</string>
@@ -231,6 +234,25 @@
     <string name="douban_sync_delay_list_crawl">列表页爬取延迟</string>
     <string name="douban_sync_delay_retry">重试前等待</string>
     <string name="douban_sync_summary_format">成功 %1$d · 跳过 %2$d · 缓存命中 %3$d</string>
+    <string name="douban_sync_summary_with_failures">同步部分完成：成功 %1$d · 跳过 %2$d · 缓存命中 %3$d · 失败 %4$d</string>
+    <string name="douban_sync_summary_title">同步摘要</string>
+    <string name="douban_sync_summary_success">成功导入</string>
+    <string name="douban_sync_summary_reused">复用或跳过</string>
+    <string name="douban_sync_summary_failed">失败，可重试</string>
+    <string name="douban_sync_summary_conflicts">冲突已修复</string>
+    <string name="douban_sync_summary_conflicts_found">发现 %1$d 个冲突</string>
+    <string name="douban_sync_summary_pending">待续传</string>
+    <string name="douban_sync_summary_cloud">云端上传</string>
+    <string name="douban_sync_cloud_not_attempted">未尝试</string>
+    <string name="douban_sync_cloud_succeeded">已上传</string>
+    <string name="douban_sync_cloud_failed">上传需重试</string>
+    <string name="douban_sync_view_details">查看活动详情</string>
+    <string name="douban_sync_hide_details">收起活动详情</string>
+    <string name="douban_sync_view_failures">查看失败项</string>
+    <string name="douban_retry_no_failures">无失败项需要重试</string>
+    <string name="douban_sync_failure_remaining">还有 %1$d 个失败项</string>
+    <string name="douban_sync_retry_failures">重试失败项</string>
+    <string name="douban_sync_view_conflicts">查看一致性结果</string>
 
     <!-- 豆瓣同步失败项重试 -->
     <string name="douban_retry_cancel">取消</string>
@@ -254,6 +276,13 @@
     <string name="douban_resume_continue_desc">跳过列表爬取，直接处理已爬到的数据</string>
     <string name="douban_resume_full_desc">清空未处理数据，从头开始</string>
     <string name="douban_resume_cancel">取消</string>
+    <string name="douban_resume_discard">放弃未处理数据</string>
+    <string name="douban_resume_discard_title">放弃这次未完成的同步？</string>
+    <string name="douban_resume_discard_message">将永久删除已爬取但未处理的 %1$d 个条目，之后无法继续同步。</string>
+    <string name="douban_resume_discard_confirm">确认放弃</string>
+    <string name="douban_resume_discard_cancel">保留数据</string>
+    <string name="douban_resume_phase">续传上次未处理完的列表</string>
+    <string name="douban_resume_complete">续传完成</string>
     <string name="sync_already_running">已有同步任务正在运行，请稍后</string>
 
     <!-- Douban sync rollback (after failed full rewrite) -->
@@ -728,6 +757,7 @@
     <string name="cooldown_available">可同步</string>
     <string name="douban_first_sync_title">从豆瓣导入标记</string>
     <string name="douban_first_sync_message">你已登录豆瓣但还未导入标记。从豆瓣导入想看和已看记录，快速开始使用。</string>
+    <string name="douban_first_sync_message_douban_only">首次导入会读取豆瓣想看和看过记录。独立模式只保存在应用中并上传到个人云端备份，不会修改 Trakt。</string>
     <string name="douban_first_sync_start">开始导入</string>
     <string name="douban_first_sync_later">稍后再说</string>
     <string name="cooldown_guidance_title">处于冷却期内</string>
@@ -738,6 +768,8 @@
     <!-- Douban sync mode picker -->
     <string name="douban_sync_mode_picker_title">选择重新同步模式</string>
     <string name="douban_sync_mode_picker_title_first">选择同步模式</string>
+    <string name="douban_sync_mode_scope_trakt">导入豆瓣标记到本地；连接 Trakt 时会写入状态变化。</string>
+    <string name="douban_sync_mode_scope_douban_only">豆瓣独立模式：仅保存本地标记并上传个人数据，不会修改 Trakt。</string>
     <string name="douban_sync_mode_b_title">增量同步</string>
     <string name="douban_sync_mode_b_desc">同步豆瓣新增的想看/看过标记,并检测已同步条目的状态变化。同步完成后自动进行状态一致性检查,确保豆瓣与 Trakt 数据一致。</string>
     <string name="douban_sync_mode_b_example">例如:某电影已同步为想看,你在豆瓣改成了看过,此模式会更新 Trakt 为已看。同步后还会自动检查并修复任何状态不一致。</string>
@@ -758,6 +790,9 @@
     <string name="consistency_check_background">转后台</string>
     <string name="consistency_check_cancelling">正在取消...</string>
     <string name="consistency_check_cancel">取消</string>
+    <string name="consistency_check_login">去登录</string>
+    <string name="consistency_check_retry">重试</string>
+    <string name="consistency_check_view_conflicts">查看冲突</string>
     <string name="consistency_check_phase_preparing">准备检查...</string>
     <string name="consistency_check_channel_desc">状态一致性检查进度</string>
     <string name="consistency_check_complete_banner">检查完成</string>
@@ -775,9 +810,11 @@
     <string name="consistency_check_phase_update_douban">更新豆瓣</string>
     <string name="consistency_check_phase_done">完成</string>
     <string name="consistency_check_summary">检查 %1$d 项，发现 %2$d 个冲突，Trakt 更新 %3$d 项，豆瓣更新 %4$d 项，错误 %5$d 项</string>
+    <string name="consistency_check_summary_with_errors">检查部分完成：检查 %1$d 项，发现 %2$d 个冲突，Trakt 更新 %3$d 项，豆瓣更新 %4$d 项，错误 %5$d 项</string>
     <string name="consistency_check_notification_progress">%1$s（%2$d/%3$d）</string>
     <string name="consistency_check_notification_progress_with_subphase">%1$s · %2$s（%3$d/%4$d）</string>
     <string name="consistency_check_notification_stage_with_subphase">%1$s · %2$s</string>
+    <string name="consistency_check_notification_batch">%1$s · 批量处理中</string>
     <string name="consistency_check_notification_current">当前：%1$s</string>
     <string name="consistency_check_notification_eta">预计剩余：%1$s</string>
     <string name="consistency_check_notification_public">状态检查：%1$s</string>
@@ -1702,4 +1739,7 @@
     <string name="settings_image_traffic_reset_confirm">重置图片流量统计？</string>
     <string name="settings_image_traffic_reset_impact">今日与累计字节数归零，已缓存的图片不会被删除。</string>
     <string name="snackbar_image_traffic_reset">图片流量统计已重置</string>
+    <string name="common_load_more_loading">正在加载更多…</string>
+    <string name="common_load_more_failed">加载更多失败，点击重试</string>
+    <string name="common_load_more_complete">已加载全部</string>
 </resources>

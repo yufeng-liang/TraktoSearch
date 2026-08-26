@@ -183,6 +183,9 @@ import com.tracktosearch.ui.component.AppIconButton
 import com.tracktosearch.ui.component.AppPullToRefreshIndicator
 import com.tracktosearch.ui.component.rememberAppPullToRefreshState
 import com.tracktosearch.ui.component.AppErrorState
+import com.tracktosearch.ui.component.CinemaClapperIcon
+import com.tracktosearch.ui.component.LoadMoreFooter
+import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
 import com.tracktosearch.ui.component.TopBarBackdropSourcePadding
@@ -547,6 +550,22 @@ fun WatchlistScreen(
         selectedMode == 1 && selectedTab == 1 -> uiState.isLoadingHistoryShows
         else -> uiState.isLoadingHistoryOthers
     }
+    val currentSupportsPaging = selectedMode == 0 && selectedTab in 0..1
+    val currentHasMore = currentSupportsPaging && when (selectedTab) {
+        0 -> uiState.hasMoreMovies
+        1 -> uiState.hasMoreShows
+        else -> false
+    }
+    val currentIsLoadingMore = selectedMode == 0 && when (selectedTab) {
+        0 -> uiState.isLoadingMovies && uiState.moviesLoaded && uiState.movies.isNotEmpty() && uiState.moviePage > 1
+        1 -> uiState.isLoadingShows && uiState.showsLoaded && uiState.shows.isNotEmpty() && uiState.showPage > 1
+        else -> false
+    }
+    val currentLoadError = selectedMode == 0 && when (selectedTab) {
+        0 -> uiState.moviesError != null && uiState.movies.isNotEmpty()
+        1 -> uiState.showsError != null && uiState.shows.isNotEmpty()
+        else -> false
+    }
 
     // 当前列表的加载失败原因。ViewModel 只在缓存也为空时才置错误（缓存非空时降级为静默失败），
     // 所以这里非 null 就意味着列表确实没有内容可显示，应当替代空态引导给出原因与重试。
@@ -735,12 +754,7 @@ fun WatchlistScreen(
                                     .fillMaxWidth()
                                     .padding(horizontal = 24.dp, vertical = 32.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Movie,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(64.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                                )
+                                CinemaClapperIcon()
                                 Spacer(modifier = Modifier.height(16.dp))
                                 if (searchQuery.isNotEmpty()) {
                                     // 搜索无结果：只显示贴切文案，不显示引导链接
@@ -902,6 +916,23 @@ fun WatchlistScreen(
                                     }
                                 )
                             }
+                        }
+                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }, key = "load_more_footer") {
+                            LoadMoreFooter(
+                                state = when {
+                                    currentIsLoadingMore -> LoadMoreFooterState.Loading
+                                    currentLoadError -> LoadMoreFooterState.Error
+                                    currentSupportsPaging && !currentHasMore && items.isNotEmpty() -> LoadMoreFooterState.Complete
+                                    else -> LoadMoreFooterState.Hidden
+                                },
+                                onRetry = {
+                                    when (selectedTab) {
+                                        0 -> viewModel.loadMoreMovies()
+                                        1 -> viewModel.loadMoreShows()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
                             }
@@ -1317,9 +1348,25 @@ fun WatchlistScreen(
                                                 } else if (syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.FAILED) {
                                                     stringResource(R.string.douban_sync_stage_failed)
                                                 } else if (syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.CANCELLING) {
-                                                    stringResource(R.string.douban_sync_cancelled_banner)
+                                                    if (syncProgress.pendingItemCount > 0) {
+                                                        stringResource(
+                                                            R.string.douban_sync_cancelled_with_pending,
+                                                            syncProgress.pendingItemCount
+                                                        )
+                                                    } else stringResource(R.string.douban_sync_cancelled_banner)
                                                 } else if (syncProgress.isComplete) {
-                                                    stringResource(R.string.douban_sync_complete_banner, syncProgress.successCount)
+                                                    if (syncProgress.failedCount > 0) {
+                                                        stringResource(
+                                                            R.string.douban_sync_complete_with_failures_banner,
+                                                            syncProgress.successCount,
+                                                            syncProgress.failedCount
+                                                        )
+                                                    } else {
+                                                        stringResource(
+                                                            R.string.douban_sync_complete_banner,
+                                                            syncProgress.successCount
+                                                        )
+                                                    }
                                                 } else if (hasLiveCountProgress && targetLabel != null) {
                                                     stringResource(
                                                         R.string.douban_sync_notification_progress_format,
@@ -1721,10 +1768,17 @@ fun WatchlistScreen(
                             viewModel.clearDoubanSyncResult()
                         }
                     },
-                    onBackground = {
+                                    onBackground = {
                         // 「转后台」:仅隐藏弹窗,同步在 Application scope 继续运行,横幅会继续显示进度
-                        showSyncDialog = false
-                    },
+                                        showSyncDialog = false
+                                    },
+                                    onBackgroundUnavailable = {
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.douban_sync_background_unavailable),
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    },
                     onRelogin = {
                         showSyncDialog = false
                         viewModel.clearDoubanSyncResult()
@@ -1734,7 +1788,24 @@ fun WatchlistScreen(
                         showSyncDialog = false
                         viewModel.clearDoubanSyncResult()
                         onTraktLogin()
-                    }
+                    },
+                    onViewFailures = {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.douban_sync_view_failures),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    },
+                    onRetry = {
+                        if (!viewModel.retryLatestDoubanFailures()) {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.douban_retry_no_failures),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    },
+                    onViewConflicts = { showConsistencyDialog = true }
                 )
             }
     
@@ -1749,13 +1820,25 @@ fun WatchlistScreen(
                             viewModel.clearConsistencyCheckResult()
                         }
                     },
-                    onBackground = { showConsistencyDialog = false }
+                    onBackground = { showConsistencyDialog = false },
+                    onLogin = {
+                        showConsistencyDialog = false
+                        onNavigateToDoubanLogin()
+                    },
+                    onBackgroundUnavailable = {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.douban_sync_background_unavailable),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
                 )
             }
     
             // 首次同步引导弹窗（已登录豆瓣但从未同步过时自动弹出）
             if (showFirstSyncGuide && !isDoubanSyncRunning) {
                 DoubanFirstSyncGuideDialog(
+                    isDoubanOnly = isDoubanMode,
                     onDismiss = { showFirstSyncGuide = false },
                     onStartImport = {
                         showFirstSyncGuide = false
@@ -1770,6 +1853,7 @@ fun WatchlistScreen(
                     syncedCount = 0,
                     cooldownStatus = null,
                     neverSynced = true,
+                    isDoubanOnly = isDoubanMode,
                     onDismiss = { showSyncModePicker = false },
                     onModeSelected = { mode ->
                         showSyncModePicker = false

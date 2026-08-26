@@ -320,6 +320,59 @@ object DatabaseModule {
         }
     }
 
+    internal val MIGRATION_14_15 = object : Migration(14, 15) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // v14 -> v15：新增可恢复一致性检查状态；旧同步、pending、rollback 数据不改写。
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS douban_consistency_check_runs (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    accountKey TEXT NOT NULL,
+                    dataVersion INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    phase TEXT NOT NULL,
+                    current INTEGER NOT NULL,
+                    total INTEGER NOT NULL,
+                    startedAt INTEGER NOT NULL,
+                    updatedAt INTEGER NOT NULL,
+                    completedAt INTEGER,
+                    invalidReason TEXT
+                )""".trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_douban_consistency_check_runs_status ON douban_consistency_check_runs(status)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_douban_consistency_check_runs_accountKey_dataVersion ON douban_consistency_check_runs(accountKey, dataVersion)")
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS douban_consistency_check_tasks (
+                    runId TEXT NOT NULL,
+                    doubanId TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    attemptCount INTEGER NOT NULL,
+                    errorMessage TEXT,
+                    updatedAt INTEGER NOT NULL,
+                    PRIMARY KEY(runId, doubanId, action)
+                )""".trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_douban_consistency_check_tasks_runId_status ON douban_consistency_check_tasks(runId, status)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_douban_consistency_check_tasks_doubanId ON douban_consistency_check_tasks(doubanId)")
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS douban_consistency_conflicts (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    runId TEXT NOT NULL,
+                    doubanId TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    doubanStatus TEXT NOT NULL,
+                    traktStatus TEXT NOT NULL,
+                    conflictType TEXT NOT NULL,
+                    resolutionStatus TEXT NOT NULL,
+                    errorMessage TEXT,
+                    updatedAt INTEGER NOT NULL
+                )""".trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_douban_consistency_conflicts_runId_resolutionStatus ON douban_consistency_conflicts(runId, resolutionStatus)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_douban_consistency_conflicts_doubanId ON douban_consistency_conflicts(doubanId)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -341,7 +394,7 @@ object DatabaseModule {
             "tracktosearch.db"
         )
             .openHelperFactory(factory)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
             .build()
     }
 
@@ -372,6 +425,10 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideDoubanSyncRollbackDao(db: AppDatabase): DoubanSyncRollbackDao = db.doubanSyncRollbackDao()
+
+    @Provides
+    @Singleton
+    fun provideDoubanConsistencyCheckDao(db: AppDatabase): DoubanConsistencyCheckDao = db.doubanConsistencyCheckDao()
 
     @Provides
     @Singleton

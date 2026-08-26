@@ -89,6 +89,10 @@ import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.EmptyStateCard
+import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.LoadMoreFooter
+import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.navigation.DetailSeedStore
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropContentSource
@@ -152,10 +156,25 @@ fun DiscoverFilterScreen(
     var showTagDialog by remember { mutableStateOf(false) }
 
     // 滚动到底部加载更多
-    LaunchedEffect(listState) {
+    LaunchedEffect(
+        listState,
+        uiState.items.size,
+        uiState.isLoadingMore,
+        uiState.error,
+        uiState.currentPage,
+        uiState.totalPages
+    ) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
             .collectLatest { lastVisibleIndex ->
-                if (lastVisibleIndex != null && lastVisibleIndex >= uiState.items.size - 4) {
+                if (
+                    lastVisibleIndex != null &&
+                    uiState.items.isNotEmpty() &&
+                    !uiState.isLoading &&
+                    !uiState.isLoadingMore &&
+                    uiState.error == null &&
+                    uiState.currentPage < uiState.totalPages &&
+                    lastVisibleIndex >= uiState.items.size - 3
+                ) {
                     viewModel.loadMore()
                 }
             }
@@ -242,18 +261,12 @@ fun DiscoverFilterScreen(
                 // 空结果
                 uiState.hasSearched && uiState.items.isEmpty() && !uiState.isLoading -> {
                     item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 80.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = stringResource(R.string.discover_filter_empty),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                        EmptyStateCard(
+                            modifier = Modifier.fillMaxWidth().padding(top = 80.dp),
+                            isDark = isAppDarkTheme(),
+                            icon = Icons.Rounded.Star,
+                            title = stringResource(R.string.discover_filter_empty)
+                        )
                     }
                 }
                 else -> {
@@ -279,18 +292,18 @@ fun DiscoverFilterScreen(
                             }
                         )
                     }
-                    // 加载更多指示器
-                    if (uiState.isLoadingMore) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                            }
-                        }
+                    // 统一的触底反馈区，保持固定高度避免列表跳动
+                    item(key = "load_more_footer") {
+                        LoadMoreFooter(
+                            state = when {
+                                uiState.isLoadingMore -> LoadMoreFooterState.Loading
+                                uiState.error != null && uiState.items.isNotEmpty() -> LoadMoreFooterState.Error
+                                uiState.hasSearched && uiState.items.isNotEmpty() && uiState.currentPage >= uiState.totalPages -> LoadMoreFooterState.Complete
+                                else -> LoadMoreFooterState.Hidden
+                            },
+                            onRetry = viewModel::loadMore,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                     // 翻页失败：已有结果还在，底部给一条可重试的错误条，不清空列表
                     if (uiState.error != null && !uiState.isLoadingMore) {
