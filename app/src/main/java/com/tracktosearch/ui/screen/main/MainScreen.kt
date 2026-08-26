@@ -206,7 +206,7 @@ fun MainScreen(
     onListClick: (listId: Int, listName: String) -> Unit = { _, _ -> },
     onLogout: () -> Unit,
     onHelpClick: () -> Unit,
-    onRestartOnboarding: () -> Unit,
+    onOpenSourceClick: () -> Unit,
     onFilterDiscoverClick: () -> Unit = {},
     onDoubanResync: () -> Unit = {},
     onNavigateToDoubanLogin: () -> Unit = {},
@@ -729,7 +729,7 @@ fun MainScreen(
                         // 传入 Trakt 连接态(独立于综合 isLoggedIn),供 AccountItem 精确判断 Trakt 行
                         isTraktConnected = isTraktConnected,
                         onHelpClick = onHelpClick,
-                        onRestartOnboarding = onRestartOnboarding,
+                        onOpenSourceClick = onOpenSourceClick,
                         onDoubanResync = {
                             // 触发同步后切换到 Watchlist tab，让用户通过横幅查看进度
                             // 同时启动前台 Service 进入后台模式（通知栏显示进度）

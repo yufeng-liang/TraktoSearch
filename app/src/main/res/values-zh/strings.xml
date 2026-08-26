@@ -694,7 +694,6 @@
     <string name="help_consistency_act_trakt_wish">Trakt 标记想看</string>
     <string name="help_consistency_act_douban_watched">豆瓣标记已看</string>
     <string name="help_consistency_act_douban_wish">豆瓣标记想看</string>
-    <string name="settings_restart_onboarding">新手引导</string>
     <string name="onboarding_skip">跳过</string>
     <string name="onboarding_next">下一步</string>
     <string name="onboarding_done">知道了</string>
@@ -1731,7 +1730,6 @@
     <string name="filter_region_tw">中国台湾</string>
     <string name="settings_logout_confirm_impact">退出后想看/已看与评分将停止同步，需要重新登录才能继续；本地已缓存的数据会保留。</string>
     <string name="settings_notification_requires_trakt">需要连接 Trakt 账号才能使用，通知基于 Trakt 想看列表推送。</string>
-    <string name="settings_restart_onboarding_subtitle">重新播放四步功能引导，不会删除任何数据</string>
     <string name="settings_custom_section_subtitle_discover">选择发现页显示哪些榜单及顺序</string>
     <string name="settings_custom_section_subtitle_detail">选择详情页显示哪些区块及顺序</string>
     <string name="settings_developer_section">开发者选项</string>

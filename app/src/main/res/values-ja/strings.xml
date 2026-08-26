@@ -927,7 +927,6 @@
     <string name="help_consistency_act_trakt_wish">Traktで見たいをマーク</string>
     <string name="help_consistency_act_douban_watched">豆瓣で見たをマーク</string>
     <string name="help_consistency_act_douban_wish">豆瓣で見たいをマーク</string>
-    <string name="settings_restart_onboarding">チュートリアル</string>
     <string name="onboarding_skip">スキップ</string>
     <string name="onboarding_next">次へ</string>
     <string name="onboarding_done">了解</string>
@@ -1743,7 +1742,6 @@
     <string name="filter_region_tw">中国台湾</string>
     <string name="settings_logout_confirm_impact">ログアウトすると見たい/視聴済みと評価の同期が止まり、再ログインするまで再開しません。ローカルのキャッシュは保持されます。</string>
     <string name="settings_notification_requires_trakt">Trakt アカウントの接続が必要です。通知は Trakt の見たいリストを基に配信されます。</string>
-    <string name="settings_restart_onboarding_subtitle">4 ステップの機能ガイドを再生します。データは削除されません</string>
     <string name="settings_custom_section_subtitle_discover">見つけるページに表示するランキングと並び順を選びます</string>
     <string name="settings_custom_section_subtitle_detail">詳細ページに表示するブロックと並び順を選びます</string>
     <string name="settings_developer_section">開発者向けオプション</string>

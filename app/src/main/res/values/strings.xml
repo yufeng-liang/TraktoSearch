@@ -694,7 +694,6 @@ Config:
     <string name="help_consistency_act_trakt_wish">Trakt mark wishlist</string>
     <string name="help_consistency_act_douban_watched">Douban mark watched</string>
     <string name="help_consistency_act_douban_wish">Douban mark wishlist</string>
-    <string name="settings_restart_onboarding">Tutorial</string>
     <string name="onboarding_skip">Skip</string>
     <string name="onboarding_next">Next</string>
     <string name="onboarding_done">Got it</string>
@@ -1730,7 +1729,6 @@ Config:
     <string name="filter_region_tw">Taiwan, China</string>
     <string name="settings_logout_confirm_impact">Watchlist, watched history and ratings stop syncing until you sign in again. Locally cached data is kept.</string>
     <string name="settings_notification_requires_trakt">Connect a Trakt account to use reminders — they are pushed from your Trakt watchlist.</string>
-    <string name="settings_restart_onboarding_subtitle">Replay the 4-step tour; nothing is deleted</string>
     <string name="settings_custom_section_subtitle_discover">Pick which lists show up on Discover and their order</string>
     <string name="settings_custom_section_subtitle_detail">Pick which blocks show up on a title page and their order</string>
     <string name="settings_developer_section">Developer options</string>

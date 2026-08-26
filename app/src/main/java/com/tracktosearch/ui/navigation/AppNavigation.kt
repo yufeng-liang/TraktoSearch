@@ -96,6 +96,7 @@ import com.tracktosearch.ui.screen.searchsource.SearchSourcesViewModel
 import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
 import com.tracktosearch.ui.screen.help.HelpScreen
 import com.tracktosearch.ui.screen.help.HelpSections
+import com.tracktosearch.ui.screen.opensource.OpenSourceScreen
 import com.tracktosearch.ui.screen.listdetail.TraktListDetailScreen
 import com.tracktosearch.ui.screen.login.ActivationLoginScreen
 import com.tracktosearch.ui.screen.main.ConnectivityObserverEntryPoint
@@ -159,6 +160,7 @@ object Routes {
     const val TRAKT_SEARCH = "traktSearch/{type}/{query}"
     // section 是可选参数：不带参数导航用 helpRoute()，功能页跳对应段用 helpRoute(HelpSections.X)
     const val HELP = "help?section={section}"
+    const val OPEN_SOURCE = "openSource"
     const val LIST_DETAIL = "listDetail/{listId}/{listName}"
     const val DISCOVER_FILTER = "discoverFilter"
     const val DOUBAN_LOGIN = "doubanLogin"
@@ -844,11 +846,8 @@ fun AppNavigation(
                             onHelpClick = {
                                 navController.navigate(Routes.helpRoute())
                             },
-                            onRestartOnboarding = {
-                                // 重置引导标记，重新显示新手引导
-                                scope.launch {
-                                    OnboardingStorage(context).setCompleted(false)
-                                }
+                            onOpenSourceClick = {
+                                navController.navigate(Routes.OPEN_SOURCE)
                             },
                             onFilterDiscoverClick = {
                                 navController.navigate(Routes.DISCOVER_FILTER)
@@ -1123,6 +1122,14 @@ fun AppNavigation(
                         HelpScreen(
                             onBack = { navController.popBackStack() },
                             initialSection = backStackEntry.arguments?.getString("section")
+                        )
+                    }
+                }
+
+                composable(Routes.OPEN_SOURCE) {
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        OpenSourceScreen(
+                            onBack = { navController.popBackStack() }
                         )
                     }
                 }
