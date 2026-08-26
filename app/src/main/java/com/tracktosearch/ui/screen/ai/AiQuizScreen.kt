@@ -279,12 +279,24 @@ private fun QuizPreviewScreen(
             )
         }
         item {
-            Button(
-                onClick = onStart,
-                enabled = movies.size == 7 && !isLoading,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(stringResource(R.string.ai_quiz_start))
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                // 已看不足 7 部时开始按钮禁用，得说明原因而不是留一个死按钮
+                if (movies.size < 7) {
+                    Text(
+                        text = stringResource(R.string.ai_quiz_need_more_movies),
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Button(
+                    onClick = onStart,
+                    enabled = movies.size == 7 && !isLoading,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.ai_quiz_start))
+                }
             }
         }
     }

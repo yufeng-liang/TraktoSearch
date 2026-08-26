@@ -1553,6 +1553,7 @@
     <string name="ai_taste_details">打开详情</string>
     <string name="ai_quiz_spoiler">本轮会涉及：%1$s，包含剧透</string>
     <string name="ai_quiz_start">开始本轮闯关</string>
+    <string name="ai_quiz_need_more_movies">开始闯关至少需要 7 部已看影视</string>
     <string name="ai_quiz_preview_title">先挑选本轮影视</string>
     <string name="ai_quiz_preview_count">本轮会从 %1$d 部已看影视出题</string>
     <string name="ai_quiz_replace">换一部</string>
@@ -1569,6 +1570,7 @@
     <string name="ai_feature_back">返回</string>
     <string name="ai_feature_refresh">刷新</string>
     <string name="ai_feature_loading">精灵正在想办法</string>
+    <string name="ai_feature_cancel">取消</string>
     <string name="ai_feature_nickname">你的昵称，让我来解读</string>
     <string name="ai_feature_meaning">昵称的寓意</string>
     <string name="ai_feature_comment">精灵的小评断</string>
@@ -1577,6 +1579,7 @@
     <string name="ai_taste_highlights">我看到的亮点</string>
     <string name="ai_taste_no_detail">这部暂时没有详情页</string>
     <string name="ai_taste_no_recommendations">暂时没有带直接详情的推荐</string>
+    <string name="ai_taste_fallback_reason">与你爱看的%1$s一脉相承</string>
     <string name="ai_daily_fact">冷知识事实</string>
     <string name="ai_daily_explanation">为什么有意思</string>
     <string name="ai_daily_source_format">来源：%1$s</string>
@@ -1617,6 +1620,7 @@
     <string name="ai_sprite_activate_disabled_exhausted">本角色的语音和文字激活次数都已用完，换一个角色再试</string>
     <string name="ai_sprite_greeting_expand">查看完整解读</string>
     <string name="ai_quota_short">今日 %1$d/%2$d</string>
+    <string name="ai_quota_full">今日 %1$d/%2$d · 本会话 %3$d/%4$d</string>
     <string name="ai_quiz_answered_count">已答 %1$d/%2$d</string>
     <string name="ai_quiz_unanswered_title">还有题没答</string>
     <string name="ai_quiz_unanswered_message">还有 %1$d 题未作答，未作答不得分。仍然提交吗？</string>
@@ -1629,7 +1633,7 @@
     <string name="help_ai_sprite_b1">点搜索页标题栏的精灵按钮进入精灵中心；云朵保留短按彩蛋和长按快捷方式</string>
     <string name="help_ai_sprite_b2">选好角色后喊一次名字激活，激活后不会持续监听；语音最多试 5 次，失败或麦克风不可用时可改用文字输入角色名激活</string>
     <string name="help_ai_sprite_b3">AI 会使用授权账号中的昵称和你的已看历史</string>
-    <string name="help_ai_sprite_b4">目前有昵称欢迎、看单锐评、影视闯关和每日冷知识四项能力</string>
+    <string name="help_ai_sprite_b4">目前有昵称欢迎、看单锐评、影视闯关和每日冷知识四项能力（闯关需至少 7 部已看影视）</string>
     <string name="help_ai_sprite_b5">AI 请求有每日配额，功能页右上角刷新会再消耗一次；离线时不能发起新请求，但已缓存内容仍可查看</string>
     <string name="help_ai_sprite_b6">V1 使用角色与场景的音色设计提示词；试听失败时回退到系统语音</string>
     <string name="help_ai_sprite_b7">闯关中途返回会保留作答；重新抽题前会二次确认，还有题没答就提交也会先提醒</string>

@@ -448,9 +448,9 @@ class AiUiLogicTest {
 
     @Test
     fun recommendationDetailsIncludeDoubanAndImdbOnlyItems() {
-        val doubanOnly = AiRecommendation("db-1", "movie", "豆瓣片", null, null, null, null, null, "db-1", "")
-        val imdbOnly = AiRecommendation("tt-1", "show", "IMDb剧", null, null, null, null, "tt-1", null, "")
-        val noId = AiRecommendation("title", "movie", "无 ID", null, null, null, null, null, null, "")
+        val doubanOnly = AiRecommendation("db-1", "movie", "豆瓣片", null, null, null, null, null, null, "db-1", "")
+        val imdbOnly = AiRecommendation("tt-1", "show", "IMDb剧", null, null, null, null, null, "tt-1", null, "")
+        val noId = AiRecommendation("title", "movie", "无 ID", null, null, null, null, null, null, null, "")
 
         assertThat(recommendationHasDetailRoute(doubanOnly)).isTrue()
         assertThat(recommendationHasDetailRoute(imdbOnly)).isTrue()

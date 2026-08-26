@@ -521,6 +521,19 @@ class AiSpriteViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 取消当前进行中的 AI 请求（加载浮条上的「取消」按钮入口）。
+     *
+     * 请求已由 [requestJob] 管理：这里换请求代际并取消 Job，被取消协程的
+     * CancellationException 走静默路径——不写 errorCode、不弹错误，
+     * 再显式复位 isLoading/loadingFeature 收起浮条。与答题中「刷新=放弃」
+     * 的二次确认互不影响：取消不动 quiz/quizAnswers 状态。
+     */
+    fun cancelActiveFeatureRequest() {
+        beginRequest()
+        _uiState.update { it.copy(isLoading = false, loadingFeature = null) }
+    }
+
     fun setQuizAnswer(questionId: String, optionIds: List<String>, textAnswer: String? = null) {
         _uiState.update { state ->
             state.copy(

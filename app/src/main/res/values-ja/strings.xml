@@ -1566,6 +1566,7 @@
     <string name="ai_taste_details">詳細を開く</string>
     <string name="ai_quiz_spoiler">対象作品：%1$s（ネタバレあり）</string>
     <string name="ai_quiz_start">ラウンドを開始</string>
+    <string name="ai_quiz_need_more_movies">クイズを始めるには視聴済みが 7 本以上必要です</string>
     <string name="ai_quiz_preview_title">今回の作品を選ぶ</string>
     <string name="ai_quiz_preview_count">視聴済みの%1$d作品から今回の問題を出します</string>
     <string name="ai_quiz_replace">入れ替え</string>
@@ -1582,6 +1583,7 @@
     <string name="ai_feature_back">戻る</string>
     <string name="ai_feature_refresh">更新</string>
     <string name="ai_feature_loading">スプライトが考え中</string>
+    <string name="ai_feature_cancel">キャンセル</string>
     <string name="ai_feature_nickname">ニックネームを解読</string>
     <string name="ai_feature_meaning">ニックネームの意味</string>
     <string name="ai_feature_comment">スプライトのひとこと</string>
@@ -1590,6 +1592,7 @@
     <string name="ai_taste_highlights">見えてきたこと</string>
     <string name="ai_taste_no_detail">この作品の詳細ページはまだありません</string>
     <string name="ai_taste_no_recommendations">詳細にリンクできる作品はまだありません</string>
+    <string name="ai_taste_fallback_reason">よく観ている%1$sと系譜がつながる作品</string>
     <string name="ai_daily_fact">豆知識</string>
     <string name="ai_daily_explanation">なぜ面白い？</string>
     <string name="ai_daily_source_format">出典：%1$s</string>
@@ -1630,6 +1633,7 @@
     <string name="ai_sprite_activate_disabled_exhausted">音声と文字の起動回数をどちらも使い切りました。別のキャラクターをお試しください</string>
     <string name="ai_sprite_greeting_expand">解読の全文を見る</string>
     <string name="ai_quota_short">本日 %1$d/%2$d</string>
+    <string name="ai_quota_full">本日 %1$d/%2$d · セッション %3$d/%4$d</string>
     <string name="ai_quiz_answered_count">回答済み %1$d/%2$d</string>
     <string name="ai_quiz_unanswered_title">未回答の問題があります</string>
     <string name="ai_quiz_unanswered_message">%1$d 問が未回答で 0 点になります。それでも提出しますか？</string>
@@ -1642,7 +1646,7 @@
     <string name="help_ai_sprite_b1">検索ページのヘッダーのスプライトボタンからスプライトセンターを開きます。雲は従来の短タップのイースターエッグと長押しのショートカットを維持します</string>
     <string name="help_ai_sprite_b2">キャラクター名を一度呼んで起動します。起動後は常時聞き取りません。音声は最大 5 回まで試せ、失敗やマイク不可のときは文字入力でも起動できます</string>
     <string name="help_ai_sprite_b3">認証済みアカウントのニックネームと視聴履歴を利用します</string>
-    <string name="help_ai_sprite_b4">ニックネーム歓迎、視聴リスト批評、映画クイズ、毎日の豆知識を利用できます</string>
+    <string name="help_ai_sprite_b4">ニックネーム歓迎、視聴リスト批評、映画クイズ、毎日の豆知識を利用できます（クイズには視聴済み 7 本以上が必要です）</string>
     <string name="help_ai_sprite_b5">AI には日次上限があり、機能ページの更新ボタンでもう 1 回消費します。オフラインでは新規リクエストはできませんが、キャッシュは読めます</string>
     <string name="help_ai_sprite_b6">V1 はキャラクターとシーンの音声設計プロンプトを使い、試聴に失敗した場合はシステム音声に戻ります</string>
     <string name="help_ai_sprite_b7">クイズを途中で離れても回答は保持されます。引き直す前に確認し、未回答のまま提出する場合も警告します</string>

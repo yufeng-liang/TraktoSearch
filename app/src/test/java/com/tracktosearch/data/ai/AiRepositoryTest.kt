@@ -1,6 +1,8 @@
 package com.tracktosearch.data.ai
 
+import android.content.Context
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.data.repository.TmdbRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -16,6 +18,16 @@ import retrofit2.Response
 import java.security.MessageDigest
 
 class AiRepositoryTest {
+
+    /** 核验/补齐链路依赖 TmdbRepository 与 Context，测试里一律 relaxed mock 静默兜底。 */
+    private fun buildAiRepository(api: AiApiService, storage: AiStorage): AiRepository = AiRepository(
+        api,
+        storage,
+        Json { ignoreUnknownKeys = true },
+        mockk<TmdbRepository>(relaxed = true),
+        mockk<Context>(relaxed = true)
+    )
+
 
     @Test
     fun activationNameNormalizer_acceptsTraditionalAndPinyinLikeInput() {
@@ -66,7 +78,7 @@ class AiRepositoryTest {
                 data = null
             )
         )
-        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+        val repository = buildAiRepository(api, storage)
 
         val result = repository.getGreeting("friend-a", "usagi", forceRefresh = true)
 
@@ -85,7 +97,7 @@ class AiRepositoryTest {
             """{"code":"AI_DAILY_QUOTA_EXCEEDED","message":"Daily AI quota exceeded"}"""
                 .toResponseBody("application/json".toMediaType())
         )
-        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+        val repository = buildAiRepository(api, storage)
 
         val result = repository.getGreeting("friend-a", "usagi", forceRefresh = true)
 
@@ -107,7 +119,7 @@ class AiRepositoryTest {
             """{"code":"AI_SESSION_QUOTA_EXCEEDED","message":"Session quota exceeded"}"""
                 .toResponseBody("application/json".toMediaType())
         )
-        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+        val repository = buildAiRepository(api, storage)
 
         val result = repository.getGreeting("friend-a", "usagi", forceRefresh = true)
 
@@ -126,7 +138,7 @@ class AiRepositoryTest {
         coEvery { storage.write(any(), any(), any(), any()) } coAnswers {
             suffixes += arg<String?>(3)
         }
-        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+        val repository = buildAiRepository(api, storage)
         val request = AiQuizRequest(
             watched = listOf(AiWatchedTitleDto(mediaId = "tmdb:1", mediaType = "movie", title = "A")),
             sessionId = "sprite-session",
@@ -190,7 +202,7 @@ class AiRepositoryTest {
                 quota = expectedQuota,
             )
         )
-        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+        val repository = buildAiRepository(api, storage)
 
         val greeting = repository.getGreeting("friend-a", "usagi", forceRefresh = true).getOrThrow()
 
@@ -216,7 +228,7 @@ class AiRepositoryTest {
             AiApiResponse(code = "SUCCESS", data = AiTasteDto())
         )
         val suffix = slot<String?>()
-        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+        val repository = buildAiRepository(api, storage)
 
         repository.getTaste(
             "friend-a",
@@ -229,7 +241,8 @@ class AiRepositoryTest {
         }
         val canonical = Json { encodeDefaults = true }
             .encodeToString(ListSerializerHolder.serializer, listOf(watched))
-        assertThat(suffix.captured).isEqualTo(canonical.sha256HexForTest())
+        // v2 起缓存 key 带 "v2|" 前缀做结构版本隔离（旧结构缓存不命中）
+        assertThat(suffix.captured).isEqualTo("v2|${canonical.sha256HexForTest()}")
     }
 
     @Test
@@ -240,7 +253,7 @@ class AiRepositoryTest {
             AiApiResponse(code = "SUCCESS", data = AiDailyKnowledgeDto(id = "daily-1"))
         )
         val suffix = slot<String?>()
-        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+        val repository = buildAiRepository(api, storage)
 
         repository.getDailyKnowledge("friend-a", forceRefresh = true).getOrThrow()
 
@@ -266,7 +279,7 @@ class AiRepositoryTest {
             AiApiResponse(code = "SUCCESS", data = AiGreetingDto(greeting = "到"))
         )
         val request = slot<AiGreetingRequest>()
-        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+        val repository = buildAiRepository(api, storage)
 
         repository.activate("friend-a", activationRequest).getOrThrow()
         repository.getGreeting("friend-a", "usagi", forceRefresh = true).getOrThrow()
@@ -286,7 +299,7 @@ class AiRepositoryTest {
             AiApiResponse(code = "SUCCESS", data = AiQuizResultDto(quizId = "quiz-1"))
         )
         val request = slot<AiSubmitQuizRequest>()
-        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+        val repository = buildAiRepository(api, storage)
 
         repository.activate(
             "friend-a",
@@ -309,7 +322,7 @@ class AiRepositoryTest {
                 data = AiAudioDto(audioDataUrl = "data:audio/wav;base64,AA==")
             )
         )
-        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+        val repository = buildAiRepository(api, storage)
 
         val audio = repository.playGuestTts(AiTtsRequest("usagi", "到！")).getOrThrow()
 
@@ -333,7 +346,7 @@ class AiRepositoryTest {
         coEvery { storage.write(any(), any(), any(), any()) } coAnswers {
             suffixes += arg<String?>(3)
         }
-        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+        val repository = buildAiRepository(api, storage)
 
         repository.playTts(
             "friend-a",
@@ -377,7 +390,7 @@ class AiRepositoryTest {
                 ),
             )
         )
-        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+        val repository = buildAiRepository(api, storage)
 
         val audio = repository.playTts(
             "friend-a",
@@ -423,7 +436,7 @@ class AiRepositoryTest {
                 ),
             )
         )
-        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+        val repository = buildAiRepository(api, storage)
 
         val greeting = repository.getGreeting("friend-a", "usagi").getOrThrow()
 
@@ -457,7 +470,7 @@ class AiRepositoryTest {
         coEvery { api.submitQuiz(any()) } returns Response.success(
             AiApiResponse(code = "SUCCESS", data = dto, quota = expectedQuota)
         )
-        val repository = AiRepository(api, storage, Json { ignoreUnknownKeys = true })
+        val repository = buildAiRepository(api, storage)
 
         val result = repository.submitQuiz("friend-a", "quiz-1", emptyList()).getOrThrow()
 

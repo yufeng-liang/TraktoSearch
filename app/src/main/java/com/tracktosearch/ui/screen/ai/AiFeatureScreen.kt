@@ -1,5 +1,7 @@
 package com.tracktosearch.ui.screen.ai
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -55,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -65,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
 import com.tracktosearch.R
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.data.ai.AiAudio
@@ -135,12 +139,19 @@ fun AiFeatureScreen(
                     }
                 },
                 actions = {
-                    // 刷新是最主要的配额消耗入口，把今日用量摆在按钮旁边
+                    // 刷新是最主要的配额消耗入口，把当日+本会话用量摆在按钮旁边
                     state.quota?.let { quota ->
                         Text(
-                            text = stringResource(R.string.ai_quota_short, quota.dailyUsed, quota.dailyLimit),
+                            text = stringResource(
+                                R.string.ai_quota_full,
+                                quota.dailyUsed,
+                                quota.dailyLimit,
+                                quota.sessionUsed,
+                                quota.sessionLimit
+                            ),
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
                         )
                     }
                     IconButton(
@@ -202,6 +213,17 @@ fun AiFeatureScreen(
                         ) {
                             CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                             Text(stringResource(R.string.ai_feature_loading), style = MaterialTheme.typography.labelMedium)
+                            // LLM 生成耗时不定，允许中途放弃：取消是静默操作，不弹错误不打扰
+                            TextButton(
+                                onClick = viewModel::cancelActiveFeatureRequest,
+                                modifier = Modifier.height(24.dp),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.ai_feature_cancel),
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
                         }
                     }
                 }
@@ -293,20 +315,28 @@ private fun GreetingFeature(greeting: AiGreeting?, onPlayAudio: (AiAudio) -> Uni
                         )
                     }
                     Spacer(Modifier.height(14.dp))
-                    Text(greeting.greeting, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                    TypewriterText(
+                        text = greeting.greeting,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold
+                    )
                 }
             }
         }
         item {
             MeaningSection(
                 title = stringResource(R.string.ai_feature_meaning),
-                text = greeting.nicknameMeaning
+                text = greeting.nicknameMeaning,
+                reveal = AiTextReveal.FADE_IN,
+                revealDelayMillis = 150L
             )
         }
         item {
             MeaningSection(
                 title = stringResource(R.string.ai_feature_comment),
-                text = greeting.comment
+                text = greeting.comment,
+                reveal = AiTextReveal.FADE_IN,
+                revealDelayMillis = 400L
             )
         }
         item {
@@ -334,7 +364,12 @@ private fun GreetingFeature(greeting: AiGreeting?, onPlayAudio: (AiAudio) -> Uni
 }
 
 @Composable
-private fun MeaningSection(title: String, text: String) {
+private fun MeaningSection(
+    title: String,
+    text: String,
+    reveal: AiTextReveal = AiTextReveal.NONE,
+    revealDelayMillis: Long = 0L
+) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
@@ -343,7 +378,15 @@ private fun MeaningSection(title: String, text: String) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(6.dp))
-            Text(text, style = MaterialTheme.typography.bodyLarge)
+            when (reveal) {
+                AiTextReveal.TYPEWRITER -> TypewriterText(text = text, style = MaterialTheme.typography.bodyLarge)
+                AiTextReveal.FADE_IN -> FadeInText(
+                    text = text,
+                    style = MaterialTheme.typography.bodyLarge,
+                    delayMillis = revealDelayMillis
+                )
+                AiTextReveal.NONE -> Text(text, style = MaterialTheme.typography.bodyLarge)
+            }
         }
     }
 }
@@ -381,7 +424,7 @@ private fun TasteFeature(
                 Column(modifier = Modifier.padding(18.dp)) {
                     Text(stringResource(R.string.ai_taste_roast), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onTertiaryContainer)
                     Spacer(Modifier.height(8.dp))
-                    Text(taste.roast, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                    TypewriterText(text = taste.roast, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -454,12 +497,29 @@ private fun TasteFeature(
 private fun RecommendationCard(recommendation: AiRecommendation, onOpen: () -> Unit) {
     val hasMediaId = recommendationHasDetailRoute(recommendation)
     val mediaIcon = if (recommendation.mediaType.lowercase() == "show") Icons.Rounded.LiveTv else Icons.Rounded.Movie
+    // 核验/补齐回填的是 TMDB poster_path，按项目约定拼完整 URL；服务端直发的 posterUrl 优先
+    val posterUrl = recommendation.posterUrl?.takeIf { it.isNotBlank() }
+        ?: recommendation.posterPath?.takeIf { it.isNotBlank() }?.let { TmdbImageUrls.build(it) }
+    // 与 FadeInText 同款简单渐入：淡入 + 轻微上移，返回本页不重播
+    var shown by remember { mutableStateOf(false) }
+    val revealProgress by animateFloatAsState(
+        targetValue = if (shown) 1f else 0f,
+        animationSpec = tween(durationMillis = 350),
+        label = "recommendation_card_reveal"
+    )
+    LaunchedEffect(recommendation.id) {
+        shown = true
+    }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .graphicsLayer {
+                alpha = revealProgress
+                translationY = (1f - revealProgress) * 6.dp.toPx()
+            }
+            .clip(RoundedCornerShape(13.dp))
             .then(if (hasMediaId) Modifier.clickable(onClick = onOpen) else Modifier),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(13.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
         tonalElevation = 1.dp
     ) {
@@ -475,11 +535,11 @@ private fun RecommendationCard(recommendation: AiRecommendation, onOpen: () -> U
                     .background(MaterialTheme.colorScheme.secondaryContainer),
                 contentAlignment = Alignment.Center
             ) {
-                if (recommendation.posterUrl.isNullOrBlank()) {
+                if (posterUrl == null) {
                     Icon(mediaIcon, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
                 } else {
                     AsyncImage(
-                        model = recommendation.posterUrl,
+                        model = posterUrl,
                         contentDescription = recommendation.title,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
@@ -488,7 +548,7 @@ private fun RecommendationCard(recommendation: AiRecommendation, onOpen: () -> U
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(recommendation.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                recommendation.year?.let { Text(it.toString(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                recommendation.year?.let { Text("(${it})", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 Text(recommendation.reason, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 // 不可点的卡片要说明原因，否则用户以为卡片坏了一直戳
                 if (!hasMediaId) {
@@ -530,8 +590,21 @@ private fun DailyFeature(daily: AiDailyKnowledge?) {
                 }
             }
         }
-        item { MeaningSection(title = stringResource(R.string.ai_daily_fact), text = daily.fact) }
-        item { MeaningSection(title = stringResource(R.string.ai_daily_explanation), text = daily.explanation) }
+        item {
+            MeaningSection(
+                title = stringResource(R.string.ai_daily_fact),
+                text = daily.fact,
+                reveal = AiTextReveal.TYPEWRITER
+            )
+        }
+        item {
+            MeaningSection(
+                title = stringResource(R.string.ai_daily_explanation),
+                text = daily.explanation,
+                reveal = AiTextReveal.FADE_IN,
+                revealDelayMillis = 150L
+            )
+        }
         if (!daily.characterLine.isNullOrBlank()) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {

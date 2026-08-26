@@ -1566,6 +1566,7 @@
     <string name="ai_taste_details">상세 열기</string>
     <string name="ai_quiz_spoiler">이번 라운드: %1$s (스포일러 포함)</string>
     <string name="ai_quiz_start">라운드 시작</string>
+    <string name="ai_quiz_need_more_movies">퀴즈를 시작하려면 시청 완료 7편 이상이 필요합니다</string>
     <string name="ai_quiz_preview_title">이번 라운드 작품 고르기</string>
     <string name="ai_quiz_preview_count">이번 라운드는 본 영화 %1$d편에서 출제됩니다</string>
     <string name="ai_quiz_replace">바꾸기</string>
@@ -1582,6 +1583,7 @@
     <string name="ai_feature_back">뒤로</string>
     <string name="ai_feature_refresh">새로고침</string>
     <string name="ai_feature_loading">스프라이트가 생각 중입니다</string>
+    <string name="ai_feature_cancel">취소</string>
     <string name="ai_feature_nickname">닉네임을 해석해 볼까요</string>
     <string name="ai_feature_meaning">닉네임의 의미</string>
     <string name="ai_feature_comment">스프라이트의 한마디</string>
@@ -1590,6 +1592,7 @@
     <string name="ai_taste_highlights">눈에 띈 점</string>
     <string name="ai_taste_no_detail">이 작품은 아직 상세 페이지가 없습니다</string>
     <string name="ai_taste_no_recommendations">상세 페이지로 연결되는 추천이 아직 없습니다</string>
+    <string name="ai_taste_fallback_reason">즐겨 본 %1$s와 결이 닿는 작품</string>
     <string name="ai_daily_fact">알쓸 영화 상식</string>
     <string name="ai_daily_explanation">왜 흥미로울까요?</string>
     <string name="ai_daily_source_format">출처: %1$s</string>
@@ -1630,6 +1633,7 @@
     <string name="ai_sprite_activate_disabled_exhausted">음성과 텍스트 활성화 횟수를 모두 썼습니다. 다른 캐릭터를 써 보세요</string>
     <string name="ai_sprite_greeting_expand">전체 해석 보기</string>
     <string name="ai_quota_short">오늘 %1$d/%2$d</string>
+    <string name="ai_quota_full">오늘 %1$d/%2$d · 이번 세션 %3$d/%4$d</string>
     <string name="ai_quiz_answered_count">답변 %1$d/%2$d</string>
     <string name="ai_quiz_unanswered_title">답하지 않은 문제가 있습니다</string>
     <string name="ai_quiz_unanswered_message">%1$d문항이 미답으로 0점 처리됩니다. 그래도 제출할까요?</string>
@@ -1642,7 +1646,7 @@
     <string name="help_ai_sprite_b1">검색 페이지 헤더의 스프라이트 버튼으로 스프라이트 센터를 엽니다. 구름은 기존의 짧게 누르기 이스터 에그와 길게 누르기 단축을 그대로 유지합니다</string>
     <string name="help_ai_sprite_b2">캐릭터 이름을 한 번 말해 활성화하며, 이후 계속 듣지 않습니다. 음성은 최대 5회까지 시도할 수 있고 실패하거나 마이크를 쓸 수 없으면 캐릭터 이름을 입력해 활성화할 수 있습니다</string>
     <string name="help_ai_sprite_b3">인증된 계정의 닉네임과 시청 기록을 사용합니다</string>
-    <string name="help_ai_sprite_b4">닉네임 인사, 시청 목록 평론, 영화 퀴즈와 매일 영화 상식을 제공합니다</string>
+    <string name="help_ai_sprite_b4">닉네임 인사, 시청 목록 평론, 영화 퀴즈와 매일 영화 상식을 제공합니다 (퀴즈는 시청 완료 7편 이상 필요)</string>
     <string name="help_ai_sprite_b5">AI에는 일일 한도가 있고 기능 페이지의 새로 고침이 한 번 더 소모합니다. 오프라인에서는 새 요청을 할 수 없지만 캐시된 내용은 볼 수 있습니다</string>
     <string name="help_ai_sprite_b6">V1은 캐릭터와 장면별 음성 설계 프롬프트를 사용하며, 미리듣기에 실패하면 시스템 음성으로 전환합니다</string>
     <string name="help_ai_sprite_b7">퀴즈를 도중에 나가도 답변은 유지되며, 다시 뽑기 전에 확인하고 미답 상태로 제출할 때도 알려 줍니다</string>

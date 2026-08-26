@@ -222,6 +222,9 @@ data class TmdbMultiSearchResult(
     val id: Int = 0,
     val title: String? = null,
     val name: String? = null,
+    // 原始标题：language=zh-CN 时 title/name 是中文译名，跨语言精确匹配须比对原始标题
+    val original_title: String? = null,
+    val original_name: String? = null,
     val overview: String = "",
     val poster_path: String? = null,
     val release_date: String? = null,

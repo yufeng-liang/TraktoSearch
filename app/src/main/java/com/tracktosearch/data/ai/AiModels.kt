@@ -139,11 +139,12 @@ data class AiRecommendationDto(
     val title: String,
     val year: Int? = null,
     val posterUrl: String? = null,
+    // TMDB 核验后本地填充的海报路径（"/xxx.jpg"），UI 层按项目约定拼完整 URL
+    val posterPath: String? = null,
     val tmdbId: Int? = null,
     val traktId: Int? = null,
     val imdbId: String? = null,
     val doubanId: String? = null,
-    val mediaIds: AiMediaIdsDto? = null,
     val reason: String = ""
 )
 
@@ -177,6 +178,7 @@ data class AiRecommendation(
     val title: String,
     val year: Int?,
     val posterUrl: String?,
+    val posterPath: String? = null,
     val tmdbId: Int?,
     val traktId: Int?,
     val imdbId: String?,
@@ -449,18 +451,17 @@ fun AiTasteDto.toDomain(outerQuota: AiQuotaDto? = null): AiTasteAnalysis {
         recommendations = recommendations.map { recommendation ->
             AiRecommendation(
                 id = recommendation.id.ifBlank {
-                    recommendation.mediaIds?.traktId
-                        ?: recommendation.mediaIds?.tmdbId?.toString()
-                        ?: recommendation.title
+                    recommendation.tmdbId?.toString() ?: recommendation.title
                 },
                 mediaType = recommendation.mediaType,
                 title = recommendation.title,
                 year = recommendation.year,
                 posterUrl = recommendation.posterUrl,
-                tmdbId = recommendation.tmdbId ?: recommendation.mediaIds?.tmdbId,
-                traktId = recommendation.traktId ?: recommendation.mediaIds?.traktId?.toIntOrNull(),
-                imdbId = recommendation.imdbId ?: recommendation.mediaIds?.imdbId,
-                doubanId = recommendation.doubanId ?: recommendation.mediaIds?.doubanId,
+                posterPath = recommendation.posterPath,
+                tmdbId = recommendation.tmdbId,
+                traktId = recommendation.traktId,
+                imdbId = recommendation.imdbId,
+                doubanId = recommendation.doubanId,
                 reason = recommendation.reason
             )
         },
