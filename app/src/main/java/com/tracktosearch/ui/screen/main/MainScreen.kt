@@ -495,6 +495,20 @@ fun MainScreen(
     // 每次组合换一个新 lambda 会让整棵子树失效。
     val ambientMotionActive = remember(ambientMotion) { { ambientMotion.active } }
 
+    // 切 Tab 的前几帧同时发生页面重排、玻璃 source 重录和导航栏水滴动画。
+    // 暂停整页 source 约 260ms，让切页先完成；导航栏在这段窗口退化为光晕采样，
+    // 避免 1440x3200 的离屏录制与切页首帧争用 RenderThread。
+    var isTabTransitionSettling by remember { mutableStateOf(false) }
+    LaunchedEffect(pagerState.currentPage) {
+        if (!isGlassMode) {
+            isTabTransitionSettling = false
+            return@LaunchedEffect
+        }
+        isTabTransitionSettling = true
+        delay(260L)
+        isTabTransitionSettling = false
+    }
+
     var backdropResampleTick by remember { mutableIntStateOf(0) }
     // 关键成本（从 kyant backdrop 2.0.0 的 LayerBackdropNode.draw 字节码确认）：该节点每次 draw
     // 会先 drawContent() 画到屏幕，再 recordLayer() 把同样的内容录进 GraphicsLayer，录制尺寸取
@@ -565,7 +579,7 @@ fun MainScreen(
                             // 读采样版本号/tick 让本节点 draw 失效也只为驱动 layerBackdrop 重录，
                             // 没有 layerBackdrop 时一并省掉。
                             .then(
-                                if (isGlassMode && !scrollMotion.active) {
+                                if (isGlassMode && !scrollMotion.active && !isTabTransitionSettling) {
                                     Modifier
                                         .drawWithContent {
                                             @Suppress("UNUSED_EXPRESSION") backdropResampleTick
@@ -794,7 +808,12 @@ fun MainScreen(
                     hazeState = hazeState,
                     // 与上面 layerBackdrop 的门控保持一致：BLUR 模式不录这一层，也就不该再传，
                     // 免得日后 blur 分支接上 backdropOverride 时读到一层没录过的空层。
-                    backdropOverride = if (isGlassMode) mainContentBackdrop else null,
+                    backdropOverride = when {
+                        !isGlassMode -> null
+                        isTabTransitionSettling && glowAsBackdrop -> glowBackdrop
+                        isTabTransitionSettling -> null
+                        else -> mainContentBackdrop
+                    },
                     exportedBackdrop = if (isGlassMode) navPanelBackdrop else null,
                     interactionSource = navPillDrag.interactionSource,
                     // 底部导航自身作为 zIndex=1 的 source，effect 只采样 zIndex=0 的页面内容，
