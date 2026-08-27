@@ -87,6 +87,7 @@ CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments
 ## 常见陷阱
 - Haze 2.0 HazeMaterials.* 默认从 MaterialTheme.colorScheme.surface 读填充色；主题新增专属 surface 会同步改全站 haze，先确认是否须与其他主题一致
 - Retrofit @GET("") 进 OkHttp 前因空 URL 失败，被评分层宽泛异常静默降级；网关 base URL 含 /api/omdb/ 时用 @GET(".")，用 MockWebServer 锁最终路径
+- Kotlin 块注释支持嵌套：KDoc 正文写 `/api/ai/*` 这类通配符路径时 `/*` 会开启嵌套注释，`*/` 只闭合内层，外层 `/**` 永不闭合，后半文件全被吞进注释产生几十条级联编译错误；注释正文避免出现 `/*` 序列（写"xxx 系列接口"替代）
 - Brainstorm Companion 预览依赖 URL 查询参数 ?key=；部分应用内浏览器重写链接丢 key 显等待页或 403。先 Invoke-WebRequest 验证带 key 地址；服务端正常而浏览器丢 key 改独立本地静态预览服务器，不反复重启同 Companion 会话
 - Android/Gradle 测试构建可能超默认工具超时但仍在跑；用较长单次超时，超时后先查 Gradle 进程、app/build/test-results、app/build/reports、APK 输出，再判成败；勿把工具 timeout 等同 Gradle 失败
 - AuthManager.initialize() 可能同时由 MainActivity 和 AuthCheckWorker 进入；刷新锁内须按调用方看到的旧 access token 二次检查，避串行等待后第二次刷新再轮换 refresh token
