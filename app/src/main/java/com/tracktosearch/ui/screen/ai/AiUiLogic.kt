@@ -330,6 +330,25 @@ fun selectQuizPreview(
     .shuffled(random)
     .take(7)
 
+/**
+ * 预览页「全部重抽」的新一批：尽量整批避开当前已展示的 7 部；
+ * 候选不够凑一整批全新的（已看恰好只有 7 部等）时退回全量随机，
+ * 此时可换候选也已用光，按钮会被禁用，走到这里只会原样返回。
+ */
+fun redrawQuizPreview(
+    current: List<AiWatchedTitleDto>,
+    candidates: List<AiWatchedTitleDto>,
+    random: Random = Random.Default
+): List<AiWatchedTitleDto> {
+    val currentKeys = current.map { it.key() }.toSet()
+    val fresh = candidates.distinctBy { it.key() }.filterNot { it.key() in currentKeys }
+    return if (fresh.size >= current.size) {
+        fresh.shuffled(random).take(current.size)
+    } else {
+        selectQuizPreview(candidates, random)
+    }
+}
+
 fun replaceQuizPreview(
     current: List<AiWatchedTitleDto>,
     candidates: List<AiWatchedTitleDto>,

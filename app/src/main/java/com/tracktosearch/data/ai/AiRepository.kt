@@ -385,6 +385,28 @@ class AiRepository @Inject constructor(
         )
     )
 
+    /**
+     * 出分页难度反馈（POST /api/ai/quiz/feedback）。
+     *
+     * 一次性调用，不走 cachedRequest；失败完全静默——反馈是锦上添花，
+     * 网络/解析/服务端任何异常都按成功处理，绝不打扰用户。
+     * 鉴权由 AiApiService 的 AuthInterceptor 统一注入，与其他 /api/ai 系列接口一致。
+     */
+    suspend fun submitQuizDifficulty(
+        quizId: String,
+        difficulty: AiQuizDifficulty
+    ): Result<Unit> = try {
+        api.submitQuizFeedback(
+            AiQuizFeedbackRequest(quizId = quizId, difficulty = difficulty.wireValue)
+        ).requirePayload()
+        Result.success(Unit)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        // 吞掉一切失败：反馈发不出去也不影响用户离开出分页
+        Result.success(Unit)
+    }
+
     suspend fun getDailyKnowledge(
         friendId: String,
         forceRefresh: Boolean = false

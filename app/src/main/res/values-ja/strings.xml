@@ -1638,6 +1638,17 @@
     <string name="ai_quiz_unanswered_message">%1$d 問が未回答で 0 点になります。それでも提出しますか？</string>
     <string name="ai_quiz_submit_anyway">このまま提出</string>
     <string name="ai_quiz_replace_exhausted">交換できる作品がもうありません</string>
+    <string name="ai_quiz_redraw_all">すべて引き直す</string>
+    <string name="ai_quiz_accuracy">正答率 %1$d%%</string>
+    <string name="ai_quiz_comment_perfect">満点宣言！あなたは歩く映画事典</string>
+    <string name="ai_quiz_comment_great">なかなかすごい、精霊も拍手しています</string>
+    <string name="ai_quiz_comment_potential">伸びしろ十分、あと数本でマスター</string>
+    <string name="ai_quiz_comment_gentle">ゆっくりでOK、精霊と一緒に鑑賞しよう</string>
+    <string name="ai_quiz_feedback_title">このラウンドの難易度は？</string>
+    <string name="ai_quiz_feedback_easy">かんたすぎた</string>
+    <string name="ai_quiz_feedback_just_right">ちょうどよかった</string>
+    <string name="ai_quiz_feedback_hard">むずかしすぎた</string>
+    <string name="ai_quiz_feedback_done">ありがとう、次は難易度を調整するね</string>
     <string name="ai_quiz_refresh_title">今回のクイズをやめますか？</string>
     <string name="ai_quiz_refresh_message">引き直すと今回の回答（%1$d 問）が消えます。</string>
     <string name="ai_quiz_refresh_confirm">引き直す</string>
@@ -1648,7 +1659,7 @@
     <string name="help_ai_sprite_b4">ニックネーム歓迎、視聴リスト批評、映画クイズ、毎日の豆知識を利用できます（クイズには視聴済み 7 本以上が必要です）</string>
     <string name="help_ai_sprite_b5">AI には日次上限があり、機能ページの更新ボタンでもう 1 回消費します。オフラインでは新規リクエストはできませんが、キャッシュは読めます</string>
     <string name="help_ai_sprite_b6">V1 はキャラクターとシーンの音声設計プロンプトを使い、試聴に失敗した場合はシステム音声に戻ります</string>
-    <string name="help_ai_sprite_b7">クイズを途中で離れても回答は保持されます。引き直す前に確認し、未回答のまま提出する場合も警告します</string>
+    <string name="help_ai_sprite_b7">クイズを途中で離れても回答は保持されます。引き直す前に確認し、未回答のまま提出する場合も警告します。答え終わったら難易度を精霊に伝えられ、次回の出題がもっと好みに合うようになります</string>
 <!-- メイン画面の背景グロー -->
     <string name="bg_glow_title">背景エフェクト</string>
     <string name="bg_glow_off">オフ</string>

@@ -1,5 +1,14 @@
 package com.tracktosearch.ui.screen.ai
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,9 +24,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Cancel
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -27,12 +41,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -41,12 +58,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
+import com.tracktosearch.data.ai.AiQuiz
+import com.tracktosearch.data.ai.AiQuizAnswer
+import com.tracktosearch.data.ai.AiQuizDifficulty
 import com.tracktosearch.data.ai.AiQuizQuestion
 import com.tracktosearch.data.ai.AiQuizQuestionType
 import com.tracktosearch.data.ai.AiQuizResult
-import com.tracktosearch.data.ai.AiQuiz
-import com.tracktosearch.data.ai.AiQuizAnswer
 import com.tracktosearch.data.ai.AiWatchedTitleDto
+import kotlinx.coroutines.delay
+
+/** 单选题选中后展示选中态的时长，之后自动进入下一题。 */
+private const val QUIZ_AUTO_ADVANCE_DELAY_MS = 600L
+
+/** 闯关流程阶段，AnimatedContent 按 phase 切换预览/答题/出分。 */
+private enum class QuizPhase { PREVIEW, QUESTIONS, RESULT, UNAVAILABLE }
 
 @Composable
 fun AiQuizScreen(
@@ -54,42 +79,84 @@ fun AiQuizScreen(
     viewModel: AiSpriteViewModel,
     onResultAnchorBoundsChanged: (Rect) -> Unit = {}
 ) {
-    val result = state.quizResult
-    if (result != null) {
-        QuizResultScreen(
-            result = result,
-            quiz = state.quiz,
-            answers = state.quizAnswers,
-            onReplay = viewModel::replayQuiz,
-            onResultAnchorBoundsChanged = onResultAnchorBoundsChanged
-        )
-        return
-    }
-
-    if (!state.quizStarted) {
-        QuizPreviewScreen(
-            movies = state.quizPreviewMovies,
-            replacementCount = state.quizReplacementCount,
-            replaceAvailable = state.quizReplaceAvailable,
-            isLoading = state.isLoading,
-            onReplace = viewModel::replaceQuizMovie,
-            onStart = viewModel::startQuiz
-        )
-        return
-    }
-
     val quiz = state.quiz
-    if (quiz == null || quiz.questions.isEmpty()) {
-        QuizUnavailable()
-        return
+    val phase = when {
+        state.quizResult != null -> QuizPhase.RESULT
+        !state.quizStarted -> QuizPhase.PREVIEW
+        quiz == null || quiz.questions.isEmpty() -> QuizPhase.UNAVAILABLE
+        else -> QuizPhase.QUESTIONS
     }
+    // 此前预览→答题→出分是 if/else 直切，这里统一 fade+slide 转场（300ms 标准缓动）
+    AnimatedContent(
+        targetState = phase,
+        transitionSpec = {
+            val enter = fadeIn(tween(durationMillis = 300, easing = FastOutSlowInEasing)) +
+                slideInHorizontally(tween(durationMillis = 300, easing = FastOutSlowInEasing)) { it / 6 }
+            val exit = fadeOut(tween(durationMillis = 200, easing = FastOutSlowInEasing)) +
+                slideOutHorizontally(tween(durationMillis = 300, easing = FastOutSlowInEasing)) { -it / 6 }
+            enter togetherWith exit
+        },
+        label = "quiz_phase"
+    ) { target ->
+        when (target) {
+            QuizPhase.RESULT -> QuizResultScreen(
+                result = state.quizResult!!,
+                quiz = state.quiz,
+                answers = state.quizAnswers,
+                feedbackDifficulty = state.quizFeedbackDifficulty,
+                onFeedback = viewModel::submitQuizDifficultyFeedback,
+                onReplay = viewModel::replayQuiz,
+                onResultAnchorBoundsChanged = onResultAnchorBoundsChanged
+            )
+            QuizPhase.PREVIEW -> QuizPreviewScreen(
+                movies = state.quizPreviewMovies,
+                replacementCount = state.quizReplacementCount,
+                replaceAvailable = state.quizReplaceAvailable,
+                isLoading = state.isLoading,
+                onReplace = viewModel::replaceQuizMovie,
+                onStart = viewModel::startQuiz,
+                onRedrawAll = viewModel::redrawAllQuizPreview
+            )
+            QuizPhase.UNAVAILABLE -> QuizUnavailable()
+            QuizPhase.QUESTIONS -> QuizQuestionScreen(
+                state = state,
+                viewModel = viewModel,
+                quiz = quiz!!
+            )
+        }
+    }
+}
 
+@Composable
+private fun QuizQuestionScreen(
+    state: AiSpriteUiState,
+    viewModel: AiSpriteViewModel,
+    quiz: AiQuiz
+) {
     val questionIndex = state.quizIndex.coerceIn(0, quiz.questions.lastIndex)
     val question = quiz.questions[questionIndex]
     val answer = state.quizAnswers[question.id]
     val progress = quizProgress(questionIndex + 1, quiz.questions.size)
     val unanswered = unansweredQuizCount(quiz, state.quizAnswers)
     var unansweredConfirmVisible by remember { mutableStateOf(false) }
+
+    // 自动跳题是加速路径不是替换：仅单选题从无到有选中时触发，
+    // 600ms 展示选中态（判分在服务端，本地没有对错反馈）后切下一题；手动「下一题」仍保留。
+    // 回头改已答的题不自动跳，最后一题答完停在「提交」前。
+    val initiallyAnswered = remember(question.id) {
+        answer?.selectedOptionIds?.isNotEmpty() == true
+    }
+    LaunchedEffect(question.id, answer?.selectedOptionIds) {
+        if (initiallyAnswered) return@LaunchedEffect
+        val selected = answer?.selectedOptionIds.orEmpty()
+        if (question.type != AiQuizQuestionType.SINGLE || selected.isEmpty()) return@LaunchedEffect
+        if (questionIndex >= quiz.questions.lastIndex) return@LaunchedEffect
+        delay(QUIZ_AUTO_ADVANCE_DELAY_MS)
+        // delay 期间用户可能已手动切题：核对当前索引仍是本题再跳，避免连跳两题
+        if (viewModel.uiState.value.quizIndex == questionIndex) {
+            viewModel.nextQuestion()
+        }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -206,7 +273,8 @@ private fun QuizPreviewScreen(
     replaceAvailable: Boolean,
     isLoading: Boolean,
     onReplace: (Int) -> Unit,
-    onStart: () -> Unit
+    onStart: () -> Unit,
+    onRedrawAll: () -> Unit
 ) {
     if (movies.isEmpty()) {
         QuizUnavailable()
@@ -233,7 +301,7 @@ private fun QuizPreviewScreen(
         itemsIndexed(movies, key = { _, movie -> "${movie.mediaType}:${movie.mediaId}" }) { index, movie ->
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(18.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 tonalElevation = 1.dp
             ) {
@@ -297,6 +365,15 @@ private fun QuizPreviewScreen(
                 ) {
                     Text(stringResource(R.string.ai_quiz_start))
                 }
+                // 「全部重抽」是次级操作：OutlinedButton 不抢主按钮视觉；非破坏性（还没作答），无需二次确认
+                OutlinedButton(
+                    onClick = onRedrawAll,
+                    // 与「换一部」共用可用性判断：没有未用候选时重抽必然原样返回，禁用免得变死按钮
+                    enabled = replaceAvailable && !isLoading,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.ai_quiz_redraw_all))
+                }
             }
         }
     }
@@ -313,7 +390,7 @@ private fun QuizQuestionCard(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(22.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
         tonalElevation = 1.dp
     ) {
@@ -322,7 +399,7 @@ private fun QuizQuestionCard(
             question.quote?.takeIf { it.isNotBlank() }?.let { quote ->
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(14.dp),
                     color = MaterialTheme.colorScheme.secondaryContainer
                 ) {
                     Text(
@@ -411,9 +488,16 @@ private fun QuizResultScreen(
     result: AiQuizResult,
     quiz: AiQuiz?,
     answers: Map<String, AiQuizAnswer>,
+    feedbackDifficulty: AiQuizDifficulty?,
+    onFeedback: (AiQuizDifficulty) -> Unit,
     onReplay: () -> Unit,
     onResultAnchorBoundsChanged: (Rect) -> Unit = {}
 ) {
+    // 已选难度用 rememberSaveable 存 name：页面重组/进程重建不丢「已反馈」标记；
+    // quizId 变化（新一轮）时旧值失效自动重置
+    var feedbackName by rememberSaveable(result.quizId) { mutableStateOf<String?>(feedbackDifficulty?.name) }
+    val feedbackSelected = AiQuizDifficulty.fromName(feedbackName)
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -424,26 +508,72 @@ private fun QuizResultScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .onGloballyPositioned { onResultAnchorBoundsChanged(it.boundsInRoot()) },
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.primaryContainer
             ) {
-                Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     Text(stringResource(R.string.ai_quiz_result_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(8.dp))
                     Text(stringResource(R.string.ai_quiz_score, result.score), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold)
                     Text(
-                        stringResource(R.string.ai_quiz_correct_count, result.correctCount, result.totalQuestions),
+                        stringResource(R.string.ai_quiz_correct_count, result.correctCount, result.totalQuestions) +
+                            " · " +
+                            stringResource(R.string.ai_quiz_accuracy, quizAccuracyPercent(result)),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
+                    // 按得分段给一句短评语，可爱不啰嗦
+                    Text(
+                        stringResource(quizScoreCommentRes(result.score)),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    // 13 题一览条形：每题等宽一小段，答对主题色、答错弱化灰，一眼看出分布
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        quizOrderedQuestionResults(quiz, result).forEach { questionResult ->
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(
+                                        if (questionResult.correct) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.25f)
+                                        }
+                                    )
+                            )
+                        }
+                    }
                 }
             }
+        }
+        item {
+            QuizDifficultyFeedbackSection(
+                selected = feedbackSelected,
+                onSelect = { difficulty ->
+                    if (feedbackSelected == null) {
+                        feedbackName = difficulty.name
+                        onFeedback(difficulty)
+                    }
+                }
+            )
         }
         if (result.summary.isNotBlank()) {
             item {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(18.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant
                 ) {
                     Text(result.summary, modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodyLarge)
@@ -463,7 +593,7 @@ private fun QuizResultScreen(
                 ?: userAnswerText?.takeIf { item.correct }
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = if (item.correct) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.errorContainer
             ) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -474,12 +604,24 @@ private fun QuizResultScreen(
                     } else {
                         MaterialTheme.colorScheme.onErrorContainer
                     }
-                    Text(
-                        text = stringResource(R.string.ai_quiz_question_score, item.score),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = labelColor
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        // 答对/答错图标：答对主题色；答错沿用错题卡的前景色（在 errorContainer 上保证可读）
+                        Icon(
+                            imageVector = if (item.correct) Icons.Outlined.CheckCircle else Icons.Outlined.Cancel,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = labelColor
+                        )
+                        Text(
+                            text = stringResource(R.string.ai_quiz_question_score, item.score),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = labelColor
+                        )
+                    }
                     Text(
                         stringResource(R.string.ai_quiz_answer_review),
                         style = MaterialTheme.typography.labelMedium,
@@ -516,6 +658,91 @@ private fun QuizResultScreen(
     }
 }
 
+/** 出分页难度反馈区：三个选项一次性的轻量反馈，跳过=直接离开，无催促。 */
+@Composable
+private fun QuizDifficultyFeedbackSection(
+    selected: AiQuizDifficulty?,
+    onSelect: (AiQuizDifficulty) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                stringResource(R.string.ai_quiz_feedback_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FeedbackOption(
+                    label = stringResource(R.string.ai_quiz_feedback_easy),
+                    difficulty = AiQuizDifficulty.EASY,
+                    selected = selected,
+                    onSelect = onSelect,
+                    modifier = Modifier.weight(1f)
+                )
+                FeedbackOption(
+                    label = stringResource(R.string.ai_quiz_feedback_just_right),
+                    difficulty = AiQuizDifficulty.JUST_RIGHT,
+                    selected = selected,
+                    onSelect = onSelect,
+                    modifier = Modifier.weight(1f)
+                )
+                FeedbackOption(
+                    label = stringResource(R.string.ai_quiz_feedback_hard),
+                    difficulty = AiQuizDifficulty.HARD,
+                    selected = selected,
+                    onSelect = onSelect,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            if (selected != null) {
+                // 已反馈：整组收起语义的确认文案；本地立即生效，异步静默提交
+                Text(
+                    stringResource(R.string.ai_quiz_feedback_done),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeedbackOption(
+    label: String,
+    difficulty: AiQuizDifficulty,
+    selected: AiQuizDifficulty?,
+    onSelect: (AiQuizDifficulty) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isSelected = selected == difficulty
+    val answered = selected != null
+    if (isSelected) {
+        // 选中态用主题 primary 高亮（项目选中态规范）；onClick 留空防重复提交
+        Button(
+            onClick = {},
+            modifier = modifier
+        ) {
+            Text(label, maxLines = 1, textAlign = TextAlign.Center)
+        }
+    } else {
+        OutlinedButton(
+            onClick = { onSelect(difficulty) },
+            // 已反馈后其余选项禁用，防重复提交
+            enabled = !answered,
+            modifier = modifier
+        ) {
+            Text(label, maxLines = 1, textAlign = TextAlign.Center)
+        }
+    }
+}
+
 @Composable
 private fun QuizUnavailable() {
     Column(
@@ -531,4 +758,31 @@ private fun QuizUnavailable() {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+}
+
+/** 正确率百分比（取整），总数为 0 时按 0 处理。 */
+private fun quizAccuracyPercent(result: AiQuizResult): Int =
+    if (result.totalQuestions > 0) {
+        result.correctCount * 100 / result.totalQuestions
+    } else {
+        0
+    }
+
+/** 按得分段选择评语资源：≥90 满分宣言 / ≥70 相当不错 / ≥40 有潜力 / <40 慢慢来。 */
+@androidx.annotation.StringRes
+private fun quizScoreCommentRes(score: Int): Int = when {
+    score >= 90 -> R.string.ai_quiz_comment_perfect
+    score >= 70 -> R.string.ai_quiz_comment_great
+    score >= 40 -> R.string.ai_quiz_comment_potential
+    else -> R.string.ai_quiz_comment_gentle
+}
+
+/** 条形图与题目顺序对齐：优先按 quiz.questions 顺序排 questionResults，无 quiz 时按返回顺序。 */
+private fun quizOrderedQuestionResults(
+    quiz: AiQuiz?,
+    result: AiQuizResult
+): List<com.tracktosearch.data.ai.AiQuizQuestionResult> {
+    val questions = quiz?.questions ?: return result.questionResults
+    val byQuestionId = result.questionResults.associateBy { it.questionId }
+    return questions.mapNotNull { byQuestionId[it.id] }
 }

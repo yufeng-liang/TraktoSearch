@@ -1638,6 +1638,17 @@
     <string name="ai_quiz_unanswered_message">%1$d문항이 미답으로 0점 처리됩니다. 그래도 제출할까요?</string>
     <string name="ai_quiz_submit_anyway">그대로 제출</string>
     <string name="ai_quiz_replace_exhausted">바꿀 수 있는 작품이 더 없습니다</string>
+    <string name="ai_quiz_redraw_all">전부 다시 뽑기</string>
+    <string name="ai_quiz_accuracy">정답률 %1$d%%</string>
+    <string name="ai_quiz_comment_perfect">만점 코스! 당신은 걸어 다니는 영화 백과</string>
+    <string name="ai_quiz_comment_great">꽤 훌륭해요, 정령도 박수를 쳐요</string>
+    <string name="ai_quiz_comment_potential">잠재력이 충분해요, 몇 편만 더 보면 돼요</string>
+    <string name="ai_quiz_comment_gentle">천천히, 정령과 함께 충전해요</string>
+    <string name="ai_quiz_feedback_title">이번 라운드 난이도는 어땠나요?</string>
+    <string name="ai_quiz_feedback_easy">너무 쉬웠어요</string>
+    <string name="ai_quiz_feedback_just_right">딱 좋았어요</string>
+    <string name="ai_quiz_feedback_hard">너무 어려웠어요</string>
+    <string name="ai_quiz_feedback_done">받았어요, 다음엔 난이도를 조정할게요</string>
     <string name="ai_quiz_refresh_title">이번 라운드를 포기할까요?</string>
     <string name="ai_quiz_refresh_message">다시 뽑으면 이번 라운드 답변(%1$d문항)이 사라집니다.</string>
     <string name="ai_quiz_refresh_confirm">다시 뽑기</string>
@@ -1648,7 +1659,7 @@
     <string name="help_ai_sprite_b4">닉네임 인사, 시청 목록 평론, 영화 퀴즈와 매일 영화 상식을 제공합니다 (퀴즈는 시청 완료 7편 이상 필요)</string>
     <string name="help_ai_sprite_b5">AI에는 일일 한도가 있고 기능 페이지의 새로 고침이 한 번 더 소모합니다. 오프라인에서는 새 요청을 할 수 없지만 캐시된 내용은 볼 수 있습니다</string>
     <string name="help_ai_sprite_b6">V1은 캐릭터와 장면별 음성 설계 프롬프트를 사용하며, 미리듣기에 실패하면 시스템 음성으로 전환합니다</string>
-    <string name="help_ai_sprite_b7">퀴즈를 도중에 나가도 답변은 유지되며, 다시 뽑기 전에 확인하고 미답 상태로 제출할 때도 알려 줍니다</string>
+    <string name="help_ai_sprite_b7">퀴즈를 도중에 나가도 답변은 유지되며, 다시 뽑기 전에 확인하고 미답 상태로 제출할 때도 알려 줍니다. 다 풀고 나면 난이도를 정령에게 알려 줄 수 있고, 이후 출제가 취향에 더 잘 맞아요</string>
 <!-- 메인 화면 배경 글로우 -->
     <string name="bg_glow_title">배경 모션</string>
     <string name="bg_glow_off">끄기</string>

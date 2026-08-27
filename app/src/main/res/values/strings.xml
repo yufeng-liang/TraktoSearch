@@ -1625,6 +1625,17 @@ Config:
     <string name="ai_quiz_unanswered_message">%1$d question(s) are unanswered and score zero. Submit anyway?</string>
     <string name="ai_quiz_submit_anyway">Submit anyway</string>
     <string name="ai_quiz_replace_exhausted">No more titles left to swap in</string>
+    <string name="ai_quiz_redraw_all">Redraw all</string>
+    <string name="ai_quiz_accuracy">Accuracy %1$d%%</string>
+    <string name="ai_quiz_comment_perfect">A perfect run — you\'re a walking film encyclopedia!</string>
+    <string name="ai_quiz_comment_great">Pretty great — even the sprite is applauding</string>
+    <string name="ai_quiz_comment_potential">Real potential — a few more rewatches and you\'re there</string>
+    <string name="ai_quiz_comment_gentle">No rush — the sprite will binge some films with you</string>
+    <string name="ai_quiz_feedback_title">How was this round?</string>
+    <string name="ai_quiz_feedback_easy">Too easy</string>
+    <string name="ai_quiz_feedback_just_right">Just right</string>
+    <string name="ai_quiz_feedback_hard">Too hard</string>
+    <string name="ai_quiz_feedback_done">Got it — I\'ll tune the difficulty next time</string>
     <string name="ai_quiz_refresh_title">Discard this round?</string>
     <string name="ai_quiz_refresh_message">Drawing a new round clears this round\'s answers (%1$d answered).</string>
     <string name="ai_quiz_refresh_confirm">Draw a new round</string>
@@ -1635,7 +1646,7 @@ Config:
     <string name="help_ai_sprite_b4">The four features are nickname welcome, watchlist roast, film quiz, and daily film facts (the quiz needs at least 7 watched titles)</string>
     <string name="help_ai_sprite_b5">AI requests use a daily quota, and the refresh button inside a feature spends one more; offline you cannot start new requests but cached content stays readable</string>
     <string name="help_ai_sprite_b6">V1 uses character and scene voice-design prompts; failed previews fall back to system speech</string>
-    <string name="help_ai_sprite_b7">Leaving a quiz round keeps your answers; drawing a new round asks for confirmation first, and submitting with blanks warns you</string>
+    <string name="help_ai_sprite_b7">Leaving a quiz round keeps your answers; drawing a new round asks for confirmation first, and submitting with blanks warns you; after a round you can tell the sprite how it felt, so future rounds fit your taste</string>
     <!-- Main screen background glow -->
     <string name="bg_glow_title">Background Effect</string>
     <string name="bg_glow_off">Off</string>
