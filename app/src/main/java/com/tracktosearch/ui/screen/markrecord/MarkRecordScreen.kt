@@ -113,7 +113,9 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.saveable.listSaver
 
 /** 首屏骨架卡片数量：两列，铺满一屏左右即可，多了只是白耗合成 */
@@ -132,6 +134,20 @@ fun MarkRecordScreen(
     val hazeState = remember { HazeState() }
     val hazeStyle = HazeMaterials.thin()
     val listState = rememberLazyGridState()
+    // 改筛选/排序/搜索/Tab 后，新列表要把整张表换掉，位置必须回到顶部。
+    //
+    // 不能只靠 Lazy 网格自己：它默认按"首个可见 item 的 key"重新定位 —— 排序方向一反转，
+    // 旧的第 0 项跑到列表末尾，位置就跟着被带到底部；筛掉大半条目时锚点在新列表里找不到，
+    // 索引又会被钳到末尾。两种情况用户看到的都是"列表停在底部"而不是从头按顺序显示。
+    //
+    // 位置要在新列表上屏那一帧才钉：重定位就发生在那次测量里，提前调用会被这次测量吃掉。
+    // requestScrollToItem 会丢掉 key 锚点，所以钉住之后不会再被重定位带走。
+    val markRecordListToken = "${uiState.currentTab}|${uiState.filterMediaTypes}|" +
+        "${uiState.filterDatePreset}|${uiState.filterDateRange}|${uiState.sortAscending}|${uiState.searchQuery}"
+    LaunchedEffect(markRecordListToken) {
+        snapshotFlow { uiState.items }.drop(1).first()
+        listState.requestScrollToItem(0)
+    }
     var showFilterSheet by remember { mutableStateOf(false) }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
