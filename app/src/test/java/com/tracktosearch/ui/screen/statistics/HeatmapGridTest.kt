@@ -42,8 +42,8 @@ class HeatmapGridTest {
         val firstDay = grid.weeks.first().first()
         val firstCal = Calendar.getInstance().apply { time = firstDay.date }
 
-        // 起始列对齐到今天所在周的第一天（DAY_OF_WEEK 以周日为 1）
-        assertThat(firstCal.get(Calendar.DAY_OF_WEEK)).isEqualTo(Calendar.SUNDAY)
+        // 起始行对齐到周一，与左侧「一…日」星期标签一致
+        assertThat(firstCal.get(Calendar.DAY_OF_WEEK)).isEqualTo(Calendar.MONDAY)
         // 今天必须落在网格内
         val allKeys = grid.weeks.flatten().map { dateKeyFormat.format(it.date) }
         assertThat(allKeys).contains("2026-08-27")
@@ -57,9 +57,9 @@ class HeatmapGridTest {
 
         assertThat(cells[todayIndex].isFuture).isFalse()
         assertThat(cells[todayIndex].dateKey).isEqualTo("2026-08-27")
-        // 2026-08-27 是周四，同周的周五、周六属于未来
+        // 2026-08-27 是周四，同周的周五、周六、周日属于未来
         val future = cells.drop(todayIndex + 1)
-        assertThat(future).hasSize(2)
+        assertThat(future).hasSize(3)
         assertThat(future.all { it.isFuture }).isTrue()
         assertThat(future.all { it.dateKey.isEmpty() }).isTrue()
     }

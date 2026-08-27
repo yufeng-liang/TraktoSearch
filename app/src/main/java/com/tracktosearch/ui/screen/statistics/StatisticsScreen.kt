@@ -1073,7 +1073,7 @@ internal data class HeatmapCell(
     val date: Date
 )
 
-/** 热力图一页的网格数据：13 周 × 7 天 + 月份标签 + 日期范围文案 */
+/** 热力图一页的网格数据：13 周 × 7 天（每列自周一起排）+ 月份标签 + 日期范围文案 */
 internal data class HeatmapGrid(
     val weeks: List<List<HeatmapCell>>,
     val monthLabels: List<Pair<Int, String>>,
@@ -1104,10 +1104,13 @@ internal fun buildHeatmapGrid(
     }
     val rangeFormat = SimpleDateFormat("yyyy/M/d", Locale.US)
 
-    val dayOfWeek = Calendar.getInstance().apply { time = today }.get(Calendar.DAY_OF_WEEK) // 1=Sunday
+    // Calendar.DAY_OF_WEEK 以周日为 1，换算成「距本周一过了几天」，
+    // 让每列从周一开始，与左侧一/月/월/Mon 起排的星期标签对齐
+    val dayOfWeek = Calendar.getInstance().apply { time = today }.get(Calendar.DAY_OF_WEEK)
+    val daysSinceMonday = (dayOfWeek + 5) % 7
     val startCal = Calendar.getInstance().apply {
         time = today
-        add(Calendar.DAY_OF_YEAR, -((HEATMAP_WEEKS - 1) * 7 + (dayOfWeek - 1)) + weekOffset * 7)
+        add(Calendar.DAY_OF_YEAR, -((HEATMAP_WEEKS - 1) * 7 + daysSinceMonday) + weekOffset * 7)
     }
     val endCal = (startCal.clone() as Calendar).apply {
         add(Calendar.DAY_OF_YEAR, HEATMAP_WEEKS * 7 - 1)
