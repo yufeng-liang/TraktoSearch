@@ -782,7 +782,7 @@ function updateActiveNav() {
 
 function parseHash() {
     const hash = window.location.hash.slice(1) || '/dashboard';
-    const [route, id] = hash.split('/');
+    const [route, id] = hash.split('/').filter(Boolean);
     state.route = route || 'dashboard';
     state.params = id ? { id } : {};
 }
