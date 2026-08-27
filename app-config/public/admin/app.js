@@ -2436,10 +2436,12 @@ function showCrashLogDetail(id, container, renderToken) {
         const recentActions = String(e.recentActions || '').trim();
         container.innerHTML = `
             <div class="detail-heading">
-                <div class="detail-heading-copy"><h1 class="section-title">崩溃日志详情</h1><p class="section-subtitle">ID: <span style="font-family:var(--font-mono)">${escapeHtml(e.id || 'unknown')}</span></p></div>
+                <div style="display:flex;align-items:flex-start;gap:12px;min-width:0">
+                    <button class="btn btn-ghost btn-sm" id="crash-back" style="flex:0 0 auto;margin-top:6px">← 返回列表</button>
+                    <div class="detail-heading-copy"><h1 class="section-title">崩溃日志详情</h1><p class="section-subtitle">ID: <span style="font-family:var(--font-mono)">${escapeHtml(e.id || 'unknown')}</span></p></div>
+                </div>
                 <div class="detail-heading-actions">
                     <button class="btn btn-ghost btn-sm" id="crash-copy">复制给 AI</button>
-                    <button class="btn btn-ghost btn-sm" id="crash-back">返回列表</button>
                     <button class="btn ${fixed ? 'btn-ghost' : 'btn-primary'} btn-sm" id="crash-toggle-status">${fixed ? '重新打开' : '标记已修复'}</button>
                 </div>
             </div>
@@ -2463,7 +2465,8 @@ function showCrashLogDetail(id, container, renderToken) {
             </div>
         `;
 
-        document.getElementById('crash-back')?.addEventListener('click', () => renderCrashLogs(container, renderToken));
+        // 返回列表：走完整路由导航，render() 会清空 main 再重绘，避免内容叠加
+        document.getElementById('crash-back')?.addEventListener('click', () => navigate('crash-logs'));
 
         // 复制 AI 友好报告
         document.getElementById('crash-copy')?.addEventListener('click', async () => {
