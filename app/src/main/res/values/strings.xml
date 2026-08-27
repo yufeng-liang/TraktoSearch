@@ -1408,6 +1408,8 @@ Config:
     <string name="mark_records_time_hours_ago">%1$d hours ago</string>
     <string name="mark_records_time_days_ago">%1$d days ago</string>
     <string name="mark_records_empty_all">No records</string>
+    <string name="mark_records_empty_filtered">No records match the filters</string>
+    <string name="mark_records_clear_filter">Clear filters</string>
     <string name="mark_records_unknown_title">Unknown title</string>
     <string name="mark_records_filter_media_type">Media Type</string>
     <string name="mark_records_filter_date_range">Date Range</string>
@@ -1444,10 +1446,10 @@ Config:
     <string name="feedback_messages">Messages</string>
     <string name="feedback_messages_title">Messages</string>
     <string name="feedback_messages_empty">No messages yet</string>
+    <string name="feedback_messages_empty_unread">No unread messages</string>
     <string name="feedback_messages_all_read">Mark all as read</string>
     <string name="feedback_filter_all">All</string>
     <string name="feedback_filter_unread">Unread</string>
-    <string name="feedback_filter_developer">Developer</string>
     <string name="feedback_role_developer">Developer</string>
     <string name="feedback_role_me">Me</string>
     <string name="feedback_conversation">Conversation</string>

@@ -1407,6 +1407,8 @@
     <string name="mark_records_time_hours_ago">%1$d 小时前</string>
     <string name="mark_records_time_days_ago">%1$d 天前</string>
     <string name="mark_records_empty_all">暂无记录</string>
+    <string name="mark_records_empty_filtered">没有符合筛选条件的记录</string>
+    <string name="mark_records_clear_filter">清除筛选条件</string>
     <string name="mark_records_unknown_title">未知影视</string>
     <string name="mark_records_filter_media_type">媒体类型</string>
     <string name="mark_records_filter_date_range">日期范围</string>
@@ -1443,10 +1445,10 @@
     <string name="feedback_messages">消息</string>
     <string name="feedback_messages_title">消息</string>
     <string name="feedback_messages_empty">暂无消息</string>
+    <string name="feedback_messages_empty_unread">没有未读消息</string>
     <string name="feedback_messages_all_read">全部已读</string>
     <string name="feedback_filter_all">全部</string>
     <string name="feedback_filter_unread">未读</string>
-    <string name="feedback_filter_developer">开发者</string>
     <string name="feedback_role_developer">开发者</string>
     <string name="feedback_role_me">我</string>
     <string name="feedback_conversation">对话</string>

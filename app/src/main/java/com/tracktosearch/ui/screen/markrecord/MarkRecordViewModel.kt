@@ -16,12 +16,18 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZoneOffset
 
 /** 标记记录 Tab */
 enum class MarkRecordTab(val actionTypes: List<String>?) {
@@ -74,7 +80,19 @@ data class MarkRecordUiState(
     val isRefreshing: Boolean = false,
     val error: String? = null,
     val currentStatusMap: Map<Int, CurrentMarkStatus> = emptyMap()
-)
+) {
+    /**
+     * 是否有生效的筛选条件（排序方向不算，它只改顺序不改集合）。
+     *
+     * 顶栏筛选按钮据此高亮，空列表也据此区分「真的没有记录」和「筛掉了」。
+     */
+    val hasActiveFilter: Boolean
+        get() = filterMediaTypes.isNotEmpty() || filterDatePreset != DatePreset.ALL
+
+    /** 是否有生效的筛选或搜索条件：空列表提示文案用它判断要不要给「清除筛选」出口。 */
+    val hasActiveFilterOrSearch: Boolean
+        get() = hasActiveFilter || searchQuery.isNotBlank()
+}
 
 @HiltViewModel
 class MarkRecordViewModel @Inject constructor(
@@ -97,13 +115,91 @@ class MarkRecordViewModel @Inject constructor(
     /** 正在进行的远端刷新数量：快速切 Tab 或改筛选会并发拉取，用计数避免先结束的那个提前收起进度条。 */
     private var remoteRefreshCount = 0
 
+    /**
+     * 当前在飞的加载任务。
+     *
+     * 切 Tab / 改筛选 / 改搜索词前取消：不取消的话旧条件的结果回来会写进已经换了条件的列表
+     * （在 ALL Tab 的 Trakt 历史还没回来时切到「已移除」，历史结果到达后就混进已移除列表）。
+     */
+    private var loadJob: Job? = null
+
+    /**
+     * 加载轮次。
+     *
+     * 取消只在挂起点生效，渐进渲染的批次回调可能刚好卡在挂起点之间，落一次过期写入。
+     * 每次启动加载 +1，写状态前比对轮次，过期的直接丢弃。
+     */
+    private var loadGeneration = 0
+
+    /** 搜索输入防抖任务：见 [updateSearchQuery]。 */
+    private var searchDebounceJob: Job? = null
+
+    /**
+     * 各 Tab 的结果缓存 + 当时的筛选条件快照。
+     *
+     * Tab 来回切换原来每次都清空重新拉（ALL/已看要走 Trakt 历史 + 上百次 TMDB 富化），
+     * 网速差时来回都是骨架屏。条件没变就直接还原，再静默刷新一次保证不看到过期数据。
+     */
+    private val tabResultCaches = mutableMapOf<MarkRecordTab, TabResultCache>()
+
+    private data class TabResultCache(
+        val items: List<MarkRecordItem>,
+        val currentPage: Int,
+        val hasMore: Boolean,
+        val snapshot: FilterSnapshot
+    )
+
+    /** 除 Tab 以外的全部查询条件：判断缓存是否还对得上当前条件。 */
+    private data class FilterSnapshot(
+        val searchQuery: String,
+        val mediaTypes: Set<String>,
+        val datePreset: DatePreset,
+        val dateRange: Pair<Long, Long>?,
+        val ascending: Boolean
+    )
+
+    private fun MarkRecordUiState.toSnapshot() = FilterSnapshot(
+        searchQuery = searchQuery,
+        mediaTypes = filterMediaTypes,
+        datePreset = filterDatePreset,
+        dateRange = filterDateRange,
+        ascending = sortAscending
+    )
+
     init {
         loadFirstPage()
     }
 
     fun switchTab(tab: MarkRecordTab) {
-        if (_uiState.value.currentTab == tab) return
+        val before = _uiState.value
+        if (before.currentTab == tab) return
         UserActionTracker.record("action", "switch_tab", tab.name)
+        // 离开的 Tab 先存一份结果，回来时能立刻还原
+        if (before.items.isNotEmpty()) {
+            tabResultCaches[before.currentTab] = TabResultCache(
+                items = before.items,
+                currentPage = before.currentPage,
+                hasMore = before.hasMore,
+                snapshot = before.toSnapshot()
+            )
+        }
+        // 旧 Tab 的请求还在飞就丢掉：它回来会把结果写进新 Tab 的列表
+        cancelPendingLoad()
+        val cached = tabResultCaches[tab]
+        if (cached != null && cached.snapshot == before.toSnapshot()) {
+            _uiState.update {
+                it.copy(
+                    currentTab = tab,
+                    items = cached.items,
+                    currentPage = cached.currentPage,
+                    hasMore = cached.hasMore,
+                    isLoading = false, isLoadingMore = false, error = null
+                )
+            }
+            // 已翻过页的不静默刷新：重拉第一页会把后面几页的内容截掉
+            if (cached.currentPage <= 1) startLoad(page = 1, silent = true)
+            return
+        }
         _uiState.update {
             it.copy(
                 currentTab = tab, currentPage = 0, hasMore = true,
@@ -113,17 +209,24 @@ class MarkRecordViewModel @Inject constructor(
         loadFirstPage()
     }
 
+    /**
+     * 搜索词变化。
+     *
+     * 输入框绑定的是 [MarkRecordUiState.searchQuery]，所以词要立刻写进状态，否则打字会卡住；
+     * 但重新查询要防抖：每个字符都触发一次 Room 查询 + Trakt 历史拉取的话，
+     * 输入过程中列表一直在清空/重填，整屏在骨架屏和结果之间闪。
+     */
     fun updateSearchQuery(query: String) {
+        if (_uiState.value.searchQuery == query) return
         if (query.isNotEmpty()) {
             UserActionTracker.record("action", "search", query)
         }
-        _uiState.update {
-            it.copy(
-                searchQuery = query, currentPage = 0, hasMore = true,
-                items = emptyList(), isLoading = true
-            )
+        _uiState.update { it.copy(searchQuery = query) }
+        searchDebounceJob?.cancel()
+        searchDebounceJob = viewModelScope.launch {
+            delay(SEARCH_DEBOUNCE_MILLIS)
+            reloadKeepingItems()
         }
-        loadFirstPage()
     }
 
     fun updateFilter(
@@ -132,22 +235,30 @@ class MarkRecordViewModel @Inject constructor(
         dateRange: Pair<Long, Long>?,
         ascending: Boolean
     ) {
+        val state = _uiState.value
+        // 弹窗里什么都没改就点确定：不必清空列表重下一遍
+        val unchanged = state.filterMediaTypes == mediaTypes &&
+            state.filterDatePreset == datePreset &&
+            state.filterDateRange == dateRange &&
+            state.sortAscending == ascending
+        if (unchanged) return
         val filterDetail = buildString {
             if (mediaTypes.isNotEmpty()) append("types=${mediaTypes.joinToString(",")} ")
             append("preset=${datePreset.name} ")
             append("asc=$ascending")
         }
         UserActionTracker.record("action", "update_filter", filterDetail)
+        searchDebounceJob?.cancel()
         _uiState.update {
             it.copy(
                 filterMediaTypes = mediaTypes,
                 filterDatePreset = datePreset,
                 filterDateRange = dateRange,
                 sortAscending = ascending,
-                currentPage = 0, hasMore = true, items = emptyList(), isLoading = true
+                currentPage = 0, hasMore = true, isLoading = true, error = null
             )
         }
-        loadFirstPage()
+        startLoad(page = 1)
     }
 
     fun loadNextPage() {
@@ -155,14 +266,12 @@ class MarkRecordViewModel @Inject constructor(
         if (state.isLoading || state.isLoadingMore || !state.hasMore) return
         UserActionTracker.record("action", "load_next_page", "page=${state.currentPage + 1}")
         _uiState.update { it.copy(isLoadingMore = true) }
-        viewModelScope.launch {
-            loadPage(state.currentPage + 1)
-            updateCurrentStatusMap()
-        }
+        startLoad(page = state.currentPage + 1)
     }
 
     fun refresh() {
         UserActionTracker.record("action", "refresh", null)
+        searchDebounceJob?.cancel()
         _uiState.update {
             it.copy(
                 currentPage = 0, hasMore = true, items = emptyList(),
@@ -172,6 +281,8 @@ class MarkRecordViewModel @Inject constructor(
         traktRepository.clearWatchHistoryCache()
         // 清缓存后 totalPages 失效，重置以便重新拉取
         traktHistoryTotalPages = 0
+        // 各 Tab 的旧结果同样失效，否则切回去还是过期数据
+        tabResultCaches.clear()
         loadFirstPage()
     }
 
@@ -180,19 +291,56 @@ class MarkRecordViewModel @Inject constructor(
         loadFirstPage()
     }
 
+    /**
+     * 改了筛选/搜索条件后的重载：保留旧列表直到新结果到达。
+     *
+     * 先清空的话每次改条件整屏都要在骨架屏和结果之间闪一下；旧内容留着 + 顶栏细进度条，
+     * 用户能看出在刷新，也不会丢掉视觉参照。
+     */
+    private fun reloadKeepingItems() {
+        _uiState.update { it.copy(currentPage = 0, hasMore = true, isLoading = true, error = null) }
+        startLoad(page = 1)
+    }
+
     private fun loadFirstPage() {
-        viewModelScope.launch {
-            loadPage(1)
-            updateCurrentStatusMap()
+        startLoad(page = 1)
+    }
+
+    /** 取消在飞的加载与待触发的防抖重载。 */
+    private fun cancelPendingLoad() {
+        searchDebounceJob?.cancel()
+        loadJob?.cancel()
+    }
+
+    /**
+     * 启动一次加载，接管在飞的请求。
+     *
+     * @param silent 缓存命中后的静默刷新：不进骨架屏，只在顶栏下方走细进度条
+     */
+    private fun startLoad(page: Int, silent: Boolean = false) {
+        loadJob?.cancel()
+        val generation = ++loadGeneration
+        if (silent) _uiState.update { it.copy(isRefreshing = true) }
+        loadJob = viewModelScope.launch {
+            try {
+                loadPage(page, generation)
+                updateCurrentStatusMap(generation)
+            } finally {
+                // 轮次判断不能省：被新请求取消时进度条归新请求管
+                if (silent && generation == loadGeneration) {
+                    _uiState.update { it.copy(isRefreshing = false) }
+                }
+            }
         }
     }
 
     /** 计算当前状态徽标（从 WatchlistWatchedIds 全局缓存查询） */
-    private suspend fun updateCurrentStatusMap() {
+    private suspend fun updateCurrentStatusMap(generation: Int) {
         if (!sessionModeManager.traktConnected.value) return
         val items = _uiState.value.items
         if (items.isEmpty()) return
         val ids = traktRepository.getWatchlistWatchedIds() ?: return
+        if (generation != loadGeneration) return
         val map = mutableMapOf<Int, CurrentMarkStatus>()
         for (item in items) {
             map[item.traktId] = currentStatusOf(item, ids)
@@ -230,7 +378,7 @@ class MarkRecordViewModel @Inject constructor(
         return items.map { it.copy(currentStatus = currentStatusOf(it, ids)) }
     }
 
-    private suspend fun loadPage(page: Int) {
+    private suspend fun loadPage(page: Int, generation: Int) {
         val state = _uiState.value
         // 渐进渲染期间会多次写入 items，必须先固定基准，否则最终合并会把已渲染的批次重复累加
         val baseItems = if (page == 1) emptyList() else state.items
@@ -240,18 +388,23 @@ class MarkRecordViewModel @Inject constructor(
             val newItems: List<MarkRecordItem> = when (state.currentTab) {
             MarkRecordTab.WATCHED -> {
                 if (sessionModeManager.traktConnected.value) {
-                    loadFromTraktHistory(
+                    val historyItems = loadFromTraktHistory(
                         page = page,
                         mediaTypesFilter = state.filterMediaTypes,
-                        onBatch = { batch -> publishProgress(baseItems, batch) }
+                        onBatch = { batch -> publishProgress(baseItems, batch, generation) }
                     )
+                    // 首次拉取后记录总页数，供 hasMore 判断（媒体类型筛选会削掉条目数，不能按条目数判断）
+                    if (traktHistoryTotalPages == 0) {
+                        traktHistoryTotalPages = traktRepository.getWatchHistoryTotalPages()
+                    }
+                    historyItems
                 } else emptyList()
             }
             MarkRecordTab.ALL -> {
                 val localItems = loadFromDao(page, state)
                 allTabLocalItemCount = localItems.size
                 // 本地流水是 Room 查询，毫秒级可用：先渲染出来，不必等 Trakt 的上百次 TMDB 富化
-                if (localItems.isNotEmpty()) publishProgress(baseItems, localItems)
+                if (localItems.isNotEmpty()) publishProgress(baseItems, localItems, generation)
                 // Trakt 已看历史分页:首次(page=1)必拉以获取 totalPages,后续页按 totalPages 判断
                 val shouldFetchTrakt = sessionModeManager.traktConnected.value &&
                     (page == 1 ||
@@ -262,7 +415,7 @@ class MarkRecordViewModel @Inject constructor(
                         loadFromTraktHistory(
                             page = page,
                             mediaTypesFilter = state.filterMediaTypes,
-                            onBatch = { batch -> publishProgress(baseItems, localItems + batch) }
+                            onBatch = { batch -> publishProgress(baseItems, localItems + batch, generation) }
                         )
                     } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
                 } else emptyList()
@@ -281,6 +434,7 @@ class MarkRecordViewModel @Inject constructor(
             )
             // hasMore 按 Tab 分别计算:
             // - ALL: 本地这页满 pageSize 说明本地可能还有更多;Trakt 当前页 < totalPages 说明 Trakt 还有更多
+            // - WATCHED: 一页是 100 部电影 + 100 集，永远不等于 pageSize，按条目数判断会在第一页就停住
             // - 其他: 本页满 pageSize 说明可能还有更多
             val hasMore = when (state.currentTab) {
                 MarkRecordTab.ALL -> {
@@ -288,8 +442,10 @@ class MarkRecordViewModel @Inject constructor(
                     val traktHasMore = traktHistoryTotalPages > 0 && page < traktHistoryTotalPages
                     localHasMore || traktHasMore
                 }
+                MarkRecordTab.WATCHED -> traktHistoryTotalPages > 0 && page < traktHistoryTotalPages
                 else -> newItems.size == pageSize
             }
+            if (generation != loadGeneration) return
             _uiState.update {
                 it.copy(
                     items = allItems,
@@ -303,6 +459,7 @@ class MarkRecordViewModel @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            if (generation != loadGeneration) return
             // U-F46: 映射网络异常为用户友好的本地化提示,不暴露英文异常信息
             _uiState.update {
                 it.copy(
@@ -315,8 +472,14 @@ class MarkRecordViewModel @Inject constructor(
     }
 
     /** 渐进渲染：把当前已就绪的部分结果并入基准列表并立即展示，退出加载态。 */
-    private fun publishProgress(baseItems: List<MarkRecordItem>, partial: List<MarkRecordItem>) {
+    private fun publishProgress(
+        baseItems: List<MarkRecordItem>,
+        partial: List<MarkRecordItem>,
+        generation: Int
+    ) {
         if (partial.isEmpty()) return
+        // 过期轮次的批次直接丢：切了 Tab/改了条件之后它属于上一份条件
+        if (generation != loadGeneration) return
         val merged = withCurrentStatus(
             (baseItems + partial)
                 .distinctBy { itemKey(it) }
@@ -437,11 +600,38 @@ class MarkRecordViewModel @Inject constructor(
         return when (state.filterDatePreset) {
             DatePreset.SEVEN_DAYS -> Pair(now - 7L * 24 * 60 * 60 * 1000, 0)
             DatePreset.THIRTY_DAYS -> Pair(now - 30L * 24 * 60 * 60 * 1000, 0)
-            DatePreset.CUSTOM -> state.filterDateRange ?: Pair(0, 0)
+            DatePreset.CUSTOM -> {
+                val range = state.filterDateRange ?: return Pair(0, 0)
+                // 日期选择器给的是所选日期的 UTC 零点，直接拿去比 actedAt（本地时间戳）会错一段：
+                // 东八区选 8-27 当结束日，UTC 零点 = 本地 08:00，当天 08:00 之后的记录全被排除。
+                // 两端都换算成所选日期在本地时区的起点/终点。
+                Pair(startOfLocalDay(range.first), endOfLocalDay(range.second))
+            }
             DatePreset.ALL -> Pair(0, 0)
         }
     }
+
+    private companion object {
+        /** 搜索防抖：一次输入停顿就够触发查询，再短会把连续输入拆成多次 Room + Trakt 拉取。 */
+        const val SEARCH_DEBOUNCE_MILLIS = 300L
+    }
 }
+
+/** UTC 零点毫秒 → 该日期在本地时区的起始毫秒；0（不限）原样返回。 */
+private fun startOfLocalDay(utcMidnightMillis: Long): Long {
+    if (utcMidnightMillis <= 0L) return 0L
+    return utcDateOf(utcMidnightMillis).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+}
+
+/** UTC 零点毫秒 → 该日期在本地时区的最后一毫秒；0（不限）原样返回。 */
+private fun endOfLocalDay(utcMidnightMillis: Long): Long {
+    if (utcMidnightMillis <= 0L) return 0L
+    return utcDateOf(utcMidnightMillis).plusDays(1)
+        .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() - 1
+}
+
+private fun utcDateOf(utcMidnightMillis: Long): LocalDate =
+    Instant.ofEpochMilli(utcMidnightMillis).atZone(ZoneOffset.UTC).toLocalDate()
 
 private fun itemKey(item: MarkRecordItem) = "${item.traktId}_${item.actedAt}_${item.actionType}"
 

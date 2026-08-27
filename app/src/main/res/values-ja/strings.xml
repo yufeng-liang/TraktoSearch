@@ -1423,6 +1423,8 @@
     <string name="mark_records_filter_start_date">開始日</string>
     <string name="mark_records_filter_end_date">終了日</string>
     <string name="mark_records_empty_all">マーク記録がありません</string>
+    <string name="mark_records_empty_filtered">条件に一致する記録がありません</string>
+    <string name="mark_records_clear_filter">条件をクリア</string>
     <string name="mark_records_unknown_title">不明なタイトル</string>
     <string name="mark_records_empty_watchlist">ウォッチリスト操作記録がありません</string>
     <string name="mark_records_empty_watched">視聴記録がありません</string>
@@ -1457,10 +1459,10 @@
     <string name="feedback_messages">メッセージ</string>
     <string name="feedback_messages_title">メッセージ</string>
     <string name="feedback_messages_empty">メッセージはありません</string>
+    <string name="feedback_messages_empty_unread">未読のメッセージはありません</string>
     <string name="feedback_messages_all_read">すべて既読にする</string>
     <string name="feedback_filter_all">すべて</string>
     <string name="feedback_filter_unread">未読</string>
-    <string name="feedback_filter_developer">開発者</string>
     <string name="feedback_role_developer">開発者</string>
     <string name="feedback_role_me">自分</string>
     <string name="feedback_conversation">会話</string>

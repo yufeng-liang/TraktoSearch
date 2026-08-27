@@ -170,7 +170,9 @@ fun MarkRecordScreen(
             else -> 0.60f
         },
         ambientColor = rememberCachedPosterAmbientColor(
-            posterUrls = uiState.items.mapNotNull { it.posterUrl },
+            // 必须 remember：rememberCachedPosterAmbientColor 内部用列表身份做 remember/LaunchedEffect 的 key，
+            // 每次重组都传新列表会让环境色先跳回 fallback 再重读一遍颜色缓存
+            posterUrls = remember(uiState.items) { uiState.items.mapNotNull { it.posterUrl } },
             fallback = MaterialTheme.colorScheme.background
         ),
         contentCapacity = 36,
@@ -269,6 +271,9 @@ fun MarkRecordScreen(
                 }
                 uiState.items.isEmpty() -> {
                     item(span = { GridItemSpan(2) }) {
+                        // 筛选/搜索把结果筛空了要说清楚，并给一个一键清掉的出口：
+                        // 否则用户看到的是「暂无记录」，会以为数据丢了
+                        val filteredEmpty = uiState.hasActiveFilterOrSearch
                         EmptyStateCard(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -276,14 +281,28 @@ fun MarkRecordScreen(
                             isDark = isDark,
                             hazeState = hazeState,
                             hazeStyle = hazeStyle,
-                            icon = Icons.Rounded.Inbox,
-                            title =
+                            icon = if (filteredEmpty) Icons.Rounded.FilterList else Icons.Rounded.Inbox,
+                            title = if (filteredEmpty) {
+                                stringResource(R.string.mark_records_empty_filtered)
+                            } else {
                                 stringResource(when (uiState.currentTab) {
                                     MarkRecordTab.ALL -> R.string.mark_records_empty_all
                                     MarkRecordTab.WATCHLIST -> R.string.mark_records_empty_watchlist
                                     MarkRecordTab.WATCHED -> R.string.mark_records_empty_watched
                                     MarkRecordTab.REMOVED -> R.string.mark_records_empty_removed
                                 })
+                            },
+                            actions = {
+                                if (filteredEmpty) {
+                                    TextButton(onClick = {
+                                        collapseSearch()
+                                        viewModel.updateSearchQuery("")
+                                        viewModel.updateFilter(emptySet(), DatePreset.ALL, null, uiState.sortAscending)
+                                    }) {
+                                        Text(stringResource(R.string.mark_records_clear_filter))
+                                    }
+                                }
+                            }
                         )
                     }
                 }
@@ -497,6 +516,12 @@ fun MarkRecordScreen(
                         Icon(
                             Icons.Rounded.FilterList,
                             contentDescription = stringResource(R.string.filter_title),
+                            // 筛选生效时保持主色：弹窗关上后没有别的地方能看出条件还开着
+                            tint = if (uiState.hasActiveFilter) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                LocalContentColor.current
+                            },
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -527,9 +552,10 @@ fun MarkRecordScreen(
                 }
             }
 
-            // 已展示旧数据但远端仍在刷新时的细进度条：不遮挡内容，只提示数据可能不是最新。
+            // 已展示旧数据但仍在加载时的细进度条：不遮挡内容，只提示数据可能不是最新。
             // 放在吸顶栏最底部，出现/消失不会推动上方的标题与 Tab。
-            if (uiState.isRefreshing && uiState.items.isNotEmpty()) {
+            // isLoading 也算：改筛选/搜索时列表保留旧内容不进骨架屏，这里是唯一的进度提示。
+            if ((uiState.isRefreshing || uiState.isLoading) && uiState.items.isNotEmpty()) {
                 LinearProgressIndicator(
                     modifier = Modifier
                         .fillMaxWidth()

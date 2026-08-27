@@ -2226,15 +2226,8 @@ private fun WatchlistFilterSheet(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 sortedGenres.forEach { genre ->
-                    FilterChip(
+                    WatchlistFilterChip(
                         selected = genre in filterState.selectedGenres,
-                        border = if (genre in filterState.selectedGenres) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-                        colors = FilterChipDefaults.filterChipColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                        ),
                         onClick = {
                             val newSet = if (genre in filterState.selectedGenres) {
                                 filterState.selectedGenres - genre
@@ -2243,7 +2236,7 @@ private fun WatchlistFilterSheet(
                             }
                             onGenresChange(newSet)
                         },
-                        label = { Text(genre) }
+                        label = genre
                     )
                 }
             }
@@ -2274,17 +2267,10 @@ private fun WatchlistFilterSheet(
                             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
                         ) {
                             rowDecades.forEach { decade ->
-                                FilterChip(
+                                WatchlistFilterChip(
                                     selected = decade in filterState.selectedDecadeKeys,
-                                    border = if (decade in filterState.selectedDecadeKeys) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                                    ),
                                     onClick = { onDecadeToggle(decade) },
-                                    label = { Text("${decade}s") }
+                                    label = "${decade}s"
                                 )
                             }
                         }
@@ -2296,6 +2282,12 @@ private fun WatchlistFilterSheet(
 
             // 评分 RangeSlider(Trakt 评分 标题 + 滑动条同一行)
             val view = LocalView.current
+            // 拖动中只改本地值，松手才写进 filterState：
+            // 每帧都写的话每一帧都要重新过滤+排序整个列表，还会因为 filterToken 变化重建 6 个网格状态。
+            // 用 uiState 的值做 key：重置筛选后本地值要跟着回到 0-10。
+            var localRatingRange by remember(filterState.ratingRange) {
+                mutableStateOf(filterState.ratingRange)
+            }
             // 跟踪上一次的整数值，仅在整数变化时触发触感反馈（避免拖动过程中频繁震动）
             var lastRatingStart by remember(filterState.ratingRange.start) { mutableStateOf(filterState.ratingRange.start.toInt()) }
             var lastRatingEnd by remember(filterState.ratingRange.endInclusive) { mutableStateOf(filterState.ratingRange.endInclusive.toInt()) }
@@ -2349,7 +2341,7 @@ private fun WatchlistFilterSheet(
                         )
                 ) {
                     RangeSlider(
-                        value = filterState.ratingRange,
+                        value = localRatingRange,
                         onValueChange = { range ->
                             // 仅在整数值变化时触发触感反馈（参考 PanHubConfigDialog 的并发数滑动条）
                             val newStart = range.start.toInt()
@@ -2359,15 +2351,16 @@ private fun WatchlistFilterSheet(
                                 lastRatingStart = newStart
                                 lastRatingEnd = newEnd
                             }
-                            onRatingRangeChange(range)
+                            localRatingRange = range
                         },
+                        onValueChangeFinished = { onRatingRangeChange(localRatingRange) },
                         valueRange = 0f..10f,
                         steps = 9,  // 步长 1（0,1,2,...,10）
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
                 Text(
-                    text = "%.0f-%.0f".format(filterState.ratingRange.start, filterState.ratingRange.endInclusive),
+                    text = "%.0f-%.0f".format(localRatingRange.start, localRatingRange.endInclusive),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -2393,23 +2386,14 @@ private fun WatchlistFilterSheet(
                     modifier = Modifier.weight(1f)
                 ) {
                     MarkedTimePreset.entries.forEach { preset ->
-                        FilterChip(
+                        WatchlistFilterChip(
                             selected = filterState.markedTimePreset == preset,
-                            border = if (filterState.markedTimePreset == preset) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                            ),
                             onClick = { onMarkedTimePresetChange(preset) },
-                            label = {
-                                Text(stringResource(when (preset) {
-                                    MarkedTimePreset.SEVEN_DAYS -> R.string.filter_time_7d
-                                    MarkedTimePreset.THIRTY_DAYS -> R.string.filter_time_30d
-                                    MarkedTimePreset.ALL -> R.string.filter_time_all
-                                }))
-                            }
+                            label = stringResource(when (preset) {
+                                MarkedTimePreset.SEVEN_DAYS -> R.string.filter_time_7d
+                                MarkedTimePreset.THIRTY_DAYS -> R.string.filter_time_30d
+                                MarkedTimePreset.ALL -> R.string.filter_time_all
+                            })
                         )
                     }
                 }
@@ -2439,7 +2423,10 @@ private fun WatchlistFilterSheet(
                 ) {
                     SegmentedButton(
                         selected = filterState.markedTimeOrder == SortOrder.DESC,
-                        onClick = { onMarkedTimeOrderChange(SortOrder.DESC) },
+                        onClick = {
+                            view.performHaptic(HapticType.CLICK)
+                            onMarkedTimeOrderChange(SortOrder.DESC)
+                        },
                         shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
                         colors = SegmentedButtonDefaults.colors(activeContainerColor = MaterialTheme.colorScheme.primary, activeContentColor = MaterialTheme.colorScheme.onPrimary),
                         modifier = Modifier.widthIn(min = 100.dp),
@@ -2455,7 +2442,10 @@ private fun WatchlistFilterSheet(
                     )
                     SegmentedButton(
                         selected = filterState.markedTimeOrder == SortOrder.ASC,
-                        onClick = { onMarkedTimeOrderChange(SortOrder.ASC) },
+                        onClick = {
+                            view.performHaptic(HapticType.CLICK)
+                            onMarkedTimeOrderChange(SortOrder.ASC)
+                        },
                         shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                         colors = SegmentedButtonDefaults.colors(activeContainerColor = MaterialTheme.colorScheme.primary, activeContentColor = MaterialTheme.colorScheme.onPrimary),
                         modifier = Modifier.widthIn(min = 100.dp),
@@ -2488,6 +2478,43 @@ private fun WatchlistFilterSheet(
             }
         }
     }
+}
+
+/**
+ * 筛选弹窗里的 chip：配色、描边、触感统一在这里。
+ *
+ * 原来类型/年代/标记时间三组各自重复一遍同样的 8 行配色，触感一处都没加，
+ * 点起来和页面里其他 chip 手感不一致。
+ */
+@Composable
+private fun WatchlistFilterChip(
+    selected: Boolean,
+    onClick: () -> Unit,
+    label: String
+) {
+    val view = LocalView.current
+    FilterChip(
+        selected = selected,
+        border = BorderStroke(
+            1.dp,
+            if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+            }
+        ),
+        colors = FilterChipDefaults.filterChipColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            selectedContainerColor = MaterialTheme.colorScheme.primary,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+        ),
+        onClick = {
+            view.performHaptic(HapticType.CLICK)
+            onClick()
+        },
+        label = { Text(label) }
+    )
 }
 
 /**
