@@ -41,8 +41,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
@@ -54,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -62,7 +65,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.hasListScrolled
+import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.launch
 
 /**
@@ -217,6 +225,18 @@ fun HelpScreen(
         }
         onDispose { scrollToTopProvider.unregister() }
     }
+    val hazeState = remember { HazeState() }
+    // HazeMaterials.thin() 读 colorScheme，是 @Composable 函数，不能 remember 缓存
+    val hazeStyle = HazeMaterials.thin()
+    // 静止时列表未位移、栏下无内容，顶栏保持全透明；滚动后再启用模糊/玻璃
+    val hasContentUnderTopBar by remember {
+        derivedStateOf {
+            hasListScrolled(
+                firstVisibleItemIndex = lazyListState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffsetPx = lazyListState.firstVisibleItemScrollOffset
+            )
+        }
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
@@ -230,7 +250,8 @@ fun HelpScreen(
             LazyColumn(
                 state = lazyListState,
                 modifier = Modifier
-                    .fillMaxSize(),
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState),
                 contentPadding = PaddingValues(
                     top = 64.dp + statusBarHeight,
                     bottom = 80.dp
@@ -520,11 +541,19 @@ fun HelpScreen(
                 }
             }
 
-            // TopAppBar（纯色背景，无共享元素转场）
+            // 毛玻璃吸顶标题栏（按视觉模式切 Blur/Glass），无共享元素转场
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
+                    .hazeTopBar(
+                        state = hazeState,
+                        style = hazeStyle,
+                        blurRadius = 24.dp,
+                        // 搜索框展开时顶栏比 contentPadding 预留的 64dp 更高、会压住首段，
+                        // 此时强制启用模糊，输入框才有磨砂底衬而不是直接透出正文
+                        isContentUnderTopBar = hasContentUnderTopBar || searchVisible
+                    )
+                    // 拦截点击：顶栏覆盖可滚动列表，不消费会让点击穿透到下方列表项
                     .clickable(enabled = false, onClick = {})
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding())
@@ -560,6 +589,10 @@ fun HelpScreen(
                             )
                         }
                     },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        // 底色交给外层 hazeTopBar；M3 默认容器色会盖死毛玻璃
+                        containerColor = Color.Transparent
+                    ),
                     windowInsets = WindowInsets(0, 0, 0, 0)
                 )
                 if (searchVisible) {

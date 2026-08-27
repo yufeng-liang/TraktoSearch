@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,6 +40,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.VolunteerActivism
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,7 +60,12 @@ import androidx.compose.ui.unit.dp
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.net.toUri
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.hasListScrolled
+import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.theme.DesignToken
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 
 /**
  * 开源相关页：按分组列出本 App 使用的第三方开源库（名称版本/许可/开发者），
@@ -72,6 +79,19 @@ fun OpenSourceScreen(
     var selected by remember { mutableStateOf<OssLibrary?>(null) }
     val groups = OpenSourceData.groups
     val libraryTotal = remember(groups) { groups.sumOf { it.libraries.size } }
+    val listState = rememberLazyListState()
+    val hazeState = remember { HazeState() }
+    // HazeMaterials.thin() 读 colorScheme，是 @Composable 函数，不能 remember 缓存
+    val hazeStyle = HazeMaterials.thin()
+    // 静止时列表未位移、栏下无内容，顶栏保持全透明；滚动后再启用模糊/玻璃
+    val hasContentUnderTopBar by remember {
+        derivedStateOf {
+            hasListScrolled(
+                firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffsetPx = listState.firstVisibleItemScrollOffset
+            )
+        }
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
@@ -83,7 +103,10 @@ fun OpenSourceScreen(
         ) {
             val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState),
                 contentPadding = PaddingValues(
                     top = 64.dp + statusBarHeight,
                     bottom = 80.dp
@@ -102,11 +125,17 @@ fun OpenSourceScreen(
                 }
             }
 
-            // TopAppBar（纯色背景，与帮助页一致）
+            // 毛玻璃吸顶标题栏（按视觉模式切 Blur/Glass，与帮助页及设置各子页一致）
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
+                    .hazeTopBar(
+                        state = hazeState,
+                        style = hazeStyle,
+                        blurRadius = 24.dp,
+                        isContentUnderTopBar = hasContentUnderTopBar
+                    )
+                    // 拦截点击：顶栏覆盖可滚动列表，不消费会让点击穿透到下方列表项
                     .clickable(enabled = false, onClick = {})
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding())
@@ -128,7 +157,8 @@ fun OpenSourceScreen(
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
+                        // 底色交给外层 hazeTopBar；这里若留 surface 会盖死毛玻璃
+                        containerColor = Color.Transparent
                     ),
                     // 外层 Column 已让出状态栏，这里必须清零，否则状态栏高度被算两遍、标题栏变高
                     windowInsets = WindowInsets(0, 0, 0, 0)
