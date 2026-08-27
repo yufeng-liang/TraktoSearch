@@ -457,17 +457,220 @@ class DiscoverFilterViewModelTest {
     }
 
     /**
-     * expandAdvanced 只展开不收起。
+     * 回归测试：首屏还在加载时改条件，这次改动不能被丢掉。
      *
-     * 评分 chip 用它：面板开着时再 toggleAdvanced 会把面板收起来，用户看起来是"点了没反应"。
+     * Bug 场景：search() 原来一律 `if (isLoading) return`，首屏请求没回来时点「应用」
+     * 直接早退，之后也没有补发时机 —— 筛选 chip 亮着，结果却是旧条件的。
      */
     @Test
-    fun `expandAdvanced_已展开_保持展开`() = runTest {
-        viewModel = createViewModel()
-        viewModel.expandAdvanced()
-        assertThat(viewModel.uiState.value.showAdvanced).isTrue()
+    fun `search_首屏加载中改条件_新条件照样生效`() = runTest {
+        val firstGate = CompletableDeferred<Unit>()
+        coEvery { tmdbRepository.discover(match { it.genreIds.isEmpty() }, any()) } coAnswers {
+            firstGate.await()
+            TmdbRepository.DiscoverPage(items = testItems, totalPages = 5, totalResults = 100)
+        }
+        coEvery { tmdbRepository.discover(match { it.genreIds == listOf(18) }, any()) } returns
+            TmdbRepository.DiscoverPage(
+                items = listOf(TmdbSearchResult(id = 7, title = "剧情片")),
+                totalPages = 1,
+                totalResults = 1
+            )
 
-        viewModel.expandAdvanced()
-        assertThat(viewModel.uiState.value.showAdvanced).isTrue()
+        viewModel = createViewModel()
+        advanceUntilIdle() // 首屏请求卡在闸门上
+        assertThat(viewModel.uiState.value.isLoading).isTrue()
+
+        viewModel.toggleGenre(18)
+        viewModel.search()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.items.map { it.id }).containsExactly(7)
+
+        // 被取消的首屏请求即使这时才返回，也不能盖掉新条件的结果
+        firstGate.complete(Unit)
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.items.map { it.id }).containsExactly(7)
+    }
+
+    /** 条件没变时的重复 search 仍然要挡住，别把在飞的请求重开一遍 */
+    @Test
+    fun `search_加载中条件未变_不重复请求`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        coEvery { tmdbRepository.discover(any(), any()) } coAnswers {
+            gate.await()
+            TmdbRepository.DiscoverPage(items = testItems, totalPages = 1, totalResults = 2)
+        }
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.search()
+        viewModel.search()
+        advanceUntilIdle()
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { tmdbRepository.discover(any(), any()) }
+    }
+
+    // ==================== 年代范围提示 ====================
+
+    /**
+     * 年代多选不连续时要把实际生效范围标出来。
+     *
+     * TMDB 的日期筛选只有一个连续区间，选「1990年代 + 2010年代」实际请求的是
+     * 1990-2019，中间的 2000年代 也会进结果 —— 不提示的话用户以为只筛了点中的两格。
+     */
+    @Test
+    fun `toggleDecade_选中年代不连续_提示实际生效范围`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.toggleDecade("1990-1999")
+        viewModel.toggleDecade("2010-2019")
+
+        assertThat(viewModel.uiState.value.decadeSpanHint).isEqualTo(1990 to 2019)
+    }
+
+    @Test
+    fun `toggleDecade_选中年代连续_不提示`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.toggleDecade("1990-1999")
+        viewModel.toggleDecade("2000-2009")
+
+        // 合并出来的 1990-2009 和用户点的一致，提示反而是噪音
+        assertThat(viewModel.uiState.value.decadeSpanHint).isNull()
+    }
+
+    @Test
+    fun `toggleDecade_单选_不提示`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.toggleDecade("1990-1999")
+
+        assertThat(viewModel.uiState.value.decadeSpanHint).isNull()
+    }
+
+    @Test
+    fun `toggleDecade_全部选项_清空选择与提示`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        viewModel.toggleDecade("1990-1999")
+        viewModel.toggleDecade("2010-2019")
+
+        viewModel.toggleDecade("0-0") // "全部"
+
+        assertThat(viewModel.uiState.value.selectedDecadeKeys).isEmpty()
+        assertThat(viewModel.uiState.value.decadeSpanHint).isNull()
+    }
+
+    /** 选中年代要如实转成日期区间传给 TMDB */
+    @Test
+    fun `toggleDecade_日期区间按选中年份传参`() = runTest {
+        coEvery { tmdbRepository.discover(any(), any()) } returns
+            TmdbRepository.DiscoverPage(items = testItems, totalPages = 1, totalResults = 2)
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.toggleDecade("1990-1999")
+        viewModel.search()
+        advanceUntilIdle()
+
+        coVerify {
+            tmdbRepository.discover(
+                match { it.releaseDateStart == "1990-01-01" && it.releaseDateEnd == "1999-12-31" },
+                1
+            )
+        }
+    }
+
+    // ==================== 仅展示未标看过 ====================
+
+    /**
+     * 回归测试：整页都被「仅展示未标看过」筛空时要继续往后翻。
+     *
+     * Bug 场景：客户端过滤把第一页全筛掉后 items 为空，屏幕显示「没有符合条件的结果」，
+     * 而自动翻页要求 items 非空 —— 后面几页明明还有没看过的片，列表却卡死在空态。
+     */
+    @Test
+    fun `hideWatched_整页都看过_自动往后翻到有结果的页`() = runTest {
+        // 第 1 页全是看过的，第 2 页有没看过的
+        val watchedIds = TraktRepository.WatchlistWatchedIds(movieWatchedTmdbIds = setOf(1, 2))
+        every { traktRepository.getWatchlistWatchedIds() } returns watchedIds
+        every { sessionModeManager.traktConnected } returns MutableStateFlow(true)
+        coEvery { traktRepository.loadWatchlistWatchedIds() } returns watchedIds
+        coEvery { tmdbRepository.discover(any(), 1) } returns
+            TmdbRepository.DiscoverPage(items = testItems, totalPages = 3, totalResults = 6)
+        coEvery { tmdbRepository.discover(any(), 2) } returns TmdbRepository.DiscoverPage(
+            items = listOf(TmdbSearchResult(id = 3, title = "没看过的")),
+            totalPages = 3,
+            totalResults = 6
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        viewModel.toggleHideWatched()
+        viewModel.search()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.items.map { it.id }).containsExactly(3)
+        // 翻到第 2 页才有结果，currentPage 要跟上，否则下次 loadMore 又去要第 2 页
+        assertThat(state.currentPage).isEqualTo(2)
+    }
+
+    /**
+     * 回归测试：想看/已看 ID 还没加载完时，「仅展示未标看过」不能静默失效。
+     *
+     * Bug 场景：过滤分支要求 _watchlistWatchedIds != null，加载没完成时整页直接放行，
+     * 开关看着是开的，看过的片照样排在最前面。
+     */
+    @Test
+    fun `hideWatched_ID还在加载_先等ID再过滤`() = runTest {
+        val idsGate = CompletableDeferred<TraktRepository.WatchlistWatchedIds>()
+        val watchedIds = TraktRepository.WatchlistWatchedIds(movieWatchedTmdbIds = setOf(1))
+        every { sessionModeManager.traktConnected } returns MutableStateFlow(true)
+        coEvery { traktRepository.loadWatchlistWatchedIds() } coAnswers { idsGate.await() }
+        every { traktRepository.getWatchlistWatchedIds() } returns watchedIds
+        coEvery { tmdbRepository.discover(any(), any()) } returns
+            TmdbRepository.DiscoverPage(items = testItems, totalPages = 1, totalResults = 2)
+
+        viewModel = createViewModel()
+        advanceUntilIdle() // ID 加载卡在闸门上；首屏（没开筛选）结果已上屏
+        assertThat(viewModel.uiState.value.items.map { it.id }).containsExactly(1, 2)
+
+        viewModel.toggleHideWatched()
+        viewModel.search()
+        // 这里不能 advanceUntilIdle：等 ID 的 withTimeoutOrNull 有 3s 兜底，
+        // 推进虚拟时间会直接跳到超时，测不到"先等 ID"这段行为
+        assertThat(viewModel.uiState.value.items).isEmpty()
+        assertThat(viewModel.uiState.value.isLoading).isTrue()
+
+        idsGate.complete(watchedIds)
+        advanceUntilIdle()
+
+        // id=1 已看，被筛掉；id=2 保留
+        assertThat(viewModel.uiState.value.items.map { it.id }).containsExactly(2)
+    }
+
+    /** TMDB 分页硬上限 500 页，越界会返回 400（"Invalid page"），到顶就当没有下一页 */
+    @Test
+    fun `loadMore_到达TMDB分页上限_不再请求`() = runTest {
+        coEvery { tmdbRepository.discover(any(), any()) } returns
+            TmdbRepository.DiscoverPage(items = testItems, totalPages = 900, totalResults = 18000)
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        // 一路翻到上限之后再多点几次，越界的那一页不该被请求
+        repeat(520) {
+            viewModel.loadMore()
+            advanceUntilIdle()
+        }
+
+        assertThat(viewModel.uiState.value.currentPage).isEqualTo(500)
+        coVerify(exactly = 0) { tmdbRepository.discover(any(), 501) }
     }
 }

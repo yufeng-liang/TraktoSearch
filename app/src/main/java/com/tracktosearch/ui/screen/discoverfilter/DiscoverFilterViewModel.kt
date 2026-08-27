@@ -19,7 +19,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Calendar
 import javax.inject.Inject
 
@@ -30,6 +33,14 @@ data class DiscoverFilterUiState(
     val selectedCountries: Set<String> = emptySet(),
     val selectedKeywordIds: Set<Int> = emptySet(),
     val selectedDecadeKeys: Set<String> = emptySet(),
+    /**
+     * 选中年代不连续时实际生效的年份范围（起始年 to 结束年），连续或单选时为 null。
+     *
+     * TMDB 的日期筛选只有一个连续区间（gte/lte），选「2026 + 1990年代」只能合并成
+     * 1990-01-01..2026-12-31，中间没选的 2000/2010 年代也会进结果。
+     * UI 据此把实际范围标出来，否则用户以为只筛了自己点的那两格。
+     */
+    val decadeSpanHint: Pair<Int, Int>? = null,
     val voteAverageMin: Float = 0f,
     val voteAverageMax: Float = 10f,
     val sortBy: TmdbRepository.DiscoverSort = TmdbRepository.DiscoverSort.POPULARITY_DESC,
@@ -217,6 +228,7 @@ class DiscoverFilterViewModel @Inject constructor(
             selectedCountries = saved.countries,
             selectedKeywordIds = saved.keywordIds,
             selectedDecadeKeys = saved.decadeKeys,
+            decadeSpanHint = decadeSpanHintFor(saved.decadeKeys),
             voteAverageMin = saved.voteMin,
             voteAverageMax = saved.voteMax,
             sortBy = saved.sortBy,
@@ -272,13 +284,15 @@ class DiscoverFilterViewModel @Inject constructor(
         val current = _uiState.value.selectedDecadeKeys
         // "全部"选项（key="0-0"）清空筛选
         val allOption = decadeOptions.firstOrNull { it.isAll }
-        if (allOption != null && key == allOption.key) {
-            _uiState.value = _uiState.value.copy(selectedDecadeKeys = emptySet())
+        val next = if (allOption != null && key == allOption.key) {
+            emptySet()
         } else {
-            _uiState.value = _uiState.value.copy(
-                selectedDecadeKeys = if (key in current) current - key else current + key
-            )
+            if (key in current) current - key else current + key
         }
+        _uiState.value = _uiState.value.copy(
+            selectedDecadeKeys = next,
+            decadeSpanHint = decadeSpanHintFor(next)
+        )
     }
 
     fun setVoteRange(min: Float, max: Float) {
@@ -326,6 +340,7 @@ class DiscoverFilterViewModel @Inject constructor(
             selectedCountries = emptySet(),
             selectedKeywordIds = emptySet(),
             selectedDecadeKeys = emptySet(),
+            decadeSpanHint = null,
             voteAverageMin = 0f,
             voteAverageMax = 10f,
             sortBy = TmdbRepository.DiscoverSort.POPULARITY_DESC,
@@ -340,31 +355,53 @@ class DiscoverFilterViewModel @Inject constructor(
     }
 
     /**
+     * 选项实际覆盖的年份区间。
+     *
+     * "更早"选项存的是 startYear=0，代表 1900 以来；endYear=0 只出现在"全部"上（不参与日期计算）。
+     */
+    private fun effectiveYears(opt: DiscoverFilterConstants.DecadeOption): IntRange {
+        val start = if (opt.startYear == 0) EARLIEST_YEAR else opt.startYear
+        val end = if (opt.endYear == 0) EARLIER_OPTION_END_YEAR else opt.endYear
+        return start..end
+    }
+
+    /** 选中的年代合并成的连续年份区间，没有有效选项时返回 null */
+    private fun mergedYearRange(keys: Set<String>): IntRange? {
+        val options = decadeOptions.filter { it.key in keys && !it.isAll }
+        if (options.isEmpty()) return null
+        val ranges = options.map { effectiveYears(it) }
+        return ranges.minOf { it.first }..ranges.maxOf { it.last }
+    }
+
+    /**
+     * 选中年代之间有没有被"顺带筛进来"的年份。
+     *
+     * 有缺口才返回实际范围：连续多选（如 1990年代 + 2000年代）合并出来的区间和用户点的一致，
+     * 提示反而是噪音。
+     */
+    private fun decadeSpanHintFor(keys: Set<String>): Pair<Int, Int>? {
+        val merged = mergedYearRange(keys) ?: return null
+        val selectedRanges = decadeOptions.filter { it.key in keys && !it.isAll }.map { effectiveYears(it) }
+        val fullyCovered = merged.all { year -> selectedRanges.any { year in it } }
+        return if (fullyCovered) null else merged.first to merged.last
+    }
+
+    /**
      * 计算选中年代对应的日期范围（多选合并为连续范围）。
-     * TMDB Discover 只支持连续日期范围，多选不连续年代会合并为最小起始到最大结束。
+     * TMDB Discover 只支持连续日期范围，多选不连续年代会合并为最小起始到最大结束，
+     * 中间被顺带筛进来的年份由 [DiscoverFilterUiState.decadeSpanHint] 在 UI 上标出。
      */
     private fun computeDateRange(): Pair<String?, String?> {
-        val keys = _uiState.value.selectedDecadeKeys
-        if (keys.isEmpty()) return null to null
-        val options = decadeOptions.filter { it.key in keys }
-        if (options.isEmpty()) return null to null
-
-        var minYear = Int.MAX_VALUE
-        var maxYear = Int.MIN_VALUE
-        for (opt in options) {
-            val s = if (opt.startYear == 0) 1900 else opt.startYear
-            val e = if (opt.endYear == 0) 1959 else opt.endYear
-            if (s < minYear) minYear = s
-            if (e > maxYear) maxYear = e
-        }
-        val start = "${minYear}-01-01"
-        val end = "${maxYear}-12-31"
-        return start to end
+        val merged = mergedYearRange(_uiState.value.selectedDecadeKeys) ?: return null to null
+        return "${merged.first}-01-01" to "${merged.last}-12-31"
     }
 
     /** 应用筛选条件，发起搜索。筛选条件未变化时跳过（避免重复请求） */
     fun search() {
-        if (_uiState.value.isLoading) return
+        // 加载中且条件没变：同一个请求不重复发。
+        // 条件变了则必须放行——首屏还在加载时改条件点「应用」，早退会把这次改动直接丢掉，
+        // 之后也没有补发时机，用户看到的是筛选条件亮着但结果是旧的。旧请求由 loadPage 取消。
+        if (_uiState.value.isLoading && !hasFilterChanged()) return
         // 条件未变化且有结果：不刷新
         if (!hasFilterChanged() && _uiState.value.hasSearched && _uiState.value.items.isNotEmpty()) return
         lastSearchSnapshot = currentSnapshot()
@@ -385,8 +422,21 @@ class DiscoverFilterViewModel @Inject constructor(
         val s = _uiState.value
         if (s.isLoading || s.isLoadingMore) return
         if (s.currentPage >= s.totalPages) return
+        // TMDB 硬上限 500 页，越界会返回 400（"Invalid page"），到顶就当没有下一页
+        if (s.currentPage >= TMDB_MAX_PAGE) return
         _uiState.value = s.copy(isLoadingMore = true, error = null)
         loadPage(s.currentPage + 1)
+    }
+
+    /** 「仅展示未标看过」的客户端过滤（TMDB 不知道用户标过什么） */
+    private fun filterWatched(
+        items: List<TmdbSearchResult>,
+        state: DiscoverFilterUiState
+    ): List<TmdbSearchResult> {
+        if (!state.hideWatched) return items
+        val ids = _watchlistWatchedIds.value ?: return items
+        val mediaType = if (state.type == TmdbRepository.DiscoverType.MOVIE) MediaType.MOVIE else MediaType.SHOW
+        return items.filter { !ids.isWatched(null, it.id, mediaType) }
     }
 
     private fun loadPage(page: Int) {
@@ -408,22 +458,38 @@ class DiscoverFilterViewModel @Inject constructor(
                 hideWatched = s.hideWatched
             )
             try {
-                val result = tmdbRepository.discover(filter, page)
-                // "仅展示未标看过"：客户端过滤
-                val filtered = if (s.hideWatched && _watchlistWatchedIds.value != null) {
-                    val wl = _watchlistWatchedIds.value!!
-                    result.items.filter { item ->
-                        val mediaType = if (s.type == TmdbRepository.DiscoverType.MOVIE) MediaType.MOVIE else MediaType.SHOW
-                        !wl.isWatched(null, item.id, mediaType)
+                // 想看/已看 ID 还在加载时先等一下：不等的话这一页等于没过滤，
+                // 开关看着是开的，看过的片照样排在最前面
+                if (s.hideWatched && _watchlistWatchedIds.value == null) {
+                    withTimeoutOrNull(WATCHED_IDS_WAIT_MILLIS) {
+                        watchlistWatchedIds.filterNotNull().first()
                     }
-                } else result.items
+                }
+                var pageToLoad = page
+                var result = tmdbRepository.discover(filter, pageToLoad)
+                var filtered = filterWatched(result.items, s)
+                // 整页都被「仅展示未标看过」筛空时继续往后翻：
+                // 停在这里会显示「没有符合条件的结果」，而后面几页其实还有没看过的
+                var skipped = 0
+                while (
+                    filtered.isEmpty() &&
+                    s.hideWatched &&
+                    pageToLoad < result.totalPages &&
+                    pageToLoad < TMDB_MAX_PAGE &&
+                    skipped < MAX_EMPTY_PAGE_SKIP
+                ) {
+                    pageToLoad++
+                    skipped++
+                    result = tmdbRepository.discover(filter, pageToLoad)
+                    filtered = filterWatched(result.items, s)
+                }
 
                 val existing = if (page == 1) emptyList() else _uiState.value.items
                 // 按 id 去重：TMDB Discover API 在某些排序方式下可能跨页返回相同条目，
                 // 直接拼接会导致 LazyColumn key 重复崩溃
                 _uiState.value = _uiState.value.copy(
                     items = (existing + filtered).distinctBy { it.id },
-                    currentPage = result.totalPages.coerceAtMost(page),
+                    currentPage = result.totalPages.coerceAtMost(pageToLoad),
                     totalPages = result.totalPages,
                     totalResults = result.totalResults,
                     isLoading = false,
@@ -441,5 +507,18 @@ class DiscoverFilterViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    private companion object {
+        /** "更早"选项的起点：TMDB 上更早的条目极少，1900 足够覆盖 */
+        const val EARLIEST_YEAR = 1900
+        /** "更早"选项的终点（只有"全部"选项 endYear 为 0，不参与日期计算） */
+        const val EARLIER_OPTION_END_YEAR = 1959
+        /** TMDB Discover 的分页上限 */
+        const val TMDB_MAX_PAGE = 500
+        /** 等想看/已看 ID 的上限：拿不到就先不过滤，不能把筛选页一直卡在骨架屏 */
+        const val WATCHED_IDS_WAIT_MILLIS = 3000L
+        /** 「仅展示未标看过」最多连续跳过的空页数，避免一次点击打出十几个请求 */
+        const val MAX_EMPTY_PAGE_SKIP = 3
     }
 }

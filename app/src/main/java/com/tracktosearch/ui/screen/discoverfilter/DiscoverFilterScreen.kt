@@ -545,7 +545,7 @@ fun DiscoverFilterScreen(
                             modifier = Modifier.width(36.dp)
                         )
                         // 评分双滑块（步长 1，触感反馈）。
-                        // 拖动只改本地状态，松手才写 uiState：每帧写 uiState 会让整页重组，
+                        // 拖动只改本地状态，松手才写 uiState + 发请求：每帧写 uiState 会让整页重组，
                         // 连毛玻璃顶栏的取色和骨架/场景判断都跟着重跑，拖起来发涩。
                         // remember 用 uiState 的值做 key，点了重置本地值才会跟着回到 0-10
                         var localMin by remember(uiState.voteAverageMin) { mutableFloatStateOf(uiState.voteAverageMin) }
@@ -561,7 +561,12 @@ fun DiscoverFilterScreen(
                                 localMin = range.start
                                 localMax = range.endInclusive
                             },
-                            onValueChangeFinished = { viewModel.setVoteRange(localMin, localMax) },
+                            // 松手即生效：等「应用」的话，用手势返回或滑动列表收起面板时这次改动就没了，
+                            // 而顶部的评分 chip 已经显示成已筛选，看着像生效了
+                            onValueChangeFinished = {
+                                viewModel.setVoteRange(localMin, localMax)
+                                viewModel.search()
+                            },
                             valueRange = 0f..10f,
                             steps = 9,  // 步长 1（0,1,2,...,10）
                             modifier = Modifier.weight(1f)
@@ -600,7 +605,8 @@ fun DiscoverFilterScreen(
                                 }
                                 GlassFilterChip(
                                     selected = uiState.sortBy == sort,
-                                    onClick = { viewModel.setSortBy(sort) },
+                                    // 点完立刻生效，理由同评分滑块
+                                    onClick = { viewModel.setSortBy(sort); viewModel.search() },
                                     hazeState = hazeState,
                                     text = sortText
                                 )
@@ -614,12 +620,28 @@ fun DiscoverFilterScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(
-                            text = stringResource(R.string.discover_filter_decade),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Column(modifier = Modifier.padding(end = 8.dp)) {
+                            Text(
+                                text = stringResource(R.string.discover_filter_decade),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            // 选的年代不连续时，TMDB 只能筛一个连续区间，中间的年份会被顺带带进来。
+                            // 不标出来的话用户以为只筛了自己点的那两格
+                            uiState.decadeSpanHint?.let { (startYear, endYear) ->
+                                Text(
+                                    text = stringResource(
+                                        R.string.discover_filter_decade_actual_range,
+                                        startYear,
+                                        endYear
+                                    ),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1
+                                )
+                            }
+                        }
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
                             verticalArrangement = Arrangement.spacedBy(0.dp)
@@ -632,7 +654,7 @@ fun DiscoverFilterScreen(
                                 }
                                 GlassFilterChip(
                                     selected = opt.key in uiState.selectedDecadeKeys,
-                                    onClick = { viewModel.toggleDecade(opt.key) },
+                                    onClick = { viewModel.toggleDecade(opt.key); viewModel.search() },
                                     hazeState = hazeState,
                                     text = decadeText
                                 )
@@ -654,12 +676,17 @@ fun DiscoverFilterScreen(
                             )
                             Switch(
                                 checked = uiState.hideWatched,
-                                onCheckedChange = { view.performHaptic(HapticType.CLICK); viewModel.toggleHideWatched() },
+                                onCheckedChange = {
+                                    view.performHaptic(HapticType.CLICK)
+                                    viewModel.toggleHideWatched()
+                                    viewModel.search()
+                                },
                                 colors = appSwitchColors()
                             )
                         }
                     }
-                    // 应用按钮：点击后搜索并收起高级面板
+                    // 收起面板看结果。面板内各项已经改完即生效，这里的 search() 通常是空操作
+                    // （条件没变会被 ViewModel 挡掉），只兜住「条件变了但请求没发出去」的极端情况
                     Button(
                         onClick = {
                             view.performHaptic(HapticType.HEAVY_CLICK)

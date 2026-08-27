@@ -1244,6 +1244,7 @@ Config:
     <string name="discover_filter_select_tags">Select tags</string>
     <string name="discover_filter_tag">Tag</string>
     <string name="discover_filter_decade">Decade</string>
+    <string name="discover_filter_decade_actual_range">Actual %1$d–%2$d</string>
     <string name="discover_filter_decade_all">All</string>
     <string name="discover_filter_decade_earlier">Earlier</string>
     <string name="decade_format">%ds</string>

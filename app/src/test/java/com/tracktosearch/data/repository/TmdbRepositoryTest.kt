@@ -1478,4 +1478,130 @@ class TmdbRepositoryTest {
             tmdbApiService.discoverMovie(any(), any(), any(), any(), any(), null, null, null, any(), any(), any(), any())
         }
     }
+
+    /** 多选是「任选其一」：TMDB 里逗号是 AND、竖线才是 OR，用逗号时两个关键词直接 0 条 */
+    @Test
+    fun discover_多选类型地区标签_用竖线拼成OR() = runTest {
+        coEvery {
+            tmdbApiService.discoverMovie(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } returns Response.success(TmdbSearchResponse())
+
+        val filter = TmdbRepository.DiscoverFilter(
+            type = TmdbRepository.DiscoverType.MOVIE,
+            genreIds = listOf(28, 35),
+            originCountries = listOf("CN", "JP"),
+            keywordIds = listOf(180547, 2076),
+            voteAverageMin = 0f, voteAverageMax = 10f,
+            releaseDateStart = null, releaseDateEnd = null,
+            sortBy = TmdbRepository.DiscoverSort.POPULARITY_DESC,
+            hideWatched = false
+        )
+        repository.discover(filter, page = 1)
+
+        coVerify {
+            tmdbApiService.discoverMovie(
+                any(), any(),
+                "28|35", "CN|JP", "180547|2076",
+                any(), any(), any(), any(), any(), any(), any()
+            )
+        }
+    }
+
+    /** 剧集的「上映日期」排序要用 first_air_date：primary_release_date 是电影专用，TMDB 会静默忽略 */
+    @Test
+    fun discover_SHOW按上映日期排序_用first_air_date() = runTest {
+        coEvery {
+            tmdbApiService.discoverTv(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } returns Response.success(TmdbSearchResponse())
+
+        val filter = TmdbRepository.DiscoverFilter(
+            type = TmdbRepository.DiscoverType.SHOW,
+            genreIds = emptyList(), originCountries = emptyList(), keywordIds = emptyList(),
+            voteAverageMin = 0f, voteAverageMax = 10f,
+            releaseDateStart = null, releaseDateEnd = null,
+            sortBy = TmdbRepository.DiscoverSort.RELEASE_DATE_DESC,
+            hideWatched = false
+        )
+        repository.discover(filter, page = 1)
+
+        coVerify {
+            tmdbApiService.discoverTv(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                "first_air_date.desc", any()
+            )
+        }
+    }
+
+    @Test
+    fun discover_MOVIE按上映日期排序_用primary_release_date() = runTest {
+        coEvery {
+            tmdbApiService.discoverMovie(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } returns Response.success(TmdbSearchResponse())
+
+        val filter = TmdbRepository.DiscoverFilter(
+            type = TmdbRepository.DiscoverType.MOVIE,
+            genreIds = emptyList(), originCountries = emptyList(), keywordIds = emptyList(),
+            voteAverageMin = 0f, voteAverageMax = 10f,
+            releaseDateStart = null, releaseDateEnd = null,
+            sortBy = TmdbRepository.DiscoverSort.RELEASE_DATE_DESC,
+            hideWatched = false
+        )
+        repository.discover(filter, page = 1)
+
+        coVerify {
+            tmdbApiService.discoverMovie(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                "primary_release_date.desc", any()
+            )
+        }
+    }
+
+    /** 按评分排序必须带最低投票数，否则榜首全是 1 票的 10.0 分冷门片 */
+    @Test
+    fun discover_按评分排序_带最低投票数() = runTest {
+        coEvery {
+            tmdbApiService.discoverMovie(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } returns Response.success(TmdbSearchResponse())
+
+        val filter = TmdbRepository.DiscoverFilter(
+            type = TmdbRepository.DiscoverType.MOVIE,
+            genreIds = emptyList(), originCountries = emptyList(), keywordIds = emptyList(),
+            // 评分区间是满量程：只有排序方式要求下限
+            voteAverageMin = 0f, voteAverageMax = 10f,
+            releaseDateStart = null, releaseDateEnd = null,
+            sortBy = TmdbRepository.DiscoverSort.VOTE_AVERAGE_DESC,
+            hideWatched = false
+        )
+        repository.discover(filter, page = 1)
+
+        coVerify {
+            tmdbApiService.discoverMovie(
+                any(), any(), any(), any(), any(), any(), any(), 200, any(), any(), any(), any()
+            )
+        }
+    }
+
+    /** 通用浏览入口不带成人内容 */
+    @Test
+    fun discover_不包含成人内容() = runTest {
+        coEvery {
+            tmdbApiService.discoverMovie(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } returns Response.success(TmdbSearchResponse())
+
+        val filter = TmdbRepository.DiscoverFilter(
+            type = TmdbRepository.DiscoverType.MOVIE,
+            genreIds = emptyList(), originCountries = emptyList(), keywordIds = emptyList(),
+            voteAverageMin = 0f, voteAverageMax = 10f,
+            releaseDateStart = null, releaseDateEnd = null,
+            sortBy = TmdbRepository.DiscoverSort.POPULARITY_DESC,
+            hideWatched = false
+        )
+        repository.discover(filter, page = 1)
+
+        coVerify {
+            tmdbApiService.discoverMovie(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), false
+            )
+        }
+    }
 }

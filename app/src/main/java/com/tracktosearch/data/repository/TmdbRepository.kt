@@ -44,6 +44,10 @@ class TmdbRepository @Inject constructor(
         private const val TTL_REVIEWS = 10 * 60 * 1000L      // 评论 10 分钟
         private const val TTL_LISTS = 6 * 60 * 60 * 1000L   // 列表类 6 小时（榜单数据更新不频繁）
         private const val PERSON_CREDITS_PAGE_SIZE = 20      // 人物作品每页数量
+        // Discover 评分筛选的最低投票数：只有几票的条目评分没有代表性，会挤掉真正的高分片
+        private const val DISCOVER_VOTE_COUNT_MIN_FILTER = 50
+        // Discover 按评分排序的最低投票数：门槛比筛选高，否则榜首全是 1 票的满分冷门片
+        private const val DISCOVER_VOTE_COUNT_MIN_SORT = 200
     }
 
     /**
@@ -918,9 +922,9 @@ class TmdbRepository @Inject constructor(
     /** Discover 筛选条件 */
     data class DiscoverFilter(
         val type: DiscoverType,             // 电影/电视剧
-        val genreIds: List<Int>,            // 类型（多选，TMDB OR 逻辑）
-        val originCountries: List<String>,  // 地区（多选，TMDB OR 逻辑）
-        val keywordIds: List<Int>,          // 标签/关键词（多选，TMDB OR 逻辑）
+        val genreIds: List<Int>,            // 类型（多选，OR）
+        val originCountries: List<String>,  // 地区（多选，OR）
+        val keywordIds: List<Int>,          // 标签/关键词（多选，OR）
         val voteAverageMin: Float,          // 评分下限 0-10
         val voteAverageMax: Float,          // 评分上限 0-10
         val releaseDateStart: String?,      // 年代起始日期 yyyy-MM-dd
@@ -931,10 +935,24 @@ class TmdbRepository @Inject constructor(
 
     enum class DiscoverType { MOVIE, SHOW }
 
-    enum class DiscoverSort(val value: String) {
-        POPULARITY_DESC("popularity.desc"),
-        RELEASE_DATE_DESC("primary_release_date.desc"),
-        VOTE_AVERAGE_DESC("vote_average.desc")
+    enum class DiscoverSort {
+        POPULARITY_DESC,
+        RELEASE_DATE_DESC,
+        VOTE_AVERAGE_DESC;
+
+        /**
+         * TMDB 的 sort_by 取值按类型区分。
+         *
+         * /discover/tv 不认电影专用的 primary_release_date.desc：TMDB 不会报错，
+         * 而是静默忽略并回落到默认的 popularity.desc，用户看到的是「点了按上映日期排序但顺序没变」。
+         * 剧集的对应字段是 first_air_date。
+         */
+        fun apiValue(type: DiscoverType): String = when (this) {
+            POPULARITY_DESC -> "popularity.desc"
+            RELEASE_DATE_DESC ->
+                if (type == DiscoverType.MOVIE) "primary_release_date.desc" else "first_air_date.desc"
+            VOTE_AVERAGE_DESC -> "vote_average.desc"
+        }
     }
 
     /** Discover 分页结果 */
@@ -947,14 +965,25 @@ class TmdbRepository @Inject constructor(
     /** 按筛选条件发现影视（分页） */
     suspend fun discover(filter: DiscoverFilter, page: Int): DiscoverPage {
         return try {
-            val genres = filter.genreIds.joinToString(",").ifEmpty { null }
-            val countries = filter.originCountries.joinToString(",").ifEmpty { null }
-            val keywords = filter.keywordIds.joinToString(",").ifEmpty { null }
+            // 多选一律用竖线分隔：TMDB 里逗号是 AND、竖线才是 OR。
+            // 用逗号时「动作 + 喜剧」只剩同时属于两个类型的片（实测 9157 条 vs 竖线 215064 条），
+            // 「中国 + 日本」只剩合拍片（53 条 vs 76100 条），两个关键词更是直接 0 条 ——
+            // UI 上是多选，用户预期的是「任选其一」。
+            val genres = filter.genreIds.joinToString("|").ifEmpty { null }
+            val countries = filter.originCountries.joinToString("|").ifEmpty { null }
+            val keywords = filter.keywordIds.joinToString("|").ifEmpty { null }
             // 评分下限/上限：边界值不传，避免过滤掉恰好 0 分或 10 分的条目
             val voteMin = if (filter.voteAverageMin <= 0f) null else filter.voteAverageMin
             val voteMax = if (filter.voteAverageMax >= 10f) null else filter.voteAverageMax
-            // 评分筛选配合最低投票数，避免低投票数的高分片污染结果
-            val voteCountGte = if (filter.voteAverageMin > 0f || filter.voteAverageMax < 10f) 50 else null
+            // 最低投票数：评分筛选和评分排序都需要，否则结果被只有几票的条目占满
+            // （sort_by=vote_average.desc 不加下限时榜首实测全是 1 票的 10.0 分片）
+            val ratingFiltered = filter.voteAverageMin > 0f || filter.voteAverageMax < 10f
+            val voteCountGte = when {
+                filter.sortBy == DiscoverSort.VOTE_AVERAGE_DESC -> DISCOVER_VOTE_COUNT_MIN_SORT
+                ratingFiltered -> DISCOVER_VOTE_COUNT_MIN_FILTER
+                else -> null
+            }
+            val sortBy = filter.sortBy.apiValue(filter.type)
 
             val response = when (filter.type) {
                 DiscoverType.MOVIE -> tmdbApiService.discoverMovie(
@@ -968,8 +997,9 @@ class TmdbRepository @Inject constructor(
                     voteCountGte = voteCountGte,
                     releaseDateGte = filter.releaseDateStart,
                     releaseDateLte = filter.releaseDateEnd,
-                    sortBy = filter.sortBy.value,
-                    includeAdult = true
+                    sortBy = sortBy,
+                    // 影视筛选是通用浏览入口，成人内容不该混在里面（TMDB 默认也是 false）
+                    includeAdult = false
                 )
                 DiscoverType.SHOW -> tmdbApiService.discoverTv(
                     language = getTmdbLanguage(),
@@ -982,8 +1012,8 @@ class TmdbRepository @Inject constructor(
                     voteCountGte = voteCountGte,
                     airDateGte = filter.releaseDateStart,
                     airDateLte = filter.releaseDateEnd,
-                    sortBy = filter.sortBy.value,
-                    includeAdult = true
+                    sortBy = sortBy,
+                    includeAdult = false
                 )
             }
             if (response.isSuccessful) {
