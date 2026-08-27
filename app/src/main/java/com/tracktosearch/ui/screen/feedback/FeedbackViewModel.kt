@@ -45,7 +45,16 @@ class FeedbackViewModel @Inject constructor(
 
     sealed interface ListState {
         data object Loading : ListState
-        data class Success(val items: List<FeedbackListItem>, val hasMore: Boolean, val offset: Int) : ListState
+        /**
+         * @param isRefreshing 已展示旧内容（磁盘缓存或上次结果）但远端请求仍在进行，
+         *   顶栏下方显示细进度条提示数据可能不是最新；骨架屏阶段由 [Loading] 负责。
+         */
+        data class Success(
+            val items: List<FeedbackListItem>,
+            val hasMore: Boolean,
+            val offset: Int,
+            val isRefreshing: Boolean = false
+        ) : ListState
         data class Error(val message: String) : ListState
     }
 
@@ -84,7 +93,13 @@ class FeedbackViewModel @Inject constructor(
 
     sealed interface MessagesState {
         data object Loading : MessagesState
-        data class Success(val items: List<MessageItem>, val hasMore: Boolean, val offset: Int) : MessagesState
+        /** @param isRefreshing 含义同 [ListState.Success.isRefreshing] */
+        data class Success(
+            val items: List<MessageItem>,
+            val hasMore: Boolean,
+            val offset: Int,
+            val isRefreshing: Boolean = false
+        ) : MessagesState
         data class Error(val message: String) : MessagesState
     }
 
@@ -133,6 +148,10 @@ class FeedbackViewModel @Inject constructor(
                 if (refresh && _listState.value !is ListState.Success) {
                     _listState.value = ListState.Loading
                 }
+                // 已有内容时请求在后台跑：标记刷新中，顶栏细进度条提示数据可能不是最新
+                (_listState.value as? ListState.Success)?.let {
+                    _listState.value = it.copy(isRefreshing = true)
+                }
                 val result = feedbackRepository.getMine(limit = 20, offset = offset)
                 result.onSuccess { response ->
                     val prev = (_listState.value as? ListState.Success)?.items ?: emptyList()
@@ -141,6 +160,9 @@ class FeedbackViewModel @Inject constructor(
                 }.onFailure { e ->
                     if (_listState.value !is ListState.Success) {
                         _listState.value = ListState.Error(e.toUserMessage(context, R.string.error_load_failed))
+                    } else {
+                        // 刷新失败：保留旧内容，只收起进度条
+                        _listState.value = (_listState.value as ListState.Success).copy(isRefreshing = false)
                     }
                 }
             } catch (e: CancellationException) {
@@ -148,6 +170,8 @@ class FeedbackViewModel @Inject constructor(
             } catch (e: Exception) {
                 if (_listState.value !is ListState.Success) {
                     _listState.value = ListState.Error(e.toUserMessage(context, R.string.error_load_failed))
+                } else {
+                    _listState.value = (_listState.value as ListState.Success).copy(isRefreshing = false)
                 }
             }
         }
@@ -318,6 +342,11 @@ class FeedbackViewModel @Inject constructor(
                         )
                     }
                 }
+                // 已有内容时请求在后台跑：标记刷新中，顶栏细进度条提示数据可能不是最新。
+                // 「加载更多」按钮本身没有进度反馈，所以翻页也一并用这条进度条提示。
+                (_messagesState.value as? MessagesState.Success)?.let {
+                    _messagesState.value = it.copy(isRefreshing = true)
+                }
                 val result = feedbackRepository.getMessages(limit = 50, offset = offset)
                 result.onSuccess { response ->
                     allMessages = if (refresh) response.messages else allMessages + response.messages
@@ -325,11 +354,16 @@ class FeedbackViewModel @Inject constructor(
                 }.onFailure { e ->
                     if (_messagesState.value !is MessagesState.Success) {
                         _messagesState.value = MessagesState.Error(e.toUserMessage(context, R.string.error_load_failed))
+                    } else {
+                        // 刷新失败：保留旧内容，只收起进度条
+                        _messagesState.value = (_messagesState.value as MessagesState.Success).copy(isRefreshing = false)
                     }
                 }
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 if (_messagesState.value !is MessagesState.Success) {
                     _messagesState.value = MessagesState.Error(e.toUserMessage(context, R.string.error_load_failed))
+                } else {
+                    _messagesState.value = (_messagesState.value as MessagesState.Success).copy(isRefreshing = false)
                 }
             }
         }
