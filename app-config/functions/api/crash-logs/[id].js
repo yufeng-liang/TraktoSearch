@@ -6,11 +6,14 @@
 
 async function readEntry(env, id) {
     const fullKey = id.startsWith('crash_') ? id : `crash_${id}`;
+    let key = fullKey;
     let val = await env.CRASH_LOGS.get(fullKey, { type: 'json' });
-    if (!val) {
+    // 兼容裸 id 存储的旧数据：fallback 命中时 key 必须用实际命中的键，否则 PATCH 会写错位置
+    if (!val && fullKey !== id) {
+        key = id;
         val = await env.CRASH_LOGS.get(id, { type: 'json' });
     }
-    return { key: val ? fullKey : null, value: val };
+    return { key: val ? key : null, value: val };
 }
 
 export async function onRequestGet(context) {

@@ -2270,6 +2270,18 @@ function showFeedbackDetail(id, container, renderToken) {
 }
 
 // ===== Crash Logs =====
+/** 崩溃日志 API 请求：走 /api/* Pages Functions 路径，401 时与 API.request 一致跳 Access 登录 */
+function crashFetch(path, options) {
+    return fetch(path, options).then(res => {
+        if (res.status === 401) {
+            localStorage.removeItem('tts-access-token');
+            window.location.href = API.getAccessLoginUrl();
+            throw new Error('UNAUTHORIZED');
+        }
+        return res;
+    });
+}
+
 function crashStatusBadge(status) {
     const fixed = status === 'fixed';
     return `<span class="badge ${fixed ? 'badge-success' : 'badge-failure'}"><span class="badge-dot"></span>${fixed ? '已修复' : '待修复'}</span>`;
@@ -2353,7 +2365,7 @@ function renderCrashLogs(container, renderToken) {
         const q = searchInput.value.trim();
         if (q) params.set('search', q);
 
-        fetch(`/api/crash-logs?${params.toString()}`).then(res => {
+        crashFetch(`/api/crash-logs?${params.toString()}`).then(res => {
             if (!res.ok) throw new Error(`Request failed (${res.status})`);
             return res.json();
         }).then(data => {
@@ -2414,7 +2426,7 @@ function renderCrashLogs(container, renderToken) {
 function showCrashLogDetail(id, container, renderToken) {
     container.innerHTML = '<div class="loading-skeleton" style="height:400px;margin:16px"></div>';
 
-    fetch(`/api/crash-logs/${id}`).then(res => {
+    crashFetch(`/api/crash-logs/${id}`).then(res => {
         if (!res.ok) throw new Error('未找到记录');
         return res.json();
     }).then(e => {
@@ -2468,7 +2480,7 @@ function showCrashLogDetail(id, container, renderToken) {
             const btn = document.getElementById('crash-toggle-status');
             btn.disabled = true;
             const next = fixed ? 'open' : 'fixed';
-            fetch(`/api/crash-logs/${id}`, {
+            crashFetch(`/api/crash-logs/${id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: next }),
