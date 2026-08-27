@@ -14,6 +14,8 @@ import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -58,6 +60,14 @@ class DiscoverFilterViewModel @Inject constructor(
     /** 上次搜索时使用的筛选条件快照，用于判断条件是否变化 */
     private var lastSearchSnapshot: FilterSnapshot? = null
 
+    /**
+     * 当前在飞的分页请求。
+     *
+     * 切类型/重新搜索前取消：不取消的话旧请求回来会把结果写进已经换了条件的列表里
+     * （切到剧集后电影结果才到，就混进剧集列表）。
+     */
+    private var searchJob: Job? = null
+
     private data class FilterSnapshot(
         val type: TmdbRepository.DiscoverType,
         val genreIds: Set<Int>,
@@ -70,17 +80,19 @@ class DiscoverFilterViewModel @Inject constructor(
         val hideWatched: Boolean
     )
 
-    private fun currentSnapshot(): FilterSnapshot = FilterSnapshot(
-        type = _uiState.value.type,
-        genreIds = _uiState.value.selectedGenreIds,
-        countries = _uiState.value.selectedCountries,
-        keywordIds = _uiState.value.selectedKeywordIds,
-        decadeKeys = _uiState.value.selectedDecadeKeys,
-        voteMin = _uiState.value.voteAverageMin,
-        voteMax = _uiState.value.voteAverageMax,
-        sortBy = _uiState.value.sortBy,
-        hideWatched = _uiState.value.hideWatched
+    private fun DiscoverFilterUiState.toSnapshot(): FilterSnapshot = FilterSnapshot(
+        type = type,
+        genreIds = selectedGenreIds,
+        countries = selectedCountries,
+        keywordIds = selectedKeywordIds,
+        decadeKeys = selectedDecadeKeys,
+        voteMin = voteAverageMin,
+        voteMax = voteAverageMax,
+        sortBy = sortBy,
+        hideWatched = hideWatched
     )
+
+    private fun currentSnapshot(): FilterSnapshot = _uiState.value.toSnapshot()
 
     /** 筛选条件是否相比上次搜索有变化 */
     private fun hasFilterChanged(): Boolean = lastSearchSnapshot != currentSnapshot()
@@ -107,6 +119,22 @@ class DiscoverFilterViewModel @Inject constructor(
         TmdbRepository.DiscoverType.SHOW to TypeFilterState()
     )
 
+    /**
+     * 每种类型上次搜到的结果，连同当时的筛选快照一起存。
+     *
+     * Tab 来回切换是最常见的操作，之前每次切换都清空结果重新下载，网速差时来回都是骨架屏。
+     * 存快照是为了校验：还原出来的筛选条件必须和缓存那次搜索一致，否则宁可重新搜。
+     */
+    private data class TypeResultCache(
+        val items: List<TmdbSearchResult>,
+        val currentPage: Int,
+        val totalPages: Int,
+        val totalResults: Int,
+        val snapshot: FilterSnapshot
+    )
+
+    private val typeResultCaches = mutableMapOf<TmdbRepository.DiscoverType, TypeResultCache>()
+
     /** 全局想看/已看 ID 缓存，用于"仅展示未标看过"过滤 */
     private val _watchlistWatchedIds = MutableStateFlow<TraktRepository.WatchlistWatchedIds?>(null)
     val watchlistWatchedIds: StateFlow<TraktRepository.WatchlistWatchedIds?> = _watchlistWatchedIds.asStateFlow()
@@ -121,6 +149,9 @@ class DiscoverFilterViewModel @Inject constructor(
 
     init {
         loadWatchlistWatchedIds()
+        // 首屏搜索在这里发，不等第一次组合后的 LaunchedEffect：
+        // 那样第一帧 isLoading 还是 false，用户会先看到一帧空白再看到骨架屏
+        search()
     }
 
     private fun loadWatchlistWatchedIds() {
@@ -143,28 +174,44 @@ class DiscoverFilterViewModel @Inject constructor(
     }
 
     /**
-     * 切换电影/电视剧类型：保存当前类型的筛选状态，恢复目标类型的筛选状态。
+     * 切换电影/电视剧类型：保存当前类型的筛选状态与结果，恢复目标类型的。
      * 两种类型的筛选互相独立但各自保留，切换回来时还原之前的选择。
+     *
+     * 结果也一起还原：条件没变就直接上屏旧结果，屏幕紧跟着调的 search() 会被
+     * "条件未变且已有结果"挡掉，来回切 Tab 不再重新下载。
      */
     fun switchType(type: TmdbRepository.DiscoverType) {
-        if (_uiState.value.type == type) return
-        val oldType = _uiState.value.type
+        val before = _uiState.value
+        if (before.type == type) return
+        val oldType = before.type
         // 保存当前类型的筛选状态
         typeFilterStates[oldType] = TypeFilterState(
-            genreIds = _uiState.value.selectedGenreIds,
-            countries = _uiState.value.selectedCountries,
-            keywordIds = _uiState.value.selectedKeywordIds,
-            decadeKeys = _uiState.value.selectedDecadeKeys,
-            voteMin = _uiState.value.voteAverageMin,
-            voteMax = _uiState.value.voteAverageMax,
-            sortBy = _uiState.value.sortBy,
-            hideWatched = _uiState.value.hideWatched,
-            showAdvanced = _uiState.value.showAdvanced
+            genreIds = before.selectedGenreIds,
+            countries = before.selectedCountries,
+            keywordIds = before.selectedKeywordIds,
+            decadeKeys = before.selectedDecadeKeys,
+            voteMin = before.voteAverageMin,
+            voteMax = before.voteAverageMax,
+            sortBy = before.sortBy,
+            hideWatched = before.hideWatched,
+            showAdvanced = before.showAdvanced
         )
+        // 保存当前类型的结果。只在这次结果确实搜出来过时存，翻页进度一并带上
+        val leavingSnapshot = lastSearchSnapshot
+        if (leavingSnapshot != null && before.hasSearched && before.items.isNotEmpty()) {
+            typeResultCaches[oldType] = TypeResultCache(
+                items = before.items,
+                currentPage = before.currentPage,
+                totalPages = before.totalPages,
+                totalResults = before.totalResults,
+                snapshot = leavingSnapshot
+            )
+        }
+        // 旧类型的请求还在飞就丢掉：它回来时会把结果写进新类型的列表（电影结果混进剧集）
+        searchJob?.cancel()
         // 恢复目标类型的筛选状态
         val saved = typeFilterStates[type] ?: TypeFilterState()
-        lastSearchSnapshot = null
-        _uiState.value = _uiState.value.copy(
+        val restored = before.copy(
             type = type,
             selectedGenreIds = saved.genreIds,
             selectedCountries = saved.countries,
@@ -179,9 +226,25 @@ class DiscoverFilterViewModel @Inject constructor(
             currentPage = 0,
             totalPages = 0,
             totalResults = 0,
+            isLoading = false,
+            isLoadingMore = false,
             hasSearched = false,
             error = null
         )
+        val cached = typeResultCaches[type]
+        if (cached != null && cached.snapshot == restored.toSnapshot()) {
+            lastSearchSnapshot = cached.snapshot
+            _uiState.value = restored.copy(
+                items = cached.items,
+                currentPage = cached.currentPage,
+                totalPages = cached.totalPages,
+                totalResults = cached.totalResults,
+                hasSearched = true
+            )
+        } else {
+            lastSearchSnapshot = null
+            _uiState.value = restored
+        }
     }
 
     fun toggleGenre(genreId: Int) {
@@ -235,6 +298,18 @@ class DiscoverFilterViewModel @Inject constructor(
 
     fun toggleAdvanced() {
         _uiState.value = _uiState.value.copy(showAdvanced = !_uiState.value.showAdvanced)
+    }
+
+    /**
+     * 只展开高级面板，已展开时什么也不做。
+     *
+     * 评分 chip 用：点它是想调评分，面板开着时再调用 toggleAdvanced 会把面板收起来，
+     * 用户看起来就是"点了没反应"。
+     */
+    fun expandAdvanced() {
+        if (!_uiState.value.showAdvanced) {
+            _uiState.value = _uiState.value.copy(showAdvanced = true)
+        }
     }
 
     /** 收起高级筛选面板（滚动结果列表时调用） */
@@ -315,7 +390,9 @@ class DiscoverFilterViewModel @Inject constructor(
     }
 
     private fun loadPage(page: Int) {
-        viewModelScope.launch {
+        // 新请求接管：翻页时上一个已经结束，重新搜索时会把旧条件的请求掐掉
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
             val s = _uiState.value
             val (dateStart, dateEnd) = computeDateRange()
             val filter = TmdbRepository.DiscoverFilter(
@@ -353,6 +430,9 @@ class DiscoverFilterViewModel @Inject constructor(
                     isLoadingMore = false,
                     error = null
                 )
+            } catch (e: CancellationException) {
+                // 被新请求取消：状态由新请求负责，这里不能落 error，否则切类型会闪一下错误页
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,

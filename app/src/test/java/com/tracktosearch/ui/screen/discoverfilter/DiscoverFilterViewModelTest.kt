@@ -14,6 +14,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import android.content.Context
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -42,6 +43,8 @@ import java.io.IOException
  *    避免 init 协程干扰（hideWatched 过滤分支在 _watchlistWatchedIds=null 时不进入）
  * 3. toggle/switchType/setXxx 是同步方法，直接验证 uiState.value 字段变化，无需 advanceUntilIdle
  * 4. search 内部用 viewModelScope.launch，需 advanceUntilIdle() 推进协程
+ * 5. init 会发首屏搜索，且它的协程排在 runTest 测试体之前执行：VM 必须由各测试装好桩之后
+ *    用 createViewModel() 自己建，不能在 @Before 里建
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -63,13 +66,7 @@ class DiscoverFilterViewModelTest {
         io.mockk.clearMocks(traktRepository)
         every { sessionModeManager.traktConnected } returns MutableStateFlow(false)
 
-        viewModel = DiscoverFilterViewModel(
-            tmdbRepository,
-            traktRepository,
-            sessionModeManager,
-            posterColorExtractor,
-            context
-        )
+        viewModel = createViewModel()
         advanceUntilIdle()
 
         coVerify(exactly = 0) { traktRepository.loadWatchlistWatchedIds() }
@@ -95,17 +92,21 @@ class DiscoverFilterViewModelTest {
         every { traktRepository.getWatchlistWatchedIds() } returns null
 
         every { sessionModeManager.traktConnected } returns MutableStateFlow(false)
-
-        viewModel = DiscoverFilterViewModel(
-            tmdbRepository,
-            traktRepository,
-            sessionModeManager,
-            posterColorExtractor,
-            context
-        )
-        // 不在此处 advanceUntilIdle：StandardTestDispatcher 下 init 协程处于 pending，
-        // 由各测试在 runTest 内按需 advanceUntilIdle 推进
     }
+
+    /**
+     * 建 ViewModel。必须由测试自己在装好桩之后调用。
+     *
+     * 不能放在 setup() 里：init 会发首屏搜索，它的协程排在 runTest 测试体之前，
+     * 在 @Before 里建 VM 的话首屏搜索会先跑，拿到的是 relaxed mock 的空结果。
+     */
+    private fun createViewModel() = DiscoverFilterViewModel(
+        tmdbRepository,
+        traktRepository,
+        sessionModeManager,
+        posterColorExtractor,
+        context
+    )
 
     // ==================== 测试 ====================
 
@@ -117,6 +118,7 @@ class DiscoverFilterViewModelTest {
      */
     @Test
     fun `switchType_切换到SHOW_type变更且清空结果`() = runTest {
+        viewModel = createViewModel()
         advanceUntilIdle()
 
         viewModel.switchType(TmdbRepository.DiscoverType.SHOW)
@@ -134,6 +136,7 @@ class DiscoverFilterViewModelTest {
      */
     @Test
     fun `toggleGenre_添加再次调用移除_selectedGenreIds正确变化`() = runTest {
+        viewModel = createViewModel()
         viewModel.toggleGenre(18)
         assertThat(viewModel.uiState.value.selectedGenreIds).contains(18)
 
@@ -149,6 +152,7 @@ class DiscoverFilterViewModelTest {
      */
     @Test
     fun `toggleDecade_添加再次调用移除_selectedDecadeKeys正确变化`() = runTest {
+        viewModel = createViewModel()
         viewModel.toggleDecade("2010-2019")
         assertThat(viewModel.uiState.value.selectedDecadeKeys).contains("2010-2019")
 
@@ -163,6 +167,7 @@ class DiscoverFilterViewModelTest {
      */
     @Test
     fun `setVoteRange_设置5到10_voteAverageMin和Max正确`() = runTest {
+        viewModel = createViewModel()
         viewModel.setVoteRange(5f, 10f)
 
         val state = viewModel.uiState.value
@@ -177,6 +182,7 @@ class DiscoverFilterViewModelTest {
      */
     @Test
     fun `setSortBy_设置为VOTE_AVERAGE_DESC_sortBy更新`() = runTest {
+        viewModel = createViewModel()
         viewModel.setSortBy(TmdbRepository.DiscoverSort.VOTE_AVERAGE_DESC)
 
         assertThat(viewModel.uiState.value.sortBy).isEqualTo(TmdbRepository.DiscoverSort.VOTE_AVERAGE_DESC)
@@ -189,6 +195,7 @@ class DiscoverFilterViewModelTest {
      */
     @Test
     fun `toggleHideWatched_默认false_调用后变true`() = runTest {
+        viewModel = createViewModel()
         assertThat(viewModel.uiState.value.hideWatched).isFalse()
 
         viewModel.toggleHideWatched()
@@ -204,6 +211,7 @@ class DiscoverFilterViewModelTest {
      */
     @Test
     fun `resetFilters_有筛选条件_全部回到默认值`() = runTest {
+        viewModel = createViewModel()
         // 设置非默认筛选条件
         viewModel.toggleGenre(18)
         viewModel.toggleCountry("CN")
@@ -238,14 +246,17 @@ class DiscoverFilterViewModelTest {
      */
     @Test
     fun `search_成功_items填充且isLoading为false`() = runTest {
-        advanceUntilIdle() // 推进 init 协程
-
         coEvery { tmdbRepository.discover(any(), any()) } returns TmdbRepository.DiscoverPage(
             items = testItems,
             totalPages = 5,
             totalResults = 100
         )
+        viewModel = createViewModel()
+        advanceUntilIdle() // init 的首屏搜索
+        // 清掉首屏搜索的调用记录，下面的 exactly = 1 数的是改条件后这次 search
+        clearMocks(tmdbRepository, answers = false, childMocks = false)
 
+        viewModel.toggleGenre(18) // 条件变了，search 不会被"条件未变"挡掉
         viewModel.search()
         advanceUntilIdle()
 
@@ -271,13 +282,11 @@ class DiscoverFilterViewModelTest {
      */
     @Test
     fun `search_网络失败_error非空且isLoading为false`() = runTest {
-        advanceUntilIdle()
-
         coEvery { tmdbRepository.discover(any(), any()) } throws IOException("网络错误")
         every { context.getString(R.string.error_network_unavailable) } returns "网络错误"
 
-        viewModel.search()
-        advanceUntilIdle()
+        viewModel = createViewModel()
+        advanceUntilIdle() // init 的首屏搜索直接失败
 
         val state = viewModel.uiState.value
         assertThat(state.error).isEqualTo("网络错误")
@@ -292,6 +301,7 @@ class DiscoverFilterViewModelTest {
      */
     @Test
     fun `toggleAdvanced_默认false_调用后变true`() = runTest {
+        viewModel = createViewModel()
         assertThat(viewModel.uiState.value.showAdvanced).isFalse()
 
         viewModel.toggleAdvanced()
@@ -313,8 +323,6 @@ class DiscoverFilterViewModelTest {
      */
     @Test
     fun `loadMore_跨页返回重复id_items去重无重复`() = runTest {
-        advanceUntilIdle() // 推进 init 协程
-
         val page1 = listOf(
             TmdbSearchResult(id = 1, title = "电影A"),
             TmdbSearchResult(id = 2, title = "电影B")
@@ -328,8 +336,8 @@ class DiscoverFilterViewModelTest {
             TmdbRepository.DiscoverPage(items = page1, totalPages = 5, totalResults = 100) andThen
             TmdbRepository.DiscoverPage(items = page2, totalPages = 5, totalResults = 100)
 
-        viewModel.search()
-        advanceUntilIdle()
+        viewModel = createViewModel()
+        advanceUntilIdle() // init 的首屏搜索拿到第一页
 
         // 第一页结果
         assertThat(viewModel.uiState.value.items.map { it.id }).containsExactly(1, 2).inOrder()
@@ -342,5 +350,124 @@ class DiscoverFilterViewModelTest {
         assertThat(ids).containsExactly(1, 2, 3).inOrder()
         // 确保没有重复 id（这正是 LazyColumn key 崩溃的根因）
         assertThat(ids.toSet().size).isEqualTo(ids.size)
+    }
+
+    /**
+     * 首屏搜索在 init 里发，不等屏幕的 LaunchedEffect。
+     *
+     * 等第一次组合后再发，第一帧 isLoading 还是 false，用户会先看到一帧空白再看到骨架屏。
+     */
+    @Test
+    fun `构造_不需要屏幕触发_init就发出首屏搜索`() = runTest {
+        coEvery { tmdbRepository.discover(any(), any()) } returns TmdbRepository.DiscoverPage(
+            items = testItems,
+            totalPages = 5,
+            totalResults = 100
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.hasSearched).isTrue()
+        assertThat(state.items).hasSize(2)
+        assertThat(state.isLoading).isFalse()
+        coVerify(exactly = 1) { tmdbRepository.discover(any(), 1) }
+    }
+
+    /**
+     * Tab 来回切换命中结果缓存：切回来立刻有内容，且不再发请求。
+     *
+     * 切换前每次都清空结果重新下载，网速差时来回都是骨架屏。
+     * 屏幕的 Tab 点击是 switchType() + search()，这里照原样调。
+     */
+    @Test
+    fun `switchType_来回切换_结果立刻还原且不重新请求`() = runTest {
+        coEvery {
+            tmdbRepository.discover(match { it.type == TmdbRepository.DiscoverType.MOVIE }, any())
+        } returns TmdbRepository.DiscoverPage(
+            items = listOf(TmdbSearchResult(id = 1, title = "电影A")),
+            totalPages = 3,
+            totalResults = 60
+        )
+        coEvery {
+            tmdbRepository.discover(match { it.type == TmdbRepository.DiscoverType.SHOW }, any())
+        } returns TmdbRepository.DiscoverPage(
+            items = listOf(TmdbSearchResult(id = 9, name = "剧集A")),
+            totalPages = 2,
+            totalResults = 40
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle() // init 首屏搜索：电影
+        assertThat(viewModel.uiState.value.items.map { it.id }).containsExactly(1)
+
+        viewModel.switchType(TmdbRepository.DiscoverType.SHOW)
+        viewModel.search()
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.items.map { it.id }).containsExactly(9)
+
+        clearMocks(tmdbRepository, answers = false, childMocks = false)
+        viewModel.switchType(TmdbRepository.DiscoverType.MOVIE)
+
+        // 缓存命中：切回来这一刻结果就在，不用等协程
+        val restored = viewModel.uiState.value
+        assertThat(restored.items.map { it.id }).containsExactly(1)
+        assertThat(restored.totalResults).isEqualTo(60)
+        assertThat(restored.hasSearched).isTrue()
+
+        // 屏幕紧跟着调的 search 被"条件未变且已有结果"挡掉
+        viewModel.search()
+        advanceUntilIdle()
+        coVerify(exactly = 0) { tmdbRepository.discover(any(), any()) }
+    }
+
+    /**
+     * 回归测试：切类型时旧类型的请求还在飞，它的结果不能落进新类型的列表。
+     *
+     * Bug 场景：在电影第一页还没回来时切到电视剧，电影结果到达后直接写进 items，
+     * 用户在电视剧 Tab 下看到的是电影。修复：切类型/重新搜索前取消在飞的请求。
+     */
+    @Test
+    fun `switchType_旧类型请求还在飞_结果不会混进新类型`() = runTest {
+        val movieGate = CompletableDeferred<Unit>()
+        coEvery {
+            tmdbRepository.discover(match { it.type == TmdbRepository.DiscoverType.MOVIE }, any())
+        } coAnswers {
+            movieGate.await()
+            TmdbRepository.DiscoverPage(items = testItems, totalPages = 5, totalResults = 100)
+        }
+        coEvery {
+            tmdbRepository.discover(match { it.type == TmdbRepository.DiscoverType.SHOW }, any())
+        } returns TmdbRepository.DiscoverPage(items = emptyList(), totalPages = 0, totalResults = 0)
+
+        viewModel = createViewModel()
+        advanceUntilIdle() // 电影首屏请求挂在闸门上
+
+        viewModel.switchType(TmdbRepository.DiscoverType.SHOW)
+        viewModel.search()
+        movieGate.complete(Unit)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.type).isEqualTo(TmdbRepository.DiscoverType.SHOW)
+        assertThat(state.items).isEmpty()
+        // 取消不是失败，不该落 error
+        assertThat(state.error).isNull()
+    }
+
+    /**
+     * expandAdvanced 只展开不收起。
+     *
+     * 评分 chip 用它：面板开着时再 toggleAdvanced 会把面板收起来，用户看起来是"点了没反应"。
+     */
+    @Test
+    fun `expandAdvanced_已展开_保持展开`() = runTest {
+        viewModel = createViewModel()
+        viewModel.expandAdvanced()
+        assertThat(viewModel.uiState.value.showAdvanced).isTrue()
+
+        viewModel.expandAdvanced()
+        assertThat(viewModel.uiState.value.showAdvanced).isTrue()
     }
 }

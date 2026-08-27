@@ -1249,6 +1249,7 @@
     <string name="decade_format">%d年代</string>
     <string name="discover_filter_rating_label">评分</string>
     <string name="discover_filter_rating_range">%1$.1f - %2$.1f</string>
+    <string name="discover_filter_result_count">约 %1$d 部</string>
     <string name="discover_filter_more_title">想发现更多影视？</string>
     <string name="discover_filter_more_button">去影视筛选页</string>
 

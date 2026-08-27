@@ -1249,6 +1249,8 @@ Config:
     <string name="decade_format">%ds</string>
     <string name="discover_filter_rating_label">Rating</string>
     <string name="discover_filter_rating_range">%1$.1f - %2$.1f</string>
+    <!-- Approximate: "hide watched" filtering happens on the client, so fewer items may be shown -->
+    <string name="discover_filter_result_count">~%1$d results</string>
     <string name="discover_filter_more_title">Want to discover more?</string>
     <string name="discover_filter_more_button">Go to Discover Filter</string>
 
