@@ -1152,6 +1152,7 @@
     <string name="discover_filter_rating_label">評価</string>
     <string name="discover_filter_rating_range">%1$.1f - %2$.1f</string>
     <string name="discover_filter_result_count">約 %1$d 件</string>
+    <string name="discover_filter_result_count_exact">%1$d 件</string>
     <string name="discover_filter_more_title">もっと作品を発見したい？</string>
     <string name="discover_filter_more_button">フィルターページへ</string>
 

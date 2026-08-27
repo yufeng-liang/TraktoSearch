@@ -16,6 +16,9 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,6 +45,13 @@ data class DiscoverFilterUiState(
     val currentPage: Int = 0,
     val totalPages: Int = 0,
     val totalResults: Int = 0,
+    /**
+     * 结果条数是不是近似值。
+     *
+     * 只有「仅展示未标看过」这种服务端不知情的客户端过滤才会为 true（还有统计请求失败兜底时）；
+     * 年代不连续的情况已经按连续块分别查准了，不算近似。
+     */
+    val totalResultsApproximate: Boolean = false,
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
     val error: String? = null,
@@ -133,6 +143,7 @@ class DiscoverFilterViewModel @Inject constructor(
         val currentPage: Int,
         val totalPages: Int,
         val totalResults: Int,
+        val totalResultsApproximate: Boolean,
         val snapshot: FilterSnapshot
     )
 
@@ -207,6 +218,7 @@ class DiscoverFilterViewModel @Inject constructor(
                 currentPage = before.currentPage,
                 totalPages = before.totalPages,
                 totalResults = before.totalResults,
+                totalResultsApproximate = before.totalResultsApproximate,
                 snapshot = leavingSnapshot
             )
         }
@@ -229,6 +241,7 @@ class DiscoverFilterViewModel @Inject constructor(
             currentPage = 0,
             totalPages = 0,
             totalResults = 0,
+            totalResultsApproximate = false,
             isLoading = false,
             isLoadingMore = false,
             hasSearched = false,
@@ -242,6 +255,7 @@ class DiscoverFilterViewModel @Inject constructor(
                 currentPage = cached.currentPage,
                 totalPages = cached.totalPages,
                 totalResults = cached.totalResults,
+                totalResultsApproximate = cached.totalResultsApproximate,
                 hasSearched = true
             )
         } else {
@@ -338,6 +352,7 @@ class DiscoverFilterViewModel @Inject constructor(
             currentPage = 0,
             totalPages = 0,
             totalResults = 0,
+            totalResultsApproximate = false,
             hasSearched = false,
             error = null
         )
@@ -366,15 +381,27 @@ class DiscoverFilterViewModel @Inject constructor(
     }
 
     /**
-     * 选中年代之间有没有用户没勾的年份。
+     * 把选中的年份区间合并成互不相邻的连续块。
      *
-     * 有缺口才需要客户端补一刀：TMDB 只能筛一个连续区间，连续多选（如 1990年代 + 2000年代）
-     * 服务端给回来的就已经是用户点的那些年，不用再过滤。
+     * 用户可以同时点「2019」和「2010年代」，两者重叠；点「1990年代」和「2000年代」则首尾相接。
+     * 合完之后块数就是"有几段"，>1 说明中间有没勾的年份。相接（如 1999 与 2000）也要合，
+     * 否则会被当成两段，多打一次统计请求。
      */
-    private fun hasDecadeGap(ranges: List<IntRange>): Boolean {
-        if (ranges.isEmpty()) return false
-        val merged = ranges.minOf { it.first }..ranges.maxOf { it.last }
-        return merged.any { year -> ranges.none { year in it } }
+    private fun coalesceRanges(ranges: List<IntRange>): List<IntRange> {
+        if (ranges.isEmpty()) return emptyList()
+        val sorted = ranges.sortedBy { it.first }
+        val blocks = mutableListOf<IntRange>()
+        var current = sorted.first()
+        for (range in sorted.drop(1)) {
+            current = if (range.first <= current.last + 1) {
+                current.first..maxOf(current.last, range.last)
+            } else {
+                blocks += current
+                range
+            }
+        }
+        blocks += current
+        return blocks
     }
 
     /** 条目的年份：电影看 release_date，剧集看 first_air_date，缺失时用另一个兜底 */
@@ -416,6 +443,39 @@ class DiscoverFilterViewModel @Inject constructor(
         return "${merged.first}-01-01" to "${merged.last}-12-31"
     }
 
+    /**
+     * 选中年代不连续时的准确结果数。
+     *
+     * 服务端只能筛一个连续区间，它给的 total_results 把中间没勾的年份也算进去了（选
+     * 「1990年代 + 2010年代」报的是 1990-2019 的总数）。每个连续块单独问一次、只取
+     * total_results 再相加才是实际条数 —— 块之间既不重叠也不相邻，不会重复计数。
+     *
+     * 任一请求失败就返回 null，由调用方退回服务端给的近似值。
+     */
+    private suspend fun exactTotalResults(
+        filter: TmdbRepository.DiscoverFilter,
+        blocks: List<IntRange>
+    ): Int? = try {
+        coroutineScope {
+            blocks.map { block ->
+                async {
+                    tmdbRepository.discover(
+                        filter.copy(
+                            releaseDateStart = "${block.first}-01-01",
+                            releaseDateEnd = "${block.last}-12-31"
+                        ),
+                        1
+                    ).totalResults
+                }
+            }.awaitAll().sum()
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        android.util.Log.w("FilterVM", "exactTotalResults failed: ${e.message}")
+        null
+    }
+
     /** 应用筛选条件，发起搜索。筛选条件未变化时跳过（避免重复请求） */
     fun search() {
         // 加载中且条件没变：同一个请求不重复发。
@@ -430,6 +490,7 @@ class DiscoverFilterViewModel @Inject constructor(
             currentPage = 0,
             totalPages = 0,
             totalResults = 0,
+            totalResultsApproximate = false,
             isLoading = true,
             error = null,
             hasSearched = true
@@ -466,8 +527,9 @@ class DiscoverFilterViewModel @Inject constructor(
             val s = _uiState.value
             val (dateStart, dateEnd) = computeDateRange()
             val yearRanges = selectedYearRanges(s.selectedDecadeKeys)
-            // 年代选得不连续时，服务端只能筛一个连续区间，没勾的年份得在客户端剔掉
-            val gapRanges = if (hasDecadeGap(yearRanges)) yearRanges else emptyList()
+            val decadeBlocks = coalesceRanges(yearRanges)
+            // 年代选得不连续（合出多段）时，服务端只能筛一个连续区间，没勾的年份得在客户端剔掉
+            val gapRanges = if (decadeBlocks.size > 1) decadeBlocks else emptyList()
             val filter = TmdbRepository.DiscoverFilter(
                 type = s.type,
                 genreIds = s.selectedGenreIds.toList(),
@@ -511,13 +573,32 @@ class DiscoverFilterViewModel @Inject constructor(
                 }
 
                 val existing = if (page == 1) emptyList() else _uiState.value.items
+                // 结果条数：合并区间的 total_results 把没勾的年份也算进去了，按连续块分别查再加起来。
+                // 「仅展示未标看过」是客户端过滤，服务端不可能知道用户标过什么，这种情况只能标"约"
+                val previous = _uiState.value
+                var totalResults = result.totalResults
+                var approximate = s.hideWatched
+                if (gapRanges.isNotEmpty()) {
+                    if (page != 1) {
+                        // 翻页时沿用首页算好的数，别用合并区间的总数把它盖回去
+                        totalResults = previous.totalResults
+                        approximate = previous.totalResultsApproximate
+                    } else if (gapRanges.size > MAX_COUNT_QUERY_BLOCKS) {
+                        // 段数太多就不查了：一次点击打出十几个请求不值得，标"约"更实在
+                        approximate = true
+                    } else {
+                        val exact = exactTotalResults(filter, gapRanges)
+                        if (exact == null) approximate = true else totalResults = exact
+                    }
+                }
                 // 按 id 去重：TMDB Discover API 在某些排序方式下可能跨页返回相同条目，
                 // 直接拼接会导致 LazyColumn key 重复崩溃
                 _uiState.value = _uiState.value.copy(
                     items = (existing + collected).distinctBy { it.id },
                     currentPage = result.totalPages.coerceAtMost(pageToLoad),
                     totalPages = result.totalPages,
-                    totalResults = result.totalResults,
+                    totalResults = totalResults,
+                    totalResultsApproximate = approximate,
                     isLoading = false,
                     isLoadingMore = false,
                     error = null
@@ -548,5 +629,7 @@ class DiscoverFilterViewModel @Inject constructor(
         const val MIN_BATCH_SIZE = 10
         /** 为凑够一批最多额外多请求几页，避免一次点击打出十几个请求 */
         const val MAX_EXTRA_PAGE_FETCH = 4
+        /** 查准确条数最多拆几段：段数越多请求越多，超过就退回近似值 */
+        const val MAX_COUNT_QUERY_BLOCKS = 6
     }
 }

@@ -407,11 +407,15 @@ fun DiscoverFilterScreen(
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     // 结果条数：让用户知道筛出来多少，条件太严时也有个数量感。
-                    // 用"约"是因为"仅展示未标看过"和没勾的年代都是客户端过滤，实际展示的会比这个少
+                    // 只有「仅展示未标看过」这种服务端不知情的过滤才标"约"
                     if (uiState.totalResults > 0) {
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = stringResource(R.string.discover_filter_result_count, uiState.totalResults),
+                            text = if (uiState.totalResultsApproximate) {
+                                stringResource(R.string.discover_filter_result_count, uiState.totalResults)
+                            } else {
+                                stringResource(R.string.discover_filter_result_count_exact, uiState.totalResults)
+                            },
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1

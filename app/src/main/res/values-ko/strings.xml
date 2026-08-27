@@ -1152,6 +1152,7 @@
     <string name="discover_filter_rating_label">평점</string>
     <string name="discover_filter_rating_range">%1$.1f - %2$.1f</string>
     <string name="discover_filter_result_count">약 %1$d개</string>
+    <string name="discover_filter_result_count_exact">%1$d개</string>
     <string name="discover_filter_more_title">더 많은 작품을 발견하고 싶나요?</string>
     <string name="discover_filter_more_button">필터 페이지로 이동</string>
 

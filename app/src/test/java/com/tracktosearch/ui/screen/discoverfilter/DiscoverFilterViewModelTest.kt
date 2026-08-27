@@ -640,6 +640,183 @@ class DiscoverFilterViewModelTest {
         }
     }
 
+    // ==================== 结果条数 ====================
+
+    /** 无日期条件的请求（首屏用），条数拿服务端给的值 */
+    private fun stubNoDateSearch() {
+        coEvery { tmdbRepository.discover(match { it.releaseDateStart == null }, any()) } returns
+            TmdbRepository.DiscoverPage(items = testItems, totalPages = 1, totalResults = 2)
+    }
+
+    /** 合并区间 1990-2019 的主请求：条数把没勾的 2000年代 也算进去了 */
+    private fun stubMergedRange(totalPages: Int = 1, totalResults: Int = 900) {
+        coEvery {
+            tmdbRepository.discover(
+                match { it.releaseDateStart == "1990-01-01" && it.releaseDateEnd == "2019-12-31" },
+                any()
+            )
+        } returns TmdbRepository.DiscoverPage(
+            items = listOf(
+                TmdbSearchResult(id = 1, title = "1995 年的", release_date = "1995-06-01"),
+                TmdbSearchResult(id = 2, title = "2005 年的", release_date = "2005-06-01"),
+                TmdbSearchResult(id = 3, title = "2015 年的", release_date = "2015-06-01")
+            ),
+            totalPages = totalPages,
+            totalResults = totalResults
+        )
+    }
+
+    /**
+     * 服务端报的是合并区间（1990-2019）的总数，比实际多。
+     * 按两个连续块分别查再相加才是用户勾的那些年的真实条数。
+     */
+    @Test
+    fun `年代不连续_条数按连续块分别查后相加`() = runTest {
+        stubNoDateSearch()
+        stubMergedRange()
+        coEvery { tmdbRepository.discover(match { it.releaseDateEnd == "1999-12-31" }, 1) } returns
+            TmdbRepository.DiscoverPage(items = emptyList(), totalPages = 1, totalResults = 200)
+        coEvery { tmdbRepository.discover(match { it.releaseDateStart == "2010-01-01" }, 1) } returns
+            TmdbRepository.DiscoverPage(items = emptyList(), totalPages = 1, totalResults = 300)
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        viewModel.toggleDecade("1990-1999")
+        viewModel.toggleDecade("2010-2019")
+        viewModel.search()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.totalResults).isEqualTo(500) // 不是服务端的 900
+        assertThat(state.totalResultsApproximate).isFalse()
+    }
+
+    /** 统计请求失败时退回服务端给的数并标成近似，不能因此报错 */
+    @Test
+    fun `年代不连续_统计请求失败_退回近似值`() = runTest {
+        stubNoDateSearch()
+        stubMergedRange()
+        coEvery { tmdbRepository.discover(match { it.releaseDateEnd == "1999-12-31" }, 1) } throws
+            IOException("network down")
+        coEvery { tmdbRepository.discover(match { it.releaseDateStart == "2010-01-01" }, 1) } returns
+            TmdbRepository.DiscoverPage(items = emptyList(), totalPages = 1, totalResults = 300)
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        viewModel.toggleDecade("1990-1999")
+        viewModel.toggleDecade("2010-2019")
+        viewModel.search()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.totalResults).isEqualTo(900)
+        assertThat(state.totalResultsApproximate).isTrue()
+        // 条数没查准不是搜索失败，结果照样上屏
+        assertThat(state.error).isNull()
+        assertThat(state.items.map { it.id }).containsExactly(1, 3)
+    }
+
+    /** 段数太多就不查了：一次点击打出十几个请求不值得，直接标成近似 */
+    @Test
+    fun `年代分成太多段_不查准确条数`() = runTest {
+        stubNoDateSearch()
+        coEvery { tmdbRepository.discover(match { it.releaseDateStart != null }, any()) } returns
+            TmdbRepository.DiscoverPage(items = testItems, totalPages = 1, totalResults = 900)
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        // 7 段：1960年代 / 1980年代 / 2000年代 / 2020 / 2022 / 2024 / 2026
+        listOf("1960-1969", "1980-1989", "2000-2009", "2020-2020", "2022-2022", "2024-2024", "2026-2026")
+            .forEach { viewModel.toggleDecade(it) }
+        viewModel.search()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.totalResults).isEqualTo(900)
+        assertThat(state.totalResultsApproximate).isTrue()
+        coVerify(exactly = 0) { tmdbRepository.discover(match { it.releaseDateEnd == "2009-12-31" }, 1) }
+    }
+
+    /** 「仅展示未标看过」是客户端过滤，服务端不知道用户标过什么，只能标"约" */
+    @Test
+    fun `仅展示未标看过_条数标成近似`() = runTest {
+        val watchedIds = TraktRepository.WatchlistWatchedIds(movieWatchedTmdbIds = setOf(1))
+        every { sessionModeManager.traktConnected } returns MutableStateFlow(true)
+        coEvery { traktRepository.loadWatchlistWatchedIds() } returns watchedIds
+        every { traktRepository.getWatchlistWatchedIds() } returns watchedIds
+        coEvery { tmdbRepository.discover(any(), any()) } returns
+            TmdbRepository.DiscoverPage(items = testItems, totalPages = 1, totalResults = 900)
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.totalResultsApproximate).isFalse()
+
+        viewModel.toggleHideWatched()
+        viewModel.search()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.totalResultsApproximate).isTrue()
+    }
+
+    /** 没有客户端过滤时服务端给的数就是准的，不标"约" */
+    @Test
+    fun `无客户端过滤_条数不标近似`() = runTest {
+        coEvery { tmdbRepository.discover(any(), any()) } returns
+            TmdbRepository.DiscoverPage(items = testItems, totalPages = 1, totalResults = 900)
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.totalResults).isEqualTo(900)
+        assertThat(viewModel.uiState.value.totalResultsApproximate).isFalse()
+    }
+
+    /** 翻页沿用首页算好的数，别用合并区间的总数把它盖回去，也别每页都重查一遍 */
+    @Test
+    fun `翻页时不重查条数且沿用首页的数`() = runTest {
+        stubNoDateSearch()
+        stubMergedRange(totalPages = 100, totalResults = 900)
+        coEvery { tmdbRepository.discover(match { it.releaseDateEnd == "1999-12-31" }, 1) } returns
+            TmdbRepository.DiscoverPage(items = emptyList(), totalPages = 1, totalResults = 200)
+        coEvery { tmdbRepository.discover(match { it.releaseDateStart == "2010-01-01" }, 1) } returns
+            TmdbRepository.DiscoverPage(items = emptyList(), totalPages = 1, totalResults = 300)
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        viewModel.toggleDecade("1990-1999")
+        viewModel.toggleDecade("2010-2019")
+        viewModel.search()
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.totalResults).isEqualTo(500)
+
+        viewModel.loadMore()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.totalResults).isEqualTo(500)
+        assertThat(viewModel.uiState.value.totalResultsApproximate).isFalse()
+        coVerify(exactly = 1) { tmdbRepository.discover(match { it.releaseDateEnd == "1999-12-31" }, 1) }
+    }
+
+    /** 重叠/相接的选择要合成一段：点「2010年代」再点「2019」不该被当成两段多打一次请求 */
+    @Test
+    fun `年代重叠选择_合成一段不查条数`() = runTest {
+        stubNoDateSearch()
+        coEvery { tmdbRepository.discover(match { it.releaseDateStart == "2010-01-01" }, any()) } returns
+            TmdbRepository.DiscoverPage(items = testItems, totalPages = 1, totalResults = 900)
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        viewModel.toggleDecade("2010-2019")
+        viewModel.toggleDecade("2019-2019")
+        viewModel.search()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.totalResults).isEqualTo(900)
+        assertThat(state.totalResultsApproximate).isFalse()
+        coVerify(exactly = 1) { tmdbRepository.discover(match { it.releaseDateStart == "2010-01-01" }, any()) }
+    }
+
     // ==================== 仅展示未标看过 ====================
 
     /**
