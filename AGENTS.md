@@ -113,7 +113,7 @@ CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments
 - 部署后不只看 Wrangler 成功输出；用 npx wrangler pages deployment list --project-name app-config 确认最新 Environment=Production、Branch=master、提交 SHA，开部署 URL 查实际静态资源版本
 - Pages 受 Cloudflare Access 保护时，未带登录 Cookie 的 curl/Invoke-WebRequest 可能只拿 302 或登录 HTML，不能据此判页面代码未更新；应已登录浏览器强制刷新，或直查部署哈希 URL 资源内容
 - Worker 部署后记录版本 ID，至少验健康检查和本次变更 API；Pages+Worker 部署成功≠业务流程已验证
-- Wrangler 部署超时/无输出不能直接判成败：先查并结束残留 wrangler/node 子进程，再分别用直连和 Clash 代理重试。Windows Clash 常见 HTTP 代理 http://127.0.0.1:7890，只当前命令临时设 HTTP_PROXY/HTTPS_PROXY/ALL_PROXY，勿写全局；重试仍记 Worker 版本 ID、Pages Production/master 记录和健康检查结果
+- Wrangler 部署超时/无输出不能直接判成败：**先查 deployment list 确认是否其实已成功**（最新记录 SHA 与本地提交一致即为成功，无需重试，重试只会重复部署）；确认失败再查并结束残留 wrangler/node 子进程（用 Get-CimInstance 过滤 CommandLine 含 wrangler 的进程，勿误杀 DSH 自身 node），再分别用直连和 Clash 代理重试。Windows Clash 常见 HTTP 代理 http://127.0.0.1:7890，只当前命令临时设 HTTP_PROXY/HTTPS_PROXY/ALL_PROXY，勿写全局；重试仍记 Worker 版本 ID、Pages Production/master 记录和健康检查结果。部署后直查部署哈希 URL 静态资源内容（匹配新代码标记如函数名）验证前端已更新；受 Access 保护的 Functions 端点未登录返 401 属正常拦截，不能据此判函数未部署
 - Pages Functions 须从 app-config 项目根部署（或显式指定该目录配置），确保读 app-config/wrangler.toml 并传 functions/；其他目录直传 public 只发静态，致 /admin-api/* 返 HTML/Access 页并触发前端 Invalid server response。部署后于部署哈希域名请 /admin-api/admin/health，未登录应返 JSON 401 而非 HTML
 
 ## Android ADB 设备核验经验
