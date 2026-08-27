@@ -48,6 +48,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -524,6 +525,17 @@ fun MarkRecordScreen(
                         }
                     )
                 }
+            }
+
+            // 已展示旧数据但远端仍在刷新时的细进度条：不遮挡内容，只提示数据可能不是最新。
+            // 放在吸顶栏最底部，出现/消失不会推动上方的标题与 Tab。
+            if (uiState.isRefreshing && uiState.items.isNotEmpty()) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .testTag("mark_record_refresh_indicator")
+                )
             }
         }
 

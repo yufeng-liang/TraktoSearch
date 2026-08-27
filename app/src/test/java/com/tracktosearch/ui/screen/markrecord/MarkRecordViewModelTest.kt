@@ -506,6 +506,81 @@ class MarkRecordViewModelTest {
         return method.invoke(viewModel, state) as Pair<Long, Long>
     }
 
+    // ==================== 静默刷新指示器 ====================
+
+    @Test
+    fun `WATCHED_Tab_远端刷新中isRefreshing为true完成后置false`() = runTest {
+        val item = TraktRepository.WatchHistoryItem(
+            traktId = 1, tmdbId = 10, imdbId = "tt1",
+            mediaType = "movie", title = "Test", displayTitle = "Test",
+            posterUrl = null, year = 2024, watchedAt = 10000L, episodeInfo = null
+        )
+        // 首批（非完成批）落地后读取状态：此时列表已有内容，远端仍在拉取
+        var refreshingAfterFirstBatch: Boolean? = null
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns flow {
+            emit(TraktRepository.WatchHistoryEmit(items = listOf(item), isComplete = false))
+            refreshingAfterFirstBatch = viewModel.uiState.value.isRefreshing
+            emit(TraktRepository.WatchHistoryEmit(items = listOf(item), isComplete = true))
+        }
+
+        viewModel.switchTab(MarkRecordTab.WATCHED)
+        advanceUntilIdle()
+
+        assertThat(refreshingAfterFirstBatch).isTrue()
+        assertThat(viewModel.uiState.value.items).isNotEmpty()
+        assertThat(viewModel.uiState.value.isRefreshing).isFalse()
+    }
+
+    @Test
+    fun `翻页时不置isRefreshing_避免与底部指示器重复`() = runTest {
+        val page1Items = List(50) { i ->
+            TraktRepository.WatchHistoryItem(
+                traktId = 1000 + i, tmdbId = 2000 + i, imdbId = "tt$i",
+                mediaType = "movie", title = "Movie $i", displayTitle = "Movie $i",
+                posterUrl = null, year = 2024, watchedAt = 10000L - i, episodeInfo = null
+            )
+        }
+        coEvery { traktRepo.fetchWatchHistory(1) } returns flowOf(
+            TraktRepository.WatchHistoryEmit(items = page1Items, isComplete = true)
+        )
+        var refreshingDuringNextPage: Boolean? = null
+        coEvery { traktRepo.fetchWatchHistory(2) } returns flow {
+            refreshingDuringNextPage = viewModel.uiState.value.isRefreshing
+            emit(TraktRepository.WatchHistoryEmit(items = emptyList(), isComplete = true))
+        }
+
+        viewModel.switchTab(MarkRecordTab.WATCHED)
+        advanceUntilIdle()
+        viewModel.loadNextPage()
+        advanceUntilIdle()
+
+        assertThat(refreshingDuringNextPage).isFalse()
+        assertThat(viewModel.uiState.value.isRefreshing).isFalse()
+    }
+
+    @Test
+    fun `Trakt失败后isRefreshing复位`() = runTest {
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns flowOf(
+            TraktRepository.WatchHistoryEmit(items = emptyList(), isComplete = true, error = "network error")
+        )
+
+        viewModel.switchTab(MarkRecordTab.WATCHED)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.error).isNotNull()
+        assertThat(viewModel.uiState.value.isRefreshing).isFalse()
+    }
+
+    @Test
+    fun `未连接Trakt时不置isRefreshing`() = runTest {
+        traktConnected.value = false
+
+        viewModel.switchTab(MarkRecordTab.WATCHED)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.isRefreshing).isFalse()
+    }
+
     @Test
     fun `computeTimeRange_SEVEN_DAYS返回7天前到0`() {
         val state = MarkRecordUiState(filterDatePreset = DatePreset.SEVEN_DAYS)

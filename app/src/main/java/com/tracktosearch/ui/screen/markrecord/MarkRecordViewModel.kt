@@ -65,6 +65,13 @@ data class MarkRecordUiState(
     val currentPage: Int = 0,
     val hasMore: Boolean = true,
     val isLoadingMore: Boolean = false,
+    /**
+     * 远端观看历史刷新进行中。
+     *
+     * 列表已有内容（磁盘快照或本地流水先渲染出来）时，顶栏下方显示细进度条提示数据可能不是最新；
+     * 列表还是空的（骨架屏阶段）不显示，由 [isLoading] 负责。翻页有底部指示器，不重复提示。
+     */
+    val isRefreshing: Boolean = false,
     val error: String? = null,
     val currentStatusMap: Map<Int, CurrentMarkStatus> = emptyMap()
 )
@@ -86,6 +93,9 @@ class MarkRecordViewModel @Inject constructor(
     /** Trakt 已看历史总页数（首次拉取后从缓存记录，用于 ALL Tab 分页判断）。
      *  refresh 时重置为 0，重新拉取。 */
     private var traktHistoryTotalPages = 0
+
+    /** 正在进行的远端刷新数量：快速切 Tab 或改筛选会并发拉取，用计数避免先结束的那个提前收起进度条。 */
+    private var remoteRefreshCount = 0
 
     init {
         loadFirstPage()
@@ -366,36 +376,60 @@ class MarkRecordViewModel @Inject constructor(
         mediaTypesFilter: Set<String> = emptySet(),
         onBatch: suspend (List<MarkRecordItem>) -> Unit
     ): List<MarkRecordItem> {
-        val best = LinkedHashMap<String, MarkRecordItem>()
-        val enrichedKeys = mutableSetOf<String>()
-        var finalItems: List<MarkRecordItem>? = null
-        traktRepository.fetchWatchHistory(page).collect { emit ->
-            if (finalItems != null) return@collect
-            if (emit.error != null) throw Exception(emit.error)
-            // 应用媒体类型筛选（修复 bug：之前忽略 filterMediaTypes 导致选电视剧不生效）
-            val filtered = if (mediaTypesFilter.isNotEmpty()) {
-                emit.items.filter { it.mediaType in mediaTypesFilter }
-            } else {
-                emit.items
-            }
-            val mapped = filtered.map { it.toMarkRecordItem() }
-            if (emit.isComplete) {
-                // 完成批是权威结果：直接以它为准，丢掉磁盘旧快照里可能已被删除的条目
-                finalItems = mapped
-                return@collect
-            }
-            mapped.forEach { item ->
-                val key = itemKey(item)
-                if (emit.enriched) {
-                    best[key] = item
-                    enrichedKeys += key
-                } else if (key !in enrichedKeys) {
-                    best[key] = item
+        beginRemoteRefresh()
+        try {
+            val best = LinkedHashMap<String, MarkRecordItem>()
+            val enrichedKeys = mutableSetOf<String>()
+            var finalItems: List<MarkRecordItem>? = null
+            traktRepository.fetchWatchHistory(page).collect { emit ->
+                if (finalItems != null) return@collect
+                if (emit.error != null) throw Exception(emit.error)
+                // 应用媒体类型筛选（修复 bug：之前忽略 filterMediaTypes 导致选电视剧不生效）
+                val filtered = if (mediaTypesFilter.isNotEmpty()) {
+                    emit.items.filter { it.mediaType in mediaTypesFilter }
+                } else {
+                    emit.items
                 }
+                val mapped = filtered.map { it.toMarkRecordItem() }
+                if (emit.isComplete) {
+                    // 完成批是权威结果：直接以它为准，丢掉磁盘旧快照里可能已被删除的条目
+                    finalItems = mapped
+                    return@collect
+                }
+                mapped.forEach { item ->
+                    val key = itemKey(item)
+                    if (emit.enriched) {
+                        best[key] = item
+                        enrichedKeys += key
+                    } else if (key !in enrichedKeys) {
+                        best[key] = item
+                    }
+                }
+                onBatch(best.values.toList())
             }
-            onBatch(best.values.toList())
+            return finalItems ?: best.values.toList()
+        } finally {
+            endRemoteRefresh()
         }
-        return finalItems ?: best.values.toList()
+    }
+
+    /**
+     * 远端拉取开始：列表已有内容时顶栏下方显示细进度条。
+     *
+     * 翻页已有底部加载指示器，这里不重复提示。计数与状态只在主线程读写
+     * （viewModelScope 默认 Main.immediate），不需要额外同步。
+     */
+    private fun beginRemoteRefresh() {
+        remoteRefreshCount++
+        _uiState.update { it.copy(isRefreshing = !it.isLoadingMore) }
+    }
+
+    /** 远端拉取结束：最后一个并发任务结束才收起进度条。 */
+    private fun endRemoteRefresh() {
+        remoteRefreshCount = (remoteRefreshCount - 1).coerceAtLeast(0)
+        if (remoteRefreshCount == 0) {
+            _uiState.update { it.copy(isRefreshing = false) }
+        }
     }
 
     private fun computeTimeRange(state: MarkRecordUiState): Pair<Long, Long> {
