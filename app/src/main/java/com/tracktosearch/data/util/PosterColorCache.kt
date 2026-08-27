@@ -28,6 +28,12 @@ class PosterColorCache @Inject constructor(
     private val memoryCache = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     /**
+     * 仅查询当前进程内存，不触发 DataStore I/O。
+     * 列表卡片重建时用它跳过已经完成的主色监听和延迟提取任务。
+     */
+    fun peekColor(posterUrl: String): Long? = memoryCache[posterUrl]
+
+    /**
      * 启动时一次性全量加载 DataStore 到内存，消除冷启动 IO。
      * 在 Application.onCreate 调用，挂起直到完成。
      */

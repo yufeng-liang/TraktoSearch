@@ -77,6 +77,9 @@ fun Modifier.backdropSource(): Modifier {
  */
 @Composable
 fun Modifier.backdropContentSource(backdrop: LayerBackdrop? = null): Modifier {
+    // MainScreen 会让四个 Pager 页面常驻组合。只有当前可见页面允许注册 source，
+    // 否则隐藏页也会持续录制 GraphicsLayer，Glass 模式下一次切换会同时重录多页。
+    if (!LocalBackdropSourceEnabled.current) return this
     // LocalBackdrop 可能是合并后的 Backdrop（Combined），只有 LayerBackdrop 可注册为 source
     val resolved = backdrop ?: LocalBackdrop.current as? LayerBackdrop ?: return this
     return then(Modifier.layerBackdrop(resolved))

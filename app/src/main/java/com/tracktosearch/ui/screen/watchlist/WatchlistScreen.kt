@@ -1,7 +1,6 @@
 package com.tracktosearch.ui.screen.watchlist
 
 import android.content.Intent
-import android.graphics.Bitmap
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -175,10 +174,12 @@ import com.tracktosearch.ui.animation.cardEnter
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalActivePosterSelectionKey
+import com.tracktosearch.ui.component.LocalActivePosterSelectionKeySetter
 import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.AppIconButton
 import com.tracktosearch.ui.component.AppPullToRefreshIndicator
 import com.tracktosearch.ui.component.rememberAppPullToRefreshState
@@ -196,7 +197,6 @@ import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.PosterCard
-import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
@@ -213,7 +213,6 @@ import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
-import dagger.hilt.android.EntryPointAccessors
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -271,6 +270,7 @@ fun WatchlistScreen(
     val view = LocalView.current
     // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的卡片参与共享元素转场，避免跨页面重复海报 key 冲突
     var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
+    var activePosterSelectionKey by rememberSaveable { mutableStateOf<String?>(null) }
     // 用外置浏览器打开 Trakt，共享外置浏览器登录态（内置 WebView 有独立 CookieJar 不共享）
     val openTraktExternal: () -> Unit = {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://trakt.tv/watchlist")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -423,6 +423,16 @@ fun WatchlistScreen(
     val ambientBackdropLayer = (LocalBackdrop.current as? LayerBackdrop)?.graphicsLayer
     // Glass 模式才需要录制内容 backdrop 层；BLUR 模式无人消费，见下方 layerBackdrop 门控。
     val isWatchlistGlassMode = LocalVisualEffectMode.current == VisualEffectMode.GLASS
+    // 详情返回/进入时，NavHost 的 AnimatedVisibility 仍在同时绘制新旧目的地。
+    // 这段时间若继续录制全屏 Backdrop，会把列表图片上传、共享元素和 Glass 离屏录制
+    // 叠到同一帧；冻结 source 并暂时禁用 Glass consumer，动画结束后自动恢复。
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+    // 只读取转场端点状态；isRunning 会在动画每一帧变化，直接读取会让整张网格每帧重组。
+    // 端点状态仅在转场开始/结束时变化，足够控制 Backdrop 的启停。
+    val isNavigationTransitionRunning = animatedVisibilityScope?.transition?.let { transition ->
+        transition.currentState != transition.targetState
+    } == true
+    val isWatchlistGlassActive = isWatchlistGlassMode && !isNavigationTransitionRunning
     val watchlistContentBackdrop = rememberLayerBackdrop(
         onDraw = remember(watchlistBackdropBackground, ambientBackdropLayer) {
             {
@@ -475,6 +485,9 @@ fun WatchlistScreen(
                 firstVisibleItemScrollOffsetPx = currentGridState.firstVisibleItemScrollOffset
             )
         }
+    }
+    val isGridScrolling by remember(currentGridState) {
+        derivedStateOf { currentGridState.isScrollInProgress }
     }
 
     // key 必须同时包含 selectedMode 和 selectedTab：
@@ -540,7 +553,6 @@ fun WatchlistScreen(
         selectedMode == 1 && selectedTab == 1 -> filteredHistoryShows
         else -> filteredHistoryOthers
     }
-
     // 当前列表是否正在加载
     val isCurrentLoading = when {
         selectedMode == 0 && selectedTab == 0 -> uiState.isLoadingMovies
@@ -662,6 +674,8 @@ fun WatchlistScreen(
 
     CompositionLocalProvider(
         LocalActivePosterTmdbId provides activePosterTmdbId,
+        LocalActivePosterSelectionKey provides activePosterSelectionKey,
+        LocalActivePosterSelectionKeySetter provides { key -> activePosterSelectionKey = key },
         LocalActivePosterClickSetter provides { id ->
             activePosterTmdbId = id
             activeClickToken += 1
@@ -707,7 +721,7 @@ fun WatchlistScreen(
                             // 只有 Glass 模式的顶栏才采样这一层；BLUR 模式走 hazeSource，
                             // 这份全屏离屏录制写了没人读，每帧纯浪费。
                             .then(
-                                if (isWatchlistGlassMode) {
+                                if (isWatchlistGlassActive && !isGridScrolling) {
                                     Modifier.layerBackdrop(watchlistContentBackdrop)
                                 } else {
                                     Modifier
@@ -852,8 +866,8 @@ fun WatchlistScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .hazeSource(state = hazeState)
-                        // GLASS 模式将影视网格注册为 Backdrop 采样源，使玻璃控件（回顶按钮等）能采到内容
-                        .backdropContentSource()
+                        // 内容已由外层 watchlistContentBackdrop 统一录制；不要在 LazyGrid
+                        // 上再次注册同一个 source，否则每次滚动会产生重复的整页离屏录制。
                         .nestedScroll(pullToRefreshState.connection)
                         .graphicsLayer { translationY = pullToRefreshState.offset.floatValue }
                     ) {
@@ -863,7 +877,20 @@ fun WatchlistScreen(
                             val item = items[index]
                             val isSelected = selectedItems[item.selectionKey] == true
                             val isResolving = isRemoving && isSelected
-                            Box(modifier = Modifier.cardEnter(item.selectionKey.hashCode().toLong(), index, enterMode, animatedIds)) {
+                            Box(
+                                modifier = if (isWatchlistGlassMode) {
+                                    // Glass 模式滚动时已有 Backdrop 离屏采样，逐卡 EMPHASIS
+                                    // 会把所有可见卡片再次变成持续重绘源；保留 Blur 模式动效。
+                                    Modifier
+                                } else {
+                                    Modifier.cardEnter(
+                                        item.selectionKey.hashCode().toLong(),
+                                        index,
+                                        enterMode,
+                                        animatedIds
+                                    )
+                                }
+                            ) {
                                 WatchlistPosterCard(
                                     item = item,
                                     isInWatchlist = selectedMode == 0,
@@ -941,7 +968,9 @@ fun WatchlistScreen(
                 }
     
                 // 回顶按钮采样本页 content backdrop（含影视网格），折射正后方海报而非页面粉色渐变。
-                CompositionLocalProvider(LocalBackdrop provides watchlistContentBackdrop) {
+                CompositionLocalProvider(
+                    LocalBackdrop provides if (isWatchlistGlassActive) watchlistContentBackdrop else null
+                ) {
                 ScrollToTopButton(
                     gridState = currentGridState,
                     modifier = Modifier
@@ -954,7 +983,9 @@ fun WatchlistScreen(
     
                 // 顶栏内玻璃控件统一采本页 content backdrop（光晕底垫+影视网格），与那条 hazeTopBar 一致：
                 // 滚动时折射正后方海报、静止时折射页面渐变，而不是页面粉色 mesh。
-                CompositionLocalProvider(LocalBackdrop provides watchlistContentBackdrop) {
+                CompositionLocalProvider(
+                    LocalBackdrop provides if (isWatchlistGlassActive) watchlistContentBackdrop else null
+                ) {
                 // Haze 模糊覆盖层 - 搜索框 + 胶囊切换 + PrimaryTabRow 或 多选操作栏
                 Box(
                     modifier = Modifier
@@ -963,9 +994,10 @@ fun WatchlistScreen(
                             state = hazeState,
                             style = hazeStyle,
                             blurRadius = TopBarBackdropBlurRadius,
-                            isContentUnderTopBar = hasContentUnderTopBar,
+                            isContentUnderTopBar = hasContentUnderTopBar &&
+                                (!isWatchlistGlassMode || !isNavigationTransitionRunning),
                             // 与 layerBackdrop 门控保持一致：BLUR 模式没录这一层，就不该再传。
-                            backdropOverride = if (isWatchlistGlassMode) watchlistContentBackdrop else null,
+                            backdropOverride = if (isWatchlistGlassActive) watchlistContentBackdrop else null,
                             scene = watchlistGlassScene
                         )
                 ) {
@@ -1902,19 +1934,21 @@ private fun WatchlistPosterCard(
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val activePosterTmdbId = LocalActivePosterTmdbId.current
+    val activePosterSelectionKey = LocalActivePosterSelectionKey.current
+    val setActivePosterSelectionKey = LocalActivePosterSelectionKeySetter.current
     val setActivePosterTmdbId = LocalActivePosterClickSetter.current
     val activeClickToken = LocalActivePosterClickToken.current
-    var myClickToken by rememberSaveable { mutableStateOf(0) }
     // 只有被点击激活的当前页海报才启用共享元素转场，避免同 tmdbId 卡片误匹配
     val enableShared = item.tmdbId > 0
             && item.tmdbId == activePosterTmdbId
-            && myClickToken != 0
-            && myClickToken == activeClickToken
+            && item.selectionKey == activePosterSelectionKey
+            && activeClickToken != 0
 
     val wrappedOnClick = remember(onClick, item.tmdbId, isMultiSelectMode) {
         {
             if (!isMultiSelectMode && item.tmdbId > 0) {
-                myClickToken = setActivePosterTmdbId(item.tmdbId)
+                setActivePosterSelectionKey(item.selectionKey)
+                setActivePosterTmdbId(item.tmdbId)
             }
             onClick()
         }
@@ -1933,44 +1967,6 @@ private fun WatchlistPosterCard(
         Modifier
     }
 
-    val context = LocalContext.current
-    // 通过 EntryPoint 获取 PosterColorExtractor 单例，用于提前提取海报主色写入缓存
-    val posterColorExtractor = remember {
-        EntryPointAccessors.fromApplication(
-            context.applicationContext,
-            PosterColorExtractorProvider::class.java
-        ).posterColorExtractor()
-    }
-    // 海报加载成功 + 卡片仍在屏幕上 1.5s 后才提取主色，避免快速滑动时大量触发 Palette 计算
-    var posterLoaded by remember { mutableStateOf(false) }
-    var colorExtracted by remember { mutableStateOf(false) }
-    var posterLoadedBitmap: Bitmap? by remember { mutableStateOf(null) }
-
-    LaunchedEffect(item.posterUrl) {
-        posterLoaded = false
-        colorExtracted = false
-        posterLoadedBitmap = null
-    }
-
-    LaunchedEffect(posterLoaded, item.posterUrl) {
-        if (posterLoaded && !colorExtracted && item.posterUrl != null) {
-            delay(500L)
-            if (posterLoaded && !colorExtracted) {
-                val bitmap = posterLoadedBitmap
-                if (bitmap != null) {
-                    withContext(Dispatchers.Default) {
-                        posterColorExtractor.extractDominantColor(item.posterUrl, bitmap)
-                    }
-                    colorExtracted = true
-                }
-            }
-        }
-    }
-
-    DisposableEffect(item.posterUrl) {
-        onDispose { posterLoadedBitmap = null }
-    }
-
     Column {
         Box {
             PosterCard(
@@ -1979,10 +1975,6 @@ private fun WatchlistPosterCard(
                 year = item.year?.toString(),
                 genres = null,
                 imageSize = 264,
-                onImageSuccess = { bitmap ->
-                    posterLoadedBitmap = bitmap
-                    posterLoaded = true
-                },
                 onClick = wrappedOnClick,
                 onLongClick = if (isMultiSelectMode) null else onLongClick,
                 posterModifier = posterModifier

@@ -150,6 +150,8 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+private val GlassBackdropResampleScheduleMillis = longArrayOf(120L, 320L, 700L, 1_400L, 2_800L, 5_000L)
+
 /** EntryPoint 用于在非 ViewModel 场景获取 TraktRepository（读取用户头像缓存） */
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -401,11 +403,6 @@ fun MainScreen(
         isFabVisible = 1f
     }
 
-    // Backdrop 采样版本号：滚动时推进，驱动「源重新录制 + 底栏重采」两端同时刷新。
-    // 只有消费者重绘是不够的：kyant 的源层（layerBackdrop）不会因子树滚动而重录，
-    // 消费者再采到的仍是旧帧，表现为底栏里混着上一次滚动位置的画面。
-    val contentSampleVersion = remember { mutableIntStateOf(0) }
-
     // 滚动期间冻结背景 shader：内容滚动 + 毛玻璃重算已经吃满一帧预算，再叠一层全屏
     // shader 重绘是纯亏，而滚动时眼睛在追内容，背景是否流动基本无感。
     // 复用 AmbientMotionState 的「最近有活动 + 超时归零」语义，idle 取 140ms：
@@ -416,9 +413,8 @@ fun MainScreen(
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: NestedScrollSource): androidx.compose.ui.geometry.Offset {
-                // 滚动即推进采样版本号（所有 tab 都要，早于下面的提前返回）
+                // 滚动只负责唤醒节流重采样协程；不在每个 pointer delta 上触发整页离屏录制。
                 if (available.y != 0f) {
-                    contentSampleVersion.intValue++
                     scrollMotion.ping()
                 }
                 // 搜索页（tab 0）且非搜索结果页时始终显示底部导航
@@ -500,42 +496,20 @@ fun MainScreen(
     val ambientMotionActive = remember(ambientMotion) { { ambientMotion.active } }
 
     var backdropResampleTick by remember { mutableIntStateOf(0) }
-    // 切 tab / 首次进入后的兜底重采窗口：程序化换页与「回顶」按钮的 animateScrollToItem 都不经过
-    // NestedScrollConnection，contentSampleVersion 不会推进，底栏会停在换页那一刻的采样上（表现为
-    // 整条导航透明、底下文字清晰可见）。这段窗口负责把陆续加载进来的数据与海报刷进底栏采样。
-    //
-    // 窗口内改用「先密后疏」：前 1.5s 用 5Hz（换页直后布局与首屏图变化最密集），之后到 6s 用 2Hz。
-    // 覆盖时长不变，但这段窗口产生的帧数从 30 降到 16。这不是省下几次采样的问题——GLASS 下每一次
-    // 重采都要把整页内容再光栅化一遍（见下），而空闲时这些帧全是白烧：实测 GLASS 静置 20s 渲染
-    // 30 帧、每帧 29-36ms，BLUR 静置是 0 帧。1.5s 后把间隔放宽到 500ms，对一层模糊背景的滞后
-    // 完全看不出来。
-    var resampleElapsedMs by remember { mutableIntStateOf(Int.MAX_VALUE) }
-    LaunchedEffect(pagerState.currentPage) {
-        resampleElapsedMs = 0
-    }
-    // 单一 ticker。
-    //
-    // 原先是两个各自 delay(200) 的 LaunchedEffect：一个跑「切 tab 后 6s」窗口，另一个在
-    // ambientMotion.active（最后一次指针事件后 3s 内）期间无限循环。两个循环推进同一个 tick，
-    // 合并成一个后行为不变、少一处相位漂移隐患。
-    //
     // 关键成本（从 kyant backdrop 2.0.0 的 LayerBackdropNode.draw 字节码确认）：该节点每次 draw
     // 会先 drawContent() 画到屏幕，再 recordLayer() 把同样的内容录进 GraphicsLayer，录制尺寸取
     // DrawScope.size，即整页全屏，库没有留降分辨率或限区域的入口。所以 GLASS 相对 BLUR 的固定
     // 开销就是「每帧多一次全屏光栅化」，tick 每推进一次就买一次。能省的只有次数。
-    LaunchedEffect(isGlassMode, ambientMotion) {
+    // 切 Tab 后只在布局/首屏图片最可能变化的几个关键时点复采。原实现 6 秒内固定产生
+    // 16 次全屏重录，并在交互活跃时继续轮询；滚动本身已有 contentSampleVersion 驱动，
+    // 无需再叠加 ticker。保留早/中/晚六次，覆盖首帧、缓存图片、网络图片和延迟数据落地。
+    LaunchedEffect(isGlassMode, pagerState.currentPage) {
         if (!isGlassMode) return@LaunchedEffect
-        while (true) {
-            val dense = resampleElapsedMs < 1_500
-            val step = if (dense) 200 else 500
-            delay(step.toLong())
-            val windowActive = resampleElapsedMs < 6_000
-            if (windowActive) {
-                resampleElapsedMs += step
-            }
-            if (windowActive || ambientMotion.active) {
-                backdropResampleTick++
-            }
+        var elapsed = 0L
+        for (target in GlassBackdropResampleScheduleMillis) {
+            delay(target - elapsed)
+            elapsed = target
+            backdropResampleTick++
         }
     }
 
@@ -582,12 +556,10 @@ fun MainScreen(
                 HorizontalPager(
                         state = pagerState,
                         userScrollEnabled = false,
-                        // 4 个 tab 页全部保持组合（2 = 当前页两侧各 2 页）：
-                        // 远 Tab 切换（如 搜索↔设置）不再销毁/重建整页，消除切换瞬间的
-                        // 200-300ms 组合尖峰；各页状态收集已下沉到 item/子 composable，
-                        // 后台页的隐藏重组成本极低。滚动位置由 rememberSaveable 的
-                        // grid/list state 跨销毁保留，此改动只省去重建不改变行为。
-                        beyondViewportPageCount = 2,
+                        // 只组合当前页。真机 Perfetto 显示从详情返回时，相邻页会与当前页一起
+                        // 恢复，首个 measureAndLayout 可达 578ms，并批量创建图片 painter。
+                        // Tab 使用 scrollToPage 瞬时切换；各页滚动位置仍由 rememberSaveable 保留。
+                        beyondViewportPageCount = 0,
                         modifier = Modifier
                             .fillMaxSize()
                             // 只有 Glass 模式的底栏才通过 backdropOverride 采样这一层。
@@ -597,10 +569,9 @@ fun MainScreen(
                             // 读采样版本号/tick 让本节点 draw 失效也只为驱动 layerBackdrop 重录，
                             // 没有 layerBackdrop 时一并省掉。
                             .then(
-                                if (isGlassMode) {
+                                if (isGlassMode && !scrollMotion.active) {
                                     Modifier
                                         .drawWithContent {
-                                            @Suppress("UNUSED_EXPRESSION") contentSampleVersion.intValue
                                             @Suppress("UNUSED_EXPRESSION") backdropResampleTick
                                             drawContent()
                                         }
@@ -622,10 +593,8 @@ fun MainScreen(
                             LocalBackdrop provides
                                 (if (glowAsBackdrop) glowBackdrop else LocalBackdrop.current)
                         ) {
-                            // beyondViewportPageCount=2 让 4 个 tab 常驻组合，语义树里就同时挂着
-                            // 4 页的全部节点。无障碍代理每帧要遍历整棵树并给全部节点重排遍历序
-                            // （实测 getCurrentSemanticsNodes + setTraversalValues 合计占应用采样
-                            // 11-17%），其中 3 页用户根本看不见。这里把非当前页的语义子树整体剪掉：
+                            // Pager 预取/切换窗口仍可能短暂组合非当前页。无障碍代理不应遍历
+                            // 不可见页的语义子树，这里统一剪掉，切回时自然恢复。
                             // 只影响无障碍暴露，不动组合/布局/绘制，切回该页时语义自然恢复。
                             Box(
                                 modifier = if (isCurrentPage) {
@@ -806,9 +775,8 @@ fun MainScreen(
                         .graphicsLayer { translationX = navPillDrag.panelOffsetPx }
                         .drawWithContent {
                             // 读取 tick 与采样版本号建立 draw 阶段快照依赖：源重录后本节点随之
-                            // 重绘并重采 backdrop 层，修复初始透明与滚动后混入旧帧画面。
+                            // 重绘并重采 backdrop 层。滚动期间 source 冻结，停滚后恢复最终画面。
                             @Suppress("UNUSED_EXPRESSION") backdropResampleTick
-                            @Suppress("UNUSED_EXPRESSION") contentSampleVersion.intValue
                             drawContent()
                         }
                         .padding(bottom = navBarHeight + 8.dp)

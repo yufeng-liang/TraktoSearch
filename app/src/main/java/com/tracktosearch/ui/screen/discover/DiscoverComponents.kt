@@ -47,7 +47,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
@@ -176,31 +175,12 @@ internal fun MovieCard(
                         .crossfade(false)
                         .build()
                 }
-                SubcomposeAsyncImage(
+                AsyncImage(
                     model = imageRequest,
                     contentDescription = title,
                     modifier = Modifier
                         .fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    // 低分辨率 w92 缩略图占位:先轮廓后清晰,改善加载白屏感知;仅 TMDB URL 生效
-                    loading = {
-                        val thumbUrl = posterUrl.takeIf { it.contains("/t/p/") }
-                            ?.let { TmdbImageUrls.swapSize(it, "w92") }
-                        if (thumbUrl != null) {
-                            AsyncImage(
-                                model = remember(thumbUrl) {
-                                    ImageRequest.Builder(context)
-                                        .data(thumbUrl)
-                                        .size(92)
-                                        .crossfade(false)
-                                        .build()
-                                },
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                    }
+                    contentScale = ContentScale.Crop
                 )
             } else {
                 Box(

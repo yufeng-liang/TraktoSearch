@@ -84,8 +84,14 @@ internal fun rememberGlassLuminanceProbe(): GlassLuminanceProbe {
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     val started = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
     val motionActive = LocalAmbientMotionActive.current
-    LaunchedEffect(probe, started, motionActive) {
-        if (!started) return@LaunchedEffect
+    val isCurrentTab = LocalIsCurrentTab.current
+    val navigationTransitionRunning = LocalAnimatedVisibilityScope.current?.transition?.let { transition ->
+        transition.currentState != transition.targetState
+    } == true
+    LaunchedEffect(probe, started, motionActive, isCurrentTab, navigationTransitionRunning) {
+        // GPU->CPU 读回只服务当前稳定页面。隐藏 Pager 页和导航转场窗口中的探针
+        // 没有用户可见收益，且会与列表恢复、共享元素和图片上传争用帧预算。
+        if (!started || !isCurrentTab || navigationTransitionRunning) return@LaunchedEffect
         val buffer = IntArray(ThumbnailSide * ThumbnailSide)
         var interval = MinSampleIntervalMillis
         while (true) {

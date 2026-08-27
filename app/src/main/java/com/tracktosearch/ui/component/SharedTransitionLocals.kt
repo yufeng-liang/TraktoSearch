@@ -50,6 +50,12 @@ val LocalActivePosterClickToken = compositionLocalOf<Int> { 0 }
  */
 val LocalActivePosterClickSetter = compositionLocalOf<(Int) -> Int> { { _ -> 0 } }
 
+/** 当前页面中被点击的海报 selectionKey；用于同 tmdbId 重复条目的精确匹配。 */
+val LocalActivePosterSelectionKey = compositionLocalOf<String?> { null }
+
+/** 设置当前被点击海报的 selectionKey。 */
+val LocalActivePosterSelectionKeySetter = compositionLocalOf<(String) -> Unit> { {} }
+
 /**
  * 当前被全屏查看器打开的共享元素 key(形如 "backdrop-zoom-123-4"),未打开时为 null。
  *
