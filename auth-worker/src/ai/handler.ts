@@ -45,6 +45,12 @@ import {
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_MOVIES = 60;
 const QUIZ_QUESTION_COUNT = 13;
+// 闯关难度反馈：KV 滑窗最多保留最近 5 条，90 天过期
+const QUIZ_DIFFICULTY_FEEDBACK_WINDOW = 5;
+const QUIZ_DIFFICULTY_TTL_SECONDS = 90 * 24 * 60 * 60;
+// 出题难度趋势指令：最近 5 条反馈中 hard/easy 占多数（≥3）时注入
+const QUIZ_DIFFICULTY_HARD_HINT = '用户反馈近期题目偏难：本轮以主流影片的主线情节为主，减少冷门细节题，让题目更容易被答对。';
+const QUIZ_DIFFICULTY_EASY_HINT = '用户反馈近期题目偏简单：本轮适当增加需要细看才能记住的情节细节题，保持挑战性。';
 
 export interface AiEnvironment extends MimoEnvironment, AiStoreEnvironment, AgnesEnvironment {
     AI_VOICE_SAMPLES?: R2Bucket;
@@ -95,6 +101,19 @@ interface QuizCacheData {
     sessionId?: string;
     movies: WatchMovie[];
     questions: InternalQuestion[];
+}
+
+type QuizDifficulty = 'easy' | 'just_right' | 'hard';
+
+interface QuizDifficultyEntry {
+    quizId: string;
+    difficulty: QuizDifficulty;
+    at: string;
+}
+
+interface QuizDifficultyRecord {
+    entries: QuizDifficultyEntry[];
+    updatedAt: string;
 }
 
 interface DailyResponse {
@@ -166,6 +185,10 @@ export async function handleAiApi(
         assertAction(body, ['quiz.submit', 'quiz_submit', 'submit']);
         return handleQuizSubmit(body, env, requestId, authenticatedPayload);
     }
+    if (path === '/api/ai/quiz/feedback') {
+        assertAction(body, 'quiz.feedback');
+        return handleQuizFeedback(body, env, requestId, authenticatedPayload);
+    }
 
     throw new AppError('NOT_FOUND', 'Not found', 404);
 }
@@ -212,7 +235,7 @@ async function handleActivate(
     const audio = await synthesizeOptionalAudio(
         env,
         character,
-        character.activationPhrase,
+        injectCatchphraseForScene(character, character.activationPhrase, 'ACTIVATION_ACK'),
         'ACTIVATION_ACK',
         audioOrigin,
     );
@@ -247,7 +270,9 @@ async function handleTts(
     }
     // style 仅为旧客户端兼容保留，不能覆盖服务端的角色声线和场景指导。
     void body.style;
-    const input = buildTtsInput(character, scene, text, audioOrigin);
+    // 口头禅只进音频：注入后的文本仅供 TTS 朗读，transcript 返回客户端前会再剥离口头禅
+    const spokenText = injectCatchphraseForScene(character, text, scene);
+    const input = buildTtsInput(character, scene, spokenText, audioOrigin);
     const clientIp = ttsClientIp(request);
     await reserveAiTtsRequest(env, clientIp);
     const cached = await readCachedTtsAudio(env, input);
@@ -258,7 +283,7 @@ async function handleTts(
     const quota = payload
         ? await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body))
         : null;
-    const audio = await synthesizeShortReply(env, character, text, scene, input.origin);
+    const audio = await synthesizeShortReply(env, character, spokenText, scene, input.origin);
     return successResponse(toPublicAudio(audio), requestId, quota ? publicQuota(quota) : undefined);
 }
 
@@ -295,7 +320,7 @@ async function handleGreeting(
     const nickname = await getFriendNickname(env, payload.sub);
     const upstream = await callLlmJson(env, provider, model, greetingMessages(character, nickname), {}, fallbackModel);
     const generated = upstream ? normalizeGreeting(parseAssistantJson<unknown>(upstream)) : fallbackGreeting(character, nickname);
-    const spokenText = buildGreetingSpokenText(character, generated.greeting);
+    const spokenText = injectCatchphrase(character, generated.greeting);
     const audio = includeAudio
         ? await synthesizeOptionalAudio(env, character, spokenText, 'GREETING', audioOrigin)
         : null;
@@ -376,7 +401,9 @@ async function handleQuiz(
     const selectedMovies = selectQuizMovies(movies, avoidedMediaIds);
     // 客户端显式传入 quizId 时沿用（重玩同一测验）；未传则每次生成新 id
     const requestedQuizId = body.quizId === undefined ? null : readOpaqueId(body.quizId, 'quizId');
-    const cacheData = await generateQuiz(env, provider, model, fallbackModel, selectedMovies, requestedQuizId, sessionId, nickname);
+    // 出题前读取难度反馈滑窗：用户连续反馈偏难/偏简单时调整本轮出题风格
+    const difficultyHint = await readQuizDifficultyHint(env, payload.sub);
+    const cacheData = await generateQuiz(env, provider, model, fallbackModel, selectedMovies, requestedQuizId, sessionId, nickname, difficultyHint);
     if (cacheData) {
         const cacheKey = `ai:v1:quiz:${payload.sub}:${cacheData.quizId}`;
         await writeAiCache(env, cacheKey, cacheData, 24 * 60 * 60, payload.sub, 'quiz');
@@ -408,8 +435,9 @@ async function generateQuiz(
     requestedQuizId: string | null,
     sessionId: string,
     nickname: string,
+    difficultyHint: string | null,
 ): Promise<QuizCacheData | null> {
-    const upstream = await callLlmJson(env, provider, model, quizMessages(nickname, selectedMovies), {
+    const upstream = await callLlmJson(env, provider, model, quizMessages(nickname, selectedMovies, difficultyHint), {
         // 13 题（含选项/解析）JSON 超过默认 1024 输出 token，给足上限避免截断后解析失败
         maxCompletionTokens: 4000,
     }, fallbackModel);
@@ -476,6 +504,87 @@ function dimensionScores(
         output[key] = value.possible > 0 ? Math.round((value.earned / value.possible) * 100) : 0;
     }
     return output;
+}
+
+/**
+ * 闯关难度反馈：免费操作，不消耗 AI 配额，也不走 D1 ai_cache 审计，
+ * 直接写 KV 滑窗（出题时读取趋势）。quizId 必须对应已生成的测验缓存，防止乱刷。
+ */
+async function handleQuizFeedback(
+    body: Record<string, unknown>,
+    env: AiEnvironment,
+    requestId: string,
+    payload: AiJwtPayload,
+): Promise<Response> {
+    const quizId = readOpaqueId(body.quizId, 'quizId');
+    const difficulty = readQuizDifficulty(body.difficulty);
+    if (!(await readAiCache(env, `ai:v1:quiz:${payload.sub}:${quizId}`))) {
+        throw new AppError('QUIZ_NOT_FOUND', 'Quiz session was not found', 404);
+    }
+    const record = await readQuizDifficultyRecord(env, payload.sub);
+    // 幂等：同一 quizId 已在滑窗里时直接返回成功，不重复记录
+    if (!record.entries.some(entry => entry.quizId === quizId)) {
+        await writeQuizDifficultyRecord(env, payload.sub, {
+            entries: [
+                { quizId, difficulty, at: new Date().toISOString() },
+                ...record.entries,
+            ].slice(0, QUIZ_DIFFICULTY_FEEDBACK_WINDOW),
+            updatedAt: new Date().toISOString(),
+        });
+    }
+    return successResponse({ success: true, requestId }, requestId);
+}
+
+function readQuizDifficulty(value: unknown): QuizDifficulty {
+    if (value !== 'easy' && value !== 'just_right' && value !== 'hard') {
+        throw new AppError('INVALID_DIFFICULTY', 'Quiz difficulty must be easy, just_right, or hard', 400);
+    }
+    return value;
+}
+
+function quizDifficultyKey(friendId: string): string {
+    return `ai:v1:quiz-difficulty:${friendId}`;
+}
+
+async function readQuizDifficultyRecord(env: AiEnvironment, friendId: string): Promise<QuizDifficultyRecord> {
+    const empty: QuizDifficultyRecord = { entries: [], updatedAt: new Date().toISOString() };
+    if (!env.KV) return empty;
+    let parsed: unknown;
+    try {
+        const raw = await env.KV.get(quizDifficultyKey(friendId));
+        if (!raw) return empty;
+        parsed = JSON.parse(raw);
+    } catch {
+        return empty;
+    }
+    if (!isRecord(parsed) || !Array.isArray(parsed.entries)) return empty;
+    const entries = parsed.entries.filter((entry): entry is QuizDifficultyEntry =>
+        isRecord(entry)
+        && typeof entry.quizId === 'string'
+        && typeof entry.at === 'string'
+        && (entry.difficulty === 'easy' || entry.difficulty === 'just_right' || entry.difficulty === 'hard'));
+    return {
+        entries: entries.slice(0, QUIZ_DIFFICULTY_FEEDBACK_WINDOW),
+        updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : empty.updatedAt,
+    };
+}
+
+async function writeQuizDifficultyRecord(env: AiEnvironment, friendId: string, record: QuizDifficultyRecord): Promise<void> {
+    if (!env.KV) return;
+    await env.KV.put(quizDifficultyKey(friendId), JSON.stringify(record), {
+        expirationTtl: QUIZ_DIFFICULTY_TTL_SECONDS,
+    });
+}
+
+/** 出题难度趋势：最近 5 条反馈里 hard/easy 占多数（≥3）时返回对应的风格指令。 */
+async function readQuizDifficultyHint(env: AiEnvironment, friendId: string): Promise<string | null> {
+    const record = await readQuizDifficultyRecord(env, friendId);
+    const recent = record.entries.slice(0, QUIZ_DIFFICULTY_FEEDBACK_WINDOW);
+    const hardCount = recent.filter(entry => entry.difficulty === 'hard').length;
+    if (hardCount >= 3) return QUIZ_DIFFICULTY_HARD_HINT;
+    const easyCount = recent.filter(entry => entry.difficulty === 'easy').length;
+    if (easyCount >= 3) return QUIZ_DIFFICULTY_EASY_HINT;
+    return null;
 }
 
 async function handleDaily(
@@ -569,10 +678,24 @@ function buildVoiceDesignPrompt(character: CharacterConfig, scene: TtsScene): st
     ].join('。');
 }
 
-function buildGreetingSpokenText(character: CharacterConfig, greeting: string): string {
-    const normalizedGreeting = greeting.trim().replace(/\s+/g, ' ');
+/** 按 catchphrasePosition 把口头禅用空格拼进文本：句首角色前置，其余后置。 */
+function injectCatchphrase(character: CharacterConfig, text: string): string {
     const catchphrase = character.greetingCatchphrase.trim().replace(/\s+/g, ' ');
-    return catchphrase ? `${normalizedGreeting} ${catchphrase}`.trim() : normalizedGreeting;
+    const normalized = text.trim().replace(/\s+/g, ' ');
+    if (!catchphrase || !normalized) return normalized;
+    return character.catchphrasePosition === 'start'
+        ? `${catchphrase} ${normalized}`
+        : `${normalized} ${catchphrase}`;
+}
+
+/**
+ * 三场景口头禅注入入口：显式开启 spokenInAllScenes 的角色（吉伊/小八）在
+ * AUDITION/ACTIVATION_ACK/GREETING 全部注入；其余角色仅 GREETING 注入
+ * （GREETING 原本就拼 greetingCatchphrase，维持现状，避免与「严禁添加口癖」的场景指导冲突）。
+ */
+function injectCatchphraseForScene(character: CharacterConfig, text: string, scene: TtsScene): string {
+    if (scene !== 'GREETING' && !character.spokenInAllScenes) return text;
+    return injectCatchphrase(character, text);
 }
 
 function resolveAudioPublicBaseUrl(request: Request, env: AiEnvironment): string {
@@ -621,6 +744,14 @@ function buildTtsInput(
     };
 }
 
+/** 客户端转文字不展示口头禅：定向移除「鸭蛋」「噢易」及其自带标点和连接空格，不动原句首尾标点。 */
+function stripCatchphraseFromTranscript(text: string | null): string | null {
+    if (!text) return text;
+    return text
+        .replace(/ ?(?:鸭蛋|噢易)[。，！？、,.!?；;：:]* ?/g, '')
+        .trim();
+}
+
 function toPublicAudio(audio: TtsPublicAudio | null): Record<string, unknown> | null {
     if (!audio) return null;
     return {
@@ -630,7 +761,7 @@ function toPublicAudio(audio: TtsPublicAudio | null): Record<string, unknown> | 
         mimeType: audio.mimeType,
         durationMs: audio.durationMs,
         cacheKey: audio.cacheKey,
-        transcript: audio.transcript,
+        transcript: stripCatchphraseFromTranscript(audio.transcript),
     };
 }
 
@@ -673,11 +804,13 @@ function tasteMessages(nickname: string, movies: WatchMovie[]): MimoMessage[] {
     ];
 }
 
-function quizMessages(nickname: string, movies: WatchMovie[]): MimoMessage[] {
+function quizMessages(nickname: string, movies: WatchMovie[], difficultyHint: string | null = null): MimoMessage[] {
+    const systemContent = '你是影视知识闯关出题人。只返回 JSON，字段为 questions。必须返回 13 题：10 个 single、2 个 multiple、1 个 short。选择题必须有 2 到 4 个 options，每题考察主题、人物处境、经典台词寓意或跨学科思考，不要问台词是谁说的。short 题必须额外提供 answerKeywords 字段：包含 5 到 8 个中文关键词，覆盖该题可接受的主要正确答法要点（判分用用户答案是否包含任一关键词）。'
+        + (difficultyHint ?? '');
     return [
         {
             role: 'system',
-            content: '你是影视知识闯关出题人。只返回 JSON，字段为 questions。必须返回 13 题：10 个 single、2 个 multiple、1 个 short。选择题必须有 2 到 4 个 options，每题考察主题、人物处境、经典台词寓意或跨学科思考，不要问台词是谁说的。short 题必须额外提供 answerKeywords 字段：包含 5 到 8 个中文关键词，覆盖该题可接受的主要正确答法要点（判分用用户答案是否包含任一关键词）。',
+            content: systemContent,
         },
         {
             role: 'user',

@@ -24,6 +24,11 @@ export interface CharacterConfig {
     sceneGuidance: Record<TtsScene, string>;
     activationPhrase: string;
     greetingCatchphrase: string;
+    // 口头禅拼接位置：start 前置到句首，end 后置到句尾（均用空格连接）
+    catchphrasePosition: 'start' | 'end';
+    // 是否在 AUDITION/ACTIVATION_ACK/GREETING 三个场景都注入口头禅；
+    // 其余角色仅在 GREETING 场景拼口头禅（维持原有行为，避免与「严禁添加口癖」的场景指导冲突）
+    spokenInAllScenes: boolean;
 }
 
 export const CHARACTERS: readonly CharacterConfig[] = [
@@ -37,12 +42,14 @@ export const CHARACTERS: readonly CharacterConfig[] = [
         voiceSampleKey: 'CHIIKAWA',
         voiceDesignPrompt: '五到六岁女童的明显稚嫩童声，细小、软糯、明亮；温柔认真，带一点害羞和紧张，亲近而清楚。语速约为普通版本的1.2倍，轻快但不能含糊。不能是成人声、青年声或播音腔。',
         sceneGuidance: {
-            AUDITION: '像轻声邀请朋友一起找电影，整句语速约1.2倍，每个字都清楚，不抢字、不吞字。',
-            ACTIVATION_ACK: '先有一点犹豫，再温柔而清楚地回应。',
-            GREETING: '真诚、轻柔、有陪伴感，语速保持轻快清楚。',
+            AUDITION: '像轻声邀请朋友一起找电影，整句语速约1.2倍，每个字都清楚，不抢字、不吞字。口头禅「鸭蛋」整句只出现一次，严禁重复、拉长或变调。',
+            ACTIVATION_ACK: '先有一点犹豫，再温柔而清楚地回应。口头禅「鸭蛋」整句只出现一次，严禁重复、拉长或变调。',
+            GREETING: '真诚、轻柔、有陪伴感，语速保持轻快清楚。口头禅「鸭蛋」整句只出现一次，严禁重复、拉长或变调。',
         },
         activationPhrase: '到、到！',
-        greetingCatchphrase: '一起看吧。',
+        greetingCatchphrase: '鸭蛋。',
+        catchphrasePosition: 'end',
+        spokenInAllScenes: true,
     },
     {
         id: 'hachiware',
@@ -54,12 +61,14 @@ export const CHARACTERS: readonly CharacterConfig[] = [
         voiceSampleKey: 'HACHIWARE',
         voiceDesignPrompt: '五到六岁男童的明显稚嫩奶声，声音细薄、轻快、明亮；友善乐观，带自然笑意和分享欲，不吵闹。不能有少年声、成人声或播音腔。',
         sceneGuidance: {
-            AUDITION: '像幼儿园男孩跑来分享新发现，语气亲切、句末自然上扬；“片单”读作普通话 piān dān，“线索”逐字读清，句末“哦”只出现一次。',
-            ACTIVATION_ACK: '明亮积极，像马上跑来帮忙，保持稚嫩奶声。',
-            GREETING: '热情分享，语气自然上扬，但保持幼童男声。',
+            AUDITION: '像幼儿园男孩跑来分享新发现，语气亲切、句末自然上扬；“片单”读作普通话 piān dān，“线索”逐字读清，句末“哦”只出现一次。口头禅「噢易」整句只出现一次，严禁重复、拉长或变调。',
+            ACTIVATION_ACK: '明亮积极，像马上跑来帮忙，保持稚嫩奶声。口头禅「噢易」整句只出现一次，严禁重复、拉长或变调。',
+            GREETING: '热情分享，语气自然上扬，但保持幼童男声。口头禅「噢易」整句只出现一次，严禁重复、拉长或变调。',
         },
         activationPhrase: '到！我在哦！',
-        greetingCatchphrase: '对吧！',
+        greetingCatchphrase: '噢易！',
+        catchphrasePosition: 'start',
+        spokenInAllScenes: true,
     },
     {
         id: 'usagi',
@@ -77,6 +86,8 @@ export const CHARACTERS: readonly CharacterConfig[] = [
         },
         activationPhrase: '到！',
         greetingCatchphrase: '呀哈！',
+        catchphrasePosition: 'end',
+        spokenInAllScenes: false,
     },
     {
         id: 'flying-squirrel',
@@ -94,6 +105,8 @@ export const CHARACTERS: readonly CharacterConfig[] = [
         },
         activationPhrase: '听到啦！',
         greetingCatchphrase: '嘿嘿。',
+        catchphrasePosition: 'end',
+        spokenInAllScenes: false,
     },
     {
         id: 'shisa',
@@ -111,6 +124,8 @@ export const CHARACTERS: readonly CharacterConfig[] = [
         },
         activationPhrase: '到，我在。',
         greetingCatchphrase: '慢慢来就好。',
+        catchphrasePosition: 'end',
+        spokenInAllScenes: false,
     },
     {
         id: 'kurimanju',
@@ -128,6 +143,8 @@ export const CHARACTERS: readonly CharacterConfig[] = [
         },
         activationPhrase: '嗯，到。',
         greetingCatchphrase: '嗯。',
+        catchphrasePosition: 'end',
+        spokenInAllScenes: false,
     },
     {
         id: 'rakko',
@@ -145,6 +162,8 @@ export const CHARACTERS: readonly CharacterConfig[] = [
         },
         activationPhrase: '到。开始吧。',
         greetingCatchphrase: '一步一步来。',
+        catchphrasePosition: 'end',
+        spokenInAllScenes: false,
     },
 ];
 
