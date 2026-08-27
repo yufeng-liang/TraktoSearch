@@ -113,7 +113,6 @@ import com.tracktosearch.ui.component.LocalBackdropSourceEnabled
 import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.ambientMotionPing
-import com.tracktosearch.ui.component.navPanelPressGlow
 import com.tracktosearch.ui.component.rememberAmbientMotionState
 import com.tracktosearch.ui.component.rememberGlassSelectionBounceScale
 import com.tracktosearch.ui.component.rememberNavPillDragState
@@ -810,7 +809,9 @@ fun MainScreen(
                     // 免得日后 blur 分支接上 backdropOverride 时读到一层没录过的空层。
                     backdropOverride = if (isGlassMode) mainContentBackdrop else null,
                     exportedBackdrop = if (isGlassMode) navPanelBackdrop else null,
-                    interactionSource = navPillDrag.interactionSource,
+                    // Glass 的按压/切 Tab 动效只作用于选中水滴和单个 Tab；不要把同一按压态
+                    // 传给整块面板，否则 GlassSurface 会让整栏放大并增强高光。Blur 保持原行为。
+                    interactionSource = if (isGlassMode) null else navPillDrag.interactionSource,
                     // 底部导航自身作为 zIndex=1 的 source，effect 只采样 zIndex=0 的页面内容，
                     // 避免导航栏模糊自身导致重复模糊与无谓开销（Haze 最重的叠加场景）
                     sourceSelection = HazeSourceSelection.Behind.where { source -> source.zIndex < 1f },
@@ -855,18 +856,6 @@ fun MainScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .then(if (isGlassMode) Modifier.layerBackdrop(navTabsBackdrop) else Modifier)
-                        .then(
-                            if (isGlassMode) {
-                                Modifier.navPanelPressGlow(
-                                    progress = { navPillDrag.pressProgress },
-                                    centerX = {
-                                        navRowPaddingPx + navTabWidthPx * (navPillDrag.value + 0.5f)
-                                    }
-                                )
-                            } else {
-                                Modifier
-                            }
-                        )
                         .padding(horizontal = rowPadding),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
