@@ -15,8 +15,6 @@
 
 ## 第三方 Logo、图标和动画
 
-- app/src/main/res/drawable-xxxhdpi/wheat_wreath.png：开源相关页感谢卡片的金色麦穗花环装饰，来自 OpenClipart（经 publicdomainvectors.org 分发），Public Domain / CC0，可商用免署名。
-
 - ic_douban_logo.xml、ic_trakt_logo.xml、ic_wikipedia.xml、社交平台图标以及网盘图标用于识别相应服务。名称、Logo、商标和品牌规范归各自权利人所有，不适用本项目 GPLv3。
 - app/src/main/res/raw/cloud_*.json、easter_*.json 等 Lottie 动画必须按其原始来源和发布包中的许可证处理。目前代码目录未为每个动画保存完整的作者、来源和许可证元数据；在公开发布或重新分发前，应补齐这部分记录，无法核对的素材应移除或替换。
 - Android 系统图标和系统字体属于 Android / 系统环境的一部分，不作为项目原创素材重新授权。
