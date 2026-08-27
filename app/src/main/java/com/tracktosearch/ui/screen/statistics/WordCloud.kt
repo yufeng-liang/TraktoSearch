@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -32,12 +33,36 @@ data class WordCloudItem(val word: String, val weight: Int)
  * @param rect 在画布坐标中的摆放矩形（含内边距，已绝对定位）
  * @param color 绘制颜色（取自主题调色板）
  */
-private data class PlacedWord(
+internal data class PlacedWord(
     val word: String,
     val rect: Rect,
     val color: Color,
     val style: TextStyle
 )
+
+/**
+ * 词云布局缓存。
+ *
+ * 布局要测量所有词并做螺旋排布，几毫秒量级。放在 LazyColumn item 里会随 item 回收丢掉，
+ * 滚回来时重算造成掉帧；提到屏幕级缓存后同一份输入只算一次。
+ */
+@Stable
+class WordCloudLayoutStore internal constructor() {
+    private var cachedKey: Any? = null
+    private var cachedLayout: WordCloudLayout? = null
+
+    internal fun getOrPut(key: Any, compute: () -> WordCloudLayout): WordCloudLayout {
+        cachedLayout?.let { if (key == cachedKey) return it }
+        val layout = compute()
+        cachedKey = key
+        cachedLayout = layout
+        return layout
+    }
+}
+
+/** 词云布局缓存，生命周期跟随调用方（通常是整个页面）。 */
+@Composable
+fun rememberWordCloudLayoutStore(): WordCloudLayoutStore = remember { WordCloudLayoutStore() }
 
 /**
  * 词云组件。
@@ -50,12 +75,14 @@ private data class PlacedWord(
  * 空列表时不绘制任何内容（空态由调用方处理）。
  *
  * @param words 词频列表（无需预先排序）
+ * @param layoutStore 布局缓存，见 [rememberWordCloudLayoutStore]
  * @param modifier 修饰符，建议至少提供宽度（如 fillMaxWidth），高度由组件按内容估算
  * @param maxWords 仅取前 N 个高频词，避免过密
  */
 @Composable
 fun WordCloud(
     words: List<WordCloudItem>,
+    layoutStore: WordCloudLayoutStore,
     modifier: Modifier = Modifier,
     maxWords: Int = 60
 ) {
@@ -81,16 +108,19 @@ fun WordCloud(
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val canvasWidthPx = with(density) { maxWidth.toPx() }
 
-        // 布局计算放入 remember，仅在 words / 宽度 / 调色板变化时重算，onDraw 只负责绘制
+        // 布局结果按 (词表, 宽度, 调色板, 词数上限) 缓存在 layoutStore 里，
+        // item 被回收再进入时直接复用，不重跑测量与螺旋排布
         val layout = remember(words, canvasWidthPx, palette, maxWords) {
-            computeLayout(
-                words = words,
-                canvasWidthPx = canvasWidthPx,
-                palette = palette,
-                textMeasurer = textMeasurer,
-                density = density,
-                maxWords = maxWords
-            )
+            layoutStore.getOrPut(listOf(words, canvasWidthPx, palette, maxWords)) {
+                computeLayout(
+                    words = words,
+                    canvasWidthPx = canvasWidthPx,
+                    palette = palette,
+                    textMeasurer = textMeasurer,
+                    density = density,
+                    maxWords = maxWords
+                )
+            }
         }
 
         val canvasHeightDp = with(density) { layout.heightPx.toDp() }
@@ -269,7 +299,7 @@ private fun overlaps(placed: List<PlacedWord>, rect: Rect): Boolean {
 /**
  * 布局结果：已摆放词列表 + 画布高度（px）。
  */
-private data class WordCloudLayout(
+internal data class WordCloudLayout(
     val placed: List<PlacedWord>,
     val heightPx: Float
 )

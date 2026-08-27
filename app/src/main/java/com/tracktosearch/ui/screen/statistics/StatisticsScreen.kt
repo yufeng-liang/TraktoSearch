@@ -2,8 +2,8 @@ package com.tracktosearch.ui.screen.statistics
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,13 +54,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,7 +73,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.platform.LocalView
@@ -92,16 +95,19 @@ import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.hazeTopBar
-import com.tracktosearch.ui.component.rememberShimmerBrush
+import com.tracktosearch.ui.component.rememberShimmer
+import com.tracktosearch.ui.component.shimmer
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -170,6 +176,28 @@ fun StatisticsScreen(
                     }
                 }
                 val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                // 热力图翻页位置与网格计算提升到列表外：item 滑出屏幕被回收也不会丢翻页位置，
+                // 且 13×7 网格（含 SimpleDateFormat / Calendar 运算）只在数据或翻页变化时重算一次
+                var heatmapWeekOffset by rememberSaveable { mutableStateOf(0) }
+                val heatmapLocale = statisticsLocale()
+                val heatmapGrid = remember(
+                    uiState.heatmapData,
+                    uiState.heatmapReady,
+                    heatmapWeekOffset,
+                    heatmapLocale
+                ) {
+                    if (uiState.heatmapReady) {
+                        buildHeatmapGrid(
+                            heatmapData = uiState.heatmapData,
+                            weekOffset = heatmapWeekOffset,
+                            locale = heatmapLocale
+                        )
+                    } else {
+                        null
+                    }
+                }
+                // 词云布局按屏幕缓存：item 被回收再进入时直接复用，不重跑螺旋排布
+                val wordCloudLayoutStore = rememberWordCloudLayoutStore()
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
@@ -186,11 +214,7 @@ fun StatisticsScreen(
             ) {
                 // 总览卡片（数字跳动动画）
                 item(key = "overview") {
-                    val isVisible by remember {
-                        derivedStateOf {
-                            listState.layoutInfo.visibleItemsInfo.any { it.key == "overview" }
-                        }
-                    }
+                    val reveal = rememberSectionReveal(listState, "overview")
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
@@ -200,7 +224,7 @@ fun StatisticsScreen(
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
                         if (uiState.overviewReady) {
-                            OverviewCards(uiState, isVisible)
+                            OverviewCards(uiState, reveal)
                         } else {
                             StatisticsSkeletonContent(
                                 variant = StatisticsSkeletonVariant.OVERVIEW,
@@ -212,14 +236,10 @@ fun StatisticsScreen(
 
                 // 观影时长
                 item(key = "watch_time") {
-                    val isVisible by remember {
-                        derivedStateOf {
-                            listState.layoutInfo.visibleItemsInfo.any { it.key == "watch_time" }
-                        }
-                    }
+                    val reveal = rememberSectionReveal(listState, "watch_time")
                     SectionCard(title = stringResource(R.string.statistics_total_watch_time)) {
                         if (uiState.watchTimeReady) {
-                            WatchTimeCard(uiState = uiState, isVisible = isVisible)
+                            WatchTimeCard(uiState = uiState, reveal = reveal)
                         } else {
                             StatisticsSkeletonContent(StatisticsSkeletonVariant.WATCH_TIME)
                         }
@@ -228,14 +248,16 @@ fun StatisticsScreen(
 
                 // 热力图
                 item(key = "heatmap") {
-                    val isVisible by remember {
-                        derivedStateOf {
-                            listState.layoutInfo.visibleItemsInfo.any { it.key == "heatmap" }
-                        }
-                    }
+                    val reveal = rememberSectionReveal(listState, "heatmap")
                     SectionCard(title = stringResource(R.string.statistics_heatmap)) {
-                        if (uiState.heatmapReady) {
-                            HeatmapChart(heatmapData = uiState.heatmapData, isVisible = isVisible)
+                        if (heatmapGrid != null) {
+                            HeatmapChart(
+                                grid = heatmapGrid,
+                                locale = heatmapLocale,
+                                weekOffset = heatmapWeekOffset,
+                                onWeekOffsetChange = { heatmapWeekOffset = it },
+                                reveal = reveal
+                            )
                         } else {
                             StatisticsSkeletonContent(StatisticsSkeletonVariant.HEATMAP)
                         }
@@ -244,14 +266,10 @@ fun StatisticsScreen(
 
                 // 评分统计
                 item(key = "ratings") {
-                    val isVisible by remember {
-                        derivedStateOf {
-                            listState.layoutInfo.visibleItemsInfo.any { it.key == "ratings" }
-                        }
-                    }
+                    val reveal = rememberSectionReveal(listState, "ratings")
                     SectionCard(title = stringResource(R.string.statistics_ratings)) {
                         if (uiState.ratingsReady) {
-                            RatingStatsCard(uiState = uiState, isVisible = isVisible)
+                            RatingStatsCard(uiState = uiState, reveal = reveal)
                         } else {
                             StatisticsSkeletonContent(StatisticsSkeletonVariant.RATINGS)
                         }
@@ -260,17 +278,13 @@ fun StatisticsScreen(
 
                 // 短评词云
                 item(key = "wordcloud") {
-                    val isVisible by remember {
-                        derivedStateOf {
-                            listState.layoutInfo.visibleItemsInfo.any { it.key == "wordcloud" }
-                        }
-                    }
                     SectionCard(title = stringResource(R.string.statistics_wordcloud)) {
                         if (!uiState.wordCloudReady) {
                             StatisticsSkeletonContent(StatisticsSkeletonVariant.WORD_CLOUD)
                         } else if (uiState.wordCloud.isNotEmpty()) {
                             WordCloud(
                                 words = uiState.wordCloud,
+                                layoutStore = wordCloudLayoutStore,
                                 modifier = Modifier.fillMaxWidth().height(220.dp)
                             )
                         } else {
@@ -293,14 +307,10 @@ fun StatisticsScreen(
 
                 // 类型分布（饼图，展开动画）
                 item(key = "pie") {
-                    val isVisible by remember {
-                        derivedStateOf {
-                            listState.layoutInfo.visibleItemsInfo.any { it.key == "pie" }
-                        }
-                    }
+                    val reveal = rememberSectionReveal(listState, "pie")
                     SectionCard(title = stringResource(R.string.statistics_genre_distribution)) {
                         if (uiState.genreReady && uiState.genreDistribution.isNotEmpty()) {
-                            GenrePieChart(genreDistribution = uiState.genreDistribution, isVisible = isVisible)
+                            GenrePieChart(genreDistribution = uiState.genreDistribution, reveal = reveal)
                         } else if (!uiState.genreReady) {
                             StatisticsSkeletonContent(StatisticsSkeletonVariant.PIE)
                         } else {
@@ -315,14 +325,10 @@ fun StatisticsScreen(
 
                 // 最常看的类型排行（柱形增长动画 + emoji奖牌）
                 item(key = "ranking") {
-                    val isVisible by remember {
-                        derivedStateOf {
-                            listState.layoutInfo.visibleItemsInfo.any { it.key == "ranking" }
-                        }
-                    }
+                    val reveal = rememberSectionReveal(listState, "ranking")
                     SectionCard(title = stringResource(R.string.statistics_genre_ranking)) {
                         if (uiState.genreReady && uiState.genreDistribution.isNotEmpty()) {
-                            GenreRanking(genreDistribution = uiState.genreDistribution, isVisible = isVisible)
+                            GenreRanking(genreDistribution = uiState.genreDistribution, reveal = reveal)
                         } else if (!uiState.genreReady) {
                             StatisticsSkeletonContent(StatisticsSkeletonVariant.RANKING)
                         } else {
@@ -470,9 +476,108 @@ private fun StatisticsInfoDialog(onDismiss: () -> Unit) {
     )
 }
 
+/**
+ * 分区的「首次露出」状态。
+ *
+ * @param revealed 是否已经进入过可视区域
+ * @param playAnimation 本次组合是否需要播放入场动画（只有首次露出才播）
+ */
+@Immutable
+private data class SectionReveal(
+    val revealed: Boolean,
+    val playAnimation: Boolean
+)
+
+/**
+ * 记录某个 LazyColumn item 是否露出过，用于入场动画只播一次。
+ *
+ * [revealed] 存在 rememberSaveable 里，item 滑出屏幕被回收后再回来仍是 true，
+ * 所以动画不会重播。可见性用 snapshotFlow 只取「第一次可见」，露出之后不再监听，
+ * 避免 derivedStateOf 每帧读 layoutInfo 造成滑动掉帧。
+ */
+@Composable
+private fun rememberSectionReveal(listState: LazyListState, itemKey: Any): SectionReveal {
+    var revealed by rememberSaveable(itemKey) { mutableStateOf(false) }
+    // 组合时就固定下来：本次是否为首次露出。之后 revealed 变 true 也不影响这个判断
+    val playAnimation = remember { !revealed }
+    if (!revealed) {
+        LaunchedEffect(itemKey) {
+            snapshotFlow {
+                listState.layoutInfo.visibleItemsInfo.any { it.key == itemKey }
+            }.first { it }
+            revealed = true
+        }
+    }
+    return SectionReveal(revealed = revealed, playAnimation = playAnimation)
+}
+
+/**
+ * 入场动画：首次露出播一次，之后（含 item 回收重建、数据刷新）直接给最终值。
+ *
+ * 返回 [Animatable] 而不是 Float，Canvas 这类绘制场景可以把 `value` 的读取留在
+ * 绘制阶段，动画期间只失效绘制、不重组。
+ */
+@Composable
+private fun rememberRevealAnimatable(
+    targetValue: Float,
+    reveal: SectionReveal,
+    durationMillis: Int = 1500,
+    delayMillis: Int = 0
+): Animatable<Float, AnimationVector1D> {
+    val animatable = remember { Animatable(if (reveal.playAnimation) 0f else targetValue) }
+    // 只在协程里读写，不参与组合，避免动画开始时额外触发一次重组
+    var animated by remember { mutableStateOf(!reveal.playAnimation) }
+
+    LaunchedEffect(reveal.revealed, targetValue) {
+        if (!reveal.revealed) return@LaunchedEffect
+        if (animated) {
+            animatable.snapTo(targetValue)
+        } else {
+            animated = true
+            animatable.animateTo(
+                targetValue = targetValue,
+                animationSpec = tween(
+                    durationMillis = durationMillis,
+                    delayMillis = delayMillis,
+                    easing = LinearOutSlowInEasing
+                )
+            )
+        }
+    }
+    return animatable
+}
+
+/** [rememberRevealAnimatable] 的取值版本，读取发生在组合期（文本、布局用）。 */
+@Composable
+private fun rememberRevealAnimatedFloat(
+    targetValue: Float,
+    reveal: SectionReveal,
+    durationMillis: Int = 1500,
+    delayMillis: Int = 0
+): Float = rememberRevealAnimatable(
+    targetValue = targetValue,
+    reveal = reveal,
+    durationMillis = durationMillis,
+    delayMillis = delayMillis
+).value
+
+/** 统计页日期文案使用的 Locale（跟随应用语言）。 */
+@Composable
+private fun statisticsLocale(): Locale {
+    val language = LocalLocale.current.platformLocale.language
+    return remember(language) {
+        when (language) {
+            "en" -> Locale.ENGLISH
+            "ja" -> Locale.JAPANESE
+            "ko" -> Locale.KOREAN
+            else -> Locale.CHINESE
+        }
+    }
+}
+
 /** 总览卡片：数字跳动动画 */
 @Composable
-private fun OverviewCards(uiState: StatisticsUiState, isVisible: Boolean) {
+private fun OverviewCards(uiState: StatisticsUiState, reveal: SectionReveal) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // 第一行：电影部数 / 电视剧（在追·看完）/ 集数
         Row(
@@ -483,7 +588,7 @@ private fun OverviewCards(uiState: StatisticsUiState, isVisible: Boolean) {
                 modifier = Modifier.weight(1f),
                 title = stringResource(R.string.statistics_movies),
                 targetValue = uiState.totalMovieCount,
-                isVisible = isVisible
+                reveal = reveal
             )
             // 剧集有两个口径：有观看记录的剧数（含未看完）与整部看完的剧数。
             // Trakt 的「已看」只要看过一集就计入，和「看完」差别很大，分开显示避免歧义。
@@ -492,13 +597,13 @@ private fun OverviewCards(uiState: StatisticsUiState, isVisible: Boolean) {
                 watchedCount = uiState.showsWatchedCount,
                 completedCount = uiState.showsCompletedCount,
                 completedReady = uiState.showsCompletedReady,
-                isVisible = isVisible
+                reveal = reveal
             )
             AnimatedStatCard(
                 modifier = Modifier.weight(1f),
                 title = stringResource(R.string.statistics_episodes),
                 targetValue = uiState.totalEpisodeCount,
-                isVisible = isVisible
+                reveal = reveal
             )
         }
         // 第二行：本月 / 本年
@@ -510,13 +615,13 @@ private fun OverviewCards(uiState: StatisticsUiState, isVisible: Boolean) {
                 modifier = Modifier.weight(1f),
                 title = stringResource(R.string.statistics_this_month),
                 targetValue = uiState.thisMonthWatched,
-                isVisible = isVisible
+                reveal = reveal
             )
             AnimatedStatCard(
                 modifier = Modifier.weight(1f),
                 title = stringResource(R.string.statistics_this_year),
                 targetValue = uiState.thisYearWatched,
-                isVisible = isVisible
+                reveal = reveal
             )
         }
     }
@@ -533,11 +638,11 @@ private fun ShowStatCard(
     watchedCount: Int,
     completedCount: Int,
     completedReady: Boolean,
-    modifier: Modifier = Modifier,
-    isVisible: Boolean = true
+    reveal: SectionReveal,
+    modifier: Modifier = Modifier
 ) {
-    val animatedWatched = rememberOneShotAnimatedInt(watchedCount, isVisible)
-    val animatedCompleted = rememberOneShotAnimatedInt(completedCount, isVisible)
+    val animatedWatched = rememberOneShotAnimatedInt(watchedCount, reveal)
+    val animatedCompleted = rememberOneShotAnimatedInt(completedCount, reveal)
     // 用目标值而非动画中间值判断，避免数字跳动过程中副行闪现
     val showCompletedLine = completedReady && completedCount != watchedCount
 
@@ -579,35 +684,22 @@ private fun ShowStatCard(
 
 /** 数字只在首次进入可视区域时播放一次，后续数据更新直接同步最终值。 */
 @Composable
-private fun rememberOneShotAnimatedInt(targetValue: Int, isVisible: Boolean): Int {
-    val animatedValue = remember { Animatable(0f) }
-    var hasAnimated by remember { mutableStateOf(false) }
-
-    LaunchedEffect(isVisible, targetValue) {
-        if (!isVisible) return@LaunchedEffect
-        if (!hasAnimated) {
-            hasAnimated = true
-            animatedValue.animateTo(
-                targetValue = targetValue.toFloat(),
-                animationSpec = tween(durationMillis = 1500, easing = LinearOutSlowInEasing)
-            )
-        } else {
-            animatedValue.snapTo(targetValue.toFloat())
-        }
-    }
-
-    return animatedValue.value.roundToInt()
-}
+private fun rememberOneShotAnimatedInt(targetValue: Int, reveal: SectionReveal): Int =
+    rememberRevealAnimatedFloat(
+        targetValue = targetValue.toFloat(),
+        reveal = reveal,
+        durationMillis = 1500
+    ).roundToInt()
 
 /** 带数字跳动动画的统计卡片 */
 @Composable
 private fun AnimatedStatCard(
     title: String,
     targetValue: Int,
-    modifier: Modifier = Modifier,
-    isVisible: Boolean = true
+    reveal: SectionReveal,
+    modifier: Modifier = Modifier
 ) {
-    val animatedValue = rememberOneShotAnimatedInt(targetValue, isVisible)
+    val animatedValue = rememberOneShotAnimatedInt(targetValue, reveal)
 
     Card(
         modifier = modifier,
@@ -704,36 +796,44 @@ private fun localizedGenreName(genre: String): String = when (genre) {
     else -> genre.replaceFirstChar { it.uppercase() }
 }
 
+/** 饼图/图例配色（固定顺序，与图例一一对应） */
+private val PIE_COLORS = listOf(
+    Color(0xFF6750A4), Color(0xFF625B71), Color(0xFF7D5260), Color(0xFF2196F3),
+    Color(0xFF4CAF50), Color(0xFFFF9800), Color(0xFF9C27B0), Color(0xFF00BCD4),
+    Color(0xFFFF5722), Color(0xFF607D8B)
+)
+
+/** 饼图扇区：类型名 + 计数 */
+@Immutable
+private data class PieSlice(val genre: String, val count: Int)
+
+/** 取前 9 大类型，其余合并为「其他」，最多 10 个扇区。 */
+private fun pieSlices(genreDistribution: Map<String, Int>): List<PieSlice> {
+    val sorted = genreDistribution.entries.sortedByDescending { it.value }
+    return if (sorted.size > 10) {
+        sorted.take(9).map { PieSlice(it.key, it.value) } +
+            PieSlice("other", sorted.drop(9).sumOf { it.value })
+    } else {
+        sorted.map { PieSlice(it.key, it.value) }
+    }
+}
+
 /** 类型分布饼图（展开动画 + 点击交互） */
 @Composable
-private fun GenrePieChart(genreDistribution: Map<String, Int>, isVisible: Boolean = true) {
-    val context = LocalContext.current
+private fun GenrePieChart(genreDistribution: Map<String, Int>, reveal: SectionReveal) {
     val view = LocalView.current
     val totalCount = genreDistribution.values.sum()
     if (totalCount == 0) return
 
-    val sortedEntries = genreDistribution.entries.sortedByDescending { it.value }
-    val entries = if (sortedEntries.size > 10) {
-        val top9 = sortedEntries.take(9)
-        val otherCount = sortedEntries.drop(9).sumOf { it.value }
-        top9 + listOf(java.util.AbstractMap.SimpleEntry("other", otherCount))
-    } else {
-        sortedEntries
-    }
-    val colors = listOf(
-        Color(0xFF6750A4), Color(0xFF625B71), Color(0xFF7D5260), Color(0xFF2196F3),
-        Color(0xFF4CAF50), Color(0xFFFF9800), Color(0xFF9C27B0), Color(0xFF00BCD4),
-        Color(0xFFFF5722), Color(0xFF607D8B)
-    )
+    val entries = remember(genreDistribution) { pieSlices(genreDistribution) }
+    val colors = PIE_COLORS
 
-    // 饼图展开动画进度
-    val sweepProgress = remember { Animatable(0f) }
-    LaunchedEffect(entries, isVisible) {
-        if (isVisible) {
-            sweepProgress.snapTo(0f)
-            sweepProgress.animateTo(1f, animationSpec = tween(durationMillis = 1500, easing = LinearOutSlowInEasing))
-        }
-    }
+    // 饼图展开动画进度（只在首次露出时播一次，进度在绘制阶段读取）
+    val sweepProgress = rememberRevealAnimatable(
+        targetValue = 1f,
+        reveal = reveal,
+        durationMillis = 1500
+    )
 
     // 点击选中的扇区索引
     var selectedIndex by remember { mutableStateOf(-1) }
@@ -766,7 +866,7 @@ private fun GenrePieChart(genreDistribution: Map<String, Int>, isVisible: Boolea
                                 angle = (angle + 90f) % 360f
                                 var accumulated = 0f
                                 for ((index, entry) in entries.withIndex()) {
-                                    val sweep = 360f * entry.value.toFloat() / totalCount.toFloat()
+                                    val sweep = 360f * entry.count.toFloat() / totalCount.toFloat()
                                     if (angle >= accumulated && angle < accumulated + sweep) {
                                         view.performHaptic(HapticType.CLICK)
                                         selectedIndex = if (selectedIndex == index) -1 else index
@@ -785,7 +885,7 @@ private fun GenrePieChart(genreDistribution: Map<String, Int>, isVisible: Boolea
                 var startAngle = -90f // 从顶部开始
 
                 entries.forEachIndexed { index, entry ->
-                    val fullSweep = 360f * entry.value.toFloat() / totalCount.toFloat()
+                    val fullSweep = 360f * entry.count.toFloat() / totalCount.toFloat()
                     val animatedSweep = fullSweep * sweepProgress.value
                     val color = colors[index % colors.size]
                     val isSelected = selectedIndex == index
@@ -819,9 +919,9 @@ private fun GenrePieChart(genreDistribution: Map<String, Int>, isVisible: Boolea
             ) {
                 if (selectedIndex >= 0 && selectedIndex < entries.size) {
                     val entry = entries[selectedIndex]
-                    val percentage = String.format("%.1f%%", entry.value.toFloat() / totalCount.toFloat() * 100)
+                    val percentage = String.format("%.1f%%", entry.count.toFloat() / totalCount.toFloat() * 100)
                     Text(
-                        text = stringResource(R.string.statistics_item_count, localizedGenreName(entry.key), entry.value, percentage),
+                        text = stringResource(R.string.statistics_item_count, localizedGenreName(entry.genre), entry.count, percentage),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         color = colors[selectedIndex % colors.size]
@@ -857,13 +957,13 @@ private fun GenrePieChart(genreDistribution: Map<String, Int>, isVisible: Boolea
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = localizedGenreName(entry.key),
+                            text = localizedGenreName(entry.genre),
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.weight(1f),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = entry.value.toString(),
+                            text = entry.count.toString(),
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -875,143 +975,203 @@ private fun GenrePieChart(genreDistribution: Map<String, Int>, isVisible: Boolea
     }
 }
 
+/** 排行前三名的奖牌 */
+private val MEDAL_EMOJIS = listOf("🥇", "🥈", "🥉")
+
 /** 最常看的类型排行（柱形增长动画 + emoji奖牌） */
 @Composable
-private fun GenreRanking(genreDistribution: Map<String, Int>, isVisible: Boolean = true) {
+private fun GenreRanking(genreDistribution: Map<String, Int>, reveal: SectionReveal) {
     val maxCount = genreDistribution.values.maxOrNull() ?: 1
-    val sortedGenres = genreDistribution.entries.sortedByDescending { it.value }
-    val medalEmojis = listOf("🥇", "🥈", "🥉")
+    val topGenres = remember(genreDistribution) {
+        genreDistribution.entries
+            .sortedByDescending { it.value }
+            .take(10)
+            .map { it.key to it.value }
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        sortedGenres.take(10).forEachIndexed { index, (genre, count) ->
-            // 柱形增长动画
-            val animatedFraction by animateFloatAsState(
-                targetValue = if (isVisible) count.toFloat() / maxCount.toFloat() else 0f,
-                animationSpec = tween(
+        topGenres.forEachIndexed { index, (genre, count) ->
+            key(genre) {
+                // 柱形增长动画：首次露出播一次
+                val animatedFraction = rememberRevealAnimatedFloat(
+                    targetValue = count.toFloat() / maxCount.toFloat(),
+                    reveal = reveal,
                     durationMillis = 1200,
-                    delayMillis = index * 120,
-                    easing = LinearOutSlowInEasing
-                ),
-                label = "barGrow$index"
-            )
+                    delayMillis = index * 120
+                )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 排名标志：前三名用emoji奖牌，其余用数字
-                Box(
-                    modifier = Modifier.size(24.dp),
-                    contentAlignment = Alignment.Center
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // 排名标志：前三名用emoji奖牌，其余用数字
+                    Box(
+                        modifier = Modifier.size(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (index < 3) MEDAL_EMOJIS[index] else "${index + 1}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontSize = if (index < 3) 16.sp else 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (index < 3) medalEmojis[index] else "${index + 1}",
+                        text = localizedGenreName(genre),
                         style = MaterialTheme.typography.bodyMedium,
-                        fontSize = if (index < 3) 16.sp else 12.sp,
-                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = localizedGenreName(genre),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                // 进度条
-                Box(
-                    modifier = Modifier
-                        .width(80.dp)
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(MaterialTheme.colorScheme.surface)
-                ) {
+                    // 进度条
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(animatedFraction)
-                            .fillMaxHeight()
+                            .width(80.dp)
+                            .height(6.dp)
                             .clip(RoundedCornerShape(3.dp))
-                            .background(MaterialTheme.colorScheme.primary)
+                            .background(MaterialTheme.colorScheme.surface)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(animatedFraction)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = count.toString(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.width(32.dp),
+                        textAlign = TextAlign.End
                     )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = count.toString(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.width(32.dp),
-                    textAlign = TextAlign.End
-                )
             }
         }
     }
 }
 
-/** 观看热力图（Canvas 统一绘制，点击格子查看详情，支持翻页查看历史） */
-@Composable
-private fun HeatmapChart(heatmapData: Map<String, Int>, isVisible: Boolean = true) {
-    val context = LocalContext.current
-    val view = LocalView.current
-    // 翻页偏移：0 = 最近13周，每次 -13 往前翻一页
-    var weekOffset by remember { mutableStateOf(0) }
+/** 热力图周数：一页固定 13 周 */
+private const val HEATMAP_WEEKS = 13
 
-    val calendar = Calendar.getInstance()
-    val today = calendar.time
+/**
+ * 热力图单格。
+ *
+ * [dateKey] 为 `yyyy-MM-dd`；未来日期不展示，[dateKey] 置空串。
+ */
+internal data class HeatmapCell(
+    val dateKey: String,
+    val count: Int,
+    val isFuture: Boolean,
+    val date: Date
+)
 
-    val todayCal = Calendar.getInstance()
-    todayCal.time = today
-    val dayOfWeek = todayCal.get(Calendar.DAY_OF_WEEK) // 1=Sunday
-    val startCal = Calendar.getInstance()
-    startCal.time = today
-    startCal.add(Calendar.DAY_OF_YEAR, -((13 - 1) * 7 + (dayOfWeek - 1)) + weekOffset * 7)
+/** 热力图一页的网格数据：13 周 × 7 天 + 月份标签 + 日期范围文案 */
+internal data class HeatmapGrid(
+    val weeks: List<List<HeatmapCell>>,
+    val monthLabels: List<Pair<Int, String>>,
+    val rangeStart: String,
+    val rangeEnd: String
+)
 
-    val endCal = (startCal.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, 13 * 7 - 1) }
-
+/**
+ * 构建热力图网格。
+ *
+ * 纯计算函数，放在组合之外用 remember 缓存：这段有 4 个 SimpleDateFormat 与 91 次
+ * 日期格式化，放在组合里每次重组都要重跑，滑动时会掉帧。
+ *
+ * @param weekOffset 翻页偏移，0 为最近 13 周，每页 ±[HEATMAP_WEEKS] 周
+ * @param today 基准「今天」，测试可注入
+ */
+internal fun buildHeatmapGrid(
+    heatmapData: Map<String, Int>,
+    weekOffset: Int,
+    locale: Locale,
+    today: Date = Date()
+): HeatmapGrid {
     val dateKeyFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-    val appLocale = LocalLocale.current.platformLocale
-    val locale = when (appLocale.language) {
-        "en" -> Locale.ENGLISH
-        "ja" -> Locale.JAPANESE
-        "ko" -> Locale.KOREAN
-        else -> Locale.CHINESE
+    val monthFormat = if (locale == Locale.CHINESE) {
+        SimpleDateFormat("M月", Locale.CHINESE)
+    } else {
+        SimpleDateFormat("MMM", locale)
     }
-    val monthFormat = if (locale == Locale.CHINESE) SimpleDateFormat("M月", Locale.CHINESE) else SimpleDateFormat("MMM", locale)
-    val fullDateFormat = if (locale == Locale.CHINESE) SimpleDateFormat("yyyy年M月d日", Locale.CHINESE) else SimpleDateFormat("yyyy/M/d", locale)
     val rangeFormat = SimpleDateFormat("yyyy/M/d", Locale.US)
-    val rangeStart = rangeFormat.format(startCal.time)
-    val rangeEnd = rangeFormat.format(endCal.time)
-    val canGoForward = weekOffset < 0
 
-    // 构建 13 周 × 7 天网格
-    data class HeatmapCell(val dateKey: String, val count: Int, val isFuture: Boolean, val date: java.util.Date)
-    val weeks = mutableListOf<List<HeatmapCell>>()
-    var currentCal = startCal.clone() as Calendar
-    var lastMonth = -1
+    val dayOfWeek = Calendar.getInstance().apply { time = today }.get(Calendar.DAY_OF_WEEK) // 1=Sunday
+    val startCal = Calendar.getInstance().apply {
+        time = today
+        add(Calendar.DAY_OF_YEAR, -((HEATMAP_WEEKS - 1) * 7 + (dayOfWeek - 1)) + weekOffset * 7)
+    }
+    val endCal = (startCal.clone() as Calendar).apply {
+        add(Calendar.DAY_OF_YEAR, HEATMAP_WEEKS * 7 - 1)
+    }
+
+    val weeks = ArrayList<List<HeatmapCell>>(HEATMAP_WEEKS)
     val monthLabels = mutableListOf<Pair<Int, String>>()
+    val cursor = startCal.clone() as Calendar
+    var lastMonth = -1
 
-    for (weekIndex in 0 until 13) {
-        val week = mutableListOf<HeatmapCell>()
+    for (weekIndex in 0 until HEATMAP_WEEKS) {
+        val week = ArrayList<HeatmapCell>(7)
         for (dayIndex in 0 until 7) {
-            val dateKey = dateKeyFormat.format(currentCal.time)
-            val count = heatmapData[dateKey] ?: 0
-            val isFuture = currentCal.time.after(today)
-            week.add(HeatmapCell(if (isFuture) "" else dateKey, count, isFuture, currentCal.time))
+            val date = cursor.time
+            val dateKey = dateKeyFormat.format(date)
+            val isFuture = date.after(today)
+            week.add(
+                HeatmapCell(
+                    dateKey = if (isFuture) "" else dateKey,
+                    count = heatmapData[dateKey] ?: 0,
+                    isFuture = isFuture,
+                    date = date
+                )
+            )
 
             if (dayIndex == 0) {
-                val month = currentCal.get(Calendar.MONTH)
+                val month = cursor.get(Calendar.MONTH)
                 if (month != lastMonth) {
-                    monthLabels.add(weekIndex to monthFormat.format(currentCal.time))
+                    monthLabels.add(weekIndex to monthFormat.format(date))
                     lastMonth = month
                 }
             }
-            currentCal.add(Calendar.DAY_OF_YEAR, 1)
+            cursor.add(Calendar.DAY_OF_YEAR, 1)
         }
         weeks.add(week)
+    }
+
+    return HeatmapGrid(
+        weeks = weeks,
+        monthLabels = monthLabels,
+        rangeStart = rangeFormat.format(startCal.time),
+        rangeEnd = rangeFormat.format(endCal.time)
+    )
+}
+
+/** 观看热力图（Canvas 统一绘制，点击格子查看详情，支持翻页查看历史） */
+@Composable
+private fun HeatmapChart(
+    grid: HeatmapGrid,
+    locale: Locale,
+    weekOffset: Int,
+    onWeekOffsetChange: (Int) -> Unit,
+    reveal: SectionReveal
+) {
+    val view = LocalView.current
+    val weeks = grid.weeks
+    val monthLabels = grid.monthLabels
+    val canGoForward = weekOffset < 0
+    val fullDateFormat = remember(locale) {
+        if (locale == Locale.CHINESE) {
+            SimpleDateFormat("yyyy年M月d日", Locale.CHINESE)
+        } else {
+            SimpleDateFormat("yyyy/M/d", locale)
+        }
     }
 
     // 尺寸常量
@@ -1049,16 +1209,22 @@ private fun HeatmapChart(heatmapData: Map<String, Int>, isVisible: Boolean = tru
 
     var selectedCell by remember { mutableStateOf<HeatmapCell?>(null) }
 
-    // 淡入动画：初始可见，进入视野时播放一次
-    val alphaAnim = remember { Animatable(1f) }
-    var hasAnimated by remember { mutableStateOf(false) }
-    LaunchedEffect(isVisible) {
-        if (isVisible && !hasAnimated) {
-            hasAnimated = true
-            alphaAnim.snapTo(0f)
-            alphaAnim.animateTo(1f, animationSpec = tween(900, easing = LinearOutSlowInEasing))
+    // 星期标签跟随语言，提前算好：Canvas 每帧都要用，别放在绘制回调里构造
+    val weekdayLabels = remember(locale) {
+        when (locale) {
+            Locale.CHINESE -> listOf("一", "二", "三", "四", "五", "六", "日")
+            Locale.JAPANESE -> listOf("月", "火", "水", "木", "金", "土", "日")
+            Locale.KOREAN -> listOf("월", "화", "수", "목", "금", "토", "일")
+            else -> listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
         }
     }
+
+    // 淡入动画：只在首次露出时播一次，alpha 在绘制阶段读取
+    val alphaAnim = rememberRevealAnimatable(
+        targetValue = 1f,
+        reveal = reveal,
+        durationMillis = 900
+    )
 
     Column(modifier = Modifier.fillMaxWidth()) {
         // 翻页导航
@@ -1067,16 +1233,19 @@ private fun HeatmapChart(heatmapData: Map<String, Int>, isVisible: Boolean = tru
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { weekOffset -= 13 }, modifier = Modifier.size(32.dp)) {
+            IconButton(
+                onClick = { onWeekOffsetChange(weekOffset - HEATMAP_WEEKS) },
+                modifier = Modifier.size(32.dp)
+            ) {
                 Text("←", fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text(
-                text = "$rangeStart ~ $rangeEnd",
+                text = "${grid.rangeStart} ~ ${grid.rangeEnd}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             IconButton(
-                onClick = { weekOffset += 13 },
+                onClick = { onWeekOffsetChange(weekOffset + HEATMAP_WEEKS) },
                 modifier = Modifier.size(32.dp),
                 enabled = canGoForward
             ) {
@@ -1094,7 +1263,7 @@ private fun HeatmapChart(heatmapData: Map<String, Int>, isVisible: Boolean = tru
                 .height(totalHeightDp)
                 .horizontalScroll(rememberScrollState())
                 .width(totalWidthDp)
-                .pointerInput(weeks) {
+                .pointerInput(grid) {
                     detectTapGestures { offset ->
                         val x = offset.x - labelWidthPx
                         val y = offset.y - monthLabelHeightPx
@@ -1134,13 +1303,13 @@ private fun HeatmapChart(heatmapData: Map<String, Int>, isVisible: Boolean = tru
                             if (totalDrag < -dragThresholdPx) {
                                 // 向左滑：看更近日期
                                 if (canGoForward) {
-                                    weekOffset += 13
+                                    onWeekOffsetChange(weekOffset + HEATMAP_WEEKS)
                                     view.performHaptic(HapticType.CLICK)
                                 }
                                 triggered = true
                             } else if (totalDrag > dragThresholdPx) {
                                 // 向右滑：看更早日期
-                                weekOffset -= 13
+                                onWeekOffsetChange(weekOffset - HEATMAP_WEEKS)
                                 view.performHaptic(HapticType.CLICK)
                                 triggered = true
                             }
@@ -1166,13 +1335,6 @@ private fun HeatmapChart(heatmapData: Map<String, Int>, isVisible: Boolean = tru
             }
 
             // 2. 绘制星期标签
-            val weekdayLabels = when (locale) {
-                Locale.CHINESE -> listOf("一", "二", "三", "四", "五", "六", "日")
-                Locale.ENGLISH -> listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-                Locale.JAPANESE -> listOf("月", "火", "水", "木", "金", "土", "日")
-                Locale.KOREAN -> listOf("월", "화", "수", "목", "금", "토", "일")
-                else -> listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-            }
             weekdayLabels.forEachIndexed { dayIdx, label ->
                 val y = monthLabelHeightPx + dayIdx * slotPx + weekdayYOffset
                 drawText(
@@ -1338,13 +1500,18 @@ private enum class StatisticsSkeletonVariant {
     RANKING
 }
 
-/** 分块加载时复用初始整页骨架的结构，避免从 A 样式切换成简单矩形 B 样式。 */
+/**
+ * 分块加载时复用初始整页骨架的结构，避免从 A 样式切换成简单矩形 B 样式。
+ *
+ * 用 [rememberShimmer] + [Modifier.shimmer]：闪烁进度只在绘制阶段读取，
+ * 骨架方块再多也不会跟着动画逐帧重组（热力图骨架有 91 个方块）。
+ */
 @Composable
 private fun StatisticsSkeletonContent(
     variant: StatisticsSkeletonVariant,
     modifier: Modifier = Modifier
 ) {
-    val brush = rememberShimmerBrush()
+    val shimmer = rememberShimmer()
     when (variant) {
         StatisticsSkeletonVariant.OVERVIEW -> {
             Row(
@@ -1356,8 +1523,7 @@ private fun StatisticsSkeletonContent(
                         modifier = Modifier
                             .weight(1f)
                             .height(80.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(brush)
+                            .shimmer(shimmer, RoundedCornerShape(12.dp))
                     )
                 }
             }
@@ -1369,16 +1535,14 @@ private fun StatisticsSkeletonContent(
                     modifier = Modifier
                         .fillMaxWidth(0.4f)
                         .height(32.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(brush)
+                        .shimmer(shimmer, RoundedCornerShape(4.dp))
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.6f)
                         .height(14.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(brush)
+                        .shimmer(shimmer, RoundedCornerShape(4.dp))
                 )
             }
         }
@@ -1394,8 +1558,7 @@ private fun StatisticsSkeletonContent(
                             Box(
                                 modifier = Modifier
                                     .size(20.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(brush)
+                                    .shimmer(shimmer, RoundedCornerShape(4.dp))
                             )
                         }
                     }
@@ -1412,15 +1575,13 @@ private fun StatisticsSkeletonContent(
                     modifier = Modifier
                         .fillMaxWidth(0.5f)
                         .height(16.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(brush)
+                        .shimmer(shimmer, RoundedCornerShape(4.dp))
                 )
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.3f)
                         .height(14.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(brush)
+                        .shimmer(shimmer, RoundedCornerShape(4.dp))
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 repeat(5) {
@@ -1432,16 +1593,14 @@ private fun StatisticsSkeletonContent(
                             modifier = Modifier
                                 .width(28.dp)
                                 .height(10.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(brush)
+                                .shimmer(shimmer, RoundedCornerShape(4.dp))
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(10.dp)
-                                .clip(RoundedCornerShape(5.dp))
-                                .background(brush)
+                                .shimmer(shimmer, RoundedCornerShape(5.dp))
                         )
                     }
                 }
@@ -1460,8 +1619,7 @@ private fun StatisticsSkeletonContent(
                             modifier = Modifier
                                 .width(width)
                                 .height(24.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(brush)
+                                .shimmer(shimmer, RoundedCornerShape(12.dp))
                         )
                     }
                 }
@@ -1471,8 +1629,7 @@ private fun StatisticsSkeletonContent(
                             modifier = Modifier
                                 .width(width)
                                 .height(34.dp)
-                                .clip(RoundedCornerShape(17.dp))
-                                .background(brush)
+                                .shimmer(shimmer, RoundedCornerShape(17.dp))
                         )
                     }
                 }
@@ -1482,8 +1639,7 @@ private fun StatisticsSkeletonContent(
                             modifier = Modifier
                                 .width(width)
                                 .height(18.dp)
-                                .clip(RoundedCornerShape(9.dp))
-                                .background(brush)
+                                .shimmer(shimmer, RoundedCornerShape(9.dp))
                         )
                     }
                 }
@@ -1498,8 +1654,7 @@ private fun StatisticsSkeletonContent(
                 Box(
                     modifier = Modifier
                         .size(200.dp)
-                        .clip(RoundedCornerShape(100.dp))
-                        .background(brush)
+                        .shimmer(shimmer, RoundedCornerShape(100.dp))
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 repeat(5) {
@@ -1512,16 +1667,14 @@ private fun StatisticsSkeletonContent(
                         Box(
                             modifier = Modifier
                                 .size(12.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(brush)
+                                .shimmer(shimmer, RoundedCornerShape(2.dp))
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(14.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(brush)
+                                .shimmer(shimmer, RoundedCornerShape(4.dp))
                         )
                     }
                 }
@@ -1542,16 +1695,14 @@ private fun StatisticsSkeletonContent(
                         Box(
                             modifier = Modifier
                                 .size(24.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(brush)
+                                .shimmer(shimmer, RoundedCornerShape(4.dp))
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth(fraction)
                                 .height(14.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(brush)
+                                .shimmer(shimmer, RoundedCornerShape(4.dp))
                         )
                     }
                 }
@@ -1562,10 +1713,10 @@ private fun StatisticsSkeletonContent(
 
 /** 观影时长卡片 */
 @Composable
-private fun WatchTimeCard(uiState: StatisticsUiState, isVisible: Boolean) {
+private fun WatchTimeCard(uiState: StatisticsUiState, reveal: SectionReveal) {
     val totalHours = uiState.totalWatchMinutes / 60
     val totalDays = totalHours / 24
-    val animatedHours = rememberOneShotAnimatedInt(totalHours.toInt(), isVisible)
+    val animatedHours = rememberOneShotAnimatedInt(totalHours.toInt(), reveal)
 
     Column {
         Text(
@@ -1586,7 +1737,7 @@ private fun WatchTimeCard(uiState: StatisticsUiState, isVisible: Boolean) {
 
 /** 评分统计卡片 */
 @Composable
-private fun RatingStatsCard(uiState: StatisticsUiState, isVisible: Boolean) {
+private fun RatingStatsCard(uiState: StatisticsUiState, reveal: SectionReveal) {
     val maxCount = uiState.ratingDistribution.values.maxOrNull() ?: 1
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1606,49 +1757,49 @@ private fun RatingStatsCard(uiState: StatisticsUiState, isVisible: Boolean) {
 
         // 水平条形分布图（10分到1分）
         (10 downTo 1).forEach { rating ->
-            val count = uiState.ratingDistribution[rating] ?: 0
-            val animatedFraction by animateFloatAsState(
-                targetValue = if (isVisible) count.toFloat() / maxCount.toFloat() else 0f,
-                animationSpec = tween(
+            key(rating) {
+                val count = uiState.ratingDistribution[rating] ?: 0
+                // 柱形增长动画：首次露出播一次
+                val animatedFraction = rememberRevealAnimatedFloat(
+                    targetValue = count.toFloat() / maxCount.toFloat(),
+                    reveal = reveal,
                     durationMillis = 1200,
-                    delayMillis = (10 - rating) * 80,
-                    easing = LinearOutSlowInEasing
-                ),
-                label = "ratingBar$rating"
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "${rating}★",
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.width(28.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    delayMillis = (10 - rating) * 80
                 )
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(10.dp)
-                        .clip(RoundedCornerShape(5.dp))
-                        .background(MaterialTheme.colorScheme.surface)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Text(
+                        text = "${rating}★",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.width(28.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(animatedFraction)
-                            .fillMaxHeight()
+                            .weight(1f)
+                            .height(10.dp)
                             .clip(RoundedCornerShape(5.dp))
-                            .background(MaterialTheme.colorScheme.primary)
+                            .background(MaterialTheme.colorScheme.surface)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(animatedFraction)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(5.dp))
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                    }
+                    Text(
+                        text = count.toString(),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.width(32.dp),
+                        textAlign = TextAlign.End,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Text(
-                    text = count.toString(),
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.width(32.dp),
-                    textAlign = TextAlign.End,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
     }
