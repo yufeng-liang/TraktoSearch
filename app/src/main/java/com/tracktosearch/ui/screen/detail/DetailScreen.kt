@@ -135,6 +135,7 @@ import com.tracktosearch.ui.screen.ai.sceneArtFor
 import com.tracktosearch.ui.screen.ai.shouldShowWatchlistAddedScene
 
 import com.tracktosearch.ui.component.LocalBackdrop
+import com.tracktosearch.ui.component.LocalBackdropSourceEnabled
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalFullscreenSharedKey
 import dev.chrisbanes.haze.HazeState
@@ -385,14 +386,14 @@ fun DetailScreen(
         ).count { it },
         loadingItemWeight = 4
     )
-    // NavHost 进入/返回时旧页与新页会短暂同时绘制。详情页在这段窗口内暂停
-    // 非首屏内容与 Haze source，避免正文、图片和模糊采样与共享海报叠加到同一帧。
+    // NavHost 进入/返回时旧页与新页会短暂同时绘制。详情页在这段窗口内只暂停
+    // Haze/Backdrop 采样；正文一旦完成首次延迟组合就保留，避免返回时拆除整棵内容树。
     // 不读取 isRunning：它随动画每帧变化，会让详情正文整棵树反复重组。
-    // 端点状态只在转场开始/结束时变化，足以控制首屏内容和 Haze source。
+    // 端点状态只在转场开始/结束时变化，足以控制 Haze/Backdrop source。
     val isNavigationTransitionRunning = LocalAnimatedVisibilityScope.current?.transition?.let { transition ->
         transition.currentState != transition.targetState
     } == true
-    val contentReadyForTransition = contentReady && !isNavigationTransitionRunning
+    val deferredContentReady = contentReady
 
     // 点击 token,确保只有被点击的卡片参与转场(避免同 tmdbId 海报跨栏目飘错)
     var activeClickToken by remember { mutableStateOf(0) }
@@ -506,7 +507,8 @@ fun DetailScreen(
             // 单 LazyColumn：头部(item) + TabRow(stickyHeader) + 内容(根据Tab切换)
             // 通过 LocalContentColor 把 tabContentColor 传下去,内部搜索源/网盘类型/找到xx个资源等文字可自适应
             androidx.compose.runtime.CompositionLocalProvider(
-                androidx.compose.material3.LocalContentColor provides tabContentColor
+                androidx.compose.material3.LocalContentColor provides tabContentColor,
+                LocalBackdropSourceEnabled provides !isNavigationTransitionRunning
             ) {
             // 将详情内容整体作为唯一内容 source，避免 LazyColumn 自身的绘制层影响 Haze 采样。
             AppPullToRefreshIndicator(
@@ -551,18 +553,18 @@ fun DetailScreen(
                         posterColorExtractor = viewModel.posterColorExtractor,
                         onPosterColorExtracted = viewModel::updatePosterColor,
                         sectionVisible = uiState.sectionVisible,
-                        contentReady = contentReadyForTransition,
+                        contentReady = deferredContentReady,
                         hazeState = detailHazeState,
                         // 头部下方内容(cast/视频/简介/季集)淡入,海报+标题+按钮始终可见
-                        contentAlpha = if (contentReadyForTransition) contentAlpha else 0f,
+                        contentAlpha = if (deferredContentReady) contentAlpha else 0f,
                         onHeaderAnchorBoundsChanged = { detailHeaderBounds = it }
                     )
                 }
 
-                // 转场期间(contentReady=false)跳过 Tab 行和所有 Tab 内容组合,
-                // 首帧只组合 header(海报+标题+按钮),大幅降低转场期间首帧工作量。
-                // contentReady 由 posterDominantColor 就绪或 400ms 兜底触发,转场结束后即 true。
-                if (contentReadyForTransition) {
+                // 首次进入延迟期间跳过 Tab 行和所有 Tab 内容组合，
+                // 只组合 header(海报+标题+按钮)。就绪后不再因 pop/导航转场拆除正文。
+                // contentReady 由 posterDominantColor 就绪或超时兜底触发，并在当前详情组合生命期内锁存。
+                if (deferredContentReady) {
                 // Tab 行（吸顶，共用同一个）
                 stickyHeader(key = "tab_row") {
                     // isPinned / tabContainerColor / tabContentColor 在 LazyColumn 外已计算
