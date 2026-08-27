@@ -150,7 +150,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-private val GlassBackdropResampleScheduleMillis = longArrayOf(120L, 320L, 700L, 1_400L, 2_800L, 5_000L)
+private const val GlassBackdropSettledResampleDelayMillis = 700L
 
 /** EntryPoint 用于在非 ViewModel 场景获取 TraktRepository（读取用户头像缓存） */
 @EntryPoint
@@ -486,8 +486,8 @@ fun MainScreen(
     //
     // 不能反过来「源绘制后推进版本号」：底栏本身是 hazeSource(zIndex=1)，底栏重绘会让页面内
     // haze 消费者失效 → 页面重绘 → 又推进版本号 → 死循环（实测空闲 246fps）。
-    // 改为定时驱动的单向重采：进入/切换 tab 后 5Hz 推进 tick 约 6s，覆盖数据与海报陆续加载的窗口；
-    // 窗口结束后不再产生帧，滚动本身也会让底栏重绘重采。
+    // 改为定时驱动的单向重采：页面稳定 700ms 后只推进一次 tick，补齐首屏缓存图片；
+    // 快速切 Tab 会取消上页任务，不再在交互期间连续触发全屏重录。
     // 背景动效停帧信号：mirage 的 shader 时间逐帧累加，跑着就等于整窗满帧重绘。
     // 无指针事件 3s 后停帧，一有触摸立刻恢复。底栏重采也复用这份信号。
     val ambientMotion = rememberAmbientMotionState()
@@ -500,17 +500,13 @@ fun MainScreen(
     // 会先 drawContent() 画到屏幕，再 recordLayer() 把同样的内容录进 GraphicsLayer，录制尺寸取
     // DrawScope.size，即整页全屏，库没有留降分辨率或限区域的入口。所以 GLASS 相对 BLUR 的固定
     // 开销就是「每帧多一次全屏光栅化」，tick 每推进一次就买一次。能省的只有次数。
-    // 切 Tab 后只在布局/首屏图片最可能变化的几个关键时点复采。原实现 6 秒内固定产生
-    // 16 次全屏重录，并在交互活跃时继续轮询；滚动本身已有 contentSampleVersion 驱动，
-    // 无需再叠加 ticker。保留早/中/晚六次，覆盖首帧、缓存图片、网络图片和延迟数据落地。
+    // 切 Tab 本身与真实内容变化都会触发正常绘制；额外 ticker 只保留稳定后的单次兜底。
+    // 真机 Perfetto 显示快速 Tab 切换期间 eglSwapBuffers 累计接近 3 秒，旧六段计划会在
+    // 每次切换后的 120/320ms 强制购买两次全屏重录，直接与下一次点击重叠。
     LaunchedEffect(isGlassMode, pagerState.currentPage) {
         if (!isGlassMode) return@LaunchedEffect
-        var elapsed = 0L
-        for (target in GlassBackdropResampleScheduleMillis) {
-            delay(target - elapsed)
-            elapsed = target
-            backdropResampleTick++
-        }
+        delay(GlassBackdropSettledResampleDelayMillis)
+        backdropResampleTick++
     }
 
     Scaffold(
