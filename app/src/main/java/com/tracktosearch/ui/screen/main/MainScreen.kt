@@ -510,6 +510,16 @@ fun MainScreen(
         delay(800L)
         isTabMotionCoolingDown = false
     }
+    // 详情进入/返回转场结束的瞬间页面仍在组合/加载，而背景动效的 3s 空闲余量会继续每帧
+    // 全屏重绘（真机 A/B：返回段 draw+GPU 约 42ms → 7ms）。在 true→false 边沿立即停帧，
+    // 把“转场结束”当作一次空闲；下一次触摸 ping() 自然恢复流动。
+    var wasNavTransitionRunning by remember { mutableStateOf(isNavigationTransitionRunning) }
+    LaunchedEffect(isNavigationTransitionRunning) {
+        if (wasNavTransitionRunning && !isNavigationTransitionRunning) {
+            ambientMotion.pause()
+        }
+        wasNavTransitionRunning = isNavigationTransitionRunning
+    }
     // 下发给页内组件（玻璃按钮的亮度探针）：static local 的值必须 remember 住，
     // 每次组合换一个新 lambda 会让整棵子树失效。
     val ambientMotionActive = remember(ambientMotion) { { ambientMotion.active } }
