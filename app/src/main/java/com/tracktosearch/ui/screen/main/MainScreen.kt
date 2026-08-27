@@ -491,6 +491,18 @@ fun MainScreen(
     // 背景动效停帧信号：mirage 的 shader 时间逐帧累加，跑着就等于整窗满帧重绘。
     // 无指针事件 3s 后停帧，一有触摸立刻恢复。底栏重采也复用这份信号。
     val ambientMotion = rememberAmbientMotionState()
+    // 真机因果对照：Glass + 动态 Mesh 的主 Tab 卡顿约 31%，仅关闭 Mesh 动画后降至 0.02%。
+    // 保留背景画面，只在切页重排最密集的 800ms 内冻结 shader 时间；稳定后自动继续呼吸。
+    var isTabMotionCoolingDown by remember { mutableStateOf(false) }
+    LaunchedEffect(pagerState.currentPage, isGlassMode, meshEnabled) {
+        if (!isGlassMode || !meshEnabled) {
+            isTabMotionCoolingDown = false
+            return@LaunchedEffect
+        }
+        isTabMotionCoolingDown = true
+        delay(800L)
+        isTabMotionCoolingDown = false
+    }
     // 下发给页内组件（玻璃按钮的亮度探针）：static local 的值必须 remember 住，
     // 每次组合换一个新 lambda 会让整棵子树失效。
     val ambientMotionActive = remember(ambientMotion) { { ambientMotion.active } }
@@ -541,8 +553,10 @@ fun MainScreen(
                         modifier = Modifier.fillMaxSize(),
                         preset = MeshPreset.fromStorage(meshPreset),
                         enabled = meshEnabled,
-                        // 无人操作 3s 后停帧（ambientMotion），滚动进行中也停帧（scrollMotion）。
-                        motionActive = { ambientMotion.active && !scrollMotion.active },
+                        // 无人操作、滚动或切 Tab 的重排窗口都冻结；只暂停时间推进，不隐藏背景。
+                        motionActive = {
+                            ambientMotion.active && !scrollMotion.active && !isTabMotionCoolingDown
+                        },
                     )
                 }
 
