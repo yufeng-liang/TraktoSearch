@@ -4,6 +4,12 @@
  * GET  /api/crash-logs — List crash logs with filter + pagination + stats
  * GET  /api/crash-logs/:id — Get single crash log detail（见 [id].js）
  */
+
+/** 单条 stackTrace 上限（KV 值上限 25MB，堆栈超此长度基本是异常数据） */
+const MAX_STACK_TRACE_LENGTH = 500 * 1024;
+/** 单条 recentActions 上限 */
+const MAX_RECENT_ACTIONS_LENGTH = 100 * 1024;
+
 export async function onRequestPost(context) {
     const { request, env } = context;
 
@@ -14,6 +20,18 @@ export async function onRequestPost(context) {
         if (!stackTrace) {
             return new Response(JSON.stringify({ error: 'stackTrace is required' }), {
                 status: 400,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+        if (stackTrace.length > MAX_STACK_TRACE_LENGTH) {
+            return new Response(JSON.stringify({ error: 'stackTrace too large' }), {
+                status: 413,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+        if (typeof recentActions === 'string' && recentActions.length > MAX_RECENT_ACTIONS_LENGTH) {
+            return new Response(JSON.stringify({ error: 'recentActions too large' }), {
+                status: 413,
                 headers: { 'Content-Type': 'application/json' }
             });
         }
@@ -45,37 +63,27 @@ export async function onRequestPost(context) {
     }
 }
 
+/** 受控并发执行：每批最多 batchSize 个在途 Promise，避免上千并发 KV get 触发限流 */
+async function mapWithConcurrency(items, batchSize, fn) {
+    const results = new Array(items.length);
+    let index = 0;
+    async function worker() {
+        while (index < items.length) {
+            const i = index++;
+            results[i] = await fn(items[i], i);
+        }
+    }
+    const workers = [];
+    for (let i = 0; i < Math.min(batchSize, items.length); i++) {
+        workers.push(worker());
+    }
+    await Promise.all(workers);
+    return results;
+}
+
 export async function onRequestGet(context) {
     const { env, request } = context;
     const url = new URL(request.url);
-    const pathSegments = url.pathname.replace('/api/crash-logs/', '').replace('/api/crash-logs', '').split('/').filter(Boolean);
-
-    // GET /api/crash-logs/:id — single detail
-    if (pathSegments.length > 0) {
-        const id = pathSegments[0];
-        try {
-            const fullKey = id.startsWith('crash_') ? id : `crash_${id}`;
-            let val = await env.CRASH_LOGS.get(fullKey, { type: 'json' });
-            if (!val) {
-                val = await env.CRASH_LOGS.get(id, { type: 'json' });
-            }
-            if (!val) {
-                return new Response(JSON.stringify({ error: 'Not found' }), {
-                    status: 404,
-                    headers: { 'Content-Type': 'application/json' }
-                });
-            }
-            return new Response(JSON.stringify(val), {
-                status: 200,
-                headers: { 'Content-Type': 'application/json' }
-            });
-        } catch (err) {
-            return new Response(JSON.stringify({ error: err.message }), {
-                status: 500,
-                headers: { 'Content-Type': 'application/json' }
-            });
-        }
-    }
 
     // GET /api/crash-logs — list
     // 崩溃日志为低频数据（仅崩溃时写入），量级小：全量拉取 KV → 内存过滤/排序 → offset 分页，
@@ -95,9 +103,9 @@ export async function onRequestGet(context) {
             cursor = page.cursor;
         } while (cursor);
 
-        // 并发读值
-        const rawList = await Promise.all(
-            keys.map(k => env.CRASH_LOGS.get(k.name, { type: 'json' }).catch(() => null))
+        // 受控并发读值（每批 20，避免大批量同时 get 触发 KV 限流）
+        const rawList = await mapWithConcurrency(keys, 20, k =>
+            env.CRASH_LOGS.get(k.name, { type: 'json' }).catch(() => null)
         );
 
         // 归一化 + 旧数据兼容（无 status 视为 open）
@@ -116,11 +124,14 @@ export async function onRequestGet(context) {
         // 按时间倒序（新在前）
         logs.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
 
-        // 统计（基于全量，不受筛选影响）
+        // 统计（基于全量，不受筛选影响；未来时间戳视为无效不计入近 7 天）
         const now = Date.now();
         const stats = {
             total: logs.length,
-            last7d: logs.filter(l => now - new Date(l.timestamp || 0).getTime() < 7 * 86400000).length,
+            last7d: logs.filter(l => {
+                const ts = new Date(l.timestamp || 0).getTime();
+                return Number.isFinite(ts) && ts <= now && now - ts < 7 * 86400000;
+            }).length,
             open: logs.filter(l => l.status === 'open').length,
             devices: new Set(logs.map(l => l.device).filter(Boolean)).size,
         };
