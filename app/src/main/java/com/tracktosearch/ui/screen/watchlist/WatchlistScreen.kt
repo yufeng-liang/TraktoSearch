@@ -486,10 +486,6 @@ fun WatchlistScreen(
             )
         }
     }
-    val isGridScrolling by remember(currentGridState) {
-        derivedStateOf { currentGridState.isScrollInProgress }
-    }
-
     // key 必须同时包含 selectedMode 和 selectedTab：
     // currentGridState 由两者共同决定，缺任一 key 都会导致切 tab 后回调里仍持有旧的 gridState，
     // 「回到顶部」操作滚到不可见列表上
@@ -720,8 +716,9 @@ fun WatchlistScreen(
                             .fillMaxHeight()
                             // 只有 Glass 模式的顶栏才采样这一层；BLUR 模式走 hazeSource，
                             // 这份全屏离屏录制写了没人读，每帧纯浪费。
+                            // 滚动时也保持录制：顶栏要持续看到滚动中的内容，不能降级成半透明。
                             .then(
-                                if (isWatchlistGlassActive && !isGridScrolling) {
+                                if (isWatchlistGlassActive) {
                                     Modifier.layerBackdrop(watchlistContentBackdrop)
                                 } else {
                                     Modifier

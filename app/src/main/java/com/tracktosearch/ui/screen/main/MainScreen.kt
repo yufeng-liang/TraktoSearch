@@ -99,6 +99,7 @@ import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.ui.component.LocalIsCurrentTab
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.AppVisualSurface
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.GlassNavigationTabIndicator
@@ -448,6 +449,13 @@ fun MainScreen(
         0.05f
     )
     val isGlassMode = LocalVisualEffectMode.current == VisualEffectMode.GLASS
+    // 详情进入/返回时 NavHost 会同时组合新旧目的地：若继续录制全屏 backdrop，
+    // 列表图片上传、页面淡入淡出与离屏录制全挤在同一帧。与 Watchlist 顶栏一致，
+    // 转场端点变化（开始/结束）时才启停，避免每帧读动画状态导致整树重组。
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+    val isNavigationTransitionRunning = animatedVisibilityScope?.transition?.let { transition ->
+        transition.currentState != transition.targetState
+    } == true
     // Glass 模式下才需要 backdrop 采样源；blur 模式走 hazeSource，注册 layer 是纯浪费。
     val glowAsBackdrop = isGlassMode && meshEnabled
 
@@ -577,8 +585,10 @@ fun MainScreen(
                             // 与上面 glowBackdrop / navTabsBackdrop 已有的 isGlassMode 门控同理。
                             // 读采样版本号/tick 让本节点 draw 失效也只为驱动 layerBackdrop 重录，
                             // 没有 layerBackdrop 时一并省掉。
+                            // 滚动时也保持录制：底栏要持续看到滚动中的内容，不能降级成半透明。
+                            // 仅详情进入/返回的 NavHost 转场窗口冻结，避免与页面淡入淡出叠加。
                             .then(
-                                if (isGlassMode && !scrollMotion.active) {
+                                if (isGlassMode && !isNavigationTransitionRunning) {
                                     Modifier
                                         .drawWithContent {
                                             @Suppress("UNUSED_EXPRESSION") backdropResampleTick
