@@ -513,49 +513,103 @@ class DiscoverFilterViewModelTest {
         coVerify(exactly = 1) { tmdbRepository.discover(any(), any()) }
     }
 
-    // ==================== 年代范围提示 ====================
+    // ==================== 年代不连续多选 ====================
 
     /**
-     * 年代多选不连续时要把实际生效范围标出来。
+     * 回归测试：用户没勾的年代不能被顺带带进结果。
      *
-     * TMDB 的日期筛选只有一个连续区间，选「1990年代 + 2010年代」实际请求的是
-     * 1990-2019，中间的 2000年代 也会进结果 —— 不提示的话用户以为只筛了点中的两格。
+     * TMDB 的日期筛选只有一个连续区间（gte/lte），选「1990年代 + 2010年代」服务端只能给
+     * 1990-2019，中间的 2000年代 也会一起回来 —— 用户没点就不该出现，客户端要补筛掉。
      */
     @Test
-    fun `toggleDecade_选中年代不连续_提示实际生效范围`() = runTest {
+    fun `toggleDecade_年代不连续_没勾的年份被筛掉`() = runTest {
+        coEvery { tmdbRepository.discover(any(), any()) } returns TmdbRepository.DiscoverPage(
+            items = listOf(
+                TmdbSearchResult(id = 1, title = "1995 年的", release_date = "1995-06-01"),
+                TmdbSearchResult(id = 2, title = "2005 年的", release_date = "2005-06-01"),
+                TmdbSearchResult(id = 3, title = "2015 年的", release_date = "2015-06-01")
+            ),
+            totalPages = 1,
+            totalResults = 3
+        )
         viewModel = createViewModel()
         advanceUntilIdle()
 
         viewModel.toggleDecade("1990-1999")
         viewModel.toggleDecade("2010-2019")
+        viewModel.search()
+        advanceUntilIdle()
 
-        assertThat(viewModel.uiState.value.decadeSpanHint).isEqualTo(1990 to 2019)
+        // 服务端按 1990-2019 返回，2005 年那条落在没勾的 2000年代 里
+        assertThat(viewModel.uiState.value.items.map { it.id }).containsExactly(1, 3)
     }
 
+    /** 年代连续时服务端给回来的就是用户点的那些年，不该再筛掉任何东西 */
     @Test
-    fun `toggleDecade_选中年代连续_不提示`() = runTest {
+    fun `toggleDecade_年代连续_结果原样保留`() = runTest {
+        coEvery { tmdbRepository.discover(any(), any()) } returns TmdbRepository.DiscoverPage(
+            items = listOf(
+                TmdbSearchResult(id = 1, title = "1995 年的", release_date = "1995-06-01"),
+                TmdbSearchResult(id = 2, title = "2005 年的", release_date = "2005-06-01")
+            ),
+            totalPages = 1,
+            totalResults = 2
+        )
         viewModel = createViewModel()
         advanceUntilIdle()
 
         viewModel.toggleDecade("1990-1999")
         viewModel.toggleDecade("2000-2009")
+        viewModel.search()
+        advanceUntilIdle()
 
-        // 合并出来的 1990-2009 和用户点的一致，提示反而是噪音
-        assertThat(viewModel.uiState.value.decadeSpanHint).isNull()
+        assertThat(viewModel.uiState.value.items.map { it.id }).containsExactly(1, 2)
     }
 
+    /** 电视剧看 first_air_date，不是 release_date */
     @Test
-    fun `toggleDecade_单选_不提示`() = runTest {
+    fun `toggleDecade_电视剧按首播年份筛`() = runTest {
+        coEvery { tmdbRepository.discover(any(), any()) } returns TmdbRepository.DiscoverPage(
+            items = listOf(
+                TmdbSearchResult(id = 1, title = "1995 首播", first_air_date = "1995-06-01"),
+                TmdbSearchResult(id = 2, title = "2005 首播", first_air_date = "2005-06-01")
+            ),
+            totalPages = 1,
+            totalResults = 2
+        )
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.switchType(TmdbRepository.DiscoverType.SHOW)
+        viewModel.toggleDecade("1990-1999")
+        viewModel.toggleDecade("2010-2019")
+        viewModel.search()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.items.map { it.id }).containsExactly(1)
+    }
+
+    /** 拿不到年份的条目保留：服务端已经按日期区间筛过，缺日期是数据不全，不是越界 */
+    @Test
+    fun `toggleDecade_条目没有日期_保留`() = runTest {
+        coEvery { tmdbRepository.discover(any(), any()) } returns TmdbRepository.DiscoverPage(
+            items = listOf(TmdbSearchResult(id = 1, title = "没日期")),
+            totalPages = 1,
+            totalResults = 1
+        )
         viewModel = createViewModel()
         advanceUntilIdle()
 
         viewModel.toggleDecade("1990-1999")
+        viewModel.toggleDecade("2010-2019")
+        viewModel.search()
+        advanceUntilIdle()
 
-        assertThat(viewModel.uiState.value.decadeSpanHint).isNull()
+        assertThat(viewModel.uiState.value.items.map { it.id }).containsExactly(1)
     }
 
     @Test
-    fun `toggleDecade_全部选项_清空选择与提示`() = runTest {
+    fun `toggleDecade_全部选项_清空选择`() = runTest {
         viewModel = createViewModel()
         advanceUntilIdle()
         viewModel.toggleDecade("1990-1999")
@@ -564,7 +618,6 @@ class DiscoverFilterViewModelTest {
         viewModel.toggleDecade("0-0") // "全部"
 
         assertThat(viewModel.uiState.value.selectedDecadeKeys).isEmpty()
-        assertThat(viewModel.uiState.value.decadeSpanHint).isNull()
     }
 
     /** 选中年代要如实转成日期区间传给 TMDB */
@@ -603,11 +656,11 @@ class DiscoverFilterViewModelTest {
         every { sessionModeManager.traktConnected } returns MutableStateFlow(true)
         coEvery { traktRepository.loadWatchlistWatchedIds() } returns watchedIds
         coEvery { tmdbRepository.discover(any(), 1) } returns
-            TmdbRepository.DiscoverPage(items = testItems, totalPages = 3, totalResults = 6)
+            TmdbRepository.DiscoverPage(items = testItems, totalPages = 2, totalResults = 4)
         coEvery { tmdbRepository.discover(any(), 2) } returns TmdbRepository.DiscoverPage(
             items = listOf(TmdbSearchResult(id = 3, title = "没看过的")),
-            totalPages = 3,
-            totalResults = 6
+            totalPages = 2,
+            totalResults = 4
         )
 
         viewModel = createViewModel()
@@ -620,6 +673,40 @@ class DiscoverFilterViewModelTest {
         assertThat(state.items.map { it.id }).containsExactly(3)
         // 翻到第 2 页才有结果，currentPage 要跟上，否则下次 loadMore 又去要第 2 页
         assertThat(state.currentPage).isEqualTo(2)
+    }
+
+    /**
+     * 客户端过滤后一页只剩两三条时，要接着往后拉够一批再上屏。
+     *
+     * 只剩两三条撑不满一屏，列表滚不动就触发不了自动翻页，用户看着像是「就这么多」。
+     * 拉够 MIN_BATCH_SIZE(10) 条或用完额外请求预算(4 页)为止。
+     */
+    @Test
+    fun `hideWatched_一页只剩几条_继续往后拉够一批`() = runTest {
+        // 每页 20 条，其中 18 条已看，只剩 2 条 —— 要拉 5 页才够 10 条
+        fun pageItems(p: Int) = List(20) { TmdbSearchResult(id = p * 100 + it, title = "p$p-$it") }
+        val watchedIds = TraktRepository.WatchlistWatchedIds(
+            movieWatchedTmdbIds = (1..6).flatMap { p -> (2..19).map { p * 100 + it } }.toSet()
+        )
+        every { traktRepository.getWatchlistWatchedIds() } returns watchedIds
+        every { sessionModeManager.traktConnected } returns MutableStateFlow(true)
+        coEvery { traktRepository.loadWatchlistWatchedIds() } returns watchedIds
+        (1..6).forEach { p ->
+            coEvery { tmdbRepository.discover(any(), p) } returns
+                TmdbRepository.DiscoverPage(items = pageItems(p), totalPages = 6, totalResults = 120)
+        }
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        viewModel.toggleHideWatched()
+        viewModel.search()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.items).hasSize(10)
+        assertThat(state.currentPage).isEqualTo(5)
+        // 额外请求有上限，不能为了凑数把 6 页全拉下来
+        coVerify(exactly = 0) { tmdbRepository.discover(any(), 6) }
     }
 
     /**

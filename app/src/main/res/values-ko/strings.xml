@@ -1146,7 +1146,6 @@
     <string name="discover_filter_select_tags">태그 선택</string>
     <string name="discover_filter_tag">태그</string>
     <string name="discover_filter_decade">연대</string>
-    <string name="discover_filter_decade_actual_range">실제 %1$d–%2$d년</string>
     <string name="discover_filter_decade_all">전체</string>
     <string name="discover_filter_decade_earlier">이전</string>
     <string name="decade_format">%d년대</string>

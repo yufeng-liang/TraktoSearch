@@ -1146,7 +1146,6 @@
     <string name="discover_filter_select_tags">タグを選択</string>
     <string name="discover_filter_tag">タグ</string>
     <string name="discover_filter_decade">年代</string>
-    <string name="discover_filter_decade_actual_range">実際 %1$d–%2$d年</string>
     <string name="discover_filter_decade_all">すべて</string>
     <string name="discover_filter_decade_earlier">それ以前</string>
     <string name="decade_format">%d年代</string>

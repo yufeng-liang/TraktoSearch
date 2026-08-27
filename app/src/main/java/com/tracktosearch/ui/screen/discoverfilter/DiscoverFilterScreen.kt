@@ -407,7 +407,7 @@ fun DiscoverFilterScreen(
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     // 结果条数：让用户知道筛出来多少，条件太严时也有个数量感。
-                    // 用"约"是因为"仅展示未标看过"是客户端过滤，实际展示的会比这个少
+                    // 用"约"是因为"仅展示未标看过"和没勾的年代都是客户端过滤，实际展示的会比这个少
                     if (uiState.totalResults > 0) {
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
@@ -620,28 +620,13 @@ fun DiscoverFilterScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Column(modifier = Modifier.padding(end = 8.dp)) {
-                            Text(
-                                text = stringResource(R.string.discover_filter_decade),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            // 选的年代不连续时，TMDB 只能筛一个连续区间，中间的年份会被顺带带进来。
-                            // 不标出来的话用户以为只筛了自己点的那两格
-                            uiState.decadeSpanHint?.let { (startYear, endYear) ->
-                                Text(
-                                    text = stringResource(
-                                        R.string.discover_filter_decade_actual_range,
-                                        startYear,
-                                        endYear
-                                    ),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1
-                                )
-                            }
-                        }
+                        Text(
+                            text = stringResource(R.string.discover_filter_decade),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
                             verticalArrangement = Arrangement.spacedBy(0.dp)

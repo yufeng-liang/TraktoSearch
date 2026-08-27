@@ -33,14 +33,6 @@ data class DiscoverFilterUiState(
     val selectedCountries: Set<String> = emptySet(),
     val selectedKeywordIds: Set<Int> = emptySet(),
     val selectedDecadeKeys: Set<String> = emptySet(),
-    /**
-     * 选中年代不连续时实际生效的年份范围（起始年 to 结束年），连续或单选时为 null。
-     *
-     * TMDB 的日期筛选只有一个连续区间（gte/lte），选「2026 + 1990年代」只能合并成
-     * 1990-01-01..2026-12-31，中间没选的 2000/2010 年代也会进结果。
-     * UI 据此把实际范围标出来，否则用户以为只筛了自己点的那两格。
-     */
-    val decadeSpanHint: Pair<Int, Int>? = null,
     val voteAverageMin: Float = 0f,
     val voteAverageMax: Float = 10f,
     val sortBy: TmdbRepository.DiscoverSort = TmdbRepository.DiscoverSort.POPULARITY_DESC,
@@ -228,7 +220,6 @@ class DiscoverFilterViewModel @Inject constructor(
             selectedCountries = saved.countries,
             selectedKeywordIds = saved.keywordIds,
             selectedDecadeKeys = saved.decadeKeys,
-            decadeSpanHint = decadeSpanHintFor(saved.decadeKeys),
             voteAverageMin = saved.voteMin,
             voteAverageMax = saved.voteMax,
             sortBy = saved.sortBy,
@@ -290,8 +281,7 @@ class DiscoverFilterViewModel @Inject constructor(
             if (key in current) current - key else current + key
         }
         _uiState.value = _uiState.value.copy(
-            selectedDecadeKeys = next,
-            decadeSpanHint = decadeSpanHintFor(next)
+            selectedDecadeKeys = next
         )
     }
 
@@ -340,7 +330,6 @@ class DiscoverFilterViewModel @Inject constructor(
             selectedCountries = emptySet(),
             selectedKeywordIds = emptySet(),
             selectedDecadeKeys = emptySet(),
-            decadeSpanHint = null,
             voteAverageMin = 0f,
             voteAverageMax = 10f,
             sortBy = TmdbRepository.DiscoverSort.POPULARITY_DESC,
@@ -365,31 +354,62 @@ class DiscoverFilterViewModel @Inject constructor(
         return start..end
     }
 
+    /** 选中的每个年代各自覆盖的年份区间（"全部"不参与） */
+    private fun selectedYearRanges(keys: Set<String>): List<IntRange> =
+        decadeOptions.filter { it.key in keys && !it.isAll }.map { effectiveYears(it) }
+
     /** 选中的年代合并成的连续年份区间，没有有效选项时返回 null */
     private fun mergedYearRange(keys: Set<String>): IntRange? {
-        val options = decadeOptions.filter { it.key in keys && !it.isAll }
-        if (options.isEmpty()) return null
-        val ranges = options.map { effectiveYears(it) }
+        val ranges = selectedYearRanges(keys)
+        if (ranges.isEmpty()) return null
         return ranges.minOf { it.first }..ranges.maxOf { it.last }
     }
 
     /**
-     * 选中年代之间有没有被"顺带筛进来"的年份。
+     * 选中年代之间有没有用户没勾的年份。
      *
-     * 有缺口才返回实际范围：连续多选（如 1990年代 + 2000年代）合并出来的区间和用户点的一致，
-     * 提示反而是噪音。
+     * 有缺口才需要客户端补一刀：TMDB 只能筛一个连续区间，连续多选（如 1990年代 + 2000年代）
+     * 服务端给回来的就已经是用户点的那些年，不用再过滤。
      */
-    private fun decadeSpanHintFor(keys: Set<String>): Pair<Int, Int>? {
-        val merged = mergedYearRange(keys) ?: return null
-        val selectedRanges = decadeOptions.filter { it.key in keys && !it.isAll }.map { effectiveYears(it) }
-        val fullyCovered = merged.all { year -> selectedRanges.any { year in it } }
-        return if (fullyCovered) null else merged.first to merged.last
+    private fun hasDecadeGap(ranges: List<IntRange>): Boolean {
+        if (ranges.isEmpty()) return false
+        val merged = ranges.minOf { it.first }..ranges.maxOf { it.last }
+        return merged.any { year -> ranges.none { year in it } }
+    }
+
+    /** 条目的年份：电影看 release_date，剧集看 first_air_date，缺失时用另一个兜底 */
+    private fun itemYear(item: TmdbSearchResult, type: TmdbRepository.DiscoverType): Int? {
+        val date = if (type == TmdbRepository.DiscoverType.SHOW) {
+            item.first_air_date?.takeIf { it.isNotBlank() } ?: item.release_date
+        } else {
+            item.release_date.takeIf { it.isNotBlank() } ?: item.first_air_date.orEmpty()
+        }
+        return date.take(4).toIntOrNull()
+    }
+
+    /**
+     * 丢掉落在没勾选年份里的条目。
+     *
+     * TMDB 的日期筛选只有一个连续区间（gte/lte），选「1990年代 + 2010年代」服务端只能给
+     * 1990-2019，中间的 2000年代 也会一起回来。用户没勾就不该出现，按发行年份在客户端补筛。
+     */
+    private fun filterDecadeGaps(
+        items: List<TmdbSearchResult>,
+        type: TmdbRepository.DiscoverType,
+        ranges: List<IntRange>
+    ): List<TmdbSearchResult> {
+        if (ranges.isEmpty()) return items
+        return items.filter { item ->
+            // 取不到年份的条目保留：服务端已经按日期区间筛过，缺日期是数据不全，不是越界
+            val year = itemYear(item, type) ?: return@filter true
+            ranges.any { year in it }
+        }
     }
 
     /**
      * 计算选中年代对应的日期范围（多选合并为连续范围）。
      * TMDB Discover 只支持连续日期范围，多选不连续年代会合并为最小起始到最大结束，
-     * 中间被顺带筛进来的年份由 [DiscoverFilterUiState.decadeSpanHint] 在 UI 上标出。
+     * 中间用户没勾的年份由 [filterDecadeGaps] 在客户端筛掉。
      */
     private fun computeDateRange(): Pair<String?, String?> {
         val merged = mergedYearRange(_uiState.value.selectedDecadeKeys) ?: return null to null
@@ -445,6 +465,9 @@ class DiscoverFilterViewModel @Inject constructor(
         searchJob = viewModelScope.launch {
             val s = _uiState.value
             val (dateStart, dateEnd) = computeDateRange()
+            val yearRanges = selectedYearRanges(s.selectedDecadeKeys)
+            // 年代选得不连续时，服务端只能筛一个连续区间，没勾的年份得在客户端剔掉
+            val gapRanges = if (hasDecadeGap(yearRanges)) yearRanges else emptyList()
             val filter = TmdbRepository.DiscoverFilter(
                 type = s.type,
                 genreIds = s.selectedGenreIds.toList(),
@@ -465,30 +488,33 @@ class DiscoverFilterViewModel @Inject constructor(
                         watchlistWatchedIds.filterNotNull().first()
                     }
                 }
+                // 有客户端过滤（未标看过 / 没勾的年代）时，一页可能只剩两三条：
+                // 撑不满一屏就滚不动，也就触发不了自动翻页，列表看着像是加载完了。
+                // 所以先攒够一批再上屏，攒不够也有请求数上限兜底
+                val clientFiltered = s.hideWatched || gapRanges.isNotEmpty()
                 var pageToLoad = page
                 var result = tmdbRepository.discover(filter, pageToLoad)
-                var filtered = filterWatched(result.items, s)
-                // 整页都被「仅展示未标看过」筛空时继续往后翻：
-                // 停在这里会显示「没有符合条件的结果」，而后面几页其实还有没看过的
-                var skipped = 0
+                val collected = mutableListOf<TmdbSearchResult>()
+                collected += filterDecadeGaps(filterWatched(result.items, s), s.type, gapRanges)
+                var extraPages = 0
                 while (
-                    filtered.isEmpty() &&
-                    s.hideWatched &&
+                    clientFiltered &&
+                    collected.size < MIN_BATCH_SIZE &&
                     pageToLoad < result.totalPages &&
                     pageToLoad < TMDB_MAX_PAGE &&
-                    skipped < MAX_EMPTY_PAGE_SKIP
+                    extraPages < MAX_EXTRA_PAGE_FETCH
                 ) {
                     pageToLoad++
-                    skipped++
+                    extraPages++
                     result = tmdbRepository.discover(filter, pageToLoad)
-                    filtered = filterWatched(result.items, s)
+                    collected += filterDecadeGaps(filterWatched(result.items, s), s.type, gapRanges)
                 }
 
                 val existing = if (page == 1) emptyList() else _uiState.value.items
                 // 按 id 去重：TMDB Discover API 在某些排序方式下可能跨页返回相同条目，
                 // 直接拼接会导致 LazyColumn key 重复崩溃
                 _uiState.value = _uiState.value.copy(
-                    items = (existing + filtered).distinctBy { it.id },
+                    items = (existing + collected).distinctBy { it.id },
                     currentPage = result.totalPages.coerceAtMost(pageToLoad),
                     totalPages = result.totalPages,
                     totalResults = result.totalResults,
@@ -518,7 +544,9 @@ class DiscoverFilterViewModel @Inject constructor(
         const val TMDB_MAX_PAGE = 500
         /** 等想看/已看 ID 的上限：拿不到就先不过滤，不能把筛选页一直卡在骨架屏 */
         const val WATCHED_IDS_WAIT_MILLIS = 3000L
-        /** 「仅展示未标看过」最多连续跳过的空页数，避免一次点击打出十几个请求 */
-        const val MAX_EMPTY_PAGE_SKIP = 3
+        /** 客户端过滤后一批至少凑这么多条，凑够才上屏（TMDB 一页 20 条） */
+        const val MIN_BATCH_SIZE = 10
+        /** 为凑够一批最多额外多请求几页，避免一次点击打出十几个请求 */
+        const val MAX_EXTRA_PAGE_FETCH = 4
     }
 }

@@ -1244,7 +1244,6 @@
     <string name="discover_filter_select_tags">选择标签</string>
     <string name="discover_filter_tag">标签</string>
     <string name="discover_filter_decade">年代</string>
-    <string name="discover_filter_decade_actual_range">实际 %1$d-%2$d 年</string>
     <string name="discover_filter_decade_all">全部</string>
     <string name="discover_filter_decade_earlier">更早</string>
     <string name="decade_format">%d年代</string>
