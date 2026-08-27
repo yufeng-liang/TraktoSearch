@@ -83,7 +83,14 @@ fun MovieCard(
     onLongClick: (() -> Unit)? = null,
     isInWatchlist: Boolean = false,
     isWatched: Boolean = false,
-    showStatusText: Boolean = true
+    showStatusText: Boolean = true,
+    /**
+     * 海报位的 shimmer 状态，仅在 [posterUrl] 还是 null 时生效。
+     *
+     * 用于「条目已经拿到标题、海报还在路上」的列表：给一格平的灰底不如给一格微光，
+     * 用户能看出是在加载而不是这张没有海报。调用方用 [rememberShimmer] 全列表共享一份。
+     */
+    posterShimmer: ShimmerState? = null
 ) {
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
@@ -211,6 +218,14 @@ fun MovieCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column {
+            val posterShape = RoundedCornerShape(topStart = 13.dp, topEnd = 13.dp)
+            // 海报未到位时铺一层微光。shimmer 只在绘制阶段读进度，不触发重组；
+            // 画在 clip 之后，圆角由 shape 直接参与绘制，不用再加一层图层。
+            val placeholderModifier = if (posterUrl == null && posterShimmer != null) {
+                Modifier.shimmer(posterShimmer, posterShape)
+            } else {
+                Modifier
+            }
             val imageModifier = if (enableShared && sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
                 with(sharedTransitionScope) {
                     Modifier
@@ -220,13 +235,15 @@ fun MovieCard(
                         )
                         .fillMaxWidth()
                         .aspectRatio(2f / 3f)
-                        .clip(RoundedCornerShape(topStart = 13.dp, topEnd = 13.dp))
+                        .clip(posterShape)
+                        .then(placeholderModifier)
                 }
             } else {
                 Modifier
                     .fillMaxWidth()
                     .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(topStart = 13.dp, topEnd = 13.dp))
+                    .clip(posterShape)
+                    .then(placeholderModifier)
             }
 
             Box {

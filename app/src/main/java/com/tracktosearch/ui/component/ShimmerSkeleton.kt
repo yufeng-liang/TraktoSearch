@@ -130,12 +130,16 @@ fun rememberShimmerBrush(): Brush {
 
 /**
  * 影视卡片骨架屏 - 用于想看列表加载态
+ *
+ * 一屏能排下十来个，所以走 [ShimmerState]：动画只失效绘制，不会让每个骨架卡每帧重组。
+ * [shimmer] 传 null 时各自建一份动画，页面里骨架多就在调用方 [rememberShimmer] 提一份共享。
  */
 @Composable
 fun MovieCardSkeleton(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    shimmer: ShimmerState? = null
 ) {
-    val brush = rememberShimmerBrush()
+    val state = shimmer ?: rememberShimmer()
     val shape = RoundedCornerShape(13.dp)
 
     Column(modifier = modifier) {
@@ -143,24 +147,21 @@ fun MovieCardSkeleton(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
-                .clip(shape)
-                .background(brush)
+                .shimmer(state, shape)
         )
         Column(modifier = Modifier.padding(6.dp)) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(0.7f)
                     .height(14.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(brush)
+                    .shimmer(state, RoundedCornerShape(4.dp))
             )
             Spacer(modifier = Modifier.height(4.dp))
             Box(
                 modifier = Modifier
                     .fillMaxWidth(0.4f)
                     .height(10.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(brush)
+                    .shimmer(state, RoundedCornerShape(4.dp))
             )
         }
     }

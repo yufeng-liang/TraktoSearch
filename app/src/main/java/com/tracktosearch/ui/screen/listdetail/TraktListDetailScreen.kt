@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -29,6 +30,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -45,6 +47,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,7 +56,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.AppErrorState
-import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
@@ -67,6 +69,7 @@ import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.rememberPosterPrefetch
+import com.tracktosearch.ui.component.rememberShimmer
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.LoadMoreFooter
@@ -89,6 +92,8 @@ fun TraktListDetailScreen(
     val gridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
     val hazeState = remember { HazeState() }
     val hazeStyle = HazeMaterials.thin()
+    // 富化是分批回来的，items 一批换一次；海报列表提出来 remember，避免每次重组重新分配
+    val posterUrls = remember(uiState.items) { uiState.items.mapNotNull { it.posterUrl } }
     val listGlassScene = glassSceneForContent(
         contentCount = uiState.items.size,
         readabilityDemand = when {
@@ -98,7 +103,7 @@ fun TraktListDetailScreen(
             else -> 0.62f
         },
         ambientColor = rememberCachedPosterAmbientColor(
-            posterUrls = uiState.items.mapNotNull { it.posterUrl },
+            posterUrls = posterUrls,
             fallback = MaterialTheme.colorScheme.background
         ),
         contentCapacity = 42,
@@ -124,13 +129,14 @@ fun TraktListDetailScreen(
             }
     }
 
-    // 网格滚动预取：与 MovieCard 内一致的 URL 生成规则，预热即将滚入视口的海报
+    // 网格滚动预取：posterUrl 已是完整 URL，与 MovieCard 内的取图地址一致，预热即将滚入视口的海报
     if (uiState.items.isNotEmpty()) {
-        val prefetchUrls = remember(uiState.items) {
-            uiState.items.map { it.posterUrl?.let { p -> TmdbImageUrls.build(p) } }
-        }
+        val prefetchUrls = remember(uiState.items) { uiState.items.map { it.posterUrl } }
         rememberPosterPrefetch(gridState, prefetchUrls)
     }
+
+    // 骨架屏与未到位的海报共享一条 shimmer 动画：一屏九到十几个方块各跑一条会白烧一帧的时间
+    val shimmer = rememberShimmer()
 
     // 点击 token,确保只有被点击的卡片参与转场
     var activeClickToken by remember { mutableStateOf(0) }
@@ -164,8 +170,9 @@ fun TraktListDetailScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 65.dp + statusBarHeight, bottom = 16.dp)
                         ) {
-                            items(6) {
-                                MovieCardSkeleton()
+                            // 3 列，铺满首屏需要 9 个；6 个会在屏幕下方留一段空白
+                            items(9) {
+                                MovieCardSkeleton(shimmer = shimmer)
                             }
                         }
 
@@ -205,7 +212,9 @@ fun TraktListDetailScreen(
                                     )
                                 }
                                 Text(
-                                    text = stringResource(R.string.common_loading),
+                                    // 榜单名是导航参数，进页就有；骨架阶段直接显示，避免「加载中」再跳成真名闪一下。
+                                    // 从别处进来没带名字时才退回「加载中」
+                                    text = uiState.listName.ifBlank { stringResource(R.string.common_loading) },
                                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = 1,
@@ -250,10 +259,12 @@ fun TraktListDetailScreen(
                                 title = item.title,
                                 year = item.year,
                                 genres = "",
-                                posterUrl = item.posterUrl?.let { TmdbImageUrls.build(it) },
+                                // posterUrl 已是完整 URL（ViewModel 统一），不要再拼尺寸前缀
+                                posterUrl = item.posterUrl,
                                 tmdbId = item.tmdbId,
                                 isInWatchlist = isInWatchlist,
                                 isWatched = isWatched,
+                                posterShimmer = shimmer,
                                 onClick = {
                                     when (item.type) {
                                         MediaType.MOVIE -> onMovieClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, isInWatchlist, isWatched)
@@ -330,6 +341,17 @@ fun TraktListDetailScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        // 磁盘快照已经渲染、远端第一页还在飞时的细进度条：不遮挡内容，只提示数据可能不是最新。
+                        // 放在标题栏最底部，出现/消失不会推动上方的标题。
+                        if (uiState.isRefreshing && uiState.items.isNotEmpty()) {
+                            LinearProgressIndicator(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(2.dp)
+                                    .testTag("list_detail_refresh_indicator")
                             )
                         }
                     }
