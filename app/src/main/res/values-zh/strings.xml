@@ -694,7 +694,6 @@
     <string name="help_consistency_act_trakt_wish">Trakt 标记想看</string>
     <string name="help_consistency_act_douban_watched">豆瓣标记已看</string>
     <string name="help_consistency_act_douban_wish">豆瓣标记想看</string>
-    <string name="settings_restart_onboarding">新手引导</string>
     <string name="onboarding_skip">跳过</string>
     <string name="onboarding_next">下一步</string>
     <string name="onboarding_done">知道了</string>
@@ -1735,7 +1734,6 @@
     <string name="filter_region_tw">中国台湾</string>
     <string name="settings_logout_confirm_impact">退出后想看/已看与评分将停止同步，需要重新登录才能继续；本地已缓存的数据会保留。</string>
     <string name="settings_notification_requires_trakt">需要连接 Trakt 账号才能使用，通知基于 Trakt 想看列表推送。</string>
-    <string name="settings_restart_onboarding_subtitle">重新播放四步功能引导，不会删除任何数据</string>
     <string name="settings_custom_section_subtitle_discover">选择发现页显示哪些榜单及顺序</string>
     <string name="settings_custom_section_subtitle_detail">选择详情页显示哪些区块及顺序</string>
     <string name="settings_developer_section">开发者选项</string>
@@ -1746,4 +1744,43 @@
     <string name="common_load_more_loading">正在加载更多…</string>
     <string name="common_load_more_failed">加载更多失败，点击重试</string>
     <string name="common_load_more_complete">已加载全部</string>
+
+    <!-- 开源相关页 -->
+    <string name="opensource_title">开源相关</string>
+    <string name="opensource_thanks_line1">TraktoSearch 的诞生</string>
+    <string name="opensource_thanks_line2">离不开这些优秀的开源库</string>
+    <string name="opensource_thanks_line3">向每一位开源贡献者致谢 🎉</string>
+    <string name="opensource_group_ui">界面与动效</string>
+    <string name="opensource_group_framework">基础框架</string>
+    <string name="opensource_group_data">数据存储</string>
+    <string name="opensource_group_image">图片</string>
+    <string name="opensource_group_text">中文与解析</string>
+    <string name="opensource_license_label">许可：%1$s</string>
+    <string name="opensource_developer_label">版权/开发者：%1$s</string>
+    <string name="opensource_version_label">版本：%1$s</string>
+    <string name="opensource_usage_label">在本应用中的用途</string>
+    <string name="opensource_view_repo">查看仓库</string>
+    <string name="opensource_use_compose">全站声明式 UI 框架，所有界面与 Material 3 组件基于它构建</string>
+    <string name="opensource_use_navigation">页面路由与返回栈管理</string>
+    <string name="opensource_use_haze">毛玻璃模糊效果，用于吸顶标题栏与背景玻璃层</string>
+    <string name="opensource_use_lottie">播放 JSON 矢量动画（加载、空状态等动效）</string>
+    <string name="opensource_use_richtext">渲染 Markdown 富文本（版本更新日志）</string>
+    <string name="opensource_use_reorderable">列表长按拖拽排序</string>
+    <string name="opensource_use_zoomable">海报与剧照的双指缩放和拖动查看</string>
+    <string name="opensource_use_backdrop">液态玻璃效果的屏幕级采样背板</string>
+    <string name="opensource_use_mesh_gradient">Android 12 及以下背景光晕的网格渐变动画回退实现</string>
+    <string name="opensource_use_mirage">Android 13 及以上背景光晕的 AGSL 着色器动画实现</string>
+    <string name="opensource_use_colorpicker">主题自定义配色的取色器</string>
+    <string name="opensource_use_kotlin">协程异步调度与 JSON 序列化</string>
+    <string name="opensource_use_hilt">依赖注入，组装 Repository、ViewModel 等组件</string>
+    <string name="opensource_use_square">HTTP 网络请求（Trakt、TMDB、授权网关等接口）</string>
+    <string name="opensource_use_room">本地 SQLite 数据库，存观影标记、搜索历史与缓存索引</string>
+    <string name="opensource_use_sqlcipher">对本地数据库透明加密，保护隐私数据</string>
+    <string name="opensource_use_datastore">键值对偏好存储（设置项与轻量缓存）</string>
+    <string name="opensource_use_workmanager">后台约束任务（授权状态周期检查、通知调度等）</string>
+    <string name="opensource_use_glance">桌面快速搜索小组件</string>
+    <string name="opensource_use_coil">图片加载与磁盘缓存（海报、头像、剧照）</string>
+    <string name="opensource_use_jsoup">解析豆瓣页面 HTML，提取条目与评分数据</string>
+    <string name="opensource_use_jieba">中文分词，用于词云与评论关键词统计</string>
+    <string name="opensource_use_pinyin">汉字转拼音，支持看单按拼音搜索匹配</string>
 </resources>

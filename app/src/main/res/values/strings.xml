@@ -694,7 +694,6 @@ Config:
     <string name="help_consistency_act_trakt_wish">Trakt mark wishlist</string>
     <string name="help_consistency_act_douban_watched">Douban mark watched</string>
     <string name="help_consistency_act_douban_wish">Douban mark wishlist</string>
-    <string name="settings_restart_onboarding">Tutorial</string>
     <string name="onboarding_skip">Skip</string>
     <string name="onboarding_next">Next</string>
     <string name="onboarding_done">Got it</string>
@@ -1734,7 +1733,6 @@ Config:
     <string name="filter_region_tw">Taiwan, China</string>
     <string name="settings_logout_confirm_impact">Watchlist, watched history and ratings stop syncing until you sign in again. Locally cached data is kept.</string>
     <string name="settings_notification_requires_trakt">Connect a Trakt account to use reminders — they are pushed from your Trakt watchlist.</string>
-    <string name="settings_restart_onboarding_subtitle">Replay the 4-step tour; nothing is deleted</string>
     <string name="settings_custom_section_subtitle_discover">Pick which lists show up on Discover and their order</string>
     <string name="settings_custom_section_subtitle_detail">Pick which blocks show up on a title page and their order</string>
     <string name="settings_developer_section">Developer options</string>
@@ -1745,4 +1743,43 @@ Config:
     <string name="common_load_more_loading">Loading more…</string>
     <string name="common_load_more_failed">Failed to load more. Tap to retry</string>
     <string name="common_load_more_complete">Everything is loaded</string>
+
+    <!-- Open Source page -->
+    <string name="opensource_title">Open Source</string>
+    <string name="opensource_thanks_line1">TraktoSearch is made possible</string>
+    <string name="opensource_thanks_line2">by these amazing open source libraries</string>
+    <string name="opensource_thanks_line3">Thanks to every open source contributor 🎉</string>
+    <string name="opensource_group_ui">UI &amp; Effects</string>
+    <string name="opensource_group_framework">Core Frameworks</string>
+    <string name="opensource_group_data">Data &amp; Storage</string>
+    <string name="opensource_group_image">Images</string>
+    <string name="opensource_group_text">Text &amp; Parsing</string>
+    <string name="opensource_license_label">License: %1$s</string>
+    <string name="opensource_developer_label">Copyright/Developer: %1$s</string>
+    <string name="opensource_version_label">Version: %1$s</string>
+    <string name="opensource_usage_label">Usage in this app</string>
+    <string name="opensource_view_repo">View Repository</string>
+    <string name="opensource_use_compose">Declarative UI framework powering every screen and Material 3 component</string>
+    <string name="opensource_use_navigation">Screen routing and back stack management</string>
+    <string name="opensource_use_haze">Frosted glass blur for sticky top bars and background glass layers</string>
+    <string name="opensource_use_lottie">Playing JSON vector animations (loading, empty states, etc.)</string>
+    <string name="opensource_use_richtext">Rendering Markdown rich text (changelog)</string>
+    <string name="opensource_use_reorderable">Long-press drag-to-reorder for lists</string>
+    <string name="opensource_use_zoomable">Pinch-to-zoom and pan for posters and stills</string>
+    <string name="opensource_use_backdrop">Screen-level sampling backdrop for the liquid glass effect</string>
+    <string name="opensource_use_mesh_gradient">Mesh gradient animation fallback for background glow on Android 12 and below</string>
+    <string name="opensource_use_mirage">AGSL shader animation for background glow on Android 13 and above</string>
+    <string name="opensource_use_colorpicker">Color picker for custom theme colors</string>
+    <string name="opensource_use_kotlin">Coroutine-based async dispatch and JSON serialization</string>
+    <string name="opensource_use_hilt">Dependency injection wiring repositories and view models</string>
+    <string name="opensource_use_square">HTTP networking (Trakt, TMDB, auth gateway APIs)</string>
+    <string name="opensource_use_room">Local SQLite database for marks, search history and cache indexes</string>
+    <string name="opensource_use_sqlcipher">Transparent encryption of the local database to protect private data</string>
+    <string name="opensource_use_datastore">Key-value preference storage (settings and lightweight caches)</string>
+    <string name="opensource_use_workmanager">Background constrained work (periodic auth checks, notification scheduling)</string>
+    <string name="opensource_use_glance">Home-screen quick search widget</string>
+    <string name="opensource_use_coil">Image loading with disk cache (posters, avatars, stills)</string>
+    <string name="opensource_use_jsoup">Parsing Douban page HTML to extract entries and ratings</string>
+    <string name="opensource_use_jieba">Chinese word segmentation for word clouds and keyword statistics</string>
+    <string name="opensource_use_pinyin">Chinese-to-pinyin conversion for watchlist pinyin search matching</string>
 </resources>
