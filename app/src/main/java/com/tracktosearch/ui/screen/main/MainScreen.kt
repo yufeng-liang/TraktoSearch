@@ -560,9 +560,11 @@ fun MainScreen(
                         modifier = Modifier.fillMaxSize(),
                         preset = MeshPreset.fromStorage(meshPreset),
                         enabled = meshEnabled,
-                        // 无人操作、滚动或切 Tab 的重排窗口都冻结；只暂停时间推进，不隐藏背景。
+                        // 无人操作、滚动、切 Tab 或详情进入/返回的转场窗口都冻结；
+                        // 转场期间全屏 shader 与页面淡入淡出叠加是本帧 GPU 大头，只暂停时间推进，不隐藏背景。
                         motionActive = {
-                            ambientMotion.active && !scrollMotion.active && !isTabMotionCoolingDown
+                            ambientMotion.active && !scrollMotion.active && !isTabMotionCoolingDown &&
+                                !isNavigationTransitionRunning
                         },
                     )
                 }
