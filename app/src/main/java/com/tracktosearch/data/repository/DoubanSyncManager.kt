@@ -2174,8 +2174,10 @@ class DoubanSyncManager @Inject constructor(
             false
         }
         if (!personalUploadSucceeded) {
+            // 云端上传失败不计入 failedCount：本地同步失败与云端失败分离，
+            // 云端失败由 cloudUploadAttempted/cloudUploadSucceeded 独立展示，
+            // 避免本地条目 100% 同步成功时终态 phase 误降格为「部分完成」并诱导无意义重试
             _progress.value = _progress.value.copy(
-                failedCount = _progress.value.failedCount + 1,
                 errorMessage = "Personal data upload failed: ${personalUploadError?.message ?: "unknown error"}"
             )
         }
@@ -2193,8 +2195,8 @@ class DoubanSyncManager @Inject constructor(
         // 上传失败项（保留原有逻辑）
         runCatching { cloudFailureSyncManager.uploadIfHasFailures() }
             .onFailure {
+                // 云端辅助上传失败只留 errorMessage，不计入 failedCount（见上方个人数据上传注释）
                 _progress.value = _progress.value.copy(
-                    failedCount = _progress.value.failedCount + 1,
                     errorMessage = "Failure record upload failed: ${it.message ?: "unknown error"}"
                 )
             }
@@ -2207,8 +2209,8 @@ class DoubanSyncManager @Inject constructor(
         // 一次性批量上传 dirty 详情到全局池
         runCatching { uploadDirtyDetails() }
             .onFailure {
+                // 云端辅助上传失败只留 errorMessage，不计入 failedCount（见上方个人数据上传注释）
                 _progress.value = _progress.value.copy(
-                    failedCount = _progress.value.failedCount + 1,
                     errorMessage = "Detail upload failed: ${it.message ?: "unknown error"}"
                 )
             }
@@ -2221,8 +2223,8 @@ class DoubanSyncManager @Inject constructor(
         // 从全局池批量填充本地未标注类型的失败项（其他用户已标注的类型）
         runCatching { fillMediaTypeFromCloudPool() }
             .onFailure {
+                // 云端池补全失败只留 errorMessage，不计入 failedCount（见上方个人数据上传注释）
                 _progress.value = _progress.value.copy(
-                    failedCount = _progress.value.failedCount + 1,
                     errorMessage = "Media type completion failed: ${it.message ?: "unknown error"}"
                 )
             }

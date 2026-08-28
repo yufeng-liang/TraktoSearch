@@ -515,10 +515,10 @@ fun SettingsScreen(
                             bottom = 80.dp
                         )
                     ) {
-            // 观看统计（第一位，独占整行卡片，无类目 Header）—— 仅登录可见
+            // 观看统计（第一位，独占整行卡片，无类目 Header）—— Trakt 已连接或豆瓣独立模式可见
             // sharedBounds 与 StatisticsScreen 头部配对,实现卡片↔页面展开/收起转场
-            // 豆瓣独立模式: 统计数据来源是 Trakt watchlist/history,无 trakt token 时无意义,隐藏
-            if (isLoggedIn && !isDoubanMode) {
+            // 豆瓣独立模式: StatisticsViewModel 支持基于豆瓣本地同步数据的统计，与 Trakt 统计同等可用
+            if (isLoggedIn && (isDoubanMode || isTraktConnected)) {
                 item(key = "statistics_entry") {
                     val statisticsEntryModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && sharedTransitionEnabled) {
                         with(sharedTransitionScope) {
