@@ -1008,6 +1008,76 @@ class DoubanRepositoryTest {
         assertThat(result.statusCode).isEqualTo(500)
     }
 
+    // ==================== markInterest / removeInterest 业务成败判定 ====================
+    // 豆瓣写接口业务失败时同样返回 200 + {"r":1}，只判状态码会把失败误报为成功，
+    // DoubanSyncManager 据此清除 pendingSync 后该条目将永远不再重试。
+
+    private val cookieWithCk = "dbcl2=\"1234567:abc\"; ck=AbCd; bid=xyz"
+
+    @Test
+    fun markInterest_r0返回成功(): Unit = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody("""{"r":0}"""))
+
+        val result = repository.markWish("123", cookieWithCk)
+
+        assertThat(result).isTrue()
+    }
+
+    @Test
+    fun markInterest_HTTP200但r1返回失败(): Unit = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody("""{"r":1,"msg":"已标记"}"""))
+
+        val result = repository.markWish("123", cookieWithCk)
+
+        assertThat(result).isFalse()
+    }
+
+    @Test
+    fun markInterest_HTTP500返回失败(): Unit = runBlocking {
+        mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("error"))
+
+        val result = repository.markWish("123", cookieWithCk)
+
+        assertThat(result).isFalse()
+    }
+
+    @Test
+    fun removeInterest_r0返回成功(): Unit = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody("""{"r":0,"result":"y"}"""))
+
+        val result = repository.removeInterest("123", cookieWithCk)
+
+        assertThat(result).isTrue()
+    }
+
+    @Test
+    fun removeInterest_HTTP200但r1返回失败(): Unit = runBlocking {
+        // j_cat_ui 返回带空格的 JSON，字面量匹配 "\"r\":0" 会漏判，必须按 r 字段取值
+        mockWebServer.enqueue(MockResponse().setBody("""{"r": 1, "code": 403}"""))
+
+        val result = repository.removeInterest("123", cookieWithCk)
+
+        assertThat(result).isFalse()
+    }
+
+    @Test
+    fun removeInterest_带空格r0返回成功(): Unit = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody("""{"r": 0, "result": "y"}"""))
+
+        val result = repository.removeInterest("123", cookieWithCk)
+
+        assertThat(result).isTrue()
+    }
+
+    @Test
+    fun removeInterest_HTTP403返回失败(): Unit = runBlocking {
+        mockWebServer.enqueue(MockResponse().setResponseCode(403).setBody("""{"r": 1, "code": 403}"""))
+
+        val result = repository.removeInterest("123", cookieWithCk)
+
+        assertThat(result).isFalse()
+    }
+
     // ==================== markWatchedWithRating ====================
 
     @Test

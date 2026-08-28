@@ -23,6 +23,7 @@ import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.Jsoup
@@ -132,6 +133,9 @@ data class DoubanCelebrityCacheEntry(
  * 使用独立的 OkHttpClient（不走 Trakt 拦截器），设置豆瓣所需的 Cookie/UA/Referer。
  */
 private const val NEGATIVE_DOUBAN_MAPPING_TTL_MILLIS = 5 * 60 * 1000L
+
+/** 豆瓣 /j/ 系列写接口响应体里的结果码字段，容忍 `{"r":0}` 与 `{"r": 0}` 两种写法 */
+private val DOUBAN_RESULT_CODE_REGEX = Regex("\"r\"\\s*:\\s*(-?\\d+)")
 
 class DoubanRepository(
     private val detailCache: PersistentTtlCache<DoubanDetailCacheEntry>,
@@ -535,7 +539,8 @@ class DoubanRepository(
             .post(formBuilder.build())
             .build()
         try {
-            client.newCall(request).execute().use { response -> response.isSuccessful }
+            // 必须校验响应体 r 字段：豆瓣业务失败时同样返回 200 + {"r":1}
+            client.newCall(request).execute().use { response -> isDoubanWriteSuccess(response) }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -575,12 +580,38 @@ class DoubanRepository(
             .post(body.toRequestBody(mediaType))
             .build()
         try {
-            client.newCall(request).execute().use { response -> response.isSuccessful }
+            // 必须校验响应体 r 字段：豆瓣业务失败时同样返回 200 + {"r":1}
+            client.newCall(request).execute().use { response -> isDoubanWriteSuccess(response) }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             false
         }
+    }
+
+    /**
+     * 判定豆瓣写接口是否真正成功：HTTP 2xx **且** 响应体 `r` 为 0。
+     *
+     * 豆瓣 /j/ 系列写接口在业务失败时（ck 失效、风控、条目不存在）同样可能返回 HTTP 200，
+     * 响应体形如 `{"r":1,...}`；只有 `r` 为 0 才是业务成功。仅凭 [Response.isSuccessful]
+     * 判定会把失败误报为成功，DoubanSyncManager 会据此清除 pendingSync 标记，
+     * 该条目将永远不再重试，同步数据静默丢失。
+     *
+     * 这里用正则而非既有字面量 `contains("\"r\":0")`：/j/mine/j_cat_ui 返回的是带空格的
+     * JSON（实测无效 ck 返回 `{"r": 1, "code": 403}`），字面量匹配会漏判。
+     * /j/subject/{id}/interest 系列端点返回紧凑 JSON，沿用原字面量判据不受影响。
+     *
+     * 依据：docs/superpowers/specs/2026-07-11-rating-dialog-comment-sync-design.md
+     * 「成功判断：HTTP 2xx + 响应体含 "r":0」；豆瓣前端 /j/mine/j_cat_ui 回调同样解析
+     * 响应体判断成败（`eval` 后取 `ret.result`），不看状态码。
+     */
+    private fun isDoubanWriteSuccess(response: Response): Boolean {
+        if (!response.isSuccessful) return false
+        val body = runCatching { response.body?.string() }.getOrNull() ?: return false
+        return DOUBAN_RESULT_CODE_REGEX.find(body)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.toIntOrNull() == 0
     }
 
     // 移动端 UA(测试页用)
