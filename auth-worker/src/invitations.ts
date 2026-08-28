@@ -3,6 +3,7 @@
 import { AppError, errorResponse, now, successResponse } from './util/errors.ts';
 import { generateId, generateInviteCode, generateSecureToken, sha256 } from './util/crypto.ts';
 import { clientIp } from './util/client-ip.ts';
+import { consumeRateLimit } from './util/rate-limit.ts';
 
 export const PUBLIC_INVITE_LIMIT = 200;
 export const VERIFICATION_TTL_SECONDS = 30 * 60;
@@ -601,16 +602,19 @@ export async function enforcePublicRateLimit(env: PublicInviteEnv, request: Requ
     if (isInviteTestRequest(env, request)) {
         return;
     }
-    if (!env.KV) return;
     // 经 gateway 转发时 CF-Connecting-IP 已被覆盖为边缘出口 IP，须优先取 X-Real-IP；
     // 直接公网访问时反过来只信 CF-Connecting-IP，避免伪造。统一由 clientIp 处理。
     const ip = clientIp(request) || 'unknown';
-    const key = `public-invite:ip:${await sha256(ip)}`;
-    const current = Number.parseInt(await env.KV.get(key) || '0', 10);
-    if (current >= PUBLIC_REQUEST_RATE_LIMIT) {
+    // D1 条件 UPSERT 原子限流，替代 KV 读改写（并发穿透 + TTL 滑动）
+    const allowed = await consumeRateLimit(
+        env.DB,
+        `public-invite:ip:${await sha256(ip)}`,
+        PUBLIC_REQUEST_RATE_LIMIT,
+        3600,
+    );
+    if (!allowed) {
         throw new AppError('RATE_LIMITED', 'Too many requests', 429);
     }
-    await env.KV.put(key, String(current + 1), { expirationTtl: 3600 });
 }
 
 export function isInviteTestRequest(env: PublicInviteEnv, request: Request): boolean {

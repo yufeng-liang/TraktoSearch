@@ -5,6 +5,7 @@ import { generateId, generateSecureToken, hmacDeviceContinuityId, sha256 } from 
 import { signAccessToken } from '../util/jwt.ts';
 import { firstRow } from '../util/db.ts';
 import { clientIp } from '../util/client-ip.ts';
+import { consumeRateLimit } from '../util/rate-limit.ts';
 import { verifyClientSignature } from './refresh.ts';
 import { buildRecoveryChallengeSubject, consumeAuthChallenge, createAuthChallenge } from './challenge.ts';
 
@@ -172,12 +173,16 @@ async function enforceRateLimit(env: RecoveryEnv, request: Request, operation: s
     // 公网直连只信 CF-Connecting-IP。统一由 clientIp 处理。
     const ip = clientIp(request) || 'unknown';
     const ipHash = await sha256(`${operation}:${ip}`);
-    const key = `recover-rate:${ipHash}`;
-    const current = Number(await env.KV.get(key) || '0');
-    if (current >= RATE_LIMIT_MAX_REQUESTS) {
+    // D1 条件 UPSERT 原子限流，替代 KV 读改写（并发穿透 + TTL 滑动）
+    const allowed = await consumeRateLimit(
+        env.DB,
+        `recover-rate:${ipHash}`,
+        RATE_LIMIT_MAX_REQUESTS,
+        RATE_LIMIT_WINDOW_SECONDS,
+    );
+    if (!allowed) {
         throw new AppError('RATE_LIMITED', 'Too many recovery attempts', 429);
     }
-    await env.KV.put(key, String(current + 1), { expirationTtl: RATE_LIMIT_WINDOW_SECONDS });
 }
 
 async function readJson<T>(request: Request): Promise<T> {

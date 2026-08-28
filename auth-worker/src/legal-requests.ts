@@ -4,6 +4,7 @@ import { AppError, now, successResponse } from './util/errors.ts';
 import { generateId, sha256 } from './util/crypto.ts';
 import { sendEmail, type PublicInviteEnv } from './invitations.ts';
 import { clientIp } from './util/client-ip.ts';
+import { consumeRateLimit } from './util/rate-limit.ts';
 
 export const LEGAL_REQUEST_TYPES = [
     'PRIVACY_ACCESS',
@@ -115,29 +116,31 @@ export async function handleLegalRequest(
 }
 
 async function enforceLegalRateLimit(
-    env: Pick<LegalRequestEnv, 'KV'>,
+    env: Pick<LegalRequestEnv, 'DB'>,
     request: Request,
     email: string,
 ): Promise<void> {
-    if (!env.KV) return;
-
     // 同 invitations.ts：经 gateway 转发优先 X-Real-IP，公网直连只信 CF-Connecting-IP。
     const ip = clientIp(request) || 'unknown';
-    await consumeRateLimit(env.KV, `public-legal:ip:${await sha256(ip)}`, PUBLIC_LEGAL_IP_LIMIT, 3600);
-    await consumeRateLimit(env.KV, `public-legal:email:${await sha256(email)}`, PUBLIC_LEGAL_EMAIL_LIMIT, 86400);
-}
-
-async function consumeRateLimit(
-    kv: KVNamespace,
-    key: string,
-    limit: number,
-    ttl: number,
-): Promise<void> {
-    const current = Number.parseInt(await kv.get(key) || '0', 10);
-    if (current >= limit) {
+    // D1 条件 UPSERT 原子限流（IP 与 email 独立桶），替代 KV 读改写
+    const ipAllowed = await consumeRateLimit(
+        env.DB,
+        `public-legal:ip:${await sha256(ip)}`,
+        PUBLIC_LEGAL_IP_LIMIT,
+        3600,
+    );
+    if (!ipAllowed) {
         throw new AppError('RATE_LIMITED', 'Too many requests', 429);
     }
-    await kv.put(key, String(current + 1), { expirationTtl: ttl });
+    const emailAllowed = await consumeRateLimit(
+        env.DB,
+        `public-legal:email:${await sha256(email)}`,
+        PUBLIC_LEGAL_EMAIL_LIMIT,
+        86400,
+    );
+    if (!emailAllowed) {
+        throw new AppError('RATE_LIMITED', 'Too many requests', 429);
+    }
 }
 
 function canSendEmail(env: LegalRequestEnv): boolean {

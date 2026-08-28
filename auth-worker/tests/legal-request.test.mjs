@@ -91,8 +91,9 @@ test('stores a legal request and returns only an opaque request id', async () =>
     const payload = await response.json();
     assert.equal(payload.data.email, undefined);
     assert.match(payload.data.id, /^[0-9a-f-]{36}$/);
-    assert.equal(statements.length, 2);
-    assert.match(statements[0].sql, /INSERT INTO legal_requests/);
-    assert.match(statements[1].sql, /INSERT INTO audit_logs/);
+    // IP 与 email 限流各 1 条 D1 条件 UPSERT + 业务 2 条 = 4
+    assert.equal(statements.length, 4);
+    assert.match(statements[2].sql, /INSERT INTO legal_requests/);
+    assert.match(statements[3].sql, /INSERT INTO audit_logs/);
     assert.equal(scheduled.length, 0);
 });

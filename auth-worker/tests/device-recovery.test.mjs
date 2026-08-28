@@ -25,7 +25,14 @@ function createDb() {
                         bindings,
                         async first() { return null; },
                         async all() { return { results: [] }; },
-                        async run() { return { success: true, meta: { changes: 0 } }; },
+                        async run() {
+                            // 限流桶条件 UPSERT 默认放行（changes=1），否则单测全被 429 拦下；
+                            // 其余写语句由 createRecoveryDb 覆盖。
+                            if (sql.includes('INSERT INTO rate_limits')) {
+                                return { success: true, meta: { changes: 1 } };
+                            }
+                            return { success: true, meta: { changes: 0 } };
+                        },
                     };
                 },
             };
@@ -51,6 +58,10 @@ function createRecoveryDb(match) {
                         return { results: [] };
                     },
                     async run() {
+                        // 限流桶条件 UPSERT 放行，避免单测被 429 拦下
+                        if (sql.includes('INSERT INTO rate_limits')) {
+                            return { success: true, meta: { changes: 1 } };
+                        }
                         if (sql.includes('UPDATE auth_challenges')) {
                             return { success: true, meta: { changes: 1 } };
                         }
