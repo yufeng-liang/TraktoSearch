@@ -55,7 +55,6 @@ import com.tracktosearch.data.util.ParseResult
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.ImportItem
 import androidx.compose.runtime.Immutable
-import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -73,13 +72,33 @@ import kotlinx.coroutines.withContext
 import java.io.IOException
 import javax.inject.Inject
 
+/**
+ * 导出/导入/清缓存/检查更新等操作的一次性反馈消息(机器码)。
+ * VM 不拼接本地化文案，UI 组合期按 resId+args 用 stringResource 渲染。
+ */
+@Immutable
+sealed interface ExportMessage {
+    val resId: Int
+    val args: List<Any> get() = emptyList()
+
+    /** 无参数消息(成功/失败/提示类) */
+    @Immutable
+    data class Plain(override val resId: Int) : ExportMessage
+
+    /** 带格式化参数消息(args 顺序与资源占位符一一对应) */
+    @Immutable
+    data class Formatted(override val resId: Int, override val args: List<Any>) : ExportMessage
+}
+
 @Immutable
 data class ExportImportState(
     val isExporting: Boolean = false,
     val isImporting: Boolean = false,
-    val message: String? = null,
+    /** 操作结果反馈(机器码,UI 组合期转本地化文案) */
+    val message: ExportMessage? = null,
     val importedItems: List<ImportItem> = emptyList(),
-    val syncProgress: String? = null,  // e.g. "Syncing 3/50..."
+    /** IMDb 导入逐条进度(机器码,UI 组合期转本地化文案) */
+    val syncProgress: ExportMessage? = null,
     val syncSuccess: Int = 0,
     val syncFailed: Int = 0
 )
@@ -298,14 +317,14 @@ class SettingsViewModel @Inject constructor(
 
                 _exportImportState.value = _exportImportState.value.copy(
                     isExporting = false,
-                    message = context.getString(R.string.snackbar_export_success)
+                    message = ExportMessage.Plain(R.string.snackbar_export_success)
                 )
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     isExporting = false,
-                    message = context.getString(R.string.snackbar_export_failed)
+                    message = ExportMessage.Plain(R.string.snackbar_export_failed)
                 )
             }
         }
@@ -324,21 +343,21 @@ class SettingsViewModel @Inject constructor(
                     is ParseResult.MissingRequiredColumns -> {
                         _exportImportState.value = _exportImportState.value.copy(
                             isImporting = false,
-                            message = context.getString(R.string.error_not_imdb_csv)
+                            message = ExportMessage.Plain(R.string.error_not_imdb_csv)
                         )
                         return@launch
                     }
                     is ParseResult.Empty -> {
                         _exportImportState.value = _exportImportState.value.copy(
                             isImporting = false,
-                            message = context.getString(R.string.error_empty_csv)
+                            message = ExportMessage.Plain(R.string.error_empty_csv)
                         )
                         return@launch
                     }
                     is ParseResult.Error -> {
                         _exportImportState.value = _exportImportState.value.copy(
                             isImporting = false,
-                            message = context.getString(R.string.error_parse_failed, result.message)
+                            message = ExportMessage.Formatted(R.string.error_parse_failed, listOf(result.message))
                         )
                         return@launch
                     }
@@ -346,7 +365,7 @@ class SettingsViewModel @Inject constructor(
                 if (items.isEmpty()) {
                     _exportImportState.value = _exportImportState.value.copy(
                         isImporting = false,
-                        message = context.getString(R.string.snackbar_import_no_data)
+                        message = ExportMessage.Plain(R.string.snackbar_import_no_data)
                     )
                     return@launch
                 }
@@ -357,7 +376,10 @@ class SettingsViewModel @Inject constructor(
 
                 items.forEachIndexed { index, item ->
                     _exportImportState.value = _exportImportState.value.copy(
-                        syncProgress = context.getString(R.string.snackbar_sync_progress, index + 1, total, item.title)
+                        syncProgress = ExportMessage.Formatted(
+                            R.string.snackbar_sync_progress,
+                            listOf(index + 1, total, item.title)
+                        )
                     )
                     try {
                         val mediaType = when (item.mediaType) {
@@ -408,14 +430,14 @@ class SettingsViewModel @Inject constructor(
                     syncProgress = null,
                     syncSuccess = success,
                     syncFailed = failed,
-                    message = context.getString(R.string.snackbar_import_done_imdb, success, failed)
+                    message = ExportMessage.Formatted(R.string.snackbar_import_done_imdb, listOf(success, failed))
                 )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     isImporting = false,
-                    message = context.getString(R.string.error_parse_failed, e.message ?: "")
+                    message = ExportMessage.Formatted(R.string.error_parse_failed, listOf(e.message ?: ""))
                 )
             }
         }
@@ -437,13 +459,13 @@ class SettingsViewModel @Inject constructor(
                 statisticsSnapshotStore.clear()
                 refreshCacheInfo()
                 _exportImportState.value = _exportImportState.value.copy(
-                    message = context.getString(R.string.snackbar_cache_cleared)
+                    message = ExportMessage.Plain(R.string.snackbar_cache_cleared)
                 )
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
-                    message = context.getString(R.string.snackbar_cache_clear_failed)
+                    message = ExportMessage.Plain(R.string.snackbar_cache_clear_failed)
                 )
             }
         }
@@ -487,7 +509,7 @@ class SettingsViewModel @Inject constructor(
         imageTrafficStorage.clear()
         // 成功反馈走与清缓存同一条 Snackbar 通道，之前重置后界面只有数字变化
         _exportImportState.value = _exportImportState.value.copy(
-            message = context.getString(R.string.snackbar_image_traffic_reset)
+            message = ExportMessage.Plain(R.string.snackbar_image_traffic_reset)
         )
     }
 
@@ -509,13 +531,13 @@ class SettingsViewModel @Inject constructor(
                 }
                 refreshCacheInfo()
                 _exportImportState.value = _exportImportState.value.copy(
-                    message = context.getString(R.string.snackbar_cache_cleared)
+                    message = ExportMessage.Plain(R.string.snackbar_cache_cleared)
                 )
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
-                    message = context.getString(R.string.snackbar_cache_clear_failed)
+                    message = ExportMessage.Plain(R.string.snackbar_cache_clear_failed)
                 )
             }
         }
@@ -794,19 +816,19 @@ class SettingsViewModel @Inject constructor(
                     _latestVersion.value = info.latestVersion
                     _changelog.value = info.changelog
                     _exportImportState.value = _exportImportState.value.copy(
-                        message = context.getString(R.string.snackbar_already_latest)
+                        message = ExportMessage.Plain(R.string.snackbar_already_latest)
                     )
                 } else {
                     _latestVersion.value = BuildConfig.VERSION_NAME
                     _exportImportState.value = _exportImportState.value.copy(
-                        message = context.getString(R.string.snackbar_check_update_failed)
+                        message = ExportMessage.Plain(R.string.snackbar_check_update_failed)
                     )
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
-                    message = context.getString(R.string.snackbar_check_update_failed)
+                    message = ExportMessage.Plain(R.string.snackbar_check_update_failed)
                 )
             } finally {
                 _isCheckingUpdate.value = false

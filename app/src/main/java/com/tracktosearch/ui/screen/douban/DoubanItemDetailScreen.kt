@@ -168,7 +168,6 @@ import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.showToast
 import com.tracktosearch.ui.util.toUserMessage
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeSourceSelection
@@ -208,7 +207,8 @@ data class DoubanItemDetailUiState(
     val failure: DoubanSyncFailure? = null,
     /** true 表示仅为兼容旧技术失败记录，false 表示同步表/豆瓣快照中的正常条目。 */
     val isLegacyFailure: Boolean = false,
-    val error: String? = null,
+    /** 加载失败原始异常(VM 不做本地化,UI 组合期用 toUserMessage 转文案) */
+    val error: Throwable? = null,
     /** 三表(同步表/详情快照/旧失败表)都查不到:不自动 onBack,由 UI 显示「条目未同步」错误卡片 */
     val entryNotFound: Boolean = false,
     // 资源搜索
@@ -216,7 +216,8 @@ data class DoubanItemDetailUiState(
     val lowRelevanceHiddenCount: Int = 0,
     val showHighRelevanceOnly: Boolean = false,
     val isSearching: Boolean = false,
-    val searchError: String? = null,
+    /** 资源搜索失败原始异常(VM 不做本地化,UI 组合期用 toUserMessage 转文案) */
+    val searchError: Throwable? = null,
     val searchWithSubtitle: Boolean = true,
     val searchAttempted: Boolean = false,
     // 筛选器
@@ -258,7 +259,6 @@ data class DoubanDetailMarkChanges(
  */
 @HiltViewModel
 class DoubanItemDetailViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val doubanRetryManager: DoubanRetryManager,
     private val doubanSyncManager: DoubanSyncManager,
     private val resourceRepository: ResourceRepository,
@@ -345,7 +345,7 @@ class DoubanItemDetailViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = e.toUserMessage(context, R.string.error_load_failed)
+                    error = e
                 )
             }
         }
@@ -639,7 +639,7 @@ class DoubanItemDetailViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isSearching = false,
                     searchAttempted = true,
-                    searchError = e.toUserMessage(context, R.string.error_search_failed)
+                    searchError = e
                 )
             }
         }
@@ -1475,8 +1475,8 @@ fun DoubanItemDetailScreen(
                     }
                 }
             } else if (uiState.error != null) {
-                // 加载错误
-                val errorMessage = uiState.error ?: ""
+                // 加载错误(VM 存原始异常,组合期转本地化文案)
+                val errorMessage = uiState.error?.toUserMessage(context, R.string.error_load_failed).orEmpty()
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center

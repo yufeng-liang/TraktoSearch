@@ -87,6 +87,7 @@ import com.tracktosearch.ui.theme.PixelFontFamily
 import com.tracktosearch.ui.theme.monetDoubanGreen
 import com.tracktosearch.ui.theme.pixelFontSize
 import com.tracktosearch.ui.theme.onMonetDoubanGreen
+import com.tracktosearch.ui.util.toUserMessage
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -296,8 +297,9 @@ fun ActivationLoginScreen(
 
                 val canUseActions = isActivated
                 if (loginState == LoginState.ERROR) {
+                    // LoginViewModel 存原始异常,组合期转本地化文案
                     Text(
-                        text = errorMessage?.ifEmpty { stringResource(R.string.login_failed) }
+                        text = errorMessage?.toUserMessage(context, R.string.login_failed)
                             ?: stringResource(R.string.login_denied),
                         modifier = Modifier.padding(top = 8.dp),
                         color = MaterialTheme.colorScheme.error,

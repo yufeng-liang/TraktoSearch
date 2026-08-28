@@ -1,6 +1,5 @@
 package com.tracktosearch.ui.screen.login
 
-import android.content.Context
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.layout.Arrangement
@@ -54,7 +53,6 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.trakt.TraktAuthManager
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.ui.util.toUserMessage
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -125,15 +123,15 @@ internal fun TraktAuthCancelGuard(
 @HiltViewModel
 class LoginViewModel @Inject constructor(
     val authManager: TraktAuthManager,
-    private val traktRepository: TraktRepository,
-    @ApplicationContext private val context: Context
+    private val traktRepository: TraktRepository
 ) : ViewModel() {
 
     private val _loginState = MutableStateFlow(LoginState.IDLE)
     val loginState: StateFlow<LoginState> = _loginState.asStateFlow()
 
-    private val _errorMessage = MutableStateFlow<String?>(null)
-    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+    private val _errorMessage = MutableStateFlow<Throwable?>(null)
+    /** 登录失败原始异常(VM 不做本地化,UI 组合期用 toUserMessage 转文案;null 表示未产生异常) */
+    val errorMessage: StateFlow<Throwable?> = _errorMessage.asStateFlow()
 
     /**
      * 检查 Trakt 是否已登录且 token 有效。
@@ -151,7 +149,7 @@ class LoginViewModel @Inject constructor(
         val result = authManager.buildAuthorizationUrl()
         return result.getOrElse {
             _loginState.value = LoginState.ERROR
-            _errorMessage.value = it.toUserMessage(context, R.string.login_failed)
+            _errorMessage.value = it
             null
         }
     }
@@ -166,7 +164,7 @@ class LoginViewModel @Inject constructor(
                 _loginState.value = LoginState.SUCCESS
             } else {
                 _loginState.value = LoginState.ERROR
-                _errorMessage.value = result.exceptionOrNull()?.toUserMessage(context, R.string.login_failed) ?: ""
+                _errorMessage.value = result.exceptionOrNull()
             }
         }
     }
@@ -384,10 +382,10 @@ fun LoginScreen(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        val loginFailedText = stringResource(R.string.login_failed)
+                        // VM 存原始异常,组合期转本地化文案
                         val loginDeniedText = stringResource(R.string.login_denied)
                         Text(
-                            text = errorMessage?.ifEmpty { loginFailedText } ?: loginDeniedText,
+                            text = errorMessage?.toUserMessage(context, R.string.login_failed) ?: loginDeniedText,
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.error
                         )

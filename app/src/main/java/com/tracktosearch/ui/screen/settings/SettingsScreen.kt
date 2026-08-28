@@ -387,13 +387,16 @@ fun SettingsScreen(
         .map { it.isRunning }
         .distinctUntilChanged()
         .collectAsStateWithLifecycle(initialValue = false)
-    // 导出/导入/清缓存等操作的 Snackbar 反馈：仅观察 message 字段，避免随进度 tick 整页重组
+    // 导出/导入/清缓存等操作的 Snackbar 反馈：仅观察 message 字段，避免随进度 tick 整页重组；
+    // message 为机器码(资源 ID+参数)，组合期转本地化文案
     val exportImportMessage by viewModel.exportImportState
         .map { it.message }
         .distinctUntilChanged()
-        .collectAsStateWithLifecycle(initialValue = null as String?)
+        .collectAsStateWithLifecycle(initialValue = null as ExportMessage?)
+    val exportMessageText = exportImportMessage
+        ?.let { stringResource(it.resId, *it.args.toTypedArray()) }
     LaunchedEffect(exportImportMessage) {
-        exportImportMessage?.let {
+        exportMessageText?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearMessage()
         }
@@ -1711,7 +1714,8 @@ private fun DataManagementGroupItem(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = progress,
+                            // syncProgress 为机器码,组合期转本地化文案
+                            text = stringResource(progress.resId, *progress.args.toTypedArray()),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
