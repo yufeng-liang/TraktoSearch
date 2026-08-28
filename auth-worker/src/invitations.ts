@@ -2,6 +2,7 @@
 
 import { AppError, errorResponse, now, successResponse } from './util/errors.ts';
 import { generateId, generateInviteCode, generateSecureToken, sha256 } from './util/crypto.ts';
+import { clientIp } from './util/client-ip.ts';
 
 export const PUBLIC_INVITE_LIMIT = 200;
 export const VERIFICATION_TTL_SECONDS = 30 * 60;
@@ -601,7 +602,9 @@ export async function enforcePublicRateLimit(env: PublicInviteEnv, request: Requ
         return;
     }
     if (!env.KV) return;
-    const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Real-IP') || 'unknown';
+    // 经 gateway 转发时 CF-Connecting-IP 已被覆盖为边缘出口 IP，须优先取 X-Real-IP；
+    // 直接公网访问时反过来只信 CF-Connecting-IP，避免伪造。统一由 clientIp 处理。
+    const ip = clientIp(request) || 'unknown';
     const key = `public-invite:ip:${await sha256(ip)}`;
     const current = Number.parseInt(await env.KV.get(key) || '0', 10);
     if (current >= PUBLIC_REQUEST_RATE_LIMIT) {

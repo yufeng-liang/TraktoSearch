@@ -3,6 +3,7 @@
 import { AppError, now, successResponse } from './util/errors.ts';
 import { generateId, sha256 } from './util/crypto.ts';
 import { sendEmail, type PublicInviteEnv } from './invitations.ts';
+import { clientIp } from './util/client-ip.ts';
 
 export const LEGAL_REQUEST_TYPES = [
     'PRIVACY_ACCESS',
@@ -120,7 +121,8 @@ async function enforceLegalRateLimit(
 ): Promise<void> {
     if (!env.KV) return;
 
-    const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Real-IP') || 'unknown';
+    // 同 invitations.ts：经 gateway 转发优先 X-Real-IP，公网直连只信 CF-Connecting-IP。
+    const ip = clientIp(request) || 'unknown';
     await consumeRateLimit(env.KV, `public-legal:ip:${await sha256(ip)}`, PUBLIC_LEGAL_IP_LIMIT, 3600);
     await consumeRateLimit(env.KV, `public-legal:email:${await sha256(email)}`, PUBLIC_LEGAL_EMAIL_LIMIT, 86400);
 }

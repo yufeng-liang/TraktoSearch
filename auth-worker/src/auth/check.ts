@@ -1,8 +1,9 @@
 // POST /api/auth/check — 每日在线校验
 
-import { AppError, successResponse, now } from '../util/errors';
-import { firstRow } from '../util/db';
-import { hmacDeviceContinuityId } from '../util/crypto';
+import { AppError, successResponse, now } from '../util/errors.ts';
+import { firstRow } from '../util/db.ts';
+import { hmacDeviceContinuityId } from '../util/crypto.ts';
+import { clientIp, clientGeo } from '../util/client-ip.ts';
 
 interface CheckRequest {
     androidId?: string;
@@ -67,48 +68,25 @@ export async function handleCheck(
         `).bind(recoveryIdHmac, currentTime, payload.device));
     }
     // === IP 上报 ===
-    // 请求经 gateway-pages service binding 转发时，CF-Connecting-IP 与 request.cf
-    // 都会被 Cloudflare 覆盖为边缘节点出口 IP（非用户真实 IP）。
-    // gateway 在转发前把原始 CF-Connecting-IP 写入 X-Real-IP，
-    // 并把原始 request.cf 地理信息序列化到 X-Client-Geo，故优先读之。
-    const clientIp = request.headers.get('X-Real-IP') || request.headers.get('CF-Connecting-IP') || '';
-    const clientGeoHeader = request.headers.get('X-Client-Geo');
-    const cf = clientGeoHeader
-        ? (() => {
-            try {
-                const parsed = JSON.parse(clientGeoHeader);
-                return {
-                    country: parsed.country || undefined,
-                    region: parsed.region || undefined,
-                    city: parsed.city || undefined,
-                    latitude: parsed.latitude || undefined,
-                    longitude: parsed.longitude || undefined,
-                    asOrganization: parsed.asOrganization || undefined
-                };
-            } catch {
-                return (request as any).cf as {
-                    country?: string; region?: string; city?: string;
-                    latitude?: string; longitude?: string; asOrganization?: string;
-                } | null;
-            }
-        })()
-        : (request as any).cf as {
-            country?: string; region?: string; city?: string;
-            latitude?: string; longitude?: string; asOrganization?: string;
-        } | null;
-    if (clientIp) {
+    // IP 与地理信息统一走 util/client-ip：只有 gateway-pages service binding 转发
+    // （hostname === gateway.internal）才采信 X-Real-IP / X-Client-Geo；公开入口
+    // 一律回退 Cloudflare 注入的 CF-Connecting-IP / request.cf，避免持有有效 JWT
+    // 的用户直连公开域名时自带伪造头污染 friend_ip_logs 与 friends.last_ip。
+    const ip = clientIp(request);
+    const cf = clientGeo(request);
+    if (ip) {
         const geoParts = cf ? [cf.country, cf.region, cf.city].filter(Boolean) : [];
         const ipGeo = geoParts.join(' ') || null;
         statements.push(
             env.DB.prepare(`
                 INSERT INTO friend_ip_logs (friend_id, ip, country, region, city, latitude, longitude, isp, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).bind(payload.sub, clientIp, cf?.country || null, cf?.region || null,
+            `)            .bind(payload.sub, ip, cf?.country || null, cf?.region || null,
                     cf?.city || null, cf?.latitude || null, cf?.longitude || null,
                     cf?.asOrganization || null, currentTime),
             env.DB.prepare(`
                 UPDATE friends SET last_ip = ?, last_ip_geo = ?, ip_updated_at = ? WHERE id = ?
-            `).bind(clientIp, ipGeo, currentTime, payload.sub)
+            `).bind(ip, ipGeo, currentTime, payload.sub)
         );
     }
     await env.DB.batch(statements);

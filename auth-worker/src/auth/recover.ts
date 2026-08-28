@@ -4,6 +4,7 @@ import { AppError, successResponse, now } from '../util/errors.ts';
 import { generateId, generateSecureToken, hmacDeviceContinuityId, sha256 } from '../util/crypto.ts';
 import { signAccessToken } from '../util/jwt.ts';
 import { firstRow } from '../util/db.ts';
+import { clientIp } from '../util/client-ip.ts';
 import { verifyClientSignature } from './refresh.ts';
 import { buildRecoveryChallengeSubject, consumeAuthChallenge, createAuthChallenge } from './challenge.ts';
 
@@ -167,7 +168,9 @@ function validateCommonRequest(body: { androidId?: string; publicKey?: string; p
 }
 
 async function enforceRateLimit(env: RecoveryEnv, request: Request, operation: string): Promise<void> {
-    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    // 经 gateway 转发时 CF-Connecting-IP 已被覆盖为边缘出口 IP，须优先取 X-Real-IP；
+    // 公网直连只信 CF-Connecting-IP。统一由 clientIp 处理。
+    const ip = clientIp(request) || 'unknown';
     const ipHash = await sha256(`${operation}:${ip}`);
     const key = `recover-rate:${ipHash}`;
     const current = Number(await env.KV.get(key) || '0');

@@ -1,6 +1,7 @@
 // /api/ai/* 协议处理：鉴权由 index.ts 统一完成，这里只处理 DTO、配额和 AI 业务。
 
 import { AppError, successResponse } from '../util/errors.ts';
+import { clientIp } from '../util/client-ip.ts';
 import {
     characterCatalog,
     characterVoiceStatus,
@@ -856,12 +857,10 @@ function fallbackTaste(nickname: string, _movies: WatchMovie[]) {
 }
 
 function ttsClientIp(request: Request): string {
-    // 只有 gateway-pages 的 service binding 请求可以信任转发头；公开 workers.dev
-    // 请求必须使用 Cloudflare 注入的地址，避免客户端伪造 X-Real-IP 绕过限流。
-    const forwardedIp = new URL(request.url).hostname === 'gateway.internal'
-        ? request.headers.get('X-Real-IP')
-        : null;
-    return forwardedIp || request.headers.get('CF-Connecting-IP') || 'unknown';
+    // 统一走 util/client-ip：只有 gateway-pages 的 service binding 请求可以信任
+    // 转发头；公开 workers.dev 请求必须使用 Cloudflare 注入的地址，避免客户端
+    // 伪造 X-Real-IP 绕过限流。
+    return clientIp(request) || 'unknown';
 }
 
 function normalizeTaste(value: unknown, nickname: string, movies: WatchMovie[]) {
