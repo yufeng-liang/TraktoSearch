@@ -190,6 +190,11 @@ import javax.inject.Inject
 
 // ==================== ViewModel ====================
 
+// 豆瓣短评的 CJK 引号包裹格式(「短评」)。
+// 妥协方案：现有 string 资源没有带引号占位符的评论 key 且本次不允许新增资源，
+// 引号符号随语言变化的理想方案需新增 string 资源(如 douban_comment_quoted「%1$s」)。
+private const val COMMENT_QUOTES = "\u300c%1\$s\u300d"
+
 /**
  * 豆瓣详情加载阶段（详情Tab内联状态用）。
  * - IDLE: 初始/未开始
@@ -2135,7 +2140,7 @@ private fun DoubanItemHeader(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "「${failure.comment}」",
+                    text = COMMENT_QUOTES.format(failure.comment),
                     style = MaterialTheme.typography.bodySmall,
                     fontStyle = FontStyle.Italic,
                     color = MaterialTheme.colorScheme.onSurface,

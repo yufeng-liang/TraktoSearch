@@ -1,3 +1,5 @@
+// 豁免说明：本页是 DEBUG-only 的豆瓣爬虫调试页（AppNavigation 以 BuildConfig.DEBUG 门控入口），
+// 仅开发者可见，页面文案（含直接展示异常堆栈/原始英文错误）不要求走 stringResource 国际化。
 package com.tracktosearch.ui.screen.douban
 
 import android.annotation.SuppressLint

@@ -227,7 +227,6 @@ enum class SearchSourceType { DISK, MOVIE, SHOW, PERSON }
 fun SearchScreen(
     initialKeyword: String = "",
     onBack: (() -> Unit)? = null,
-    onSearchClick: ((String) -> Unit)? = null,
     onTraktSearch: ((SearchSourceType, String) -> Unit)? = null,
     onSpiderTest: (() -> Unit)? = null,
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
