@@ -36,14 +36,36 @@ fun MacrobenchmarkScope.launchAndWaitForContent() {
 }
 
 /**
+ * 确认被测应用仍在前台，不在则重新拉起。
+ *
+ * 存在的理由：坐标点击和 pressBack 都可能把应用退到后台（点空白处后 pressBack 直接回桌面）。
+ * 一旦回到桌面，后续 `By.desc("设置")` 这类选择器会匹配到桌面上的系统设置图标 ——
+ * 曾经因此在基准运行中途真的打开了手机系统设置，那一段采到的帧数据全是无效的。
+ *
+ * 重新拉起会影响该次 iteration 的帧数据，但比继续在别的应用上操作要好得多。
+ *
+ * @return 应用原本就在前台时返回 true；需要重新拉起时返回 false，便于调用方判断该次采样是否可信。
+ */
+fun MacrobenchmarkScope.ensureAppForeground(): Boolean {
+    if (device.currentPackageName == TARGET_PACKAGE) return true
+    launchAndWaitForContent()
+    return false
+}
+
+/**
  * 切到指定底部导航 tab。
+ *
+ * 选择器必须带 `.pkg(TARGET_PACKAGE)` 限定：uiautomator 的 `By.desc()` 是在整个屏幕的
+ * 无障碍节点树上搜索，不限应用。少了这个限定，应用一旦不在前台，`By.desc("设置")`
+ * 就会匹配到桌面上的系统设置图标并点开它。
  *
  * @return 是否成功点到。找不到时返回 false 而不抛异常 —— 「我的」页依赖 Trakt 授权数据，
  * 未登录设备上该 tab 仍存在但内容为空，这里不该因此让整个基准失败。
  */
 fun MacrobenchmarkScope.openTab(tab: MainTab): Boolean {
-    val target = device.wait(Until.findObject(By.desc(tab.zh)), UI_TIMEOUT_MS)
-        ?: device.wait(Until.findObject(By.desc(tab.en)), 2_000L)
+    ensureAppForeground()
+    val target = device.wait(Until.findObject(By.desc(tab.zh).pkg(TARGET_PACKAGE)), UI_TIMEOUT_MS)
+        ?: device.wait(Until.findObject(By.desc(tab.en).pkg(TARGET_PACKAGE)), 2_000L)
         ?: return false
     target.click()
     device.waitForIdle()
@@ -60,6 +82,7 @@ fun MacrobenchmarkScope.openTab(tab: MainTab): Boolean {
  * 12 步约 120ms，能触发列表的惯性滚动而不至于快到跳过中间帧。
  */
 fun MacrobenchmarkScope.scrollDownOnce(steps: Int = 12) {
+    if (!ensureAppForeground()) return
     val width = device.displayWidth
     val height = device.displayHeight
     device.swipe(
@@ -74,6 +97,7 @@ fun MacrobenchmarkScope.scrollDownOnce(steps: Int = 12) {
 
 /** 反向滚动，用于回到列表顶部或覆盖向上滚的代码路径。 */
 fun MacrobenchmarkScope.scrollUpOnce(steps: Int = 12) {
+    if (!ensureAppForeground()) return
     val width = device.displayWidth
     val height = device.displayHeight
     device.swipe(
@@ -90,16 +114,25 @@ fun MacrobenchmarkScope.scrollUpOnce(steps: Int = 12) {
  * 打开当前页第一张海报卡片的详情页，再返回。
  *
  * 覆盖「详情进入 + 返回」这条路径 —— 现有性能报告里返回首帧尖峰 300~680ms 的那条。
- * 卡片没有稳定的 testTag，按坐标点首行中部；点不到详情页时 pressBack 不会有副作用。
+ * 卡片没有稳定的 testTag，按坐标点首行中部。
+ *
+ * pressBack 前后都要确认还在应用内：点在空白处时详情页不会打开，此时 pressBack
+ * 会直接把应用退到桌面，后续测试就会在桌面上误点图标。
  */
 fun MacrobenchmarkScope.openFirstDetailAndBack() {
+    if (!ensureAppForeground()) return
     val width = device.displayWidth
     val height = device.displayHeight
     device.click(width / 4, (height * 0.4f).toInt())
     device.waitForIdle()
     device.wait(Until.hasObject(By.pkg(TARGET_PACKAGE).depth(0)), UI_TIMEOUT_MS)
+    if (device.currentPackageName != TARGET_PACKAGE) {
+        ensureAppForeground()
+        return
+    }
     device.pressBack()
     device.waitForIdle()
+    ensureAppForeground()
 }
 
 /**
@@ -107,9 +140,11 @@ fun MacrobenchmarkScope.openFirstDetailAndBack() {
  *
  * 在 LazyRow（发现页的横向片区）这类场景下坐标 swipe 会误触发竖向滚动，
  * 这里用 uiautomator 的可滚动节点查找兜底；找不到就回落到坐标 swipe。
+ * 同样要限定包名，否则应用不在前台时会去滚别的应用的列表。
  */
 fun MacrobenchmarkScope.flingScrollableForward(direction: Direction = Direction.DOWN) {
-    val scrollable = device.findObject(By.scrollable(true))
+    if (!ensureAppForeground()) return
+    val scrollable = device.findObject(By.scrollable(true).pkg(TARGET_PACKAGE))
     if (scrollable != null) {
         scrollable.setGestureMargin(device.displayWidth / 5)
         scrollable.fling(direction)
