@@ -14,6 +14,7 @@ import android.speech.tts.UtteranceProgressListener
 import android.util.Base64
 import androidx.core.content.ContextCompat
 import com.tracktosearch.data.ai.AiAudio
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
@@ -37,13 +38,17 @@ object AiAudioRecorder {
             val minimumBuffer = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
             if (minimumBuffer <= 0) return@withContext null
             val bufferSize = (minimumBuffer * 2).coerceAtLeast(2_048)
-            val recorder = AudioRecord(
-                MediaRecorder.AudioSource.MIC,
-                SAMPLE_RATE,
-                CHANNEL_CONFIG,
-                AUDIO_FORMAT,
-                bufferSize
-            )
+            // 部分设备的 AudioRecord 构造在参数不被支持或麦克风资源异常时抛 IllegalArgumentException，
+            // 未捕获会直达默认异常处理器导致崩溃，这里降级为“无音频”（调用方有 AUDIO_UNAVAILABLE 兜底）。
+            val recorder = runCatching {
+                AudioRecord(
+                    MediaRecorder.AudioSource.MIC,
+                    SAMPLE_RATE,
+                    CHANNEL_CONFIG,
+                    AUDIO_FORMAT,
+                    bufferSize
+                )
+            }.getOrNull() ?: return@withContext null
             if (recorder.state != AudioRecord.STATE_INITIALIZED) {
                 recorder.release()
                 return@withContext null
@@ -52,6 +57,8 @@ object AiAudioRecorder {
             val pcm = ByteArrayOutputStream()
             val buffer = ByteArray(bufferSize)
             try {
+                // startRecording 在麦克风被占用时抛 IllegalStateException；
+                // read 在录音器被外部释放后同样可能抛异常。
                 recorder.startRecording()
                 val deadline = System.nanoTime() + maxDurationMs.coerceAtMost(MAX_DURATION_MS) * 1_000_000
                 // 协程取消时提前结束录音，尽早释放麦克风（activate 被新请求取消时）
@@ -59,6 +66,11 @@ object AiAudioRecorder {
                     val count = recorder.read(buffer, 0, buffer.size)
                     if (count > 0) pcm.write(buffer, 0, count)
                 }
+            } catch (e: CancellationException) {
+                // CancellationException 继承 IllegalStateException，必须优先重抛，否则会吞掉协程取消
+                throw e
+            } catch (_: Exception) {
+                return@withContext null
             } finally {
                 runCatching { recorder.stop() }
                 recorder.release()
