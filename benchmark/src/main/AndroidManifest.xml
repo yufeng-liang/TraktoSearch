@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Macrobenchmark 模块的清单。测试进程与被测应用（:app）是两个独立进程，
+  这里不需要声明任何组件，权限也由 benchmark 库自带的清单合并进来。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />

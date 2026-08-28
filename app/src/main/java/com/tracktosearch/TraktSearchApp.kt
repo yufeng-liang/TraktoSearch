@@ -153,8 +153,13 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
         return ImageLoader.Builder(this)
             .okHttpClient(imageHttpClient)
             .memoryCache {
+                // 0.30：Coil 2 默认 0.25（低内存机 0.15），原先设的 0.20 比默认还低。
+                // 一张 264px 海报解码后约 418KB、342px 约 702KB，20% 堆只装得下几屏内容，
+                // 滚出视口再回来就要走磁盘 + 重新解码 JPEG。低内存机仍按默认 0.15 保护。
+                val lowRam = (getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)
+                    ?.isLowRamDevice ?: false
                 MemoryCache.Builder(this)
-                    .maxSizePercent(0.20)
+                    .maxSizePercent(if (lowRam) 0.15 else 0.30)
                     .build()
             }
             .diskCache {

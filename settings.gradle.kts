@@ -30,3 +30,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "TraktoSearch"
 include(":app")
+// Macrobenchmark 模块：release 构建上测启动/帧耗时，并生成 baseline + startup profile。
+// 只在显式跑 :benchmark 的任务时参与构建，不影响 :app 的日常 assembleDebug。
+include(":benchmark")

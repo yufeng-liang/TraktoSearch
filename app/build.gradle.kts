@@ -28,6 +28,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.androidx.baselineprofile)
     id("com.huawei.agconnect") apply false
 }
 
@@ -81,6 +82,29 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
+        // Macrobenchmark 与 baseline profile 采集专用。继承 release 的 R8/资源压缩配置，
+        // 测的才是用户实际安装的产物形态 —— 现有性能报告的全部数据来自 debug 构建，
+        // 解释器占 51% 采样，主线程侧的瓶颈排序不能直接采信。
+        //
+        // 签名换回 debug：release 签名由 verifyReleaseSigning 校验证书指纹，
+        // 基准构建不该依赖正式发布密钥。
+        // 该构建类型名不匹配 preReleaseBuild/assembleRelease/bundleRelease，不会触发那项校验。
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            isDebuggable = false
+        }
+    }
+
+    // baselineprofile 插件会自己再派生一个 nonMinifiedRelease 构建类型（initWith release，
+    // 关掉 R8 以便采到未混淆的方法签名），连 release 签名一起继承过去。
+    // 采集 profile 不该动用正式发布密钥，统一换回 debug 签名。
+    // configureEach 是惰性的，对插件之后才加进来的构建类型同样生效。
+    buildTypes.configureEach {
+        if (name.startsWith("nonMinified")) {
+            signingConfig = signingConfigs.getByName("debug")
+        }
     }
 
     compileOptions {
@@ -108,6 +132,44 @@ android {
         resources.excludes += "/META-INF/LICENSE.md"
         resources.excludes += "/META-INF/LICENSE-notice.md"
     }
+}
+
+// Compose 编译器指标/报告，用于定位 restartable 但不 skippable 的 composable 与不稳定参数。
+// 由 gradle.properties 的 kotlin.compose.compiler.metrics / kotlin.compose.compiler.reports
+// 门控，默认关闭（开启会拖慢 Kotlin 编译）。
+//
+// Kotlin 2.x 的 org.jetbrains.kotlin.plugin.compose 不读这两个 Gradle 属性 —— 那是旧
+// androidx compose compiler 时代的写法，必须走 composeCompiler DSL，这里显式转接一次。
+//
+// 用法：./gradlew :app:assembleDebug -Pkotlin.compose.compiler.reports=true \
+//           -Pkotlin.compose.compiler.metrics=true
+// 产物：app/build/compose-reports/
+//   *-composables.txt      每个 composable 的 restartable / skippable 判定
+//   *-composables.csv      同上，便于筛选
+//   *-classes.txt          参数类型的稳定性判定
+//   *-module.json          模块级汇总计数
+composeCompiler {
+    val reportsDir = layout.buildDirectory.dir("compose-reports")
+    if (providers.gradleProperty("kotlin.compose.compiler.metrics").orNull == "true") {
+        metricsDestination.set(reportsDir)
+    }
+    if (providers.gradleProperty("kotlin.compose.compiler.reports").orNull == "true") {
+        reportsDestination.set(reportsDir)
+    }
+}
+
+baselineProfile {
+    // 生成结果落到 app/src/release/generated/baselineProfiles/，与手工维护的
+    // src/main/baseline-prof.txt 并存 —— AGP 会把两份都作为 profile 源合并，profman 去重。
+    // 先跑起来比对覆盖率，确认新流程不比手工那份差，再决定是否替换。
+    // 生成命令：./gradlew :app:generateReleaseBaselineProfile
+    saveInSrc = true
+    // 不挂到普通构建上：生成需要连真机跑 instrumentation，
+    // 自动触发会让没插设备的 assembleRelease 直接失败。
+    automaticGenerationDuringBuild = false
+    // BaselineProfileGenerator.startup() 标了 includeInStartupProfile，产出 startup-prof.txt，
+    // 交给 AGP 做 dex 类布局优化 —— 本项目此前完全没有这一项。
+    dexLayoutOptimization = true
 }
 
 abstract class VerifyReleaseSigningTask : DefaultTask() {
@@ -257,6 +319,8 @@ dependencies {
 
     // Baseline Profile
     implementation(libs.profileinstaller)
+    // :benchmark 模块产出的 baseline / startup profile 的消费方声明
+    baselineProfile(project(":benchmark"))
 
     // Security
     implementation(libs.security.crypto)
