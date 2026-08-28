@@ -96,7 +96,9 @@ fun Modifier.hazeTopBar(
         scene = scene,
         glassEffectEnabled = isContentUnderTopBar != false,
         // 渲染降采样：Haze 官方基准显示可降低 5-20% 开销，肉眼几乎不可见
-        blurPerformanceMode = HazePerformanceMode.Adaptive
+        // 顶栏是大面积、持续随列表更新的消费者；Performance 档降低输入分辨率，
+        // 文本与边框仍以原分辨率绘制，仅模糊背景轻微降采样。
+        blurPerformanceMode = HazePerformanceMode.Performance
     )
 }
 

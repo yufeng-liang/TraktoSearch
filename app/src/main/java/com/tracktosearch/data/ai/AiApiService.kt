@@ -25,6 +25,9 @@ interface AiApiService {
     @POST("quiz/submit")
     suspend fun submitQuiz(@Body request: AiSubmitQuizRequest): Response<AiApiResponse<AiQuizResultDto>>
 
+    @POST("quiz/feedback")
+    suspend fun submitQuizFeedback(@Body request: AiQuizFeedbackRequest): Response<AiApiResponse<AiQuizFeedbackDto>>
+
     @POST("daily")
     suspend fun getDailyKnowledge(@Body request: AiDailyRequest): Response<AiApiResponse<AiDailyKnowledgeDto>>
 

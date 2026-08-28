@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.component
 
+import android.graphics.drawable.BitmapDrawable
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -47,7 +48,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import coil.compose.AsyncImage
-import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
@@ -124,6 +124,9 @@ fun MovieCard(
     // 仅保存延迟主色提取任务，不把 Bitmap 放入 Compose 状态。
     val colorExtractionScope = rememberCoroutineScope()
     val colorExtractionJob = remember { AtomicReference<Job?>(null) }
+    val shouldExtractColor = remember(posterUrl, posterColorExtractor) {
+        posterUrl != null && posterColorExtractor.peekCachedColor(posterUrl) == null
+    }
 
     // posterUrl 变化时重置提取状态
     LaunchedEffect(posterUrl) {
@@ -137,29 +140,34 @@ fun MovieCard(
     // 卡片海报源图已降级 w342(列表数据 posterUrl),解码 342 与源图 1:1,显示约 318px 清晰;
     // 详情页 header 改用 w780 独立高清图(见 DetailHeaderContent),不再与卡片共享解码图,
     // 转场期间由 header 的 w342 占位图兜底避免"闪空"
-    val imageRequest = remember(posterUrl) {
+    val imageRequest = remember(posterUrl, shouldExtractColor) {
         ImageRequest.Builder(context)
             .data(posterUrl)
             .size(342)
             .crossfade(false)
-            .listener(
-                onSuccess = { _, result ->
-                    // 仅标记海报已加载,不立即提取主色
-                    // 由 LaunchedEffect + delay 控制提取时机
-                    colorExtractionJob.getAndSet(null)?.cancel()
-                    val bitmap = result.drawable.toBitmap()
-                    colorExtractionJob.set(colorExtractionScope.launch {
-                        delay(500L)
-                        if (!colorExtracted && posterUrl != null) {
-                            withContext(Dispatchers.Default) {
-                                posterColorExtractor.extractDominantColor(posterUrl, bitmap)
+            .apply {
+                if (shouldExtractColor) {
+                    listener(
+                        onSuccess = { _, result ->
+                            colorExtractionJob.getAndSet(null)?.cancel()
+                            // Coil 已经解码出 BitmapDrawable 时直接复用位图，避免图片批量完成时
+                            // 在主线程额外复制 Bitmap；非 BitmapDrawable 才走兼容转换。
+                            val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
+                                ?: result.drawable.toBitmap()
+                            colorExtractionJob.set(colorExtractionScope.launch {
+                                delay(500L)
+                                if (!colorExtracted && posterUrl != null) {
+                                    withContext(Dispatchers.Default) {
+                                        posterColorExtractor.extractDominantColor(posterUrl, bitmap)
+                                    }
+                                    colorExtracted = true
+                                }
                             }
-                            colorExtracted = true
+                            )
                         }
-                    }
                     )
                 }
-            )
+            }
             .build()
     }
 
@@ -247,33 +255,11 @@ fun MovieCard(
             }
 
             Box {
-                SubcomposeAsyncImage(
+                AsyncImage(
                     model = imageRequest,
                     contentDescription = title,
                     modifier = imageModifier,
-                    contentScale = ContentScale.Crop,
-                    // 低分辨率 w92 缩略图占位:先显示轮廓再替换为 w342 清晰图,改善加载白屏感知;
-                    // 仅 TMDB URL 生效(swapSize 对豆瓣图原样返回,避免重复加载同一原图)
-                    loading = {
-                        val thumbUrl = posterUrl?.let {
-                            if (it.contains("/t/p/")) TmdbImageUrls.swapSize(it, "w92") else null
-                        }
-                        if (thumbUrl != null) {
-                            AsyncImage(
-                                model = remember(thumbUrl) {
-                                    ImageRequest.Builder(context)
-                                        .data(thumbUrl)
-                                        .size(92)
-                                        .crossfade(false)
-                                        .build()
-                                },
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                    },
-                    error = null
+                    contentScale = ContentScale.Crop
                 )
 
                 // 海报左上角状态角标

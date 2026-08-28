@@ -77,22 +77,27 @@ fun PosterCard(
     // 用 rememberUpdatedState 持有最新 onImageSuccess：lambda 引用变化不会导致重组或
     // 触发 ImageRequest 重建，也不会在组合期写 snapshot state（原 var + mutableStateOf 写法）。
     val onImageSuccessRef by rememberUpdatedState(onImageSuccess)
-    val model = remember(imageUrl, imageSize) {
+    val hasImageSuccessListener = onImageSuccess != null
+    val model = remember(imageUrl, imageSize, hasImageSuccessListener) {
         if (imageSize != null || onImageSuccess != null) {
             ImageRequest.Builder(context)
                 .data(imageUrl)
                 .apply { if (imageSize != null) size(imageSize) }
                 .crossfade(false)
-                .listener(
-                    onSuccess = { _, result ->
-                        val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
-                        if (bitmap != null) {
-                            onImageSuccessRef?.invoke(bitmap) // 零拷贝复用 Coil 解码位图
-                        } else {
-                            onImageSuccessRef?.invoke(result.drawable.toBitmap())
-                        }
+                .apply {
+                    if (hasImageSuccessListener) {
+                        listener(
+                            onSuccess = { _, result ->
+                                val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
+                                if (bitmap != null) {
+                                    onImageSuccessRef?.invoke(bitmap) // 零拷贝复用 Coil 解码位图
+                                } else {
+                                    onImageSuccessRef?.invoke(result.drawable.toBitmap())
+                                }
+                            }
+                        )
                     }
-                )
+                }
                 .build()
         } else {
             imageUrl

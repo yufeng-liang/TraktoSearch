@@ -21,6 +21,9 @@ import javax.inject.Singleton
 class PosterColorExtractor @Inject constructor(
     private val cache: PosterColorCache
 ) {
+    /** 仅查当前进程内存缓存，不挂起、不触发磁盘读取。 */
+    fun peekCachedColor(posterUrl: String): Long? = cache.peekColor(posterUrl)
+
     suspend fun extractDominantColor(posterUrl: String, bitmap: Bitmap): Long = withContext(Dispatchers.Default) {
         cache.getColor(posterUrl)?.let { return@withContext it }
 

@@ -270,8 +270,6 @@ dependencies {
     // 中文转拼音（看单搜索拼音匹配）
     implementation(libs.pinyin4j)
 
-    // See More 展开收起文本
-    implementation(libs.seymour.text)
 implementation(libs.skydoves.colorpicker)
 
     // 单元测试

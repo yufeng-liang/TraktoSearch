@@ -51,6 +51,12 @@ enum class AiFeature {
     DAILY
 }
 
+/** 出分页难度反馈提交状态：SUBMITTED 后不再重复发请求。 */
+enum class AiQuizFeedbackState {
+    NOT_SUBMITTED,
+    SUBMITTED
+}
+
 enum class AiActivationState {
     IDLE,
     RECORDING,
@@ -92,6 +98,9 @@ data class AiSpriteUiState(
     val quizResult: AiQuizResult? = null,
     // 答题结果成功提交次数，用于只触发一次对应场景图
     val quizResultRevision: Long = 0L,
+    // 出分页难度反馈：选中档位与提交状态（SUBMITTED 后 UI 收起/禁用，不再重复提交）
+    val quizFeedbackDifficulty: com.tracktosearch.data.ai.AiQuizDifficulty? = null,
+    val quizFeedbackState: AiQuizFeedbackState = AiQuizFeedbackState.NOT_SUBMITTED,
     val quizHistory: com.tracktosearch.data.ai.AiQuizHistory? = null,
     val dailyKnowledge: AiDailyKnowledge? = null,
     // 角色目录是否成功取回：失败时全部角色停在「准备中」，UI 要给出原因和重试入口
@@ -284,6 +293,8 @@ class AiSpriteViewModel @Inject constructor(
                 quizAnswers = emptyMap(),
                 quizResult = null,
                 quizResultRevision = 0L,
+                quizFeedbackDifficulty = null,
+                quizFeedbackState = AiQuizFeedbackState.NOT_SUBMITTED,
                 quizHistory = null,
                 dailyKnowledge = null,
                 errorCode = null
@@ -601,11 +612,54 @@ class AiSpriteViewModel @Inject constructor(
                 quizAnswers = emptyMap(),
                 quizReplacementCount = 0,
                 quizReplaceAvailable = false,
-                quizPreviewMovies = emptyList()
+                quizPreviewMovies = emptyList(),
+                quizFeedbackDifficulty = null,
+                quizFeedbackState = AiQuizFeedbackState.NOT_SUBMITTED
             )
         }
         quizCandidates = emptyList()
         prepareQuizPreview()
+    }
+
+    /**
+     * 出分页难度反馈：本地先锁 SUBMITTED 防重复，异步静默提交。
+     * 失败在 Repository 层就被吞掉，这里不处理结果、不设 isLoading，不打扰用户。
+     */
+    fun submitQuizDifficultyFeedback(difficulty: com.tracktosearch.data.ai.AiQuizDifficulty) {
+        val state = _uiState.value
+        if (state.quizFeedbackState == AiQuizFeedbackState.SUBMITTED) return
+        val quizId = state.quizResult?.quizId ?: state.quiz?.quizId ?: return
+        _uiState.update {
+            it.copy(
+                quizFeedbackState = AiQuizFeedbackState.SUBMITTED,
+                quizFeedbackDifficulty = difficulty
+            )
+        }
+        viewModelScope.launch {
+            aiRepository.submitQuizDifficulty(quizId, difficulty)
+        }
+    }
+
+    /**
+     * 预览页「全部重抽」：基于已缓存的候选池本地重新抽一批（尽量避开当前 7 部），
+     * 不重新拉 Trakt 已看列表。非破坏性操作（还没作答），无需二次确认。
+     */
+    fun redrawAllQuizPreview() {
+        val state = _uiState.value
+        if (state.quizStarted) return
+        if (quizCandidates.isEmpty()) {
+            prepareQuizPreview()
+            return
+        }
+        val preview = redrawQuizPreview(state.quizPreviewMovies, quizCandidates)
+        if (preview == state.quizPreviewMovies) return
+        _uiState.update {
+            it.copy(
+                quizPreviewMovies = preview,
+                quizReplacementCount = 0,
+                quizReplaceAvailable = canReplaceQuizPreview(preview, quizCandidates, 0)
+            )
+        }
     }
 
     fun startQuiz() {

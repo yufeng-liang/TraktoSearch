@@ -56,7 +56,6 @@ import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.SyncAlt
@@ -199,7 +198,7 @@ fun SettingsScreen(
      */
     isTraktConnected: Boolean = false,
     onHelpClick: () -> Unit = {},
-    onRestartOnboarding: () -> Unit = {},
+    onOpenSourceClick: () -> Unit = {},
     onDoubanResync: () -> Unit = {},
     onNavigateToDoubanLogin: () -> Unit = {},
     onNavigateToLogin: () -> Unit = {},
@@ -750,7 +749,7 @@ fun SettingsScreen(
                         showChangelogDialog = true
                     },
                     onHelpClick = onHelpClick,
-                    onRestartOnboarding = onRestartOnboarding,
+                    onOpenSourceClick = onOpenSourceClick,
                     onFeedbackClick = onFeedbackClick
                 )
             }
@@ -1736,7 +1735,7 @@ private fun AboutGroupItem(
     onVersionClick: () -> Unit,
     onChangelogClick: () -> Unit,
     onHelpClick: () -> Unit,
-    onRestartOnboarding: () -> Unit,
+    onOpenSourceClick: () -> Unit,
     onFeedbackClick: () -> Unit
 ) {
     val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
@@ -1755,7 +1754,7 @@ private fun AboutGroupItem(
             onVersionClick = onVersionClick,
             onChangelogClick = onChangelogClick,
             onHelpClick = onHelpClick,
-            onRestartOnboarding = onRestartOnboarding,
+            onOpenSourceClick = onOpenSourceClick,
             containerColor = Color.Transparent
         )
         GroupDivider()
@@ -2053,7 +2052,7 @@ private fun DataFlowGridItem(
 }
 
 /**
- * 关于区块（版本/更新日志/帮助/新手引导 2x2 卡片）。
+ * 关于区块（版本/更新日志/帮助/开源相关 2x2 卡片）。
  * 抽取为独立函数，更新状态变化只重组本函数。
  */
 @Composable
@@ -2064,7 +2063,7 @@ private fun AboutItem(
     onVersionClick: () -> Unit,
     onChangelogClick: () -> Unit,
     onHelpClick: () -> Unit,
-    onRestartOnboarding: () -> Unit,
+    onOpenSourceClick: () -> Unit,
     containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     val versionSubtitle = if (hasUpdate && latestVersion != null) {
@@ -2110,10 +2109,9 @@ private fun AboutItem(
         )
         SettingsCard(
             modifier = Modifier.weight(1f),
-            icon = Icons.Rounded.School,
-            title = stringResource(R.string.settings_restart_onboarding),
-            subtitle = stringResource(R.string.settings_restart_onboarding_subtitle),
-            onClick = onRestartOnboarding,
+            icon = Icons.Rounded.Code,
+            title = stringResource(R.string.opensource_title),
+            onClick = onOpenSourceClick,
             containerColor = containerColor
         )
     }

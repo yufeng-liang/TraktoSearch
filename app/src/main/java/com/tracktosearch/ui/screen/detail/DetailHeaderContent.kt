@@ -9,7 +9,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -119,6 +118,8 @@ internal fun DetailHeaderContent(
     posterColorExtractor: PosterColorExtractor,
     onPosterColorExtracted: (Color) -> Unit,
     sectionVisible: DetailSectionVisibility = DetailSectionVisibility(),
+    // false 时只组合共享海报、标题和操作按钮，避免转场首帧创建不可见的整页内容。
+    contentReady: Boolean = true,
     // 头部下方内容(cast/视频/简介/季集)的透明度,用于"沉浸背景先现,内容后显"淡入效果
     // 1f=完全显示,0f=隐藏;海报+标题+按钮始终不透明
     contentAlpha: Float = 1f,
@@ -148,15 +149,15 @@ internal fun DetailHeaderContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(IntrinsicSize.Max)
+                // 详情首屏的右侧信息块高度固定，避免 IntrinsicSize.Max 触发额外的
+                // intrinsic measure pass；海报仍通过 fillMaxHeight 与操作区保持对齐。
+                .height(152.dp)
                 .padding(bottom = 12.dp)
                 .onGloballyPositioned { onHeaderAnchorBoundsChanged(it.boundsInRoot()) },
             verticalAlignment = Alignment.Top
         ) {
             // 海报：fillMaxHeight 让海报高度跟随右侧信息列（含按钮组），
             // 实现海报底部与想看/已看/评分按钮底部对齐。
-            // IntrinsicSize.Max 会多一次测量 pass，但进入卡顿已由 contentReady
-            // 延迟组合优化抵消，视觉对齐优先。
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
@@ -427,6 +428,7 @@ internal fun DetailHeaderContent(
 
         // 第二行：演职员（海报下方独立一行，左对齐，始终预留空间避免布局跳动）
         // 头部下方内容(cast/视频/简介/系列/季集)统一淡入,营造"沉浸背景先现,内容后显"效果
+        if (contentReady) {
         Column(modifier = Modifier.alpha(contentAlpha)) {
         if (sectionVisible.cast) {
         val hasCredits = uiState.cast.isNotEmpty() || uiState.crew.isNotEmpty()
@@ -640,6 +642,7 @@ internal fun DetailHeaderContent(
             }
         }
         } // end Column(alpha = contentAlpha)
+        } // end if (contentReady)
     }
 }
 

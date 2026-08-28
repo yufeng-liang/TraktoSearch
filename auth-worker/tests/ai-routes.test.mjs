@@ -133,7 +133,7 @@ test('AI character catalog is public through the main router', async () => {
 
 test('AI protected routes still reject missing JWT', async () => {
     const worker = await loadMainWorker();
-    for (const path of ['/api/ai/activate', '/api/ai/greeting', '/api/ai/taste', '/api/ai/quiz', '/api/ai/daily', '/api/ai/quiz/submit']) {
+    for (const path of ['/api/ai/activate', '/api/ai/greeting', '/api/ai/taste', '/api/ai/quiz', '/api/ai/daily', '/api/ai/quiz/submit', '/api/ai/quiz/feedback']) {
         const method = path === '/api/ai/daily' ? 'GET' : 'POST';
         const response = await worker.default.fetch(
             new Request(`https://gateway.test${path}`, {
@@ -208,13 +208,14 @@ test('final character voice designs keep the approved child voices and delivery 
     };
 
     const cases = [
-        ['吉伊', '女童', '今天也一起找一部好看的电影吧。', /1\.2倍/],
-        ['小八', '男童', '我发现了一点有意思的片单线索哦。', /奶声|幼儿园/],
-        ['乌萨奇', '男童', '呀哈！你的片单有点东西。', /尖叫|音量比普通说话更大/],
-        ['飞鼠', '女童', '让我看看，今天有什么值得你发光的电影。', /只朗读一遍|严禁重复/],
-        ['狮萨', '女童', '欢迎回来，我帮你把片单整理得更清楚。', /明亮|片单/],
-        ['栗子馒头', '男童', '先坐下来，慢慢看看你的观影口味。', /发音清晰|逐字读/],
-        ['獭师', '男童', '准备好了吗？我们来认真拆一拆这份片单。', /幼儿园男孩|幼童男声/],
+        // [名称, 性别, 试听原文, 场景指导必含片段, TTS assistant 朗读文本（口头禅注入后）]
+        ['吉伊', '女童', '今天也一起找一部好看的电影吧。', /1\.2倍/, '今天也一起找一部好看的电影吧。 鸭蛋。'],
+        ['小八', '男童', '我发现了一点有意思的片单线索哦。', /奶声|幼儿园/, '噢易！ 我发现了一点有意思的片单线索哦。'],
+        ['乌萨奇', '男童', '呀哈！你的片单有点东西。', /尖叫|音量比普通说话更大/, '呀哈！你的片单有点东西。'],
+        ['飞鼠', '女童', '让我看看，今天有什么值得你发光的电影。', /只朗读一遍|严禁重复/, '让我看看，今天有什么值得你发光的电影。'],
+        ['狮萨', '女童', '欢迎回来，我帮你把片单整理得更清楚。', /明亮|片单/, '欢迎回来，我帮你把片单整理得更清楚。'],
+        ['栗子馒头', '男童', '先坐下来，慢慢看看你的观影口味。', /发音清晰|逐字读/, '先坐下来，慢慢看看你的观影口味。'],
+        ['獭师', '男童', '准备好了吗？我们来认真拆一拆这份片单。', /幼儿园男孩|幼童男声/, '准备好了吗？我们来认真拆一拆这份片单。'],
     ];
 
     try {
@@ -222,7 +223,7 @@ test('final character voice designs keep the approved child voices and delivery 
             MIMO_API_KEY: 'test-mimo-key',
             AI_TEST_VOICE_DESIGN_READY: true,
         });
-        for (const [name, gender, text, requiredDirection] of cases) {
+        for (const [name, gender, text, requiredDirection, expectedSpoken] of cases) {
             const result = await call('/api/ai/tts', {
                 method: 'POST',
                 body: { action: 'tts', characterId: {
@@ -243,12 +244,15 @@ test('final character voice designs keep the approved child voices and delivery 
             assert.match(requestBody.messages[0].content, /不能是成人声|不能是成人|明显稚嫩/, name);
             assert.match(requestBody.messages[0].content, requiredDirection, name);
             assert.equal(requestBody.messages[1].role, 'assistant');
-            assert.equal(requestBody.messages[1].content, text);
+            // 吉伊口头禅「鸭蛋。」句尾注入、小八「噢易！」句首注入；其余角色 AUDITION 不注入
+            assert.equal(requestBody.messages[1].content, expectedSpoken, name);
         }
 
         const usagiPrompt = requests.get('乌萨奇').messages[0].content;
         assert.match(usagiPrompt, /不得在开头或任何位置添加“到”/);
         assert.doesNotMatch(usagiPrompt, /开头的“到！”|“到”只发一个音节|只喊一次“到”/);
+        assert.match(requests.get('吉伊').messages[0].content, /口头禅「鸭蛋」整句只出现一次，严禁重复、拉长或变调/);
+        assert.match(requests.get('小八').messages[0].content, /口头禅「噢易」整句只出现一次，严禁重复、拉长或变调/);
     } finally {
         globalThis.fetch = originalFetch;
     }
@@ -1587,6 +1591,303 @@ test('quiz falls back when the successful Mimo response envelope is not an objec
     }
 });
 
+test('guest audition transcript strips the injected catchphrase', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (_input, init) => {
+        const requestBody = JSON.parse(init.body);
+        return new Response(JSON.stringify({
+            choices: [{ message: { audio: { data: 'AA==', transcript: requestBody.messages[1].content } } }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+
+    try {
+        const worker = await loadMainWorker();
+        const chiikawa = await worker.default.fetch(
+            new Request('https://gateway.test/api/ai/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'tts',
+                    characterId: 'chiikawa',
+                    text: '今天也一起找一部好看的电影吧。',
+                    scene: 'AUDITION',
+                }),
+            }),
+            createTestEnv({ MIMO_API_KEY: 'test-mimo-key', AI_TEST_VOICE_DESIGN_READY: true }),
+            { waitUntil() {} },
+        );
+        const chiikawaJson = await chiikawa.json();
+        assert.equal(chiikawa.status, 200);
+        assert.equal(chiikawaJson.data.transcript, '今天也一起找一部好看的电影吧。');
+
+        const hachiware = await worker.default.fetch(
+            new Request('https://gateway.test/api/ai/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'tts',
+                    characterId: 'hachiware',
+                    text: '我发现了一点有意思的片单线索哦。',
+                    scene: 'AUDITION',
+                }),
+            }),
+            createTestEnv({ MIMO_API_KEY: 'test-mimo-key', AI_TEST_VOICE_DESIGN_READY: true }),
+            { waitUntil() {} },
+        );
+        const hachiwareJson = await hachiware.json();
+        assert.equal(hachiware.status, 200);
+        assert.equal(hachiwareJson.data.transcript, '我发现了一点有意思的片单线索哦。');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('activation ack injects the chiikawa catchphrase and strips the transcript', async () => {
+    const originalFetch = globalThis.fetch;
+    let captured = null;
+    globalThis.fetch = async (_input, init) => {
+        const requestBody = JSON.parse(init.body);
+        if (requestBody.model === 'mimo-v2.5-tts-voicedesign') {
+            captured = requestBody;
+            return new Response(JSON.stringify({
+                choices: [{ message: { audio: { data: 'AA==', transcript: requestBody.messages[1].content } } }],
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        throw new Error('activation should not call other upstreams');
+    };
+
+    try {
+        const { response, json } = await call('/api/ai/activate', {
+            method: 'POST',
+            body: {
+                characterId: 'chiikawa',
+                sessionId: 'activation-catchphrase-session',
+                audioDataUrl: 'data:audio/wav;base64,AA==',
+            },
+            env: createTestEnv({
+                MIMO_API_KEY: 'test-mimo-key',
+                AI_TEST_VOICE_DESIGN_READY: true,
+                AI_TEST_TRANSCRIPT: '吉伊',
+            }),
+        });
+        assert.equal(response.status, 200);
+        assert.equal(json.data.activated, true);
+        assert.equal(captured.messages[1].content, '到、到！ 鸭蛋。');
+        assert.equal(json.data.audio.transcript, '到、到！');
+        assert.equal(json.data.activationPhrase, '到、到！');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('greeting spoken text follows the character catchphrase position', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({
+            greeting: '小明，今天也来挑一部好片吧。',
+            meaning: '名字像一盏小灯。',
+            comment: '很适合当片单侦探。',
+        }) } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+    try {
+        const chiikawa = await call('/api/ai/greeting', {
+            method: 'POST',
+            body: { characterId: 'chiikawa', sessionId: 'greeting-position-chiikawa-session' },
+            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+        });
+        assert.equal(chiikawa.response.status, 200);
+        assert.equal(chiikawa.json.data.spokenText, '小明，今天也来挑一部好片吧。 鸭蛋。');
+
+        const hachiware = await call('/api/ai/greeting', {
+            method: 'POST',
+            body: { characterId: 'hachiware', sessionId: 'greeting-position-hachiware-session' },
+            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+        });
+        assert.equal(hachiware.response.status, 200);
+        assert.equal(hachiware.json.data.spokenText, '噢易！ 小明，今天也来挑一部好片吧。');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('quiz difficulty feedback validates input and stays free of quota', async () => {
+    const kv = createMapKv();
+    const env = createTestEnv({ KV: kv });
+    const quizId = await createFallbackQuiz(env, 'feedback-validate-session');
+
+    const invalidDifficulty = await call('/api/ai/quiz/feedback', {
+        method: 'POST',
+        body: { action: 'quiz.feedback', quizId, difficulty: 'impossible' },
+        env,
+    });
+    assert.equal(invalidDifficulty.response.status, 400);
+    assert.equal(invalidDifficulty.json.code, 'INVALID_DIFFICULTY');
+
+    const invalidAction = await call('/api/ai/quiz/feedback', {
+        method: 'POST',
+        body: { action: 'quiz.submit', quizId, difficulty: 'easy' },
+        env,
+    });
+    assert.equal(invalidAction.response.status, 400);
+    assert.equal(invalidAction.json.code, 'INVALID_ACTION');
+
+    const unknown = await call('/api/ai/quiz/feedback', {
+        method: 'POST',
+        body: { action: 'quiz.feedback', quizId: 'missing-quiz', difficulty: 'easy' },
+        env,
+    });
+    assert.equal(unknown.response.status, 404);
+    assert.equal(unknown.json.code, 'QUIZ_NOT_FOUND');
+
+    const invalidQuizId = await call('/api/ai/quiz/feedback', {
+        method: 'POST',
+        body: { action: 'quiz.feedback', quizId: '非法 id', difficulty: 'easy' },
+        env,
+    });
+    assert.equal(invalidQuizId.response.status, 400);
+    assert.equal(invalidQuizId.json.code, 'INVALID_REQUEST');
+
+    const recorded = await call('/api/ai/quiz/feedback', {
+        method: 'POST',
+        body: { action: 'quiz.feedback', quizId, difficulty: 'just_right' },
+        env,
+    });
+    assert.equal(recorded.response.status, 200);
+    assert.equal(recorded.json.data.success, true);
+    assert.equal(recorded.json.data.requestId, 'request-1');
+    assert.equal(recorded.json.quota, undefined);
+    assert.equal(kv.puts.length, 1);
+    assert.equal(kv.puts[0].key, 'ai:v1:quiz-difficulty:friend-1');
+    assert.equal(kv.puts[0].options.expirationTtl, 90 * 24 * 60 * 60);
+    const record = JSON.parse(kv.store.get('ai:v1:quiz-difficulty:friend-1'));
+    assert.equal(record.entries.length, 1);
+    assert.equal(record.entries[0].quizId, quizId);
+    assert.equal(record.entries[0].difficulty, 'just_right');
+    assert.equal(typeof record.updatedAt, 'string');
+});
+
+test('quiz difficulty feedback keeps a five-entry sliding window and stays idempotent', async () => {
+    const kv = createMapKv();
+    const env = createTestEnv({ KV: kv });
+    const firstQuizId = await createFallbackQuiz(env, 'feedback-window-session-1');
+    const secondQuizId = await createFallbackQuiz(env, 'feedback-window-session-2');
+    const thirdQuizId = await createFallbackQuiz(env, 'feedback-window-session-3');
+
+    // 预置 5 条旧反馈：新反馈进入后滑窗裁剪到 5 条，最旧一条被挤掉
+    kv.store.set('ai:v1:quiz-difficulty:friend-1', JSON.stringify({
+        entries: ['seed-1', 'seed-2', 'seed-3', 'seed-4', 'seed-5'].map((seed, index) => ({
+            quizId: seed,
+            difficulty: index % 2 === 0 ? 'easy' : 'hard',
+            at: new Date(Date.now() - (5 - index) * 60_000).toISOString(),
+        })),
+        updatedAt: new Date().toISOString(),
+    }));
+
+    for (const [quizId, difficulty] of [[firstQuizId, 'easy'], [secondQuizId, 'just_right'], [thirdQuizId, 'hard']]) {
+        const recorded = await call('/api/ai/quiz/feedback', {
+            method: 'POST',
+            body: { action: 'quiz.feedback', quizId, difficulty },
+            env,
+        });
+        assert.equal(recorded.response.status, 200);
+    }
+    let record = JSON.parse(kv.store.get('ai:v1:quiz-difficulty:friend-1'));
+    assert.equal(record.entries.length, 5);
+    assert.deepEqual(
+        record.entries.map((entry) => entry.quizId),
+        [thirdQuizId, secondQuizId, firstQuizId, 'seed-1', 'seed-2'],
+    );
+    assert.deepEqual(
+        record.entries.map((entry) => entry.difficulty),
+        ['hard', 'just_right', 'easy', 'easy', 'hard'],
+    );
+
+    // 幂等：同一 quizId 再次反馈直接成功，不重复记录也不改写难度
+    const repeat = await call('/api/ai/quiz/feedback', {
+        method: 'POST',
+        body: { action: 'quiz.feedback', quizId: firstQuizId, difficulty: 'hard' },
+        env,
+    });
+    assert.equal(repeat.response.status, 200);
+    record = JSON.parse(kv.store.get('ai:v1:quiz-difficulty:friend-1'));
+    assert.equal(record.entries.length, 5);
+    assert.equal(record.entries[2].quizId, firstQuizId);
+    assert.equal(record.entries[2].difficulty, 'easy');
+});
+
+test('quiz prompt adapts to the recent difficulty feedback trend', async () => {
+    const originalFetch = globalThis.fetch;
+    let captured = null;
+    globalThis.fetch = async (_input, init) => {
+        captured = JSON.parse(init.body);
+        return new Response(JSON.stringify(validQuizUpstreamPayload()), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+        });
+    };
+    const difficultyRecord = (difficulties) => JSON.stringify({
+        entries: difficulties.map((difficulty, index) => ({
+            quizId: `trend-${index}`,
+            difficulty,
+            at: new Date().toISOString(),
+        })),
+        updatedAt: new Date().toISOString(),
+    });
+    const seededKv = (raw) => {
+        const kv = createMapKv();
+        if (raw !== null) kv.store.set('ai:v1:quiz-difficulty:friend-1', raw);
+        return kv;
+    };
+
+    try {
+        const hard = await call('/api/ai/quiz', {
+            method: 'POST',
+            body: { action: 'quiz', sessionId: 'quiz-trend-hard-session', watched: movies() },
+            env: createTestEnv({
+                MIMO_API_KEY: 'test-mimo-key',
+                KV: seededKv(difficultyRecord(['hard', 'hard', 'hard', 'easy', 'just_right'])),
+            }),
+        });
+        assert.equal(hard.response.status, 200);
+        assert.match(captured.messages[0].content, /用户反馈近期题目偏难/);
+        assert.doesNotMatch(captured.messages[0].content, /题目偏简单/);
+
+        const easy = await call('/api/ai/quiz', {
+            method: 'POST',
+            body: { action: 'quiz', sessionId: 'quiz-trend-easy-session', watched: movies() },
+            env: createTestEnv({
+                MIMO_API_KEY: 'test-mimo-key',
+                KV: seededKv(difficultyRecord(['easy', 'easy', 'easy', 'hard', 'hard'])),
+            }),
+        });
+        assert.equal(easy.response.status, 200);
+        assert.match(captured.messages[0].content, /用户反馈近期题目偏简单/);
+        assert.doesNotMatch(captured.messages[0].content, /题目偏难/);
+
+        const neutral = await call('/api/ai/quiz', {
+            method: 'POST',
+            body: { action: 'quiz', sessionId: 'quiz-trend-neutral-session', watched: movies() },
+            env: createTestEnv({
+                MIMO_API_KEY: 'test-mimo-key',
+                KV: seededKv(difficultyRecord(['hard', 'easy', 'just_right', 'easy', 'hard'])),
+            }),
+        });
+        assert.equal(neutral.response.status, 200);
+        assert.doesNotMatch(captured.messages[0].content, /用户反馈近期题目偏/);
+
+        const empty = await call('/api/ai/quiz', {
+            method: 'POST',
+            body: { action: 'quiz', sessionId: 'quiz-trend-empty-session', watched: movies() },
+            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+        });
+        assert.equal(empty.response.status, 200);
+        assert.doesNotMatch(captured.messages[0].content, /用户反馈近期题目偏/);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
 function validQuizUpstreamPayload() {
     const questions = Array.from({ length: 13 }, (_, index) => {
         if (index < 10) {
@@ -1634,6 +1935,31 @@ function validQuizUpstreamPayload() {
 async function digestForTest(value) {
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
     return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function createMapKv() {
+    const store = new Map();
+    const puts = [];
+    return {
+        store,
+        puts,
+        async get(key) { return store.has(key) ? store.get(key) : null; },
+        async put(key, value, options) {
+            puts.push({ key, value, options });
+            store.set(key, value);
+        },
+    };
+}
+
+/** 走离线兜底链路生成一个真实缓存的测验，返回其 quizId（供难度反馈端点校验）。 */
+async function createFallbackQuiz(env, sessionId) {
+    const { response, json } = await call('/api/ai/quiz', {
+        method: 'POST',
+        body: { action: 'quiz', sessionId, watched: movies() },
+        env,
+    });
+    assert.equal(response.status, 200);
+    return json.data.quizId;
 }
 
 function createAtomicTtsRateLimitDb() {

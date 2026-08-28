@@ -782,7 +782,7 @@ function updateActiveNav() {
 
 function parseHash() {
     const hash = window.location.hash.slice(1) || '/dashboard';
-    const [route, id] = hash.slice(1).split('/');
+    const [route, id] = hash.split('/').filter(Boolean);
     state.route = route || 'dashboard';
     state.params = id ? { id } : {};
 }
@@ -927,6 +927,11 @@ function render() {
             case 'dashboard': renderDashboard(main, renderToken); break;
             case 'friends': renderFriends(main, renderToken); break;
             case 'friend-detail': renderFriendDetail(main, renderToken); break;
+            case 'crash-logs': renderCrashLogs(main, renderToken); break;
+            case 'crash-log-detail':
+                if (state.params.id) showCrashLogDetail(state.params.id, main, renderToken);
+                else renderCrashLogs(main, renderToken);
+                break;
             case 'audit': renderAudit(main, renderToken); break;
             case 'feedback': renderFeedback(main, renderToken); break;
             default: renderDashboard(main, renderToken);
@@ -1160,8 +1165,11 @@ function renderFriendDetail(container, renderToken) {
     const id = state.params.id;
     const title = document.createElement('div');
     title.className = 'detail-heading';
-    title.innerHTML = `<div class="detail-heading-copy"><h1 class="section-title">用户详情</h1><p class="section-subtitle" id="detailSubtitle">加载中...</p></div><div class="detail-heading-actions"><button class="btn btn-ghost btn-sm" id="editBtn" hidden><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>编辑信息</button><button class="btn btn-danger btn-sm detail-disable-btn" id="disableBtn" hidden>禁用用户</button></div>`;
+    title.innerHTML = `<div style="display:flex;align-items:flex-start;gap:12px;min-width:0"><button class="btn btn-ghost btn-sm" id="friend-back" style="flex:0 0 auto;margin-top:6px">← 返回列表</button><div class="detail-heading-copy"><h1 class="section-title">用户详情</h1><p class="section-subtitle" id="detailSubtitle">加载中...</p></div></div><div class="detail-heading-actions"><button class="btn btn-ghost btn-sm" id="editBtn" hidden><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>编辑信息</button><button class="btn btn-danger btn-sm detail-disable-btn" id="disableBtn" hidden>禁用用户</button></div>`;
     container.appendChild(title);
+
+    // 返回用户列表
+    title.querySelector('#friend-back').addEventListener('click', () => navigate('friends'));
 
     const content = document.createElement('div');
     content.className = 'detail-grid friend-detail-grid';
@@ -2141,8 +2149,10 @@ function showFeedbackDetail(id, container, renderToken) {
 
         container.innerHTML = `
             <div class="detail-heading">
-                <div class="detail-heading-copy"><h1 class="section-title">反馈详情</h1><p class="section-subtitle feedback-detail-subtitle"><span class="fb-id-badge" style="background:${typeColor}33;color:${typeColor}">${displayId}</span><span>· ${escapeHtml(f.friend_nickname || '')}</span></p></div>
-                <div class="detail-heading-actions"><button class="btn btn-ghost btn-sm" id="fb-back">返回列表</button></div>
+                <div style="display:flex;align-items:flex-start;gap:12px;min-width:0">
+                    <button class="btn btn-ghost btn-sm" id="fb-back" style="flex:0 0 auto;margin-top:6px">← 返回列表</button>
+                    <div class="detail-heading-copy"><h1 class="section-title">反馈详情</h1><p class="section-subtitle feedback-detail-subtitle"><span class="fb-id-badge" style="background:${typeColor}33;color:${typeColor}">${displayId}</span><span>· ${escapeHtml(f.friend_nickname || '')}</span></p></div>
+                </div>
             </div>
             <div class="detail-grid">
                 <div class="card detail-card">
@@ -2265,6 +2275,247 @@ function showFeedbackDetail(id, container, renderToken) {
         if (renderToken !== state.renderToken || !container.isConnected) return;
         container.innerHTML = `<div class="error-banner"><span class="error-text">加载失败：${escapeHtml(err.message || '')}</span><button class="btn btn-sm btn-ghost" id="fbDetailRetry">重试</button></div>`;
         document.getElementById('fbDetailRetry')?.addEventListener('click', () => showFeedbackDetail(id, container, renderToken));
+    });
+}
+
+// ===== Crash Logs =====
+/** 崩溃日志 API 请求：走 /api/* Pages Functions 路径，401/登录重定向时与 API.request 一致跳 Access 登录 */
+function crashFetch(path, options) {
+    return fetch(path, options).then(res => {
+        if (res.status === 401 || (res.redirected && res.url.includes('/cdn-cgi/access/login'))) {
+            localStorage.removeItem('tts-access-token');
+            window.location.href = API.getAccessLoginUrl();
+            throw new Error('UNAUTHORIZED');
+        }
+        return res;
+    });
+}
+
+function crashStatusBadge(status) {
+    const fixed = status === 'fixed';
+    return `<span class="badge ${fixed ? 'badge-success' : 'badge-failure'}"><span class="badge-dot"></span>${fixed ? '已修复' : '待修复'}</span>`;
+}
+
+/** 组装适合粘贴给 AI 的崩溃报告文本 */
+function buildCrashReport(e) {
+    const line = (label, value) => `${label}: ${String(value ?? '').trim() || '—'}`;
+    return [
+        '【崩溃日志】',
+        line('崩溃时间', e.timestamp ? new Date(e.timestamp).toLocaleString('zh-CN', { hour12: false }) : ''),
+        line('App 版本', e.appVersion),
+        line('Android 版本', e.androidVersion),
+        line('设备型号', e.device),
+        line('崩溃页面', e.currentPage),
+        line('状态', e.status === 'fixed' ? '已修复' : '待修复'),
+        '',
+        '【堆栈跟踪】',
+        e.stackTrace || '（无）',
+        e.recentActions ? `\n【最近操作】\n${e.recentActions}` : '',
+    ].join('\n');
+}
+
+function renderCrashLogs(container, renderToken) {
+    const header = document.createElement('div');
+    header.className = 'page-header';
+    header.innerHTML = `
+        <h1 class="section-title">崩溃日志</h1>
+        <p class="section-subtitle">查看应用崩溃堆栈记录（储存在 Cloudflare KV）</p>
+    `;
+    container.appendChild(header);
+
+    // 统计卡片
+    const statsGrid = document.createElement('div');
+    statsGrid.className = 'stat-grid';
+    statsGrid.innerHTML = [1, 2, 3, 4].map(() => `<div class="stat-card"><div class="loading-skeleton" style="height:90px"></div></div>`).join('');
+    container.appendChild(statsGrid);
+
+    // 工具栏：搜索 + 状态筛选 + 刷新
+    const toolbar = document.createElement('div');
+    toolbar.className = 'toolbar';
+    toolbar.innerHTML = `
+        <input type="text" class="form-input" id="crash-search" placeholder="搜索堆栈 / 设备 / 版本..." style="width:220px" aria-label="搜索崩溃日志">
+        <select class="form-select" id="crash-status-filter" aria-label="状态筛选" style="width:auto">
+            <option value="all">全部状态</option>
+            <option value="open">待修复</option>
+            <option value="fixed">已修复</option>
+        </select>
+        <button class="btn btn-primary btn-sm" id="crash-refresh">刷新</button>
+    `;
+    container.appendChild(toolbar);
+
+    const searchInput = toolbar.querySelector('#crash-search');
+    const statusFilter = toolbar.querySelector('#crash-status-filter');
+
+    // 表格 + 分页（复用审计日志结构）
+    const tableWrap = document.createElement('div');
+    tableWrap.className = 'table-wrap';
+    tableWrap.innerHTML = `
+        <div class="table-scroll"><table>
+            <thead><tr><th>时间</th><th>设备</th><th>Android</th><th>App 版本</th><th>当前页面</th><th>状态</th><th>堆栈预览</th></tr></thead>
+            <tbody><tr><td colspan="7"><div class="loading-skeleton" style="height:200px;margin:16px"></div></td></tr></tbody>
+        </table></div>
+        <div class="invite-pagination crash-pagination"></div>
+    `;
+    container.appendChild(tableWrap);
+
+    let offset = 0;
+    const limit = 20;
+    let loadSequence = 0;
+
+    function loadAndRender() {
+        if (renderToken !== state.renderToken || !container.isConnected) return;
+        const sequence = ++loadSequence;
+        const tbody = tableWrap.querySelector('tbody');
+        const pagination = tableWrap.querySelector('.crash-pagination');
+        tbody.innerHTML = `<tr><td colspan="7"><div class="loading-skeleton" style="height:200px;margin:16px"></div></td></tr>`;
+        pagination.innerHTML = '';
+
+        const params = new URLSearchParams({ limit, offset, status: statusFilter.value });
+        const q = searchInput.value.trim();
+        if (q) params.set('search', q);
+
+        crashFetch(`/api/crash-logs?${params.toString()}`).then(res => {
+            if (!res.ok) throw new Error(`Request failed (${res.status})`);
+            return res.json();
+        }).then(data => {
+            if (renderToken !== state.renderToken || !container.isConnected) return;
+            if (sequence !== loadSequence) return;
+
+            // 统计卡片（全量口径，不受筛选影响）
+            if (data.stats) {
+                statsGrid.innerHTML = `
+                    <div class="stat-card"><div class="stat-label">总崩溃</div><div class="stat-value stat-accent">${data.stats.total}</div><div class="stat-hint">累计记录</div></div>
+                    <div class="stat-card"><div class="stat-label">近 7 天</div><div class="stat-value">${data.stats.last7d}</div><div class="stat-hint">7 天内崩溃</div></div>
+                    <div class="stat-card"><div class="stat-label">待修复</div><div class="stat-value ${data.stats.open > 0 ? 'stat-danger' : 'stat-success'}">${data.stats.open}</div><div class="stat-hint">未处理</div></div>
+                    <div class="stat-card"><div class="stat-label">涉及设备</div><div class="stat-value">${data.stats.devices}</div><div class="stat-hint">去重设备数</div></div>
+                `;
+            }
+
+            const entries = data.entries || [];
+            if (entries.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-title">无记录</div><div class="empty-desc">当前条件下没有崩溃日志</div></div></td></tr>`;
+            } else {
+                tbody.innerHTML = entries.map(e => `
+                    <tr class="crash-row" data-id="${escapeHtml(e.id)}" style="cursor:pointer">
+                        <td style="font-family:var(--font-mono);font-size:12px;color:var(--text-dim);white-space:nowrap">${formatDateTime(e.timestamp)}</td>
+                        <td>${entityCell(e.device, '', '未知设备')}</td>
+                        <td style="font-size:12px">${escapeHtml(e.androidVersion || '—')}</td>
+                        <td style="font-size:12px">${escapeHtml(e.appVersion || '—')}</td>
+                        <td style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(e.currentPage || '—')}</td>
+                        <td>${crashStatusBadge(e.status)}</td>
+                        <td style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim);max-width:280px;white-space:pre-wrap;word-break:break-word">${escapeHtml(e.stackTracePreview || '')}</td>
+                    </tr>
+                `).join('');
+                tableWrap.querySelectorAll('.crash-row').forEach(row => {
+                    row.addEventListener('click', () => navigate('crash-log-detail', { id: row.dataset.id }));
+                });
+            }
+
+            const end = Math.min(offset + entries.length, data.total);
+            pagination.innerHTML = `<span>共 ${data.total} 条${data.total ? `，第 ${offset + 1} - ${end} 条` : ''}</span><div>
+                <button class="btn btn-ghost btn-sm crash-prev" ${offset === 0 ? 'disabled' : ''}>上一页</button>
+                <button class="btn btn-ghost btn-sm crash-next" ${data.hasMore ? '' : 'disabled'}>下一页</button>
+            </div>`;
+            pagination.querySelector('.crash-prev')?.addEventListener('click', () => { offset = Math.max(0, offset - limit); loadAndRender(); });
+            pagination.querySelector('.crash-next')?.addEventListener('click', () => { offset += limit; loadAndRender(); });
+        }).catch(err => {
+            if (renderToken !== state.renderToken || !container.isConnected) return;
+            const tbody = tableWrap.querySelector('tbody');
+            tbody.innerHTML = `<tr><td colspan="7"><div class="error-banner"><span class="error-text">加载失败：${escapeHtml(errorMessage(err))}</span><button class="btn btn-sm btn-ghost" id="crashRetry">重试</button></div></td></tr>`;
+            tbody.querySelector('#crashRetry')?.addEventListener('click', loadAndRender);
+        });
+    }
+
+    searchInput.addEventListener('input', debounce(() => { offset = 0; loadAndRender(); }, 400));
+    statusFilter.addEventListener('change', () => { offset = 0; loadAndRender(); });
+    toolbar.querySelector('#crash-refresh').addEventListener('click', () => loadAndRender());
+    loadAndRender();
+}
+
+/** 渲染崩溃日志详情视图（数据已就绪时调用；PATCH 后复用响应直接渲染避免整页重拉） */
+function renderCrashLogDetailView(e, container, renderToken) {
+    if (renderToken !== state.renderToken || !container.isConnected) return;
+    const id = e.id || '';
+    const fixed = e.status === 'fixed';
+    const recentActions = String(e.recentActions || '').trim();
+    container.innerHTML = `
+        <div class="detail-heading">
+            <div style="display:flex;align-items:flex-start;gap:12px;min-width:0">
+                <button class="btn btn-ghost btn-sm" id="crash-back" style="flex:0 0 auto;margin-top:6px">← 返回列表</button>
+                <div class="detail-heading-copy"><h1 class="section-title">崩溃日志详情</h1><p class="section-subtitle">ID: <span style="font-family:var(--font-mono)">${escapeHtml(id || 'unknown')}</span></p></div>
+            </div>
+            <div class="detail-heading-actions">
+                <button class="btn btn-ghost btn-sm" id="crash-copy">复制给 AI</button>
+                <button class="btn ${fixed ? 'btn-ghost' : 'btn-primary'} btn-sm" id="crash-toggle-status">${fixed ? '重新打开' : '标记已修复'}</button>
+            </div>
+        </div>
+        <div class="detail-grid">
+            <div class="card">
+                <div class="card-header"><span class="card-title">崩溃信息</span>${crashStatusBadge(e.status)}</div>
+                <div style="display:grid;gap:10px;font-size:13px;margin-bottom:16px">
+                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">时间</span><span>${formatDateTime(e.timestamp)}</span></div>
+                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">App 版本</span><span>${escapeHtml(e.appVersion || '—')}</span></div>
+                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">Android 版本</span><span>${escapeHtml(e.androidVersion || '—')}</span></div>
+                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">设备型号</span><span>${escapeHtml(e.device || '—')}</span></div>
+                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">当前页面</span><span>${escapeHtml(e.currentPage || '—')}</span></div>
+                </div>
+                <div class="card-header" style="margin-top:12px"><span class="card-title">堆栈跟踪</span></div>
+                <div style="background:var(--surface-2);padding:12px;border-radius:8px;white-space:pre-wrap;word-break:break-word;font-family:var(--font-mono);font-size:12px;line-height:1.6">${escapeHtml(e.stackTrace || '无堆栈信息')}</div>
+            </div>
+            <div class="card">
+                <div class="card-header"><span class="card-title">最近操作</span></div>
+                <div style="background:var(--surface-2);padding:12px;border-radius:8px;white-space:pre-wrap;word-break:break-word;font-family:var(--font-mono);font-size:12px;line-height:1.6">${escapeHtml(recentActions || '无记录')}</div>
+            </div>
+        </div>
+    `;
+
+    // 返回列表：走完整路由导航，render() 会清空 main 再重绘，避免内容叠加
+    document.getElementById('crash-back')?.addEventListener('click', () => navigate('crash-logs'));
+
+    // 复制 AI 友好报告
+    document.getElementById('crash-copy')?.addEventListener('click', async () => {
+        try {
+            await copyText(buildCrashReport(e));
+            showToast('已复制崩溃信息，可直接粘贴给 AI');
+        } catch (err) {
+            showToast('复制失败：' + (err.message || ''), 'error');
+        }
+    });
+
+    // 标记已修复 / 重新打开：PATCH 成功后用响应直接重渲染，避免整页重拉
+    document.getElementById('crash-toggle-status')?.addEventListener('click', () => {
+        const btn = document.getElementById('crash-toggle-status');
+        btn.disabled = true;
+        const next = fixed ? 'open' : 'fixed';
+        crashFetch(`/api/crash-logs/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: next }),
+        }).then(res => {
+            if (!res.ok) throw new Error('更新失败');
+            return res.json();
+        }).then(updated => {
+            showToast(fixed ? '已重新打开' : '已标记修复');
+            renderCrashLogDetailView(updated, container, renderToken);
+        }).catch(err => {
+            btn.disabled = false;
+            showToast('更新失败：' + (err.message || ''), 'error');
+        });
+    });
+}
+
+function showCrashLogDetail(id, container, renderToken) {
+    container.innerHTML = '<div class="loading-skeleton" style="height:400px;margin:16px"></div>';
+
+    crashFetch(`/api/crash-logs/${id}`).then(res => {
+        if (!res.ok) throw new Error('未找到记录');
+        return res.json();
+    }).then(e => {
+        renderCrashLogDetailView(e, container, renderToken);
+    }).catch(err => {
+        if (renderToken !== state.renderToken || !container.isConnected) return;
+        container.innerHTML = `<div class="error-banner"><span class="error-text">加载失败：${escapeHtml(errorMessage(err))}</span><button class="btn btn-sm btn-ghost" id="crashDetailRetry">重试</button></div>`;
+        document.getElementById('crashDetailRetry')?.addEventListener('click', () => showCrashLogDetail(id, container, renderToken));
     });
 }
 

@@ -117,7 +117,11 @@ internal fun VideosAndImagesSection(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(horizontal = 0.dp)
         ) {
-            itemsIndexed(backdrops, key = { index, url -> "backdrop_${index}_$url" }) { index, backdropUrl ->
+            itemsIndexed(
+                backdrops,
+                key = { _, url -> "backdrop_$url" },
+                contentType = { _, _ -> "backdrop" }
+            ) { index, backdropUrl ->
                 BackdropCard(
                     backdropUrl = backdropUrl,
                     onClick = { onBackdropClick(index) },
@@ -125,7 +129,11 @@ internal fun VideosAndImagesSection(
                     index = index
                 )
             }
-            itemsIndexed(videos, key = { index, video -> "video_${index}_${video.key}" }) { _, video ->
+            itemsIndexed(
+                videos,
+                key = { _, video -> "video_${video.key}" },
+                contentType = { _, _ -> "video" }
+            ) { _, video ->
                 VideoCard(
                     video = video,
                     onClick = { onVideoClick(video) }

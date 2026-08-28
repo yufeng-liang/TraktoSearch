@@ -67,6 +67,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -134,6 +135,7 @@ import com.tracktosearch.ui.screen.ai.sceneArtFor
 import com.tracktosearch.ui.screen.ai.shouldShowWatchlistAddedScene
 
 import com.tracktosearch.ui.component.LocalBackdrop
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalFullscreenSharedKey
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeSourceSelection
@@ -282,17 +284,13 @@ fun DetailScreen(
     var showAllVideos by remember { mutableStateOf(false) }
 
     // 内容就绪状态:沉浸背景优先显示,其他内容(cast/视频/简介/tab)淡入
-    // posterDominantColor 就绪 → 立即标记就绪;未就绪(首次访问无缓存) → 400ms 后兜底就绪
+    // 至少等主导航/共享元素转场的重负载帧结束，再组合非首屏内容。
+    // 颜色命中走 320ms，未命中走 480ms；最后再跨一帧，避免与路由出场节点销毁同帧发生。
     var contentReady by remember { mutableStateOf(false) }
     LaunchedEffect(uiState.posterDominantColor) {
         if (contentReady) return@LaunchedEffect // 已就绪则不重复触发淡入(#26)
-        if (uiState.posterDominantColor != null) {
-            // 颜色就绪后短暂延迟,让背景渐变先渲染出来再淡入内容
-            delay(80)
-        } else {
-            // 首次访问无缓存主色,400ms 后兜底显示内容,避免长时间空白
-            delay(400)
-        }
+        delay(if (uiState.posterDominantColor != null) 320 else 480)
+        withFrameNanos { }
         contentReady = true
     }
     val contentAlpha by remember(contentReady) {
@@ -387,6 +385,14 @@ fun DetailScreen(
         ).count { it },
         loadingItemWeight = 4
     )
+    // NavHost 进入/返回时旧页与新页会短暂同时绘制。详情页在这段窗口内暂停
+    // 非首屏内容与 Haze source，避免正文、图片和模糊采样与共享海报叠加到同一帧。
+    // 不读取 isRunning：它随动画每帧变化，会让详情正文整棵树反复重组。
+    // 端点状态只在转场开始/结束时变化，足以控制首屏内容和 Haze source。
+    val isNavigationTransitionRunning = LocalAnimatedVisibilityScope.current?.transition?.let { transition ->
+        transition.currentState != transition.targetState
+    } == true
+    val contentReadyForTransition = contentReady && !isNavigationTransitionRunning
 
     // 点击 token,确保只有被点击的卡片参与转场(避免同 tmdbId 海报跨栏目飘错)
     var activeClickToken by remember { mutableStateOf(0) }
@@ -424,7 +430,10 @@ fun DetailScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .hazeSource(state = detailHazeState, zIndex = 0f)
+                    .then(
+                        if (isNavigationTransitionRunning) Modifier
+                        else Modifier.hazeSource(state = detailHazeState, zIndex = 0f)
+                    )
                     .then(immersiveBackgroundModifier)
             ) {
             // 全屏查看器打开时，把「正在被查看」的 key 广播给缩略图源侧，让源侧置不可见。
@@ -542,9 +551,10 @@ fun DetailScreen(
                         posterColorExtractor = viewModel.posterColorExtractor,
                         onPosterColorExtracted = viewModel::updatePosterColor,
                         sectionVisible = uiState.sectionVisible,
+                        contentReady = contentReadyForTransition,
                         hazeState = detailHazeState,
                         // 头部下方内容(cast/视频/简介/季集)淡入,海报+标题+按钮始终可见
-                        contentAlpha = contentAlpha,
+                        contentAlpha = if (contentReadyForTransition) contentAlpha else 0f,
                         onHeaderAnchorBoundsChanged = { detailHeaderBounds = it }
                     )
                 }
@@ -552,7 +562,7 @@ fun DetailScreen(
                 // 转场期间(contentReady=false)跳过 Tab 行和所有 Tab 内容组合,
                 // 首帧只组合 header(海报+标题+按钮),大幅降低转场期间首帧工作量。
                 // contentReady 由 posterDominantColor 就绪或 400ms 兜底触发,转场结束后即 true。
-                if (contentReady) {
+                if (contentReadyForTransition) {
                 // Tab 行（吸顶，共用同一个）
                 stickyHeader(key = "tab_row") {
                     // isPinned / tabContainerColor / tabContentColor 在 LazyColumn 外已计算
