@@ -19,6 +19,7 @@ import com.tracktosearch.data.remote.douban.DoubanMarkItem
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
 import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.trakt.dto.TraktSyncResponse
+import com.tracktosearch.data.session.SessionCacheInvalidatedException
 import com.tracktosearch.data.session.SessionMode
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.PersistentTtlCache
@@ -636,6 +637,19 @@ class DoubanSyncManager @Inject constructor(
                     }
                     work()
                     if (cancelled) scheduleCancellationFinalization()
+                } catch (e: SessionCacheInvalidatedException) {
+                    // 会话缓存失效（登录态变更/登出）导致的同步中止：
+                    // 该异常继承 CancellationException，若落入下方重抛分支会以取消语义
+                    // 静默结束协程、不发布终态，UI 永久卡在"同步中"。单独捕获并引导重登。
+                    _progress.value = _progress.value.copy(
+                        isRunning = false,
+                        isComplete = true,
+                        stage = DoubanSyncStage.LOGIN_REQUIRED,
+                        subStage = DoubanSyncSubStage.NONE,
+                        loginTarget = DoubanSyncLoginTarget.TRAKT,
+                        errorMessage = e.message,
+                        phase = "会话已变更，同步中止，请重新登录"
+                    )
                 } catch (e: CancellationException) {
                     if (cancelled) scheduleCancellationFinalization() else throw e
                 } catch (e: Exception) {
