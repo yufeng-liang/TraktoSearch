@@ -759,7 +759,10 @@ class DoubanSyncManager @Inject constructor(
      * 恢复回滚数据:将被删除的标记重新添加到 Trakt watchlist/history。
      *
      * 使用场景:上次完整重写同步失败/取消后,用户选择恢复被删除的标记。
-     * 恢复完成后清除回滚表。
+     *
+     * 只有批量写入确实成功才清除回滚表并发布 COMPLETED;批量写入失败(401/断网/部分
+     * not_found)时抛异常走 catch,发布 FAILED **并保留回滚表**,避免丢失唯一快照。
+     * 评分恢复为尽力而为(单项失败不影响整体),与回滚表清除无关。
      *
      * @return 恢复的条目数(0=无回滚数据或恢复失败)
      */
@@ -793,11 +796,20 @@ class DoubanSyncManager @Inject constructor(
         )
 
         try {
+            // 必须校验批量写入结果：batchAddToWatchlist / batchMarkAsWatched 内部捕获异常
+            // 并以 Result 返回失败，直接丢弃结果会在 401/断网时误判为成功。
+            // checkTraktResult 失败即抛异常，跳过 clearAll()，保留唯一的回滚快照。
             if (wishMovieIds.isNotEmpty() || wishShowIds.isNotEmpty()) {
-                traktRepository.batchAddToWatchlist(wishMovieIds, wishShowIds)
+                checkTraktResult(
+                    traktRepository.batchAddToWatchlist(wishMovieIds, wishShowIds),
+                    "restoreRollback.batchAddToWatchlist"
+                )
             }
             if (collectMovieIds.isNotEmpty() || collectShowIds.isNotEmpty()) {
-                traktRepository.batchMarkAsWatched(collectMovieIds, collectShowIds)
+                checkTraktResult(
+                    traktRepository.batchMarkAsWatched(collectMovieIds, collectShowIds),
+                    "restoreRollback.batchMarkAsWatched"
+                )
             }
             // 恢复评分
             for (item in rollbackItems) {
