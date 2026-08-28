@@ -513,7 +513,19 @@ class AiSpriteViewModel @Inject constructor(
                 isLoading = false,
                 activeFeature = null,
                 loadingFeature = null,
-                errorCode = null
+                errorCode = null,
+                // 激活进行中被关闭：请求已取消，但 activationState 若仍卡在
+                // RECORDING/VERIFYING，激活按钮会因 inFlight 判断永久禁用。
+                // 关闭功能页时重置为 IDLE，下次进入可重新激活。
+                activationState = if (
+                    it.activationState == AiActivationState.RECORDING ||
+                    it.activationState == AiActivationState.VERIFYING
+                ) {
+                    AiActivationState.IDLE
+                } else {
+                    it.activationState
+                },
+                activationMessage = null
             )
         }
     }
