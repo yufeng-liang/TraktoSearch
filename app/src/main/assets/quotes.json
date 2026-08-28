@@ -1,0 +1,195 @@
+{
+  "version": 1,
+  "quotes": [
+    {
+      "id": "casablanca",
+      "year": 1942,
+      "tmdbId": 289,
+      "posterPath": "/lGCEKlJo2CnWydQj7aamY7s1S7Q.jpg",
+      "bundled": true,
+      "lines": {
+        "en": ["Here's looking at you, kid."],
+        "zh": ["为你的眼睛干杯。"],
+        "ja": ["君の瞳に乾杯。"],
+        "ko": ["그대의 눈동자에 건배."]
+      },
+      "title": {
+        "en": "Casablanca",
+        "zh": "卡萨布兰卡",
+        "ja": "カサブランカ",
+        "ko": "카사블랑카"
+      }
+    },
+    {
+      "id": "shawshank",
+      "year": 1994,
+      "tmdbId": 278,
+      "posterPath": "/9cqNxx0GxF0bflZmeSMuL5tnGzr.jpg",
+      "bundled": true,
+      "lines": {
+        "en": ["Hope is a good thing,", "maybe the best of things.", "And no good thing ever dies."],
+        "zh": ["希望是好东西，", "也许是世上最好的东西。", "好东西从来不会消失。"],
+        "ja": ["希望はいいものだ。", "たぶん最高のものだ。", "いいものは", "決して滅びない。"],
+        "ko": ["희망은 좋은 것이고,", "어쩌면 최고의 것이다.", "좋은 것은 결코", "사라지지 않는다."]
+      },
+      "title": {
+        "en": "The Shawshank Redemption",
+        "zh": "肖申克的救赎",
+        "ja": "ショーシャンクの空に",
+        "ko": "쇼생크 탈출"
+      }
+    },
+    {
+      "id": "farewell-my-concubine",
+      "year": 1993,
+      "tmdbId": 10997,
+      "posterPath": "/f54hNIiHNINw3JiUJB2XaQl5wCN.jpg",
+      "bundled": true,
+      "lines": {
+        "en": ["We agreed on a lifetime.", "A year less, a month, a day,", "even an hour —", "that is not a lifetime."],
+        "zh": ["说好了是一辈子。", "差一年，一个月，一天，", "一个时辰，都不算一辈子。"],
+        "ja": ["一生と約束した。", "一年、一月、一日、", "一刻でも足りなければ、", "一生とは言えない。"],
+        "ko": ["평생을 약속했잖아.", "한 해, 한 달, 하루,", "한 시라도 모자라면", "평생이 아니야."]
+      },
+      "title": {
+        "en": "Farewell My Concubine",
+        "zh": "霸王别姬",
+        "ja": "さらば、わが愛／覇王別姫",
+        "ko": "패왕별희"
+      }
+    },
+    {
+      "id": "blade-runner",
+      "year": 1982,
+      "tmdbId": 78,
+      "posterPath": "/63N9uy8nd9j7Eog2axPQ8lbr3Wj.jpg",
+      "bundled": true,
+      "lines": {
+        "en": ["All those moments", "will be lost in time,", "like tears in rain."],
+        "zh": ["所有这些瞬间", "都将消失在时光中，", "一如雨中的泪水。"],
+        "ja": ["そういう思い出もすべて、", "時の中に消える。", "雨の中の涙のように。"],
+        "ko": ["그 모든 순간들은", "시간 속에 사라지겠지.", "빗속의 눈물처럼."]
+      },
+      "title": {
+        "en": "Blade Runner",
+        "zh": "银翼杀手",
+        "ja": "ブレードランナー",
+        "ko": "블레이드 러너"
+      }
+    },
+    {
+      "id": "chungking-express",
+      "year": 1994,
+      "tmdbId": 11104,
+      "posterPath": "/43I9DcNoCzpyzK8JCkJYpHqHqGG.jpg",
+      "bundled": true,
+      "lines": {
+        "en": ["If memories could be canned,", "I hope this one never expires."],
+        "zh": ["如果记忆是一个罐头的话，", "我希望这罐罐头", "永远不会过期。"],
+        "ja": ["記憶が缶詰なら、", "この缶だけは", "賞味期限が", "来ないでほしい。"],
+        "ko": ["기억이 통조림이라면,", "이 통조림만은", "유통기한이 없기를."]
+      },
+      "title": {
+        "en": "Chungking Express",
+        "zh": "重庆森林",
+        "ja": "恋する惑星",
+        "ko": "중경삼림"
+      }
+    },
+    {
+      "id": "forrest-gump",
+      "year": 1994,
+      "tmdbId": 13,
+      "posterPath": "/Cw4hIUIAmSYfK9QfaUW5igp9La.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["Life was like", "a box of chocolates.", "You never know what", "you're gonna get."],
+        "zh": ["生命就像一盒巧克力，", "你永远不知道", "下一颗是什么味道。"],
+        "ja": ["人生はチョコレートの", "箱のようなもの。", "開けてみるまで", "分からない。"],
+        "ko": ["인생은 초콜릿 상자와 같아.", "무엇을 집을지는", "알 수 없지."]
+      },
+      "title": {
+        "en": "Forrest Gump",
+        "zh": "阿甘正传",
+        "ja": "フォレスト・ガンプ",
+        "ko": "포레스트 검프"
+      }
+    },
+    {
+      "id": "spirited-away",
+      "year": 2001,
+      "tmdbId": 129,
+      "posterPath": "/39wmItIWsg5sZMyRUHLkWBcuVCM.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["Once you have met someone,", "you never really forget them.", "You just can't recall them", "for a while."],
+        "zh": ["发生过的事不会忘记，", "只是暂时想不起来。"],
+        "ja": ["一度あったことは", "忘れないものさ。", "思い出せないだけで。"],
+        "ko": ["한 번 있었던 일은", "잊지 않아.", "다만 떠오르지 않을 뿐이야."]
+      },
+      "title": {
+        "en": "Spirited Away",
+        "zh": "千与千寻",
+        "ja": "千と千尋の神隠し",
+        "ko": "센과 치히로의 행방불명"
+      }
+    },
+    {
+      "id": "eternal-sunshine",
+      "year": 2004,
+      "tmdbId": 38,
+      "posterPath": "/5MwkWH9tYHv3mV9OdYTMR5qreIz.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["Meet me in Montauk."],
+        "zh": ["在蒙托克等我。"],
+        "ja": ["モントークで会おう。"],
+        "ko": ["몬톡에서 만나."]
+      },
+      "title": {
+        "en": "Eternal Sunshine of the Spotless Mind",
+        "zh": "暖暖内含光",
+        "ja": "エターナル・サンシャイン",
+        "ko": "이터널 션샤인"
+      }
+    },
+    {
+      "id": "interstellar",
+      "year": 2014,
+      "tmdbId": 157336,
+      "posterPath": "/yQvGrMoipbRoddT0ZR8tPoR7NfX.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["Love is the one thing", "we're capable of perceiving", "that transcends dimensions", "of time and space."],
+        "zh": ["爱是唯一能被我们感知的、", "超越时间与空间维度的", "存在。"],
+        "ja": ["愛だけが、", "時間と空間の次元を超えて", "感じ取れる唯一のものだ。"],
+        "ko": ["사랑은 시간과 공간의", "차원을 넘어", "우리가 감지할 수 있는", "유일한 것이야."]
+      },
+      "title": {
+        "en": "Interstellar",
+        "zh": "星际穿越",
+        "ja": "インターステラー",
+        "ko": "인터스텔라"
+      }
+    },
+    {
+      "id": "parasite",
+      "year": 2019,
+      "tmdbId": 496243,
+      "posterPath": "/7IiTTgloJzvGI1TAYymCfbfl3vT.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["You know what kind of plan", "never fails?", "No plan at all."],
+        "zh": ["你知道什么计划", "绝不会失败吗？", "没有计划。"],
+        "ja": ["絶対に失敗しない計画とは", "何か分かるか。", "無計画だ。"],
+        "ko": ["절대 실패하지 않는 계획이", "뭔지 알아?", "무계획이야."]
+      },
+      "title": {
+        "en": "Parasite",
+        "zh": "寄生虫",
+        "ja": "パラサイト 半地下の家族",
+        "ko": "기생충"
+      }
+    }
+  ]
+}
