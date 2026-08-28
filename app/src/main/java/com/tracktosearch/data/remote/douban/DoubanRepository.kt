@@ -408,7 +408,14 @@ class DoubanRepository(
 
         // 两次都失败，返回最后一次解析结果（可能 imdbId 为 null）
         onProgress("failed", title)
-        return Pair(lastHtml?.let { DoubanSpider.parseDetail(it) }, false)
+        val lastParsed = lastHtml?.let { DoubanSpider.parseDetail(it) }
+        // 反爬拦截页/404 页解析出的对象 title 为空：若原样返回非 null，调用方会把它当作
+        // "成功但无 imdbId"写入同步表并停止重试，违反「null=失败」契约。title 为空视为失败。
+        return if (lastParsed?.title.isNullOrBlank()) {
+            Pair(null, false)
+        } else {
+            Pair(lastParsed, false)
+        }
     }
 
     /**
