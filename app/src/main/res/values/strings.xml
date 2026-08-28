@@ -1514,6 +1514,11 @@ Config:
     <string name="douban_sync_notification_latest">Latest: %1$s</string>
     <string name="douban_sync_notification_public">Douban sync: %1$s</string>
     <string name="douban_sync_notification_channel_description">Shows Douban sync progress</string>
+    <string name="douban_login_waiting_auth">Waiting for authorization to complete…</string>
+    <string name="auth_invite_bound_this_device">This invite code is already bound to a device. Restart the app to recover it, or use a new code.</string>
+    <string name="douban_detail_entry_not_found">This item hasn’t been synced to this device yet</string>
+    <string name="douban_batch_remove_remote_failed">%1$d items failed to remove from Douban. They will be retried on next sync.</string>
+    <string name="detail_credits_douban_unavailable">Cast info unavailable for Douban-only items</string>
     <string name="error_rate_limited">Too many requests. Please slow down and try again.</string>
     <string name="error_network_unavailable">Network error. Please check your connection and try again.</string>
     <string name="error_server_error">Server is busy. Please try again later.</string>
