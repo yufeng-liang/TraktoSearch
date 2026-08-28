@@ -499,11 +499,20 @@ class WatchlistViewModel @Inject constructor(
                 if (progress.isRunning || progress.isComplete) {
                     _uiState.update { it.copy(batchRemovalProgress = progress) }
                     if (progress.isComplete) {
-                        // 完成后 5 秒横幅消失
+                        // 完成后 5 秒横幅消失。记录完成快照，delay 后比对仍一致才清，
+                        // 避免 5 秒窗口内新一轮移除完成后误清新一轮结果横幅（同同步横幅守卫模式）
+                        val completedProgress = progress
                         delay(5000)
-                        _uiState.update { it.copy(batchRemovalProgress = null) }
-                        // 重置 progress 避免下次进入页面时 collector 收到旧 isComplete=true 重复显示横幅
-                        doubanBatchRemovalManager.resetProgress()
+                        _uiState.update { state ->
+                            if (state.batchRemovalProgress == completedProgress) {
+                                state.copy(batchRemovalProgress = null)
+                            } else state
+                        }
+                        // 仅当横幅确被清除（仍是同一轮）才重置 progress，
+                        // 避免把新一轮的进行中/结果状态误 reset
+                        if (_uiState.value.batchRemovalProgress == null) {
+                            doubanBatchRemovalManager.resetProgress()
+                        }
                     }
                 }
             }
