@@ -29,12 +29,16 @@ import com.tracktosearch.R
 import com.tracktosearch.data.local.SearchSourceTemplate
 import com.tracktosearch.data.local.SearchSourceTemplates
 
-/** 模板库半屏弹层：网格展示内置模板 + 底部导入快捷通道 */
+/**
+ * 模板库半屏弹层：网格展示内置模板 + 底部导入快捷通道。
+ *
+ * [onImport] 传 null 时隐藏导入行——编辑页内没有导入弹层，摆一个点了没反应的入口更糟。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SourceTemplateSheet(
     onTemplateClick: (SearchSourceTemplate) -> Unit,
-    onImport: () -> Unit,
+    onImport: (() -> Unit)?,
     onDismiss: () -> Unit
 ) {
     ModalBottomSheet(
@@ -69,20 +73,22 @@ fun SourceTemplateSheet(
                 }
             }
             Spacer(modifier = Modifier.height(4.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .clickable { onImport() }
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.template_import_shortcut),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
+            if (onImport != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable { onImport() }
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.template_import_shortcut),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(8.dp))
         }

@@ -18,6 +18,9 @@ import kotlinx.coroutines.launch
 /** 向导模式：新建（空白向导）/模板（参数完整直接确认）/编辑已有/导入 */
 enum class EditorMode { BLANK, TEMPLATE, EDIT, IMPORT }
 
+/** 探测用示例关键词：随便一个片名都行，选它是因为中英双语站点都能命中 */
+private const val PROBE_KEYWORD = "The Wandering Earth"
+
 @HiltViewModel
 class SearchSourceEditorViewModel @Inject constructor(
     private val customSearchSourceStorage: CustomSearchSourceStorage,
@@ -72,7 +75,24 @@ class SearchSourceEditorViewModel @Inject constructor(
         data object Idle : ProbeUiState
         data object Probing : ProbeUiState
         data class Found(val result: AutoProbe.ProbeResult, val keywordParam: String, val apiPath: String) : ProbeUiState
-        data object Failed : ProbeUiState
+        data class Failed(val reason: ProbeFailureReason) : ProbeUiState
+    }
+
+    /**
+     * 探测失败的原因。
+     *
+     * 只说「识别失败」时用户不知道该改什么：地址打错、接口返回网页、接口结构不认识，
+     * 这三种情况的下一步动作完全不同，所以分开告知。
+     */
+    enum class ProbeFailureReason {
+        /** 所有变体都连不上：超时、DNS 失败、非 2xx */
+        UNREACHABLE,
+
+        /** 连上了但返回的不是 JSON：通常是拿到了网页或错误页 */
+        NOT_JSON,
+
+        /** 是 JSON 但认不出结果列表或名称/链接字段 */
+        UNRECOGNIZED,
     }
 
     // 导入状态
@@ -131,6 +151,26 @@ class SearchSourceEditorViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 在向导内套用模板：把模板参数填进表单。
+     *
+     * 参数完整的模板（非 wizardMode）直接跳到确认步骤——它已经不需要探测；
+     * 空白/向导型模板留在步骤 1，让用户填地址。
+     */
+    fun applyTemplate(templateId: String) {
+        val template = SearchSourceTemplates.byId(templateId) ?: return
+        applySource(template.defaults)
+        if (template.wizardMode) {
+            appliedTemplateId = null
+            _appliedTemplateName.value = null
+            _step.value = 1
+        } else {
+            appliedTemplateId = template.id
+            _appliedTemplateName.value = template.name
+            _step.value = 3
+        }
+    }
+
     private fun applySource(source: CustomSearchSource) {
         _name.value = source.name
         _baseUrl.value = source.baseUrl
@@ -158,7 +198,6 @@ class SearchSourceEditorViewModel @Inject constructor(
 
     /** 点击步骤指示器直接跳转 */
     fun goToStep(target: Int) {
-        android.util.Log.d("StepDebug", "goToStep target=$target current=${_step.value}")
         if (target in 1..3) _step.value = target
     }
 
@@ -167,24 +206,33 @@ class SearchSourceEditorViewModel @Inject constructor(
         if (_probeState.value is ProbeUiState.Probing) return
         viewModelScope.launch {
             _probeState.value = ProbeUiState.Probing
-            var found: ProbeUiState? = null
+            var found: ProbeUiState.Found? = null
+            // 失败原因取「最靠前的进展」：连上过就不该再说连不上，
+            // 解析出 JSON 就该说结构不认识，这样建议才指向真正卡住的那一步
+            var reachedServer = false
+            var gotJson = false
             for (variant in AutoProbe.variants()) {
                 val probeSource = CustomSearchSource(
                     id = "probe", name = "probe", baseUrl = _baseUrl.value,
                     apiPath = variant.apiPath, keywordParam = variant.keywordParam,
                     enabled = true, parseMode = "custom"
                 )
-                val raw = customSearchService.fetchRaw(probeSource, "The Wandering Earth")
-                if (raw != null) {
-                    val result = AutoProbe.analyze(raw)
-                    if (result != null) {
-                        found = ProbeUiState.Found(result, variant.keywordParam, variant.apiPath)
-                        break
+                when (val fetch = customSearchService.probeRaw(probeSource, PROBE_KEYWORD)) {
+                    is CustomSearchService.ProbeFetch.Unreachable -> Unit
+                    is CustomSearchService.ProbeFetch.NotJson -> reachedServer = true
+                    is CustomSearchService.ProbeFetch.Json -> {
+                        reachedServer = true
+                        gotJson = true
+                        val result = AutoProbe.analyze(fetch.root)
+                        if (result != null) {
+                            found = ProbeUiState.Found(result, variant.keywordParam, variant.apiPath)
+                            break
+                        }
                     }
                 }
             }
-            _probeState.value = found ?: ProbeUiState.Failed
-            if (found is ProbeUiState.Found) {
+            if (found != null) {
+                _probeState.value = found
                 // 自动套用识别结果
                 _apiPath.value = found.apiPath
                 _keywordParam.value = found.keywordParam
@@ -194,6 +242,14 @@ class SearchSourceEditorViewModel @Inject constructor(
                 _urlPath.value = found.result.urlPath
                 _diskTypePath.value = found.result.diskTypePath
                 _datePath.value = found.result.datePath
+            } else {
+                _probeState.value = ProbeUiState.Failed(
+                    when {
+                        gotJson -> ProbeFailureReason.UNRECOGNIZED
+                        reachedServer -> ProbeFailureReason.NOT_JSON
+                        else -> ProbeFailureReason.UNREACHABLE
+                    }
+                )
             }
         }
     }

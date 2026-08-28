@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.searchsource
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,6 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -358,7 +360,8 @@ private fun BuiltinSourcesSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         SectionLabel(text = stringResource(R.string.search_sources_builtin))
         SourceCardRow(
@@ -392,6 +395,9 @@ private fun BuiltinSourcesSection(
     }
 }
 
+// 列表页所有卡片共用一套规格：20dp 圆角、无描边、极轻投影，与统计页卡片对齐
+private val SOURCE_CARD_SHAPE = RoundedCornerShape(20.dp)
+
 /** 分组小标题（与自定义源分组标题字号、左边距一致） */
 @Composable
 private fun SectionLabel(text: String) {
@@ -404,7 +410,12 @@ private fun SectionLabel(text: String) {
     )
 }
 
-/** 内置源单行卡片：名称描述 + 开关（可附带点击区域与开关左侧操作） */
+/**
+ * 内置源单行卡片：名称描述 + 开关（可附带点击区域与开关左侧操作）。
+ *
+ * 之前只 clip 不填色，行是透明的，整页看起来是一串浮在背景上的文字；
+ * 补上 surfaceVariant 卡面 + 20dp 圆角 + 极轻投影，和统计页卡片规格对齐。
+ */
 @Composable
 private fun SourceCardRow(
     title: String,
@@ -418,9 +429,11 @@ private fun SourceCardRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(MaterialTheme.shapes.large)
+            .shadow(1.dp, SOURCE_CARD_SHAPE)
+            .clip(SOURCE_CARD_SHAPE)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
+            .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -466,6 +479,8 @@ private fun EmptyCustomSourceCard(
             .padding(horizontal = 16.dp),
         isDark = isAppDarkTheme(),
         title = stringResource(R.string.search_sources_empty),
+        // 空状态只写「暂无自定义源」等于没说；补一句「自定义源能做什么」才有点开的理由
+        description = stringResource(R.string.search_sources_empty_hint),
         icon = Icons.Rounded.Language,
         actions = {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -524,9 +539,11 @@ private fun CustomSourceRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .clip(MaterialTheme.shapes.large)
+            .shadow(1.dp, SOURCE_CARD_SHAPE)
+            .clip(SOURCE_CARD_SHAPE)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable(onClick = { view.performHaptic(HapticType.CLICK); onEdit() })
-            .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 8.dp)
+            .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {

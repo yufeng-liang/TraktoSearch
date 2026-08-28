@@ -71,6 +71,45 @@ class CustomSearchService @Inject constructor(
     }
 
     /**
+     * 探测一次请求，区分失败原因（自动探测用）。
+     *
+     * [fetchRaw] 把「连不上」「返回的不是 JSON」都压成 null，编辑页无法据此给出有用的建议，
+     * 所以这里返回带原因的结果；[fetchRaw] 保留给只关心成功值的调用方。
+     */
+    suspend fun probeRaw(source: CustomSearchSource, keyword: String): ProbeFetch =
+        withContext(Dispatchers.IO) {
+            val body = try {
+                val request = Request.Builder()
+                    .url(buildUrl(source, keyword))
+                    .addHeader("User-Agent", com.tracktosearch.di.NetworkModule.USER_AGENT)
+                    .addHeader("Referer", source.baseUrl)
+                    .build()
+                okHttpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        return@withContext ProbeFetch.Unreachable
+                    }
+                    response.body?.string()
+                }
+            } catch (e: Exception) {
+                // 超时、DNS 失败、非法 URL 都算「连不上」：对用户的下一步动作是同一件事
+                return@withContext ProbeFetch.Unreachable
+            } ?: return@withContext ProbeFetch.Unreachable
+
+            try {
+                ProbeFetch.Json(json.parseToJsonElement(body))
+            } catch (e: Exception) {
+                ProbeFetch.NotJson
+            }
+        }
+
+    /** 探测请求的结果：连不上 / 不是 JSON / 拿到 JSON */
+    sealed interface ProbeFetch {
+        data object Unreachable : ProbeFetch
+        data object NotJson : ProbeFetch
+        data class Json(val root: JsonElement) : ProbeFetch
+    }
+
+    /**
      * 获取原始响应 JSON（自动探测用）：请求失败或非 2xx 返回 null
      */
     suspend fun fetchRaw(source: CustomSearchSource, keyword: String): JsonElement? = withContext(Dispatchers.IO) {

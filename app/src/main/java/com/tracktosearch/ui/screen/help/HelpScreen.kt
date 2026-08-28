@@ -93,7 +93,8 @@ private val HelpSectionSearchIndex: List<List<Int>> = listOf(
     // 2 观看统计
     listOf(
         R.string.help_statistics, R.string.help_statistics_b1, R.string.help_statistics_b2,
-        R.string.help_statistics_b3, R.string.help_statistics_b4
+        R.string.help_statistics_b3, R.string.help_statistics_b4,
+        R.string.help_statistics_b5, R.string.help_statistics_b6
     ),
     // 3 标记记录
     listOf(
@@ -117,6 +118,7 @@ private val HelpSectionSearchIndex: List<List<Int>> = listOf(
     listOf(
         R.string.help_custom_source, R.string.help_custom_source_b1, R.string.help_custom_source_b2,
         R.string.help_custom_source_b3, R.string.help_custom_source_b4, R.string.help_custom_source_b5,
+        R.string.help_custom_source_b6, R.string.help_custom_source_b7, R.string.help_custom_source_b8,
         R.string.help_custom_source_params, R.string.help_custom_source_parse_title,
         R.string.help_custom_source_parse_b1, R.string.help_custom_source_parse_b2,
         R.string.help_custom_source_parse_b3, R.string.help_custom_source_example_title
@@ -303,6 +305,8 @@ fun HelpScreen(
                         HelpBullet(stringResource(R.string.help_statistics_b2))
                         HelpBullet(stringResource(R.string.help_statistics_b3))
                         HelpBullet(stringResource(R.string.help_statistics_b4))
+                        HelpBullet(stringResource(R.string.help_statistics_b5))
+                        HelpBullet(stringResource(R.string.help_statistics_b6))
                     }
                 }
 
@@ -401,6 +405,9 @@ fun HelpScreen(
                         HelpBullet(stringResource(R.string.help_custom_source_b3))
                         HelpBullet(stringResource(R.string.help_custom_source_b4))
                         HelpBullet(stringResource(R.string.help_custom_source_b5))
+                        HelpBullet(stringResource(R.string.help_custom_source_b6))
+                        HelpBullet(stringResource(R.string.help_custom_source_b7))
+                        HelpBullet(stringResource(R.string.help_custom_source_b8))
 
                         Spacer(modifier = Modifier.height(8.dp))
                         HelpSubtitle(stringResource(R.string.help_custom_source_params))
