@@ -72,6 +72,10 @@ object ApkDownloader {
         } catch (e: Exception) {
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
             throw e
+        } finally {
+            // 每次下载新建的 client 用完必须关闭：释放 dispatcher 线程池与连接池，
+            // 否则多次更新检查后线程/连接泄漏（OkHttpClient 无 close()，须 shutdown dispatcher）。
+            runCatching { client.dispatcher.executorService.shutdown() }
         }
     }
 
@@ -102,6 +106,8 @@ object ApkDownloader {
             response = client.newCall(request).execute()
 
             if (!response.isSuccessful) {
+                // 非 2xx：errorBody 未消费会泄漏连接，必须显式关闭
+                response.close()
                 return null
             }
 
