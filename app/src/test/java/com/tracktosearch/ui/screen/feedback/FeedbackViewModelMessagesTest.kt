@@ -122,4 +122,80 @@ class FeedbackViewModelMessagesTest {
         assertThat((viewModel.messagesState.value as FeedbackViewModel.MessagesState.Success).items.map { it.id })
             .containsExactly("cached")
     }
+
+    // ==================== 静默刷新指示器 ====================
+
+    @Test
+    fun isRefreshingIsTrueWhileCachedMessagesRefreshAndFalseAfterwards() = runTest {
+        val cached = MessagesResponse(listOf(message("cached", true)), 50, 0, 1, false)
+        val networkResult = CompletableDeferred<Result<MessagesResponse>>()
+        every { cacheStore.getCachedMessages() } returns cached
+        coEvery { feedbackRepository.getMessages(50, 0) } coAnswers { networkResult.await() }
+        val viewModel = createViewModel()
+
+        viewModel.loadMessages(refresh = true)
+        runCurrent()
+
+        assertThat((viewModel.messagesState.value as FeedbackViewModel.MessagesState.Success).isRefreshing).isTrue()
+
+        networkResult.complete(Result.success(MessagesResponse(listOf(message("fresh", false)), 50, 0, 1, false)))
+        advanceUntilIdle()
+        assertThat((viewModel.messagesState.value as FeedbackViewModel.MessagesState.Success).isRefreshing).isFalse()
+    }
+
+    @Test
+    fun isRefreshingResetsAfterRefreshFailure() = runTest {
+        val cached = MessagesResponse(listOf(message("cached", true)), 50, 0, 1, false)
+        every { cacheStore.getCachedMessages() } returns cached
+        coEvery { feedbackRepository.getMessages(50, 0) } returns Result.failure(IllegalStateException("NETWORK_FAILED"))
+        val viewModel = createViewModel()
+
+        viewModel.loadMessages(refresh = true)
+        advanceUntilIdle()
+
+        assertThat((viewModel.messagesState.value as FeedbackViewModel.MessagesState.Success).isRefreshing).isFalse()
+    }
+
+    @Test
+    fun firstLoadWithoutCacheStaysLoadingInsteadOfShowingIndicator() = runTest {
+        val networkResult = CompletableDeferred<Result<MessagesResponse>>()
+        every { cacheStore.getCachedMessages() } returns null
+        coEvery { feedbackRepository.getMessages(50, 0) } coAnswers { networkResult.await() }
+        val viewModel = createViewModel()
+
+        viewModel.loadMessages(refresh = true)
+        runCurrent()
+
+        // 无缓存时首次加载走骨架屏，不显示顶栏进度条
+        assertThat(viewModel.messagesState.value).isEqualTo(FeedbackViewModel.MessagesState.Loading)
+
+        networkResult.complete(Result.success(MessagesResponse(listOf(message("fresh", false)), 50, 0, 1, false)))
+        advanceUntilIdle()
+        assertThat((viewModel.messagesState.value as FeedbackViewModel.MessagesState.Success).isRefreshing).isFalse()
+    }
+
+    @Test
+    fun loadMoreAlsoShowsRefreshIndicator() = runTest {
+        val networkResult = CompletableDeferred<Result<MessagesResponse>>()
+        coEvery { feedbackRepository.getMessages(50, 0) } returns Result.success(
+            MessagesResponse(listOf(message("m1", true)), 50, 0, 2, true)
+        )
+        coEvery { feedbackRepository.getMessages(50, 1) } coAnswers { networkResult.await() }
+        val viewModel = createViewModel()
+
+        viewModel.loadMessages(refresh = true)
+        advanceUntilIdle()
+        assertThat((viewModel.messagesState.value as FeedbackViewModel.MessagesState.Success).isRefreshing).isFalse()
+
+        // 「加载更多」按钮自身没有进度反馈，翻页同样用顶栏进度条提示
+        viewModel.loadMessages(refresh = false)
+        runCurrent()
+        assertThat((viewModel.messagesState.value as FeedbackViewModel.MessagesState.Success).isRefreshing).isTrue()
+
+        networkResult.complete(Result.success(MessagesResponse(listOf(message("m2", true)), 50, 1, 2, false)))
+        advanceUntilIdle()
+        val state = viewModel.messagesState.value as FeedbackViewModel.MessagesState.Success
+        assertThat(state.isRefreshing).isFalse()
+        assertThat(state.items.map { it.id }).containsExactly("m1", "m2")
+    }
 }

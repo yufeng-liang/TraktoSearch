@@ -48,6 +48,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -112,7 +113,9 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.saveable.listSaver
 
 /** 首屏骨架卡片数量：两列，铺满一屏左右即可，多了只是白耗合成 */
@@ -131,6 +134,20 @@ fun MarkRecordScreen(
     val hazeState = remember { HazeState() }
     val hazeStyle = HazeMaterials.thin()
     val listState = rememberLazyGridState()
+    // 改筛选/排序/搜索/Tab 后，新列表要把整张表换掉，位置必须回到顶部。
+    //
+    // 不能只靠 Lazy 网格自己：它默认按"首个可见 item 的 key"重新定位 —— 排序方向一反转，
+    // 旧的第 0 项跑到列表末尾，位置就跟着被带到底部；筛掉大半条目时锚点在新列表里找不到，
+    // 索引又会被钳到末尾。两种情况用户看到的都是"列表停在底部"而不是从头按顺序显示。
+    //
+    // 位置要在新列表上屏那一帧才钉：重定位就发生在那次测量里，提前调用会被这次测量吃掉。
+    // requestScrollToItem 会丢掉 key 锚点，所以钉住之后不会再被重定位带走。
+    val markRecordListToken = "${uiState.currentTab}|${uiState.filterMediaTypes}|" +
+        "${uiState.filterDatePreset}|${uiState.filterDateRange}|${uiState.sortAscending}|${uiState.searchQuery}"
+    LaunchedEffect(markRecordListToken) {
+        snapshotFlow { uiState.items }.drop(1).first()
+        listState.requestScrollToItem(0)
+    }
     var showFilterSheet by remember { mutableStateOf(false) }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
@@ -169,7 +186,9 @@ fun MarkRecordScreen(
             else -> 0.60f
         },
         ambientColor = rememberCachedPosterAmbientColor(
-            posterUrls = uiState.items.mapNotNull { it.posterUrl },
+            // 必须 remember：rememberCachedPosterAmbientColor 内部用列表身份做 remember/LaunchedEffect 的 key，
+            // 每次重组都传新列表会让环境色先跳回 fallback 再重读一遍颜色缓存
+            posterUrls = remember(uiState.items) { uiState.items.mapNotNull { it.posterUrl } },
             fallback = MaterialTheme.colorScheme.background
         ),
         contentCapacity = 36,
@@ -268,6 +287,9 @@ fun MarkRecordScreen(
                 }
                 uiState.items.isEmpty() -> {
                     item(span = { GridItemSpan(2) }) {
+                        // 筛选/搜索把结果筛空了要说清楚，并给一个一键清掉的出口：
+                        // 否则用户看到的是「暂无记录」，会以为数据丢了
+                        val filteredEmpty = uiState.hasActiveFilterOrSearch
                         EmptyStateCard(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -275,14 +297,28 @@ fun MarkRecordScreen(
                             isDark = isDark,
                             hazeState = hazeState,
                             hazeStyle = hazeStyle,
-                            icon = Icons.Rounded.Inbox,
-                            title =
+                            icon = if (filteredEmpty) Icons.Rounded.FilterList else Icons.Rounded.Inbox,
+                            title = if (filteredEmpty) {
+                                stringResource(R.string.mark_records_empty_filtered)
+                            } else {
                                 stringResource(when (uiState.currentTab) {
                                     MarkRecordTab.ALL -> R.string.mark_records_empty_all
                                     MarkRecordTab.WATCHLIST -> R.string.mark_records_empty_watchlist
                                     MarkRecordTab.WATCHED -> R.string.mark_records_empty_watched
                                     MarkRecordTab.REMOVED -> R.string.mark_records_empty_removed
                                 })
+                            },
+                            actions = {
+                                if (filteredEmpty) {
+                                    TextButton(onClick = {
+                                        collapseSearch()
+                                        viewModel.updateSearchQuery("")
+                                        viewModel.updateFilter(emptySet(), DatePreset.ALL, null, uiState.sortAscending)
+                                    }) {
+                                        Text(stringResource(R.string.mark_records_clear_filter))
+                                    }
+                                }
+                            }
                         )
                     }
                 }
@@ -496,6 +532,12 @@ fun MarkRecordScreen(
                         Icon(
                             Icons.Rounded.FilterList,
                             contentDescription = stringResource(R.string.filter_title),
+                            // 筛选生效时保持主色：弹窗关上后没有别的地方能看出条件还开着
+                            tint = if (uiState.hasActiveFilter) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                LocalContentColor.current
+                            },
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -524,6 +566,18 @@ fun MarkRecordScreen(
                         }
                     )
                 }
+            }
+
+            // 已展示旧数据但仍在加载时的细进度条：不遮挡内容，只提示数据可能不是最新。
+            // 放在吸顶栏最底部，出现/消失不会推动上方的标题与 Tab。
+            // isLoading 也算：改筛选/搜索时列表保留旧内容不进骨架屏，这里是唯一的进度提示。
+            if ((uiState.isRefreshing || uiState.isLoading) && uiState.items.isNotEmpty()) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .testTag("mark_record_refresh_indicator")
+                )
             }
         }
 

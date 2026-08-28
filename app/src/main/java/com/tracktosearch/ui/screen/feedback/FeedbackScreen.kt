@@ -54,18 +54,30 @@ fun FeedbackScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.feedback_title), fontWeight = FontWeight.ExtraBold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = stringResource(R.string.content_desc_back)
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-            )
+            // 用 Box 叠加进度条而不是 Column 追加：顶栏高度不变，进度条出现/消失不会推动下方列表。
+            Box {
+                TopAppBar(
+                    title = { Text(stringResource(R.string.feedback_title), fontWeight = FontWeight.ExtraBold) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = stringResource(R.string.content_desc_back)
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                )
+                // 已展示缓存但远端仍在刷新时的细进度条：不遮挡内容，只提示数据可能不是最新
+                if ((listState as? FeedbackViewModel.ListState.Success)?.isRefreshing == true) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(2.dp)
+                    )
+                }
+            }
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->

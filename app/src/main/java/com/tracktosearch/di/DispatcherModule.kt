@@ -23,9 +23,17 @@ object DispatcherModule {
 
     const val COMPUTE_DISPATCHER = "computeDispatcher"
 
+    const val IO_DISPATCHER = "ioDispatcher"
+
     /** CPU 密集计算调度器（列表合并/排序/搜索索引构建）。 */
     @Provides
     @Singleton
     @Named(COMPUTE_DISPATCHER)
     fun provideComputeDispatcher(): CoroutineDispatcher = Dispatchers.Default
+
+    /** 磁盘读写调度器（快照 JSON 的读写）。同样注入，单元测试才能确定性推进读盘。 */
+    @Provides
+    @Singleton
+    @Named(IO_DISPATCHER)
+    fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO
 }

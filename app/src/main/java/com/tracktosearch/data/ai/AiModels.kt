@@ -337,6 +337,33 @@ data class AiQuizResult(
     val quota: AiQuota? = null
 )
 
+/** 出分页难度反馈档位，wireValue 对接服务端契约 easy/just_right/hard。 */
+@Serializable
+enum class AiQuizDifficulty(val wireValue: String) {
+    EASY("easy"),
+    JUST_RIGHT("just_right"),
+    HARD("hard");
+
+    companion object {
+        /** rememberSaveable 存的是 name，恢复时安全解析，脏值返回 null。 */
+        fun fromName(name: String?): AiQuizDifficulty? =
+            name?.let { runCatching { valueOf(it) }.getOrNull() }
+    }
+}
+
+/** POST /api/ai/quiz/feedback 请求体：action 固定 quiz.feedback。 */
+@Serializable
+data class AiQuizFeedbackRequest(
+    val action: String = "quiz.feedback",
+    val quizId: String,
+    val difficulty: String
+)
+
+@Serializable
+data class AiQuizFeedbackDto(
+    val success: Boolean = false
+)
+
 /** 闯关历史（离线可浏览）：最近一次结果 + 历史最高分。按 friendId 分区持久化。 */
 @Serializable
 data class AiQuizHistory(

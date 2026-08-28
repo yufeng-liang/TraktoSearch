@@ -19,7 +19,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -32,6 +37,8 @@ import com.tracktosearch.data.remote.feedback.MessageItem
 import com.tracktosearch.ui.screen.feedback.FeedbackViewModel
 import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.util.performHaptic
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -47,36 +54,53 @@ fun MessagesScreen(
     val filter by viewModel.messagesFilter.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     LaunchedEffect(Unit) { viewModel.loadMessages(refresh = true) }
+    // 换筛选后内容整批换掉，滚动位置留在原处会停在半空
+    // （从翻了几页的「全部」切到只有两条的「未读」时最明显）
+    LaunchedEffect(filter) { listState.scrollToItem(0) }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.feedback_messages_title), fontWeight = FontWeight.ExtraBold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = stringResource(R.string.content_desc_back)
-                        )
-                    }
-                },
-                actions = {
-                    TextButton(onClick = { viewModel.markAllRead() }) {
-                        Icon(Icons.Rounded.DoneAll, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(stringResource(R.string.feedback_messages_all_read), fontSize = 13.sp)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-            )
+            // 用 Box 叠加进度条而不是 Column 追加：顶栏高度不变，
+            // 进度条出现/消失不会推动下方的筛选栏和列表。
+            Box {
+                TopAppBar(
+                    title = { Text(stringResource(R.string.feedback_messages_title), fontWeight = FontWeight.ExtraBold) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = stringResource(R.string.content_desc_back)
+                            )
+                        }
+                    },
+                    actions = {
+                        TextButton(onClick = { viewModel.markAllRead() }) {
+                            Icon(Icons.Rounded.DoneAll, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(stringResource(R.string.feedback_messages_all_read), fontSize = 13.sp)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                )
+                // 已展示缓存但远端仍在刷新时的细进度条：不遮挡内容，只提示数据可能不是最新
+                if ((messagesState as? FeedbackViewModel.MessagesState.Success)?.isRefreshing == true) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(2.dp)
+                    )
+                }
+            }
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // 只有「全部」「未读」两个筛选：列表只展示开发者回复（自己的回复不算收到的消息），
+            // 所以原来的「开发者」chip 和「全部」筛出来的是同一份，点了看不出区别。
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.Start)) {
                 MessageFilterChip(stringResource(R.string.feedback_filter_all), filter == FeedbackViewModel.MessageFilter.ALL) { viewModel.setMessagesFilter(FeedbackViewModel.MessageFilter.ALL) }
                 MessageFilterChip(stringResource(R.string.feedback_filter_unread), filter == FeedbackViewModel.MessageFilter.UNREAD) { viewModel.setMessagesFilter(FeedbackViewModel.MessageFilter.UNREAD) }
-                MessageFilterChip(stringResource(R.string.feedback_filter_developer), filter == FeedbackViewModel.MessageFilter.DEVELOPER) { viewModel.setMessagesFilter(FeedbackViewModel.MessageFilter.DEVELOPER) }
             }
             when (val state = messagesState) {
                 is FeedbackViewModel.MessagesState.Loading -> { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
@@ -89,7 +113,10 @@ fun MessagesScreen(
                     )
                 }
                 is FeedbackViewModel.MessagesState.Success -> {
-                    val visibleItems = state.items.filter { it.author_role == "developer" }
+                    // remember：列表不变时不必每次重组都重新过滤一遍
+                    val visibleItems = remember(state.items) {
+                        state.items.filter { it.author_role == "developer" }
+                    }
                     if (visibleItems.isEmpty()) {
                         Box(
                             Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -97,8 +124,22 @@ fun MessagesScreen(
                         ) {
                             EmptyStateCard(
                                 isDark = isAppDarkTheme(),
-                                title = stringResource(R.string.feedback_messages_empty),
-                                icon = Icons.Rounded.Inbox
+                                // 「未读」筛掉的空和真的没有消息不是一回事，文案要分开
+                                title = if (filter == FeedbackViewModel.MessageFilter.UNREAD) {
+                                    stringResource(R.string.feedback_messages_empty_unread)
+                                } else {
+                                    stringResource(R.string.feedback_messages_empty)
+                                },
+                                icon = Icons.Rounded.Inbox,
+                                actions = {
+                                    if (filter == FeedbackViewModel.MessageFilter.UNREAD) {
+                                        TextButton(onClick = {
+                                            viewModel.setMessagesFilter(FeedbackViewModel.MessageFilter.ALL)
+                                        }) {
+                                            Text(stringResource(R.string.feedback_filter_all))
+                                        }
+                                    }
+                                }
                             )
                         }
                     }
@@ -116,7 +157,24 @@ fun MessagesScreen(
 
 @Composable
 private fun MessageFilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Surface(modifier = Modifier.clickable { onClick() }, shape = RoundedCornerShape(8.dp), color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface, tonalElevation = if (selected) 0.dp else 1.dp, shadowElevation = if (selected) 0.dp else 1.dp) {
+    val view = LocalView.current
+    val isSelected = selected
+    Surface(
+        modifier = Modifier
+            // 无障碍：Surface 本身没有语义，读屏只念文字，念不出这是可点的筛选项、有没有选中
+            .semantics {
+                this.role = Role.Button
+                this.selected = isSelected
+            }
+            .clickable {
+                view.performHaptic(HapticType.CLICK)
+                onClick()
+            },
+        shape = RoundedCornerShape(8.dp),
+        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface,
+        tonalElevation = if (selected) 0.dp else 1.dp,
+        shadowElevation = if (selected) 0.dp else 1.dp
+    ) {
         Text(text = label, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), fontSize = 12.sp, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
     }
 }

@@ -81,6 +81,28 @@ class MarkRecordViewModelTest {
         actionType = actionType, actedAt = actedAt, episodeInfo = null
     )
 
+    /** 日期选择器返回值：所选日期的 UTC 零点。 */
+    private fun utcMidnight(year: Int, month: Int, day: Int): Long =
+        java.time.LocalDate.of(year, month, day)
+            .atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+
+    /** 所选日期在本地时区的起点。 */
+    private fun localDayStart(year: Int, month: Int, day: Int): Long =
+        java.time.LocalDate.of(year, month, day)
+            .atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+    /** 所选日期在本地时区的最后一毫秒。 */
+    private fun localDayEnd(year: Int, month: Int, day: Int): Long =
+        java.time.LocalDate.of(year, month, day).plusDays(1)
+            .atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() - 1
+
+    private fun historyItem(traktId: Int, watchedAt: Long, mediaType: String = "movie") =
+        TraktRepository.WatchHistoryItem(
+            traktId = traktId, tmdbId = traktId * 10, imdbId = "tt$traktId", mediaType = mediaType,
+            title = "Movie $traktId", displayTitle = "Movie $traktId", posterUrl = null,
+            year = 2024, watchedAt = watchedAt, episodeInfo = null
+        )
+
     @Test
     fun initial_state_is_all_tab_loading() = runTest {
         val state = viewModel.uiState.value
@@ -124,10 +146,53 @@ class MarkRecordViewModelTest {
     @Test
     fun update_search_query_triggers_reload() = runTest {
         viewModel.updateSearchQuery("Inception")
-        kotlinx.coroutines.delay(100)
+        // 搜索有防抖，要把虚拟时间推过去才发查询
+        advanceUntilIdle()
         coVerify(atLeast = 1) {
             dao.query(any(), any(), any(), any(), any(), any(), eq("%Inception%"), any(), any(), any())
         }
+    }
+
+    /**
+     * 连续输入只发一次查询。
+     *
+     * 每个字符都触发 Room 查询 + Trakt 历史拉取的话，输入过程中列表一直在清空/重填。
+     */
+    @Test
+    fun `连续输入_防抖后只查询一次`() = runTest {
+        advanceUntilIdle() // 等 init 的首屏加载（dao.query 第 1 次）
+        io.mockk.clearMocks(dao, answers = false, childMocks = false)
+
+        viewModel.updateSearchQuery("I")
+        viewModel.updateSearchQuery("In")
+        viewModel.updateSearchQuery("Inc")
+        advanceUntilIdle()
+
+        // 输入框立刻反映最后一个字符，但只查最终的词
+        assertThat(viewModel.uiState.value.searchQuery).isEqualTo("Inc")
+        coVerify(exactly = 1) {
+            dao.query(any(), any(), any(), any(), any(), any(), eq("%Inc%"), any(), any(), any())
+        }
+    }
+
+    /**
+     * 改搜索词时保留旧列表。
+     *
+     * 先清空的话每次改条件整屏都要在骨架屏和结果之间闪一下。
+     */
+    @Test
+    fun `改搜索词_旧列表保留到新结果到达`() = runTest {
+        coEvery {
+            dao.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } returns listOf(sampleEntity(MarkActionType.ADD_WATCHLIST.value, 1, 1000L))
+        viewModel.switchTab(MarkRecordTab.WATCHLIST)
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.items).hasSize(1)
+
+        viewModel.updateSearchQuery("Test")
+
+        // 防抖窗口内不清列表，用户看到的还是旧结果
+        assertThat(viewModel.uiState.value.items).hasSize(1)
     }
 
     // ==================== updateFilter ====================
@@ -168,17 +233,23 @@ class MarkRecordViewModelTest {
         coEvery {
             dao.query(any(), any(), any(), any(), capture(startSlot), capture(endSlot), any(), any(), any(), any())
         } returns emptyList()
-        val customRange = 1000L to 2000L
+        // 日期选择器给的是所选日期的 UTC 零点
+        val startPick = utcMidnight(2026, 8, 1)
+        val endPick = utcMidnight(2026, 8, 27)
 
-        viewModel.updateFilter(emptySet(), DatePreset.CUSTOM, customRange, false)
+        viewModel.updateFilter(emptySet(), DatePreset.CUSTOM, startPick to endPick, false)
         advanceUntilIdle()
 
-        assertThat(startSlot.captured).isEqualTo(1000L)
-        assertThat(endSlot.captured).isEqualTo(2000L)
+        assertThat(startSlot.captured).isEqualTo(localDayStart(2026, 8, 1))
+        assertThat(endSlot.captured).isEqualTo(localDayEnd(2026, 8, 27))
     }
 
     @Test
     fun `updateFilter_ALL_时间范围为0`() = runTest {
+        // 先设一个非默认条件，否则「与当前条件相同」会被早退挡掉
+        viewModel.updateFilter(emptySet(), DatePreset.SEVEN_DAYS, null, false)
+        advanceUntilIdle()
+
         val startSlot = slot<Long>()
         val endSlot = slot<Long>()
         coEvery {
@@ -190,6 +261,19 @@ class MarkRecordViewModelTest {
 
         assertThat(startSlot.captured).isEqualTo(0L)
         assertThat(endSlot.captured).isEqualTo(0L)
+    }
+
+    /** 弹窗里什么都没改就点确定：不重新查一遍。 */
+    @Test
+    fun `updateFilter_条件未变_不重复加载`() = runTest {
+        advanceUntilIdle() // init 的首屏加载（dao.query 第 1 次）
+
+        viewModel.updateFilter(emptySet(), DatePreset.ALL, null, false)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            dao.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+        }
     }
 
     @Test
@@ -506,6 +590,83 @@ class MarkRecordViewModelTest {
         return method.invoke(viewModel, state) as Pair<Long, Long>
     }
 
+    // ==================== 静默刷新指示器 ====================
+
+    @Test
+    fun `WATCHED_Tab_远端刷新中isRefreshing为true完成后置false`() = runTest {
+        val item = TraktRepository.WatchHistoryItem(
+            traktId = 1, tmdbId = 10, imdbId = "tt1",
+            mediaType = "movie", title = "Test", displayTitle = "Test",
+            posterUrl = null, year = 2024, watchedAt = 10000L, episodeInfo = null
+        )
+        // 首批（非完成批）落地后读取状态：此时列表已有内容，远端仍在拉取
+        var refreshingAfterFirstBatch: Boolean? = null
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns flow {
+            emit(TraktRepository.WatchHistoryEmit(items = listOf(item), isComplete = false))
+            refreshingAfterFirstBatch = viewModel.uiState.value.isRefreshing
+            emit(TraktRepository.WatchHistoryEmit(items = listOf(item), isComplete = true))
+        }
+
+        viewModel.switchTab(MarkRecordTab.WATCHED)
+        advanceUntilIdle()
+
+        assertThat(refreshingAfterFirstBatch).isTrue()
+        assertThat(viewModel.uiState.value.items).isNotEmpty()
+        assertThat(viewModel.uiState.value.isRefreshing).isFalse()
+    }
+
+    @Test
+    fun `翻页时不置isRefreshing_避免与底部指示器重复`() = runTest {
+        val page1Items = List(50) { i ->
+            TraktRepository.WatchHistoryItem(
+                traktId = 1000 + i, tmdbId = 2000 + i, imdbId = "tt$i",
+                mediaType = "movie", title = "Movie $i", displayTitle = "Movie $i",
+                posterUrl = null, year = 2024, watchedAt = 10000L - i, episodeInfo = null
+            )
+        }
+        coEvery { traktRepo.fetchWatchHistory(1) } returns flowOf(
+            TraktRepository.WatchHistoryEmit(items = page1Items, isComplete = true)
+        )
+        var refreshingDuringNextPage: Boolean? = null
+        coEvery { traktRepo.fetchWatchHistory(2) } returns flow {
+            refreshingDuringNextPage = viewModel.uiState.value.isRefreshing
+            emit(TraktRepository.WatchHistoryEmit(items = emptyList(), isComplete = true))
+        }
+        // hasMore 靠总页数，不给的话 loadNextPage 会直接被挡掉
+        coEvery { traktRepo.getWatchHistoryTotalPages() } returns 2
+
+        viewModel.switchTab(MarkRecordTab.WATCHED)
+        advanceUntilIdle()
+        viewModel.loadNextPage()
+        advanceUntilIdle()
+
+        assertThat(refreshingDuringNextPage).isFalse()
+        assertThat(viewModel.uiState.value.isRefreshing).isFalse()
+    }
+
+    @Test
+    fun `Trakt失败后isRefreshing复位`() = runTest {
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns flowOf(
+            TraktRepository.WatchHistoryEmit(items = emptyList(), isComplete = true, error = "network error")
+        )
+
+        viewModel.switchTab(MarkRecordTab.WATCHED)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.error).isNotNull()
+        assertThat(viewModel.uiState.value.isRefreshing).isFalse()
+    }
+
+    @Test
+    fun `未连接Trakt时不置isRefreshing`() = runTest {
+        traktConnected.value = false
+
+        viewModel.switchTab(MarkRecordTab.WATCHED)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.isRefreshing).isFalse()
+    }
+
     @Test
     fun `computeTimeRange_SEVEN_DAYS返回7天前到0`() {
         val state = MarkRecordUiState(filterDatePreset = DatePreset.SEVEN_DAYS)
@@ -525,14 +686,28 @@ class MarkRecordViewModelTest {
     }
 
     @Test
-    fun `computeTimeRange_CUSTOM使用自定义范围`() {
+    fun `computeTimeRange_CUSTOM换算成本地时区的整天`() {
         val state = MarkRecordUiState(
             filterDatePreset = DatePreset.CUSTOM,
-            filterDateRange = 1000L to 2000L
+            filterDateRange = utcMidnight(2026, 8, 1) to utcMidnight(2026, 8, 27)
         )
         val (start, end) = computeTimeRange(state)
-        assertThat(start).isEqualTo(1000L)
-        assertThat(end).isEqualTo(2000L)
+        assertThat(start).isEqualTo(localDayStart(2026, 8, 1))
+        // 结束日当天的记录必须包含在内：DAO 是 actedAt <= endTime，
+        // 直接用 UTC 零点会把结束日整天排除
+        assertThat(end).isEqualTo(localDayEnd(2026, 8, 27))
+    }
+
+    /** 只挑了开始日期：另一端按不限处理，语义是「这天以后」。 */
+    @Test
+    fun `computeTimeRange_CUSTOM单边范围_另一端不限`() {
+        val state = MarkRecordUiState(
+            filterDatePreset = DatePreset.CUSTOM,
+            filterDateRange = utcMidnight(2026, 8, 1) to 0L
+        )
+        val (start, end) = computeTimeRange(state)
+        assertThat(start).isEqualTo(localDayStart(2026, 8, 1))
+        assertThat(end).isEqualTo(0L)
     }
 
     @Test
@@ -552,41 +727,54 @@ class MarkRecordViewModelTest {
     }
 
     // ==================== WATCHED Tab Trakt 分页补充 ====================
+    // hasMore 按 Trakt 总页数判断，不能按条目数：
+    // 一页是 100 部电影 + 100 集，永远不等于 pageSize(50)，
+    // 而且媒体类型筛选会在客户端削掉条目，按条目数判断第一页就会停住。
 
     @Test
-    fun `WATCHED_Tab_满50条hasMore为true`() = runTest {
-        val items = List(50) { i ->
-            TraktRepository.WatchHistoryItem(
-                traktId = 1000 + i, tmdbId = 2000 + i, imdbId = "tt$i",
-                mediaType = "movie", title = "Movie $i", displayTitle = "Movie $i",
-                posterUrl = null, year = 2024, watchedAt = 10000L - i, episodeInfo = null
-            )
-        }
+    fun `WATCHED_Tab_还有下一页时hasMore为true`() = runTest {
         coEvery { traktRepo.fetchWatchHistory(any()) } returns flowOf(
-            TraktRepository.WatchHistoryEmit(items = items, isComplete = true)
+            TraktRepository.WatchHistoryEmit(items = List(120) { historyItem(1000 + it, 10000L - it) }, isComplete = true)
         )
+        coEvery { traktRepo.getWatchHistoryTotalPages() } returns 3
+
         viewModel.switchTab(MarkRecordTab.WATCHED)
         advanceUntilIdle()
-        assertThat(viewModel.uiState.value.items).hasSize(50)
+
+        assertThat(viewModel.uiState.value.items).hasSize(120)
         assertThat(viewModel.uiState.value.hasMore).isTrue()
     }
 
     @Test
-    fun `WATCHED_Tab_不足50条hasMore为false`() = runTest {
-        val items = List(30) { i ->
-            TraktRepository.WatchHistoryItem(
-                traktId = 1000 + i, tmdbId = 2000 + i, imdbId = "tt$i",
-                mediaType = "movie", title = "Movie $i", displayTitle = "Movie $i",
-                posterUrl = null, year = 2024, watchedAt = 10000L - i, episodeInfo = null
-            )
-        }
+    fun `WATCHED_Tab_最后一页hasMore为false`() = runTest {
         coEvery { traktRepo.fetchWatchHistory(any()) } returns flowOf(
-            TraktRepository.WatchHistoryEmit(items = items, isComplete = true)
+            TraktRepository.WatchHistoryEmit(items = List(30) { historyItem(1000 + it, 10000L - it) }, isComplete = true)
         )
+        coEvery { traktRepo.getWatchHistoryTotalPages() } returns 1
+
         viewModel.switchTab(MarkRecordTab.WATCHED)
         advanceUntilIdle()
+
         assertThat(viewModel.uiState.value.items).hasSize(30)
         assertThat(viewModel.uiState.value.hasMore).isFalse()
+    }
+
+    /** 回归：筛掉大半条目后仍要能翻页（按条目数判断时这里会停在第一页）。 */
+    @Test
+    fun `WATCHED_Tab_媒体类型筛掉大半条目仍可翻页`() = runTest {
+        val mixed = List(100) { historyItem(1000 + it, 10000L - it, if (it == 0) "show" else "movie") }
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns flowOf(
+            TraktRepository.WatchHistoryEmit(items = mixed, isComplete = true)
+        )
+        coEvery { traktRepo.getWatchHistoryTotalPages() } returns 4
+
+        viewModel.switchTab(MarkRecordTab.WATCHED)
+        advanceUntilIdle()
+        viewModel.updateFilter(setOf("show"), DatePreset.ALL, null, false)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.items).hasSize(1)
+        assertThat(viewModel.uiState.value.hasMore).isTrue()
     }
 
     @Test
@@ -611,6 +799,8 @@ class MarkRecordViewModelTest {
         coEvery { traktRepo.fetchWatchHistory(2) } returns flowOf(
             TraktRepository.WatchHistoryEmit(items = page2Items, isComplete = true)
         )
+        coEvery { traktRepo.getWatchHistoryTotalPages() } returns 2
+
         viewModel.switchTab(MarkRecordTab.WATCHED)
         advanceUntilIdle()
         assertThat(viewModel.uiState.value.currentPage).isEqualTo(1)
@@ -620,7 +810,7 @@ class MarkRecordViewModelTest {
         advanceUntilIdle()
         assertThat(viewModel.uiState.value.currentPage).isEqualTo(2)
         assertThat(viewModel.uiState.value.items).hasSize(60)
-        // 第二页只有 10 条（< 50），hasMore 为 false
+        // 第二页就是最后一页
         assertThat(viewModel.uiState.value.hasMore).isFalse()
     }
 
@@ -709,16 +899,167 @@ class MarkRecordViewModelTest {
         assertThat(newItems.all { it.currentStatus == CurrentMarkStatus.NONE }).isTrue()
     }
 
+    // ==================== Tab 结果缓存 / 过期请求 ====================
+
+    /** 切回来先还原上次的结果（不闪骨架屏），再静默刷新一次。 */
+    @Test
+    fun `切回原Tab_条件未变时先还原缓存再静默刷新`() = runTest {
+        val watchlistPage = List(3) { sampleEntity(MarkActionType.ADD_WATCHLIST.value, it, 1000L + it) }
+        // 第二次查询（静默刷新）挂住，好观察还原出来的那一帧
+        val refreshGate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        var watchlistQueryCount = 0
+        coEvery {
+            dao.query(
+                actionTypes = listOf(MarkActionType.ADD_WATCHLIST.value),
+                actionTypesEmpty = false,
+                any(), any(), any(), any(), any(), any(), any(), any()
+            )
+        } coAnswers {
+            watchlistQueryCount++
+            if (watchlistQueryCount > 1) refreshGate.await()
+            watchlistPage
+        }
+
+        viewModel.switchTab(MarkRecordTab.WATCHLIST)
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.items).hasSize(3)
+
+        viewModel.switchTab(MarkRecordTab.REMOVED)
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.items).isEmpty()
+
+        viewModel.switchTab(MarkRecordTab.WATCHLIST)
+        // 缓存同步还原：列表已经有内容，不是 isLoading 的空屏
+        assertThat(viewModel.uiState.value.items).hasSize(3)
+        assertThat(viewModel.uiState.value.isLoading).isFalse()
+        assertThat(viewModel.uiState.value.isRefreshing).isTrue()
+
+        refreshGate.complete(Unit)
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.items).hasSize(3)
+        assertThat(viewModel.uiState.value.isRefreshing).isFalse()
+    }
+
+    /** 筛选条件变了缓存就作废，不能把旧条件的结果还原出来。 */
+    @Test
+    fun `切回原Tab_条件已变时不还原缓存`() = runTest {
+        coEvery {
+            dao.query(
+                actionTypes = listOf(MarkActionType.ADD_WATCHLIST.value),
+                actionTypesEmpty = false,
+                any(), any(), any(), any(), any(), any(), any(), any()
+            )
+        } returns List(3) { sampleEntity(MarkActionType.ADD_WATCHLIST.value, it, 1000L + it) }
+
+        viewModel.switchTab(MarkRecordTab.WATCHLIST)
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.items).hasSize(3)
+
+        viewModel.switchTab(MarkRecordTab.REMOVED)
+        advanceUntilIdle()
+        // 在别的 Tab 上改了筛选条件
+        viewModel.updateFilter(setOf("show"), DatePreset.ALL, null, false)
+        advanceUntilIdle()
+        // 新条件下这个 Tab 查不到东西
+        coEvery {
+            dao.query(
+                actionTypes = listOf(MarkActionType.ADD_WATCHLIST.value),
+                actionTypesEmpty = false,
+                any(), any(), any(), any(), any(), any(), any(), any()
+            )
+        } returns emptyList()
+
+        viewModel.switchTab(MarkRecordTab.WATCHLIST)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.items).isEmpty()
+    }
+
+    /** 回归：旧 Tab 的请求在飞时切走，结果回来不能混进新 Tab 的列表。 */
+    @Test
+    fun `切Tab后旧请求的结果不写进新Tab`() = runTest {
+        val historyGate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns flow {
+            historyGate.await()
+            emit(TraktRepository.WatchHistoryEmit(items = listOf(historyItem(1, 10000L)), isComplete = true))
+        }
+        coEvery {
+            dao.query(
+                actionTypes = MarkRecordTab.REMOVED.actionTypes!!,
+                actionTypesEmpty = false,
+                any(), any(), any(), any(), any(), any(), any(), any()
+            )
+        } returns listOf(sampleEntity(MarkActionType.REMOVE_WATCHLIST.value, 99, 500L))
+
+        viewModel.switchTab(MarkRecordTab.WATCHED) // 卡在 Trakt 历史上
+        viewModel.switchTab(MarkRecordTab.REMOVED) // 立刻切走，旧请求应被取消
+        advanceUntilIdle()
+        historyGate.complete(Unit) // 旧请求这时才有结果
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.currentTab).isEqualTo(MarkRecordTab.REMOVED)
+        assertThat(viewModel.uiState.value.items.map { it.traktId }).containsExactly(99)
+    }
+
+    /** refresh 要把各 Tab 的缓存一起作废，否则切回去还是过期数据。 */
+    @Test
+    fun `refresh清掉Tab缓存`() = runTest {
+        coEvery {
+            dao.query(
+                actionTypes = listOf(MarkActionType.ADD_WATCHLIST.value),
+                actionTypesEmpty = false,
+                any(), any(), any(), any(), any(), any(), any(), any()
+            )
+        } returns List(3) { sampleEntity(MarkActionType.ADD_WATCHLIST.value, it, 1000L + it) }
+
+        viewModel.switchTab(MarkRecordTab.WATCHLIST)
+        advanceUntilIdle()
+        viewModel.switchTab(MarkRecordTab.REMOVED)
+        advanceUntilIdle()
+        viewModel.refresh()
+        advanceUntilIdle()
+        // 缓存清空后，这个 Tab 的数据也换了
+        coEvery {
+            dao.query(
+                actionTypes = listOf(MarkActionType.ADD_WATCHLIST.value),
+                actionTypesEmpty = false,
+                any(), any(), any(), any(), any(), any(), any(), any()
+            )
+        } returns emptyList()
+
+        viewModel.switchTab(MarkRecordTab.WATCHLIST)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.items).isEmpty()
+    }
+
     // ==================== 边界情况 ====================
 
+    /** 搜索词没变（初始就是空串）时不该再查一次，防抖 + 早退合起来只留 init 那一次。 */
     @Test
-    fun `updateSearchQuery空字符串触发重载`() = runTest {
+    fun `updateSearchQuery相同搜索词不重复查询`() = runTest {
         advanceUntilIdle() // 等 init 完成（init 调用 dao.query 一次）
         viewModel.updateSearchQuery("")
         advanceUntilIdle()
-        // init (1) + updateSearchQuery (1) = 2 次
-        coVerify(exactly = 2) {
+        coVerify(exactly = 1) {
             dao.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+        }
+    }
+
+    /** 清空搜索词是真的要重载：先搜再清，两次都要落到 DAO。 */
+    @Test
+    fun `updateSearchQuery清空搜索词触发重载`() = runTest {
+        advanceUntilIdle()
+        viewModel.updateSearchQuery("Inception")
+        advanceUntilIdle()
+        io.mockk.clearMocks(dao, answers = false, childMocks = false)
+
+        viewModel.updateSearchQuery("")
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.searchQuery).isEmpty()
+        coVerify(exactly = 1) {
+            dao.query(any(), any(), any(), any(), any(), any(), isNull(), any(), any(), any())
         }
     }
 

@@ -29,6 +29,9 @@ import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 
+/** 网盘类型选项：常量集合，不必每次重组都 toList 一份新的（LazyRow 的 items 会跟着重新读一遍） */
+private val DISK_TYPE_OPTIONS = ResourceRepository.ALL_DISK_TYPES.toList()
+
 @Composable
 internal fun FilterSection(
     availableSources: List<String>,
@@ -108,7 +111,7 @@ internal fun FilterSection(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(
-                    items = ResourceRepository.ALL_DISK_TYPES.toList(),
+                    items = DISK_TYPE_OPTIONS,
                     key = { it.name }
                 ) { type ->
                     val label = when (type) {

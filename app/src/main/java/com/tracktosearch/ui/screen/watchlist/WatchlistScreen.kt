@@ -106,6 +106,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.key
@@ -442,6 +443,29 @@ fun WatchlistScreen(
             }
         }
     )
+    // 根据搜索关键词和筛选条件过滤当前 Tab 的列表。
+    // 索引构建（拼音转换、标题小写、类型集合、listedAt 解析）与过滤/排序整体挪到
+    // Dispatchers.Default：原先在组合期执行，列表引用一变就在主线程整表重算，数据落地那一帧必掉帧。
+    // 索引按列表版本缓存一次，连续输入不重复构建；仅在真正需要（有搜索词/类型/时间筛选）时才构建。
+    // 搜索使用防抖后的 debouncedQuery：输入期间只更新输入框，停止输入 120ms 后才重算。
+    val filteredMovies = rememberFilteredItems(uiState.movies, debouncedQuery, filterState)
+    val filteredShows = rememberFilteredItems(uiState.shows, debouncedQuery, filterState)
+    val filteredOthers = rememberFilteredItems(uiState.others, debouncedQuery, filterState)
+    val filteredHistoryMovies = rememberFilteredItems(uiState.historyMovies, debouncedQuery, filterState)
+    val filteredHistoryShows = rememberFilteredItems(uiState.historyShows, debouncedQuery, filterState)
+    val filteredHistoryOthers = rememberFilteredItems(uiState.historyOthers, debouncedQuery, filterState)
+
+    // 当前 tab 对应的过滤结果（items 用于渲染与多选操作，token 用于下面重建 gridState）
+    val currentResult = when {
+        selectedMode == 0 && selectedTab == 0 -> filteredMovies
+        selectedMode == 0 && selectedTab == 1 -> filteredShows
+        selectedMode == 0 && selectedTab == 2 -> filteredOthers
+        selectedMode == 1 && selectedTab == 0 -> filteredHistoryMovies
+        selectedMode == 1 && selectedTab == 1 -> filteredHistoryShows
+        else -> filteredHistoryOthers
+    }
+    val currentItems = currentResult.items
+
     // 为6种 (mode, tab) 组合各自创建独立的 gridState，彻底隔离滚动位置，
     // 避免切 tab 时列表位置互相影响。
     //
@@ -450,7 +474,14 @@ fun WatchlistScreen(
     // 不会先被旧滚动位置钳到底部、再由事后 scrollToItem 跳回顶部（两段式跳动）。
     // 从详情页返回时 token 不变：key 块不重建，rememberSaveable 正常恢复原滚动位置
     // （HorizontalPager 页面销毁重建 / 进程重建场景由 Saver 持久化兜底）。
-    val filterToken = "$filterState||$debouncedQuery"
+    //
+    // token 取自「当前屏上这批结果」而不是「当前筛选条件」：过滤/排序在 Dispatchers.Default 上算，
+    // 改条件后新列表要晚一帧才到，那一帧渲染的还是旧列表。若按当前条件立刻重建 gridState，
+    // 新状态会先拿旧列表测一次量，把旧的第 0 项记成 key 锚点；下一帧新列表到达时 Lazy 网格
+    // 按 key 把这一项找回来 —— 排序一反转它跑到列表末尾，滚动位置就被带到了底部
+    // （用户滑过列表后改排序，看到的是列表停在末尾而不是从头开始）。
+    // 用结果自带的 token，重建正好落在新列表上屏那一帧，新状态第一次测量就是新列表，位置稳定在顶部。
+    val filterToken = currentResult.token
     val gridStates = key(filterToken) {
         WatchlistGridStates(
             movies = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() },        // mode=0, tab=0 想看电影
@@ -528,27 +559,6 @@ fun WatchlistScreen(
         isRemoving = false
     }
 
-    // 根据搜索关键词和筛选条件过滤当前 Tab 的列表。
-    // 索引构建（拼音转换、标题小写、类型集合、listedAt 解析）与过滤/排序整体挪到
-    // Dispatchers.Default：原先在组合期执行，列表引用一变就在主线程整表重算，数据落地那一帧必掉帧。
-    // 索引按列表版本缓存一次，连续输入不重复构建；仅在真正需要（有搜索词/类型/时间筛选）时才构建。
-    // 搜索使用防抖后的 debouncedQuery：输入期间只更新输入框，停止输入 120ms 后才重算。
-    val filteredMovies = rememberFilteredItems(uiState.movies, debouncedQuery, filterState)
-    val filteredShows = rememberFilteredItems(uiState.shows, debouncedQuery, filterState)
-    val filteredOthers = rememberFilteredItems(uiState.others, debouncedQuery, filterState)
-    val filteredHistoryMovies = rememberFilteredItems(uiState.historyMovies, debouncedQuery, filterState)
-    val filteredHistoryShows = rememberFilteredItems(uiState.historyShows, debouncedQuery, filterState)
-    val filteredHistoryOthers = rememberFilteredItems(uiState.historyOthers, debouncedQuery, filterState)
-
-    // 获取当前 tab 对应的 items（用于多选操作）
-    val currentItems = when {
-        selectedMode == 0 && selectedTab == 0 -> filteredMovies
-        selectedMode == 0 && selectedTab == 1 -> filteredShows
-        selectedMode == 0 && selectedTab == 2 -> filteredOthers
-        selectedMode == 1 && selectedTab == 0 -> filteredHistoryMovies
-        selectedMode == 1 && selectedTab == 1 -> filteredHistoryShows
-        else -> filteredHistoryOthers
-    }
     // 当前列表是否正在加载
     val isCurrentLoading = when {
         selectedMode == 0 && selectedTab == 0 -> uiState.isLoadingMovies
@@ -1133,9 +1143,9 @@ fun WatchlistScreen(
                                                                     focusManager.clearFocus()
                                                                     if (searchQuery.isNotBlank() && selectedMode == 0) {
                                                                         val noResults = when (selectedTab) {
-                                                                            0 -> filteredMovies.isEmpty()
-                                                                            1 -> filteredShows.isEmpty()
-                                                                            else -> filteredOthers.isEmpty()
+                                                                            0 -> filteredMovies.items.isEmpty()
+                                                                            1 -> filteredShows.items.isEmpty()
+                                                                            else -> filteredOthers.items.isEmpty()
                                                                         }
                                                                         if (noResults && selectedTab != 2) {
                                                                             onTraktSearch(if (selectedTab == 0) "movie" else "show", searchQuery)
@@ -1251,19 +1261,19 @@ fun WatchlistScreen(
                             // 分类 Tab：名称与数量徽标使用 Watchlist 专用组件
                             val hasLocalFilter = searchQuery.isNotBlank() || hasActiveFilters
                             val movieCount = if (selectedMode == 1 || isDoubanMode || hasLocalFilter) {
-                                if (selectedMode == 1) filteredHistoryMovies.size else filteredMovies.size
+                                if (selectedMode == 1) filteredHistoryMovies.items.size else filteredMovies.items.size
                             } else {
-                                uiState.movieTotalCount ?: if (uiState.moviesLoaded) filteredMovies.size else 0
+                                uiState.movieTotalCount ?: if (uiState.moviesLoaded) filteredMovies.items.size else 0
                             }
                             val showCount = if (selectedMode == 1 || isDoubanMode || hasLocalFilter) {
-                                if (selectedMode == 1) filteredHistoryShows.size else filteredShows.size
+                                if (selectedMode == 1) filteredHistoryShows.items.size else filteredShows.items.size
                             } else {
-                                uiState.showTotalCount ?: if (uiState.showsLoaded) filteredShows.size else 0
+                                uiState.showTotalCount ?: if (uiState.showsLoaded) filteredShows.items.size else 0
                             }
                             val otherCount = if (selectedMode == 1 || isDoubanMode || hasLocalFilter) {
-                                if (selectedMode == 1) filteredHistoryOthers.size else filteredOthers.size
+                                if (selectedMode == 1) filteredHistoryOthers.items.size else filteredOthers.items.size
                             } else {
-                                uiState.otherTotalCount ?: if (uiState.othersLoaded) filteredOthers.size else 0
+                                uiState.otherTotalCount ?: if (uiState.othersLoaded) filteredOthers.items.size else 0
                             }
                             WatchlistCategoryTabs(
                                 modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 2.dp),
@@ -2215,15 +2225,8 @@ private fun WatchlistFilterSheet(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 sortedGenres.forEach { genre ->
-                    FilterChip(
+                    WatchlistFilterChip(
                         selected = genre in filterState.selectedGenres,
-                        border = if (genre in filterState.selectedGenres) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-                        colors = FilterChipDefaults.filterChipColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                        ),
                         onClick = {
                             val newSet = if (genre in filterState.selectedGenres) {
                                 filterState.selectedGenres - genre
@@ -2232,7 +2235,7 @@ private fun WatchlistFilterSheet(
                             }
                             onGenresChange(newSet)
                         },
-                        label = { Text(genre) }
+                        label = genre
                     )
                 }
             }
@@ -2263,17 +2266,10 @@ private fun WatchlistFilterSheet(
                             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
                         ) {
                             rowDecades.forEach { decade ->
-                                FilterChip(
+                                WatchlistFilterChip(
                                     selected = decade in filterState.selectedDecadeKeys,
-                                    border = if (decade in filterState.selectedDecadeKeys) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                                    ),
                                     onClick = { onDecadeToggle(decade) },
-                                    label = { Text("${decade}s") }
+                                    label = "${decade}s"
                                 )
                             }
                         }
@@ -2285,6 +2281,12 @@ private fun WatchlistFilterSheet(
 
             // 评分 RangeSlider(Trakt 评分 标题 + 滑动条同一行)
             val view = LocalView.current
+            // 拖动中只改本地值，松手才写进 filterState：
+            // 每帧都写的话每一帧都要重新过滤+排序整个列表，还会因为 filterToken 变化重建 6 个网格状态。
+            // 用 uiState 的值做 key：重置筛选后本地值要跟着回到 0-10。
+            var localRatingRange by remember(filterState.ratingRange) {
+                mutableStateOf(filterState.ratingRange)
+            }
             // 跟踪上一次的整数值，仅在整数变化时触发触感反馈（避免拖动过程中频繁震动）
             var lastRatingStart by remember(filterState.ratingRange.start) { mutableStateOf(filterState.ratingRange.start.toInt()) }
             var lastRatingEnd by remember(filterState.ratingRange.endInclusive) { mutableStateOf(filterState.ratingRange.endInclusive.toInt()) }
@@ -2338,7 +2340,7 @@ private fun WatchlistFilterSheet(
                         )
                 ) {
                     RangeSlider(
-                        value = filterState.ratingRange,
+                        value = localRatingRange,
                         onValueChange = { range ->
                             // 仅在整数值变化时触发触感反馈（参考 PanHubConfigDialog 的并发数滑动条）
                             val newStart = range.start.toInt()
@@ -2348,15 +2350,16 @@ private fun WatchlistFilterSheet(
                                 lastRatingStart = newStart
                                 lastRatingEnd = newEnd
                             }
-                            onRatingRangeChange(range)
+                            localRatingRange = range
                         },
+                        onValueChangeFinished = { onRatingRangeChange(localRatingRange) },
                         valueRange = 0f..10f,
                         steps = 9,  // 步长 1（0,1,2,...,10）
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
                 Text(
-                    text = "%.0f-%.0f".format(filterState.ratingRange.start, filterState.ratingRange.endInclusive),
+                    text = "%.0f-%.0f".format(localRatingRange.start, localRatingRange.endInclusive),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -2382,23 +2385,14 @@ private fun WatchlistFilterSheet(
                     modifier = Modifier.weight(1f)
                 ) {
                     MarkedTimePreset.entries.forEach { preset ->
-                        FilterChip(
+                        WatchlistFilterChip(
                             selected = filterState.markedTimePreset == preset,
-                            border = if (filterState.markedTimePreset == preset) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                            ),
                             onClick = { onMarkedTimePresetChange(preset) },
-                            label = {
-                                Text(stringResource(when (preset) {
-                                    MarkedTimePreset.SEVEN_DAYS -> R.string.filter_time_7d
-                                    MarkedTimePreset.THIRTY_DAYS -> R.string.filter_time_30d
-                                    MarkedTimePreset.ALL -> R.string.filter_time_all
-                                }))
-                            }
+                            label = stringResource(when (preset) {
+                                MarkedTimePreset.SEVEN_DAYS -> R.string.filter_time_7d
+                                MarkedTimePreset.THIRTY_DAYS -> R.string.filter_time_30d
+                                MarkedTimePreset.ALL -> R.string.filter_time_all
+                            })
                         )
                     }
                 }
@@ -2428,7 +2422,10 @@ private fun WatchlistFilterSheet(
                 ) {
                     SegmentedButton(
                         selected = filterState.markedTimeOrder == SortOrder.DESC,
-                        onClick = { onMarkedTimeOrderChange(SortOrder.DESC) },
+                        onClick = {
+                            view.performHaptic(HapticType.CLICK)
+                            onMarkedTimeOrderChange(SortOrder.DESC)
+                        },
                         shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
                         colors = SegmentedButtonDefaults.colors(activeContainerColor = MaterialTheme.colorScheme.primary, activeContentColor = MaterialTheme.colorScheme.onPrimary),
                         modifier = Modifier.widthIn(min = 100.dp),
@@ -2444,7 +2441,10 @@ private fun WatchlistFilterSheet(
                     )
                     SegmentedButton(
                         selected = filterState.markedTimeOrder == SortOrder.ASC,
-                        onClick = { onMarkedTimeOrderChange(SortOrder.ASC) },
+                        onClick = {
+                            view.performHaptic(HapticType.CLICK)
+                            onMarkedTimeOrderChange(SortOrder.ASC)
+                        },
                         shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                         colors = SegmentedButtonDefaults.colors(activeContainerColor = MaterialTheme.colorScheme.primary, activeContentColor = MaterialTheme.colorScheme.onPrimary),
                         modifier = Modifier.widthIn(min = 100.dp),
@@ -2477,6 +2477,43 @@ private fun WatchlistFilterSheet(
             }
         }
     }
+}
+
+/**
+ * 筛选弹窗里的 chip：配色、描边、触感统一在这里。
+ *
+ * 原来类型/年代/标记时间三组各自重复一遍同样的 8 行配色，触感一处都没加，
+ * 点起来和页面里其他 chip 手感不一致。
+ */
+@Composable
+private fun WatchlistFilterChip(
+    selected: Boolean,
+    onClick: () -> Unit,
+    label: String
+) {
+    val view = LocalView.current
+    FilterChip(
+        selected = selected,
+        border = BorderStroke(
+            1.dp,
+            if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+            }
+        ),
+        colors = FilterChipDefaults.filterChipColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            selectedContainerColor = MaterialTheme.colorScheme.primary,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+        ),
+        onClick = {
+            view.performHaptic(HapticType.CLICK)
+            onClick()
+        },
+        label = { Text(label) }
+    )
 }
 
 /**
@@ -2534,6 +2571,19 @@ private fun needsSearchIndex(searchQuery: String, filter: FilterState): Boolean 
         filter.markedTimePreset != MarkedTimePreset.ALL
 
 /**
+ * 一批过滤结果，连同它对应的筛选条件 token。
+ *
+ * 过滤/排序在后台线程算，改条件后新结果要晚一帧才到，这期间 [produceState] 返回的还是上一批。
+ * 带上 token 让调用方能分清「屏上这批是哪套条件的结果」—— gridState 要在新结果上屏那一帧
+ * 才重建，早一帧重建会让 Lazy 网格拿旧列表记下 key 锚点，新列表到达时位置被带到锚点所在的位置。
+ */
+@Immutable
+private class FilteredResult(
+    val token: String,
+    val items: List<MediaUiItem>
+)
+
+/**
  * 在 [Dispatchers.Default] 上构建索引并完成过滤 + 排序，结果作为 State 返回。
  *
  * 计算期间沿用上一次的结果（produceState 语义），因此不会出现"先清空再填充"的闪动；
@@ -2544,16 +2594,23 @@ private fun rememberFilteredItems(
     items: List<MediaUiItem>,
     searchQuery: String,
     filter: FilterState
-): List<MediaUiItem> {
+): FilteredResult {
+    val token = remember(searchQuery, filter) { "$filter||$searchQuery" }
     val indexHolder = remember(items) { SearchIndexHolder() }
-    val result by produceState(initialValue = items, items, searchQuery, filter, indexHolder) {
+    val result by produceState(
+        initialValue = FilteredResult(token, items),
+        items,
+        searchQuery,
+        filter,
+        indexHolder
+    ) {
         value = withContext(Dispatchers.Default) {
             val index = if (needsSearchIndex(searchQuery, filter)) {
                 indexHolder.index ?: buildSearchIndex(items).also { indexHolder.index = it }
             } else {
                 emptyMap()
             }
-            applyFilterAndSort(items, index, searchQuery, filter)
+            FilteredResult(token, applyFilterAndSort(items, index, searchQuery, filter))
         }
     }
     return result

@@ -1248,6 +1248,8 @@
     <string name="decade_format">%d年代</string>
     <string name="discover_filter_rating_label">评分</string>
     <string name="discover_filter_rating_range">%1$.1f - %2$.1f</string>
+    <string name="discover_filter_result_count">约 %1$d 部</string>
+    <string name="discover_filter_result_count_exact">%1$d 部</string>
     <string name="discover_filter_more_title">想发现更多影视？</string>
     <string name="discover_filter_more_button">去影视筛选页</string>
 
@@ -1405,6 +1407,8 @@
     <string name="mark_records_time_hours_ago">%1$d 小时前</string>
     <string name="mark_records_time_days_ago">%1$d 天前</string>
     <string name="mark_records_empty_all">暂无记录</string>
+    <string name="mark_records_empty_filtered">没有符合筛选条件的记录</string>
+    <string name="mark_records_clear_filter">清除筛选条件</string>
     <string name="mark_records_unknown_title">未知影视</string>
     <string name="mark_records_filter_media_type">媒体类型</string>
     <string name="mark_records_filter_date_range">日期范围</string>
@@ -1441,10 +1445,10 @@
     <string name="feedback_messages">消息</string>
     <string name="feedback_messages_title">消息</string>
     <string name="feedback_messages_empty">暂无消息</string>
+    <string name="feedback_messages_empty_unread">没有未读消息</string>
     <string name="feedback_messages_all_read">全部已读</string>
     <string name="feedback_filter_all">全部</string>
     <string name="feedback_filter_unread">未读</string>
-    <string name="feedback_filter_developer">开发者</string>
     <string name="feedback_role_developer">开发者</string>
     <string name="feedback_role_me">我</string>
     <string name="feedback_conversation">对话</string>
@@ -1625,6 +1629,17 @@
     <string name="ai_quiz_unanswered_message">还有 %1$d 题未作答，未作答不得分。仍然提交吗？</string>
     <string name="ai_quiz_submit_anyway">仍然提交</string>
     <string name="ai_quiz_replace_exhausted">没有更多可换的影视了</string>
+    <string name="ai_quiz_redraw_all">全部重抽</string>
+    <string name="ai_quiz_accuracy">正确率 %1$d%%</string>
+    <string name="ai_quiz_comment_perfect">满分宣言！你就是片场行走的影视百科</string>
+    <string name="ai_quiz_comment_great">相当不错，精灵都在鼓掌</string>
+    <string name="ai_quiz_comment_potential">有潜力，再补几部就通了</string>
+    <string name="ai_quiz_comment_gentle">慢慢来，精灵陪你慢慢充电</string>
+    <string name="ai_quiz_feedback_title">本轮难度如何？</string>
+    <string name="ai_quiz_feedback_easy">太简单</string>
+    <string name="ai_quiz_feedback_just_right">刚刚好</string>
+    <string name="ai_quiz_feedback_hard">太难</string>
+    <string name="ai_quiz_feedback_done">已收到反馈，会努力调整难度</string>
     <string name="ai_quiz_refresh_title">放弃本轮闯关？</string>
     <string name="ai_quiz_refresh_message">重新抽题会清空当前这一轮的作答，已答 %1$d 题。</string>
     <string name="ai_quiz_refresh_confirm">重新抽题</string>
@@ -1635,7 +1650,7 @@
     <string name="help_ai_sprite_b4">目前有昵称欢迎、看单锐评、影视闯关和每日冷知识四项能力（闯关需至少 7 部已看影视）</string>
     <string name="help_ai_sprite_b5">AI 请求有每日配额，功能页右上角刷新会再消耗一次；离线时不能发起新请求，但已缓存内容仍可查看</string>
     <string name="help_ai_sprite_b6">V1 使用角色与场景的音色设计提示词；试听失败时回退到系统语音</string>
-    <string name="help_ai_sprite_b7">闯关中途返回会保留作答；重新抽题前会二次确认，还有题没答就提交也会先提醒</string>
+    <string name="help_ai_sprite_b7">闯关中途返回会保留作答；重新抽题前会二次确认，还有题没答就提交也会先提醒；答完还可以告诉精灵难度，之后出题会更合你口味</string>
 
     <!-- 主页面背景光晕 -->
     <string name="bg_glow_title">背景动效</string>
@@ -1750,6 +1765,8 @@
     <string name="opensource_thanks_line1">TraktoSearch 的诞生</string>
     <string name="opensource_thanks_line2">离不开这些优秀的开源库</string>
     <string name="opensource_thanks_line3">向每一位开源贡献者致谢 🎉</string>
+    <string name="opensource_thanks_summary">共收录 %1$d 个开源库 · %2$d 个分类</string>
+    <string name="opensource_group_count">%1$d 个库</string>
     <string name="opensource_group_ui">界面与动效</string>
     <string name="opensource_group_framework">基础框架</string>
     <string name="opensource_group_data">数据存储</string>

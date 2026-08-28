@@ -130,6 +130,59 @@ class FeedbackViewModelTest {
     }
 
     @Test
+    fun `loadList marks isRefreshing while cached list refreshes`() = runTest {
+        val cached = FeedbackListItem("cached", "BUG", "cached content", null, "PENDING", 1700000000L)
+        val remoteResult = CompletableDeferred<Result<MineResponse>>()
+        val viewModel = createViewModel()
+
+        every { cacheStore.getCachedList() } returns MineResponse(listOf(cached), 20, 0, 1, false)
+        coEvery { feedbackRepository.getMine(any(), any()) } coAnswers { remoteResult.await() }
+
+        viewModel.loadList(refresh = true)
+        runCurrent()
+
+        assertThat((viewModel.listState.value as FeedbackViewModel.ListState.Success).isRefreshing).isTrue()
+
+        remoteResult.complete(Result.success(MineResponse(listOf(cached), 20, 0, 1, false)))
+        advanceUntilIdle()
+        assertThat((viewModel.listState.value as FeedbackViewModel.ListState.Success).isRefreshing).isFalse()
+    }
+
+    @Test
+    fun `loadList refresh failure keeps cached items and clears isRefreshing`() = runTest {
+        val cached = FeedbackListItem("cached", "BUG", "cached content", null, "PENDING", 1700000000L)
+        val viewModel = createViewModel()
+
+        every { cacheStore.getCachedList() } returns MineResponse(listOf(cached), 20, 0, 1, false)
+        coEvery { feedbackRepository.getMine(any(), any()) } returns Result.failure(Exception("LOAD_FAILED"))
+
+        viewModel.loadList(refresh = true)
+        advanceUntilIdle()
+
+        val state = viewModel.listState.value as FeedbackViewModel.ListState.Success
+        assertThat(state.items.single().id).isEqualTo("cached")
+        assertThat(state.isRefreshing).isFalse()
+    }
+
+    @Test
+    fun `loadList without cache stays Loading instead of showing indicator`() = runTest {
+        val remoteResult = CompletableDeferred<Result<MineResponse>>()
+        val viewModel = createViewModel()
+
+        coEvery { feedbackRepository.getMine(any(), any()) } coAnswers { remoteResult.await() }
+
+        viewModel.loadList(refresh = true)
+        runCurrent()
+
+        // 无缓存时首次加载走骨架屏，不显示顶栏进度条
+        assertThat(viewModel.listState.value).isEqualTo(FeedbackViewModel.ListState.Loading)
+
+        remoteResult.complete(Result.success(MineResponse(emptyList(), 20, 0, 0, false)))
+        advanceUntilIdle()
+        assertThat((viewModel.listState.value as FeedbackViewModel.ListState.Success).isRefreshing).isFalse()
+    }
+
+    @Test
     fun `loadDetail success updates detailState to Success`() = runTest {
         val detail = FeedbackDetail(
             "fb1", "f1", "friend", null, null, null, "BUG", "content", null, null,

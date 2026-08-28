@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.discoverfilter
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.ui.theme.RatingGold
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -69,10 +70,17 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -93,6 +101,9 @@ import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
+import com.tracktosearch.ui.component.ShimmerState
+import com.tracktosearch.ui.component.rememberShimmer
+import com.tracktosearch.ui.component.shimmer
 import com.tracktosearch.ui.navigation.DetailSeedStore
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropContentSource
@@ -126,6 +137,9 @@ fun DiscoverFilterScreen(
     val filterContext = LocalContext.current
     val hazeState = remember { HazeState() }
     val hazeStyle = HazeMaterials.thin()
+    // 必须 remember：rememberCachedPosterAmbientColor 内部用列表身份做 remember/LaunchedEffect 的 key，
+    // 每次重组都传新列表会让环境色先跳回 fallback 再重读一遍颜色缓存（拖评分滑块时最明显）
+    val ambientPosterPaths = remember(uiState.items) { uiState.items.mapNotNull { it.poster_path } }
     val discoverFilterGlassScene = glassSceneForContent(
         contentCount = uiState.items.size,
         readabilityDemand = when {
@@ -136,7 +150,7 @@ fun DiscoverFilterScreen(
             else -> 0.66f
         },
         ambientColor = rememberCachedPosterAmbientColor(
-            posterUrls = uiState.items.mapNotNull { it.poster_path },
+            posterUrls = ambientPosterPaths,
             fallback = MaterialTheme.colorScheme.background
         ),
         contentCapacity = 36,
@@ -154,6 +168,17 @@ fun DiscoverFilterScreen(
     var showGenreDialog by remember { mutableStateOf(false) }
     var showRegionDialog by remember { mutableStateOf(false) }
     var showTagDialog by remember { mutableStateOf(false) }
+
+    // 吸顶栏固定部分（状态栏+标题+Tab+筛选条）的底边，用作列表顶部留白。
+    // 之前写死 148.dp，字体放大或 Tab 文案换行时第一条会被压在栏下面。
+    // 由筛选条下方的零高度标尺实测，0 表示还没测到，先用写死值兜底。
+    val density = LocalDensity.current
+    var headerBottom by remember { mutableStateOf(0.dp) }
+
+    // 骨架屏共享一份 shimmer 动画：逐项各建一份会同时跑多个无限动画。
+    // 只在骨架屏真的在显示时创建，否则无限动画会一直向 Choreographer 要帧
+    val showSkeleton = uiState.isLoading && uiState.items.isEmpty()
+    val skeletonShimmer = if (showSkeleton) rememberShimmer() else null
 
     // 滚动到底部加载更多
     LaunchedEffect(
@@ -201,10 +226,8 @@ fun DiscoverFilterScreen(
         rememberPosterPrefetch(listState, prefetchUrls)
     }
 
-    // 首次进入自动搜索
-    LaunchedEffect(Unit) {
-        if (!uiState.hasSearched) viewModel.search()
-    }
+    // 首屏搜索由 ViewModel 的 init 发起：等到这里再发，第一帧 isLoading 还是 false，
+    // 用户会先看到一帧空白再看到骨架屏
 
     // 高级面板展开时,返回手势优先关闭面板而非返回上一页
     BackHandler(enabled = uiState.showAdvanced) {
@@ -237,15 +260,15 @@ fun DiscoverFilterScreen(
             contentPadding = PaddingValues(
                 start = 12.dp,
                 end = 12.dp,
-                top = statusBarHeight + 148.dp,  // 为吸顶栏留空间（标题+Tab+筛选条）
+                top = if (headerBottom > 0.dp) headerBottom else statusBarHeight + 148.dp,
                 bottom = 16.dp
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             when {
-                // 首次加载：3 个骨架项
-                uiState.isLoading && uiState.items.isEmpty() -> {
-                    items(3) { DiscoverFilterItemSkeleton() }
+                // 首次加载：骨架项铺满一屏，5 条刚好占满可视区，3 条会在下方留一块空白
+                showSkeleton -> {
+                    items(5) { DiscoverFilterItemSkeleton(shimmer = skeletonShimmer) }
                 }
                 // 请求失败：必须排在空结果分支之前。否则失败会落进「没有符合条件的结果」，
                 // 用户以为条件太严去改条件，而真正的原因是这次请求没成功。
@@ -380,8 +403,24 @@ fun DiscoverFilterScreen(
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
+                    // 结果条数：让用户知道筛出来多少，条件太严时也有个数量感。
+                    // 只有「仅展示未标看过」这种服务端不知情的过滤才标"约"
+                    if (uiState.totalResults > 0) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (uiState.totalResultsApproximate) {
+                                stringResource(R.string.discover_filter_result_count, uiState.totalResults)
+                            } else {
+                                stringResource(R.string.discover_filter_result_count_exact, uiState.totalResults)
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
+                        )
+                    }
                 }
                 TextButton(onClick = { viewModel.resetFilters(); viewModel.search() }) {
                     Text(stringResource(R.string.discover_filter_reset))
@@ -446,17 +485,23 @@ fun DiscoverFilterScreen(
                         stringResource(R.string.discover_filter_tag)
                     else "${uiState.selectedKeywordIds.size} ${stringResource(R.string.discover_filter_tag)}"
                 )
-                // 评分（显示"评分 0.0-10.0"）
+                // 评分：满量程时只显示"评分"。恒显示"评分 0.0 - 10.0" 会让人以为已经筛过
+                val ratingFiltered = uiState.voteAverageMin > 0f || uiState.voteAverageMax < 10f
                 GlassFilterChip(
-                    selected = uiState.voteAverageMin > 0f || uiState.voteAverageMax < 10f,
-                    onClick = { viewModel.toggleAdvanced() },
+                    selected = ratingFiltered,
+                    // 只展开不收起：点评分是想调评分，面板开着时 toggle 会把它收起来，看起来像点了没反应
+                    onClick = { viewModel.expandAdvanced() },
                     hazeState = hazeState,
-                    text = stringResource(R.string.discover_filter_rating_label) + " " +
-                        stringResource(
-                            R.string.discover_filter_rating_range,
-                            uiState.voteAverageMin,
-                            uiState.voteAverageMax
-                        )
+                    text = if (ratingFiltered) {
+                        stringResource(R.string.discover_filter_rating_label) + " " +
+                            stringResource(
+                                R.string.discover_filter_rating_range,
+                                uiState.voteAverageMin,
+                                uiState.voteAverageMax
+                            )
+                    } else {
+                        stringResource(R.string.discover_filter_rating_label)
+                    }
                 )
                 // 高级筛选
                 GlassFilterChip(
@@ -466,6 +511,17 @@ fun DiscoverFilterScreen(
                     text = stringResource(R.string.discover_filter_advanced)
                 )
             }
+
+            // 零高度标尺：它的 Y 就是吸顶栏固定部分的底边，直接给列表当顶部留白。
+            // 放在这里而不是最外层测高，是因为高级面板展开时列表不该整体往下挪
+            Spacer(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned { coords ->
+                        val bottom = with(density) { coords.positionInRoot().y.toDp() }
+                        if (bottom > 0.dp && bottom != headerBottom) headerBottom = bottom
+                    }
+            )
 
             // 高级筛选展开区（防御性消费垂直拖拽：避免拖拽冒泡到结果列表触发 collapse）
             if (uiState.showAdvanced) {
@@ -492,24 +548,40 @@ fun DiscoverFilterScreen(
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.width(36.dp)
                         )
-                        // 评分双滑块（步长 1，触感反馈）
-                        var localMin by remember { mutableFloatStateOf(uiState.voteAverageMin) }
-                        var localMax by remember { mutableFloatStateOf(uiState.voteAverageMax) }
+                        // 评分双滑块（步长 1，触感反馈）。
+                        // 拖动只改本地状态，松手才写 uiState + 发请求：每帧写 uiState 会让整页重组，
+                        // 连毛玻璃顶栏的取色和骨架/场景判断都跟着重跑，拖起来发涩。
+                        // remember 用 uiState 的值做 key，点了重置本地值才会跟着回到 0-10
+                        var localMin by remember(uiState.voteAverageMin) { mutableFloatStateOf(uiState.voteAverageMin) }
+                        var localMax by remember(uiState.voteAverageMax) { mutableFloatStateOf(uiState.voteAverageMax) }
                         RangeSlider(
                             value = localMin..localMax,
                             onValueChange = { range ->
-                                val oldMin = localMin
-                                val oldMax = localMax
-                                localMin = range.start
-                                localMax = range.endInclusive
-                                if (range.start.toInt() != oldMin.toInt() || range.endInclusive.toInt() != oldMax.toInt()) {
+                                if (range.start.toInt() != localMin.toInt() ||
+                                    range.endInclusive.toInt() != localMax.toInt()
+                                ) {
                                     view.performHaptic(HapticType.TICK)
                                 }
-                                viewModel.setVoteRange(range.start, range.endInclusive)
+                                localMin = range.start
+                                localMax = range.endInclusive
+                            },
+                            // 松手即生效：等「应用」的话，用手势返回或滑动列表收起面板时这次改动就没了，
+                            // 而顶部的评分 chip 已经显示成已筛选，看着像生效了
+                            onValueChangeFinished = {
+                                viewModel.setVoteRange(localMin, localMax)
+                                viewModel.search()
                             },
                             valueRange = 0f..10f,
                             steps = 9,  // 步长 1（0,1,2,...,10）
                             modifier = Modifier.weight(1f)
+                        )
+                        // 当前区间读数：松手才写 uiState，拖动中的反馈靠这里（顶部评分 chip 要等松手）
+                        Text(
+                            text = stringResource(R.string.discover_filter_rating_range, localMin, localMax),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            modifier = Modifier.width(72.dp)
                         )
                     }
                     HorizontalDivider()
@@ -537,10 +609,8 @@ fun DiscoverFilterScreen(
                                 }
                                 GlassFilterChip(
                                     selected = uiState.sortBy == sort,
-                                    onClick = {
-                                        view.performHaptic(HapticType.CLICK)
-                                        viewModel.setSortBy(sort)
-                                    },
+                                    // 点完立刻生效，理由同评分滑块
+                                    onClick = { viewModel.setSortBy(sort); viewModel.search() },
                                     hazeState = hazeState,
                                     text = sortText
                                 )
@@ -558,7 +628,8 @@ fun DiscoverFilterScreen(
                             text = stringResource(R.string.discover_filter_decade),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(end = 8.dp)
                         )
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
@@ -572,10 +643,7 @@ fun DiscoverFilterScreen(
                                 }
                                 GlassFilterChip(
                                     selected = opt.key in uiState.selectedDecadeKeys,
-                                    onClick = {
-                                        view.performHaptic(HapticType.CLICK)
-                                        viewModel.toggleDecade(opt.key)
-                                    },
+                                    onClick = { viewModel.toggleDecade(opt.key); viewModel.search() },
                                     hazeState = hazeState,
                                     text = decadeText
                                 )
@@ -597,12 +665,17 @@ fun DiscoverFilterScreen(
                             )
                             Switch(
                                 checked = uiState.hideWatched,
-                                onCheckedChange = { view.performHaptic(HapticType.CLICK); viewModel.toggleHideWatched() },
+                                onCheckedChange = {
+                                    view.performHaptic(HapticType.CLICK)
+                                    viewModel.toggleHideWatched()
+                                    viewModel.search()
+                                },
                                 colors = appSwitchColors()
                             )
                         }
                     }
-                    // 应用按钮：点击后搜索并收起高级面板
+                    // 收起面板看结果。面板内各项已经改完即生效，这里的 search() 通常是空操作
+                    // （条件没变会被 ViewModel 挡掉），只兜住「条件变了但请求没发出去」的极端情况
                     Button(
                         onClick = {
                             view.performHaptic(HapticType.HEAVY_CLICK)
@@ -625,7 +698,10 @@ fun DiscoverFilterScreen(
         } else {
             DiscoverFilterConstants.TV_GENRES
         }
-        val options = genreEntries.map { (id, labelRes) -> id.toString() to stringResource(labelRes) }
+        // remember：弹窗里每次勾选都会重组，不缓存就要重新查一遍全部译名
+        val options = remember(genreEntries, filterContext) {
+            genreEntries.map { (id, labelRes) -> id.toString() to filterContext.getString(labelRes) }
+        }
         MultiSelectDialog(
             title = stringResource(R.string.discover_filter_select_genres),
             options = options,
@@ -640,11 +716,15 @@ fun DiscoverFilterScreen(
 
     // 地区多选弹窗（滑动列表模式）
     if (showRegionDialog) {
+        // regionName 走 Locale 译名查询，四十来个地区每次重组查一遍会拖慢勾选反馈
+        val regionOptions = remember(filterContext) {
+            DiscoverFilterConstants.REGION_CODES.map { code ->
+                code to DiscoverFilterConstants.regionName(filterContext, code)
+            }
+        }
         MultiSelectDialog(
             title = stringResource(R.string.discover_filter_select_regions),
-            options = DiscoverFilterConstants.REGION_CODES.map { code ->
-                code to DiscoverFilterConstants.regionName(filterContext, code)
-            },
+            options = regionOptions,
             selectedIds = uiState.selectedCountries,
             onToggle = { code -> viewModel.toggleCountry(code) },
             onDismiss = {
@@ -657,11 +737,14 @@ fun DiscoverFilterScreen(
 
     // 标签多选弹窗（滑动列表模式，标签数量多）
     if (showTagDialog) {
+        val tagOptions = remember(filterContext) {
+            DiscoverFilterConstants.TAGS.map { (id, labelRes) ->
+                id.toString() to filterContext.getString(labelRes)
+            }
+        }
         MultiSelectDialog(
             title = stringResource(R.string.discover_filter_select_tags),
-            options = DiscoverFilterConstants.TAGS.map { (id, labelRes) ->
-                id.toString() to stringResource(labelRes)
-            },
+            options = tagOptions,
             selectedIds = uiState.selectedKeywordIds.map { it.toString() }.toSet(),
             onToggle = { idStr -> viewModel.toggleKeyword(idStr.toInt()) },
             onDismiss = {
@@ -699,15 +782,37 @@ private fun DiscoverFilterListItem(
         TmdbImageUrls.build(item.poster_path, TmdbImageUrls.W185)
     } else null
 
-    var dominantColor by remember { mutableStateOf<Color?>(null) }
+    var dominantColor by remember(item.id) { mutableStateOf<Color?>(null) }
+
+    // 先问一次颜色缓存：滚回来或二次进入时不必等图片解码，卡片一上屏就带底色
+    LaunchedEffect(posterUrl) {
+        if (posterUrl != null && dominantColor == null) {
+            posterColorExtractor.getCachedColor(posterUrl)
+                ?.takeIf { it != 0L }
+                ?.let { dominantColor = Color(it) }
+        }
+    }
+
+    // 主色到位时渐变过渡，不是硬切一下
+    val fallbackSurface = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+    val baseColor by animateColorAsState(
+        targetValue = dominantColor ?: fallbackSurface,
+        label = "filter_item_bg"
+    )
 
     // 根据主色亮度自适应文字颜色
-    val onGradientColor = dominantColor?.let { c ->
-        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.92f) else Color.White
-    } ?: MaterialTheme.colorScheme.onSurface
-    val onGradientVariantColor = dominantColor?.let { c ->
-        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.78f)
-    } ?: MaterialTheme.colorScheme.onSurfaceVariant
+    val onGradientColor by animateColorAsState(
+        targetValue = dominantColor?.let { c ->
+            if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.92f) else Color.White
+        } ?: MaterialTheme.colorScheme.onSurface,
+        label = "filter_item_on_bg"
+    )
+    val onGradientVariantColor by animateColorAsState(
+        targetValue = dominantColor?.let { c ->
+            if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.78f)
+        } ?: MaterialTheme.colorScheme.onSurfaceVariant,
+        label = "filter_item_on_bg_variant"
+    )
 
     // 海报 modifier：当两个 scope 可用时加 sharedElement（与详情页海报配对）
     val posterModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
@@ -728,14 +833,12 @@ private fun DiscoverFilterListItem(
             .clip(RoundedCornerShape(8.dp))
     }
 
-    val backgroundBrush: Brush? = dominantColor?.let { color ->
-        Brush.horizontalGradient(
-            colors = listOf(
-                color,
-                color.copy(alpha = 0.7f)
-            )
+    val backgroundBrush = Brush.horizontalGradient(
+        colors = listOf(
+            baseColor,
+            baseColor.copy(alpha = baseColor.alpha * 0.7f)
         )
-    }
+    )
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -749,13 +852,7 @@ private fun DiscoverFilterListItem(
             .fillMaxWidth()
             .scale(scale)
             .clip(RoundedCornerShape(16.dp))
-            .then(
-                if (backgroundBrush != null) {
-                    Modifier.background(backgroundBrush)
-                } else {
-                    Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                }
-            )
+            .background(backgroundBrush)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -769,9 +866,10 @@ private fun DiscoverFilterListItem(
             AsyncImage(
                 model = remember(posterUrl) {
                     ImageRequest.Builder(context)
+                        // 不写死 size：80×120dp 的位子在 3x 屏上是 240px 宽，
+                        // 先降到 150 再放大回去，海报会发虚
+                        .crossfade(160)
                         .data(posterUrl)
-                        .size(150)
-                        .crossfade(false)
                         .listener(
                             onSuccess = { _, result ->
                                 val bitmap = result.drawable.toBitmap()
@@ -814,14 +912,17 @@ private fun DiscoverFilterListItem(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-            // 地区：紧贴标题下方一行；优先用 origin_country（TV），为空时用 original_language 推断（movie 回退）
-            val regionText = if (item.origin_country.isNotEmpty()) {
-                item.origin_country.joinToString(" / ") { code ->
-                    DiscoverFilterConstants.regionName(context, code)
-                }
-            } else if (item.original_language.isNotBlank()) {
-                DiscoverFilterConstants.countryByLanguage(context, item.original_language)?.second
-            } else null
+            // 地区：紧贴标题下方一行；优先用 origin_country（TV），为空时用 original_language 推断（movie 回退）。
+            // remember：译名走 Locale 查询，主色渐入那几帧会重组本项，不缓存就每帧查一遍
+            val regionText = remember(item.id, context) {
+                if (item.origin_country.isNotEmpty()) {
+                    item.origin_country.joinToString(" / ") { code ->
+                        DiscoverFilterConstants.regionName(context, code)
+                    }
+                } else if (item.original_language.isNotBlank()) {
+                    DiscoverFilterConstants.countryByLanguage(context, item.original_language)?.second
+                } else null
+            }
             if (regionText != null) {
                 Text(
                     text = regionText,
@@ -848,18 +949,20 @@ private fun DiscoverFilterListItem(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "%.1f".format(item.vote_average),
+                    text = remember(item.id) { "%.1f".format(item.vote_average) },
                     style = MaterialTheme.typography.bodyMedium,
                     color = onGradientColor
                 )
             }
             // 类型
-            val genreNames = item.genre_ids.mapNotNull { id ->
-                DiscoverFilterConstants.genreName(context, id, isMovie).takeIf { it.isNotBlank() }
+            val genreText = remember(item.id, isMovie, context) {
+                item.genre_ids.mapNotNull { id ->
+                    DiscoverFilterConstants.genreName(context, id, isMovie).takeIf { it.isNotBlank() }
+                }.joinToString(" / ")
             }
-            if (genreNames.isNotEmpty()) {
+            if (genreText.isNotEmpty()) {
                 Text(
-                    text = genreNames.joinToString(" / "),
+                    text = genreText,
                     style = MaterialTheme.typography.bodySmall,
                     color = onGradientVariantColor,
                     maxLines = 1,
@@ -871,10 +974,15 @@ private fun DiscoverFilterListItem(
 }
 
 /**
- * 列表骨架项：与列表项布局对齐（海报 80×120 + 信息列）
+ * 列表骨架项：与列表项布局对齐（海报 80×120 + 信息列）。
+ *
+ * 方块顺序与真实项一致（标题/地区/年份/评分/类型），否则数据到位时几行文字会互相错位跳一下。
+ * [shimmer] 由调用方用 [rememberShimmer] 建一份共享，避免每项各跑一个无限动画。
  */
 @Composable
-private fun DiscoverFilterItemSkeleton() {
+private fun DiscoverFilterItemSkeleton(shimmer: ShimmerState? = null) {
+    val state = shimmer ?: rememberShimmer()
+    val blockShape = RoundedCornerShape(4.dp)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -888,55 +996,49 @@ private fun DiscoverFilterItemSkeleton() {
             modifier = Modifier
                 .width(80.dp)
                 .height(120.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .shimmer(state, RoundedCornerShape(8.dp))
         )
         // 信息骨架
         Column(
             modifier = Modifier
                 .weight(1f)
                 .height(120.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             // 标题骨架
             Box(
                 modifier = Modifier
                     .fillMaxWidth(0.7f)
                     .height(20.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            )
-            // 年份骨架
-            Box(
-                modifier = Modifier
-                    .width(60.dp)
-                    .height(14.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            )
-            // 评分骨架
-            Box(
-                modifier = Modifier
-                    .width(50.dp)
-                    .height(16.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            )
-            // 类型骨架
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.5f)
-                    .height(14.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .shimmer(state, blockShape)
             )
             // 地区骨架
             Box(
                 modifier = Modifier
                     .width(80.dp)
                     .height(14.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .shimmer(state, blockShape)
+            )
+            // 年份骨架
+            Box(
+                modifier = Modifier
+                    .width(60.dp)
+                    .height(14.dp)
+                    .shimmer(state, blockShape)
+            )
+            // 评分骨架
+            Box(
+                modifier = Modifier
+                    .width(50.dp)
+                    .height(16.dp)
+                    .shimmer(state, blockShape)
+            )
+            // 类型骨架
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.5f)
+                    .height(14.dp)
+                    .shimmer(state, blockShape)
             )
         }
     }
@@ -955,7 +1057,6 @@ private fun MultiSelectDialog(
     onDismiss: () -> Unit,
     useScrollableList: Boolean = false
 ) {
-    val view = LocalView.current
     val scrollState = rememberScrollState()
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -986,10 +1087,7 @@ private fun MultiSelectDialog(
                     options.forEach { (id, name) ->
                         GlassFilterChip(
                             selected = id in selectedIds,
-                            onClick = {
-                                view.performHaptic(HapticType.CLICK)
-                                onToggle(id)
-                            },
+                            onClick = { onToggle(id) },
                             text = name
                         )
                     }
@@ -1004,10 +1102,7 @@ private fun MultiSelectDialog(
                     options.forEach { (id, name) ->
                         GlassFilterChip(
                             selected = id in selectedIds,
-                            onClick = {
-                                view.performHaptic(HapticType.CLICK)
-                                onToggle(id)
-                            },
+                            onClick = { onToggle(id) },
                             text = name
                         )
                     }
@@ -1031,6 +1126,8 @@ private fun MultiSelectDialog(
  *
  * 未选中时使用 surfaceVariant 半透明背景，选中时使用主题色填充。
  * 文字色与背景保持高对比度，避免浅色模式下看不清。
+ * 触感反馈与无障碍语义都收在这里：以前靠各调用点自己加，有的加了有的没加，
+ * 读屏也念不出选中状态。
  * [hazeState] 参数已废弃，chip 自身不需要毛玻璃效果。
  */
 @Composable
@@ -1041,6 +1138,8 @@ private fun GlassFilterChip(
     hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
+    val view = LocalView.current
+    val isSelected = selected
     val background = if (selected) {
         MaterialTheme.colorScheme.primary
     } else {
@@ -1056,7 +1155,14 @@ private fun GlassFilterChip(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
             .background(background)
-            .clickable(onClick = onClick)
+            .semantics {
+                this.role = Role.Button
+                this.selected = isSelected
+            }
+            .clickable {
+                view.performHaptic(HapticType.CLICK)
+                onClick()
+            }
             .padding(horizontal = 12.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center
     ) {

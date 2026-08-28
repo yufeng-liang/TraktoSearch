@@ -1248,6 +1248,9 @@ Config:
     <string name="decade_format">%ds</string>
     <string name="discover_filter_rating_label">Rating</string>
     <string name="discover_filter_rating_range">%1$.1f - %2$.1f</string>
+    <!-- Approximate: "hide watched" filtering happens on the client, so fewer items may be shown -->
+    <string name="discover_filter_result_count">~%1$d results</string>
+    <string name="discover_filter_result_count_exact">%1$d results</string>
     <string name="discover_filter_more_title">Want to discover more?</string>
     <string name="discover_filter_more_button">Go to Discover Filter</string>
 
@@ -1405,6 +1408,8 @@ Config:
     <string name="mark_records_time_hours_ago">%1$d hours ago</string>
     <string name="mark_records_time_days_ago">%1$d days ago</string>
     <string name="mark_records_empty_all">No records</string>
+    <string name="mark_records_empty_filtered">No records match the filters</string>
+    <string name="mark_records_clear_filter">Clear filters</string>
     <string name="mark_records_unknown_title">Unknown title</string>
     <string name="mark_records_filter_media_type">Media Type</string>
     <string name="mark_records_filter_date_range">Date Range</string>
@@ -1441,10 +1446,10 @@ Config:
     <string name="feedback_messages">Messages</string>
     <string name="feedback_messages_title">Messages</string>
     <string name="feedback_messages_empty">No messages yet</string>
+    <string name="feedback_messages_empty_unread">No unread messages</string>
     <string name="feedback_messages_all_read">Mark all as read</string>
     <string name="feedback_filter_all">All</string>
     <string name="feedback_filter_unread">Unread</string>
-    <string name="feedback_filter_developer">Developer</string>
     <string name="feedback_role_developer">Developer</string>
     <string name="feedback_role_me">Me</string>
     <string name="feedback_conversation">Conversation</string>
@@ -1625,6 +1630,17 @@ Config:
     <string name="ai_quiz_unanswered_message">%1$d question(s) are unanswered and score zero. Submit anyway?</string>
     <string name="ai_quiz_submit_anyway">Submit anyway</string>
     <string name="ai_quiz_replace_exhausted">No more titles left to swap in</string>
+    <string name="ai_quiz_redraw_all">Redraw all</string>
+    <string name="ai_quiz_accuracy">Accuracy %1$d%%</string>
+    <string name="ai_quiz_comment_perfect">A perfect run — you\'re a walking film encyclopedia!</string>
+    <string name="ai_quiz_comment_great">Pretty great — even the sprite is applauding</string>
+    <string name="ai_quiz_comment_potential">Real potential — a few more rewatches and you\'re there</string>
+    <string name="ai_quiz_comment_gentle">No rush — the sprite will binge some films with you</string>
+    <string name="ai_quiz_feedback_title">How was this round?</string>
+    <string name="ai_quiz_feedback_easy">Too easy</string>
+    <string name="ai_quiz_feedback_just_right">Just right</string>
+    <string name="ai_quiz_feedback_hard">Too hard</string>
+    <string name="ai_quiz_feedback_done">Got it — I\'ll tune the difficulty next time</string>
     <string name="ai_quiz_refresh_title">Discard this round?</string>
     <string name="ai_quiz_refresh_message">Drawing a new round clears this round\'s answers (%1$d answered).</string>
     <string name="ai_quiz_refresh_confirm">Draw a new round</string>
@@ -1635,7 +1651,7 @@ Config:
     <string name="help_ai_sprite_b4">The four features are nickname welcome, watchlist roast, film quiz, and daily film facts (the quiz needs at least 7 watched titles)</string>
     <string name="help_ai_sprite_b5">AI requests use a daily quota, and the refresh button inside a feature spends one more; offline you cannot start new requests but cached content stays readable</string>
     <string name="help_ai_sprite_b6">V1 uses character and scene voice-design prompts; failed previews fall back to system speech</string>
-    <string name="help_ai_sprite_b7">Leaving a quiz round keeps your answers; drawing a new round asks for confirmation first, and submitting with blanks warns you</string>
+    <string name="help_ai_sprite_b7">Leaving a quiz round keeps your answers; drawing a new round asks for confirmation first, and submitting with blanks warns you; after a round you can tell the sprite how it felt, so future rounds fit your taste</string>
     <!-- Main screen background glow -->
     <string name="bg_glow_title">Background Effect</string>
     <string name="bg_glow_off">Off</string>
@@ -1749,6 +1765,8 @@ Config:
     <string name="opensource_thanks_line1">TraktoSearch is made possible</string>
     <string name="opensource_thanks_line2">by these amazing open source libraries</string>
     <string name="opensource_thanks_line3">Thanks to every open source contributor 🎉</string>
+    <string name="opensource_thanks_summary">%1$d libraries · %2$d categories</string>
+    <string name="opensource_group_count">%1$d libraries</string>
     <string name="opensource_group_ui">UI &amp; Effects</string>
     <string name="opensource_group_framework">Core Frameworks</string>
     <string name="opensource_group_data">Data &amp; Storage</string>

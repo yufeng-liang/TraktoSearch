@@ -3,6 +3,8 @@ package com.tracktosearch.ui.screen.markrecord
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +47,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,6 +61,8 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.rememberShimmerBrush
+import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.util.performHaptic
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -373,6 +378,8 @@ private fun CurrentStatusBadge(item: MarkRecordItem) {
 
 /**
  * 与 Watchlist 筛选弹窗保持一致的 FilterChip。
+ *
+ * 触感在这里统一发：调用点一个个加会漏（原来整个弹窗都没有，而列表页其他 chip 都有）。
  */
 @Composable
 private fun MarkRecordFilterChip(
@@ -381,9 +388,13 @@ private fun MarkRecordFilterChip(
     label: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val view = LocalView.current
     FilterChip(
         selected = selected,
-        onClick = onClick,
+        onClick = {
+            view.performHaptic(HapticType.CLICK)
+            onClick()
+        },
         label = label,
         modifier = modifier,
         colors = FilterChipDefaults.filterChipColors(
@@ -429,7 +440,10 @@ fun FilterSheetContent(
 ) {
     var selectedMediaTypes by remember { mutableStateOf(mediaTypes) }
     var selectedPreset by remember { mutableStateOf(datePreset) }
-    var selectedRange by remember { mutableStateOf(dateRange) }
+    // 起止分开存：Pair 逼着两端同时有值，只挑了开始日期时会被当成「就这一天」，
+    // 而用户的意思通常是「这天以后」。0 表示这一端不限，DAO 的查询按 0 放行。
+    var selectedStart by remember { mutableStateOf(dateRange?.first?.takeIf { it > 0L }) }
+    var selectedEnd by remember { mutableStateOf(dateRange?.second?.takeIf { it > 0L }) }
     var selectedAscending by remember { mutableStateOf(ascending) }
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showEndDatePicker by remember { mutableStateOf(false) }
@@ -439,6 +453,8 @@ fun FilterSheetContent(
         modifier = Modifier
             .fillMaxWidth()
             .fillMaxHeight(0.8f)
+            // 字体放大 / 小屏时内容会超过 80% 屏高，不能滚的话「确定」按钮点不到
+            .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
         // 媒体类型
@@ -491,23 +507,21 @@ fun FilterSheetContent(
                     .padding(top = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                val start = selectedRange?.first
                 OutlinedButton(
                     onClick = { showStartDatePicker = true },
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        text = start?.let { dateFormatter.format(Date(it)) }
+                        text = selectedStart?.let { dateFormatter.format(Date(it)) }
                             ?: stringResource(R.string.mark_records_filter_start_date)
                     )
                 }
-                val end = selectedRange?.second
                 OutlinedButton(
                     onClick = { showEndDatePicker = true },
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        text = end?.let { dateFormatter.format(Date(it)) }
+                        text = selectedEnd?.let { dateFormatter.format(Date(it)) }
                             ?: stringResource(R.string.mark_records_filter_end_date)
                     )
                 }
@@ -542,8 +556,25 @@ fun FilterSheetContent(
                 Text(stringResource(R.string.mark_records_reset))
             }
             Button(onClick = {
-                val range = if (selectedPreset == DatePreset.CUSTOM) selectedRange else null
-                onConfirm(selectedMediaTypes, selectedPreset, range, selectedAscending)
+                val custom = selectedPreset == DatePreset.CUSTOM
+                // 两端都挑了却挑反了就换回来，省得筛出空列表让用户以为没数据
+                val start = selectedStart
+                val end = selectedEnd
+                val ordered = if (start != null && end != null && start > end) end to start else start to end
+                val range = (ordered.first ?: 0L) to (ordered.second ?: 0L)
+                // 选了自定义又没挑日期 = 没有时间条件：落回「全部」，
+                // 否则顶栏筛选按钮会亮着但其实什么都没筛
+                val preset = if (custom && range.first == 0L && range.second == 0L) {
+                    DatePreset.ALL
+                } else {
+                    selectedPreset
+                }
+                onConfirm(
+                    selectedMediaTypes,
+                    preset,
+                    if (preset == DatePreset.CUSTOM) range else null,
+                    selectedAscending
+                )
             }) {
                 Text(stringResource(R.string.mark_records_confirm))
             }
@@ -552,17 +583,14 @@ fun FilterSheetContent(
 
     if (showStartDatePicker) {
         val pickerState = rememberDatePickerState(
-            initialSelectedDateMillis = selectedRange?.first
+            initialSelectedDateMillis = selectedStart
         )
         DatePickerDialog(
             onDismissRequest = { showStartDatePicker = false },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        pickerState.selectedDateMillis?.let { millis ->
-                            selectedRange = selectedRange?.copy(first = millis)
-                                ?: (millis to (selectedRange?.second ?: millis))
-                        }
+                        pickerState.selectedDateMillis?.let { millis -> selectedStart = millis }
                         showStartDatePicker = false
                     }
                 ) { Text(stringResource(android.R.string.ok)) }
@@ -577,17 +605,14 @@ fun FilterSheetContent(
 
     if (showEndDatePicker) {
         val pickerState = rememberDatePickerState(
-            initialSelectedDateMillis = selectedRange?.second
+            initialSelectedDateMillis = selectedEnd
         )
         DatePickerDialog(
             onDismissRequest = { showEndDatePicker = false },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        pickerState.selectedDateMillis?.let { millis ->
-                            selectedRange = selectedRange?.copy(second = millis)
-                                ?: ((selectedRange?.first ?: millis) to millis)
-                        }
+                        pickerState.selectedDateMillis?.let { millis -> selectedEnd = millis }
                         showEndDatePicker = false
                     }
                 ) { Text(stringResource(android.R.string.ok)) }

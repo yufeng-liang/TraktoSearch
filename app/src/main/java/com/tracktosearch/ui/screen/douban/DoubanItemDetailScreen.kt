@@ -2263,6 +2263,9 @@ private fun DoubanSearchKeywordBar(
     }
 }
 
+/** 网盘类型选项：常量集合，不必每次重组都 toList 一份新的 */
+private val DISK_TYPE_OPTIONS = ResourceRepository.ALL_DISK_TYPES.toList()
+
 /**
  * 资源筛选器(参照 [com.tracktosearch.ui.screen.detail.FilterSection],
  * 因原 FilterSection 为 internal 无法跨包访问,此处自建简化版)。
@@ -2353,7 +2356,7 @@ private fun DoubanFilterSection(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(
-                    items = ResourceRepository.ALL_DISK_TYPES.toList(),
+                    items = DISK_TYPE_OPTIONS,
                     key = { it.name }
                 ) { type ->
                     val label = when (type) {
