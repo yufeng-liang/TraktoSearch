@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  benchmark 构建类型专用清单。
+
+  该构建类型继承 release（debuggable=false + R8），Macrobenchmark 无法通过 debuggable
+  通道采样，必须显式声明 profileable 才能让 shell 侧的 Perfetto / simpleperf 采到进程数据。
+  debug 源集里已有同样的声明，但那是给日常调试用的构建类型，不覆盖这里。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <profileable android:shell="true" />
+    </application>
+</manifest>

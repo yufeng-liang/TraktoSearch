@@ -9,6 +9,10 @@ plugins {
     alias(libs.plugins.androidx.baselineprofile)
 }
 
+// 签名：不显式配置，走 AGP 默认的 debug 签名。
+// test APK 必须与被测应用同签名（instrumentation 只允许作用于同签名的目标包），
+// :app 侧的 benchmark / nonMinifiedRelease 也统一换成了 debug 签名，两边自然配对。
+
 android {
     namespace = "com.tracktosearch.benchmark"
     compileSdk = 37

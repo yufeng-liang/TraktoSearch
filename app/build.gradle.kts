@@ -86,24 +86,17 @@ android {
         // 测的才是用户实际安装的产物形态 —— 现有性能报告的全部数据来自 debug 构建，
         // 解释器占 51% 采样，主线程侧的瓶颈排序不能直接采信。
         //
-        // 签名换回 debug：release 签名由 verifyReleaseSigning 校验证书指纹，
-        // 基准构建不该依赖正式发布密钥。
+        // 签名换回 debug，两个理由：
+        // 1) release 签名由 verifyReleaseSigning 校验证书指纹，基准构建不该动用正式发布密钥；
+        // 2) 覆盖安装要求签名一致 —— 设备上那份 3.6.0 是 debug 构建
+        //    （dumpsys package 显示 flags=[ DEBUGGABLE ]），换 release 签名会 INSTALL_FAILED_UPDATE_INCOMPATIBLE，
+        //    只能卸载重装、清空想看已看数据，滚动基准就测不到真实数据量了。
         // 该构建类型名不匹配 preReleaseBuild/assembleRelease/bundleRelease，不会触发那项校验。
         create("benchmark") {
             initWith(getByName("release"))
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")
             isDebuggable = false
-        }
-    }
-
-    // baselineprofile 插件会自己再派生一个 nonMinifiedRelease 构建类型（initWith release，
-    // 关掉 R8 以便采到未混淆的方法签名），连 release 签名一起继承过去。
-    // 采集 profile 不该动用正式发布密钥，统一换回 debug 签名。
-    // configureEach 是惰性的，对插件之后才加进来的构建类型同样生效。
-    buildTypes.configureEach {
-        if (name.startsWith("nonMinified")) {
-            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
@@ -148,6 +141,26 @@ android {
 //   *-composables.csv      同上，便于筛选
 //   *-classes.txt          参数类型的稳定性判定
 //   *-module.json          模块级汇总计数
+// baselineprofile 插件会自己派生一个 nonMinifiedRelease 构建类型（initWith release，
+// 关掉 R8 才能采到未混淆的方法签名），连 release 的 signingConfig 一起继承过去。
+// 采集 profile 不该动用正式发布密钥；而且工作树里通常没有 release.jks
+// （keystore 不在版本库），继承下来会直接卡在 validateSigningNonMinifiedRelease。
+// 换 debug 签名还有一个必要理由：设备上已装的包是 debug 签名，覆盖安装要求签名一致。
+//
+// 必须用 finalizeDsl 而不是 buildTypes.configureEach：插件是在自己的配置阶段里
+// 创建并设置该构建类型的，容器级 configureEach 会被它随后的赋值覆盖掉。
+// finalizeDsl 是 AGP 给出的「DSL 锁定前最后一次修改」钩子，在所有插件配置完之后才跑。
+androidComponents {
+    finalizeDsl { extension ->
+        val debugSigning = extension.signingConfigs.getByName("debug")
+        extension.buildTypes.forEach { buildType ->
+            if (buildType.name.startsWith("nonMinified") || buildType.name == "benchmark") {
+                buildType.signingConfig = debugSigning
+            }
+        }
+    }
+}
+
 composeCompiler {
     val reportsDir = layout.buildDirectory.dir("compose-reports")
     if (providers.gradleProperty("kotlin.compose.compiler.metrics").orNull == "true") {
