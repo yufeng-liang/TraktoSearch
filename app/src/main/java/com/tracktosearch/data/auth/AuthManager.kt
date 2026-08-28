@@ -132,7 +132,7 @@ class AuthManager @Inject constructor(
                 _authState.value = AuthState.AUTHORIZED
                 Result.success(body)
             } else {
-                Result.failure(Exception(response.errorMessage("Activate failed: ${response.code()}")))
+                response.failureWith("Activate failed: ${response.code()}")
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -159,12 +159,13 @@ class AuthManager @Inject constructor(
                 Result.success(body)
             } else if (response.code() == 401) {
                 // 令牌失效，尝试刷新
+                response.closeQuietly()
                 refreshAfterCheck(failedAccessToken)
             } else if (response.code() == 403) {
                 invalidateSession()
-                Result.failure(Exception(response.errorMessage("Check failed: ${response.code()}")))
+                response.failureWith("Check failed: ${response.code()}")
             } else {
-                Result.failure(Exception(response.errorMessage("Check failed: ${response.code()}")))
+                response.failureWith("Check failed: ${response.code()}")
             }
         } catch (e: CancellationException) {
             throw e
@@ -210,7 +211,7 @@ class AuthManager @Inject constructor(
                 if (challengeResponse.code() == 401 || challengeResponse.code() == 403) {
                     invalidateSession()
                 }
-                return Result.failure(Exception(challengeResponse.errorMessage("Challenge failed: ${challengeResponse.code()}")))
+                return challengeResponse.failureWith("Challenge failed: ${challengeResponse.code()}")
             }
                 val challenge = challengeResponse.body()?.data?.nonce ?: return Result.failure(Exception("No nonce"))
 
@@ -245,13 +246,14 @@ class AuthManager @Inject constructor(
             } else if (refreshResponse.code() == 401 || refreshResponse.code() == 403) {
                 // 服务端已撤销当前刷新会话时，release 先尝试用设备连续性自动恢复。
                 invalidateSession()
+                refreshResponse.closeQuietly()
                 if (allowSilentRecovery) {
                     recoverAfterRefreshFailure()
                 } else {
                     Result.failure(Exception("Refresh failed, re-authorization required"))
                 }
             } else {
-                Result.failure(Exception(refreshResponse.errorMessage("Refresh failed: ${refreshResponse.code()}")))
+                refreshResponse.failureWith("Refresh failed: ${refreshResponse.code()}")
             }
         } catch (e: CancellationException) {
             throw e
@@ -473,7 +475,7 @@ class AuthManager @Inject constructor(
                 RecoveryChallengeRequest(androidId, publicKey, BuildConfig.APPLICATION_ID)
             )
             if (!challengeResponse.isSuccessful) {
-                return recoveryFailure(challengeResponse.errorMessage("Recovery challenge failed: ${challengeResponse.code()}"))
+                return challengeResponse.failureWith("Recovery challenge failed: ${challengeResponse.code()}")
             }
             val nonce = challengeResponse.body()?.data?.nonce
                 ?: return recoveryFailure("Recovery challenge is empty")
@@ -493,7 +495,7 @@ class AuthManager @Inject constructor(
                 )
             )
             if (!response.isSuccessful) {
-                return recoveryFailure(response.errorMessage("Recovery failed: ${response.code()}"))
+                return response.failureWith("Recovery failed: ${response.code()}")
             }
             val body = response.body()?.data
                 ?: return recoveryFailure("Recovery response is empty")
@@ -557,5 +559,25 @@ class AuthManager @Inject constructor(
                 .getOrNull()?.let { return "${it.code}: ${it.message}" }
         }
         return fallback
+    }
+
+    /**
+     * 关闭 Retrofit 响应体（非 2xx 分支避免连接泄漏）。
+     * retrofit2.Response 本身没有 close()，须经 raw() 取底层 okhttp3.Response
+     * （实现 Closeable）关闭；close 幂等，errorBody 已消费也不受影响。
+     */
+    private fun retrofit2.Response<*>.closeQuietly() {
+        runCatching { raw().close() }
+    }
+
+    /**
+     * 失败分支统一出口：先取错误信息再关闭响应体，避免非 2xx 分支泄漏连接
+     * （网关/网络频繁失败场景连接池被掏空）。先 [errorMessage] 后关闭，
+     * 顺序不可颠倒——errorMessage 要读 errorBody，关闭后读取会失败。
+     */
+    private fun <T> retrofit2.Response<GatewayResponse<T>>.failureWith(fallback: String): Result<Nothing> {
+        val failure = Result.failure<Nothing>(Exception(errorMessage(fallback)))
+        closeQuietly()
+        return failure
     }
 }

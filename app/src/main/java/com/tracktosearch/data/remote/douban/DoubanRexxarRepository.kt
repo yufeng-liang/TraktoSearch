@@ -303,15 +303,31 @@ class DoubanRexxarRepository(
 
             if (response.isSuccessful) {
                 return response.body()
-                    ?: throw DoubanRexxarResponseException()
+                    ?: run {
+                        // 2xx 但空 body：关闭响应避免泄漏后抛异常
+                        response.closeQuietly()
+                        throw DoubanRexxarResponseException()
+                    }
             }
             if (response.code() in 500..599 && !retryUsed) {
                 retryUsed = true
+                // 重试前关闭本次错误响应，避免频繁 5xx 场景连接池被掏空
+                response.closeQuietly()
                 retryDelay(randomRetryDelay())
                 continue
             }
+            response.closeQuietly()
             throw DoubanRexxarHttpException(response.code())
         }
+    }
+
+    /**
+     * 关闭错误响应体释放 OkHttp 连接（非 2xx/重试路径避免连接泄漏）。
+     * retrofit2.Response 无 close()，经 raw() 取底层 okhttp3.Response 关闭；
+     * 成功路径 body 已被 Retrofit converter 消费至 EOF，无需手动关闭。
+     */
+    private fun Response<*>.closeQuietly() {
+        runCatching { raw().close() }
     }
 
     private fun mapDetail(
