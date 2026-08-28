@@ -18,6 +18,7 @@ import com.tracktosearch.data.notification.NotificationScheduler
 import com.tracktosearch.data.remote.ImageDownloadProgress
 import com.tracktosearch.data.util.DnsCache
 import com.tracktosearch.data.util.StartupTrace
+import com.tracktosearch.data.worker.SplashPosterScheduler
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +40,7 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     @Inject lateinit var dnsCache: DnsCache
     @Inject lateinit var notificationScheduler: NotificationScheduler
     @Inject lateinit var authCheckScheduler: AuthCheckScheduler
+    @Inject lateinit var splashPosterScheduler: SplashPosterScheduler
     @Inject lateinit var crashLogUploader: com.tracktosearch.data.util.CrashLogUploader
     @Inject lateinit var imageTrafficStorage: ImageTrafficStorage
     // 惰性 Provider：注入本身不触发数据库创建，仅在使用时才解析 @Singleton 实例
@@ -82,6 +84,8 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
             Thread { notificationScheduler.schedulePeriodicCheck() }.start()
             // 授权撤销最多 15 分钟内生效；网络不可用时由 AuthManager 保留离线宽限策略。
             Thread { authCheckScheduler.schedulePeriodicCheck() }.start()
+            // 开屏台词海报整池补齐：不计费网络下跑，池子齐了之后每次执行都是空转。
+            Thread { splashPosterScheduler.schedulePeriodicPrefetch() }.start()
             // 上传未发送的崩溃日志到云端（走网关代理，worker 注入上报密钥）
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
                 crashLogUploader.uploadPendingLogs()

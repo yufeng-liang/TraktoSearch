@@ -197,6 +197,7 @@ class SettingsViewModelTest {
             doubanSyncManager = doubanSyncManager,
             doubanBatchRemovalManager = doubanBatchRemovalManager,
             sharedTransitionStorage = sharedTransitionStorage,
+            splashQuoteStorage = mockk(relaxed = true),
             doubanSyncedItemDao = doubanSyncedItemDao,
             sessionModeManager = sessionModeManager,
             imageTrafficStorage = mockk(relaxed = true),

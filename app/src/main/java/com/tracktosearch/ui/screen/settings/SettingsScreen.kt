@@ -47,6 +47,7 @@ import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.FormatQuote
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
@@ -1473,6 +1474,40 @@ private fun SharedTransitionSwitchCard(
 }
 
 /**
+ * 开屏每日台词开关卡片（外观分组下，独占一行）。
+ *
+ * 开关状态在本函数内部收集：切换时只重组本卡片，不波及外观分组其余项。
+ */
+@Composable
+private fun SplashQuoteSwitchCard(
+    viewModel: SettingsViewModel,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
+) {
+    val view = LocalView.current
+    val enabled by viewModel.splashQuoteEnabled.collectAsStateWithLifecycle()
+    SettingsItemCard(
+        icon = Icons.Rounded.FormatQuote,
+        title = stringResource(R.string.settings_splash_quote),
+        subtitle = stringResource(R.string.settings_splash_quote_subtitle),
+        onClick = {
+            view.performHaptic(HapticType.CLICK)
+            viewModel.setSplashQuoteEnabled(!enabled)
+        },
+        containerColor = containerColor,
+        trailing = {
+            Switch(
+                checked = enabled,
+                onCheckedChange = { value ->
+                    view.performHaptic(HapticType.CLICK)
+                    viewModel.setSplashQuoteEnabled(value)
+                },
+                colors = appSwitchColors()
+            )
+        }
+    )
+}
+
+/**
  * 外观分组 item：主题/语言/默认标签页的当前值在本函数内部收集，
  * 值变化（或顶层任意重组）只影响本 item，不波及 LazyColumn 其他 item。
  * 顶层仍保留同名收集供主题/语言/默认页三个对话框使用（低频变化，双收集无碍）。
@@ -1560,6 +1595,11 @@ private fun AppearanceGroupItem(
         SharedTransitionSwitchCard(
             enabled = sharedTransitionEnabled,
             onToggle = { viewModel.setSharedTransitionEnabled(it) },
+            containerColor = Color.Transparent
+        )
+        // 开屏每日台词开关(默认开启):关闭后系统场记板结束直接进主页
+        SplashQuoteSwitchCard(
+            viewModel = viewModel,
             containerColor = Color.Transparent
         )
     }

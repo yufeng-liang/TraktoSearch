@@ -113,6 +113,7 @@ class SettingsViewModel @Inject constructor(
     private val doubanSyncManager: DoubanSyncManager,
     private val doubanBatchRemovalManager: DoubanBatchRemovalManager,
     private val sharedTransitionStorage: SharedTransitionStorage,
+    private val splashQuoteStorage: com.tracktosearch.data.local.SplashQuoteStorage,
     private val doubanSyncedItemDao: DoubanSyncedItemDao,
     private val sessionModeManager: SessionModeManager,
     private val imageTrafficStorage: ImageTrafficStorage,
@@ -130,6 +131,9 @@ class SettingsViewModel @Inject constructor(
     val visualEffectMode: StateFlow<VisualEffectMode> = themeStorage.visualEffectMode
 
     val glassVariant: StateFlow<GlassVariant> = themeStorage.glassVariant
+
+    /** 开屏台词开关：Storage 启动时已预加载磁盘首值，直接暴露不会有默认值跳变 */
+    val splashQuoteEnabled: StateFlow<Boolean> = splashQuoteStorage.enabledState
 
     // 主页面背景彩色弥散光晕
     val meshPreset: StateFlow<String> = themeStorage.meshPreset
@@ -213,6 +217,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setSharedTransitionEnabled(enabled: Boolean) {
         viewModelScope.launch { sharedTransitionStorage.setEnabled(enabled) }
+    }
+
+    fun setSplashQuoteEnabled(enabled: Boolean) {
+        viewModelScope.launch { splashQuoteStorage.setEnabled(enabled) }
     }
 
     fun setMeshPreset(preset: String) {

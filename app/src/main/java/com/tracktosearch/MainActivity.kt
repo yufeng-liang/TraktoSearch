@@ -127,6 +127,15 @@ class MainActivity : AppCompatActivity() {
     lateinit var sharedTransitionStorage: com.tracktosearch.data.local.SharedTransitionStorage
 
     @Inject
+    lateinit var splashQuoteStorage: com.tracktosearch.data.local.SplashQuoteStorage
+
+    @Inject
+    lateinit var splashQuoteLoader: com.tracktosearch.ui.screen.splash.SplashQuoteLoader
+
+    @Inject
+    lateinit var splashQuoteRepository: com.tracktosearch.data.repository.SplashQuoteRepository
+
+    @Inject
     lateinit var crashLogUploader: com.tracktosearch.data.util.CrashLogUploader
     @Inject
     lateinit var crashLogStorage: com.tracktosearch.data.local.CrashLogStorage
@@ -176,6 +185,10 @@ class MainActivity : AppCompatActivity() {
 
         var startDest by mutableStateOf(Routes.LOGIN)
         var initialTab by mutableStateOf(0)
+        // 开屏台词：必须在 isReady 置位之前准备完毕，否则系统场记板已经散场、
+        // 台词层才刚开始加载，中间会露出一帧主界面。
+        var splashQuote by mutableStateOf<com.tracktosearch.ui.screen.splash.SplashQuoteUi?>(null)
+        var splashQuoteDone by mutableStateOf(false)
         val opensSearchFromWidget = SearchNavigator.isOpenSearchIntent(intent)
         val notificationOpensWatchlist = intent?.getStringExtra("navigate_to") in setOf(
             "douban_sync",
@@ -239,6 +252,18 @@ class MainActivity : AppCompatActivity() {
                 sharedTransitionStorage.preloadAndGetValue()
             }
 
+            // 开屏台词：读开关 + 选当天那条 + 解海报，全部在后台线程做完才放行 Splash。
+            // 台词库和海报都在本地，正常只花几十毫秒；任何一步不成立就拿不到 quote，
+            // 台词层整层跳过，绝不会显示到一半或占位。
+            val splashQuoteEnabled = StartupTrace.measure("local.splash_quote") {
+                splashQuoteStorage.preloadAndGetValue()
+            }
+            if (splashQuoteEnabled) {
+                splashQuote = StartupTrace.measure("splash_quote.load") {
+                    splashQuoteLoader.load(language)
+                }
+            }
+
             if (isAuthorized) {
                 // 想看列表由 WatchlistScreen 进入后自行加载，避免网络请求阻塞 Splash。
                 StartupTrace.mark("trakt.watchlist.startup_skipped", "reason=load_on_page")
@@ -258,6 +283,16 @@ class MainActivity : AppCompatActivity() {
                     authCheckScheduler.schedulePreflight(authManager.getNextCheckAt())
                 } else {
                     authCheckScheduler.cancelPreflight()
+                }
+            }
+            // 海报预取放在 Splash 之后：这活儿是为了「以后每天都有画面」，
+            // 不该和启动阶段的首屏请求抢带宽。未来 7 天先备齐，整池由
+            // SplashPosterWorker 在不计费网络下补完。
+            this@MainActivity.lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    splashQuoteRepository.prefetchUpcoming()
+                } catch (e: Exception) {
+                    // 预取失败无副作用：下次启动或 Worker 会再补
                 }
             }
             if (isAuthorized) {
@@ -338,6 +373,16 @@ class MainActivity : AppCompatActivity() {
                     crashLogStorage = crashLogStorage,
                     crashLogUploader = crashLogUploader,
                 )
+
+                // 开屏台词层：压在最上面，等它自己散场或被点掉。
+                // 只有 isReady 之后才组合——早一帧组合，动画就会在系统场记板背后白跑。
+                val quote = splashQuote
+                if (isReady && quote != null && !splashQuoteDone) {
+                    com.tracktosearch.ui.screen.splash.SplashQuoteOverlay(
+                        quote = quote,
+                        onFinished = { splashQuoteDone = true }
+                    )
+                }
 
                 } // CompositionLocalProvider
             }
