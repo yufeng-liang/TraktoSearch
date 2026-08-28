@@ -953,22 +953,35 @@ fun WatchlistScreen(
                                 )
                             }
                         }
-                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }, key = "load_more_footer") {
-                            LoadMoreFooter(
-                                state = when {
-                                    currentIsLoadingMore -> LoadMoreFooterState.Loading
-                                    currentLoadError -> LoadMoreFooterState.Error
-                                    currentSupportsPaging && !currentHasMore && items.isNotEmpty() -> LoadMoreFooterState.Complete
-                                    else -> LoadMoreFooterState.Hidden
-                                },
-                                onRetry = {
-                                    when (selectedTab) {
-                                        0 -> viewModel.loadMoreMovies()
-                                        1 -> viewModel.loadMoreShows()
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                        // footer 只在列表非空时发出。
+                        //
+                        // 无条件发出时，列表还在加载、currentItems 仍为空的那一帧（此时空状态分支
+                        // 不生效，它要求 currentItems.isEmpty() && !isCurrentLoading），
+                        // footer 是整个网格里唯一的 item，Lazy 网格的 key 锚点就落在
+                        // "load_more_footer" 上。数据到达后这个 key 的索引从 0 变成 items.size，
+                        // 网格按 key 把锚点找回首个可见位置，firstVisibleItemIndex 被带到列表末尾
+                        // —— 首次进入「我的」页看到列表停在底部就是这么来的。
+                        //
+                        // 空列表时它本来也只渲染 Hidden 态：Complete 要求 items.isNotEmpty()，
+                        // Loading/Error 都只发生在已有数据之后，所以去掉不改变任何可见行为。
+                        if (items.isNotEmpty()) {
+                            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }, key = "load_more_footer") {
+                                LoadMoreFooter(
+                                    state = when {
+                                        currentIsLoadingMore -> LoadMoreFooterState.Loading
+                                        currentLoadError -> LoadMoreFooterState.Error
+                                        currentSupportsPaging && !currentHasMore -> LoadMoreFooterState.Complete
+                                        else -> LoadMoreFooterState.Hidden
+                                    },
+                                    onRetry = {
+                                        when (selectedTab) {
+                                            0 -> viewModel.loadMoreMovies()
+                                            1 -> viewModel.loadMoreShows()
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                         }
                     }
                             }
