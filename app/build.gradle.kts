@@ -101,6 +101,9 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            // MockK 通过 ByteBuddy agent 插桩，JDK 17+ 默认禁止 self-attach，不加会抛
+            // "Could not self-attach to current VM"，所有用到 mockk 的测试类直接类加载失败
+            all { it.jvmArgs("-Djdk.attach.allowAttachSelf=true") }
         }
     }
     packaging {
