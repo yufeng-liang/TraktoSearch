@@ -207,4 +207,54 @@ class DoubanSyncedItemDaoTest {
         dao.replaceAll(listOf(sample(doubanId = "d1")))
         assertThat(dao.count()).isEqualTo(1)
     }
+
+    // ==================== deleteNotInDoubanIds 分块清理 ====================
+    // 超过 SQLite 绑定变量上限(999)时必须分块；但 NOT IN 不能直接切片，
+    // 否则 DELETE WHERE doubanId NOT IN (第一块) 会把后续块里的合法记录一并删掉。
+
+    @Test
+    fun deleteNotInDoubanIds_删除差集且保留命中项() = runTest {
+        dao.insertAll(listOf(
+            sample(doubanId = "keep1"),
+            sample(doubanId = "keep2"),
+            sample(doubanId = "stale1")
+        ))
+
+        dao.deleteNotInDoubanIds(listOf("keep1", "keep2"))
+
+        assertThat(dao.getAllSyncedDoubanIds()).containsExactly("keep1", "keep2")
+    }
+
+    @Test
+    fun deleteNotInDoubanIds_条目数超过单块上限_不误删命中项() = runTest {
+        // 1200 条 > 分块大小 900，命中项跨越多个块，简单切片 NOT IN 会误删
+        val ids = (1..1200).map { "d$it" }
+        dao.insertAll(ids.map { sample(doubanId = it) })
+
+        dao.deleteNotInDoubanIds(ids)
+
+        assertThat(dao.count()).isEqualTo(1200)
+    }
+
+    @Test
+    fun deleteNotInDoubanIds_跨块差集_只删未命中项() = runTest {
+        val ids = (1..1200).map { "d$it" }
+        dao.insertAll(ids.map { sample(doubanId = it) })
+        // 保留前 1000 条，删除后 200 条；保留集合本身也需要跨块
+        val keep = ids.take(1000)
+
+        dao.deleteNotInDoubanIds(keep)
+
+        assertThat(dao.count()).isEqualTo(1000)
+        assertThat(dao.getAllSyncedDoubanIds()).containsExactlyElementsIn(keep)
+    }
+
+    @Test
+    fun deleteNotInDoubanIds_空保留列表_清空表() = runTest {
+        dao.insertAll(listOf(sample(doubanId = "d1"), sample(doubanId = "d2")))
+
+        dao.deleteNotInDoubanIds(emptyList())
+
+        assertThat(dao.count()).isEqualTo(0)
+    }
 }

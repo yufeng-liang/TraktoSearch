@@ -12,6 +12,13 @@ import androidx.room.Transaction
 import androidx.room.Update
 
 /**
+ * SQLite 单条语句的绑定变量上限（Android 框架 SQLite 的 SQLITE_MAX_VARIABLE_NUMBER 为 999）。
+ * 豆瓣想看+看过合计很容易超过该值，批量 IN 必须按此大小分块，否则抛 SQLiteException。
+ * 取 900 留出余量。
+ */
+private const val SQLITE_MAX_VARIABLES = 900
+
+/**
  * 豆瓣→Trakt 同步记录。
  *
  * 用途:
@@ -131,8 +138,32 @@ interface DoubanSyncedItemDao {
     @Query("DELETE FROM douban_synced_items")
     suspend fun clearAll()
 
-    @Query("DELETE FROM douban_synced_items WHERE doubanId NOT IN (:doubanIds)")
-    suspend fun deleteNotInDoubanIds(doubanIds: List<String>)
+    @Query("DELETE FROM douban_synced_items WHERE doubanId IN (:ids)")
+    suspend fun deleteByDoubanIdsChunk(ids: List<String>)
+
+    /**
+     * 删除不在 [doubanIds] 内的本地记录（全量同步收尾清理已从豆瓣移除的条目）。
+     *
+     * **不能直接把 NOT IN 的列表分块**：`DELETE WHERE doubanId NOT IN (chunk1)`
+     * 会把属于 chunk2..N 的合法记录一并删掉，反而制造数据丢失。正确做法是先取出
+     * 全量 doubanId 在内存中求差集，再按正向 IN 分块删除（各块并集等价于差集）。
+     *
+     * 另外整条 `NOT IN (:doubanIds)` 在条目数超过 [SQLITE_MAX_VARIABLES] 时会抛
+     * SQLiteException，且该步骤位于失败项持久化之前，会连带丢掉本次的失败记录。
+     *
+     * @param doubanIds 本次从豆瓣完整抓取到的 ID；空列表视为清空
+     */
+    suspend fun deleteNotInDoubanIds(doubanIds: List<String>) {
+        if (doubanIds.isEmpty()) {
+            clearAll()
+            return
+        }
+        val keep = doubanIds.toHashSet()
+        val stale = getAllSyncedDoubanIds().filter { it !in keep }
+        for (chunk in stale.chunked(SQLITE_MAX_VARIABLES)) {
+            deleteByDoubanIdsChunk(chunk)
+        }
+    }
 
     @Query("SELECT COUNT(*) FROM douban_synced_items")
     suspend fun count(): Int
@@ -293,9 +324,21 @@ interface DoubanSyncPendingItemDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(items: List<DoubanSyncPendingItemEntity>)
 
-    /** 处理完一批后删除已处理的 doubanId(无论成功还是失败) */
     @Query("DELETE FROM douban_sync_pending_items WHERE doubanId IN (:ids)")
-    suspend fun deleteByDoubanIds(ids: List<String>)
+    suspend fun deleteByDoubanIdsChunk(ids: List<String>)
+
+    /**
+     * 处理完一批后删除已处理的 doubanId(无论成功还是失败)。
+     *
+     * 正向 IN 可以安全分块:各块的并集等价于整条 `IN (:ids)`。分块是为了避开
+     * SQLite 绑定变量上限(见 [SQLITE_MAX_VARIABLES]),超出后整条语句会抛
+     * SQLiteException,导致同步在收尾阶段失败。
+     */
+    suspend fun deleteByDoubanIds(ids: List<String>) {
+        for (chunk in ids.chunked(SQLITE_MAX_VARIABLES)) {
+            deleteByDoubanIdsChunk(chunk)
+        }
+    }
 
     /** 用户选择「完整同步」时清空未处理数据 */
     @Query("DELETE FROM douban_sync_pending_items")

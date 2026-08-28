@@ -169,4 +169,38 @@ class DoubanSyncPendingItemDaoTest {
         dao.replaceAll(listOf(sample(doubanId = "d1")))
         assertThat(dao.count()).isEqualTo(1)
     }
+
+    // ==================== deleteByDoubanIds 分块删除 ====================
+    // 超过 SQLite 绑定变量上限(999)时必须分块，否则整条 IN 语句抛 SQLiteException。
+    // 正向 IN 可以直接分块：各块并集等价于整条语句。
+
+    @Test
+    fun deleteByDoubanIds_删除命中项且保留其余() = runTest {
+        dao.insertAll(listOf(sample(doubanId = "d1"), sample(doubanId = "d2")))
+
+        dao.deleteByDoubanIds(listOf("d1"))
+
+        assertThat(dao.getAll().map { it.doubanId }).containsExactly("d2")
+    }
+
+    @Test
+    fun deleteByDoubanIds_条目数超过单块上限_全部删除() = runTest {
+        val ids = (1..1200).map { "d$it" }
+        dao.insertAll(ids.map { sample(doubanId = it) })
+
+        dao.deleteByDoubanIds(ids)
+
+        assertThat(dao.count()).isEqualTo(0)
+    }
+
+    @Test
+    fun deleteByDoubanIds_跨块部分删除_只删命中项() = runTest {
+        val ids = (1..1200).map { "d$it" }
+        dao.insertAll(ids.map { sample(doubanId = it) })
+
+        dao.deleteByDoubanIds(ids.take(1000))
+
+        assertThat(dao.count()).isEqualTo(200)
+        assertThat(dao.getAll().map { it.doubanId }).containsExactlyElementsIn(ids.drop(1000))
+    }
 }
