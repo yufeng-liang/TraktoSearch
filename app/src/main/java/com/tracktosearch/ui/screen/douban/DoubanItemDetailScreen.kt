@@ -56,6 +56,7 @@ import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.TheaterComedy
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.Visibility
@@ -208,6 +209,8 @@ data class DoubanItemDetailUiState(
     /** true 表示仅为兼容旧技术失败记录，false 表示同步表/豆瓣快照中的正常条目。 */
     val isLegacyFailure: Boolean = false,
     val error: String? = null,
+    /** 三表(同步表/详情快照/旧失败表)都查不到:不自动 onBack,由 UI 显示「条目未同步」错误卡片 */
+    val entryNotFound: Boolean = false,
     // 资源搜索
     val searchResults: List<ResourceItem> = emptyList(),
     val lowRelevanceHiddenCount: Int = 0,
@@ -315,8 +318,9 @@ class DoubanItemDetailViewModel @Inject constructor(
             try {
                 val source = loadDetailSource(doubanId)
                 if (source == null) {
-                    // 条目已被删除或不存在,UI 层检测 failure==null 后自动 onBack
-                    _uiState.value = DoubanItemDetailUiState(isLoading = false, failure = null)
+                    // 三表都查不到(AI 推荐/深链带来的未同步条目):不再自动 onBack(立即弹回像点击失灵),
+                    // 置 entryNotFound 由 UI 显示错误卡片,返回交还给用户
+                    _uiState.value = DoubanItemDetailUiState(isLoading = false, failure = null, entryNotFound = true)
                     return@launch
                 }
                 _uiState.value = DoubanItemDetailUiState(
@@ -1129,9 +1133,10 @@ fun DoubanItemDetailScreen(
     // 收集一次性 Toast 事件(爬取成功/标注成功/失败提示)
     ToastEffect(viewModel.toastEvent)
 
-    // 加载完成后若 failure == null(条目已被删除/不存在),自动返回
-    LaunchedEffect(uiState.failure, uiState.isLoading) {
-        if (!uiState.isLoading && uiState.failure == null && uiState.error == null) {
+    // 加载完成后若 failure == null(条目已被删除/不存在),自动返回;
+    // entryNotFound(三表全空)除外:立即弹回像点击失灵,改为页面内错误卡片
+    LaunchedEffect(uiState.failure, uiState.isLoading, uiState.entryNotFound) {
+        if (!uiState.isLoading && uiState.failure == null && uiState.error == null && !uiState.entryNotFound) {
             handleBack()
         }
     }
@@ -1432,6 +1437,42 @@ fun DoubanItemDetailScreen(
                         }
                     }
                 }
+                }
+            } else if (uiState.entryNotFound) {
+                // 三表全查不到(条目未同步到本机):错误卡片替代自动弹回,复用详情加载失败卡片的样式
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = stringResource(R.string.douban_detail_entry_not_found),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(onClick = {
+                                view.performHaptic(HapticType.CLICK)
+                                handleBack()
+                            }) {
+                                Text(stringResource(R.string.detail_back))
+                            }
+                        }
+                    }
                 }
             } else if (uiState.error != null) {
                 // 加载错误
@@ -2110,10 +2151,11 @@ private fun DoubanItemHeader(
 private fun DoubanStarRating(rating: Int, textColor: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         for (i in 1..5) {
+            // 空星用描边图标与实星区分,不再依赖 alpha 区分
             Icon(
-                imageVector = if (i <= rating) Icons.Rounded.Star else Icons.Rounded.Star,
+                imageVector = if (i <= rating) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                 contentDescription = null,
-                tint = if (i <= rating) RatingGold else textColor.copy(alpha = 0.4f),
+                tint = if (i <= rating) RatingGold else textColor,
                 modifier = Modifier.size(16.dp)
             )
         }

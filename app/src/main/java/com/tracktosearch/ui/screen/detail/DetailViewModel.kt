@@ -865,6 +865,11 @@ class DetailViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(backdrops = urls)
                 }
             }
+            // 剧照请求结束(无论成败)都复位预告片/剧照加载标志:
+            // 纯豆瓣条目(tmdbId=0)没有 TMDB 填充兜底,不复位会让骨架与 glass scene 加载态永久卡住
+            if (_uiState.value.isLoadingVideosImages) {
+                _uiState.value = _uiState.value.copy(isLoadingVideosImages = false)
+            }
             saveToCache()
         }
     }
@@ -1464,7 +1469,12 @@ class DetailViewModel @Inject constructor(
     }
 
     private fun fetchVideosAndImages() {
-        if (currentTmdbId <= 0) return
+        if (currentTmdbId <= 0) {
+            // 纯豆瓣条目(tmdbId=0)无 TMDB 预告片/剧照:先复位加载标志再返回,
+            // 否则初始 true 永不复位,骨架与 glass scene 加载态永久卡住
+            _uiState.value = _uiState.value.copy(isLoadingVideosImages = false)
+            return
+        }
         _uiState.value = _uiState.value.copy(isLoadingVideosImages = true)
         viewModelScope.launch {
             try {
@@ -2810,8 +2820,13 @@ class DetailViewModel @Inject constructor(
 
         val cred = doubanAuthStorage.getCredentials()
         if (cred == null) {
-            // 豆瓣未登录(理论上豆瓣模式前提是已登录,此为防御性检查)
-            viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
+            // 访客(GUEST)点豆瓣承载条目的标记:引导登录而不是报「同步失败」;
+            // 豆瓣登录用户 cred 意外为 null 才算真正的同步失败,保留原 toast
+            if (currentSessionMode == SessionMode.GUEST) {
+                _uiState.value = current.copy(showLoginPrompt = true)
+            } else {
+                viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
+            }
             return
         }
 
@@ -2891,7 +2906,13 @@ class DetailViewModel @Inject constructor(
 
         val cred = doubanAuthStorage.getCredentials()
         if (cred == null) {
-            viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
+            // 访客(GUEST)点豆瓣承载条目的标记:引导登录而不是报「同步失败」;
+            // 豆瓣登录用户 cred 意外为 null 才算真正的同步失败,保留原 toast
+            if (currentSessionMode == SessionMode.GUEST) {
+                _uiState.value = current.copy(showLoginPrompt = true)
+            } else {
+                viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
+            }
             return
         }
 

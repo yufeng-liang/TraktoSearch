@@ -430,7 +430,9 @@ internal fun DetailHeaderContent(
         // 头部下方内容(cast/视频/简介/系列/季集)统一淡入,营造"沉浸背景先现,内容后显"效果
         if (contentReady) {
         Column(modifier = Modifier.alpha(contentAlpha)) {
-        if (sectionVisible.cast) {
+        // 纯豆瓣条目(tmdbId=0)没有 TMDB 演职员数据(cast/crew 只来自 TMDB),直接隐藏整栏,
+        // 否则骨架卡与「全部」按钮永远等不到内容,永久空挂
+        if (sectionVisible.cast && tmdbId > 0) {
         val hasCredits = uiState.cast.isNotEmpty() || uiState.crew.isNotEmpty()
         var showFullCast by rememberSaveable { mutableStateOf(false) }
         Column(
