@@ -2,6 +2,8 @@ package com.tracktosearch.ui.navigation
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.SizeTransform
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -592,7 +594,12 @@ fun AppNavigation(
                 enterTransition = { fadeIn(animationSpec = tween(220)) },
                 exitTransition = { fadeOut(animationSpec = tween(220)) },
                 popEnterTransition = { fadeIn(animationSpec = tween(120)) },
-                popExitTransition = { fadeOut(animationSpec = tween(120)) }
+                popExitTransition = { fadeOut(animationSpec = tween(120)) },
+                // 默认 SizeTransform 用 StiffnessMediumLow 弹簧，尺寸动画要 2~3 秒才判停，
+                // 转场状态在 fade 结束后仍长时间 running，期间每帧重录含 Mesh 的背景层，
+                // 返回段白烧 GPU。两页都全屏、尺寸不变，尺寸动画用 120ms 线性结束，
+                // 让转场状态与 fade 同步收尾；共享元素海报由 SharedTransitionLayout 独立接管。
+                sizeTransform = { SizeTransform(clip = false, sizeAnimationSpec = { _, _ -> tween<IntSize>(120) }) }
             ) {
                 composable(Routes.LOGIN) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {

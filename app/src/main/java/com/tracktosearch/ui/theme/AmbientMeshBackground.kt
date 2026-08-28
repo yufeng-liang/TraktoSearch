@@ -15,6 +15,8 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.tooling.preview.Preview
@@ -101,7 +103,6 @@ fun AmbientMeshBackground(
     } else {
         0f
     }
-
     // 关闭动效时，默认底色既更灰一点又轻微掺入主题主色，避免纯灰白/黑蓝显得单调。
     // 浅色主题掺入更明显（10%），深色主题收敛（8%），同时保证正文对比度。
     val baseBackground = if (enabled) {
@@ -112,13 +113,29 @@ fun AmbientMeshBackground(
 
     Box(modifier = modifier.fillMaxSize().background(baseBackground)) {
         if (enabled) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                ShaderAmbient(preset, palette, colorScheme.background, speedScale)
-            } else {
-                LegacyMeshAmbient(preset, palette, speedScale > 0f)
+            // 停帧（speed=0）时把 shader 层缓存成离屏纹理：转场/其他重绘触发父层重录时
+            // 只做纹理 blit，不再每帧执行全屏 AGSL shader（真机返回段 draw+GPU 42ms → 约 7ms）。
+            // 恢复流动时移除离屏策略，shader 每帧直接绘制；内容变化会自然使缓存失效重录。
+            val shaderBoxModifier = Modifier
+                .fillMaxSize()
+                .then(
+                    if (speedScale <= 0f) {
+                        Modifier.graphicsLayer {
+                            compositingStrategy = CompositingStrategy.Offscreen
+                        }
+                    } else {
+                        Modifier
+                    }
+                )
+            Box(modifier = shaderBoxModifier) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    ShaderAmbient(preset, palette, colorScheme.background, speedScale)
+                } else {
+                    LegacyMeshAmbient(preset, palette, speedScale > 0f)
+                }
+                val scrim = colorScheme.background.copy(alpha = scrimAlpha(preset, isDark))
+                Box(Modifier.fillMaxSize().background(scrim))
             }
-            val scrim = colorScheme.background.copy(alpha = scrimAlpha(preset, isDark))
-            Box(Modifier.fillMaxSize().background(scrim))
         }
     }
 }
