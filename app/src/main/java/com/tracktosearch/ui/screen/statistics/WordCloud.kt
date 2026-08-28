@@ -68,7 +68,7 @@ fun rememberWordCloudLayoutStore(): WordCloudLayoutStore = remember { WordCloudL
  * 词云组件。
  *
  * 按权重降序取前 [maxWords] 个高频词，字号随权重在 12sp~36sp 间归一化，
- * 颜色循环取自 [androidx.compose.material3.MaterialTheme] 调色板（兼容深色模式），
+ * 颜色循环取自 [colors]（默认为统计页 8 色暖调分析色板，与饼图、类型排行同一套），
  * 布局使用固定种子（Random(42)）的螺旋搜索，尽量不与已放置矩形重叠；
  * 放不下则缩小重试，仍失败则跳过（保证不崩、不重叠堆叠）。同一输入永远得到相同布局。
  *
@@ -78,32 +78,21 @@ fun rememberWordCloudLayoutStore(): WordCloudLayoutStore = remember { WordCloudL
  * @param layoutStore 布局缓存，见 [rememberWordCloudLayoutStore]
  * @param modifier 修饰符，建议至少提供宽度（如 fillMaxWidth），高度由组件按内容估算
  * @param maxWords 仅取前 N 个高频词，避免过密
+ * @param colors 取色循环列表，需保证在 surface 背景上可读
  */
 @Composable
 fun WordCloud(
     words: List<WordCloudItem>,
     layoutStore: WordCloudLayoutStore,
     modifier: Modifier = Modifier,
-    maxWords: Int = 60
+    maxWords: Int = 60,
+    colors: List<Color> = rememberAnalyticsPalette()
 ) {
     if (words.isEmpty()) return
 
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
-    val colorScheme = androidx.compose.material3.MaterialTheme.colorScheme
-
-    // 主题协调调色板（均在 surface 背景上可读）
-    val palette = remember(colorScheme) {
-        listOf(
-            colorScheme.primary,
-            colorScheme.secondary,
-            colorScheme.tertiary,
-            colorScheme.onSurfaceVariant,
-            colorScheme.primary.copy(alpha = 0.85f),
-            colorScheme.secondary.copy(alpha = 0.85f),
-            colorScheme.tertiary.copy(alpha = 0.85f)
-        )
-    }
+    val palette = colors
 
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val canvasWidthPx = with(density) { maxWidth.toPx() }

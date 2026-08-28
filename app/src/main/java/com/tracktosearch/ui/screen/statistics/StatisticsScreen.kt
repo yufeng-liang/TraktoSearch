@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.statistics
 
+import android.content.Intent
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
@@ -7,7 +8,6 @@ import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -40,16 +40,23 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Help
+import androidx.compose.material.icons.rounded.Insights
+import androidx.compose.material.icons.rounded.LiveTv
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -73,6 +80,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.platform.LocalView
@@ -145,8 +153,67 @@ fun StatisticsScreen(
         contentCapacity = 72
     )
 
+    // Hero 卡片与分享长图共用的派生量：连看天数要扫全量热力图（约一年 365 个 key），
+    // 提到组合顶层算一次，列表 item 被回收重建时不重复解析日期
+    val streakDays = remember(uiState.heatmapData) {
+        longestWatchStreak(uiState.heatmapData)
+    }
+    val highlight = remember(
+        streakDays,
+        uiState.thisYearWatched,
+        uiState.totalWatchMinutes,
+        uiState.genreDistribution,
+        uiState.totalMovieCount,
+        uiState.showsWatchedCount
+    ) {
+        pickHighlight(
+            streakDays = streakDays,
+            thisYearWatched = uiState.thisYearWatched,
+            totalWatchMinutes = uiState.totalWatchMinutes,
+            genreDistribution = uiState.genreDistribution,
+            totalWatchedCount = uiState.totalMovieCount + uiState.showsWatchedCount
+        )
+    }
+
+    // 分享长图：内容与文案在组合里取好，位图渲染与写文件都在后台线程
+    val context = LocalContext.current
+    val shareScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    var sharing by remember { mutableStateOf(false) }
+    val shareData = statisticsShareData(
+        uiState = uiState,
+        locale = statisticsLocale(),
+        highlight = highlight
+    )
+    val shareFailedText = stringResource(R.string.statistics_share_failed)
+    val shareChooserTitle = stringResource(R.string.statistics_share_chooser)
+    val shareEnabled = shareData != null && !sharing
+    val onShare: () -> Unit = {
+        val data = shareData
+        if (data != null && !sharing) {
+            sharing = true
+            shareScope.launch {
+                try {
+                    val uri = renderStatisticsShareImage(context, data)
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "image/png"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(Intent.createChooser(intent, shareChooserTitle))
+                } catch (e: Exception) {
+                    // 位图分配失败、无接收方应用、FileProvider 写入失败等都只提示，不崩溃
+                    snackbarHostState.showSnackbar(shareFailedText)
+                } finally {
+                    sharing = false
+                }
+            }
+        }
+    }
+
     Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Box(
             modifier = Modifier
@@ -210,25 +277,30 @@ fun StatisticsScreen(
                         top = 65.dp + statusBarHeight,
                         bottom = 16.dp
                     ),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                // Hero 小结：一句话 + 一个大数字，先把「最突出的一项」讲成人话，
+                // 后面的总览再给全量数字。数据未就绪时不占位，避免一进页面就是空卡片。
+                if (uiState.overviewReady) {
+                    item(key = "hero") {
+                        StatisticsHeroCard(
+                            highlight = highlight,
+                            thisYearWatched = uiState.thisYearWatched,
+                            totalHours = (uiState.totalWatchMinutes / 60).toInt(),
+                            streakDays = streakDays
+                        )
+                    }
+                }
+
                 // 总览卡片（数字跳动动画）
                 item(key = "overview") {
                     val reveal = rememberSectionReveal(listState, "overview")
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        ),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                    ) {
+                    SectionCard(title = stringResource(R.string.statistics_overview)) {
                         if (uiState.overviewReady) {
                             OverviewCards(uiState, reveal)
                         } else {
                             StatisticsSkeletonContent(
-                                variant = StatisticsSkeletonVariant.OVERVIEW,
-                                modifier = Modifier.padding(16.dp)
+                                variant = StatisticsSkeletonVariant.OVERVIEW
                             )
                         }
                     }
@@ -393,6 +465,18 @@ fun StatisticsScreen(
                     )
                 }
                 Spacer(modifier = Modifier.weight(1f))
+                IconButton(
+                    onClick = onShare,
+                    enabled = shareEnabled,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Share,
+                        contentDescription = stringResource(R.string.statistics_share),
+                        modifier = Modifier.size(22.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
                 // 展示上次快照并后台刷新时的细进度条：不遮挡内容，只提示数据可能不是最新
                 if (uiState.isRefreshing) {
@@ -575,109 +659,93 @@ private fun statisticsLocale(): Locale {
     }
 }
 
-/** 总览卡片：数字跳动动画 */
+/**
+ * 总览：2 列 × 3 行图标格子。
+ *
+ * 原先 3 列时「剧集」格要塞主数字 + 「N 部看完」副行，窄屏会折成两行折字；
+ * 且 5 个格子第二行只放 2 个，右侧留一大块空。改 2 列后每格更宽，
+ * 图标 + 大数字 + 单位 + 标签四层都放得下，补上「已评分」正好铺满 6 格。
+ */
 @Composable
 private fun OverviewCards(uiState: StatisticsUiState, reveal: SectionReveal) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // 第一行：电影部数 / 电视剧（在追·看完）/ 集数
+    val movies = rememberOneShotAnimatedInt(uiState.totalMovieCount, reveal)
+    val shows = rememberOneShotAnimatedInt(uiState.showsWatchedCount, reveal)
+    val completed = rememberOneShotAnimatedInt(uiState.showsCompletedCount, reveal)
+    val episodes = rememberOneShotAnimatedInt(uiState.totalEpisodeCount, reveal)
+    val thisMonth = rememberOneShotAnimatedInt(uiState.thisMonthWatched, reveal)
+    val thisYear = rememberOneShotAnimatedInt(uiState.thisYearWatched, reveal)
+    val ratings = rememberOneShotAnimatedInt(uiState.totalRatings, reveal)
+    // 用目标值而非动画中间值判断，避免数字跳动过程中副行闪现
+    val showCompletedLine = uiState.showsCompletedReady &&
+        uiState.showsCompletedCount != uiState.showsWatchedCount
+    val unitTitles = stringResource(R.string.statistics_unit_titles)
+    val unitEpisodes = stringResource(R.string.statistics_unit_episodes)
+    val unitTimes = stringResource(R.string.statistics_unit_times)
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            AnimatedStatCard(
-                modifier = Modifier.weight(1f),
-                title = stringResource(R.string.statistics_movies),
-                targetValue = uiState.totalMovieCount,
-                reveal = reveal
+            StatOverviewTile(
+                icon = Icons.Rounded.Movie,
+                value = movies.toString(),
+                unit = unitTitles,
+                label = stringResource(R.string.statistics_movies),
+                modifier = Modifier.weight(1f)
             )
             // 剧集有两个口径：有观看记录的剧数（含未看完）与整部看完的剧数。
             // Trakt 的「已看」只要看过一集就计入，和「看完」差别很大，分开显示避免歧义。
-            ShowStatCard(
+            StatOverviewTile(
+                icon = Icons.Rounded.Tv,
+                value = shows.toString(),
+                unit = unitTitles,
+                label = stringResource(R.string.statistics_shows),
                 modifier = Modifier.weight(1f),
-                watchedCount = uiState.showsWatchedCount,
-                completedCount = uiState.showsCompletedCount,
-                completedReady = uiState.showsCompletedReady,
-                reveal = reveal
-            )
-            AnimatedStatCard(
-                modifier = Modifier.weight(1f),
-                title = stringResource(R.string.statistics_episodes),
-                targetValue = uiState.totalEpisodeCount,
-                reveal = reveal
+                secondary = if (showCompletedLine) {
+                    stringResource(R.string.statistics_shows_completed, completed)
+                } else {
+                    null
+                }
             )
         }
-        // 第二行：本月 / 本年
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            AnimatedStatCard(
-                modifier = Modifier.weight(1f),
-                title = stringResource(R.string.statistics_this_month),
-                targetValue = uiState.thisMonthWatched,
-                reveal = reveal
+            StatOverviewTile(
+                icon = Icons.Rounded.LiveTv,
+                value = episodes.toString(),
+                unit = unitEpisodes,
+                label = stringResource(R.string.statistics_episodes),
+                modifier = Modifier.weight(1f)
             )
-            AnimatedStatCard(
-                modifier = Modifier.weight(1f),
-                title = stringResource(R.string.statistics_this_year),
-                targetValue = uiState.thisYearWatched,
-                reveal = reveal
+            StatOverviewTile(
+                icon = Icons.Rounded.Star,
+                value = ratings.toString(),
+                unit = unitTimes,
+                label = stringResource(R.string.statistics_overview_rated),
+                modifier = Modifier.weight(1f)
             )
         }
-    }
-}
-
-/**
- * 剧集统计卡片：主数字为有观看记录的剧数，副行补充其中「整部看完」的数量。
- *
- * 两个数字相等时（全部看完）副行是重复信息，隐藏它。
- * 与 [AnimatedStatCard] 保持相同的卡片高度与数字动画，便于同一行对齐。
- */
-@Composable
-private fun ShowStatCard(
-    watchedCount: Int,
-    completedCount: Int,
-    completedReady: Boolean,
-    reveal: SectionReveal,
-    modifier: Modifier = Modifier
-) {
-    val animatedWatched = rememberOneShotAnimatedInt(watchedCount, reveal)
-    val animatedCompleted = rememberOneShotAnimatedInt(completedCount, reveal)
-    // 用目标值而非动画中间值判断，避免数字跳动过程中副行闪现
-    val showCompletedLine = completedReady && completedCount != watchedCount
-
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(
-                text = animatedWatched.toString(),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+            StatOverviewTile(
+                icon = Icons.Rounded.Schedule,
+                value = thisMonth.toString(),
+                unit = unitTitles,
+                label = stringResource(R.string.statistics_this_month),
+                modifier = Modifier.weight(1f)
             )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = stringResource(R.string.statistics_shows),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            StatOverviewTile(
+                icon = Icons.Rounded.Insights,
+                value = thisYear.toString(),
+                unit = unitTitles,
+                label = stringResource(R.string.statistics_this_year),
+                modifier = Modifier.weight(1f)
             )
-            if (showCompletedLine) {
-                Text(
-                    text = stringResource(R.string.statistics_shows_completed, animatedCompleted),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-                    textAlign = TextAlign.Center
-                )
-            }
         }
     }
 }
@@ -691,76 +759,16 @@ private fun rememberOneShotAnimatedInt(targetValue: Int, reveal: SectionReveal):
         durationMillis = 1500
     ).roundToInt()
 
-/** 带数字跳动动画的统计卡片 */
-@Composable
-private fun AnimatedStatCard(
-    title: String,
-    targetValue: Int,
-    reveal: SectionReveal,
-    modifier: Modifier = Modifier
-) {
-    val animatedValue = rememberOneShotAnimatedInt(targetValue, reveal)
-
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = animatedValue.toString(),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
 @Composable
 private fun SectionCard(
     title: String,
     content: @Composable () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            content()
-        }
-    }
+    StatsSectionCard(title = title, content = content)
 }
 
 @Composable
-private fun localizedGenreName(genre: String): String = when (genre) {
+internal fun localizedGenreName(genre: String): String = when (genre) {
     "action" -> stringResource(R.string.genre_action)
     "adventure" -> stringResource(R.string.genre_adventure)
     "animation" -> stringResource(R.string.genre_animation)
@@ -796,23 +804,19 @@ private fun localizedGenreName(genre: String): String = when (genre) {
     else -> genre.replaceFirstChar { it.uppercase() }
 }
 
-/** 饼图/图例配色（固定顺序，与图例一一对应） */
-private val PIE_COLORS = listOf(
-    Color(0xFF6750A4), Color(0xFF625B71), Color(0xFF7D5260), Color(0xFF2196F3),
-    Color(0xFF4CAF50), Color(0xFFFF9800), Color(0xFF9C27B0), Color(0xFF00BCD4),
-    Color(0xFFFF5722), Color(0xFF607D8B)
-)
+/** 饼图/图例配色：统一走 8 色暖调分析色板，与词云、类型排行同一套 */
+private const val PIE_MAX_SLICES = ANALYTICS_PALETTE_SIZE
 
 /** 饼图扇区：类型名 + 计数 */
 @Immutable
 private data class PieSlice(val genre: String, val count: Int)
 
-/** 取前 9 大类型，其余合并为「其他」，最多 10 个扇区。 */
+/** 取前 7 大类型，其余合并为「其他」，最多 8 个扇区，与分析色板容量一致。 */
 private fun pieSlices(genreDistribution: Map<String, Int>): List<PieSlice> {
     val sorted = genreDistribution.entries.sortedByDescending { it.value }
-    return if (sorted.size > 10) {
-        sorted.take(9).map { PieSlice(it.key, it.value) } +
-            PieSlice("other", sorted.drop(9).sumOf { it.value })
+    return if (sorted.size > PIE_MAX_SLICES) {
+        sorted.take(PIE_MAX_SLICES - 1).map { PieSlice(it.key, it.value) } +
+            PieSlice("other", sorted.drop(PIE_MAX_SLICES - 1).sumOf { it.value })
     } else {
         sorted.map { PieSlice(it.key, it.value) }
     }
@@ -826,7 +830,7 @@ private fun GenrePieChart(genreDistribution: Map<String, Int>, reveal: SectionRe
     if (totalCount == 0) return
 
     val entries = remember(genreDistribution) { pieSlices(genreDistribution) }
-    val colors = PIE_COLORS
+    val colors = rememberAnalyticsPalette()
 
     // 饼图展开动画进度（只在首次露出时播一次，进度在绘制阶段读取）
     val sweepProgress = rememberRevealAnimatable(
@@ -982,10 +986,12 @@ private val MEDAL_EMOJIS = listOf("🥇", "🥈", "🥉")
 @Composable
 private fun GenreRanking(genreDistribution: Map<String, Int>, reveal: SectionReveal) {
     val maxCount = genreDistribution.values.maxOrNull() ?: 1
+    // 与饼图取同样的排序与条数：同一个类型在饼图和排行里拿到同一个颜色，两块图才能互相对读
+    val colors = rememberAnalyticsPalette()
     val topGenres = remember(genreDistribution) {
         genreDistribution.entries
             .sortedByDescending { it.value }
-            .take(10)
+            .take(PIE_MAX_SLICES)
             .map { it.key to it.value }
     }
 
@@ -1007,18 +1013,27 @@ private fun GenreRanking(genreDistribution: Map<String, Int>, reveal: SectionRev
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 排名标志：前三名用emoji奖牌，其余用数字
+                    // 排名标志：前三名用emoji奖牌，其余用与饼图一致的类型色点
                     Box(
                         modifier = Modifier.size(24.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = if (index < 3) MEDAL_EMOJIS[index] else "${index + 1}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontSize = if (index < 3) 16.sp else 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        if (index < 3) {
+                            Text(
+                                text = MEDAL_EMOJIS[index],
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(9.dp)
+                                    .clip(RoundedCornerShape(5.dp))
+                                    .background(colors[index % colors.size])
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
@@ -1517,17 +1532,25 @@ private fun StatisticsSkeletonContent(
     val shimmer = rememberShimmer()
     when (variant) {
         StatisticsSkeletonVariant.OVERVIEW -> {
-            Row(
+            // 骨架跟随真实布局的 2 列 × 3 行，避免加载完成时格子数量与位置整体跳一下
+            Column(
                 modifier = modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 repeat(3) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(80.dp)
-                            .shimmer(shimmer, RoundedCornerShape(12.dp))
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        repeat(2) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(104.dp)
+                                    .shimmer(shimmer, RoundedCornerShape(16.dp))
+                            )
+                        }
+                    }
                 }
             }
         }
