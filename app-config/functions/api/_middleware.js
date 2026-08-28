@@ -160,9 +160,22 @@ export async function onRequest(context) {
     const authHeader = request.headers.get('Authorization') || '';
     const token = authHeader.replace('Bearer ', '').trim();
 
-    if (!token || token !== env.CRASH_LOG_TOKEN) {
+    // API key 用常量时间比较，避免 === 短路的时序侧信道（照 auth-worker crypto.ts）
+    if (!token || !timingSafeEqual(token, env.CRASH_LOG_TOKEN || '')) {
         return unauthorizedResponse();
     }
 
     return context.next();
+}
+
+/** 常量时间字符串比较（TextEncoder 版，不依赖 node:crypto）。 */
+function timingSafeEqual(a, b) {
+    const aBuf = new TextEncoder().encode(a);
+    const bBuf = new TextEncoder().encode(b);
+    const minLen = Math.min(aBuf.length, bBuf.length);
+    let result = aBuf.length ^ bBuf.length;
+    for (let i = 0; i < minLen; i++) {
+        result |= aBuf[i] ^ bBuf[i];
+    }
+    return result === 0;
 }
