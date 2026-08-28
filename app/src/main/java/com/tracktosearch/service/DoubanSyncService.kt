@@ -122,8 +122,12 @@ class DoubanSyncService : Service() {
                 startProgressCollection()
             }
         }
-        // START_STICKY:系统杀进程后可重启 Service 恢复通知(同步仍在 Application scope 继续运行)
-        return START_STICKY
+        // 与 ConsistencyCheckService/DoubanBatchRemovalService 一致用 START_NOT_STICKY：
+        // START_STICKY 下系统粘性重启时 intent 为 null 不会进前台分支，由
+        // startForegroundService 启动的服务重启 5 秒内未调 startForeground 会抛
+        // ForegroundServiceDidNotStartInTimeException 崩溃；同步本体在 Application
+        // scope 运行，Service 仅是通知载体，系统杀进程后不重启通知无碍。
+        return START_NOT_STICKY
     }
 
     private fun startProgressCollection() {
