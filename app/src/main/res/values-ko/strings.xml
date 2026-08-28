@@ -262,6 +262,9 @@
     <string name="settings_appearance">외관</string>
     <string name="settings_shared_transition">공유 요소 전환 애니메이션</string>
     <string name="settings_shared_transition_subtitle">화면 간 공유 요소에 전환 애니메이션을 적용합니다. 전체 화면 이미지를 열 때의 확대 전환도 포함됩니다.</string>
+    <string name="settings_splash_quote">시작 화면 오늘의 명대사</string>
+    <string name="settings_splash_quote_subtitle">앱을 열 때 명작 영화의 대사와 포스터를 보여줍니다. 화면을 탭하면 건너뜁니다.</string>
+    <string name="splash_quote_skip">탭하여 건너뛰기</string>
     <string name="settings_storage">저장소</string>
     <string name="settings_clear_cache">캐시 지우기</string>
     <string name="settings_about">정보</string>
@@ -898,6 +901,8 @@
     <string name="help_statistics_b2">Trakt와 Douban을 합친 시청 개요 (전체, 이번 달, 올해), 시청 시간, 평가 통계 확인 (같은 작품은 IMDb/Trakt/TMDB ID로 출처 간 중복 제거, 드라마는 ‘시청한 작품’과 ‘완주한 작품’ 두 숫자로 표시)</string>
     <string name="help_statistics_b3">장르 분포 파이 차트와 순위로 시청 취향 표시</string>
     <string name="help_statistics_b4">히트맵으로 지난 1년간의 매일 시청 활동 표시</string>
+    <string name="help_statistics_b5">상단 카드는 하이라이트를 자동으로 하나 고릅니다: 연속 시청 일수, 올해 편수, 누적 시간 또는 가장 많이 본 장르</string>
+    <string name="help_statistics_b6">오른쪽 위 공유 버튼은 하이라이트·개요·히트맵·장르 Top3·워드 클라우드를 한 장의 긴 이미지로 만듭니다. 닉네임과 프로필 사진은 포함되지 않습니다</string>
     <string name="help_notification_b1">알림을 켜면 신작 개봉과 새 시즌을 자동 알림</string>
     <string name="help_notification_b2">Android 13 이상은 알림 권한 부여 필요</string>
     <string name="help_notification_b3">알림은 Trakt 관심목록을 기반으로 합니다</string>
@@ -990,6 +995,42 @@
     <string name="statistics_wordcloud">리뷰 워드 클라우드</string>
     <string name="statistics_wordcloud_empty">아직 리뷰가 없습니다. 좋아하는 작품에 한 줄을 남겨보세요</string>
 
+    <!-- Statistics hero summary -->
+    <string name="statistics_hero_label_streak">최장 연속 시청</string>
+    <string name="statistics_hero_label_year">올해 시청</string>
+    <string name="statistics_hero_label_time">누적 시간</string>
+    <string name="statistics_hero_label_genre">선호 장르</string>
+    <string name="statistics_hero_label_starter">나의 기록</string>
+    <string name="statistics_unit_days">일</string>
+    <string name="statistics_unit_hours">시간</string>
+    <string name="statistics_unit_percent">%</string>
+    <string name="statistics_unit_titles">편</string>
+    <string name="statistics_unit_episodes">화</string>
+    <string name="statistics_unit_times">건</string>
+    <string name="statistics_overview_rated">평가함</string>
+    <string name="statistics_hero_streak">%1$d일 연속으로 봤습니다. 우연이 아니라 습관이네요.</string>
+    <string name="statistics_hero_year">올해 %1$d편을 끝냈습니다. 페이스가 좋아요.</string>
+    <string name="statistics_hero_time">쉬지 않고 약 %1$d일을 이어 본 분량입니다.</string>
+    <string name="statistics_hero_genre">%1$s이(가) 전체 시청의 %2$d%%를 차지합니다. 가장 뚜렷한 취향이에요.</string>
+    <string name="statistics_hero_starter">지금까지 %1$d편을 기록했습니다. 계속 보면 아래 숫자도 자랍니다.</string>
+    <string name="statistics_hero_metric_year">올해</string>
+    <string name="statistics_hero_metric_hours">시간</string>
+    <string name="statistics_hero_metric_streak">연속(일)</string>
+
+    <!-- Statistics share -->
+    <string name="statistics_share">통계 공유</string>
+    <string name="statistics_share_generating">이미지 생성 중…</string>
+    <string name="statistics_share_failed">이미지 생성에 실패했습니다. 다시 시도해 주세요</string>
+    <string name="statistics_share_not_ready">통계를 불러오는 중입니다. 잠시 후 다시 시도해 주세요</string>
+    <string name="statistics_share_card_title">나의 시청 기록</string>
+    <string name="statistics_overview">개요</string>
+    <string name="statistics_share_heatmap">최근 13주</string>
+    <string name="statistics_share_genre_count">%1$d편</string>
+    <string name="statistics_share_top_genres">장르 취향</string>
+    <string name="statistics_share_wordcloud">내가 남긴 말</string>
+    <string name="statistics_share_tagline">본 작품을 기록하고, 볼 작품을 찾다</string>
+    <string name="statistics_share_chooser">통계 공유</string>
+
     <!-- Content Descriptions -->
     <string name="cd_watched">시청함</string>
     <string name="cd_saved">저장됨</string>
@@ -1046,7 +1087,8 @@
     <string name="search_sources_import">설정 가져오기</string>
     <string name="search_sources_builtin">내장 소스</string>
     <string name="search_sources_custom">사용자 소스</string>
-    <string name="search_sources_empty">사용자 검색 소스가 없습니다.\n템플릿에서 추가하거나 공유 설정을 붙여넣으세요.</string>
+    <string name="search_sources_empty">사용자 검색 소스가 없습니다</string>
+    <string name="search_sources_empty_hint">사용자 소스는 내장 소스와 함께 매번 검색에 참여합니다. API 주소 하나만 넣으면 되고, 주요 사이트는 템플릿에 준비되어 있습니다.</string>
     <string name="search_sources_manage_entry_title">검색 소스</string>
         <string name="search_sources_pansou">PanSou</string>
     <string name="search_sources_pansou_desc">공공 판검색 API, 템플릿 파싱</string>
@@ -1071,7 +1113,6 @@
     <string name="editor_probe_start">파싱 시작</string>
     <string name="editor_probe_hint">응답 JSONPath를 자동으로 인식합니다. 샘플 키워드로 사이트에 한 번 요청합니다.</string>
     <string name="editor_probe_progress">샘플 키워드로 요청 중…</string>
-    <string name="editor_probe_failed">자동 인식 실패, 수동으로 설정하세요</string>
     <string name="editor_probe_result_list">결과 목록</string>
     <string name="editor_probe_result_title">제목</string>
     <string name="editor_probe_result_url">링크</string>
@@ -1079,7 +1120,42 @@
     <string name="editor_probe_result_date">날짜</string>
     <string name="editor_probe_keyword_param">키워드 파라미터</string>
     <string name="editor_probe_manual">인식이 정확하지 않나요? JSONPath 수동 조정 →</string>
-    <string name="editor_advanced_expand">고급 파라미터 모두 표시</string>
+
+    <!-- Search source editor polish -->
+    <string name="editor_template_entry_title">자주 쓰는 템플릿으로 시작</string>
+    <string name="editor_template_entry_desc">PanSou, Zreso 등 주요 사이트는 이미 설정되어 있어 선택만 하면 저장할 수 있습니다</string>
+    <string name="editor_manual_divider">또는 직접 입력</string>
+    <string name="editor_paste_url">클립보드에서 주소 붙여넣기</string>
+    <string name="editor_paste_empty">클립보드에 주소가 없습니다</string>
+    <string name="editor_base_url_hint">사이트 루트 주소만 입력하고 API 경로는 제외하세요</string>
+    <string name="editor_name_hint">검색 소스 목록에 표시됩니다. 알아볼 수 있는 이름이면 됩니다</string>
+    <string name="editor_group_basic">기본 정보</string>
+    <string name="editor_group_request">요청 파라미터</string>
+    <string name="editor_group_parse">파싱 규칙</string>
+    <string name="editor_group_basic_desc">이름, 주소, API 경로</string>
+    <string name="editor_group_request_desc">키워드와 선택적 필터 파라미터</string>
+    <string name="editor_group_parse_desc">응답의 어떤 필드를 읽을지</string>
+    <string name="editor_label_base_url">Base URL</string>
+    <string name="editor_label_api_path">API 경로</string>
+    <string name="editor_label_keyword_param">키워드 파라미터</string>
+    <string name="editor_label_disk_param">클라우드 종류 파라미터</string>
+    <string name="editor_label_disk_value">클라우드 종류 값</string>
+    <string name="editor_label_src_param">소스 파라미터</string>
+    <string name="editor_label_src_value">소스 값</string>
+    <string name="editor_label_list_path">목록 경로</string>
+    <string name="editor_label_name_path">이름 경로</string>
+    <string name="editor_label_url_path">링크 경로</string>
+    <string name="editor_label_disk_path">클라우드 종류 경로</string>
+    <string name="editor_label_date_path">날짜 경로</string>
+    <string name="editor_optional">선택</string>
+    <string name="editor_preview_url">요청 미리보기</string>
+    <string name="editor_probe_retry">다시 시도</string>
+    <string name="editor_probe_failed_unreachable">사이트에 연결할 수 없습니다</string>
+    <string name="editor_probe_failed_not_json">응답은 왔지만 JSON이 아닙니다</string>
+    <string name="editor_probe_failed_unrecognized">JSON을 받았지만 결과 목록을 인식할 수 없습니다</string>
+    <string name="editor_probe_advice_unreachable">주소에 오타가 없는지, 브라우저에서 열리는지, 네트워크나 프록시가 정상인지 확인하세요.</string>
+    <string name="editor_probe_advice_not_json">이 주소는 API가 아니라 웹 페이지를 가리키는 것 같습니다. 사이트의 검색 API 주소를 입력하세요.</string>
+    <string name="editor_probe_advice_unrecognized">아직 모르는 응답 구조입니다. 다음 단계에서 JSONPath를 직접 입력하세요.</string>
     <string name="import_paste">붙여넣기</string>
     <!-- 공유/가져오기 -->
     <string name="share_source_title">「%1$s」공유</string>
@@ -1262,6 +1338,9 @@
     <string name="help_custom_source_b3">템플릿 라이브러리에서 한 번에 추가하거나 3단계 마법사: 기본 정보 → 자동 파싱 → 확인</string>
     <string name="help_custom_source_b4">자동 파싱은 JSONPath로 목록 경로/이름/링크/디스크 유형 인식, 수동 미세 조정 가능</string>
     <string name="help_custom_source_b5">공유: 목록 항목 공유 버튼으로 설정 텍스트 복사; 가져오기: 텍스트 붙여넣기만 하면 되며, 이름 충돌 시 알림</string>
+    <string name="help_custom_source_b6">1단계에는 템플릿 바로가기와 「클립보드에서 주소 붙여넣기」 버튼이 있습니다. 누를 때만 클립보드를 읽습니다</string>
+    <string name="help_custom_source_b7">3단계는 13개 매개변수를 기본 정보 / 요청 매개변수 / 파싱 규칙 세 그룹으로 나누며 한 번에 하나만 펼칩니다. 기본은 기본 정보만 열려 있습니다</string>
+    <string name="help_custom_source_b8">자동 감지가 실패하면 어디서 막혔는지 알려줍니다: 주소 연결 불가, 응답이 JSON 아님, 필드 인식 불가</string>
     <string name="help_custom_source_params">매개변수 설명</string>
     <string name="help_cs_table_param">매개변수명</string>
     <string name="help_cs_table_desc">설명</string>

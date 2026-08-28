@@ -262,6 +262,9 @@
     <string name="settings_appearance">外観</string>
     <string name="settings_shared_transition">共有要素トランジション</string>
     <string name="settings_shared_transition_subtitle">画面間で共有要素にトランジションアニメーションを適用（全画面表示時のズーム遷移も含む）。</string>
+    <string name="settings_splash_quote">起動時の名セリフ</string>
+    <string name="settings_splash_quote_subtitle">起動時に名作映画のセリフとポスターを表示します。画面をタップするとスキップできます。</string>
+    <string name="splash_quote_skip">タップでスキップ</string>
     <string name="settings_storage">ストレージ</string>
     <string name="settings_clear_cache">キャッシュクリア</string>
     <string name="settings_about">について</string>
@@ -898,6 +901,8 @@
     <string name="help_statistics_b2">TraktとDoubanを統合した視聴概要（合計、今月、今年）、視聴時間、評価統計を確認（同じ作品はIMDb/Trakt/TMDB IDで出典をまたいで重複排除。ドラマは「視聴した作品」と「完走した作品」の2つの数字で表示）</string>
     <string name="help_statistics_b3">ジャンル分布の円グラフとランキングで視聴嗜好を表示</string>
     <string name="help_statistics_b4">ヒートマップで過去1年間の毎日の視聴活動を表示</string>
+    <string name="help_statistics_b5">上部カードはハイライトを自動で 1 つ選びます：連続視聴日数、今年の本数、累計時間、または最も多いジャンル</string>
+    <string name="help_statistics_b6">右上の共有ボタンでハイライト・概要・ヒートマップ・ジャンル Top3・ワードクラウドを 1 枚の長い画像にします。ニックネームやアイコンは含まれません</string>
     <string name="help_notification_b1">通知を有効にすると新作公開や新シーズンを自動通知</string>
     <string name="help_notification_b2">Android 13以上は通知権限の付与が必要</string>
     <string name="help_notification_b3">リマインダーはTraktの見たいリストに基づきます</string>
@@ -990,6 +995,42 @@
     <string name="statistics_wordcloud">レビュー単語クラウド</string>
     <string name="statistics_wordcloud_empty">まだレビューがありません。お気に入りの作品に一言書いてみましょう</string>
 
+    <!-- Statistics hero summary -->
+    <string name="statistics_hero_label_streak">最長連続視聴</string>
+    <string name="statistics_hero_label_year">今年の視聴</string>
+    <string name="statistics_hero_label_time">累計時間</string>
+    <string name="statistics_hero_label_genre">好みのジャンル</string>
+    <string name="statistics_hero_label_starter">あなたの記録</string>
+    <string name="statistics_unit_days">日</string>
+    <string name="statistics_unit_hours">時間</string>
+    <string name="statistics_unit_percent">%</string>
+    <string name="statistics_unit_titles">作品</string>
+    <string name="statistics_unit_episodes">話</string>
+    <string name="statistics_unit_times">件</string>
+    <string name="statistics_overview_rated">評価済み</string>
+    <string name="statistics_hero_streak">%1$d 日連続で観ています。偶然ではなく、もう習慣です。</string>
+    <string name="statistics_hero_year">今年は %1$d 作品を見終えました。良いペースです。</string>
+    <string name="statistics_hero_time">休みなく約 %1$d 日間観続けた長さです。</string>
+    <string name="statistics_hero_genre">%1$s が視聴全体の %2$d%% を占め、最もはっきりした好みです。</string>
+    <string name="statistics_hero_starter">これまでに %1$d 作品を記録。続ければ下の数字も育ちます。</string>
+    <string name="statistics_hero_metric_year">今年</string>
+    <string name="statistics_hero_metric_hours">時間</string>
+    <string name="statistics_hero_metric_streak">連続（日）</string>
+
+    <!-- Statistics share -->
+    <string name="statistics_share">統計を共有</string>
+    <string name="statistics_share_generating">画像を生成中…</string>
+    <string name="statistics_share_failed">画像の生成に失敗しました。もう一度お試しください</string>
+    <string name="statistics_share_not_ready">統計を読み込み中です。少し待ってからお試しください</string>
+    <string name="statistics_share_card_title">わたしの視聴記録</string>
+    <string name="statistics_overview">概要</string>
+    <string name="statistics_share_heatmap">直近 13 週</string>
+    <string name="statistics_share_genre_count">%1$d 作品</string>
+    <string name="statistics_share_top_genres">ジャンルの好み</string>
+    <string name="statistics_share_wordcloud">書き残した言葉</string>
+    <string name="statistics_share_tagline">観た作品を記録し、観たい作品を探す</string>
+    <string name="statistics_share_chooser">統計を共有</string>
+
     <!-- Content Descriptions -->
     <string name="cd_watched">視聴済み</string>
     <string name="cd_saved">保存済み</string>
@@ -1046,7 +1087,8 @@
     <string name="search_sources_import">設定をインポート</string>
     <string name="search_sources_builtin">内蔵ソース</string>
     <string name="search_sources_custom">カスタムソース</string>
-    <string name="search_sources_empty">カスタムソースはまだありません。\nテンプレートから追加するか、共有設定を貼り付けてください。</string>
+    <string name="search_sources_empty">カスタムソースはまだありません</string>
+    <string name="search_sources_empty_hint">カスタムソースは組み込みソースと一緒に毎回の検索に参加します。API アドレスを 1 つ入れるだけで使え、主要サイトはテンプレートに用意済みです。</string>
     <string name="search_sources_manage_entry_title">検索ソース</string>
         <string name="search_sources_pansou">PanSou</string>
     <string name="search_sources_pansou_desc">公共パン検索API、テンプレート解析</string>
@@ -1071,7 +1113,6 @@
     <string name="editor_probe_start">解析開始</string>
     <string name="editor_probe_hint">レスポンスのJSONPathを自動認識します。サンプルキーワードでサイトに1回リクエストします。</string>
     <string name="editor_probe_progress">サンプルキーワードでリクエスト中…</string>
-    <string name="editor_probe_failed">自動認識できませんでした。手動設定してください</string>
     <string name="editor_probe_result_list">結果リスト</string>
     <string name="editor_probe_result_title">タイトル</string>
     <string name="editor_probe_result_url">リンク</string>
@@ -1079,7 +1120,42 @@
     <string name="editor_probe_result_date">日時</string>
     <string name="editor_probe_keyword_param">キーワードパラメータ</string>
     <string name="editor_probe_manual">認識が不正確？JSONPath を手動調整 →</string>
-    <string name="editor_advanced_expand">詳細パラメータをすべて表示</string>
+
+    <!-- Search source editor polish -->
+    <string name="editor_template_entry_title">よく使うテンプレートから始める</string>
+    <string name="editor_template_entry_desc">PanSou や Zreso など主要サイトは設定済み。選ぶだけで保存できます</string>
+    <string name="editor_manual_divider">または自分で入力</string>
+    <string name="editor_paste_url">クリップボードからアドレスを貼り付け</string>
+    <string name="editor_paste_empty">クリップボードにアドレスが見つかりません</string>
+    <string name="editor_base_url_hint">サイトのルートアドレスのみ。API パスは含めません</string>
+    <string name="editor_name_hint">検索ソース一覧に表示されます。自分が分かる名前で十分です</string>
+    <string name="editor_group_basic">基本情報</string>
+    <string name="editor_group_request">リクエストパラメータ</string>
+    <string name="editor_group_parse">解析ルール</string>
+    <string name="editor_group_basic_desc">名前・アドレス・API パス</string>
+    <string name="editor_group_request_desc">キーワードと任意の絞り込みパラメータ</string>
+    <string name="editor_group_parse_desc">レスポンスのどのフィールドを読むか</string>
+    <string name="editor_label_base_url">Base URL</string>
+    <string name="editor_label_api_path">API パス</string>
+    <string name="editor_label_keyword_param">キーワードパラメータ</string>
+    <string name="editor_label_disk_param">ストレージ種別パラメータ</string>
+    <string name="editor_label_disk_value">ストレージ種別の値</string>
+    <string name="editor_label_src_param">ソースパラメータ</string>
+    <string name="editor_label_src_value">ソースの値</string>
+    <string name="editor_label_list_path">リストパス</string>
+    <string name="editor_label_name_path">名前パス</string>
+    <string name="editor_label_url_path">リンクパス</string>
+    <string name="editor_label_disk_path">ストレージ種別パス</string>
+    <string name="editor_label_date_path">日付パス</string>
+    <string name="editor_optional">任意</string>
+    <string name="editor_preview_url">リクエストのプレビュー</string>
+    <string name="editor_probe_retry">再試行</string>
+    <string name="editor_probe_failed_unreachable">サイトに接続できません</string>
+    <string name="editor_probe_failed_not_json">応答はありましたが JSON ではありません</string>
+    <string name="editor_probe_failed_unrecognized">JSON は取得できましたが、結果リストを認識できません</string>
+    <string name="editor_probe_advice_unreachable">アドレスの誤りがないか、ブラウザで開けるか、ネットワークやプロキシが正常かを確認してください。</string>
+    <string name="editor_probe_advice_not_json">このアドレスは API ではなく Web ページを指している可能性があります。サイトの検索 API アドレスを入力してください。</string>
+    <string name="editor_probe_advice_unrecognized">この応答構造は未知のものです。次のステップで JSONPath を手動入力してください。</string>
     <string name="import_paste">貼り付け</string>
     <!-- 共有/インポート -->
     <string name="share_source_title">「%1$s」を共有</string>
@@ -1262,6 +1338,9 @@
     <string name="help_custom_source_b3">テンプレートライブラリからワンタップ追加、または3ステップウィザード：基本情報 → 自動解析 → 確認</string>
     <string name="help_custom_source_b4">自動解析はJSONPath（リストパス/名前/リンク/ディスク種別）を自動認識、手動微調整も可能</string>
     <string name="help_custom_source_b5">共有：リスト項目の共有ボタンで設定テキストをコピー；インポート：テキストを貼り付けるだけで、同名は競合通知</string>
+    <string name="help_custom_source_b6">ステップ 1 にはテンプレートの近道と「クリップボードから貼り付け」ボタンがあります。押したときだけクリップボードを読みます</string>
+    <string name="help_custom_source_b7">ステップ 3 では 13 個のパラメータを基本情報 / リクエスト / 解析ルールの 3 グループに収め、1 つずつ開きます。初期状態は基本情報のみ</string>
+    <string name="help_custom_source_b8">自動検出に失敗した場合、どこで止まったかを表示します：アドレスに接続不可、応答が JSON でない、フィールドを認識できない</string>
     <string name="help_custom_source_params">パラメータ説明</string>
     <string name="help_cs_table_param">パラメータ名</string>
     <string name="help_cs_table_desc">説明</string>

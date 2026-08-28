@@ -496,6 +496,9 @@
     <string name="settings_appearance">外观</string>
     <string name="settings_shared_transition">共享元素转场动画</string>
     <string name="settings_shared_transition_subtitle">在页面间为共享元素添加转场动画，包括点开大图时的缩放过渡。</string>
+    <string name="settings_splash_quote">开屏每日台词</string>
+    <string name="settings_splash_quote_subtitle">启动时展示一句经典电影台词和它的海报，轻触任意位置可跳过。</string>
+    <string name="splash_quote_skip">轻触跳过</string>
     <string name="settings_storage">存储</string>
     <string name="settings_clear_cache">清除缓存</string>
     <string name="settings_clear_cache_confirm">确定要清除所有缓存数据吗？</string>
@@ -564,6 +567,8 @@
     <string name="help_statistics_b2">查看观影总览（总数、本月、本年）、观影时长和评分统计（合并 Trakt 与豆瓣数据，同一部影视按 IMDb/Trakt/TMDB ID 跨来源去重；剧集分「有观看记录」和「整部看完」两个数字）</string>
     <string name="help_statistics_b3">类型分布饼图和类型排行展示你的观影偏好</string>
     <string name="help_statistics_b4">热力图展示过去一年的每日观影活跃度</string>
+    <string name="help_statistics_b5">顶部卡片会自动挑一条亮点：连续观影天数、今年看了多少、累计时长或最爱类型</string>
+    <string name="help_statistics_b6">右上角分享按钮会把亮点、总览、热力图、类型 Top3 和词云拼成一张长图，图上不含昵称和头像</string>
     <string name="help_notification_b1">开启通知后可自动提醒新上映和新季</string>
     <string name="help_notification_b2">Android 13及以上需要授予通知权限</string>
     <string name="help_notification_b3">提醒基于你的 Trakt 想看列表</string>
@@ -590,6 +595,9 @@
     <string name="help_custom_source_b3">添加自定义源可从模板库一键选用，或走三步向导：基本信息 → 自动解析 → 确认</string>
     <string name="help_custom_source_b4">自动解析支持 JSONPath 识别列表路径/名称/链接/网盘类型，可手动微调</string>
     <string name="help_custom_source_b5">分享：列表项分享按钮生成配置文本；导入：粘贴配置文本即可，同名冲突会提示</string>
+    <string name="help_custom_source_b6">第一步提供模板捷径和「从剪贴板粘贴地址」按钮，只有按下时才读剪贴板</string>
+    <string name="help_custom_source_b7">第三步把 13 个参数收进基本信息 / 请求参数 / 解析规则三组，一次只展开一组，默认只开基本信息</string>
+    <string name="help_custom_source_b8">自动识别失败时会说清卡在哪一步：地址连不上、返回不是 JSON、还是字段认不出</string>
     <string name="help_custom_source_params">参数说明</string>
     <string name="help_cs_table_param">参数名</string>
     <string name="help_cs_table_desc">说明</string>
@@ -1088,6 +1096,42 @@
     <string name="statistics_wordcloud">短评词云</string>
     <string name="statistics_wordcloud_empty">还没有短评，去给喜欢的影视写一句吧</string>
 
+    <!-- Statistics hero summary -->
+    <string name="statistics_hero_label_streak">最长连看</string>
+    <string name="statistics_hero_label_year">本年观影</string>
+    <string name="statistics_hero_label_time">累计时长</string>
+    <string name="statistics_hero_label_genre">偏爱类型</string>
+    <string name="statistics_hero_label_starter">你的片单</string>
+    <string name="statistics_unit_days">天</string>
+    <string name="statistics_unit_hours">小时</string>
+    <string name="statistics_unit_percent">%</string>
+    <string name="statistics_unit_titles">部</string>
+    <string name="statistics_unit_episodes">集</string>
+    <string name="statistics_unit_times">次</string>
+    <string name="statistics_overview_rated">已评分</string>
+    <string name="statistics_hero_streak">你连着 %1$d 天都在看片，这已经是习惯，不是巧合。</string>
+    <string name="statistics_hero_year">今年看完 %1$d 部，节奏保持得不错。</string>
+    <string name="statistics_hero_time">相当于不吃不睡连看约 %1$d 天。</string>
+    <string name="statistics_hero_genre">%1$s 占了你观影的 %2$d%%，是最明显的口味倾向。</string>
+    <string name="statistics_hero_starter">已经记录 %1$d 部，继续看下去，下面的数字会长起来。</string>
+    <string name="statistics_hero_metric_year">本年</string>
+    <string name="statistics_hero_metric_hours">小时</string>
+    <string name="statistics_hero_metric_streak">连看（天）</string>
+
+    <!-- Statistics share -->
+    <string name="statistics_share">分享统计</string>
+    <string name="statistics_share_generating">正在生成图片…</string>
+    <string name="statistics_share_failed">图片生成失败，请重试</string>
+    <string name="statistics_share_not_ready">统计还在加载，稍后再试</string>
+    <string name="statistics_share_card_title">我的观影档案</string>
+    <string name="statistics_overview">总览</string>
+    <string name="statistics_share_heatmap">最近 13 周</string>
+    <string name="statistics_share_genre_count">%1$d 部</string>
+    <string name="statistics_share_top_genres">类型偏好</string>
+    <string name="statistics_share_wordcloud">我写下的词</string>
+    <string name="statistics_share_tagline">记录你看过的，搜索你想看的</string>
+    <string name="statistics_share_chooser">分享统计</string>
+
     <!-- Content Descriptions -->
     <string name="cd_watched">已看</string>
     <string name="cd_saved">已保存</string>
@@ -1144,7 +1188,8 @@
     <string name="search_sources_import">导入配置</string>
     <string name="search_sources_builtin">内置源</string>
     <string name="search_sources_custom">自定义源</string>
-    <string name="search_sources_empty">还没有自定义搜索源。\n可以从模板添加，或粘贴分享的配置。</string>
+    <string name="search_sources_empty">还没有自定义搜索源</string>
+    <string name="search_sources_empty_hint">自定义源会和内置源一起参与每次网盘搜索。填一个 API 地址就能用，常见站点模板里已经备好了。</string>
     <string name="search_sources_manage_entry_title">搜索源</string>
         <string name="search_sources_pansou">PanSou</string>
     <string name="search_sources_pansou_desc">公共盘搜 API，模板解析</string>
@@ -1169,7 +1214,6 @@
     <string name="editor_probe_start">开始解析</string>
     <string name="editor_probe_hint">自动识别响应 JSONPath：会用示例关键词请求该站点一次。</string>
     <string name="editor_probe_progress">正在用示例关键词请求接口…</string>
-    <string name="editor_probe_failed">未能自动识别，可手动配置</string>
     <string name="editor_probe_result_list">结果列表</string>
     <string name="editor_probe_result_title">标题</string>
     <string name="editor_probe_result_url">链接</string>
@@ -1177,7 +1221,42 @@
     <string name="editor_probe_result_date">时间</string>
     <string name="editor_probe_keyword_param">关键词参数</string>
     <string name="editor_probe_manual">识别不准？手动调整 JSONPath →</string>
-    <string name="editor_advanced_expand">展开全部高级参数</string>
+
+    <!-- Search source editor polish -->
+    <string name="editor_template_entry_title">从常用模板开始</string>
+    <string name="editor_template_entry_desc">PanSou、Zreso 等常见站点已配好参数，选一个即可直接保存</string>
+    <string name="editor_manual_divider">或者自己填</string>
+    <string name="editor_paste_url">从剪贴板粘贴地址</string>
+    <string name="editor_paste_empty">剪贴板里没有找到地址</string>
+    <string name="editor_base_url_hint">只填站点根地址，不含接口路径</string>
+    <string name="editor_name_hint">显示在搜索源列表里，能认出来就行</string>
+    <string name="editor_group_basic">基本信息</string>
+    <string name="editor_group_request">请求参数</string>
+    <string name="editor_group_parse">解析规则</string>
+    <string name="editor_group_basic_desc">名称、地址、接口路径</string>
+    <string name="editor_group_request_desc">关键字与可选的筛选参数</string>
+    <string name="editor_group_parse_desc">从响应的哪些字段取数据</string>
+    <string name="editor_label_base_url">Base URL</string>
+    <string name="editor_label_api_path">API 路径</string>
+    <string name="editor_label_keyword_param">关键字参数</string>
+    <string name="editor_label_disk_param">网盘类型参数</string>
+    <string name="editor_label_disk_value">网盘类型取值</string>
+    <string name="editor_label_src_param">来源参数</string>
+    <string name="editor_label_src_value">来源取值</string>
+    <string name="editor_label_list_path">列表路径</string>
+    <string name="editor_label_name_path">名称路径</string>
+    <string name="editor_label_url_path">链接路径</string>
+    <string name="editor_label_disk_path">网盘类型路径</string>
+    <string name="editor_label_date_path">日期路径</string>
+    <string name="editor_optional">可选</string>
+    <string name="editor_preview_url">请求预览</string>
+    <string name="editor_probe_retry">重试</string>
+    <string name="editor_probe_failed_unreachable">连不上该站点</string>
+    <string name="editor_probe_failed_not_json">站点有响应，但返回的不是 JSON</string>
+    <string name="editor_probe_failed_unrecognized">拿到了 JSON，但认不出结果列表</string>
+    <string name="editor_probe_advice_unreachable">检查地址有没有写错、能否在浏览器里打开，以及网络或代理是否正常。</string>
+    <string name="editor_probe_advice_not_json">这个地址大概指向网页而不是接口，找到该站点的搜索接口地址再填。</string>
+    <string name="editor_probe_advice_unrecognized">这份响应结构我们还不认识，下一步手动填写 JSONPath 表达式即可。</string>
     <string name="import_paste">粘贴</string>
     <!-- 分享/导入 -->
     <string name="share_source_title">分享「%1$s」</string>

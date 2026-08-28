@@ -496,6 +496,9 @@
     <string name="settings_appearance">Appearance</string>
     <string name="settings_shared_transition">Shared Element Transitions</string>
     <string name="settings_shared_transition_subtitle">Animate shared elements between screens, including the zoom transition when opening a full-screen image.</string>
+    <string name="settings_splash_quote">Daily Movie Line</string>
+    <string name="settings_splash_quote_subtitle">Show a classic movie line with its poster on the splash screen. Tap anywhere to skip.</string>
+    <string name="splash_quote_skip">TAP TO SKIP</string>
     <string name="settings_storage">Storage</string>
     <string name="settings_clear_cache">Clear Cache</string>
     <string name="settings_clear_cache_confirm">Are you sure you want to clear all cached data?</string>
@@ -564,6 +567,8 @@
     <string name="help_statistics_b2">View overview (total, this month, this year), watch time, and rating stats from Trakt and Douban — the same title is de-duplicated across sources by IMDb/Trakt/TMDB id, and shows list two figures: watched and finished</string>
     <string name="help_statistics_b3">Genre pie chart and ranking show your viewing preferences</string>
     <string name="help_statistics_b4">Heatmap shows daily viewing activity over the past year</string>
+    <string name="help_statistics_b5">The top card picks one highlight automatically — a viewing streak, this year\'s count, total hours or your dominant genre</string>
+    <string name="help_statistics_b6">The share button in the top bar renders a long image with the highlight, overview, heatmap, top genres and word cloud; it carries no nickname or avatar</string>
     <string name="help_notification_b1">Enable notifications to get reminders for new releases and new seasons</string>
     <string name="help_notification_b2">Notification permission required on Android 13+</string>
     <string name="help_notification_b3">Reminders are based on your Trakt watchlist</string>
@@ -590,6 +595,9 @@
     <string name="help_custom_source_b3">Add custom sources from the template library in one tap, or use the 3-step wizard: Basic Info → Auto Parse → Confirm</string>
     <string name="help_custom_source_b4">Auto Parse detects JSONPath rules (list path, name, link, disk type); fine-tune manually if needed</string>
     <string name="help_custom_source_b5">Share: list item share button copies config text; Import: paste the text, name conflicts are reported</string>
+    <string name="help_custom_source_b6">Step 1 offers a template shortcut and a paste-address button; the clipboard is only read when you press it</string>
+    <string name="help_custom_source_b7">Step 3 groups the 13 parameters into Basics / Request / Parsing — open one group at a time, only Basics starts open</string>
+    <string name="help_custom_source_b8">If auto-detect fails it tells you which step broke: address unreachable, response not JSON, or fields unrecognized</string>
     <string name="help_custom_source_params">Parameter Reference</string>
     <string name="help_cs_table_param">Param</string>
     <string name="help_cs_table_desc">Description</string>
@@ -1088,6 +1096,42 @@ Config:
     <string name="statistics_wordcloud_empty">No reviews yet — write one for a show you love</string>
     <string name="error_no_data">No data</string>
 
+    <!-- Statistics hero summary -->
+    <string name="statistics_hero_label_streak">LONGEST STREAK</string>
+    <string name="statistics_hero_label_year">THIS YEAR</string>
+    <string name="statistics_hero_label_time">TIME WATCHED</string>
+    <string name="statistics_hero_label_genre">FAVOURITE GENRE</string>
+    <string name="statistics_hero_label_starter">YOUR ARCHIVE</string>
+    <string name="statistics_unit_days">days</string>
+    <string name="statistics_unit_hours">hours</string>
+    <string name="statistics_unit_percent">%</string>
+    <string name="statistics_unit_titles">titles</string>
+    <string name="statistics_unit_episodes">eps</string>
+    <string name="statistics_unit_times">times</string>
+    <string name="statistics_overview_rated">Rated</string>
+    <string name="statistics_hero_streak">You watched something %1$d days in a row — that is a habit, not a coincidence.</string>
+    <string name="statistics_hero_year">%1$d titles finished this year. You are keeping a real pace.</string>
+    <string name="statistics_hero_time">That is about %1$d days of non-stop viewing.</string>
+    <string name="statistics_hero_genre">%1$s takes %2$d%% of everything you watch — your clearest preference.</string>
+    <string name="statistics_hero_starter">%1$d titles logged so far. Keep going and the numbers below will grow.</string>
+    <string name="statistics_hero_metric_year">This year</string>
+    <string name="statistics_hero_metric_hours">Hours</string>
+    <string name="statistics_hero_metric_streak">Streak (days)</string>
+
+    <!-- Statistics share -->
+    <string name="statistics_share">Share stats</string>
+    <string name="statistics_share_generating">Rendering image…</string>
+    <string name="statistics_share_failed">Could not render the image. Please try again.</string>
+    <string name="statistics_share_not_ready">Statistics are still loading — try again in a moment.</string>
+    <string name="statistics_share_card_title">My Viewing Record</string>
+    <string name="statistics_overview">Overview</string>
+    <string name="statistics_share_heatmap">Recent 13 weeks</string>
+    <string name="statistics_share_genre_count">%1$d titles</string>
+    <string name="statistics_share_top_genres">Top genres</string>
+    <string name="statistics_share_wordcloud">In my own words</string>
+    <string name="statistics_share_tagline">Track what you watch, search where to watch it</string>
+    <string name="statistics_share_chooser">Share statistics</string>
+
     <!-- Content Descriptions -->
     <string name="cd_watched">Watched</string>
     <string name="cd_saved">Saved</string>
@@ -1144,7 +1188,8 @@ Config:
     <string name="search_sources_import">Import config</string>
     <string name="search_sources_builtin">Built-in</string>
     <string name="search_sources_custom">Custom</string>
-    <string name="search_sources_empty">No custom sources yet.\nAdd one from a template, or paste a shared config.</string>
+    <string name="search_sources_empty">No custom sources yet</string>
+    <string name="search_sources_empty_hint">Custom sources join the built-in ones in every disk search. One API address is enough — the templates already cover the common sites.</string>
     <string name="search_sources_manage_entry_title">Search sources</string>
         <string name="search_sources_pansou">PanSou</string>
     <string name="search_sources_pansou_desc">Public pan-search API, template parsing</string>
@@ -1169,7 +1214,6 @@ Config:
     <string name="editor_probe_start">Start parsing</string>
     <string name="editor_probe_hint">Automatically recognize the response JSONPath by requesting the site once with a sample keyword.</string>
     <string name="editor_probe_progress">Requesting with sample keyword…</string>
-    <string name="editor_probe_failed">Could not recognize automatically, you can configure manually</string>
     <string name="editor_probe_result_list">Result list</string>
     <string name="editor_probe_result_title">Title</string>
     <string name="editor_probe_result_url">Link</string>
@@ -1177,7 +1221,42 @@ Config:
     <string name="editor_probe_result_date">Date</string>
     <string name="editor_probe_keyword_param">Keyword param</string>
     <string name="editor_probe_manual">Wrong? Adjust JSONPath manually</string>
-    <string name="editor_advanced_expand">Show all advanced params</string>
+
+    <!-- Search source editor polish -->
+    <string name="editor_template_entry_title">Start from a template</string>
+    <string name="editor_template_entry_desc">PanSou, Zreso and other common sites are preconfigured — pick one and it is ready to save</string>
+    <string name="editor_manual_divider">or fill it in yourself</string>
+    <string name="editor_paste_url">Paste address from clipboard</string>
+    <string name="editor_paste_empty">No address found on the clipboard</string>
+    <string name="editor_base_url_hint">Site root only, without the API path</string>
+    <string name="editor_name_hint">Shown in the source list — anything you can recognise</string>
+    <string name="editor_group_basic">Basic info</string>
+    <string name="editor_group_request">Request params</string>
+    <string name="editor_group_parse">Parse rules</string>
+    <string name="editor_group_basic_desc">Name, address, API path</string>
+    <string name="editor_group_request_desc">Keyword and optional filter params</string>
+    <string name="editor_group_parse_desc">Which fields of the response to read</string>
+    <string name="editor_label_base_url">Base URL</string>
+    <string name="editor_label_api_path">API path</string>
+    <string name="editor_label_keyword_param">Keyword param</string>
+    <string name="editor_label_disk_param">Disk type param</string>
+    <string name="editor_label_disk_value">Disk type value</string>
+    <string name="editor_label_src_param">Source param</string>
+    <string name="editor_label_src_value">Source value</string>
+    <string name="editor_label_list_path">List path</string>
+    <string name="editor_label_name_path">Name path</string>
+    <string name="editor_label_url_path">Link path</string>
+    <string name="editor_label_disk_path">Disk type path</string>
+    <string name="editor_label_date_path">Date path</string>
+    <string name="editor_optional">Optional</string>
+    <string name="editor_preview_url">Request preview</string>
+    <string name="editor_probe_retry">Try again</string>
+    <string name="editor_probe_failed_unreachable">Could not reach the site</string>
+    <string name="editor_probe_failed_not_json">The site replied, but not with JSON</string>
+    <string name="editor_probe_failed_unrecognized">Got JSON, but the result list was not recognised</string>
+    <string name="editor_probe_advice_unreachable">Check the address for typos, confirm it opens in a browser, and check your network or proxy.</string>
+    <string name="editor_probe_advice_not_json">The address probably points at a web page rather than an API. Find the site\'s search API address and use that.</string>
+    <string name="editor_probe_advice_unrecognized">The response structure is not one we know. Fill in the JSONPath expressions by hand on the next step.</string>
     <string name="import_paste">Paste</string>
     <!-- Share/Import -->
     <string name="share_source_title">Share "%1$s"</string>
