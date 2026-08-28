@@ -273,15 +273,12 @@ class AuthManager @Inject constructor(
             refreshLocked().isSuccess
         }
         return if (refreshed) {
-            Result.success(CheckResponse(
-                authorized = true,
-                friendId = "",
-                deviceId = deviceId ?: "",
-                nickname = "",
-                deviceStatus = "ACTIVE",
-                nextCheckAt = nextCheckAt,
-                configVersion = 1
-            ))
+            // 刷新成功后带新 token 重发一次 check，走正常身份/排期更新路径。
+            // 不能手工构造 CheckResponse：friendId 空串、nextCheckAt 旧值会跳过
+            // updateFriendIdentity/saveSessionMetadata，服务端账号切换时旧 friendId
+            // 的 AI 缓存清理被无限期延迟。新 token 仍 401 时 refreshIfNeeded 判定
+            // token 未变化不重复刷新，直接返回失败，不会递归。
+            check()
         } else {
             Result.failure(Exception("Refresh failed"))
         }
