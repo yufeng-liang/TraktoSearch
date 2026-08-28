@@ -136,6 +136,19 @@ fun MacrobenchmarkScope.openFirstDetailAndBack() {
 }
 
 /**
+ * 等到屏上出现可滚动容器再返回。
+ *
+ * 冷启动后「我的」页要等数据落地才挂上网格，此前整屏没有可滚动节点。
+ * 这时候滑动既滑不到列表、也不产生新帧，FrameTimingMetric 会直接报
+ * `At least one result is necessary, 0 found for frameDurationCpuMs` 让整个用例失败。
+ *
+ * @return 超时前是否等到。等不到时返回 false，调用方仍会滑一遍 —— 空屏采到的数据由
+ * 指标本身暴露（帧数异常少），比在这里抛异常丢掉整轮迭代要好。
+ */
+fun MacrobenchmarkScope.waitForScrollableContent(): Boolean =
+    device.wait(Until.hasObject(By.scrollable(true).pkg(TARGET_PACKAGE)), UI_TIMEOUT_MS)
+
+/**
  * 让屏幕上任意可滚动容器向前滚动。
  *
  * 在 LazyRow（发现页的横向片区）这类场景下坐标 swipe 会误触发竖向滚动，

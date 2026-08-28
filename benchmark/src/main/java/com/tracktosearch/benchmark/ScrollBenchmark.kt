@@ -66,6 +66,9 @@ class ScrollBenchmark {
     /**
      * 四个 tab 依次切一轮。报告里这个场景冷态 202 掉帧、P99 200ms，是切换瞬间多页
      * backdrop 同时重采的结果。
+     *
+     * 启动放在 measureBlock 内，理由同 [frameBenchmark]：冷态下这一段正是要测的对象，
+     * 且留在 setupBlock 时 measure 会开在还没有内容的屏幕上、采不到帧。
      */
     @Test
     fun tabSwitchCold() = benchmarkRule.measureRepeated(
@@ -76,9 +79,9 @@ class ScrollBenchmark {
         startupMode = StartupMode.COLD,
         setupBlock = {
             pressHome()
-            launchAndWaitForContent()
         }
     ) {
+        launchAndWaitForContent()
         MainTab.entries.forEach { openTab(it) }
     }
 
@@ -108,6 +111,15 @@ class ScrollBenchmark {
     /**
      * 通用滚动基准：启动到指定 tab，滚 [SCROLL_COUNT] 屏。
      *
+     * 启动与切 tab 放在哪一侧取决于 [startupMode]：
+     * - WARM：放 setupBlock，measure 里只剩滚动，测的是稳态滚动帧耗时。
+     * - COLD：放 measureBlock。冷路径下这两步本身就是要测的对象（报告里
+     *   `me_scroll` 冷态 300 掉帧几乎全在首次进入那一段）；更要紧的是，
+     *   冷启动后列表要等数据落地才挂上来，把启动留在 setup、measure 里直接滑，
+     *   滑的是还没有内容的空屏，一帧都产生不了，FrameTimingMetric 会以
+     *   `At least one result is necessary, 0 found for frameDurationCpuMs` 让用例失败
+     *   —— 四个 cold 用例最初就是这么全军覆没的。
+     *
      * @param startupMode COLD 每次迭代杀进程重启（测冷路径），WARM 保留进程只重启 Activity（测稳态）
      * @param tab 目标底部导航 tab
      */
@@ -122,10 +134,19 @@ class ScrollBenchmark {
         startupMode = startupMode,
         setupBlock = {
             pressHome()
-            launchAndWaitForContent()
-            openTab(tab)
+            if (startupMode != StartupMode.COLD) {
+                launchAndWaitForContent()
+                openTab(tab)
+            }
         },
-        measureBlock = { scrollSweep() }
+        measureBlock = {
+            if (startupMode == StartupMode.COLD) {
+                launchAndWaitForContent()
+                openTab(tab)
+                waitForScrollableContent()
+            }
+            scrollSweep()
+        }
     )
 
     private fun MacrobenchmarkScope.scrollSweep() {
