@@ -33,6 +33,15 @@ interface ActivateResponse {
     nextCheckAt: number;
 }
 
+// 批次内语句下标：核销邀请码、写设备、写刷新会话（用于事后校验 changes）
+const INVITE_CONSUME_INDEX = 0;
+const DEVICE_WRITE_INDEX = 1;
+const SESSION_WRITE_INDEX = 3;
+
+// 同一批次内后续语句的共同守卫：只有第一条语句成功核销了邀请码才真正写入。
+// 绑定参数为 (inviteId, usedAt)。
+const CONSUMED_GUARD = 'EXISTS (SELECT 1 FROM invites WHERE id = ? AND used_at = ?)';
+
 export async function handleActivate(
     request: Request,
     env: { DB: D1Database; JWT_SIGNING_KEY: string; DEVICE_RECOVERY_HMAC_KEY: string },
@@ -170,43 +179,80 @@ export async function handleActivate(
         accessExpiresIn
     );
 
-    // 事务：创建设备 + 创建刷新会话 + 标记邀请码已使用
+    // 事务：核销邀请码 + 创建设备 + 创建刷新会话 + 审计
+    //
+    // 竞态防护：上面的校验全部是事务外 SELECT，两路并发请求可能同时读到
+    // used_at IS NULL、设备数未满，然后各自提交——同一邀请码就能绑定多台设备。
+    // 因此把全部前置条件折叠进第一条 UPDATE：单行 UPDATE 是原子的，只有真正抢到
+    // 核销的一方 changes 为 1；其余语句统一用「本批次已核销该邀请码」自守，
+    // 落败方整批空转，不留设备、不留刷新会话。模式同 invitations.ts:issueInvitation。
     const statements = [
+        env.DB.prepare(`
+            UPDATE invites
+            SET used_at = ?
+            WHERE id = ?
+              AND used_at IS NULL
+              AND revoked_at IS NULL
+              AND expires_at >= ?
+              AND EXISTS (
+                  SELECT 1 FROM friends f
+                  WHERE f.id = invites.friend_id
+                    AND f.status = 'ACTIVE'
+                    AND (f.expires_at IS NULL OR f.expires_at >= ?)
+              )
+              AND (
+                  SELECT COUNT(*) FROM devices d
+                  WHERE d.friend_id = invites.friend_id
+                    AND d.status = 'ACTIVE'
+                    AND (? IS NULL OR d.id != ?)
+              ) < ?
+        `).bind(
+            currentTime,
+            invite.id,
+            currentTime,
+            currentTime,
+            existingDevice?.id || null,
+            existingDevice?.id || null,
+            invite.max_devices,
+        ),
+
+        // 后续语句都带同一守卫：只有本批次成功核销邀请码时才真正写入。
         existingDevice
             ? env.DB.prepare(`
             UPDATE devices
             SET friend_id = ?, public_key = ?, device_name = ?, status = 'ACTIVE', app_version = ?, activated_at = ?, revoked_at = NULL, deleted_at = NULL
-            WHERE id = ?
-        `).bind(invite.friend_id, body.publicKey, body.deviceName || null, body.appVersion || null, currentTime, deviceId)
+            WHERE id = ? AND ${CONSUMED_GUARD}
+        `).bind(invite.friend_id, body.publicKey, body.deviceName || null, body.appVersion || null, currentTime, deviceId, invite.id, currentTime)
             : env.DB.prepare(`
             INSERT INTO devices (id, friend_id, public_key, device_name, status, app_version, activated_at)
-            VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?)
-        `).bind(deviceId, invite.friend_id, body.publicKey, body.deviceName || null, body.appVersion || null, currentTime),
+            SELECT ?, ?, ?, ?, 'ACTIVE', ?, ?
+            WHERE ${CONSUMED_GUARD}
+        `).bind(deviceId, invite.friend_id, body.publicKey, body.deviceName || null, body.appVersion || null, currentTime, invite.id, currentTime),
 
         env.DB.prepare(`
             UPDATE refresh_sessions SET revoked_at = ?
-            WHERE device_id = ? AND revoked_at IS NULL
-        `).bind(currentTime, deviceId),
+            WHERE device_id = ? AND revoked_at IS NULL AND ${CONSUMED_GUARD}
+        `).bind(currentTime, deviceId, invite.id, currentTime),
 
         env.DB.prepare(`
             INSERT INTO refresh_sessions (id, device_id, token_hash, expires_at, created_at)
-            VALUES (?, ?, ?, ?, ?)
-        `).bind(refreshSessionId, deviceId, refreshTokenHash, refreshExpiresAt, currentTime),
-
-        env.DB.prepare(`
-            UPDATE invites SET used_at = ? WHERE id = ?
-        `).bind(currentTime, invite.id),
+            SELECT ?, ?, ?, ?, ?
+            WHERE ${CONSUMED_GUARD}
+        `).bind(refreshSessionId, deviceId, refreshTokenHash, refreshExpiresAt, currentTime, invite.id, currentTime),
 
         // 将授权审计与邀请码消费放进同一批处理，避免出现“邀请码已使用但没有审计记录”。
         env.DB.prepare(`
             INSERT INTO audit_logs (event_type, friend_id, device_id, request_id, result, detail, created_at)
-            VALUES (?, ?, ?, ?, 'SUCCESS', ?, ?)
+            SELECT ?, ?, ?, ?, 'SUCCESS', ?, ?
+            WHERE ${CONSUMED_GUARD}
         `).bind(
             invite.kind === 'MIGRATION' ? 'MIGRATE' : 'ACTIVATE',
             invite.friend_id,
             deviceId,
             requestId,
             `invite_kind:${invite.kind};invite_id:${invite.id};invite_mask:${invite.code_mask || ''}`,
+            currentTime,
+            invite.id,
             currentTime,
         ),
     ];
@@ -216,11 +262,22 @@ export async function handleActivate(
         statements.push(env.DB.prepare(`
             UPDATE devices
             SET recovery_id_hmac = ?, recovery_id_version = 1, recovery_updated_at = ?
-            WHERE id = ?
-        `).bind(recoveryIdHmac, currentTime, deviceId));
+            WHERE id = ? AND ${CONSUMED_GUARD}
+        `).bind(recoveryIdHmac, currentTime, deviceId, invite.id, currentTime));
     }
 
-    await env.DB.batch(statements);
+    const results = await env.DB.batch(statements);
+
+    // 核销失败：并发的另一方先抢到了邀请码，或设备上限/有效期在提交时已发生变化。
+    // 此时后续语句全部空转，没有留下设备与刷新会话，可以安全返回错误。
+    if (Number(results?.[INVITE_CONSUME_INDEX]?.meta?.changes || 0) !== 1) {
+        return throwActivationRaceFailure(env, requestId, invite, currentTime, existingDevice?.id);
+    }
+    // 邀请码已核销但设备或刷新会话写入条数不符，属数据层异常，绝不能发放令牌。
+    if (Number(results?.[DEVICE_WRITE_INDEX]?.meta?.changes || 0) !== 1
+        || Number(results?.[SESSION_WRITE_INDEX]?.meta?.changes || 0) !== 1) {
+        throw new AppError('ACTIVATION_INCOMPLETE', 'Activation could not be completed', 500);
+    }
 
     const response: ActivateResponse = {
         deviceId,
@@ -232,6 +289,61 @@ export async function handleActivate(
     };
 
     return successResponse(response, requestId);
+}
+
+// 核销失败后重新读取一次状态，把原因映射回与并发前一致的错误码。
+// 此时邀请码未被本请求消耗，也没有留下设备与刷新会话。
+async function throwActivationRaceFailure(
+    env: { DB: D1Database },
+    requestId: string,
+    invite: { id: string; kind: string; friend_id: string },
+    currentTime: number,
+    deviceId?: string,
+): Promise<never> {
+    const latest = await env.DB.prepare(`
+        SELECT i.used_at, i.revoked_at, i.expires_at,
+               f.status as friend_status, f.expires_at as friend_expires_at, f.max_devices
+        FROM invites i
+        JOIN friends f ON f.id = i.friend_id
+        WHERE i.id = ?
+    `).bind(invite.id).first<{
+        used_at: number | null; revoked_at: number | null; expires_at: number;
+        friend_status: string; friend_expires_at: number | null; max_devices: number;
+    }>();
+
+    if (!latest) {
+        return logAndThrowActivationFailure(env, requestId, 'INVALID_INVITE', 'Invite code not found');
+    }
+    if (latest.used_at !== null) {
+        return logAndThrowActivationFailure(env, requestId, 'INVITE_ALREADY_USED', 'Invite code already used', invite);
+    }
+    if (latest.revoked_at !== null) {
+        return logAndThrowActivationFailure(env, requestId, 'INVITE_REVOKED', 'Invite code has been revoked', invite);
+    }
+    if (latest.expires_at < currentTime) {
+        return logAndThrowActivationFailure(env, requestId, 'INVITE_EXPIRED', 'Invite code has expired', invite);
+    }
+    if (latest.friend_status !== 'ACTIVE'
+        || (latest.friend_expires_at !== null && latest.friend_expires_at < currentTime)) {
+        return logAndThrowActivationFailure(env, requestId, 'FRIEND_DISABLED', 'Friend account is not active', invite);
+    }
+
+    const activeDeviceCount = await env.DB.prepare(`
+        SELECT COUNT(*) as count FROM devices
+        WHERE friend_id = ? AND status = 'ACTIVE' AND (? IS NULL OR id != ?)
+    `).bind(invite.friend_id, deviceId || null, deviceId || null).first<{ count: number }>();
+    if (activeDeviceCount && activeDeviceCount.count >= latest.max_devices) {
+        return logAndThrowActivationFailure(
+            env,
+            requestId,
+            'DEVICE_LIMIT_REACHED',
+            `Device limit reached (max ${latest.max_devices})`,
+            invite,
+            deviceId,
+        );
+    }
+
+    return logAndThrowActivationFailure(env, requestId, 'INVITE_UNAVAILABLE', 'Invite code is no longer available', invite);
 }
 
 async function logAndThrowActivationFailure(
