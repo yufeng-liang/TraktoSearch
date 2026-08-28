@@ -1765,6 +1765,8 @@ Config:
     <string name="opensource_thanks_line1">TraktoSearch is made possible</string>
     <string name="opensource_thanks_line2">by these amazing open source libraries</string>
     <string name="opensource_thanks_line3">Thanks to every open source contributor 🎉</string>
+    <string name="opensource_thanks_summary">%1$d libraries · %2$d categories</string>
+    <string name="opensource_group_count">%1$d libraries</string>
     <string name="opensource_group_ui">UI &amp; Effects</string>
     <string name="opensource_group_framework">Core Frameworks</string>
     <string name="opensource_group_data">Data &amp; Storage</string>

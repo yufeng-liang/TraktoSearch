@@ -1777,6 +1777,8 @@
     <string name="opensource_thanks_line1">TraktoSearch의 탄생은</string>
     <string name="opensource_thanks_line2">이 훌륭한 오픈소스 덕분입니다</string>
     <string name="opensource_thanks_line3">모든 오픈소스 기여자에게 감사드립니다 🎉</string>
+    <string name="opensource_thanks_summary">총 라이브러리 %1$d개 · 카테고리 %2$d개</string>
+    <string name="opensource_group_count">라이브러리 %1$d개</string>
     <string name="opensource_group_ui">UI 및 효과</string>
     <string name="opensource_group_framework">핵심 프레임워크</string>
     <string name="opensource_group_data">데이터 저장</string>

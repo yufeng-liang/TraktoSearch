@@ -1777,6 +1777,8 @@
     <string name="opensource_thanks_line1">TraktoSearch の誕生は</string>
     <string name="opensource_thanks_line2">これらの素晴らしいオープンソースのおかげです</string>
     <string name="opensource_thanks_line3">すべての貢献者に感謝を込めて 🎉</string>
+    <string name="opensource_thanks_summary">計 %1$d ライブラリ・%2$d カテゴリ</string>
+    <string name="opensource_group_count">%1$d ライブラリ</string>
     <string name="opensource_group_ui">UI とエフェクト</string>
     <string name="opensource_group_framework">基盤フレームワーク</string>
     <string name="opensource_group_data">データ保存</string>

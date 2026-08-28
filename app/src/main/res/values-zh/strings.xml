@@ -1765,6 +1765,8 @@
     <string name="opensource_thanks_line1">TraktoSearch 的诞生</string>
     <string name="opensource_thanks_line2">离不开这些优秀的开源库</string>
     <string name="opensource_thanks_line3">向每一位开源贡献者致谢 🎉</string>
+    <string name="opensource_thanks_summary">共收录 %1$d 个开源库 · %2$d 个分类</string>
+    <string name="opensource_group_count">%1$d 个库</string>
     <string name="opensource_group_ui">界面与动效</string>
     <string name="opensource_group_framework">基础框架</string>
     <string name="opensource_group_data">数据存储</string>

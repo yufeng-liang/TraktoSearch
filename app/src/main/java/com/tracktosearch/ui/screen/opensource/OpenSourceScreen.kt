@@ -1,27 +1,27 @@
 package com.tracktosearch.ui.screen.opensource
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -38,22 +38,34 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.VolunteerActivism
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.net.toUri
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.hasListScrolled
+import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.ui.theme.DesignToken
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 
 /**
  * 开源相关页：按分组列出本 App 使用的第三方开源库（名称版本/许可/开发者），
@@ -65,6 +77,21 @@ fun OpenSourceScreen(
     onBack: () -> Unit
 ) {
     var selected by remember { mutableStateOf<OssLibrary?>(null) }
+    val groups = OpenSourceData.groups
+    val libraryTotal = remember(groups) { groups.sumOf { it.libraries.size } }
+    val listState = rememberLazyListState()
+    val hazeState = remember { HazeState() }
+    // HazeMaterials.thin() 读 colorScheme，是 @Composable 函数，不能 remember 缓存
+    val hazeStyle = HazeMaterials.thin()
+    // 静止时列表未位移、栏下无内容，顶栏保持全透明；滚动后再启用模糊/玻璃
+    val hasContentUnderTopBar by remember {
+        derivedStateOf {
+            hasListScrolled(
+                firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffsetPx = listState.firstVisibleItemScrollOffset
+            )
+        }
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
@@ -76,24 +103,21 @@ fun OpenSourceScreen(
         ) {
             val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState),
                 contentPadding = PaddingValues(
                     top = 64.dp + statusBarHeight,
                     bottom = 80.dp
                 )
             ) {
                 item(key = "thanks_card") {
-                    OssThanksCard()
+                    OssThanksCard(libraryTotal = libraryTotal, groupTotal = groups.size)
                 }
-                OpenSourceData.groups.forEach { group ->
+                groups.forEach { group ->
                     item(key = "group_${group.titleRes}") {
-                        Text(
-                            text = stringResource(group.titleRes),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 6.dp)
-                        )
+                        OssGroupHeader(titleRes = group.titleRes, count = group.libraries.size)
                     }
                     items(group.libraries, key = { "${group.titleRes}_${it.name}" }) { lib ->
                         OssLibraryCard(lib) { selected = lib }
@@ -101,11 +125,17 @@ fun OpenSourceScreen(
                 }
             }
 
-            // TopAppBar（纯色背景，与帮助页一致）
+            // 毛玻璃吸顶标题栏（按视觉模式切 Blur/Glass，与帮助页及设置各子页一致）
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
+                    .hazeTopBar(
+                        state = hazeState,
+                        style = hazeStyle,
+                        blurRadius = 24.dp,
+                        isContentUnderTopBar = hasContentUnderTopBar
+                    )
+                    // 拦截点击：顶栏覆盖可滚动列表，不消费会让点击穿透到下方列表项
                     .clickable(enabled = false, onClick = {})
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding())
@@ -127,8 +157,11 @@ fun OpenSourceScreen(
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
+                        // 底色交给外层 hazeTopBar；这里若留 surface 会盖死毛玻璃
+                        containerColor = Color.Transparent
+                    ),
+                    // 外层 Column 已让出状态栏，这里必须清零，否则状态栏高度被算两遍、标题栏变高
+                    windowInsets = WindowInsets(0, 0, 0, 0)
                 )
             }
         }
@@ -140,83 +173,117 @@ fun OpenSourceScreen(
 }
 
 /**
- * 顶部感谢卡片：左右麦穗弧 + 致谢文案。
- * 麦穗素材为 OpenClipart 公有领域金色麦穗花环（Public Domain / CC0），
- * 整幅图按 150dp 高缩放，左右各裁出 58dp 宽的弧段，与视觉伴侣定稿一致。
+ * 顶部感谢卡片：纯 Compose 绘制，无外部图片素材。
+ * 视觉从上到下：主题色渐变洗白 → 捧心徽标（致谢意象）→ 两行主文案 → 致谢标语胶囊 → 库数量小结。
  */
 @Composable
-private fun OssThanksCard() {
+private fun OssThanksCard(libraryTotal: Int, groupTotal: Int) {
+    val scheme = MaterialTheme.colorScheme
     Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = DesignToken.Hero,
+        color = scheme.surfaceVariant,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 4.dp)
     ) {
-        Box(
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 150.dp),
-            contentAlignment = Alignment.Center
+                .background(
+                    Brush.verticalGradient(
+                        0f to scheme.primary.copy(alpha = 0.14f),
+                        0.75f to Color.Transparent
+                    )
+                )
+                .padding(horizontal = 24.dp, vertical = 22.dp)
         ) {
-            val wreath = painterResource(R.drawable.wheat_wreath)
-            val arcHeight = 150.dp
-            val arcWidth = 58.dp
-            // 源图 549x600，等比缩放后宽约 137dp；裁窗只露左右弧段
-            val imageWidth = arcHeight * (549f / 600f)
-            val cropOffset = (imageWidth - arcWidth) / 2
+            // 捧心手势 = 致谢/回馈，比奖杯麦穗更贴「感谢贡献者」而非「自我表彰」
             Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .size(arcWidth, arcHeight)
-                    .clipToBounds()
+                    .size(52.dp)
+                    .clip(CircleShape)
+                    .background(scheme.primary.copy(alpha = 0.16f))
             ) {
-                Image(
-                    painter = wreath,
+                Icon(
+                    imageVector = Icons.Rounded.VolunteerActivism,
                     contentDescription = null,
-                    modifier = Modifier
-                        .size(imageWidth, arcHeight)
-                        .offset(x = -cropOffset)
+                    tint = scheme.primary,
+                    modifier = Modifier.size(28.dp)
                 )
             }
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .size(arcWidth, arcHeight)
-                    .clipToBounds()
+            Spacer(modifier = Modifier.height(14.dp))
+            Text(
+                text = stringResource(R.string.opensource_thanks_line1),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                color = scheme.onSurface
+            )
+            Text(
+                text = stringResource(R.string.opensource_thanks_line2),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                color = scheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            Surface(
+                shape = DesignToken.Tag,
+                color = scheme.primary.copy(alpha = 0.12f)
             ) {
-                Image(
-                    painter = wreath,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(imageWidth, arcHeight)
-                        .offset(x = cropOffset)
-                )
-            }
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(horizontal = 64.dp, vertical = 22.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.opensource_thanks_line1),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = stringResource(R.string.opensource_thanks_line2),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(7.dp))
                 Text(
                     text = stringResource(R.string.opensource_thanks_line3),
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.primary
+                    textAlign = TextAlign.Center,
+                    color = scheme.primary,
+                    modifier = Modifier.padding(
+                        horizontal = DesignToken.ChipPaddingH,
+                        vertical = DesignToken.ChipPaddingV
+                    )
                 )
             }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = stringResource(R.string.opensource_thanks_summary, libraryTotal, groupTotal),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/** 分组标题行：标题 + 该组库数量胶囊 */
+@Composable
+private fun OssGroupHeader(titleRes: Int, count: Int) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 6.dp)
+    ) {
+        Text(
+            text = stringResource(titleRes),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = scheme.primary
+        )
+        val countDesc = stringResource(R.string.opensource_group_count, count)
+        Surface(
+            shape = CircleShape,
+            color = scheme.primary.copy(alpha = 0.12f)
+        ) {
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = scheme.primary,
+                modifier = Modifier
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                    .semantics { contentDescription = countDesc }
+            )
         }
     }
 }
