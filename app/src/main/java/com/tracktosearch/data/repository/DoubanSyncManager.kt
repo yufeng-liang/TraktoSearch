@@ -3305,8 +3305,8 @@ class DoubanSyncManager @Inject constructor(
     /**
      * 从豆瓣详情推断细分媒体类型(与 DoubanRetryManager.inferMediaTypeFromDetail 推断逻辑一致)。
      *
-     * - genres 含"综艺"/"真人秀"/"脱口秀"/"音乐" → "variety"
-     * - genres 含"纪录片" → "documentary"
+     * - genres 含"纪录片" → "documentary"（优先于音乐：音乐纪录片判纪录片）
+     * - genres 含"综艺"/"真人秀"/"脱口秀"/"音乐" → "variety"（"音乐"降级到纪录片之后）
      * - episodeCount > 0 → "show"
      * - 否则 → "movie"
      *
@@ -3314,8 +3314,8 @@ class DoubanSyncManager @Inject constructor(
      */
     private fun inferMediaTypeFromDetail(detail: DoubanDetailInfo): String {
         return when {
-            detail.genres.any { it.contains("综艺") || it.contains("真人秀") || it.contains("脱口秀") || it.contains("音乐") } -> "variety"
             detail.genres.any { it.contains("纪录片") } -> "documentary"
+            detail.genres.any { it.contains("综艺") || it.contains("真人秀") || it.contains("脱口秀") || it.contains("音乐") } -> "variety"
             detail.episodeCount != null && detail.episodeCount > 0 -> "show"
             else -> "movie"
         }

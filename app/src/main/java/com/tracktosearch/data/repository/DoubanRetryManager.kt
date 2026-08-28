@@ -235,14 +235,16 @@ class DoubanRetryManager @Inject constructor(
     suspend fun inferMediaTypeFromDetail(doubanId: String, detailInfo: DoubanDetailInfo): Boolean = withContext(Dispatchers.IO) {
         val existing = doubanSyncFailureDao.getById(doubanId) ?: return@withContext false
 
-        // 强覆盖：genre 含"综艺"或"真人秀" → 综艺
+        // 强覆盖仅限未标注：用户已手动标注（movie/documentary 等）不静默覆盖，
+        // 与 updateMediaType 的「自动推断不覆盖用户标注」文档承诺一致。
+        // 纪录片优先于音乐：音乐纪录片应判 documentary 而非 variety（"音乐"降级）。
         val forceType = when {
-            detailInfo.genres.any { it.contains("综艺") || it.contains("真人秀") || it.contains("脱口秀") || it.contains("音乐") } -> "variety"
+            existing.mediaType != null -> null
             detailInfo.genres.any { it.contains("纪录片") } -> "documentary"
+            detailInfo.genres.any { it.contains("综艺") || it.contains("真人秀") || it.contains("脱口秀") || it.contains("音乐") } -> "variety"
             else -> null
         }
         if (forceType != null) {
-            // 强覆盖：即使已有标注也覆盖
             if (existing.mediaType != forceType) {
                 doubanSyncFailureDao.updateMediaType(doubanId, forceType)
                 runCatching {
