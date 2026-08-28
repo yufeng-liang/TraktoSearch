@@ -750,7 +750,8 @@ fun SearchScreen(
                         selectedKeyword = searchQuery,
                         isDark = isDark,
                         hazeState = hazeState,
-                        scene = searchGlassScene
+                        scene = searchGlassScene,
+                        onRefresh = { viewModel.loadHotSearches() }
                     )
                 }
                 Spacer(modifier = Modifier.height(80.dp))
@@ -795,7 +796,8 @@ fun SearchScreen(
                             interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                             if (BuildConfig.DEBUG && searchQuery.trim() == "13638719007") {
                                 onSpiderTest?.invoke()
-                            } else {
+                            } else if (searchQuery.isNotBlank()) {
+                                // 空输入不拦截会写入空历史并发起无效搜索，blank 时直接忽略
                                 viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
                                 onTraktSearch?.invoke(searchSourceType, searchQuery)
                             }
@@ -1341,16 +1343,35 @@ private fun PopularSearchesSectionNew(
     selectedKeyword: String? = null,
     isDark: Boolean = false,
     hazeState: HazeState,
-    scene: GlassScene
+    scene: GlassScene,
+    onRefresh: () -> Unit = {}
 ) {
+    // 热词为空不渲染整个栏目，避免历史存在时只剩「热门搜索」标题的空栏目
+    if (popularSearches.isEmpty()) return
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(R.string.hot_search),
-            style = MaterialTheme.typography.titleSmall.copy(shadow = ambientTextHalo()),
-            color = if (isDark) Color.White else Color(0xFF37474F),
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(bottom = 10.dp)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.hot_search),
+                style = MaterialTheme.typography.titleSmall.copy(shadow = ambientTextHalo()),
+                color = if (isDark) Color.White else Color(0xFF37474F),
+                fontWeight = FontWeight.SemiBold
+            )
+            // 手动刷新入口：热词失败只有 ON_RESUME 自动重试，标题行补一个小刷新按钮
+            IconButton(onClick = onRefresh, modifier = Modifier.size(28.dp)) {
+                Icon(
+                    Icons.Rounded.Refresh,
+                    contentDescription = stringResource(R.string.ai_feature_refresh),
+                    modifier = Modifier.size(16.dp),
+                    tint = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF78909C)
+                )
+            }
+        }
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -1671,37 +1692,67 @@ fun DoubanHotAllSheet(
                 }
             }
 
-            androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                modifier = Modifier.fillMaxHeight(0.8f),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                gridItems(category.items, key = { it.id ?: it.title }) { item ->
-                    DoubanHotGridItem(
-                        item = item,
-                        isResolving = resolvingItemId == item.id,
-                        onClick = {
-                            onItemClick(item)
-                            onDismiss()
+            when {
+                // 首载骨架：页 1 加载中且无任何条目时给占位，避免弹层白板
+                category.items.isEmpty() && category.isLoading -> {
+                    androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier.fillMaxHeight(0.8f),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(count = 9, key = { index -> "douban_sheet_skeleton_$index" }) {
+                            com.tracktosearch.ui.component.DoubanHotCardSkeleton()
                         }
-                    )
+                    }
                 }
-                if (category.items.isNotEmpty()) {
-                    item(span = { GridItemSpan(3) }) {
-                        if (category.hasMore && category.error == null) {
-                            LaunchedEffect(category.currentPage) { onLoadMore() }
-                        }
-                        LoadMoreFooter(
-                            state = when {
-                                category.error != null -> LoadMoreFooterState.Error
-                                category.hasMore -> LoadMoreFooterState.Loading
-                                else -> LoadMoreFooterState.Complete
-                            },
-                            onRetry = onLoadMore,
-                            modifier = Modifier.fillMaxWidth()
+                // 页 1 失败且无数据：错误 + 重试（重试经 onLoadMore 重载当前失败页）
+                category.items.isEmpty() && category.error != null -> {
+                    Box(
+                        modifier = Modifier.fillMaxHeight(0.8f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        com.tracktosearch.ui.screen.discover.ErrorRetryRow(
+                            error = category.error,
+                            onRetry = onLoadMore
                         )
+                    }
+                }
+                else -> {
+                    androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier.fillMaxHeight(0.8f),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        gridItems(category.items, key = { it.id ?: it.title }) { item ->
+                            DoubanHotGridItem(
+                                item = item,
+                                isResolving = resolvingItemId == item.id,
+                                onClick = {
+                                    onItemClick(item)
+                                    onDismiss()
+                                }
+                            )
+                        }
+                        if (category.items.isNotEmpty()) {
+                            item(span = { GridItemSpan(3) }) {
+                                if (category.hasMore && category.error == null) {
+                                    LaunchedEffect(category.currentPage) { onLoadMore() }
+                                }
+                                LoadMoreFooter(
+                                    state = when {
+                                        category.error != null -> LoadMoreFooterState.Error
+                                        category.hasMore -> LoadMoreFooterState.Loading
+                                        else -> LoadMoreFooterState.Complete
+                                    },
+                                    onRetry = onLoadMore,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
                     }
                 }
             }
