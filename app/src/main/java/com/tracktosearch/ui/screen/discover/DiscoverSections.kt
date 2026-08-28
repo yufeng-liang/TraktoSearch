@@ -71,6 +71,7 @@ import com.tracktosearch.ui.component.GlassTabIndicator
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
+import java.util.Locale
 
 // LazyRow 内容类型常量：Compose 依据 contentType 复用滚动复用池中的 item 布局，减少重组与重新测量
 private const val CONTENT_TYPE_MEDIA_CARD = "media_card"
@@ -571,6 +572,76 @@ internal fun LoginUnlockCard(onLoginClick: () -> Unit) {
 }
 
 /**
+ * 豆瓣登录引导卡片（未登录 / Cookie 失效两种状态共用）。
+ *
+ * 与 Trakt 的 [LoginUnlockCard] 区分：绿色渐变。promptText 区分
+ * 「未登录」与「Cookie 已失效请重新登录」两种文案，动作都是跳豆瓣登录页。
+ */
+@Composable
+private fun DoubanLoginGuideCard(promptText: String, onLoginClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        label = "douban_recommend_login_scale"
+    )
+    val shape = RoundedCornerShape(20.dp)
+    val isDark = isAppDarkTheme()
+    val gradient = remember(isDark) {
+        Brush.linearGradient(
+            colors = if (isDark) {
+                listOf(Color(0xFF358E60), Color(0xFF378C9B))
+            } else {
+                listOf(Color(0xFF49B879), Color(0xFF42A7B3))
+            },
+            start = Offset(0f, Float.POSITIVE_INFINITY),
+            end = Offset(Float.POSITIVE_INFINITY, 0f)
+        )
+    }
+    AppVisualSurface(
+        kind = VisualSurfaceKind.Content,
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onLoginClick
+            ),
+        shape = shape,
+        backgroundColor = Color.Transparent,
+        borderColor = Color.Transparent
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(gradient)
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.30f),
+                    shape = shape
+                )
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = promptText,
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.White.copy(alpha = 0.9f)
+            )
+            Text(
+                text = stringResource(R.string.discover_douban_recommend_login_button),
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold
+                ),
+                color = Color.White
+            )
+        }
+    }
+}
+
+/**
  * 豆瓣「猜你喜欢」栏目
  *
  * 未登录豆瓣时显示引导登录卡片；登录后展示电影/电视剧 Tab 切换 + 个性化推荐列表。
@@ -617,66 +688,18 @@ internal fun DoubanRecommendSection(
         when (state) {
             is DoubanRecommendState.NotLoggedIn -> {
                 // 引导登录卡片：复刻底部「去影视筛选页」卡片样式（仅渐变配色不同）
-                val interactionSource = remember { MutableInteractionSource() }
-                val isPressed by interactionSource.collectIsPressedAsState()
-                val scale by animateFloatAsState(
-                    targetValue = if (isPressed) 0.97f else 1f,
-                    label = "douban_recommend_login_scale"
+                DoubanLoginGuideCard(
+                    promptText = stringResource(R.string.discover_douban_recommend_login_prompt),
+                    onLoginClick = onLoginClick
                 )
-                val shape = RoundedCornerShape(20.dp)
-                val isDark = isAppDarkTheme()
-                val gradient = remember(isDark) {
-                    Brush.linearGradient(
-                        colors = if (isDark) {
-                            listOf(Color(0xFF358E60), Color(0xFF378C9B))
-                        } else {
-                            listOf(Color(0xFF49B879), Color(0xFF42A7B3))
-                        },
-                        start = Offset(0f, Float.POSITIVE_INFINITY),
-                        end = Offset(Float.POSITIVE_INFINITY, 0f)
-                    )
-                }
-                AppVisualSurface(
-                    kind = VisualSurfaceKind.Content,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .scale(scale)
-                        .clickable(
-                            interactionSource = interactionSource,
-                            indication = null,
-                            onClick = onLoginClick
-                        ),
-                    shape = shape,
-                    backgroundColor = Color.Transparent,
-                    borderColor = Color.Transparent
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(gradient)
-                            .border(
-                                width = 1.dp,
-                                color = Color.White.copy(alpha = 0.30f),
-                                shape = shape
-                            )
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.discover_douban_recommend_login_prompt),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = Color.White.copy(alpha = 0.9f)
-                        )
-                        Text(
-                            text = stringResource(R.string.discover_douban_recommend_login_button),
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = Color.White
-                        )
-                    }
-                }
+            }
+
+            is DoubanRecommendState.CookieInvalid -> {
+                // Cookie 失效引导：样式同登录卡片，文案改为「请重新登录」提示（登录态未清除）
+                DoubanLoginGuideCard(
+                    promptText = stringResource(R.string.douban_writeback_cookie_expired),
+                    onLoginClick = onLoginClick
+                )
             }
 
             is DoubanRecommendState.Loading -> {
@@ -727,7 +750,7 @@ internal fun DoubanRecommendSection(
                                     title = item.title,
                                     posterPath = item.pic?.normal ?: item.pic?.large ?: item.cover,
                                     year = item.year ?: "",
-                                    rating = item.rating?.value?.let { String.format("%.1f", it) },
+                                    rating = item.rating?.value?.let { String.format(Locale.US, "%.1f", it) },
                                     subtitle = item.reasonTags?.takeIf { it.isNotEmpty() }?.joinToString(" · "),
                                     isResolving = resolvingItemId == item.id,
                                     isInWatchlist = false,
