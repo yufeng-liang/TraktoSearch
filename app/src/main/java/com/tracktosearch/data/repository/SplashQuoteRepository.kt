@@ -43,8 +43,9 @@ class SplashQuoteRepository @Inject constructor(
     /**
      * 预取未来 [days] 天要用的海报，供启动后台调用。
      *
-     * 只取一小段而不是整池：启动阶段不该为了几十天后的画面占用带宽，
-     * 整池补齐交给不计费网络下的 [com.tracktosearch.data.worker.SplashPosterWorker]。
+     * 只取一小段而不是整池：台词库覆盖全年 365 条，整池海报有十几 MB，
+     * 启动阶段不该为了半年后的画面占用带宽。整池补齐交给不计费网络下的
+     * [com.tracktosearch.data.worker.SplashPosterWorker]。
      */
     suspend fun prefetchUpcoming(days: Int = DEFAULT_PREFETCH_DAYS) {
         val pool = catalog.quotes()

@@ -54,7 +54,8 @@ private data class QuoteCatalogFile(
 /**
  * 台词库：从 assets/quotes.json 读一次并常驻内存。
  *
- * 整个库只有几十条、总量几十 KB，解析一次比按需读盘简单得多；
+ * 全年 365 条、约 240 KB，解析一次比按需读盘或建索引简单得多；一天只用其中一条，
+ * 但常驻的是解析后的 data class，内存代价可以忽略。
  * 解析失败返回空列表而不是抛异常——开屏台词是锦上添花，不该让 App 起不来。
  */
 @Singleton
