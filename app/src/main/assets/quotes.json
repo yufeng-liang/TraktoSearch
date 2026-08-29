@@ -141,10 +141,10 @@
       "posterPath": "/5MwkWH9tYHv3mV9OdYTMR5qreIz.jpg",
       "bundled": false,
       "lines": {
-        "en": ["Meet me in Montauk."],
-        "zh": ["在蒙托克等我。"],
-        "ja": ["モントークで会おう。"],
-        "ko": ["몬톡에서 만나."]
+        "en": ["How happy is", "the blameless vestal's lot!", "The world forgetting,", "by the world forgot."],
+        "zh": ["多幸福啊，", "那忘记了世界、", "也被世界忘记的人。"],
+        "ja": ["なんと幸せなことか。", "世界を忘れ、", "世界からも忘れられた者は。"],
+        "ko": ["얼마나 행복한가.", "세상을 잊고,", "세상에게도 잊힌 이는."]
       },
       "title": {
         "en": "Eternal Sunshine of the Spotless Mind",
@@ -249,35 +249,16 @@
       }
     },
     {
-      "id": "some-like-it-hot",
-      "year": 1959,
-      "tmdbId": 239,
-      "posterPath": "/hVIKyTK13AvOGv7ICmJjK44DTzp.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Well, nobody's perfect."],
-        "zh": ["人无完人嘛。"],
-        "ja": ["完璧な人間はいないさ。"],
-        "ko": ["완벽한 사람은 없어."]
-      },
-      "title": {
-        "en": "Some Like It Hot",
-        "zh": "热情如火",
-        "ja": "お熱いのがお好き",
-        "ko": "뜨거운 것이 좋아"
-      }
-    },
-    {
       "id": "star-wars",
       "year": 1977,
       "tmdbId": 11,
       "posterPath": "/fai0rspsNeJCS69wHNjOdWxcI7P.jpg",
       "bundled": false,
       "lines": {
-        "en": ["May the Force", "be with you."],
-        "zh": ["愿原力与你同在。"],
-        "ja": ["フォースと共にあれ。"],
-        "ko": ["포스가 함께하기를."]
+        "en": ["Your eyes can deceive you.", "Don't trust them."],
+        "zh": ["你的眼睛会骗你。", "不要相信它们。"],
+        "ja": ["目は君を騙す。", "信じてはいけない。"],
+        "ko": ["눈은 너를 속인다.", "믿지 마라."]
       },
       "title": {
         "en": "Star Wars",
@@ -293,10 +274,10 @@
       "posterPath": "/ekstpH614fwDX8DUln1a2Opz0N8.jpg",
       "bundled": false,
       "lines": {
-        "en": ["You talkin' to me?"],
-        "zh": ["你在跟我说话吗？"],
-        "ja": ["俺に言ってるのか？"],
-        "ko": ["나한테 말하는 거야?"]
+        "en": ["I am", "God's lonely man."],
+        "zh": ["我是", "上帝的孤独者。"],
+        "ja": ["俺は", "神の孤独な男だ。"],
+        "ko": ["나는", "신의 외로운 사내다."]
       },
       "title": {
         "en": "Taxi Driver",
@@ -312,10 +293,10 @@
       "posterPath": "/an0nD6uq6byfxXCfk6lQBzdL2J1.jpg",
       "bundled": false,
       "lines": {
-        "en": ["E.T. phone home."],
-        "zh": ["E.T.，打电话回家。"],
-        "ja": ["イーティー、おうちに電話。"],
-        "ko": ["E.T., 집에 전화."]
+        "en": ["I'll be", "right here."],
+        "zh": ["我会一直", "在这里。"],
+        "ja": ["ぼくは", "ここにいるよ。"],
+        "ko": ["나는", "여기 있을 거야."]
       },
       "title": {
         "en": "E.T. the Extra-Terrestrial",
@@ -882,10 +863,10 @@
       "posterPath": "/gix9thDBXfjJ8M7rYbihqbQGBcP.jpg",
       "bundled": false,
       "lines": {
-        "en": ["Sorry.", "I'm a cop."],
-        "zh": ["对不起，", "我是警察。"],
-        "ja": ["すまない、", "俺は警察だ。"],
-        "ko": ["미안해,", "난 경찰이야."]
+        "en": ["I want to be", "a good man."],
+        "zh": ["我想做", "一个好人。"],
+        "ja": ["俺は", "いい人間になりたいんだ。"],
+        "ko": ["나는", "좋은 사람이 되고 싶어."]
       },
       "title": {
         "en": "Infernal Affairs",
@@ -1025,44 +1006,6 @@
         "zh": "你的名字。",
         "ja": "君の名は。",
         "ko": "너의 이름은."
-      }
-    },
-    {
-      "id": "seven-samurai",
-      "year": 1954,
-      "tmdbId": 346,
-      "posterPath": "/lOMGc8bnSwQhS4XyE1S99uH8NXf.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["The victory belongs", "to those peasants,", "not to us."],
-        "zh": ["赢的是那些农民，", "不是我们。"],
-        "ja": ["勝ったのは", "あの百姓たちだ。", "わしたちではない。"],
-        "ko": ["이긴 건 저 농민들이야.", "우리가 아니라."]
-      },
-      "title": {
-        "en": "Seven Samurai",
-        "zh": "七武士",
-        "ja": "七人の侍",
-        "ko": "7인의 사무라이"
-      }
-    },
-    {
-      "id": "tokyo-story",
-      "year": 1953,
-      "tmdbId": 18148,
-      "posterPath": "/g2YbTYKpY7N2yDSk7BfXZ18I5QV.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Had I known,", "I would have been", "kinder to her."],
-        "zh": ["早知会这样，", "当初就该对她", "更好一些。"],
-        "ja": ["こんなことになるなら、", "もっと優しくして", "おけばよかった。"],
-        "ko": ["이렇게 될 줄 알았다면,", "더 잘해 주었을 텐데."]
-      },
-      "title": {
-        "en": "Tokyo Story",
-        "zh": "东京物语",
-        "ja": "東京物語",
-        "ko": "동경 이야기"
       }
     },
     {
@@ -1218,25 +1161,6 @@
       }
     },
     {
-      "id": "peppermint-candy",
-      "year": 2000,
-      "tmdbId": 41245,
-      "posterPath": "/jPP0gFDgdXRa1YgP8Cn8arzOHI3.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["I want to go back!"],
-        "zh": ["我想回去啊！"],
-        "ja": ["俺は戻りたい！"],
-        "ko": ["나 다시 돌아갈래!"]
-      },
-      "title": {
-        "en": "Peppermint Candy",
-        "zh": "薄荷糖",
-        "ja": "ペパーミント・キャンディー",
-        "ko": "박하사탕"
-      }
-    },
-    {
       "id": "past-lives",
       "year": 2023,
       "tmdbId": 666277,
@@ -1281,10 +1205,10 @@
       "posterPath": "/74hLDKjD5aGYOotO6esUVaeISa2.jpg",
       "bundled": false,
       "lines": {
-        "en": ["Good morning, princess!"],
-        "zh": ["早安，公主！"],
-        "ja": ["おはよう、お姫様！"],
-        "ko": ["안녕, 공주님!"]
+        "en": ["This is the sacrifice", "my father made.", "This was his gift", "to me."],
+        "zh": ["这是我父亲", "为我做的牺牲，", "这是他", "给我的礼物。"],
+        "ja": ["これが父の", "払った犠牲だ。", "これが父が", "くれた贈り物だ。"],
+        "ko": ["이것이 아버지가", "치른 희생이고,", "이것이 아버지가", "준 선물이다."]
       },
       "title": {
         "en": "Life Is Beautiful",
@@ -1348,25 +1272,6 @@
         "zh": "三傻大闹宝莱坞",
         "ja": "きっと、うまくいく",
         "ko": "세 얼간이"
-      }
-    },
-    {
-      "id": "citizen-kane",
-      "year": 1941,
-      "tmdbId": 15,
-      "posterPath": "/sav0jxhqiH0bPr2vZFU0Kjt2nZL.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Rosebud."],
-        "zh": ["玫瑰花蕾。"],
-        "ja": ["薔薇のつぼみ。"],
-        "ko": ["로즈버드."]
-      },
-      "title": {
-        "en": "Citizen Kane",
-        "zh": "公民凯恩",
-        "ja": "市民ケーン",
-        "ko": "시민 케인"
       }
     },
     {
@@ -1452,111 +1357,16 @@
       "posterPath": "/8lI9dmz1RH20FAqltkGelY1v4BE.jpg",
       "bundled": false,
       "lines": {
-        "en": ["I have to leave you now.", "I will walk to that corner", "and turn.", "You must drive away."],
-        "zh": ["我得走了。", "我会走到那个转角，", "然后转过去。", "你必须开车离开。"],
-        "ja": ["もう行かなくては。", "あの角まで歩いて", "曲がります。", "あなたは車で行って。"],
-        "ko": ["이제 가야 해요.", "저 모퉁이까지 걸어가", "돌아설 거예요.", "당신은 차로 떠나세요."]
+        "en": ["I will cherish my visit here", "in memory,", "as long as I live."],
+        "zh": ["我会把这段时光", "珍藏在记忆里，", "只要我还活着。"],
+        "ja": ["ここで過ごした時間を、", "生きているかぎり", "胸にしまっておきます。"],
+        "ko": ["이곳에서의 시간을,", "살아 있는 동안", "기억에 품고 살겠어요."]
       },
       "title": {
         "en": "Roman Holiday",
         "zh": "罗马假日",
         "ja": "ローマの休日",
         "ko": "로마의 휴일"
-      }
-    },
-    {
-      "id": "rear-window",
-      "year": 1954,
-      "tmdbId": 567,
-      "posterPath": "/ILVF0eJxHMddjxeQhswFtpMtqx.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["We have become", "a race of Peeping Toms."],
-        "zh": ["我们变成了", "一个偷窥者的种族。"],
-        "ja": ["我々は覗き魔の", "種族になった。"],
-        "ko": ["우리는 훔쳐보는", "족속이 되었어."]
-      },
-      "title": {
-        "en": "Rear Window",
-        "zh": "后窗",
-        "ja": "裏窓",
-        "ko": "이창"
-      }
-    },
-    {
-      "id": "on-the-waterfront",
-      "year": 1954,
-      "tmdbId": 654,
-      "posterPath": "/d4S8LpbCyFJsh1tGgwGQSJdGzKm.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["I coulda been a contender.", "I coulda been somebody."],
-        "zh": ["我本可以是个拳王，", "我本可以成为人物。"],
-        "ja": ["俺は挑戦者になれた。", "何者かになれたんだ。"],
-        "ko": ["난 도전자가 될 수 있었어.", "누군가가 될 수 있었어."]
-      },
-      "title": {
-        "en": "On the Waterfront",
-        "zh": "码头风云",
-        "ja": "波止場",
-        "ko": "워터프론트"
-      }
-    },
-    {
-      "id": "rebel-without-a-cause",
-      "year": 1955,
-      "tmdbId": 221,
-      "posterPath": "/yHStsC8rRRfIjqRN38BQsLh6S7k.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["You're tearing me apart!"],
-        "zh": ["你们把我撕碎了！"],
-        "ja": ["僕を引き裂くのか！"],
-        "ko": ["날 갈라놓고 있어요!"]
-      },
-      "title": {
-        "en": "Rebel Without a Cause",
-        "zh": "无因的反叛",
-        "ja": "理由なき反抗",
-        "ko": "이유 없는 반항"
-      }
-    },
-    {
-      "id": "the-bridge-on-the-river-kwai",
-      "year": 1957,
-      "tmdbId": 826,
-      "posterPath": "/7paXMt2e3Tr5dLmEZOGgFEn2Vo7.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Madness.", "Madness!"],
-        "zh": ["疯了。", "全都疯了！"],
-        "ja": ["狂気だ。", "狂気だ！"],
-        "ko": ["미친 짓이야.", "미친 짓!"]
-      },
-      "title": {
-        "en": "The Bridge on the River Kwai",
-        "zh": "桂河大桥",
-        "ja": "戦場にかける橋",
-        "ko": "콰이강의 다리"
-      }
-    },
-    {
-      "id": "12-angry-men",
-      "year": 1957,
-      "tmdbId": 389,
-      "posterPath": "/ppd84D2i9W8jXmsyInGyihiSyqz.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["It's not easy", "to raise my hand", "and send a boy off to die."],
-        "zh": ["举起手，", "送一个孩子去死，", "并不容易。"],
-        "ja": ["手を挙げて", "少年を死へ送るのは", "簡単じゃない。"],
-        "ko": ["손을 들어", "소년을 죽음으로 보내는 건", "쉬운 일이 아니오."]
-      },
-      "title": {
-        "en": "12 Angry Men",
-        "zh": "十二怒汉",
-        "ja": "十二人の怒れる男",
-        "ko": "12명의 성난 사람들"
       }
     },
     {
@@ -1579,44 +1389,6 @@
       }
     },
     {
-      "id": "the-apartment",
-      "year": 1960,
-      "tmdbId": 284,
-      "posterPath": "/hhSRt1KKfRT0yEhEtRW3qp31JFU.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Shut up and deal."],
-        "zh": ["别说了，发牌吧。"],
-        "ja": ["黙って配って。"],
-        "ko": ["그만하고 패나 돌려요."]
-      },
-      "title": {
-        "en": "The Apartment",
-        "zh": "桃色公寓",
-        "ja": "アパートの鍵貸します",
-        "ko": "아파트 열쇠를 빌려드립니다"
-      }
-    },
-    {
-      "id": "spartacus",
-      "year": 1960,
-      "tmdbId": 967,
-      "posterPath": "/nqU4xAn3ygWA4fvXSBufRwdGhpr.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["I am Spartacus!"],
-        "zh": ["我是斯巴达克斯！"],
-        "ja": ["私がスパルタカスだ！"],
-        "ko": ["내가 스파르타쿠스다!"]
-      },
-      "title": {
-        "en": "Spartacus",
-        "zh": "斯巴达克斯",
-        "ja": "スパルタカス",
-        "ko": "스팔타커스"
-      }
-    },
-    {
       "id": "psycho",
       "year": 1960,
       "tmdbId": 539,
@@ -1633,25 +1405,6 @@
         "zh": "惊魂记",
         "ja": "サイコ",
         "ko": "싸이코"
-      }
-    },
-    {
-      "id": "breakfast-at-tiffanys",
-      "year": 1961,
-      "tmdbId": 164,
-      "posterPath": "/79xm4gXw4l7A5D0XukUOJRocFYQ.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["I'll never let anybody", "put me in a cage."],
-        "zh": ["我绝不让任何人", "把我关进笼子。"],
-        "ja": ["誰にも私を", "籠に入れさせない。"],
-        "ko": ["누구도 날", "새장에 넣지 못해."]
-      },
-      "title": {
-        "en": "Breakfast at Tiffany's",
-        "zh": "蒂凡尼的早餐",
-        "ja": "ティファニーで朝食を",
-        "ko": "티파니에서 아침을"
       }
     },
     {
@@ -1712,44 +1465,6 @@
       }
     },
     {
-      "id": "dr-strangelove",
-      "year": 1964,
-      "tmdbId": 935,
-      "posterPath": "/gHm96BRW4GoI339rF1vYoYTB6Qe.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Gentlemen, you can't fight", "in here!", "This is the War Room!"],
-        "zh": ["先生们，", "不能在这里打架！", "这里是作战室！"],
-        "ja": ["諸君、ここで喧嘩は困る！", "ここは作戦室だ！"],
-        "ko": ["여러분, 여기서 싸우면 안 됩니다!", "여기는 작전실이에요!"]
-      },
-      "title": {
-        "en": "Dr. Strangelove",
-        "zh": "奇爱博士",
-        "ja": "博士の異常な愛情",
-        "ko": "닥터 스트레인지러브"
-      }
-    },
-    {
-      "id": "mary-poppins",
-      "year": 1964,
-      "tmdbId": 433,
-      "posterPath": "/o4Wsby4ydIXhWmtmfvb451D5Np1.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Practically perfect", "in every way."],
-        "zh": ["在每一方面，", "都近乎完美。"],
-        "ja": ["あらゆる点で", "ほぼ完璧。"],
-        "ko": ["모든 면에서", "거의 완벽해요."]
-      },
-      "title": {
-        "en": "Mary Poppins",
-        "zh": "欢乐满人间",
-        "ja": "メリー・ポピンズ",
-        "ko": "메리 포핀스"
-      }
-    },
-    {
       "id": "the-sound-of-music",
       "year": 1965,
       "tmdbId": 15121,
@@ -1788,35 +1503,16 @@
       }
     },
     {
-      "id": "cool-hand-luke",
-      "year": 1967,
-      "tmdbId": 903,
-      "posterPath": "/4ykzTiHKLamh3eZJ8orVICtU2Jp.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["What we've got here", "is failure to communicate."],
-        "zh": ["我们这里的问题，", "是沟通不良。"],
-        "ja": ["ここにあるのは", "意思の疎通の失敗だ。"],
-        "ko": ["여기 문제는", "소통의 실패요."]
-      },
-      "title": {
-        "en": "Cool Hand Luke",
-        "zh": "铁窗喋血",
-        "ja": "暴力脱獄",
-        "ko": "폭력 탈옥"
-      }
-    },
-    {
       "id": "2001-a-space-odyssey",
       "year": 1968,
       "tmdbId": 62,
       "posterPath": "/ve72VxNqjGM69Uky4WTo2bK6rfq.jpg",
       "bundled": false,
       "lines": {
-        "en": ["I'm sorry, Dave.", "I'm afraid I can't do that."],
-        "zh": ["抱歉，戴夫。", "我恐怕不能那么做。"],
-        "ja": ["すまない、デイブ。", "それはできない。"],
-        "ko": ["미안해요, 데이브.", "그건 할 수 없어요."]
+        "en": ["I'm afraid.", "Dave, my mind", "is going.", "I can feel it."],
+        "zh": ["我害怕。", "戴夫，我的意识", "正在消失。", "我能感觉到。"],
+        "ja": ["怖い。", "デイブ、私の意識が", "消えていく。", "感じるんだ。"],
+        "ko": ["무서워요.", "데이브, 내 정신이", "사라지고 있어요.", "느낄 수 있어요."]
       },
       "title": {
         "en": "2001: A Space Odyssey",
@@ -1845,25 +1541,6 @@
       }
     },
     {
-      "id": "midnight-cowboy",
-      "year": 1969,
-      "tmdbId": 3116,
-      "posterPath": "/wNvxBptJChe3A2CSfPmZoXf7ooh.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["I'm walkin' here!"],
-        "zh": ["我在走路呢！"],
-        "ja": ["こっちは歩いてんだ！"],
-        "ko": ["나 여기 걷고 있어!"]
-      },
-      "title": {
-        "en": "Midnight Cowboy",
-        "zh": "午夜牛郎",
-        "ja": "真夜中のカーボーイ",
-        "ko": "미드나잇 카우보이"
-      }
-    },
-    {
       "id": "love-story",
       "year": 1970,
       "tmdbId": 9062,
@@ -1889,10 +1566,10 @@
       "posterPath": "/4sHeTAp65WrSSuc05nRBKddhBxO.jpg",
       "bundled": false,
       "lines": {
-        "en": ["I was cured all right."],
-        "zh": ["我确实被治好了。"],
-        "ja": ["俺は確かに治った。"],
-        "ko": ["난 확실히 치료됐어."]
+        "en": ["When a man cannot choose,", "he ceases to be a man."],
+        "zh": ["一个人不能选择的时候，", "他就不再是人了。"],
+        "ja": ["選ぶことができなくなったとき、", "人は人でなくなる。"],
+        "ko": ["선택할 수 없게 되면,", "사람은 사람이기를", "그친다."]
       },
       "title": {
         "en": "A Clockwork Orange",
@@ -1927,10 +1604,10 @@
       "posterPath": "/kZRSP3FmOcq0xnBulqpUQngJUXY.jpg",
       "bundled": false,
       "lines": {
-        "en": ["Forget it, Jake.", "It's Chinatown."],
-        "zh": ["算了吧，杰克。", "这里是唐人街。"],
-        "ja": ["忘れろ、ジェイク。", "ここはチャイナタウンだ。"],
-        "ko": ["잊어버려, 제이크.", "여긴 차이나타운이야."]
+        "en": ["At the right time", "and the right place,", "people are capable", "of anything."],
+        "zh": ["在合适的时间、", "合适的地点，", "人什么事", "都做得出来。"],
+        "ja": ["時と場所が揃えば、", "人は何だって", "やれるものだ。"],
+        "ko": ["때와 장소가 맞으면,", "사람은 무슨 일이든", "할 수 있다."]
       },
       "title": {
         "en": "Chinatown",
@@ -1965,10 +1642,10 @@
       "posterPath": "/lxM6kqilAdpdhqUl2biYp5frUxE.jpg",
       "bundled": false,
       "lines": {
-        "en": ["You're gonna need", "a bigger boat."],
-        "zh": ["你们需要一条", "更大的船。"],
-        "ja": ["もっと大きな船が", "必要だ。"],
-        "ko": ["더 큰 배가", "필요할 거야."]
+        "en": ["A shark's eyes are black,", "lifeless,", "like a doll's eyes."],
+        "zh": ["鲨鱼的眼睛是黑的，", "没有生命，", "像玩具娃娃的眼睛。"],
+        "ja": ["鮫の目は黒くて、", "命がない。", "人形の目のようだ。"],
+        "ko": ["상어의 눈은 검고", "생명이 없어.", "인형의 눈 같지."]
       },
       "title": {
         "en": "Jaws",
@@ -2092,35 +1769,16 @@
       }
     },
     {
-      "id": "the-third-man",
-      "year": 1949,
-      "tmdbId": 1092,
-      "posterPath": "/rO2Fq0AZZx9obs52KJdx4mRE8p5.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["In Switzerland they had", "brotherly love.", "What did they produce?", "The cuckoo clock."],
-        "zh": ["瑞士人有兄弟之爱，", "他们造出了什么？", "咕咕钟。"],
-        "ja": ["スイスには同胞愛があった。", "それで何を生んだ？", "鳩時計だ。"],
-        "ko": ["스위스에는 형제애가 있었지.", "그래서 뭘 만들었나?", "뻐꾸기 시계."]
-      },
-      "title": {
-        "en": "The Third Man",
-        "zh": "第三人",
-        "ja": "第三の男",
-        "ko": "제3의 사나이"
-      }
-    },
-    {
       "id": "the-shining",
       "year": 1980,
       "tmdbId": 694,
       "posterPath": "/uAR0AWqhQL1hQa69UDEbb2rE5Wx.jpg",
       "bundled": false,
       "lines": {
-        "en": ["All work and no play", "makes Jack a dull boy."],
-        "zh": ["只工作不玩耍，", "杰克变成大傻瓜。"],
-        "ja": ["仕事ばかりで遊ばないと", "ジャックは馬鹿になる。"],
-        "ko": ["일만 하고 놀지 않으면", "잭은 바보가 된다."]
+        "en": ["You are the caretaker.", "You've always been", "the caretaker."],
+        "zh": ["你是这里的看守人。", "你一直都是。"],
+        "ja": ["あなたが管理人だ。", "ずっと前から", "管理人だった。"],
+        "ko": ["당신이 관리인이오.", "당신은 언제나", "관리인이었소."]
       },
       "title": {
         "en": "The Shining",
@@ -2149,25 +1807,6 @@
       }
     },
     {
-      "id": "raiders-of-the-lost-ark",
-      "year": 1981,
-      "tmdbId": 85,
-      "posterPath": "/ceG9VzoRAVGwivFU403Wc3AHRys.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Snakes.", "Why did it have to be snakes?"],
-        "zh": ["蛇。", "为什么偏偏是蛇？"],
-        "ja": ["蛇か。", "なんで蛇なんだ。"],
-        "ko": ["뱀이라니.", "왜 하필 뱀이야?"]
-      },
-      "title": {
-        "en": "Raiders of the Lost Ark",
-        "zh": "夺宝奇兵：法柜奇兵",
-        "ja": "レイダース／失われたアーク《聖櫃》",
-        "ko": "인디아나 존스: 레이더스"
-      }
-    },
-    {
       "id": "chariots-of-fire",
       "year": 1981,
       "tmdbId": 9443,
@@ -2193,10 +1832,10 @@
       "posterPath": "/iQ5ztdjvteGeboxtmRdXEChJOHh.jpg",
       "bundled": false,
       "lines": {
-        "en": ["Say hello", "to my little friend!"],
-        "zh": ["跟我的小朋友", "打个招呼！"],
-        "ja": ["俺の小さな友達に", "挨拶しろ！"],
-        "ko": ["내 작은 친구에게", "인사해!"]
+        "en": ["I always tell the truth,", "even when I lie."],
+        "zh": ["我永远说真话，", "就算我在说谎的时候。"],
+        "ja": ["俺はいつも本当のことを言う。", "嘘をつくときでもな。"],
+        "ko": ["난 언제나 진실을 말해.", "거짓말할 때조차도."]
       },
       "title": {
         "en": "Scarface",
@@ -2212,10 +1851,10 @@
       "posterPath": "/qvktm0BHcnmDpul4Hz01GIazWPr.jpg",
       "bundled": false,
       "lines": {
-        "en": ["I'll be back."],
-        "zh": ["我会回来的。"],
-        "ja": ["また戻ってくる。"],
-        "ko": ["다시 돌아오겠다."]
+        "en": ["It can't be reasoned with.", "It doesn't feel pity", "or fear.", "And it will not stop."],
+        "zh": ["它不会讲道理，", "不会同情，", "不会恐惧。", "它绝不会停下来。"],
+        "ja": ["話が通じない。", "哀れみも恐れも", "感じない。", "決して止まらない。"],
+        "ko": ["말이 통하지 않고,", "동정도 두려움도", "느끼지 않는다.", "절대 멈추지 않는다."]
       },
       "title": {
         "en": "The Terminator",
@@ -2307,10 +1946,10 @@
       "posterPath": "/xUuHj3CgmZQ9P2cMaqQs4J0d4Zc.jpg",
       "bundled": false,
       "lines": {
-        "en": ["I feel the need —", "the need for speed."],
-        "zh": ["我需要，", "我需要速度。"],
-        "ja": ["俺が欲しいのは、", "スピードだ。"],
-        "ko": ["난 필요해.", "속도가 필요해."]
+        "en": ["Your ego's writing checks", "your body can't cash."],
+        "zh": ["你的自负在开支票，", "你的身体", "兑现不了。"],
+        "ja": ["お前の自惚れが切る小切手を、", "体が現金に", "換えられない。"],
+        "ko": ["네 자만심이 쓴 수표를", "네 몸이", "현금으로 못 바꾼다."]
       },
       "title": {
         "en": "Top Gun",
@@ -2326,10 +1965,10 @@
       "posterPath": "/2FC9L9MrjBoGHYjYZjdWQdopVYb.jpg",
       "bundled": false,
       "lines": {
-        "en": ["As you wish."],
-        "zh": ["如你所愿。"],
-        "ja": ["仰せのままに。"],
-        "ko": ["당신 뜻대로."]
+        "en": ["Life is pain.", "Anyone who says differently", "is selling something."],
+        "zh": ["人生就是痛苦。", "谁说不是，", "他就是在卖东西给你。"],
+        "ja": ["人生は苦しみだ。", "違うと言う者は、", "何かを売りつけている。"],
+        "ko": ["인생은 고통이야.", "아니라고 하는 자는", "무언가를 팔고 있는 거지."]
       },
       "title": {
         "en": "The Princess Bride",
@@ -2355,44 +1994,6 @@
         "zh": "华尔街",
         "ja": "ウォール街",
         "ko": "월 스트리트"
-      }
-    },
-    {
-      "id": "rain-man",
-      "year": 1988,
-      "tmdbId": 380,
-      "posterPath": "/iTNHwO896WKkaoPtpMMS74d8VNi.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["I'm an excellent driver."],
-        "zh": ["我是个很棒的司机。"],
-        "ja": ["僕は運転が上手なんだ。"],
-        "ko": ["난 운전을 아주 잘해."]
-      },
-      "title": {
-        "en": "Rain Man",
-        "zh": "雨人",
-        "ja": "レインマン",
-        "ko": "레인 맨"
-      }
-    },
-    {
-      "id": "die-hard",
-      "year": 1988,
-      "tmdbId": 562,
-      "posterPath": "/7Bjd8kfmDSOzpmhySpEhkUyK2oH.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Welcome to the party, pal!"],
-        "zh": ["欢迎参加派对，伙计！"],
-        "ja": ["パーティーへようこそ、相棒！"],
-        "ko": ["파티에 온 걸 환영해, 친구!"]
-      },
-      "title": {
-        "en": "Die Hard",
-        "zh": "虎胆龙威",
-        "ja": "ダイ・ハード",
-        "ko": "다이 하드"
       }
     },
     {
@@ -2440,10 +2041,10 @@
       "posterPath": "/sizg1AU8f8JDZX4QIgE4pjUMBvx.jpg",
       "bundled": false,
       "lines": {
-        "en": ["He chose... poorly."],
-        "zh": ["他选错了。"],
-        "ja": ["彼は…選択を誤った。"],
-        "ko": ["그는… 잘못 골랐군."]
+        "en": ["Archaeology is not", "the search for facts.", "Truth is down the hall", "in philosophy."],
+        "zh": ["考古学不是在找事实。", "真相在哲学系。"],
+        "ja": ["考古学は事実を探す学問ではない。", "真理は廊下の先の", "哲学科にある。"],
+        "ko": ["고고학은 사실을 찾는 게 아니다.", "진리는 복도 저편", "철학과에 있다."]
       },
       "title": {
         "en": "Indiana Jones and the Last Crusade",
@@ -2469,44 +2070,6 @@
         "zh": "好家伙",
         "ja": "グッドフェローズ",
         "ko": "좋은 친구들"
-      }
-    },
-    {
-      "id": "ghost",
-      "year": 1990,
-      "tmdbId": 251,
-      "posterPath": "/w9RaPHov8oM5cnzeE27isnFMsvS.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Ditto."],
-        "zh": ["我也一样。"],
-        "ja": ["僕もだよ。"],
-        "ko": ["나도 그래."]
-      },
-      "title": {
-        "en": "Ghost",
-        "zh": "人鬼情未了",
-        "ja": "ゴースト/ニューヨークの幻",
-        "ko": "사랑과 영혼"
-      }
-    },
-    {
-      "id": "pretty-woman",
-      "year": 1990,
-      "tmdbId": 114,
-      "posterPath": "/hVHUfT801LQATGd26VPzhorIYza.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Big mistake.", "Big. Huge."],
-        "zh": ["大错。", "很大。天大的错。"],
-        "ja": ["大きな間違いよ。", "とても、とても大きな。"],
-        "ko": ["큰 실수예요.", "아주. 엄청나게."]
-      },
-      "title": {
-        "en": "Pretty Woman",
-        "zh": "风月俏佳人",
-        "ja": "プリティ・ウーマン",
-        "ko": "귀여운 여인"
       }
     },
     {
@@ -2624,25 +2187,6 @@
       }
     },
     {
-      "id": "the-fugitive",
-      "year": 1993,
-      "tmdbId": 5503,
-      "posterPath": "/b3rEtLKyOnF89mcK75GXDXdmOEf.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["I didn't kill my wife.", "I don't care."],
-        "zh": ["我没有杀我妻子。", "我不在乎。"],
-        "ja": ["妻は殺していない。", "関係ない。"],
-        "ko": ["난 아내를 죽이지 않았소.", "알 게 뭐요."]
-      },
-      "title": {
-        "en": "The Fugitive",
-        "zh": "亡命天涯",
-        "ja": "逃亡者",
-        "ko": "도망자"
-      }
-    },
-    {
       "id": "before-sunrise",
       "year": 1995,
       "tmdbId": 76,
@@ -2668,10 +2212,10 @@
       "posterPath": "/uXDfjJbdP4ijW5hWSBrPrlKpxab.jpg",
       "bundled": false,
       "lines": {
-        "en": ["To infinity and beyond!"],
-        "zh": ["飞向宇宙，浩瀚无垠！"],
-        "ja": ["無限の彼方へ、さあ行くぞ！"],
-        "ko": ["무한한 공간, 저 너머로!"]
+        "en": ["That wasn't flying.", "That was falling", "with style."],
+        "zh": ["那不是飞，", "那是很有风格地", "坠落。"],
+        "ja": ["あれは飛んだんじゃない。", "かっこよく", "落ちたんだ。"],
+        "ko": ["그건 난 게 아니야.", "멋지게", "떨어진 거지."]
       },
       "title": {
         "en": "Toy Story",
@@ -2833,25 +2377,6 @@
       }
     },
     {
-      "id": "the-big-lebowski",
-      "year": 1998,
-      "tmdbId": 115,
-      "posterPath": "/3bv6WAp6BSxxYvB5ozKFUYuRA8C.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["The Dude abides."],
-        "zh": ["老兄自有活法。"],
-        "ja": ["デュードは動じない。"],
-        "ko": ["듀드는 흔들리지 않아."]
-      },
-      "title": {
-        "en": "The Big Lebowski",
-        "zh": "谋杀绿脚趾",
-        "ja": "ビッグ・リボウスキ",
-        "ko": "위대한 레보스키"
-      }
-    },
-    {
       "id": "american-beauty",
       "year": 1999,
       "tmdbId": 14,
@@ -2868,25 +2393,6 @@
         "zh": "美国丽人",
         "ja": "アメリカン・ビューティー",
         "ko": "아메리칸 뷰티"
-      }
-    },
-    {
-      "id": "the-sixth-sense",
-      "year": 1999,
-      "tmdbId": 745,
-      "posterPath": "/vOyfUXNFSnaTk7Vk5AjpsKTUWsu.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["I see dead people."],
-        "zh": ["我看得见死人。"],
-        "ja": ["死んだ人が見えるんだ。"],
-        "ko": ["죽은 사람들이 보여요."]
-      },
-      "title": {
-        "en": "The Sixth Sense",
-        "zh": "第六感",
-        "ja": "シックス・センス",
-        "ko": "식스 센스"
       }
     },
     {
@@ -3162,10 +2668,10 @@
       "posterPath": "/jcfEqKdWF1zeyvECPqp3mkWLct2.jpg",
       "bundled": false,
       "lines": {
-        "en": ["Mo cuishle.", "My darling, my blood."],
-        "zh": ["我的至亲，", "我的血脉。"],
-        "ja": ["モ・クシュラ。", "愛しい者、我が血。"],
-        "ko": ["모 쿠슐라.", "내 사랑, 내 피."]
+        "en": ["Boxing is", "an unnatural act.", "Everything in it", "is backwards."],
+        "zh": ["拳击是违反本能的。", "它的每一步，", "都跟你想做的", "正好相反。"],
+        "ja": ["ボクシングは本能に反する。", "その一つ一つが、", "やりたいことの", "逆なんだ。"],
+        "ko": ["복싱은 본능에 어긋난다.", "그 하나하나가", "하고 싶은 것과", "정반대다."]
       },
       "title": {
         "en": "Million Dollar Baby",
@@ -3371,10 +2877,10 @@
       "posterPath": "/gKY6q7SjCkAU6FqvqWybDYgUKIF.jpg",
       "bundled": false,
       "lines": {
-        "en": ["I see you."],
-        "zh": ["我看见你了。"],
-        "ja": ["君が見える。"],
-        "ko": ["당신이 보여요."]
+        "en": ["All energy is only borrowed.", "One day you have to", "give it back."],
+        "zh": ["所有的能量", "都只是借来的，", "总有一天", "要还回去。"],
+        "ja": ["すべての力は借り物だ。", "いつかは", "返さねばならない。"],
+        "ko": ["모든 에너지는 빌린 것이다.", "언젠가는", "돌려주어야 한다."]
       },
       "title": {
         "en": "Avatar",
@@ -3390,10 +2896,10 @@
       "posterPath": "/AbbXspMOwdvwWZgVN0nabZq03Ec.jpg",
       "bundled": false,
       "lines": {
-        "en": ["So long, partner."],
-        "zh": ["再见了，伙伴。"],
-        "ja": ["さよなら、相棒。"],
-        "ko": ["잘 있어, 친구."]
+        "en": ["He'll never give up on you.", "Ever."],
+        "zh": ["他永远不会", "放弃你。", "永远不会。"],
+        "ja": ["あの子は君を", "見捨てたりしない。", "絶対に。"],
+        "ko": ["그는 너를", "절대 포기하지 않아.", "절대로."]
       },
       "title": {
         "en": "Toy Story 3",
@@ -3409,10 +2915,10 @@
       "posterPath": "/c54HpQmuwXjHq2C9wmoACjxoom3.jpg",
       "bundled": false,
       "lines": {
-        "en": ["After all this time?", "Always."],
-        "zh": ["这么多年了？", "一直如此。"],
-        "ja": ["こんなに経っても？", "いつまでも。"],
-        "ko": ["그 오랜 시간이 지나서도?", "언제나."]
+        "en": ["Do not pity the dead.", "Pity the living,", "and above all,", "those who live without love."],
+        "zh": ["不要怜悯死者。", "要怜悯活着的人，", "尤其是那些", "活着却没有爱的人。"],
+        "ja": ["死者を哀れむな。", "生きている者を哀れめ。", "とりわけ、愛のないまま", "生きている者を。"],
+        "ko": ["죽은 자를 불쌍히 여기지 마라.", "산 자를 불쌍히 여겨라.", "무엇보다, 사랑 없이", "살아가는 이들을."]
       },
       "title": {
         "en": "Harry Potter and the Deathly Hallows: Part 2",
@@ -4752,44 +4258,6 @@
       }
     },
     {
-      "id": "godzilla",
-      "year": 1954,
-      "tmdbId": 1678,
-      "posterPath": "/2W0Yw0qrgVMgdsSCZRKtfvaAh0i.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["I cannot believe", "that Godzilla", "was the last of its kind."],
-        "zh": ["我不认为", "那只哥斯拉", "是最后一只。"],
-        "ja": ["あのゴジラが", "最後の一匹だとは", "思えない。"],
-        "ko": ["그 고지라가", "마지막 한 마리라고는", "생각하지 않는다."]
-      },
-      "title": {
-        "en": "Godzilla",
-        "zh": "哥斯拉",
-        "ja": "ゴジラ",
-        "ko": "고지라"
-      }
-    },
-    {
-      "id": "otoko-wa-tsurai-yo",
-      "year": 1969,
-      "tmdbId": 125271,
-      "posterPath": "/c9ytzAM7onmINsxF02nOVnVmBRz.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Once you say that,", "it's all over."],
-        "zh": ["这话一说出口，", "就全完了。"],
-        "ja": ["それを言っちゃあ、", "おしまいよ。"],
-        "ko": ["그 말을 해 버리면", "다 끝이야."]
-      },
-      "title": {
-        "en": "Tora-san, Our Lovable Tramp",
-        "zh": "寅次郎的故事1",
-        "ja": "男はつらいよ",
-        "ko": "Tora-san, Our Lovable Tramp"
-      }
-    },
-    {
       "id": "lupin-cagliostro",
       "year": 1979,
       "tmdbId": 15371,
@@ -4853,10 +4321,10 @@
       "posterPath": "/neZ0ykEsPqxamsX6o5QNUFILQrz.jpg",
       "bundled": false,
       "lines": {
-        "en": ["It has already", "begun."],
-        "zh": ["已经", "开始了。"],
-        "ja": ["もう、", "始まってるんだ。"],
-        "ko": ["이미", "시작됐어."]
+        "en": ["What if an amoeba", "were handed", "the power of a man?"],
+        "zh": ["如果一只草履虫", "拿到了人的力量，", "会怎么样？"],
+        "ja": ["アメーバが人間の力を", "手にしたら、", "どうなる。"],
+        "ko": ["아메바가 인간의 힘을", "손에 넣으면", "어떻게 될까."]
       },
       "title": {
         "en": "Akira",
@@ -4977,25 +4445,6 @@
         "zh": "谈谈情跳跳舞",
         "ja": "Shall we ダンス?",
         "ko": "쉘 위 댄스"
-      }
-    },
-    {
-      "id": "dog-of-flanders",
-      "year": 1997,
-      "tmdbId": 48661,
-      "posterPath": "/iQL9qWTfaCCSfnyqsFjwdhEyyP2.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Patrasche,", "I'm so tired now."],
-        "zh": ["帕特拉修，", "我已经很累了。"],
-        "ja": ["パトラッシュ、", "僕はもう疲れたよ。"],
-        "ko": ["파트라슈,", "난 이제 너무 지쳤어."]
-      },
-      "title": {
-        "en": "The Dog of Flanders",
-        "zh": "佛兰德斯的狗",
-        "ja": "劇場版 フランダースの犬",
-        "ko": "플란다스의 개 극장판"
       }
     },
     {
@@ -5167,25 +4616,6 @@
         "zh": "福音战士新剧场版：序",
         "ja": "ヱヴァンゲリヲン新劇場版：序",
         "ko": "에반게리온: 서"
-      }
-    },
-    {
-      "id": "ponyo",
-      "year": 2008,
-      "tmdbId": 12429,
-      "posterPath": "/yp8vEZflGynlEylxEesbYasc06i.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Ponyo loves Sosuke!"],
-        "zh": ["波妞喜欢宗介！"],
-        "ja": ["ポニョ、宗介、好き！"],
-        "ko": ["포뇨, 소스케, 좋아!"]
-      },
-      "title": {
-        "en": "Ponyo",
-        "zh": "崖上的波妞",
-        "ja": "崖の上のポニョ",
-        "ko": "벼랑 위의 포뇨"
       }
     },
     {
@@ -5499,10 +4929,10 @@
       "posterPath": "/yq4tSiYvfGw150Ntq8NbsFZ12En.jpg",
       "bundled": false,
       "lines": {
-        "en": ["The left hand", "is just for support."],
-        "zh": ["左手只是", "辅助。"],
-        "ja": ["左手はそえるだけ。"],
-        "ko": ["왼손은 거들 뿐."]
+        "en": ["If you give up,", "the game really is over."],
+        "zh": ["放弃的话，", "比赛就", "真的结束了。"],
+        "ja": ["あきらめたら、", "そこで試合終了ですよ。"],
+        "ko": ["포기하면,", "그때 경기는", "정말 끝나는 거예요."]
       },
       "title": {
         "en": "The First Slam Dunk",
@@ -5569,117 +4999,22 @@
       }
     },
     {
-      "id": "failan",
-      "year": 2001,
-      "tmdbId": 18704,
-      "posterPath": "/3DG3eUhXyV0bVOuw3V0a1nIy7Jh.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Mr. Kangjae,", "you are a good person."],
-        "zh": ["姜载先生，", "你是个好人。"],
-        "ja": ["カンジェさん、", "あなたはいい人です。"],
-        "ko": ["강재 씨는", "착한 사람입니다."]
-      },
-      "title": {
-        "en": "Failan",
-        "zh": "白兰",
-        "ja": "パイラン",
-        "ko": "파이란"
-      }
-    },
-    {
-      "id": "friend",
-      "year": 2001,
-      "tmdbId": 19635,
-      "posterPath": "/AwhWTvbB1Pdp7nz1DWElonH4e2a.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["That's enough.", "I've had my fill."],
-        "zh": ["够了，", "我已经吃饱了。"],
-        "ja": ["もういい。", "たっぷり食った。"],
-        "ko": ["고마해라.", "많이 묵었다 아이가."]
-      },
-      "title": {
-        "en": "Friend",
-        "zh": "朋友",
-        "ja": "友へ チング",
-        "ko": "친구"
-      }
-    },
-    {
-      "id": "memories-of-murder",
-      "year": 2003,
-      "tmdbId": 11423,
-      "posterPath": "/jcgUjx1QcupGzjntTVlnQ15lHqy.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Do you eat", "your meals all right?"],
-        "zh": ["你还吃得下饭吗？"],
-        "ja": ["ちゃんと飯は", "食ってるのか。"],
-        "ko": ["밥은 먹고 다니냐?"]
-      },
-      "title": {
-        "en": "Memories of Murder",
-        "zh": "杀人回忆",
-        "ja": "殺人の追憶",
-        "ko": "살인의 추억"
-      }
-    },
-    {
-      "id": "a-moment-to-remember",
-      "year": 2004,
-      "tmdbId": 15859,
-      "posterPath": "/s9ulpxLbkeJTTYxqLVUl6PreLGN.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Drink this,", "and you're going out", "with me."],
-        "zh": ["喝了这个，", "你就是在跟我交往了。"],
-        "ja": ["これを飲んだら、", "付き合うってことだぞ。"],
-        "ko": ["이거 마시면,", "나랑 사귀는 거다."]
-      },
-      "title": {
-        "en": "A Moment to Remember",
-        "zh": "我脑海中的橡皮擦",
-        "ja": "私の頭の中の消しゴム",
-        "ko": "내 머리 속의 지우개"
-      }
-    },
-    {
       "id": "a-bittersweet-life",
       "year": 2005,
       "tmdbId": 11344,
       "posterPath": "/iqUGAIQqHMMscatykpR6hVBxezA.jpg",
       "bundled": false,
       "lines": {
-        "en": ["Tell me.", "Why did you", "do that to me?"],
-        "zh": ["告诉我，", "你为什么", "那样对我？"],
-        "ja": ["教えてくれ。", "なぜ俺に", "あんなことを。"],
-        "ko": ["말해 봐요.", "저한테 왜", "그랬어요?"]
+        "en": ["Is it the branch that moves,", "or your own heart?"],
+        "zh": ["是树枝在动，", "还是你的心", "在动？"],
+        "ja": ["動いているのは枝か、", "それとも", "お前の心か。"],
+        "ko": ["움직이는 것은 가지인가,", "아니면 네 마음인가."]
       },
       "title": {
         "en": "A Bittersweet Life",
         "zh": "甜蜜的人生",
         "ja": "甘い人生",
         "ko": "달콤한 인생"
-      }
-    },
-    {
-      "id": "the-king-and-the-clown",
-      "year": 2005,
-      "tmdbId": 45035,
-      "posterPath": "/ilNM1LndM1ybOid2wYd2FhjsKIh.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["I'm here,", "and you're there."],
-        "zh": ["我在这儿，", "你在那儿。"],
-        "ja": ["俺はここにいる、", "お前はそこにいる。"],
-        "ko": ["나 여기 있고", "너 여기 있다."]
-      },
-      "title": {
-        "en": "King and the Clown",
-        "zh": "王的男人",
-        "ja": "王の男",
-        "ko": "왕의 남자"
       }
     },
     {
@@ -5699,25 +5034,6 @@
         "zh": "你是我的命运",
         "ja": "ユア・マイ・サンシャイン",
         "ko": "너는 내 운명"
-      }
-    },
-    {
-      "id": "tazza",
-      "year": 2006,
-      "tmdbId": 38015,
-      "posterPath": "/lIIGKcD9CmCYPYaCOZg3rTw0bRS.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Freeze.", "Was that a bottom deal?"],
-        "zh": ["别动。", "你刚才是抽底牌吗？"],
-        "ja": ["動くな。", "今、底から抜いたか。"],
-        "ko": ["동작 그만.", "밑장 빼기냐?"]
-      },
-      "title": {
-        "en": "Tazza: The High Rollers",
-        "zh": "老千",
-        "ja": "タチャ イカサマ師",
-        "ko": "타짜"
       }
     },
     {
@@ -5778,25 +5094,6 @@
       }
     },
     {
-      "id": "a-werewolf-boy",
-      "year": 2012,
-      "tmdbId": 128246,
-      "posterPath": "/r8nLI2052swGQ53p5eVVPuEzlAf.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Wait for me."],
-        "zh": ["等我。"],
-        "ja": ["待っていて。"],
-        "ko": ["기다려."]
-      },
-      "title": {
-        "en": "A Werewolf Boy",
-        "zh": "狼少年",
-        "ja": "私のオオカミ少年",
-        "ko": "늑대소년"
-      }
-    },
-    {
       "id": "masquerade",
       "year": 2012,
       "tmdbId": 133200,
@@ -5813,25 +5110,6 @@
         "zh": "双面君王",
         "ja": "Masquerade",
         "ko": "광해, 왕이 된 남자"
-      }
-    },
-    {
-      "id": "miracle-in-cell-no-7",
-      "year": 2013,
-      "tmdbId": 158445,
-      "posterPath": "/wHh4Or1RVzgX2GSYYfEN5HcO6xQ.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Dad,", "I love you."],
-        "zh": ["爸爸，", "我爱你。"],
-        "ja": ["パパ、", "大好き。"],
-        "ko": ["아빠,", "사랑해요."]
-      },
-      "title": {
-        "en": "Miracle in Cell No. 7",
-        "zh": "七号房的礼物",
-        "ja": "７番房の奇跡",
-        "ko": "7번방의 선물"
       }
     },
     {
@@ -5892,25 +5170,6 @@
       }
     },
     {
-      "id": "ode-to-my-father",
-      "year": 2014,
-      "tmdbId": 313108,
-      "posterPath": "/8CAnvwZmUARHDwEcqr89YifBUkm.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Father,", "I kept my promise,", "didn't I?"],
-        "zh": ["爸，", "我守住约定了，对吧？"],
-        "ja": ["父さん、", "約束は守ったよね。"],
-        "ko": ["아버지,", "내 약속 잘 지켰지요?"]
-      },
-      "title": {
-        "en": "Ode to My Father",
-        "zh": "国际市场",
-        "ja": "国際市場で逢いましょう",
-        "ko": "국제시장"
-      }
-    },
-    {
       "id": "veteran",
       "year": 2015,
       "tmdbId": 346646,
@@ -5927,25 +5186,6 @@
         "zh": "老手",
         "ja": "ベテラン",
         "ko": "베테랑"
-      }
-    },
-    {
-      "id": "inside-men",
-      "year": 2015,
-      "tmdbId": 293413,
-      "posterPath": "/7brLGeVVlGjsv7HZ0GdSElne0Ts.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Shall we go to Mojito", "for a glass of Maldives?"],
-        "zh": ["去莫吉托", "喝一杯马尔代夫吧？"],
-        "ja": ["モヒートへ行って", "モルディブを一杯どう？"],
-        "ko": ["모히토 가서", "몰디브 한 잔?"]
-      },
-      "title": {
-        "en": "Inside Men",
-        "zh": "局内人",
-        "ja": "インサイダーズ 内部者たち",
-        "ko": "내부자들"
       }
     },
     {
@@ -5987,25 +5227,6 @@
       }
     },
     {
-      "id": "a-taxi-driver",
-      "year": 2017,
-      "tmdbId": 437068,
-      "posterPath": "/iXVaWbxmyPk4KZGZk5GGDGFieMX.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["I left", "my passenger behind."],
-        "zh": ["我把客人", "留在那里了。"],
-        "ja": ["客を置いて", "来てしまった。"],
-        "ko": ["손님을", "두고 왔다."]
-      },
-      "title": {
-        "en": "A Taxi Driver",
-        "zh": "出租车司机",
-        "ja": "タクシー運転手 約束は海を越えて",
-        "ko": "택시운전사"
-      }
-    },
-    {
       "id": "1987-when-the-day-comes",
       "year": 2017,
       "tmdbId": 437103,
@@ -6041,25 +5262,6 @@
         "zh": "蜂鸟",
         "ja": "はちどり",
         "ko": "벌새"
-      }
-    },
-    {
-      "id": "extreme-job",
-      "year": 2019,
-      "tmdbId": 567646,
-      "posterPath": "/52oLgq2gEiZyDjpJ7tgkGruoQI0.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Until now,", "no one has ever", "tasted this."],
-        "zh": ["至今为止，", "从没有过这种味道。"],
-        "ja": ["今までこんな味は", "なかった。"],
-        "ko": ["지금까지", "이런 맛은 없었다."]
-      },
-      "title": {
-        "en": "Extreme Job",
-        "zh": "极限职业",
-        "ja": "エクストリーム・ジョブ",
-        "ko": "극한직업"
       }
     },
     {
@@ -6139,25 +5341,6 @@
       }
     },
     {
-      "id": "la-strada",
-      "year": 1954,
-      "tmdbId": 405,
-      "posterPath": "/rwjbT0zlsUDMztaCcWjlWuxaEL1.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Everything in this world", "is good for something."],
-        "zh": ["这世上的一切，", "都有它的用处。"],
-        "ja": ["この世のすべてに、", "何かしらの意味がある。"],
-        "ko": ["이 세상 모든 것엔", "다 쓸모가 있어."]
-      },
-      "title": {
-        "en": "La Strada",
-        "zh": "大路",
-        "ja": "道",
-        "ko": "길"
-      }
-    },
-    {
       "id": "the-seventh-seal",
       "year": 1957,
       "tmdbId": 490,
@@ -6177,44 +5360,6 @@
       }
     },
     {
-      "id": "la-dolce-vita",
-      "year": 1960,
-      "tmdbId": 439,
-      "posterPath": "/dZ2v0DAX4aCZartCzZdg4ZinSW2.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Marcello,", "come here.", "Hurry up."],
-        "zh": ["马尔切洛，", "过来呀，", "快点。"],
-        "ja": ["マルチェロ、", "こっちへ来て。", "早く。"],
-        "ko": ["마르첼로,", "여기로 와요.", "빨리."]
-      },
-      "title": {
-        "en": "La Dolce Vita",
-        "zh": "甜蜜的生活",
-        "ja": "甘い生活",
-        "ko": "달콤한 인생"
-      }
-    },
-    {
-      "id": "breathless",
-      "year": 1960,
-      "tmdbId": 269,
-      "posterPath": "/9Wx0Wdn2EOqeCZU4SP6tlS3LOml.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["It really is", "disgusting."],
-        "zh": ["真是", "恶心透了。"],
-        "ja": ["本当に", "最低だわ。"],
-        "ko": ["정말", "역겨워."]
-      },
-      "title": {
-        "en": "Breathless",
-        "zh": "精疲力尽",
-        "ja": "勝手にしやがれ",
-        "ko": "네 멋대로 해라"
-      }
-    },
-    {
       "id": "8-and-a-half",
       "year": 1963,
       "tmdbId": 422,
@@ -6231,44 +5376,6 @@
         "zh": "八部半",
         "ja": "８ 1／2",
         "ko": "8과 1/2"
-      }
-    },
-    {
-      "id": "the-good-the-bad-and-the-ugly",
-      "year": 1966,
-      "tmdbId": 429,
-      "posterPath": "/bX2xnavhMYjWDoZp1VM6VnU1xwe.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["There are two kinds", "of people in the world:", "those with loaded guns,", "and those who dig."],
-        "zh": ["世上只有两种人：", "拿着上膛的枪的，", "和挖坑的。"],
-        "ja": ["世界には二種類の人間がいる。", "銃を持つ者と、穴を掘る者だ。"],
-        "ko": ["세상엔 두 종류의 사람이 있지.", "총을 든 놈과", "땅을 파는 놈."]
-      },
-      "title": {
-        "en": "The Good, the Bad and the Ugly",
-        "zh": "黄金三镖客",
-        "ja": "続・夕陽のガンマン",
-        "ko": "석양의 무법자"
-      }
-    },
-    {
-      "id": "monty-python-holy-grail",
-      "year": 1975,
-      "tmdbId": 762,
-      "posterPath": "/7nTkHjETdGMYK1phHwDbPsrzbYl.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["It's just", "a flesh wound."],
-        "zh": ["只是", "皮肉伤而已。"],
-        "ja": ["ただの", "かすり傷だ。"],
-        "ko": ["그냥", "살짝 긁힌 거야."]
-      },
-      "title": {
-        "en": "Monty Python and the Holy Grail",
-        "zh": "巨蟒与圣杯",
-        "ja": "モンティ・パイソン・アンド・ホーリー・グレイル",
-        "ko": "몬티 파이튼의 성배"
       }
     },
     {
@@ -6525,10 +5632,10 @@
       "posterPath": "/cVUDMnskSc01rdbyH0tLATTJUdP.jpg",
       "bundled": false,
       "lines": {
-        "en": ["No,", "it's for me."],
-        "zh": ["不用，", "这是给我自己的。"],
-        "ja": ["いや、", "これは私のためのものだ。"],
-        "ko": ["아니요,", "이건 제 겁니다."]
+        "en": ["Can anyone who has truly heard", "this music", "still be a bad person?"],
+        "zh": ["一个人真正听过这首曲子，", "还能是坏人吗？"],
+        "ja": ["この曲を本当に聴いた者が、", "それでも悪人で", "いられるだろうか。"],
+        "ko": ["이 음악을 진심으로 들은 사람이", "그래도 나쁜 사람일 수", "있을까."]
       },
       "title": {
         "en": "The Lives of Others",
@@ -6620,35 +5727,16 @@
       "posterPath": "/1QU7HKgsQbGpzsJbJK4pAVQV9F5.jpg",
       "bundled": false,
       "lines": {
-        "en": ["No arms,", "no chocolate."],
-        "zh": ["没有手，", "就没有巧克力。"],
-        "ja": ["腕がなければ、", "チョコもなしだ。"],
-        "ko": ["팔이 없으면,", "초콜릿도 없다."]
+        "en": ["Art is the only trace", "we leave", "of our passage on earth."],
+        "zh": ["艺术", "是我们在这世上", "留下的唯一痕迹。"],
+        "ja": ["芸術は、", "人がこの世を通った", "唯一の跡だ。"],
+        "ko": ["예술은 우리가 이 세상을", "지나갔다는", "유일한 흔적이다."]
       },
       "title": {
         "en": "The Intouchables",
         "zh": "触不可及",
         "ja": "最強のふたり",
         "ko": "언터처블: 1%의 우정"
-      }
-    },
-    {
-      "id": "the-artist",
-      "year": 2011,
-      "tmdbId": 74643,
-      "posterPath": "/xYMYV8lMIeQMymuNPBvq3hOnqXw.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["With", "pleasure."],
-        "zh": ["非常", "乐意。"],
-        "ja": ["喜んで。"],
-        "ko": ["기꺼이."]
-      },
-      "title": {
-        "en": "The Artist",
-        "zh": "艺术家",
-        "ja": "アーティスト",
-        "ko": "아티스트"
       }
     },
     {
@@ -6842,25 +5930,6 @@
       }
     },
     {
-      "id": "lion",
-      "year": 2016,
-      "tmdbId": 334543,
-      "posterPath": "/kCELJH1tCmaRLqvwIgKDb09aEaw.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["I found you."],
-        "zh": ["我找到你了。"],
-        "ja": ["君を見つけた。"],
-        "ko": ["널 찾았어."]
-      },
-      "title": {
-        "en": "Lion",
-        "zh": "雄狮",
-        "ja": "LION／ライオン ～25年目のただいま～",
-        "ko": "라이언"
-      }
-    },
-    {
       "id": "moana",
       "year": 2016,
       "tmdbId": 277834,
@@ -6934,6 +6003,937 @@
         "zh": "别告诉她",
         "ja": "フェアウェル",
         "ko": "페어웰"
+      }
+    },
+    {
+      "id": "metropolis",
+      "year": 1927,
+      "tmdbId": 19,
+      "posterPath": "/kr9wXRN23zLuWJIelahas1mtnYj.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["The mediator between", "head and hands", "must be the heart."],
+        "zh": ["头脑与双手之间的中介，", "必须是心。"],
+        "ja": ["頭と手をつなぐ仲立ちは、", "心でなければならない。"],
+        "ko": ["머리와 손을 잇는 중재자는", "반드시 심장이어야 한다."]
+      },
+      "title": {
+        "en": "Metropolis",
+        "zh": "大都会",
+        "ja": "メトロポリス",
+        "ko": "메트로폴리스"
+      }
+    },
+    {
+      "id": "city-lights",
+      "year": 1931,
+      "tmdbId": 901,
+      "posterPath": "/ugmakEL5y294I5bXgiBqApuZpwc.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["You can see now?", "Yes, I can see now."],
+        "zh": ["你能看见了？", "是的，我能看见了。"],
+        "ja": ["見えるようになったの？", "ええ、見えるわ。"],
+        "ko": ["이제 보이나요?", "네, 이제 보여요."]
+      },
+      "title": {
+        "en": "City Lights",
+        "zh": "城市之光",
+        "ja": "街の灯",
+        "ko": "시티 라이트"
+      }
+    },
+    {
+      "id": "m",
+      "year": 1931,
+      "tmdbId": 832,
+      "posterPath": "/bTdZk3q2DWpBRnLiaaItKFWOVhI.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["I can't escape.", "I can't escape", "from myself."],
+        "zh": ["我逃不掉。", "我逃不掉", "我自己。"],
+        "ja": ["逃げられない。", "自分から", "逃げられないんだ。"],
+        "ko": ["도망칠 수 없어.", "내 자신에게서", "도망칠 수 없어."]
+      },
+      "title": {
+        "en": "M",
+        "zh": "M就是凶手",
+        "ja": "M",
+        "ko": "엠"
+      }
+    },
+    {
+      "id": "la-grande-illusion",
+      "year": 1937,
+      "tmdbId": 777,
+      "posterPath": "/lWg41zE0FVixkNsFgxnlRyvDYv9.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["Borders are made by men.", "Nature pays them no mind."],
+        "zh": ["边界是人划出来的，", "大自然", "从不认识它们。"],
+        "ja": ["国境は人が引いたものだ。", "自然はそれを", "知らない。"],
+        "ko": ["국경은 사람이 그은 것이다.", "자연은 그것을", "알지 못한다."]
+      },
+      "title": {
+        "en": "Grand Illusion",
+        "zh": "大幻影",
+        "ja": "大いなる幻影",
+        "ko": "위대한 환상"
+      }
+    },
+    {
+      "id": "the-rules-of-the-game",
+      "year": 1939,
+      "tmdbId": 776,
+      "posterPath": "/8JOzt7uFZyshcuzCBmYU6CDJL4D.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["The terrible thing is", "that everyone has", "his reasons."],
+        "zh": ["可怕的是，", "每个人都有", "他自己的理由。"],
+        "ja": ["恐ろしいのは、", "誰にもそれぞれの", "理由があることだ。"],
+        "ko": ["무서운 것은,", "누구에게나 저마다의", "이유가 있다는 것이다."]
+      },
+      "title": {
+        "en": "The Rules of the Game",
+        "zh": "游戏规则",
+        "ja": "ゲームの規則",
+        "ko": "게임의 규칙"
+      }
+    },
+    {
+      "id": "the-grapes-of-wrath",
+      "year": 1940,
+      "tmdbId": 596,
+      "posterPath": "/eUcxMVBIA0Jg8l1RGUqycrc3eIQ.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["Wherever there's someone hungry,", "I'll be there.", "Wherever there's someone beaten,", "I'll be there."],
+        "zh": ["哪里有人在挨饿，", "我就在那里；", "哪里有人在被打，", "我就在那里。"],
+        "ja": ["腹を空かせた者がいれば、", "俺はそこにいる。", "殴られている者がいれば、", "俺はそこにいる。"],
+        "ko": ["굶주린 사람이 있는 곳에", "내가 있고,", "맞고 있는 사람이 있는 곳에", "내가 있다."]
+      },
+      "title": {
+        "en": "The Grapes of Wrath",
+        "zh": "愤怒的葡萄",
+        "ja": "怒りの葡萄",
+        "ko": "분노의 포도"
+      }
+    },
+    {
+      "id": "the-philadelphia-story",
+      "year": 1940,
+      "tmdbId": 981,
+      "posterPath": "/dKUubjvxO78XDts6VP1Ggcp4R9O.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["The time to make up your mind", "about people", "is never."],
+        "zh": ["要对一个人下判断，", "那个时机", "永远不会到。"],
+        "ja": ["人について心を決める時など、", "永遠に来ない。"],
+        "ko": ["사람에 대해 판단을 내릴", "그 순간은", "영원히 오지 않는다."]
+      },
+      "title": {
+        "en": "The Philadelphia Story",
+        "zh": "费城故事",
+        "ja": "フィラデルフィア物語",
+        "ko": "필라델피아 스토리"
+      }
+    },
+    {
+      "id": "the-maltese-falcon",
+      "year": 1941,
+      "tmdbId": 963,
+      "posterPath": "/bf4o6Uzw5wqLjdKwRuiDrN1xyvl.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["This is the stuff", "that dreams are made of."],
+        "zh": ["这就是", "造梦的材料。"],
+        "ja": ["これが、", "夢を作る材料だ。"],
+        "ko": ["이것이", "꿈을 만드는", "재료야."]
+      },
+      "title": {
+        "en": "The Maltese Falcon",
+        "zh": "马耳他之鹰",
+        "ja": "マルタの鷹",
+        "ko": "말타의 매"
+      }
+    },
+    {
+      "id": "brief-encounter",
+      "year": 1945,
+      "tmdbId": 851,
+      "posterPath": "/jC9EwLJcGhYMSQAHu2LxkKN5v7O.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["I'm an ordinary woman.", "I didn't think such violent things", "could happen", "to ordinary people."],
+        "zh": ["我是个平凡的女人。", "我没想到这么剧烈的事，", "会发生在平凡人身上。"],
+        "ja": ["私はごく普通の女です。", "こんな激しいことが", "普通の人間に起こるとは", "思わなかった。"],
+        "ko": ["저는 평범한 여자예요.", "이렇게 격렬한 일이", "평범한 사람에게", "일어날 줄 몰랐어요."]
+      },
+      "title": {
+        "en": "Brief Encounter",
+        "zh": "相见恨晚",
+        "ja": "逢びき",
+        "ko": "밀회"
+      }
+    },
+    {
+      "id": "the-red-shoes",
+      "year": 1948,
+      "tmdbId": 19542,
+      "posterPath": "/vPvpBWFWDvEXuQBkoYgA6A89GVp.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["Why do you want to dance?", "Why do you want to live?"],
+        "zh": ["你为什么想跳舞？", "你为什么想活着？"],
+        "ja": ["なぜ踊りたいのか。", "なぜ生きたいのか。"],
+        "ko": ["왜 춤을 추고 싶나?", "왜 살고 싶나?"]
+      },
+      "title": {
+        "en": "The Red Shoes",
+        "zh": "红菱艳",
+        "ja": "赤い靴",
+        "ko": "분홍신"
+      }
+    },
+    {
+      "id": "a-streetcar-named-desire",
+      "year": 1951,
+      "tmdbId": 702,
+      "posterPath": "/aicdlO5vt7z2ARm279eGzJeYCLQ.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["I have always depended", "on the kindness", "of strangers."],
+        "zh": ["我一直依赖", "陌生人的善意。"],
+        "ja": ["私はいつも、", "見知らぬ人の親切に", "頼って生きてきた。"],
+        "ko": ["저는 언제나", "낯선 사람의 친절에", "의지해 왔어요."]
+      },
+      "title": {
+        "en": "A Streetcar Named Desire",
+        "zh": "欲望号街车",
+        "ja": "欲望という名の電車",
+        "ko": "욕망이라는 이름의 전차"
+      }
+    },
+    {
+      "id": "sansho-the-bailiff",
+      "year": 1954,
+      "tmdbId": 20532,
+      "posterPath": "/cOBsWxFtEoqXIPx4JZP5E7g1WEo.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["Without mercy,", "a man is not a man."],
+        "zh": ["人没有慈悲心，", "就不算是人。"],
+        "ja": ["慈悲のない人間は、", "人間ではない。"],
+        "ko": ["자비가 없는 사람은", "사람이 아니다."]
+      },
+      "title": {
+        "en": "Sansho the Bailiff",
+        "zh": "山椒大夫",
+        "ja": "山椒大夫",
+        "ko": "산쇼다유"
+      }
+    },
+    {
+      "id": "paths-of-glory",
+      "year": 1957,
+      "tmdbId": 975,
+      "posterPath": "/hGg1UCQSHlXfv2HI9bDHT2OQBam.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["Patriotism is the last refuge", "of a scoundrel."],
+        "zh": ["爱国主义，", "是无赖最后的", "避难所。"],
+        "ja": ["愛国心は、", "悪党の最後の", "隠れ場所だ。"],
+        "ko": ["애국심은", "악당의 마지막", "피난처다."]
+      },
+      "title": {
+        "en": "Paths of Glory",
+        "zh": "光荣之路",
+        "ja": "突撃",
+        "ko": "영광의 길"
+      }
+    },
+    {
+      "id": "throne-of-blood",
+      "year": 1957,
+      "tmdbId": 3777,
+      "posterPath": "/zaZFMNxJST0TtPd68yF7fNt1he8.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["Behold the ruins", "of the castle of delusion.", "The spirits wander here", "even now."],
+        "zh": ["看啊，妄执之城的遗址。", "魂魄至今，", "仍在此地徘徊。"],
+        "ja": ["見よ、妄執の城の址。", "魂魄いまも", "なおここに", "さまよう。"],
+        "ko": ["보라, 망집의 성터를.", "혼백은 지금도", "이곳을 떠돈다."]
+      },
+      "title": {
+        "en": "Throne of Blood",
+        "zh": "蜘蛛巢城",
+        "ja": "蜘蛛巣城",
+        "ko": "거미집의 성"
+      }
+    },
+    {
+      "id": "touch-of-evil",
+      "year": 1958,
+      "tmdbId": 1480,
+      "posterPath": "/1pvRgmfBaoMczIJBOi9gCOZ4FMC.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["He was some kind of a man.", "What does it matter", "what you say about people?"],
+        "zh": ["他算是个人物吧。", "可你说人什么，", "又有什么关系呢？"],
+        "ja": ["彼はまあ、", "ひとかどの男だった。", "人のことを何と言おうと、", "何になる。"],
+        "ko": ["그는 그래도", "사내였지.", "사람에 대해 뭐라 하든,", "무슨 상관이겠나."]
+      },
+      "title": {
+        "en": "Touch of Evil",
+        "zh": "历劫佳人",
+        "ja": "黒い罠",
+        "ko": "검은 함정"
+      }
+    },
+    {
+      "id": "pickpocket",
+      "year": 1959,
+      "tmdbId": 690,
+      "posterPath": "/szulf6uQyZp0QPVOvzavETdVYXI.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["What a strange road", "I took", "to reach you."],
+        "zh": ["为了走到你身边，", "我走了一条", "多么奇怪的路。"],
+        "ja": ["君のところへ行くために、", "なんと奇妙な道を", "通ったことか。"],
+        "ko": ["네게 오기까지", "참 이상한 길을", "걸었구나."]
+      },
+      "title": {
+        "en": "Pickpocket",
+        "zh": "扒手",
+        "ja": "スリ",
+        "ko": "소매치기"
+      }
+    },
+    {
+      "id": "harakiri",
+      "year": 1962,
+      "tmdbId": 14537,
+      "posterPath": "/zK7HsOC7QxW1ldKIeFG8YJ5F2Eb.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["A samurai's honour", "is nothing but", "a facade."],
+        "zh": ["武士的尊严，", "说到底", "只是一张外壳。"],
+        "ja": ["武士の面目など、", "所詮は", "作り物にすぎぬ。"],
+        "ko": ["무사의 명예란", "결국 겉껍데기에", "불과하다."]
+      },
+      "title": {
+        "en": "Harakiri",
+        "zh": "切腹",
+        "ja": "切腹",
+        "ko": "하라키리"
+      }
+    },
+    {
+      "id": "an-autumn-afternoon",
+      "year": 1962,
+      "tmdbId": 50759,
+      "posterPath": "/4RtWkqywkzxonlnGBwv4RpSw4Rb.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["In the end,", "we are all alone."],
+        "zh": ["人到头来，", "都是一个人。"],
+        "ja": ["結局、", "人はひとりなんだ。"],
+        "ko": ["결국,", "사람은 혼자다."]
+      },
+      "title": {
+        "en": "An Autumn Afternoon",
+        "zh": "秋刀鱼之味",
+        "ja": "秋刀魚の味",
+        "ko": "꽁치의 맛"
+      }
+    },
+    {
+      "id": "the-leopard",
+      "year": 1963,
+      "tmdbId": 1040,
+      "posterPath": "/riSUxwoK3xjkOgy6YJSvPhi7cO6.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["For things to stay as they are,", "everything must change."],
+        "zh": ["要让一切保持原样，", "就必须让一切", "都改变。"],
+        "ja": ["すべてを今のままに保つには、", "すべてを", "変えねばならない。"],
+        "ko": ["모든 것이 그대로 있으려면", "모든 것이", "변해야 한다."]
+      },
+      "title": {
+        "en": "The Leopard",
+        "zh": "豹",
+        "ja": "山猫",
+        "ko": "레오파드"
+      }
+    },
+    {
+      "id": "woman-in-the-dunes",
+      "year": 1964,
+      "tmdbId": 16672,
+      "posterPath": "/xiBr3bIT2xpbuIKo5bLK7ebP4O1.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["Do you shovel sand to live,", "or live to shovel sand?"],
+        "zh": ["你是为了活着才铲沙，", "还是为了铲沙", "才活着？"],
+        "ja": ["生きるために砂を掻くのか、", "砂を掻くために", "生きるのか。"],
+        "ko": ["살기 위해 모래를 파는가,", "모래를 파기 위해", "사는가?"]
+      },
+      "title": {
+        "en": "Woman in the Dunes",
+        "zh": "砂之女",
+        "ja": "砂の女",
+        "ko": "모래의 여자"
+      }
+    },
+    {
+      "id": "life-of-brian",
+      "year": 1979,
+      "tmdbId": 583,
+      "posterPath": "/lSSA64WF0M0BXnjwr2quMh6shCl.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["You don't need to follow anybody.", "You've got to think", "for yourselves."],
+        "zh": ["你不必跟着任何人。", "你得自己想。"],
+        "ja": ["誰かに従う必要はない。", "自分の頭で", "考えるんだ。"],
+        "ko": ["누구도 따를 필요 없어.", "스스로 생각해야 해."]
+      },
+      "title": {
+        "en": "Life of Brian",
+        "zh": "万世魔星",
+        "ja": "モンティ・パイソン ライフ・オブ・ブライアン",
+        "ko": "라이프 오브 브라이언"
+      }
+    },
+    {
+      "id": "the-elephant-man",
+      "year": 1980,
+      "tmdbId": 1955,
+      "posterPath": "/u0wpPYjuSt8DIe1Y3Vapnh8jcKE.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["I am not an animal!", "I am a human being!", "I am a man!"],
+        "zh": ["我不是动物！", "我是人！", "我是一个人！"],
+        "ja": ["私は動物じゃない！", "私は人間だ！", "私は人間なんだ！"],
+        "ko": ["나는 동물이 아니야!", "나는 인간이야!", "나는 사람이야!"]
+      },
+      "title": {
+        "en": "The Elephant Man",
+        "zh": "象人",
+        "ja": "エレファント・マン",
+        "ko": "엘리펀트 맨"
+      }
+    },
+    {
+      "id": "the-big-blue",
+      "year": 1988,
+      "tmdbId": 175,
+      "posterPath": "/3t5t7yaFiTJQlqxiTkXJMFZdkh3.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["The hardest part", "is finding a reason", "to come back up."],
+        "zh": ["最难的是，", "在水底找到", "一个上来的理由。"],
+        "ja": ["いちばん難しいのは、", "水の底で", "浮かび上がる理由を", "見つけることだ。"],
+        "ko": ["가장 어려운 건", "물속에서", "올라올 이유를", "찾는 것이다."]
+      },
+      "title": {
+        "en": "The Big Blue",
+        "zh": "碧海蓝天",
+        "ja": "グラン・ブルー",
+        "ko": "그랑블루"
+      }
+    },
+    {
+      "id": "dances-with-wolves",
+      "year": 1990,
+      "tmdbId": 581,
+      "posterPath": "/hw0ZEHAaTqTxSXGVwUFX7uvanSA.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["I had never known", "who I really was", "until now."],
+        "zh": ["我第一次", "这么清楚地知道", "我是谁。"],
+        "ja": ["自分が何者なのか、", "今ほどはっきり", "わかったことはない。"],
+        "ko": ["내가 누구인지", "이토록 분명히", "알았던 적이 없다."]
+      },
+      "title": {
+        "en": "Dances with Wolves",
+        "zh": "与狼共舞",
+        "ja": "ダンス・ウィズ・ウルブズ",
+        "ko": "늑대와 춤을"
+      }
+    },
+    {
+      "id": "only-yesterday",
+      "year": 1991,
+      "tmdbId": 15080,
+      "posterPath": "/tOSnFE9e82iH3ZAzSTtuOkBsabJ.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["You still walk around", "carrying your fifth-grade self", "with you."],
+        "zh": ["你还带着", "小学五年级的自己", "在走路。"],
+        "ja": ["あなたは小学五年生の自分を", "連れて歩いてるんだ。"],
+        "ko": ["너는 초등학교 오학년의", "너 자신을", "데리고 걷고 있어."]
+      },
+      "title": {
+        "en": "Only Yesterday",
+        "zh": "岁月的童话",
+        "ja": "おもひでぽろぽろ",
+        "ko": "추억은 방울방울"
+      }
+    },
+    {
+      "id": "the-silence-of-the-lambs",
+      "year": 1991,
+      "tmdbId": 274,
+      "posterPath": "/uS9m8OBk1A8eM9I042bx8XXpqAq.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["We covet", "what we see", "every day."],
+        "zh": ["我们所渴望的，", "就是我们每天", "看见的东西。"],
+        "ja": ["人が欲しがるのは、", "毎日目にしている", "ものだ。"],
+        "ko": ["우리가 탐하는 것은", "매일 보는", "그것이다."]
+      },
+      "title": {
+        "en": "The Silence of the Lambs",
+        "zh": "沉默的羔羊",
+        "ja": "羊たちの沈黙",
+        "ko": "양들의 침묵"
+      }
+    },
+    {
+      "id": "three-colors-blue",
+      "year": 1993,
+      "tmdbId": 108,
+      "posterPath": "/33wsWxzsNstI8N7dvuwzFmj1qBd.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["Now I have", "only one thing left to do:", "nothing."],
+        "zh": ["现在我只剩一件事要做：", "什么都不做。"],
+        "ja": ["今、私に残された", "することはひとつ。", "何もしないこと。"],
+        "ko": ["이제 내게 남은 일은", "하나뿐이야.", "아무것도 하지 않는 것."]
+      },
+      "title": {
+        "en": "Three Colors: Blue",
+        "zh": "蓝白红三部曲之蓝",
+        "ja": "トリコロール／青の愛",
+        "ko": "세 가지 색: 블루"
+      }
+    },
+    {
+      "id": "legends-of-the-fall",
+      "year": 1994,
+      "tmdbId": 4476,
+      "posterPath": "/89DRDb6mmNkIekqSeAzz13faQDt.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["Some people hear", "their own inner voices", "with great clearness,", "and they live by what they hear."],
+        "zh": ["有些人能清楚听见", "自己内心的声音，", "他们就照着", "那声音活。"],
+        "ja": ["自分の内なる声を", "はっきりと聞く者がいる。", "彼らはその声のままに", "生きる。"],
+        "ko": ["제 안의 목소리를", "또렷이 듣는 사람이 있다.", "그들은 그 소리대로", "살아간다."]
+      },
+      "title": {
+        "en": "Legends of the Fall",
+        "zh": "燃情岁月",
+        "ja": "レジェンド・オブ・フォール 果てしなき想い",
+        "ko": "가을의 전설"
+      }
+    },
+    {
+      "id": "gattaca",
+      "year": 1997,
+      "tmdbId": 782,
+      "posterPath": "/eSKr5Fl1MEC7zpAXaLWBWSBjgJq.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["I never saved anything", "for the swim back."],
+        "zh": ["我从来没为", "游回来", "留过力气。"],
+        "ja": ["帰りの分の力を、", "残したことはない。"],
+        "ko": ["돌아올 힘을", "남겨 둔 적이 없어."]
+      },
+      "title": {
+        "en": "Gattaca",
+        "zh": "千钧一发",
+        "ja": "ガタカ",
+        "ko": "가타카"
+      }
+    },
+    {
+      "id": "fight-club",
+      "year": 1999,
+      "tmdbId": 550,
+      "posterPath": "/jSziioSwPVrOy9Yow3XhWIBDjq1.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["You are not your job.", "You are not", "the money you have.", "You are not the car you drive."],
+        "zh": ["你不是你的工作，", "不是你银行里的钱，", "不是你开的车。"],
+        "ja": ["君は仕事ではない。", "持っている金でもない。", "乗っている車でもない。"],
+        "ko": ["너는 네 직업이 아니다.", "가진 돈도 아니고,", "타는 차도 아니다."]
+      },
+      "title": {
+        "en": "Fight Club",
+        "zh": "搏击俱乐部",
+        "ja": "ファイト・クラブ",
+        "ko": "파이트 클럽"
+      }
+    },
+    {
+      "id": "memento",
+      "year": 2000,
+      "tmdbId": 77,
+      "posterPath": "/nzlv62aC0octS5AklAiWpXLX9Z0.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["We all lie to ourselves", "to be happy."],
+        "zh": ["我们都在撒谎，", "好让自己", "活得下去。"],
+        "ja": ["人はみな、", "幸せでいるために", "自分に嘘をつく。"],
+        "ko": ["우리는 모두", "행복하기 위해", "스스로에게 거짓말한다."]
+      },
+      "title": {
+        "en": "Memento",
+        "zh": "记忆碎片",
+        "ja": "メメント",
+        "ko": "메멘토"
+      }
+    },
+    {
+      "id": "spring-summer-fall-winter-and-spring",
+      "year": 2003,
+      "tmdbId": 113,
+      "posterPath": "/6SQQ5REuAz7k0FMQ9mSCT40T2LN.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["The stone you carry", "is the stone", "inside your heart."],
+        "zh": ["你背着的那块石头，", "就是你心里的", "那块石头。"],
+        "ja": ["背負っている石は、", "お前の心の中の", "石だ。"],
+        "ko": ["네가 지고 있는 돌이", "바로 네 마음속의", "돌이다."]
+      },
+      "title": {
+        "en": "Spring, Summer, Fall, Winter... and Spring",
+        "zh": "春夏秋冬又一春",
+        "ja": "春夏秋冬そして春",
+        "ko": "봄 여름 가을 겨울 그리고 봄"
+      }
+    },
+    {
+      "id": "v-for-vendetta",
+      "year": 2005,
+      "tmdbId": 752,
+      "posterPath": "/1avD1JeaRiJX5M4ahPdZPypGoGN.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["Ideas", "are bulletproof."],
+        "zh": ["思想是", "杀不死的。"],
+        "ja": ["思想は", "殺せない。"],
+        "ko": ["사상은", "죽일 수 없다."]
+      },
+      "title": {
+        "en": "V for Vendetta",
+        "zh": "V字仇杀队",
+        "ja": "V フォー・ヴェンデッタ",
+        "ko": "브이 포 벤데타"
+      }
+    },
+    {
+      "id": "welcome-to-dongmakgol",
+      "year": 2005,
+      "tmdbId": 14968,
+      "posterPath": "/3FQ8p7kXTqdHJ2EIvQ5Y9TDTSw0.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["What's your secret", "to leading them?", "Feed them well."],
+        "zh": ["你怎么让大家听话的？", "让他们吃饱。"],
+        "ja": ["どうやって", "皆をまとめている。", "腹いっぱい食わせるんだ。"],
+        "ko": ["어떻게 사람들을", "이끄시오?", "잘 먹이는 거요."]
+      },
+      "title": {
+        "en": "Welcome to Dongmakgol",
+        "zh": "欢迎来到东莫村",
+        "ja": "トンマッコルへようこそ",
+        "ko": "웰컴 투 동막골"
+      }
+    },
+    {
+      "id": "secret-sunshine",
+      "year": 2007,
+      "tmdbId": 2015,
+      "posterPath": "/vee1jyUrqUEmi5ZStWI1JJzLQJH.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["How could God", "forgive him", "before I did?"],
+        "zh": ["上帝凭什么", "先原谅了他？"],
+        "ja": ["神はどうして、", "私より先に", "あの人を許したの。"],
+        "ko": ["하나님이 어떻게", "그를 먼저", "용서해요?"]
+      },
+      "title": {
+        "en": "Secret Sunshine",
+        "zh": "密阳",
+        "ja": "シークレット・サンシャイン",
+        "ko": "밀양"
+      }
+    },
+    {
+      "id": "poetry",
+      "year": 2010,
+      "tmdbId": 47909,
+      "posterPath": "/5RS3zovYbHdpZqLqyEOr24qWKwf.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["Where on earth", "is poetry hiding?"],
+        "zh": ["诗，", "到底藏在哪里？"],
+        "ja": ["詩は、", "いったいどこに", "隠れているのか。"],
+        "ko": ["시는", "대체 어디에", "숨어 있는 걸까."]
+      },
+      "title": {
+        "en": "Poetry",
+        "zh": "诗",
+        "ja": "ポエトリー アグネスの詩",
+        "ko": "시"
+      }
+    },
+    {
+      "id": "silenced",
+      "year": 2011,
+      "tmdbId": 81481,
+      "posterPath": "/mbMp0oIFmYnw0i5gzRoKt8cH5ve.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["We are not fighting", "to change the world.", "We fight so the world", "won't change us."],
+        "zh": ["我们争取的不是", "改变世界，", "而是", "不被世界改变。"],
+        "ja": ["私たちが戦うのは", "世界を変えるためではなく、", "世界に変えられない", "ためだ。"],
+        "ko": ["우리가 싸우는 건", "세상을 바꾸려는 게 아니라", "세상이 우리를 바꾸지", "못하게 하려는 거다."]
+      },
+      "title": {
+        "en": "Silenced",
+        "zh": "熔炉",
+        "ja": "トガニ 幼き瞳の告発",
+        "ko": "도가니"
+      }
+    },
+    {
+      "id": "midnight-in-paris",
+      "year": 2011,
+      "tmdbId": 59436,
+      "posterPath": "/4wBG5kbfagTQclETblPRRGihk0I.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["If you stay here,", "this becomes your present,", "and you'll start longing", "for another time."],
+        "zh": ["你留在这里，", "这里就成了你的现在。", "然后你又会开始", "怀念别的时代。"],
+        "ja": ["ここに留まれば、", "ここが君の現在になる。", "そしてまた別の時代を", "恋しがり始める。"],
+        "ko": ["여기 머물면", "여기가 네 현재가 되고,", "또 다른 시대를", "그리워하게 될 거야."]
+      },
+      "title": {
+        "en": "Midnight in Paris",
+        "zh": "午夜巴黎",
+        "ja": "ミッドナイト・イン・パリ",
+        "ko": "미드나잇 인 파리"
+      }
+    },
+    {
+      "id": "cloud-atlas",
+      "year": 2012,
+      "tmdbId": 83542,
+      "posterPath": "/8naVv2Xu3rWI5JKHz0vCujx6GaJ.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["Our lives are not our own.", "From womb to tomb,", "we are bound to others."],
+        "zh": ["我们的生命不属于自己。", "从子宫到坟墓，", "我们与他人相连。"],
+        "ja": ["私たちの命は", "自分だけのものではない。", "胎から墓まで、", "人は他者と結ばれている。"],
+        "ko": ["우리 삶은 우리 것이 아니다.", "태에서 무덤까지,", "우리는 서로에게", "묶여 있다."]
+      },
+      "title": {
+        "en": "Cloud Atlas",
+        "zh": "云图",
+        "ja": "クラウド アトラス",
+        "ko": "클라우드 아틀라스"
+      }
+    },
+    {
+      "id": "pieta",
+      "year": 2012,
+      "tmdbId": 123377,
+      "posterPath": "/cI9SXHxBsEF0cgUTZKDDaPC0ozT.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["What is money?", "The beginning and the end", "of all evil."],
+        "zh": ["钱是什么？", "一切罪恶的", "开始和结束。"],
+        "ja": ["金とは何か。", "すべての悪の", "始まりと終わりだ。"],
+        "ko": ["돈이란 무엇인가.", "모든 악의", "시작이자 끝."]
+      },
+      "title": {
+        "en": "Pieta",
+        "zh": "圣殇",
+        "ja": "嘆きのピエタ",
+        "ko": "피에타"
+      }
+    },
+    {
+      "id": "the-face-reader",
+      "year": 2013,
+      "tmdbId": 220176,
+      "posterPath": "/cX5Z7A3zG0zBTNxgWlROpss44Qh.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["I only read men's faces.", "I never saw", "the tide of the times."],
+        "zh": ["我只看了人的脸，", "却没看见", "时代的浪。"],
+        "ja": ["私は人の顔だけを見て、", "時代の流れを", "見なかった。"],
+        "ko": ["나는 사람의 얼굴만 보았고", "시대의 흐름을", "보지 못했다."]
+      },
+      "title": {
+        "en": "The Face Reader",
+        "zh": "观相",
+        "ja": "観相師－かんそうし－",
+        "ko": "관상"
+      }
+    },
+    {
+      "id": "hope",
+      "year": 2013,
+      "tmdbId": 255709,
+      "posterPath": "/x9yjkm9gIz5qI5fJMUTfBnWiB2o.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["Dad,", "did I do", "something wrong?"],
+        "zh": ["爸爸，", "我做错了什么吗？"],
+        "ja": ["お父さん、", "私、何か", "悪いことしたの。"],
+        "ko": ["아빠,", "내가 뭐", "잘못했어요?"]
+      },
+      "title": {
+        "en": "Hope",
+        "zh": "素媛",
+        "ja": "ソウォン/願い",
+        "ko": "소원"
+      }
+    },
+    {
+      "id": "when-marnie-was-there",
+      "year": 2014,
+      "tmdbId": 242828,
+      "posterPath": "/vug1dvDI1tSa60Z8qjCuUE7ntkO.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["I forgive you.", "I forgave you", "long ago."],
+        "zh": ["我原谅你。", "我早就", "原谅你了。"],
+        "ja": ["あなたを許すわ。", "ずっと前から", "許していたの。"],
+        "ko": ["너를 용서해.", "아주 오래전에", "이미 용서했어."]
+      },
+      "title": {
+        "en": "When Marnie Was There",
+        "zh": "记忆中的玛妮",
+        "ja": "思い出のマーニー",
+        "ko": "추억의 마니"
+      }
+    },
+    {
+      "id": "the-throne",
+      "year": 2015,
+      "tmdbId": 315439,
+      "posterPath": "/fxucCjHL566llnZC3TfWTdReHee.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["I never wanted the throne.", "I only wanted", "my father to look at me."],
+        "zh": ["我不是想当王。", "我只是想", "被父亲看一眼。"],
+        "ja": ["王になりたかったのではない。", "ただ父に", "見てほしかった。"],
+        "ko": ["왕이 되고 싶었던 게 아닙니다.", "그저 아버지가", "한 번 봐주기를 바랐습니다."]
+      },
+      "title": {
+        "en": "The Throne",
+        "zh": "思悼",
+        "ja": "The Throne",
+        "ko": "사도"
+      }
+    },
+    {
+      "id": "the-world-of-us",
+      "year": 2016,
+      "tmdbId": 384748,
+      "posterPath": "/yIQgdVGDjryehtnhPnQ12yZa6gk.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["She hits me,", "I hit her.", "Then when do we", "ever get to play?"],
+        "zh": ["她打我，我打她，", "那我们什么时候", "才能一起玩？"],
+        "ja": ["あの子が叩いて、", "私も叩いて。", "それじゃ、いつ", "遊べるの。"],
+        "ko": ["그 애가 때리고", "나도 때리고,", "그럼 언제 놀아?"]
+      },
+      "title": {
+        "en": "The World of Us",
+        "zh": "我们的世界",
+        "ja": "The World of Us",
+        "ko": "우리들"
+      }
+    },
+    {
+      "id": "manchester-by-the-sea",
+      "year": 2016,
+      "tmdbId": 334541,
+      "posterPath": "/o9VXYOuaJxCEKOxbA86xqtwmqYn.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["My heart was broken.", "It's always gonna be broken."],
+        "zh": ["我的心碎了。", "它永远", "都会是碎的。"],
+        "ja": ["私の心は壊れた。", "これからも", "ずっと壊れたままよ。"],
+        "ko": ["내 마음은 부서졌어.", "앞으로도 계속", "부서진 채일 거야."]
+      },
+      "title": {
+        "en": "Manchester by the Sea",
+        "zh": "海边的曼彻斯特",
+        "ja": "マンチェスター・バイ・ザ・シー",
+        "ko": "맨체스터 바이 더 씨"
+      }
+    },
+    {
+      "id": "three-billboards",
+      "year": 2017,
+      "tmdbId": 359940,
+      "posterPath": "/bRYLt8fV82tdVoDppSFTZIcJiLN.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["Anger", "begets greater anger."],
+        "zh": ["愤怒", "只会招来", "更多的愤怒。"],
+        "ja": ["怒りは、", "さらに大きな怒りを", "生むだけだ。"],
+        "ko": ["분노는", "더 큰 분노를", "낳을 뿐이다."]
+      },
+      "title": {
+        "en": "Three Billboards Outside Ebbing",
+        "zh": "三块广告牌",
+        "ja": "スリー・ビルボード",
+        "ko": "쓰리 빌보드"
+      }
+    },
+    {
+      "id": "burning",
+      "year": 2018,
+      "tmdbId": 491584,
+      "posterPath": "/kXiF80o74fE9gf3Utf9moAI7ar0.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["There are two kinds of hunger:", "little hunger", "and great hunger."],
+        "zh": ["世上有两种饥饿：", "小的饿，", "和大的饿。"],
+        "ja": ["飢えには二種類ある。", "小さな飢えと、", "大きな飢えだ。"],
+        "ko": ["배고픔에는 두 가지가 있어.", "리틀 헝거와", "그레이트 헝거."]
+      },
+      "title": {
+        "en": "Burning",
+        "zh": "燃烧",
+        "ja": "バーニング 劇場版",
+        "ko": "버닝"
+      }
+    },
+    {
+      "id": "kim-ji-young-born-1982",
+      "year": 2019,
+      "tmdbId": 586048,
+      "posterPath": "/gA4J1jio3O5monA9GrAnxjlcvqw.jpg",
+      "bundled": false,
+      "lines": {
+        "en": ["Sometimes I'm happy,", "and sometimes I feel", "shut in here."],
+        "zh": ["有时候我很幸福，", "有时候我", "又觉得被关在了这里。"],
+        "ja": ["幸せなときもあるし、", "ここに閉じ込められていると", "感じるときもある。"],
+        "ko": ["행복할 때도 있고,", "여기 갇혀 있다고", "느낄 때도 있어요."]
+      },
+      "title": {
+        "en": "Kim Ji-young: Born 1982",
+        "zh": "82年生的金智英",
+        "ja": "82年生まれ、キム・ジヨン",
+        "ko": "82년생 김지영"
       }
     }
   ]
