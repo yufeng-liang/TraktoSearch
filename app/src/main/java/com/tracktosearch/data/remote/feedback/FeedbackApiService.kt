@@ -59,7 +59,7 @@ data class FeedbackResponse<T>(val code: String, val message: String, val reques
 data class UploadScreenshotResponse(val key: String)
 
 @Serializable
-data class SubmitFeedbackRequest(val type: String, val content: String, val contact: String? = null, val screenshots: List<String> = emptyList(), val friendNickname: String, val traktUsername: String? = null, val doubanUsername: String? = null, val appVersion: String, val osVersion: String, val deviceModel: String)
+data class SubmitFeedbackRequest(val type: String, val content: String, val contact: String? = null, val screenshots: List<String> = emptyList(), val friendNickname: String, val traktUsername: String? = null, val doubanUsername: String? = null, val appVersion: String, val osVersion: String)
 
 @Serializable
 data class SubmitFeedbackResponse(val id: String, val createdAt: Long, val displayId: String = "")
@@ -74,7 +74,7 @@ data class FeedbackListItem(val id: String, val type: String, val content: Strin
 data class FeedbackDetailResponse(val feedback: FeedbackDetail, val replies: List<FeedbackReply>)
 
 @Serializable
-data class FeedbackDetail(val id: String, val friend_id: String, val friend_nickname: String, val device_id: String? = null, val trakt_username: String? = null, val douban_username: String? = null, val type: String, val content: String, val contact: String? = null, val screenshots: String? = null, val app_version: String, val os_version: String, val device_model: String, val status: String, val created_at: Long, @SerialName("displayId") val display_id: String = "", @SerialName("lastReadAt") val last_read_at: Long = 0)
+data class FeedbackDetail(val id: String, val friend_id: String, val friend_nickname: String, val device_id: String? = null, val trakt_username: String? = null, val douban_username: String? = null, val type: String, val content: String, val contact: String? = null, val screenshots: String? = null, val app_version: String, val os_version: String, val device_model: String = "", val status: String, val created_at: Long, @SerialName("displayId") val display_id: String = "", @SerialName("lastReadAt") val last_read_at: Long = 0)
 
 @Serializable
 data class FeedbackReply(val id: String, val content: String, @SerialName("createdAt") val created_at: Long, @SerialName("authorRole") val author_role: String = "developer", val screenshots: List<String> = emptyList())

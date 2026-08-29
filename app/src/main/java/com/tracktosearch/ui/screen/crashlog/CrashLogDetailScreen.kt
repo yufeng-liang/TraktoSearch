@@ -165,9 +165,6 @@ private fun InfoCard(record: CrashLogRecord) {
             if (record.appVersion.isNotBlank()) {
                 InfoRow(stringResource(R.string.crash_detail_app_version), record.appVersion)
             }
-            if (record.device.isNotBlank()) {
-                InfoRow(stringResource(R.string.crash_detail_device), record.device)
-            }
         }
     }
 }

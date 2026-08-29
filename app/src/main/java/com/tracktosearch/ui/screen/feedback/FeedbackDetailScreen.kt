@@ -341,7 +341,9 @@ private fun OriginalFeedbackCard(feedback: com.tracktosearch.data.remote.feedbac
 
             val appInfo = buildList {
                 add(stringResource(R.string.feedback_app_version, feedback.app_version))
-                add(stringResource(R.string.feedback_device_model, feedback.device_model))
+                if (feedback.device_model.isNotBlank()) {
+                    add(stringResource(R.string.feedback_device_model, feedback.device_model))
+                }
                 feedback.trakt_username?.takeIf { it.isNotBlank() }?.let {
                     add(stringResource(R.string.feedback_trakt_username, it))
                 }

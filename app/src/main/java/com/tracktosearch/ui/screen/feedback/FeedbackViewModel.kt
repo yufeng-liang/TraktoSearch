@@ -260,8 +260,7 @@ class FeedbackViewModel @Inject constructor(
                     traktUsername = traktUsername,
                     doubanUsername = doubanUsername,
                     appVersion = BuildConfig.VERSION_NAME,
-                    osVersion = "${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})",
-                    deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}"
+                    osVersion = "${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})"
                 )
                 result.onSuccess { _submitState.value = SubmitState.Success(it.id) }
                     .onFailure { _submitState.value = SubmitState.Error(it.toUserMessage(context, R.string.feedback_submit_failed)) }

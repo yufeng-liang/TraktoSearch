@@ -12,7 +12,6 @@ data class CrashLogRecord(
     val error: String = "",       // 失败原因（英文，非 UI 展示文案）
     val logContent: String,       // 日志全文快照
     val appVersion: String = "",
-    val device: String = "",
 ) {
     @Serializable
     enum class Status { PENDING, UPLOADING, SUCCESS, FAILED }

@@ -61,8 +61,7 @@ class FeedbackRepositoryTest {
             traktUsername = null,
             doubanUsername = null,
             appVersion = "1.0",
-            osVersion = "14",
-            deviceModel = "Pixel"
+            osVersion = "14"
         )
         assertTrue(result.isSuccess)
         assertEquals("fb1", result.getOrNull()?.id)
@@ -78,7 +77,7 @@ class FeedbackRepositoryTest {
             override suspend fun getDetail(id: String) = error("not used")
         }
         val repo = FeedbackRepository(api, cacheStore)
-        val result = repo.submit("BUG", "test", emptyList(), friendNickname, null, null, "1.0", "14", "Pixel")
+        val result = repo.submit("BUG", "test", emptyList(), friendNickname, null, null, "1.0", "14")
         assertTrue(result.isFailure)
     }
 
