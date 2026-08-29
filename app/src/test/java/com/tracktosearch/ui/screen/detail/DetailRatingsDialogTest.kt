@@ -99,32 +99,20 @@ class DetailRatingsDialogTest {
     }
 
     @Test
-    fun `豆瓣条目没有公开评分时不回退显示MTC`() {
+    fun `metacritic有值时正常显示不依赖豆瓣条目标记`() {
         composeRule.setContent {
             MaterialTheme {
                 RatingsRow(
                     MultiRatings(
                         metacritic = "88%"
-                    ),
-                    isDoubanItem = true
+                    )
                 )
             }
         }
 
         val context = ApplicationProvider.getApplicationContext<Context>()
-        listOf(
-            R.string.detail_info_imdb_rating,
-            R.string.detail_info_douban_rating,
-            R.string.detail_info_tmdb_rating,
-            R.string.detail_info_rotten_tomatoes_rating
-        ).forEach { resourceId ->
-            composeRule.onNodeWithText(context.getString(resourceId)).assertIsDisplayed()
-        }
-        assertThat(
-            composeRule.onAllNodesWithText("—").fetchSemanticsNodes()
-        ).hasSize(4)
-        assertThat(composeRule.onAllNodesWithText("MTC").fetchSemanticsNodes()).isEmpty()
-        assertThat(composeRule.onAllNodesWithText("88%").fetchSemanticsNodes()).isEmpty()
+        composeRule.onNodeWithText(context.getString(R.string.detail_info_metacritic_rating)).assertIsDisplayed()
+        assertThat(composeRule.onAllNodesWithText("88%").fetchSemanticsNodes()).isNotEmpty()
     }
 
     @Test

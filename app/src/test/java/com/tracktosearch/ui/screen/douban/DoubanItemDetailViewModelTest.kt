@@ -57,7 +57,6 @@ class DoubanItemDetailViewModelTest {
         every { authStorage.getCredentials() } returns null
 
         viewModel = DoubanItemDetailViewModel(
-            context,
             retryManager,
             syncManager,
             resourceRepository,
