@@ -27,10 +27,24 @@ data class SplashQuote(
     val posterPath: String,
     /** 是否随 APK 内置了海报：随包的 5 条保证首次安装当天就有画面 */
     val bundled: Boolean = false,
+    /**
+     * 台词是否以英文原文示人。
+     *
+     * 只打在英语原片、且原句本身就是英文世界会引用的名句上：
+     * 「like tears in rain」译成中文再准，也丢了原句的音节。
+     */
+    val preferOriginal: Boolean = false,
     /** 语言标签（en/zh/ja/ko）到逐行台词的映射 */
     val lines: Map<String, List<String>>,
     /** 语言标签到片名的映射，用于破折号后的出处标注 */
     val title: Map<String, String>,
+    /**
+     * 语言标签到日签关键词的映射。
+     *
+     * 关键词参照整部片的主旨提炼，不取自台词原文；中文限 2–4 字以便刻进方形印章，
+     * 其余语言不限长度。
+     */
+    val keyword: Map<String, String> = emptyMap(),
 ) {
     /** 按语言取台词行，缺失语言回落英文 */
     fun linesFor(lang: String): List<String> =
@@ -39,6 +53,18 @@ data class SplashQuote(
     /** 按语言取片名，缺失语言回落英文 */
     fun titleFor(lang: String): String =
         title[lang] ?: title[FALLBACK_LANG] ?: id
+
+    /** 按语言取关键词，缺失语言回落英文 */
+    fun keywordFor(lang: String): String =
+        keyword[lang] ?: keyword[FALLBACK_LANG] ?: ""
+
+    /**
+     * 台词实际渲染用的语言。
+     *
+     * [preferOriginal] 的条目一律走英文；片名不跟着切，界面语言下的片名才认得出是哪部片。
+     */
+    fun lineLang(lang: String): String =
+        if (preferOriginal) FALLBACK_LANG else lang
 
     companion object {
         const val FALLBACK_LANG = "en"

@@ -29,7 +29,9 @@ class SplashQuoteLoader @Inject constructor(
         try {
             val quote = repository.todayQuote() ?: return@withContext null
             val lang = resolveLang(language)
-            val lines = quote.linesFor(lang)
+            // 台词可能走英文原文，片名始终跟界面语言：混排时片名才认得出是哪部片
+            val lineLang = quote.lineLang(lang)
+            val lines = quote.linesFor(lineLang)
             if (lines.isEmpty()) return@withContext null
             val bytes = posterStore.readBytes(quote) ?: return@withContext null
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
@@ -41,7 +43,7 @@ class SplashQuoteLoader @Inject constructor(
                 title = quote.titleFor(lang),
                 year = quote.year,
                 poster = bitmap.asImageBitmap(),
-                isEnglish = lang == SplashQuote.FALLBACK_LANG,
+                isEnglish = lineLang == SplashQuote.FALLBACK_LANG,
                 titleWrap = titleWrap(lang),
             )
         } catch (e: Exception) {

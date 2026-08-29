@@ -7,6 +7,7 @@
       "tmdbId": 289,
       "posterPath": "/lGCEKlJo2CnWydQj7aamY7s1S7Q.jpg",
       "bundled": true,
+      "preferOriginal": true,
       "lines": {
         "en": ["Here's looking at you, kid."],
         "zh": ["为你的眼睛干杯。"],
@@ -18,6 +19,12 @@
         "zh": "卡萨布兰卡",
         "ja": "カサブランカ",
         "ko": "카사블랑카"
+      },
+      "keyword": {
+        "en": "Farewell",
+        "zh": "惜别",
+        "ja": "惜別",
+        "ko": "석별"
       }
     },
     {
@@ -26,6 +33,7 @@
       "tmdbId": 278,
       "posterPath": "/9cqNxx0GxF0bflZmeSMuL5tnGzr.jpg",
       "bundled": true,
+      "preferOriginal": true,
       "lines": {
         "en": ["Hope is a good thing,", "maybe the best of things.", "And no good thing ever dies."],
         "zh": ["希望是好东西，", "也许是世上最好的东西。", "好东西从来不会消失。"],
@@ -37,6 +45,12 @@
         "zh": "肖申克的救赎",
         "ja": "ショーシャンクの空に",
         "ko": "쇼생크 탈출"
+      },
+      "keyword": {
+        "en": "Glimmer",
+        "zh": "微光",
+        "ja": "微光",
+        "ko": "희미한 빛"
       }
     },
     {
@@ -56,6 +70,12 @@
         "zh": "霸王别姬",
         "ja": "さらば、わが愛／覇王別姫",
         "ko": "패왕별희"
+      },
+      "keyword": {
+        "en": "Wedded to the Stage",
+        "zh": "殉戏",
+        "ja": "芝居に殉ず",
+        "ko": "무대에 바친 생"
       }
     },
     {
@@ -64,6 +84,7 @@
       "tmdbId": 78,
       "posterPath": "/63N9uy8nd9j7Eog2axPQ8lbr3Wj.jpg",
       "bundled": true,
+      "preferOriginal": true,
       "lines": {
         "en": ["All those moments", "will be lost in time,", "like tears in rain."],
         "zh": ["所有这些瞬间", "都将消失在时光中，", "一如雨中的泪水。"],
@@ -75,6 +96,12 @@
         "zh": "银翼杀手",
         "ja": "ブレードランナー",
         "ko": "블레이드 러너"
+      },
+      "keyword": {
+        "en": "Transience",
+        "zh": "消散",
+        "ja": "泡沫",
+        "ko": "덧없음"
       }
     },
     {
@@ -94,6 +121,12 @@
         "zh": "重庆森林",
         "ja": "恋する惑星",
         "ko": "중경삼림"
+      },
+      "keyword": {
+        "en": "Brushing Past",
+        "zh": "擦肩",
+        "ja": "すれ違い",
+        "ko": "스침"
       }
     },
     {
@@ -102,6 +135,7 @@
       "tmdbId": 13,
       "posterPath": "/Cw4hIUIAmSYfK9QfaUW5igp9La.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Life was like", "a box of chocolates.", "You never know what", "you're gonna get."],
         "zh": ["生命就像一盒巧克力，", "你永远不知道", "下一颗是什么味道。"],
@@ -113,6 +147,12 @@
         "zh": "阿甘正传",
         "ja": "フォレスト・ガンプ",
         "ko": "포레스트 검프"
+      },
+      "keyword": {
+        "en": "The Innocent",
+        "zh": "赤子",
+        "ja": "無垢",
+        "ko": "순수"
       }
     },
     {
@@ -132,6 +172,12 @@
         "zh": "千与千寻",
         "ja": "千と千尋の神隠し",
         "ko": "센과 치히로의 행방불명"
+      },
+      "keyword": {
+        "en": "One's True Name",
+        "zh": "本名",
+        "ja": "本当の名",
+        "ko": "본디 이름"
       }
     },
     {
@@ -151,6 +197,12 @@
         "zh": "暖暖内含光",
         "ja": "エターナル・サンシャイン",
         "ko": "이터널 션샤인"
+      },
+      "keyword": {
+        "en": "What Remains",
+        "zh": "余情",
+        "ja": "余情",
+        "ko": "남은 마음"
       }
     },
     {
@@ -170,6 +222,12 @@
         "zh": "星际穿越",
         "ja": "インターステラー",
         "ko": "인터스텔라"
+      },
+      "keyword": {
+        "en": "Gravity",
+        "zh": "引力",
+        "ja": "引力",
+        "ko": "끌림"
       }
     },
     {
@@ -189,6 +247,12 @@
         "zh": "寄生虫",
         "ja": "パラサイト 半地下の家族",
         "ko": "기생충"
+      },
+      "keyword": {
+        "en": "The Smell",
+        "zh": "气味",
+        "ja": "匂い",
+        "ko": "냄새"
       }
     },
     {
@@ -197,6 +261,7 @@
       "tmdbId": 238,
       "posterPath": "/3bhkrj58Vtu7enYsRolD1fZdja1.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I'm gonna make him", "an offer he can't refuse."],
         "zh": ["我会给他一个", "无法拒绝的条件。"],
@@ -208,6 +273,12 @@
         "zh": "教父",
         "ja": "ゴッドファーザー",
         "ko": "대부"
+      },
+      "keyword": {
+        "en": "The Family",
+        "zh": "家门",
+        "ja": "家門",
+        "ko": "가문"
       }
     },
     {
@@ -216,6 +287,7 @@
       "tmdbId": 770,
       "posterPath": "/lNz2Ow0wGCAvzckW7EOjE03KcYv.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["After all,", "tomorrow is another day."],
         "zh": ["毕竟，", "明天又是新的一天。"],
@@ -227,6 +299,12 @@
         "zh": "乱世佳人",
         "ja": "風と共に去りぬ",
         "ko": "바람과 함께 사라지다"
+      },
+      "keyword": {
+        "en": "Tomorrow",
+        "zh": "明日",
+        "ja": "明日",
+        "ko": "내일"
       }
     },
     {
@@ -235,6 +313,7 @@
       "tmdbId": 630,
       "posterPath": "/uCC3j4pV9eOZwzDUWp2ilbcTf1f.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["There's no place like home."],
         "zh": ["没有一个地方", "比家更好。"],
@@ -246,6 +325,12 @@
         "zh": "绿野仙踪",
         "ja": "オズの魔法使",
         "ko": "오즈의 마법사"
+      },
+      "keyword": {
+        "en": "Home",
+        "zh": "归处",
+        "ja": "帰る場所",
+        "ko": "돌아갈 곳"
       }
     },
     {
@@ -254,6 +339,7 @@
       "tmdbId": 11,
       "posterPath": "/fai0rspsNeJCS69wHNjOdWxcI7P.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Your eyes can deceive you.", "Don't trust them."],
         "zh": ["你的眼睛会骗你。", "不要相信它们。"],
@@ -265,6 +351,12 @@
         "zh": "星球大战",
         "ja": "スター・ウォーズ",
         "ko": "스타워즈"
+      },
+      "keyword": {
+        "en": "The Inner Eye",
+        "zh": "心眼",
+        "ja": "心の目",
+        "ko": "마음의 눈"
       }
     },
     {
@@ -273,6 +365,7 @@
       "tmdbId": 103,
       "posterPath": "/ekstpH614fwDX8DUln1a2Opz0N8.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I am", "God's lonely man."],
         "zh": ["我是", "上帝的孤独者。"],
@@ -284,6 +377,12 @@
         "zh": "出租车司机",
         "ja": "タクシードライバー",
         "ko": "택시 드라이버"
+      },
+      "keyword": {
+        "en": "Night Drive",
+        "zh": "夜行",
+        "ja": "夜行",
+        "ko": "밤길"
       }
     },
     {
@@ -292,6 +391,7 @@
       "tmdbId": 601,
       "posterPath": "/an0nD6uq6byfxXCfk6lQBzdL2J1.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I'll be", "right here."],
         "zh": ["我会一直", "在这里。"],
@@ -303,6 +403,12 @@
         "zh": "E.T. 外星人",
         "ja": "E.T.",
         "ko": "E.T."
+      },
+      "keyword": {
+        "en": "Fingertip",
+        "zh": "指尖",
+        "ja": "指先",
+        "ko": "손끝"
       }
     },
     {
@@ -311,6 +417,7 @@
       "tmdbId": 105,
       "posterPath": "/vN5B5WgYscRGcQpVhHl6p9DDTP0.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Roads?", "Where we're going,", "we don't need roads."],
         "zh": ["公路？", "我们要去的地方", "不需要公路。"],
@@ -322,6 +429,12 @@
         "zh": "回到未来",
         "ja": "バック・トゥ・ザ・フューチャー",
         "ko": "백 투 더 퓨처"
+      },
+      "keyword": {
+        "en": "Airborne",
+        "zh": "腾空",
+        "ja": "飛翔",
+        "ko": "비상"
       }
     },
     {
@@ -330,6 +443,7 @@
       "tmdbId": 207,
       "posterPath": "/tNvKkSnnn4Z6RCBThyK1gfCSSvv.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Carpe diem.", "Seize the day, boys."],
         "zh": ["把握当下吧，", "孩子们。"],
@@ -341,6 +455,12 @@
         "zh": "死亡诗社",
         "ja": "いまを生きる",
         "ko": "죽은 시인의 사회"
+      },
+      "keyword": {
+        "en": "A Poet's Heart",
+        "zh": "诗心",
+        "ja": "詩心",
+        "ko": "시심"
       }
     },
     {
@@ -349,6 +469,7 @@
       "tmdbId": 280,
       "posterPath": "/jFTVD4XoWQTcg7wdyJKa8PEds5q.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["There is no fate", "but what we make", "for ourselves."],
         "zh": ["没有命运，", "只有我们自己", "造就的未来。"],
@@ -360,6 +481,12 @@
         "zh": "终结者2：审判日",
         "ja": "ターミネーター2",
         "ko": "터미네이터 2"
+      },
+      "keyword": {
+        "en": "Self-Made Fate",
+        "zh": "造命",
+        "ja": "自ら作る運命",
+        "ko": "스스로 만드는 운명"
       }
     },
     {
@@ -368,6 +495,7 @@
       "tmdbId": 329,
       "posterPath": "/63viWuPfYQjRYLSZSZNq7dglJP5.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Life, uh...", "finds a way."],
         "zh": ["生命…", "总会找到出路。"],
@@ -379,6 +507,12 @@
         "zh": "侏罗纪公园",
         "ja": "ジュラシック・パーク",
         "ko": "쥬라기 공원"
+      },
+      "keyword": {
+        "en": "Life's Way",
+        "zh": "生路",
+        "ja": "活路",
+        "ko": "살길"
       }
     },
     {
@@ -387,6 +521,7 @@
       "tmdbId": 424,
       "posterPath": "/sF1U4EUQS8YHUYjNl3pMGNIQyr0.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Whoever saves one life", "saves the world entire."],
         "zh": ["救一人，", "即是救全世界。"],
@@ -398,6 +533,12 @@
         "zh": "辛德勒的名单",
         "ja": "シンドラーのリスト",
         "ko": "쉰들러 리스트"
+      },
+      "keyword": {
+        "en": "The Names",
+        "zh": "存名",
+        "ja": "名を刻む",
+        "ko": "이름을 남기다"
       }
     },
     {
@@ -406,6 +547,7 @@
       "tmdbId": 8587,
       "posterPath": "/sKCr78MXSLixwmZ8DyJLrpMsd15.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Remember who you are."],
         "zh": ["记住你是谁。"],
@@ -417,6 +559,12 @@
         "zh": "狮子王",
         "ja": "ライオン・キング",
         "ko": "라이온 킹"
+      },
+      "keyword": {
+        "en": "Rightful Place",
+        "zh": "归位",
+        "ja": "己の座",
+        "ko": "제자리"
       }
     },
     {
@@ -436,6 +584,12 @@
         "zh": "这个杀手不太冷",
         "ja": "レオン",
         "ko": "레옹"
+      },
+      "keyword": {
+        "en": "Someone to Lean On",
+        "zh": "相依",
+        "ja": "寄る辺",
+        "ko": "기댈 곳"
       }
     },
     {
@@ -444,6 +598,7 @@
       "tmdbId": 597,
       "posterPath": "/9xjZS2rlVxm8SFx8kPC3aIGCOYQ.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["You jump, I jump.", "Right?"],
         "zh": ["你跳，我也跳。", "记得吗？"],
@@ -455,6 +610,12 @@
         "zh": "泰坦尼克号",
         "ja": "タイタニック",
         "ko": "타이타닉"
+      },
+      "keyword": {
+        "en": "A Vow at Sea",
+        "zh": "海誓",
+        "ja": "海の誓い",
+        "ko": "바다의 맹세"
       }
     },
     {
@@ -463,6 +624,7 @@
       "tmdbId": 489,
       "posterPath": "/j9Z7P7BGHXn0I0uPiiyalC6efwe.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["It's not your fault."],
         "zh": ["这不是你的错。"],
@@ -474,6 +636,12 @@
         "zh": "心灵捕手",
         "ja": "グッド・ウィル・ハンティング",
         "ko": "굿 윌 헌팅"
+      },
+      "keyword": {
+        "en": "No Blame",
+        "zh": "无咎",
+        "ja": "咎なし",
+        "ko": "허물없음"
       }
     },
     {
@@ -482,6 +650,7 @@
       "tmdbId": 37165,
       "posterPath": "/vuza0WqY239yBXOadKlGwJsZJFE.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Good morning,", "and in case I don't see you:", "good afternoon, good evening,", "and good night."],
         "zh": ["早上好。", "万一见不到你，", "那就午安、晚上好，", "还有晚安。"],
@@ -493,6 +662,12 @@
         "zh": "楚门的世界",
         "ja": "トゥルーマン・ショー",
         "ko": "트루먼 쇼"
+      },
+      "keyword": {
+        "en": "Beyond the Door",
+        "zh": "门外",
+        "ja": "扉の外",
+        "ko": "문 밖"
       }
     },
     {
@@ -501,6 +676,7 @@
       "tmdbId": 603,
       "posterPath": "/dXNAPwY7VrqMAo51EKhhCJfaGb5.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Free your mind."],
         "zh": ["解放你的思想。"],
@@ -512,6 +688,12 @@
         "zh": "黑客帝国",
         "ja": "マトリックス",
         "ko": "매트릭스"
+      },
+      "keyword": {
+        "en": "Unbound",
+        "zh": "解缚",
+        "ja": "解き放たれる",
+        "ko": "풀려남"
       }
     },
     {
@@ -520,6 +702,7 @@
       "tmdbId": 98,
       "posterPath": "/wN2xWp1eIwCKOD0BHTcErTBv1Uq.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["What we do in life", "echoes in eternity."],
         "zh": ["我们此生的作为，", "会在永恒中回响。"],
@@ -531,6 +714,12 @@
         "zh": "角斗士",
         "ja": "グラディエーター",
         "ko": "글래디에이터"
+      },
+      "keyword": {
+        "en": "Echo",
+        "zh": "回响",
+        "ja": "響き",
+        "ko": "울림"
       }
     },
     {
@@ -539,6 +728,7 @@
       "tmdbId": 120,
       "posterPath": "/6oom5QYQ2yQTMJIbnvbkBL9cHo6.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["All we have to decide", "is what to do with the time", "that is given us."],
         "zh": ["我们唯一要决定的，", "是如何度过", "被赐予的时光。"],
@@ -550,6 +740,12 @@
         "zh": "指环王：护戒使者",
         "ja": "ロード・オブ・ザ・リング",
         "ko": "반지의 제왕: 반지 원정대"
+      },
+      "keyword": {
+        "en": "Fellowship",
+        "zh": "同行",
+        "ja": "同行",
+        "ko": "동행"
       }
     },
     {
@@ -558,6 +754,7 @@
       "tmdbId": 12,
       "posterPath": "/eHuGQ10FUzK1mdOY69wF5pGgEf5.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Just keep swimming."],
         "zh": ["一直游，一直游。"],
@@ -569,6 +766,12 @@
         "zh": "海底总动员",
         "ja": "ファインディング・ニモ",
         "ko": "니모를 찾아서"
+      },
+      "keyword": {
+        "en": "The Long Swim",
+        "zh": "洄游",
+        "ja": "回遊",
+        "ko": "헤엄"
       }
     },
     {
@@ -577,6 +780,7 @@
       "tmdbId": 155,
       "posterPath": "/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["You either die a hero,", "or you live long enough", "to see yourself", "become the villain."],
         "zh": ["你要么作为英雄死去，", "要么活得够久，", "亲眼看自己", "变成恶人。"],
@@ -588,6 +792,12 @@
         "zh": "蝙蝠侠：黑暗骑士",
         "ja": "ダークナイト",
         "ko": "다크 나이트"
+      },
+      "keyword": {
+        "en": "Bearing the Blame",
+        "zh": "负名",
+        "ja": "汚名を負う",
+        "ko": "오명을 지다"
       }
     },
     {
@@ -596,6 +806,7 @@
       "tmdbId": 14160,
       "posterPath": "/mFvoEwSfLqbcWwFsDjQebn9bzFe.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Adventure is out there!"],
         "zh": ["冒险就在外面！"],
@@ -607,6 +818,12 @@
         "zh": "飞屋环游记",
         "ja": "カールじいさんの空飛ぶ家",
         "ko": "업"
+      },
+      "keyword": {
+        "en": "The Journey Out",
+        "zh": "远行",
+        "ja": "遠出",
+        "ko": "먼 길"
       }
     },
     {
@@ -615,6 +832,7 @@
       "tmdbId": 27205,
       "posterPath": "/xlaY2zyzMfkhk0HSC5VUwzoZPU1.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["You mustn't be afraid", "to dream a little bigger,", "darling."],
         "zh": ["亲爱的，", "别怕把梦", "做得更大一点。"],
@@ -626,6 +844,12 @@
         "zh": "盗梦空间",
         "ja": "インセプション",
         "ko": "인셉션"
+      },
+      "keyword": {
+        "en": "Building Dreams",
+        "zh": "造梦",
+        "ja": "夢を築く",
+        "ko": "꿈을 짓다"
       }
     },
     {
@@ -634,6 +858,7 @@
       "tmdbId": 313369,
       "posterPath": "/uDO8zWDhfWwoFdKS4fzkUJt0Rf0.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Here's to the ones", "who dream,", "foolish as they may seem."],
         "zh": ["敬那些做梦的人，", "哪怕看起来很傻。"],
@@ -645,6 +870,12 @@
         "zh": "爱乐之城",
         "ja": "ラ・ラ・ランド",
         "ko": "라라랜드"
+      },
+      "keyword": {
+        "en": "Chasing the Dream",
+        "zh": "追梦",
+        "ja": "夢を追う",
+        "ko": "꿈을 좇다"
       }
     },
     {
@@ -653,6 +884,7 @@
       "tmdbId": 329865,
       "posterPath": "/pEzNVQfdzYDzVK0XqxERIw2x2se.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["If you could see", "your whole life", "from start to finish,", "would you change things?"],
         "zh": ["如果你能看见", "自己的一生，", "你会改变什么吗？"],
@@ -664,6 +896,12 @@
         "zh": "降临",
         "ja": "メッセージ",
         "ko": "컨택트"
+      },
+      "keyword": {
+        "en": "Knowing",
+        "zh": "知命",
+        "ja": "命を知る",
+        "ko": "운명을 알다"
       }
     },
     {
@@ -672,6 +910,7 @@
       "tmdbId": 914,
       "posterPath": "/nhMXB8GTdswYMCL9nepDZymJCOr.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["We all want", "to help one another.", "Human beings are like that."],
         "zh": ["我们都想彼此帮助，", "人本来就是这样的。"],
@@ -683,6 +922,12 @@
         "zh": "大独裁者",
         "ja": "独裁者",
         "ko": "위대한 독재자"
+      },
+      "keyword": {
+        "en": "One Another",
+        "zh": "相扶",
+        "ja": "支え合い",
+        "ko": "서로 돕기"
       }
     },
     {
@@ -702,6 +947,12 @@
         "zh": "花样年华",
         "ja": "花様年華",
         "ko": "화양연화"
+      },
+      "keyword": {
+        "en": "One More Ticket",
+        "zh": "船票",
+        "ja": "もう一枚の切符",
+        "ko": "한 장의 표"
       }
     },
     {
@@ -721,6 +972,12 @@
         "zh": "大话西游之大圣娶亲",
         "ja": "チャイニーズ・オデッセイ",
         "ko": "서유기: 선리기연"
+      },
+      "keyword": {
+        "en": "Too Late",
+        "zh": "追悔",
+        "ja": "悔い",
+        "ko": "후회"
       }
     },
     {
@@ -740,6 +997,12 @@
         "zh": "卧虎藏龙",
         "ja": "グリーン・デスティニー",
         "ko": "와호장룡"
+      },
+      "keyword": {
+        "en": "Letting Go",
+        "zh": "舍得",
+        "ja": "手放す",
+        "ko": "놓아주기"
       }
     },
     {
@@ -759,6 +1022,12 @@
         "zh": "活着",
         "ja": "活きる",
         "ko": "인생"
+      },
+      "keyword": {
+        "en": "Surviving",
+        "zh": "苟全",
+        "ja": "生き延びる",
+        "ko": "살아남기"
       }
     },
     {
@@ -778,6 +1047,12 @@
         "zh": "一代宗师",
         "ja": "グランド・マスター",
         "ko": "일대종사"
+      },
+      "keyword": {
+        "en": "Constancy",
+        "zh": "念念",
+        "ja": "念々",
+        "ko": "한결같은 마음"
       }
     },
     {
@@ -797,6 +1072,12 @@
         "zh": "阿飞正传",
         "ja": "欲望の翼",
         "ko": "아비정전"
+      },
+      "keyword": {
+        "en": "One Minute",
+        "zh": "一分钟",
+        "ja": "一分間",
+        "ko": "1분"
       }
     },
     {
@@ -816,6 +1097,12 @@
         "zh": "英雄",
         "ja": "HERO",
         "ko": "영웅"
+      },
+      "keyword": {
+        "en": "Laying Down the Sword",
+        "zh": "止戈",
+        "ja": "剣を収める",
+        "ko": "칼을 거두다"
       }
     },
     {
@@ -835,6 +1122,12 @@
         "zh": "喜剧之王",
         "ja": "喜劇王",
         "ko": "희극지왕"
+      },
+      "keyword": {
+        "en": "One's Own Worth",
+        "zh": "自许",
+        "ja": "自負",
+        "ko": "자부"
       }
     },
     {
@@ -854,6 +1147,12 @@
         "zh": "一一",
         "ja": "ヤンヤン 夏の想い出",
         "ko": "하나 그리고 둘"
+      },
+      "keyword": {
+        "en": "The Other Half",
+        "zh": "半面",
+        "ja": "見えない半分",
+        "ko": "보이지 않는 반쪽"
       }
     },
     {
@@ -873,6 +1172,12 @@
         "zh": "无间道",
         "ja": "インファナル・アフェア",
         "ko": "무간도"
+      },
+      "keyword": {
+        "en": "In Between",
+        "zh": "无间",
+        "ja": "無間",
+        "ko": "무간"
       }
     },
     {
@@ -892,6 +1197,12 @@
         "zh": "龙猫",
         "ja": "となりのトトロ",
         "ko": "이웃집 토토로"
+      },
+      "keyword": {
+        "en": "A Laugh",
+        "zh": "一笑",
+        "ja": "笑い一つ",
+        "ko": "한 번의 웃음"
       }
     },
     {
@@ -911,6 +1222,12 @@
         "zh": "哈尔的移动城堡",
         "ja": "ハウルの動く城",
         "ko": "하울의 움직이는 성"
+      },
+      "keyword": {
+        "en": "Composure",
+        "zh": "从容",
+        "ja": "泰然",
+        "ko": "태연"
       }
     },
     {
@@ -930,6 +1247,12 @@
         "zh": "幽灵公主",
         "ja": "もののけ姫",
         "ko": "모노노케 히메"
+      },
+      "keyword": {
+        "en": "Coexistence",
+        "zh": "共生",
+        "ja": "共生",
+        "ko": "공생"
       }
     },
     {
@@ -949,6 +1272,12 @@
         "zh": "魔女宅急便",
         "ja": "魔女の宅急便",
         "ko": "마녀 배달부 키키"
+      },
+      "keyword": {
+        "en": "Leaving the Nest",
+        "zh": "离巢",
+        "ja": "巣立ち",
+        "ko": "홀로서기"
       }
     },
     {
@@ -968,6 +1297,12 @@
         "zh": "天空之城",
         "ja": "天空の城ラピュタ",
         "ko": "천공의 성 라퓨타"
+      },
+      "keyword": {
+        "en": "Rooted",
+        "zh": "扎根",
+        "ja": "大地に根を",
+        "ko": "뿌리내림"
       }
     },
     {
@@ -987,6 +1322,12 @@
         "zh": "萤火虫之墓",
         "ja": "火垂るの墓",
         "ko": "반딧불이의 묘"
+      },
+      "keyword": {
+        "en": "Fireflies",
+        "zh": "萤火",
+        "ja": "螢火",
+        "ko": "반딧불"
       }
     },
     {
@@ -1006,6 +1347,12 @@
         "zh": "你的名字。",
         "ja": "君の名は。",
         "ko": "너의 이름은."
+      },
+      "keyword": {
+        "en": "Searching",
+        "zh": "相寻",
+        "ja": "探し合う",
+        "ko": "서로 찾다"
       }
     },
     {
@@ -1025,6 +1372,12 @@
         "zh": "入殓师",
         "ja": "おくりびと",
         "ko": "굿 바이"
+      },
+      "keyword": {
+        "en": "The Ferryman",
+        "zh": "摆渡",
+        "ja": "送り人",
+        "ko": "보내는 이"
       }
     },
     {
@@ -1044,6 +1397,12 @@
         "zh": "情书",
         "ja": "ラヴレター",
         "ko": "러브레터"
+      },
+      "keyword": {
+        "en": "A Greeting",
+        "zh": "问安",
+        "ja": "お元気ですか",
+        "ko": "안녕하신가요"
       }
     },
     {
@@ -1063,6 +1422,12 @@
         "zh": "小偷家族",
         "ja": "万引き家族",
         "ko": "어느 가족"
+      },
+      "keyword": {
+        "en": "Chosen Family",
+        "zh": "结缘",
+        "ja": "縁を結ぶ",
+        "ko": "인연을 맺다"
       }
     },
     {
@@ -1082,6 +1447,12 @@
         "zh": "完美的日子",
         "ja": "PERFECT DAYS",
         "ko": "퍼펙트 데이즈"
+      },
+      "keyword": {
+        "en": "Every Day",
+        "zh": "日日",
+        "ja": "日日是好日",
+        "ko": "하루하루"
       }
     },
     {
@@ -1101,6 +1472,12 @@
         "zh": "老男孩",
         "ja": "オールド・ボーイ",
         "ko": "올드보이"
+      },
+      "keyword": {
+        "en": "Old Grudge",
+        "zh": "宿怨",
+        "ja": "宿怨",
+        "ko": "묵은 원한"
       }
     },
     {
@@ -1120,6 +1497,12 @@
         "zh": "我的野蛮女友",
         "ja": "猟奇的な彼女",
         "ko": "엽기적인 그녀"
+      },
+      "keyword": {
+        "en": "The Bridge",
+        "zh": "架桥",
+        "ja": "橋を架ける",
+        "ko": "다리를 놓다"
       }
     },
     {
@@ -1139,6 +1522,12 @@
         "zh": "八月照相馆",
         "ja": "八月のクリスマス",
         "ko": "8월의 크리스마스"
+      },
+      "keyword": {
+        "en": "Keepsake",
+        "zh": "留影",
+        "ja": "面影",
+        "ko": "남은 사진"
       }
     },
     {
@@ -1158,6 +1547,12 @@
         "zh": "春逝",
         "ja": "春の日は過ぎゆく",
         "ko": "봄날은 간다"
+      },
+      "keyword": {
+        "en": "Impermanence",
+        "zh": "无常",
+        "ja": "無常",
+        "ko": "무상"
       }
     },
     {
@@ -1177,6 +1572,12 @@
         "zh": "过往人生",
         "ja": "パスト ライブス／再会",
         "ko": "패스트 라이브즈"
+      },
+      "keyword": {
+        "en": "Providence",
+        "zh": "因缘",
+        "ja": "因縁",
+        "ko": "인연"
       }
     },
     {
@@ -1196,6 +1597,12 @@
         "zh": "天堂电影院",
         "ja": "ニュー・シネマ・パラダイス",
         "ko": "시네마 천국"
+      },
+      "keyword": {
+        "en": "Nostalgia",
+        "zh": "乡愁",
+        "ja": "郷愁",
+        "ko": "향수"
       }
     },
     {
@@ -1215,6 +1622,12 @@
         "zh": "美丽人生",
         "ja": "ライフ・イズ・ビューティフル",
         "ko": "인생은 아름다워"
+      },
+      "keyword": {
+        "en": "A Father's Shelter",
+        "zh": "父荫",
+        "ja": "父の傘",
+        "ko": "아버지의 그늘"
       }
     },
     {
@@ -1234,6 +1647,12 @@
         "zh": "天使爱美丽",
         "ja": "アメリ",
         "ko": "아멜리에"
+      },
+      "keyword": {
+        "en": "Small Kindnesses",
+        "zh": "小善",
+        "ja": "小さな善",
+        "ko": "작은 선의"
       }
     },
     {
@@ -1253,6 +1672,12 @@
         "zh": "海上钢琴师",
         "ja": "海の上のピアニスト",
         "ko": "피아니스트의 전설"
+      },
+      "keyword": {
+        "en": "The Finite",
+        "zh": "有涯",
+        "ja": "限りあるもの",
+        "ko": "유한"
       }
     },
     {
@@ -1272,6 +1697,12 @@
         "zh": "三傻大闹宝莱坞",
         "ja": "きっと、うまくいく",
         "ko": "세 얼간이"
+      },
+      "keyword": {
+        "en": "All Is Well",
+        "zh": "宽心",
+        "ja": "万事順調",
+        "ko": "다 잘될 거야"
       }
     },
     {
@@ -1280,6 +1711,7 @@
       "tmdbId": 1585,
       "posterPath": "/bSqt9rhDZx1Q7UZ86dBPKdNomp2.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["No man is a failure", "who has friends."],
         "zh": ["有朋友的人，", "不算失败。"],
@@ -1291,6 +1723,12 @@
         "zh": "生活多美好",
         "ja": "素晴らしき哉、人生！",
         "ko": "멋진 인생"
+      },
+      "keyword": {
+        "en": "Rich in Friends",
+        "zh": "有邻",
+        "ja": "隣人あり",
+        "ko": "이웃이 있다"
       }
     },
     {
@@ -1299,6 +1737,7 @@
       "tmdbId": 599,
       "posterPath": "/zt8aQ6ksqK6p1AopC5zVTDS9pKT.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I am big.", "It's the pictures", "that got small."],
         "zh": ["我还是大明星，", "是电影变小了。"],
@@ -1310,6 +1749,12 @@
         "zh": "日落大道",
         "ja": "サンセット大通り",
         "ko": "선셋 대로"
+      },
+      "keyword": {
+        "en": "Faded Glory",
+        "zh": "虚火",
+        "ja": "残り火",
+        "ko": "사그라든 불"
       }
     },
     {
@@ -1318,6 +1763,7 @@
       "tmdbId": 705,
       "posterPath": "/blBzZaatPWVuWpXEnPscMA4Xp6m.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Fasten your seatbelts.", "It's going to be", "a bumpy night."],
         "zh": ["系好安全带，", "今晚会很颠簸。"],
@@ -1329,6 +1775,12 @@
         "zh": "彗星美人",
         "ja": "イヴの総て",
         "ko": "이브의 모든 것"
+      },
+      "keyword": {
+        "en": "The Next Wave",
+        "zh": "后浪",
+        "ja": "新しい波",
+        "ko": "뒷물결"
       }
     },
     {
@@ -1337,6 +1789,7 @@
       "tmdbId": 872,
       "posterPath": "/w03EiJVHP8Un77boQeE7hg9DVdU.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Dignity.", "Always dignity."],
         "zh": ["尊严，", "永远要有尊严。"],
@@ -1348,6 +1801,12 @@
         "zh": "雨中曲",
         "ja": "雨に唄えば",
         "ko": "사랑은 비를 타고"
+      },
+      "keyword": {
+        "en": "Dignity",
+        "zh": "尊严",
+        "ja": "品位",
+        "ko": "품위"
       }
     },
     {
@@ -1356,6 +1815,7 @@
       "tmdbId": 804,
       "posterPath": "/8lI9dmz1RH20FAqltkGelY1v4BE.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I will cherish my visit here", "in memory,", "as long as I live."],
         "zh": ["我会把这段时光", "珍藏在记忆里，", "只要我还活着。"],
@@ -1367,6 +1827,12 @@
         "zh": "罗马假日",
         "ja": "ローマの休日",
         "ko": "로마의 휴일"
+      },
+      "keyword": {
+        "en": "A Day to Keep",
+        "zh": "旧游",
+        "ja": "思い出の日",
+        "ko": "간직할 하루"
       }
     },
     {
@@ -1386,6 +1852,12 @@
         "zh": "迷魂记",
         "ja": "めまい",
         "ko": "현기증"
+      },
+      "keyword": {
+        "en": "Obsession",
+        "zh": "执念",
+        "ja": "執念",
+        "ko": "집념"
       }
     },
     {
@@ -1394,6 +1866,7 @@
       "tmdbId": 539,
       "posterPath": "/yz4QVqPx3h1hD1DfqqQkCq3rmxW.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["We all go a little mad", "sometimes."],
         "zh": ["我们都有", "发疯的时候。"],
@@ -1405,6 +1878,12 @@
         "zh": "惊魂记",
         "ja": "サイコ",
         "ko": "싸이코"
+      },
+      "keyword": {
+        "en": "The Inner Demon",
+        "zh": "心魔",
+        "ja": "心の魔",
+        "ko": "내면의 광기"
       }
     },
     {
@@ -1413,6 +1892,7 @@
       "tmdbId": 1725,
       "posterPath": "/nzCMu6D5q60i2bVrIQ0DxlRSgCZ.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Make of our lives one life."],
         "zh": ["把我们的两条命，", "活成一条。"],
@@ -1424,6 +1904,12 @@
         "zh": "西区故事",
         "ja": "ウエスト・サイド物語",
         "ko": "웨스트 사이드 스토리"
+      },
+      "keyword": {
+        "en": "One Life Between Two",
+        "zh": "同命",
+        "ja": "一つの命に",
+        "ko": "하나의 목숨"
       }
     },
     {
@@ -1432,6 +1918,7 @@
       "tmdbId": 947,
       "posterPath": "/AiAm0EtDvyGqNpVoieRw4u65vD1.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Nothing is written."],
         "zh": ["命运并未写定。"],
@@ -1443,6 +1930,12 @@
         "zh": "阿拉伯的劳伦斯",
         "ja": "アラビアのロレンス",
         "ko": "아라비아의 로렌스"
+      },
+      "keyword": {
+        "en": "Making One's Fate",
+        "zh": "立命",
+        "ja": "命を立てる",
+        "ko": "운명을 세우다"
       }
     },
     {
@@ -1451,6 +1944,7 @@
       "tmdbId": 595,
       "posterPath": "/gZycFUMLx2110dzK3nBNai7gfpM.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["You never understand a person", "until you climb into his skin", "and walk around in it."],
         "zh": ["你永远不会真正懂一个人，", "除非你钻进他的皮肤里，", "走上一圈。"],
@@ -1462,6 +1956,12 @@
         "zh": "杀死一只知更鸟",
         "ja": "アラバマ物語",
         "ko": "앵무새 죽이기"
+      },
+      "keyword": {
+        "en": "In Another's Skin",
+        "zh": "设身",
+        "ja": "相手の身に",
+        "ko": "그의 처지에"
       }
     },
     {
@@ -1470,6 +1970,7 @@
       "tmdbId": 15121,
       "posterPath": "/c6CrUZypAsBCaRWX0M3RVRDbhNS.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["When the Lord closes a door,", "somewhere He opens a window."],
         "zh": ["上帝关上一道门，", "总会在别处开一扇窗。"],
@@ -1481,6 +1982,12 @@
         "zh": "音乐之声",
         "ja": "サウンド・オブ・ミュージック",
         "ko": "사운드 오브 뮤직"
+      },
+      "keyword": {
+        "en": "A Window Opens",
+        "zh": "开窗",
+        "ja": "窓が開く",
+        "ko": "창이 열리다"
       }
     },
     {
@@ -1500,6 +2007,12 @@
         "zh": "毕业生",
         "ja": "卒業",
         "ko": "졸업"
+      },
+      "keyword": {
+        "en": "Adrift",
+        "zh": "迷途",
+        "ja": "迷い",
+        "ko": "길 잃음"
       }
     },
     {
@@ -1508,6 +2021,7 @@
       "tmdbId": 62,
       "posterPath": "/ve72VxNqjGM69Uky4WTo2bK6rfq.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I'm afraid.", "Dave, my mind", "is going.", "I can feel it."],
         "zh": ["我害怕。", "戴夫，我的意识", "正在消失。", "我能感觉到。"],
@@ -1519,6 +2033,12 @@
         "zh": "2001太空漫游",
         "ja": "2001年宇宙の旅",
         "ko": "2001 스페이스 오디세이"
+      },
+      "keyword": {
+        "en": "The Machine's Mind",
+        "zh": "机心",
+        "ja": "機械の心",
+        "ko": "기계의 마음"
       }
     },
     {
@@ -1538,6 +2058,12 @@
         "zh": "虎豹小霸王",
         "ja": "明日に向って撃て！",
         "ko": "내일을 향해 쏴라"
+      },
+      "keyword": {
+        "en": "Vision",
+        "zh": "远见",
+        "ja": "先見",
+        "ko": "선견"
       }
     },
     {
@@ -1546,6 +2072,7 @@
       "tmdbId": 9062,
       "posterPath": "/yCjADq9fwbdPnxMo0DKNeRGZ4YC.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Love means never having", "to say you're sorry."],
         "zh": ["爱，就是永远", "不必说对不起。"],
@@ -1557,6 +2084,12 @@
         "zh": "爱情故事",
         "ja": "ある愛の詩",
         "ko": "러브 스토리"
+      },
+      "keyword": {
+        "en": "Knowing Without Words",
+        "zh": "相知",
+        "ja": "言わずと知る",
+        "ko": "말없이 아는 마음"
       }
     },
     {
@@ -1565,6 +2098,7 @@
       "tmdbId": 185,
       "posterPath": "/4sHeTAp65WrSSuc05nRBKddhBxO.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["When a man cannot choose,", "he ceases to be a man."],
         "zh": ["一个人不能选择的时候，", "他就不再是人了。"],
@@ -1576,6 +2110,12 @@
         "zh": "发条橙",
         "ja": "時計じかけのオレンジ",
         "ko": "시계태엽 오렌지"
+      },
+      "keyword": {
+        "en": "The Right to Choose",
+        "zh": "抉择",
+        "ja": "選ぶ自由",
+        "ko": "선택할 자유"
       }
     },
     {
@@ -1584,6 +2124,7 @@
       "tmdbId": 240,
       "posterPath": "/sSuQTCZwqKrNBNIsksO9IAUoWP9.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Keep your friends close,", "but your enemies closer."],
         "zh": ["亲近你的朋友，", "但要更亲近你的敌人。"],
@@ -1595,6 +2136,12 @@
         "zh": "教父2",
         "ja": "ゴッドファーザー PART II",
         "ko": "대부 2"
+      },
+      "keyword": {
+        "en": "The Lonely Summit",
+        "zh": "孤峰",
+        "ja": "孤峰",
+        "ko": "홀로 선 정점"
       }
     },
     {
@@ -1614,6 +2161,12 @@
         "zh": "唐人街",
         "ja": "チャイナタウン",
         "ko": "차이나타운"
+      },
+      "keyword": {
+        "en": "A Muddied World",
+        "zh": "浊世",
+        "ja": "濁世",
+        "ko": "탁한 세상"
       }
     },
     {
@@ -1622,6 +2175,7 @@
       "tmdbId": 510,
       "posterPath": "/kjWsMh72V6d8KRLV4EOoSJLT1H7.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["But I tried, didn't I?", "At least I did that."],
         "zh": ["但我试过了，不是吗？", "至少我做到了这一点。"],
@@ -1633,6 +2187,12 @@
         "zh": "飞越疯人院",
         "ja": "カッコーの巣の上で",
         "ko": "뻐꾸기 둥지 위로 날아간 새"
+      },
+      "keyword": {
+        "en": "The Attempt",
+        "zh": "一试",
+        "ja": "試み",
+        "ko": "시도"
       }
     },
     {
@@ -1641,6 +2201,7 @@
       "tmdbId": 578,
       "posterPath": "/lxM6kqilAdpdhqUl2biYp5frUxE.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["A shark's eyes are black,", "lifeless,", "like a doll's eyes."],
         "zh": ["鲨鱼的眼睛是黑的，", "没有生命，", "像玩具娃娃的眼睛。"],
@@ -1652,6 +2213,12 @@
         "zh": "大白鲨",
         "ja": "ジョーズ",
         "ko": "죠스"
+      },
+      "keyword": {
+        "en": "The Deep",
+        "zh": "深渊",
+        "ja": "深淵",
+        "ko": "심연"
       }
     },
     {
@@ -1660,6 +2227,7 @@
       "tmdbId": 1366,
       "posterPath": "/xSI0dbKLDETwhiVUy6hGE8KXUln.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["All I wanna do", "is go the distance."],
         "zh": ["我只想", "打完全场。"],
@@ -1671,6 +2239,12 @@
         "zh": "洛奇",
         "ja": "ロッキー",
         "ko": "록키"
+      },
+      "keyword": {
+        "en": "Going the Distance",
+        "zh": "终场",
+        "ja": "最後まで",
+        "ko": "끝까지"
       }
     },
     {
@@ -1679,6 +2253,7 @@
       "tmdbId": 10774,
       "posterPath": "/qZomlHsaALUtkFeMDwdYmwS2Pbo.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I'm as mad as hell,", "and I'm not going to take", "this anymore!"],
         "zh": ["我气疯了，", "我再也不要", "忍受这一切了！"],
@@ -1690,6 +2265,12 @@
         "zh": "电视台风云",
         "ja": "ネットワーク",
         "ko": "네트워크"
+      },
+      "keyword": {
+        "en": "Outrage",
+        "zh": "众怒",
+        "ja": "憤り",
+        "ko": "분노"
       }
     },
     {
@@ -1698,6 +2279,7 @@
       "tmdbId": 703,
       "posterPath": "/dEtjPywhDbAXYjoFfhBC4U9unU7.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["A relationship is like a shark.", "It has to keep moving forward,", "or it dies."],
         "zh": ["感情就像鲨鱼，", "必须不断前进，", "不然就会死。"],
@@ -1709,6 +2291,12 @@
         "zh": "安妮·霍尔",
         "ja": "アニー・ホール",
         "ko": "애니 홀"
+      },
+      "keyword": {
+        "en": "Moving On",
+        "zh": "流转",
+        "ja": "移ろい",
+        "ko": "흘러감"
       }
     },
     {
@@ -1717,6 +2305,7 @@
       "tmdbId": 11778,
       "posterPath": "/bbGtogDZOg09bm42KIpCXUXICkh.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["One shot.", "That's what it's all about."],
         "zh": ["一枪。", "这就是全部意义。"],
@@ -1728,6 +2317,12 @@
         "zh": "猎鹿人",
         "ja": "ディア・ハンター",
         "ko": "디어헌터"
+      },
+      "keyword": {
+        "en": "One Shot",
+        "zh": "一枪",
+        "ja": "一発",
+        "ko": "한 발"
       }
     },
     {
@@ -1736,6 +2331,7 @@
       "tmdbId": 348,
       "posterPath": "/vfrQk5IPloGg1v9Rzbh2Eg3VGyM.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I can't lie to you", "about your chances,", "but you have my sympathies."],
         "zh": ["我无法对你隐瞒", "生存的几率，", "但我同情你们。"],
@@ -1747,6 +2343,12 @@
         "zh": "异形",
         "ja": "エイリアン",
         "ko": "에이리언"
+      },
+      "keyword": {
+        "en": "The Cold Dark",
+        "zh": "冷寂",
+        "ja": "冷たい静寂",
+        "ko": "차가운 정적"
       }
     },
     {
@@ -1755,6 +2357,7 @@
       "tmdbId": 28,
       "posterPath": "/gQB8Y5RCMkv2zwzFHbUJX3kAhvA.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I love the smell of napalm", "in the morning."],
         "zh": ["我爱清晨", "凝固汽油弹的味道。"],
@@ -1766,6 +2369,12 @@
         "zh": "现代启示录",
         "ja": "地獄の黙示録",
         "ko": "지옥의 묵시록"
+      },
+      "keyword": {
+        "en": "The Heart of Darkness",
+        "zh": "幽暗",
+        "ja": "闇の奥",
+        "ko": "어둠의 심연"
       }
     },
     {
@@ -1774,6 +2383,7 @@
       "tmdbId": 694,
       "posterPath": "/uAR0AWqhQL1hQa69UDEbb2rE5Wx.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["You are the caretaker.", "You've always been", "the caretaker."],
         "zh": ["你是这里的看守人。", "你一直都是。"],
@@ -1785,6 +2395,12 @@
         "zh": "闪灵",
         "ja": "シャイニング",
         "ko": "샤이닝"
+      },
+      "keyword": {
+        "en": "Keeper of the Place",
+        "zh": "困守",
+        "ja": "守り人",
+        "ko": "관리인"
       }
     },
     {
@@ -1793,6 +2409,7 @@
       "tmdbId": 1891,
       "posterPath": "/nNAeTmF4CtdSgMDplXTDPOpYzsX.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Do. Or do not.", "There is no try."],
         "zh": ["要么做，要么不做。", "没有试试看。"],
@@ -1804,6 +2421,12 @@
         "zh": "星球大战5：帝国反击战",
         "ja": "スター・ウォーズ エピソード５／帝国の逆襲",
         "ko": "스타워즈 에피소드 5: 제국의 역습"
+      },
+      "keyword": {
+        "en": "Resolve",
+        "zh": "笃行",
+        "ja": "やり遂げる",
+        "ko": "해내다"
       }
     },
     {
@@ -1823,6 +2446,12 @@
         "zh": "烈火战车",
         "ja": "炎のランナー",
         "ko": "불의 전차"
+      },
+      "keyword": {
+        "en": "From Within",
+        "zh": "心源",
+        "ja": "内なる力",
+        "ko": "안에서"
       }
     },
     {
@@ -1842,6 +2471,12 @@
         "zh": "疤面煞星",
         "ja": "スカーフェイス",
         "ko": "스카페이스"
+      },
+      "keyword": {
+        "en": "Ambition",
+        "zh": "野心",
+        "ja": "野心",
+        "ko": "야심"
       }
     },
     {
@@ -1850,6 +2485,7 @@
       "tmdbId": 218,
       "posterPath": "/qvktm0BHcnmDpul4Hz01GIazWPr.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["It can't be reasoned with.", "It doesn't feel pity", "or fear.", "And it will not stop."],
         "zh": ["它不会讲道理，", "不会同情，", "不会恐惧。", "它绝不会停下来。"],
@@ -1861,6 +2497,12 @@
         "zh": "终结者",
         "ja": "ターミネーター",
         "ko": "터미네이터"
+      },
+      "keyword": {
+        "en": "The Relentless",
+        "zh": "铁心",
+        "ja": "鉄の心",
+        "ko": "강철의 심장"
       }
     },
     {
@@ -1880,6 +2522,12 @@
         "zh": "莫扎特传",
         "ja": "アマデウス",
         "ko": "아마데우스"
+      },
+      "keyword": {
+        "en": "Mediocrity",
+        "zh": "平庸",
+        "ja": "凡庸",
+        "ko": "평범함"
       }
     },
     {
@@ -1899,6 +2547,12 @@
         "zh": "早餐俱乐部",
         "ja": "ブレックファスト・クラブ",
         "ko": "조찬 클럽"
+      },
+      "keyword": {
+        "en": "One of Us",
+        "zh": "同类",
+        "ja": "同類",
+        "ko": "같은 부류"
       }
     },
     {
@@ -1907,6 +2561,7 @@
       "tmdbId": 606,
       "posterPath": "/6oMKqh08TfxmvnoFR4mm1wZB67P.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I had a farm in Africa."],
         "zh": ["我在非洲有一座农场。"],
@@ -1918,6 +2573,12 @@
         "zh": "走出非洲",
         "ja": "愛と哀しみの果て",
         "ko": "아웃 오브 아프리카"
+      },
+      "keyword": {
+        "en": "A Farm in Africa",
+        "zh": "故园",
+        "ja": "かの農場",
+        "ko": "그 농장"
       }
     },
     {
@@ -1926,6 +2587,7 @@
       "tmdbId": 235,
       "posterPath": "/vz0w9BSehcqjDcJOjRaCk7fgJe7.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I never had any friends later", "like the ones I had", "when I was twelve."],
         "zh": ["后来我再没有过", "像十二岁那年那样的", "朋友。"],
@@ -1937,6 +2599,12 @@
         "zh": "伴我同行",
         "ja": "スタンド・バイ・ミー",
         "ko": "스탠 바이 미"
+      },
+      "keyword": {
+        "en": "Boyhood Days",
+        "zh": "少时",
+        "ja": "幼き日",
+        "ko": "어린 날"
       }
     },
     {
@@ -1956,6 +2624,12 @@
         "zh": "壮志凌云",
         "ja": "トップガン",
         "ko": "탑건"
+      },
+      "keyword": {
+        "en": "The Sharp Edge",
+        "zh": "锋芒",
+        "ja": "気鋭",
+        "ko": "예기"
       }
     },
     {
@@ -1975,6 +2649,12 @@
         "zh": "公主新娘",
         "ja": "プリンセス・ブライド・ストーリー",
         "ko": "프린세스 브라이드"
+      },
+      "keyword": {
+        "en": "True Love",
+        "zh": "痴心",
+        "ja": "一途",
+        "ko": "한마음"
       }
     },
     {
@@ -1983,6 +2663,7 @@
       "tmdbId": 10673,
       "posterPath": "/2tQYq9ntzn2dEwDIGLBSipYPenv.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Greed, for lack of", "a better word, is good."],
         "zh": ["贪婪，找不到更好的词，", "是好东西。"],
@@ -1994,6 +2675,12 @@
         "zh": "华尔街",
         "ja": "ウォール街",
         "ko": "월 스트리트"
+      },
+      "keyword": {
+        "en": "Greed",
+        "zh": "贪念",
+        "ja": "貪欲",
+        "ko": "탐욕"
       }
     },
     {
@@ -2002,6 +2689,7 @@
       "tmdbId": 639,
       "posterPath": "/rFOiFUhTMtDetqCGClC9PIgnC1P.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I'll have", "what she's having."],
         "zh": ["我要和她", "一样的。"],
@@ -2013,6 +2701,12 @@
         "zh": "当哈利遇到莎莉",
         "ja": "恋人たちの予感",
         "ko": "해리가 샐리를 만났을 때"
+      },
+      "keyword": {
+        "en": "In Time",
+        "zh": "日久",
+        "ja": "歳月のうちに",
+        "ko": "세월이 흘러"
       }
     },
     {
@@ -2021,6 +2715,7 @@
       "tmdbId": 2323,
       "posterPath": "/oeM7nAw6FVFICwUaXKCRkDsKjqO.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["If you build it,", "he will come."],
         "zh": ["如果你把它建起来，", "他就会来。"],
@@ -2032,6 +2727,12 @@
         "zh": "梦幻之地",
         "ja": "フィールド・オブ・ドリームス",
         "ko": "꿈의 구장"
+      },
+      "keyword": {
+        "en": "One Belief",
+        "zh": "一念",
+        "ja": "一念",
+        "ko": "일념"
       }
     },
     {
@@ -2051,6 +2752,12 @@
         "zh": "夺宝奇兵3：圣战奇兵",
         "ja": "インディ・ジョーンズ／最後の聖戦",
         "ko": "인디아나 존스: 최후의 성전"
+      },
+      "keyword": {
+        "en": "The Leap of Faith",
+        "zh": "凌虚",
+        "ja": "虚を踏む",
+        "ko": "허공을 딛다"
       }
     },
     {
@@ -2059,6 +2766,7 @@
       "tmdbId": 769,
       "posterPath": "/9OkCLM73MIU2CrKZbqiT8Ln1wY2.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["As far back as I remember,", "I always wanted to be", "a gangster."],
         "zh": ["从我记事起，", "我就一直想当", "一个黑帮。"],
@@ -2070,6 +2778,12 @@
         "zh": "好家伙",
         "ja": "グッドフェローズ",
         "ko": "좋은 친구들"
+      },
+      "keyword": {
+        "en": "The Good Life",
+        "zh": "浮华",
+        "ja": "虚栄",
+        "ko": "허영"
       }
     },
     {
@@ -2078,6 +2792,7 @@
       "tmdbId": 162,
       "posterPath": "/e0FqKFvGPdQNWG8tF9cZBtev9Em.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Hold me.", "I can't."],
         "zh": ["抱抱我。", "我不能。"],
@@ -2089,6 +2804,12 @@
         "zh": "剪刀手爱德华",
         "ja": "シザーハンズ",
         "ko": "가위손"
+      },
+      "keyword": {
+        "en": "Falling Snow",
+        "zh": "落雪",
+        "ja": "雪が降る",
+        "ko": "내리는 눈"
       }
     },
     {
@@ -2108,6 +2829,12 @@
         "zh": "末路狂花",
         "ja": "テルマ&ルイーズ",
         "ko": "델마와 루이스"
+      },
+      "keyword": {
+        "en": "The Getaway",
+        "zh": "出逃",
+        "ja": "逃走",
+        "ko": "탈주"
       }
     },
     {
@@ -2116,6 +2843,7 @@
       "tmdbId": 10020,
       "posterPath": "/hUJ0UvQ5tgE2Z9WpfuduVSdiCiU.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Tale as old as time,", "song as old as rhyme."],
         "zh": ["像时间一样古老的故事，", "像韵律一样古老的歌。"],
@@ -2127,6 +2855,12 @@
         "zh": "美女与野兽",
         "ja": "美女と野獣",
         "ko": "미녀와 야수"
+      },
+      "keyword": {
+        "en": "As Old as Time",
+        "zh": "亘古",
+        "ja": "永久",
+        "ko": "아득한 옛날"
       }
     },
     {
@@ -2135,6 +2869,7 @@
       "tmdbId": 881,
       "posterPath": "/rLOk4z9zL1tTukIYV56P94aZXKk.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["You want the truth?", "You can't handle the truth!"],
         "zh": ["你想听真话？", "你承受不了真话！"],
@@ -2146,6 +2881,12 @@
         "zh": "好人寥寥",
         "ja": "ア・フュー・グッドメン",
         "ko": "어 퓨 굿 맨"
+      },
+      "keyword": {
+        "en": "The Truth",
+        "zh": "直言",
+        "ja": "直言",
+        "ko": "직언"
       }
     },
     {
@@ -2154,6 +2895,7 @@
       "tmdbId": 9475,
       "posterPath": "/4adI7IaveWb7EidYXfLb3MK3CgO.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I always knew", "what the right path was.", "It was always too hard."],
         "zh": ["我一直知道", "哪条是对的路，", "但那条路太难走了。"],
@@ -2165,6 +2907,12 @@
         "zh": "闻香识女人",
         "ja": "セント・オブ・ウーマン／夢の香り",
         "ko": "여인의 향기"
+      },
+      "keyword": {
+        "en": "The Right Road",
+        "zh": "正道",
+        "ja": "正道",
+        "ko": "바른 길"
       }
     },
     {
@@ -2173,6 +2921,7 @@
       "tmdbId": 137,
       "posterPath": "/gCgt1WARPZaXnq523ySQEUKinCs.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["What if there is no tomorrow?", "There wasn't one today."],
         "zh": ["如果没有明天呢？", "今天就没有明天。"],
@@ -2184,6 +2933,12 @@
         "zh": "土拨鼠之日",
         "ja": "恋はデジャ・ブ",
         "ko": "사랑의 블랙홀"
+      },
+      "keyword": {
+        "en": "Again",
+        "zh": "重来",
+        "ja": "やり直し",
+        "ko": "다시"
       }
     },
     {
@@ -2192,6 +2947,7 @@
       "tmdbId": 76,
       "posterPath": "/kf1Jb1c2JAOqjuzA3H4oDM263uB.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["If there's any magic", "in this world, it's in", "trying to understand someone."],
         "zh": ["如果这世上有什么魔法，", "那一定在于", "试着去理解一个人。"],
@@ -2203,6 +2959,12 @@
         "zh": "爱在黎明破晓前",
         "ja": "ビフォア・サンライズ 恋人までの距離",
         "ko": "비포 선라이즈"
+      },
+      "keyword": {
+        "en": "First Meeting",
+        "zh": "初遇",
+        "ja": "出会い",
+        "ko": "첫 만남"
       }
     },
     {
@@ -2211,6 +2973,7 @@
       "tmdbId": 862,
       "posterPath": "/uXDfjJbdP4ijW5hWSBrPrlKpxab.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["That wasn't flying.", "That was falling", "with style."],
         "zh": ["那不是飞，", "那是很有风格地", "坠落。"],
@@ -2222,6 +2985,12 @@
         "zh": "玩具总动员",
         "ja": "トイ・ストーリー",
         "ko": "토이 스토리"
+      },
+      "keyword": {
+        "en": "A Child's Heart",
+        "zh": "童心",
+        "ja": "童心",
+        "ko": "동심"
       }
     },
     {
@@ -2230,6 +2999,7 @@
       "tmdbId": 197,
       "posterPath": "/or1gBugydmjToAEq7OZY0owwFk.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["They may take our lives,", "but they'll never take", "our freedom!"],
         "zh": ["他们可以夺走我们的生命，", "但永远夺不走", "我们的自由！"],
@@ -2241,6 +3011,12 @@
         "zh": "勇敢的心",
         "ja": "ブレイブハート",
         "ko": "브레이브하트"
+      },
+      "keyword": {
+        "en": "Freedom",
+        "zh": "自由",
+        "ja": "自由",
+        "ko": "자유"
       }
     },
     {
@@ -2249,6 +3025,7 @@
       "tmdbId": 807,
       "posterPath": "/191nKfP0ehp3uIvWqgPbFmI4lv9.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["The world is a fine place", "and worth fighting for.", "I agree with the second part."],
         "zh": ["这世界很美好，", "值得为之奋斗。", "我同意后半句。"],
@@ -2260,6 +3037,12 @@
         "zh": "七宗罪",
         "ja": "セブン",
         "ko": "세븐"
+      },
+      "keyword": {
+        "en": "Original Sin",
+        "zh": "原罪",
+        "ja": "原罪",
+        "ko": "원죄"
       }
     },
     {
@@ -2268,6 +3051,7 @@
       "tmdbId": 629,
       "posterPath": "/99X2SgyFunJFXGAYnDv3sb9pnUD.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["The greatest trick", "the devil ever pulled", "was convincing the world", "he didn't exist."],
         "zh": ["魔鬼最大的骗术，", "就是让世人相信", "他并不存在。"],
@@ -2279,6 +3063,12 @@
         "zh": "非常嫌疑犯",
         "ja": "ユージュアル・サスペクツ",
         "ko": "유주얼 서스펙트"
+      },
+      "keyword": {
+        "en": "Sleight of Hand",
+        "zh": "障眼",
+        "ja": "目くらまし",
+        "ko": "눈속임"
       }
     },
     {
@@ -2287,6 +3077,7 @@
       "tmdbId": 275,
       "posterPath": "/rt7cpEr1uP6RTZykBFhBTcRaKvG.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["There's more to life", "than a little money,", "you know."],
         "zh": ["人生里的东西，", "可不只是一点钱，", "你知道吧。"],
@@ -2298,6 +3089,12 @@
         "zh": "冰血暴",
         "ja": "ファーゴ",
         "ko": "파고"
+      },
+      "keyword": {
+        "en": "More Than Money",
+        "zh": "世情",
+        "ja": "人の世",
+        "ko": "세상사"
       }
     },
     {
@@ -2306,6 +3103,7 @@
       "tmdbId": 9390,
       "posterPath": "/lABvGN7fDk5ifnwZoxij6G96t2w.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["You had me at hello."],
         "zh": ["你说「你好」的时候，", "我就已经属于你了。"],
@@ -2317,6 +3115,12 @@
         "zh": "甜心先生",
         "ja": "ザ・エージェント",
         "ko": "제리 맥과이어"
+      },
+      "keyword": {
+        "en": "At Hello",
+        "zh": "倾心",
+        "ja": "一目惚れ",
+        "ko": "한눈에"
       }
     },
     {
@@ -2336,6 +3140,12 @@
         "zh": "猜火车",
         "ja": "トレインスポッティング",
         "ko": "트레인스포팅"
+      },
+      "keyword": {
+        "en": "Sinking",
+        "zh": "沉沦",
+        "ja": "堕ちる",
+        "ko": "타락"
       }
     },
     {
@@ -2344,6 +3154,7 @@
       "tmdbId": 2898,
       "posterPath": "/xXxuJPNUDZ0vjsAXca0O5p3leVB.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["You make me want", "to be a better man."],
         "zh": ["你让我想", "成为一个更好的人。"],
@@ -2355,6 +3166,12 @@
         "zh": "尽善尽美",
         "ja": "恋愛小説家",
         "ko": "이보다 더 좋을 순 없다"
+      },
+      "keyword": {
+        "en": "A Better Man",
+        "zh": "向善",
+        "ja": "よき人へ",
+        "ko": "더 나은 사람"
       }
     },
     {
@@ -2363,6 +3180,7 @@
       "tmdbId": 857,
       "posterPath": "/uqx37cS8cpHg8U35f9U5IBlrCV3.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Earn this.", "Earn it."],
         "zh": ["别辜负这一切。", "好好活下去。"],
@@ -2374,6 +3192,12 @@
         "zh": "拯救大兵瑞恩",
         "ja": "プライベート・ライアン",
         "ko": "라이언 일병 구하기"
+      },
+      "keyword": {
+        "en": "Earn It",
+        "zh": "负重",
+        "ja": "背負う",
+        "ko": "짊어지다"
       }
     },
     {
@@ -2382,6 +3206,7 @@
       "tmdbId": 14,
       "posterPath": "/wby9315QzVKdW9BonAefg8jGTTb.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["It's hard to stay mad", "when there's so much beauty", "in the world."],
         "zh": ["这世上有这么多美，", "你很难一直生气。"],
@@ -2393,6 +3218,12 @@
         "zh": "美国丽人",
         "ja": "アメリカン・ビューティー",
         "ko": "아메리칸 뷰티"
+      },
+      "keyword": {
+        "en": "Drifting Beauty",
+        "zh": "随风",
+        "ja": "風に舞う",
+        "ko": "바람에 날리다"
       }
     },
     {
@@ -2412,6 +3243,12 @@
         "zh": "绿里奇迹",
         "ja": "グリーンマイル",
         "ko": "그린 마일"
+      },
+      "keyword": {
+        "en": "World-Weary",
+        "zh": "倦世",
+        "ja": "世に倦む",
+        "ko": "세상에 지치다"
       }
     },
     {
@@ -2420,6 +3257,7 @@
       "tmdbId": 509,
       "posterPath": "/hHRIf2XHeQMbyRb3HUx19SF5Ujw.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I'm just a girl,", "standing in front of a boy,", "asking him to love her."],
         "zh": ["我只是一个女孩，", "站在一个男孩面前，", "请他爱她。"],
@@ -2431,6 +3269,12 @@
         "zh": "诺丁山",
         "ja": "ノッティングヒルの恋人",
         "ko": "노팅 힐"
+      },
+      "keyword": {
+        "en": "Just a Girl",
+        "zh": "凡心",
+        "ja": "ただの女の子",
+        "ko": "그저 한 사람"
       }
     },
     {
@@ -2439,6 +3283,7 @@
       "tmdbId": 8358,
       "posterPath": "/7lLJgKnAicAcR5UEuo8xhSMj18w.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Tomorrow the sun will rise.", "Who knows what the tide", "could bring?"],
         "zh": ["明天太阳照常升起。", "谁知道潮水", "会带来什么呢？"],
@@ -2450,6 +3295,12 @@
         "zh": "荒岛余生",
         "ja": "キャスト・アウェイ",
         "ko": "캐스트 어웨이"
+      },
+      "keyword": {
+        "en": "What the Tide Brings",
+        "zh": "潮信",
+        "ja": "潮の便り",
+        "ko": "밀물의 소식"
       }
     },
     {
@@ -2469,6 +3320,12 @@
         "zh": "几近成名",
         "ja": "あの頃ペニー・レインと",
         "ko": "올모스트 페이머스"
+      },
+      "keyword": {
+        "en": "Uncool and True",
+        "zh": "赤诚",
+        "ja": "誠",
+        "ko": "진심"
       }
     },
     {
@@ -2477,6 +3334,7 @@
       "tmdbId": 808,
       "posterPath": "/iB64vpL3dIObOtMZgX3RqdVdQDc.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Ogres are like onions.", "They have layers."],
         "zh": ["怪物就像洋葱，", "是一层一层的。"],
@@ -2488,6 +3346,12 @@
         "zh": "怪物史瑞克",
         "ja": "シュレック",
         "ko": "슈렉"
+      },
+      "keyword": {
+        "en": "Layers",
+        "zh": "表里",
+        "ja": "幾重にも",
+        "ko": "여러 겹"
       }
     },
     {
@@ -2496,6 +3360,7 @@
       "tmdbId": 453,
       "posterPath": "/rEIg5yJdNOt9fmX4P8gU9LeNoTQ.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["It is only in the mysterious", "equations of love", "that any logic can be found."],
         "zh": ["只有在爱的", "神秘方程式里，", "才能找到逻辑。"],
@@ -2507,6 +3372,12 @@
         "zh": "美丽心灵",
         "ja": "ビューティフル・マインド",
         "ko": "뷰티풀 마인드"
+      },
+      "keyword": {
+        "en": "A Clear Mind",
+        "zh": "明心",
+        "ja": "明らかな心",
+        "ko": "맑은 마음"
       }
     },
     {
@@ -2515,6 +3386,7 @@
       "tmdbId": 671,
       "posterPath": "/wuMc08IPKEatf9rnMNXvIDxqP4W.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["It does not do to dwell", "on dreams", "and forget to live."],
         "zh": ["沉溺于梦境而忘记生活，", "是没有好处的。"],
@@ -2526,6 +3398,12 @@
         "zh": "哈利·波特与魔法石",
         "ja": "ハリー・ポッターと賢者の石",
         "ko": "해리 포터와 마법사의 돌"
+      },
+      "keyword": {
+        "en": "The Mirror's Image",
+        "zh": "镜影",
+        "ja": "鏡の影",
+        "ko": "거울 속 그림자"
       }
     },
     {
@@ -2534,6 +3412,7 @@
       "tmdbId": 557,
       "posterPath": "/or6XJBVpcEbIkma0V9zshnbEtx4.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["With great power", "comes great responsibility."],
         "zh": ["能力越大，", "责任越大。"],
@@ -2545,6 +3424,12 @@
         "zh": "蜘蛛侠",
         "ja": "スパイダーマン",
         "ko": "스파이더맨"
+      },
+      "keyword": {
+        "en": "Responsibility",
+        "zh": "担当",
+        "ja": "責任",
+        "ko": "책임"
       }
     },
     {
@@ -2553,6 +3438,7 @@
       "tmdbId": 121,
       "posterPath": "/5VTN0pR8gcqV3EPUHHfMGnJYN9L.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["There's some good", "in this world,", "and it's worth fighting for."],
         "zh": ["这世上还有些美好，", "值得为之战斗。"],
@@ -2564,6 +3450,12 @@
         "zh": "指环王2：双塔奇兵",
         "ja": "ロード・オブ・ザ・リング／二つの塔",
         "ko": "반지의 제왕: 두 개의 탑"
+      },
+      "keyword": {
+        "en": "Worth Fighting For",
+        "zh": "所守",
+        "ja": "守るもの",
+        "ko": "지킬 것"
       }
     },
     {
@@ -2572,6 +3464,7 @@
       "tmdbId": 122,
       "posterPath": "/rCzpDGLbOoPwLjy3OAm5NUPOTrC.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I can't carry it for you,", "but I can carry you."],
         "zh": ["我不能替你背它，", "但我能背你。"],
@@ -2583,6 +3476,12 @@
         "zh": "指环王3：王者无敌",
         "ja": "ロード・オブ・ザ・リング／王の帰還",
         "ko": "반지의 제왕: 왕의 귀환"
+      },
+      "keyword": {
+        "en": "I'll Carry You",
+        "zh": "相携",
+        "ja": "背負っていく",
+        "ko": "함께 가다"
       }
     },
     {
@@ -2602,6 +3501,12 @@
         "zh": "迷失东京",
         "ja": "ロスト・イン・トランスレーション",
         "ko": "사랑도 통역이 되나요?"
+      },
+      "keyword": {
+        "en": "A Brief While",
+        "zh": "一晌",
+        "ja": "ひととき",
+        "ko": "한때"
       }
     },
     {
@@ -2621,6 +3526,12 @@
         "zh": "大鱼",
         "ja": "ビッグ・フィッシュ",
         "ko": "빅 피쉬"
+      },
+      "keyword": {
+        "en": "The Tale He Became",
+        "zh": "传奇",
+        "ja": "伝説",
+        "ko": "전설"
       }
     },
     {
@@ -2640,6 +3551,12 @@
         "zh": "爱在日落黄昏时",
         "ja": "ビフォア・サンセット",
         "ko": "비포 선셋"
+      },
+      "keyword": {
+        "en": "Meeting Again",
+        "zh": "重逢",
+        "ja": "再会",
+        "ko": "재회"
       }
     },
     {
@@ -2648,6 +3565,7 @@
       "tmdbId": 11036,
       "posterPath": "/rNzQyW4f8B8cQeg7Dgj3n6eT5k9.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["It's not gonna be easy.", "It's gonna be really hard.", "We're gonna have to work", "at this every day."],
         "zh": ["这不会容易。", "会非常艰难。", "我们得每天", "为它努力。"],
@@ -2659,6 +3577,12 @@
         "zh": "恋恋笔记本",
         "ja": "きみに読む物語",
         "ko": "노트북"
+      },
+      "keyword": {
+        "en": "Every Day's Work",
+        "zh": "日课",
+        "ja": "日課",
+        "ko": "일과"
       }
     },
     {
@@ -2678,6 +3602,12 @@
         "zh": "百万美元宝贝",
         "ja": "ミリオンダラー・ベイビー",
         "ko": "밀리언 달러 베이비"
+      },
+      "keyword": {
+        "en": "My Darling, My Blood",
+        "zh": "至亲",
+        "ja": "わが血よ",
+        "ko": "내 혈육"
       }
     },
     {
@@ -2686,6 +3616,7 @@
       "tmdbId": 142,
       "posterPath": "/aByfQOQBNa4CMFwIgq3QrqY2ZHh.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I wish I knew how", "to quit you."],
         "zh": ["我真希望", "我知道怎么戒掉你。"],
@@ -2697,6 +3628,12 @@
         "zh": "断背山",
         "ja": "ブロークバック・マウンテン",
         "ko": "브로크백 마운틴"
+      },
+      "keyword": {
+        "en": "Longing",
+        "zh": "牵念",
+        "ja": "未練",
+        "ko": "미련"
       }
     },
     {
@@ -2705,6 +3642,7 @@
       "tmdbId": 272,
       "posterPath": "/sPX89Td70IDDjVr85jdSBb4rWGr.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Why do we fall?", "So we can learn", "to pick ourselves up."],
         "zh": ["我们为什么会跌倒？", "为了学会", "自己站起来。"],
@@ -2716,6 +3654,12 @@
         "zh": "蝙蝠侠：侠影之谜",
         "ja": "バットマン ビギンズ",
         "ko": "배트맨 비긴즈"
+      },
+      "keyword": {
+        "en": "Rising Again",
+        "zh": "再起",
+        "ja": "再起",
+        "ko": "재기"
       }
     },
     {
@@ -2724,6 +3668,7 @@
       "tmdbId": 4348,
       "posterPath": "/o8UhmEbWPHmTUxP0lMuCoqNkbB3.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["You have bewitched me,", "body and soul."],
         "zh": ["你迷住了我，", "从身到心。"],
@@ -2735,6 +3680,12 @@
         "zh": "傲慢与偏见",
         "ja": "プライドと偏見",
         "ko": "오만과 편견"
+      },
+      "keyword": {
+        "en": "Bewitched",
+        "zh": "心折",
+        "ja": "心を奪われ",
+        "ko": "마음을 빼앗기다"
       }
     },
     {
@@ -2743,6 +3694,7 @@
       "tmdbId": 1402,
       "posterPath": "/lBYOKAMcxIvuk9s9hMuecB9dPBV.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Don't ever let somebody", "tell you you can't", "do something."],
         "zh": ["永远不要让别人告诉你", "你做不到什么。"],
@@ -2754,6 +3706,12 @@
         "zh": "当幸福来敲门",
         "ja": "幸せのちから",
         "ko": "행복을 찾아서"
+      },
+      "keyword": {
+        "en": "Knocking",
+        "zh": "敲门",
+        "ja": "扉を叩く",
+        "ko": "문을 두드리다"
       }
     },
     {
@@ -2762,6 +3720,7 @@
       "tmdbId": 2062,
       "posterPath": "/t3vaWRPSf6WjDSamIkKDs1iQWna.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Anyone can cook.", "But only the fearless", "can be great."],
         "zh": ["谁都能做菜，", "但只有勇敢的人", "才能做得出色。"],
@@ -2773,6 +3732,12 @@
         "zh": "美食总动员",
         "ja": "レミーのおいしいレストラン",
         "ko": "라따뚜이"
+      },
+      "keyword": {
+        "en": "The Daring",
+        "zh": "敢为",
+        "ja": "敢えて挑む",
+        "ko": "감히 나서다"
       }
     },
     {
@@ -2781,6 +3746,7 @@
       "tmdbId": 5915,
       "posterPath": "/jnLnLYP5pGDfri04gxtAqAvkHMw.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Happiness is only real", "when shared."],
         "zh": ["幸福只有在分享时，", "才是真的。"],
@@ -2792,6 +3758,12 @@
         "zh": "荒野生存",
         "ja": "イントゥ・ザ・ワイルド",
         "ko": "인투 더 와일드"
+      },
+      "keyword": {
+        "en": "Shared Joy",
+        "zh": "分甘",
+        "ja": "分かち合う",
+        "ko": "나누다"
       }
     },
     {
@@ -2800,6 +3772,7 @@
       "tmdbId": 6977,
       "posterPath": "/6d5XOczc226jECq0LIX0siKtgHR.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["You can't stop", "what's coming."],
         "zh": ["该来的，", "你阻止不了。"],
@@ -2811,6 +3784,12 @@
         "zh": "老无所依",
         "ja": "ノーカントリー",
         "ko": "노인을 위한 나라는 없다"
+      },
+      "keyword": {
+        "en": "What's Coming",
+        "zh": "天数",
+        "ja": "天命",
+        "ko": "정해진 일"
       }
     },
     {
@@ -2819,6 +3798,7 @@
       "tmdbId": 10681,
       "posterPath": "/hbhFnRzzg6ZDmm8YAmxBnQpQIPh.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I don't want to survive.", "I want to live!"],
         "zh": ["我不想只是活着，", "我想好好生活！"],
@@ -2830,6 +3810,12 @@
         "zh": "机器人总动员",
         "ja": "ウォーリー",
         "ko": "월•E"
+      },
+      "keyword": {
+        "en": "To Really Live",
+        "zh": "生趣",
+        "ja": "生きる楽しみ",
+        "ko": "사는 재미"
       }
     },
     {
@@ -2838,6 +3824,7 @@
       "tmdbId": 4922,
       "posterPath": "/26wEWZYt6yJkwRVkjcbwJEFh9IS.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["It's never too late", "to be whoever", "you want to be."],
         "zh": ["无论何时，", "想成为什么样的人", "都不算太晚。"],
@@ -2849,6 +3836,12 @@
         "zh": "本杰明·巴顿奇事",
         "ja": "ベンジャミン・バトン 数奇な人生",
         "ko": "벤자민 버튼의 시간은 거꾸로 간다"
+      },
+      "keyword": {
+        "en": "Backward Life",
+        "zh": "逆生",
+        "ja": "逆さの生",
+        "ko": "거꾸로 사는 삶"
       }
     },
     {
@@ -2868,6 +3861,12 @@
         "zh": "贫民窟的百万富翁",
         "ja": "スラムドッグ＄ミリオネア",
         "ko": "슬럼독 밀리어네어"
+      },
+      "keyword": {
+        "en": "It Is Written",
+        "zh": "命定",
+        "ja": "運命",
+        "ko": "운명"
       }
     },
     {
@@ -2876,6 +3875,7 @@
       "tmdbId": 19995,
       "posterPath": "/gKY6q7SjCkAU6FqvqWybDYgUKIF.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["All energy is only borrowed.", "One day you have to", "give it back."],
         "zh": ["所有的能量", "都只是借来的，", "总有一天", "要还回去。"],
@@ -2887,6 +3887,12 @@
         "zh": "阿凡达",
         "ja": "アバター",
         "ko": "아바타"
+      },
+      "keyword": {
+        "en": "All Connected",
+        "zh": "相连",
+        "ja": "繋がり",
+        "ko": "이어짐"
       }
     },
     {
@@ -2895,6 +3901,7 @@
       "tmdbId": 10193,
       "posterPath": "/AbbXspMOwdvwWZgVN0nabZq03Ec.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["He'll never give up on you.", "Ever."],
         "zh": ["他永远不会", "放弃你。", "永远不会。"],
@@ -2906,6 +3913,12 @@
         "zh": "玩具总动员3",
         "ja": "トイ・ストーリー3",
         "ko": "토이 스토리 3"
+      },
+      "keyword": {
+        "en": "Always There",
+        "zh": "长伴",
+        "ja": "ずっと側に",
+        "ko": "언제나 곁에"
       }
     },
     {
@@ -2925,6 +3938,12 @@
         "zh": "哈利·波特与死亡圣器（下）",
         "ja": "ハリー・ポッターと死の秘宝 Part2",
         "ko": "해리 포터와 죽음의 성물 2"
+      },
+      "keyword": {
+        "en": "Pity the Living",
+        "zh": "悲悯",
+        "ja": "憐れみ",
+        "ko": "연민"
       }
     },
     {
@@ -2944,6 +3963,12 @@
         "zh": "相助",
         "ja": "ヘルプ 〜心がつなぐストーリー〜",
         "ko": "헬프"
+      },
+      "keyword": {
+        "en": "You Matter",
+        "zh": "珍重",
+        "ja": "大切に",
+        "ko": "소중히"
       }
     },
     {
@@ -2952,6 +3977,7 @@
       "tmdbId": 87827,
       "posterPath": "/iLgRu4hhSr6V1uManX6ukDriiSc.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I have to believe", "there was more in his eyes", "than my own reflection."],
         "zh": ["我愿意相信，", "它眼里有的不只是", "我自己的倒影。"],
@@ -2963,6 +3989,12 @@
         "zh": "少年派的奇幻漂流",
         "ja": "ライフ・オブ・パイ／トラと漂流した227日",
         "ko": "라이프 오브 파이"
+      },
+      "keyword": {
+        "en": "The Reflection",
+        "zh": "倒影",
+        "ja": "水鏡",
+        "ko": "물그림자"
       }
     },
     {
@@ -2982,6 +4014,12 @@
         "zh": "壁花少年",
         "ja": "ウォールフラワー",
         "ko": "월플라워"
+      },
+      "keyword": {
+        "en": "Infinite",
+        "zh": "无限",
+        "ja": "無限",
+        "ko": "무한"
       }
     },
     {
@@ -2990,6 +4028,7 @@
       "tmdbId": 82695,
       "posterPath": "/6CuzBs2Lb8At7qQr64mLXg2RYRb.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["To love another person", "is to see the face of God."],
         "zh": ["去爱一个人，", "就是看见上帝的面容。"],
@@ -3001,6 +4040,12 @@
         "zh": "悲惨世界",
         "ja": "レ・ミゼラブル",
         "ko": "레미제라블"
+      },
+      "keyword": {
+        "en": "Grace",
+        "zh": "宽恕",
+        "ja": "赦し",
+        "ko": "용서"
       }
     },
     {
@@ -3020,6 +4065,12 @@
         "zh": "她",
         "ja": "her／世界でひとつの彼女",
         "ko": "그녀"
+      },
+      "keyword": {
+        "en": "Talking to Myself",
+        "zh": "独语",
+        "ja": "独り語り",
+        "ko": "혼잣말"
       }
     },
     {
@@ -3039,6 +4090,12 @@
         "zh": "时空恋旅人",
         "ja": "アバウト・タイム ～愛おしい時間について～",
         "ko": "어바웃 타임"
+      },
+      "keyword": {
+        "en": "Travelling Together",
+        "zh": "共度",
+        "ja": "共に過ごす",
+        "ko": "함께 지내다"
       }
     },
     {
@@ -3047,6 +4104,7 @@
       "tmdbId": 116745,
       "posterPath": "/iAo1hlzsPV9XpYcLQp6Ud065tGO.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["To see the world,", "to find each other,", "and to feel.", "That is the purpose of life."],
         "zh": ["看见世界，", "找到彼此，", "去感受。", "这就是生活的目的。"],
@@ -3058,6 +4116,12 @@
         "zh": "白日梦想家",
         "ja": "LIFE！/ライフ",
         "ko": "월터의 상상은 현실이 된다"
+      },
+      "keyword": {
+        "en": "Setting Out",
+        "zh": "启程",
+        "ja": "旅立ち",
+        "ko": "떠나기"
       }
     },
     {
@@ -3077,6 +4141,12 @@
         "zh": "少年时代",
         "ja": "6才のボクが、大人になるまで。",
         "ko": "보이후드"
+      },
+      "keyword": {
+        "en": "Right Now",
+        "zh": "此刻",
+        "ja": "この瞬間",
+        "ko": "이 순간"
       }
     },
     {
@@ -3085,6 +4155,7 @@
       "tmdbId": 244786,
       "posterPath": "/7fn624j5lj3xTme2SgiLCeuedmO.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["There are no two words", "more harmful", "than good job."],
         "zh": ["没有哪两个字", "比「干得不错」", "更有害。"],
@@ -3096,6 +4167,12 @@
         "zh": "爆裂鼓手",
         "ja": "セッション",
         "ko": "위플래쉬"
+      },
+      "keyword": {
+        "en": "Tempered",
+        "zh": "淬火",
+        "ja": "焼き入れ",
+        "ko": "담금질"
       }
     },
     {
@@ -3115,6 +4192,12 @@
         "zh": "布达佩斯大饭店",
         "ja": "グランド・ブダペスト・ホテル",
         "ko": "그랜드 부다페스트 호텔"
+      },
+      "keyword": {
+        "en": "The Last Manners",
+        "zh": "旧礼",
+        "ja": "古き礼",
+        "ko": "옛 예의"
       }
     },
     {
@@ -3123,6 +4206,7 @@
       "tmdbId": 150540,
       "posterPath": "/2H1TmgdfNtsKlU9jKdeNyYL5y8T.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Crying helps me slow down", "and obsess over the weight", "of life's problems."],
         "zh": ["哭让我慢下来，", "去认真掂量", "生活难题的重量。"],
@@ -3134,6 +4218,12 @@
         "zh": "头脑特工队",
         "ja": "インサイド・ヘッド",
         "ko": "인사이드 아웃"
+      },
+      "keyword": {
+        "en": "Room for Sadness",
+        "zh": "容悲",
+        "ja": "悲しみの席",
+        "ko": "슬픔의 자리"
       }
     },
     {
@@ -3153,6 +4243,12 @@
         "zh": "疯狂的麦克斯4：狂暴之路",
         "ja": "マッドマックス 怒りのデス・ロード",
         "ko": "매드맥스: 분노의 도로"
+      },
+      "keyword": {
+        "en": "All Broken",
+        "zh": "破碎",
+        "ja": "壊れもの",
+        "ko": "부서짐"
       }
     },
     {
@@ -3172,6 +4268,12 @@
         "zh": "月光男孩",
         "ja": "ムーンライト",
         "ko": "문라이트"
+      },
+      "keyword": {
+        "en": "Becoming",
+        "zh": "自成",
+        "ja": "自らなる",
+        "ko": "스스로 되다"
       }
     },
     {
@@ -3191,6 +4293,12 @@
         "zh": "请以你的名字呼唤我",
         "ja": "君の名前で僕を呼んで",
         "ko": "콜 미 바이 유어 네임"
+      },
+      "keyword": {
+        "en": "The Warmth Left",
+        "zh": "余温",
+        "ja": "残る熱",
+        "ko": "남은 열"
       }
     },
     {
@@ -3199,6 +4307,7 @@
       "tmdbId": 354912,
       "posterPath": "/6Ryitt95xrO8KXuqRGm1fUuNwqF.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Remember me,", "though I have to say goodbye."],
         "zh": ["请记住我，", "尽管我必须告别。"],
@@ -3210,6 +4319,12 @@
         "zh": "寻梦环游记",
         "ja": "リメンバー・ミー",
         "ko": "코코"
+      },
+      "keyword": {
+        "en": "Remember Me",
+        "zh": "追念",
+        "ja": "追憶",
+        "ko": "추념"
       }
     },
     {
@@ -3229,6 +4344,12 @@
         "zh": "伯德小姐",
         "ja": "レディ・バード",
         "ko": "레이디 버드"
+      },
+      "keyword": {
+        "en": "Attention",
+        "zh": "用心",
+        "ja": "心を向ける",
+        "ko": "마음을 쓰다"
       }
     },
     {
@@ -3237,6 +4358,7 @@
       "tmdbId": 324857,
       "posterPath": "/iiZZdoQBEYBv6id8su7ImL0oCbD.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Anyone can wear the mask.", "You can wear the mask."],
         "zh": ["任何人都能戴上面具。", "你也可以。"],
@@ -3248,6 +4370,12 @@
         "zh": "蜘蛛侠：平行宇宙",
         "ja": "スパイダーマン：スパイダーバース",
         "ko": "스파이더맨: 뉴 유니버스"
+      },
+      "keyword": {
+        "en": "The Mask",
+        "zh": "面具",
+        "ja": "仮面",
+        "ko": "가면"
       }
     },
     {
@@ -3256,6 +4384,7 @@
       "tmdbId": 508442,
       "posterPath": "/hm58Jw4Lw8OIeECIq5qyPYhAeRJ.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I'm going to live", "every minute of it."],
         "zh": ["我要认真活过", "每一分钟。"],
@@ -3267,6 +4396,12 @@
         "zh": "心灵奇旅",
         "ja": "ソウルフル・ワールド",
         "ko": "소울"
+      },
+      "keyword": {
+        "en": "The Spark",
+        "zh": "火花",
+        "ja": "きらめき",
+        "ko": "불꽃"
       }
     },
     {
@@ -3275,6 +4410,7 @@
       "tmdbId": 581734,
       "posterPath": "/8Vc5EOUEIF1EUXuX9eLFf7BvN3P.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I'll see you", "down the road."],
         "zh": ["路上再见。"],
@@ -3286,6 +4422,12 @@
         "zh": "无依之地",
         "ja": "ノマドランド",
         "ko": "노매드랜드"
+      },
+      "keyword": {
+        "en": "See You Down the Road",
+        "zh": "行路",
+        "ja": "路の上",
+        "ko": "길 위에서"
       }
     },
     {
@@ -3294,6 +4436,7 @@
       "tmdbId": 438631,
       "posterPath": "/v1tRXZ4JtD2Iv6fjkPvT4GiwslV.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Fear is the mind-killer."],
         "zh": ["恐惧是思维的杀手。"],
@@ -3305,6 +4448,12 @@
         "zh": "沙丘",
         "ja": "DUNE／デューン 砂の惑星",
         "ko": "듄"
+      },
+      "keyword": {
+        "en": "Steady Mind",
+        "zh": "定心",
+        "ja": "心を定める",
+        "ko": "흔들리지 않는 마음"
       }
     },
     {
@@ -3313,6 +4462,7 @@
       "tmdbId": 545611,
       "posterPath": "/u68AjlvlutfEIcpmbYpKcdi09ut.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Be kind,", "especially when we don't know", "what's going on."],
         "zh": ["请善良一点，", "尤其是在我们", "什么都搞不懂的时候。"],
@@ -3324,6 +4474,12 @@
         "zh": "瞬息全宇宙",
         "ja": "エブリシング・エブリウェア・オール・アット・ワンス",
         "ko": "에브리씽 에브리웨어 올 앳 원스"
+      },
+      "keyword": {
+        "en": "Be Kind",
+        "zh": "善念",
+        "ja": "優しさ",
+        "ko": "다정"
       }
     },
     {
@@ -3332,6 +4488,7 @@
       "tmdbId": 361743,
       "posterPath": "/n0YuM4f5lvGAP6MAW2kBIzugXnc.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Don't think.", "Just do."],
         "zh": ["别想，", "去做。"],
@@ -3343,6 +4500,12 @@
         "zh": "壮志凌云：独行侠",
         "ja": "トップガン マーヴェリック",
         "ko": "탑건: 매버릭"
+      },
+      "keyword": {
+        "en": "Instinct",
+        "zh": "本能",
+        "ja": "本能",
+        "ko": "본능"
       }
     },
     {
@@ -3351,6 +4514,7 @@
       "tmdbId": 872585,
       "posterPath": "/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Now I am become death,", "the destroyer of worlds."],
         "zh": ["现在我成了死神，", "世界的毁灭者。"],
@@ -3362,6 +4526,12 @@
         "zh": "奥本海默",
         "ja": "オッペンハイマー",
         "ko": "오펜하이머"
+      },
+      "keyword": {
+        "en": "Karmic Fire",
+        "zh": "业火",
+        "ja": "業火",
+        "ko": "업의 불"
       }
     },
     {
@@ -3381,6 +4551,12 @@
         "zh": "英雄本色",
         "ja": "男たちの挽歌",
         "ko": "영웅본색"
+      },
+      "keyword": {
+        "en": "One Chance",
+        "zh": "志气",
+        "ja": "気概",
+        "ko": "기개"
       }
     },
     {
@@ -3400,6 +4576,12 @@
         "zh": "芙蓉镇",
         "ja": "芙蓉镇",
         "ko": "부용진"
+      },
+      "keyword": {
+        "en": "Enduring",
+        "zh": "隐忍",
+        "ja": "忍ぶ",
+        "ko": "인내"
       }
     },
     {
@@ -3419,6 +4601,12 @@
         "zh": "胭脂扣",
         "ja": "ルージュ",
         "ko": "연지구"
+      },
+      "keyword": {
+        "en": "Like a Dream",
+        "zh": "如幻",
+        "ja": "夢幻のごとく",
+        "ko": "환영처럼"
       }
     },
     {
@@ -3438,6 +4626,12 @@
         "zh": "倩女幽魂",
         "ja": "チャイニーズ・ゴースト・ストーリー",
         "ko": "천녀유혼"
+      },
+      "keyword": {
+        "en": "Frost Over the Lake",
+        "zh": "霜天",
+        "ja": "霜の空",
+        "ko": "서리 하늘"
       }
     },
     {
@@ -3457,6 +4651,12 @@
         "zh": "红高粱",
         "ja": "紅いコーリャン",
         "ko": "붉은 수수밭"
+      },
+      "keyword": {
+        "en": "Blazing",
+        "zh": "炽烈",
+        "ja": "熱く烈しく",
+        "ko": "타오르다"
       }
     },
     {
@@ -3476,6 +4676,12 @@
         "zh": "笑傲江湖",
         "ja": "笑傲江湖",
         "ko": "소오강호"
+      },
+      "keyword": {
+        "en": "A Laugh Across the Sea",
+        "zh": "沧海",
+        "ja": "滄海",
+        "ko": "창해"
       }
     },
     {
@@ -3495,6 +4701,12 @@
         "zh": "大红灯笼高高挂",
         "ja": "紅夢",
         "ko": "홍등"
+      },
+      "keyword": {
+        "en": "Deep Courtyard",
+        "zh": "深院",
+        "ja": "奥の院",
+        "ko": "깊은 뜰"
       }
     },
     {
@@ -3514,6 +4726,12 @@
         "zh": "笑傲江湖2：东方不败",
         "ja": "スウォーズマン 女神伝説の章",
         "ko": "동방불패"
+      },
+      "keyword": {
+        "en": "Where There Are People",
+        "zh": "江湖",
+        "ja": "江湖",
+        "ko": "강호"
       }
     },
     {
@@ -3533,6 +4751,12 @@
         "zh": "秋菊打官司",
         "ja": "秋菊打官司",
         "ko": "귀주 이야기"
+      },
+      "keyword": {
+        "en": "An Explanation",
+        "zh": "说法",
+        "ja": "筋を通す",
+        "ko": "해명"
       }
     },
     {
@@ -3552,6 +4776,12 @@
         "zh": "青蛇",
         "ja": "青蛇",
         "ko": "청사"
+      },
+      "keyword": {
+        "en": "Love's Ordeal",
+        "zh": "情劫",
+        "ja": "情の業",
+        "ko": "사랑의 업"
       }
     },
     {
@@ -3571,6 +4801,12 @@
         "zh": "饮食男女",
         "ja": "恋人たちの食卓",
         "ko": "음식남녀"
+      },
+      "keyword": {
+        "en": "Timing",
+        "zh": "火候",
+        "ja": "火加減",
+        "ko": "불 조절"
       }
     },
     {
@@ -3590,6 +4826,12 @@
         "zh": "东邪西毒",
         "ja": "楽園の瑕",
         "ko": "동사서독"
+      },
+      "keyword": {
+        "en": "The Wine of Forgetting",
+        "zh": "醉生梦死",
+        "ja": "酔生夢死",
+        "ko": "취생몽사"
       }
     },
     {
@@ -3609,6 +4851,12 @@
         "zh": "阳光灿烂的日子",
         "ja": "太陽の少年",
         "ko": "햇빛 쏟아지던 날들"
+      },
+      "keyword": {
+        "en": "Unreliable Memory",
+        "zh": "浮忆",
+        "ja": "おぼろな記憶",
+        "ko": "흐릿한 기억"
       }
     },
     {
@@ -3628,6 +4876,12 @@
         "zh": "堕落天使",
         "ja": "天使の涙",
         "ko": "타락천사"
+      },
+      "keyword": {
+        "en": "Passing By",
+        "zh": "错身",
+        "ja": "行き違い",
+        "ko": "엇갈림"
       }
     },
     {
@@ -3647,6 +4901,12 @@
         "zh": "食神",
         "ja": "食神",
         "ko": "식신"
+      },
+      "keyword": {
+        "en": "With Heart",
+        "zh": "有心",
+        "ja": "心あれば",
+        "ko": "마음만 있으면"
       }
     },
     {
@@ -3666,6 +4926,12 @@
         "zh": "甜蜜蜜",
         "ja": "甜蜜蜜",
         "ko": "첨밀밀"
+      },
+      "keyword": {
+        "en": "A Foreign City",
+        "zh": "他乡",
+        "ja": "異郷",
+        "ko": "타향"
       }
     },
     {
@@ -3685,6 +4951,12 @@
         "zh": "春光乍泄",
         "ja": "ブエノスアイレス",
         "ko": "해피 투게더"
+      },
+      "keyword": {
+        "en": "Entangled",
+        "zh": "纠缠",
+        "ja": "縺れ",
+        "ko": "얽힘"
       }
     },
     {
@@ -3704,6 +4976,12 @@
         "zh": "甲方乙方",
         "ja": "甲方乙方",
         "ko": "The Dream Factory"
+      },
+      "keyword": {
+        "en": "I Miss It",
+        "zh": "念旧",
+        "ja": "懐かしむ",
+        "ko": "그리워하다"
       }
     },
     {
@@ -3723,6 +5001,12 @@
         "zh": "少林足球",
         "ja": "少林サッカー",
         "ko": "소림축구"
+      },
+      "keyword": {
+        "en": "A Dream to Keep",
+        "zh": "有梦",
+        "ja": "夢を持つ",
+        "ko": "꿈이 있다"
       }
     },
     {
@@ -3742,6 +5026,12 @@
         "zh": "功夫",
         "ja": "カンフーハッスル",
         "ko": "쿵푸 허슬"
+      },
+      "keyword": {
+        "en": "Speed",
+        "zh": "迅疾",
+        "ja": "迅さ",
+        "ko": "빠름"
       }
     },
     {
@@ -3761,6 +5051,12 @@
         "zh": "2046",
         "ja": "2046",
         "ko": "2046"
+      },
+      "keyword": {
+        "en": "Damp Memory",
+        "zh": "潮湿",
+        "ja": "湿った記憶",
+        "ko": "젖은 기억"
       }
     },
     {
@@ -3780,6 +5076,12 @@
         "zh": "海角七号",
         "ja": "海角七號",
         "ko": "하이자오 7번지"
+      },
+      "keyword": {
+        "en": "Stay or Go",
+        "zh": "去留",
+        "ja": "去るか留まるか",
+        "ko": "떠남과 머묾"
       }
     },
     {
@@ -3799,6 +5101,12 @@
         "zh": "岁月神偷",
         "ja": "歲月神偷",
         "ko": "세월신투"
+      },
+      "keyword": {
+        "en": "Keep Faith",
+        "zh": "存信",
+        "ja": "信じること",
+        "ko": "믿음을 지니다"
       }
     },
     {
@@ -3818,6 +5126,12 @@
         "zh": "唐山大地震",
         "ja": "唐山大地震",
         "ko": "대지진"
+      },
+      "keyword": {
+        "en": "Aftershock",
+        "zh": "余震",
+        "ja": "余震",
+        "ko": "여진"
       }
     },
     {
@@ -3837,6 +5151,12 @@
         "zh": "让子弹飞",
         "ja": "さらば復讐の狼たちよ",
         "ko": "양자탄비"
+      },
+      "keyword": {
+        "en": "Stand Up",
+        "zh": "挺立",
+        "ja": "立ち上がる",
+        "ko": "일어서다"
       }
     },
     {
@@ -3856,6 +5176,12 @@
         "zh": "艋舺",
         "ja": "モンガに散る",
         "ko": "맹갑"
+      },
+      "keyword": {
+        "en": "Grass in the Wind",
+        "zh": "草莽",
+        "ja": "風になびく草",
+        "ko": "바람에 눕는 풀"
       }
     },
     {
@@ -3875,6 +5201,12 @@
         "zh": "赛德克·巴莱（上）",
         "ja": "セデック・バレ　第一部：太陽旗",
         "ko": "워리어스 레인보우: 항전의 시작"
+      },
+      "keyword": {
+        "en": "Savage Pride",
+        "zh": "傲骨",
+        "ja": "誇り",
+        "ko": "자존"
       }
     },
     {
@@ -3894,6 +5226,12 @@
         "zh": "那些年，我们一起追的女孩",
         "ja": "那些年，我們一起追的女孩",
         "ko": "그 시절, 우리가 좋아했던 소녀"
+      },
+      "keyword": {
+        "en": "Green Years",
+        "zh": "青涩",
+        "ja": "青くさい",
+        "ko": "풋내"
       }
     },
     {
@@ -3913,6 +5251,12 @@
         "zh": "致我们终将逝去的青春",
         "ja": "So Young～過ぎ去りし青春に捧ぐ～",
         "ko": "우리가 잃어버릴 청춘"
+      },
+      "keyword": {
+        "en": "High Spirits",
+        "zh": "意气",
+        "ja": "意気",
+        "ko": "의기"
       }
     },
     {
@@ -3932,6 +5276,12 @@
         "zh": "后会无期",
         "ja": "いつか、また",
         "ko": "기약없는 만남"
+      },
+      "keyword": {
+        "en": "Restraint",
+        "zh": "克制",
+        "ja": "抑制",
+        "ko": "절제"
       }
     },
     {
@@ -3951,6 +5301,12 @@
         "zh": "刺客聂隐娘",
         "ja": "黒衣の刺客",
         "ko": "자객 섭은낭"
+      },
+      "keyword": {
+        "en": "The Blue Phoenix",
+        "zh": "青鸾",
+        "ja": "青鸞",
+        "ko": "청란"
       }
     },
     {
@@ -3970,6 +5326,12 @@
         "zh": "山河故人",
         "ja": "山河ノスタルジア",
         "ko": "산하고인"
+      },
+      "keyword": {
+        "en": "One Stretch of Road",
+        "zh": "一程",
+        "ja": "ひと道",
+        "ko": "한 구간"
       }
     },
     {
@@ -3989,6 +5351,12 @@
         "zh": "驴得水",
         "ja": "驴得水",
         "ko": "Mr. Donkey"
+      },
+      "keyword": {
+        "en": "Let It Pass",
+        "zh": "放下",
+        "ja": "捨て置く",
+        "ko": "내려놓다"
       }
     },
     {
@@ -4008,6 +5376,12 @@
         "zh": "美人鱼",
         "ja": "人魚姫",
         "ko": "미인어"
+      },
+      "keyword": {
+        "en": "One Clean Drop",
+        "zh": "一滴",
+        "ja": "一滴",
+        "ko": "한 방울"
       }
     },
     {
@@ -4027,6 +5401,12 @@
         "zh": "芳华",
         "ja": "芳華-Youth-",
         "ko": "청춘: 그 날의 설렘처럼"
+      },
+      "keyword": {
+        "en": "Knowing Kindness",
+        "zh": "知善",
+        "ja": "善を知る",
+        "ko": "선을 알다"
       }
     },
     {
@@ -4046,6 +5426,12 @@
         "zh": "大佛普拉斯",
         "ja": "大仏⁺",
         "ko": "대불+"
+      },
+      "keyword": {
+        "en": "The Inner Cosmos",
+        "zh": "内宇宙",
+        "ja": "内なる宇宙",
+        "ko": "내면의 우주"
       }
     },
     {
@@ -4065,6 +5451,12 @@
         "zh": "无问西东",
         "ja": "无问西东",
         "ko": "무문서동"
+      },
+      "keyword": {
+        "en": "Courage to Come",
+        "zh": "无畏",
+        "ja": "畏れなき",
+        "ko": "두려움 없이"
       }
     },
     {
@@ -4084,6 +5476,12 @@
         "zh": "我不是药神",
         "ja": "薬の神じゃない！",
         "ko": "나는 약신이 아니다"
+      },
+      "keyword": {
+        "en": "To Live",
+        "zh": "求生",
+        "ja": "生きたい",
+        "ko": "살고 싶다"
       }
     },
     {
@@ -4103,6 +5501,12 @@
         "zh": "流浪地球",
         "ja": "流転の地球",
         "ko": "유랑지구"
+      },
+      "keyword": {
+        "en": "Choosing Hope",
+        "zh": "寄望",
+        "ja": "希望に賭ける",
+        "ko": "희망을 걸다"
       }
     },
     {
@@ -4122,6 +5526,12 @@
         "zh": "哪吒之魔童降世",
         "ja": "ナタ～魔童降臨～",
         "ko": "너자"
+      },
+      "keyword": {
+        "en": "My Fate Is Mine",
+        "zh": "逆天",
+        "ja": "天に逆らう",
+        "ko": "하늘을 거스르다"
       }
     },
     {
@@ -4141,6 +5551,12 @@
         "zh": "少年的你",
         "ja": "少年の君",
         "ko": "소년시절의 너"
+      },
+      "keyword": {
+        "en": "I'll Protect You",
+        "zh": "相护",
+        "ja": "守り合う",
+        "ko": "서로 지키다"
       }
     },
     {
@@ -4160,6 +5576,12 @@
         "zh": "返校",
         "ja": "返校 言葉が消えた日",
         "ko": "반교: 디텐션"
+      },
+      "keyword": {
+        "en": "Do Not Forget",
+        "zh": "勿忘",
+        "ja": "忘れざれ",
+        "ko": "잊지 말라"
       }
     },
     {
@@ -4179,6 +5601,12 @@
         "zh": "你好，李焕英",
         "ja": "こんにちは、私のお母さん",
         "ko": "안녕, 리환잉"
+      },
+      "keyword": {
+        "en": "Safe and Well",
+        "zh": "安好",
+        "ja": "健やかに",
+        "ko": "무탈하기를"
       }
     },
     {
@@ -4198,6 +5626,12 @@
         "zh": "人生大事",
         "ja": "人生大事",
         "ko": "인생대사"
+      },
+      "keyword": {
+        "en": "Seeing Off",
+        "zh": "送行",
+        "ja": "見送り",
+        "ko": "배웅"
       }
     },
     {
@@ -4217,6 +5651,12 @@
         "zh": "热辣滚烫",
         "ja": "YOLO 百元の恋",
         "ko": "맵고 뜨겁게"
+      },
+      "keyword": {
+        "en": "Turning It Around",
+        "zh": "翻身",
+        "ja": "起き上がる",
+        "ko": "일어서기"
       }
     },
     {
@@ -4236,6 +5676,12 @@
         "zh": "罗生门",
         "ja": "羅生門",
         "ko": "라쇼몽"
+      },
+      "keyword": {
+        "en": "Doubt",
+        "zh": "疑心",
+        "ja": "疑心",
+        "ko": "의심"
       }
     },
     {
@@ -4255,6 +5701,12 @@
         "zh": "生之欲",
         "ja": "生きる",
         "ko": "이키루"
+      },
+      "keyword": {
+        "en": "Toward Life",
+        "zh": "向生",
+        "ja": "生へ",
+        "ko": "삶을 향해"
       }
     },
     {
@@ -4274,6 +5726,12 @@
         "zh": "鲁邦三世：卡里奥斯特罗城",
         "ja": "ルパン三世 カリオストロの城",
         "ko": "루팡 3세: 칼리오스트로의 성"
+      },
+      "keyword": {
+        "en": "He Stole Your Heart",
+        "zh": "窃心",
+        "ja": "心を盗む",
+        "ko": "마음을 훔치다"
       }
     },
     {
@@ -4293,6 +5751,12 @@
         "zh": "风之谷",
         "ja": "風の谷のナウシカ",
         "ko": "바람계곡의 나우시카"
+      },
+      "keyword": {
+        "en": "Clad in Blue",
+        "zh": "蓝衣",
+        "ja": "青き衣",
+        "ko": "푸른 옷"
       }
     },
     {
@@ -4312,6 +5776,12 @@
         "zh": "银河铁道之夜",
         "ja": "銀河鉄道の夜",
         "ko": "은하철도의 밤"
+      },
+      "keyword": {
+        "en": "True Happiness",
+        "zh": "真福",
+        "ja": "まことの幸い",
+        "ko": "참된 행복"
       }
     },
     {
@@ -4331,6 +5801,12 @@
         "zh": "阿基拉",
         "ja": "AKIRA",
         "ko": "아키라"
+      },
+      "keyword": {
+        "en": "Runaway Power",
+        "zh": "暴走",
+        "ja": "暴走",
+        "ko": "폭주"
       }
     },
     {
@@ -4350,6 +5826,12 @@
         "zh": "红猪",
         "ja": "紅の豚",
         "ko": "붉은 돼지"
+      },
+      "keyword": {
+        "en": "Wings",
+        "zh": "振翅",
+        "ja": "羽ばたき",
+        "ko": "날갯짓"
       }
     },
     {
@@ -4369,6 +5851,12 @@
         "zh": "袅袅夕阳情",
         "ja": "まあだだよ",
         "ko": "마다다요"
+      },
+      "keyword": {
+        "en": "Not Yet",
+        "zh": "未央",
+        "ja": "まあだだよ",
+        "ko": "아직이야"
       }
     },
     {
@@ -4388,6 +5876,12 @@
         "zh": "侧耳倾听",
         "ja": "耳をすませば",
         "ko": "귀를 기울이면"
+      },
+      "keyword": {
+        "en": "The Country Road",
+        "zh": "小径",
+        "ja": "小径",
+        "ko": "작은 길"
       }
     },
     {
@@ -4407,6 +5901,12 @@
         "zh": "攻壳机动队",
         "ja": "GHOST IN THE SHELL / 攻殻機動隊",
         "ko": "공각기동대"
+      },
+      "keyword": {
+        "en": "Ghost and Shell",
+        "zh": "灵壳",
+        "ja": "魂と殻",
+        "ko": "영과 껍데기"
       }
     },
     {
@@ -4426,6 +5926,12 @@
         "zh": "坏孩子的天空",
         "ja": "キッズ・リターン",
         "ko": "키즈 리턴"
+      },
+      "keyword": {
+        "en": "We're Just Starting",
+        "zh": "起手",
+        "ja": "始まったばかり",
+        "ko": "이제 시작"
       }
     },
     {
@@ -4445,6 +5951,12 @@
         "zh": "谈谈情跳跳舞",
         "ja": "Shall we ダンス?",
         "ko": "쉘 위 댄스"
+      },
+      "keyword": {
+        "en": "It Takes Two",
+        "zh": "共舞",
+        "ja": "共に踊る",
+        "ko": "함께 춤추다"
       }
     },
     {
@@ -4464,6 +5976,12 @@
         "zh": "下一站，天国",
         "ja": "ワンダフルライフ",
         "ko": "원더풀 라이프"
+      },
+      "keyword": {
+        "en": "One Memory",
+        "zh": "择忆",
+        "ja": "記憶を選ぶ",
+        "ko": "기억을 고르다"
       }
     },
     {
@@ -4483,6 +6001,12 @@
         "zh": "四月物语",
         "ja": "四月物語",
         "ko": "4월 이야기"
+      },
+      "keyword": {
+        "en": "Waiting for Spring",
+        "zh": "待春",
+        "ja": "春を待つ",
+        "ko": "봄을 기다리다"
       }
     },
     {
@@ -4502,6 +6026,12 @@
         "zh": "蜡笔小新：呼风唤雨！大人帝国的反击",
         "ja": "クレヨンしんちゃん 大人帝国の逆襲",
         "ko": "극장판 짱구는 못말려: 어른 제국의 역습"
+      },
+      "keyword": {
+        "en": "Growing Up",
+        "zh": "长成",
+        "ja": "大人になる",
+        "ko": "자라나기"
       }
     },
     {
@@ -4521,6 +6051,12 @@
         "zh": "千年女优",
         "ja": "千年女優",
         "ko": "천년여우"
+      },
+      "keyword": {
+        "en": "Chasing a Shadow",
+        "zh": "追影",
+        "ja": "影を追う",
+        "ko": "그림자를 좇다"
       }
     },
     {
@@ -4540,6 +6076,12 @@
         "zh": "星之声",
         "ja": "ほしのこえ",
         "ko": "별의 목소리"
+      },
+      "keyword": {
+        "en": "Light-Years Apart",
+        "zh": "天涯",
+        "ja": "天涯",
+        "ko": "아득한 거리"
       }
     },
     {
@@ -4559,6 +6101,12 @@
         "zh": "猫的报恩",
         "ja": "猫の恩返し",
         "ko": "고양이의 보은"
+      },
+      "keyword": {
+        "en": "Your Own Time",
+        "zh": "自适",
+        "ja": "自分の時間",
+        "ko": "나만의 시간"
       }
     },
     {
@@ -4578,6 +6126,12 @@
         "zh": "穿越时空的少女",
         "ja": "時をかける少女",
         "ko": "시간을 달리는 소녀"
+      },
+      "keyword": {
+        "en": "I'll Wait in the Future",
+        "zh": "来日",
+        "ja": "未来で待つ",
+        "ko": "미래에서 기다리다"
       }
     },
     {
@@ -4597,6 +6151,12 @@
         "zh": "秒速五厘米",
         "ja": "秒速5センチメートル",
         "ko": "초속 5센티미터"
+      },
+      "keyword": {
+        "en": "Falling Petals",
+        "zh": "落樱",
+        "ja": "桜舞う",
+        "ko": "지는 벚꽃"
       }
     },
     {
@@ -4616,6 +6176,12 @@
         "zh": "福音战士新剧场版：序",
         "ja": "ヱヴァンゲリヲン新劇場版：序",
         "ko": "에반게리온: 서"
+      },
+      "keyword": {
+        "en": "Facing It",
+        "zh": "迎战",
+        "ja": "立ち向かう",
+        "ko": "맞서다"
       }
     },
     {
@@ -4635,6 +6201,12 @@
         "zh": "步履不停",
         "ja": "歩いても 歩いても",
         "ko": "걸어도 걸어도"
+      },
+      "keyword": {
+        "en": "Always Just Missed",
+        "zh": "错过",
+        "ja": "間に合わず",
+        "ko": "놓치다"
       }
     },
     {
@@ -4654,6 +6226,12 @@
         "zh": "夏日大作战",
         "ja": "サマーウォーズ",
         "ko": "썸머 워즈"
+      },
+      "keyword": {
+        "en": "All Together",
+        "zh": "一家",
+        "ja": "一家",
+        "ko": "한 식구"
       }
     },
     {
@@ -4673,6 +6251,12 @@
         "zh": "借物少女艾莉缇",
         "ja": "借りぐらしのアリエッティ",
         "ko": "마루 밑 아리에티"
+      },
+      "keyword": {
+        "en": "Part of My Heart",
+        "zh": "心上",
+        "ja": "心の一部",
+        "ko": "마음의 한켠"
       }
     },
     {
@@ -4692,6 +6276,12 @@
         "zh": "狼的孩子雨和雪",
         "ja": "おおかみこどもの雨と雪",
         "ko": "늑대아이"
+      },
+      "keyword": {
+        "en": "Thirteen Years, Gone",
+        "zh": "转眼",
+        "ja": "瞬く間",
+        "ko": "눈 깜짝할 사이"
       }
     },
     {
@@ -4711,6 +6301,12 @@
         "zh": "言叶之庭",
         "ja": "言の葉の庭",
         "ko": "언어의 정원"
+      },
+      "keyword": {
+        "en": "Learning to Walk",
+        "zh": "学步",
+        "ja": "歩き方を学ぶ",
+        "ko": "걸음을 배우다"
       }
     },
     {
@@ -4730,6 +6326,12 @@
         "zh": "起风了",
         "ja": "風立ちぬ",
         "ko": "바람이 분다"
+      },
+      "keyword": {
+        "en": "The Wind Rises",
+        "zh": "起风",
+        "ja": "風立ちぬ",
+        "ko": "바람이 일다"
       }
     },
     {
@@ -4749,6 +6351,12 @@
         "zh": "如父如子",
         "ja": "そして父になる",
         "ko": "그렇게 아버지가 된다"
+      },
+      "keyword": {
+        "en": "Becoming a Father",
+        "zh": "为父",
+        "ja": "父になる",
+        "ko": "아버지 되기"
       }
     },
     {
@@ -4768,6 +6376,12 @@
         "zh": "辉夜姬物语",
         "ja": "かぐや姫の物語",
         "ko": "가구야공주 이야기"
+      },
+      "keyword": {
+        "en": "The Taste of This World",
+        "zh": "人间味",
+        "ja": "この世の味",
+        "ko": "이 세상의 맛"
       }
     },
     {
@@ -4787,6 +6401,12 @@
         "zh": "编舟记",
         "ja": "舟を編む",
         "ko": "행복한 사전"
+      },
+      "keyword": {
+        "en": "A Sea of Words",
+        "zh": "词海",
+        "ja": "言葉の海",
+        "ko": "말의 바다"
       }
     },
     {
@@ -4806,6 +6426,12 @@
         "zh": "怪物之子",
         "ja": "バケモノの子",
         "ko": "괴물의 아이"
+      },
+      "keyword": {
+        "en": "The Sword Within",
+        "zh": "胸中剑",
+        "ja": "胸の中の剣",
+        "ko": "가슴 속의 검"
       }
     },
     {
@@ -4825,6 +6451,12 @@
         "zh": "声之形",
         "ja": "映画 聲の形",
         "ko": "목소리의 형태"
+      },
+      "keyword": {
+        "en": "Reaching Out",
+        "zh": "伸手",
+        "ja": "手を伸ばす",
+        "ko": "손을 내밀다"
       }
     },
     {
@@ -4844,6 +6476,12 @@
         "zh": "在这世界的角落",
         "ja": "この世界の片隅に",
         "ko": "이 세상의 한구석에"
+      },
+      "keyword": {
+        "en": "A Corner of the World",
+        "zh": "一隅",
+        "ja": "片隅",
+        "ko": "한 구석"
       }
     },
     {
@@ -4863,6 +6501,12 @@
         "zh": "天气之子",
         "ja": "天気の子",
         "ko": "날씨의 아이"
+      },
+      "keyword": {
+        "en": "It Will Clear Up",
+        "zh": "转晴",
+        "ja": "晴れゆく",
+        "ko": "맑아지다"
       }
     },
     {
@@ -4882,6 +6526,12 @@
         "zh": "鬼灭之刃：无限列车篇",
         "ja": "劇場版「鬼滅の刃」無限列車編",
         "ko": "극장판 귀멸의 칼날: 무한열차편"
+      },
+      "keyword": {
+        "en": "Set Your Heart Ablaze",
+        "zh": "燃心",
+        "ja": "心を燃やせ",
+        "ko": "마음을 불태워라"
       }
     },
     {
@@ -4901,6 +6551,12 @@
         "zh": "驾驶我的车",
         "ja": "ドライブ・マイ・カー",
         "ko": "드라이브 마이 카"
+      },
+      "keyword": {
+        "en": "Facing the Hurt",
+        "zh": "正视",
+        "ja": "向き合う",
+        "ko": "마주하기"
       }
     },
     {
@@ -4920,6 +6576,12 @@
         "zh": "花束般的恋爱",
         "ja": "花束みたいな恋をした",
         "ko": "꽃다발 같은 사랑을 했다"
+      },
+      "keyword": {
+        "en": "A Bouquet",
+        "zh": "花束",
+        "ja": "花束",
+        "ko": "꽃다발"
       }
     },
     {
@@ -4939,6 +6601,12 @@
         "zh": "灌篮高手",
         "ja": "THE FIRST SLAM DUNK",
         "ko": "더 퍼스트 슬램덩크"
+      },
+      "keyword": {
+        "en": "Not Over Yet",
+        "zh": "未竟",
+        "ja": "まだ終わらない",
+        "ko": "아직 끝나지 않았다"
       }
     },
     {
@@ -4958,6 +6626,12 @@
         "zh": "铃芽之旅",
         "ja": "すずめの戸締まり",
         "ko": "스즈메의 문단속"
+      },
+      "keyword": {
+        "en": "I'm Off, I'll Be Back",
+        "zh": "往还",
+        "ja": "行ってきます",
+        "ko": "다녀오겠습니다"
       }
     },
     {
@@ -4977,6 +6651,12 @@
         "zh": "哥斯拉-1.0",
         "ja": "ゴジラ-1.0",
         "ko": "고질라 마이너스 원"
+      },
+      "keyword": {
+        "en": "Survivor's War",
+        "zh": "生还",
+        "ja": "生きて還る",
+        "ko": "살아 돌아오다"
       }
     },
     {
@@ -4996,6 +6676,12 @@
         "zh": "你想活出怎样的人生",
         "ja": "君たちはどう生きるか",
         "ko": "그대들은 어떻게 살 것인가"
+      },
+      "keyword": {
+        "en": "How Will You Live?",
+        "zh": "问生",
+        "ja": "いかに生きるか",
+        "ko": "어떻게 살 것인가"
       }
     },
     {
@@ -5015,6 +6701,12 @@
         "zh": "甜蜜的人生",
         "ja": "甘い人生",
         "ko": "달콤한 인생"
+      },
+      "keyword": {
+        "en": "The Branch or the Heart",
+        "zh": "心动",
+        "ja": "心が動く",
+        "ko": "마음이 흔들리다"
       }
     },
     {
@@ -5034,6 +6726,12 @@
         "zh": "你是我的命运",
         "ja": "ユア・マイ・サンシャイン",
         "ko": "너는 내 운명"
+      },
+      "keyword": {
+        "en": "Staying by Her",
+        "zh": "厮守",
+        "ja": "添い遂げる",
+        "ko": "곁을 지키다"
       }
     },
     {
@@ -5053,6 +6751,12 @@
         "zh": "孤胆特工",
         "ja": "アジョシ",
         "ko": "아저씨"
+      },
+      "keyword": {
+        "en": "Only Today",
+        "zh": "今日",
+        "ja": "今日だけ",
+        "ko": "오늘만"
       }
     },
     {
@@ -5072,6 +6776,12 @@
         "zh": "最终兵器：弓",
         "ja": "神弓－KAMIYUMI－",
         "ko": "최종병기 활"
+      },
+      "keyword": {
+        "en": "Against the Wind",
+        "zh": "破风",
+        "ja": "風を破る",
+        "ko": "바람을 가르다"
       }
     },
     {
@@ -5091,6 +6801,12 @@
         "zh": "与犯罪的战争：坏家伙的全盛时代",
         "ja": "悪いやつら",
         "ko": "범죄와의 전쟁: 나쁜놈들 전성시대"
+      },
+      "keyword": {
+        "en": "Pulling Strings",
+        "zh": "攀附",
+        "ja": "コネ",
+        "ko": "연줄"
       }
     },
     {
@@ -5110,6 +6826,12 @@
         "zh": "双面君王",
         "ja": "Masquerade",
         "ko": "광해, 왕이 된 남자"
+      },
+      "keyword": {
+        "en": "The Double",
+        "zh": "替身",
+        "ja": "影武者",
+        "ko": "대역"
       }
     },
     {
@@ -5129,6 +6851,12 @@
         "zh": "辩护人",
         "ja": "弁護人",
         "ko": "변호인"
+      },
+      "keyword": {
+        "en": "The People's Sovereignty",
+        "zh": "民本",
+        "ja": "民が本",
+        "ko": "국민이 주인"
       }
     },
     {
@@ -5148,6 +6876,12 @@
         "zh": "雪国列车",
         "ja": "スノーピアサー",
         "ko": "설국열차"
+      },
+      "keyword": {
+        "en": "It's a Door",
+        "zh": "破壁",
+        "ja": "壁を破る",
+        "ko": "벽을 깨다"
       }
     },
     {
@@ -5167,6 +6901,12 @@
         "zh": "鸣梁海战",
         "ja": "バトル・オーシャン／海上決戦",
         "ko": "명량"
+      },
+      "keyword": {
+        "en": "Twelve Ships",
+        "zh": "十二艘",
+        "ja": "十二隻",
+        "ko": "열두 척"
       }
     },
     {
@@ -5186,6 +6926,12 @@
         "zh": "老手",
         "ja": "ベテラン",
         "ko": "베테랑"
+      },
+      "keyword": {
+        "en": "Backbone",
+        "zh": "骨气",
+        "ja": "気骨",
+        "ko": "배짱"
       }
     },
     {
@@ -5205,6 +6951,12 @@
         "zh": "小姐",
         "ja": "お嬢さん",
         "ko": "아가씨"
+      },
+      "keyword": {
+        "en": "My Savior, My Ruin",
+        "zh": "共谋",
+        "ja": "共謀",
+        "ko": "공모"
       }
     },
     {
@@ -5224,6 +6976,12 @@
         "zh": "釜山行",
         "ja": "新感染 ファイナル・エクスプレス",
         "ko": "부산행"
+      },
+      "keyword": {
+        "en": "Giving Himself Up",
+        "zh": "舍身",
+        "ja": "身を捨てる",
+        "ko": "몸을 던지다"
       }
     },
     {
@@ -5243,6 +7001,12 @@
         "zh": "1987：黎明到来的那一天",
         "ja": "1987、ある闘いの真実",
         "ko": "1987"
+      },
+      "keyword": {
+        "en": "Will It Change Anything?",
+        "zh": "星火",
+        "ja": "一つの火",
+        "ko": "작은 불씨"
       }
     },
     {
@@ -5262,6 +7026,12 @@
         "zh": "蜂鸟",
         "ja": "はちどり",
         "ko": "벌새"
+      },
+      "keyword": {
+        "en": "How Should I Live?",
+        "zh": "彷徨",
+        "ja": "彷徨い",
+        "ko": "방황"
       }
     },
     {
@@ -5280,6 +7050,12 @@
         "en": "Minari",
         "zh": "米纳里",
         "ja": "ミナリ",
+        "ko": "미나리"
+      },
+      "keyword": {
+        "en": "Minari Grows Anywhere",
+        "zh": "水芹",
+        "ja": "セリ",
         "ko": "미나리"
       }
     },
@@ -5300,6 +7076,12 @@
         "zh": "分手的决心",
         "ja": "別れる決心",
         "ko": "헤어질 결심"
+      },
+      "keyword": {
+        "en": "Utterly Undone",
+        "zh": "崩塌",
+        "ja": "崩れる",
+        "ko": "무너지다"
       }
     },
     {
@@ -5319,6 +7101,12 @@
         "zh": "首尔之春",
         "ja": "ソウルの春",
         "ko": "서울의 봄"
+      },
+      "keyword": {
+        "en": "A Coup or a Revolution?",
+        "zh": "窃国",
+        "ja": "国を盗む",
+        "ko": "나라를 훔치다"
       }
     },
     {
@@ -5338,6 +7126,12 @@
         "zh": "破墓",
         "ja": "破墓／パミョ",
         "ko": "파묘"
+      },
+      "keyword": {
+        "en": "The Severed Spine",
+        "zh": "地脉",
+        "ja": "地脈",
+        "ko": "지맥"
       }
     },
     {
@@ -5357,6 +7151,12 @@
         "zh": "第七封印",
         "ja": "第七の封印",
         "ko": "제7의 봉인"
+      },
+      "keyword": {
+        "en": "Knowledge, Not Faith",
+        "zh": "求知",
+        "ja": "知を求む",
+        "ko": "지를 구하다"
       }
     },
     {
@@ -5376,6 +7176,12 @@
         "zh": "八部半",
         "ja": "８ 1／2",
         "ko": "8과 1/2"
+      },
+      "keyword": {
+        "en": "Candor",
+        "zh": "坦然",
+        "ja": "率直",
+        "ko": "솔직"
       }
     },
     {
@@ -5395,6 +7201,12 @@
         "zh": "柏林苍穹下",
         "ja": "ベルリン・天使の詩",
         "ko": "베를린 천사의 시"
+      },
+      "keyword": {
+        "en": "When the Child Was a Child",
+        "zh": "初心",
+        "ja": "初心",
+        "ko": "초심"
       }
     },
     {
@@ -5414,6 +7226,12 @@
         "zh": "巴贝特之宴",
         "ja": "バベットの晩餐会",
         "ko": "바베트의 만찬"
+      },
+      "keyword": {
+        "en": "The Feast",
+        "zh": "盛宴",
+        "ja": "饗宴",
+        "ko": "만찬"
       }
     },
     {
@@ -5433,6 +7251,12 @@
         "zh": "邮差",
         "ja": "イル・ポスティーノ",
         "ko": "일 포스티노"
+      },
+      "keyword": {
+        "en": "Poetry for Whoever Needs It",
+        "zh": "赠诗",
+        "ja": "詩を贈る",
+        "ko": "시를 주다"
       }
     },
     {
@@ -5452,6 +7276,12 @@
         "zh": "怒火青春",
         "ja": "憎しみ",
         "ko": "증오"
+      },
+      "keyword": {
+        "en": "The Landing",
+        "zh": "着地",
+        "ja": "着地",
+        "ko": "착지"
       }
     },
     {
@@ -5471,6 +7301,12 @@
         "zh": "罗拉快跑",
         "ja": "ラン・ローラ・ラン",
         "ko": "롤라 런"
+      },
+      "keyword": {
+        "en": "Running",
+        "zh": "疾走",
+        "ja": "疾走",
+        "ko": "질주"
       }
     },
     {
@@ -5490,6 +7326,12 @@
         "zh": "跳出我天地",
         "ja": "リトル・ダンサー",
         "ko": "빌리 엘리어트"
+      },
+      "keyword": {
+        "en": "Like Electricity",
+        "zh": "触电",
+        "ja": "電気のように",
+        "ko": "감전된 듯"
       }
     },
     {
@@ -5498,6 +7340,7 @@
       "tmdbId": 245,
       "posterPath": "/qoZ1bD0q9EFqcNiEYbEigsRcNCt.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["No man", "is an island."],
         "zh": ["没有人", "是一座孤岛。"],
@@ -5509,6 +7352,12 @@
         "zh": "关于一个男孩",
         "ja": "アバウト・ア・ボーイ",
         "ko": "어바웃 어 보이"
+      },
+      "keyword": {
+        "en": "An Island",
+        "zh": "孤岛",
+        "ja": "孤島",
+        "ko": "섬"
       }
     },
     {
@@ -5528,6 +7377,12 @@
         "zh": "对她说",
         "ja": "トーク・トゥ・ハー",
         "ko": "그녀에게"
+      },
+      "keyword": {
+        "en": "Nothing Is Simple",
+        "zh": "难言",
+        "ja": "言い難し",
+        "ko": "말하기 어려운"
       }
     },
     {
@@ -5547,6 +7402,12 @@
         "zh": "上帝之城",
         "ja": "シティ・オブ・ゴッド",
         "ko": "시티 오브 갓"
+      },
+      "keyword": {
+        "en": "No Way Out",
+        "zh": "困局",
+        "ja": "袋の鼠",
+        "ko": "덫"
       }
     },
     {
@@ -5566,6 +7427,12 @@
         "zh": "再见列宁",
         "ja": "グッバイ、レーニン！",
         "ko": "굿바이, 레닌"
+      },
+      "keyword": {
+        "en": "The Country She Believed In",
+        "zh": "故国",
+        "ja": "母の国",
+        "ko": "그 나라"
       }
     },
     {
@@ -5574,6 +7441,7 @@
       "tmdbId": 508,
       "posterPath": "/7QPeVsr9rcFU9Gl90yg0gTOTpVv.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["If you look for it,", "I've got a sneaky feeling", "you'll find that love", "actually is all around."],
         "zh": ["如果你去寻找，", "我有种预感，你会发现", "爱其实无处不在。"],
@@ -5585,6 +7453,12 @@
         "zh": "真爱至上",
         "ja": "ラブ・アクチュアリー",
         "ko": "러브 액츄얼리"
+      },
+      "keyword": {
+        "en": "Love Is All Around",
+        "zh": "遍在",
+        "ja": "あまねく",
+        "ko": "곳곳에"
       }
     },
     {
@@ -5604,6 +7478,12 @@
         "zh": "摩托日记",
         "ja": "モーターサイクル・ダイアリーズ",
         "ko": "모터사이클 다이어리"
+      },
+      "keyword": {
+        "en": "Let the World Change You",
+        "zh": "历世",
+        "ja": "世を経る",
+        "ko": "세상을 겪다"
       }
     },
     {
@@ -5623,6 +7503,12 @@
         "zh": "潘神的迷宫",
         "ja": "パンズ・ラビリンス",
         "ko": "판의 미로: 오필리아와 세개의 열쇠"
+      },
+      "keyword": {
+        "en": "Back to Her Kingdom",
+        "zh": "归途",
+        "ja": "帰る道",
+        "ko": "돌아가는 길"
       }
     },
     {
@@ -5642,6 +7528,12 @@
         "zh": "窃听风暴",
         "ja": "善き人のためのソナタ",
         "ko": "타인의 삶"
+      },
+      "keyword": {
+        "en": "The Sonata",
+        "zh": "一曲",
+        "ja": "一曲",
+        "ko": "한 곡"
       }
     },
     {
@@ -5661,6 +7553,12 @@
         "zh": "赎罪",
         "ja": "つぐない",
         "ko": "어톤먼트"
+      },
+      "keyword": {
+        "en": "Atonement",
+        "zh": "补过",
+        "ja": "償い",
+        "ko": "속죄"
       }
     },
     {
@@ -5680,6 +7578,12 @@
         "zh": "生人勿进",
         "ja": "ぼくのエリ 200歳の少女",
         "ko": "렛 미 인"
+      },
+      "keyword": {
+        "en": "Let Me In",
+        "zh": "邀入",
+        "ja": "招き入れる",
+        "ko": "들이다"
       }
     },
     {
@@ -5699,6 +7603,12 @@
         "zh": "谜一样的双眼",
         "ja": "瞳の奥の秘密",
         "ko": "엘 시크레토: 비밀의 눈동자"
+      },
+      "keyword": {
+        "en": "The Unclosed Case",
+        "zh": "悬案",
+        "ja": "未決",
+        "ko": "미결"
       }
     },
     {
@@ -5707,6 +7617,7 @@
       "tmdbId": 45269,
       "posterPath": "/pVNKXVQFukBaCz6ML7GH3kiPlQP.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I have", "a voice."],
         "zh": ["我", "有声音。"],
@@ -5718,6 +7629,12 @@
         "zh": "国王的演讲",
         "ja": "英国王のスピーチ",
         "ko": "킹스 스피치"
+      },
+      "keyword": {
+        "en": "I Have a Voice",
+        "zh": "发声",
+        "ja": "声を持つ",
+        "ko": "목소리를 갖다"
       }
     },
     {
@@ -5737,6 +7654,12 @@
         "zh": "触不可及",
         "ja": "最強のふたり",
         "ko": "언터처블: 1%의 우정"
+      },
+      "keyword": {
+        "en": "The Only Trace",
+        "zh": "痕迹",
+        "ja": "痕跡",
+        "ko": "흔적"
       }
     },
     {
@@ -5756,6 +7679,12 @@
         "zh": "初恋这首情歌",
         "ja": "シング・ストリート 未来へのうた",
         "ko": "싱 스트리트"
+      },
+      "keyword": {
+        "en": "Happy-Sad",
+        "zh": "悲喜",
+        "ja": "悲喜",
+        "ko": "희비"
       }
     },
     {
@@ -5764,6 +7693,7 @@
       "tmdbId": 346648,
       "posterPath": "/1OJ9vkD5xPt3skC6KguyXAgagRZ.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["If we're kind and polite,", "the world will be right."],
         "zh": ["只要我们善良有礼，", "世界就会变好。"],
@@ -5775,6 +7705,12 @@
         "zh": "帕丁顿熊2",
         "ja": "パディントン２",
         "ko": "패딩턴 2"
+      },
+      "keyword": {
+        "en": "Kind and Polite",
+        "zh": "温良",
+        "ja": "優しく礼儀正しく",
+        "ko": "친절과 예의"
       }
     },
     {
@@ -5794,6 +7730,12 @@
         "zh": "燃烧女子的肖像",
         "ja": "燃ゆる女の肖像",
         "ko": "타오르는 여인의 초상"
+      },
+      "keyword": {
+        "en": "The Gaze",
+        "zh": "凝视",
+        "ja": "見つめ合う",
+        "ko": "응시"
       }
     },
     {
@@ -5813,6 +7755,12 @@
         "zh": "伊尼舍林的报丧女妖",
         "ja": "イニシェリン島の精霊",
         "ko": "이니셰린의 밴시"
+      },
+      "keyword": {
+        "en": "Fallen Out",
+        "zh": "相厌",
+        "ja": "嫌になる",
+        "ko": "싫어지다"
       }
     },
     {
@@ -5832,6 +7780,12 @@
         "zh": "钢琴课",
         "ja": "ピアノ・レッスン",
         "ko": "피아노"
+      },
+      "keyword": {
+        "en": "A Silence With No Sound",
+        "zh": "默语",
+        "ja": "沈黙の声",
+        "ko": "침묵의 말"
       }
     },
     {
@@ -5851,6 +7805,12 @@
         "zh": "勇夺芳心",
         "ja": "シャー・ルク・カーンのDDLJ／ラブゲット大作戦",
         "ko": "용감한 자가 신부를 데려가리"
+      },
+      "keyword": {
+        "en": "Look Back",
+        "zh": "回望",
+        "ja": "振り返る",
+        "ko": "돌아보다"
       }
     },
     {
@@ -5870,6 +7830,12 @@
         "zh": "地球上的星星",
         "ja": "地上の星たち",
         "ko": "지상의 별처럼"
+      },
+      "keyword": {
+        "en": "Every Child's Gift",
+        "zh": "异才",
+        "ja": "それぞれの才",
+        "ko": "저마다의 재능"
       }
     },
     {
@@ -5878,6 +7844,7 @@
       "tmdbId": 109445,
       "posterPath": "/itAKcobTYGpYT8Phwjd8c9hleTo.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Let it go.", "The cold never", "bothered me anyway."],
         "zh": ["随它去吧。", "反正寒冷", "从来困不住我。"],
@@ -5889,6 +7856,12 @@
         "zh": "冰雪奇缘",
         "ja": "アナと雪の女王",
         "ko": "겨울왕국"
+      },
+      "keyword": {
+        "en": "Let It Go",
+        "zh": "解冻",
+        "ja": "解け放つ",
+        "ko": "녹아내리다"
       }
     },
     {
@@ -5908,6 +7881,12 @@
         "zh": "午餐盒",
         "ja": "めぐり逢わせのお弁当",
         "ko": "런치박스"
+      },
+      "keyword": {
+        "en": "The Wrong Train",
+        "zh": "错车",
+        "ja": "乗り違え",
+        "ko": "잘못 탄 기차"
       }
     },
     {
@@ -5927,6 +7906,12 @@
         "zh": "摔跤吧！爸爸",
         "ja": "ダンガル きっと、つよくなる",
         "ko": "당갈"
+      },
+      "keyword": {
+        "en": "Our Daughters",
+        "zh": "巾帼",
+        "ja": "女傑",
+        "ko": "여장부"
       }
     },
     {
@@ -5935,6 +7920,7 @@
       "tmdbId": 277834,
       "posterPath": "/m5MDZOIFEFlxGiLuAzWzFSsWcye.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I am Moana", "of Motunui.", "You will board my boat."],
         "zh": ["我是莫图努伊的", "莫阿娜。", "你将登上我的船。"],
@@ -5946,6 +7932,12 @@
         "zh": "海洋奇缘",
         "ja": "モアナと伝説の海",
         "ko": "모아나"
+      },
+      "keyword": {
+        "en": "To the Sea",
+        "zh": "向海",
+        "ja": "海へ",
+        "ko": "바다로"
       }
     },
     {
@@ -5954,6 +7946,7 @@
       "tmdbId": 269149,
       "posterPath": "/hlK0e0wAQ3VLuJcsfIYPvb4JVud.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Anyone", "can be anything."],
         "zh": ["任何人", "都能成为任何样子。"],
@@ -5965,6 +7958,12 @@
         "zh": "疯狂动物城",
         "ja": "ズートピア",
         "ko": "주토피아"
+      },
+      "keyword": {
+        "en": "Anyone Can Be Anything",
+        "zh": "无界",
+        "ja": "境なし",
+        "ko": "경계 없이"
       }
     },
     {
@@ -5984,6 +7983,12 @@
         "zh": "何以为家",
         "ja": "存在のない子供たち",
         "ko": "가버나움"
+      },
+      "keyword": {
+        "en": "Abandoned",
+        "zh": "弃儿",
+        "ja": "捨て子",
+        "ko": "버려진 아이"
       }
     },
     {
@@ -6003,6 +8008,12 @@
         "zh": "别告诉她",
         "ja": "フェアウェル",
         "ko": "페어웰"
+      },
+      "keyword": {
+        "en": "Carrying It for Her",
+        "zh": "承重",
+        "ja": "重さを担う",
+        "ko": "무게를 대신 지다"
       }
     },
     {
@@ -6022,6 +8033,12 @@
         "zh": "大都会",
         "ja": "メトロポリス",
         "ko": "메트로폴리스"
+      },
+      "keyword": {
+        "en": "The Mediator Must Be the Heart",
+        "zh": "居间",
+        "ja": "仲立ち",
+        "ko": "중재"
       }
     },
     {
@@ -6030,6 +8047,7 @@
       "tmdbId": 901,
       "posterPath": "/ugmakEL5y294I5bXgiBqApuZpwc.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["You can see now?", "Yes, I can see now."],
         "zh": ["你能看见了？", "是的，我能看见了。"],
@@ -6041,6 +8059,12 @@
         "zh": "城市之光",
         "ja": "街の灯",
         "ko": "시티 라이트"
+      },
+      "keyword": {
+        "en": "You Can See Now?",
+        "zh": "相认",
+        "ja": "気づく",
+        "ko": "알아보다"
       }
     },
     {
@@ -6060,6 +8084,12 @@
         "zh": "M就是凶手",
         "ja": "M",
         "ko": "엠"
+      },
+      "keyword": {
+        "en": "Trapped in Myself",
+        "zh": "自困",
+        "ja": "自らに囚われ",
+        "ko": "스스로에 갇히다"
       }
     },
     {
@@ -6079,6 +8109,12 @@
         "zh": "大幻影",
         "ja": "大いなる幻影",
         "ko": "위대한 환상"
+      },
+      "keyword": {
+        "en": "Borders Are Man-Made",
+        "zh": "疆界",
+        "ja": "国境",
+        "ko": "국경"
       }
     },
     {
@@ -6098,6 +8134,12 @@
         "zh": "游戏规则",
         "ja": "ゲームの規則",
         "ko": "게임의 규칙"
+      },
+      "keyword": {
+        "en": "Everyone Has Their Reasons",
+        "zh": "情理",
+        "ja": "それぞれの理",
+        "ko": "각자의 이유"
       }
     },
     {
@@ -6106,6 +8148,7 @@
       "tmdbId": 596,
       "posterPath": "/eUcxMVBIA0Jg8l1RGUqycrc3eIQ.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Wherever there's someone hungry,", "I'll be there.", "Wherever there's someone beaten,", "I'll be there."],
         "zh": ["哪里有人在挨饿，", "我就在那里；", "哪里有人在被打，", "我就在那里。"],
@@ -6117,6 +8160,12 @@
         "zh": "愤怒的葡萄",
         "ja": "怒りの葡萄",
         "ko": "분노의 포도"
+      },
+      "keyword": {
+        "en": "I'll Be There",
+        "zh": "同苦",
+        "ja": "苦を共に",
+        "ko": "고통을 함께"
       }
     },
     {
@@ -6136,6 +8185,12 @@
         "zh": "费城故事",
         "ja": "フィラデルフィア物語",
         "ko": "필라델피아 스토리"
+      },
+      "keyword": {
+        "en": "Never the Time to Judge",
+        "zh": "容人",
+        "ja": "人を容れる",
+        "ko": "사람을 품다"
       }
     },
     {
@@ -6144,6 +8199,7 @@
       "tmdbId": 963,
       "posterPath": "/bf4o6Uzw5wqLjdKwRuiDrN1xyvl.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["This is the stuff", "that dreams are made of."],
         "zh": ["这就是", "造梦的材料。"],
@@ -6155,6 +8211,12 @@
         "zh": "马耳他之鹰",
         "ja": "マルタの鷹",
         "ko": "말타의 매"
+      },
+      "keyword": {
+        "en": "The Stuff of Dreams",
+        "zh": "幻物",
+        "ja": "夢の材",
+        "ko": "꿈의 재료"
       }
     },
     {
@@ -6174,6 +8236,12 @@
         "zh": "相见恨晚",
         "ja": "逢びき",
         "ko": "밀회"
+      },
+      "keyword": {
+        "en": "An Ordinary Woman's Storm",
+        "zh": "隐情",
+        "ja": "秘めた情",
+        "ko": "숨긴 마음"
       }
     },
     {
@@ -6193,6 +8261,12 @@
         "zh": "红菱艳",
         "ja": "赤い靴",
         "ko": "분홍신"
+      },
+      "keyword": {
+        "en": "Why Do You Dance?",
+        "zh": "痴舞",
+        "ja": "舞に憑かれ",
+        "ko": "춤에 홀리다"
       }
     },
     {
@@ -6201,6 +8275,7 @@
       "tmdbId": 702,
       "posterPath": "/aicdlO5vt7z2ARm279eGzJeYCLQ.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I have always depended", "on the kindness", "of strangers."],
         "zh": ["我一直依赖", "陌生人的善意。"],
@@ -6212,6 +8287,12 @@
         "zh": "欲望号街车",
         "ja": "欲望という名の電車",
         "ko": "욕망이라는 이름의 전차"
+      },
+      "keyword": {
+        "en": "The Kindness of Strangers",
+        "zh": "陌客",
+        "ja": "見知らぬ人",
+        "ko": "낯선 이"
       }
     },
     {
@@ -6231,6 +8312,12 @@
         "zh": "山椒大夫",
         "ja": "山椒大夫",
         "ko": "산쇼다유"
+      },
+      "keyword": {
+        "en": "Mercy",
+        "zh": "慈悲",
+        "ja": "慈悲",
+        "ko": "자비"
       }
     },
     {
@@ -6250,6 +8337,12 @@
         "zh": "光荣之路",
         "ja": "突撃",
         "ko": "영광의 길"
+      },
+      "keyword": {
+        "en": "The Last Refuge",
+        "zh": "遮羞",
+        "ja": "体裁を隠す",
+        "ko": "부끄러움을 가리다"
       }
     },
     {
@@ -6269,6 +8362,12 @@
         "zh": "蜘蛛巢城",
         "ja": "蜘蛛巣城",
         "ko": "거미집의 성"
+      },
+      "keyword": {
+        "en": "Delusion",
+        "zh": "妄执",
+        "ja": "妄執",
+        "ko": "망집"
       }
     },
     {
@@ -6288,6 +8387,12 @@
         "zh": "历劫佳人",
         "ja": "黒い罠",
         "ko": "검은 함정"
+      },
+      "keyword": {
+        "en": "What Does It Matter?",
+        "zh": "身后名",
+        "ja": "死後の名",
+        "ko": "죽은 뒤의 이름"
       }
     },
     {
@@ -6307,6 +8412,12 @@
         "zh": "扒手",
         "ja": "スリ",
         "ko": "소매치기"
+      },
+      "keyword": {
+        "en": "What a Strange Road",
+        "zh": "歧路",
+        "ja": "奇しき道",
+        "ko": "이상한 길"
       }
     },
     {
@@ -6326,6 +8437,12 @@
         "zh": "切腹",
         "ja": "切腹",
         "ko": "하라키리"
+      },
+      "keyword": {
+        "en": "An Empty Shell",
+        "zh": "虚仪",
+        "ja": "虚礼",
+        "ko": "허례"
       }
     },
     {
@@ -6345,6 +8462,12 @@
         "zh": "秋刀鱼之味",
         "ja": "秋刀魚の味",
         "ko": "꽁치의 맛"
+      },
+      "keyword": {
+        "en": "Alone in the End",
+        "zh": "独坐",
+        "ja": "独り座す",
+        "ko": "홀로 앉아"
       }
     },
     {
@@ -6364,6 +8487,12 @@
         "zh": "豹",
         "ja": "山猫",
         "ko": "레오파드"
+      },
+      "keyword": {
+        "en": "Everything Must Change",
+        "zh": "变以守常",
+        "ja": "変えて守る",
+        "ko": "바꾸어 지키다"
       }
     },
     {
@@ -6383,6 +8512,12 @@
         "zh": "砂之女",
         "ja": "砂の女",
         "ko": "모래의 여자"
+      },
+      "keyword": {
+        "en": "Shoveling Sand",
+        "zh": "徒劳",
+        "ja": "徒労",
+        "ko": "헛수고"
       }
     },
     {
@@ -6402,6 +8537,12 @@
         "zh": "万世魔星",
         "ja": "モンティ・パイソン ライフ・オブ・ブライアン",
         "ko": "라이프 오브 브라이언"
+      },
+      "keyword": {
+        "en": "Think for Yourself",
+        "zh": "自思",
+        "ja": "自ら考えよ",
+        "ko": "스스로 생각하라"
       }
     },
     {
@@ -6410,6 +8551,7 @@
       "tmdbId": 1955,
       "posterPath": "/u0wpPYjuSt8DIe1Y3Vapnh8jcKE.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I am not an animal!", "I am a human being!", "I am a man!"],
         "zh": ["我不是动物！", "我是人！", "我是一个人！"],
@@ -6421,6 +8563,12 @@
         "zh": "象人",
         "ja": "エレファント・マン",
         "ko": "엘리펀트 맨"
+      },
+      "keyword": {
+        "en": "I Am a Man",
+        "zh": "为人",
+        "ja": "人である",
+        "ko": "사람이다"
       }
     },
     {
@@ -6440,6 +8588,12 @@
         "zh": "碧海蓝天",
         "ja": "グラン・ブルー",
         "ko": "그랑블루"
+      },
+      "keyword": {
+        "en": "A Reason to Surface",
+        "zh": "浮沉",
+        "ja": "浮き沈み",
+        "ko": "부침"
       }
     },
     {
@@ -6448,6 +8602,7 @@
       "tmdbId": 581,
       "posterPath": "/hw0ZEHAaTqTxSXGVwUFX7uvanSA.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I had never known", "who I really was", "until now."],
         "zh": ["我第一次", "这么清楚地知道", "我是谁。"],
@@ -6459,6 +8614,12 @@
         "zh": "与狼共舞",
         "ja": "ダンス・ウィズ・ウルブズ",
         "ko": "늑대와 춤을"
+      },
+      "keyword": {
+        "en": "Knowing Who I Am",
+        "zh": "知我",
+        "ja": "我を知る",
+        "ko": "나를 알다"
       }
     },
     {
@@ -6478,6 +8639,12 @@
         "zh": "岁月的童话",
         "ja": "おもひでぽろぽろ",
         "ko": "추억은 방울방울"
+      },
+      "keyword": {
+        "en": "The Child I Still Carry",
+        "zh": "旧我",
+        "ja": "昔の自分",
+        "ko": "옛날의 나"
       }
     },
     {
@@ -6497,6 +8664,12 @@
         "zh": "沉默的羔羊",
         "ja": "羊たちの沈黙",
         "ko": "양들의 침묵"
+      },
+      "keyword": {
+        "en": "We Covet What We See",
+        "zh": "所欲",
+        "ja": "欲するもの",
+        "ko": "탐하는 것"
       }
     },
     {
@@ -6516,6 +8689,12 @@
         "zh": "蓝白红三部曲之蓝",
         "ja": "トリコロール／青の愛",
         "ko": "세 가지 색: 블루"
+      },
+      "keyword": {
+        "en": "Nothing Left to Do",
+        "zh": "留白",
+        "ja": "余白",
+        "ko": "여백"
       }
     },
     {
@@ -6535,6 +8714,12 @@
         "zh": "燃情岁月",
         "ja": "レジェンド・オブ・フォール 果てしなき想い",
         "ko": "가을의 전설"
+      },
+      "keyword": {
+        "en": "The Voice Within",
+        "zh": "心声",
+        "ja": "心の声",
+        "ko": "마음의 소리"
       }
     },
     {
@@ -6543,6 +8728,7 @@
       "tmdbId": 782,
       "posterPath": "/eSKr5Fl1MEC7zpAXaLWBWSBjgJq.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["I never saved anything", "for the swim back."],
         "zh": ["我从来没为", "游回来", "留过力气。"],
@@ -6554,6 +8740,12 @@
         "zh": "千钧一发",
         "ja": "ガタカ",
         "ko": "가타카"
+      },
+      "keyword": {
+        "en": "No Strength Saved",
+        "zh": "竭尽",
+        "ja": "力を尽くす",
+        "ko": "온 힘을 다해"
       }
     },
     {
@@ -6562,6 +8754,7 @@
       "tmdbId": 550,
       "posterPath": "/jSziioSwPVrOy9Yow3XhWIBDjq1.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["You are not your job.", "You are not", "the money you have.", "You are not the car you drive."],
         "zh": ["你不是你的工作，", "不是你银行里的钱，", "不是你开的车。"],
@@ -6573,6 +8766,12 @@
         "zh": "搏击俱乐部",
         "ja": "ファイト・クラブ",
         "ko": "파이트 클럽"
+      },
+      "keyword": {
+        "en": "Not Your Job",
+        "zh": "空身",
+        "ja": "身一つ",
+        "ko": "빈 몸"
       }
     },
     {
@@ -6592,6 +8791,12 @@
         "zh": "记忆碎片",
         "ja": "メメント",
         "ko": "메멘토"
+      },
+      "keyword": {
+        "en": "Lies We Live By",
+        "zh": "自欺",
+        "ja": "自ら欺く",
+        "ko": "자기기만"
       }
     },
     {
@@ -6611,6 +8816,12 @@
         "zh": "春夏秋冬又一春",
         "ja": "春夏秋冬そして春",
         "ko": "봄 여름 가을 겨울 그리고 봄"
+      },
+      "keyword": {
+        "en": "The Stone You Carry",
+        "zh": "负石",
+        "ja": "石を負う",
+        "ko": "돌을 지다"
       }
     },
     {
@@ -6619,6 +8830,7 @@
       "tmdbId": 752,
       "posterPath": "/1avD1JeaRiJX5M4ahPdZPypGoGN.jpg",
       "bundled": false,
+      "preferOriginal": true,
       "lines": {
         "en": ["Ideas", "are bulletproof."],
         "zh": ["思想是", "杀不死的。"],
@@ -6630,6 +8842,12 @@
         "zh": "V字仇杀队",
         "ja": "V フォー・ヴェンデッタ",
         "ko": "브이 포 벤데타"
+      },
+      "keyword": {
+        "en": "Ideas Are Bulletproof",
+        "zh": "火种",
+        "ja": "火種",
+        "ko": "꺼지지 않는 불씨"
       }
     },
     {
@@ -6649,6 +8867,12 @@
         "zh": "欢迎来到东莫村",
         "ja": "トンマッコルへようこそ",
         "ko": "웰컴 투 동막골"
+      },
+      "keyword": {
+        "en": "Just Feed Them",
+        "zh": "一饭",
+        "ja": "一飯",
+        "ko": "한 끼"
       }
     },
     {
@@ -6668,6 +8892,12 @@
         "zh": "密阳",
         "ja": "シークレット・サンシャイン",
         "ko": "밀양"
+      },
+      "keyword": {
+        "en": "Who Gave You the Right?",
+        "zh": "问天",
+        "ja": "天に問う",
+        "ko": "하늘에 묻다"
       }
     },
     {
@@ -6687,6 +8917,12 @@
         "zh": "诗",
         "ja": "ポエトリー アグネスの詩",
         "ko": "시"
+      },
+      "keyword": {
+        "en": "Where Is the Poem?",
+        "zh": "寻诗",
+        "ja": "詩を探す",
+        "ko": "시를 찾다"
       }
     },
     {
@@ -6706,6 +8942,12 @@
         "zh": "熔炉",
         "ja": "トガニ 幼き瞳の告発",
         "ko": "도가니"
+      },
+      "keyword": {
+        "en": "Not to Be Changed",
+        "zh": "守己",
+        "ja": "己を守る",
+        "ko": "나를 지키다"
       }
     },
     {
@@ -6725,6 +8967,12 @@
         "zh": "午夜巴黎",
         "ja": "ミッドナイト・イン・パリ",
         "ko": "미드나잇 인 파리"
+      },
+      "keyword": {
+        "en": "Then Becomes Now",
+        "zh": "今昔",
+        "ja": "今昔",
+        "ko": "지금과 옛날"
       }
     },
     {
@@ -6744,6 +8992,12 @@
         "zh": "云图",
         "ja": "クラウド アトラス",
         "ko": "클라우드 아틀라스"
+      },
+      "keyword": {
+        "en": "From Womb to Tomb",
+        "zh": "因果",
+        "ja": "因果",
+        "ko": "인과"
       }
     },
     {
@@ -6763,6 +9017,12 @@
         "zh": "圣殇",
         "ja": "嘆きのピエタ",
         "ko": "피에타"
+      },
+      "keyword": {
+        "en": "The Root of All Evil",
+        "zh": "孽债",
+        "ja": "業の債",
+        "ko": "업보의 빚"
       }
     },
     {
@@ -6782,6 +9042,12 @@
         "zh": "观相",
         "ja": "観相師－かんそうし－",
         "ko": "관상"
+      },
+      "keyword": {
+        "en": "The Tide of an Era",
+        "zh": "时浪",
+        "ja": "時の波",
+        "ko": "시대의 물결"
       }
     },
     {
@@ -6801,6 +9067,12 @@
         "zh": "素媛",
         "ja": "ソウォン/願い",
         "ko": "소원"
+      },
+      "keyword": {
+        "en": "What Did I Do Wrong?",
+        "zh": "无辜",
+        "ja": "罪なき",
+        "ko": "죄 없음"
       }
     },
     {
@@ -6820,6 +9092,12 @@
         "zh": "记忆中的玛妮",
         "ja": "思い出のマーニー",
         "ko": "추억의 마니"
+      },
+      "keyword": {
+        "en": "I Forgave You Long Ago",
+        "zh": "释怨",
+        "ja": "怨みを解く",
+        "ko": "원망을 풀다"
       }
     },
     {
@@ -6839,6 +9117,12 @@
         "zh": "思悼",
         "ja": "The Throne",
         "ko": "사도"
+      },
+      "keyword": {
+        "en": "One Look from My Father",
+        "zh": "一眼",
+        "ja": "ひと目",
+        "ko": "한 번의 눈길"
       }
     },
     {
@@ -6858,6 +9142,12 @@
         "zh": "我们的世界",
         "ja": "The World of Us",
         "ko": "우리들"
+      },
+      "keyword": {
+        "en": "When Can We Just Play?",
+        "zh": "和好",
+        "ja": "仲直り",
+        "ko": "화해"
       }
     },
     {
@@ -6877,6 +9167,12 @@
         "zh": "海边的曼彻斯特",
         "ja": "マンチェスター・バイ・ザ・シー",
         "ko": "맨체스터 바이 더 씨"
+      },
+      "keyword": {
+        "en": "A Heart That Stays Broken",
+        "zh": "旧伤",
+        "ja": "古傷",
+        "ko": "옛 상처"
       }
     },
     {
@@ -6896,6 +9192,12 @@
         "zh": "三块广告牌",
         "ja": "スリー・ビルボード",
         "ko": "쓰리 빌보드"
+      },
+      "keyword": {
+        "en": "Anger Begets Anger",
+        "zh": "息怒",
+        "ja": "怒りを収める",
+        "ko": "분노를 거두다"
       }
     },
     {
@@ -6915,6 +9217,12 @@
         "zh": "燃烧",
         "ja": "バーニング 劇場版",
         "ko": "버닝"
+      },
+      "keyword": {
+        "en": "The Great Hunger",
+        "zh": "饥心",
+        "ja": "心の飢え",
+        "ko": "마음의 허기"
       }
     },
     {
@@ -6934,6 +9242,12 @@
         "zh": "82年生的金智英",
         "ja": "82年生まれ、キム・ジヨン",
         "ko": "82년생 김지영"
+      },
+      "keyword": {
+        "en": "Caged Here",
+        "zh": "笼中",
+        "ja": "籠の中",
+        "ko": "새장 속"
       }
     }
   ]
