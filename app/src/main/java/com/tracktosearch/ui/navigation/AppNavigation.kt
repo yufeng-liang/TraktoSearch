@@ -97,6 +97,7 @@ import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
 import com.tracktosearch.ui.screen.help.HelpScreen
 import com.tracktosearch.ui.screen.help.HelpSections
 import com.tracktosearch.ui.screen.opensource.OpenSourceScreen
+import com.tracktosearch.ui.screen.privacy.PrivacyScreen
 import com.tracktosearch.ui.screen.listdetail.TraktListDetailScreen
 import com.tracktosearch.ui.screen.login.ActivationLoginScreen
 import com.tracktosearch.ui.screen.main.ConnectivityObserverEntryPoint
@@ -175,6 +176,7 @@ object Routes {
     const val MESSAGES = "messages"
     const val SEARCH_SOURCES = "searchSources"
     const val SEARCH_SOURCE_EDITOR = "searchSourceEditor/{mode}/{payload}"
+    const val PRIVACY = "privacy"
 
     fun helpRoute(section: String? = null): String =
         if (section == null) "help" else "help?section=$section"
@@ -919,6 +921,9 @@ fun AppNavigation(
                             },
                             onSearchSourcesClick = {
                                 navController.navigate(Routes.SEARCH_SOURCES)
+                            },
+                            onPrivacyClick = {
+                                navController.navigate(Routes.PRIVACY)
                             }
                         )
                     }
@@ -1181,6 +1186,14 @@ fun AppNavigation(
                 composable(Routes.OPEN_SOURCE) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         OpenSourceScreen(
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
+                }
+
+                composable(Routes.PRIVACY) {
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        PrivacyScreen(
                             onBack = { navController.popBackStack() }
                         )
                     }

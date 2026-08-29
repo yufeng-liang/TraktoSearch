@@ -51,7 +51,6 @@ import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
-import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Movie
@@ -211,6 +210,7 @@ fun SettingsScreen(
     onMessagesClick: () -> Unit = {},
     onGlassPilot: () -> Unit = {},
     onSearchSourcesClick: () -> Unit = {},
+    onPrivacyClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -741,15 +741,15 @@ fun SettingsScreen(
                 }
             }
 
-            // AI 与隐私：锐评看单数据上传开关（状态收集局部化到 AiPrivacyGroupItem，开关变化只重组本 item）
-            item(key = "group_ai_privacy") {
-                AiPrivacyGroupItem(
-                    viewModel = viewModel,
+            // 数据与隐私：独立管理页入口（AI taste/崩溃上报开关与隐私说明迁入隐私页，与搜索源入口卡片同构）
+            item(key = "privacy_entry") {
+                PrivacyEntryCard(
+                    onClick = onPrivacyClick,
                     hazeState = settingsHazeState
                 )
             }
 
-            // 关于（更新信息/最新版本/崩溃日志开关在 AboutGroupItem 内部收集，检查更新只重组本 item）
+            // 关于（更新信息/最新版本在 AboutGroupItem 内部收集，检查更新只重组本 item）
             item(key = "group_about") {
                 AboutGroupItem(
                     viewModel = viewModel,
@@ -1455,6 +1455,88 @@ private fun SearchSourcesEntryCard(
 }
 
 /**
+ * 数据与隐私入口卡片（独立管理页入口）。
+ * 与 SearchSourcesEntryCard 风格保持一致，点击跳转「数据与隐私」页。
+ */
+@Composable
+private fun PrivacyEntryCard(
+    onClick: () -> Unit,
+    hazeState: dev.chrisbanes.haze.HazeState? = null
+) {
+    val view = LocalView.current
+    val isDark = isAppDarkTheme()
+    // BLUR 模式列表卡片不再各自开一层离屏做真模糊，改用更实的填充；GLASS 模式不变。
+    val realBlur = LocalVisualEffectMode.current == VisualEffectMode.GLASS
+    NeumorphicFrostedSurface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .clickable { view.performHaptic(HapticType.CLICK); onClick() },
+        isDark = isDark,
+        shape = RoundedCornerShape(20.dp),
+        backgroundColor = if (realBlur) {
+            if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.70f)
+        } else {
+            if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+            else Color.White.copy(alpha = 0.82f)
+        },
+        borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
+                      else Color(0xFFE0E5EC).copy(alpha = 0.9f),
+        elevation = 6.dp,
+        blurRadius = 18.dp,
+        hazeState = if (realBlur) hazeState else null,
+        hazeStyle = HazeMaterials.thin(),
+        glassRole = GlassSurfaceRole.Card
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(
+                        color = settingsIconContainerColor(isDark),
+                        shape = RoundedCornerShape(14.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.AutoAwesome,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.privacy_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = stringResource(R.string.privacy_entry_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(22.dp)
+            )
+        }
+    }
+}
+
+/**
  * 共享元素转场动画开关卡片(外观分组下,独占一行)。
  * 开关状态收集局部化到本函数,切换时只重组本卡片。
  */
@@ -1736,74 +1818,7 @@ private fun DataManagementGroupItem(
 }
 
 /**
- * 「AI 与隐私」分组 item：锐评看单数据上传开关在本函数内部收集，
- * 开关变化只重组本 item，不波及 LazyColumn 其他 item。
- * 行样式与「关于」分组崩溃日志开关行一致（40dp 图标容器 + 标题/副标题 + Switch）。
- */
-@Composable
-private fun AiPrivacyGroupItem(
-    viewModel: SettingsViewModel,
-    hazeState: HazeState?
-) {
-    val aiTasteEnabled by viewModel.aiTasteEnabled.collectAsStateWithLifecycle()
-    val view = LocalView.current
-    val isDark = isAppDarkTheme()
-    SettingsGroupCard(
-        title = stringResource(R.string.settings_ai_group_title),
-        hazeState = hazeState
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { view.performHaptic(HapticType.CLICK); viewModel.setAiTasteEnabled(!aiTasteEnabled) }
-                .padding(horizontal = 20.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(
-                        color = settingsIconContainerColor(isDark),
-                        shape = RoundedCornerShape(12.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Rounded.AutoAwesome,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.ai_feature_taste),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 15.sp
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = stringResource(R.string.settings_ai_taste_subtitle),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Switch(
-                checked = aiTasteEnabled,
-                onCheckedChange = { view.performHaptic(HapticType.CLICK); viewModel.setAiTasteEnabled(it) },
-                colors = appSwitchColors()
-            )
-        }
-    }
-}
-
-/**
- * 关于分组 item：更新信息/最新版本/崩溃日志开关在本函数内部收集，
+ * 关于分组 item：更新信息/最新版本在本函数内部收集，
  * 检查更新状态变化只重组本 item。顶层保留 updateInfo/isCheckingUpdate
  * 收集供 UpdateDialog 与吸顶栏玻璃场景使用（低频，双收集无碍）。
  */
@@ -1820,9 +1835,6 @@ private fun AboutGroupItem(
 ) {
     val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
     val latestVersion by viewModel.latestVersion.collectAsStateWithLifecycle()
-    val crashLogEnabled by viewModel.crashLogEnabled.collectAsStateWithLifecycle()
-    val view = LocalView.current
-    val isDark = isAppDarkTheme()
     SettingsGroupCard(
         title = stringResource(R.string.settings_about),
         hazeState = hazeState
@@ -1845,54 +1857,6 @@ private fun AboutGroupItem(
             onClick = onFeedbackClick,
             containerColor = Color.Transparent
         )
-        GroupDivider()
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { view.performHaptic(HapticType.CLICK); viewModel.setCrashLogEnabled(!crashLogEnabled) }
-                .padding(horizontal = 20.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(
-                        color = settingsIconContainerColor(isDark),
-                        shape = RoundedCornerShape(12.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Rounded.BugReport,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.settings_crash_log_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 15.sp
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = stringResource(R.string.settings_crash_log_subtitle),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Switch(
-                checked = crashLogEnabled,
-                onCheckedChange = { view.performHaptic(HapticType.CLICK); viewModel.setCrashLogEnabled(it) },
-                colors = appSwitchColors()
-            )
-        }
     }
 }
 
