@@ -23,7 +23,8 @@ object ApkDownloader {
         context: Context,
         url: String,
         fileName: String,
-        onProgress: (Float) -> Unit,
+        /** 每读一个块回调一次：(已读字节数, 总字节数)；总字节数未知时 totalBytes 传 0（UI 转 indeterminate） */
+        onProgress: (bytesRead: Long, totalBytes: Long) -> Unit,
         fallbackUrl: String = "",
         /** APK 期望 SHA-256（小写 hex），非空时下载完成后校验，不匹配抛异常并删除文件 */
         expectedSha256: String = ""
@@ -37,20 +38,20 @@ object ApkDownloader {
             .build()
 
         createDownloadChannel(context)
-        showDownloadNotification(context, 0f, indeterminate = true)
+        showDownloadNotification(context, 0L, 0L)
 
         try {
             // 尝试主 URL
-            val result = tryDownload(client, url, context, fileName) { progress ->
-                onProgress(progress)
-                showDownloadNotification(context, progress, indeterminate = false)
+            val result = tryDownload(client, url, context, fileName) { bytesRead, totalBytes ->
+                onProgress(bytesRead, totalBytes)
+                showDownloadNotification(context, bytesRead, totalBytes)
             }
 
             // 主 URL 失败且有备用 URL，自动降级尝试
             val finalResult = if (result == null && fallbackUrl.isNotEmpty()) {
-                tryDownload(client, fallbackUrl, context, fileName) { progress ->
-                    onProgress(progress)
-                    showDownloadNotification(context, progress, indeterminate = false)
+                tryDownload(client, fallbackUrl, context, fileName) { bytesRead, totalBytes ->
+                    onProgress(bytesRead, totalBytes)
+                    showDownloadNotification(context, bytesRead, totalBytes)
                 } ?: throw Exception(context.getString(R.string.download_failed_both))
             } else if (result == null) {
                 throw Exception(context.getString(R.string.download_failed))
@@ -98,7 +99,7 @@ object ApkDownloader {
         url: String,
         context: Context,
         fileName: String,
-        onProgress: (Float) -> Unit
+        onProgress: (bytesRead: Long, totalBytes: Long) -> Unit
     ): File? {
         var response: okhttp3.Response? = null
         return try {
@@ -137,9 +138,8 @@ object ApkDownloader {
                         if (read == -1) break
                         output.write(buffer, 0, read)
                         bytesRead += read
-                        if (contentLength > 0) {
-                            onProgress(bytesRead.toFloat() / contentLength.toFloat())
-                        }
+                        // 每读一个块回调原始字节数；contentLength 未知（<=0）时 totalBytes 传 0，由 UI 层转 indeterminate
+                        onProgress(bytesRead, if (contentLength > 0) contentLength else 0L)
                     }
                 }
             }
@@ -165,8 +165,10 @@ object ApkDownloader {
         manager.createNotificationChannel(channel)
     }
 
-    private fun showDownloadNotification(context: Context, progress: Float, indeterminate: Boolean) {
-        val percent = (progress * 100).toInt().coerceIn(0, 100)
+    /** 下载进度通知：内部按 bytesRead/totalBytes 换算百分比，totalBytes 未知（<=0）时转 indeterminate */
+    private fun showDownloadNotification(context: Context, bytesRead: Long, totalBytes: Long) {
+        val indeterminate = totalBytes <= 0
+        val percent = if (indeterminate) 0 else ((bytesRead * 100) / totalBytes).toInt().coerceIn(0, 100)
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(context.getString(R.string.update_download_builtin))
             .setContentText(if (indeterminate) context.getString(R.string.download_preparing) else "$percent%")
