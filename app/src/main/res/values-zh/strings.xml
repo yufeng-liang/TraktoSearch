@@ -599,17 +599,13 @@
     <string name="help_watchlist_b2">在"我的"页面查看和管理你的列表</string>
     <string name="help_watchlist_b3">标记已看支持按季勾选集数，第0季特别篇放在最后</string>
     <string name="help_watchlist_b4">电视剧部数统计：看过任意一集即计入剧数，已看集数达到已播出总集数才算整部看完</string>
-    <string name="help_statistics_b1">在"设置"页面第一行进入观看统计</string>
-    <string name="help_statistics_b2">查看观影总览（总数、本月、本年）、观影时长和评分统计（合并 Trakt 与豆瓣数据，同一部影视按 IMDb/Trakt/TMDB ID 跨来源去重；剧集分「有观看记录」和「整部看完」两个数字）</string>
-    <string name="help_statistics_b3">类型分布饼图和类型排行展示你的观影偏好</string>
-    <string name="help_statistics_b4">热力图展示过去一年的每日观影活跃度</string>
-    <string name="help_statistics_b5">顶部卡片会自动挑一条亮点：连续观影天数、今年看了多少、累计时长或最爱类型</string>
-    <string name="help_statistics_b6">右上角分享按钮会把亮点、总览、热力图、类型 Top3 和词云拼成一张长图，图上不含昵称和头像</string>
-    <string name="help_notification_b1">开启通知后可自动提醒新上映和新季</string>
-    <string name="help_notification_b2">Android 13及以上需要授予通知权限</string>
-    <string name="help_notification_b3">提醒基于你的 Trakt 想看列表</string>
-    <string name="help_notification_b4">权限被拒时开关会自动关闭</string>
-    <string name="help_notification_b5">豆瓣同步、一致性检查等后台任务的进度通知，在 Android 16 及以上会以实时更新（Live Update）样式置顶展示，状态栏还会显示当前阶段</string>
+    <string name="help_statistics_b1">从设置页第一行进入「观看统计」。</string>
+    <string name="help_statistics_b2">总览、观影时长和评分合并 Trakt 与豆瓣数据；同一作品按 IMDb/Trakt/TMDB ID 去重，剧集区分「看过」与「看完」。</string>
+    <string name="help_statistics_b3">类型图表展示偏好，年度热力图展示每日活跃度；顶部卡片会自动选取连看天数、本年数量、累计时长或最爱类型作为亮点。</string>
+    <string name="help_statistics_b6">分享会先把包含亮点、总览、热力图、类型排行和词云的长图保存到相册，再打开系统分享面板；图片不含昵称和头像。</string>
+    <string name="help_notification_b1">在设置 → 通知中开启提醒；新上映和新季提醒基于 Trakt 想看列表。</string>
+    <string name="help_notification_b2">Android 13 及以上需授予通知权限；拒绝权限后开关会自动关闭。</string>
+    <string name="help_notification_b5">豆瓣同步和一致性检查的进度，在 Android 16 及以上会以实时更新（Live Update）置顶展示，状态栏显示当前阶段。</string>
     
     <string name="help_data_table_title">数据导入导出总览</string>
     <string name="help_dc_export_t">导出标记数据</string>
@@ -626,14 +622,12 @@
     <string name="help_dc_douban_desc">登录豆瓣抓取想看/已看标记并显示在 Watchlist；连接 Trakt 后可同步到 Trakt</string>
     <string name="help_dc_cooldown">冷却期：豆瓣有反爬机制，频繁多次爬取可能导致你的 IP 地址被列入黑名单。完整爬取后设置 7 天冷却期以降低请求频率。冷却期内增量同步复用云端数据，不再重新爬取；你可以自行承担风险强制同步。</string>
     <string name="help_custom_source">自定义搜索源</string>
-    <string name="help_custom_source_b1">设置 → 搜索源 → 独立管理页：内置 PanSou/Panhub/Zreso 启停（Panhub 可配置），自定义源列表与模板</string>
-    <string name="help_custom_source_b2">搜索源会拼接 URL 发送请求：{baseUrl}/{apiPath}?{keywordParam}=搜索词&amp;其他参数</string>
-    <string name="help_custom_source_b3">添加自定义源可从模板库一键选用，或走三步向导：基本信息 → 自动解析 → 确认</string>
-    <string name="help_custom_source_b4">自动解析支持 JSONPath 识别列表路径/名称/链接/网盘类型，可手动微调</string>
-    <string name="help_custom_source_b5">分享：列表项分享按钮生成配置文本；导入：粘贴配置文本即可，同名冲突会提示</string>
-    <string name="help_custom_source_b6">第一步提供模板捷径和「从剪贴板粘贴地址」按钮，只有按下时才读剪贴板</string>
-    <string name="help_custom_source_b7">第三步把 13 个参数收进基本信息 / 请求参数 / 解析规则三组，一次只展开一组，默认只开基本信息</string>
-    <string name="help_custom_source_b8">自动识别失败时会说清卡在哪一步：地址连不上、返回不是 JSON、还是字段认不出</string>
+    <string name="help_custom_source_b1">进入设置 → 搜索源管理 PanSou/Panhub/Zreso、自定义源和模板；Panhub 可单独配置。</string>
+    <string name="help_custom_source_b2">请求地址格式为 {baseUrl}/{apiPath}?{keywordParam}=搜索词&amp;其他参数。</string>
+    <string name="help_custom_source_b3">可直接添加模板，或使用三步向导：基本信息 → 自动解析 → 确认。</string>
+    <string name="help_custom_source_b4">自动解析会识别 JSONPath 的列表、名称、链接和网盘类型字段，并允许手动调整；失败时会区分地址不可达、返回非 JSON 和字段无法识别。</string>
+    <string name="help_custom_source_b5">分享会复制配置文本；导入时粘贴该文本，同名冲突会明确提示。</string>
+    <string name="help_custom_source_b6">「粘贴地址」按钮只在按下时读取剪贴板。</string>
     <string name="help_custom_source_params">参数说明</string>
     <string name="help_cs_table_param">参数名</string>
     <string name="help_cs_table_desc">说明</string>
@@ -704,18 +698,12 @@
     <string name="help_discover_filter_b3">电影与电视剧的筛选条件互相独立，切换 Tab 会保留各自的筛选选择</string>
     <string name="help_discover_filter_b4">筛选条件未变化时不刷新结果（关闭弹窗或点应用时如条件未变会跳过重复请求）</string>
     <string name="help_discover_filter_b6">高级筛选中开启"仅展示未标看过"可过滤掉已标记看过的影视（需登录）</string>
-    <string name="help_tips_b1">点击状态栏可快速回到页面顶部</string>
-    <string name="help_tips_b2">评分支持半星选择（点击星星左右两侧），再次点击已选区域可取消评分</string>
-    <string name="help_tips_b3">电视剧详情页可展开全部季信息查看进度</string>
-    <string name="help_tips_b4">设置中可自定义发现页栏目显示和排序</string>
-    <string name="help_tips_b5">详情页点击海报可大图查看，再次点击保存到相册</string>
+    <string name="help_tips_b1">点击状态栏可回到页面顶部。</string>
+    <string name="help_tips_b2">点击星星左右两侧可选半星；再次点击已选区域可清除评分。</string>
+    <string name="help_tips_b5">点击海报或人物照片进入全屏，并可在全屏页保存到相册。</string>
     
-    <string name="help_tips_b7">详情页演职员头像点击可查看该演员作品</string>
-    <string name="help_tips_b8">人物详情页可横向滑动查看多张图片，点击图片可全屏查看并保存到相册</string>
-    <string name="help_tips_b9">在线搜索支持中文人名搜索（基于 TMDB），搜索人物时自动填充相关影视作品</string>
     
-    <string name="help_tips_b11">模糊采用柔和的毛玻璃风格；玻璃按场景自适应深度、折射与响应式高光</string>
-    <string name="help_tips_b12">开启「自动上报崩溃日志」后，崩溃日志将在下次启动时自动上传；上传记录可在反馈与建议页查看</string>
+    <string name="help_tips_b12">开启自动上报后，崩溃日志会在下次启动时上传，记录可在反馈与建议页查看；日志可能包含设备与应用状态等诊断信息。</string>
     <string name="help_vpn">VPN 说明</string>
     <string name="help_vpn_b1">本应用部分功能需要访问国外服务，不开启VPN可能无法正常访问</string>
     <string name="help_vpn_b2">涉及功能：预告片缩略图（YouTube）、Trakt 数据（热门/推荐/期待榜）、TMDB 数据（影视详情/海报）</string>
@@ -1641,7 +1629,7 @@
     <string name="ai_sprite_center_title">精灵中心</string>
     <string name="ai_sprite_center_subtitle">选一只陪你看电影的 AI 精灵</string>
     <string name="ai_sprite_character_selection">%1$s · %2$s</string>
-    <string name="ai_sprite_long_press_hint">精灵会在搜索页短暂探头，输入或滚动时会收回；云朵短按彩蛋、长按进入精灵中心的入口保持不变。</string>
+    <string name="ai_sprite_long_press_hint">点搜索页标题栏的精灵按钮或长按云朵进入精灵中心；短按云朵仍触发彩蛋。精灵可能短暂探头，输入或滚动时会收回。</string>
     <string name="ai_sprite_activate">喊「%1$s」来激活</string>
     <string name="ai_sprite_activating">正在听你喊「%1$s」…</string>
     <string name="ai_sprite_listening">只需要喊一次名字</string>
@@ -1772,13 +1760,11 @@
     <string name="ai_quiz_refresh_message">重新抽题会清空当前这一轮的作答，已答 %1$d 题。</string>
     <string name="ai_quiz_refresh_confirm">重新抽题</string>
     <string name="help_ai_sprite">AI 精灵</string>
-    <string name="help_ai_sprite_b1">点搜索页标题栏的精灵按钮进入精灵中心；云朵保留短按彩蛋和长按快捷方式</string>
-    <string name="help_ai_sprite_b2">选好角色后喊一次名字激活，激活后不会持续监听；语音最多试 5 次，失败或麦克风不可用时可改用文字输入角色名激活</string>
-    <string name="help_ai_sprite_b3">AI 会使用授权账号中的昵称和你的已看历史</string>
-    <string name="help_ai_sprite_b4">目前有昵称欢迎、看单锐评、影视闯关和每日冷知识四项能力（闯关需至少 7 部已看影视）</string>
-    <string name="help_ai_sprite_b5">AI 请求有每日配额，功能页右上角刷新会再消耗一次；离线时不能发起新请求，但已缓存内容仍可查看</string>
-    <string name="help_ai_sprite_b6">V1 使用角色与场景的音色设计提示词；试听失败时回退到系统语音</string>
-    <string name="help_ai_sprite_b7">闯关中途返回会保留作答；重新抽题前会二次确认，还有题没答就提交也会先提醒；答完还可以告诉精灵难度，之后出题会更合你口味</string>
+    <string name="help_ai_sprite_b2">选好角色后喊一次名字激活，之后不会持续监听；语音最多尝试 5 次，失败或麦克风不可用时可改为输入角色名。</string>
+    <string name="help_ai_sprite_b3">AI 会使用授权账号的昵称和你的已看历史。</string>
+    <string name="help_ai_sprite_b4">功能包括昵称欢迎、看单锐评、影视闯关和每日冷知识；闯关需至少 7 部已看影视。</string>
+    <string name="help_ai_sprite_b5">AI 请求有每日配额，刷新功能会再消耗一次；离线时不能发起新请求，但仍可查看缓存内容。</string>
+    <string name="help_ai_sprite_b7">离开闯关会保留答案；重新抽题和未答完提交前会确认，难度反馈会用于调整后续题目。</string>
 
     <!-- 主页面背景光晕 -->
     <string name="bg_glow_title">背景动效</string>

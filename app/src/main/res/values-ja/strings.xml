@@ -933,17 +933,13 @@
     <string name="statistics_info_ratings">Q：評価統計とは？\nA：TraktとDoubanの評価数、平均評価、評価分布を表示します。Doubanの1〜5星評価は10点満点に換算します。</string>
 
     <!-- Help Statistics -->
-    <string name="help_statistics_b1">「設定」ページの先頭行から統計にアクセス</string>
-    <string name="help_statistics_b2">TraktとDoubanを統合した視聴概要（合計、今月、今年）、視聴時間、評価統計を確認（同じ作品はIMDb/Trakt/TMDB IDで出典をまたいで重複排除。ドラマは「視聴した作品」と「完走した作品」の2つの数字で表示）</string>
-    <string name="help_statistics_b3">ジャンル分布の円グラフとランキングで視聴嗜好を表示</string>
-    <string name="help_statistics_b4">ヒートマップで過去1年間の毎日の視聴活動を表示</string>
-    <string name="help_statistics_b5">上部カードはハイライトを自動で 1 つ選びます：連続視聴日数、今年の本数、累計時間、または最も多いジャンル</string>
-    <string name="help_statistics_b6">右上の共有ボタンでハイライト・概要・ヒートマップ・ジャンル Top3・ワードクラウドを 1 枚の長い画像にします。ニックネームやアイコンは含まれません</string>
-    <string name="help_notification_b1">通知を有効にすると新作公開や新シーズンを自動通知</string>
-    <string name="help_notification_b2">Android 13以上は通知権限の付与が必要</string>
-    <string name="help_notification_b3">リマインダーはTraktの見たいリストに基づきます</string>
-    <string name="help_notification_b4">権限が拒否された場合、スイッチは自動的にオフになります</string>
-    <string name="help_notification_b5">Douban 同期や整合性チェックなどのバックグラウンドタスクの進捗通知は、Android 16 以降ではライブアップデート（Live Update）として上部に表示され、ステータスバーに現在の段階が表示されます</string>
+    <string name="help_statistics_b1">「設定」ページの先頭行から「視聴統計」を開きます。</string>
+    <string name="help_statistics_b2">概要、視聴時間、評価は Trakt と Douban を統合します。同じ作品は IMDb/Trakt/TMDB ID で重複排除し、ドラマは「視聴済み」と「完走」を分けます。</string>
+    <string name="help_statistics_b3">ジャンル図は好み、年間ヒートマップは日々の活動を表示します。上部カードは連続視聴日数、今年の本数、累計時間、最多ジャンルからハイライトを選びます。</string>
+    <string name="help_statistics_b6">共有すると、ハイライト、概要、ヒートマップ、ジャンル順位、ワードクラウドの長い画像をアルバムに保存してからシステム共有画面を開きます。ニックネームとアバターは含みません。</string>
+    <string name="help_notification_b1">設定 → 通知で有効にします。公開・新シーズンの通知は Trakt の見たいリストを基準にします。</string>
+    <string name="help_notification_b2">Android 13 以降は通知権限が必要です。拒否するとスイッチは自動でオフになります。</string>
+    <string name="help_notification_b5">Douban 同期と整合性チェックの進捗は、Android 16 以降でライブアップデートとして上部に表示され、ステータスバーに現在の段階が出ます。</string>
 
     <!-- VPN -->
     <string name="help_vpn">VPNについて</string>
@@ -1369,14 +1365,12 @@
     <string name="help_dc_douban_desc">Doubanにログインしてウィッシュ/視聴済みマークをWatchlistに取り込み、Trakt接続時は同期</string>
     <string name="help_dc_cooldown">クールダウン：豆瓣にはアンチクロール機構があり、頻繁なクロールでIPアドレスがブラックリストに登録される可能性があります。完全クロール後に7日間のクールダウンを設けリクエスト頻度を下げます。クールダウン中の増分同期はクラウドデータを再利用し再クロールしません。自己責任で強制同期可能。</string>
     <string name="help_custom_source">カスタム検索ソース</string>
-    <string name="help_custom_source_b1">設定 → 検索ソース → 専用ページ：PanSou/Panhub/Zreso の有効/無効（Panhub は設定可能）、カスタムソース一覧とテンプレート</string>
-    <string name="help_custom_source_b2">検索ソースはURLを構築してリクエスト：{baseUrl}/{apiPath}?{keywordParam}=検索語&amp;その他のパラメータ</string>
-    <string name="help_custom_source_b3">テンプレートライブラリからワンタップ追加、または3ステップウィザード：基本情報 → 自動解析 → 確認</string>
-    <string name="help_custom_source_b4">自動解析はJSONPath（リストパス/名前/リンク/ディスク種別）を自動認識、手動微調整も可能</string>
-    <string name="help_custom_source_b5">共有：リスト項目の共有ボタンで設定テキストをコピー；インポート：テキストを貼り付けるだけで、同名は競合通知</string>
-    <string name="help_custom_source_b6">ステップ 1 にはテンプレートの近道と「クリップボードから貼り付け」ボタンがあります。押したときだけクリップボードを読みます</string>
-    <string name="help_custom_source_b7">ステップ 3 では 13 個のパラメータを基本情報 / リクエスト / 解析ルールの 3 グループに収め、1 つずつ開きます。初期状態は基本情報のみ</string>
-    <string name="help_custom_source_b8">自動検出に失敗した場合、どこで止まったかを表示します：アドレスに接続不可、応答が JSON でない、フィールドを認識できない</string>
+    <string name="help_custom_source_b1">設定 → 検索ソースで PanSou/Panhub/Zreso、カスタムソース、テンプレートを管理します。Panhub は個別設定できます。</string>
+    <string name="help_custom_source_b2">リクエスト形式は {baseUrl}/{apiPath}?{keywordParam}=検索語&amp;その他のパラメータ です。</string>
+    <string name="help_custom_source_b3">テンプレートを直接追加するか、基本情報 → 自動解析 → 確認の 3 ステップを使います。</string>
+    <string name="help_custom_source_b4">自動解析は JSONPath のリスト・名前・リンク・ディスク種別を認識し、手動修正もできます。失敗時は接続不可、非 JSON 応答、フィールド未認識を区別します。</string>
+    <string name="help_custom_source_b5">共有は設定テキストをコピーし、インポートはそのテキストを貼り付けます。同名の競合は表示されます。</string>
+    <string name="help_custom_source_b6">「アドレスを貼り付け」ボタンは、押したときだけクリップボードを読みます。</string>
     <string name="help_custom_source_params">パラメータ説明</string>
     <string name="help_cs_table_param">パラメータ名</string>
     <string name="help_cs_table_desc">説明</string>
@@ -1447,18 +1441,12 @@
     <string name="help_discover_filter_b3">映画とテレビ番組のフィルター条件は独立、タブ切り替えでそれぞれのフィルター選択を保持</string>
     <string name="help_discover_filter_b4">フィルター条件が変更されていない場合は結果を更新しない（ダイアログを閉じるか適用をタップした際、条件が変わっていなければ重複リクエストをスキップ）</string>
     <string name="help_discover_filter_b6">高度なフィルターで「未視聴のみ表示」を有効にすると視聴済みマークのある作品を非表示（ログイン必要）</string>
-    <string name="help_tips_b1">ステータスバーをタップしてページの先頭に戻る</string>
-    <string name="help_tips_b2">評価はハーフスター選択対応（星の左右をタップ）、もう一度タップで評価を解除</string>
-    <string name="help_tips_b3">テレビ番組の詳細ページで全シーズンを展開して進捗を表示</string>
-    <string name="help_tips_b4">設定で発見ページのセクション表示と並べ替えをカスタマイズ</string>
-    <string name="help_tips_b5">詳細ページでポスターをタップして拡大表示、もう一度タップでアルバムに保存</string>
+    <string name="help_tips_b1">ステータスバーをタップするとページ先頭に戻ります。</string>
+    <string name="help_tips_b2">星の左右をタップしてハーフスターを選び、選択済み部分をもう一度タップすると評価を解除できます。</string>
+    <string name="help_tips_b5">ポスターや人物写真をタップして全画面表示し、全画面ページからアルバムに保存できます。</string>
     
-    <string name="help_tips_b7">詳細ページのキャストアバターをタップして俳優の作品を表示</string>
-    <string name="help_tips_b8">人物詳細ページで横スワイプして複数の写真を表示、写真をタップして全画面表示しアルバムに保存</string>
-    <string name="help_tips_b9">オンライン検索は中国語人名検索に対応（TMDBベース）、人物検索時に自動的に関連作品を表示</string>
     
-    <string name="help_tips_b11">ぼかしは柔らかなすりガラス風、Glass はシーンに応じて深度、屈折、ハイライトを調整します</string>
-    <string name="help_tips_b12">設定で「クラッシュログを自動アップロード」を有効にすると、クラッシュログは次回起動時に自動的にアップロードされます。アップロード履歴はフィードバックページで確認できます</string>
+    <string name="help_tips_b12">自動アップロードを有効にすると、クラッシュログは次回起動時に送信され、履歴はフィードバックページで確認できます。ログには端末やアプリ状態などの診断情報が含まれる場合があります。</string>
 
     <!-- 彩蛋メッセージ（9アニメ × 3メッセージ） -->
     <string name="easter_msg_shy_1">つつかれました、くすぐったい！</string>
@@ -1654,7 +1642,7 @@
     <string name="ai_sprite_center_title">AI スプライトセンター</string>
     <string name="ai_sprite_center_subtitle">映画の旅に寄り添う仲間を選択</string>
     <string name="ai_sprite_character_selection">%1$s · %2$s</string>
-    <string name="ai_sprite_long_press_hint">検索ページではスプライトが短時間だけ顔を出し、入力やスクロールで引っ込みます。雲を短くタップして起動するイースターエッグと、長押しで開くスプライトセンターの入口は変わりません。</string>
+    <string name="ai_sprite_long_press_hint">検索ヘッダーのスプライトボタン、または雲の長押しでスプライトセンターを開きます。雲の短押しは従来どおりイースターエッグです。スプライトは短く顔を出すことがあり、入力やスクロールで戻ります。</string>
     <string name="ai_sprite_activate">「%1$s」と呼んで起動</string>
     <string name="ai_sprite_activating">「%1$s」を聞いています…</string>
     <string name="ai_sprite_listening">名前を一度だけ言ってください</string>
@@ -1785,13 +1773,11 @@
     <string name="ai_quiz_refresh_message">引き直すと今回の回答（%1$d 問）が消えます。</string>
     <string name="ai_quiz_refresh_confirm">引き直す</string>
     <string name="help_ai_sprite">AI スプライト</string>
-    <string name="help_ai_sprite_b1">検索ページのヘッダーのスプライトボタンからスプライトセンターを開きます。雲は従来の短タップのイースターエッグと長押しのショートカットを維持します</string>
-    <string name="help_ai_sprite_b2">キャラクター名を一度呼んで起動します。起動後は常時聞き取りません。音声は最大 5 回まで試せ、失敗やマイク不可のときは文字入力でも起動できます</string>
-    <string name="help_ai_sprite_b3">認証済みアカウントのニックネームと視聴履歴を利用します</string>
-    <string name="help_ai_sprite_b4">ニックネーム歓迎、視聴リスト批評、映画クイズ、毎日の豆知識を利用できます（クイズには視聴済み 7 本以上が必要です）</string>
-    <string name="help_ai_sprite_b5">AI には日次上限があり、機能ページの更新ボタンでもう 1 回消費します。オフラインでは新規リクエストはできませんが、キャッシュは読めます</string>
-    <string name="help_ai_sprite_b6">V1 はキャラクターとシーンの音声設計プロンプトを使い、試聴に失敗した場合はシステム音声に戻ります</string>
-    <string name="help_ai_sprite_b7">クイズを途中で離れても回答は保持されます。引き直す前に確認し、未回答のまま提出する場合も警告します。答え終わったら難易度を精霊に伝えられ、次回の出題がもっと好みに合うようになります</string>
+    <string name="help_ai_sprite_b2">キャラクター名を一度呼んで起動し、その後は常時聞き取りません。音声は最大 5 回まで試せ、失敗時やマイク不可時は名前を入力できます。</string>
+    <string name="help_ai_sprite_b3">AI は認証済みアカウントのニックネームと視聴履歴を利用します。</string>
+    <string name="help_ai_sprite_b4">ニックネーム歓迎、視聴リスト批評、映画クイズ、毎日の豆知識を利用できます。クイズには視聴済み 7 本以上が必要です。</string>
+    <string name="help_ai_sprite_b5">AI リクエストには日次上限があり、機能の更新でも 1 回消費します。オフラインでは新規リクエスト不可ですが、キャッシュは読めます。</string>
+    <string name="help_ai_sprite_b7">クイズを離れても回答は保持されます。引き直しと未回答のままの提出は確認され、難易度の感想は次回以降の調整に使われます。</string>
 <!-- メイン画面の背景グロー -->
     <string name="bg_glow_title">背景エフェクト</string>
     <string name="bg_glow_off">オフ</string>

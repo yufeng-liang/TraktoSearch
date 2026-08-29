@@ -66,7 +66,7 @@ internal data class HelpSectionSpec(
  * 以前段落信息散在四处：手写的搜索索引、key→序号映射、key 常量、以及十四个几乎
  * 一样的 item 块。加一段要改四处，漏一处不会报错——只是搜不到，或者深链跳到别的段。
  *
- * 列表顺序就是页面顺序，也是编号顺序：下标 0 显示成「壹」，下标 13 显示成「拾肆」。
+ * 列表顺序就是页面顺序，也是编号顺序：下标 0 显示成「1」，下标 13 显示成「14」。
  * 同一分组的段落必须连续，否则分组小标题会在页面上出现两次（见 HelpCatalogTest）。
  */
 internal val HelpCatalog: List<HelpSectionSpec> = listOf(
@@ -122,8 +122,6 @@ internal val HelpCatalog: List<HelpSectionSpec> = listOf(
             R.string.help_statistics_b1,
             R.string.help_statistics_b2,
             R.string.help_statistics_b3,
-            R.string.help_statistics_b4,
-            R.string.help_statistics_b5,
             R.string.help_statistics_b6,
         ),
     ),
@@ -184,8 +182,6 @@ internal val HelpCatalog: List<HelpSectionSpec> = listOf(
             R.string.help_custom_source_b4,
             R.string.help_custom_source_b5,
             R.string.help_custom_source_b6,
-            R.string.help_custom_source_b7,
-            R.string.help_custom_source_b8,
         ),
         extra = HelpExtra.CUSTOM_SOURCE_SPEC,
         searchOnly = listOf(
@@ -220,14 +216,12 @@ internal val HelpCatalog: List<HelpSectionSpec> = listOf(
         group = HelpGroup.ADVANCED,
         title = R.string.help_ai_sprite,
         bullets = listOf(
-            R.string.help_ai_sprite_b1,
+            R.string.ai_sprite_long_press_hint,
             R.string.help_ai_sprite_b2,
             R.string.help_ai_sprite_b3,
             R.string.help_ai_sprite_b4,
             R.string.help_ai_sprite_b5,
-            R.string.help_ai_sprite_b6,
             R.string.help_ai_sprite_b7,
-            R.string.ai_sprite_long_press_hint,
         ),
     ),
     HelpSectionSpec(
@@ -237,8 +231,6 @@ internal val HelpCatalog: List<HelpSectionSpec> = listOf(
         bullets = listOf(
             R.string.help_notification_b1,
             R.string.help_notification_b2,
-            R.string.help_notification_b3,
-            R.string.help_notification_b4,
             R.string.help_notification_b5,
         ),
     ),
@@ -249,13 +241,7 @@ internal val HelpCatalog: List<HelpSectionSpec> = listOf(
         bullets = listOf(
             R.string.help_tips_b1,
             R.string.help_tips_b2,
-            R.string.help_tips_b3,
-            R.string.help_tips_b4,
             R.string.help_tips_b5,
-            R.string.help_tips_b7,
-            R.string.help_tips_b8,
-            R.string.help_tips_b9,
-            R.string.help_tips_b11,
             R.string.help_tips_b12,
         ),
     ),

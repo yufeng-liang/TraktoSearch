@@ -601,17 +601,13 @@
     <string name="help_watchlist_b2">Manage your lists on the \"Me\" tab</string>
     <string name="help_watchlist_b3">Mark as watched supports checking episodes by season, specials (season 0) placed last</string>
     <string name="help_watchlist_b4">TV show count: any watched episode counts the show; it counts as finished once watched episodes reach the aired total</string>
-    <string name="help_statistics_b1">Access statistics from the first row of \"Settings\" page</string>
-    <string name="help_statistics_b2">View overview (total, this month, this year), watch time, and rating stats from Trakt and Douban — the same title is de-duplicated across sources by IMDb/Trakt/TMDB id, and shows list two figures: watched and finished</string>
-    <string name="help_statistics_b3">Genre pie chart and ranking show your viewing preferences</string>
-    <string name="help_statistics_b4">Heatmap shows daily viewing activity over the past year</string>
-    <string name="help_statistics_b5">The top card picks one highlight automatically — a viewing streak, this year\'s count, total hours or your dominant genre</string>
-    <string name="help_statistics_b6">The share button in the top bar renders a long image with the highlight, overview, heatmap, top genres and word cloud; it carries no nickname or avatar</string>
-    <string name="help_notification_b1">Enable notifications to get reminders for new releases and new seasons</string>
-    <string name="help_notification_b2">Notification permission required on Android 13+</string>
-    <string name="help_notification_b3">Reminders are based on your Trakt watchlist</string>
-    <string name="help_notification_b4">Toggle auto-disables if permission denied</string>
-    <string name="help_notification_b5">Progress notifications for background tasks like Douban sync and consistency check appear as a promoted Live Update on Android 16+, with the current phase shown in the status bar</string>
+    <string name="help_statistics_b1">Open Watch Statistics from the first row of Settings.</string>
+    <string name="help_statistics_b2">Overview, watch time, and ratings combine Trakt and Douban. Titles are de-duplicated by IMDb/Trakt/TMDB ID; shows separate watched from finished.</string>
+    <string name="help_statistics_b3">Genre charts show preferences, the one-year heatmap shows daily activity, and the top card automatically selects a streak, yearly count, total hours, or favorite genre.</string>
+    <string name="help_statistics_b6">Share saves a long image with the highlight, overview, heatmap, top genres, and word cloud to your gallery, then opens the system share sheet; no nickname or avatar is included.</string>
+    <string name="help_notification_b1">Enable reminders in Settings → Notifications; release and new-season reminders use your Trakt watchlist.</string>
+    <string name="help_notification_b2">Android 13+ requires notification permission; the switch turns off if permission is denied.</string>
+    <string name="help_notification_b5">Douban sync and consistency-check progress appears as a promoted Live Update on Android 16+, with the current phase in the status bar.</string>
     
     <string name="help_data_table_title">Data Import/Export Overview</string>
     <string name="help_dc_export_t">Export Marks</string>
@@ -628,14 +624,12 @@
     <string name="help_dc_douban_desc">Log in to Douban and import wish/watched marks into Watchlist; optionally sync them to Trakt</string>
     <string name="help_dc_cooldown">Cooldown: Douban has anti-crawl measures. Frequent repeated crawls may get your IP blacklisted. A 7-day cooldown after a full crawl reduces request frequency. During cooldown, incremental sync reuses cloud data without re-crawling; you can force sync at your own risk.</string>
     <string name="help_custom_source">Custom Search Sources</string>
-    <string name="help_custom_source_b1">Settings → Search Sources → dedicated page: toggle PanSou/Panhub/Zreso (Panhub configurable), custom sources &amp; templates</string>
-    <string name="help_custom_source_b2">URL is constructed as: {baseUrl}/{apiPath}?{keywordParam}=query&amp;other params</string>
-    <string name="help_custom_source_b3">Add custom sources from the template library in one tap, or use the 3-step wizard: Basic Info → Auto Parse → Confirm</string>
-    <string name="help_custom_source_b4">Auto Parse detects JSONPath rules (list path, name, link, disk type); fine-tune manually if needed</string>
-    <string name="help_custom_source_b5">Share: list item share button copies config text; Import: paste the text, name conflicts are reported</string>
-    <string name="help_custom_source_b6">Step 1 offers a template shortcut and a paste-address button; the clipboard is only read when you press it</string>
-    <string name="help_custom_source_b7">Step 3 groups the 13 parameters into Basics / Request / Parsing — open one group at a time, only Basics starts open</string>
-    <string name="help_custom_source_b8">If auto-detect fails it tells you which step broke: address unreachable, response not JSON, or fields unrecognized</string>
+    <string name="help_custom_source_b1">Open Settings → Search Sources to manage PanSou/Panhub/Zreso, custom sources, and templates; Panhub can be configured.</string>
+    <string name="help_custom_source_b2">Requests use {baseUrl}/{apiPath}?{keywordParam}=query&amp;other params.</string>
+    <string name="help_custom_source_b3">Add a template directly or use the 3-step wizard: Basic Info → Auto Parse → Confirm.</string>
+    <string name="help_custom_source_b4">Auto Parse detects JSONPath list/name/link/disk-type fields and allows manual edits. Failures distinguish unreachable URLs, non-JSON responses, and unrecognized fields.</string>
+    <string name="help_custom_source_b5">Share copies configuration text; import pastes that text and reports name conflicts.</string>
+    <string name="help_custom_source_b6">The paste-address button reads the clipboard only when you press it.</string>
     <string name="help_custom_source_params">Parameter Reference</string>
     <string name="help_cs_table_param">Param</string>
     <string name="help_cs_table_desc">Description</string>
@@ -706,18 +700,12 @@ Config:
     <string name="help_discover_filter_b3">Movie and TV show filters are independent — switching tabs keeps each type\'s previous filter selections</string>
     <string name="help_discover_filter_b4">Filter conditions unchanged will not refresh results (closing a dialog or tapping Apply with no changes skips redundant requests)</string>
     <string name="help_discover_filter_b6">Enable \"Hide Watched\" in advanced filters to exclude items you\'ve already marked as watched (requires login)</string>
-    <string name="help_tips_b1">Tap status bar to quickly scroll to top</string>
-    <string name="help_tips_b2">Rating supports half-star selection (tap left/right side), tap again to cancel</string>
-    <string name="help_tips_b3">Expand all seasons in TV show detail page to view progress</string>
-    <string name="help_tips_b4">Customize discover page sections in Settings</string>
-    <string name="help_tips_b5">Tap poster on detail page for fullscreen view, tap again to save to gallery</string>
+    <string name="help_tips_b1">Tap the status bar to return to the top.</string>
+    <string name="help_tips_b2">Ratings support half-stars by tapping either side of a star; tap the selected area again to clear.</string>
+    <string name="help_tips_b5">Tap a poster or person photo for full-screen viewing; save it from the full-screen view.</string>
     
-    <string name="help_tips_b7">Tap cast avatar on detail page to view that actor\'s works</string>
-    <string name="help_tips_b8">Person page supports horizontal swipe to view multiple images, tap for fullscreen and save</string>
-    <string name="help_tips_b9">Online search supports Chinese name search (powered by TMDB), auto-populates related movies/shows when searching for a person</string>
     
-    <string name="help_tips_b11">Blur uses a soft frosted style; Glass uses scene-aware optical depth, refraction, and responsive highlights</string>
-    <string name="help_tips_b12">Crash logs are auto-uploaded after a crash if enabled in Settings; upload history can be viewed on the Feedback page</string>
+    <string name="help_tips_b12">If automatic crash-log upload is enabled, logs upload on the next launch; review upload history on Feedback. Logs may contain diagnostic device and app-state data.</string>
     <string name="help_vpn">VPN Notice</string>
     <string name="help_vpn_b1">Some features require access to overseas services. VPN may be needed for normal access</string>
     <string name="help_vpn_b2">Affected features: Trailer thumbnails (YouTube), Trakt data (trending/recommendations), TMDB data (movie details/posters)</string>
@@ -1644,7 +1632,7 @@ Config:
     <string name="ai_sprite_center_title">AI Sprite Center</string>
     <string name="ai_sprite_center_subtitle">Choose a companion for your movie journey</string>
     <string name="ai_sprite_character_selection">%1$s · %2$s</string>
-    <string name="ai_sprite_long_press_hint">Your sprite may peek out briefly on the search page, then retreat when you type or scroll. The cloud\'s short-tap easter egg and long-press Sprite Center entry stay the same.</string>
+    <string name="ai_sprite_long_press_hint">Open Sprite Center from the sprite button in the search header, or long-press the cloud; short-tapping the cloud keeps the easter egg. The sprite may briefly peek out and retreats when you type or scroll.</string>
     <string name="ai_sprite_activate">Call %1$s to activate</string>
     <string name="ai_sprite_activating">Listening for %1$s…</string>
     <string name="ai_sprite_listening">Say the name once</string>
@@ -1775,13 +1763,11 @@ Config:
     <string name="ai_quiz_refresh_message">Drawing a new round clears this round\'s answers (%1$d answered).</string>
     <string name="ai_quiz_refresh_confirm">Draw a new round</string>
     <string name="help_ai_sprite">AI Sprite</string>
-    <string name="help_ai_sprite_b1">Tap the sprite button in the search page header to open Sprite Center; the cloud keeps its short-tap easter egg and long-press shortcut</string>
-    <string name="help_ai_sprite_b2">Choose a character and say its name once to activate it. The app does not keep listening. Voice allows up to 5 attempts; if voice fails or the microphone is unavailable, you can type the character name instead</string>
-    <string name="help_ai_sprite_b3">AI uses the nickname attached to your authorized account and your watched history</string>
-    <string name="help_ai_sprite_b4">The four features are nickname welcome, watchlist roast, film quiz, and daily film facts (the quiz needs at least 7 watched titles)</string>
-    <string name="help_ai_sprite_b5">AI requests use a daily quota, and the refresh button inside a feature spends one more; offline you cannot start new requests but cached content stays readable</string>
-    <string name="help_ai_sprite_b6">V1 uses character and scene voice-design prompts; failed previews fall back to system speech</string>
-    <string name="help_ai_sprite_b7">Leaving a quiz round keeps your answers; drawing a new round asks for confirmation first, and submitting with blanks warns you; after a round you can tell the sprite how it felt, so future rounds fit your taste</string>
+    <string name="help_ai_sprite_b2">Choose a character and say its name once. The app does not keep listening; after up to five voice attempts, or when the microphone is unavailable, type the name instead.</string>
+    <string name="help_ai_sprite_b3">AI uses the nickname on your authorized account and your watched history.</string>
+    <string name="help_ai_sprite_b4">Features include nickname welcome, watchlist roast, film quiz, and daily film facts; the quiz needs at least 7 watched titles.</string>
+    <string name="help_ai_sprite_b5">AI requests use a daily quota, and refreshing a feature spends one more. Offline, new requests are unavailable but cached content remains readable.</string>
+    <string name="help_ai_sprite_b7">Quiz answers survive leaving the round. Redraw and incomplete submission ask for confirmation; difficulty feedback helps tune later rounds.</string>
     <!-- Main screen background glow -->
     <string name="bg_glow_title">Background Effect</string>
     <string name="bg_glow_off">Off</string>

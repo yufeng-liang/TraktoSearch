@@ -5,76 +5,42 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 /**
- * 纸面编号与命中高亮的单测。
+ * 说明书编号与命中高亮的单测。
  *
- * 编号是四语言各一套：壹贰叁只在中文成立，日韩要一二三，拉丁语系要罗马数字。三张表
- * 都写死在代码里，最容易犯的错是目录长到第十五段却忘了补表——`编号表覆盖整本目录`
- * 就是守这个的。
+ * 章节编号不再按语言分支；正文圆圈数字必须覆盖 1 至 20，超出后安全回退普通数字。
  */
 class HelpPaperTest {
 
     private val seal = Color(0xFFB4472F)
 
     @Test
-    fun `中文段落编号用大写数字`() {
-        assertThat(helpSectionNumeral("zh", 0)).isEqualTo("壹")
-        assertThat(helpSectionNumeral("zh", 9)).isEqualTo("拾")
-        assertThat(helpSectionNumeral("zh", 13)).isEqualTo("拾肆")
+    fun `章节统一使用阿拉伯数字`() {
+        assertThat(helpSectionNumeral(0)).isEqualTo("1")
+        assertThat(helpSectionNumeral(9)).isEqualTo("10")
+        assertThat(helpSectionNumeral(13)).isEqualTo("14")
     }
 
     @Test
-    fun `日韩段落编号用汉数字`() {
-        assertThat(helpSectionNumeral("ja", 0)).isEqualTo("一")
-        assertThat(helpSectionNumeral("ko", 0)).isEqualTo("一")
-        assertThat(helpSectionNumeral("ja", 13)).isEqualTo("十四")
-        assertThat(helpSectionNumeral("ko", 10)).isEqualTo("十一")
+    fun `章节编号可安全增长`() {
+        assertThat(helpSectionNumeral(99)).isEqualTo("100")
     }
 
     @Test
-    fun `英文段落编号用罗马数字`() {
-        assertThat(helpSectionNumeral("en", 0)).isEqualTo("I")
-        assertThat(helpSectionNumeral("en", 3)).isEqualTo("IV")
-        assertThat(helpSectionNumeral("en", 13)).isEqualTo("XIV")
+    fun `正文前二十条使用圆圈数字`() {
+        assertThat(helpItemNumeral(0)).isEqualTo("①")
+        assertThat(helpItemNumeral(9)).isEqualTo("⑩")
+        assertThat(helpItemNumeral(10)).isEqualTo("⑪")
+        assertThat(helpItemNumeral(19)).isEqualTo("⑳")
     }
 
     @Test
-    fun `没预置的语言退回罗马数字`() {
-        assertThat(helpSectionNumeral("de", 4)).isEqualTo("V")
+    fun `正文超过二十条回退普通数字`() {
+        assertThat(helpItemNumeral(20)).isEqualTo("21")
+        assertThat(helpItemNumeral(99)).isEqualTo("100")
     }
 
     @Test
-    fun `编号表覆盖整本目录`() {
-        // 退回值是阿拉伯数字，三张表都不含阿拉伯数字，所以「等于下标加一」就等于漏了
-        listOf("zh", "ja", "ko", "en").forEach { lang ->
-            HelpCatalog.indices.forEach { index ->
-                assertThat(helpSectionNumeral(lang, index)).isNotEqualTo("${index + 1}")
-            }
-        }
-    }
-
-    @Test
-    fun `超出编号表时退回阿拉伯数字而不是崩掉`() {
-        assertThat(helpSectionNumeral("zh", 14)).isEqualTo("15")
-        assertThat(helpSectionNumeral("en", 99)).isEqualTo("100")
-    }
-
-    @Test
-    fun `条目编号中日韩用汉数字`() {
-        assertThat(helpItemNumeral("zh", 0)).isEqualTo("一")
-        assertThat(helpItemNumeral("ja", 9)).isEqualTo("十")
-        assertThat(helpItemNumeral("ko", 10)).isEqualTo("十一")
-    }
-
-    @Test
-    fun `条目编号拉丁语系用阿拉伯数字`() {
-        // 条目不用罗马数字：正文里的 I II III 会和段落编号撞辈分
-        assertThat(helpItemNumeral("en", 0)).isEqualTo("1")
-        assertThat(helpItemNumeral("en", 9)).isEqualTo("10")
-        assertThat(helpItemNumeral("de", 2)).isEqualTo("3")
-    }
-
-    @Test
-    fun `命中的词标成朱砂`() {
+    fun `命中的词标成主题强调色`() {
         val result = helpHighlight("聚合四个搜索源", "搜索", seal)
         assertThat(result.text).isEqualTo("聚合四个搜索源")
         assertThat(result.spanStyles).hasSize(1)

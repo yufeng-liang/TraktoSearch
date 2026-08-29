@@ -38,12 +38,11 @@ import com.tracktosearch.R
 internal fun HelpExtraContent(
     extra: HelpExtra,
     paper: HelpPaper,
-    lang: String,
     query: String,
 ) {
     when (extra) {
         HelpExtra.DATA_SOURCES -> HelpDataSources(paper = paper, query = query)
-        HelpExtra.CUSTOM_SOURCE_SPEC -> HelpCustomSourceSpec(paper, lang, query)
+        HelpExtra.CUSTOM_SOURCE_SPEC -> HelpCustomSourceSpec(paper, query)
         HelpExtra.CONSISTENCY_TABLE -> HelpConsistencyTable(paper)
     }
 }
@@ -132,7 +131,7 @@ private fun HelpDataRow(
     }
 }
 
-/** 格式标签：朱砂描边小签，等宽字，像盖在纸上的一个类型戳。 */
+/** 格式标签：主题强调色描边小签，等宽字保留技术文档层级。 */
 @Composable
 private fun HelpFormatTag(format: String, paper: HelpPaper) {
     Text(
@@ -175,7 +174,7 @@ private fun HelpFineLine(
  * 解析说明那三条重新从「一」编号：它们是这一小节的第一二三条，不是整段的第九十十一条。
  */
 @Composable
-private fun HelpCustomSourceSpec(paper: HelpPaper, lang: String, query: String) {
+private fun HelpCustomSourceSpec(paper: HelpPaper, query: String) {
     val seal = paper.palette.seal
     HelpSubtitle(stringResource(R.string.help_custom_source_params), paper)
     HelpParamsTable(paper)
@@ -188,7 +187,7 @@ private fun HelpCustomSourceSpec(paper: HelpPaper, lang: String, query: String) 
         R.string.help_custom_source_parse_b3,
     ).forEachIndexed { index, res ->
         HelpItem(
-            numeral = helpItemNumeral(lang, index),
+            numeral = helpItemNumeral(index),
             text = helpHighlight(stringResource(res), query, seal),
             paper = paper,
         )
@@ -291,7 +290,7 @@ private data class HelpCell(
     val mono: Boolean,
 )
 
-/** 表头：朱砂小字 + 一道墨线收底。 */
+/** 表头：主题强调色小字 + 一道分隔线收底。 */
 @Composable
 private fun HelpTableHead(cells: List<Pair<String, Float>>, paper: HelpPaper) {
     Row(modifier = Modifier.fillMaxWidth()) {

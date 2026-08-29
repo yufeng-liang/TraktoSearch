@@ -933,17 +933,13 @@
     <string name="statistics_info_ratings">Q: 평점 통계란?\nA: Trakt와 Douban의 평점 수, 평균 평점, 평점 분포를 표시합니다. Douban 1~5점 평점은 10점 척도로 변환합니다.</string>
 
     <!-- Help Statistics -->
-    <string name="help_statistics_b1">"설정" 페이지 첫 번째 행에서 통계에 접근</string>
-    <string name="help_statistics_b2">Trakt와 Douban을 합친 시청 개요 (전체, 이번 달, 올해), 시청 시간, 평가 통계 확인 (같은 작품은 IMDb/Trakt/TMDB ID로 출처 간 중복 제거, 드라마는 ‘시청한 작품’과 ‘완주한 작품’ 두 숫자로 표시)</string>
-    <string name="help_statistics_b3">장르 분포 파이 차트와 순위로 시청 취향 표시</string>
-    <string name="help_statistics_b4">히트맵으로 지난 1년간의 매일 시청 활동 표시</string>
-    <string name="help_statistics_b5">상단 카드는 하이라이트를 자동으로 하나 고릅니다: 연속 시청 일수, 올해 편수, 누적 시간 또는 가장 많이 본 장르</string>
-    <string name="help_statistics_b6">오른쪽 위 공유 버튼은 하이라이트·개요·히트맵·장르 Top3·워드 클라우드를 한 장의 긴 이미지로 만듭니다. 닉네임과 프로필 사진은 포함되지 않습니다</string>
-    <string name="help_notification_b1">알림을 켜면 신작 개봉과 새 시즌을 자동 알림</string>
-    <string name="help_notification_b2">Android 13 이상은 알림 권한 부여 필요</string>
-    <string name="help_notification_b3">알림은 Trakt 관심목록을 기반으로 합니다</string>
-    <string name="help_notification_b4">권한이 거부되면 스위치가 자동으로 꺼집니다</string>
-    <string name="help_notification_b5">Douban 동기화, 일관성 검사 등 백그라운드 작업의 진행 알림은 Android 16 이상에서 라이브 업데이트(Live Update)로 상단에 표시되며 상태 표시줄에 현재 단계가 나타납니다</string>
+    <string name="help_statistics_b1">설정 페이지 첫 번째 행에서 「시청 통계」를 엽니다.</string>
+    <string name="help_statistics_b2">개요, 시청 시간, 평가는 Trakt와 Douban 데이터를 합칩니다. 같은 작품은 IMDb/Trakt/TMDB ID로 중복 제거하고, 드라마는 「시청함」과 「완주함」을 구분합니다.</string>
+    <string name="help_statistics_b3">장르 차트는 취향을, 연간 히트맵은 일별 활동을 보여 줍니다. 상단 카드는 연속 시청일, 올해 편수, 누적 시간, 최다 장르 중 하나를 하이라이트로 고릅니다.</string>
+    <string name="help_statistics_b6">공유하면 하이라이트, 개요, 히트맵, 장르 순위, 워드 클라우드가 담긴 긴 이미지를 앨범에 저장한 뒤 시스템 공유 창을 엽니다. 닉네임과 아바타는 포함하지 않습니다.</string>
+    <string name="help_notification_b1">설정 → 알림에서 켭니다. 공개 및 새 시즌 알림은 Trakt 관심목록을 기준으로 합니다.</string>
+    <string name="help_notification_b2">Android 13 이상은 알림 권한이 필요하며, 거부하면 스위치가 자동으로 꺼집니다.</string>
+    <string name="help_notification_b5">Douban 동기화와 일관성 검사 진행 상황은 Android 16 이상에서 라이브 업데이트로 상단에 표시되고 상태 표시줄에 현재 단계가 나타납니다.</string>
 
     <!-- VPN -->
     <string name="help_vpn">VPN 안내</string>
@@ -1369,14 +1365,12 @@
     <string name="help_dc_douban_desc">Douban에 로그인하여 관심/시청 마크를 Watchlist로 가져오고, Trakt 연결 시 동기화</string>
     <string name="help_dc_cooldown">쿨다운: 더우반에는 안티 크롤링 메커니즘이 있어, 잦은 반복 크롤링 시 IP 주소가 블랙리스트에 등록될 수 있습니다. 전체 크롤링 후 7일 쿨다운을 설정해 요청 빈도를 낮춥니다. 쿨다운 중 증분 동기화는 클라우드 데이터를 재사용하며 재크롤링하지 않습니다. 본인 책임하에 강제 동기화 가능.</string>
     <string name="help_custom_source">사용자 정의 검색 소스</string>
-    <string name="help_custom_source_b1">설정 → 검색 소스 → 전용 페이지: PanSou/Panhub/Zreso 켜기/끄기(Panhub 설정 가능), 사용자 정의 소스 목록과 템플릿</string>
-    <string name="help_custom_source_b2">검색 소스는 URL을 조합하여 요청: {baseUrl}/{apiPath}?{keywordParam}=검색어&amp;기타 매개변수</string>
-    <string name="help_custom_source_b3">템플릿 라이브러리에서 한 번에 추가하거나 3단계 마법사: 기본 정보 → 자동 파싱 → 확인</string>
-    <string name="help_custom_source_b4">자동 파싱은 JSONPath로 목록 경로/이름/링크/디스크 유형 인식, 수동 미세 조정 가능</string>
-    <string name="help_custom_source_b5">공유: 목록 항목 공유 버튼으로 설정 텍스트 복사; 가져오기: 텍스트 붙여넣기만 하면 되며, 이름 충돌 시 알림</string>
-    <string name="help_custom_source_b6">1단계에는 템플릿 바로가기와 「클립보드에서 주소 붙여넣기」 버튼이 있습니다. 누를 때만 클립보드를 읽습니다</string>
-    <string name="help_custom_source_b7">3단계는 13개 매개변수를 기본 정보 / 요청 매개변수 / 파싱 규칙 세 그룹으로 나누며 한 번에 하나만 펼칩니다. 기본은 기본 정보만 열려 있습니다</string>
-    <string name="help_custom_source_b8">자동 감지가 실패하면 어디서 막혔는지 알려줍니다: 주소 연결 불가, 응답이 JSON 아님, 필드 인식 불가</string>
+    <string name="help_custom_source_b1">설정 → 검색 소스에서 PanSou/Panhub/Zreso, 사용자 정의 소스, 템플릿을 관리합니다. Panhub는 별도 설정할 수 있습니다.</string>
+    <string name="help_custom_source_b2">요청 형식은 {baseUrl}/{apiPath}?{keywordParam}=검색어&amp;기타 매개변수입니다.</string>
+    <string name="help_custom_source_b3">템플릿을 바로 추가하거나 기본 정보 → 자동 파싱 → 확인의 3단계 마법사를 사용합니다.</string>
+    <string name="help_custom_source_b4">자동 파싱은 JSONPath의 목록·이름·링크·디스크 유형 필드를 찾고 수동 수정도 허용합니다. 실패 시 주소 연결 불가, 비 JSON 응답, 필드 인식 실패를 구분합니다.</string>
+    <string name="help_custom_source_b5">공유는 설정 텍스트를 복사하고, 가져오기는 그 텍스트를 붙여넣습니다. 이름 충돌은 명확히 알립니다.</string>
+    <string name="help_custom_source_b6">「주소 붙여넣기」 버튼은 누를 때만 클립보드를 읽습니다.</string>
     <string name="help_custom_source_params">매개변수 설명</string>
     <string name="help_cs_table_param">매개변수명</string>
     <string name="help_cs_table_desc">설명</string>
@@ -1447,18 +1441,12 @@
     <string name="help_discover_filter_b3">영화와 TV 프로그램의 필터 조건은 독립적, 탭 전환 시 각각의 필터 선택 유지</string>
     <string name="help_discover_filter_b4">필터 조건이 변경되지 않으면 결과 새로고침 안 함(대화상자를 닫거나 적용을 탭할 때 조건이 변경되지 않았으면 중복 요청 건너뜀)</string>
     <string name="help_discover_filter_b6">고급 필터에서 「미시청만 표시」를 켜면 시청 표시된 작품 숨김(로그인 필요)</string>
-    <string name="help_tips_b1">상태 표시줄을 탭하여 페이지 상단으로 이동</string>
-    <string name="help_tips_b2">평가는 반점 선택 지원(별 좌우 탭), 다시 탭하면 평가 취소</string>
-    <string name="help_tips_b3">TV 프로그램 상세 페이지에서 전체 시즌을 펼쳐 진행 상황 보기</string>
-    <string name="help_tips_b4">설정에서 발견 페이지 섹션 표시와 정렬 사용자 정의</string>
-    <string name="help_tips_b5">상세 페이지에서 포스터를 탭하여 크게 보기, 다시 탭하면 앨범에 저장</string>
+    <string name="help_tips_b1">상태 표시줄을 탭하면 페이지 상단으로 돌아갑니다.</string>
+    <string name="help_tips_b2">별의 좌우를 눌러 반점을 선택하고, 선택한 부분을 다시 누르면 평가를 지울 수 있습니다.</string>
+    <string name="help_tips_b5">포스터나 인물 사진을 눌러 전체 화면으로 보고, 전체 화면 페이지에서 앨범에 저장할 수 있습니다.</string>
     
-    <string name="help_tips_b7">상세 페이지의 출연진 아바타를 탭하여 해당 배우의 작품 보기</string>
-    <string name="help_tips_b8">인물 상세 페이지에서 좌우 스와이프로 여러 사진 보기, 사진 탭하여 전체 화면 보기 및 앨범에 저장</string>
-    <string name="help_tips_b9">온라인 검색은 중국어 인물명 검색 지원(TMDB 기반), 인물 검색 시 자동으로 관련 작품 표시</string>
     
-    <string name="help_tips_b11">블러는 부드러운 반투명 스타일을 사용하고, Glass는 장면에 맞춰 깊이, 굴절, 하이라이트를 조정합니다</string>
-    <string name="help_tips_b12">설정에서 「크래시 로그 자동 업로드」를 켜면 크래시 로그가 다음 실행 시 자동으로 업로드됩니다. 업로드 기록은 피드백 페이지에서 확인할 수 있습니다</string>
+    <string name="help_tips_b12">자동 업로드를 켜면 크래시 로그가 다음 실행 때 전송되며 기록은 피드백 페이지에서 확인할 수 있습니다. 로그에는 기기와 앱 상태 등 진단 정보가 포함될 수 있습니다.</string>
 
     <!-- 이스터에그 메시지 (9애니메이션 × 3메시지) -->
     <string name="easter_msg_shy_1">찔렀어요, 간지러워!</string>
@@ -1654,7 +1642,7 @@
     <string name="ai_sprite_center_title">AI 스프라이트 센터</string>
     <string name="ai_sprite_center_subtitle">영화 여정을 함께할 동료를 선택하세요</string>
     <string name="ai_sprite_character_selection">%1$s · %2$s</string>
-    <string name="ai_sprite_long_press_hint">검색 화면에서 스프라이트가 잠시 모습을 드러냈다가 입력하거나 스크롤하면 들어갑니다. 구름을 짧게 눌러 실행하는 이스터 에그와 길게 눌러 여는 스프라이트 센터 입구는 그대로입니다.</string>
+    <string name="ai_sprite_long_press_hint">검색 헤더의 스프라이트 버튼이나 구름 길게 누르기로 스프라이트 센터를 엽니다. 구름 짧게 누르기는 기존 이스터 에그를 유지합니다. 스프라이트가 잠시 모습을 보일 수 있으며 입력하거나 스크롤하면 들어갑니다.</string>
     <string name="ai_sprite_activate">“%1$s”라고 불러 활성화</string>
     <string name="ai_sprite_activating">“%1$s”를 듣는 중…</string>
     <string name="ai_sprite_listening">이름을 한 번만 말해 주세요</string>
@@ -1785,13 +1773,11 @@
     <string name="ai_quiz_refresh_message">다시 뽑으면 이번 라운드 답변(%1$d문항)이 사라집니다.</string>
     <string name="ai_quiz_refresh_confirm">다시 뽑기</string>
     <string name="help_ai_sprite">AI 스프라이트</string>
-    <string name="help_ai_sprite_b1">검색 페이지 헤더의 스프라이트 버튼으로 스프라이트 센터를 엽니다. 구름은 기존의 짧게 누르기 이스터 에그와 길게 누르기 단축을 그대로 유지합니다</string>
-    <string name="help_ai_sprite_b2">캐릭터 이름을 한 번 말해 활성화하며, 이후 계속 듣지 않습니다. 음성은 최대 5회까지 시도할 수 있고 실패하거나 마이크를 쓸 수 없으면 캐릭터 이름을 입력해 활성화할 수 있습니다</string>
-    <string name="help_ai_sprite_b3">인증된 계정의 닉네임과 시청 기록을 사용합니다</string>
-    <string name="help_ai_sprite_b4">닉네임 인사, 시청 목록 평론, 영화 퀴즈와 매일 영화 상식을 제공합니다 (퀴즈는 시청 완료 7편 이상 필요)</string>
-    <string name="help_ai_sprite_b5">AI에는 일일 한도가 있고 기능 페이지의 새로 고침이 한 번 더 소모합니다. 오프라인에서는 새 요청을 할 수 없지만 캐시된 내용은 볼 수 있습니다</string>
-    <string name="help_ai_sprite_b6">V1은 캐릭터와 장면별 음성 설계 프롬프트를 사용하며, 미리듣기에 실패하면 시스템 음성으로 전환합니다</string>
-    <string name="help_ai_sprite_b7">퀴즈를 도중에 나가도 답변은 유지되며, 다시 뽑기 전에 확인하고 미답 상태로 제출할 때도 알려 줍니다. 다 풀고 나면 난이도를 정령에게 알려 줄 수 있고, 이후 출제가 취향에 더 잘 맞아요</string>
+    <string name="help_ai_sprite_b2">캐릭터 이름을 한 번 말해 활성화하고 이후 계속 듣지 않습니다. 음성은 최대 5회까지 시도하며, 실패하거나 마이크를 쓸 수 없으면 이름을 입력할 수 있습니다.</string>
+    <string name="help_ai_sprite_b3">AI는 인증된 계정의 닉네임과 시청 기록을 사용합니다.</string>
+    <string name="help_ai_sprite_b4">닉네임 인사, 시청 목록 평론, 영화 퀴즈, 매일 영화 상식을 제공합니다. 퀴즈는 시청 완료 7편 이상이 필요합니다.</string>
+    <string name="help_ai_sprite_b5">AI 요청에는 일일 한도가 있고 기능 새로 고침도 한 번 소모합니다. 오프라인에서는 새 요청을 할 수 없지만 캐시된 내용은 볼 수 있습니다.</string>
+    <string name="help_ai_sprite_b7">퀴즈를 나가도 답변은 유지됩니다. 다시 뽑기와 미완료 제출 전에 확인하며, 난이도 의견은 이후 문제 조정에 사용됩니다.</string>
 <!-- 메인 화면 배경 글로우 -->
     <string name="bg_glow_title">배경 모션</string>
     <string name="bg_glow_off">끄기</string>
