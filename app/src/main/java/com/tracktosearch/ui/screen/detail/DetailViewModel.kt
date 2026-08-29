@@ -203,6 +203,8 @@ data class DetailUiState(
     val recommendationsError: Boolean = false,
     val seasonsError: Boolean = false,
     val creditsError: Boolean = false,
+    // 预告片/截图加载失败（TMDB 或豆瓣 rexxar 任一路径失败且当前无数据时为 true）
+    val videosError: Boolean = false,
     // 未登录用户引导登录
     val isLoggedIn: Boolean = true,
     val showLoginPrompt: Boolean = false,
@@ -430,6 +432,8 @@ class DetailViewModel @Inject constructor(
     private var currentTraktRating: Double = 0.0
     // 评分聚合的 TMDB 评分入参：重试时要用同一份入参重新聚合
     private var lastRatingsTmdbRating: Double = 0.0
+    // 上次评分聚合已用过的 imdbId：豆瓣 rexxar 补齐 imdbId 后补拉评分时去重
+    private var lastRatingsImdbId: String = ""
     private var currentTmdbId: Int = 0
     private var currentCollectionId: Int = 0
     private var currentDoubanId: String? = null
@@ -542,7 +546,9 @@ class DetailViewModel @Inject constructor(
             // 此时 ratings/comments/credits/videos/seasons 等字段为空,需要重新拉取避免永久卡在骨架状态
             val visibility = cached.uiState.sectionVisible
             startOwnCommentLoad()
-            if (visibility.myRating && cached.uiState.ratings == null) fetchRatingsAsync(cached.currentTraktRating)
+            // 多平台评分聚合是头部评分卡的数据源，不受 myRating(仅控制「我的评分」模块) gate，
+            // 否则关闭该模块后头部评分卡在 ratings==null 时永久骨架
+            if (cached.uiState.ratings == null) fetchRatingsAsync(cached.currentTraktRating)
             if (visibility.comments && cached.uiState.comments.isEmpty()) fetchComments()
             if (cached.uiState.seasons.isEmpty() && cached.currentMediaType == MediaType.SHOW) fetchSeasons()
             if (visibility.cast && cached.uiState.cast.isEmpty() && cached.uiState.crew.isEmpty()) fetchCredits()
@@ -756,7 +762,9 @@ class DetailViewModel @Inject constructor(
             val visibility = _uiState.value.sectionVisible
 
             // 首屏关键数据：评分、评论、季信息、演职员、预告片截图
-            if (visibility.myRating) fetchRatingsAsync(tmdbRating)
+            // 多平台评分聚合是头部评分卡的数据源，无条件加载；
+            // myRating 可见性只控制「我的评分」模块 UI 与用户评分查询
+            fetchRatingsAsync(tmdbRating)
             if (visibility.comments) fetchComments()
             fetchSeasons()
             if (visibility.cast) fetchCredits()
@@ -814,8 +822,16 @@ class DetailViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             doubanIdForSync = doubanId,
             ratingSource = DetailRatingSource.DOUBAN,
-            ratings = _uiState.value.ratings?.copy(doubanRating = publicRating)
+            // ratings 为 null 时也要建出带豆瓣分的对象，否则豆瓣分永远补不进头部评分卡
+            ratings = (_uiState.value.ratings ?: MultiRatings()).copy(doubanRating = publicRating)
         )
+        // 解析出 doubanId 后重新校正想看/已看标记态：无路由 doubanId 的条目在 loadDetail 里
+        // 先以空 doubanId 走过一次 applyWatchStates（豆瓣分支查不到同步记录，写入 (false,false)），
+        // 旧校正任务此时已产出错误结果，取消后用新 doubanId 重查一次本地同步表
+        watchStateJob?.cancel()
+        currentDetailCacheKey?.let { cacheKey ->
+            applyWatchStates(cacheKey, currentTraktId, currentMediaType, currentImdbId)
+        }
         currentDetailCacheKey?.let { startDoubanRexxarLoad(it, doubanId) }
         if (_uiState.value.sectionVisible.comments && _uiState.value.comments.isEmpty()) {
             fetchComments()
@@ -843,6 +859,7 @@ class DetailViewModel @Inject constructor(
             if (currentDetailCacheKey != expectedKey || currentDoubanId != doubanId) return@launch
 
             detailResult.getOrNull()?.let { rexxarDetail ->
+                val imdbIdBeforeMerge = currentImdbId
                 val supplement = loadDoubanSupplement(doubanId, currentImdbId)
                 val merged = mergeDoubanDetail(
                     rexxar = rexxarDetail,
@@ -853,17 +870,30 @@ class DetailViewModel @Inject constructor(
                 currentImdbId = merged.imdbId ?: currentImdbId
                 currentDoubanRating = merged.score ?: currentDoubanRating
                 applyDoubanPresentation(merged, doubanId)
+                // 纯豆瓣条目 Rexxar 合并补出 imdbId 后才满足 OMDb 评分聚合条件，
+                // 此时评分流早已以空 imdbId 跑完，需按原入参补拉一次；
+                // lastRatingsImdbId 去重，避免 rexxar 重复回调发起重复请求
+                if (imdbIdBeforeMerge.isBlank() && currentImdbId.isNotBlank() && lastRatingsImdbId != currentImdbId) {
+                    lastRatingsImdbId = currentImdbId
+                    fetchRatingsAsync(lastRatingsTmdbRating)
+                }
             }
 
-            photosResult.getOrNull()?.let { photoPage ->
+            val photos = photosResult.getOrNull()
+            photos?.let { photoPage ->
                 val urls = photoPage.photos.mapNotNull { photo ->
                     photo.largeUrl?.takeIf { it.isNotBlank() }
                         ?: photo.normalUrl?.takeIf { it.isNotBlank() }
                         ?: photo.smallUrl?.takeIf { it.isNotBlank() }
                 }.distinct().take(20)
                 if (urls.isNotEmpty() && currentDetailCacheKey == expectedKey && currentDoubanId == doubanId) {
-                    _uiState.value = _uiState.value.copy(backdrops = urls)
+                    _uiState.value = _uiState.value.copy(backdrops = urls, videosError = false)
                 }
+            }
+            // 豆瓣 rexxar 剧照请求失败(区别于空结果)且当前无任何视频/截图数据时置错误标志供 UI 重试；
+            // 与 TMDB 路径共用 videosError，以「任一路径失败且当前无数据」为准
+            if (photos == null && _uiState.value.videos.isEmpty() && _uiState.value.backdrops.isEmpty()) {
+                _uiState.value = _uiState.value.copy(videosError = true)
             }
             // 剧照请求结束(无论成败)都复位预告片/剧照加载标志:
             // 纯豆瓣条目(tmdbId=0)没有 TMDB 填充兜底,不复位会让骨架与 glass scene 加载态永久卡住
@@ -1101,6 +1131,16 @@ class DetailViewModel @Inject constructor(
         fetchRecommendations()
     }
 
+    /** 预告片/截图区重试入口：清错误标志后重拉 TMDB 数据；纯豆瓣条目同时重启 rexxar 剧照加载 */
+    fun retryVideos() {
+        _uiState.value = _uiState.value.copy(videosError = false)
+        fetchVideosAndImages()
+        val doubanId = currentDoubanId
+        if (currentTmdbId <= 0 && !doubanId.isNullOrBlank()) {
+            currentDetailCacheKey?.let { startDoubanRexxarLoad(it, doubanId) }
+        }
+    }
+
     /**
      * 下拉刷新：重拉本页各分区。
      *
@@ -1205,6 +1245,10 @@ class DetailViewModel @Inject constructor(
                 val hasMoreTrakt = traktComments.size >= 10
                 val hasMoreTmdb = tmdbResponse != null && tmdbResponse.total_pages > 1
 
+                // 豆瓣短评源存在但请求失败(区别于真实空页)，且 Trakt/TMDB 兜底也为空时
+                // 置错误标志：豆瓣模式下 Trakt 被跳过、纯豆瓣条目 TMDB 也为空，
+                // 不标记的话加载失败会与「暂无评论」不可区分，用户也拿不到重试入口
+                val doubanCommentsFailed = currentDoubanId != null && doubanType != null && doubanPage == null
                 _uiState.value = _uiState.value.copy(
                     comments = allComments,
                     translatedComments = emptyList(),
@@ -1214,7 +1258,7 @@ class DetailViewModel @Inject constructor(
                     doubanCommentPage = 0,
                     hasMoreComments = hasMoreTrakt || hasMoreTmdb,
                     isLoadingComments = false,
-                    commentsError = false
+                    commentsError = doubanCommentsFailed && allComments.isEmpty()
                 )
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -1559,19 +1603,22 @@ class DetailViewModel @Inject constructor(
                     } else {
                         backdropUrls.take(20)
                     },
-                    isLoadingVideosImages = false
+                    isLoadingVideosImages = false,
+                    videosError = false
                 )
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (_: Exception) {
-                // 加载失败不影响页面正常显示
-                _uiState.value = _uiState.value.copy(isLoadingVideosImages = false)
+                // 失败置错误标志供 UI 展示与重试(retryVideos 入口复位)，不再静默吞掉
+                _uiState.value = _uiState.value.copy(isLoadingVideosImages = false, videosError = true)
             }
         }
     }
 
     private fun fetchRecommendations() {
-        if (currentTraktId <= 0) return
+        // 豆瓣独立模式 traktId 恒 0，但条目可能带 tmdbId：不能只凭 traktId 早退，
+        // 否则 TMDB similar 路径不可达，推荐 Tab 在豆瓣模式下永远为空(下拉刷新也无效)
+        if (currentTraktId <= 0 && currentTmdbId <= 0) return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingRecommendations = true)
             // 限制并发数，避免触发 API 限流
@@ -1581,6 +1628,8 @@ class DetailViewModel @Inject constructor(
                 val enriched = when (currentMediaType) {
                     MediaType.MOVIE -> {
                         val traktDeferred = async {
+                            // 豆瓣独立模式无有效 traktId，跳过 trakt related(评分聚合路径仅 traktId>0 时走)
+                            if (currentTraktId <= 0) return@async emptyList<RecommendationItem>()
                             val result = traktRepository.getRelatedMovies(currentTraktId)
                             val movies = result.getOrDefault(emptyList())
                             movies.map { movie ->
@@ -1631,6 +1680,8 @@ class DetailViewModel @Inject constructor(
                     }
                     MediaType.SHOW -> {
                         val traktDeferred = async {
+                            // 同 MOVIE 分支：豆瓣独立模式跳过 trakt related
+                            if (currentTraktId <= 0) return@async emptyList<RecommendationItem>()
                             val result = traktRepository.getRelatedShows(currentTraktId)
                             val shows = result.getOrDefault(emptyList())
                             shows.map { show ->
@@ -2174,9 +2225,14 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    /** 为标记已看弹窗加载指定季的集信息（不修改展开状态） */
-    fun loadEpisodesForMarkWatched(seasonNumber: Int) {
-        if (currentTraktId <= 0) return
+    /** 为标记已看弹窗加载指定季的集信息（不修改展开状态）；失败时发信号给弹窗并触发 onFailure 回调 */
+    fun loadEpisodesForMarkWatched(seasonNumber: Int, onFailure: () -> Unit = {}) {
+        if (currentTraktId <= 0) {
+            // 无法加载（Trakt 会话无效等）：发失败信号供弹窗显示错误态，避免永久卡「加载剧集中」
+            markWatchedEpisodeLoadFailures.tryEmit(seasonNumber)
+            onFailure()
+            return
+        }
         if (seasonNumber in _uiState.value.episodes) return
 
         viewModelScope.launch {
@@ -2186,6 +2242,14 @@ class DetailViewModel @Inject constructor(
                 val newEpisodes = _uiState.value.episodes.toMutableMap()
                 newEpisodes[seasonNumber] = localized
                 _uiState.value = _uiState.value.copy(episodes = newEpisodes)
+            }.onFailure { e ->
+                // 协程被取消（页面销毁等，Job 已不活跃）不算加载失败，不回调；真实失败（含请求超时）发信号并回调
+                val cancelled = e is kotlinx.coroutines.CancellationException &&
+                    coroutineContext[Job]?.isActive != true
+                if (!cancelled) {
+                    markWatchedEpisodeLoadFailures.tryEmit(seasonNumber)
+                    onFailure()
+                }
             }
         }
     }
@@ -2589,6 +2653,8 @@ class DetailViewModel @Inject constructor(
     fun toggleWatched() {
         val current = _uiState.value
         if (current.isMarkingWatched) return
+        // 取消进行中的标记态校正，避免其异步结果覆盖本次乐观标记
+        watchStateJob?.cancel()
 
         // 豆瓣独立模式:不检查 trakt token(网关已激活是豆瓣模式前提),走本地表 + 豆瓣 API
         if (isDoubanBackedItem()) {
@@ -2728,6 +2794,8 @@ class DetailViewModel @Inject constructor(
     fun toggleWatchlist() {
         val current = _uiState.value
         if (current.isMarkingWatchlist) return
+        // 取消进行中的标记态校正，避免其异步结果覆盖本次乐观标记
+        watchStateJob?.cancel()
 
         // 豆瓣独立模式:不检查 trakt token(网关已激活是豆瓣模式前提),走本地表 + 豆瓣 API
         if (isDoubanBackedItem()) {
@@ -2806,6 +2874,8 @@ class DetailViewModel @Inject constructor(
     private fun toggleWatchlistDouban() {
         val current = _uiState.value
         if (current.isMarkingWatchlist) return
+        // 取消进行中的标记态校正，避免其异步结果覆盖本次乐观标记
+        watchStateJob?.cancel()
 
         val doubanId = current.doubanIdForSync
         if (doubanId.isNullOrBlank()) {
@@ -2877,6 +2947,11 @@ class DetailViewModel @Inject constructor(
                 doubanSyncRetryable = if (success) false else _uiState.value.doubanSyncRetryable,
                 pendingDoubanAction = if (success) null else _uiState.value.pendingDoubanAction
             )
+            // 与 trakt 路径同构：想看标记成功发可撤销事件(UI 撤销时再调 toggleWatchlist，
+            // 内部按 isDoubanBackedItem 自动走回豆瓣取消)
+            if (success) {
+                _markEvent.emit(DetailMarkEvent(DetailMarkKind.WATCHLIST, added = targetState))
+            }
             saveToCache()
         }
     }
@@ -2893,6 +2968,8 @@ class DetailViewModel @Inject constructor(
     private fun toggleWatchedDouban(rating: Int? = null) {
         val current = _uiState.value
         if (current.isMarkingWatched) return
+        // 取消进行中的标记态校正，避免其异步结果覆盖本次乐观标记
+        watchStateJob?.cancel()
 
         val doubanId = current.doubanIdForSync
         if (doubanId.isNullOrBlank()) {
@@ -2938,6 +3015,11 @@ class DetailViewModel @Inject constructor(
                     isMarkedWatchlist = true,
                     isMarkingWatched = false
                 )
+                // 与 trakt 路径同构：取消已看成功发可撤销事件(UI 撤销时再调 toggleWatched，
+                // 内部按 isDoubanBackedItem 自动走回豆瓣标记已看)
+                if (success) {
+                    _markEvent.emit(DetailMarkEvent(DetailMarkKind.WATCHED, added = false))
+                }
                 saveToCache()
             }
             return
@@ -2954,14 +3036,23 @@ class DetailViewModel @Inject constructor(
             if (success) {
                 upsertDoubanSyncedItem(doubanId, status = "collect", pendingSync = false)
             } else {
-                // 失败:乐观标记已看,pendingSync=true
+                // 失败:乐观标记已看,pendingSync=true,并保留即时重试动作,避免豆瓣侧标记缺失
+                // (写法对齐取消想看失败分支)
                 upsertDoubanSyncedItem(doubanId, status = "collect", pendingSync = true)
+                _uiState.value = _uiState.value.copy(
+                    doubanSyncRetryable = true,
+                    pendingDoubanAction = DoubanSyncAction.COLLECT
+                )
                 Log.w("DetailViewModel", "Douban markCollect failed for $doubanId, optimistic collect applied")
             }
             _uiState.value = _uiState.value.copy(
                 isMarkedWatched = true,
                 isMarkedWatchlist = false,
-                isMarkingWatched = false
+                isMarkingWatched = false,
+                // 与 trakt 路径同构：标记已看成功后直接弹评分弹窗(豆瓣评分走 setRatingDouban 链路，
+                // 弹窗确认回调 confirmRatingWithComment 已接通；trakt 电影/剧集成功路径均置 true)。
+                // 弹窗本身即反馈，不再叠发可撤销 Snackbar
+                showRatingDialog = if (success) true else _uiState.value.showRatingDialog
             )
             saveToCache()
         }
@@ -3048,7 +3139,13 @@ class DetailViewModel @Inject constructor(
         }
         val cred = doubanAuthStorage.getCredentials()
         if (cred == null) {
-            viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
+            // 访客(GUEST)对豆瓣承载条目评分:引导登录而不是报「同步失败」;
+            // 豆瓣登录用户 cred 意外为 null 才算真正的同步失败,保留原 toast
+            if (currentSessionMode == SessionMode.GUEST) {
+                _uiState.value = current.copy(showLoginPrompt = true)
+            } else {
+                viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
+            }
             return
         }
         val doubanRating = Math.round(rating / 2.0).toInt()
@@ -3103,7 +3200,12 @@ class DetailViewModel @Inject constructor(
         }
         val cred = doubanAuthStorage.getCredentials()
         if (cred == null) {
-            viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
+            // 访客(GUEST)对豆瓣承载条目取消评分:引导登录而不是报「同步失败」(与 setRatingDouban 一致)
+            if (currentSessionMode == SessionMode.GUEST) {
+                _uiState.value = current.copy(showLoginPrompt = true)
+            } else {
+                viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
+            }
             return
         }
         _uiState.value = current.copy(isRating = true, showRatingDialog = false)
