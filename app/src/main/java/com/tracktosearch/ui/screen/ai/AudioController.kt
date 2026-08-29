@@ -114,6 +114,14 @@ object AiAudioRecorder {
     }
 }
 
+private const val ANDROID_ASSET_URL_PREFIX = "file:///android_asset/"
+
+/** 把预存试听伪 URL 还原为 AssetManager 可读取的相对路径。 */
+internal fun bundledAssetPath(audioUrl: String?): String? = audioUrl
+    ?.takeIf { it.startsWith(ANDROID_ASSET_URL_PREFIX) }
+    ?.removePrefix(ANDROID_ASSET_URL_PREFIX)
+    ?.takeIf { it.isNotBlank() && !it.startsWith('/') && ".." !in it.split('/') }
+
 /** 使用系统 MediaPlayer 播放短音频，并在结束后清理临时文件。 */
 class AiAudioPlayer(private val context: Context) {
     private var player: MediaPlayer? = null
@@ -167,7 +175,21 @@ class AiAudioPlayer(private val context: Context) {
                     }
                 }.start()
             } else if (!audio.audioUrl.isNullOrBlank()) {
-                mediaPlayer.setDataSource(context, Uri.parse(audio.audioUrl))
+                val assetPath = bundledAssetPath(audio.audioUrl)
+                if (assetPath != null) {
+                    // file:///android_asset 只是 WebView 风格的伪路径，MediaPlayer 无法通过
+                    // setDataSource(Context, Uri) 读取。预存试听必须交给 AssetManager 打开的
+                    // 文件描述符，并携带 APK 内的偏移与长度。
+                    context.assets.openFd(assetPath).use { descriptor ->
+                        mediaPlayer.setDataSource(
+                            descriptor.fileDescriptor,
+                            descriptor.startOffset,
+                            descriptor.length
+                        )
+                    }
+                } else {
+                    mediaPlayer.setDataSource(context, Uri.parse(audio.audioUrl))
+                }
                 prepareAndStart(mediaPlayer, epoch, onStarted, onFinished)
             } else {
                 stop()
