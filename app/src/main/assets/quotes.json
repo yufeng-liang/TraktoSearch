@@ -1034,10 +1034,10 @@
       "posterPath": "/9iAgQSkt9z34DTYQfpG0M69SyiL.jpg",
       "bundled": false,
       "lines": {
-        "en": ["How are you?", "I'm doing fine."],
-        "zh": ["你好吗？", "我很好。"],
-        "ja": ["お元気ですか。", "私は元気です。"],
-        "ko": ["잘 지내나요?", "저는 잘 지냅니다."]
+        "en": ["Dear Itsuki Fujii,", "How are you?", "I'm doing fine."],
+        "zh": ["藤井树君：", "你好吗？", "我很好。"],
+        "ja": ["拝啓、藤井樹様。", "お元気ですか。", "私は元気です。"],
+        "ko": ["후지이 이츠키 님께.", "잘 지내나요?", "저는 잘 지냅니다."]
       },
       "title": {
         "en": "Love Letter",
