@@ -11,6 +11,7 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.net.Uri
+import android.os.Environment
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
@@ -19,16 +20,18 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.stringResource
-import androidx.core.content.FileProvider
 import androidx.core.graphics.drawable.toBitmap
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.SaveToAlbumResult
+import com.tracktosearch.ui.component.queryExistingFile
+import com.tracktosearch.ui.component.saveBitmapToAlbum
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.FileOutputStream
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
@@ -222,8 +225,25 @@ private const val CONTENT_TOP = CARD_TOP + PAD
 /** 内容底部之后还要留的高度（纸卡内边距 + 呼吸 + 齿孔带） */
 private const val CONTENT_BOTTOM_EXTRA = PAD + 26f + FILM_BAND
 
+private const val STATISTICS_ALBUM_DIRECTORY = "TrackToSearch"
+private const val MAX_FILENAME_ATTEMPTS = 100
+
+/** 生成稳定、可读且支持同毫秒重名退避的相册文件名。 */
+internal fun statisticsShareFilename(
+    timestampMillis: Long,
+    duplicateIndex: Int = 0,
+    timeZone: TimeZone = TimeZone.getDefault(),
+): String {
+    require(duplicateIndex >= 0) { "duplicateIndex must be non-negative" }
+    val stamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).apply {
+        this.timeZone = timeZone
+    }.format(Date(timestampMillis))
+    val suffix = if (duplicateIndex == 0) "" else "_$duplicateIndex"
+    return "TrackToSearch_statistics_${stamp}${suffix}.png"
+}
+
 /**
- * 渲染统计分享长图并写入 cacheDir/share，返回可分享的 content URI。
+ * 渲染统计分享长图，先写入系统相册，再返回该 MediaStore 项的 content URI。
  *
  * 先用 1×1 的画布跑一遍布局拿到总高度（所有绘制都被裁掉，只有文字测量真正生效），
  * 再按这个高度建位图正式画一遍。比预估高度靠谱：文案长度随语言差别很大，
@@ -235,28 +255,54 @@ suspend fun renderStatisticsShareImage(
 ): Uri {
     val bitmap = withContext(Dispatchers.Default) {
         val icon = loadAppIcon(context)
-        val probe = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
-        val height = try {
-            drawContent(Canvas(probe), data, icon).toInt() + CONTENT_BOTTOM_EXTRA.toInt()
+        try {
+            val probe = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+            val height = try {
+                drawContent(Canvas(probe), data, icon).toInt() + CONTENT_BOTTOM_EXTRA.toInt()
+            } finally {
+                probe.recycle()
+            }
+            Bitmap.createBitmap(IMAGE_WIDTH, height, Bitmap.Config.ARGB_8888).also { bmp ->
+                val canvas = Canvas(bmp)
+                drawBackdrop(canvas, height)
+                drawContent(canvas, data, icon)
+            }
         } finally {
-            probe.recycle()
-        }
-        Bitmap.createBitmap(IMAGE_WIDTH, height, Bitmap.Config.ARGB_8888).also { bmp ->
-            val canvas = Canvas(bmp)
-            drawBackdrop(canvas, height)
-            drawContent(canvas, data, icon)
+            icon?.recycle()
         }
     }
-    return withContext(Dispatchers.IO) {
-        val dir = File(context.cacheDir, "share").apply { if (!exists()) mkdirs() }
-        val file = File(dir, "TraktoSearch-statistics.png")
-        FileOutputStream(file).use { out ->
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+    val timestampMillis = System.currentTimeMillis()
+    try {
+        repeat(MAX_FILENAME_ATTEMPTS) { duplicateIndex ->
+            val filename = statisticsShareFilename(timestampMillis, duplicateIndex)
+            when (
+                saveBitmapToAlbum(
+                    context = context,
+                    bitmap = bitmap,
+                    filename = filename,
+                    subDirectory = STATISTICS_ALBUM_DIRECTORY,
+                )
+            ) {
+                SaveToAlbumResult.SAVED -> {
+                    return findStatisticsShareUri(context, filename)
+                        ?: throw IOException("Saved statistics image URI not found")
+                }
+                SaveToAlbumResult.ALREADY_EXISTS -> Unit
+                SaveToAlbumResult.FAILED -> throw IOException("Failed to save statistics image")
+            }
         }
+        throw IOException("Could not allocate a unique statistics filename")
+    } finally {
         bitmap.recycle()
-        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     }
 }
+
+private suspend fun findStatisticsShareUri(context: Context, filename: String): Uri? =
+    withContext(Dispatchers.IO) {
+        val relativePath = Environment.DIRECTORY_PICTURES + "/" + STATISTICS_ALBUM_DIRECTORY
+        queryExistingFile(context, filename, relativePath)
+            ?: queryExistingFile(context, filename, "$relativePath/")
+    }
 
 /** 应用图标取不到时（自适应图标解析失败等）返回 null，头部退化成纯文字，不让分享整体失败。 */
 private fun loadAppIcon(context: Context): Bitmap? = try {

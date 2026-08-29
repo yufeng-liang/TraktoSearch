@@ -1052,7 +1052,9 @@
     <!-- Statistics share -->
     <string name="statistics_share">통계 공유</string>
     <string name="statistics_share_generating">이미지 생성 중…</string>
-    <string name="statistics_share_failed">이미지 생성에 실패했습니다. 다시 시도해 주세요</string>
+    <string name="statistics_share_failed">이미지를 저장하지 못했습니다. 다시 시도해 주세요</string>
+    <string name="statistics_share_saved">갤러리에 저장했습니다</string>
+    <string name="statistics_share_open_failed">갤러리에 저장했지만 공유 패널을 열지 못했습니다</string>
     <string name="statistics_share_not_ready">통계를 불러오는 중입니다. 잠시 후 다시 시도해 주세요</string>
     <string name="statistics_share_card_title">나의 시청 기록</string>
     <string name="statistics_overview">개요</string>

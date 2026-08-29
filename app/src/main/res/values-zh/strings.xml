@@ -1046,12 +1046,12 @@
     <!-- Statistics -->
     <string name="statistics_title">观看统计</string>
     <string name="statistics_total">总计</string>
-    <string name="statistics_movies">部电影</string>
+    <string name="statistics_movies">电影</string>
     <string name="statistics_this_month">本月</string>
     <string name="statistics_this_year">本年</string>
-    <string name="statistics_shows">部剧</string>
+    <string name="statistics_shows">剧集</string>
     <string name="statistics_shows_completed">%1$d 部看完</string>
-    <string name="statistics_episodes">集</string>
+    <string name="statistics_episodes">集数</string>
     <string name="statistics_heatmap">观看热力图</string>
     <string name="statistics_genre_distribution">类型分布</string>
     <string name="statistics_genre_ranking">最常看的类型排行</string>
@@ -1145,7 +1145,9 @@
     <!-- Statistics share -->
     <string name="statistics_share">分享统计</string>
     <string name="statistics_share_generating">正在生成图片…</string>
-    <string name="statistics_share_failed">图片生成失败，请重试</string>
+    <string name="statistics_share_failed">图片保存失败，请重试</string>
+    <string name="statistics_share_saved">已保存到相册</string>
+    <string name="statistics_share_open_failed">图片已保存到相册，但无法打开系统分享面板</string>
     <string name="statistics_share_not_ready">统计还在加载，稍后再试</string>
     <string name="statistics_share_card_title">我的观影档案</string>
     <string name="statistics_overview">总览</string>

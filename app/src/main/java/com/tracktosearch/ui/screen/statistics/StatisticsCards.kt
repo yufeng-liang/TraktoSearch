@@ -89,9 +89,9 @@ fun StatsSectionCard(
     }
 }
 /**
- * 总览格子：图标 + 大数字 + 单位 + 标签。
+ * 总览格子：顶部图标 + 标签，下方大数字 + 单位。
  *
- * 2 列布局每格更宽，容得下这四层；原先 3 列时「部剧 / N 部看完」两行在窄屏已经挤成两行折字。
+ * 2 列布局每格更宽；标签与图标同行，避免数值下方再次出现和单位重复的量词。
  * [secondary] 用于剧集格补充「整部看完」这类副行，不需要时传 null。
  */
 @Composable
@@ -116,12 +116,21 @@ fun StatOverviewTile(
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp, vertical = 13.dp),
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.primary,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(modifier = Modifier.width(7.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Spacer(modifier = Modifier.height(9.dp))
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
@@ -141,13 +150,8 @@ fun StatOverviewTile(
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             if (secondary != null) {
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = secondary,
                     style = MaterialTheme.typography.labelSmall,

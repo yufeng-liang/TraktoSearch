@@ -1147,7 +1147,9 @@ Config:
     <!-- Statistics share -->
     <string name="statistics_share">Share stats</string>
     <string name="statistics_share_generating">Rendering image…</string>
-    <string name="statistics_share_failed">Could not render the image. Please try again.</string>
+    <string name="statistics_share_failed">Could not save the image. Please try again.</string>
+    <string name="statistics_share_saved">Saved to Photos</string>
+    <string name="statistics_share_open_failed">Saved to Photos, but couldn\'t open the share panel.</string>
     <string name="statistics_share_not_ready">Statistics are still loading — try again in a moment.</string>
     <string name="statistics_share_card_title">My Viewing Record</string>
     <string name="statistics_overview">Overview</string>

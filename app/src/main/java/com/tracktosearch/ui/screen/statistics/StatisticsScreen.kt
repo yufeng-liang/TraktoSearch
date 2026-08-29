@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.statistics
 
+import android.content.ClipData
 import android.content.Intent
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.Animatable
@@ -63,6 +64,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -102,6 +104,7 @@ import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropSource
+import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.rememberShimmer
 import com.tracktosearch.ui.component.shimmer
@@ -111,6 +114,7 @@ import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -186,6 +190,8 @@ fun StatisticsScreen(
         highlight = highlight
     )
     val shareFailedText = stringResource(R.string.statistics_share_failed)
+    val shareSavedText = stringResource(R.string.statistics_share_saved)
+    val shareOpenFailedText = stringResource(R.string.statistics_share_open_failed)
     val shareChooserTitle = stringResource(R.string.statistics_share_chooser)
     val shareEnabled = shareData != null && !sharing
     val onShare: () -> Unit = {
@@ -194,15 +200,26 @@ fun StatisticsScreen(
             sharing = true
             shareScope.launch {
                 try {
+                    // 渲染完成后先写进系统相册，分享使用 MediaStore 的 content URI。
                     val uri = renderStatisticsShareImage(context, data)
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "image/png"
                         putExtra(Intent.EXTRA_STREAM, uri)
+                        clipData = ClipData.newRawUri("statistics", uri)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
-                    context.startActivity(Intent.createChooser(intent, shareChooserTitle))
-                } catch (e: Exception) {
-                    // 位图分配失败、无接收方应用、FileProvider 写入失败等都只提示，不崩溃
+                    val feedbackText = try {
+                        context.startActivity(Intent.createChooser(intent, shareChooserTitle))
+                        shareSavedText
+                    } catch (_: Exception) {
+                        // 相册已经保存成功；系统分享面板异常不能误报成“保存失败”。
+                        shareOpenFailedText
+                    }
+                    shareScope.launch { snackbarHostState.showSnackbar(feedbackText) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // 渲染或相册写入失败时不拉起分享，也不显示“已保存”。
                     snackbarHostState.showSnackbar(shareFailedText)
                 } finally {
                     sharing = false
@@ -220,6 +237,15 @@ fun StatisticsScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            val listState = rememberLazyListState()
+            val hasContentUnderTopBar by remember {
+                derivedStateOf {
+                    hasListScrolled(
+                        firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                        firstVisibleItemScrollOffsetPx = listState.firstVisibleItemScrollOffset
+                    )
+                }
+            }
             val errorMsg = uiState.error
             if (errorMsg != null && !uiState.watchTimeReady && !uiState.overviewReady) {
                 AppErrorState(
@@ -229,7 +255,11 @@ fun StatisticsScreen(
                     retryLabel = stringResource(R.string.watchlist_retry)
                 )
             } else {
-                val listState = rememberLazyListState()
+                // Navigation 会恢复 LazyListState；页面实例每次重新进入时强制从 Hero 顶部开始。
+                // 只以 Unit 为 key，避免数据稍后就绪时把已经开始浏览的用户再次拉回顶部。
+                LaunchedEffect(Unit) {
+                    listState.scrollToItem(0)
+                }
                 val scrollToTopProvider = LocalScrollToTopProvider.current
                 val statsCoroutineScope = rememberCoroutineScope()
                 DisposableEffect(Unit) {
@@ -281,8 +311,8 @@ fun StatisticsScreen(
             ) {
                 // Hero 小结：一句话 + 一个大数字，先把「最突出的一项」讲成人话，
                 // 后面的总览再给全量数字。数据未就绪时不占位，避免一进页面就是空卡片。
-                if (uiState.overviewReady) {
-                    item(key = "hero") {
+                item(key = "hero") {
+                    if (uiState.overviewReady) {
                         StatisticsHeroCard(
                             highlight = highlight,
                             thisYearWatched = uiState.thisYearWatched,
@@ -432,6 +462,7 @@ fun StatisticsScreen(
                         state = statsHazeState,
                         style = statsHazeStyle,
                         blurRadius = 24.dp,
+                        isContentUnderTopBar = hasContentUnderTopBar,
                         scene = statisticsGlassScene
                     )
                     .clickable(enabled = false, onClick = {})
@@ -664,7 +695,7 @@ private fun statisticsLocale(): Locale {
  *
  * 原先 3 列时「剧集」格要塞主数字 + 「N 部看完」副行，窄屏会折成两行折字；
  * 且 5 个格子第二行只放 2 个，右侧留一大块空。改 2 列后每格更宽，
- * 图标 + 大数字 + 单位 + 标签四层都放得下，补上「已评分」正好铺满 6 格。
+ * 「图标 + 标签」和「大数字 + 单位」两层都放得下，补上「已评分」正好铺满 6 格。
  */
 @Composable
 private fun OverviewCards(uiState: StatisticsUiState, reveal: SectionReveal) {
