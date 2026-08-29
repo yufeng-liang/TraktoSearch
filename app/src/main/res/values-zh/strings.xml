@@ -1667,6 +1667,7 @@
     <string name="bg_glow_aurora">极光</string>
     <string name="bg_glow_lava">熔岩灯</string>
     <string name="bg_glow_bloom">弥散绽放</string>
+    <string name="bg_glow_theme_driven">跟随主题色</string>
     <string name="bg_glow_off_desc">不显示彩色弥散光晕背景</string>
     <string name="bg_glow_aurora_desc">柔和流动的极光色带，随页面滑动连续运动</string>
     <string name="bg_glow_lava_desc">颜色如熔岩灯般缓慢对流，慵懒舒缓</string>

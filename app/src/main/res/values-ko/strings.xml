@@ -1679,6 +1679,7 @@
     <string name="bg_glow_aurora">오로라</string>
     <string name="bg_glow_lava">라바 램프</string>
     <string name="bg_glow_bloom">블룸</string>
+    <string name="bg_glow_theme_driven">테마 색상</string>
     <string name="bg_glow_off_desc">배경 글로우를 표시하지 않음</string>
     <string name="bg_glow_aurora_desc">부드럽게 흐르는 오로라 무늬가 페이지 사이에서 연속으로 움직임</string>
     <string name="bg_glow_lava_desc">라바 램프처럼 색이 천천히 대류하며 잔잔하게 변함</string>

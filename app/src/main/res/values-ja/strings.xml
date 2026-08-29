@@ -1679,6 +1679,7 @@
     <string name="bg_glow_aurora">オーロラ</string>
     <string name="bg_glow_lava">ラバランプ</string>
     <string name="bg_glow_bloom">ブルーム</string>
+    <string name="bg_glow_theme_driven">テーマ色に追従</string>
     <string name="bg_glow_off_desc">背景のグローを表示しない</string>
     <string name="bg_glow_aurora_desc">やわらかく流れるオーロラの帯が、ページ間で連続して動く</string>
     <string name="bg_glow_lava_desc">ラバランプのように色がゆっくり対流し、穏やかに変化する</string>

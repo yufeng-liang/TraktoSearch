@@ -1667,6 +1667,7 @@ Config:
     <string name="bg_glow_aurora">Aurora</string>
     <string name="bg_glow_lava">Lava Lamp</string>
     <string name="bg_glow_bloom">Bloom</string>
+    <string name="bg_glow_theme_driven">Theme color</string>
     <string name="bg_glow_off_desc">No colored glow background</string>
     <string name="bg_glow_aurora_desc">Soft flowing aurora ribbons that move continuously across pages</string>
     <string name="bg_glow_lava_desc">Colors slowly convect like a lava lamp, calm and unhurried</string>
