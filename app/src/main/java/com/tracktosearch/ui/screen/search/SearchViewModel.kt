@@ -71,7 +71,7 @@ class SearchViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
-    // 热门搜索词 - 从豆瓣新片榜实时获取
+    // 热门搜索词 - 从豆瓣口碑榜实时获取
     private val _hotSearches = MutableStateFlow<List<String>>(emptyList())
     val hotSearches: StateFlow<List<String>> = _hotSearches.asStateFlow()
 
@@ -115,12 +115,12 @@ class SearchViewModel @Inject constructor(
                 return@launch
             }
             // 共享缓存 + 飞行中去重：并发时只发一次网络请求
-            // 缓存 key 带版本号 v4：数据源切为 App 直连豆瓣 Rexxar，与发现页共享同一缓存
-            val cacheKey = "douban-movie_1_10_v5"
+            // key 与发现页口碑榜同一格式：数据同为口碑榜，发现页先加载过则此处直接命中缓存
+            val cacheKey = "douban-weekly_1_10_v5"
             try {
                 val data = sharedDoubanHotCache.getOrAwait(cacheKey) {
                     val response = doubanRexxarApi.getCollectionItems(
-                        collectionId = doubanCollectionId("douban-movie"),
+                        collectionId = doubanCollectionId("douban-weekly"),
                         start = 0,
                         count = 20
                     ).takeIf { it.isSuccessful }?.body()
@@ -137,9 +137,9 @@ class SearchViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                // 失败兜底：尝试从 v2 缓存取数据(发现页新片榜可能已加载成功)
+                // 失败兜底：尝试从共享缓存取数据(发现页口碑榜可能已加载成功)
                 try {
-                    val cached = sharedDoubanHotCache.get("douban-movie_1_10_v5")
+                    val cached = sharedDoubanHotCache.get("douban-weekly_1_10_v5")
                     if (cached != null) {
                         val titles = cached.items.take(8).map { item ->
                             item.title.replace(Regex("^【[^】]+】"), "").trim()
