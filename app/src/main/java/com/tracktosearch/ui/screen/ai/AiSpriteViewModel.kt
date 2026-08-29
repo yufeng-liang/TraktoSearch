@@ -24,6 +24,7 @@ import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
 import com.tracktosearch.data.repository.TraktRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -128,7 +129,8 @@ class AiSpriteViewModel @Inject constructor(
     private val authManager: AuthManager,
     private val traktRepository: TraktRepository,
     private val overlayStorage: com.tracktosearch.data.local.AiSpriteOverlayStorage,
-    private val aiTasteStorage: com.tracktosearch.data.local.AiTasteStorage
+    private val aiTasteStorage: com.tracktosearch.data.local.AiTasteStorage,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(
         AiSpriteUiState(
@@ -767,6 +769,30 @@ class AiSpriteViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 预存试听音频：assets 里按角色 ID 打包了与服务端文案一致的 MP3，命中即零网络播放。
+     * 服务端改过试听文案时（远端合并覆盖后的 auditionText 与本地目录不一致）返回 null，
+     * 让调用方走 TTS 重新合成，避免播错文案的旧音频。
+     */
+    private fun bundledAuditionAudio(character: AiCharacter): AiAudio? {
+        val catalogText = AiCharacterCatalog.all.firstOrNull { it.id == character.id }?.auditionText
+        if (character.auditionText != catalogText) return null
+        val assetPath = "ai_auditions/${character.id}.mp3"
+        return try {
+            context.assets.open(assetPath).use { /* 能打开即视为已打包 */ }
+            AiAudio(
+                audioDataUrl = null,
+                audioUrl = "file:///android_asset/$assetPath",
+                mimeType = "audio/mpeg",
+                durationMs = null,
+                cacheKey = null,
+                transcript = character.auditionText
+            )
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private suspend fun loadCharacters() {
         aiRepository.listCharacters().fold(
             onSuccess = { remote ->
@@ -796,6 +822,11 @@ class AiSpriteViewModel @Inject constructor(
     /** 试听请求挂在本预览 Job 内执行：取消 previewJob 会一并取消 TTS，避免快速切换角色时旧请求后完成、播放上一个角色的声音。 */
     private suspend fun previewSelectedCharacter() {
         val character = _uiState.value.selectedCharacter ?: return
+        // 预存音频命中则立即播放，不消耗 TTS 配额；未命中按角色状态走网络链路
+        bundledAuditionAudio(character)?.let { local ->
+            _audioEvents.emit(local)
+            return
+        }
         val authorized = isAuthorized()
         val request = buildAuditionTtsRequest(character, spriteSessionId)
         when (auditionPlaybackRoute(authorized, character.isAvailable)) {
@@ -825,6 +856,14 @@ class AiSpriteViewModel @Inject constructor(
 
     private fun scheduleCharacterPreview() {
         previewJob?.cancel()
+        // 预存音频命中时跳过防抖立即播放；未命中才按原防抖走网络 TTS
+        val character = _uiState.value.selectedCharacter
+        if (character != null) {
+            bundledAuditionAudio(character)?.let { local ->
+                previewJob = viewModelScope.launch { _audioEvents.emit(local) }
+                return
+            }
+        }
         previewJob = viewModelScope.launch {
             delay(350)
             previewSelectedCharacter()
