@@ -38,7 +38,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.EventNote
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Animation
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Explore
@@ -1457,7 +1457,7 @@ private fun SharedTransitionSwitchCard(
 ) {
     val view = LocalView.current
     SettingsItemCard(
-        icon = Icons.Rounded.AutoAwesome,
+        icon = Icons.Rounded.Animation,
         title = stringResource(R.string.settings_shared_transition),
         subtitle = stringResource(R.string.settings_shared_transition_subtitle),
         onClick = { view.performHaptic(HapticType.CLICK); onToggle(!enabled) },
