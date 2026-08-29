@@ -1,6 +1,8 @@
 package com.tracktosearch.ui.screen.dailystamp
 
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas as AndroidCanvas
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.CubicBezierEasing
@@ -45,16 +47,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Canvas as GraphicsCanvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -63,17 +70,23 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toIntSize
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.SaveToAlbumResult
 import com.tracktosearch.ui.screen.splash.QuoteSeal
 import com.tracktosearch.ui.screen.splash.SplashPalette
 import com.tracktosearch.ui.util.showToast
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -159,6 +172,8 @@ private fun CardStack(
     onQuoteClick: (tmdbId: Int, title: String, year: Int, posterUrl: String) -> Unit,
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
     val scope = rememberCoroutineScope()
     val graphicsLayer = rememberGraphicsLayer()
     val dragX = remember { Animatable(0f) }
@@ -170,9 +185,9 @@ private fun CardStack(
         onQuoteClick(card.tmdbId, card.title, card.year, card.posterUrl)
     }
 
-    /** 把当前卡面录下来交给保存/分享，两条路都用同一张位图 */
-    val capture: suspend () -> android.graphics.Bitmap = {
-        graphicsLayer.toImageBitmap().asAndroidBitmap()
+    /** 把当前卡面录下来交给保存/分享，两条路都用同一张软件位图 */
+    val capture: suspend () -> Bitmap = {
+        captureCardLayer(graphicsLayer, density, layoutDirection)
     }
 
     Column(
@@ -226,7 +241,7 @@ private fun CardStack(
                 if (!busy) {
                     busy = true
                     scope.launch {
-                        saveCard(context, capture(), card.date)
+                        saveCard(context, card.date, capture)
                         busy = false
                     }
                 }
@@ -235,7 +250,7 @@ private fun CardStack(
                 if (!busy) {
                     busy = true
                     scope.launch {
-                        shareCard(context, capture(), card.date)
+                        shareCard(context, card.date, capture)
                         busy = false
                     }
                 }
@@ -317,6 +332,14 @@ private fun CardPoster(
     val tintColor = if (palette.isDark) Color(0xFF16100B) else palette.paper
     val tintAlpha = if (palette.isDark) 0.22f else 0.14f
     val interactionSource = remember { MutableInteractionSource() }
+    val context = LocalContext.current
+    val posterRequest = remember(card.poster, context) {
+        ImageRequest.Builder(context)
+            .data(card.poster)
+            // 导出会在软件 Canvas 上重放卡面，硬件 Bitmap 无法参与这次绘制。
+            .allowHardware(false)
+            .build()
+    }
     Box(
         modifier = Modifier
             .size(width = 122.dp, height = 183.dp)
@@ -330,7 +353,7 @@ private fun CardPoster(
             .padding(5.dp)
     ) {
         AsyncImage(
-            model = card.poster,
+            model = posterRequest,
             contentDescription = card.title,
             contentScale = ContentScale.Crop,
             modifier = Modifier
@@ -513,18 +536,53 @@ private fun neighbour(
     return openable.getOrNull(target)
 }
 
+/**
+ * 把已录制的卡面重放到软件位图。
+ *
+ * Android 9 及以上的 GraphicsLayer 硬件快照在部分设备会返回尺寸正常、内容却全白的位图。
+ * 这里显式创建 ARGB_8888 Bitmap，再通过公开 DrawScope API 重放图层，绕开硬件快照。
+ */
+private suspend fun captureCardLayer(
+    graphicsLayer: GraphicsLayer,
+    density: Density,
+    layoutDirection: LayoutDirection,
+): Bitmap = withContext(Dispatchers.Main.immediate) {
+    val layerSize = graphicsLayer.size
+    require(layerSize.width > 0 && layerSize.height > 0) {
+        "Daily stamp card has not been drawn yet"
+    }
+
+    Bitmap.createBitmap(layerSize.width, layerSize.height, Bitmap.Config.ARGB_8888).also { bitmap ->
+        CanvasDrawScope().draw(
+            density = density,
+            layoutDirection = layoutDirection,
+            canvas = GraphicsCanvas(AndroidCanvas(bitmap)),
+            size = Size(layerSize.width.toFloat(), layerSize.height.toFloat()),
+        ) {
+            drawLayer(graphicsLayer)
+        }
+    }
+}
+
 private suspend fun saveCard(
     context: android.content.Context,
-    bitmap: android.graphics.Bitmap,
     date: LocalDate,
+    capture: suspend () -> Bitmap,
 ) {
     val message = try {
-        when (saveStampCard(context, bitmap, date)) {
-            SaveToAlbumResult.SAVED -> R.string.daily_stamp_saved
-            SaveToAlbumResult.ALREADY_EXISTS -> R.string.daily_stamp_already_saved
-            SaveToAlbumResult.FAILED -> R.string.daily_stamp_save_failed
+        val bitmap = capture()
+        try {
+            when (saveStampCard(context, bitmap, date)) {
+                SaveToAlbumResult.SAVED -> R.string.daily_stamp_saved
+                SaveToAlbumResult.ALREADY_EXISTS -> R.string.daily_stamp_already_saved
+                SaveToAlbumResult.FAILED -> R.string.daily_stamp_save_failed
+            }
+        } finally {
+            bitmap.recycle()
         }
-    } catch (e: Exception) {
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
         // 位图录制失败（低内存、层还没画完）也只提示，不崩在一次保存上
         R.string.daily_stamp_save_failed
     }
@@ -533,11 +591,16 @@ private suspend fun saveCard(
 
 private suspend fun shareCard(
     context: android.content.Context,
-    bitmap: android.graphics.Bitmap,
     date: LocalDate,
+    capture: suspend () -> Bitmap,
 ) {
     try {
-        val uri = shareStampCardUri(context, bitmap, date)
+        val bitmap = capture()
+        val uri = try {
+            shareStampCardUri(context, bitmap, date)
+        } finally {
+            bitmap.recycle()
+        }
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "image/png"
             putExtra(Intent.EXTRA_STREAM, uri)
@@ -546,7 +609,9 @@ private suspend fun shareCard(
         context.startActivity(
             Intent.createChooser(intent, context.getString(R.string.daily_stamp_share_chooser))
         )
-    } catch (e: Exception) {
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
         // 无接收方应用、FileProvider 写入失败等
         context.showToast(context.getString(R.string.daily_stamp_share_failed))
     }

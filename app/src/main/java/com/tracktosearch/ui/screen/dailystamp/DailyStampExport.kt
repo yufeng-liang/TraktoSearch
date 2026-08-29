@@ -32,17 +32,52 @@ private fun stamp(date: LocalDate): String =
 
 private fun fileName(date: LocalDate): String = "TrackToSearch_DailyStamp_${stamp(date)}.png"
 
+/**
+ * 是否含有可导出的卡面像素。
+ *
+ * 空白快照通常是全透明或纯白。逐行扫描并在发现第一个非透明、非纯白像素时立即返回，
+ * 不额外复制整张位图；真实卡面的暖色背景会在第一行就通过。
+ */
+internal fun Bitmap.hasDailyStampVisualContent(): Boolean {
+    if (isRecycled || width <= 0 || height <= 0) return false
+
+    val row = IntArray(width)
+    for (y in 0 until height) {
+        getPixels(row, 0, width, 0, y, width, 1)
+        if (row.any { pixel ->
+                android.graphics.Color.alpha(pixel) != 0 &&
+                    (android.graphics.Color.red(pixel) != 255 ||
+                        android.graphics.Color.green(pixel) != 255 ||
+                        android.graphics.Color.blue(pixel) != 255)
+            }
+        ) {
+            return true
+        }
+    }
+    return false
+}
+
+/** 在任何相册或分享文件写入前拦截透明/纯白快照。 */
+internal fun requireExportableStampBitmap(bitmap: Bitmap): Bitmap = bitmap.also {
+    require(it.hasDailyStampVisualContent()) { "Daily stamp capture is blank" }
+}
+
 /** 存进相册。同名文件已存在时返回 [SaveToAlbumResult.ALREADY_EXISTS]，不重复写一份 */
 internal suspend fun saveStampCard(
     context: Context,
     bitmap: Bitmap,
     date: LocalDate,
-): SaveToAlbumResult = saveBitmapToAlbum(
-    context = context,
-    bitmap = bitmap,
-    filename = fileName(date),
-    subDirectory = ALBUM_SUB_DIR,
-)
+): SaveToAlbumResult {
+    val exportableBitmap = withContext(Dispatchers.Default) {
+        requireExportableStampBitmap(bitmap)
+    }
+    return saveBitmapToAlbum(
+        context = context,
+        bitmap = exportableBitmap,
+        filename = fileName(date),
+        subDirectory = ALBUM_SUB_DIR,
+    )
+}
 
 /**
  * 写进 cacheDir 再交给 FileProvider，返回可分享的 URI。
@@ -53,11 +88,14 @@ internal suspend fun shareStampCardUri(
     context: Context,
     bitmap: Bitmap,
     date: LocalDate,
-): Uri = withContext(Dispatchers.IO) {
-    val dir = File(context.cacheDir, "share").apply { if (!exists()) mkdirs() }
-    val file = File(dir, fileName(date))
-    FileOutputStream(file).use { out ->
-        bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+): Uri {
+    return withContext(Dispatchers.IO) {
+        val exportableBitmap = requireExportableStampBitmap(bitmap)
+        val dir = File(context.cacheDir, "share").apply { if (!exists()) mkdirs() }
+        val file = File(dir, fileName(date))
+        FileOutputStream(file).use { out ->
+            exportableBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+        }
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     }
-    FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 }
