@@ -409,7 +409,7 @@
     <string name="crash_dialog_cancel">나중에</string>
     <!-- 크래시 로그 인가 -->
     <string name="crash_auth_dialog_title">크래시 로그 인가</string>
-    <string name="crash_auth_dialog_message">앱이 최근 크래시되었습니다. 문제 수정을 위해 게이트웨이를 통해 크래시 로그(스택 트레이스, 앱 버전, OS 버전, 최근 작업 포함)를 개발자에게 전송해도 됩니까? 로그에는 기기 모델이나 신원 정보가 포함되지 않습니다. 설정에서 언제든 변경할 수 있습니다.</string>
+    <string name="crash_auth_dialog_message">앱이 최근 크래시되었습니다. 문제 수정을 위해 게이트웨이를 통해 크래시 로그(스택 트레이스, 앱 버전, OS 버전, 최근 작업 포함)를 개발자에게 전송해도 됩니까? 설정에서 언제든 변경할 수 있습니다.</string>
     <string name="crash_auth_dialog_agree">동의하고 전송</string>
     <string name="crash_auth_dialog_decline">거부</string>
     <string name="settings_crash_log_title">크래시 로그 자동 업로드</string>
@@ -1686,14 +1686,6 @@
     <string name="help_ai_sprite_b5">AI에는 일일 한도가 있고 기능 페이지의 새로 고침이 한 번 더 소모합니다. 오프라인에서는 새 요청을 할 수 없지만 캐시된 내용은 볼 수 있습니다</string>
     <string name="help_ai_sprite_b6">V1은 캐릭터와 장면별 음성 설계 프롬프트를 사용하며, 미리듣기에 실패하면 시스템 음성으로 전환합니다</string>
     <string name="help_ai_sprite_b7">퀴즈를 도중에 나가도 답변은 유지되며, 다시 뽑기 전에 확인하고 미답 상태로 제출할 때도 알려 줍니다. 다 풀고 나면 난이도를 정령에게 알려 줄 수 있고, 이후 출제가 취향에 더 잘 맞아요</string>
-    <string name="help_privacy">데이터 &amp; 개인정보</string>
-    <string name="help_privacy_b1">업데이트 확인: 이 앱의 게이트웨이를 통해 GitHub/Gitee에 최신 버전을 조회합니다. 신원 정보는 전송되지 않습니다</string>
-    <string name="help_privacy_b2">위치: 구름을 탭하고 권한을 허용한 경우에만 대략적인 위치(도시 수준)를 날씨 서비스로 보내 날씨를 조회합니다. 계정 연동이나 저장은 하지 않으며, 거부해도 다른 기능에는 영향이 없습니다</string>
-    <string name="help_privacy_b3">크래시 로그: 기본적으로 꺼져 있습니다. 켜면 크래시 스택, OS 버전, 앱 버전(기기 모델 제외)을 업로드합니다. 설정에서 언제든 끌 수 있습니다</string>
-    <string name="help_privacy_b4">AI 스프라이트: \'내 시청 목록 평론\'은 최초 확인 후 최근 60개의 시청 기록을 이 앱의 AI 서비스로 보내 날평을 생성합니다. \'설정 → AI &amp; 개인정보\'에서 끌 수 있습니다. 다른 AI 기능은 필요한 최소한의 데이터만 전송합니다</string>
-    <string name="help_privacy_b5">피드백: 입력한 내용과 연락처, OS 버전만 전송합니다. 기기 모델은 포함되지 않습니다</string>
-    <string name="help_privacy_b6">인증 및 동기화: 인증 활성화 시 기기 연결을 위해 Android ID를 전송합니다. Douban 로그인 쿠키는 내 Douban 기록 데이터를 가져오는 데만 사용되며 제3자에게 전송되지 않습니다</string>
-    <string name="help_privacy_b7">이 앱은 통계·광고 SDK를 일절 포함하지 않으며 사용 행동 데이터를 수집하지 않습니다</string>
 <!-- 메인 화면 배경 글로우 -->
     <string name="bg_glow_title">배경 모션</string>
     <string name="bg_glow_off">끄기</string>

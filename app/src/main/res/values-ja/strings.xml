@@ -409,7 +409,7 @@
     <string name="crash_dialog_cancel">後で</string>
     <!-- クラッシュログ認可 -->
     <string name="crash_auth_dialog_title">クラッシュログ認可</string>
-    <string name="crash_auth_dialog_message">アプリが最近クラッシュしました。問題修正のため、ゲートウェイ経由でクラッシュログ（スタックトレース、アプリバージョン、OS バージョン、最近の操作を含む）を開発者に送信してもよろしいですか？ログに端末モデルや個人を特定する情報は含まれません。設定でいつでも変更できます。</string>
+    <string name="crash_auth_dialog_message">アプリが最近クラッシュしました。問題修正のため、ゲートウェイ経由でクラッシュログ（スタックトレース、アプリバージョン、OS バージョン、最近の操作を含む）を開発者に送信してもよろしいですか？設定でいつでも変更できます。</string>
     <string name="crash_auth_dialog_agree">同意して送信</string>
     <string name="crash_auth_dialog_decline">拒否</string>
     <string name="settings_crash_log_title">クラッシュログを自動アップロード</string>
@@ -1686,14 +1686,6 @@
     <string name="help_ai_sprite_b5">AI には日次上限があり、機能ページの更新ボタンでもう 1 回消費します。オフラインでは新規リクエストはできませんが、キャッシュは読めます</string>
     <string name="help_ai_sprite_b6">V1 はキャラクターとシーンの音声設計プロンプトを使い、試聴に失敗した場合はシステム音声に戻ります</string>
     <string name="help_ai_sprite_b7">クイズを途中で離れても回答は保持されます。引き直す前に確認し、未回答のまま提出する場合も警告します。答え終わったら難易度を精霊に伝えられ、次回の出題がもっと好みに合うようになります</string>
-    <string name="help_privacy">データとプライバシー</string>
-    <string name="help_privacy_b1">アップデート確認：本アプリのゲートウェイ経由で GitHub/Gitee に最新バージョンを問い合わせます。あなたの識別情報は送信されません</string>
-    <string name="help_privacy_b2">位置情報：雲をタップして許可した場合にのみ、大まかな位置（都市レベル）を天気サービスへ送信して天気を取得します。アカウントとの紐付けや保存はしません。許可しなくても他の機能には影響しません</string>
-    <string name="help_privacy_b3">クラッシュログ：既定ではオフ。オンにすると、クラッシュのスタックトレース、OS バージョン、アプリバージョン（端末モデルは含まない）をアップロードします。設定でいつでもオフにできます</string>
-    <string name="help_privacy_b4">AI スプライト：「視聴リストを批評」は初回確認の後、直近 60 件の視聴記録を本アプリの AI サービスへ送信してレビューを生成します。「設定 → AI とプライバシー」でオフにできます。他の AI 機能は必要最小限のデータのみを送信します</string>
-    <string name="help_privacy_b5">フィードバック：入力した内容と連絡先、および OS バージョンのみを送信します。端末モデルは含まれません</string>
-    <string name="help_privacy_b6">認証と同期：認証の有効化にはデバイス紐付けのため Android ID を送信します。豆瓣ログインの Cookie はあなたの豆瓣マークデータの取得のみに使用し、第三者には送信しません</string>
-    <string name="help_privacy_b7">本アプリは統計・広告 SDK を一切含まず、利用行動データを収集しません</string>
 <!-- メイン画面の背景グロー -->
     <string name="bg_glow_title">背景エフェクト</string>
     <string name="bg_glow_off">オフ</string>

@@ -155,12 +155,6 @@ private val HelpSectionSearchIndex: List<List<Int>> = listOf(
         R.string.help_ai_sprite, R.string.help_ai_sprite_b1, R.string.help_ai_sprite_b2,
         R.string.help_ai_sprite_b3, R.string.help_ai_sprite_b4, R.string.help_ai_sprite_b5,
         R.string.help_ai_sprite_b6, R.string.help_ai_sprite_b7, R.string.ai_sprite_long_press_hint
-    ),
-    // 14 数据与隐私
-    listOf(
-        R.string.help_privacy, R.string.help_privacy_b1, R.string.help_privacy_b2,
-        R.string.help_privacy_b3, R.string.help_privacy_b4, R.string.help_privacy_b5,
-        R.string.help_privacy_b6, R.string.help_privacy_b7
     )
 )
 
@@ -179,8 +173,7 @@ private val HelpSectionKeys: Map<String, Int> = mapOf(
     HelpSections.VPN to 10,
     HelpSections.DOUBAN_WRITEBACK to 11,
     HelpSections.CONSISTENCY_CHECK to 12,
-    HelpSections.AI_SPRITE to 13,
-    HelpSections.DATA_PRIVACY to 14
+    HelpSections.AI_SPRITE to 13
 )
 
 /** 帮助段落 key 常量，供功能页带参数跳转。 */
@@ -199,7 +192,6 @@ object HelpSections {
     const val DOUBAN_WRITEBACK = "doubanWriteback"
     const val CONSISTENCY_CHECK = "consistencyCheck"
     const val AI_SPRITE = "aiSprite"
-    const val DATA_PRIVACY = "dataPrivacy"
 }
 
 /** 段内搜索：命中段落标题或段落内任一条目文案即视为匹配。 */
@@ -556,25 +548,6 @@ fun HelpScreen(
                         HelpBullet(stringResource(R.string.help_ai_sprite_b6))
                         HelpBullet(stringResource(R.string.help_ai_sprite_b7))
                         HelpBullet(stringResource(R.string.ai_sprite_long_press_hint))
-                    }
-                }
-
-                // 数据与隐私
-                item {
-                    HelpSection(
-                        title = stringResource(R.string.help_privacy),
-                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
-                        isExpanded = expandedIndex == 14 || helpQuery.isNotBlank(),
-                        onToggle = { expandedIndex = if (expandedIndex == 14) -1 else 14 },
-                        visible = helpSectionMatches(14, helpQuery)
-                    ) {
-                        HelpBullet(stringResource(R.string.help_privacy_b1))
-                        HelpBullet(stringResource(R.string.help_privacy_b2))
-                        HelpBullet(stringResource(R.string.help_privacy_b3))
-                        HelpBullet(stringResource(R.string.help_privacy_b4))
-                        HelpBullet(stringResource(R.string.help_privacy_b5))
-                        HelpBullet(stringResource(R.string.help_privacy_b6))
-                        HelpBullet(stringResource(R.string.help_privacy_b7))
                     }
                 }
             }
