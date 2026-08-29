@@ -549,6 +549,10 @@
     <string name="detail_video_trailer">예고편</string>
     <string name="detail_video_teaser">티저 예고편</string>
     <string name="detail_video_clip">클립</string>
+    <string name="detail_video_featurette">메이킹 필름</string>
+    <string name="detail_video_behind_the_scenes">비하인드</string>
+    <string name="detail_video_blooper">NG 컷</string>
+    <string name="detail_video_other">동영상</string>
     <string name="detail_video_open_browser">브라우저에서 열기</string>
     <string name="detail_video_play">재생</string>
     <string name="trailer_youtube_restricted">YouTube가 현재 지역에서 접근 제한됨\nVPN을 사용해 주세요</string>

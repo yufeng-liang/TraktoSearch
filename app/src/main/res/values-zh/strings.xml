@@ -396,6 +396,10 @@
     <string name="detail_video_trailer">预告片</string>
     <string name="detail_video_teaser">先导预告</string>
     <string name="detail_video_clip">片段</string>
+    <string name="detail_video_featurette">幕后特辑</string>
+    <string name="detail_video_behind_the_scenes">幕后</string>
+    <string name="detail_video_blooper">花絮</string>
+    <string name="detail_video_other">视频</string>
     <string name="detail_video_open_browser">在浏览器中打开</string>
     <string name="detail_video_play">播放</string>
     <string name="trailer_youtube_restricted">YouTube在国内访问受限\n请使用VPN</string>

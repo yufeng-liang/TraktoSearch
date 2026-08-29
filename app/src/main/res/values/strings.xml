@@ -396,6 +396,10 @@
     <string name="detail_video_trailer">Trailer</string>
     <string name="detail_video_teaser">Teaser</string>
     <string name="detail_video_clip">Clip</string>
+    <string name="detail_video_featurette">Featurette</string>
+    <string name="detail_video_behind_the_scenes">Behind the Scenes</string>
+    <string name="detail_video_blooper">Bloopers</string>
+    <string name="detail_video_other">Video</string>
     <string name="detail_video_open_browser">Open in Browser</string>
     <string name="detail_video_play">Play</string>
     <string name="trailer_youtube_restricted">YouTube is restricted in China\nPlease use VPN</string>

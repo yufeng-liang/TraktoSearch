@@ -549,6 +549,10 @@
     <string name="detail_video_trailer">予告編</string>
     <string name="detail_video_teaser">ティザー予告</string>
     <string name="detail_video_clip">クリップ</string>
+    <string name="detail_video_featurette">メイキング特集</string>
+    <string name="detail_video_behind_the_scenes">舞台裏</string>
+    <string name="detail_video_blooper">NG集</string>
+    <string name="detail_video_other">動画</string>
     <string name="detail_video_open_browser">ブラウザで開く</string>
     <string name="detail_video_play">再生</string>
     <string name="trailer_youtube_restricted">YouTubeは現在の地域で制限されています\nVPNをご使用ください</string>
