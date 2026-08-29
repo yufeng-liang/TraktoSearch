@@ -1,7 +1,9 @@
 package com.tracktosearch.ui.screen.splash
 
 import android.graphics.Bitmap
+import android.os.Build
 import android.provider.Settings
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -62,6 +64,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
+import io.androidpoet.mirage.GrainGradient
+import io.androidpoet.mirage.GrainGradientShape
+import io.androidpoet.mirage.core.ShaderFit
+import io.androidpoet.mirage.core.SizingParams
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -222,6 +228,7 @@ fun SplashQuoteOverlay(
     ) {
         SplashBackdrop(
             palette = palette,
+            backgroundColor = backgroundColor,
             glowScale = glowScale,
             glowAlpha = glowAlpha,
             washAlpha = washAlpha,
@@ -440,20 +447,84 @@ private fun QuotePoster(
 }
 
 /**
- * 背景四层：暖色光晕、中央可读性蒙层、胶片颗粒、四角压暗。
+ * 背景：暖色光晕 + 中央可读性蒙层 + 四角压暗。
  *
- * 光晕用三个大半径径向渐变而不是 AGSL：AGSL 要 API 33+，还得为 26-32 另写一套回退，
- * 而这里要的只是三团缓慢张开的暖光，径向渐变在所有版本上表现一致且几乎不耗性能。
- * 明色主题用 Multiply 让光晕像颜料渗进纸里，暗色主题改 Screen，否则会糊成一团黑。
+ * 光晕在 API 33+ 走 mirage 的 AGSL GrainGradient（Blob 形状），和主页面背景光晕
+ * 用的是同一套着色器。相比手搓径向渐变，AGSL 这边是真的在片元着色器里算弥散：
+ * 边缘没有可数的同心圆过渡，颗粒噪声由 shader 自己生成、顺带压掉大面积暖色渐变的色带。
+ * API 26-32 没有 RuntimeShader，回退到三团径向渐变 + 平铺噪点，形近而已。
  */
 @Composable
 private fun SplashBackdrop(
     palette: SplashPalette,
+    backgroundColor: Color,
     glowScale: Float,
     glowAlpha: Float,
     washAlpha: Float,
     grainAlpha: Float,
     vignetteAlpha: Float,
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ShaderGlow(palette, backgroundColor, glowScale, glowAlpha)
+        } else {
+            GradientGlow(palette, glowScale, glowAlpha, grainAlpha)
+        }
+        ReadabilityOverlay(palette, washAlpha, vignetteAlpha)
+    }
+}
+
+/**
+ * AGSL 光晕层。
+ *
+ * 缩放走 Compose 的 graphicsLayer 而不是 SizingParams.scale：前者语义确定
+ * （>1 就是变大），后者是着色器世界坐标的缩放，方向反过来就得改代码。
+ * 底图先放大到 [GLOW_BASE_SCALE]，保证收缩到 0.55 倍时边缘也不会露出底色。
+ *
+ * speed 压到 0.10：整层只活 4 秒多，这个速度刚好让暖光有一点呼吸感，
+ * 又不至于为了背景动画在启动阶段满帧重绘。
+ */
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+@Composable
+private fun ShaderGlow(
+    palette: SplashPalette,
+    backgroundColor: Color,
+    glowScale: Float,
+    glowAlpha: Float,
+) {
+    val colors = remember(palette) { listOf(palette.caramel, palette.ochre, palette.cream) }
+    val sizing = remember { SizingParams(fit = ShaderFit.Cover) }
+    GrainGradient(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                alpha = glowAlpha
+                scaleX = glowScale * GLOW_BASE_SCALE
+                scaleY = glowScale * GLOW_BASE_SCALE
+            },
+        colorBack = backgroundColor,
+        colors = colors,
+        shape = GrainGradientShape.Blob,
+        softness = 0.92f,
+        intensity = 0.46f,
+        noise = palette.grainAlpha,
+        speed = 0.10f,
+        sizing = sizing,
+    )
+}
+
+/**
+ * API 26-32 回退光晕：三团径向渐变 + 平铺噪点。
+ *
+ * 明色主题用 Multiply 让暖光像颜料渗进纸里，暗色主题改 Screen，
+ * 否则三团深棕叠在深底上会糊成一片黑。
+ */
+@Composable
+private fun GradientGlow(
+    palette: SplashPalette,
+    glowScale: Float,
+    glowAlpha: Float,
+    grainAlpha: Float,
 ) {
     val grain = remember { grainBrush() }
     Canvas(modifier = Modifier.fillMaxSize()) {
@@ -466,8 +537,25 @@ private fun SplashBackdrop(
             drawGlow(Offset(0.91f * w, 0.49f * h), 0.49f * w * glowScale, palette.ochre, glowAlpha, glowBlend)
             drawGlow(Offset(0.21f * w, 0.84f * h), 0.56f * w * glowScale, palette.cream, glowAlpha, glowBlend)
         }
+        if (grainAlpha > EPSILON) {
+            drawRect(brush = grain, alpha = grainAlpha, blendMode = BlendMode.Multiply)
+        }
+    }
+}
+
+/** 中央纸色蒙层与四角压暗：两条都是为了台词的对比度，与光晕实现无关，两个分支共用 */
+@Composable
+private fun ReadabilityOverlay(
+    palette: SplashPalette,
+    washAlpha: Float,
+    vignetteAlpha: Float,
+) {
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val w = size.width
+        val h = size.height
+        if (w <= 0f || h <= 0f) return@Canvas
         if (washAlpha > EPSILON) {
-            // 中央回到纯纸色：光晕铺满之后台词区域对比度会掉，这层把它拉回来
+            // 光晕铺满之后台词区域对比度会掉，这层把中央拉回纯纸色
             val center = Offset(0.5f * w, 0.48f * h)
             val radius = 0.80f * w
             drawCircle(
@@ -481,9 +569,6 @@ private fun SplashBackdrop(
                 center = center,
                 alpha = washAlpha
             )
-        }
-        if (grainAlpha > EPSILON) {
-            drawRect(brush = grain, alpha = grainAlpha, blendMode = BlendMode.Multiply)
         }
         if (vignetteAlpha > EPSILON) {
             val center = Offset(0.5f * w, 0.44f * h)
@@ -526,7 +611,7 @@ private fun DrawScope.drawGlow(
 }
 
 /**
- * 生成一小块噪点并平铺成胶片颗粒。
+ * 生成一小块噪点并平铺成胶片颗粒。API 26-32 专用，AGSL 分支的噪点由着色器自己出。
  *
  * 128×128 一张（64KB）平铺整屏，比放一张全屏噪点图省得多，也不用往 APK 里塞资源。
  * 固定随机种子，保证每次启动的颗粒分布一致——颗粒每次都变会看出「在闪」。
@@ -550,6 +635,14 @@ private const val WASH_ALPHA = 0.66f
 private const val EPSILON = 0.001f
 private const val GRAIN_TILE_PX = 128
 private const val GRAIN_SEED = 20260828L
+
+/**
+ * AGSL 光晕层的基准放大倍数。
+ *
+ * 对应原型里 `.glow { inset: -18% }` 的做法：着色器画布本身要比屏幕大一圈，
+ * 这样光斑收缩到 0.55 倍（弥散动画起点）时，四边也不会露出没有光晕的底色。
+ */
+private const val GLOW_BASE_SCALE = 1.45f
 private val VIGNETTE_COLOR = Color(0x383C2212)
 private val GlowEasing = CubicBezierEasing(0.22f, 0.7f, 0.25f, 1f)
 private val RiseEasing = CubicBezierEasing(0.2f, 0.75f, 0.28f, 1f)
