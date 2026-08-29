@@ -48,6 +48,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
+import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Movie
@@ -173,6 +174,7 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -183,6 +185,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -1361,6 +1364,15 @@ fun DoubanItemDetailScreen(
                                         Box(modifier = Modifier.alpha(contentAlpha)) { DoubanSearchingState() }
                                     }
                                 }
+                                // 搜索失败(网络异常等):显错误态+重试,与「真空结果」区分,
+                                // 否则失败被空态卡片吞掉,用户误以为没有资源
+                                uiState.searchError != null && uiState.searchResults.isEmpty() -> {
+                                    item(key = "search_error") {
+                                        Box(modifier = Modifier.alpha(contentAlpha)) {
+                                            DoubanSearchErrorState(onRetry = { viewModel.searchResources() })
+                                        }
+                                    }
+                                }
                                 uiState.searchResults.isEmpty() && uiState.searchAttempted -> {
                                     item(key = "empty") {
                                         Box(modifier = Modifier.alpha(contentAlpha)) { DoubanEmptyState(onRetry = { viewModel.searchResources() }) }
@@ -1961,11 +1973,13 @@ private fun DoubanItemHeader(
 ) {
     val scope = rememberCoroutineScope()
     // 根据海报主色调亮度自适应文字颜色,增强沉浸背景下的可读性
+    // 实际背景是海报色 alpha0.70 与主题背景的渐变,先按渐变中段混合再判亮度,
+    // 否则亮海报色在深色主题下会误选黑字,对比度不足(与普通详情页同一套逻辑)
     val onPosterColor = posterColor?.let { c ->
-        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.92f) else Color.White
+        if (lerp(c, MaterialTheme.colorScheme.background, 0.8f).luminance() > 0.5f) Color.Black.copy(alpha = 0.92f) else Color.White
     } ?: MaterialTheme.colorScheme.onSurface
     val onPosterVariantColor = posterColor?.let { c ->
-        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.72f)
+        if (lerp(c, MaterialTheme.colorScheme.background, 0.8f).luminance() > 0.5f) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.72f)
     } ?: MaterialTheme.colorScheme.onSurfaceVariant
     // 处理 title 中包含 / 的中英文名分隔:主标题取 / 前面,子标题优先用已有,为空时取 / 后面
     val titleContainsSlash = failure.title.contains("/")
@@ -2012,8 +2026,9 @@ private fun DoubanItemHeader(
                                     onSuccess = { _, result ->
                                         // 图片加载成功后提取主色调,用于沉浸式背景渐变
                                         // 外层已判空且 failure 为 val 参数,posterUrl 在此非 null
-                                        val bitmap = result.drawable.toBitmap()
                                         scope.launch {
+                                            // 位图解码拷贝移出主线程,避免进详情帧卡顿
+                                            val bitmap = withContext(Dispatchers.Default) { result.drawable.toBitmap() }
                                             val argb = posterColorExtractor.extractDominantColor(failure.posterUrl, bitmap)
                                             if (argb != 0L) {
                                                 onPosterColorExtracted(Color(argb))
@@ -2510,6 +2525,28 @@ private fun DoubanEmptyState(onRetry: () -> Unit) {
         isDark = isAppDarkTheme(),
         title = stringResource(R.string.screen_douban_item_detail_no_resources),
         icon = Icons.Rounded.Movie,
+        modifier = Modifier.padding(vertical = 16.dp),
+        actions = {
+            OutlinedButton(onClick = {
+                view.performHaptic(HapticType.CLICK)
+                onRetry()
+            }) {
+                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(stringResource(R.string.detail_retry))
+            }
+        }
+    )
+}
+
+/** 资源搜索失败态(与空结果区分):错误图标+「搜索失败」+重试 */
+@Composable
+private fun DoubanSearchErrorState(onRetry: () -> Unit) {
+    val view = LocalView.current
+    EmptyStateCard(
+        isDark = isAppDarkTheme(),
+        title = stringResource(R.string.error_search_failed),
+        icon = Icons.Rounded.CloudOff,
         modifier = Modifier.padding(vertical = 16.dp),
         actions = {
             OutlinedButton(onClick = {
