@@ -549,6 +549,10 @@
     <string name="detail_video_trailer">예고편</string>
     <string name="detail_video_teaser">티저 예고편</string>
     <string name="detail_video_clip">클립</string>
+    <string name="detail_video_featurette">메이킹 필름</string>
+    <string name="detail_video_behind_the_scenes">비하인드</string>
+    <string name="detail_video_blooper">NG 컷</string>
+    <string name="detail_video_other">동영상</string>
     <string name="detail_video_open_browser">브라우저에서 열기</string>
     <string name="detail_video_play">재생</string>
     <string name="trailer_youtube_restricted">YouTube가 현재 지역에서 접근 제한됨\nVPN을 사용해 주세요</string>
@@ -1526,6 +1530,11 @@
     <string name="douban_sync_notification_latest">최근 가져옴: %1$s</string>
     <string name="douban_sync_notification_public">더우반 동기화: %1$s</string>
     <string name="douban_sync_notification_channel_description">더우반 동기화 진행률 표시</string>
+    <string name="douban_login_waiting_auth">인증 완료를 기다리는 중…</string>
+    <string name="auth_invite_bound_this_device">이 초대 코드는 이미 기기에 연결되어 있습니다. 앱을 다시 시작해 복구하거나 새 코드를 사용하세요</string>
+    <string name="douban_detail_entry_not_found">이 항목은 아직 이 기기에 동기화되지 않았습니다</string>
+    <string name="douban_batch_remove_remote_failed">%1$d개 항목을 豆瓣에서 삭제하지 못했습니다. 다음 동기화 시 재시도됩니다</string>
+    <string name="detail_credits_douban_unavailable">豆瓣 전용 항목에는 출연진 정보가 없습니다</string>
     <string name="error_rate_limited">요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요</string>
     <string name="error_network_unavailable">네트워크 오류입니다. 연결을 확인하고 다시 시도해 주세요</string>
     <string name="error_server_error">서버가 혼잡합니다. 잠시 후 다시 시도해 주세요</string>

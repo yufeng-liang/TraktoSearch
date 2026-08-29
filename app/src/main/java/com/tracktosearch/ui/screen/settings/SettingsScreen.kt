@@ -387,13 +387,16 @@ fun SettingsScreen(
         .map { it.isRunning }
         .distinctUntilChanged()
         .collectAsStateWithLifecycle(initialValue = false)
-    // 导出/导入/清缓存等操作的 Snackbar 反馈：仅观察 message 字段，避免随进度 tick 整页重组
+    // 导出/导入/清缓存等操作的 Snackbar 反馈：仅观察 message 字段，避免随进度 tick 整页重组；
+    // message 为机器码(资源 ID+参数)，组合期转本地化文案
     val exportImportMessage by viewModel.exportImportState
         .map { it.message }
         .distinctUntilChanged()
-        .collectAsStateWithLifecycle(initialValue = null as String?)
+        .collectAsStateWithLifecycle(initialValue = null as ExportMessage?)
+    val exportMessageText = exportImportMessage
+        ?.let { stringResource(it.resId, *it.args.toTypedArray()) }
     LaunchedEffect(exportImportMessage) {
-        exportImportMessage?.let {
+        exportMessageText?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearMessage()
         }
@@ -515,10 +518,10 @@ fun SettingsScreen(
                             bottom = 80.dp
                         )
                     ) {
-            // 观看统计（第一位，独占整行卡片，无类目 Header）—— 仅登录可见
+            // 观看统计（第一位，独占整行卡片，无类目 Header）—— Trakt 已连接或豆瓣独立模式可见
             // sharedBounds 与 StatisticsScreen 头部配对,实现卡片↔页面展开/收起转场
-            // 豆瓣独立模式: 统计数据来源是 Trakt watchlist/history,无 trakt token 时无意义,隐藏
-            if (isLoggedIn && !isDoubanMode) {
+            // 豆瓣独立模式: StatisticsViewModel 支持基于豆瓣本地同步数据的统计，与 Trakt 统计同等可用
+            if (isLoggedIn && (isDoubanMode || isTraktConnected)) {
                 item(key = "statistics_entry") {
                     val statisticsEntryModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && sharedTransitionEnabled) {
                         with(sharedTransitionScope) {
@@ -1711,7 +1714,8 @@ private fun DataManagementGroupItem(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = progress,
+                            // syncProgress 为机器码,组合期转本地化文案
+                            text = stringResource(progress.resId, *progress.args.toTypedArray()),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

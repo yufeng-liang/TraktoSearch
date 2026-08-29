@@ -143,20 +143,28 @@ internal fun VideosAndImagesSection(
     }
 }
 
+/**
+ * 视频类型 → 本地化文案。
+ * Featurette/幕后/花絮等此前都被折叠进 detail_video_clip 或直接展示英文原文，现各自独立映射。
+ */
+@Composable
+private fun videoTypeLabel(type: String): String = when (type) {
+    "Trailer" -> stringResource(R.string.detail_video_trailer)
+    "Teaser" -> stringResource(R.string.detail_video_teaser)
+    "Clip" -> stringResource(R.string.detail_video_clip)
+    "Featurette" -> stringResource(R.string.detail_video_featurette)
+    "Behind the Scenes" -> stringResource(R.string.detail_video_behind_the_scenes)
+    "Bloopers" -> stringResource(R.string.detail_video_blooper)
+    else -> stringResource(R.string.detail_video_other)
+}
+
 @Composable
 internal fun VideoCard(
     video: TmdbVideo,
     onClick: () -> Unit
 ) {
     val thumbnailUrl = "https://img.youtube.com/vi/${video.key}/hqdefault.jpg"
-    val typeLabel = when (video.type) {
-        "Trailer" -> stringResource(R.string.detail_video_trailer)
-        "Teaser" -> stringResource(R.string.detail_video_teaser)
-        "Clip" -> stringResource(R.string.detail_video_clip)
-        "Featurette" -> stringResource(R.string.detail_video_clip)
-        "Behind the Scenes" -> stringResource(R.string.detail_video_clip)
-        else -> video.type
-    }
+    val typeLabel = videoTypeLabel(video.type)
     Box(
         modifier = Modifier
             .width(240.dp)
@@ -329,8 +337,7 @@ internal fun FullVideosImagesSheet(
     val hasBackdrops = backdrops.isNotEmpty()
     val tabCount = (if (hasVideos) 1 else 0) + (if (hasBackdrops) 1 else 0)
     // 默认选中截图Tab（如果有）
-    val initialPage = if (hasBackdrops) 0 else 0
-    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { tabCount })
+    val pagerState = rememberPagerState(initialPage = 0, pageCount = { tabCount })
 
     // 同步 pager 和 tab
     val selectedTabIndex = pagerState.currentPage
@@ -440,14 +447,7 @@ internal fun FullVideoItem(
     onClick: () -> Unit
 ) {
     val thumbnailUrl = "https://img.youtube.com/vi/${video.key}/hqdefault.jpg"
-    val typeLabel = when (video.type) {
-        "Trailer" -> stringResource(R.string.detail_video_trailer)
-        "Teaser" -> stringResource(R.string.detail_video_teaser)
-        "Clip" -> stringResource(R.string.detail_video_clip)
-        "Featurette" -> stringResource(R.string.detail_video_clip)
-        "Behind the Scenes" -> stringResource(R.string.detail_video_clip)
-        else -> video.type
-    }
+    val typeLabel = videoTypeLabel(video.type)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -527,7 +527,6 @@ internal fun FullBackdropItem(
             modifier = Modifier.fillMaxSize()
         )
     }
-    Spacer(modifier = Modifier.height(6.dp))
 }
 
 // ==================== 预告片播放界面 ====================

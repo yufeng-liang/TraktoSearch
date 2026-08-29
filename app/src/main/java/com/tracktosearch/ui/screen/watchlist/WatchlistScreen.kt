@@ -1,9 +1,14 @@
 package com.tracktosearch.ui.screen.watchlist
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.Animatable
@@ -161,6 +166,7 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
@@ -214,6 +220,7 @@ import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.util.showToast
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -268,6 +275,11 @@ fun WatchlistScreen(
     var showFilterSheet by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val batchRemovePartialFailedMessage = stringResource(R.string.watchlist_batch_remove_partial_failed)
+    // 通知权限请求 launcher（Android 13+ 运行时权限）：首次发起豆瓣同步时请求，
+    // 供前台服务在通知栏展示同步/批量移除进度；无论授权与否都不阻塞同步本身
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { _ -> }
     val view = LocalView.current
     // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的卡片参与共享元素转场，避免跨页面重复海报 key 冲突
     var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
@@ -1734,11 +1746,10 @@ fun WatchlistScreen(
                                                     isRemoving = false
                                                     // 部分条目移除失败时提示用户（成功的项已更新 UI 并启动豆瓣移除）
                                                     if (hasFailure) {
-                                                        Toast.makeText(
-                                                            context,
+                                                        context.showToast(
                                                             batchRemovePartialFailedMessage,
                                                             Toast.LENGTH_LONG
-                                                        ).show()
+                                                        )
                                                     }
                                                 }
                                             },
@@ -1815,38 +1826,35 @@ fun WatchlistScreen(
                                         showSyncDialog = false
                                     },
                                     onBackgroundUnavailable = {
-                                        Toast.makeText(
-                                            context,
+                                        context.showToast(
                                             context.getString(R.string.douban_sync_background_unavailable),
                                             Toast.LENGTH_LONG
-                                        ).show()
+                                        )
                                     },
-                    onRelogin = {
-                        showSyncDialog = false
-                        viewModel.clearDoubanSyncResult()
-                        onNavigateToDoubanLogin()
-                    },
-                    onTraktLogin = {
-                        showSyncDialog = false
-                        viewModel.clearDoubanSyncResult()
-                        onTraktLogin()
-                    },
-                    onViewFailures = {
-                        Toast.makeText(
-                            context,
-                            context.getString(R.string.douban_sync_view_failures),
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    },
-                    onRetry = {
-                        if (!viewModel.retryLatestDoubanFailures()) {
-                            Toast.makeText(
-                                context,
-                                context.getString(R.string.douban_retry_no_failures),
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    },
+                                    onRelogin = {
+                                        showSyncDialog = false
+                                        viewModel.clearDoubanSyncResult()
+                                        onNavigateToDoubanLogin()
+                                    },
+                                    onTraktLogin = {
+                                        showSyncDialog = false
+                                        viewModel.clearDoubanSyncResult()
+                                        onTraktLogin()
+                                    },
+                                    onViewFailures = {
+                                        context.showToast(
+                                            context.getString(R.string.douban_sync_view_failures),
+                                            Toast.LENGTH_SHORT
+                                        )
+                                    },
+                                    onRetry = {
+                                        if (!viewModel.retryLatestDoubanFailures()) {
+                                            context.showToast(
+                                                context.getString(R.string.douban_retry_no_failures),
+                                                Toast.LENGTH_SHORT
+                                            )
+                                        }
+                                    },
                     onViewConflicts = { showConsistencyDialog = true }
                 )
             }
@@ -1868,15 +1876,14 @@ fun WatchlistScreen(
                         onNavigateToDoubanLogin()
                     },
                     onBackgroundUnavailable = {
-                        Toast.makeText(
-                            context,
+                        context.showToast(
                             context.getString(R.string.douban_sync_background_unavailable),
                             Toast.LENGTH_LONG
-                        ).show()
+                        )
                     }
                 )
             }
-    
+
             // 首次同步引导弹窗（已登录豆瓣但从未同步过时自动弹出）
             if (showFirstSyncGuide && !isDoubanSyncRunning) {
                 DoubanFirstSyncGuideDialog(
@@ -1899,6 +1906,15 @@ fun WatchlistScreen(
                     onDismiss = { showSyncModePicker = false },
                     onModeSelected = { mode ->
                         showSyncModePicker = false
+                        // Android 13+ 首次发起同步时请求通知权限（已授予则跳过）；
+                        // 系统永久拒绝时 launcher 静默返回，不会反复打扰
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                            ContextCompat.checkSelfPermission(
+                                context, Manifest.permission.POST_NOTIFICATIONS
+                            ) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
                         viewModel.startDoubanSync(mode)
                         // 立即显示进度弹窗，让用户看到同步过程
                         showSyncDialog = true
@@ -1989,8 +2005,9 @@ private fun WatchlistPosterCard(
                 onLongClick = if (isMultiSelectMode) null else onLongClick,
                 posterModifier = posterModifier
             )
-            // TMDB 补充数据失败时，在对应海报卡片内提示，避免页面级 Toast 与具体条目脱节
-            if (item.tmdbId > 0 && item.posterUrl == null) {
+            // 海报缺失时在卡片内提示：TMDB 补充数据失败（tmdbId>0）或豆瓣条目本身无海报
+            // （tmdbId=0，如详情抓取失败只留最低限度快照），避免空白卡没有任何解释
+            if (item.posterUrl == null) {
                 Box(
                     modifier = Modifier
                         .matchParentSize()

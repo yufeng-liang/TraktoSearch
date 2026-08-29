@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.detail
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -177,6 +178,9 @@ fun DetailScreen(
     // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的推荐卡片参与共享元素转场
     var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
     var showRatingDialog by remember { mutableStateOf(false) }
+    // 评分入口的本地登录引导标记：ViewModel 没有单独的「请求登录引导」入口，
+    // 未登录点评分时在 UI 层直接弹引导框，不打开评分弹窗（随 uiState.showLoginPrompt 一起控制下方对话框）
+    var showLoginPromptLocal by remember { mutableStateOf(false) }
     var detailHeaderBounds by remember { mutableStateOf<Rect?>(null) }
     var showWatchlistScene by remember { mutableStateOf(false) }
     var handledWatchlistRevision by remember(traktId, tmdbId) { mutableStateOf(0L) }
@@ -253,10 +257,19 @@ fun DetailScreen(
     }
     LaunchedEffect(detailRefreshPending) {
         if (!detailRefreshPending) return@LaunchedEffect
-        withTimeoutOrNull(10_000) {
-            snapshotFlow { uiState.isLoadingComments || uiState.isLoadingRecommendations }
-                .dropWhile { !it }
-                .first { !it }
+        // 分区被 sectionVisible 关闭时对应 loading 标志永不置 true（如豆瓣模式关掉评论模块），
+        // 空等会一直挂起拖满 10s 超时；进入等待前先按可见性过滤，只等可能进入 loading 的分区
+        val waitComments = uiState.sectionVisible.comments
+        val waitRecommendations = uiState.sectionVisible.recommendations
+        if (waitComments || waitRecommendations) {
+            withTimeoutOrNull(10_000) {
+                snapshotFlow {
+                    (waitComments && uiState.isLoadingComments) ||
+                        (waitRecommendations && uiState.isLoadingRecommendations)
+                }
+                    .dropWhile { !it }
+                    .first { !it }
+            }
         }
         detailPullToRefreshState.finishRefresh()
         detailRefreshPending = false
@@ -293,9 +306,13 @@ fun DetailScreen(
         withFrameNanos { }
         contentReady = true
     }
-    val contentAlpha by remember(contentReady) {
-        derivedStateOf { if (contentReady) 1f else 0f }
-    }
+    // 头部下方内容淡入：animateFloatAsState 做真实渐显（0→1 约 220ms），
+    // 旧实现是 derivedStateOf 的 0/1 直切，注释宣称淡入但实际没有过渡
+    val contentAlpha by animateFloatAsState(
+        targetValue = if (contentReady) 1f else 0f,
+        animationSpec = tween(durationMillis = 220),
+        label = "detailContentAlpha"
+    )
 
     // Coil 内存缓存兜底：PosterColorCache miss 时从 Coil 内存缓存取 bitmap 提取主色
     // 列表页 MovieCard 已用 size(264) 加载海报，详情页进入时 Coil 内存缓存大概率命中 → 秒提取
@@ -486,9 +503,17 @@ fun DetailScreen(
             // 减少分配并为后续按字段跳过重组打基础。置于 LazyColumn 之前(@Composable 上下文)。
             val onToggleWatched = remember { { viewModel.toggleWatched() } }
             val onToggleWatchlist = remember { { viewModel.toggleWatchlist() } }
-            val onShowRatingDialog = remember { { showRatingDialog = true } }
-            val onDismissRatingDialog = remember { { showRatingDialog = false; viewModel.dismissRatingDialog() } }
-            val onRatingSelected = remember { { rating: Int? -> if (rating == null || rating == 0) viewModel.removeRating() else viewModel.setRating(rating) } }
+            // 评分入口预检登录态：Trakt 模式未登录时直接引导登录，不打开评分弹窗，
+            // 避免用户填完评分点确认才被告知要登录、输入丢失（豆瓣独立模式 isLoggedIn 恒为 true 不受影响）
+            val onShowRatingDialog = remember {
+                {
+                    if (uiState.isLoggedIn) {
+                        showRatingDialog = true
+                    } else {
+                        showLoginPromptLocal = true
+                    }
+                }
+            }
             val onPosterClick = remember { { showPosterFullscreen = true } }
             val onToggleSeason = remember { { season: Int -> viewModel.toggleSeason(season) } }
             val onToggleEpisodeWatched = remember { { season: Int, episode: Int, traktId: Int -> viewModel.toggleEpisodeWatched(season, episode, traktId) } }
@@ -535,8 +560,6 @@ fun DetailScreen(
                         isMarkingWatchlist = uiState.isMarkingWatchlist,
                         onToggleWatchlist = onToggleWatchlist,
                         onShowRatingDialog = onShowRatingDialog,
-                        onDismissRatingDialog = onDismissRatingDialog,
-                        onRatingSelected = onRatingSelected,
                         onPosterClick = onPosterClick,
                         onPersonClick = onPersonClick,
                         onToggleSeason = onToggleSeason,
@@ -544,6 +567,7 @@ fun DetailScreen(
                         onRetryRatings = viewModel::retryRatings,
                         onRetryCredits = viewModel::retryCredits,
                         onRetrySeasons = viewModel::retrySeasons,
+                        onRetryVideos = viewModel::retryVideos,
                         onVideoClick = onVideoClick,
                         onBackdropClick = onBackdropClick,
                         onShowAllVideos = onShowAllVideos,
@@ -552,7 +576,6 @@ fun DetailScreen(
                         onPosterColorExtracted = viewModel::updatePosterColor,
                         sectionVisible = uiState.sectionVisible,
                         contentReady = contentReadyForTransition,
-                        hazeState = detailHazeState,
                         // 头部下方内容(cast/视频/简介/季集)淡入,海报+标题+按钮始终可见
                         contentAlpha = if (contentReadyForTransition) contentAlpha else 0f,
                         onHeaderAnchorBoundsChanged = { detailHeaderBounds = it }
@@ -1181,24 +1204,29 @@ fun DetailScreen(
                 )
             }
 
-            // 未登录用户引导登录弹窗
-            if (uiState.showLoginPrompt) {
+            // 未登录用户引导登录弹窗（含评分入口预检触发的本地路径）
+            if (uiState.showLoginPrompt || showLoginPromptLocal) {
+                val dismissLoginPrompt: () -> Unit = {
+                    viewModel.dismissLoginPrompt()
+                    showLoginPromptLocal = false
+                }
                 AlertDialog(
-                    onDismissRequest = { viewModel.dismissLoginPrompt() },
+                    onDismissRequest = dismissLoginPrompt,
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     title = { Text(stringResource(R.string.detail_login_required_title)) },
                     text = { Text(stringResource(R.string.detail_login_required_message)) },
                     confirmButton = {
                         TextButton(onClick = {
-                            viewModel.dismissLoginPrompt()
+                            dismissLoginPrompt()
                             onNavigateToLogin()
                         }) {
                             Text(stringResource(R.string.detail_login_go))
                         }
                     },
                     dismissButton = {
-                        TextButton(onClick = { viewModel.dismissLoginPrompt() }) {
-                            Text(stringResource(android.R.string.cancel))
+                        TextButton(onClick = dismissLoginPrompt) {
+                            // 用应用内资源而非 android.R.string.cancel（平台串随系统语言变化）
+                            Text(stringResource(R.string.common_cancel))
                         }
                     }
                 )

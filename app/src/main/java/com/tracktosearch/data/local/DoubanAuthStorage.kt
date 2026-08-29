@@ -1,6 +1,8 @@
 package com.tracktosearch.data.local
 
 import android.content.Context
+import android.util.Log
+import android.webkit.CookieManager
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -22,6 +24,7 @@ class DoubanAuthStorage @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     companion object {
+        private const val TAG = "DoubanAuthStorage"
         private const val FILE_NAME = "douban_auth_encrypted"
         private const val KEY_USER_ID = "douban_user_id"
         private const val KEY_COOKIE = "douban_cookie"
@@ -137,6 +140,17 @@ class DoubanAuthStorage @Inject constructor(
         _isLoggedIn.value = false
         _doubanProfile.value = null
         _cookieInvalid.value = false
+        // 必须同步清掉全局 WebView Cookie：否则登录页 WebView 会带着残留的 dbcl2 Cookie
+        // 打开豆瓣登录页，onPageFinished 一检测到 Cookie 就立即误判"登录成功"把旧账号存回，
+        // 导致永远无法真正退出/换账号。CookieManager 在无 WebView 环境可能抛异常，兜底捕获。
+        try {
+            CookieManager.getInstance().apply {
+                removeAllCookies(null)
+                flush()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "清除 WebView Cookie 失败: ${e.message}")
+        }
     }
 }
 

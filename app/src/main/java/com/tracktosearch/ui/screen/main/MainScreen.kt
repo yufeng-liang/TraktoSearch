@@ -650,7 +650,6 @@ fun MainScreen(
                         } else {
                             SearchScreen(
                                 initialKeyword = "",
-                                onSearchClick = onSearchClick,
                                 onTraktSearch = { type, query ->
                                     traktSearchType = type
                                     traktSearchQuery = query

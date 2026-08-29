@@ -168,6 +168,7 @@ class TmdbRepository @Inject constructor(
     private val movieTitleCache = TtlCache<String>(TTL_DETAIL, maxSize = 100)
     private val tvTitleCache = TtlCache<String>(TTL_DETAIL, maxSize = 100)
     private val searchMovieCache = TtlCache<TmdbSearchResult?>(TTL_SEARCH, maxSize = 100)
+    private val searchTvCache = TtlCache<TmdbSearchResult?>(TTL_SEARCH, maxSize = 100)
     // 人物作品缓存：TMDB 一次性返回全部作品，这里缓存按 vote_average 降序排列后的完整列表，按 personId 分页切片
     private val personMovieCreditsCache = TtlCache<List<TmdbPersonMovieCredit>>(TTL_PERSON, maxSize = 30)
     private val personTvCreditsCache = TtlCache<List<TmdbPersonTvCredit>>(TTL_PERSON, maxSize = 30)
@@ -590,6 +591,21 @@ class TmdbRepository @Inject constructor(
                 val response = tmdbApiService.searchMovie(query = query, language = getTmdbLanguage())
                 if (response.isSuccessful) {
                     response.body()?.results?.firstOrNull()?.also { searchMovieCache.put(key, it) }
+                } else null
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
+    // 通过标题搜索剧集，返回第一个匹配结果（与 searchMovie 同链路，仅端点不同）
+    suspend fun searchTv(query: String): TmdbSearchResult? {
+        val key = langKey(query.trim())
+        return searchTvCache.getOrAwait(key) {
+            try {
+                val response = tmdbApiService.searchTv(query = query, language = getTmdbLanguage())
+                if (response.isSuccessful) {
+                    response.body()?.results?.firstOrNull()?.also { searchTvCache.put(key, it) }
                 } else null
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 null

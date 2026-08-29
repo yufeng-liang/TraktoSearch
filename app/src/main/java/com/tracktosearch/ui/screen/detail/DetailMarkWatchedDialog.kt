@@ -26,8 +26,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,8 +46,12 @@ import com.tracktosearch.data.remote.trakt.dto.TraktEpisode
 import com.tracktosearch.data.remote.trakt.dto.TraktSeason
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
+import kotlinx.coroutines.flow.MutableSharedFlow
 
 // ==================== 标记已看弹窗（电视剧季/集勾选） ====================
+
+/** 季集加载失败信号：ViewModel 同包写入，弹窗收集后按季显示错误态与重试入口（无状态，弹窗关闭即清） */
+internal val markWatchedEpisodeLoadFailures = MutableSharedFlow<Int>(extraBufferCapacity = 16)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,6 +75,19 @@ internal fun MarkWatchedDialog(
     }
     // 已展开的季
     val expandedSeasons = remember { mutableStateOf(setOf<Int>()) }
+    // 加载失败的季集合（rememberSaveable，配置更改后保留，用于显示错误态与重试）
+    var failedSeasons by rememberSaveable { mutableStateOf(setOf<Int>()) }
+    // 收集信号时读取最新的 episodes，避免闭包捕获首次组合的旧 Map
+    val currentEpisodes by rememberUpdatedState(episodes)
+
+    // 收集 ViewModel 的加载失败信号，合并进失败集合（已成功到达的季忽略）
+    LaunchedEffect(Unit) {
+        markWatchedEpisodeLoadFailures.collect { seasonNumber ->
+            if (currentEpisodes[seasonNumber] == null) {
+                failedSeasons = failedSeasons + seasonNumber
+            }
+        }
+    }
 
     val toggleSeasonExpand: (Int) -> Unit = { seasonNumber ->
         val isExpanding = seasonNumber !in expandedSeasons.value
@@ -184,12 +206,28 @@ internal fun MarkWatchedDialog(
                                 val episodeList = episodes[season.number]
                                 Spacer(modifier = Modifier.height(4.dp))
                                 if (episodeList == null) {
-                                    Text(
-                                        text = stringResource(R.string.detail_loading_episodes),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(start = 36.dp, bottom = 4.dp)
-                                    )
+                                    if (season.number in failedSeasons) {
+                                        // 加载失败：错误文案 + 点击重试（点击清失败记录并重新加载）
+                                        Text(
+                                            text = stringResource(R.string.detail_load_error),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier
+                                                .padding(start = 36.dp, bottom = 4.dp)
+                                                .clickable {
+                                                    view.performHaptic(HapticType.CLICK)
+                                                    failedSeasons = failedSeasons - season.number
+                                                    onLoadEpisodes(season.number)
+                                                }
+                                        )
+                                    } else {
+                                        Text(
+                                            text = stringResource(R.string.detail_loading_episodes),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(start = 36.dp, bottom = 4.dp)
+                                        )
+                                    }
                                 } else {
                                     episodeList.forEach { ep ->
                                         val epSelected = ep.number in seasonSelected
@@ -226,24 +264,39 @@ internal fun MarkWatchedDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                // 收集所有已勾选集的 trakt ID
-                val selectedIds = mutableListOf<Int>()
-                selectedEpisodes.value.forEach { (seasonNum, epNums) ->
-                    epNums.forEach { epNum ->
-                        episodes[seasonNum]?.find { it.number == epNum }?.ids?.trakt?.let {
-                            selectedIds.add(it)
+            // 所有已勾选季的集列表均已加载完成后才允许确认，避免未加载季的勾选被静默丢弃
+            val confirmEnabled = selectedEpisodes.value.entries.all { (seasonNum, epNums) ->
+                epNums.isEmpty() || episodes[seasonNum] != null
+            }
+            TextButton(
+                enabled = confirmEnabled,
+                onClick = {
+                    // 收集所有已勾选集的 trakt ID；已看过的集仅预勾展示，提交时排除避免 Trakt history 重复
+                    val selectedIds = mutableListOf<Int>()
+                    selectedEpisodes.value.forEach { (seasonNum, epNums) ->
+                        val watched = watchedEpisodeNumbers[seasonNum] ?: emptySet()
+                        epNums.forEach { epNum ->
+                            if (epNum !in watched) {
+                                episodes[seasonNum]?.find { it.number == epNum }?.ids?.trakt?.let {
+                                    selectedIds.add(it)
+                                }
+                            }
                         }
                     }
+                    // 过滤后没有新增集（全部已看过）则不提交直接关闭
+                    if (selectedIds.isNotEmpty()) {
+                        onSubmit(selectedIds)
+                    } else {
+                        onDismiss()
+                    }
                 }
-                onSubmit(selectedIds)
-            }) {
+            ) {
                 Text(stringResource(R.string.common_confirm))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(android.R.string.cancel))
+                Text(stringResource(R.string.common_cancel))
             }
         }
     )

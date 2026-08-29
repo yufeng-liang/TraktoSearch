@@ -87,6 +87,7 @@ import com.tracktosearch.ui.theme.PixelFontFamily
 import com.tracktosearch.ui.theme.monetDoubanGreen
 import com.tracktosearch.ui.theme.pixelFontSize
 import com.tracktosearch.ui.theme.onMonetDoubanGreen
+import com.tracktosearch.ui.util.toUserMessage
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -153,11 +154,21 @@ fun ActivationLoginScreen(
         }
     }
 
-    LaunchedEffect(redirectToBrowser, isActivated) {
-        if (redirectToBrowser && isActivated && loginState == LoginState.IDLE) {
+    // 仅授权过期需续期时（redirectToBrowser 由导航层按 EXPIRED 态传入）自动拉起浏览器；
+    // 其余情况（豆瓣用户/访客进入登录页）停留在登录页让用户自选路径，
+    // 避免自动 OAuth 抢占豆瓣入口并把豆瓣按钮禁用在 AUTHORIZING 态。
+    // 只按 redirectToBrowser 作 key：取消授权重置 IDLE 后不会重新拉起浏览器
+    LaunchedEffect(redirectToBrowser) {
+        if (redirectToBrowser && loginState == LoginState.IDLE) {
             launchAuthorization()
         }
     }
+
+    // 浏览器授权取消守卫：CustomTabs 按返回取消无回调，宽限后仍在 AUTHORIZING 则重置 IDLE
+    TraktAuthCancelGuard(
+        loginState = loginState,
+        onCanceled = { loginViewModel.reset() }
+    )
 
     LaunchedEffect(Unit) {
         kotlinx.coroutines.coroutineScope {
@@ -278,6 +289,7 @@ fun ActivationLoginScreen(
                     hazeState = hazeState,
                     loginState = loginState,
                     onLoginClick = { launchAuthorization() },
+                    onCancelAuth = { loginViewModel.reset() },
                     canUseActions = isActivated,
                     scene = loginGlassScene,
                     modifier = Modifier.padding(top = if (expired) 14.dp else 0.dp)
@@ -285,8 +297,9 @@ fun ActivationLoginScreen(
 
                 val canUseActions = isActivated
                 if (loginState == LoginState.ERROR) {
+                    // LoginViewModel 存原始异常,组合期转本地化文案
                     Text(
-                        text = errorMessage?.ifEmpty { stringResource(R.string.login_failed) }
+                        text = errorMessage?.toUserMessage(context, R.string.login_failed)
                             ?: stringResource(R.string.login_denied),
                         modifier = Modifier.padding(top = 8.dp),
                         color = MaterialTheme.colorScheme.error,
@@ -317,7 +330,9 @@ fun ActivationLoginScreen(
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
                     .padding(top = 174.dp)
-                    .zIndex(0.5f)
+                    // 提到内容层（zIndex=1）之上展示烟花；仍低于右上角帮助按钮（zIndex=2），
+                    // 烟花无交互属性不拦截点击
+                    .zIndex(1.5f)
             )
         }
     }
@@ -423,6 +438,7 @@ private fun ActivationCard(
     hazeState: HazeState,
     loginState: LoginState,
     onLoginClick: () -> Unit,
+    onCancelAuth: () -> Unit,
     canUseActions: Boolean,
     scene: GlassScene = GlassScene(),
     modifier: Modifier = Modifier
@@ -605,6 +621,22 @@ private fun ActivationCard(
                 LoginState.CONNECTING -> CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 LoginState.ERROR -> Text(stringResource(R.string.login_retry))
                 else -> Text(stringResource(R.string.login_button))
+            }
+        }
+        if (loginState == LoginState.AUTHORIZING) {
+            // CustomTabs 取消授权不产生回调：显示等待提示与取消逃生，避免 AUTHORIZING 永久锁死
+            Text(
+                text = stringResource(R.string.douban_login_waiting_auth),
+                modifier = Modifier.padding(top = 8.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            TextButton(
+                onClick = onCancelAuth,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.common_cancel))
             }
         }
     }

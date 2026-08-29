@@ -549,6 +549,10 @@
     <string name="detail_video_trailer">予告編</string>
     <string name="detail_video_teaser">ティザー予告</string>
     <string name="detail_video_clip">クリップ</string>
+    <string name="detail_video_featurette">メイキング特集</string>
+    <string name="detail_video_behind_the_scenes">舞台裏</string>
+    <string name="detail_video_blooper">NG集</string>
+    <string name="detail_video_other">動画</string>
     <string name="detail_video_open_browser">ブラウザで開く</string>
     <string name="detail_video_play">再生</string>
     <string name="trailer_youtube_restricted">YouTubeは現在の地域で制限されています\nVPNをご使用ください</string>
@@ -1526,6 +1530,11 @@
     <string name="douban_sync_notification_latest">取得済み：%1$s</string>
     <string name="douban_sync_notification_public">豆瓣同期：%1$s</string>
     <string name="douban_sync_notification_channel_description">豆瓣の同期進捗を表示</string>
+    <string name="douban_login_waiting_auth">認証の完了を待っています…</string>
+    <string name="auth_invite_bound_this_device">この招待コードは既にデバイスに紐付いています。アプリを再起動して復元するか、新しいコードをお使いください</string>
+    <string name="douban_detail_entry_not_found">このアイテムはまだこの端末に同期されていません</string>
+    <string name="douban_batch_remove_remote_failed">%1$d 件の項目を豆瓣から削除できませんでした。次回同期時に再試行します</string>
+    <string name="detail_credits_douban_unavailable">豆瓣限定アイテムにはキャスト情報がありません</string>
     <string name="error_rate_limited">送信が多すぎます。少し待ってから再試行してください</string>
     <string name="error_network_unavailable">ネットワークエラーです。接続を確認して再試行してください</string>
     <string name="error_server_error">サーバーが混み合っています。後でもう一度お試しください</string>

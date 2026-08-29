@@ -12,6 +12,7 @@ import com.tracktosearch.data.local.DoubanCredentials
 import com.tracktosearch.data.local.SearchHistoryStorage
 import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.remote.douban.DoubanCookieExpiredException
+import com.tracktosearch.data.remote.douban.DoubanRateLimitedException
 import com.tracktosearch.data.remote.douban.DoubanRexxarApiService
 import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.douban.dto.DoubanHotData
@@ -74,6 +75,8 @@ sealed class DoubanRecommendState {
     ) : DoubanRecommendState()
     /** 加载失败 */
     data class Error(val message: String) : DoubanRecommendState()
+    /** Cookie 已失效（登录态保留，引导重新登录豆瓣） */
+    object CookieInvalid : DoubanRecommendState()
 }
 
 @Immutable
@@ -280,9 +283,9 @@ class DiscoverViewModel @Inject constructor(
                     )
                 )
             } catch (e: DoubanCookieExpiredException) {
-                // cookie 过期，清除登录态，显示引导卡片
-                doubanAuthStorage.clearCredentials()
-                _uiState.value = _uiState.value.copy(doubanRecommendState = DoubanRecommendState.NotLoggedIn)
+                // Cookie 过期：软标记失效（保留登录态与凭据，绝不清除），显示重新登录引导卡片
+                doubanAuthStorage.markCookieInvalid()
+                _uiState.value = _uiState.value.copy(doubanRecommendState = DoubanRecommendState.CookieInvalid)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -320,7 +323,8 @@ class DiscoverViewModel @Inject constructor(
     /** 豆瓣登录后返回发现页时，按最新凭据加载猜你喜欢。 */
     fun refreshDoubanRecommendOnResume() {
         if (doubanAuthStorage.getCredentials() != null &&
-            _uiState.value.doubanRecommendState is DoubanRecommendState.NotLoggedIn
+            (_uiState.value.doubanRecommendState is DoubanRecommendState.NotLoggedIn ||
+                _uiState.value.doubanRecommendState is DoubanRecommendState.CookieInvalid)
         ) {
             loadDoubanRecommend()
         }
@@ -402,15 +406,18 @@ class DiscoverViewModel @Inject constructor(
             val cacheKey = "${categoryId}_1_10_v5"
             try {
                 val data = sharedDoubanHotCache.getOrAwait(cacheKey) {
+                    // 请求失败必须抛异常走栏目错误态：原 takeIf 静默吞掉失败，栏目空白且无重试入口
                     val response = doubanRexxarApi.getCollectionItems(
                         collectionId = doubanCollectionId(categoryId),
                         start = 0,
                         count = if (categoryId == "douban-top250") 25 else 20
-                    ).takeIf { it.isSuccessful }?.body()
+                    )
+                    if (!response.isSuccessful) throw rexxarFailure(response.code())
+                    val page = response.body() ?: throw Exception("Douban rexxar response body is empty")
                     com.tracktosearch.data.remote.douban.dto.DoubanHotData(
-                        items = response?.subject_collection_items?.map { it.toDoubanHotItem() } ?: emptyList(),
-                        total = response?.total ?: 0,
-                        hasMore = response != null && (response.start + response.count) < response.total
+                        items = page.subject_collection_items.map { it.toDoubanHotItem() },
+                        total = page.total,
+                        hasMore = (page.start + page.count) < page.total
                     )
                 }
                 val updated = _uiState.value.doubanHotCategories.toMutableList()
@@ -446,6 +453,10 @@ class DiscoverViewModel @Inject constructor(
             loadDoubanCategory(index, categoryId)
         }
     }
+
+    /** 豆瓣 Rexxar 榜单请求失败 → 异常（403 视为风控限流，其余带状态码便于映射文案） */
+    private fun rexxarFailure(code: Int): Exception =
+        if (code == 403) DoubanRateLimitedException() else Exception("Douban rexxar HTTP $code")
 
     /** 会话级预解析结果：豆瓣条目 id(hashCode) → imdbId。点击时优先使用，避免等待 ID 转换。 */
     private val prefetchedImdbIds = java.util.concurrent.ConcurrentHashMap<Int, String>()
@@ -523,13 +534,17 @@ class DiscoverViewModel @Inject constructor(
                             collectionId = doubanCollectionId(categoryId),
                             start = (page - 1) * limit,
                             count = limit
-                        ).takeIf { it.isSuccessful }?.body()
+                        )
+                        // 失败抛异常走弹层错误态（原 takeIf 静默吞掉，栏目空白且无反馈）
+                        if (!rexxarResponse.isSuccessful) throw rexxarFailure(rexxarResponse.code())
+                        val rexxarPage = rexxarResponse.body()
+                            ?: throw Exception("Douban rexxar response body is empty")
                         com.tracktosearch.data.remote.douban.dto.DoubanHotResponse(
                             code = 0,
                             data = com.tracktosearch.data.remote.douban.dto.DoubanHotData(
-                                items = rexxarResponse?.subject_collection_items?.map { it.toDoubanHotItem() } ?: emptyList(),
-                                total = rexxarResponse?.total ?: 0,
-                                hasMore = rexxarResponse != null && (rexxarResponse.start + rexxarResponse.count) < rexxarResponse.total,
+                                items = rexxarPage.subject_collection_items.map { it.toDoubanHotItem() },
+                                total = rexxarPage.total,
+                                hasMore = (rexxarPage.start + rexxarPage.count) < rexxarPage.total,
                                 page = page,
                                 limit = limit
                             )
@@ -563,7 +578,10 @@ class DiscoverViewModel @Inject constructor(
                 if (idx >= 0) {
                     updated[idx] = updated[idx].copy(
                         isLoading = false,
-                        error = e.toUserMessage(context, R.string.error_load_failed)
+                        // 失败页不前移：currentPage 回退到失败页的上一页，弹层重试用 currentPage+1
+                        // 恰好重载本次失败页（页 1 失败回退到 0，重试仍是页 1）
+                        error = e.toUserMessage(context, R.string.error_load_failed),
+                        currentPage = (page - 1).coerceAtLeast(0)
                     )
                     _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
                 }
@@ -751,10 +769,11 @@ class DiscoverViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             traktAnticipatedMovies = enhancedMovies,
             traktAnticipatedShows = enhancedShows,
-            traktAnticipatedError = moviesResult.exceptionOrNull()?.toUserMessage(context, R.string.error_load_failed)
-                ?: showsResult.exceptionOrNull()?.toUserMessage(context, R.string.error_load_failed)
-                ?: context.getString(R.string.error_load_failed)
-                    .takeIf { moviesResult.isFailure && showsResult.isFailure }
+            // 与注释语义一致：两者都失败才算整栏失败；单边失败用成功边数据继续，失败边留空
+            traktAnticipatedError = if (moviesResult.isFailure && showsResult.isFailure) {
+                moviesResult.exceptionOrNull()?.toUserMessage(context, R.string.error_load_failed)
+                    ?: context.getString(R.string.error_load_failed)
+            } else null
         )
     }
 
@@ -968,7 +987,8 @@ class DiscoverViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                // 忽略
+                // 转换失败不能静默：给用户可感知的错误提示
+                _toastEvent.emit(R.string.card_resolve_error)
             } finally {
                 // 仅当仍是自己设置的 tmdbId 时才清空，避免清空新协程设的值
                 if (_uiState.value.resolvingTmdbId == tmdbId) {
@@ -1043,7 +1063,8 @@ class DiscoverViewModel @Inject constructor(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) {
-                    // 忽略
+                    // 转换失败不能静默：给用户可感知的错误提示
+                    _toastEvent.emit(R.string.card_resolve_error)
                 } finally {
                     // 仅当仍是自己设置的 tmdbId 时才清空，避免清空新协程设的值
                     if (_uiState.value.resolvingTmdbId == tmdbId) {
@@ -1131,7 +1152,9 @@ class DiscoverViewModel @Inject constructor(
                     }
                 }
                 if (searchResult == null || searchResult.id <= 0) {
+                    // 与负缓存路径一致：搜索无结果要给用户可感知提示，不能静默无反馈
                     _uiState.value = _uiState.value.copy(resolvingItemId = null)
+                    _toastEvent.emit(R.string.card_resolve_not_found)
                     return@launch
                 }
 
@@ -1234,10 +1257,13 @@ class DiscoverViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(resolvingRecommendItemId = item.id)
             try {
                 // 1. 用 TMDB 搜索（优先从缓存获取）
-                val searchResult = doubanTmdbCache.get(cleanTitle) ?: run {
-                    val result = tmdbRepository.searchMovie(cleanTitle)
+                // 剧集用 /search/tv（与电影同名结果不同）；TV 条目缓存 key 加前缀，避免与电影搜索结果互相污染
+                val tmdbCacheKey = if (mediaType == MediaType.MOVIE) cleanTitle else "tv_$cleanTitle"
+                val searchResult = doubanTmdbCache.get(tmdbCacheKey) ?: run {
+                    val result = if (mediaType == MediaType.MOVIE) tmdbRepository.searchMovie(cleanTitle)
+                    else tmdbRepository.searchTv(cleanTitle)
                     if (result != null && result.id > 0) {
-                        doubanTmdbCache.put(cleanTitle, result)
+                        doubanTmdbCache.put(tmdbCacheKey, result)
                     }
                     result
                 }
