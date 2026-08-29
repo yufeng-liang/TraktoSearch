@@ -4397,10 +4397,10 @@
       "posterPath": "/9gC88zYUBARRSThcG93MvW14sqx.jpg",
       "bundled": false,
       "lines": {
-        "en": ["The net is vast", "and infinite."],
-        "zh": ["网络是", "广阔无边的。"],
-        "ja": ["ネットは広大だわ。"],
-        "ko": ["네트는 광대하구나."]
+        "en": ["Overspecialize,", "and you breed in weakness.", "It's slow death."],
+        "zh": ["无论组织还是个人，", "特化到极致，", "尽头只有缓慢的死亡。"],
+        "ja": ["組織も人も、", "特殊化の果てにあるのは", "緩やかな死だけだ。"],
+        "ko": ["조직도 사람도,", "특수화의 끝에 남는 것은", "느린 죽음뿐이다."]
       },
       "title": {
         "en": "Ghost in the Shell",
