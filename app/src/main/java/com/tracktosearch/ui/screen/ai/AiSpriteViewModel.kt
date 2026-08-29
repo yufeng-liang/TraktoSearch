@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -105,7 +106,11 @@ data class AiSpriteUiState(
     val dailyKnowledge: AiDailyKnowledge? = null,
     // 角色目录是否成功取回：失败时全部角色停在「准备中」，UI 要给出原因和重试入口
     val charactersLoadFailed: Boolean = false,
-    val errorCode: String? = null
+    val errorCode: String? = null,
+    // 「锐评我的看单」首次使用说明弹窗：true 时弹出（同意后才上传数据）
+    val showTasteConsent: Boolean = false,
+    // 锐评功能被设置页开关关闭时的引导弹窗：true 时弹出「去设置」
+    val showTasteDisabled: Boolean = false
 ) {
     val isAuthorized: Boolean
         get() = authState == AuthState.AUTHORIZED || authState == AuthState.OFFLINE
@@ -122,7 +127,8 @@ class AiSpriteViewModel @Inject constructor(
     private val aiRepository: AiRepository,
     private val authManager: AuthManager,
     private val traktRepository: TraktRepository,
-    private val overlayStorage: com.tracktosearch.data.local.AiSpriteOverlayStorage
+    private val overlayStorage: com.tracktosearch.data.local.AiSpriteOverlayStorage,
+    private val aiTasteStorage: com.tracktosearch.data.local.AiTasteStorage
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(
         AiSpriteUiState(
@@ -496,14 +502,59 @@ class AiSpriteViewModel @Inject constructor(
     }
 
     fun openFeature(feature: AiFeature) {
+        // 「锐评我的看单」先过隐私守卫：首次点击弹说明弹窗（同意才上传），
+        // 开关被关闭则弹「去设置」引导；两条路径都不进入功能页、不加载数据
+        if (feature == AiFeature.TASTE) {
+            viewModelScope.launch { guardThenLoadTaste(forceRefresh = false) }
+            return
+        }
         _uiState.update { it.copy(activeFeature = feature, errorCode = null) }
         when (feature) {
             AiFeature.GREETING -> loadGreeting(_uiState.value.activatedCharacterId ?: _uiState.value.selectedCharacterId)
-            AiFeature.TASTE -> loadTaste()
+            // 已在上方 TASTE 守卫分支处理
+            AiFeature.TASTE -> Unit
             // 返回后重进不能把答到一半的一轮题冲掉；只有没有未完成的一轮时才重新抽题
             AiFeature.QUIZ -> if (!hasQuizInProgress(_uiState.value)) prepareQuizPreview()
             AiFeature.DAILY -> loadDaily()
         }
+    }
+
+    /**
+     * 锐评功能隐私守卫（须在协程内调用）：
+     * 1. 用户从未对首次说明弹窗做出决定 → 弹说明弹窗，不进入功能页；
+     * 2. 已决定但上传开关已关闭 → 弹「去设置」引导，不进入功能页；
+     * 3. 否则进入功能页并按原逻辑加载数据（缓存/截断逻辑不动）。
+     */
+    private suspend fun guardThenLoadTaste(forceRefresh: Boolean) {
+        when {
+            !aiTasteStorage.tasteConsentDecided.first() ->
+                _uiState.update { it.copy(showTasteConsent = true, errorCode = null) }
+            !aiTasteStorage.tasteUploadEnabled.first() ->
+                _uiState.update { it.copy(showTasteDisabled = true, errorCode = null) }
+            else -> {
+                _uiState.update { it.copy(activeFeature = AiFeature.TASTE, errorCode = null) }
+                loadTaste(forceRefresh)
+            }
+        }
+    }
+
+    /** 首次说明弹窗点击「同意并继续」：记录已决定，进入功能页并立即加载。 */
+    fun onTasteConsentAgreed() {
+        viewModelScope.launch {
+            aiTasteStorage.setConsentDecided(true)
+            _uiState.update { it.copy(showTasteConsent = false) }
+            guardThenLoadTaste(forceRefresh = false)
+        }
+    }
+
+    /** 首次说明弹窗点击「暂不使用」或外部关闭：仅收起弹窗，不记录决定（下次点击会再次询问）。 */
+    fun onTasteConsentDismissed() {
+        _uiState.update { it.copy(showTasteConsent = false) }
+    }
+
+    /** 「去设置」引导弹窗关闭（取消或跳转后）：仅收起弹窗。 */
+    fun onTasteDisabledDismiss() {
+        _uiState.update { it.copy(showTasteDisabled = false) }
     }
 
     fun closeFeature() {
@@ -537,7 +588,8 @@ class AiSpriteViewModel @Inject constructor(
                 _uiState.value.activatedCharacterId ?: _uiState.value.selectedCharacterId,
                 forceRefresh = true
             )
-            AiFeature.TASTE -> loadTaste(forceRefresh = true)
+            // 锐评刷新同样过隐私守卫：功能页打开期间开关可能已在设置里被关闭
+            AiFeature.TASTE -> viewModelScope.launch { guardThenLoadTaste(forceRefresh = true) }
             AiFeature.QUIZ -> replayQuiz()
             AiFeature.DAILY -> loadDaily(forceRefresh = true)
             null -> Unit

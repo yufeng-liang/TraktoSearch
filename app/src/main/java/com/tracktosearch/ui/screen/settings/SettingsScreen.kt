@@ -740,6 +740,14 @@ fun SettingsScreen(
                 }
             }
 
+            // AI 与隐私：锐评看单数据上传开关（状态收集局部化到 AiPrivacyGroupItem，开关变化只重组本 item）
+            item(key = "group_ai_privacy") {
+                AiPrivacyGroupItem(
+                    viewModel = viewModel,
+                    hazeState = settingsHazeState
+                )
+            }
+
             // 关于（更新信息/最新版本/崩溃日志开关在 AboutGroupItem 内部收集，检查更新只重组本 item）
             item(key = "group_about") {
                 AboutGroupItem(
@@ -1722,6 +1730,73 @@ private fun DataManagementGroupItem(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * 「AI 与隐私」分组 item：锐评看单数据上传开关在本函数内部收集，
+ * 开关变化只重组本 item，不波及 LazyColumn 其他 item。
+ * 行样式与「关于」分组崩溃日志开关行一致（40dp 图标容器 + 标题/副标题 + Switch）。
+ */
+@Composable
+private fun AiPrivacyGroupItem(
+    viewModel: SettingsViewModel,
+    hazeState: HazeState?
+) {
+    val aiTasteEnabled by viewModel.aiTasteEnabled.collectAsStateWithLifecycle()
+    val view = LocalView.current
+    val isDark = isAppDarkTheme()
+    SettingsGroupCard(
+        title = stringResource(R.string.settings_ai_group_title),
+        hazeState = hazeState
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { view.performHaptic(HapticType.CLICK); viewModel.setAiTasteEnabled(!aiTasteEnabled) }
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(
+                        color = settingsIconContainerColor(isDark),
+                        shape = RoundedCornerShape(12.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Rounded.AutoAwesome,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.ai_feature_taste),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 15.sp
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = stringResource(R.string.settings_ai_taste_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Switch(
+                checked = aiTasteEnabled,
+                onCheckedChange = { view.performHaptic(HapticType.CLICK); viewModel.setAiTasteEnabled(it) },
+                colors = appSwitchColors()
+            )
         }
     }
 }

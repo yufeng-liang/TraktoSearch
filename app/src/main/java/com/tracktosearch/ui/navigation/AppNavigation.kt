@@ -1025,6 +1025,12 @@ fun AppNavigation(
                             },
                             onRecommendationClick = { recommendation ->
                                 navigateAiRecommendation(navController, recommendation)
+                            },
+                            // AI 锐评弹窗「去设置」：独立搜索路由不在主界面内，
+                            // 先登记目标页签再回主界面，由 MainScreen 收集后切到设置页
+                            onOpenSettings = {
+                                MainTabNavigator.requestTab(3)
+                                navController.navigate(Routes.MAIN) { launchSingleTop = true }
                             }
                         )
                     }
@@ -1143,6 +1149,12 @@ fun AppNavigation(
                                 navController.navigate(Routes.LOGIN) {
                                     popUpTo(Routes.MAIN) { inclusive = false }
                                 }
+                            },
+                            // AI 锐评弹窗「去设置」：独立统一搜索路由不在主界面内，
+                            // 先登记目标页签再回主界面，由 MainScreen 收集后切到设置页
+                            onOpenSettings = {
+                                MainTabNavigator.requestTab(3)
+                                navController.navigate(Routes.MAIN) { launchSingleTop = true }
                             }
                         )
                     }

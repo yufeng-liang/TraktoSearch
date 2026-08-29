@@ -24,6 +24,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -40,6 +41,7 @@ class AiSpriteViewModelTest {
     private val authManager = mockk<AuthManager>()
     private val traktRepository = mockk<TraktRepository>(relaxed = true)
     private val overlayStorage = mockk<com.tracktosearch.data.local.AiSpriteOverlayStorage>(relaxed = true)
+    private val aiTasteStorage = mockk<com.tracktosearch.data.local.AiTasteStorage>()
 
     @Test
     fun submitQuiz_mergesResultQuotaIntoUiState() = runTest {
@@ -385,7 +387,10 @@ class AiSpriteViewModelTest {
         every { authManager.nickname } returns MutableStateFlow("朋友")
         every { authManager.friendId } returns MutableStateFlow("friend-a")
         coEvery { aiRepository.listCharacters() } returns Result.success(emptyList())
-        return AiSpriteViewModel(aiRepository, authManager, traktRepository, overlayStorage)
+        // 锐评隐私守卫默认放行：已同意说明弹窗且上传开关开启
+        every { aiTasteStorage.tasteConsentDecided } returns flowOf(true)
+        every { aiTasteStorage.tasteUploadEnabled } returns flowOf(true)
+        return AiSpriteViewModel(aiRepository, authManager, traktRepository, overlayStorage, aiTasteStorage)
     }
 
     private fun viewModelCharacter(id: String) = com.tracktosearch.data.ai.AiCharacter(

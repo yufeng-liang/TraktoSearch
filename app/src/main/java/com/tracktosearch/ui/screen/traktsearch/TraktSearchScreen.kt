@@ -195,6 +195,8 @@ fun TraktSearchScreen(
     onItemClick: (type: MediaType, traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
     onPersonClick: (tmdbId: Int, name: String, profileUrl: String?, avatarColor: Color?) -> Unit = { _, _, _, _ -> },
     onNavigateToLogin: () -> Unit = {},
+    // AI 锐评弹窗「去设置」回调：未提供时按钮无跳转（仅收起弹窗）
+    onOpenSettings: () -> Unit = {},
     onRecommendationClick: ((AiRecommendation) -> Unit)? = null,
     inlineMode: Boolean = false,
     viewModel: TraktSearchViewModel = hiltViewModel(),
@@ -1015,6 +1017,7 @@ fun TraktSearchScreen(
                     spriteViewModel.closeFeature()
                 },
                 onNavigateToLogin = onNavigateToLogin,
+                onOpenSettings = onOpenSettings,
                 onMovieClick = { traktId, tmdbId, title, imdbId, traktRating, _, _ ->
                     onItemClick(MediaType.MOVIE, traktId, tmdbId, title, imdbId, traktRating)
                 },

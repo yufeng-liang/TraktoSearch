@@ -110,7 +110,6 @@ class CrashHandler private constructor(
             pw.println("Time: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())}")
             pw.println("App Version: ${getAppVersion()}")
             pw.println("Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
-            pw.println("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
             pw.println()
             pw.println("=== Stack Trace ===")
             throwable.printStackTrace(pw)

@@ -58,6 +58,10 @@
     <string name="update_download_browser">Browser download</string>
     <string name="update_release_page">Go to release page</string>
     <string name="update_download_unavailable">Direct download is temporarily unavailable. You can get the APK from the release page.</string>
+    <string name="update_dialog_badge">Update available</string>
+    <string name="update_cancel_download">Cancel download</string>
+    <string name="update_install">Install now</string>
+    <string name="update_download_complete">Download complete, tap to install</string>
     <string name="update_close">Close</string>
     <string name="install_failed">Installation failed (code=%1$d)</string>
     <string name="notification_release_title">Release alert: %1$s</string>
@@ -91,7 +95,9 @@
     <string name="watchlist_batch_remove_partial_failed">Some items failed to remove</string>
     <string name="common_cancel">Cancel</string>
     <string name="permission_cloud_title">Want to see clouds transform?</string>
-    <string name="permission_cloud_message">After granting location permission, it will change with your city\'s real-time weather and holiday themes!</string>
+    <string name="permission_cloud_message">The cloud changes with real-time weather and holiday themes in your city. Only approximate location (city level) is needed — no precise location.</string>
+    <string name="permission_privacy_title">Privacy boundary</string>
+    <string name="permission_cloud_privacy">When checking the weather, your approximate location is sent only to the weather service in exchange for weather info — never linked to any account, never stored, never used for anything else. Declining affects nothing; the cloud just stays static.</string>
     <string name="permission_cancel">Cancel</string>
     <string name="permission_authorize">Authorize</string>
 
@@ -408,11 +414,11 @@
     <string name="crash_dialog_cancel">Not now</string>
     <!-- Crash log authorization -->
     <string name="crash_auth_dialog_title">Crash Log Authorization</string>
-    <string name="crash_auth_dialog_message">The app crashed recently. May we upload the crash log (including stack trace, app version, device model, and recent actions) to the developer via the gateway to help fix the issue? You can change this anytime in Settings.</string>
+    <string name="crash_auth_dialog_message">The app crashed recently. May we upload the crash log (including stack trace, app version, OS version, and recent actions) to the developer via the gateway to help fix the issue? The log contains no device model or identity info. You can change this anytime in Settings.</string>
     <string name="crash_auth_dialog_agree">Agree and upload</string>
     <string name="crash_auth_dialog_decline">Decline</string>
     <string name="settings_crash_log_title">Auto-upload crash logs</string>
-    <string name="settings_crash_log_subtitle">Uploads the crash stack trace, device model, OS version and app version to this app’s feedback service on next launch. Used only to locate crashes.</string>
+    <string name="settings_crash_log_subtitle">Uploads the crash stack trace, OS version and app version to this app’s feedback service on next launch. Used only to locate crashes.</string>
 
     <!-- Crash upload feedback and records -->
     <string name="crash_upload_success">Crash log uploaded successfully</string>
@@ -430,7 +436,6 @@
     <string name="crash_detail_fail_reason">Fail reason</string>
     <string name="crash_detail_crash_time">Crash time</string>
     <string name="crash_detail_app_version">App version</string>
-    <string name="crash_detail_device">Device</string>
     <string name="crash_detail_log_content">Log content</string>
     <string name="crash_detail_upload_now">Upload now</string>
     <string name="crash_detail_not_found">Record not found</string>
@@ -1556,6 +1561,14 @@ Config:
     <string name="ai_audio_playing">Playing voice</string>
     <string name="ai_feature_greeting">Nickname welcome</string>
     <string name="ai_feature_taste">Roast my watchlist</string>
+    <string name="settings_ai_group_title">AI &amp; Privacy</string>
+    <string name="settings_ai_taste_subtitle">When enabled, using this feature uploads your latest 60 watched titles (name, year, rating, watched date) to this app\'s AI service, used only to generate the roast</string>
+    <string name="ai_taste_consent_title">Your watchlist will be uploaded</string>
+    <string name="ai_taste_consent_message">Generating the roast sends your latest 60 watched titles (name, year, rating, watched date) to this app\'s AI service. You can turn this off anytime in Settings → AI &amp; Privacy; when off, nothing is sent.</string>
+    <string name="ai_taste_consent_agree">Agree and continue</string>
+    <string name="ai_taste_consent_decline">Not now</string>
+    <string name="ai_taste_disabled_message">%1$s is turned off in Settings. Turn it on to use it.</string>
+    <string name="ai_taste_go_settings">Open Settings</string>
     <string name="ai_feature_quiz">Did you really understand these films?</string>
     <string name="ai_feature_daily">Daily film fact</string>
     <string name="ai_feature_start">Open</string>
@@ -1661,6 +1674,14 @@ Config:
     <string name="help_ai_sprite_b5">AI requests use a daily quota, and the refresh button inside a feature spends one more; offline you cannot start new requests but cached content stays readable</string>
     <string name="help_ai_sprite_b6">V1 uses character and scene voice-design prompts; failed previews fall back to system speech</string>
     <string name="help_ai_sprite_b7">Leaving a quiz round keeps your answers; drawing a new round asks for confirmation first, and submitting with blanks warns you; after a round you can tell the sprite how it felt, so future rounds fit your taste</string>
+    <string name="help_privacy">Data &amp; Privacy</string>
+    <string name="help_privacy_b1">Update check: queries GitHub/Gitee for the latest version via this app\'s gateway, without your identity info</string>
+    <string name="help_privacy_b2">Location: only when you tap the cloud and grant permission is your approximate location (city level) sent to the weather service to look up weather — never linked to your account, never stored; declining affects nothing else</string>
+    <string name="help_privacy_b3">Crash logs: off by default. When on, uploads the crash stack trace, OS version and app version (no device model); can be turned off anytime in Settings</string>
+    <string name="help_privacy_b4">AI sprite: \"Roast my watchlist\" uploads your latest 60 watched titles to this app\'s AI service to generate the roast after a first-use confirmation; turn it off in Settings → AI &amp; Privacy. Other AI features send only minimal necessary data</string>
+    <string name="help_privacy_b5">Feedback: only what you fill in — content and contact info — plus the OS version; no device model</string>
+    <string name="help_privacy_b6">Activation &amp; sync: activation reports the Android ID for device binding; the Douban login cookie is used only to read your own Douban marks, never uploaded to any third party</string>
+    <string name="help_privacy_b7">This app integrates no analytics or ad SDKs and collects no usage behavior data</string>
     <!-- Main screen background glow -->
     <string name="bg_glow_title">Background Effect</string>
     <string name="bg_glow_off">Off</string>

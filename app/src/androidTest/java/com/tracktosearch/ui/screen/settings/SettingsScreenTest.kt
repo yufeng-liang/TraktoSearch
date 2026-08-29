@@ -420,6 +420,7 @@ class SettingsScreenTest {
         every { mock.detailSections } returns MutableStateFlow(emptyList())
         every { mock.changelog } returns MutableStateFlow<String?>(null)
         every { mock.isLoadingChangelog } returns MutableStateFlow(false)
+        every { mock.aiTasteEnabled } returns MutableStateFlow(true)
         return mock
     }
 }

@@ -102,6 +102,7 @@ class SettingsViewModelTest {
     private lateinit var sharedTransitionStorage: SharedTransitionStorage
     private lateinit var doubanSyncedItemDao: DoubanSyncedItemDao
     private lateinit var sessionModeManager: SessionModeManager
+    private lateinit var aiTasteStorage: com.tracktosearch.data.local.AiTasteStorage
     private lateinit var context: Context
 
     private lateinit var viewModel: SettingsViewModel
@@ -138,6 +139,7 @@ class SettingsViewModelTest {
         sharedTransitionStorage = mockk(relaxed = true)
         doubanSyncedItemDao = mockk(relaxed = true)
         sessionModeManager = mockk(relaxed = true)
+        aiTasteStorage = mockk(relaxed = true)
         context = RuntimeEnvironment.getApplication()
 
         // 构造时直接赋值的 StateFlow 属性必须在 ViewModel 构造前 stub
@@ -159,6 +161,7 @@ class SettingsViewModelTest {
         every { detailSectionStorage.sectionConfigs } returns MutableStateFlow(emptyList())
         every { statusConsistencyChecker.checkProgress } returns MutableStateFlow(ConsistencyCheckResult())
         every { doubanSyncManager.progress } returns MutableStateFlow(DoubanSyncProgress())
+        every { aiTasteStorage.tasteUploadEnabled } returns MutableStateFlow(true)
 
         // init 块的 refreshCacheInfo() 调用的方法 stub
         every { offlineCacheManager.getDataStoreSizeBytes() } returns 0L
@@ -200,6 +203,7 @@ class SettingsViewModelTest {
             doubanSyncedItemDao = doubanSyncedItemDao,
             sessionModeManager = sessionModeManager,
             imageTrafficStorage = mockk(relaxed = true),
+            aiTasteStorage = aiTasteStorage,
             statisticsSnapshotStore = mockk(relaxed = true),
             context = context
         )

@@ -133,6 +133,7 @@ import com.tracktosearch.ui.screen.traktsearch.TraktSearchScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchViewModel
 import com.tracktosearch.ui.screen.watchlist.MediaUiItem
 import com.tracktosearch.ui.screen.watchlist.WatchlistScreen
+import com.tracktosearch.ui.navigation.MainTabNavigator
 import com.tracktosearch.ui.navigation.NotificationNavigator
 import com.tracktosearch.ui.navigation.SearchNavigator
 import com.tracktosearch.ui.util.HapticType
@@ -231,6 +232,13 @@ fun MainScreen(
     val pagerState = rememberPagerState(initialPage = initialTab) { 4 }
     val aiSpriteCenterVisibleOnCurrentPage = pagerState.currentPage == 0 && aiSpriteCenterVisible
     val scope = rememberCoroutineScope()
+
+    // AI 弹窗「去设置」：先关精灵中心再切到设置页签（HorizontalPager 第 4 页）
+    val onAiOpenSettings: () -> Unit = {
+        aiSpriteCenterVisible = false
+        selectedTab = 3
+        scope.launch { pagerState.scrollToPage(3) }
+    }
     val context = LocalContext.current
 
     // 新手引导
@@ -367,6 +375,17 @@ fun MainScreen(
                 pagerState.scrollToPage(0)
                 selectedTab = 0
                 SearchNavigator.consume()
+            }
+        }
+    }
+
+    // 独立路由（如 AI 弹窗「去设置」）请求跳到主界面指定页签，进入主页后消费。
+    LaunchedEffect(Unit) {
+        MainTabNavigator.pendingTab.collect { tab ->
+            if (tab != null) {
+                pagerState.scrollToPage(tab)
+                selectedTab = tab
+                MainTabNavigator.consume()
             }
         }
     }
@@ -637,6 +656,7 @@ fun MainScreen(
                                             onPersonClick(tmdbId, name, profileUrl, avatarColor)
                                         },
                                         onNavigateToLogin = onNavigateToLogin,
+                                        onOpenSettings = onAiOpenSettings,
                                         onRecommendationClick = onAiRecommendationClick,
                                         viewModel = viewModel,
                                         inlineMode = true,
@@ -657,6 +677,7 @@ fun MainScreen(
                                 },
                                 onSpiderTest = onSpiderTest,
                                 onMovieClick = onMovieClick,
+                                onOpenSettings = onAiOpenSettings,
                                 searchSourceType = searchSourceType,
                                 onSearchSourceTypeChange = { searchSourceType = it },
                                 modifier = Modifier.fillMaxSize(),

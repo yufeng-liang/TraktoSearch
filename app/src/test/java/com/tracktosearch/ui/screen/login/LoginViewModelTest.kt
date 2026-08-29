@@ -19,7 +19,7 @@ class LoginViewModelTest {
         val traktRepository = mockk<TraktRepository>(relaxed = true)
         coEvery { authManager.exchangeCodeForToken("oauth-code") } returns Result.success(Unit)
 
-        val viewModel = LoginViewModel(authManager, traktRepository, mockk<Context>(relaxed = true))
+        val viewModel = LoginViewModel(authManager, traktRepository)
         viewModel.exchangeCodeForToken("oauth-code")
         advanceUntilIdle()
 

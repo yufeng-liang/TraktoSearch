@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -65,6 +66,7 @@ import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.PrivacyTip
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
@@ -232,6 +234,8 @@ fun SearchScreen(
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
     onNavigateToLogin: (() -> Unit)? = null,
+    // AI 锐评弹窗「去设置」回调：未提供时按钮无跳转（仅收起弹窗）
+    onOpenSettings: () -> Unit = {},
     onRecommendationClick: ((AiRecommendation) -> Unit)? = null,
     searchSourceType: SearchSourceType = SearchSourceType.DISK,
     onSearchSourceTypeChange: ((SearchSourceType) -> Unit)? = null,
@@ -601,10 +605,9 @@ fun SearchScreen(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
                 dragHandle = null
             ) {
+                // 高度自适应：去掉固定 0.28f，让三层内容自然撑开，猫 Lottie 仍绝对定位在左上角当装饰
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(0.28f)
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.easter_cat))
                     LottieAnimation(
@@ -617,20 +620,58 @@ fun SearchScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            // Sheet 内容延展到导航栏背后，自身垫出导航栏高度避免按钮被遮挡
+                            .navigationBarsPadding()
                             .padding(top = 20.dp, start = 27.dp, end = 27.dp, bottom = 20.dp)
                     ) {
+                        // 层 1：可爱标题（顶部预留猫头探出空间，保持居中）
                         Text(
                             text = stringResource(R.string.permission_cloud_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth().padding(top = 36.dp, bottom = 36.dp)
+                            modifier = Modifier.fillMaxWidth().padding(top = 36.dp, bottom = 20.dp)
                         )
+                        // 层 2：权限申请主说明
                         Text(
                             text = stringResource(R.string.permission_cloud_message),
                             style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(bottom = 42.dp)
+                            lineHeight = 22.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(bottom = 16.dp)
                         )
+                        // 层 3：隐私边界小字块（半透明圆角容器，弱化但可读）
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
+                                .padding(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.PrivacyTip,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.permission_privacy_title),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = stringResource(R.string.permission_cloud_privacy),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    lineHeight = 18.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(24.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.End
@@ -859,6 +900,7 @@ fun SearchScreen(
                 spriteViewModel.closeFeature()
             },
             onNavigateToLogin = { onNavigateToLogin?.invoke() },
+            onOpenSettings = onOpenSettings,
             onMovieClick = onMovieClick,
             onShowClick = onShowClick,
             onRecommendationClick = onRecommendationClick,

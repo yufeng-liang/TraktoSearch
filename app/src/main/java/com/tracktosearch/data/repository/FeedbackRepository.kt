@@ -43,8 +43,7 @@ class FeedbackRepository(
         traktUsername: String?,
         doubanUsername: String?,
         appVersion: String,
-        osVersion: String,
-        deviceModel: String
+        osVersion: String
     ): Result<SubmitFeedbackResponse> {
         return try {
             val request = SubmitFeedbackRequest(
@@ -56,8 +55,7 @@ class FeedbackRepository(
                 traktUsername = traktUsername,
                 doubanUsername = doubanUsername,
                 appVersion = appVersion,
-                osVersion = osVersion,
-                deviceModel = deviceModel
+                osVersion = osVersion
             )
             val response = api.submit(request)
             val data = response.body()?.data
