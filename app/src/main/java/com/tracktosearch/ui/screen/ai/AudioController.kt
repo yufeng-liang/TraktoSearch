@@ -9,6 +9,8 @@ import android.media.AudioTrack
 import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Base64
@@ -117,6 +119,7 @@ class AiAudioPlayer(private val context: Context) {
     private var player: MediaPlayer? = null
     private var temporaryFile: File? = null
     private var textToSpeech: TextToSpeech? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     // 每次 play 递增的代号。MediaPlayer 回调在独立线程派发，旧播放的延迟
     // onCompletion/onError/onPrepared 可能在新播放建立后才到达；代号不匹配则忽略，
@@ -133,46 +136,75 @@ class AiAudioPlayer(private val context: Context) {
         val epoch = ++playEpoch
         val mediaPlayer = MediaPlayer()
         player = mediaPlayer
+        val source = audio.audioDataUrl
         try {
-            val source = audio.audioDataUrl
             if (!source.isNullOrBlank() && source.startsWith("data:")) {
                 val comma = source.indexOf(',')
                 require(comma > 0) { "Invalid audio data URL" }
-                val bytes = Base64.decode(source.substring(comma + 1), Base64.DEFAULT)
-                val file = File.createTempFile("ai_voice_", ".audio", context.cacheDir)
-                FileOutputStream(file).use { it.write(bytes) }
-                temporaryFile = file
-                mediaPlayer.setDataSource(file.absolutePath)
+                // Base64 解码 + 临时文件写盘是耗时操作（长音频可达秒级），放后台线程执行，
+                // 完成后 post 回主线程继续 MediaPlayer 流程，避免主线程卡顿/ANR。
+                Thread {
+                    try {
+                        val bytes = Base64.decode(source.substring(comma + 1), Base64.DEFAULT)
+                        val file = File.createTempFile("ai_voice_", ".audio", context.cacheDir)
+                        FileOutputStream(file).use { it.write(bytes) }
+                        mainHandler.post {
+                            // 播放期间被 stop()/新 play() 取代：epoch 已变，丢弃本次结果
+                            if (playEpoch != epoch) {
+                                file.delete()
+                                return@post
+                            }
+                            temporaryFile = file
+                            prepareAndStart(mediaPlayer, epoch, onStarted, onFinished)
+                        }
+                    } catch (_: Exception) {
+                        mainHandler.post {
+                            if (playEpoch == epoch) {
+                                cleanup()
+                                onFinished()
+                            }
+                        }
+                    }
+                }.start()
             } else if (!audio.audioUrl.isNullOrBlank()) {
                 mediaPlayer.setDataSource(context, Uri.parse(audio.audioUrl))
+                prepareAndStart(mediaPlayer, epoch, onStarted, onFinished)
             } else {
                 stop()
-                return
             }
-            mediaPlayer.setOnCompletionListener {
-                if (playEpoch != epoch) return@setOnCompletionListener
-                cleanup()
-                onFinished()
-            }
-            mediaPlayer.setOnErrorListener { _, _, _ ->
-                if (playEpoch != epoch) return@setOnErrorListener true
-                cleanup()
-                onFinished()
-                true
-            }
-            mediaPlayer.setOnPreparedListener { mp ->
-                if (playEpoch == epoch) {
-                    mp.start()
-                    onStarted()
-                }
-            }
-            mediaPlayer.prepareAsync()
         } catch (_: Exception) {
             if (playEpoch == epoch) {
                 cleanup()
                 onFinished()
             }
         }
+    }
+
+    /** 注册 MediaPlayer 回调并开始异步准备（dataSource 已由调用方设置好）。 */
+    private fun prepareAndStart(
+        mediaPlayer: MediaPlayer,
+        epoch: Long,
+        onStarted: () -> Unit,
+        onFinished: () -> Unit
+    ) {
+        mediaPlayer.setOnCompletionListener {
+            if (playEpoch != epoch) return@setOnCompletionListener
+            cleanup()
+            onFinished()
+        }
+        mediaPlayer.setOnErrorListener { _, _, _ ->
+            if (playEpoch != epoch) return@setOnErrorListener true
+            cleanup()
+            onFinished()
+            true
+        }
+        mediaPlayer.setOnPreparedListener { mp ->
+            if (playEpoch == epoch) {
+                mp.start()
+                onStarted()
+            }
+        }
+        mediaPlayer.prepareAsync()
     }
 
     /** 访客试听没有网关身份时使用系统中文语音，只用于浏览阶段的即时反馈。 */

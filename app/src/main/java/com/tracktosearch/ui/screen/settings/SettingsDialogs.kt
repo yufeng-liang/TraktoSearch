@@ -1,7 +1,6 @@
 package com.tracktosearch.ui.screen.settings
 
 import android.os.Build
-import com.tracktosearch.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -217,7 +216,9 @@ internal fun AccentColorDialog(
     data class MeshOption(
         val preset: MeshPreset?,
         val title: String,
-        val description: String
+        val description: String,
+        // 主题色驱动动效：标题旁显「跟随主题色」胶囊标签
+        val isThemeDriven: Boolean = false
     )
     val meshOptions = listOf(
         MeshOption(
@@ -243,17 +244,20 @@ internal fun AccentColorDialog(
         MeshOption(
             preset = MeshPreset.AURORA,
             title = stringResource(R.string.bg_glow_aurora),
-            description = stringResource(R.string.bg_glow_aurora_desc)
+            description = stringResource(R.string.bg_glow_aurora_desc),
+            isThemeDriven = true
         ),
         MeshOption(
             preset = MeshPreset.LAVA_LAMP,
             title = stringResource(R.string.bg_glow_lava),
-            description = stringResource(R.string.bg_glow_lava_desc)
+            description = stringResource(R.string.bg_glow_lava_desc),
+            isThemeDriven = true
         ),
         MeshOption(
             preset = MeshPreset.BLOOM,
             title = stringResource(R.string.bg_glow_bloom),
-            description = stringResource(R.string.bg_glow_bloom_desc)
+            description = stringResource(R.string.bg_glow_bloom_desc),
+            isThemeDriven = true
         )
     )
     val currentMeshLabel = meshOptions.firstOrNull {
@@ -344,49 +348,48 @@ internal fun AccentColorDialog(
                         }
                     }
                 }
-                // 背景光晕区：尚未完全调好，仅 debug 构建显示
-                if (BuildConfig.DEBUG) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                view.performHaptic(HapticType.TICK)
-                                meshMenuExpanded = true
+                // 背景光晕区：关闭 / Paper Shaders 固定配色 / 主题色驱动动效
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        view.performHaptic(HapticType.TICK)
+                        meshMenuExpanded = true
+                    }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.bg_glow_title),
+                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 14.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
+                    DropdownAnchorMenu(
+                        expanded = meshMenuExpanded,
+                        onDismissRequest = { meshMenuExpanded = false },
+                        menuWidth = menuWidth,
+                        anchor = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = currentMeshLabel,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Icon(
+                                    imageVector = Icons.Rounded.ArrowDropDown,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        }
                     ) {
-                        Text(
-                            text = stringResource(R.string.bg_glow_title),
-                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 14.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f)
-                        )
-                        DropdownAnchorMenu(
-                            expanded = meshMenuExpanded,
-                            onDismissRequest = { meshMenuExpanded = false },
-                            menuWidth = menuWidth,
-                            anchor = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = currentMeshLabel,
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Icon(
-                                        imageVector = Icons.Rounded.ArrowDropDown,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        ) {
-                            meshOptions.forEach { option ->
-                                val selected = option.preset == (if (currentMeshEnabled) currentMeshPreset else null)
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
+                        meshOptions.forEach { option ->
+                            val selected = option.preset == (if (currentMeshEnabled) currentMeshPreset else null)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
                                         .clickable {
                                             view.performHaptic(HapticType.TICK)
                                             onMeshSelected(option.preset)
@@ -396,10 +399,27 @@ internal fun AccentColorDialog(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = option.title,
-                                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
-                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = option.title,
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
+                                            )
+                                            // 主题色驱动动效：标题后胶囊标签，填充主题色、白字
+                                            if (option.isThemeDriven) {
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Surface(
+                                                    shape = RoundedCornerShape(50),
+                                                    color = MaterialTheme.colorScheme.primary
+                                                ) {
+                                                    Text(
+                                                        text = stringResource(R.string.bg_glow_theme_driven),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = Color.White,
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
                                         Text(
                                             text = option.description,
                                             style = MaterialTheme.typography.bodySmall,
@@ -407,20 +427,19 @@ internal fun AccentColorDialog(
                                             maxLines = 2
                                         )
                                     }
-                                    if (selected) {
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Icon(
-                                            imageVector = Icons.Rounded.Check,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
+                                if (selected) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Icon(
+                                        imageVector = Icons.Rounded.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
                                 }
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
                 }
+                Spacer(modifier = Modifier.height(8.dp))
                 // 色调区：壁纸取色 + 莫奈/印象派色块网格 + 自由调色（自由调色紧跟船上午餐蓝）
                 val customMarker = Any()
                 val swatches: List<Any?> = buildList {

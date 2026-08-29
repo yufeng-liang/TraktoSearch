@@ -33,9 +33,12 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.random.Random
 
-/** 豆瓣 Cookie 过期异常（401/403 或响应为登录页）。
+/** 豆瓣 Cookie 过期异常（401 或响应为登录页）。
  *  message 默认英文（ViewModel error 用英文规范），UI 层基于异常类型映射本地化文案。 */
 class DoubanCookieExpiredException(message: String = "Douban cookie expired") : Exception(message)
+
+/** 豆瓣风控限流异常（403）。豆瓣对有效 Cookie 限流也常返 403，不能误判为 Cookie 过期。 */
+class DoubanRateLimitedException(message: String = "Douban rate limited") : Exception(message)
 
 /** 豆瓣请求在重试后仍失败，供上层区别于 Cookie 失效。 */
 class DoubanNetworkException(
@@ -408,7 +411,14 @@ class DoubanRepository(
 
         // 两次都失败，返回最后一次解析结果（可能 imdbId 为 null）
         onProgress("failed", title)
-        return Pair(lastHtml?.let { DoubanSpider.parseDetail(it) }, false)
+        val lastParsed = lastHtml?.let { DoubanSpider.parseDetail(it) }
+        // 反爬拦截页/404 页解析出的对象 title 为空：若原样返回非 null，调用方会把它当作
+        // "成功但无 imdbId"写入同步表并停止重试，违反「null=失败」契约。title 为空视为失败。
+        return if (lastParsed?.title.isNullOrBlank()) {
+            Pair(null, false)
+        } else {
+            Pair(lastParsed, false)
+        }
     }
 
     /**
@@ -1360,7 +1370,8 @@ class DoubanRepository(
      * @param type "movie" 或 "tv"
      * @param cookie 用户登录后的豆瓣 cookie
      * @return 个性化单剧列表（已过滤片单/豆列，仅保留 type="subject"）
-     * @throws DoubanCookieExpiredException 当响应为登录页（cookie 过期）
+     * @throws DoubanCookieExpiredException 当响应为 401 或登录页（cookie 过期）
+     * @throws DoubanRateLimitedException 当响应为 403（风控限流，Cookie 仍有效）
      */
     suspend fun fetchRecommend(type: String, cookie: String): List<DoubanRecommendItem> = withContext(Dispatchers.IO) {
         val url = "https://m.douban.com/rexxar/api/v2/$type/recommend"
@@ -1374,11 +1385,14 @@ class DoubanRepository(
             .build()
         client.newCall(request).execute().use { response ->
             val body = response.body?.string() ?: throw IOException("豆瓣推荐响应为空")
-            // cookie 过期:rexxar 端点可能返回 401 或重定向到登录页
-            if (response.code == 401 || response.code == 403) {
+            // 401 = 凭证明确失效;403 常是豆瓣对有效 Cookie 的风控限流,不能误判为 Cookie 过期
+            if (response.code == 401) {
                 throw DoubanCookieExpiredException()
             }
-            // 防御性检查:响应是 HTML 登录页而非 JSON
+            if (response.code == 403) {
+                throw DoubanRateLimitedException()
+            }
+            // 防御性检查:响应是 HTML 登录页而非 JSON(lzform 登录表单 / 登录态标记)
             if (body.contains("<form id=\"lzform\"") || body.contains("\"login\":true")) {
                 throw DoubanCookieExpiredException()
             }

@@ -2,6 +2,7 @@ package com.tracktosearch.ui.util
 
 import android.content.Context
 import com.tracktosearch.R
+import com.tracktosearch.data.remote.douban.DoubanRateLimitedException
 import com.tracktosearch.data.remote.feedback.FeedbackApiException
 import retrofit2.HttpException
 import java.io.IOException
@@ -11,7 +12,7 @@ import java.net.UnknownHostException
 
 /**
  * 将底层异常 / 错误码统一映射为用户友好的本地化文案。
- * 映射顺序：反馈业务错误码 > 网络异常类型 > HTTP 状态码 > 已知消息关键词 > 兜底文案。
+ * 映射顺序：反馈业务错误码 > 豆瓣风控限流 > 网络异常类型 > HTTP 状态码 > 已知消息关键词 > 兜底文案。
  * 避免把英文异常原文（timeout / resolve / HTTP xxx 等）直接展示给用户。
  */
 fun Throwable.toUserMessage(context: Context, fallbackRes: Int = R.string.error_operation_failed): String {
@@ -24,6 +25,10 @@ fun Throwable.toUserMessage(context: Context, fallbackRes: Int = R.string.error_
                 context.getString(R.string.error_server_error)
             else -> context.getString(fallbackRes)
         }
+    }
+    // 1.5 豆瓣风控限流（403，有效 Cookie 也可能被限流）
+    if (this is DoubanRateLimitedException) {
+        return context.getString(R.string.error_rate_limited)
     }
     // 2. 网络异常类型
     when (this) {

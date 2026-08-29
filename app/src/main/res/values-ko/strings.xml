@@ -58,6 +58,10 @@
     <string name="update_download_browser">브라우저 다운로드</string>
     <string name="update_release_page">릴리스 페이지로</string>
     <string name="update_download_unavailable">직접 다운로드를 일시적으로 사용할 수 없습니다. 릴리스 페이지에서 APK를 받을 수 있습니다.</string>
+    <string name="update_dialog_badge">새 버전 사용 가능</string>
+    <string name="update_cancel_download">다운로드 취소</string>
+    <string name="update_install">지금 설치</string>
+    <string name="update_download_complete">다운로드 완료, 탭하여 설치</string>
     <string name="update_close">닫기</string>
     <string name="install_failed">설치 실패 (code=%1$d)</string>
     
@@ -360,7 +364,9 @@
     <string name="watchlist_batch_remove_partial_failed">일부 항목 제거 실패</string>
     <string name="common_cancel">취소</string>
     <string name="permission_cloud_title">구름이 변신하는 걸 보고 싶으신가요?</string>
-    <string name="permission_cloud_message">위치 권한을 허용하면 도시의 실시간 날씨와 명절 테마에 따라 변화합니다!</string>
+    <string name="permission_cloud_message">구름은 거주 도시의 실시간 날씨와 시즌 테마에 따라 변합니다. 필요한 것은 대략적인 위치(도시 수준)뿐, 정밀한 위치는 사용하지 않습니다.</string>
+    <string name="permission_privacy_title">개인정보 경계</string>
+    <string name="permission_cloud_privacy">날씨를 확인할 때 대략적인 위치는 날씨 정보를 가져오기 위해서만 날씨 서비스로 전송됩니다. 계정 연동, 저장, 다른 용도로의 사용은 일절 없습니다. 거부해도 기능에는 영향이 없으며 구름은 정적으로 유지됩니다.</string>
     <string name="permission_cancel">취소</string>
     <string name="permission_authorize">허용하기</string>
 
@@ -425,11 +431,11 @@
     <string name="crash_dialog_cancel">나중에</string>
     <!-- 크래시 로그 인가 -->
     <string name="crash_auth_dialog_title">크래시 로그 인가</string>
-    <string name="crash_auth_dialog_message">앱이 최근 크래시되었습니다. 문제 수정을 위해 게이트웨이를 통해 크래시 로그(스택 트레이스, 앱 버전, 기기 모델, 최근 작업 포함)를 개발자에게 전송해도 됩니까? 설정에서 언제든 변경할 수 있습니다.</string>
+    <string name="crash_auth_dialog_message">앱이 최근 크래시되었습니다. 문제 수정을 위해 게이트웨이를 통해 크래시 로그(스택 트레이스, 앱 버전, OS 버전, 최근 작업 포함)를 개발자에게 전송해도 됩니까? 설정에서 언제든 변경할 수 있습니다.</string>
     <string name="crash_auth_dialog_agree">동의하고 전송</string>
     <string name="crash_auth_dialog_decline">거부</string>
     <string name="settings_crash_log_title">크래시 로그 자동 업로드</string>
-    <string name="settings_crash_log_subtitle">다음 실행 시 크래시 스택, 기기 모델, OS 버전, 앱 버전을 이 앱의 피드백 서비스로 업로드합니다. 크래시 원인 파악에만 사용합니다</string>
+    <string name="settings_crash_log_subtitle">다음 실행 시 크래시 스택, OS 버전, 앱 버전을 이 앱의 피드백 서비스로 업로드합니다. 크래시 원인 파악에만 사용합니다</string>
 
     <!-- 크래시 로그 업로드 및 기록 -->
     <string name="crash_upload_success">크래시 로그 업로드 성공</string>
@@ -447,7 +453,6 @@
     <string name="crash_detail_fail_reason">실패 원인</string>
     <string name="crash_detail_crash_time">크래시 시간</string>
     <string name="crash_detail_app_version">앱 버전</string>
-    <string name="crash_detail_device">기기 모델</string>
     <string name="crash_detail_log_content">로그 내용</string>
     <string name="crash_detail_upload_now">지금 업로드</string>
     <string name="crash_detail_not_found">기록을 찾을 수 없습니다</string>
@@ -571,6 +576,10 @@
     <string name="detail_video_trailer">예고편</string>
     <string name="detail_video_teaser">티저 예고편</string>
     <string name="detail_video_clip">클립</string>
+    <string name="detail_video_featurette">메이킹 필름</string>
+    <string name="detail_video_behind_the_scenes">비하인드</string>
+    <string name="detail_video_blooper">NG 컷</string>
+    <string name="detail_video_other">동영상</string>
     <string name="detail_video_open_browser">브라우저에서 열기</string>
     <string name="detail_video_play">재생</string>
     <string name="trailer_youtube_restricted">YouTube가 현재 지역에서 접근 제한됨\nVPN을 사용해 주세요</string>
@@ -1632,6 +1641,11 @@
     <string name="douban_sync_notification_latest">최근 가져옴: %1$s</string>
     <string name="douban_sync_notification_public">더우반 동기화: %1$s</string>
     <string name="douban_sync_notification_channel_description">더우반 동기화 진행률 표시</string>
+    <string name="douban_login_waiting_auth">인증 완료를 기다리는 중…</string>
+    <string name="auth_invite_bound_this_device">이 초대 코드는 이미 기기에 연결되어 있습니다. 앱을 다시 시작해 복구하거나 새 코드를 사용하세요</string>
+    <string name="douban_detail_entry_not_found">이 항목은 아직 이 기기에 동기화되지 않았습니다</string>
+    <string name="douban_batch_remove_remote_failed">%1$d개 항목을 豆瓣에서 삭제하지 못했습니다. 다음 동기화 시 재시도됩니다</string>
+    <string name="detail_credits_douban_unavailable">豆瓣 전용 항목에는 출연진 정보가 없습니다</string>
     <string name="error_rate_limited">요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요</string>
     <string name="error_network_unavailable">네트워크 오류입니다. 연결을 확인하고 다시 시도해 주세요</string>
     <string name="error_server_error">서버가 혼잡합니다. 잠시 후 다시 시도해 주세요</string>
@@ -1665,6 +1679,14 @@
     <string name="ai_audio_playing">음성 재생 중</string>
     <string name="ai_feature_greeting">닉네임 인사</string>
     <string name="ai_feature_taste">내 시청 목록 평론</string>
+    <string name="settings_ai_group_title">AI &amp; 개인정보</string>
+    <string name="settings_ai_taste_subtitle">사용하면 이 기능 이용 시 최근 60개의 시청 기록(제목, 연도, 평점, 시청일)을 이 앱의 AI 서비스로 전송하며, 날평 생성에만 사용합니다</string>
+    <string name="ai_taste_consent_title">시청 목록이 업로드됩니다</string>
+    <string name="ai_taste_consent_message">날평 생성을 위해서는 최근 60개의 시청 기록(제목, 연도, 평점, 시청일)을 이 앱의 AI 서비스로 보내야 합니다. \'설정 → AI &amp; 개인정보\'에서 언제든 끌 수 있으며, 꺼진 동안에는 전송되지 않습니다.</string>
+    <string name="ai_taste_consent_agree">동의하고 계속</string>
+    <string name="ai_taste_consent_decline">나중에</string>
+    <string name="ai_taste_disabled_message">%1$s(이)가 설정에서 꺼져 있습니다. 켜면 사용할 수 있습니다.</string>
+    <string name="ai_taste_go_settings">설정 열기</string>
     <string name="ai_feature_quiz">정말 이 영화를 이해했나요?</string>
     <string name="ai_feature_daily">매일 영화 상식</string>
     <string name="ai_feature_start">열기</string>
@@ -1776,6 +1798,7 @@
     <string name="bg_glow_aurora">오로라</string>
     <string name="bg_glow_lava">라바 램프</string>
     <string name="bg_glow_bloom">블룸</string>
+    <string name="bg_glow_theme_driven">테마 색상</string>
     <string name="bg_glow_off_desc">배경 글로우를 표시하지 않음</string>
     <string name="bg_glow_aurora_desc">부드럽게 흐르는 오로라 무늬가 페이지 사이에서 연속으로 움직임</string>
     <string name="bg_glow_lava_desc">라바 램프처럼 색이 천천히 대류하며 잔잔하게 변함</string>
@@ -1918,4 +1941,51 @@
     <string name="opensource_use_jsoup">더우반 페이지 HTML 파싱(작품 정보와 평점 추출)</string>
     <string name="opensource_use_jieba">중국어 형태소 분석(워드 클라우드, 키워드 통계)</string>
     <string name="opensource_use_pinyin">한자→병음 변환(워치리스트 병음 검색)</string>
+
+    <!-- Privacy Center Screen -->
+    <string name="privacy_title">데이터 &amp; 개인정보</string>
+    <string name="privacy_entry_subtitle">데이터 설정 · 개인정보 · 이용과 권리</string>
+    <string name="privacy_section_switches">데이터 설정</string>
+    <string name="privacy_location_title">위치 권한(구름 테마)</string>
+    <string name="privacy_location_granted">허용됨. 구름이 거주 도시의 날씨와 시즌에 따라 변합니다. 시스템 설정에서 철회할 수 있습니다</string>
+    <string name="privacy_location_denied">미허용. 구름은 정적으로 유지되며 다른 기능에는 영향이 없습니다</string>
+    <string name="privacy_location_grant">다시 허용</string>
+    <string name="privacy_location_manage">시스템 설정</string>
+    <string name="privacy_section_statement">개인정보</string>
+    <string name="privacy_statement_intro">TraktoSearch는 광고·분석 SDK를 일절 통합하지 않습니다. 시청 기록, 진행도, 리스트는 먼저 휴대폰에 저장되며, 로그인·동기화·정보 조회·리소스 검색 또는 피드백을 직접 켠 경우에만 필요한 요청을 전송합니다.</string>
+    <string name="privacy_local_title">기기에 남는 데이터</string>
+    <string name="privacy_local_b1">로그인 자격 증명과 토큰(암호화 저장)</string>
+    <string name="privacy_local_b2">검색·열람 기록, 시청 기록</string>
+    <string name="privacy_local_b3">리스트, 평점, 시청 진행도</string>
+    <string name="privacy_network_title">네트워크로 전송되는 데이터(전송 대상)</string>
+    <string name="privacy_network_b1">로그인·동기화: Trakt/Douban 관련 요청</string>
+    <string name="privacy_network_b2">정보 조회: TMDB/Douban/OMDb 요청</string>
+    <string name="privacy_network_b3">리소스 검색: 작품 키워드만 전송</string>
+    <string name="privacy_network_b4">날씨: 구름을 탭하고 허용한 경우에만 대략적인 위치(도시 수준)를 날씨 서비스로 보내 날씨를 조회합니다. 계정 연동이나 저장은 일절 없습니다</string>
+    <string name="privacy_network_b5">AI 평론: 최초 확인 후 최근 60개의 시청 기록을 이 앱의 AI 서비스로 보내 날평을 생성합니다. 위 스위치로 끌 수 있습니다</string>
+    <string name="privacy_network_b6">크래시 로그: 기본적으로 꺼져 있으며, 켜면 다음 실행 시 스택, OS 버전, 앱 버전을 업로드합니다</string>
+    <string name="privacy_network_b7">피드백: 입력한 내용과 연락처, OS 버전만 전송</string>
+    <string name="privacy_network_b8">인증: 기기 연결을 위해 Android ID를 전송</string>
+    <string name="privacy_tech_title">기술적 구현 보기</string>
+    <string name="privacy_tech_b1">기기 내: 토큰과 자격 증명은 EncryptedSharedPreferences로 암호화합니다. 리스트, 동기화 기록, 진행도는 SQLCipher 암호화 데이터베이스에 저장되며 Android Keystore가 로컬 키를 보호합니다</string>
+    <string name="privacy_tech_b2">네트워크 요청: HTTPS와 게이트웨이 JWT 인증으로 중계되며 클라이언트는 서버 키를 갖지 않습니다</string>
+    <string name="privacy_tech_b3">서버: 클라우드 데이터는 Worker가 서버 측 키로 암호화 저장하며 키는 APK에 포함되지 않습니다</string>
+    <string name="privacy_badge_b1">오픈소스, 코드 감사 가능</string>
+    <string name="privacy_badge_b2">광고·분석 SDK 없음</string>
+    <string name="privacy_section_legal">이용과 권리</string>
+    <string name="privacy_legal_intro">TraktoSearch는 독립 개발된 Android 도구이며 영화 플랫폼, 클라우드 드라이브, 콘텐츠 배포 서비스가 아닙니다. 아래는 본 프로젝트의 이용 경계와 데이터 처리 설명이며, 특정 상황에 대한 법적 조언이 아닙니다.</string>
+    <string name="privacy_legal_b1_title">독립 프로젝트, 제3자 비제휴</string>
+    <string name="privacy_legal_b1">Douban, Trakt, TMDB, OMDb, PanSou, PanHub, ZReso, 각종 클라우드 드라이브, GitHub, Chiikawa 권리자와 제휴·협력·공식 승인 관계가 없습니다. 표시되는 서비스명과 상표는 호환 대상 설명에만 사용합니다. 제3자 데이터의 완전성, 정확성, 지속적 가용성을 보증하지 않습니다.</string>
+    <string name="privacy_legal_b2_title">Douban 로그인, 수집, 쓰기</string>
+    <string name="privacy_legal_b2">사용자가 직접 시작하며, Douban 계정 권한, 접근 정책, 캡차, API 변경의 제약을 받습니다. 반드시 본인 계정만 사용하세요. 접근 제어 우회, 대량 수집, 서비스 과부하, 타인 데이터 수집에 본 앱을 사용해서는 안 됩니다.</string>
+    <string name="privacy_legal_b3_title">리소스 링크와 제3자 콘텐츠</string>
+    <string name="privacy_legal_b3">검색 소스와 클라우드 드라이브 기능은 제3자가 반환한 링크를 조회하거나 여는 것만 담당합니다. 본 앱은 영상 파일을 업로드, 호스팅, 캐시, 배포하지 않으며 링크가 가리키는 콘텐츠나 허가 상태를 보증하지 않습니다. 콘텐츠 허가와 거주 지역의 법적 요건은 본인이 확인해야 합니다.</string>
+    <string name="privacy_legal_b4_title">제3자 데이터와 귀속</string>
+    <string name="privacy_legal_b4">작품 정보는 TMDB에서 제공될 수 있습니다: This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB. 시청 기록과 동기화는 Trakt 서비스 약관의 제약을 받습니다.</string>
+    <string name="privacy_legal_b5_title">오픈소스 라이선스</string>
+    <string name="privacy_legal_b5">자체 오리지널 코드는 GNU GPLv3를 적용합니다. 작품 정보, 제3자 API 응답 콘텐츠, 의존성, 포스터, 캐릭터 소재는 코드 오픈소스화로 자동으로 GPLv3 대상이 되지 않습니다.</string>
+    <string name="privacy_rights_title">데이터 접근, 정정, 삭제</string>
+    <string name="privacy_rights_desc">접근, 정정, 삭제 요청과 저작권 알림은 공식 사이트의 권리 요청 폼으로 제출할 수 있습니다. 폼은 요청 처리에 필요한 정보만 수집하며, 기록은 종료 후 180일 이내에 삭제됩니다.</string>
+    <string name="privacy_rights_open">권리 요청 페이지 열기</string>
+    <string name="privacy_footer">© 2026 TraktoSearch · 콘텐츠 기준 2026-08</string>
 </resources>

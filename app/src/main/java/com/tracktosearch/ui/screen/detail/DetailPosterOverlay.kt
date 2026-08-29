@@ -203,7 +203,13 @@ internal fun PosterFullscreenOverlay(
                     if (isSaved == true) {
                         context.showToast(savedToAlbumToast)
                     } else {
-                        savePosterToGallery(context, scope, posterUrl, title) {
+                        // 保存用与屏幕显示一致的 original 原图，所见即所得（此前存的是 w342 小图）
+                        savePosterToGallery(
+                            context,
+                            scope,
+                            TmdbImageUrls.swapSize(posterUrl, "original"),
+                            title
+                        ) {
                             isSaved = true
                         }
                     }

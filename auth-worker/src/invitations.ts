@@ -1,7 +1,7 @@
 // 公开邀请码申请：直接原子分配名额，并通过事务邮件发信。
 
 import { AppError, errorResponse, now, successResponse } from './util/errors.ts';
-import { generateId, generateInviteCode, generateSecureToken, sha256 } from './util/crypto.ts';
+import { generateId, generateInviteCode, generateSecureToken, sha256, timingSafeEqual } from './util/crypto.ts';
 import { clientIp } from './util/client-ip.ts';
 import { consumeRateLimit } from './util/rate-limit.ts';
 
@@ -619,7 +619,8 @@ export async function enforcePublicRateLimit(env: PublicInviteEnv, request: Requ
 
 export function isInviteTestRequest(env: PublicInviteEnv, request: Request): boolean {
     const testKey = request.headers.get('X-Invite-Test-Key');
-    return Boolean(env.INVITE_TEST_BYPASS_KEY && testKey === env.INVITE_TEST_BYPASS_KEY);
+    // 常量时间比较，避免 === 短路的时序侧信道（API key 基线）
+    return Boolean(env.INVITE_TEST_BYPASS_KEY && testKey && timingSafeEqual(testKey, env.INVITE_TEST_BYPASS_KEY));
 }
 
 export async function sendEmail(

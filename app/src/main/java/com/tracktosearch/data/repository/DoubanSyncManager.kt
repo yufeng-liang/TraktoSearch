@@ -19,6 +19,7 @@ import com.tracktosearch.data.remote.douban.DoubanMarkItem
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
 import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.trakt.dto.TraktSyncResponse
+import com.tracktosearch.data.session.SessionCacheInvalidatedException
 import com.tracktosearch.data.session.SessionMode
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.PersistentTtlCache
@@ -636,6 +637,19 @@ class DoubanSyncManager @Inject constructor(
                     }
                     work()
                     if (cancelled) scheduleCancellationFinalization()
+                } catch (e: SessionCacheInvalidatedException) {
+                    // 会话缓存失效（登录态变更/登出）导致的同步中止：
+                    // 该异常继承 CancellationException，若落入下方重抛分支会以取消语义
+                    // 静默结束协程、不发布终态，UI 永久卡在"同步中"。单独捕获并引导重登。
+                    _progress.value = _progress.value.copy(
+                        isRunning = false,
+                        isComplete = true,
+                        stage = DoubanSyncStage.LOGIN_REQUIRED,
+                        subStage = DoubanSyncSubStage.NONE,
+                        loginTarget = DoubanSyncLoginTarget.TRAKT,
+                        errorMessage = e.message,
+                        phase = "会话已变更，同步中止，请重新登录"
+                    )
                 } catch (e: CancellationException) {
                     if (cancelled) scheduleCancellationFinalization() else throw e
                 } catch (e: Exception) {
@@ -2160,8 +2174,10 @@ class DoubanSyncManager @Inject constructor(
             false
         }
         if (!personalUploadSucceeded) {
+            // 云端上传失败不计入 failedCount：本地同步失败与云端失败分离，
+            // 云端失败由 cloudUploadAttempted/cloudUploadSucceeded 独立展示，
+            // 避免本地条目 100% 同步成功时终态 phase 误降格为「部分完成」并诱导无意义重试
             _progress.value = _progress.value.copy(
-                failedCount = _progress.value.failedCount + 1,
                 errorMessage = "Personal data upload failed: ${personalUploadError?.message ?: "unknown error"}"
             )
         }
@@ -2179,8 +2195,8 @@ class DoubanSyncManager @Inject constructor(
         // 上传失败项（保留原有逻辑）
         runCatching { cloudFailureSyncManager.uploadIfHasFailures() }
             .onFailure {
+                // 云端辅助上传失败只留 errorMessage，不计入 failedCount（见上方个人数据上传注释）
                 _progress.value = _progress.value.copy(
-                    failedCount = _progress.value.failedCount + 1,
                     errorMessage = "Failure record upload failed: ${it.message ?: "unknown error"}"
                 )
             }
@@ -2193,8 +2209,8 @@ class DoubanSyncManager @Inject constructor(
         // 一次性批量上传 dirty 详情到全局池
         runCatching { uploadDirtyDetails() }
             .onFailure {
+                // 云端辅助上传失败只留 errorMessage，不计入 failedCount（见上方个人数据上传注释）
                 _progress.value = _progress.value.copy(
-                    failedCount = _progress.value.failedCount + 1,
                     errorMessage = "Detail upload failed: ${it.message ?: "unknown error"}"
                 )
             }
@@ -2207,8 +2223,8 @@ class DoubanSyncManager @Inject constructor(
         // 从全局池批量填充本地未标注类型的失败项（其他用户已标注的类型）
         runCatching { fillMediaTypeFromCloudPool() }
             .onFailure {
+                // 云端池补全失败只留 errorMessage，不计入 failedCount（见上方个人数据上传注释）
                 _progress.value = _progress.value.copy(
-                    failedCount = _progress.value.failedCount + 1,
                     errorMessage = "Media type completion failed: ${it.message ?: "unknown error"}"
                 )
             }
@@ -3291,8 +3307,8 @@ class DoubanSyncManager @Inject constructor(
     /**
      * 从豆瓣详情推断细分媒体类型(与 DoubanRetryManager.inferMediaTypeFromDetail 推断逻辑一致)。
      *
-     * - genres 含"综艺"/"真人秀"/"脱口秀"/"音乐" → "variety"
-     * - genres 含"纪录片" → "documentary"
+     * - genres 含"纪录片" → "documentary"（优先于音乐：音乐纪录片判纪录片）
+     * - genres 含"综艺"/"真人秀"/"脱口秀"/"音乐" → "variety"（"音乐"降级到纪录片之后）
      * - episodeCount > 0 → "show"
      * - 否则 → "movie"
      *
@@ -3300,8 +3316,8 @@ class DoubanSyncManager @Inject constructor(
      */
     private fun inferMediaTypeFromDetail(detail: DoubanDetailInfo): String {
         return when {
-            detail.genres.any { it.contains("综艺") || it.contains("真人秀") || it.contains("脱口秀") || it.contains("音乐") } -> "variety"
             detail.genres.any { it.contains("纪录片") } -> "documentary"
+            detail.genres.any { it.contains("综艺") || it.contains("真人秀") || it.contains("脱口秀") || it.contains("音乐") } -> "variety"
             detail.episodeCount != null && detail.episodeCount > 0 -> "show"
             else -> "movie"
         }

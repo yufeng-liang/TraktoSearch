@@ -47,8 +47,8 @@
     <string name="content_desc_view_all">查看全部</string>
     <string name="content_desc_back">返回</string>
     <string name="gallery_save_failed">保存失败</string>
-    <string name="gallery_already_exists">已存在: %1$s</string>
-    <string name="gallery_saved">已保存: %1$s/%2$s</string>
+    <string name="gallery_already_exists">已存在：%1$s</string>
+    <string name="gallery_saved">已保存：%1$s/%2$s</string>
     <string name="gallery_saved_to_album">已保存到相册</string>
     <string name="magnet_copied">磁力链接已复制到剪贴板</string>
     <string name="link_copied">链接已复制</string>
@@ -58,6 +58,10 @@
     <string name="update_download_browser">浏览器下载</string>
     <string name="update_release_page">前往发布页</string>
     <string name="update_download_unavailable">直接下载暂不可用，可前往发布页获取 APK。</string>
+    <string name="update_dialog_badge">发现新版本</string>
+    <string name="update_cancel_download">取消下载</string>
+    <string name="update_install">立即安装</string>
+    <string name="update_download_complete">下载完成，点击安装</string>
     <string name="update_close">关闭</string>
     <string name="install_failed">安装失败 (code=%1$d)</string>
     <string name="notification_release_title">上映提醒：%1$s</string>
@@ -91,7 +95,9 @@
     <string name="watchlist_batch_remove_partial_failed">部分条目移除失败</string>
     <string name="common_cancel">取消</string>
     <string name="permission_cloud_title">想知道白云会变身吗？</string>
-    <string name="permission_cloud_message">授权位置后，它会随您所在城市的实时天气和节日主题变化哦~</string>
+    <string name="permission_cloud_message">白云会随你所在城市的实时天气和节日主题变化。只需大致位置（城市级），不需要精确定位。</string>
+    <string name="permission_privacy_title">隐私边界</string>
+    <string name="permission_cloud_privacy">查询天气时，大致位置仅发送给天气服务换取天气信息：不与任何账号关联、不保存、不用于其他用途。拒绝授权也不影响任何功能，白云保持静态。</string>
     <string name="permission_cancel">取消</string>
     <string name="permission_authorize">去授权</string>
 
@@ -157,7 +163,7 @@
     <string name="detail_year_suffix">%d年</string>
     <string name="detail_watched">已看</string>
     <string name="detail_not_watched">未看</string>
-    <string name="detail_comment_source">(来源:%s)</string>
+    <string name="detail_comment_source">（来源：%s）</string>
 
     <string name="detail_comment_source_douban">豆瓣</string>
 
@@ -193,7 +199,7 @@
     <string name="login_activation_choose_path">已激活 · 请选择登录 Trakt，或暂时以访客身份进入</string>
     <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
     <string name="douban_import_require_trakt_title">需要先登录 Trakt 账号</string>
-    <string name="douban_import_require_trakt_desc">从豆瓣导入标记需要先登录 Trakt 账号,标记会同步到你的 Trakt 想看/已看列表。是否现在登录 Trakt?</string>
+    <string name="douban_import_require_trakt_desc">从豆瓣导入标记需要先登录 Trakt 账号，标记会同步到你的 Trakt 想看/已看列表。是否现在登录 Trakt？</string>
     <string name="douban_import_require_trakt_login">登录 Trakt</string>
     <string name="douban_import_require_trakt_cancel">取消</string>
     <string name="login_what_is_trakt">什么是 Trakt</string>
@@ -326,7 +332,7 @@
     <string name="detail_seasons_collapse">收起</string>
     <string name="detail_season">第 %1$d 季</string>
     <string name="detail_episode">第%1$d集 %2$s</string>
-    <string name="detail_original_title">原名: %1$s</string>
+    <string name="detail_original_title">原名：%1$s</string>
     <string name="detail_runtime_hours">%1$d小时%2$d分</string>
     <string name="detail_runtime_minutes">%1$d分钟</string>
     <string name="detail_year">%1$d年</string>
@@ -366,7 +372,7 @@
     <string name="detail_info_tmdb_rating">TMDB</string>
     <string name="detail_info_rotten_tomatoes_rating">RT</string>
     <string name="detail_info_rating_missing">—</string>
-    <string name="detail_info_rating_count">(%1$d 人评价)</string>
+    <string name="detail_info_rating_count">（%1$d 人评价）</string>
     <string name="detail_info_aka">又名</string>
     <string name="detail_info_runtime">片长</string>
     <string name="detail_info_episode_count">集数</string>
@@ -396,6 +402,10 @@
     <string name="detail_video_trailer">预告片</string>
     <string name="detail_video_teaser">先导预告</string>
     <string name="detail_video_clip">片段</string>
+    <string name="detail_video_featurette">幕后特辑</string>
+    <string name="detail_video_behind_the_scenes">幕后</string>
+    <string name="detail_video_blooper">花絮</string>
+    <string name="detail_video_other">视频</string>
     <string name="detail_video_open_browser">在浏览器中打开</string>
     <string name="detail_video_play">播放</string>
     <string name="trailer_youtube_restricted">YouTube在国内访问受限\n请使用VPN</string>
@@ -404,11 +414,11 @@
     <string name="crash_dialog_cancel">暂不发送</string>
     <!-- 崩溃日志授权 -->
     <string name="crash_auth_dialog_title">崩溃日志授权</string>
-    <string name="crash_auth_dialog_message">应用近期发生了崩溃。是否允许通过网关将崩溃日志（含堆栈、应用版本、设备型号、最近操作）上报给开发者以帮助修复问题？你随时可在设置中更改。</string>
+    <string name="crash_auth_dialog_message">应用近期发生了崩溃。是否允许通过网关将崩溃日志（含堆栈、应用版本、系统版本、最近操作）上报给开发者以帮助修复问题？你随时可在设置中更改。</string>
     <string name="crash_auth_dialog_agree">同意并上报</string>
     <string name="crash_auth_dialog_decline">拒绝</string>
     <string name="settings_crash_log_title">自动上报崩溃日志</string>
-    <string name="settings_crash_log_subtitle">下次启动时上传崩溃堆栈、机型、系统版本与 App 版本，接收方是本应用的反馈服务，仅用于定位崩溃</string>
+    <string name="settings_crash_log_subtitle">下次启动时上传崩溃堆栈、系统版本与 App 版本，接收方是本应用的反馈服务，仅用于定位崩溃</string>
 
     <!-- 崩溃上报反馈与记录 -->
     <string name="crash_upload_success">崩溃日志上报成功</string>
@@ -426,7 +436,6 @@
     <string name="crash_detail_fail_reason">失败原因</string>
     <string name="crash_detail_crash_time">崩溃时间</string>
     <string name="crash_detail_app_version">应用版本</string>
-    <string name="crash_detail_device">设备型号</string>
     <string name="crash_detail_log_content">日志内容</string>
     <string name="crash_detail_upload_now">立即上传</string>
     <string name="crash_detail_not_found">记录不存在</string>
@@ -606,11 +615,11 @@
     <string name="help_dc_export_t">导出标记数据</string>
     <string name="help_dc_export_entry">设置页 → 数据管理</string>
     <string name="help_dc_export_fmt">JSON</string>
-    <string name="help_dc_export_desc">包含想看/已看标记,适合备份/迁移</string>
+    <string name="help_dc_export_desc">包含想看/已看标记，适合备份/迁移</string>
     <string name="help_dc_imdb_t">从 IMDb 导入</string>
     <string name="help_dc_imdb_entry">设置页 → 数据管理</string>
     <string name="help_dc_imdb_fmt">CSV</string>
-    <string name="help_dc_imdb_desc">从 IMDb 观影列表导入,按标题搜索并同步到 Trakt</string>
+    <string name="help_dc_imdb_desc">从 IMDb 观影列表导入，按标题搜索并同步到 Trakt</string>
     <string name="help_dc_douban_t">豆瓣标记同步</string>
     <string name="help_dc_douban_entry">登录页 / 设置页</string>
     <string name="help_dc_douban_fmt">豆瓣账号</string>
@@ -716,15 +725,15 @@
     <string name="help_douban_writeback_b1">在豆瓣条目详情页，可直接把「想看 / 已看 / 取消标记」写回豆瓣。</string>
     <string name="help_douban_writeback_b3">切换想看↔已看会更新豆瓣标记；取消标记会在确认后删除该标记。</string>
     <string name="help_consistency_check">状态一致性检查</string>
-    <string name="help_consistency_intro">豆瓣与 Trakt 的影视状态可能不一致。检查按「已看过优先于想看」原则统一两边:已看状态覆盖想看状态,并以已看方为准回写另一方,标记永不丢失。检查还会清理 Trakt 侧同时处于「想看」与「已看」的历史条目(旧数据遗留),自动移除其想看标记。下表列出所有不一致情况的处理方式。</string>
+    <string name="help_consistency_intro">豆瓣与 Trakt 的影视状态可能不一致。检查按「已看过优先于想看」原则统一两边：已看状态覆盖想看状态，并以已看方为准回写另一方，标记永不丢失。检查还会清理 Trakt 侧同时处于「想看」与「已看」的历史条目（旧数据遗留），自动移除其想看标记。下表列出所有不一致情况的处理方式。</string>
     <string name="help_consistency_col_douban">豆瓣状态</string>
     <string name="help_consistency_col_trakt">Trakt 状态</string>
     <string name="help_consistency_col_result">统一后</string>
     <string name="help_consistency_col_action">处理方式</string>
     <string name="help_status_unmarked">未标记</string>
     <string name="help_no_action">无操作</string>
-    <string name="help_consistency_act_trakt_watched_remove_wish">Trakt 标记已看(移除想看)</string>
-    <string name="help_consistency_act_douban_watched_upgrade">豆瓣标记已看(升级)</string>
+    <string name="help_consistency_act_trakt_watched_remove_wish">Trakt 标记已看（移除想看）</string>
+    <string name="help_consistency_act_douban_watched_upgrade">豆瓣标记已看（升级）</string>
     <string name="help_consistency_act_trakt_watched">Trakt 标记已看</string>
     <string name="help_consistency_act_trakt_wish">Trakt 标记想看</string>
     <string name="help_consistency_act_douban_watched">豆瓣标记已看</string>
@@ -780,11 +789,11 @@
     <string name="mark_records_settings_entry_desc">查看你的想看/已看/移除操作历史</string>
     <string name="settings_douban_resync">重新同步豆瓣</string>
     <string name="settings_douban_sync">同步豆瓣</string>
-    <string name="settings_douban_resync_desc">选择同步模式,处理豆瓣状态变化</string>
+    <string name="settings_douban_resync_desc">选择同步模式，处理豆瓣状态变化</string>
     <string name="settings_douban_resync_running">同步进行中…</string>
-    <string name="settings_douban_resync_running_desc">正在同步豆瓣数据,点击查看进度</string>
+    <string name="settings_douban_resync_running_desc">正在同步豆瓣数据，点击查看进度</string>
     <string name="settings_douban_not_logged_in_title">未登录豆瓣</string>
-    <string name="settings_douban_not_logged_in_message">同步豆瓣需要先登录豆瓣,是否前往登录?</string>
+    <string name="settings_douban_not_logged_in_message">同步豆瓣需要先登录豆瓣，是否前往登录？</string>
     <string name="settings_douban_not_logged_in_login">前往登录</string>
     <!-- 增量同步冷却期(7天) -->
     <string name="cooldown_remaining_days">冷却中·剩%1$d天</string>
@@ -795,7 +804,7 @@
     <string name="douban_first_sync_start">开始导入</string>
     <string name="douban_first_sync_later">稍后再说</string>
     <string name="cooldown_guidance_title">处于冷却期内</string>
-    <string name="cooldown_guidance_message">7 天内已同步过列表爬取,增量同步将被跳过(数据来自云端)。是否强制同步重新爬取豆瓣列表?\n\n豆瓣有反爬机制,频繁多次爬取可能导致你的 IP 地址被列入黑名单。强制同步请自行承担风险。</string>
+    <string name="cooldown_guidance_message">7 天内已同步过列表爬取，增量同步将被跳过（数据来自云端）。是否强制同步重新爬取豆瓣列表？\n\n豆瓣有反爬机制，频繁多次爬取可能导致你的 IP 地址被列入黑名单。强制同步请自行承担风险。</string>
     <string name="cooldown_force_sync">强制同步</string>
     <string name="cooldown_skip">跳过</string>
 
@@ -805,13 +814,13 @@
     <string name="douban_sync_mode_scope_trakt">导入豆瓣标记到本地；连接 Trakt 时会写入状态变化。</string>
     <string name="douban_sync_mode_scope_douban_only">豆瓣独立模式：仅保存本地标记并上传个人数据，不会修改 Trakt。</string>
     <string name="douban_sync_mode_b_title">增量同步</string>
-    <string name="douban_sync_mode_b_desc">同步豆瓣新增的想看/看过标记,并检测已同步条目的状态变化。同步完成后自动进行状态一致性检查,确保豆瓣与 Trakt 数据一致。</string>
-    <string name="douban_sync_mode_b_example">例如:某电影已同步为想看,你在豆瓣改成了看过,此模式会更新 Trakt 为已看。同步后还会自动检查并修复任何状态不一致。</string>
+    <string name="douban_sync_mode_b_desc">同步豆瓣新增的想看/看过标记，并检测已同步条目的状态变化。同步完成后自动进行状态一致性检查，确保豆瓣与 Trakt 数据一致。</string>
+    <string name="douban_sync_mode_b_example">例如：某电影已同步为想看，你在豆瓣改成了看过，此模式会更新 Trakt 为已看。同步后还会自动检查并修复任何状态不一致。</string>
     <string name="douban_sync_mode_c_title">完全重写</string>
-    <string name="douban_sync_mode_c_desc">清空所有已同步记录,从零开始重新同步所有豆瓣标记。本应用之前添加到 Trakt 的标记会被移除并重写。</string>
-    <string name="douban_sync_mode_c_example">例如:之前已同步 %1$d 条,全部会被清除并重新同步。仅当数据严重不一致时使用。</string>
+    <string name="douban_sync_mode_c_desc">清空所有已同步记录，从零开始重新同步所有豆瓣标记。本应用之前添加到 Trakt 的标记会被移除并重写。</string>
+    <string name="douban_sync_mode_c_example">例如：之前已同步 %1$d 条，全部会被清除并重新同步。仅当数据严重不一致时使用。</string>
     <string name="douban_sync_mode_confirm">确认</string>
-    <string name="douban_sync_mode_warning_c">完全重写会清空所有同步记录并重新爬取豆瓣列表。\n\n豆瓣有严格的反爬机制,频繁多次爬取可能导致你的 IP 地址被列入黑名单。继续操作请自行承担风险。\n\n确定要继续吗?</string>
+    <string name="douban_sync_mode_warning_c">完全重写会清空所有同步记录并重新爬取豆瓣列表。\n\n豆瓣有严格的反爬机制，频繁多次爬取可能导致你的 IP 地址被列入黑名单。继续操作请自行承担风险。\n\n确定要继续吗？</string>
 
     <!-- Douban retry dialog - export option -->
 
@@ -857,9 +866,9 @@
     <string name="consistency_check_sub_detail_ck">详情页拿ck</string>
     <string name="consistency_check_phase_cancelling">正在取消...</string>
     <string name="consistency_check_phase_cancelled">已取消</string>
-    <string name="consistency_check_network_failed">网络连接失败,请检查网络后重试</string>
-    <string name="consistency_check_network_timeout">网络请求超时,请重试</string>
-    <string name="consistency_check_exception">检查异常: %1$s</string>
+    <string name="consistency_check_network_failed">网络连接失败，请检查网络后重试</string>
+    <string name="consistency_check_network_timeout">网络请求超时，请重试</string>
+    <string name="consistency_check_exception">检查异常：%1$s</string>
     <string name="consistency_check_already_running">状态一致性检查正在运行</string>
     <string name="consistency_check_trakt_required_title">需要连接 Trakt</string>
     <string name="consistency_check_trakt_required_message">状态一致性检查需要比较豆瓣与 Trakt 的状态，请先连接 Trakt 账号。</string>
@@ -996,38 +1005,38 @@
     <string name="filter_rating_label">评分</string>
 
     <!-- Douban item detail -->
-    <string name="screen_douban_item_detail_not_synced">此条目 Trakt 未收录,无法同步</string>
-    <string name="screen_douban_item_detail_failure_reason">失败原因:%1$s</string>
+    <string name="screen_douban_item_detail_not_synced">此条目 Trakt 未收录，无法同步</string>
+    <string name="screen_douban_item_detail_failure_reason">失败原因：%1$s</string>
     <string name="screen_douban_item_detail_open_douban">打开豆瓣页面</string>
     <string name="screen_douban_item_detail_retry">重新尝试同步</string>
     <string name="screen_douban_item_detail_refetch">重新爬取</string>
-    <string name="screen_douban_item_detail_subtitle_hint">点击添加子标题(可用于资源搜索)</string>
+    <string name="screen_douban_item_detail_subtitle_hint">点击添加子标题（可用于资源搜索）</string>
     <string name="screen_douban_item_detail_subtitle_edit">编辑子标题</string>
     <string name="screen_douban_item_detail_search_with_subtitle">同时用子标题搜索</string>
     <string name="screen_douban_item_detail_tab_resources">资源搜索</string>
     <string name="screen_douban_item_detail_tab_info">详情信息</string>
-    <string name="screen_douban_item_detail_no_resources">未找到资源,试试子标题或更换关键词</string>
-    <string name="screen_douban_item_detail_retry_in_progress">重试进行中,请稍候…</string>
+    <string name="screen_douban_item_detail_no_resources">未找到资源，试试子标题或更换关键词</string>
+    <string name="screen_douban_item_detail_retry_in_progress">重试进行中，请稍候…</string>
     <string name="screen_douban_item_detail_meta_failed_at">失败时间</string>
     <string name="screen_douban_item_detail_meta_attempt_count">尝试次数</string>
     <string name="screen_douban_item_detail_meta_douban_id">豆瓣 ID</string>
     <string name="screen_douban_item_detail_copied">已复制</string>
 
     <!-- 豆瓣标记双向写回 -->
-    <string name="douban_writeback_title">豆瓣标记(双向写回)</string>
+    <string name="douban_writeback_title">豆瓣标记（双向写回）</string>
     <string name="douban_writeback_wish">想看</string>
     <string name="douban_writeback_wished">已想看</string>
     <string name="douban_writeback_collect">已看</string>
     <string name="douban_writeback_collected">已看过</string>
     <string name="douban_writeback_remove">取消标记</string>
-    <string name="douban_writeback_login_required">未登录豆瓣,无法写回</string>
-    <string name="douban_writeback_cookie_expired">豆瓣 Cookie 已失效,请重新登录</string>
+    <string name="douban_writeback_login_required">未登录豆瓣，无法写回</string>
+    <string name="douban_writeback_cookie_expired">豆瓣 Cookie 已失效，请重新登录</string>
     <string name="douban_writeback_ck_failed">解析豆瓣凭证(ck)失败</string>
     <string name="douban_writeback_marked_success">已写回豆瓣</string>
     <string name="douban_writeback_removed">已取消豆瓣标记</string>
-    <string name="douban_writeback_failed">写回豆瓣失败,请重试</string>
+    <string name="douban_writeback_failed">写回豆瓣失败，请重试</string>
     <string name="douban_writeback_remove_confirm_title">取消豆瓣标记</string>
-    <string name="douban_writeback_remove_confirm_text">将删除该条目在豆瓣的收藏,并从此失败列表移除,是否继续?</string>
+    <string name="douban_writeback_remove_confirm_text">将删除该条目在豆瓣的收藏，并从此失败列表移除，是否继续？</string>
     <string name="douban_writeback_remove_confirm_yes">取消并移除</string>
 
     <!-- Notification -->
@@ -1082,7 +1091,7 @@
     <string name="error_detail_close">关闭</string>
     <string name="common_no_data">暂无数据</string>
     <string name="common_loading">加载中…</string>
-    <string name="common_saved_path">已保存: %1$s/%2$s</string>
+    <string name="common_saved_path">已保存：%1$s/%2$s</string>
     <string name="common_open_failed">无法打开此链接</string>
     <string name="common_done">完成</string>
     <string name="error_load_failed">加载失败</string>
@@ -1619,6 +1628,11 @@
     <string name="douban_sync_notification_latest">刚获取：%1$s</string>
     <string name="douban_sync_notification_public">豆瓣同步：%1$s</string>
     <string name="douban_sync_notification_channel_description">显示豆瓣同步进度</string>
+    <string name="douban_login_waiting_auth">等待授权完成…</string>
+    <string name="auth_invite_bound_this_device">该邀请码已绑定设备。重启应用可尝试恢复，或更换新邀请码</string>
+    <string name="douban_detail_entry_not_found">该条目尚未同步到本机，暂无法查看</string>
+    <string name="douban_batch_remove_remote_failed">%1$d 个条目从豆瓣移除失败，将在下次同步时重试</string>
+    <string name="detail_credits_douban_unavailable">豆瓣条目暂无演职员信息</string>
     <string name="error_rate_limited">发送太频繁，请稍后再试</string>
     <string name="error_network_unavailable">网络连接失败，请检查网络后重试</string>
     <string name="error_server_error">服务器开小差了，请稍后重试</string>
@@ -1652,6 +1666,14 @@
     <string name="ai_audio_playing">正在播放语音</string>
     <string name="ai_feature_greeting">昵称欢迎</string>
     <string name="ai_feature_taste">锐评我的看单</string>
+    <string name="settings_ai_group_title">AI 与隐私</string>
+    <string name="settings_ai_taste_subtitle">开启后，使用该功能会上传最近 60 条观看记录（标题、年份、评分、观看时间）给本应用的 AI 服务，仅用于生成锐评</string>
+    <string name="ai_taste_consent_title">锐评需要上传观看记录</string>
+    <string name="ai_taste_consent_message">生成锐评需要将你最近 60 条观看记录（标题、年份、评分、观看时间）发送给本应用的 AI 服务。可随时在「设置 → AI 与隐私」中关闭，关闭后不会发送。</string>
+    <string name="ai_taste_consent_agree">同意并继续</string>
+    <string name="ai_taste_consent_decline">暂不使用</string>
+    <string name="ai_taste_disabled_message">「%1$s」已在设置中关闭，开启后才能使用。</string>
+    <string name="ai_taste_go_settings">去设置</string>
     <string name="ai_feature_quiz">你真的看懂这些影视了吗</string>
     <string name="ai_feature_daily">每日影视冷知识</string>
     <string name="ai_feature_start">打开</string>
@@ -1764,6 +1786,7 @@
     <string name="bg_glow_aurora">极光</string>
     <string name="bg_glow_lava">熔岩灯</string>
     <string name="bg_glow_bloom">弥散绽放</string>
+    <string name="bg_glow_theme_driven">跟随主题色</string>
     <string name="bg_glow_off_desc">不显示彩色弥散光晕背景</string>
     <string name="bg_glow_aurora_desc">柔和流动的极光色带，随页面滑动连续运动</string>
     <string name="bg_glow_lava_desc">颜色如熔岩灯般缓慢对流，慵懒舒缓</string>
@@ -1906,4 +1929,51 @@
     <string name="opensource_use_jsoup">解析豆瓣页面 HTML，提取条目与评分数据</string>
     <string name="opensource_use_jieba">中文分词，用于词云与评论关键词统计</string>
     <string name="opensource_use_pinyin">汉字转拼音，支持看单按拼音搜索匹配</string>
+
+    <!-- Privacy Center Screen -->
+    <string name="privacy_title">数据与隐私</string>
+    <string name="privacy_entry_subtitle">数据开关 · 隐私说明 · 使用与权利</string>
+    <string name="privacy_section_switches">数据开关</string>
+    <string name="privacy_location_title">位置授权（白云天气主题）</string>
+    <string name="privacy_location_granted">已授权。白云会随你所在城市的天气与节日变化；可在系统设置中撤销</string>
+    <string name="privacy_location_denied">未授权。白云保持静态，不影响其他功能</string>
+    <string name="privacy_location_grant">重新申请</string>
+    <string name="privacy_location_manage">系统设置</string>
+    <string name="privacy_section_statement">隐私说明</string>
+    <string name="privacy_statement_intro">TraktoSearch 不接入广告或分析 SDK。平时的观影记录、进度和历史先保存在手机上；只有当你登录、同步、查资料、搜资源，或主动开启反馈时，应用才发出完成这件事所需的请求。</string>
+    <string name="privacy_local_title">留在设备上的</string>
+    <string name="privacy_local_b1">登录凭据与令牌，保存在加密区域</string>
+    <string name="privacy_local_b2">搜索与浏览历史、观影记录</string>
+    <string name="privacy_local_b3">片单、评分与观看进度</string>
+    <string name="privacy_network_title">需要联网的（及去向）</string>
+    <string name="privacy_network_b1">登录或同步：Trakt / 豆瓣相关请求</string>
+    <string name="privacy_network_b2">查资料：TMDB / 豆瓣 / OMDb 请求</string>
+    <string name="privacy_network_b3">搜资源：只发送影视搜索关键词</string>
+    <string name="privacy_network_b4">天气：仅在你点击白云并授权后，将大致位置（城市级）发送给天气服务查询天气，不与账号关联、不保存</string>
+    <string name="privacy_network_b5">AI 锐评：首次确认后，将最近 60 条观看记录发送给本应用的 AI 服务生成锐评，可用上方开关关闭</string>
+    <string name="privacy_network_b6">崩溃日志：默认关闭，开启后下次启动上传堆栈、系统版本与 App 版本</string>
+    <string name="privacy_network_b7">意见反馈：仅提交你填写的内容与联系方式，附带系统版本</string>
+    <string name="privacy_network_b8">激活授权：上报 Android ID 用于设备绑定</string>
+    <string name="privacy_tech_title">查看技术实现</string>
+    <string name="privacy_tech_b1">手机本地：令牌与凭据用 EncryptedSharedPreferences 加密；片单、同步记录与进度存于 SQLCipher 加密数据库；Android Keystore 保护本地密钥</string>
+    <string name="privacy_tech_b2">联网请求：经 HTTPS 与网关 JWT 鉴权转发，客户端不携带服务端密钥</string>
+    <string name="privacy_tech_b3">服务端：云端数据由 Worker 用服务端密钥加密存储，密钥不随 APK 分发</string>
+    <string name="privacy_badge_b1">开源项目，代码可审计</string>
+    <string name="privacy_badge_b2">无广告与分析 SDK</string>
+    <string name="privacy_section_legal">使用与权利</string>
+    <string name="privacy_legal_intro">TraktoSearch 是独立开发的 Android 工具，不是影视平台、网盘或内容分发服务。以下是项目的使用边界与数据处理说明，不构成针对任何具体情况的法律意见。</string>
+    <string name="privacy_legal_b1_title">独立项目，不代表第三方</string>
+    <string name="privacy_legal_b1">与豆瓣、Trakt、TMDB、OMDb、PanSou、PanHub、ZReso、任何网盘服务、GitHub 及 Chiikawa 权利人没有隶属、合作或官方背书关系；出现的服务名称与商标仅用于说明兼容对象。不承诺第三方数据的完整性、准确性与持续可用性。</string>
+    <string name="privacy_legal_b2_title">豆瓣登录、抓取与写回</string>
+    <string name="privacy_legal_b2">由你主动发起，并受豆瓣账号权限、访问策略、验证码与接口变化限制。请只使用自己的账号。不得借本应用绕过访问控制、批量抓取、压垮服务或收集他人数据。</string>
+    <string name="privacy_legal_b3_title">资源链接与第三方内容</string>
+    <string name="privacy_legal_b3">搜索源与网盘能力只负责查询或打开第三方返回的链接；本应用不上传、托管、缓存或分发影视文件，也不对链接指向的内容与授权状态作保证。请自行核实内容授权与所在地区的法律要求。</string>
+    <string name="privacy_legal_b4_title">第三方数据与归属</string>
+    <string name="privacy_legal_b4">影视资料可能来自 TMDB：This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB。观影记录与同步能力受 Trakt 服务条款约束。</string>
+    <string name="privacy_legal_b5_title">开源许可</string>
+    <string name="privacy_legal_b5">自有原创代码采用 GNU GPLv3；影视资料、第三方 API 返回内容、依赖、海报与角色素材不因代码开源而自动获得授权。</string>
+    <string name="privacy_rights_title">访问、更正或删除你的数据</string>
+    <string name="privacy_rights_desc">通过官网权利请求表单提交访问、更正、删除请求或版权通知；表单只收集处理请求所需的信息，请求关闭后保留不超过 180 天。</string>
+    <string name="privacy_rights_open">前往权利请求页</string>
+    <string name="privacy_footer">© 2026 TraktoSearch · 内容基准 2026-08</string>
 </resources>

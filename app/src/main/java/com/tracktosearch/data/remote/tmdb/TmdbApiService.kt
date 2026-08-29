@@ -82,6 +82,13 @@ interface TmdbApiService {
         @Query("page") page: Int = 1
     ): Response<TmdbSearchResponse>
 
+    @GET("search/tv")
+    suspend fun searchTv(
+        @Query("query") query: String,
+        @Query("language") language: String = "zh-CN",
+        @Query("page") page: Int = 1
+    ): Response<TmdbSearchResponse>
+
     @GET("search/person")
     suspend fun searchPerson(
         @Query("query") query: String,

@@ -7,6 +7,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.ai.AiApiService
 import com.tracktosearch.data.auth.AuthInterceptor
+import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.remote.douban.DoubanHotApiService
 import com.tracktosearch.data.remote.douban.DoubanRexxarApiService
 import com.tracktosearch.data.remote.douban.DoubanRexxarRequestInterceptor
@@ -42,6 +43,7 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 import javax.inject.Named
 import javax.inject.Singleton
@@ -134,6 +136,7 @@ object NetworkModule {
         cache: Cache,
         authInterceptor: AuthInterceptor,
         connectivityObserver: ConnectivityObserver,
+        tokenStorage: TokenStorage,
         @Named("gateway") gatewayDispatcher: Dispatcher
     ): OkHttpClient {
         return baseClient.newBuilder()
@@ -147,7 +150,11 @@ object NetworkModule {
                     .build()
                 chain.proceed(request)
             })
-            .addInterceptor(RetryInterceptor(connectivityObserver = connectivityObserver, maxRetries = 2))
+            .addInterceptor(RetryInterceptor(
+                connectivityObserver = connectivityObserver,
+                maxRetries = 2,
+                tokenProvider = tokenStorage::getCachedAccessToken
+            ))
             .addInterceptor(loggingInterceptor)
             .build()
     }
@@ -174,6 +181,7 @@ object NetworkModule {
         cache: Cache,
         authInterceptor: AuthInterceptor,
         connectivityObserver: ConnectivityObserver,
+        tokenStorage: TokenStorage,
         @Named("gateway") gatewayDispatcher: Dispatcher
     ): OkHttpClient {
         return baseClient.newBuilder()
@@ -186,7 +194,11 @@ object NetworkModule {
                     .build()
                 chain.proceed(request)
             })
-            .addInterceptor(RetryInterceptor(connectivityObserver = connectivityObserver, maxRetries = 2))
+            .addInterceptor(RetryInterceptor(
+                connectivityObserver = connectivityObserver,
+                maxRetries = 2,
+                tokenProvider = tokenStorage::getCachedAccessToken
+            ))
             .addInterceptor(loggingInterceptor)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
@@ -775,8 +787,10 @@ class RetryInterceptor(
             try {
                 Thread.sleep(delayMs)
             } catch (_: InterruptedException) {
+                // 线程被中断：response 已在上方 close，绝不能返回它（调用方读 body 会崩），
+                // 按网络异常上抛，让调用方走既有网络失败处理。
                 Thread.currentThread().interrupt()
-                return response
+                throw IOException("Retry interrupted")
             }
             retries++
             // 重试时重建请求并刷新 Authorization：auth 注入拦截器位于 RetryInterceptor 之前，

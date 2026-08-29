@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.ai
 
+import android.content.Context
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.ai.AiDailyKnowledge
 import com.tracktosearch.data.ai.AiGreeting
@@ -24,12 +25,15 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.junit.Rule
 import org.junit.Test
+import java.io.ByteArrayInputStream
+import java.io.FileNotFoundException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AiSpriteViewModelTest {
@@ -40,6 +44,7 @@ class AiSpriteViewModelTest {
     private val authManager = mockk<AuthManager>()
     private val traktRepository = mockk<TraktRepository>(relaxed = true)
     private val overlayStorage = mockk<com.tracktosearch.data.local.AiSpriteOverlayStorage>(relaxed = true)
+    private val aiTasteStorage = mockk<com.tracktosearch.data.local.AiTasteStorage>()
 
     @Test
     fun submitQuiz_mergesResultQuotaIntoUiState() = runTest {
@@ -258,6 +263,28 @@ class AiSpriteViewModelTest {
     }
 
     @Test
+    fun selectCharacter_bundledAuditionPlaysImmediatelyWithoutTts() = runTest {
+        val context = mockk<Context>(relaxed = true)
+        every { context.assets.open(any()) } returns ByteArrayInputStream(ByteArray(16))
+        val viewModel = viewModel(context = context)
+        // 用本地目录角色（文案与预存音频一致）模拟服务端文案未变的合并结果
+        coEvery { aiRepository.listCharacters() } returns Result.success(
+            listOf(com.tracktosearch.data.ai.AiCharacterCatalog.all.first { it.id == "usagi" })
+        )
+        val audioEvent = async { viewModel.audioEvents.first() }
+
+        viewModel.ensureLoaded()
+        runCurrent()
+        viewModel.selectCharacter("usagi")
+        runCurrent()
+
+        // 预存音频命中：跳过防抖直接发 file:///android_asset 源，且不发起任何 TTS 请求
+        assertThat(audioEvent.await().audioUrl).isEqualTo("file:///android_asset/ai_auditions/usagi.mp3")
+        coVerify(exactly = 0) { aiRepository.playTts(any(), any()) }
+        coVerify(exactly = 0) { aiRepository.playGuestTts(any()) }
+    }
+
+    @Test
     fun replaySelectedCharacter_requestsAuditionImmediately() = runTest {
         val authState = MutableStateFlow(AuthState.UNAUTHORIZED)
         val viewModel = viewModel(authState)
@@ -379,13 +406,20 @@ class AiSpriteViewModelTest {
     }
 
     private fun viewModel(
-        authState: MutableStateFlow<AuthState> = MutableStateFlow(AuthState.AUTHORIZED)
+        authState: MutableStateFlow<AuthState> = MutableStateFlow(AuthState.AUTHORIZED),
+        // 默认模拟 App 未打包预存音频：assets 读取抛异常，试听走网络 TTS 链路
+        context: Context = mockk(relaxed = true) {
+            every { assets.open(any()) } throws FileNotFoundException("no bundled audition")
+        }
     ): AiSpriteViewModel {
         every { authManager.authState } returns authState
         every { authManager.nickname } returns MutableStateFlow("朋友")
         every { authManager.friendId } returns MutableStateFlow("friend-a")
         coEvery { aiRepository.listCharacters() } returns Result.success(emptyList())
-        return AiSpriteViewModel(aiRepository, authManager, traktRepository, overlayStorage)
+        // 锐评隐私守卫默认放行：已同意说明弹窗且上传开关开启
+        every { aiTasteStorage.tasteConsentDecided } returns flowOf(true)
+        every { aiTasteStorage.tasteUploadEnabled } returns flowOf(true)
+        return AiSpriteViewModel(aiRepository, authManager, traktRepository, overlayStorage, aiTasteStorage, context)
     }
 
     private fun viewModelCharacter(id: String) = com.tracktosearch.data.ai.AiCharacter(

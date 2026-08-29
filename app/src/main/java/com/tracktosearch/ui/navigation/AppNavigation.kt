@@ -97,6 +97,7 @@ import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
 import com.tracktosearch.ui.screen.help.HelpScreen
 import com.tracktosearch.ui.screen.help.HelpSections
 import com.tracktosearch.ui.screen.opensource.OpenSourceScreen
+import com.tracktosearch.ui.screen.privacy.PrivacyScreen
 import com.tracktosearch.ui.screen.listdetail.TraktListDetailScreen
 import com.tracktosearch.ui.screen.login.ActivationLoginScreen
 import com.tracktosearch.ui.screen.main.ConnectivityObserverEntryPoint
@@ -176,6 +177,7 @@ object Routes {
     const val MESSAGES = "messages"
     const val SEARCH_SOURCES = "searchSources"
     const val SEARCH_SOURCE_EDITOR = "searchSourceEditor/{mode}/{payload}"
+    const val PRIVACY = "privacy"
 
     fun helpRoute(section: String? = null): String =
         if (section == null) "help" else "help?section=$section"
@@ -503,9 +505,13 @@ fun AppNavigation(
         EntryPointAccessors.fromApplication(context, DoubanAuthStorageEntryPoint::class.java).doubanAuthStorage()
     }
     val isDoubanLoggedIn by doubanAuthStorage.isLoggedIn.collectAsStateWithLifecycle()
-    // 豆瓣独立模式：trakt 未连 + 豆瓣已登录
-    val isDoubanMode = isDoubanLoggedIn && !isTraktConnected
-    // MainScreen 的 isLoggedIn：trakt 已连 OR 豆瓣已登录（非 GUEST 模式才显示 WatchlistScreen）
+    // 豆瓣独立模式：统一由 SessionModeManager 判定（额外含网关授权态，授权撤销后立即退出该模式），
+    // 不再本地重算双源判定；initialValue 沿用旧判定式，仅作流首次收集前的首帧占位
+    val isDoubanMode by sessionModeManager.isDoubanMode.collectAsStateWithLifecycle(
+        initialValue = isDoubanLoggedIn && !isTraktConnected
+    )
+    // MainScreen 的 isLoggedIn：trakt 已连 OR 豆瓣已登录（非 GUEST 模式才显示 WatchlistScreen）。
+    // 刻意不从 sessionMode 收敛：收敛后会引入网关授权态，改变访客模式下 Watchlist 页的可见性
     val isLoggedIn = isTraktConnected || isDoubanLoggedIn
 
     // Widget 从详情等子页面触发时，先回到 MainScreen，再由 MainScreen 消费搜索请求。
@@ -546,13 +552,46 @@ fun AppNavigation(
                 )
             }
         }
-        if ((currentAuthState == AuthState.UNAUTHORIZED || currentAuthState == AuthState.EXPIRED) &&
-            navController.currentDestination?.route == Routes.MAIN
+    }
+
+    // 授权失效重定向：撤销可能发生在任意页面，原逻辑只在「状态变化瞬间恰好位于 MAIN」时跳登录页，
+    // 用户在详情/搜索页被撤销后返回 MAIN 不再触发，会被困在无会话的主界面。
+    // currentRoute 参与重跑：回到 MAIN 时重新校验，保持「在 MAIN 时立即跳」的原行为。
+    // 仅「曾处于授权态（AUTHORIZED/OFFLINE）后失效」才标记踢出：访客模式用户本就以
+    // UNAUTHORIZED 常驻主界面，不能被误踢回登录页。
+    var pendingInvalidationKick by remember { mutableStateOf(false) }
+    var previousKickAuthState by remember { mutableStateOf(currentAuthState) }
+    LaunchedEffect(currentAuthState, currentRoute) {
+        val wasAuthorized = previousKickAuthState == AuthState.AUTHORIZED ||
+            previousKickAuthState == AuthState.OFFLINE
+        previousKickAuthState = currentAuthState
+        if (wasAuthorized &&
+            (currentAuthState == AuthState.UNAUTHORIZED || currentAuthState == AuthState.EXPIRED)
         ) {
+            pendingInvalidationKick = true
+        }
+        if (currentAuthState == AuthState.AUTHORIZED || currentAuthState == AuthState.OFFLINE) {
+            pendingInvalidationKick = false
+        }
+        if (pendingInvalidationKick && currentRoute == Routes.MAIN) {
+            pendingInvalidationKick = false
             currentStartDest = Routes.LOGIN
             navController.navigate(Routes.LOGIN) {
                 popUpTo(Routes.MAIN) { inclusive = true }
             }
+        }
+    }
+
+    // 授权恢复导航：EXPIRED/UNAUTHORIZED 期间静默恢复或重新激活转回 AUTHORIZED 时，
+    // 若用户仍在登录页则自动回主界面（已激活即可进入，首次启动与被踢来的用户一致处理）。
+    // 记录上一状态：豆瓣用户本就以 AUTHORIZED 进入登录页连 Trakt，不能被误判成恢复事件弹回主界面。
+    var previousRecoveryAuthState by remember { mutableStateOf(currentAuthState) }
+    LaunchedEffect(currentAuthState, currentRoute) {
+        val recovered = previousRecoveryAuthState != AuthState.AUTHORIZED &&
+            currentAuthState == AuthState.AUTHORIZED
+        previousRecoveryAuthState = currentAuthState
+        if (recovered && currentRoute == Routes.LOGIN) {
+            navigateToMainAfterLogin()
         }
     }
 
@@ -595,9 +634,12 @@ fun AppNavigation(
             ) {
                 composable(Routes.LOGIN) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
-                        val fromGuestMode = navController.previousBackStackEntry?.destination?.route == Routes.MAIN
                         ActivationLoginScreen(
-                            redirectToBrowser = fromGuestMode,
+                            // 仅授权过期（EXPIRED）需续期时自动拉起 Trakt 授权浏览器，且限定 Trakt 未连
+                            // （Trakt 已连说明问题在网关会话，弹浏览器只会造成「登录成功→被踢回→再弹」循环）。
+                            // 其余情况（豆瓣用户/访客从主界面进入）停留在登录页让用户自选路径，
+                            // 避免自动 OAuth 抢占豆瓣入口并把豆瓣按钮禁用在 AUTHORIZING 态
+                            redirectToBrowser = currentAuthState == AuthState.EXPIRED && !isTraktConnected,
                             expired = currentAuthState == AuthState.EXPIRED,
                             onLoginSuccess = {
                                 // Trakt 登录成功：写入 SessionModeManager，由其驱动 UI 切换到 TRAKT 模式
@@ -883,6 +925,9 @@ fun AppNavigation(
                             },
                             onSearchSourcesClick = {
                                 navController.navigate(Routes.SEARCH_SOURCES)
+                            },
+                            onPrivacyClick = {
+                                navController.navigate(Routes.PRIVACY)
                             }
                         )
                     }
@@ -989,6 +1034,12 @@ fun AppNavigation(
                             },
                             onRecommendationClick = { recommendation ->
                                 navigateAiRecommendation(navController, recommendation)
+                            },
+                            // AI 锐评弹窗「去设置」：独立搜索路由不在主界面内，
+                            // 先登记目标页签再回主界面，由 MainScreen 收集后切到设置页
+                            onOpenSettings = {
+                                MainTabNavigator.requestTab(3)
+                                navController.navigate(Routes.MAIN) { launchSingleTop = true }
                             }
                         )
                     }
@@ -1128,6 +1179,12 @@ fun AppNavigation(
                                 navController.navigate(Routes.LOGIN) {
                                     popUpTo(Routes.MAIN) { inclusive = false }
                                 }
+                            },
+                            // AI 锐评弹窗「去设置」：独立统一搜索路由不在主界面内，
+                            // 先登记目标页签再回主界面，由 MainScreen 收集后切到设置页
+                            onOpenSettings = {
+                                MainTabNavigator.requestTab(3)
+                                navController.navigate(Routes.MAIN) { launchSingleTop = true }
                             }
                         )
                     }
@@ -1154,6 +1211,14 @@ fun AppNavigation(
                 composable(Routes.OPEN_SOURCE) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         OpenSourceScreen(
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
+                }
+
+                composable(Routes.PRIVACY) {
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        PrivacyScreen(
                             onBack = { navController.popBackStack() }
                         )
                     }

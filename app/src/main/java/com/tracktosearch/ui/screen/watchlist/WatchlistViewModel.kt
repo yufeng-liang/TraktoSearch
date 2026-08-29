@@ -37,6 +37,7 @@ import com.tracktosearch.data.session.SessionMode
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.TtlCache
 import com.tracktosearch.di.DispatcherModule
+import com.tracktosearch.ui.util.showToast
 import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -312,6 +313,9 @@ class WatchlistViewModel @Inject constructor(
 
     /** 启动豆瓣同步 */
     fun startDoubanSync(mode: SyncMode) {
+        // 运行中守卫：模式选择对话框首帧重组前双击会双触发本入口，
+        // 运行中直接忽略（DoubanSyncManager.startSync 自身也有防重入，这里提前拦截避免无效请求）
+        if (doubanSyncManager.isRunning()) return
         viewModelScope.launch {
             doubanSyncManager.startSync(mode)
         }
@@ -495,15 +499,38 @@ class WatchlistViewModel @Inject constructor(
         }
         // 监听豆瓣标记批量移除进度：isRunning 时显示横幅，完成后 5 秒消失
         viewModelScope.launch {
+            // 运行轮次观察标记：仅对本收集器见过的运行轮次提示远端失败，
+            // 避免 ViewModel 重建后 StateFlow 重放旧完成值导致重复 Toast
+            var removalRunObserved = false
             doubanBatchRemovalManager.progress.collect { progress: BatchRemovalProgress ->
                 if (progress.isRunning || progress.isComplete) {
+                    if (progress.isRunning) {
+                        removalRunObserved = true
+                    }
                     _uiState.update { it.copy(batchRemovalProgress = progress) }
                     if (progress.isComplete) {
-                        // 完成后 5 秒横幅消失
+                        // 本地已删除但豆瓣远端移除失败的条目，远端标记仍在，下次同步会重新导入（条目“复活”）；
+                        // 失败仅记日志用户无感知，这里明确提示失败条数
+                        if (removalRunObserved && progress.failCount > 0) {
+                            removalRunObserved = false
+                            context.showToast(
+                                context.getString(R.string.douban_batch_remove_remote_failed, progress.failCount)
+                            )
+                        }
+                        // 完成后 5 秒横幅消失。记录完成快照，delay 后比对仍一致才清，
+                        // 避免 5 秒窗口内新一轮移除完成后误清新一轮结果横幅（同同步横幅守卫模式）
+                        val completedProgress = progress
                         delay(5000)
-                        _uiState.update { it.copy(batchRemovalProgress = null) }
-                        // 重置 progress 避免下次进入页面时 collector 收到旧 isComplete=true 重复显示横幅
-                        doubanBatchRemovalManager.resetProgress()
+                        _uiState.update { state ->
+                            if (state.batchRemovalProgress == completedProgress) {
+                                state.copy(batchRemovalProgress = null)
+                            } else state
+                        }
+                        // 仅当横幅确被清除（仍是同一轮）才重置 progress，
+                        // 避免把新一轮的进行中/结果状态误 reset
+                        if (_uiState.value.batchRemovalProgress == null) {
+                            doubanBatchRemovalManager.resetProgress()
+                        }
                     }
                 }
             }

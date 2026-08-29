@@ -104,6 +104,7 @@ fun AiSpriteCenter(
     visible: Boolean,
     onDismiss: () -> Unit,
     onNavigateToLogin: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     onMovieClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
     onShowClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
     onRecommendationClick: ((com.tracktosearch.data.ai.AiRecommendation) -> Unit)? = null,
@@ -213,6 +214,56 @@ fun AiSpriteCenter(
                 onClearError = viewModel::clearError
             )
         }
+    }
+
+    // 锐评隐私弹窗挂在最外层：功能页与首页两个层级都要能触发
+    // 首次使用说明弹窗：同意才允许上传数据并进入功能页
+    if (state.showTasteConsent) {
+        AlertDialog(
+            onDismissRequest = viewModel::onTasteConsentDismissed,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            title = { Text(stringResource(R.string.ai_taste_consent_title)) },
+            text = { Text(stringResource(R.string.ai_taste_consent_message)) },
+            confirmButton = {
+                TextButton(onClick = viewModel::onTasteConsentAgreed) {
+                    Text(stringResource(R.string.ai_taste_consent_agree))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::onTasteConsentDismissed) {
+                    Text(stringResource(R.string.ai_taste_consent_decline))
+                }
+            }
+        )
+    }
+    // 功能被设置页开关关闭时的引导弹窗：确认后跳设置页
+    if (state.showTasteDisabled) {
+        AlertDialog(
+            onDismissRequest = viewModel::onTasteDisabledDismiss,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            text = {
+                Text(
+                    stringResource(
+                        R.string.ai_taste_disabled_message,
+                        stringResource(R.string.ai_feature_taste)
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    // 先收弹窗再跳转：弹窗标志挂在共享 ViewModel 上，离开页面前必须清掉
+                    viewModel.onTasteDisabledDismiss()
+                    onOpenSettings()
+                }) {
+                    Text(stringResource(R.string.ai_taste_go_settings))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::onTasteDisabledDismiss) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            }
+        )
     }
 }
 

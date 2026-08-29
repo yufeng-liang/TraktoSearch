@@ -227,7 +227,7 @@ class FeedbackViewModelTest {
 
     @Test
     fun `submit success updates submitState to Success`() = runTest {
-        coEvery { feedbackRepository.submit(any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns Result.success(
+        coEvery { feedbackRepository.submit(any(), any(), any(), any(), any(), any(), any(), any()) } returns Result.success(
             SubmitFeedbackResponse("fb-new", 1700000000L)
         )
         val viewModel = createViewModel()
@@ -255,7 +255,7 @@ class FeedbackViewModelTest {
 
     @Test
     fun `submit main call failure updates submitState to Error`() = runTest {
-        coEvery { feedbackRepository.submit(any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns Result.failure(Exception("SUBMIT_FAILED"))
+        coEvery { feedbackRepository.submit(any(), any(), any(), any(), any(), any(), any(), any()) } returns Result.failure(Exception("SUBMIT_FAILED"))
         val viewModel = createViewModel()
 
         viewModel.submit("BUG", "test content", emptyList(), emptyList())

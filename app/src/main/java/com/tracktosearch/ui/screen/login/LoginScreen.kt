@@ -1,6 +1,5 @@
 package com.tracktosearch.ui.screen.login
 
-import android.content.Context
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.layout.Arrangement
@@ -27,11 +26,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,7 +42,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.OAuthCallback
@@ -48,13 +53,13 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.trakt.TraktAuthManager
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.ui.util.toUserMessage
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -66,18 +71,67 @@ enum class LoginState {
     ERROR           // 登录失败
 }
 
+/** 授权取消守卫的宽限时长：覆盖「deep link 先于 ON_RESUME 到达、回调收集器推进状态」的正常时序 */
+private const val TRAKT_AUTH_CANCEL_GRACE_MS = 1_500L
+
+/**
+ * Trakt 浏览器授权取消守卫。
+ *
+ * 用户在 CustomTabs 授权页按返回取消时不会产生任何回调，loginState 会永久停留在
+ * AUTHORIZING 锁死全部按钮。守卫监听生命周期：打开浏览器会使宿主 Activity ON_STOP，
+ * 返回前台（ON_RESUME）后经过短暂宽限仍未收到授权回调则重置为 IDLE。
+ *
+ * 宽限期用于规避 ON_RESUME 与成功回调的竞态：deep link 在 onNewIntent（先于 ON_RESUME）
+ * 写入 OAuthCallback，回到前台后回调收集器会在宽限窗口内把状态推进到 CONNECTING，
+ * 此时守卫不再重置，正常授权流程不受影响。
+ */
+@Composable
+internal fun TraktAuthCancelGuard(
+    loginState: LoginState,
+    onCanceled: () -> Unit
+) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val currentLoginState by rememberUpdatedState(loginState)
+    val currentOnCanceled by rememberUpdatedState(onCanceled)
+    // 曾在 AUTHORIZING 期间离开前台：区分「从浏览器返回」与通知栏下拉等不离开前台的 ON_RESUME 抖动
+    var leftForegroundWhileAuthorizing by remember { mutableStateOf(false) }
+    var resumeEpoch by remember { mutableIntStateOf(0) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP ->
+                    if (currentLoginState == LoginState.AUTHORIZING) leftForegroundWhileAuthorizing = true
+                Lifecycle.Event.ON_RESUME ->
+                    if (leftForegroundWhileAuthorizing) resumeEpoch++
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(resumeEpoch) {
+        if (resumeEpoch == 0) return@LaunchedEffect
+        delay(TRAKT_AUTH_CANCEL_GRACE_MS)
+        // 宽限结束后仍是 AUTHORIZING 才算取消：期间收到回调会先推进到 CONNECTING/SUCCESS
+        if (currentLoginState == LoginState.AUTHORIZING) {
+            leftForegroundWhileAuthorizing = false
+            currentOnCanceled()
+        }
+    }
+}
+
 @HiltViewModel
 class LoginViewModel @Inject constructor(
     val authManager: TraktAuthManager,
-    private val traktRepository: TraktRepository,
-    @ApplicationContext private val context: Context
+    private val traktRepository: TraktRepository
 ) : ViewModel() {
 
     private val _loginState = MutableStateFlow(LoginState.IDLE)
     val loginState: StateFlow<LoginState> = _loginState.asStateFlow()
 
-    private val _errorMessage = MutableStateFlow<String?>(null)
-    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+    private val _errorMessage = MutableStateFlow<Throwable?>(null)
+    /** 登录失败原始异常(VM 不做本地化,UI 组合期用 toUserMessage 转文案;null 表示未产生异常) */
+    val errorMessage: StateFlow<Throwable?> = _errorMessage.asStateFlow()
 
     /**
      * 检查 Trakt 是否已登录且 token 有效。
@@ -95,7 +149,7 @@ class LoginViewModel @Inject constructor(
         val result = authManager.buildAuthorizationUrl()
         return result.getOrElse {
             _loginState.value = LoginState.ERROR
-            _errorMessage.value = it.toUserMessage(context, R.string.login_failed)
+            _errorMessage.value = it
             null
         }
     }
@@ -110,7 +164,7 @@ class LoginViewModel @Inject constructor(
                 _loginState.value = LoginState.SUCCESS
             } else {
                 _loginState.value = LoginState.ERROR
-                _errorMessage.value = result.exceptionOrNull()?.toUserMessage(context, R.string.login_failed) ?: ""
+                _errorMessage.value = result.exceptionOrNull()
             }
         }
     }
@@ -139,6 +193,12 @@ fun LoginScreen(
     val loginState by viewModel.loginState.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
+
+    // 浏览器授权取消守卫：CustomTabs 按返回取消无回调，宽限后仍在 AUTHORIZING 则重置 IDLE
+    TraktAuthCancelGuard(
+        loginState = loginState,
+        onCanceled = { viewModel.reset() }
+    )
 
     // 「从豆瓣导入」前置预检:未登录 Trakt 时弹引导对话框
     var showDoubanImportRequireLoginDialog by remember { mutableStateOf(false) }
@@ -279,6 +339,19 @@ fun LoginScreen(
                             style = MaterialTheme.typography.titleMedium
                         )
                     }
+                    if (loginState == LoginState.AUTHORIZING) {
+                        // CustomTabs 取消授权不产生回调：显示等待提示与取消逃生，避免永久锁死
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = stringResource(R.string.douban_login_waiting_auth),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        TextButton(onClick = { viewModel.reset() }) {
+                            Text(stringResource(R.string.common_cancel))
+                        }
+                    }
                 }
 
                 LoginState.CONNECTING -> {
@@ -309,10 +382,10 @@ fun LoginScreen(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        val loginFailedText = stringResource(R.string.login_failed)
+                        // VM 存原始异常,组合期转本地化文案
                         val loginDeniedText = stringResource(R.string.login_denied)
                         Text(
-                            text = errorMessage?.ifEmpty { loginFailedText } ?: loginDeniedText,
+                            text = errorMessage?.toUserMessage(context, R.string.login_failed) ?: loginDeniedText,
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.error
                         )

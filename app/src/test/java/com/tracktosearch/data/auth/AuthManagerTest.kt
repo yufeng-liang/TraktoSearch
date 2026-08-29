@@ -178,7 +178,7 @@ class AuthManagerTest {
     }
 
     @Test
-    fun initializeForStartup_timeoutWithoutSessionKeepsOfflineGrace() = runTest {
+    fun initializeForStartup_timeoutWithoutSessionStaysUnauthorized() = runTest {
         val api = mockk<AuthApiService>()
         val keyManager = mockk<DeviceKeyManager>()
         val continuityManager = mockk<DeviceContinuityManager>()
@@ -217,8 +217,9 @@ class AuthManagerTest {
 
         manager.initializeForStartup(timeoutMillis = 100)
 
-        // 本地会话缺失（异常状态）：超时仍走既有离线宽限路径
-        assertThat(manager.authState.value).isEqualTo(AuthState.OFFLINE)
+        // 本地会话缺失（从未激活）：超时不放行主界面，保持未授权走登录页；
+        // 离线宽限仅限曾激活过的设备
+        assertThat(manager.authState.value).isEqualTo(AuthState.UNAUTHORIZED)
     }
 
     @Test

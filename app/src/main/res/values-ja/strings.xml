@@ -58,6 +58,10 @@
     <string name="update_download_browser">ブラウザダウンロード</string>
     <string name="update_release_page">リリースページへ</string>
     <string name="update_download_unavailable">直接ダウンロードは一時的に利用できません。リリースページからAPKを取得できます。</string>
+    <string name="update_dialog_badge">新しいバージョンがあります</string>
+    <string name="update_cancel_download">ダウンロードをキャンセル</string>
+    <string name="update_install">今すぐインストール</string>
+    <string name="update_download_complete">ダウンロード完了、タップしてインストール</string>
     <string name="update_close">閉じる</string>
     <string name="install_failed">インストール失敗 (code=%1$d)</string>
     
@@ -360,7 +364,9 @@
     <string name="watchlist_batch_remove_partial_failed">一部の項目の削除に失敗しました</string>
     <string name="common_cancel">キャンセル</string>
     <string name="permission_cloud_title">雲が変身するのを見たいですか？</string>
-    <string name="permission_cloud_message">位置情報を許可すると、あなたの都市のリアルタイムの天気や祝日テーマに合わせて変化します！</string>
+    <string name="permission_cloud_message">雲はお住まいの都市のリアルタイム天気や季節イベントに合わせて変化します。必要なのは大まかな位置（都市レベル）だけで、精密な位置情報は不要です。</string>
+    <string name="permission_privacy_title">プライバシーの範囲</string>
+    <string name="permission_cloud_privacy">天気を確認する際、大まかな位置は天気サービスにのみ送信され、天気情報の取得だけに使われます。アカウントとの紐付け・保存・他目的への利用は一切ありません。許可しなくても機能には影響せず、雲は静止したままです。</string>
     <string name="permission_cancel">キャンセル</string>
     <string name="permission_authorize">許可する</string>
 
@@ -425,11 +431,11 @@
     <string name="crash_dialog_cancel">後で</string>
     <!-- クラッシュログ認可 -->
     <string name="crash_auth_dialog_title">クラッシュログ認可</string>
-    <string name="crash_auth_dialog_message">アプリが最近クラッシュしました。問題修正のため、ゲートウェイ経由でクラッシュログ（スタックトレース、アプリバージョン、デバイスモデル、最近の操作を含む）を開発者に送信してもよろしいですか？設定でいつでも変更できます。</string>
+    <string name="crash_auth_dialog_message">アプリが最近クラッシュしました。問題修正のため、ゲートウェイ経由でクラッシュログ（スタックトレース、アプリバージョン、OS バージョン、最近の操作を含む）を開発者に送信してもよろしいですか？設定でいつでも変更できます。</string>
     <string name="crash_auth_dialog_agree">同意して送信</string>
     <string name="crash_auth_dialog_decline">拒否</string>
     <string name="settings_crash_log_title">クラッシュログを自動アップロード</string>
-    <string name="settings_crash_log_subtitle">次回起動時にクラッシュのスタックトレース、端末モデル、OS バージョン、アプリバージョンを本アプリのフィードバックサービスへ送信します。クラッシュの原因特定にのみ使用します</string>
+    <string name="settings_crash_log_subtitle">次回起動時にクラッシュのスタックトレース、OS バージョン、アプリバージョンを本アプリのフィードバックサービスへ送信します。クラッシュの原因特定にのみ使用します</string>
 
     <!-- クラッシュログのアップロードと記録 -->
     <string name="crash_upload_success">クラッシュログのアップロードに成功しました</string>
@@ -447,7 +453,6 @@
     <string name="crash_detail_fail_reason">失敗理由</string>
     <string name="crash_detail_crash_time">クラッシュ時間</string>
     <string name="crash_detail_app_version">アプリバージョン</string>
-    <string name="crash_detail_device">デバイスモデル</string>
     <string name="crash_detail_log_content">ログ内容</string>
     <string name="crash_detail_upload_now">今すぐアップロード</string>
     <string name="crash_detail_not_found">レコードが見つかりません</string>
@@ -571,6 +576,10 @@
     <string name="detail_video_trailer">予告編</string>
     <string name="detail_video_teaser">ティザー予告</string>
     <string name="detail_video_clip">クリップ</string>
+    <string name="detail_video_featurette">メイキング特集</string>
+    <string name="detail_video_behind_the_scenes">舞台裏</string>
+    <string name="detail_video_blooper">NG集</string>
+    <string name="detail_video_other">動画</string>
     <string name="detail_video_open_browser">ブラウザで開く</string>
     <string name="detail_video_play">再生</string>
     <string name="trailer_youtube_restricted">YouTubeは現在の地域で制限されています\nVPNをご使用ください</string>
@@ -1632,6 +1641,11 @@
     <string name="douban_sync_notification_latest">取得済み：%1$s</string>
     <string name="douban_sync_notification_public">豆瓣同期：%1$s</string>
     <string name="douban_sync_notification_channel_description">豆瓣の同期進捗を表示</string>
+    <string name="douban_login_waiting_auth">認証の完了を待っています…</string>
+    <string name="auth_invite_bound_this_device">この招待コードは既にデバイスに紐付いています。アプリを再起動して復元するか、新しいコードをお使いください</string>
+    <string name="douban_detail_entry_not_found">このアイテムはまだこの端末に同期されていません</string>
+    <string name="douban_batch_remove_remote_failed">%1$d 件の項目を豆瓣から削除できませんでした。次回同期時に再試行します</string>
+    <string name="detail_credits_douban_unavailable">豆瓣限定アイテムにはキャスト情報がありません</string>
     <string name="error_rate_limited">送信が多すぎます。少し待ってから再試行してください</string>
     <string name="error_network_unavailable">ネットワークエラーです。接続を確認して再試行してください</string>
     <string name="error_server_error">サーバーが混み合っています。後でもう一度お試しください</string>
@@ -1665,6 +1679,14 @@
     <string name="ai_audio_playing">音声を再生中</string>
     <string name="ai_feature_greeting">ニックネーム歓迎</string>
     <string name="ai_feature_taste">視聴リストを批評</string>
+    <string name="settings_ai_group_title">AI とプライバシー</string>
+    <string name="settings_ai_taste_subtitle">有効にすると、この機能の利用時に直近 60 件の視聴記録（タイトル、年、評価、視聴日）を本アプリの AI サービスへ送信します。レビュー生成のみに使用します</string>
+    <string name="ai_taste_consent_title">視聴リストがアップロードされます</string>
+    <string name="ai_taste_consent_message">レビュー生成には、直近 60 件の視聴記録（タイトル、年、評価、視聴日）を本アプリの AI サービスへ送信することが必要です。「設定 → AI とプライバシー」でいつでもオフにでき、オフ中は送信されません。</string>
+    <string name="ai_taste_consent_agree">同意して続行</string>
+    <string name="ai_taste_consent_decline">今は使わない</string>
+    <string name="ai_taste_disabled_message">%1$s は設定でオフになっています。オンにすると利用できます。</string>
+    <string name="ai_taste_go_settings">設定を開く</string>
     <string name="ai_feature_quiz">本当に映画を理解した？</string>
     <string name="ai_feature_daily">毎日の映画豆知識</string>
     <string name="ai_feature_start">開く</string>
@@ -1776,6 +1798,7 @@
     <string name="bg_glow_aurora">オーロラ</string>
     <string name="bg_glow_lava">ラバランプ</string>
     <string name="bg_glow_bloom">ブルーム</string>
+    <string name="bg_glow_theme_driven">テーマ色に追従</string>
     <string name="bg_glow_off_desc">背景のグローを表示しない</string>
     <string name="bg_glow_aurora_desc">やわらかく流れるオーロラの帯が、ページ間で連続して動く</string>
     <string name="bg_glow_lava_desc">ラバランプのように色がゆっくり対流し、穏やかに変化する</string>
@@ -1918,4 +1941,51 @@
     <string name="opensource_use_jsoup">豆瓣ページ HTML の解析（作品情報と評価の抽出）</string>
     <string name="opensource_use_jieba">中国語分かち書き（ワードクラウド・キーワード集計）</string>
     <string name="opensource_use_pinyin">中国語のピンイン変換（ウォッチリストのピンイン検索）</string>
+
+    <!-- Privacy Center Screen -->
+    <string name="privacy_title">データとプライバシー</string>
+    <string name="privacy_entry_subtitle">データ設定 · プライバシー · 利用と権利</string>
+    <string name="privacy_section_switches">データ設定</string>
+    <string name="privacy_location_title">位置情報の許可（雲のテーマ）</string>
+    <string name="privacy_location_granted">許可済み。雲は現在地の天気や季節イベントで変化します。システム設定で取り消せます</string>
+    <string name="privacy_location_denied">未許可。雲は静止したままで、他の機能への影響はありません</string>
+    <string name="privacy_location_grant">再許可</string>
+    <string name="privacy_location_manage">システム設定</string>
+    <string name="privacy_section_statement">プライバシー</string>
+    <string name="privacy_statement_intro">TraktoSearch は広告・分析 SDK を組み込んでいません。視聴履歴・進捗・リストはまず端末内に保存され、ログイン・同期・情報照会・リソース検索、またはフィードバックを明示的に有効にした場合にのみ、必要なリクエストを送信します。</string>
+    <string name="privacy_local_title">端末内に留まるもの</string>
+    <string name="privacy_local_b1">ログイン資格情報とトークン（暗号化して保存）</string>
+    <string name="privacy_local_b2">検索・閲覧履歴、視聴履歴</string>
+    <string name="privacy_local_b3">リスト、評価、視聴進捗</string>
+    <string name="privacy_network_title">ネットワークに送るもの（送信先）</string>
+    <string name="privacy_network_b1">ログイン・同期：Trakt/豆瓣へのリクエスト</string>
+    <string name="privacy_network_b2">情報照会：TMDB/豆瓣/OMDb へのリクエスト</string>
+    <string name="privacy_network_b3">リソース検索：作品名キーワードのみ送信</string>
+    <string name="privacy_network_b4">天気：雲をタップして許可した場合にのみ、大まかな位置（都市レベル）を天気サービスへ送信して天気を取得します。アカウントと紐付けず、保存もしません</string>
+    <string name="privacy_network_b5">AI レビュー：初回確認の後、直近 60 件の視聴記録を本アプリの AI サービスへ送信してレビューを生成します。上のスイッチでオフにできます</string>
+    <string name="privacy_network_b6">クラッシュログ：既定ではオフ。オンにすると次回起動時にスタックトレース、OS バージョン、アプリバージョンを送信します</string>
+    <string name="privacy_network_b7">フィードバック：入力した内容と連絡先、OS バージョンのみを送信</string>
+    <string name="privacy_network_b8">認証：デバイス紐付けのため Android ID を送信</string>
+    <string name="privacy_tech_title">技術的な実装を見る</string>
+    <string name="privacy_tech_b1">端末内：トークンと資格情報は EncryptedSharedPreferences で暗号化。リスト・同期記録・進捗は SQLCipher で暗号化したデータベースに保存。Android Keystore がローカル鍵を保護します</string>
+    <string name="privacy_tech_b2">通信：HTTPS とゲートウェイ JWT 認証で中継され、クライアントはサーバー鍵を保持しません</string>
+    <string name="privacy_tech_b3">サーバー：クラウドデータは Worker がサーバー側の鍵で暗号化して保存し、鍵は APK に同梱されません</string>
+    <string name="privacy_badge_b1">オープンソース・コード監査可能</string>
+    <string name="privacy_badge_b2">広告・分析 SDK なし</string>
+    <string name="privacy_section_legal">利用と権利</string>
+    <string name="privacy_legal_intro">TraktoSearch は独立開発の Android ツールであり、映画プラットフォーム、クラウドドライブ、コンテンツ配信サービスではありません。以下は本プロジェクトの利用範囲とデータ取り扱いの説明であり、特定の状況に対する法的助言ではありません。</string>
+    <string name="privacy_legal_b1_title">独立プロジェクト、第三者と非提携</string>
+    <string name="privacy_legal_b1">豆瓣、Trakt、TMDB、OMDb、PanSou、PanHub、ZReso、各種クラウドドライブ、GitHub、Chiikawa の権利者とは提携・協力・公式承認の関係にありません。表示されるサービス名や商標は互換対象の説明のみに使用します。第三者データの完全性・正確性・継続的な可用性は保証しません。</string>
+    <string name="privacy_legal_b2_title">豆瓣ログイン・取得・書き戻し</string>
+    <string name="privacy_legal_b2">ユーザーの能動的な操作によってのみ実行され、豆瓣アカウントの権限、アクセス方針、CAPTCHA、API 変更の制約を受けます。必ずご自身のアカウントのみを使用してください。アクセス制御の回避、一括取得、サービスへの過負荷、他人のデータ収集に本アプリを使用してはいけません。</string>
+    <string name="privacy_legal_b3_title">リソースリンクと第三者コンテンツ</string>
+    <string name="privacy_legal_b3">検索ソースとクラウドドライブ機能は、第三者が返したリンクの検索またはオープンのみを行います。本アプリは動画ファイルのアップロード・ホスティング・キャッシュ・配布を行わず、リンク先のコンテンツや許諾状態を保証しません。コンテンツの許諾とお住まいの地域の法律要件はご自身で確認してください。</string>
+    <string name="privacy_legal_b4_title">第三者データと帰属</string>
+    <string name="privacy_legal_b4">作品情報は TMDB 由来の場合があります：This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB。視聴記録と同期は Trakt の利用規約に従います。</string>
+    <string name="privacy_legal_b5_title">オープンソースライセンス</string>
+    <string name="privacy_legal_b5">独自のオリジナルコードは GNU GPLv3 で提供します。作品情報、第三者 API の返答内容、依存ライブラリ、ポスター、キャラクター素材は、コードのオープンソース化によって自動的に GPLv3 の対象にはなりません。</string>
+    <string name="privacy_rights_title">データへのアクセス・訂正・削除</string>
+    <string name="privacy_rights_desc">アクセス・訂正・削除のリクエストや著作権通知は、公式サイトの権利リクエストフォームから送信できます。フォームはリクエスト処理に必要な情報のみを収集し、記録はクローズ後 180 日以内に削除されます。</string>
+    <string name="privacy_rights_open">権利リクエストページを開く</string>
+    <string name="privacy_footer">© 2026 TraktoSearch · 内容基準 2026-08</string>
 </resources>

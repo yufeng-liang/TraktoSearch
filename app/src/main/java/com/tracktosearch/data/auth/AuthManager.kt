@@ -273,15 +273,12 @@ class AuthManager @Inject constructor(
             refreshLocked().isSuccess
         }
         return if (refreshed) {
-            Result.success(CheckResponse(
-                authorized = true,
-                friendId = "",
-                deviceId = deviceId ?: "",
-                nickname = "",
-                deviceStatus = "ACTIVE",
-                nextCheckAt = nextCheckAt,
-                configVersion = 1
-            ))
+            // 刷新成功后带新 token 重发一次 check，走正常身份/排期更新路径。
+            // 不能手工构造 CheckResponse：friendId 空串、nextCheckAt 旧值会跳过
+            // updateFriendIdentity/saveSessionMetadata，服务端账号切换时旧 friendId
+            // 的 AI 缓存清理被无限期延迟。新 token 仍 401 时 refreshIfNeeded 判定
+            // token 未变化不重复刷新，直接返回失败，不会递归。
+            check()
         } else {
             Result.failure(Exception("Refresh failed"))
         }
@@ -335,7 +332,9 @@ class AuthManager @Inject constructor(
             val hasLocalSession = !deviceId.isNullOrBlank() &&
                 !tokenStorage.getRefreshToken().isNullOrBlank()
             if (!hasLocalSession) {
-                handleOffline<Unit>()
+                // 从未激活过的设备（本地无已保存会话）保持 UNAUTHORIZED 走登录页：
+                // 超时离线宽限放行主界面仅限曾激活过的设备，避免新用户被启动超时误判直进主界面
+                _authState.value = AuthState.UNAUTHORIZED
             } else {
                 _authState.value = AuthState.AUTHORIZED
             }
@@ -464,11 +463,18 @@ class AuthManager @Inject constructor(
         }
     }
 
-    private suspend fun recoverSilently(): Result<ActivateResponse> {
+    /**
+     * 静默恢复：按 androidId+公钥向网关申请重发会话（无需邀请码）。
+     * 成功时写入会话并置 AUTHORIZED（状态置位在本方法内完成）；失败默认写入
+     * [recoveryFailure] 供 UI 引导迁移邀请码，[emitFailure] 为 false 时
+     * （激活撞码后的重试等已有专属错误提示的场景）只返回失败结果，不产生该副作用。
+     * 须在挂起上下文调用；网络与签名在调用方协程执行，状态均经 StateFlow 写回，跨线程安全。
+     */
+    suspend fun recoverSilently(emitFailure: Boolean = true): Result<ActivateResponse> {
         _recoveryFailure.value = null
         if (BuildConfig.DEBUG) return Result.failure(Exception("RECOVERY_RELEASE_ONLY"))
         val androidId = deviceContinuityManager.getAndroidId()
-            ?: return recoveryFailure("RECOVERY_ID_UNAVAILABLE")
+            ?: return recoveryFailure("RECOVERY_ID_UNAVAILABLE", emitFailure)
         return try {
             val publicKey = deviceKeyManager.getPublicKeyBase64()
             val challengeResponse = authApiService.recoveryChallenge(
@@ -478,7 +484,7 @@ class AuthManager @Inject constructor(
                 return challengeResponse.failureWith("Recovery challenge failed: ${challengeResponse.code()}")
             }
             val nonce = challengeResponse.body()?.data?.nonce
-                ?: return recoveryFailure("Recovery challenge is empty")
+                ?: return recoveryFailure("Recovery challenge is empty", emitFailure)
             val signature = Base64.encodeToString(
                 deviceKeyManager.sign(nonce.toByteArray()),
                 Base64.NO_WRAP,
@@ -516,13 +522,13 @@ class AuthManager @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            _recoveryFailure.value = e.message ?: "RECOVERY_FAILED"
+            if (emitFailure) _recoveryFailure.value = e.message ?: "RECOVERY_FAILED"
             Result.failure(e)
         }
     }
 
-    private fun recoveryFailure(message: String): Result<ActivateResponse> {
-        _recoveryFailure.value = message
+    private fun recoveryFailure(message: String, emitFailure: Boolean = true): Result<ActivateResponse> {
+        if (emitFailure) _recoveryFailure.value = message
         return Result.failure(Exception(message))
     }
 

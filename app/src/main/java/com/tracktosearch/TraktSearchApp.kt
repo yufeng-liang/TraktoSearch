@@ -12,6 +12,7 @@ import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import com.tracktosearch.di.NetworkModule
 import com.tracktosearch.data.auth.AuthCheckScheduler
+import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.ImageTrafficStorage
 import com.tracktosearch.data.local.db.AppDatabase
 import com.tracktosearch.data.notification.NotificationScheduler
@@ -45,6 +46,8 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     @Inject lateinit var imageTrafficStorage: ImageTrafficStorage
     // 惰性 Provider：注入本身不触发数据库创建，仅在使用时才解析 @Singleton 实例
     @Inject lateinit var appDatabaseProvider: Provider<AppDatabase>
+    // 惰性 Provider：注入本身不触发 EncryptedSharedPreferences 初始化，仅在使用时才解析
+    @Inject lateinit var doubanAuthStorageProvider: Provider<DoubanAuthStorage>
 
     // CrashLogUploader 已改为 Hilt 单例：走网关 /api/crash-logs 代理，客户端不持有上报密钥。
 
@@ -63,14 +66,24 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
         if (isMainProcess()) {
             StartupTrace.markProcessStart()
             StartupTrace.mark("application.onCreate.enter")
-            // 数据库预热：SQLCipher 的 loadLibs 与 Keystore 密钥解密在 MainActivity 主线程 Hilt 注入
-            // （TraktRepository → MarkActionRecordDao → AppDatabase）时固定消耗 200ms-1s。
-            // 这里在后台单线程提前触发 AppDatabase 单例创建，主线程后续注入直接复用现成实例。
-            // Hilt 对 @Singleton @Provides 生成双检锁代理，跨线程并发访问安全；预热失败不阻断启动。
+            // 数据库与豆瓣凭据存储预热：SQLCipher 的 loadLibs 与 Keystore 密钥解密在 MainActivity 主线程 Hilt 注入
+            // （TraktRepository → MarkActionRecordDao → AppDatabase）时固定消耗 200ms-1s；
+            // DoubanAuthStorage 首次初始化同样同步读 EncryptedSharedPreferences（MasterKey 走 Keystore），
+            // 首次注入点在 AppNavigation 组合期主线程。
+            // 这里在后台单线程提前触发单例创建，主线程后续注入直接复用现成实例。
+            // Hilt 对 @Singleton 生成双检锁代理，跨线程并发访问安全；预热失败不阻断启动。
             StartupTrace.mark("application.db_warmup.start")
-            val dbWarmupExecutor = Executors.newSingleThreadExecutor { r -> Thread(r, "db-warmup") }
+            val dbWarmupExecutor = Executors.newSingleThreadExecutor { r -> Thread(r, "startup-warmup") }
             dbWarmupExecutor.execute {
                 try {
+                    // 豆瓣凭据存储预热（与数据库无关，单独捕获避免相互影响）
+                    try {
+                        doubanAuthStorageProvider.get()
+                        StartupTrace.mark("application.douban_auth_warmup.done")
+                    } catch (e: Exception) {
+                        // 预热失败不影响启动：主线程首次访问时仍会按需创建
+                        StartupTrace.mark("application.douban_auth_warmup.failed", "err=${e.javaClass.simpleName}")
+                    }
                     appDatabaseProvider.get()
                     StartupTrace.mark("application.db_warmup.done")
                 } catch (e: Exception) {

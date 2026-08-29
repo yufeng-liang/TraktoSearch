@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -65,6 +66,7 @@ import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.PrivacyTip
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
@@ -227,12 +229,13 @@ enum class SearchSourceType { DISK, MOVIE, SHOW, PERSON }
 fun SearchScreen(
     initialKeyword: String = "",
     onBack: (() -> Unit)? = null,
-    onSearchClick: ((String) -> Unit)? = null,
     onTraktSearch: ((SearchSourceType, String) -> Unit)? = null,
     onSpiderTest: (() -> Unit)? = null,
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
     onNavigateToLogin: (() -> Unit)? = null,
+    // AI 锐评弹窗「去设置」回调：未提供时按钮无跳转（仅收起弹窗）
+    onOpenSettings: () -> Unit = {},
     onRecommendationClick: ((AiRecommendation) -> Unit)? = null,
     searchSourceType: SearchSourceType = SearchSourceType.DISK,
     onSearchSourceTypeChange: ((SearchSourceType) -> Unit)? = null,
@@ -602,10 +605,9 @@ fun SearchScreen(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
                 dragHandle = null
             ) {
+                // 高度自适应：去掉固定 0.28f，让三层内容自然撑开，猫 Lottie 仍绝对定位在左上角当装饰
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(0.28f)
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.easter_cat))
                     LottieAnimation(
@@ -618,20 +620,58 @@ fun SearchScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            // Sheet 内容延展到导航栏背后，自身垫出导航栏高度避免按钮被遮挡
+                            .navigationBarsPadding()
                             .padding(top = 20.dp, start = 27.dp, end = 27.dp, bottom = 20.dp)
                     ) {
+                        // 层 1：可爱标题（顶部预留猫头探出空间，保持居中）
                         Text(
                             text = stringResource(R.string.permission_cloud_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth().padding(top = 36.dp, bottom = 36.dp)
+                            modifier = Modifier.fillMaxWidth().padding(top = 36.dp, bottom = 20.dp)
                         )
+                        // 层 2：权限申请主说明
                         Text(
                             text = stringResource(R.string.permission_cloud_message),
                             style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(bottom = 42.dp)
+                            lineHeight = 22.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(bottom = 16.dp)
                         )
+                        // 层 3：隐私边界小字块（半透明圆角容器，弱化但可读）
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
+                                .padding(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.PrivacyTip,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.permission_privacy_title),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = stringResource(R.string.permission_cloud_privacy),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    lineHeight = 18.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(24.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.End
@@ -750,7 +790,8 @@ fun SearchScreen(
                         selectedKeyword = searchQuery,
                         isDark = isDark,
                         hazeState = hazeState,
-                        scene = searchGlassScene
+                        scene = searchGlassScene,
+                        onRefresh = { viewModel.loadHotSearches() }
                     )
                 }
                 Spacer(modifier = Modifier.height(80.dp))
@@ -795,7 +836,8 @@ fun SearchScreen(
                             interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                             if (BuildConfig.DEBUG && searchQuery.trim() == "13638719007") {
                                 onSpiderTest?.invoke()
-                            } else {
+                            } else if (searchQuery.isNotBlank()) {
+                                // 空输入不拦截会写入空历史并发起无效搜索，blank 时直接忽略
                                 viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
                                 onTraktSearch?.invoke(searchSourceType, searchQuery)
                             }
@@ -858,6 +900,7 @@ fun SearchScreen(
                 spriteViewModel.closeFeature()
             },
             onNavigateToLogin = { onNavigateToLogin?.invoke() },
+            onOpenSettings = onOpenSettings,
             onMovieClick = onMovieClick,
             onShowClick = onShowClick,
             onRecommendationClick = onRecommendationClick,
@@ -1341,16 +1384,35 @@ private fun PopularSearchesSectionNew(
     selectedKeyword: String? = null,
     isDark: Boolean = false,
     hazeState: HazeState,
-    scene: GlassScene
+    scene: GlassScene,
+    onRefresh: () -> Unit = {}
 ) {
+    // 热词为空不渲染整个栏目，避免历史存在时只剩「热门搜索」标题的空栏目
+    if (popularSearches.isEmpty()) return
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(R.string.hot_search),
-            style = MaterialTheme.typography.titleSmall.copy(shadow = ambientTextHalo()),
-            color = if (isDark) Color.White else Color(0xFF37474F),
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(bottom = 10.dp)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.hot_search),
+                style = MaterialTheme.typography.titleSmall.copy(shadow = ambientTextHalo()),
+                color = if (isDark) Color.White else Color(0xFF37474F),
+                fontWeight = FontWeight.SemiBold
+            )
+            // 手动刷新入口：热词失败只有 ON_RESUME 自动重试，标题行补一个小刷新按钮
+            IconButton(onClick = onRefresh, modifier = Modifier.size(28.dp)) {
+                Icon(
+                    Icons.Rounded.Refresh,
+                    contentDescription = stringResource(R.string.ai_feature_refresh),
+                    modifier = Modifier.size(16.dp),
+                    tint = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF78909C)
+                )
+            }
+        }
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -1671,37 +1733,67 @@ fun DoubanHotAllSheet(
                 }
             }
 
-            androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                modifier = Modifier.fillMaxHeight(0.8f),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                gridItems(category.items, key = { it.id ?: it.title }) { item ->
-                    DoubanHotGridItem(
-                        item = item,
-                        isResolving = resolvingItemId == item.id,
-                        onClick = {
-                            onItemClick(item)
-                            onDismiss()
+            when {
+                // 首载骨架：页 1 加载中且无任何条目时给占位，避免弹层白板
+                category.items.isEmpty() && category.isLoading -> {
+                    androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier.fillMaxHeight(0.8f),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(count = 9, key = { index -> "douban_sheet_skeleton_$index" }) {
+                            com.tracktosearch.ui.component.DoubanHotCardSkeleton()
                         }
-                    )
+                    }
                 }
-                if (category.items.isNotEmpty()) {
-                    item(span = { GridItemSpan(3) }) {
-                        if (category.hasMore && category.error == null) {
-                            LaunchedEffect(category.currentPage) { onLoadMore() }
-                        }
-                        LoadMoreFooter(
-                            state = when {
-                                category.error != null -> LoadMoreFooterState.Error
-                                category.hasMore -> LoadMoreFooterState.Loading
-                                else -> LoadMoreFooterState.Complete
-                            },
-                            onRetry = onLoadMore,
-                            modifier = Modifier.fillMaxWidth()
+                // 页 1 失败且无数据：错误 + 重试（重试经 onLoadMore 重载当前失败页）
+                category.items.isEmpty() && category.error != null -> {
+                    Box(
+                        modifier = Modifier.fillMaxHeight(0.8f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        com.tracktosearch.ui.screen.discover.ErrorRetryRow(
+                            error = category.error,
+                            onRetry = onLoadMore
                         )
+                    }
+                }
+                else -> {
+                    androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier.fillMaxHeight(0.8f),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        gridItems(category.items, key = { it.id ?: it.title }) { item ->
+                            DoubanHotGridItem(
+                                item = item,
+                                isResolving = resolvingItemId == item.id,
+                                onClick = {
+                                    onItemClick(item)
+                                    onDismiss()
+                                }
+                            )
+                        }
+                        if (category.items.isNotEmpty()) {
+                            item(span = { GridItemSpan(3) }) {
+                                if (category.hasMore && category.error == null) {
+                                    LaunchedEffect(category.currentPage) { onLoadMore() }
+                                }
+                                LoadMoreFooter(
+                                    state = when {
+                                        category.error != null -> LoadMoreFooterState.Error
+                                        category.hasMore -> LoadMoreFooterState.Loading
+                                        else -> LoadMoreFooterState.Complete
+                                    },
+                                    onRetry = onLoadMore,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
                     }
                 }
             }

@@ -420,6 +420,8 @@ class SettingsScreenTest {
         every { mock.detailSections } returns MutableStateFlow(emptyList())
         every { mock.changelog } returns MutableStateFlow<String?>(null)
         every { mock.isLoadingChangelog } returns MutableStateFlow(false)
+        // aiTasteEnabled/crashLogEnabled 开关已迁入「数据与隐私」页（PrivacyViewModel），
+        // SettingsScreen 不再读取，无需 stub
         return mock
     }
 }

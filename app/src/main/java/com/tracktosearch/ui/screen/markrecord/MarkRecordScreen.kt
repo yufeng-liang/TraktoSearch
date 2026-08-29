@@ -91,8 +91,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.NeumorphicIconButton
@@ -109,9 +111,12 @@ import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.animation.EnterMode
 import com.tracktosearch.ui.animation.cardEnter
+import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import javax.inject.Inject
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
@@ -121,15 +126,30 @@ import androidx.compose.runtime.saveable.listSaver
 /** 首屏骨架卡片数量：两列，铺满一屏左右即可，多了只是白耗合成 */
 private const val SKELETON_ITEM_COUNT = 8
 
+/**
+ * 轻量会话 ViewModel：仅向页面暴露 Trakt 连接态。
+ *
+ * MarkRecordViewModel 不感知会话模式，而深链/通知可能把未连 Trakt 的用户
+ * （如豆瓣独立模式）带进本页；空态需要据此区分「真的没有记录」和「缺少 Trakt 数据源」。
+ */
+@HiltViewModel
+class MarkRecordSessionViewModel @Inject constructor(
+    sessionModeManager: SessionModeManager
+) : ViewModel() {
+    val traktConnected: StateFlow<Boolean> = sessionModeManager.traktConnected
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MarkRecordScreen(
     onBack: () -> Unit,
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
-    viewModel: MarkRecordViewModel = hiltViewModel()
+    viewModel: MarkRecordViewModel = hiltViewModel(),
+    sessionViewModel: MarkRecordSessionViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val traktConnected by sessionViewModel.traktConnected.collectAsStateWithLifecycle()
     val isDark = isAppDarkTheme()
     val hazeState = remember { HazeState() }
     val hazeStyle = HazeMaterials.thin()
@@ -290,6 +310,10 @@ fun MarkRecordScreen(
                         // 筛选/搜索把结果筛空了要说清楚，并给一个一键清掉的出口：
                         // 否则用户看到的是「暂无记录」，会以为数据丢了
                         val filteredEmpty = uiState.hasActiveFilterOrSearch
+                        // 深链/通知可能把未连 Trakt 的用户（如豆瓣独立模式）带进本页：
+                        // Trakt 已看历史拉不到、本地流水也可能为空，列表永远空白，
+                        // 此时给出「需要 Trakt」的明确原因，而不是让用户面对空的通用空态
+                        val needTraktHint = !traktConnected && !filteredEmpty
                         EmptyStateCard(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -298,7 +322,9 @@ fun MarkRecordScreen(
                             hazeState = hazeState,
                             hazeStyle = hazeStyle,
                             icon = if (filteredEmpty) Icons.Rounded.FilterList else Icons.Rounded.Inbox,
-                            title = if (filteredEmpty) {
+                            title = if (needTraktHint) {
+                                stringResource(R.string.douban_import_require_trakt_title)
+                            } else if (filteredEmpty) {
                                 stringResource(R.string.mark_records_empty_filtered)
                             } else {
                                 stringResource(when (uiState.currentTab) {
@@ -308,6 +334,9 @@ fun MarkRecordScreen(
                                     MarkRecordTab.REMOVED -> R.string.mark_records_empty_removed
                                 })
                             },
+                            description = if (needTraktHint) {
+                                stringResource(R.string.douban_import_require_trakt_desc)
+                            } else null,
                             actions = {
                                 if (filteredEmpty) {
                                     TextButton(onClick = {

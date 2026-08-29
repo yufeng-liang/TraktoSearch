@@ -163,8 +163,6 @@ class CrashLogUploader @Inject constructor(
             logContent = content,
             appVersion = content.lines()
                 .find { it.startsWith("App Version:") }?.removePrefix("App Version:")?.trim() ?: "",
-            device = content.lines()
-                .find { it.startsWith("Device:") }?.removePrefix("Device:")?.trim() ?: "",
         )
     }
 
@@ -212,7 +210,6 @@ class CrashLogUploader @Inject constructor(
             "timestamp" to timeLine,
             "appVersion" to appVersion,
             "androidVersion" to "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
-            "device" to "${Build.MANUFACTURER} ${Build.MODEL}",
             "currentPage" to pageLine,
             "recentActions" to actionsLine,
             "stackTrace" to stackTrace

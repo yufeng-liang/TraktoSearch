@@ -48,6 +48,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
+import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Movie
@@ -56,6 +57,7 @@ import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.TheaterComedy
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.Visibility
@@ -167,12 +169,12 @@ import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.showToast
 import com.tracktosearch.ui.util.toUserMessage
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -183,12 +185,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 
 // ==================== ViewModel ====================
+
+// 豆瓣短评的 CJK 引号包裹格式(「短评」)。
+// 妥协方案：现有 string 资源没有带引号占位符的评论 key 且本次不允许新增资源，
+// 引号符号随语言变化的理想方案需新增 string 资源(如 douban_comment_quoted「%1$s」)。
+private const val COMMENT_QUOTES = "\u300c%1\$s\u300d"
 
 /**
  * 豆瓣详情加载阶段（详情Tab内联状态用）。
@@ -207,13 +215,17 @@ data class DoubanItemDetailUiState(
     val failure: DoubanSyncFailure? = null,
     /** true 表示仅为兼容旧技术失败记录，false 表示同步表/豆瓣快照中的正常条目。 */
     val isLegacyFailure: Boolean = false,
-    val error: String? = null,
+    /** 加载失败原始异常(VM 不做本地化,UI 组合期用 toUserMessage 转文案) */
+    val error: Throwable? = null,
+    /** 三表(同步表/详情快照/旧失败表)都查不到:不自动 onBack,由 UI 显示「条目未同步」错误卡片 */
+    val entryNotFound: Boolean = false,
     // 资源搜索
     val searchResults: List<ResourceItem> = emptyList(),
     val lowRelevanceHiddenCount: Int = 0,
     val showHighRelevanceOnly: Boolean = false,
     val isSearching: Boolean = false,
-    val searchError: String? = null,
+    /** 资源搜索失败原始异常(VM 不做本地化,UI 组合期用 toUserMessage 转文案) */
+    val searchError: Throwable? = null,
     val searchWithSubtitle: Boolean = true,
     val searchAttempted: Boolean = false,
     // 筛选器
@@ -255,7 +267,6 @@ data class DoubanDetailMarkChanges(
  */
 @HiltViewModel
 class DoubanItemDetailViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val doubanRetryManager: DoubanRetryManager,
     private val doubanSyncManager: DoubanSyncManager,
     private val resourceRepository: ResourceRepository,
@@ -315,8 +326,9 @@ class DoubanItemDetailViewModel @Inject constructor(
             try {
                 val source = loadDetailSource(doubanId)
                 if (source == null) {
-                    // 条目已被删除或不存在,UI 层检测 failure==null 后自动 onBack
-                    _uiState.value = DoubanItemDetailUiState(isLoading = false, failure = null)
+                    // 三表都查不到(AI 推荐/深链带来的未同步条目):不再自动 onBack(立即弹回像点击失灵),
+                    // 置 entryNotFound 由 UI 显示错误卡片,返回交还给用户
+                    _uiState.value = DoubanItemDetailUiState(isLoading = false, failure = null, entryNotFound = true)
                     return@launch
                 }
                 _uiState.value = DoubanItemDetailUiState(
@@ -341,7 +353,7 @@ class DoubanItemDetailViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = e.toUserMessage(context, R.string.error_load_failed)
+                    error = e
                 )
             }
         }
@@ -635,7 +647,7 @@ class DoubanItemDetailViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isSearching = false,
                     searchAttempted = true,
-                    searchError = e.toUserMessage(context, R.string.error_search_failed)
+                    searchError = e
                 )
             }
         }
@@ -1129,9 +1141,10 @@ fun DoubanItemDetailScreen(
     // 收集一次性 Toast 事件(爬取成功/标注成功/失败提示)
     ToastEffect(viewModel.toastEvent)
 
-    // 加载完成后若 failure == null(条目已被删除/不存在),自动返回
-    LaunchedEffect(uiState.failure, uiState.isLoading) {
-        if (!uiState.isLoading && uiState.failure == null && uiState.error == null) {
+    // 加载完成后若 failure == null(条目已被删除/不存在),自动返回;
+    // entryNotFound(三表全空)除外:立即弹回像点击失灵,改为页面内错误卡片
+    LaunchedEffect(uiState.failure, uiState.isLoading, uiState.entryNotFound) {
+        if (!uiState.isLoading && uiState.failure == null && uiState.error == null && !uiState.entryNotFound) {
             handleBack()
         }
     }
@@ -1351,6 +1364,15 @@ fun DoubanItemDetailScreen(
                                         Box(modifier = Modifier.alpha(contentAlpha)) { DoubanSearchingState() }
                                     }
                                 }
+                                // 搜索失败(网络异常等):显错误态+重试,与「真空结果」区分,
+                                // 否则失败被空态卡片吞掉,用户误以为没有资源
+                                uiState.searchError != null && uiState.searchResults.isEmpty() -> {
+                                    item(key = "search_error") {
+                                        Box(modifier = Modifier.alpha(contentAlpha)) {
+                                            DoubanSearchErrorState(onRetry = { viewModel.searchResources() })
+                                        }
+                                    }
+                                }
                                 uiState.searchResults.isEmpty() && uiState.searchAttempted -> {
                                     item(key = "empty") {
                                         Box(modifier = Modifier.alpha(contentAlpha)) { DoubanEmptyState(onRetry = { viewModel.searchResources() }) }
@@ -1433,9 +1455,45 @@ fun DoubanItemDetailScreen(
                     }
                 }
                 }
+            } else if (uiState.entryNotFound) {
+                // 三表全查不到(条目未同步到本机):错误卡片替代自动弹回,复用详情加载失败卡片的样式
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = stringResource(R.string.douban_detail_entry_not_found),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(onClick = {
+                                view.performHaptic(HapticType.CLICK)
+                                handleBack()
+                            }) {
+                                Text(stringResource(R.string.detail_back))
+                            }
+                        }
+                    }
+                }
             } else if (uiState.error != null) {
-                // 加载错误
-                val errorMessage = uiState.error ?: ""
+                // 加载错误(VM 存原始异常,组合期转本地化文案)
+                val errorMessage = uiState.error?.toUserMessage(context, R.string.error_load_failed).orEmpty()
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -1915,11 +1973,13 @@ private fun DoubanItemHeader(
 ) {
     val scope = rememberCoroutineScope()
     // 根据海报主色调亮度自适应文字颜色,增强沉浸背景下的可读性
+    // 实际背景是海报色 alpha0.70 与主题背景的渐变,先按渐变中段混合再判亮度,
+    // 否则亮海报色在深色主题下会误选黑字,对比度不足(与普通详情页同一套逻辑)
     val onPosterColor = posterColor?.let { c ->
-        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.92f) else Color.White
+        if (lerp(c, MaterialTheme.colorScheme.background, 0.8f).luminance() > 0.5f) Color.Black.copy(alpha = 0.92f) else Color.White
     } ?: MaterialTheme.colorScheme.onSurface
     val onPosterVariantColor = posterColor?.let { c ->
-        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.72f)
+        if (lerp(c, MaterialTheme.colorScheme.background, 0.8f).luminance() > 0.5f) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.72f)
     } ?: MaterialTheme.colorScheme.onSurfaceVariant
     // 处理 title 中包含 / 的中英文名分隔:主标题取 / 前面,子标题优先用已有,为空时取 / 后面
     val titleContainsSlash = failure.title.contains("/")
@@ -1966,8 +2026,9 @@ private fun DoubanItemHeader(
                                     onSuccess = { _, result ->
                                         // 图片加载成功后提取主色调,用于沉浸式背景渐变
                                         // 外层已判空且 failure 为 val 参数,posterUrl 在此非 null
-                                        val bitmap = result.drawable.toBitmap()
                                         scope.launch {
+                                            // 位图解码拷贝移出主线程,避免进详情帧卡顿
+                                            val bitmap = withContext(Dispatchers.Default) { result.drawable.toBitmap() }
                                             val argb = posterColorExtractor.extractDominantColor(failure.posterUrl, bitmap)
                                             if (argb != 0L) {
                                                 onPosterColorExtracted(Color(argb))
@@ -2094,7 +2155,7 @@ private fun DoubanItemHeader(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "「${failure.comment}」",
+                    text = COMMENT_QUOTES.format(failure.comment),
                     style = MaterialTheme.typography.bodySmall,
                     fontStyle = FontStyle.Italic,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -2110,10 +2171,11 @@ private fun DoubanItemHeader(
 private fun DoubanStarRating(rating: Int, textColor: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         for (i in 1..5) {
+            // 空星用描边图标与实星区分,不再依赖 alpha 区分
             Icon(
-                imageVector = if (i <= rating) Icons.Rounded.Star else Icons.Rounded.Star,
+                imageVector = if (i <= rating) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                 contentDescription = null,
-                tint = if (i <= rating) RatingGold else textColor.copy(alpha = 0.4f),
+                tint = if (i <= rating) RatingGold else textColor,
                 modifier = Modifier.size(16.dp)
             )
         }
@@ -2463,6 +2525,28 @@ private fun DoubanEmptyState(onRetry: () -> Unit) {
         isDark = isAppDarkTheme(),
         title = stringResource(R.string.screen_douban_item_detail_no_resources),
         icon = Icons.Rounded.Movie,
+        modifier = Modifier.padding(vertical = 16.dp),
+        actions = {
+            OutlinedButton(onClick = {
+                view.performHaptic(HapticType.CLICK)
+                onRetry()
+            }) {
+                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(stringResource(R.string.detail_retry))
+            }
+        }
+    )
+}
+
+/** 资源搜索失败态(与空结果区分):错误图标+「搜索失败」+重试 */
+@Composable
+private fun DoubanSearchErrorState(onRetry: () -> Unit) {
+    val view = LocalView.current
+    EmptyStateCard(
+        isDark = isAppDarkTheme(),
+        title = stringResource(R.string.error_search_failed),
+        icon = Icons.Rounded.CloudOff,
         modifier = Modifier.padding(vertical = 16.dp),
         actions = {
             OutlinedButton(onClick = {

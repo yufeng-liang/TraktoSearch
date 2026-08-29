@@ -455,6 +455,29 @@ class TraktRepository @Inject constructor(
         }
     }
 
+    /**
+     * 失效整个 watchlistWatchedIds 缓存（内存 + 持久化）。
+     * 批量操作（batchSync）只持有 traktId，无 tmdbId 映射，逐条 cacheUpdate 传
+     * tmdbId=0 会被各 tmdbId 集合的 `if (tmdbId > 0)` 守卫跳过，导致 traktId 集合
+     * 已更新而 tmdbId 集合残留旧值，双集合长期不一致。批量成功后直接清缓存，
+     * 下次访问重新拉取，一致性优先（代价是 6h 持久化缓存失效后多一次网络拉取）。
+     */
+    private fun invalidateWatchlistWatchedIdsCache() {
+        synchronized(watchlistWatchedIdsLock) {
+            watchlistWatchedIds = null
+        }
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
+        persistentScope.launch {
+            try {
+                // clearAll 是挂起函数（含 DataStore 落盘），须用挂起版本临界区；
+                // 会话已失效时抛 SessionCacheInvalidatedException，正好跳过本次清理
+                sessionCacheRegistry.requireCurrentGenerationSuspend(sessionGeneration) {
+                    watchlistWatchedIdsCache.clearAll()
+                }
+            } catch (e: CancellationException) { throw e } catch (_: Exception) {}
+        }
+    }
+
     /** 缓存已加载时，添加想看 ID 到缓存 */
     private fun addToWatchlistCache(traktId: Int, tmdbId: Int, type: MediaType) {
         synchronized(watchlistWatchedIdsLock) {
@@ -1933,6 +1956,9 @@ class TraktRepository @Inject constructor(
             if (response.isSuccessful) {
                 movieTraktIds.forEach { cacheUpdate(it, 0, MediaType.MOVIE) }
                 showTraktIds.forEach { cacheUpdate(it, 0, MediaType.SHOW) }
+                // 批量操作只有 traktId 无 tmdbId 映射，直接失效整个 watchlistWatchedIds
+                // 缓存（内存+持久化），下次访问重新拉取，避免 tmdbId 集合残留脏数据
+                invalidateWatchlistWatchedIdsCache()
                 // 批量状态变更可能同时影响 watchlist 和 history，统一失效页缓存与总数
                 movieWatchlistCache.clear()
                 showWatchlistCache.clear()
