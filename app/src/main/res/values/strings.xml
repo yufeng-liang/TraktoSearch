@@ -566,6 +566,15 @@
     <string name="settings_help">Help &amp; Tips</string>
     <string name="help_title">Help &amp; Tips</string>
     <string name="help_search_hint">Search help</string>
+    <string name="help_group_basics">GETTING STARTED</string>
+    <string name="help_group_records">YOUR RECORDS</string>
+    <string name="help_group_advanced">GOING FURTHER</string>
+    <string name="help_group_extras">ALSO WORTH KNOWING</string>
+    <string name="help_search_empty">Nothing in this manual matches that.</string>
+    <plurals name="help_search_matches">
+        <item quantity="one">%1$d SECTION</item>
+        <item quantity="other">%1$d SECTIONS</item>
+    </plurals>
     <string name="help_search">Search</string>
     <string name="help_watchlist">Watchlist &amp; Watched</string>
     <string name="help_statistics">Watch Statistics</string>

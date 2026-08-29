@@ -565,6 +565,14 @@
     <string name="settings_help">帮助与说明</string>
     <string name="help_title">帮助与说明</string>
     <string name="help_search_hint">搜索帮助内容</string>
+    <string name="help_group_basics">入门</string>
+    <string name="help_group_records">记录</string>
+    <string name="help_group_advanced">拓展</string>
+    <string name="help_group_extras">另外</string>
+    <string name="help_search_empty">这本说明书里没有这一条。</string>
+    <plurals name="help_search_matches">
+        <item quantity="other">命中 %1$d 段</item>
+    </plurals>
     <string name="help_search">搜索功能</string>
     <string name="help_watchlist">想看与已看</string>
     <string name="help_statistics">观看统计</string>

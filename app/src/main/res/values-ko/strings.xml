@@ -635,6 +635,14 @@
     <string name="settings_help">도움말 &amp; 팁</string>
     <string name="help_title">도움말과 설명</string>
     <string name="help_search_hint">도움말 검색</string>
+    <string name="help_group_basics">기본</string>
+    <string name="help_group_records">기록</string>
+    <string name="help_group_advanced">확장</string>
+    <string name="help_group_extras">기타</string>
+    <string name="help_search_empty">이 설명서에는 해당 항목이 없습니다.</string>
+    <plurals name="help_search_matches">
+        <item quantity="other">%1$d개 항목 일치</item>
+    </plurals>
     <string name="help_search">검색 기능</string>
     <string name="help_watchlist">관심목록과 시청</string>
     <string name="help_statistics">시청 통계</string>

@@ -635,6 +635,14 @@
     <string name="settings_help">ヘルプ＆ヒント</string>
     <string name="help_title">ヘルプと説明</string>
     <string name="help_search_hint">ヘルプを検索</string>
+    <string name="help_group_basics">基本</string>
+    <string name="help_group_records">記録</string>
+    <string name="help_group_advanced">応用</string>
+    <string name="help_group_extras">その他</string>
+    <string name="help_search_empty">この説明書には該当する項目がありません。</string>
+    <plurals name="help_search_matches">
+        <item quantity="other">%1$d 項目に一致</item>
+    </plurals>
     <string name="help_search">検索機能</string>
     <string name="help_watchlist">見たいと視聴済</string>
     <string name="help_statistics">視聴統計</string>

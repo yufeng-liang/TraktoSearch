@@ -1,8 +1,12 @@
 package com.tracktosearch.ui.screen.help
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -21,33 +25,24 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.ExpandMore
-import androidx.compose.material.icons.rounded.FileDownload
-import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Sync
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -55,926 +50,501 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
-import com.tracktosearch.ui.component.hasListScrolled
-import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.data.local.SplashQuote
+import com.tracktosearch.ui.screen.splash.grainBrush
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.launch
 
 /**
- * 帮助页各段落的可检索文案。
+ * 列表里的一行。
  *
- * 段落内容是手写的 Composable（含表格、代码块、数据卡），无法自动内省，这里把每段用到的
- * 字符串资源列一遍供段内搜索匹配。新增段落时同步补一行。
+ * 分组小标题和段落摊进同一个列表，[LazyColumn] 的 item 下标才和这里的下标一致——
+ * 深链要滚到第 N 段时得知道那一段在列表里排第几行，而它前面有多少个小标题是变量。
  */
-private val HelpSectionSearchIndex: List<List<Int>> = listOf(
-    // 0 搜索功能
-    listOf(
-        R.string.help_search, R.string.help_search_b1, R.string.help_search_b2,
-        R.string.help_search_b3, R.string.help_search_b4, R.string.help_person_search
-    ),
-    // 1 想看与已看
-    listOf(
-        R.string.help_watchlist, R.string.help_watchlist_b1, R.string.help_watchlist_b2,
-        R.string.help_watchlist_b3, R.string.help_watchlist_b4
-    ),
-    // 2 观看统计
-    listOf(
-        R.string.help_statistics, R.string.help_statistics_b1, R.string.help_statistics_b2,
-        R.string.help_statistics_b3, R.string.help_statistics_b4,
-        R.string.help_statistics_b5, R.string.help_statistics_b6
-    ),
-    // 3 标记记录
-    listOf(
-        R.string.mark_records_settings_entry, R.string.mark_records_help_entry_location,
-        R.string.mark_records_help_data_source, R.string.mark_records_help_history_limit
-    ),
-    // 4 通知提醒
-    listOf(
-        R.string.help_notification, R.string.help_notification_b1, R.string.help_notification_b2,
-        R.string.help_notification_b3, R.string.help_notification_b4, R.string.help_notification_b5
-    ),
-    // 5 数据管理
-    listOf(
-        R.string.help_data, R.string.help_data_table_title,
-        R.string.help_dc_export_t, R.string.help_dc_export_entry, R.string.help_dc_export_desc,
-        R.string.help_dc_imdb_t, R.string.help_dc_imdb_entry, R.string.help_dc_imdb_desc,
-        R.string.help_dc_douban_t, R.string.help_dc_douban_entry, R.string.help_dc_douban_desc,
-        R.string.help_dc_cooldown
-    ),
-    // 6 自定义搜索源
-    listOf(
-        R.string.help_custom_source, R.string.help_custom_source_b1, R.string.help_custom_source_b2,
-        R.string.help_custom_source_b3, R.string.help_custom_source_b4, R.string.help_custom_source_b5,
-        R.string.help_custom_source_b6, R.string.help_custom_source_b7, R.string.help_custom_source_b8,
-        R.string.help_custom_source_params, R.string.help_custom_source_parse_title,
-        R.string.help_custom_source_parse_b1, R.string.help_custom_source_parse_b2,
-        R.string.help_custom_source_parse_b3, R.string.help_custom_source_example_title
-    ),
-    // 7 详情页
-    listOf(R.string.help_detail, R.string.help_detail_custom, R.string.help_videos_images),
-    // 8 影视筛选
-    listOf(
-        R.string.help_discover_filter, R.string.help_discover_filter_b1,
-        R.string.help_discover_filter_b2, R.string.help_discover_filter_b3,
-        R.string.help_discover_filter_b4, R.string.help_discover_filter_b6
-    ),
-    // 9 使用技巧
-    listOf(
-        R.string.help_tips, R.string.help_tips_b1, R.string.help_tips_b2, R.string.help_tips_b3,
-        R.string.help_tips_b4, R.string.help_tips_b5, R.string.help_tips_b7, R.string.help_tips_b8,
-        R.string.help_tips_b9, R.string.help_tips_b11, R.string.help_tips_b12
-    ),
-    // 10 网络环境
-    listOf(R.string.help_vpn, R.string.help_vpn_b1, R.string.help_vpn_b2),
-    // 11 豆瓣回写
-    listOf(
-        R.string.help_douban_writeback, R.string.help_douban_writeback_b1,
-        R.string.help_douban_writeback_b3
-    ),
-    // 12 一致性检查
-    listOf(R.string.help_consistency_check, R.string.help_consistency_intro),
-    // 13 AI 精灵
-    listOf(
-        R.string.help_ai_sprite, R.string.help_ai_sprite_b1, R.string.help_ai_sprite_b2,
-        R.string.help_ai_sprite_b3, R.string.help_ai_sprite_b4, R.string.help_ai_sprite_b5,
-        R.string.help_ai_sprite_b6, R.string.help_ai_sprite_b7, R.string.ai_sprite_long_press_hint
-    )
-)
+private sealed interface HelpRow {
+    /** 页首：题签，或搜索时的结果计数 */
+    data object Head : HelpRow
 
-/** 功能页跳帮助用的段落 key → 段落序号。key 走导航参数，改动时注意调用方。 */
-private val HelpSectionKeys: Map<String, Int> = mapOf(
-    HelpSections.SEARCH to 0,
-    HelpSections.WATCHLIST to 1,
-    HelpSections.STATISTICS to 2,
-    HelpSections.MARK_RECORDS to 3,
-    HelpSections.NOTIFICATION to 4,
-    HelpSections.DATA to 5,
-    HelpSections.CUSTOM_SOURCE to 6,
-    HelpSections.DETAIL to 7,
-    HelpSections.DISCOVER_FILTER to 8,
-    HelpSections.TIPS to 9,
-    HelpSections.VPN to 10,
-    HelpSections.DOUBAN_WRITEBACK to 11,
-    HelpSections.CONSISTENCY_CHECK to 12,
-    HelpSections.AI_SPRITE to 13
-)
+    data class GroupLabel(val group: HelpGroup) : HelpRow
 
-/** 帮助段落 key 常量，供功能页带参数跳转。 */
-object HelpSections {
-    const val SEARCH = "search"
-    const val WATCHLIST = "watchlist"
-    const val STATISTICS = "statistics"
-    const val MARK_RECORDS = "markRecords"
-    const val NOTIFICATION = "notification"
-    const val DATA = "data"
-    const val CUSTOM_SOURCE = "customSource"
-    const val DETAIL = "detail"
-    const val DISCOVER_FILTER = "discoverFilter"
-    const val TIPS = "tips"
-    const val VPN = "vpn"
-    const val DOUBAN_WRITEBACK = "doubanWriteback"
-    const val CONSISTENCY_CHECK = "consistencyCheck"
-    const val AI_SPRITE = "aiSprite"
+    data class Section(val index: Int, val spec: HelpSectionSpec) : HelpRow
+
+    /** 搜索一段都没命中 */
+    data object Empty : HelpRow
 }
 
-/** 段内搜索：命中段落标题或段落内任一条目文案即视为匹配。 */
-@Composable
-private fun helpSectionMatches(index: Int, query: String): Boolean {
-    if (query.isBlank()) return true
-    val context = LocalContext.current
-    val ids = HelpSectionSearchIndex.getOrNull(index) ?: return true
-    val keyword = query.trim()
-    return ids.any { context.getString(it).contains(keyword, ignoreCase = true) }
+/** 按命中集合摊平成行。空集合（搜不到）只出一行空状态，连题签都不留。 */
+private fun helpRows(matched: Set<Int>): List<HelpRow> {
+    val rows = mutableListOf<HelpRow>(HelpRow.Head)
+    if (matched.isEmpty()) {
+        rows += HelpRow.Empty
+        return rows
+    }
+    HelpGroupBlocks.forEach { block ->
+        val hits = block.sections.filter { it.index in matched }
+        if (hits.isEmpty()) return@forEach
+        rows += HelpRow.GroupLabel(block.group)
+        hits.forEach { rows += HelpRow.Section(it.index, it.value) }
+    }
+    return rows
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * 帮助与说明。
+ *
+ * 做成一本纸质说明书：暖纸底、衬线字、中文大写数字编号、细墨线代替卡片。色板和纹理
+ * 直接取开屏台词层那一套（[rememberHelpPaper]、[grainBrush]），这三处必须是同一张纸。
+ *
+ * 代价说清楚：这一页不跟随用户自定义强调色，也不跟随全局 Glass/Blur/拟态视觉模式——
+ * 顶栏是纸色的，没有毛玻璃。全 App 只有这一页这样，是刻意的。
+ *
+ * @param initialSection 功能页带过来的段落 key（见 [HelpSections]）：进入后展开并滚到该段
+ */
 @Composable
 fun HelpScreen(
     onBack: () -> Unit,
-    /** 功能页带过来的段落 key：进入后自动展开并滚到该段 */
-    initialSection: String? = null
+    initialSection: String? = null,
 ) {
-    // rememberSaveable：旋屏/进程重建后保留展开位置，之前用 remember 一转屏就回到第一段
-    var expandedIndex by rememberSaveable { mutableIntStateOf(0) }
-    var helpQuery by rememberSaveable { mutableStateOf("") }
+    val paper = rememberHelpPaper()
+    val context = LocalContext.current
+    // 语言从 Configuration 取：「跟随系统」这一档只有它知道最终落到了哪种语言
+    val locale = LocalConfiguration.current.locales[0]
+    val lang = remember(locale) { SplashQuote.resolveLang(locale.language) }
+
+    var query by rememberSaveable { mutableStateOf("") }
     var searchVisible by rememberSaveable { mutableStateOf(false) }
-    val lazyListState = rememberLazyListState()
+    // 浏览态是单开手风琴：十四段全开就等于没有折叠
+    var browseExpanded by rememberSaveable { mutableIntStateOf(0) }
+    val searching = query.isNotBlank()
+
+    // 搜索态下命中段落默认全开，这里只记用户手动收起的那几段。
+    // 用 remember(query) 而不是 rememberSaveable：换搜索词就该重新全开，不该记着上一次的收放。
+    val collapsedWhileSearching = remember(query) { mutableStateListOf<Int>() }
+
+    val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    // 功能页带 section 参数进来时：展开对应段并滚到它，省得用户在 12 段里自己找
-    LaunchedEffect(initialSection) {
-        val target = initialSection?.let { HelpSectionKeys[it] } ?: return@LaunchedEffect
-        expandedIndex = target
-        lazyListState.animateScrollToItem(target)
-    }
-    // 状态栏回顶
     val scrollToTopProvider = LocalScrollToTopProvider.current
+
+    val matched = remember(query, context) {
+        HelpCatalog.withIndex()
+            .filter { (_, spec) ->
+                helpMatchesQuery(spec.searchable.map(context::getString), query)
+            }
+            .map { it.index }
+            .toSet()
+    }
+    val rows = remember(matched) { helpRows(matched) }
+
+    // 深链：展开对应段并滚到它，省得用户在十四段里自己找
+    LaunchedEffect(initialSection) {
+        val target = helpIndexOf(initialSection) ?: return@LaunchedEffect
+        browseExpanded = target
+        val row = rows.indexOfFirst { it is HelpRow.Section && it.index == target }
+        if (row >= 0) listState.animateScrollToItem(row)
+    }
+
+    // 状态栏回顶
     DisposableEffect(Unit) {
-        scrollToTopProvider.register {
-            scope.launch { lazyListState.animateScrollToItem(0) }
-        }
+        scrollToTopProvider.register { scope.launch { listState.animateScrollToItem(0) } }
         onDispose { scrollToTopProvider.unregister() }
     }
-    val hazeState = remember { HazeState() }
-    // HazeMaterials.thin() 读 colorScheme，是 @Composable 函数，不能 remember 缓存
-    val hazeStyle = HazeMaterials.thin()
-    // 静止时列表未位移、栏下无内容，顶栏保持全透明；滚动后再启用模糊/玻璃
-    val hasContentUnderTopBar by remember {
-        derivedStateOf {
-            hasListScrolled(
-                firstVisibleItemIndex = lazyListState.firstVisibleItemIndex,
-                firstVisibleItemScrollOffsetPx = lazyListState.firstVisibleItemScrollOffset
-            )
-        }
+
+    // 题签滚出视野后顶栏才浮出标题：静止时标题在纸上只该出现一次
+    val titleInBar by remember {
+        derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 40 }
     }
 
-    Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(paper.palette.paper)
+    ) {
+        HelpPaperBackdrop(paper)
+        val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = 22.dp,
+                end = 22.dp,
+                top = 52.dp + statusBarHeight,
+                bottom = 96.dp,
+            ),
         ) {
-            val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-            LazyColumn(
-                state = lazyListState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .hazeSource(state = hazeState),
-                contentPadding = PaddingValues(
-                    top = 64.dp + statusBarHeight,
-                    bottom = 80.dp
-                )
-            ) {
-                // 搜索功能
-                item {
-                    HelpSection(
-                        title = stringResource(R.string.help_search),
-                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
-                        isExpanded = expandedIndex == 0 || helpQuery.isNotBlank(),
-                        onToggle = { expandedIndex = if (expandedIndex == 0) -1 else 0 },
-                        visible = helpSectionMatches(0, helpQuery)
-                    ) {
-                        HelpBullet(stringResource(R.string.help_search_b1))
-                        HelpBullet(stringResource(R.string.help_search_b2))
-                        HelpBullet(stringResource(R.string.help_search_b3))
-                        HelpBullet(stringResource(R.string.help_search_b4))
-                        HelpBullet(stringResource(R.string.help_person_search))
+            items(
+                count = rows.size,
+                key = { index ->
+                    when (val row = rows[index]) {
+                        HelpRow.Head -> "head"
+                        HelpRow.Empty -> "empty"
+                        is HelpRow.GroupLabel -> "group-${row.group.name}"
+                        is HelpRow.Section -> "section-${row.spec.key}"
                     }
-                }
-
-                // 想看与已看
-                item {
-                    HelpSection(
-                        title = stringResource(R.string.help_watchlist),
-                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
-                        isExpanded = expandedIndex == 1 || helpQuery.isNotBlank(),
-                        onToggle = { expandedIndex = if (expandedIndex == 1) -1 else 1 },
-                        visible = helpSectionMatches(1, helpQuery)
-                    ) {
-                        HelpBullet(stringResource(R.string.help_watchlist_b1))
-                        HelpBullet(stringResource(R.string.help_watchlist_b2))
-                        HelpBullet(stringResource(R.string.help_watchlist_b3))
-                        HelpBullet(stringResource(R.string.help_watchlist_b4))
-                    }
-                }
-
-                // 观看统计
-                item {
-                    HelpSection(
-                        title = stringResource(R.string.help_statistics),
-                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
-                        isExpanded = expandedIndex == 2 || helpQuery.isNotBlank(),
-                        onToggle = { expandedIndex = if (expandedIndex == 2) -1 else 2 },
-                        visible = helpSectionMatches(2, helpQuery)
-                    ) {
-                        HelpBullet(stringResource(R.string.help_statistics_b1))
-                        HelpBullet(stringResource(R.string.help_statistics_b2))
-                        HelpBullet(stringResource(R.string.help_statistics_b3))
-                        HelpBullet(stringResource(R.string.help_statistics_b4))
-                        HelpBullet(stringResource(R.string.help_statistics_b5))
-                        HelpBullet(stringResource(R.string.help_statistics_b6))
-                    }
-                }
-
-                // 标记记录
-                item {
-                    HelpSection(
-                        title = stringResource(R.string.mark_records_settings_entry),
-                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
-                        isExpanded = expandedIndex == 3 || helpQuery.isNotBlank(),
-                        onToggle = { expandedIndex = if (expandedIndex == 3) -1 else 3 },
-                        visible = helpSectionMatches(3, helpQuery)
-                    ) {
-                        HelpBullet(stringResource(R.string.mark_records_help_entry_location))
-                        HelpBullet(stringResource(R.string.mark_records_help_data_source))
-                        HelpBullet(stringResource(R.string.mark_records_help_history_limit))
-                    }
-                }
-
-                // 通知提醒
-                item {
-                    HelpSection(
-                        title = stringResource(R.string.help_notification),
-                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
-                        isExpanded = expandedIndex == 4 || helpQuery.isNotBlank(),
-                        onToggle = { expandedIndex = if (expandedIndex == 4) -1 else 4 },
-                        visible = helpSectionMatches(4, helpQuery)
-                    ) {
-                        HelpBullet(stringResource(R.string.help_notification_b1))
-                        HelpBullet(stringResource(R.string.help_notification_b2))
-                        HelpBullet(stringResource(R.string.help_notification_b3))
-                        HelpBullet(stringResource(R.string.help_notification_b4))
-                        HelpBullet(stringResource(R.string.help_notification_b5))
-                    }
-                }
-
-                // 数据管理
-                item {
-                    HelpSection(
-                        title = stringResource(R.string.help_data),
-                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
-                        isExpanded = expandedIndex == 5 || helpQuery.isNotBlank(),
-                        onToggle = { expandedIndex = if (expandedIndex == 5) -1 else 5 },
-                        visible = helpSectionMatches(5, helpQuery)
-                    ) {
-                        HelpSubtitle(stringResource(R.string.help_data_table_title))
-                        Spacer(modifier = Modifier.height(4.dp))
-                        // 3 个图标卡片,放在圆角背景容器内
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 4.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .padding(8.dp)
-                        ) {
-                            HelpDataCard(
-                                icon = Icons.Rounded.FileDownload,
-                                title = stringResource(R.string.help_dc_export_t),
-                                entry = stringResource(R.string.help_dc_export_entry),
-                                format = stringResource(R.string.help_dc_export_fmt),
-                                description = stringResource(R.string.help_dc_export_desc)
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            HelpDataCard(
-                                icon = Icons.Rounded.FileUpload,
-                                title = stringResource(R.string.help_dc_imdb_t),
-                                entry = stringResource(R.string.help_dc_imdb_entry),
-                                format = stringResource(R.string.help_dc_imdb_fmt),
-                                description = stringResource(R.string.help_dc_imdb_desc)
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            HelpDataCard(
-                                icon = Icons.Rounded.Sync,
-                                title = stringResource(R.string.help_dc_douban_t),
-                                entry = stringResource(R.string.help_dc_douban_entry),
-                                format = stringResource(R.string.help_dc_douban_fmt),
-                                description = stringResource(R.string.help_dc_douban_desc)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        HelpBullet(stringResource(R.string.help_dc_cooldown))
-                    }
-                }
-
-                // 自定义搜索源
-                item {
-                    HelpSection(
-                        title = stringResource(R.string.help_custom_source),
-                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
-                        isExpanded = expandedIndex == 6 || helpQuery.isNotBlank(),
-                        onToggle = { expandedIndex = if (expandedIndex == 6) -1 else 6 },
-                        visible = helpSectionMatches(6, helpQuery)
-                    ) {
-                        HelpBullet(stringResource(R.string.help_custom_source_b1))
-                        HelpBullet(stringResource(R.string.help_custom_source_b2))
-                        HelpBullet(stringResource(R.string.help_custom_source_b3))
-                        HelpBullet(stringResource(R.string.help_custom_source_b4))
-                        HelpBullet(stringResource(R.string.help_custom_source_b5))
-                        HelpBullet(stringResource(R.string.help_custom_source_b6))
-                        HelpBullet(stringResource(R.string.help_custom_source_b7))
-                        HelpBullet(stringResource(R.string.help_custom_source_b8))
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                        HelpSubtitle(stringResource(R.string.help_custom_source_params))
-                        Spacer(modifier = Modifier.height(4.dp))
-                        CustomSourceParamsTable()
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                        HelpSubtitle(stringResource(R.string.help_custom_source_parse_title))
-                        HelpBullet(stringResource(R.string.help_custom_source_parse_b1))
-                        HelpBullet(stringResource(R.string.help_custom_source_parse_b2))
-                        HelpBullet(stringResource(R.string.help_custom_source_parse_b3))
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                        HelpCodeBlock(stringResource(R.string.help_custom_source_parse_pansou_example))
-                        Spacer(modifier = Modifier.height(4.dp))
-                        HelpCodeBlock(stringResource(R.string.help_custom_source_parse_zreso_example))
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                        HelpSubtitle(stringResource(R.string.help_custom_source_example_title))
-                        HelpCodeBlock(stringResource(R.string.help_custom_source_example))
-                    }
-                }
-
-                // 详情页
-                item {
-                    HelpSection(
-                        title = stringResource(R.string.help_detail),
-                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
-                        isExpanded = expandedIndex == 7 || helpQuery.isNotBlank(),
-                        onToggle = { expandedIndex = if (expandedIndex == 7) -1 else 7 },
-                        visible = helpSectionMatches(7, helpQuery)
-                    ) {
-                        HelpBullet(stringResource(R.string.help_detail_custom))
-                        HelpBullet(stringResource(R.string.help_videos_images))
-                    }
-                }
-
-                // 影视筛选
-                item {
-                    HelpSection(
-                        title = stringResource(R.string.help_discover_filter),
-                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
-                        isExpanded = expandedIndex == 8 || helpQuery.isNotBlank(),
-                        onToggle = { expandedIndex = if (expandedIndex == 8) -1 else 8 },
-                        visible = helpSectionMatches(8, helpQuery)
-                    ) {
-                        HelpBullet(stringResource(R.string.help_discover_filter_b1))
-                        HelpBullet(stringResource(R.string.help_discover_filter_b2))
-                        HelpBullet(stringResource(R.string.help_discover_filter_b3))
-                        HelpBullet(stringResource(R.string.help_discover_filter_b4))
-                        HelpBullet(stringResource(R.string.help_discover_filter_b6))
-                    }
-                }
-
-                // 更多技巧
-                item {
-                    HelpSection(
-                        title = stringResource(R.string.help_tips),
-                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
-                        isExpanded = expandedIndex == 9 || helpQuery.isNotBlank(),
-                        onToggle = { expandedIndex = if (expandedIndex == 9) -1 else 9 },
-                        visible = helpSectionMatches(9, helpQuery)
-                    ) {
-                        HelpBullet(stringResource(R.string.help_tips_b1))
-                        HelpBullet(stringResource(R.string.help_tips_b2))
-                        HelpBullet(stringResource(R.string.help_tips_b3))
-                        HelpBullet(stringResource(R.string.help_tips_b4))
-                        HelpBullet(stringResource(R.string.help_tips_b5))
-                        HelpBullet(stringResource(R.string.help_tips_b7))
-                        HelpBullet(stringResource(R.string.help_tips_b8))
-                        HelpBullet(stringResource(R.string.help_tips_b9))
-                        HelpBullet(stringResource(R.string.help_tips_b11))
-                        HelpBullet(stringResource(R.string.help_tips_b12))
-                    }
-                }
-
-                // VPN 说明
-                item {
-                    HelpSection(
-                        title = stringResource(R.string.help_vpn),
-                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
-                        isExpanded = expandedIndex == 10 || helpQuery.isNotBlank(),
-                        onToggle = { expandedIndex = if (expandedIndex == 10) -1 else 10 },
-                        visible = helpSectionMatches(10, helpQuery)
-                    ) {
-                        HelpBullet(stringResource(R.string.help_vpn_b1))
-                        HelpBullet(stringResource(R.string.help_vpn_b2))
-                    }
-                }
-
-                // 豆瓣标记双向写回
-                item {
-                    HelpSection(
-                        title = stringResource(R.string.help_douban_writeback),
-                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
-                        isExpanded = expandedIndex == 11 || helpQuery.isNotBlank(),
-                        onToggle = { expandedIndex = if (expandedIndex == 11) -1 else 11 },
-                        visible = helpSectionMatches(11, helpQuery)
-                    ) {
-                        HelpBullet(stringResource(R.string.help_douban_writeback_b1))
-                        HelpBullet(stringResource(R.string.help_douban_writeback_b3))
-                    }
-                }
-
-                // 状态一致性检查
-                item {
-                    HelpSection(
-                        title = stringResource(R.string.help_consistency_check),
-                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
-                        isExpanded = expandedIndex == 12 || helpQuery.isNotBlank(),
-                        onToggle = { expandedIndex = if (expandedIndex == 12) -1 else 12 },
-                        visible = helpSectionMatches(12, helpQuery)
-                    ) {
-                        HelpBullet(stringResource(R.string.help_consistency_intro))
-                        Spacer(modifier = Modifier.height(8.dp))
-                        ConsistencyCheckTable()
-                    }
-                }
-
-                // AI 精灵
-                item {
-                    HelpSection(
-                        title = stringResource(R.string.help_ai_sprite),
-                        // 搜索时命中的段落自动展开，免得用户搜到了还要再点一下
-                        isExpanded = expandedIndex == 13 || helpQuery.isNotBlank(),
-                        onToggle = { expandedIndex = if (expandedIndex == 13) -1 else 13 },
-                        visible = helpSectionMatches(13, helpQuery)
-                    ) {
-                        HelpBullet(stringResource(R.string.help_ai_sprite_b1))
-                        HelpBullet(stringResource(R.string.help_ai_sprite_b2))
-                        HelpBullet(stringResource(R.string.help_ai_sprite_b3))
-                        HelpBullet(stringResource(R.string.help_ai_sprite_b4))
-                        HelpBullet(stringResource(R.string.help_ai_sprite_b5))
-                        HelpBullet(stringResource(R.string.help_ai_sprite_b6))
-                        HelpBullet(stringResource(R.string.help_ai_sprite_b7))
-                        HelpBullet(stringResource(R.string.ai_sprite_long_press_hint))
-                    }
-                }
-            }
-
-            // 毛玻璃吸顶标题栏（按视觉模式切 Blur/Glass），无共享元素转场
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .hazeTopBar(
-                        state = hazeState,
-                        style = hazeStyle,
-                        blurRadius = 24.dp,
-                        // 搜索框展开时顶栏比 contentPadding 预留的 64dp 更高、会压住首段，
-                        // 此时强制启用模糊，输入框才有磨砂底衬而不是直接透出正文
-                        isContentUnderTopBar = hasContentUnderTopBar || searchVisible
-                    )
-                    // 拦截点击：顶栏覆盖可滚动列表，不消费会让点击穿透到下方列表项
-                    .clickable(enabled = false, onClick = {})
-            ) {
-                Spacer(modifier = Modifier.statusBarsPadding())
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = stringResource(R.string.help_title),
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                },
+            ) { index ->
+                HelpRowContent(
+                    row = rows[index],
+                    paper = paper,
+                    lang = lang,
+                    query = query,
+                    matchCount = matched.size,
+                    isExpanded = { section ->
+                        if (searching) section !in collapsedWhileSearching else browseExpanded == section
                     },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                contentDescription = "Back",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    },
-                    actions = {
-                        // 段内搜索：12 段手风琴靠翻找效率太低
-                        IconButton(onClick = {
-                            searchVisible = !searchVisible
-                            if (!searchVisible) helpQuery = ""
-                        }) {
-                            Icon(
-                                imageVector = if (searchVisible) Icons.Rounded.Close else Icons.Rounded.Search,
-                                contentDescription = stringResource(
-                                    if (searchVisible) R.string.common_cancel else R.string.help_search_hint
-                                ),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        // 底色交给外层 hazeTopBar；M3 默认容器色会盖死毛玻璃
-                        containerColor = Color.Transparent
-                    ),
-                    windowInsets = WindowInsets(0, 0, 0, 0)
-                )
-                if (searchVisible) {
-                    OutlinedTextField(
-                        value = helpQuery,
-                        onValueChange = { helpQuery = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                        singleLine = true,
-                        placeholder = { Text(stringResource(R.string.help_search_hint)) },
-                        trailingIcon = {
-                            if (helpQuery.isNotEmpty()) {
-                                IconButton(onClick = { helpQuery = "" }) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Close,
-                                        contentDescription = stringResource(R.string.common_cancel)
-                                    )
-                                }
+                    onToggle = { section ->
+                        if (searching) {
+                            if (section in collapsedWhileSearching) {
+                                collapsedWhileSearching.remove(section)
+                            } else {
+                                collapsedWhileSearching.add(section)
                             }
+                        } else {
+                            browseExpanded = if (browseExpanded == section) -1 else section
                         }
-                    )
-                }
+                    },
+                )
             }
         }
+
+        HelpPaperTopBar(
+            paper = paper,
+            titleVisible = titleInBar,
+            ruleVisible = titleInBar,
+            searchVisible = searchVisible,
+            query = query,
+            onQueryChange = { query = it },
+            onBack = onBack,
+            onToggleSearch = {
+                searchVisible = !searchVisible
+                if (!searchVisible) query = ""
+            },
+        )
     }
 }
 
 @Composable
-private fun HelpSection(
-    title: String,
-    isExpanded: Boolean,
-    onToggle: () -> Unit,
-    /** 段内搜索未命中时整段不渲染 */
-    visible: Boolean = true,
-    content: @Composable () -> Unit
+private fun HelpRowContent(
+    row: HelpRow,
+    paper: HelpPaper,
+    lang: String,
+    query: String,
+    matchCount: Int,
+    isExpanded: (Int) -> Boolean,
+    onToggle: (Int) -> Unit,
 ) {
-    if (!visible) return
+    when (row) {
+        // 搜索时题签让位给结果计数：正在筛的时候书名不重要，命中几段才重要
+        HelpRow.Head -> if (query.isBlank()) {
+            HelpMasthead(stringResource(R.string.help_title), paper)
+        } else {
+            HelpResultCount(matchCount, paper)
+        }
+
+        HelpRow.Empty -> HelpEmptyResult(paper)
+
+        is HelpRow.GroupLabel -> HelpGroupLabel(stringResource(row.group.label), paper)
+
+        is HelpRow.Section -> HelpSectionBlock(
+            index = row.index,
+            spec = row.spec,
+            paper = paper,
+            lang = lang,
+            query = query,
+            expanded = isExpanded(row.index),
+            onToggle = { onToggle(row.index) },
+        )
+    }
+}
+
+/** 一段：标题行 + 展开的正文 + 收底的墨线。 */
+@Composable
+private fun HelpSectionBlock(
+    index: Int,
+    spec: HelpSectionSpec,
+    paper: HelpPaper,
+    lang: String,
+    query: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val seal = paper.palette.seal
+    Column(modifier = Modifier.fillMaxWidth()) {
+        HelpSectionHeader(
+            numeral = helpSectionNumeral(lang, index),
+            title = helpHighlight(stringResource(spec.title), query, seal),
+            expanded = expanded,
+            paper = paper,
+            onToggle = onToggle,
+        )
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(tween(220)),
+            exit = shrinkVertically(tween(180)),
+        ) {
+            Column(modifier = Modifier.padding(start = 2.dp, bottom = 16.dp)) {
+                spec.bullets.forEachIndexed { position, res ->
+                    HelpItem(
+                        numeral = helpItemNumeral(lang, position),
+                        text = helpHighlight(stringResource(res), query, seal),
+                        paper = paper,
+                    )
+                }
+                spec.extra?.let { extra ->
+                    Spacer(Modifier.height(6.dp))
+                    HelpExtraContent(extra = extra, paper = paper, lang = lang, query = query)
+                }
+            }
+        }
+        HelpInkRule(paper)
+    }
+}
+
+/** 搜索结果计数。朱砂小字居中，占位和题签一样高，切换时页面不跳。 */
+@Composable
+private fun HelpResultCount(count: Int, paper: HelpPaper) {
+    Text(
+        text = pluralStringResource(R.plurals.help_search_matches, count, count),
+        color = paper.palette.seal,
+        fontSize = 11.sp,
+        fontFamily = FontFamily.Serif,
+        letterSpacing = 0.14.em,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp, bottom = 20.dp),
+    )
+}
+
+/** 一段都没命中。以前这里是一片空白，看不出是搜错了还是页面坏了。 */
+@Composable
+private fun HelpEmptyResult(paper: HelpPaper) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .padding(top = 64.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        Text(
+            text = stringResource(R.string.help_search_empty),
+            color = paper.palette.inkSoft,
+            fontSize = 13.sp,
+            fontFamily = FontFamily.Serif,
+            letterSpacing = 0.06.em,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/**
+ * 背景：顶部一团很弱的暖光 + 整屏胶片颗粒。
+ *
+ * 光比日签页还弱、也不动：这一页是拿来读的，背景一动就成了干扰。颗粒用的是开屏那一块
+ * 噪点，三处纸面纹理必须同源。暗色主题下改 Screen 混合，深棕叠深底会糊成一片黑。
+ */
+@Composable
+private fun HelpPaperBackdrop(paper: HelpPaper) {
+    val grain = remember { grainBrush() }
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val w = size.width
+        val h = size.height
+        if (w <= 0f || h <= 0f) return@Canvas
+        val center = Offset(0.5f * w, 0.02f * h)
+        val radius = 0.86f * w
+        drawCircle(
+            brush = Brush.radialGradient(
+                0f to paper.palette.caramel,
+                0.7f to Color.Transparent,
+                center = center,
+                radius = radius,
+            ),
+            radius = radius,
+            center = center,
+            alpha = if (paper.palette.isDark) 0.26f else 0.30f,
+            blendMode = if (paper.palette.isDark) BlendMode.Screen else BlendMode.Multiply,
+        )
+        drawRect(brush = grain, alpha = paper.palette.grainAlpha * 0.7f)
+    }
+}
+
+/**
+ * 纸色顶栏。
+ *
+ * 没有毛玻璃：这一页整张是纸，一条玻璃横切过去就把纸切断了。代价是它不再跟随全局
+ * Glass/Blur/拟态视觉模式——见 [HelpScreen] 的说明。
+ *
+ * 标题只在题签滚出视野后才浮出来，静止时纸上不会同时出现两个「使用说明」。
+ * 底下那道墨线同时出现，它是唯一表示「上面还有内容」的信号。
+ */
+@Composable
+private fun HelpPaperTopBar(
+    paper: HelpPaper,
+    titleVisible: Boolean,
+    ruleVisible: Boolean,
+    searchVisible: Boolean,
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onBack: () -> Unit,
+    onToggleSearch: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(paper.palette.paper)
+            // 顶栏盖在可滚动列表上，不消费点击会穿透到下面的段落标题
+            .clickable(enabled = false, onClick = {})
+    ) {
+        Spacer(Modifier.statusBarsPadding())
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onToggle() }
-                .padding(vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .height(52.dp)
+                .padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.weight(1f)
-            )
-            Icon(
-                imageVector = if (isExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        AnimatedVisibility(
-            visible = isExpanded,
-            enter = expandVertically(),
-            exit = shrinkVertically()
-        ) {
-            Column(modifier = Modifier.padding(start = 4.dp, bottom = 12.dp)) {
-                content()
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = stringResource(R.string.content_desc_back),
+                    tint = paper.palette.ink,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                HelpTopBarTitle(visible = titleVisible, paper = paper)
+            }
+            IconButton(onClick = onToggleSearch) {
+                Icon(
+                    imageVector = if (searchVisible) Icons.Rounded.Close else Icons.Rounded.Search,
+                    contentDescription = stringResource(
+                        if (searchVisible) R.string.common_cancel else R.string.help_search_hint
+                    ),
+                    tint = paper.palette.ink,
+                    modifier = Modifier.size(19.dp),
+                )
             }
         }
-    }
-}
-
-@Composable
-private fun HelpBullet(text: String, icon: ImageVector? = null) {
-    Row(
-        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        if (icon != null) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .size(16.dp)
-                    .padding(top = 3.dp, end = 6.dp)
-            )
-        } else {
-            Text(
-                text = "•",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(end = 6.dp)
+        if (searchVisible) {
+            HelpSearchField(
+                query = query,
+                onQueryChange = onQueryChange,
+                paper = paper,
             )
         }
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.4f
-        )
+        AnimatedVisibility(
+            visible = ruleVisible,
+            enter = fadeIn(tween(180)),
+            exit = fadeOut(tween(180)),
+        ) {
+            HelpInkRule(paper)
+        }
     }
 }
 
+/**
+ * 顶栏标题。
+ *
+ * 抽成独立 Composable 而不是写在 Row 里：Row 的作用域会让 RowScope.AnimatedVisibility
+ * 参与重载决议，隐式接收者对不上就编译不过。
+ */
 @Composable
-private fun HelpSubtitle(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-    )
-}
-
-@Composable
-private fun HelpCodeBlock(text: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(12.dp)
+private fun HelpTopBarTitle(visible: Boolean, paper: HelpPaper) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(180)),
+        exit = fadeOut(tween(180)),
     ) {
         Text(
-            text = text,
-            style = MaterialTheme.typography.bodySmall,
-            fontFamily = FontFamily.Monospace,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            lineHeight = 18.sp
+            text = stringResource(R.string.help_title),
+            color = paper.palette.ink,
+            fontSize = 14.sp,
+            fontFamily = FontFamily.Serif,
+            letterSpacing = 0.16.em,
         )
     }
 }
 
+/**
+ * 搜索框：一行衬线字 + 一道墨线。
+ *
+ * 用 BasicTextField 而不是 OutlinedTextField：M3 的描边框、悬浮 label、填充底色是一整套
+ * 玻璃时代的语言，放在纸上像贴了张塑料条。这里只要「在纸上划一道线，在线上写字」。
+ */
 @Composable
-private fun HelpDataCard(
-    icon: ImageVector,
-    title: String,
-    entry: String,
-    format: String,
-    description: String
+private fun HelpSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    paper: HelpPaper,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        // 左侧图标
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier
-                .size(20.dp)
-                .padding(end = 8.dp, top = 2.dp)
-        )
-        // 右侧内容
-        Column(modifier = Modifier.weight(1f)) {
-            // 第一行: 功能名 + 格式标签
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(end = 6.dp)
+    val seal = paper.palette.seal
+    val selectionColors = remember(seal) {
+        TextSelectionColors(handleColor = seal, backgroundColor = seal.copy(alpha = 0.22f))
+    }
+    Column(modifier = Modifier.padding(start = 22.dp, end = 22.dp, bottom = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CompositionLocalProvider(LocalTextSelectionColors provides selectionColors) {
+                BasicTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                    textStyle = TextStyle(
+                        color = paper.body,
+                        fontSize = 13.sp,
+                        fontFamily = FontFamily.Serif,
+                        letterSpacing = 0.04.em,
+                    ),
+                    cursorBrush = SolidColor(seal),
+                    decorationBox = { field ->
+                        Box(modifier = Modifier.padding(vertical = 6.dp)) {
+                            if (query.isEmpty()) {
+                                Text(
+                                    text = stringResource(R.string.help_search_hint),
+                                    color = paper.palette.inkFaint,
+                                    fontSize = 13.sp,
+                                    fontFamily = FontFamily.Serif,
+                                    letterSpacing = 0.04.em,
+                                )
+                            }
+                            field()
+                        }
+                    },
                 )
-                Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    shape = RoundedCornerShape(4.dp)
+            }
+            if (query.isNotEmpty()) {
+                IconButton(
+                    onClick = { onQueryChange("") },
+                    modifier = Modifier.size(28.dp),
                 ) {
-                    Text(
-                        text = format,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = stringResource(R.string.common_cancel),
+                        tint = paper.palette.inkSoft,
+                        modifier = Modifier.size(15.dp),
                     )
                 }
             }
-            // 第二行: 入口
-            Text(
-                text = "📍 $entry",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp)
-            )
-            // 第三行: 说明
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 1.dp)
-            )
         }
-    }
-}
-
-@Composable
-private fun CustomSourceParamsTable() {
-    val params = listOf(
-        Triple("name", stringResource(R.string.help_cs_param_name), "我的搜索源"),
-        Triple("baseUrl", stringResource(R.string.help_cs_param_baseUrl), "https://example.com/"),
-        Triple("apiPath", stringResource(R.string.help_cs_param_apiPath), "api/search"),
-        Triple("keywordParam", stringResource(R.string.help_cs_param_keyword), "kw"),
-        Triple("cloudTypesParam", stringResource(R.string.help_cs_param_cloudTypes), "cloud_types"),
-        Triple("cloudTypesValue", stringResource(R.string.help_cs_param_cloudTypesVal), "quark,baidu,aliyun"),
-        Triple("srcParam", stringResource(R.string.help_cs_param_src), "src"),
-        Triple("srcValue", stringResource(R.string.help_cs_param_srcVal), "all"),
-        Triple("parseMode", stringResource(R.string.help_cs_param_parseMode), "pansou_template"),
-        Triple("listPath", stringResource(R.string.help_cs_param_listPath), "$.data.results"),
-        Triple("namePath", stringResource(R.string.help_cs_param_namePath), "$.title"),
-        Triple("urlPath", stringResource(R.string.help_cs_param_urlPath), "$.url"),
-        Triple("diskTypePath", stringResource(R.string.help_cs_param_diskTypePath), "$.type"),
-        Triple("datePath", stringResource(R.string.help_cs_param_datePath), "$.datetime"),
-    )
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(8.dp)
-    ) {
-        // Header
-        Row(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                stringResource(R.string.help_cs_table_param),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.weight(0.28f)
-            )
-            Text(
-                stringResource(R.string.help_cs_table_desc),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.weight(0.44f)
-            )
-            Text(
-                stringResource(R.string.help_cs_table_example),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.weight(0.28f)
-            )
-        }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-        params.forEach {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 2.dp)
-            ) {
-                Text(
-                    it.first,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(0.28f)
-                )
-                Text(
-                    it.second,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(0.44f)
-                )
-                Text(
-                    it.third,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(0.28f)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ConsistencyCheckTable() {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(8.dp)
-    ) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = stringResource(R.string.help_consistency_col_douban),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.weight(0.22f)
-            )
-            Text(
-                text = stringResource(R.string.help_consistency_col_trakt),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.weight(0.22f)
-            )
-            Text(
-                text = stringResource(R.string.help_consistency_col_result),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.weight(0.16f)
-            )
-            Text(
-                text = stringResource(R.string.help_consistency_col_action),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.weight(0.40f)
-            )
-        }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-        val rows = listOf(
-            ConsistencyRow(
-                R.string.watchlist_mode_watched, R.string.watchlist_mode_watchlist,
-                R.string.watchlist_mode_watched, R.string.help_consistency_act_trakt_watched_remove_wish
-            ),
-            ConsistencyRow(
-                R.string.watchlist_mode_watchlist, R.string.watchlist_mode_watched,
-                R.string.watchlist_mode_watched, R.string.help_consistency_act_douban_watched_upgrade
-            ),
-            ConsistencyRow(
-                R.string.watchlist_mode_watched, R.string.help_status_unmarked,
-                R.string.watchlist_mode_watched, R.string.help_consistency_act_trakt_watched
-            ),
-            ConsistencyRow(
-                R.string.watchlist_mode_watchlist, R.string.help_status_unmarked,
-                R.string.watchlist_mode_watchlist, R.string.help_consistency_act_trakt_wish
-            ),
-            ConsistencyRow(
-                R.string.help_status_unmarked, R.string.watchlist_mode_watched,
-                R.string.watchlist_mode_watched, R.string.help_consistency_act_douban_watched
-            ),
-            ConsistencyRow(
-                R.string.help_status_unmarked, R.string.watchlist_mode_watchlist,
-                R.string.watchlist_mode_watchlist, R.string.help_consistency_act_douban_wish
-            ),
-            ConsistencyRow(
-                R.string.watchlist_mode_watched, R.string.watchlist_mode_watched,
-                R.string.watchlist_mode_watched, R.string.help_no_action
-            ),
-            ConsistencyRow(
-                R.string.watchlist_mode_watchlist, R.string.watchlist_mode_watchlist,
-                R.string.watchlist_mode_watchlist, R.string.help_no_action
-            )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(paper.palette.inkFaint)
         )
-        rows.forEach { (douban, trakt, result, action) ->
-            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-                Text(stringResource(douban), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 14.sp, modifier = Modifier.weight(0.22f))
-                Text(stringResource(trakt), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 14.sp, modifier = Modifier.weight(0.22f))
-                Text(stringResource(result), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 14.sp, modifier = Modifier.weight(0.16f))
-                Text(stringResource(action), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 14.sp, modifier = Modifier.weight(0.40f))
-            }
-        }
     }
 }
-
-private data class ConsistencyRow(
-    val douban: Int,
-    val trakt: Int,
-    val result: Int,
-    val action: Int
-)
