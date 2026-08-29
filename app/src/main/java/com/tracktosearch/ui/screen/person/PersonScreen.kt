@@ -309,7 +309,8 @@ fun PersonScreen(
                                         val moviePosterUrls = remember(uiState.movieCredits) {
                                             uiState.movieCredits.map { it.poster_path?.let { p -> TmdbImageUrls.build(p) } }
                                         }
-                                        rememberPosterPrefetch(movieCreditsRowState, moviePosterUrls)
+                                        // decodeSizePx 与 CreditPosterCard 的 PosterCard(imageSize = 264) 对齐
+                                        rememberPosterPrefetch(movieCreditsRowState, moviePosterUrls, decodeSizePx = 264)
                                         LazyRow(
                                             state = movieCreditsRowState,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -388,7 +389,8 @@ fun PersonScreen(
                                         val tvPosterUrls = remember(uiState.tvCredits) {
                                             uiState.tvCredits.map { it.poster_path?.let { p -> TmdbImageUrls.build(p) } }
                                         }
-                                        rememberPosterPrefetch(tvCreditsRowState, tvPosterUrls)
+                                        // decodeSizePx 与 CreditPosterCard 的 PosterCard(imageSize = 264) 对齐
+                                        rememberPosterPrefetch(tvCreditsRowState, tvPosterUrls, decodeSizePx = 264)
                                         LazyRow(
                                             state = tvCreditsRowState,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp),

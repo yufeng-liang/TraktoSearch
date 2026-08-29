@@ -1546,9 +1546,11 @@ fun DoubanHotCategorySection(
             )
         } else {
             val hotRowState = androidx.compose.foundation.lazy.rememberLazyListState()
-            // DoubanHotCard 使用 item.cover 作为海报 URL，预取命中同一缓存
+            // DoubanHotCard 使用 item.cover 作为海报 URL，预取命中同一缓存。
+            // decodeSizePx 与 DoubanHotCard 的 .size(200) 一致：豆瓣封面 URL 尺寸不受控，
+            // 不限制时预取会按原图解码（可达 1080 宽），把内存缓存挤爆。
             val posterUrls = remember(category.items) { category.items.map { it.cover } }
-            rememberPosterPrefetch(hotRowState, posterUrls)
+            rememberPosterPrefetch(hotRowState, posterUrls, decodeSizePx = 200)
             androidx.compose.foundation.lazy.LazyRow(
                 state = hotRowState,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)

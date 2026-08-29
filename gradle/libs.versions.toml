@@ -49,6 +49,11 @@ testRunner = "1.7.0"
 hiltTesting = "2.60.1"
 composeMeshGradient = "0.3.0"
 mirage = "0.1.0"
+# Macrobenchmark / Baseline Profile 生成（:benchmark 模块）
+# 1.5.0-rc02 而非 1.4.1 stable：1.4.x 的 baselineprofile 插件对 AGP 版本有上限校验，
+# 本项目是 AGP 9.3.0，需要 1.5.x 才在支持范围内。
+benchmark = "1.5.0-rc02"
+uiautomator = "2.4.0"
 
 [libraries]
 # AndroidX Core
@@ -175,6 +180,10 @@ androidx-test-core = { group = "androidx.test", name = "core", version.ref = "te
 androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "testRunner" }
 hilt-android-testing = { group = "com.google.dagger", name = "hilt-android-testing", version.ref = "hiltTesting" }
 
+# Macrobenchmark（:benchmark 模块，com.android.test 插件下用 implementation 声明）
+androidx-benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmark" }
+androidx-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
+
 
 
 [plugins]
@@ -183,3 +192,7 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+androidx-baselineprofile = { id = "androidx.baselineprofile", version.ref = "benchmark" }
+# 注：:benchmark 模块的 com.android.test 插件不在这里建 alias。AGP 已被 :app 引入 classpath，
+# 再带版本号声明会报 "plugin is already on the classpath with an unknown version"，
+# 那边直接写 id("com.android.test")。

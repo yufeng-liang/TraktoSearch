@@ -64,6 +64,18 @@ class AmbientMotionState internal constructor(
             }
         }
     }
+
+    /**
+     * 立即停帧，直到下一次 [ping]。用于详情进入/返回转场结束等“刚完成大量工作、暂时无人操作”
+     * 的时刻：背景 shader 只要还在跑就是整窗满帧重绘，立刻停掉可避免转场后页面组合/加载窗口
+     * 继续白烧 GPU；下一次触摸 [ping] 会恢复流动并重启空闲看门狗。
+     */
+    fun pause() {
+        watchdog?.cancel()
+        watchdog = null
+        lastPingUptime = 0L
+        if (active) active = false
+    }
 }
 
 /**

@@ -733,7 +733,10 @@ internal fun DoubanRecommendSection(
                     val posterUrls = remember(items) {
                         items.map { it.pic?.normal ?: it.pic?.large ?: it.cover }
                     }
-                    rememberPosterPrefetch(listState, posterUrls)
+                    // 豆瓣图尺寸不定（pic.normal 常见 480 宽），必须显式对齐 MovieCard 的
+                    // ImageRequest.size(342)：Coil 2 无 transformation 时不把 size 并入内存缓存 key，
+                    // 预取先落地就会把原始尺寸的大位图塞进缓存让卡片复用，白占约一倍内存。
+                    rememberPosterPrefetch(listState, posterUrls, decodeSizePx = 342)
                     LazyRow(
                         state = listState,
                         modifier = Modifier,

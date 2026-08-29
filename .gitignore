@@ -23,6 +23,7 @@ captures/
 
 # Build
 /app/build
+/benchmark/build
 /build
 
 # Trae IDE

@@ -28,6 +28,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.androidx.baselineprofile)
     id("com.huawei.agconnect") apply false
 }
 
@@ -81,6 +82,22 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
+        // Macrobenchmark 与 baseline profile 采集专用。继承 release 的 R8/资源压缩配置，
+        // 测的才是用户实际安装的产物形态 —— 现有性能报告的全部数据来自 debug 构建，
+        // 解释器占 51% 采样，主线程侧的瓶颈排序不能直接采信。
+        //
+        // 签名换回 debug，两个理由：
+        // 1) release 签名由 verifyReleaseSigning 校验证书指纹，基准构建不该动用正式发布密钥；
+        // 2) 覆盖安装要求签名一致 —— 设备上那份 3.6.0 是 debug 构建
+        //    （dumpsys package 显示 flags=[ DEBUGGABLE ]），换 release 签名会 INSTALL_FAILED_UPDATE_INCOMPATIBLE，
+        //    只能卸载重装、清空想看已看数据，滚动基准就测不到真实数据量了。
+        // 该构建类型名不匹配 preReleaseBuild/assembleRelease/bundleRelease，不会触发那项校验。
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            isDebuggable = false
+        }
     }
 
     compileOptions {
@@ -111,6 +128,64 @@ android {
         resources.excludes += "/META-INF/LICENSE.md"
         resources.excludes += "/META-INF/LICENSE-notice.md"
     }
+}
+
+// Compose 编译器指标/报告，用于定位 restartable 但不 skippable 的 composable 与不稳定参数。
+// 由 gradle.properties 的 kotlin.compose.compiler.metrics / kotlin.compose.compiler.reports
+// 门控，默认关闭（开启会拖慢 Kotlin 编译）。
+//
+// Kotlin 2.x 的 org.jetbrains.kotlin.plugin.compose 不读这两个 Gradle 属性 —— 那是旧
+// androidx compose compiler 时代的写法，必须走 composeCompiler DSL，这里显式转接一次。
+//
+// 用法：./gradlew :app:assembleDebug -Pkotlin.compose.compiler.reports=true \
+//           -Pkotlin.compose.compiler.metrics=true
+// 产物：app/build/compose-reports/
+//   *-composables.txt      每个 composable 的 restartable / skippable 判定
+//   *-composables.csv      同上，便于筛选
+//   *-classes.txt          参数类型的稳定性判定
+//   *-module.json          模块级汇总计数
+// baselineprofile 插件会自己派生一个 nonMinifiedRelease 构建类型（initWith release，
+// 关掉 R8 才能采到未混淆的方法签名），连 release 的 signingConfig 一起继承过去。
+// 采集 profile 不该动用正式发布密钥；而且工作树里通常没有 release.jks
+// （keystore 不在版本库），继承下来会直接卡在 validateSigningNonMinifiedRelease。
+// 换 debug 签名还有一个必要理由：设备上已装的包是 debug 签名，覆盖安装要求签名一致。
+//
+// 必须用 finalizeDsl 而不是 buildTypes.configureEach：插件是在自己的配置阶段里
+// 创建并设置该构建类型的，容器级 configureEach 会被它随后的赋值覆盖掉。
+// finalizeDsl 是 AGP 给出的「DSL 锁定前最后一次修改」钩子，在所有插件配置完之后才跑。
+androidComponents {
+    finalizeDsl { extension ->
+        val debugSigning = extension.signingConfigs.getByName("debug")
+        extension.buildTypes.forEach { buildType ->
+            if (buildType.name.startsWith("nonMinified") || buildType.name == "benchmark") {
+                buildType.signingConfig = debugSigning
+            }
+        }
+    }
+}
+
+composeCompiler {
+    val reportsDir = layout.buildDirectory.dir("compose-reports")
+    if (providers.gradleProperty("kotlin.compose.compiler.metrics").orNull == "true") {
+        metricsDestination.set(reportsDir)
+    }
+    if (providers.gradleProperty("kotlin.compose.compiler.reports").orNull == "true") {
+        reportsDestination.set(reportsDir)
+    }
+}
+
+baselineProfile {
+    // 生成结果落到 app/src/release/generated/baselineProfiles/，与手工维护的
+    // src/main/baseline-prof.txt 并存 —— AGP 会把两份都作为 profile 源合并，profman 去重。
+    // 先跑起来比对覆盖率，确认新流程不比手工那份差，再决定是否替换。
+    // 生成命令：./gradlew :app:generateReleaseBaselineProfile
+    saveInSrc = true
+    // 不挂到普通构建上：生成需要连真机跑 instrumentation，
+    // 自动触发会让没插设备的 assembleRelease 直接失败。
+    automaticGenerationDuringBuild = false
+    // BaselineProfileGenerator.startup() 标了 includeInStartupProfile，产出 startup-prof.txt，
+    // 交给 AGP 做 dex 类布局优化 —— 本项目此前完全没有这一项。
+    dexLayoutOptimization = true
 }
 
 abstract class VerifyReleaseSigningTask : DefaultTask() {
@@ -260,6 +335,8 @@ dependencies {
 
     // Baseline Profile
     implementation(libs.profileinstaller)
+    // :benchmark 模块产出的 baseline / startup profile 的消费方声明
+    baselineProfile(project(":benchmark"))
 
     // Security
     implementation(libs.security.crypto)

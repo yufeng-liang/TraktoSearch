@@ -531,10 +531,6 @@ fun WatchlistScreen(
             )
         }
     }
-    val isGridScrolling by remember(currentGridState) {
-        derivedStateOf { currentGridState.isScrollInProgress }
-    }
-
     // key 必须同时包含 selectedMode 和 selectedTab：
     // currentGridState 由两者共同决定，缺任一 key 都会导致切 tab 后回调里仍持有旧的 gridState，
     // 「回到顶部」操作滚到不可见列表上
@@ -620,10 +616,12 @@ fun WatchlistScreen(
     // 海报 URL 列表：列表内容不变时复用同一实例，避免每次重组都 O(n) 重建导致
     // rememberCachedPosterAmbientColor 重新构建缓存 key 与重跑缓存读取。
     val posterUrls = remember(currentItems) { currentItems.mapNotNull { it.posterUrl } }
-    // 网格滚动预取：与卡片同一 posterUrl，预热即将滚入视口的海报
+    // 网格滚动预取：与卡片同一 posterUrl。decodeSizePx 必须与 WatchlistPosterCard 的
+    // PosterCard(imageSize = 264) 一致 —— 不传时预取会解码 w342 源图原始尺寸，
+    // 而 Coil 2 无 transformation 时 size 不进内存缓存 key，卡片会复用那份偏大的位图。
     if (currentItems.isNotEmpty()) {
         val prefetchUrls = remember(currentItems) { currentItems.map { it.posterUrl } }
-        rememberPosterPrefetch(currentGridState, prefetchUrls)
+        rememberPosterPrefetch(currentGridState, prefetchUrls, decodeSizePx = 264)
     }
     val watchlistGlassScene = glassSceneForContent(
         contentCount = currentItems.size,
@@ -744,8 +742,9 @@ fun WatchlistScreen(
                             .fillMaxHeight()
                             // 只有 Glass 模式的顶栏才采样这一层；BLUR 模式走 hazeSource，
                             // 这份全屏离屏录制写了没人读，每帧纯浪费。
+                            // 滚动时也保持录制：顶栏要持续看到滚动中的内容，不能降级成半透明。
                             .then(
-                                if (isWatchlistGlassActive && !isGridScrolling) {
+                                if (isWatchlistGlassActive) {
                                     Modifier.layerBackdrop(watchlistContentBackdrop)
                                 } else {
                                     Modifier

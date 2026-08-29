@@ -99,6 +99,7 @@ import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.ui.component.LocalIsCurrentTab
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.AppVisualSurface
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.GlassNavigationTabIndicator
@@ -113,7 +114,6 @@ import com.tracktosearch.ui.component.LocalBackdropSourceEnabled
 import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.ambientMotionPing
-import com.tracktosearch.ui.component.navPanelPressGlow
 import com.tracktosearch.ui.component.rememberAmbientMotionState
 import com.tracktosearch.ui.component.rememberGlassSelectionBounceScale
 import com.tracktosearch.ui.component.rememberNavPillDragState
@@ -151,7 +151,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-private val GlassBackdropResampleScheduleMillis = longArrayOf(120L, 320L, 700L, 1_400L, 2_800L, 5_000L)
+private const val GlassBackdropSettledResampleDelayMillis = 700L
 
 /** EntryPoint 用于在非 ViewModel 场景获取 TraktRepository（读取用户头像缓存） */
 @EntryPoint
@@ -470,6 +470,13 @@ fun MainScreen(
         0.05f
     )
     val isGlassMode = LocalVisualEffectMode.current == VisualEffectMode.GLASS
+    // 详情进入/返回时 NavHost 会同时组合新旧目的地：若继续录制全屏 backdrop，
+    // 列表图片上传、页面淡入淡出与离屏录制全挤在同一帧。与 Watchlist 顶栏一致，
+    // 转场端点变化（开始/结束）时才启停，避免每帧读动画状态导致整树重组。
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+    val isNavigationTransitionRunning = animatedVisibilityScope?.transition?.let { transition ->
+        transition.currentState != transition.targetState
+    } == true
     // Glass 模式下才需要 backdrop 采样源；blur 模式走 hazeSource，注册 layer 是纯浪费。
     val glowAsBackdrop = isGlassMode && meshEnabled
 
@@ -507,11 +514,33 @@ fun MainScreen(
     //
     // 不能反过来「源绘制后推进版本号」：底栏本身是 hazeSource(zIndex=1)，底栏重绘会让页面内
     // haze 消费者失效 → 页面重绘 → 又推进版本号 → 死循环（实测空闲 246fps）。
-    // 改为定时驱动的单向重采：进入/切换 tab 后 5Hz 推进 tick 约 6s，覆盖数据与海报陆续加载的窗口；
-    // 窗口结束后不再产生帧，滚动本身也会让底栏重绘重采。
+    // 改为定时驱动的单向重采：页面稳定 700ms 后只推进一次 tick，补齐首屏缓存图片；
+    // 快速切 Tab 会取消上页任务，不再在交互期间连续触发全屏重录。
     // 背景动效停帧信号：mirage 的 shader 时间逐帧累加，跑着就等于整窗满帧重绘。
     // 无指针事件 3s 后停帧，一有触摸立刻恢复。底栏重采也复用这份信号。
     val ambientMotion = rememberAmbientMotionState()
+    // 真机因果对照：Glass + 动态 Mesh 的主 Tab 卡顿约 31%，仅关闭 Mesh 动画后降至 0.02%。
+    // 保留背景画面，只在切页重排最密集的 800ms 内冻结 shader 时间；稳定后自动继续呼吸。
+    var isTabMotionCoolingDown by remember { mutableStateOf(false) }
+    LaunchedEffect(pagerState.currentPage, isGlassMode, meshEnabled) {
+        if (!isGlassMode || !meshEnabled) {
+            isTabMotionCoolingDown = false
+            return@LaunchedEffect
+        }
+        isTabMotionCoolingDown = true
+        delay(800L)
+        isTabMotionCoolingDown = false
+    }
+    // 详情进入/返回转场结束的瞬间页面仍在组合/加载，而背景动效的 3s 空闲余量会继续每帧
+    // 全屏重绘（真机 A/B：返回段 draw+GPU 约 42ms → 7ms）。在 true→false 边沿立即停帧，
+    // 把“转场结束”当作一次空闲；下一次触摸 ping() 自然恢复流动。
+    var wasNavTransitionRunning by remember { mutableStateOf(isNavigationTransitionRunning) }
+    LaunchedEffect(isNavigationTransitionRunning) {
+        if (wasNavTransitionRunning && !isNavigationTransitionRunning) {
+            ambientMotion.pause()
+        }
+        wasNavTransitionRunning = isNavigationTransitionRunning
+    }
     // 下发给页内组件（玻璃按钮的亮度探针）：static local 的值必须 remember 住，
     // 每次组合换一个新 lambda 会让整棵子树失效。
     val ambientMotionActive = remember(ambientMotion) { { ambientMotion.active } }
@@ -521,17 +550,13 @@ fun MainScreen(
     // 会先 drawContent() 画到屏幕，再 recordLayer() 把同样的内容录进 GraphicsLayer，录制尺寸取
     // DrawScope.size，即整页全屏，库没有留降分辨率或限区域的入口。所以 GLASS 相对 BLUR 的固定
     // 开销就是「每帧多一次全屏光栅化」，tick 每推进一次就买一次。能省的只有次数。
-    // 切 Tab 后只在布局/首屏图片最可能变化的几个关键时点复采。原实现 6 秒内固定产生
-    // 16 次全屏重录，并在交互活跃时继续轮询；滚动本身已有 contentSampleVersion 驱动，
-    // 无需再叠加 ticker。保留早/中/晚六次，覆盖首帧、缓存图片、网络图片和延迟数据落地。
+    // 切 Tab 本身与真实内容变化都会触发正常绘制；额外 ticker 只保留稳定后的单次兜底。
+    // 真机 Perfetto 显示快速 Tab 切换期间 eglSwapBuffers 累计接近 3 秒，旧六段计划会在
+    // 每次切换后的 120/320ms 强制购买两次全屏重录，直接与下一次点击重叠。
     LaunchedEffect(isGlassMode, pagerState.currentPage) {
         if (!isGlassMode) return@LaunchedEffect
-        var elapsed = 0L
-        for (target in GlassBackdropResampleScheduleMillis) {
-            delay(target - elapsed)
-            elapsed = target
-            backdropResampleTick++
-        }
+        delay(GlassBackdropSettledResampleDelayMillis)
+        backdropResampleTick++
     }
 
     Scaffold(
@@ -566,8 +591,12 @@ fun MainScreen(
                         modifier = Modifier.fillMaxSize(),
                         preset = MeshPreset.fromStorage(meshPreset),
                         enabled = meshEnabled,
-                        // 无人操作 3s 后停帧（ambientMotion），滚动进行中也停帧（scrollMotion）。
-                        motionActive = { ambientMotion.active && !scrollMotion.active },
+                        // 无人操作、滚动、切 Tab 或详情进入/返回的转场窗口都冻结；
+                        // 转场期间全屏 shader 与页面淡入淡出叠加是本帧 GPU 大头，只暂停时间推进，不隐藏背景。
+                        motionActive = {
+                            ambientMotion.active && !scrollMotion.active && !isTabMotionCoolingDown &&
+                                !isNavigationTransitionRunning
+                        },
                     )
                 }
 
@@ -589,8 +618,10 @@ fun MainScreen(
                             // 与上面 glowBackdrop / navTabsBackdrop 已有的 isGlassMode 门控同理。
                             // 读采样版本号/tick 让本节点 draw 失效也只为驱动 layerBackdrop 重录，
                             // 没有 layerBackdrop 时一并省掉。
+                            // 滚动时也保持录制：底栏要持续看到滚动中的内容，不能降级成半透明。
+                            // 仅详情进入/返回的 NavHost 转场窗口冻结，避免与页面淡入淡出叠加。
                             .then(
-                                if (isGlassMode && !scrollMotion.active) {
+                                if (isGlassMode && !isNavigationTransitionRunning) {
                                     Modifier
                                         .drawWithContent {
                                             @Suppress("UNUSED_EXPRESSION") backdropResampleTick
@@ -824,7 +855,9 @@ fun MainScreen(
                     // 免得日后 blur 分支接上 backdropOverride 时读到一层没录过的空层。
                     backdropOverride = if (isGlassMode) mainContentBackdrop else null,
                     exportedBackdrop = if (isGlassMode) navPanelBackdrop else null,
-                    interactionSource = navPillDrag.interactionSource,
+                    // Glass 的按压/切 Tab 动效只作用于选中水滴和单个 Tab；不要把同一按压态
+                    // 传给整块面板，否则 GlassSurface 会让整栏放大并增强高光。Blur 保持原行为。
+                    interactionSource = if (isGlassMode) null else navPillDrag.interactionSource,
                     // 底部导航自身作为 zIndex=1 的 source，effect 只采样 zIndex=0 的页面内容，
                     // 避免导航栏模糊自身导致重复模糊与无谓开销（Haze 最重的叠加场景）
                     sourceSelection = HazeSourceSelection.Behind.where { source -> source.zIndex < 1f },
@@ -869,18 +902,6 @@ fun MainScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .then(if (isGlassMode) Modifier.layerBackdrop(navTabsBackdrop) else Modifier)
-                        .then(
-                            if (isGlassMode) {
-                                Modifier.navPanelPressGlow(
-                                    progress = { navPillDrag.pressProgress },
-                                    centerX = {
-                                        navRowPaddingPx + navTabWidthPx * (navPillDrag.value + 0.5f)
-                                    }
-                                )
-                            } else {
-                                Modifier
-                            }
-                        )
                         .padding(horizontal = rowPadding),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
