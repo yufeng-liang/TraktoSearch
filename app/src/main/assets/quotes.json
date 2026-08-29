@@ -5480,10 +5480,10 @@
       "posterPath": "/73EMVPCQ3G2mTLgXJrFuOgxJfkp.jpg",
       "bundled": false,
       "lines": {
-        "en": ["Our love story", "was already over."],
-        "zh": ["我们的爱情故事，", "其实已经结束了。"],
-        "ja": ["私たちの恋の話は、", "もう終わっていたんだ。"],
-        "ko": ["우리 사랑 이야기는", "이미 끝나 있었다."]
+        "en": ["When I listened alone,", "that song was just a song."],
+        "zh": ["一个人听的时候，", "那首歌只是那首歌。"],
+        "ja": ["ひとりで聴いているときは、", "あの曲はただの曲だった。"],
+        "ko": ["혼자 들을 때는", "그 노래는 그냥 노래였다."]
       },
       "title": {
         "en": "We Made a Beautiful Bouquet",
