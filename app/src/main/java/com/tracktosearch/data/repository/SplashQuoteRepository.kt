@@ -3,6 +3,7 @@ package com.tracktosearch.data.repository
 import com.tracktosearch.data.local.SplashPosterStore
 import com.tracktosearch.data.local.SplashQuote
 import com.tracktosearch.data.local.SplashQuoteCatalog
+import com.tracktosearch.data.local.SplashQuoteStorage
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.coroutineScope
@@ -15,7 +16,10 @@ import javax.inject.Singleton
  * 开屏台词的选片与海报预取。
  *
  * 「每天同一条」用日期取模实现，不存任何游标：同一天进出 App 多次拿到的是同一条，
- * 跨天自动换；卸载重装也不会重头开始。
+ * 跨天自动换；卸载重装也不会重头开始。取模的池子是全库，所以同一天在所有设备上
+ * 算出来的是同一条——这是刻意的，「每日一句」的意思就是今天大家读的是同一句。
+ *
+ * 唯一的例外是装完的第一屏：见 [DEBUT_QUOTE_ID]。
  *
  * 关键约束是「开屏永远不出现占位图」。选片因此分两步：
  * 先算出当天应该展示的那条，海报没就绪时不硬等下载，而是在已就绪的子集里
@@ -26,18 +30,41 @@ import javax.inject.Singleton
 class SplashQuoteRepository @Inject constructor(
     private val catalog: SplashQuoteCatalog,
     private val posterStore: SplashPosterStore,
+    private val storage: SplashQuoteStorage,
 ) {
 
     /** 当天该展示的台词；整池海报都没就绪（首启且 assets 被裁掉）时返回 null，调用方跳过台词层 */
     suspend fun todayQuote(): SplashQuote? {
         val pool = catalog.quotes()
         if (pool.isEmpty()) return null
+        debutQuote(pool)?.let { return it }
         val seed = daySeed()
         val designated = pool[(seed % pool.size).toInt()]
         if (posterStore.isReady(designated)) return designated
         val ready = pool.filter { posterStore.isReady(it) }
         if (ready.isEmpty()) return null
         return ready[(seed % ready.size).toInt()]
+    }
+
+    /**
+     * 开场那一条真的渲染出来之后调用，之后就交还给日期取模。
+     *
+     * 标记放在「渲染成功」而不是「选中」之后：选中之后海报仍可能解码失败，
+     * 那时整个台词层会被跳过，这一条其实没人看见，标记掉就等于永远错过了。
+     */
+    suspend fun markShown(quote: SplashQuote) {
+        if (quote.id == DEBUT_QUOTE_ID) storage.markDebutShown()
+    }
+
+    /**
+     * 装完第一屏固定给 [DEBUT_QUOTE_ID]，还没展示过时返回它，否则返回 null 走常规路径。
+     *
+     * 它是内置海报之一，所以这条路径不会出现没图的情况；万一台词库里没有这个 id
+     * （库被改过），就当作没有例外，直接落回日期取模。
+     */
+    private suspend fun debutQuote(pool: List<SplashQuote>): SplashQuote? {
+        if (!storage.isDebutPending()) return null
+        return pool.firstOrNull { it.id == DEBUT_QUOTE_ID && posterStore.isReady(it) }
     }
 
     /**
@@ -94,6 +121,8 @@ class SplashQuoteRepository @Inject constructor(
     private fun daySeed(): Long = LocalDate.now().toEpochDay()
 
     companion object {
+        /** 装完第一屏固定展示的那一条：《重庆森林》的「凤梨罐头」 */
+        const val DEBUT_QUOTE_ID = "chungking-express"
         private const val DEFAULT_PREFETCH_DAYS = 7
         private const val MAX_PARALLEL_DOWNLOADS = 3
     }

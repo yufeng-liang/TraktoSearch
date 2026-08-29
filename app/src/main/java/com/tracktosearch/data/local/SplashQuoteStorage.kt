@@ -51,8 +51,28 @@ class SplashQuoteStorage @Inject constructor(
         _enabledState.value = value
     }
 
+    /**
+     * 是否还没展示过开场那一条。
+     *
+     * 首次安装的第一屏不交给日期取模：装完就看到的那句是这个功能给人的第一印象，
+     * 应该是选定的那一条，而不是碰巧落在当天的随便一条。
+     */
+    suspend fun isDebutPending(): Boolean =
+        context.splashQuoteDataStore.data.map { prefs ->
+            prefs[KEY_DEBUT_SHOWN] ?: false
+        }.first().not()
+
+    /** 开场那一条真的渲染出来之后才落盘，写之前先看标记，避免每次开屏都写一次磁盘 */
+    suspend fun markDebutShown() {
+        if (!isDebutPending()) return
+        context.splashQuoteDataStore.edit { prefs ->
+            prefs[KEY_DEBUT_SHOWN] = true
+        }
+    }
+
     companion object {
         const val DEFAULT_ENABLED = true
         private val KEY_ENABLED = booleanPreferencesKey("enabled")
+        private val KEY_DEBUT_SHOWN = booleanPreferencesKey("debut_shown")
     }
 }

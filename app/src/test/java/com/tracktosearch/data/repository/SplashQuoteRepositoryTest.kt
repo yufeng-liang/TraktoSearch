@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.local.SplashPosterStore
 import com.tracktosearch.data.local.SplashQuote
 import com.tracktosearch.data.local.SplashQuoteCatalog
+import com.tracktosearch.data.local.SplashQuoteStorage
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -22,8 +23,12 @@ class SplashQuoteRepositoryTest {
 
     private val catalog = mockk<SplashQuoteCatalog>()
     private val posterStore = mockk<SplashPosterStore>(relaxed = true)
+    private val storage = mockk<SplashQuoteStorage>(relaxed = true)
 
-    private fun repository() = SplashQuoteRepository(catalog, posterStore)
+    /** 默认按「开场那一条早就展示过」配置，日期取模的用例才是常规路径 */
+    private fun repository() = SplashQuoteRepository(catalog, posterStore, storage).also {
+        coEvery { storage.isDebutPending() } returns false
+    }
 
     private fun quote(id: String) = SplashQuote(
         id = id,
@@ -135,5 +140,51 @@ class SplashQuoteRepositoryTest {
         coEvery { catalog.quotes() } returns emptyList()
 
         assertThat(repository().isPoolComplete()).isFalse()
+    }
+
+    @Test
+    fun `还没展示过开场那一条时无视日期直接给它`() = runTest {
+        val pool = listOf("a", SplashQuoteRepository.DEBUT_QUOTE_ID, "c").map { quote(it) }
+        coEvery { catalog.quotes() } returns pool
+        every { posterStore.isReady(any()) } returns true
+        val repository = repository()
+        coEvery { storage.isDebutPending() } returns true
+
+        val result = repository.todayQuote()
+
+        assertThat(result?.id).isEqualTo(SplashQuoteRepository.DEBUT_QUOTE_ID)
+    }
+
+    @Test
+    fun `开场那一条展示过之后回到日期取模`() = runTest {
+        val pool = listOf("a", SplashQuoteRepository.DEBUT_QUOTE_ID, "c", "d", "e").map { quote(it) }
+        coEvery { catalog.quotes() } returns pool
+        every { posterStore.isReady(any()) } returns true
+
+        val result = repository().todayQuote()
+
+        assertThat(result).isEqualTo(pool[(seed() % pool.size).toInt()])
+    }
+
+    @Test
+    fun `台词库里没有开场那一条时不搞例外直接走日期取模`() = runTest {
+        val pool = listOf("a", "b", "c").map { quote(it) }
+        coEvery { catalog.quotes() } returns pool
+        every { posterStore.isReady(any()) } returns true
+        val repository = repository()
+        coEvery { storage.isDebutPending() } returns true
+
+        assertThat(repository.todayQuote()).isEqualTo(pool[(seed() % pool.size).toInt()])
+    }
+
+    @Test
+    fun `markShown 只对开场那一条落盘`() = runTest {
+        val repository = repository()
+
+        repository.markShown(quote("a"))
+        coVerify(exactly = 0) { storage.markDebutShown() }
+
+        repository.markShown(quote(SplashQuoteRepository.DEBUT_QUOTE_ID))
+        coVerify(exactly = 1) { storage.markDebutShown() }
     }
 }

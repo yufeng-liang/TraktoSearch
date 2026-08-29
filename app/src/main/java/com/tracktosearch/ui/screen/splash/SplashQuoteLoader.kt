@@ -34,6 +34,8 @@ class SplashQuoteLoader @Inject constructor(
             val bytes = posterStore.readBytes(quote) ?: return@withContext null
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                 ?: return@withContext null
+            // 到这里画面已经凑齐，开场那一条才算真的展示过
+            repository.markShown(quote)
             SplashQuoteUi(
                 lines = lines,
                 title = quote.titleFor(lang),

@@ -17,9 +17,9 @@ import javax.inject.Singleton
  * 不复用 Coil 的图片缓存，原因有两个：
  * 1. 那是 888MB 的 LRU，浏览几百张海报就可能把开屏用的那张挤掉；
  * 2. 它在 cacheDir 下，系统清理缓存或存储紧张时会被抹掉。
- * 开屏要求「永远不出现占位图」，所以放 filesDir 下自己管，整池 60 条也只有 ~2MB。
+ * 开屏要求「永远不出现占位图」，所以放 filesDir 下自己管，整池 365 条约 15MB。
  *
- * 内置的 5 条海报随 APK 走 assets，不占这里的空间，也不需要下载。
+ * 内置的 6 条海报随 APK 走 assets，不占这里的空间，也不需要下载。
  */
 @Singleton
 class SplashPosterStore @Inject constructor(
