@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.help
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ExpandLess
@@ -36,7 +38,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -56,10 +57,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -209,6 +215,11 @@ fun HelpScreen(
     var expandedIndex by rememberSaveable { mutableIntStateOf(0) }
     var helpQuery by rememberSaveable { mutableStateOf("") }
     var searchVisible by rememberSaveable { mutableStateOf(false) }
+    // 搜索框内嵌在顶栏 title 槽（与片单页同款展开收起交互），展开时自动拉起键盘
+    val searchFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(searchVisible) {
+        if (searchVisible) searchFocusRequester.requestFocus()
+    }
     val lazyListState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     // 功能页带 section 参数进来时：展开对应段并滚到它，省得用户在 12 段里自己找
@@ -549,9 +560,8 @@ fun HelpScreen(
                         state = hazeState,
                         style = hazeStyle,
                         blurRadius = 24.dp,
-                        // 搜索框展开时顶栏比 contentPadding 预留的 64dp 更高、会压住首段，
-                        // 此时强制启用模糊，输入框才有磨砂底衬而不是直接透出正文
-                        isContentUnderTopBar = hasContentUnderTopBar || searchVisible
+                        // 搜索框内嵌在 title 槽内，顶栏高度恒为预留的 64dp，不会压住首段
+                        isContentUnderTopBar = hasContentUnderTopBar
                     )
                     // 拦截点击：顶栏覆盖可滚动列表，不消费会让点击穿透到下方列表项
                     .clickable(enabled = false, onClick = {})
@@ -559,11 +569,23 @@ fun HelpScreen(
                 Spacer(modifier = Modifier.statusBarsPadding())
                 TopAppBar(
                     title = {
-                        Text(
-                            text = stringResource(R.string.help_title),
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        // 搜索框与标题同位切换（片单页同款展开收起交互），顶栏高度不变
+                        Crossfade(targetState = searchVisible, label = "help_search_switch") { visible ->
+                            if (visible) {
+                                HelpSearchField(
+                                    query = helpQuery,
+                                    onQueryChange = { helpQuery = it },
+                                    focusRequester = searchFocusRequester,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            } else {
+                                Text(
+                                    text = stringResource(R.string.help_title),
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
                     },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
@@ -576,9 +598,15 @@ fun HelpScreen(
                     },
                     actions = {
                         // 段内搜索：12 段手风琴靠翻找效率太低
+                        val focusManager = LocalFocusManager.current
                         IconButton(onClick = {
-                            searchVisible = !searchVisible
-                            if (!searchVisible) helpQuery = ""
+                            if (searchVisible) {
+                                searchVisible = false
+                                helpQuery = ""
+                                focusManager.clearFocus()
+                            } else {
+                                searchVisible = true
+                            }
                         }) {
                             Icon(
                                 imageVector = if (searchVisible) Icons.Rounded.Close else Icons.Rounded.Search,
@@ -595,29 +623,75 @@ fun HelpScreen(
                     ),
                     windowInsets = WindowInsets(0, 0, 0, 0)
                 )
-                if (searchVisible) {
-                    OutlinedTextField(
-                        value = helpQuery,
-                        onValueChange = { helpQuery = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                        singleLine = true,
-                        placeholder = { Text(stringResource(R.string.help_search_hint)) },
-                        trailingIcon = {
-                            if (helpQuery.isNotEmpty()) {
-                                IconButton(onClick = { helpQuery = "" }) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Close,
-                                        contentDescription = stringResource(R.string.common_cancel)
-                                    )
-                                }
-                            }
-                        }
-                    )
-                }
             }
         }
+    }
+}
+
+/**
+ * 顶栏内嵌的段内搜索框：胶囊样式与片单页搜索一致，收起时由图标按钮替代。
+ */
+@Composable
+private fun HelpSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    focusRequester: FocusRequester,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(21.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = modifier.height(42.dp)
+    ) {
+        BasicTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            singleLine = true,
+            textStyle = TextStyle(
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 14.sp
+            ),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            modifier = Modifier
+                .fillMaxSize()
+                .focusRequester(focusRequester)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            decorationBox = { innerTextField ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        if (query.isEmpty()) {
+                            Text(
+                                text = stringResource(R.string.help_search_hint),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                                fontSize = 14.sp
+                            )
+                        }
+                        innerTextField()
+                    }
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { onQueryChange("") }, modifier = Modifier.size(28.dp)) {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = stringResource(R.string.common_cancel),
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        )
     }
 }
 
