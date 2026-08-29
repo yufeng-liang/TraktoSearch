@@ -58,6 +58,10 @@
     <string name="update_download_browser">浏览器下载</string>
     <string name="update_release_page">前往发布页</string>
     <string name="update_download_unavailable">直接下载暂不可用，可前往发布页获取 APK。</string>
+    <string name="update_dialog_badge">发现新版本</string>
+    <string name="update_cancel_download">取消下载</string>
+    <string name="update_install">立即安装</string>
+    <string name="update_download_complete">下载完成，点击安装</string>
     <string name="update_close">关闭</string>
     <string name="install_failed">安装失败 (code=%1$d)</string>
     <string name="notification_release_title">上映提醒：%1$s</string>
@@ -91,7 +95,9 @@
     <string name="watchlist_batch_remove_partial_failed">部分条目移除失败</string>
     <string name="common_cancel">取消</string>
     <string name="permission_cloud_title">想知道白云会变身吗？</string>
-    <string name="permission_cloud_message">授权位置后，它会随您所在城市的实时天气和节日主题变化哦~</string>
+    <string name="permission_cloud_message">白云会随你所在城市的实时天气和节日主题变化。只需大致位置（城市级），不需要精确定位。</string>
+    <string name="permission_privacy_title">隐私边界</string>
+    <string name="permission_cloud_privacy">查询天气时，大致位置仅发送给天气服务换取天气信息：不与任何账号关联、不保存、不用于其他用途。拒绝授权也不影响任何功能，白云保持静态。</string>
     <string name="permission_cancel">取消</string>
     <string name="permission_authorize">去授权</string>
 
@@ -408,11 +414,11 @@
     <string name="crash_dialog_cancel">暂不发送</string>
     <!-- 崩溃日志授权 -->
     <string name="crash_auth_dialog_title">崩溃日志授权</string>
-    <string name="crash_auth_dialog_message">应用近期发生了崩溃。是否允许通过网关将崩溃日志（含堆栈、应用版本、设备型号、最近操作）上报给开发者以帮助修复问题？你随时可在设置中更改。</string>
+    <string name="crash_auth_dialog_message">应用近期发生了崩溃。是否允许通过网关将崩溃日志（含堆栈、应用版本、系统版本、最近操作）上报给开发者以帮助修复问题？日志不含设备型号等身份信息。你随时可在设置中更改。</string>
     <string name="crash_auth_dialog_agree">同意并上报</string>
     <string name="crash_auth_dialog_decline">拒绝</string>
     <string name="settings_crash_log_title">自动上报崩溃日志</string>
-    <string name="settings_crash_log_subtitle">下次启动时上传崩溃堆栈、机型、系统版本与 App 版本，接收方是本应用的反馈服务，仅用于定位崩溃</string>
+    <string name="settings_crash_log_subtitle">下次启动时上传崩溃堆栈、系统版本与 App 版本，接收方是本应用的反馈服务，仅用于定位崩溃</string>
 
     <!-- 崩溃上报反馈与记录 -->
     <string name="crash_upload_success">崩溃日志上报成功</string>
@@ -430,7 +436,6 @@
     <string name="crash_detail_fail_reason">失败原因</string>
     <string name="crash_detail_crash_time">崩溃时间</string>
     <string name="crash_detail_app_version">应用版本</string>
-    <string name="crash_detail_device">设备型号</string>
     <string name="crash_detail_log_content">日志内容</string>
     <string name="crash_detail_upload_now">立即上传</string>
     <string name="crash_detail_not_found">记录不存在</string>
@@ -1555,6 +1560,14 @@
     <string name="ai_audio_playing">正在播放语音</string>
     <string name="ai_feature_greeting">昵称欢迎</string>
     <string name="ai_feature_taste">锐评我的看单</string>
+    <string name="settings_ai_group_title">AI 与隐私</string>
+    <string name="settings_ai_taste_subtitle">开启后，使用该功能会上传最近 60 条观看记录（标题、年份、评分、观看时间）给本应用的 AI 服务，仅用于生成锐评</string>
+    <string name="ai_taste_consent_title">锐评需要上传观看记录</string>
+    <string name="ai_taste_consent_message">生成锐评需要将你最近 60 条观看记录（标题、年份、评分、观看时间）发送给本应用的 AI 服务。可随时在「设置 → AI 与隐私」中关闭，关闭后不会发送。</string>
+    <string name="ai_taste_consent_agree">同意并继续</string>
+    <string name="ai_taste_consent_decline">暂不使用</string>
+    <string name="ai_taste_disabled_message">「%1$s」已在设置中关闭，开启后才能使用。</string>
+    <string name="ai_taste_go_settings">去设置</string>
     <string name="ai_feature_quiz">你真的看懂这些影视了吗</string>
     <string name="ai_feature_daily">每日影视冷知识</string>
     <string name="ai_feature_start">打开</string>
@@ -1660,6 +1673,14 @@
     <string name="help_ai_sprite_b5">AI 请求有每日配额，功能页右上角刷新会再消耗一次；离线时不能发起新请求，但已缓存内容仍可查看</string>
     <string name="help_ai_sprite_b6">V1 使用角色与场景的音色设计提示词；试听失败时回退到系统语音</string>
     <string name="help_ai_sprite_b7">闯关中途返回会保留作答；重新抽题前会二次确认，还有题没答就提交也会先提醒；答完还可以告诉精灵难度，之后出题会更合你口味</string>
+    <string name="help_privacy">数据与隐私</string>
+    <string name="help_privacy_b1">检查更新：经本应用网关向 GitHub/Gitee 查询最新版本，不携带你的身份信息</string>
+    <string name="help_privacy_b2">位置：仅在你点击白云并授权后，将大致位置（城市级）发送给天气服务查询天气，不与账号关联、不保存；拒绝授权不影响其他功能</string>
+    <string name="help_privacy_b3">崩溃日志：默认关闭。开启后上传崩溃堆栈、系统版本与 App 版本（不含设备型号），可在设置中随时关闭</string>
+    <string name="help_privacy_b4">AI 精灵：「锐评我的看单」经首次确认后上传最近 60 条观看记录给本应用的 AI 服务生成锐评，可在「设置 → AI 与隐私」关闭；其他 AI 功能只发送少量必要数据</string>
+    <string name="help_privacy_b5">意见反馈：仅提交你填写的内容与联系方式，附带系统版本，不含设备型号</string>
+    <string name="help_privacy_b6">授权与同步：激活授权需上报 Android ID 用于设备绑定；豆瓣登录 Cookie 仅用于读取你的豆瓣标记数据，不上传任何第三方</string>
+    <string name="help_privacy_b7">本应用不集成任何统计或广告 SDK，不采集使用行为数据</string>
 
     <!-- 主页面背景光晕 -->
     <string name="bg_glow_title">背景动效</string>
