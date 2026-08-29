@@ -202,6 +202,7 @@ fun MainScreen(
     onNavigateToLogin: () -> Unit,
     onTraktLogin: () -> Unit = { onNavigateToLogin() },
     onStatisticsClick: () -> Unit,
+    onDailyStampClick: () -> Unit = {},
     onMarkRecordsClick: () -> Unit = {},
     onTraktSearch: (type: String, query: String) -> Unit,
     onPersonClick: (tmdbId: Int, name: String, profileUrl: String?, avatarColor: Color?) -> Unit = { _, _, _, _ -> },
@@ -689,6 +690,7 @@ fun MainScreen(
                             onNavigateToLogin = onNavigateToLogin,
                             onTraktLogin = onTraktLogin,
                             onStatisticsClick = onStatisticsClick,
+                            onDailyStampClick = onDailyStampClick,
                             modifier = Modifier.fillMaxSize()
                         )
                     }

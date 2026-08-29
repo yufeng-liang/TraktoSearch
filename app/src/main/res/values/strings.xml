@@ -499,6 +499,26 @@
     <string name="settings_splash_quote">Daily Movie Line</string>
     <string name="settings_splash_quote_subtitle">Show a classic movie line with its poster on the splash screen. Tap anywhere to skip.</string>
     <string name="splash_quote_skip">TAP TO SKIP</string>
+
+    <!-- Daily Stamp -->
+    <string name="daily_stamp_title">Daily Stamp</string>
+    <string name="daily_stamp_previous_month">Previous month</string>
+    <string name="daily_stamp_next_month">Next month</string>
+    <plurals name="daily_stamp_day_count">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <string name="daily_stamp_streak">STREAK</string>
+    <string name="daily_stamp_total">TOTAL</string>
+    <string name="daily_stamp_hint">Tap a day to read its line</string>
+    <string name="daily_stamp_empty">No stamps yet. Open the app tomorrow and you will have one.</string>
+    <string name="daily_stamp_save">Save</string>
+    <string name="daily_stamp_share">Share</string>
+    <string name="daily_stamp_saved">Saved to your album</string>
+    <string name="daily_stamp_already_saved">Already in your album</string>
+    <string name="daily_stamp_save_failed">Could not save the card</string>
+    <string name="daily_stamp_share_chooser">Share daily stamp</string>
+    <string name="daily_stamp_share_failed">Could not share the card</string>
     <string name="settings_storage">Storage</string>
     <string name="settings_clear_cache">Clear Cache</string>
     <string name="settings_clear_cache_confirm">Are you sure you want to clear all cached data?</string>

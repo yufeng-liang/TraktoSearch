@@ -136,6 +136,9 @@ class MainActivity : AppCompatActivity() {
     lateinit var splashQuoteRepository: com.tracktosearch.data.repository.SplashQuoteRepository
 
     @Inject
+    lateinit var dailyStampRepository: com.tracktosearch.data.repository.DailyStampRepository
+
+    @Inject
     lateinit var crashLogUploader: com.tracktosearch.data.util.CrashLogUploader
     @Inject
     lateinit var crashLogStorage: com.tracktosearch.data.local.CrashLogStorage
@@ -295,6 +298,15 @@ class MainActivity : AppCompatActivity() {
                     // 预取失败无副作用：下次启动或 Worker 会再补
                 }
             }
+            // 日签：打开 App 就算今天来过。传开屏真正展示过的那条 id，
+            // 关掉台词或整层跳过时传 null 由仓库按日期兜底。
+            this@MainActivity.lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    dailyStampRepository.checkIn(splashQuote?.quoteId)
+                } catch (e: Exception) {
+                    // 签到失败不影响任何已有功能：下次启动或跨天回到前台会再写
+                }
+            }
             if (isAuthorized) {
                 this@MainActivity.lifecycleScope.launch {
                     val checkResult = StartupTrace.measure("trakt.profile") {
@@ -412,6 +424,18 @@ class MainActivity : AppCompatActivity() {
                 }
             } else {
                 StartupTrace.mark("auth.resume_check.skipped", "reason=unauthorized")
+            }
+            // 日签的第二个入口：App 挂在后台过了一夜，第二天点回来不会走冷启动，
+            // 只靠 onCreate 那次签到的话这一天就漏了。checkIn 自己会先查当天有没有，
+            // 每次回到前台多一次主键查询，代价可以忽略。
+            if (!isInitialResume) {
+                withContext(Dispatchers.IO) {
+                    try {
+                        dailyStampRepository.checkIn()
+                    } catch (e: Exception) {
+                        // 签到失败不影响任何已有功能：下次回到前台会再写
+                    }
+                }
             }
         }
     }

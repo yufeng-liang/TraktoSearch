@@ -63,6 +63,19 @@ class SplashPosterStore @Inject constructor(
     }
 
     /**
+     * Coil 能直接吃的海报来源：内置的给 assets URI，其余给 [File]。
+     *
+     * 给日签日历用。那一屏最多 31 张缩略图，走 [readBytes] 就是 31 次全量读盘 + 手动解码；
+     * 交给 Coil 才能按控件尺寸降采样并复用它的内存缓存。
+     * 返回 null 表示还没就绪，调用方按「没有这张图」处理，不要画占位框。
+     */
+    fun posterModel(quote: SplashQuote): Any? = if (quote.bundled) {
+        "file:///android_asset/${assetPath(quote.id)}"
+    } else {
+        file(quote.id).takeIf { it.exists() && it.length() > 0 }
+    }
+
+    /**
      * 下载单条海报，已就绪则跳过。返回是否处于就绪状态。
      *
      * 先写临时文件再改名：直接写目标文件的话，下载被中断就留下一个半张图的文件，

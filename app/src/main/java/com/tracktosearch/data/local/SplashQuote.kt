@@ -68,6 +68,25 @@ data class SplashQuote(
 
     companion object {
         const val FALLBACK_LANG = "en"
+
+        /** 台词库覆盖的语言 */
+        private val SUPPORTED_LANGS = setOf("en", "zh", "ja", "ko")
+
+        /**
+         * 把界面语言或系统语言收敛到台词库支持的四种，落不到的一律走英文。
+         *
+         * 开屏和日签共用同一份判断：两处若各写一遍，某天加了第五种语言就会出现
+         * 开屏是中文、日签是英文的错配。
+         */
+        fun resolveLang(tag: String): String =
+            if (tag in SUPPORTED_LANGS) tag else FALLBACK_LANG
+
+        /** 片名的书名号：中韩《》、日『』、英文不加。开屏与日签卡片共用 */
+        fun titleWrap(lang: String): Pair<String, String> = when (lang) {
+            "zh", "ko" -> "《" to "》"
+            "ja" -> "『" to "』"
+            else -> "" to ""
+        }
     }
 }
 

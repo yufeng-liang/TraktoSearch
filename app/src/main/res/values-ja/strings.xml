@@ -265,6 +265,25 @@
     <string name="settings_splash_quote">起動時の名セリフ</string>
     <string name="settings_splash_quote_subtitle">起動時に名作映画のセリフとポスターを表示します。画面をタップするとスキップできます。</string>
     <string name="splash_quote_skip">タップでスキップ</string>
+
+    <!-- 日めくり -->
+    <string name="daily_stamp_title">日めくり</string>
+    <string name="daily_stamp_previous_month">前の月</string>
+    <string name="daily_stamp_next_month">次の月</string>
+    <plurals name="daily_stamp_day_count">
+        <item quantity="other">%1$d 日</item>
+    </plurals>
+    <string name="daily_stamp_streak">連続</string>
+    <string name="daily_stamp_total">累計</string>
+    <string name="daily_stamp_hint">日付をタップすると、その日の一言が読めます</string>
+    <string name="daily_stamp_empty">まだ一枚もありません。明日アプリを開けば、一枚たまります。</string>
+    <string name="daily_stamp_save">保存</string>
+    <string name="daily_stamp_share">共有</string>
+    <string name="daily_stamp_saved">アルバムに保存しました</string>
+    <string name="daily_stamp_already_saved">すでにアルバムにあります</string>
+    <string name="daily_stamp_save_failed">カードを保存できませんでした</string>
+    <string name="daily_stamp_share_chooser">日めくりを共有</string>
+    <string name="daily_stamp_share_failed">カードを共有できませんでした</string>
     <string name="settings_storage">ストレージ</string>
     <string name="settings_clear_cache">キャッシュクリア</string>
     <string name="settings_about">について</string>

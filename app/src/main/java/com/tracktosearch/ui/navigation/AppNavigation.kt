@@ -157,6 +157,7 @@ object Routes {
     const val SEARCH = "search/{keyword}"
     const val PERSON = "person/{personId}/{personName}/{profileUrl}"
     const val STATISTICS = "statistics"
+    const val DAILY_STAMP = "dailyStamp"
     const val TRAKT_SEARCH = "traktSearch/{type}/{query}"
     // section 是可选参数：不带参数导航用 helpRoute()，功能页跳对应段用 helpRoute(HelpSections.X)
     const val HELP = "help?section={section}"
@@ -812,6 +813,9 @@ fun AppNavigation(
                             onStatisticsClick = {
                                 navController.navigate(Routes.STATISTICS)
                             },
+                            onDailyStampClick = {
+                                navController.navigate(Routes.DAILY_STAMP)
+                            },
                             onMarkRecordsClick = {
                                 navController.navigate(Routes.MARK_RECORDS)
                             },
@@ -1056,6 +1060,27 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         StatisticsScreen(
                             onBack = { navController.popBackStack() }
+                        )
+                    }
+                }
+
+                composable(Routes.DAILY_STAMP) {
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        com.tracktosearch.ui.screen.dailystamp.DailyStampScreen(
+                            onBack = { navController.popBackStack() },
+                            // 台词库全是电影，所以固定 movie；traktId 传 0，详情页按 tmdbId 自己去查
+                            onQuoteClick = { tmdbId, title, year, posterUrl ->
+                                navController.navigate(
+                                    Routes.detailRoute(
+                                        type = "movie",
+                                        traktId = 0,
+                                        tmdbId = tmdbId,
+                                        title = title,
+                                        posterUrl = posterUrl,
+                                        year = year,
+                                    )
+                                )
+                            }
                         )
                     }
                 }

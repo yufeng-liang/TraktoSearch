@@ -55,32 +55,76 @@ private fun saveBitmapToGallery(
     val safeName = title.replace(Regex("[^a-zA-Z0-9\\u4e00-\\u9fa5]"), "_")
     val filename = "TrackToSearch_${safeName}.jpg"
     val relativePath = Environment.DIRECTORY_PICTURES + "/TrackToSearch"
-
-    // 检查是否已存在同名文件（防重复保存）
-    val existingUri = queryExistingFile(context, filename, relativePath)
-    if (existingUri != null) {
-        scope.launch(Dispatchers.Main) {
+    when (writeBitmapToAlbum(context, bitmap, filename, relativePath)) {
+        SaveToAlbumResult.ALREADY_EXISTS -> scope.launch(Dispatchers.Main) {
             context.showToast(context.getString(R.string.gallery_already_exists, filename))
         }
-        return
+        SaveToAlbumResult.SAVED -> scope.launch(Dispatchers.Main) {
+            context.showToast(context.getString(R.string.gallery_saved, relativePath, filename))
+        }
+        SaveToAlbumResult.FAILED -> scope.launch(Dispatchers.Main) {
+            context.showToast(context.getString(R.string.gallery_save_failed))
+        }
+    }
+}
+
+/** 写入相册的结果。同名文件已存在单独成一档：那不是失败，提示语也该不一样。 */
+enum class SaveToAlbumResult { SAVED, ALREADY_EXISTS, FAILED }
+
+/**
+ * 把已有位图写进相册，只返回结果、不弹提示。
+ *
+ * 与 [savePosterToGallery] 的分工：那个负责「从 URL 取图再存」并顺手弹 toast；
+ * 这个只做写入，让调用方自己决定用 toast 还是 snackbar、文案怎么写。
+ */
+suspend fun saveBitmapToAlbum(
+    context: Context,
+    bitmap: Bitmap,
+    filename: String,
+    subDirectory: String = "TrackToSearch",
+): SaveToAlbumResult = withContext(Dispatchers.IO) {
+    writeBitmapToAlbum(
+        context = context,
+        bitmap = bitmap,
+        filename = filename,
+        relativePath = Environment.DIRECTORY_PICTURES + "/" + subDirectory,
+    )
+}
+
+private fun writeBitmapToAlbum(
+    context: Context,
+    bitmap: Bitmap,
+    filename: String,
+    relativePath: String,
+): SaveToAlbumResult {
+    // 检查是否已存在同名文件（防重复保存）
+    if (queryExistingFile(context, filename, relativePath) != null) {
+        return SaveToAlbumResult.ALREADY_EXISTS
     }
 
     val contentValues = android.content.ContentValues().apply {
         put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, filename)
-        put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+        put(
+            android.provider.MediaStore.Images.Media.MIME_TYPE,
+            if (filename.endsWith(".png", ignoreCase = true)) "image/png" else "image/jpeg"
+        )
         put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, relativePath)
     }
-    val uri = context.contentResolver.insert(
-        android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-        contentValues
-    )
-    if (uri != null) {
+    return try {
+        val uri = context.contentResolver.insert(
+            android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            contentValues
+        ) ?: return SaveToAlbumResult.FAILED
         context.contentResolver.openOutputStream(uri)?.use { stream ->
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream)
-        }
-        scope.launch(Dispatchers.Main) {
-            context.showToast(context.getString(R.string.gallery_saved, relativePath, filename))
-        }
+            if (filename.endsWith(".png", ignoreCase = true)) {
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+            } else {
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream)
+            }
+        } ?: return SaveToAlbumResult.FAILED
+        SaveToAlbumResult.SAVED
+    } catch (e: Exception) {
+        SaveToAlbumResult.FAILED
     }
 }
 

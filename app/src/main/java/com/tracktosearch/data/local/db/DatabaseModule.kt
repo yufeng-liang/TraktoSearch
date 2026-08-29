@@ -373,6 +373,21 @@ object DatabaseModule {
         }
     }
 
+    internal val MIGRATION_15_16 = object : Migration(15, 16) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // v15 -> v16：新增日签表，只增不改；已有缓存、同步、评论、流水数据一律不动。
+            // 升级上来的老用户没有历史日签，日历从升级后第一次打开那天开始长——
+            // 历史无法回算（台词库会扩容、海报就绪情况因人而异），补造假数据比空着更糟。
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS daily_stamp (
+                    epochDay INTEGER NOT NULL PRIMARY KEY,
+                    quoteId TEXT NOT NULL,
+                    stampedAt INTEGER NOT NULL
+                )""".trimIndent()
+            )
+        }
+    }
+
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -394,7 +409,7 @@ object DatabaseModule {
             "tracktosearch.db"
         )
             .openHelperFactory(factory)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
             .build()
     }
 
@@ -437,4 +452,8 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideMarkActionRecordDao(db: AppDatabase): MarkActionRecordDao = db.markActionRecordDao()
+
+    @Provides
+    @Singleton
+    fun provideDailyStampDao(db: AppDatabase): DailyStampDao = db.dailyStampDao()
 }

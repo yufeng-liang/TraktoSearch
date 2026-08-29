@@ -70,6 +70,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
@@ -243,6 +244,7 @@ fun WatchlistScreen(
     onTraktLogin: () -> Unit = onNavigateToLogin,
     // 观看统计入口：设置 Tab 里的入口保留，这里只是多一条更浅的路径
     onStatisticsClick: () -> Unit = {},
+    onDailyStampClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: WatchlistViewModel = hiltViewModel()
 ) {
@@ -1072,6 +1074,19 @@ fun WatchlistScreen(
                                                         contentDescription = stringResource(R.string.statistics_title),
                                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                         modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                                // 日签入口：紧挨着统计。两个都是「回看自己」的入口，
+                                                // 放一起才不用分别去记在哪。
+                                                IconButton(
+                                                    onClick = onDailyStampClick,
+                                                    modifier = Modifier.size(32.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.CalendarMonth,
+                                                        contentDescription = stringResource(R.string.daily_stamp_title),
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.size(19.dp)
                                                     )
                                                 }
                                             }

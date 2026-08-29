@@ -499,6 +499,25 @@
     <string name="settings_splash_quote">开屏每日台词</string>
     <string name="settings_splash_quote_subtitle">启动时展示一句经典电影台词和它的海报，轻触任意位置可跳过。</string>
     <string name="splash_quote_skip">轻触跳过</string>
+
+    <!-- 日签 -->
+    <string name="daily_stamp_title">日签</string>
+    <string name="daily_stamp_previous_month">上个月</string>
+    <string name="daily_stamp_next_month">下个月</string>
+    <plurals name="daily_stamp_day_count">
+        <item quantity="other">%1$d 天</item>
+    </plurals>
+    <string name="daily_stamp_streak">连续</string>
+    <string name="daily_stamp_total">累计</string>
+    <string name="daily_stamp_hint">点一天，读那天的句子</string>
+    <string name="daily_stamp_empty">还没有日签。明天打开 App，就有一枚了。</string>
+    <string name="daily_stamp_save">保存</string>
+    <string name="daily_stamp_share">分享</string>
+    <string name="daily_stamp_saved">已存进相册</string>
+    <string name="daily_stamp_already_saved">相册里已经有了</string>
+    <string name="daily_stamp_save_failed">没能存下这张卡</string>
+    <string name="daily_stamp_share_chooser">分享日签</string>
+    <string name="daily_stamp_share_failed">没能分享这张卡</string>
     <string name="settings_storage">存储</string>
     <string name="settings_clear_cache">清除缓存</string>
     <string name="settings_clear_cache_confirm">确定要清除所有缓存数据吗？</string>

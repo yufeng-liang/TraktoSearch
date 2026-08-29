@@ -39,12 +39,16 @@ class SplashQuoteLoader @Inject constructor(
             // 到这里画面已经凑齐，开场那一条才算真的展示过
             repository.markShown(quote)
             SplashQuoteUi(
+                quoteId = quote.id,
                 lines = lines,
                 title = quote.titleFor(lang),
                 year = quote.year,
                 poster = bitmap.asImageBitmap(),
                 isEnglish = lineLang == SplashQuote.FALLBACK_LANG,
-                titleWrap = titleWrap(lang),
+                titleWrap = SplashQuote.titleWrap(lang),
+                keyword = quote.keywordFor(lang),
+                keywordLatin = quote.keywordFor(SplashQuote.FALLBACK_LANG)
+                    .takeIf { lang != SplashQuote.FALLBACK_LANG && it.isNotBlank() },
             )
         } catch (e: Exception) {
             // 解码 OOM 或文件损坏：开屏不值得为此崩溃，跳过台词层即可
@@ -59,21 +63,6 @@ class SplashQuoteLoader @Inject constructor(
         } else {
             language
         }
-        return if (tag in SUPPORTED_LANGS) tag else SplashQuote.FALLBACK_LANG
-    }
-
-    private fun titleWrap(lang: String): Pair<String, String> = when (lang) {
-        LanguageStorage.LANGUAGE_CHINESE, LanguageStorage.LANGUAGE_KOREAN -> "《" to "》"
-        LanguageStorage.LANGUAGE_JAPANESE -> "『" to "』"
-        else -> "" to ""
-    }
-
-    private companion object {
-        val SUPPORTED_LANGS = setOf(
-            LanguageStorage.LANGUAGE_CHINESE,
-            LanguageStorage.LANGUAGE_ENGLISH,
-            LanguageStorage.LANGUAGE_JAPANESE,
-            LanguageStorage.LANGUAGE_KOREAN,
-        )
+        return SplashQuote.resolveLang(tag)
     }
 }

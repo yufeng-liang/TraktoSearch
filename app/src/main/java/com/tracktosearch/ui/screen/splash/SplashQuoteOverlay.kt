@@ -111,6 +111,7 @@ fun SplashQuoteOverlay(
     var posterVisible by remember { mutableStateOf(reduceMotion) }
     var visibleLines by remember { mutableIntStateOf(if (reduceMotion) lineCount else 0) }
     var sourceVisible by remember { mutableStateOf(reduceMotion) }
+    var sealVisible by remember { mutableStateOf(reduceMotion) }
     var skipVisible by remember { mutableStateOf(reduceMotion) }
     var exiting by remember { mutableStateOf(false) }
 
@@ -135,6 +136,10 @@ fun SplashQuoteOverlay(
         launch {
             delay(SplashQuoteTiming.SOURCE_AT_MS)
             sourceVisible = true
+        }
+        launch {
+            delay(SplashQuoteTiming.SEAL_AT_MS)
+            sealVisible = true
         }
         launch {
             delay(SplashQuoteTiming.SKIP_AT_MS)
@@ -269,6 +274,8 @@ fun SplashQuoteOverlay(
             }
             Spacer(Modifier.height(22.dp))
             QuoteSource(quote = quote, palette = palette, visible = sourceVisible)
+            Spacer(Modifier.height(26.dp))
+            StampedSeal(quote = quote, palette = palette, visible = sealVisible)
         }
 
         Text(
@@ -381,6 +388,41 @@ private fun QuoteSource(
         fontSize = 13.sp,
         letterSpacing = 0.1.em,
         textAlign = TextAlign.Center
+    )
+}
+
+/**
+ * 落下的印章：当天日签的关键词。
+ *
+ * 动作是「压」而不是「浮」：从 1.28 倍缩到 1 倍、260ms 收住，比其它元素都快。
+ * 台词是慢慢浮起来的，印章要是也慢慢浮，就成了第四行字；快速压下去才是盖章。
+ */
+@Composable
+private fun StampedSeal(
+    quote: SplashQuoteUi,
+    palette: SplashPalette,
+    visible: Boolean,
+) {
+    if (quote.keyword.isBlank()) return
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(durationMillis = 200),
+        label = "quoteSealAlpha"
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (visible) 1f else 1.28f,
+        animationSpec = tween(durationMillis = 260, easing = SealEasing),
+        label = "quoteSealScale"
+    )
+    QuoteSeal(
+        keyword = quote.keyword,
+        latin = quote.keywordLatin,
+        palette = palette,
+        modifier = Modifier.graphicsLayer {
+            this.alpha = alpha
+            scaleX = scale
+            scaleY = scale
+        },
     )
 }
 
@@ -615,8 +657,10 @@ private fun DrawScope.drawGlow(
  *
  * 128×128 一张（64KB）平铺整屏，比放一张全屏噪点图省得多，也不用往 APK 里塞资源。
  * 固定随机种子，保证每次启动的颗粒分布一致——颗粒每次都变会看出「在闪」。
+ *
+ * 日签页也用这一块噪点：两屏的纸面纹理必须是同一种，否则从开屏走到日签会看出换了张纸。
  */
-private fun grainBrush(): ShaderBrush {
+internal fun grainBrush(): ShaderBrush {
     val size = GRAIN_TILE_PX
     val random = Random(GRAIN_SEED)
     val pixels = IntArray(size * size) {
@@ -647,3 +691,6 @@ private val VIGNETTE_COLOR = Color(0x383C2212)
 private val GlowEasing = CubicBezierEasing(0.22f, 0.7f, 0.25f, 1f)
 private val RiseEasing = CubicBezierEasing(0.2f, 0.75f, 0.28f, 1f)
 private val PosterEasing = CubicBezierEasing(0.2f, 0.75f, 0.28f, 1f)
+
+/** 印章专用：起手就快、末尾硬收，模拟压下去到底的手感 */
+private val SealEasing = CubicBezierEasing(0.16f, 0.9f, 0.2f, 1f)
