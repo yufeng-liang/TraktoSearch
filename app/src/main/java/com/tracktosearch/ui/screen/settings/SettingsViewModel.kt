@@ -135,6 +135,7 @@ class SettingsViewModel @Inject constructor(
     private val doubanSyncedItemDao: DoubanSyncedItemDao,
     private val sessionModeManager: SessionModeManager,
     private val imageTrafficStorage: ImageTrafficStorage,
+    private val aiTasteStorage: com.tracktosearch.data.local.AiTasteStorage,
     private val statisticsSnapshotStore: com.tracktosearch.data.local.StatisticsSnapshotStore,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -172,6 +173,13 @@ class SettingsViewModel @Inject constructor(
 
     /** 崩溃日志上报开关（默认关闭，需用户授权） */
     val crashLogEnabled: StateFlow<Boolean> = crashLogStorage.enabled
+
+    /**
+     * 「锐评我的看单」数据上传开关（默认开启）。
+     * 存储层是冷 Flow，这里 stateIn 起来给设置页开关绑定；首值落地前用默认 true 占位。
+     */
+    val aiTasteEnabled: StateFlow<Boolean> = aiTasteStorage.tasteUploadEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     private val _exportImportState = MutableStateFlow(ExportImportState())
     val exportImportState: StateFlow<ExportImportState> = _exportImportState.asStateFlow()
@@ -289,6 +297,11 @@ class SettingsViewModel @Inject constructor(
                 crashLogUploader.uploadPendingLogs()
             }
         }
+    }
+
+    /** 「锐评我的看单」数据上传开关（关闭后功能项保留，点击时引导回本页开启） */
+    fun setAiTasteEnabled(enabled: Boolean) {
+        viewModelScope.launch { aiTasteStorage.setTasteUploadEnabled(enabled) }
     }
 
     fun exportData(uri: Uri) {

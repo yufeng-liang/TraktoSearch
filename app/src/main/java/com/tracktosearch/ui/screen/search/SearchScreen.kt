@@ -232,6 +232,8 @@ fun SearchScreen(
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
     onNavigateToLogin: (() -> Unit)? = null,
+    // AI 锐评弹窗「去设置」回调：未提供时按钮无跳转（仅收起弹窗）
+    onOpenSettings: () -> Unit = {},
     onRecommendationClick: ((AiRecommendation) -> Unit)? = null,
     searchSourceType: SearchSourceType = SearchSourceType.DISK,
     onSearchSourceTypeChange: ((SearchSourceType) -> Unit)? = null,
@@ -859,6 +861,7 @@ fun SearchScreen(
                 spriteViewModel.closeFeature()
             },
             onNavigateToLogin = { onNavigateToLogin?.invoke() },
+            onOpenSettings = onOpenSettings,
             onMovieClick = onMovieClick,
             onShowClick = onShowClick,
             onRecommendationClick = onRecommendationClick,
