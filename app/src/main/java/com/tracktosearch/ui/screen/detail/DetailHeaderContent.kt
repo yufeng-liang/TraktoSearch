@@ -4,11 +4,14 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -49,9 +52,11 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -83,8 +88,9 @@ import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.zoomSharedSource
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
-import dev.chrisbanes.haze.HazeState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 // ==================== 头部内容 ====================
 
@@ -100,8 +106,6 @@ internal fun DetailHeaderContent(
     isMarkingWatchlist: Boolean,
     onToggleWatchlist: () -> Unit,
     onShowRatingDialog: () -> Unit = {},
-    onDismissRatingDialog: () -> Unit = {},
-    onRatingSelected: (Int?) -> Unit,
     onPosterClick: () -> Unit = {},
     onPersonClick: (personId: Int, personName: String, profileUrl: String?, avatarColor: Color?) -> Unit = { _, _, _, _ -> },
     onToggleSeason: (Int) -> Unit = {},
@@ -110,6 +114,8 @@ internal fun DetailHeaderContent(
     onRetryRatings: () -> Unit = {},
     onRetryCredits: () -> Unit = {},
     onRetrySeasons: () -> Unit = {},
+    // 预告片/截图区加载失败的重试入口
+    onRetryVideos: () -> Unit = {},
     onVideoClick: (TmdbVideo) -> Unit = {},
     onBackdropClick: (Int) -> Unit = {},
     onShowAllVideos: () -> Unit = {},
@@ -123,7 +129,6 @@ internal fun DetailHeaderContent(
     // 头部下方内容(cast/视频/简介/季集)的透明度,用于"沉浸背景先现,内容后显"淡入效果
     // 1f=完全显示,0f=隐藏;海报+标题+按钮始终不透明
     contentAlpha: Float = 1f,
-    hazeState: HazeState,
     onHeaderAnchorBoundsChanged: (Rect) -> Unit = {},
     backdrop: LayerBackdrop? = null
 ) {
@@ -132,12 +137,17 @@ internal fun DetailHeaderContent(
     val scope = rememberCoroutineScope()
     // 根据海报主色调亮度自适应文字颜色,增强沉浸背景下的可读性
     // 亮色海报 → 深色文字;暗色海报 → 浅色文字;无海报色 → 回退主题色
+    // 注意实际底色不是原始 posterColor，而是海报色(alpha 0.70)叠主题 background 的渐变
+    // (见 DetailScreen immersiveBackgroundModifier)。与同页 Tab 的做法一致：先 lerp 0.8f
+    // 得到真实混合底色再判亮度，否则较亮的海报会被误判成暗底而配白字、看不清
     val posterColor = uiState.posterDominantColor
     val onPosterColor = posterColor?.let { c ->
-        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.92f) else Color.White
+        val blended = lerp(c, MaterialTheme.colorScheme.background, 0.8f)
+        if (blended.luminance() > 0.5f) Color.Black.copy(alpha = 0.92f) else Color.White
     } ?: MaterialTheme.colorScheme.onSurface
     val onPosterVariantColor = posterColor?.let { c ->
-        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.72f)
+        val blended = lerp(c, MaterialTheme.colorScheme.background, 0.8f)
+        if (blended.luminance() > 0.5f) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.72f)
     } ?: MaterialTheme.colorScheme.onSurfaceVariant
     Column(
         modifier = Modifier
@@ -149,9 +159,12 @@ internal fun DetailHeaderContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                // 详情首屏的右侧信息块高度固定，避免 IntrinsicSize.Max 触发额外的
-                // intrinsic measure pass；海报仍通过 fillMaxHeight 与操作区保持对齐。
-                .height(152.dp)
+                // 右列含标题+四行信息+评分卡(64dp)+想看/已看/评分按钮组，固定高度装不下：
+                // 评分卡被压成一行(TMDB/烂番茄被裁)、按钮组分到 0 高度直接消失，
+                // 故恢复 IntrinsicSize.Max 让行高由内容决定。它多出的 intrinsic measure
+                // pass 开销已由 contentReady 延迟组合抵消，视觉正确优先。
+                // 海报 fillMaxHeight 跟随内容高度，恢复底部与按钮组对齐的原设计。
+                .height(IntrinsicSize.Max)
                 .padding(bottom = 12.dp)
                 .onGloballyPositioned { onHeaderAnchorBoundsChanged(it.boundsInRoot()) },
             verticalAlignment = Alignment.Top
@@ -211,8 +224,11 @@ internal fun DetailHeaderContent(
                                             onSuccess = { _, result ->
                                                 // 图片加载成功后提取主色调,用于沉浸式背景渐变
                                                 uiState.posterUrl.let { url ->
-                                                    val bitmap = result.drawable.toBitmap()
                                                     scope.launch {
+                                                        // toBitmap 需整图解码，挪到 Default 线程避免阻塞主线程
+                                                        val bitmap = withContext(Dispatchers.Default) {
+                                                            result.drawable.toBitmap()
+                                                        }
                                                         val argb = posterColorExtractor.extractDominantColor(url, bitmap)
                                                         if (argb != 0L) {
                                                             onPosterColorExtracted(Color(argb))
@@ -228,8 +244,24 @@ internal fun DetailHeaderContent(
                                 modifier = posterModifier
                                     .graphicsLayer(scaleX = posterScale, scaleY = posterScale)
                                     .pointerInput(Unit) {
-                                        detectTransformGestures { _, _, zoom, _ ->
-                                            posterScale = (posterScale * zoom).coerceIn(1f, 4f)
+                                        // 仅双指才缩放：detectTransformGestures 对单指拖动超 touch slop
+                                        // 也会消费 change，会吞掉父级 LazyColumn 从海报起手的滚动。
+                                        // 自写检测保证单指阶段不消费任何事件，父级滚动不受影响。
+                                        awaitEachGesture {
+                                            awaitFirstDown(requireUnconsumed = false)
+                                            do {
+                                                val event = awaitPointerEvent()
+                                                val pressedCount = event.changes.count { it.pressed }
+                                                if (pressedCount >= 2) {
+                                                    val zoom = event.calculateZoom()
+                                                    if (zoom != 1f) {
+                                                        posterScale = (posterScale * zoom).coerceIn(1f, 4f)
+                                                        event.changes.forEach { change ->
+                                                            if (change.positionChanged()) change.consume()
+                                                        }
+                                                    }
+                                                }
+                                            } while (event.changes.any { it.pressed })
                                         }
                                     },
                                 // 转场兜底:首次进入详情页 w780 可能需网络下载,
@@ -446,7 +478,8 @@ internal fun DetailHeaderContent(
                     onPersonClick = onPersonClick
                 )
             } else {
-                // 加载中占位：栏目标题与「全部」为静态文字直接显示，仅卡片区保留骨架
+                // 加载中/失败占位：仅栏目标题直接显示，卡片区保留骨架或错误态重试入口；
+                // 「全部」此时隐藏，避免数据未就绪时点开空 sheet（仅 hasCredits 的 CrewSection 提供该入口）
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -458,13 +491,6 @@ internal fun DetailHeaderContent(
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                    Text(
-                        text = stringResource(R.string.detail_cast_all),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.clickable(onClick = { showFullCast = true })
                     )
                 }
                 Row(
@@ -517,7 +543,8 @@ internal fun DetailHeaderContent(
         } // end if (sectionVisible.cast)
 
         // 预告片与截图横向滑动栏
-        if (sectionVisible.videosImages && (uiState.videos.isNotEmpty() || uiState.backdrops.isNotEmpty() || uiState.isLoadingVideosImages)) {
+        // videosError 时也要组合：以前失败整块静默不组合，用户分不清「这部片没有预告片」和「没加载上」
+        if (sectionVisible.videosImages && (uiState.videos.isNotEmpty() || uiState.backdrops.isNotEmpty() || uiState.isLoadingVideosImages || uiState.videosError)) {
             if (uiState.videos.isNotEmpty() || uiState.backdrops.isNotEmpty()) {
                 VideosAndImagesSection(
                     videos = uiState.videos,
@@ -527,6 +554,23 @@ internal fun DetailHeaderContent(
                     onShowAll = onShowAllVideos,
                     sharedKeyPrefix = "backdrop-zoom-$tmdbId"
                 )
+            } else if (uiState.videosError) {
+                // 加载失败：与评分区一致的 Inline 错误态，带重试入口
+                Column(modifier = Modifier.padding(bottom = 12.dp)) {
+                    Text(
+                        text = stringResource(R.string.detail_videos_section),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    AppErrorState(
+                        message = stringResource(R.string.detail_load_error),
+                        onRetry = onRetryVideos,
+                        variant = AppErrorVariant.Inline,
+                        inlineLabel = stringResource(R.string.detail_load_error),
+                        showDetail = false
+                    )
+                }
             } else {
                 // 骨架屏占位，防止加载后内容跳变；栏目标题为静态文字直接显示，「全部」随数据到达后出现
                 Column(modifier = Modifier.padding(bottom = 12.dp)) {

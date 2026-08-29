@@ -85,12 +85,7 @@ private data class RatingBadgeData(
 @Composable
 internal fun RatingsRow(
     ratings: MultiRatings,
-    isDoubanItem: Boolean = false,
-    ratingSource: DetailRatingSource = if (isDoubanItem) {
-        DetailRatingSource.DOUBAN
-    } else {
-        DetailRatingSource.NORMAL
-    },
+    ratingSource: DetailRatingSource = DetailRatingSource.NORMAL,
     immersionColor: Color? = null
 ) {
     if (ratingSource == DetailRatingSource.UNKNOWN) {
@@ -99,6 +94,8 @@ internal fun RatingsRow(
     }
     val missingValue = stringResource(R.string.detail_info_rating_missing)
     val normalizedDoubanRating = normalizeTenPointRating(ratings.doubanRating)
+    // 与 TMDB 分支同守卫：0.0 视为无有效评分，不能渲染成 "0.0" 假分
+    val validDoubanRating = ratings.doubanRating?.takeIf { it > 0.0 }
     val showDoubanRating = when (ratingSource) {
         DetailRatingSource.DOUBAN -> true
         DetailRatingSource.NORMAL -> normalizedDoubanRating != null
@@ -109,10 +106,10 @@ internal fun RatingsRow(
             source = RatingSource.Douban,
             label = stringResource(R.string.detail_info_douban_rating),
             brandColor = Color(0xFF2E963D),
-            value = ratings.doubanRating?.takeIf { normalizedDoubanRating != null }?.let {
+            value = validDoubanRating?.let {
                 String.format(Locale.getDefault(), "%.1f", it)
             } ?: missingValue,
-            normalizedScore = normalizedDoubanRating
+            normalizedScore = validDoubanRating?.let(::normalizeTenPointRating)
         )
     } else {
         RatingBadgeData(
@@ -326,7 +323,13 @@ private fun RatingBadge(
                 text = badge.label,
                 style = MaterialTheme.typography.titleSmall.copy(fontSize = 13.sp),
                 fontWeight = FontWeight.Bold,
-                color = badge.brandColor
+                // TMDB 无品牌底色也无图标，纯文字用 IMDb 黄在浅色卡片上对比度差，改中性色；
+                // 豆瓣/番茄/Metacritic 有品牌色或图标的不变
+                color = if (source == RatingSource.TMDB) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    badge.brandColor
+                }
             )
         }
         }
