@@ -49,6 +49,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,6 +74,7 @@ import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.screen.settings.PanHubConfigDialog
 import com.tracktosearch.ui.theme.appSwitchColors
@@ -98,6 +100,14 @@ fun SearchSourcesScreen(
 ) {
     val hazeState = remember { HazeState() }
     val listState = rememberLazyListState()
+    val hasContentUnderTopBar by remember {
+        derivedStateOf {
+            hasListScrolled(
+                firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffsetPx = listState.firstVisibleItemScrollOffset
+            )
+        }
+    }
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val pansouEnabled by viewModel.pansouEnabled.collectAsStateWithLifecycle()
     val panhubEnabled by viewModel.panhubEnabled.collectAsStateWithLifecycle()
@@ -204,6 +214,7 @@ fun SearchSourcesScreen(
 
             HeaderBar(
                 hazeState = hazeState,
+                isContentUnderTopBar = hasContentUnderTopBar,
                 onBack = onBack,
                 onImport = { showImportDialog = true },
                 onHelpClick = onHelpClick
@@ -277,6 +288,7 @@ fun SearchSourcesScreen(
 @Composable
 private fun HeaderBar(
     hazeState: HazeState,
+    isContentUnderTopBar: Boolean,
     onBack: () -> Unit,
     onImport: () -> Unit,
     onHelpClick: () -> Unit = {}
@@ -289,7 +301,7 @@ private fun HeaderBar(
                 state = hazeState,
                 style = HazeMaterials.thin(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)),
                 blurRadius = 24.dp,
-                isContentUnderTopBar = true
+                isContentUnderTopBar = isContentUnderTopBar
             )
             // 拦截点击：顶栏覆盖可滚动列表，不消费会让点击穿透到下方列表项
             .clickable(enabled = false, onClick = {})

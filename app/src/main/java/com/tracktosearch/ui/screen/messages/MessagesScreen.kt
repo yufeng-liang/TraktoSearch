@@ -36,9 +36,15 @@ import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.data.remote.feedback.MessageItem
 import com.tracktosearch.ui.screen.feedback.FeedbackViewModel
 import com.tracktosearch.ui.component.EmptyStateCard
+import com.tracktosearch.ui.component.hasListScrolled
+import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import dev.chrisbanes.haze.hazeSource
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -53,108 +59,240 @@ fun MessagesScreen(
     val messagesState by viewModel.messagesState.collectAsStateWithLifecycle()
     val filter by viewModel.messagesFilter.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
+    val hazeState = remember { HazeState() }
+    val hazeStyle = HazeMaterials.thin()
+    val hasContentUnderTopBar by remember {
+        derivedStateOf {
+            hasListScrolled(
+                firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffsetPx = listState.firstVisibleItemScrollOffset
+            )
+        }
+    }
+    val successState = messagesState as? FeedbackViewModel.MessagesState.Success
+    val visibleItems = remember(successState?.items) {
+        successState?.items?.filter { it.author_role == "developer" }.orEmpty()
+    }
+
     LaunchedEffect(Unit) { viewModel.loadMessages(refresh = true) }
-    // 换筛选后内容整批换掉，滚动位置留在原处会停在半空
-    // （从翻了几页的「全部」切到只有两条的「未读」时最明显）
+    // 换筛选后内容整批换掉，滚动位置留在原处会停在半空。
     LaunchedEffect(filter) { listState.scrollToItem(0) }
 
     Scaffold(
-        topBar = {
-            // 用 Box 叠加进度条而不是 Column 追加：顶栏高度不变，
-            // 进度条出现/消失不会推动下方的筛选栏和列表。
-            Box {
-                TopAppBar(
-                    title = { Text(stringResource(R.string.feedback_messages_title), fontWeight = FontWeight.ExtraBold) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                Icons.AutoMirrored.Rounded.ArrowBack,
-                                contentDescription = stringResource(R.string.content_desc_back)
-                            )
-                        }
-                    },
-                    actions = {
-                        TextButton(onClick = { viewModel.markAllRead() }) {
-                            Icon(Icons.Rounded.DoneAll, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(stringResource(R.string.feedback_messages_all_read), fontSize = 13.sp)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-                )
-                // 已展示缓存但远端仍在刷新时的细进度条：不遮挡内容，只提示数据可能不是最新
-                if ((messagesState as? FeedbackViewModel.MessagesState.Success)?.isRefreshing == true) {
-                    LinearProgressIndicator(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .height(2.dp)
-                    )
-                }
-            }
-        },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            // 只有「全部」「未读」两个筛选：列表只展示开发者回复（自己的回复不算收到的消息），
-            // 所以原来的「开发者」chip 和「全部」筛出来的是同一份，点了看不出区别。
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.Start)) {
-                MessageFilterChip(stringResource(R.string.feedback_filter_all), filter == FeedbackViewModel.MessageFilter.ALL) { viewModel.setMessagesFilter(FeedbackViewModel.MessageFilter.ALL) }
-                MessageFilterChip(stringResource(R.string.feedback_filter_unread), filter == FeedbackViewModel.MessageFilter.UNREAD) { viewModel.setMessagesFilter(FeedbackViewModel.MessageFilter.UNREAD) }
-            }
-            when (val state = messagesState) {
-                is FeedbackViewModel.MessagesState.Loading -> { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
-                is FeedbackViewModel.MessagesState.Error -> {
-                    AppErrorState(
-                        message = state.message,
-                        onRetry = { viewModel.loadMessages(refresh = true) },
-                        modifier = Modifier.fillMaxSize(),
-                        retryLabel = stringResource(R.string.feedback_retry)
-                    )
-                }
-                is FeedbackViewModel.MessagesState.Success -> {
-                    // remember：列表不变时不必每次重组都重新过滤一遍
-                    val visibleItems = remember(state.items) {
-                        state.items.filter { it.author_role == "developer" }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState),
+                contentPadding = PaddingValues(
+                    top = 64.dp + statusBarHeight,
+                    bottom = 16.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item(key = "filters") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.Start)
+                    ) {
+                        MessageFilterChip(
+                            label = stringResource(R.string.feedback_filter_all),
+                            selected = filter == FeedbackViewModel.MessageFilter.ALL,
+                            onClick = {
+                                viewModel.setMessagesFilter(FeedbackViewModel.MessageFilter.ALL)
+                            }
+                        )
+                        MessageFilterChip(
+                            label = stringResource(R.string.feedback_filter_unread),
+                            selected = filter == FeedbackViewModel.MessageFilter.UNREAD,
+                            onClick = {
+                                viewModel.setMessagesFilter(FeedbackViewModel.MessageFilter.UNREAD)
+                            }
+                        )
                     }
-                    if (visibleItems.isEmpty()) {
-                        Box(
-                            Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            EmptyStateCard(
-                                isDark = isAppDarkTheme(),
-                                // 「未读」筛掉的空和真的没有消息不是一回事，文案要分开
-                                title = if (filter == FeedbackViewModel.MessageFilter.UNREAD) {
-                                    stringResource(R.string.feedback_messages_empty_unread)
-                                } else {
-                                    stringResource(R.string.feedback_messages_empty)
-                                },
-                                icon = Icons.Rounded.Inbox,
-                                actions = {
-                                    if (filter == FeedbackViewModel.MessageFilter.UNREAD) {
-                                        TextButton(onClick = {
-                                            viewModel.setMessagesFilter(FeedbackViewModel.MessageFilter.ALL)
-                                        }) {
-                                            Text(stringResource(R.string.feedback_filter_all))
+                }
+
+                when (val state = messagesState) {
+                    is FeedbackViewModel.MessagesState.Loading -> {
+                        item(key = "loading") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(320.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator()
+                            }
+                        }
+                    }
+
+                    is FeedbackViewModel.MessagesState.Error -> {
+                        item(key = "error") {
+                            AppErrorState(
+                                message = state.message,
+                                onRetry = { viewModel.loadMessages(refresh = true) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 320.dp)
+                                    .padding(16.dp),
+                                retryLabel = stringResource(R.string.feedback_retry)
+                            )
+                        }
+                    }
+
+                    is FeedbackViewModel.MessagesState.Success -> {
+                        if (visibleItems.isEmpty()) {
+                            item(key = "empty") {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(320.dp)
+                                        .padding(horizontal = 16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    EmptyStateCard(
+                                        isDark = isAppDarkTheme(),
+                                        title = if (filter == FeedbackViewModel.MessageFilter.UNREAD) {
+                                            stringResource(R.string.feedback_messages_empty_unread)
+                                        } else {
+                                            stringResource(R.string.feedback_messages_empty)
+                                        },
+                                        icon = Icons.Rounded.Inbox,
+                                        actions = {
+                                            if (filter == FeedbackViewModel.MessageFilter.UNREAD) {
+                                                TextButton(
+                                                    onClick = {
+                                                        viewModel.setMessagesFilter(
+                                                            FeedbackViewModel.MessageFilter.ALL
+                                                        )
+                                                    }
+                                                ) {
+                                                    Text(stringResource(R.string.feedback_filter_all))
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        } else {
+                            items(visibleItems, key = { it.id }) { item ->
+                                MessageItemRow(
+                                    item = item,
+                                    onClick = { onMessageClick(item.feedback_id, item.id) },
+                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                )
+                            }
+                            if (state.hasMore) {
+                                item(key = "load_more") {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        TextButton(
+                                            onClick = { viewModel.loadMessages(refresh = false) }
+                                        ) {
+                                            Text(stringResource(R.string.feedback_load_more))
                                         }
                                     }
                                 }
-                            )
-                        }
-                    }
-                    else {
-                        LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(visibleItems, key = { it.id }) { item -> MessageItemRow(item = item, onClick = { onMessageClick(item.feedback_id, item.id) }) }
-                            if (state.hasMore) { item(key = "load_more") { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { TextButton(onClick = { viewModel.loadMessages(refresh = false) }) { Text(stringResource(R.string.feedback_load_more)) } } } }
+                            }
                         }
                     }
                 }
             }
+
+            MessagesTopBar(
+                hazeState = hazeState,
+                hazeStyle = hazeStyle,
+                isContentUnderTopBar = hasContentUnderTopBar,
+                refreshing = successState?.isRefreshing == true,
+                onBack = onBack,
+                onMarkAllRead = viewModel::markAllRead
+            )
         }
     }
 }
 
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun MessagesTopBar(
+    hazeState: HazeState,
+    hazeStyle: HazeBlurStyle,
+    isContentUnderTopBar: Boolean,
+    refreshing: Boolean,
+    onBack: () -> Unit,
+    onMarkAllRead: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .hazeTopBar(
+                state = hazeState,
+                style = hazeStyle,
+                blurRadius = 24.dp,
+                isContentUnderTopBar = isContentUnderTopBar
+            )
+            // 顶栏覆盖列表，拦截空白区域点击，避免穿透到下面的消息条目。
+            .clickable(enabled = false, onClick = {})
+    ) {
+        Spacer(modifier = Modifier.statusBarsPadding())
+        Box {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = stringResource(R.string.feedback_messages_title),
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = stringResource(R.string.content_desc_back)
+                        )
+                    }
+                },
+                actions = {
+                    TextButton(onClick = onMarkAllRead) {
+                        Icon(
+                            Icons.Rounded.DoneAll,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = stringResource(R.string.feedback_messages_all_read),
+                            fontSize = 13.sp
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                windowInsets = WindowInsets(0, 0, 0, 0)
+            )
+            if (refreshing) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(2.dp)
+                )
+            }
+        }
+    }
+}
 @Composable
 private fun MessageFilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
     val view = LocalView.current
@@ -180,14 +318,18 @@ private fun MessageFilterChip(label: String, selected: Boolean, onClick: () -> U
 }
 
 @Composable
-private fun MessageItemRow(item: MessageItem, onClick: () -> Unit) {
+private fun MessageItemRow(
+    item: MessageItem,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val isDeveloper = item.author_role == "developer"
     val avatarColor = if (isDeveloper) Color(0xFF34D399) else MaterialTheme.colorScheme.primary
     val avatarLabel = if (isDeveloper) "D" else "我"
     val typeColor = when (item.type) { "FEATURE" -> Color(0xFF34D399); "BUG" -> Color(0xFFFB7185); "UX" -> Color(0xFFFBBF24); else -> Color(0xFF9CA3AF) }
     val hasScreenshot = item.screenshots.isNotEmpty()
 
-    Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (item.is_unread) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else Color.Transparent).clickable { onClick() }.padding(horizontal = 8.dp, vertical = 10.dp).alpha(if (item.is_unread) 1f else 0.6f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Row(modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (item.is_unread) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else Color.Transparent).clickable { onClick() }.padding(horizontal = 8.dp, vertical = 10.dp).alpha(if (item.is_unread) 1f else 0.6f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box {
             Box(Modifier.size(36.dp).clip(CircleShape).background(avatarColor), contentAlignment = Alignment.Center) { Text(avatarLabel, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
             if (item.is_unread) {

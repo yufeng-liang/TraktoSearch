@@ -58,6 +58,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -108,6 +109,7 @@ import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.animation.EnterMode
 import com.tracktosearch.ui.animation.cardEnter
@@ -154,6 +156,14 @@ fun MarkRecordScreen(
     val hazeState = remember { HazeState() }
     val hazeStyle = HazeMaterials.thin()
     val listState = rememberLazyGridState()
+    val hasContentUnderTopBar by remember {
+        derivedStateOf {
+            hasListScrolled(
+                firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffsetPx = listState.firstVisibleItemScrollOffset
+            )
+        }
+    }
     // 改筛选/排序/搜索/Tab 后，新列表要把整张表换掉，位置必须回到顶部。
     //
     // 不能只靠 Lazy 网格自己：它默认按"首个可见 item 的 key"重新定位 —— 排序方向一反转，
@@ -402,6 +412,7 @@ fun MarkRecordScreen(
                     state = hazeState,
                     style = hazeStyle,
                     blurRadius = 24.dp,
+                    isContentUnderTopBar = hasContentUnderTopBar,
                     scene = markRecordGlassScene
                 )
                 // 拦截点击：顶栏覆盖可滚动网格，不消费会让点击穿透到下方列表项

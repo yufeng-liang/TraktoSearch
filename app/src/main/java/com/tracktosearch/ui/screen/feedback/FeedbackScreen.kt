@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -34,7 +35,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.EmptyStateCard
+import com.tracktosearch.ui.component.hasListScrolled
+import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import dev.chrisbanes.haze.hazeSource
 import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,44 +55,44 @@ fun FeedbackScreen(
 ) {
     val listState by viewModel.listState.collectAsStateWithLifecycle()
     val crashLogRecords by viewModel.crashLogRecords.collectAsStateWithLifecycle()
+    val feedbackListState = rememberLazyListState()
+    val hazeState = remember { HazeState() }
+    val hazeStyle = HazeMaterials.thin()
+    val hasContentUnderTopBar by remember {
+        derivedStateOf {
+            hasListScrolled(
+                firstVisibleItemIndex = feedbackListState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffsetPx = feedbackListState.firstVisibleItemScrollOffset
+            )
+        }
+    }
 
     // 首次进入加载
     LaunchedEffect(Unit) { viewModel.loadList(refresh = true) }
 
     Scaffold(
-        topBar = {
-            // 用 Box 叠加进度条而不是 Column 追加：顶栏高度不变，进度条出现/消失不会推动下方列表。
-            Box {
-                TopAppBar(
-                    title = { Text(stringResource(R.string.feedback_title), fontWeight = FontWeight.ExtraBold) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                Icons.AutoMirrored.Rounded.ArrowBack,
-                                contentDescription = stringResource(R.string.content_desc_back)
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-                )
-                // 已展示缓存但远端仍在刷新时的细进度条：不遮挡内容，只提示数据可能不是最新
-                if ((listState as? FeedbackViewModel.ListState.Success)?.isRefreshing == true) {
-                    LinearProgressIndicator(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .height(2.dp)
-                    )
-                }
-            }
-        },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
         ) {
+            val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            LazyColumn(
+                state = feedbackListState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    top = 64.dp + statusBarHeight,
+                    end = 16.dp,
+                    bottom = 16.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
             item {
                 Text(
                     text = stringResource(R.string.feedback_intro),
@@ -183,6 +190,67 @@ fun FeedbackScreen(
                         }
                     }
                 }
+            }
+            }
+
+            FeedbackTopBar(
+                hazeState = hazeState,
+                hazeStyle = hazeStyle,
+                isContentUnderTopBar = hasContentUnderTopBar,
+                refreshing = (listState as? FeedbackViewModel.ListState.Success)?.isRefreshing == true,
+                onBack = onBack
+            )
+        }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun FeedbackTopBar(
+    hazeState: HazeState,
+    hazeStyle: HazeBlurStyle,
+    isContentUnderTopBar: Boolean,
+    refreshing: Boolean,
+    onBack: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .hazeTopBar(
+                state = hazeState,
+                style = hazeStyle,
+                blurRadius = 24.dp,
+                isContentUnderTopBar = isContentUnderTopBar
+            )
+            .clickable(enabled = false, onClick = {})
+    ) {
+        Spacer(modifier = Modifier.statusBarsPadding())
+        Box {
+            TopAppBar(
+                title = {
+                    Text(
+                        stringResource(R.string.feedback_title),
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = stringResource(R.string.content_desc_back)
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                windowInsets = WindowInsets(0, 0, 0, 0)
+            )
+            if (refreshing) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(2.dp)
+                )
             }
         }
     }
