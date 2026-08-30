@@ -113,7 +113,7 @@ internal fun DailyStampCardOverlay(
     openableDates: List<LocalDate>,
     onSelect: (LocalDate) -> Unit,
     onDismiss: () -> Unit,
-    onQuoteClick: (tmdbId: Int, title: String, year: Int, posterUrl: String) -> Unit,
+    onQuoteClick: (tmdbId: Int, mediaType: String, title: String, year: Int, posterUrl: String) -> Unit,
 ) {
     // 退场那一帧 card 已经是 null，留住上一张才有东西可淡出
     var retained by remember { mutableStateOf<DailyStampCardUi?>(null) }
@@ -172,7 +172,7 @@ private fun CardStack(
     palette: SplashPalette,
     openableDates: List<LocalDate>,
     onSelect: (LocalDate) -> Unit,
-    onQuoteClick: (tmdbId: Int, title: String, year: Int, posterUrl: String) -> Unit,
+    onQuoteClick: (tmdbId: Int, mediaType: String, title: String, year: Int, posterUrl: String) -> Unit,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -185,7 +185,7 @@ private fun CardStack(
     LaunchedEffect(card.date) { dragX.snapTo(0f) }
 
     val onPosterClick = {
-        onQuoteClick(card.tmdbId, card.title, card.year, card.posterUrl)
+        onQuoteClick(card.tmdbId, card.mediaType, card.title, card.year, card.posterUrl)
     }
 
     /** 把当前卡面录下来交给保存/分享，两条路都用同一张软件位图 */

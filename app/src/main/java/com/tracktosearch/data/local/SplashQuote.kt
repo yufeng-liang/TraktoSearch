@@ -18,11 +18,23 @@ import javax.inject.Singleton
  *
  * 海报走 TMDB：[tmdbId] + [posterPath] 组合出网关地址，命中 App 已有的图片链路；
  * 存绝对 URL 的话第三方图源一改就全挂。
+ *
+ * 入库标准：1960 年以后首映/首播的影视。更早的作品台词大多经过几十年转述，
+ * 引文版本互相矛盾，逐条核到原片不现实。
  */
 @Serializable
 data class SplashQuote(
     val id: String,
     val year: Int,
+    /**
+     * TMDB 命名空间：电影 `movie`、剧集 `show`。
+     *
+     * [tmdbId] 在两个命名空间里各自编号，同一个数字在 `/movie/` 和 `/tv/` 下是两部
+     * 不同的作品，所以点进详情页必须带上这个字段。海报路径不分命名空间，取图不受影响。
+     *
+     * 默认电影：库里绝大多数条目是电影，逐条写一遍 `"mediaType": "movie"` 只是噪音。
+     */
+    val mediaType: String = MEDIA_TYPE_MOVIE,
     val tmdbId: Int,
     val posterPath: String,
     /** 是否随 APK 内置了海报：随包的 5 条保证首次安装当天就有画面 */
@@ -86,6 +98,10 @@ data class SplashQuote(
 
     companion object {
         const val FALLBACK_LANG = "en"
+
+        /** [mediaType] 的两个取值，与 Routes.detailRoute 的 type 参数同名 */
+        const val MEDIA_TYPE_MOVIE = "movie"
+        const val MEDIA_TYPE_SHOW = "show"
 
         /** [keyword] 里存繁体字形的键，只有中文有，只给印章用 */
         const val SEAL_LANG_ZH = "zh-Hant"

@@ -86,7 +86,7 @@ import java.util.Locale
 @Composable
 fun DailyStampScreen(
     onBack: () -> Unit,
-    onQuoteClick: (tmdbId: Int, title: String, year: Int, posterUrl: String) -> Unit,
+    onQuoteClick: (tmdbId: Int, mediaType: String, title: String, year: Int, posterUrl: String) -> Unit,
     viewModel: DailyStampViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()

@@ -52,6 +52,13 @@ data class DailyStampCardUi(
     val poster: Any?,
     /** 进影视详情页要用的 TMDB id */
     val tmdbId: Int,
+    /**
+     * [tmdbId] 所属的 TMDB 命名空间：`movie` 或 `show`。
+     *
+     * 详情页按它决定查电影还是剧集接口——两个命名空间各自编号，传错会打开另一部作品。
+     * 见 SplashQuote.mediaType。
+     */
+    val mediaType: String,
     /** 详情页首屏要用的海报网络地址；本地那份是给卡片自己显示的 */
     val posterUrl: String,
 )
@@ -89,6 +96,7 @@ internal fun DailyStamp.toCard(lang: String): DailyStampCardUi? {
             .takeIf { lang != SplashQuote.FALLBACK_LANG && it.isNotBlank() },
         poster = poster,
         tmdbId = quote.tmdbId,
+        mediaType = quote.mediaType,
         posterUrl = TmdbImageUrls.build(quote.posterPath, TmdbImageUrls.W342),
     )
 }

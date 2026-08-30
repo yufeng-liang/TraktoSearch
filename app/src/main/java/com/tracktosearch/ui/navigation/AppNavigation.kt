@@ -1134,11 +1134,12 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         com.tracktosearch.ui.screen.dailystamp.DailyStampScreen(
                             onBack = { navController.popBackStack() },
-                            // 台词库全是电影，所以固定 movie；traktId 传 0，详情页按 tmdbId 自己去查
-                            onQuoteClick = { tmdbId, title, year, posterUrl ->
+                            // mediaType 由台词库给（movie/show），两个命名空间的 tmdbId 各自编号；
+                            // traktId 传 0，详情页按 tmdbId 自己去查
+                            onQuoteClick = { tmdbId, mediaType, title, year, posterUrl ->
                                 navController.navigate(
                                     Routes.detailRoute(
-                                        type = "movie",
+                                        type = mediaType,
                                         traktId = 0,
                                         tmdbId = tmdbId,
                                         title = title,
@@ -1243,11 +1244,12 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         com.tracktosearch.ui.screen.splashquote.SplashQuoteScreen(
                             onBack = { navController.popBackStack() },
-                            // 台词库全是电影，所以固定 movie；traktId 传 0，详情页按 tmdbId 自己去查
-                            onQuoteClick = { tmdbId, title, year, posterUrl ->
+                            // mediaType 由台词库给（movie/show），两个命名空间的 tmdbId 各自编号；
+                            // traktId 传 0，详情页按 tmdbId 自己去查
+                            onQuoteClick = { tmdbId, mediaType, title, year, posterUrl ->
                                 navController.navigate(
                                     Routes.detailRoute(
-                                        type = "movie",
+                                        type = mediaType,
                                         traktId = 0,
                                         tmdbId = tmdbId,
                                         title = title,

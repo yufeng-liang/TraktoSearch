@@ -2,33 +2,6 @@
   "version": 1,
   "quotes": [
     {
-      "id": "casablanca",
-      "year": 1942,
-      "tmdbId": 289,
-      "posterPath": "/lGCEKlJo2CnWydQj7aamY7s1S7Q.jpg",
-      "bundled": true,
-      "preferOriginal": true,
-      "lines": {
-        "en": ["Here's looking at you, kid."],
-        "zh": ["为你的眼睛干杯。"],
-        "ja": ["君の瞳に乾杯。"],
-        "ko": ["그대의 눈동자에 건배."]
-      },
-      "title": {
-        "en": "Casablanca",
-        "zh": "卡萨布兰卡",
-        "ja": "カサブランカ",
-        "ko": "카사블랑카"
-      },
-      "keyword": {
-        "en": "Farewell",
-        "zh": "惜别",
-        "zh-Hant": "惜別",
-        "ja": "惜別",
-        "ko": "석별"
-      }
-    },
-    {
       "id": "shawshank",
       "year": 1994,
       "tmdbId": 278,
@@ -290,60 +263,6 @@
         "zh-Hant": "家門",
         "ja": "家門",
         "ko": "가문"
-      }
-    },
-    {
-      "id": "gone-with-the-wind",
-      "year": 1939,
-      "tmdbId": 770,
-      "posterPath": "/lNz2Ow0wGCAvzckW7EOjE03KcYv.jpg",
-      "bundled": false,
-      "preferOriginal": true,
-      "lines": {
-        "en": ["After all,", "tomorrow is another day."],
-        "zh": ["毕竟，", "明天又是新的一天。"],
-        "ja": ["明日は明日の風が吹く。"],
-        "ko": ["결국,", "내일은 또 다른 날이니까."]
-      },
-      "title": {
-        "en": "Gone with the Wind",
-        "zh": "乱世佳人",
-        "ja": "風と共に去りぬ",
-        "ko": "바람과 함께 사라지다"
-      },
-      "keyword": {
-        "en": "Tomorrow",
-        "zh": "明日",
-        "zh-Hant": "明日",
-        "ja": "明日",
-        "ko": "내일"
-      }
-    },
-    {
-      "id": "the-wizard-of-oz",
-      "year": 1939,
-      "tmdbId": 630,
-      "posterPath": "/uCC3j4pV9eOZwzDUWp2ilbcTf1f.jpg",
-      "bundled": false,
-      "preferOriginal": true,
-      "lines": {
-        "en": ["There's no place like home."],
-        "zh": ["没有一个地方", "比家更好。"],
-        "ja": ["おうちほど", "いいところはない。"],
-        "ko": ["집만 한 곳은 없어."]
-      },
-      "title": {
-        "en": "The Wizard of Oz",
-        "zh": "绿野仙踪",
-        "ja": "オズの魔法使",
-        "ko": "오즈의 마법사"
-      },
-      "keyword": {
-        "en": "Home",
-        "zh": "归处",
-        "zh-Hant": "歸處",
-        "ja": "帰る場所",
-        "ko": "돌아갈 곳"
       }
     },
     {
@@ -937,33 +856,6 @@
         "zh-Hant": "知命",
         "ja": "命を知る",
         "ko": "운명을 알다"
-      }
-    },
-    {
-      "id": "the-great-dictator",
-      "year": 1940,
-      "tmdbId": 914,
-      "posterPath": "/nhMXB8GTdswYMCL9nepDZymJCOr.jpg",
-      "bundled": false,
-      "preferOriginal": true,
-      "lines": {
-        "en": ["We all want", "to help one another.", "Human beings are like that."],
-        "zh": ["我们都想彼此帮助，", "人本来就是这样的。"],
-        "ja": ["人は互いに助け合いたい。", "人間とはそういうものだ。"],
-        "ko": ["우리는 서로 돕고 싶어 한다.", "인간이란 그런 존재다."]
-      },
-      "title": {
-        "en": "The Great Dictator",
-        "zh": "大独裁者",
-        "ja": "独裁者",
-        "ko": "위대한 독재자"
-      },
-      "keyword": {
-        "en": "One Another",
-        "zh": "相扶",
-        "zh-Hant": "相扶",
-        "ja": "支え合い",
-        "ko": "서로 돕기"
       }
     },
     {
@@ -1770,167 +1662,6 @@
         "zh-Hant": "寬心",
         "ja": "万事順調",
         "ko": "다 잘될 거야"
-      }
-    },
-    {
-      "id": "its-a-wonderful-life",
-      "year": 1946,
-      "tmdbId": 1585,
-      "posterPath": "/bSqt9rhDZx1Q7UZ86dBPKdNomp2.jpg",
-      "bundled": false,
-      "preferOriginal": true,
-      "lines": {
-        "en": ["No man is a failure", "who has friends."],
-        "zh": ["有朋友的人，", "不算失败。"],
-        "ja": ["友のいる者は", "敗者ではない。"],
-        "ko": ["친구가 있는 사람은", "실패자가 아니다."]
-      },
-      "title": {
-        "en": "It's a Wonderful Life",
-        "zh": "生活多美好",
-        "ja": "素晴らしき哉、人生！",
-        "ko": "멋진 인생"
-      },
-      "keyword": {
-        "en": "Rich in Friends",
-        "zh": "有邻",
-        "zh-Hant": "有鄰",
-        "ja": "隣人あり",
-        "ko": "이웃이 있다"
-      }
-    },
-    {
-      "id": "sunset-boulevard",
-      "year": 1950,
-      "tmdbId": 599,
-      "posterPath": "/zt8aQ6ksqK6p1AopC5zVTDS9pKT.jpg",
-      "bundled": false,
-      "preferOriginal": true,
-      "lines": {
-        "en": ["I am big.", "It's the pictures", "that got small."],
-        "zh": ["我还是大明星，", "是电影变小了。"],
-        "ja": ["私は大きいままよ。", "小さくなったのは", "映画のほう。"],
-        "ko": ["난 여전히 커.", "작아진 건", "영화들이지."]
-      },
-      "title": {
-        "en": "Sunset Boulevard",
-        "zh": "日落大道",
-        "ja": "サンセット大通り",
-        "ko": "선셋 대로"
-      },
-      "keyword": {
-        "en": "Faded Glory",
-        "zh": "虚火",
-        "zh-Hant": "虛火",
-        "ja": "残り火",
-        "ko": "사그라든 불"
-      }
-    },
-    {
-      "id": "all-about-eve",
-      "year": 1950,
-      "tmdbId": 705,
-      "posterPath": "/blBzZaatPWVuWpXEnPscMA4Xp6m.jpg",
-      "bundled": false,
-      "preferOriginal": true,
-      "lines": {
-        "en": ["Fasten your seatbelts.", "It's going to be", "a bumpy night."],
-        "zh": ["系好安全带，", "今晚会很颠簸。"],
-        "ja": ["シートベルトを締めて。", "今夜は荒れるわよ。"],
-        "ko": ["안전벨트 매세요.", "오늘 밤은 험할 거예요."]
-      },
-      "title": {
-        "en": "All About Eve",
-        "zh": "彗星美人",
-        "ja": "イヴの総て",
-        "ko": "이브의 모든 것"
-      },
-      "keyword": {
-        "en": "The Next Wave",
-        "zh": "后浪",
-        "zh-Hant": "後浪",
-        "ja": "新しい波",
-        "ko": "뒷물결"
-      }
-    },
-    {
-      "id": "singin-in-the-rain",
-      "year": 1952,
-      "tmdbId": 872,
-      "posterPath": "/w03EiJVHP8Un77boQeE7hg9DVdU.jpg",
-      "bundled": false,
-      "preferOriginal": true,
-      "lines": {
-        "en": ["Dignity.", "Always dignity."],
-        "zh": ["尊严，", "永远要有尊严。"],
-        "ja": ["品格。", "いつも品格だ。"],
-        "ko": ["품위.", "언제나 품위."]
-      },
-      "title": {
-        "en": "Singin' in the Rain",
-        "zh": "雨中曲",
-        "ja": "雨に唄えば",
-        "ko": "사랑은 비를 타고"
-      },
-      "keyword": {
-        "en": "Dignity",
-        "zh": "尊严",
-        "zh-Hant": "尊嚴",
-        "ja": "品位",
-        "ko": "품위"
-      }
-    },
-    {
-      "id": "roman-holiday",
-      "year": 1953,
-      "tmdbId": 804,
-      "posterPath": "/8lI9dmz1RH20FAqltkGelY1v4BE.jpg",
-      "bundled": false,
-      "preferOriginal": true,
-      "lines": {
-        "en": ["I will cherish my visit here", "in memory,", "as long as I live."],
-        "zh": ["我会把这段时光", "珍藏在记忆里，", "只要我还活着。"],
-        "ja": ["ここで過ごした時間を、", "生きているかぎり", "胸にしまっておきます。"],
-        "ko": ["이곳에서의 시간을,", "살아 있는 동안", "기억에 품고 살겠어요."]
-      },
-      "title": {
-        "en": "Roman Holiday",
-        "zh": "罗马假日",
-        "ja": "ローマの休日",
-        "ko": "로마의 휴일"
-      },
-      "keyword": {
-        "en": "A Day to Keep",
-        "zh": "旧游",
-        "zh-Hant": "舊遊",
-        "ja": "思い出の日",
-        "ko": "간직할 하루"
-      }
-    },
-    {
-      "id": "vertigo",
-      "year": 1958,
-      "tmdbId": 426,
-      "posterPath": "/15uOEfqBNTVtDUT7hGBVCka0rZz.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Only one is a wanderer.", "Two together", "are always going somewhere."],
-        "zh": ["一个人才是漂泊，", "两个人在一起，", "总是有去处的。"],
-        "ja": ["一人なら漂うだけ。", "二人なら", "どこかへ向かえる。"],
-        "ko": ["혼자면 방랑이지만,", "둘이면", "늘 어딘가로 가는 거야."]
-      },
-      "title": {
-        "en": "Vertigo",
-        "zh": "迷魂记",
-        "ja": "めまい",
-        "ko": "현기증"
-      },
-      "keyword": {
-        "en": "Obsession",
-        "zh": "执念",
-        "zh-Hant": "執念",
-        "ja": "執念",
-        "ko": "집념"
       }
     },
     {
@@ -5882,58 +5613,6 @@
       }
     },
     {
-      "id": "rashomon",
-      "year": 1950,
-      "tmdbId": 548,
-      "posterPath": "/ijWibsAU1iBcCD8tuIZfTmDzMVE.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["If people cannot trust", "one another,", "this world is hell."],
-        "zh": ["如果人不能互相信任，", "这世上就是地狱。"],
-        "ja": ["人が人を信じられぬとしたら、", "この世は地獄だ。"],
-        "ko": ["사람이 사람을 믿지 못한다면,", "이 세상은 지옥이다."]
-      },
-      "title": {
-        "en": "Rashomon",
-        "zh": "罗生门",
-        "ja": "羅生門",
-        "ko": "라쇼몽"
-      },
-      "keyword": {
-        "en": "Doubt",
-        "zh": "疑心",
-        "zh-Hant": "疑心",
-        "ja": "疑心",
-        "ko": "의심"
-      }
-    },
-    {
-      "id": "ikiru",
-      "year": 1952,
-      "tmdbId": 3782,
-      "posterPath": "/dgNTS4EQDDVfkzJI5msKuHu2Ei3.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Life is short.", "Fall in love, maiden."],
-        "zh": ["人生短暂，", "少女啊，去恋爱吧。"],
-        "ja": ["命短し、", "恋せよ乙女。"],
-        "ko": ["삶은 짧으니,", "소녀여 사랑하라."]
-      },
-      "title": {
-        "en": "Ikiru",
-        "zh": "生之欲",
-        "ja": "生きる",
-        "ko": "이키루"
-      },
-      "keyword": {
-        "en": "Toward Life",
-        "zh": "向生",
-        "zh-Hant": "向生",
-        "ja": "生へ",
-        "ko": "삶을 향해"
-      }
-    },
-    {
       "id": "lupin-cagliostro",
       "year": 1979,
       "tmdbId": 15371,
@@ -7416,32 +7095,6 @@
       }
     },
     {
-      "id": "the-seventh-seal",
-      "year": 1957,
-      "tmdbId": 490,
-      "posterPath": "/wcZ21zrOsy0b52AfAF50XpTiv75.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["I want knowledge,", "not faith."],
-        "zh": ["我要的是知识，", "不是信仰。"],
-        "ja": ["私が欲しいのは知識だ、", "信仰ではない。"],
-        "ko": ["내가 원하는 건 지식이야,", "믿음이 아니라."]
-      },
-      "title": {
-        "en": "The Seventh Seal",
-        "zh": "第七封印",
-        "ja": "第七の封印",
-        "ko": "제7의 봉인"
-      },
-      "keyword": {
-        "en": "Knowledge, Not Faith",
-        "zh": "求知",
-        "zh-Hant": "求知",
-        "ja": "知を求む",
-        "ko": "지를 구하다"
-      }
-    },
-    {
       "id": "8-and-a-half",
       "year": 1963,
       "tmdbId": 422,
@@ -8333,426 +7986,6 @@
       }
     },
     {
-      "id": "metropolis",
-      "year": 1927,
-      "tmdbId": 19,
-      "posterPath": "/kr9wXRN23zLuWJIelahas1mtnYj.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["The mediator between", "head and hands", "must be the heart."],
-        "zh": ["头脑与双手之间的中介，", "必须是心。"],
-        "ja": ["頭と手をつなぐ仲立ちは、", "心でなければならない。"],
-        "ko": ["머리와 손을 잇는 중재자는", "반드시 심장이어야 한다."]
-      },
-      "title": {
-        "en": "Metropolis",
-        "zh": "大都会",
-        "ja": "メトロポリス",
-        "ko": "메트로폴리스"
-      },
-      "keyword": {
-        "en": "The Mediator Must Be the Heart",
-        "zh": "居间",
-        "zh-Hant": "居間",
-        "ja": "仲立ち",
-        "ko": "중재"
-      }
-    },
-    {
-      "id": "city-lights",
-      "year": 1931,
-      "tmdbId": 901,
-      "posterPath": "/ugmakEL5y294I5bXgiBqApuZpwc.jpg",
-      "bundled": false,
-      "preferOriginal": true,
-      "lines": {
-        "en": ["You can see now?", "Yes, I can see now."],
-        "zh": ["你能看见了？", "是的，我能看见了。"],
-        "ja": ["見えるようになったの？", "ええ、見えるわ。"],
-        "ko": ["이제 보이나요?", "네, 이제 보여요."]
-      },
-      "title": {
-        "en": "City Lights",
-        "zh": "城市之光",
-        "ja": "街の灯",
-        "ko": "시티 라이트"
-      },
-      "keyword": {
-        "en": "You Can See Now?",
-        "zh": "相认",
-        "zh-Hant": "相認",
-        "ja": "気づく",
-        "ko": "알아보다"
-      }
-    },
-    {
-      "id": "m",
-      "year": 1931,
-      "tmdbId": 832,
-      "posterPath": "/bTdZk3q2DWpBRnLiaaItKFWOVhI.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["I can't escape.", "I can't escape", "from myself."],
-        "zh": ["我逃不掉。", "我逃不掉", "我自己。"],
-        "ja": ["逃げられない。", "自分から", "逃げられないんだ。"],
-        "ko": ["도망칠 수 없어.", "내 자신에게서", "도망칠 수 없어."]
-      },
-      "title": {
-        "en": "M",
-        "zh": "M就是凶手",
-        "ja": "M",
-        "ko": "엠"
-      },
-      "keyword": {
-        "en": "Trapped in Myself",
-        "zh": "自困",
-        "zh-Hant": "自困",
-        "ja": "自らに囚われ",
-        "ko": "스스로에 갇히다"
-      }
-    },
-    {
-      "id": "la-grande-illusion",
-      "year": 1937,
-      "tmdbId": 777,
-      "posterPath": "/lWg41zE0FVixkNsFgxnlRyvDYv9.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Borders are made by men.", "Nature pays them no mind."],
-        "zh": ["边界是人划出来的，", "大自然", "从不认识它们。"],
-        "ja": ["国境は人が引いたものだ。", "自然はそれを", "知らない。"],
-        "ko": ["국경은 사람이 그은 것이다.", "자연은 그것을", "알지 못한다."]
-      },
-      "title": {
-        "en": "Grand Illusion",
-        "zh": "大幻影",
-        "ja": "大いなる幻影",
-        "ko": "위대한 환상"
-      },
-      "keyword": {
-        "en": "Borders Are Man-Made",
-        "zh": "疆界",
-        "zh-Hant": "疆界",
-        "ja": "国境",
-        "ko": "국경"
-      }
-    },
-    {
-      "id": "the-rules-of-the-game",
-      "year": 1939,
-      "tmdbId": 776,
-      "posterPath": "/8JOzt7uFZyshcuzCBmYU6CDJL4D.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["The terrible thing is", "that everyone has", "his reasons."],
-        "zh": ["可怕的是，", "每个人都有", "他自己的理由。"],
-        "ja": ["恐ろしいのは、", "誰にもそれぞれの", "理由があることだ。"],
-        "ko": ["무서운 것은,", "누구에게나 저마다의", "이유가 있다는 것이다."]
-      },
-      "title": {
-        "en": "The Rules of the Game",
-        "zh": "游戏规则",
-        "ja": "ゲームの規則",
-        "ko": "게임의 규칙"
-      },
-      "keyword": {
-        "en": "Everyone Has Their Reasons",
-        "zh": "情理",
-        "zh-Hant": "情理",
-        "ja": "それぞれの理",
-        "ko": "각자의 이유"
-      }
-    },
-    {
-      "id": "the-grapes-of-wrath",
-      "year": 1940,
-      "tmdbId": 596,
-      "posterPath": "/eUcxMVBIA0Jg8l1RGUqycrc3eIQ.jpg",
-      "bundled": false,
-      "preferOriginal": true,
-      "lines": {
-        "en": ["Wherever there's someone hungry,", "I'll be there.", "Wherever there's someone beaten,", "I'll be there."],
-        "zh": ["哪里有人在挨饿，", "我就在那里；", "哪里有人在被打，", "我就在那里。"],
-        "ja": ["腹を空かせた者がいれば、", "俺はそこにいる。", "殴られている者がいれば、", "俺はそこにいる。"],
-        "ko": ["굶주린 사람이 있는 곳에", "내가 있고,", "맞고 있는 사람이 있는 곳에", "내가 있다."]
-      },
-      "title": {
-        "en": "The Grapes of Wrath",
-        "zh": "愤怒的葡萄",
-        "ja": "怒りの葡萄",
-        "ko": "분노의 포도"
-      },
-      "keyword": {
-        "en": "I'll Be There",
-        "zh": "同苦",
-        "zh-Hant": "同苦",
-        "ja": "苦を共に",
-        "ko": "고통을 함께"
-      }
-    },
-    {
-      "id": "the-philadelphia-story",
-      "year": 1940,
-      "tmdbId": 981,
-      "posterPath": "/dKUubjvxO78XDts6VP1Ggcp4R9O.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["The time to make up your mind", "about people", "is never."],
-        "zh": ["要对一个人下判断，", "那个时机", "永远不会到。"],
-        "ja": ["人について心を決める時など、", "永遠に来ない。"],
-        "ko": ["사람에 대해 판단을 내릴", "그 순간은", "영원히 오지 않는다."]
-      },
-      "title": {
-        "en": "The Philadelphia Story",
-        "zh": "费城故事",
-        "ja": "フィラデルフィア物語",
-        "ko": "필라델피아 스토리"
-      },
-      "keyword": {
-        "en": "Never the Time to Judge",
-        "zh": "容人",
-        "zh-Hant": "容人",
-        "ja": "人を容れる",
-        "ko": "사람을 품다"
-      }
-    },
-    {
-      "id": "the-maltese-falcon",
-      "year": 1941,
-      "tmdbId": 963,
-      "posterPath": "/bf4o6Uzw5wqLjdKwRuiDrN1xyvl.jpg",
-      "bundled": false,
-      "preferOriginal": true,
-      "lines": {
-        "en": ["This is the stuff", "that dreams are made of."],
-        "zh": ["这就是", "造梦的材料。"],
-        "ja": ["これが、", "夢を作る材料だ。"],
-        "ko": ["이것이", "꿈을 만드는", "재료야."]
-      },
-      "title": {
-        "en": "The Maltese Falcon",
-        "zh": "马耳他之鹰",
-        "ja": "マルタの鷹",
-        "ko": "말타의 매"
-      },
-      "keyword": {
-        "en": "The Stuff of Dreams",
-        "zh": "幻物",
-        "zh-Hant": "幻物",
-        "ja": "夢の材",
-        "ko": "꿈의 재료"
-      }
-    },
-    {
-      "id": "brief-encounter",
-      "year": 1945,
-      "tmdbId": 851,
-      "posterPath": "/jC9EwLJcGhYMSQAHu2LxkKN5v7O.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["I'm an ordinary woman.", "I didn't think such violent things", "could happen", "to ordinary people."],
-        "zh": ["我是个平凡的女人。", "我没想到这么剧烈的事，", "会发生在平凡人身上。"],
-        "ja": ["私はごく普通の女です。", "こんな激しいことが", "普通の人間に起こるとは", "思わなかった。"],
-        "ko": ["저는 평범한 여자예요.", "이렇게 격렬한 일이", "평범한 사람에게", "일어날 줄 몰랐어요."]
-      },
-      "title": {
-        "en": "Brief Encounter",
-        "zh": "相见恨晚",
-        "ja": "逢びき",
-        "ko": "밀회"
-      },
-      "keyword": {
-        "en": "An Ordinary Woman's Storm",
-        "zh": "隐情",
-        "zh-Hant": "隱情",
-        "ja": "秘めた情",
-        "ko": "숨긴 마음"
-      }
-    },
-    {
-      "id": "the-red-shoes",
-      "year": 1948,
-      "tmdbId": 19542,
-      "posterPath": "/vPvpBWFWDvEXuQBkoYgA6A89GVp.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Why do you want to dance?", "Why do you want to live?"],
-        "zh": ["你为什么想跳舞？", "你为什么想活着？"],
-        "ja": ["なぜ踊りたいのか。", "なぜ生きたいのか。"],
-        "ko": ["왜 춤을 추고 싶나?", "왜 살고 싶나?"]
-      },
-      "title": {
-        "en": "The Red Shoes",
-        "zh": "红菱艳",
-        "ja": "赤い靴",
-        "ko": "분홍신"
-      },
-      "keyword": {
-        "en": "Why Do You Dance?",
-        "zh": "痴舞",
-        "zh-Hant": "癡舞",
-        "ja": "舞に憑かれ",
-        "ko": "춤에 홀리다"
-      }
-    },
-    {
-      "id": "a-streetcar-named-desire",
-      "year": 1951,
-      "tmdbId": 702,
-      "posterPath": "/aicdlO5vt7z2ARm279eGzJeYCLQ.jpg",
-      "bundled": false,
-      "preferOriginal": true,
-      "lines": {
-        "en": ["I have always depended", "on the kindness", "of strangers."],
-        "zh": ["我一直依赖", "陌生人的善意。"],
-        "ja": ["私はいつも、", "見知らぬ人の親切に", "頼って生きてきた。"],
-        "ko": ["저는 언제나", "낯선 사람의 친절에", "의지해 왔어요."]
-      },
-      "title": {
-        "en": "A Streetcar Named Desire",
-        "zh": "欲望号街车",
-        "ja": "欲望という名の電車",
-        "ko": "욕망이라는 이름의 전차"
-      },
-      "keyword": {
-        "en": "The Kindness of Strangers",
-        "zh": "陌客",
-        "zh-Hant": "陌客",
-        "ja": "見知らぬ人",
-        "ko": "낯선 이"
-      }
-    },
-    {
-      "id": "sansho-the-bailiff",
-      "year": 1954,
-      "tmdbId": 20532,
-      "posterPath": "/cOBsWxFtEoqXIPx4JZP5E7g1WEo.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Without mercy,", "a man is not a man."],
-        "zh": ["人没有慈悲心，", "就不算是人。"],
-        "ja": ["慈悲のない人間は、", "人間ではない。"],
-        "ko": ["자비가 없는 사람은", "사람이 아니다."]
-      },
-      "title": {
-        "en": "Sansho the Bailiff",
-        "zh": "山椒大夫",
-        "ja": "山椒大夫",
-        "ko": "산쇼다유"
-      },
-      "keyword": {
-        "en": "Mercy",
-        "zh": "慈悲",
-        "zh-Hant": "慈悲",
-        "ja": "慈悲",
-        "ko": "자비"
-      }
-    },
-    {
-      "id": "paths-of-glory",
-      "year": 1957,
-      "tmdbId": 975,
-      "posterPath": "/hGg1UCQSHlXfv2HI9bDHT2OQBam.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Patriotism is the last refuge", "of a scoundrel."],
-        "zh": ["爱国主义，", "是无赖最后的", "避难所。"],
-        "ja": ["愛国心は、", "悪党の最後の", "隠れ場所だ。"],
-        "ko": ["애국심은", "악당의 마지막", "피난처다."]
-      },
-      "title": {
-        "en": "Paths of Glory",
-        "zh": "光荣之路",
-        "ja": "突撃",
-        "ko": "영광의 길"
-      },
-      "keyword": {
-        "en": "The Last Refuge",
-        "zh": "遮羞",
-        "zh-Hant": "遮羞",
-        "ja": "体裁を隠す",
-        "ko": "부끄러움을 가리다"
-      }
-    },
-    {
-      "id": "throne-of-blood",
-      "year": 1957,
-      "tmdbId": 3777,
-      "posterPath": "/zaZFMNxJST0TtPd68yF7fNt1he8.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["Behold the ruins", "of the castle of delusion.", "The spirits wander here", "even now."],
-        "zh": ["看啊，妄执之城的遗址。", "魂魄至今，", "仍在此地徘徊。"],
-        "ja": ["見よ、妄執の城の址。", "魂魄いまも", "なおここに", "さまよう。"],
-        "ko": ["보라, 망집의 성터를.", "혼백은 지금도", "이곳을 떠돈다."]
-      },
-      "title": {
-        "en": "Throne of Blood",
-        "zh": "蜘蛛巢城",
-        "ja": "蜘蛛巣城",
-        "ko": "거미집의 성"
-      },
-      "keyword": {
-        "en": "Delusion",
-        "zh": "妄执",
-        "zh-Hant": "妄執",
-        "ja": "妄執",
-        "ko": "망집"
-      }
-    },
-    {
-      "id": "touch-of-evil",
-      "year": 1958,
-      "tmdbId": 1480,
-      "posterPath": "/1pvRgmfBaoMczIJBOi9gCOZ4FMC.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["He was some kind of a man.", "What does it matter", "what you say about people?"],
-        "zh": ["他算是个人物吧。", "可你说人什么，", "又有什么关系呢？"],
-        "ja": ["彼はまあ、", "ひとかどの男だった。", "人のことを何と言おうと、", "何になる。"],
-        "ko": ["그는 그래도", "사내였지.", "사람에 대해 뭐라 하든,", "무슨 상관이겠나."]
-      },
-      "title": {
-        "en": "Touch of Evil",
-        "zh": "历劫佳人",
-        "ja": "黒い罠",
-        "ko": "검은 함정"
-      },
-      "keyword": {
-        "en": "What Does It Matter?",
-        "zh": "身后名",
-        "zh-Hant": "身後名",
-        "ja": "死後の名",
-        "ko": "죽은 뒤의 이름"
-      }
-    },
-    {
-      "id": "pickpocket",
-      "year": 1959,
-      "tmdbId": 690,
-      "posterPath": "/szulf6uQyZp0QPVOvzavETdVYXI.jpg",
-      "bundled": false,
-      "lines": {
-        "en": ["What a strange road", "I took", "to reach you."],
-        "zh": ["为了走到你身边，", "我走了一条", "多么奇怪的路。"],
-        "ja": ["君のところへ行くために、", "なんと奇妙な道を", "通ったことか。"],
-        "ko": ["네게 오기까지", "참 이상한 길을", "걸었구나."]
-      },
-      "title": {
-        "en": "Pickpocket",
-        "zh": "扒手",
-        "ja": "スリ",
-        "ko": "소매치기"
-      },
-      "keyword": {
-        "en": "What a Strange Road",
-        "zh": "歧路",
-        "zh-Hant": "歧路",
-        "ja": "奇しき道",
-        "ko": "이상한 길"
-      }
-    },
-    {
       "id": "harakiri",
       "year": 1962,
       "tmdbId": 14537,
@@ -9613,6 +8846,783 @@
         "zh-Hant": "籠中",
         "ja": "籠の中",
         "ko": "새장 속"
+      }
+    },
+    {
+      "id": "breaking-bad",
+      "year": 2008,
+      "mediaType": "show",
+      "tmdbId": 1396,
+      "posterPath": "/anFx9aTOOYqgS3v7x3R84Kz67ly.jpg",
+      "lines": {
+        "en": ["I am not in danger, Skyler.", "I am the danger."],
+        "zh": ["我不是身处险境。", "我就是那个险境。"],
+        "ja": ["危険にさらされてるんじゃない。", "俺が危険なんだ。"],
+        "ko": ["나는 위험에 처한 게 아니야.", "내가 위험이야."]
+      },
+      "title": {
+        "en": "Breaking Bad",
+        "zh": "绝命毒师",
+        "ja": "ブレイキング・バッド",
+        "ko": "브레이킹 배드"
+      },
+      "keyword": {
+        "en": "I Am the Danger",
+        "zh": "祸源",
+        "zh-Hant": "禍源",
+        "ja": "危険は俺だ",
+        "ko": "위험은 나다"
+      }
+    },
+    {
+      "id": "the-wire",
+      "year": 2002,
+      "mediaType": "show",
+      "tmdbId": 1438,
+      "posterPath": "/4lbclFySvugI51fwsyxBTOm4DqK.jpg",
+      "lines": {
+        "en": ["We're building something here.", "We build it from scratch.", "All the pieces matter."],
+        "zh": ["我们在这儿建东西，", "从零开始建。", "每一块都算数。"],
+        "ja": ["ここで一つのものを組み立ててる。", "ゼロからだ。", "どの断片も無駄じゃない。"],
+        "ko": ["여기서 뭔가를 만들고 있어.", "처음부터 하나하나.", "모든 조각이 다 중요해."]
+      },
+      "title": {
+        "en": "The Wire",
+        "zh": "火线",
+        "ja": "ザ・ワイヤー",
+        "ko": "더 와이어"
+      },
+      "keyword": {
+        "en": "All the Pieces Matter",
+        "zh": "积微",
+        "zh-Hant": "積微",
+        "ja": "積み重ね",
+        "ko": "모든 조각"
+      }
+    },
+    {
+      "id": "friends",
+      "year": 1994,
+      "mediaType": "show",
+      "tmdbId": 1668,
+      "posterPath": "/2koX1xLkpTQM4IZebYvKysFW1Nh.jpg",
+      "lines": {
+        "en": ["Lobsters fall in love", "and mate for life.", "He's her lobster."],
+        "zh": ["龙虾一旦相爱，", "就是一辈子。", "他就是她的龙虾。"],
+        "ja": ["ロブスターは一度恋をしたら、", "一生その相手と過ごす。", "彼が、彼女のロブスターなの。"],
+        "ko": ["랍스터는 한번 사랑에 빠지면", "평생을 함께한대.", "그가 그녀의 랍스터야."]
+      },
+      "title": {
+        "en": "Friends",
+        "zh": "老友记",
+        "ja": "フレンズ",
+        "ko": "프렌즈"
+      },
+      "keyword": {
+        "en": "Lobsters Mate for Life",
+        "zh": "偕老",
+        "zh-Hant": "偕老",
+        "ja": "生涯の相手",
+        "ko": "평생의 짝"
+      }
+    },
+    {
+      "id": "game-of-thrones",
+      "year": 2011,
+      "mediaType": "show",
+      "tmdbId": 1399,
+      "posterPath": "/1XS1oqL89opfnbLl8WnZY1O1uJx.jpg",
+      "lines": {
+        "en": ["Never forget what you are.", "Wear it like armor,", "and it can never be used", "to hurt you."],
+        "zh": ["永远不要忘记你是什么。", "把它当铠甲穿上，", "就没人能拿它伤你。"],
+        "ja": ["自分が何者かを忘れるな。", "鎧のように身にまとえ。", "そうすれば誰にも傷つけられない。"],
+        "ko": ["네가 무엇인지 절대 잊지 마라.", "그것을 갑옷처럼 입어라.", "누구도 그것으로", "너를 해치지 못한다."]
+      },
+      "title": {
+        "en": "Game of Thrones",
+        "zh": "权力的游戏",
+        "ja": "ゲーム・オブ・スローンズ",
+        "ko": "왕좌의 게임"
+      },
+      "keyword": {
+        "en": "Wear It Like Armor",
+        "zh": "铠甲",
+        "zh-Hant": "鎧甲",
+        "ja": "鎧とせよ",
+        "ko": "갑옷처럼"
+      }
+    },
+    {
+      "id": "chernobyl",
+      "year": 2019,
+      "mediaType": "show",
+      "tmdbId": 87108,
+      "posterPath": "/hlLXt2tOPT6RRnjiUmoxyG1LTFi.jpg",
+      "lines": {
+        "en": ["What is the cost of lies?", "Not that we mistake them", "for the truth. The danger is", "that we no longer know it at all."],
+        "zh": ["谎言的代价是什么？", "不是我们错认了真相，", "而是听得够多之后，", "再也认不出真相。"],
+        "ja": ["嘘の代償とは何か。", "真実と取り違えることではない。", "聞き続けた末に、", "真実が分からなくなることだ。"],
+        "ko": ["거짓의 대가는 무엇인가.", "진실로 착각하는 것이 아니다.", "충분히 듣고 나면", "더는 진실을 알아보지 못한다."]
+      },
+      "title": {
+        "en": "Chernobyl",
+        "zh": "切尔诺贝利",
+        "ja": "チェルノブイリ",
+        "ko": "체르노빌"
+      },
+      "keyword": {
+        "en": "The Cost of Lies",
+        "zh": "失真",
+        "zh-Hant": "失真",
+        "ja": "嘘の代償",
+        "ko": "거짓의 대가"
+      }
+    },
+    {
+      "id": "band-of-brothers",
+      "year": 2001,
+      "mediaType": "show",
+      "tmdbId": 4613,
+      "posterPath": "/pGzV187ogXzgJrvPRy2YPi29ofH.jpg",
+      "lines": {
+        "en": ["'Grandpa, were you a hero", "in the war?'", "'No. But I served", "in a company of heroes.'"],
+        "zh": ["「爷爷，你是英雄吗？」", "「不是。", "但我待过英雄的连队。」"],
+        "ja": ["「おじいちゃんは英雄だったの？」", "「いや。", "だが英雄たちの中隊にいた。」"],
+        "ko": ["'할아버지, 영웅이었어요?'", "'아니.", "하지만 영웅들의 중대에 있었다.'"]
+      },
+      "title": {
+        "en": "Band of Brothers",
+        "zh": "兄弟连",
+        "ja": "バンド・オブ・ブラザース",
+        "ko": "밴드 오브 브라더스"
+      },
+      "keyword": {
+        "en": "A Company of Heroes",
+        "zh": "群英",
+        "zh-Hant": "群英",
+        "ja": "英雄の隊",
+        "ko": "영웅들 속에"
+      }
+    },
+    {
+      "id": "mad-men",
+      "year": 2007,
+      "mediaType": "show",
+      "tmdbId": 1104,
+      "posterPath": "/7v8iCNzKFpdlrCMcqCoJyn74Nsa.jpg",
+      "lines": {
+        "en": ["Nostalgia — delicate, but potent.", "In Greek it means", "'the pain from an old wound.'"],
+        "zh": ["怀旧纤细，却有力量。", "希腊语里，它的意思是", "「旧伤口的疼」。"],
+        "ja": ["ノスタルジアは繊細だが強い。", "ギリシャ語では", "「古い傷の痛み」を意味する。"],
+        "ko": ["노스탤지어는 섬세하지만 강하다.", "그리스어로 그것은", "'오래된 상처의 아픔'을 뜻한다."]
+      },
+      "title": {
+        "en": "Mad Men",
+        "zh": "广告狂人",
+        "ja": "マッドメン",
+        "ko": "매드 맨"
+      },
+      "keyword": {
+        "en": "The Pain from an Old Wound",
+        "zh": "旧创",
+        "zh-Hant": "舊創",
+        "ja": "古い傷の痛み",
+        "ko": "오래된 상처"
+      }
+    },
+    {
+      "id": "hanzawa-naoki",
+      "year": 2013,
+      "mediaType": "show",
+      "tmdbId": 55925,
+      "posterPath": "/4Qnk3QvC8gxTWH5uM8thovg1j4Q.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["Do me wrong,", "and I do you wrong right back.", "Twice as hard."],
+        "zh": ["别人怎么对我，", "我就怎么还回去。", "加倍奉还。"],
+        "ja": ["やられたら、やり返す。", "倍返しだ。"],
+        "ko": ["당하면, 되갚는다.", "두 배로 갚아준다."]
+      },
+      "title": {
+        "en": "Hanzawa Naoki",
+        "zh": "半泽直树",
+        "ja": "半沢直樹",
+        "ko": "한자와 나오키"
+      },
+      "keyword": {
+        "en": "Twice as Hard",
+        "zh": "奉还",
+        "zh-Hant": "奉還",
+        "ja": "倍返し",
+        "ko": "두 배로"
+      }
+    },
+    {
+      "id": "midnight-diner",
+      "year": 2009,
+      "mediaType": "show",
+      "tmdbId": 47008,
+      "posterPath": "/Aou5vJF5kvHRFp7IZILwK0ZO2sB.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["That's the whole menu.", "Order whatever else you like —", "if I can make it, I will."],
+        "zh": ["菜单就这些。", "别的你随便点，", "能做的我就做。"],
+        "ja": ["メニューはこれだけ。", "あとは勝手に注文してくれりゃ、", "できるもんなら作るよ。"],
+        "ko": ["메뉴는 이게 다야.", "나머지는 마음대로 주문해.", "만들 수 있으면 만들어 줄게."]
+      },
+      "title": {
+        "en": "Midnight Diner",
+        "zh": "深夜食堂",
+        "ja": "深夜食堂",
+        "ko": "심야식당"
+      },
+      "keyword": {
+        "en": "The Late Kitchen",
+        "zh": "灶火",
+        "zh-Hant": "灶火",
+        "ja": "深夜の灯",
+        "ko": "심야의 불"
+      }
+    },
+    {
+      "id": "kodoku-no-gurume",
+      "year": 2012,
+      "mediaType": "show",
+      "tmdbId": 55582,
+      "posterPath": "/3DEWsJv0OxHON7AEy4Us6m3e7fS.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["To eat undisturbed,", "minding no one at all —", "a solitary and lofty act."],
+        "zh": ["不被谁打扰，不用顾谁，", "只是吃东西——", "这是一件孤高的事。"],
+        "ja": ["誰にも邪魔されず、気を使わず、", "ものを食べるという孤高の行為。"],
+        "ko": ["누구에게도 방해받지 않고,", "누구도 신경 쓰지 않고 먹는", "고고한 행위."]
+      },
+      "title": {
+        "en": "Solitary Gourmet",
+        "zh": "孤独的美食家",
+        "ja": "孤独のグルメ",
+        "ko": "고독한 미식가"
+      },
+      "keyword": {
+        "en": "A Solitary Meal",
+        "zh": "独餐",
+        "zh-Hant": "獨餐",
+        "ja": "孤高の食",
+        "ko": "혼자의 식탁"
+      }
+    },
+    {
+      "id": "quartet",
+      "year": 2017,
+      "mediaType": "show",
+      "tmdbId": 69857,
+      "posterPath": "/gCuCYARnYLlXRbxaLpFzETLT3Zm.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["Anyone who has eaten a meal", "while crying", "can go on living."],
+        "zh": ["哭着也把饭吃下去的人，", "是能活下去的。"],
+        "ja": ["泣きながらご飯を", "食べたことある人は、", "生きていけます。"],
+        "ko": ["울면서 밥을 먹어 본 사람은,", "살아갈 수 있습니다."]
+      },
+      "title": {
+        "en": "Quartet",
+        "zh": "四重奏",
+        "ja": "カルテット",
+        "ko": "콰르텟"
+      },
+      "keyword": {
+        "en": "Eating While Crying",
+        "zh": "泪与饭",
+        "zh-Hant": "淚與飯",
+        "ja": "泣きながら",
+        "ko": "울면서 먹은 밥"
+      }
+    },
+    {
+      "id": "nigeru-wa-haji",
+      "year": 2016,
+      "mediaType": "show",
+      "tmdbId": 68293,
+      "posterPath": "/28lfvAfvYoDoFDXkPS49RWhDTJo.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["It's all right to run.", "Even if you run shamefully,", "surviving matters more."],
+        "zh": ["逃也可以。", "就算逃得难看，", "活下去才更重要。"],
+        "ja": ["逃げてもいい。", "恥ずかしい逃げ方だったとしても、", "生き抜くことの方が大切で。"],
+        "ko": ["도망쳐도 된다.", "부끄러운 도망이라도,", "살아내는 것이 더 중요하다."]
+      },
+      "title": {
+        "en": "The Full-Time Wife Escapist",
+        "zh": "逃避虽可耻但有用",
+        "ja": "逃げるは恥だが役に立つ",
+        "ko": "도망치는 건 부끄럽지만 도움이 된다"
+      },
+      "keyword": {
+        "en": "Running Is Allowed",
+        "zh": "退亦勇",
+        "zh-Hant": "退亦勇",
+        "ja": "逃げてよい",
+        "ko": "도망쳐도 된다"
+      }
+    },
+    {
+      "id": "kita-no-kuni-kara",
+      "year": 1981,
+      "mediaType": "show",
+      "tmdbId": 74492,
+      "posterPath": "/k1hbqb65Kq9VrC9OJVxAUHcJSpb.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["When you're worn out,", "come home any time.", "Going home is nothing", "to be ashamed of."],
+        "zh": ["累了，随时回来。", "回老家不是丢人的事。"],
+        "ja": ["疲れたら、いつでも帰ってこい。", "くにへ帰ることは、", "恥ずかしいことじゃない。"],
+        "ko": ["지치면 언제든 돌아와라.", "고향으로 돌아오는 건", "부끄러운 일이 아니다."]
+      },
+      "title": {
+        "en": "From the Northern Country",
+        "zh": "北国之恋",
+        "ja": "北の国から",
+        "ko": "북쪽 고향에서"
+      },
+      "keyword": {
+        "en": "Come Home Any Time",
+        "zh": "归乡",
+        "zh-Hant": "歸鄉",
+        "ja": "帰ってこい",
+        "ko": "언제든 돌아와"
+      }
+    },
+    {
+      "id": "shiroi-kyoto",
+      "year": 2003,
+      "mediaType": "show",
+      "tmdbId": 38242,
+      "posterPath": "/ewWvv9eV3cRdBudojaF6FiqtqX2.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["Medicine has no absolutes.", "So a doctor must keep agonizing.", "Your anguish — I stand behind it."],
+        "zh": ["医疗没有绝对。", "所以医生必须一直烦恼。", "你的苦恼，我支持。"],
+        "ja": ["医療に絶対はない。", "だから医者は悩み続けねばならん。", "君の苦悩を、私は支持するよ。"],
+        "ko": ["의료에 절대는 없다.", "그러니 의사는", "계속 고뇌해야 한다.", "자네의 고뇌를, 나는 지지하네."]
+      },
+      "title": {
+        "en": "The Great White Tower",
+        "zh": "白色巨塔",
+        "ja": "白い巨塔",
+        "ko": "하얀거탑"
+      },
+      "keyword": {
+        "en": "No Absolutes",
+        "zh": "无绝对",
+        "zh-Hant": "無絕對",
+        "ja": "絶対はない",
+        "ko": "절대는 없다"
+      }
+    },
+    {
+      "id": "reply-1988",
+      "year": 2015,
+      "mediaType": "show",
+      "tmdbId": 64010,
+      "posterPath": "/655MownSWwplhvVlXERRJ4OSOG2.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["Grown-ups are only enduring.", "They hold up the weight of age", "by pretending to be strong.", "Grown-ups hurt too."],
+        "zh": ["大人只是在忍着。", "只是用装作坚强", "扛住年龄的重量。", "大人也会疼。"],
+        "ja": ["大人はただ耐えているだけだ。", "年齢の重さを", "強がりで支えていただけだ。", "大人も痛いのだ。"],
+        "ko": ["어른은 그저 견디고 있을 뿐이다.", "나이의 무게감을", "강한 척으로 버텨냈을 뿐이다.", "어른도 아프다."]
+      },
+      "title": {
+        "en": "Reply 1988",
+        "zh": "请回答1988",
+        "ja": "恋のスケッチ 〜応答せよ1988〜",
+        "ko": "응답하라 1988"
+      },
+      "keyword": {
+        "en": "Grown-Ups Hurt Too",
+        "zh": "隐痛",
+        "zh-Hant": "隱痛",
+        "ja": "大人も痛い",
+        "ko": "어른도 아프다"
+      }
+    },
+    {
+      "id": "my-mister",
+      "year": 2018,
+      "mediaType": "show",
+      "tmdbId": 76662,
+      "posterPath": "/gE9tZDycsA31wvtzUcDWVk6Nf7t.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["Ji-an. Have you come to ease?", "Yes. Yes!"],
+        "zh": ["至安，你到安宁了吗？", "到了。到了！"],
+        "ja": ["ジアン、安らぎにたどり着いたか。", "はい。はい！"],
+        "ko": ["지안, 편안함에 이르렀나?", "네. 네!"]
+      },
+      "title": {
+        "en": "My Mister",
+        "zh": "我的大叔",
+        "ja": "マイ・ディア・ミスター 〜私のおじさん〜",
+        "ko": "나의 아저씨"
+      },
+      "keyword": {
+        "en": "Coming to Ease",
+        "zh": "至安",
+        "zh-Hant": "至安",
+        "ja": "安らぎ",
+        "ko": "편안함"
+      }
+    },
+    {
+      "id": "goblin",
+      "year": 2016,
+      "mediaType": "show",
+      "tmdbId": 67915,
+      "posterPath": "/sPkxHNw5BFvuCFGWw825TS7n6X3.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["Every hour with you was dazzling.", "Because the weather was fine,", "was not, was just right.", "All the days were good."],
+        "zh": ["和你在一起的时光都耀眼。", "因为天气好，不好，", "刚刚好。", "每一天都好。"],
+        "ja": ["君と過ごした時間はどれも眩しい。", "天気がよくて、よくなくて、", "ちょうどよくて。", "どの日もよかった。"],
+        "ko": ["너와 함께한 시간 모두 눈부셨다.", "날이 좋아서, 좋지 않아서,", "적당해서.", "모든 날이 좋았다."]
+      },
+      "title": {
+        "en": "Goblin",
+        "zh": "鬼怪",
+        "ja": "トッケビ 〜君がくれた愛しい日々〜",
+        "ko": "도깨비"
+      },
+      "keyword": {
+        "en": "All the Days Were Good",
+        "zh": "皆好日",
+        "zh-Hant": "皆好日",
+        "ja": "どの日も",
+        "ko": "모든 날이 좋았다"
+      }
+    },
+    {
+      "id": "misaeng",
+      "year": 2014,
+      "mediaType": "show",
+      "tmdbId": 61678,
+      "posterPath": "/ii4FKpUdiS40oBh62YgeiyL2hx2.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["A road is not for walking.", "It is for going forward", "while you walk.", "A road that cannot go on is none."],
+        "zh": ["路不是用来走的，", "是走着往前去的。", "不能往前的路，", "不是路。"],
+        "ja": ["道とは歩くためのものではなく、", "歩きながら前へ進むためのものだ。", "進めない道は道ではない。"],
+        "ko": ["길이란 걷는 것이 아니라,", "걸으면서 나아가기 위한 것이다.", "나아가지 못하는 길은", "길이 아니다."]
+      },
+      "title": {
+        "en": "Misaeng: Incomplete Life",
+        "zh": "未生",
+        "ja": "ミセン -未生-",
+        "ko": "미생"
+      },
+      "keyword": {
+        "en": "A Road That Goes Forward",
+        "zh": "前路",
+        "zh-Hant": "前路",
+        "ja": "進む道",
+        "ko": "나아가는 길"
+      }
+    },
+    {
+      "id": "signal",
+      "year": 2016,
+      "mediaType": "show",
+      "tmdbId": 64840,
+      "posterPath": "/uIskxIo84jexPhnrzm1TpsUCI9w.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["The past can be changed.", "Never give up."],
+        "zh": ["过去，是可以改变的。", "千万不要放弃。"],
+        "ja": ["過去は、変えられます。", "絶対に諦めないでください。"],
+        "ko": ["과거, 바뀔 수 있습니다.", "절대 포기하지 말아요."]
+      },
+      "title": {
+        "en": "Signal",
+        "zh": "信号",
+        "ja": "シグナル",
+        "ko": "시그널"
+      },
+      "keyword": {
+        "en": "The Past Can Change",
+        "zh": "改往",
+        "zh-Hant": "改往",
+        "ja": "過去を変える",
+        "ko": "과거를 바꾸다"
+      }
+    },
+    {
+      "id": "when-camellia-blooms",
+      "year": 2019,
+      "mediaType": "show",
+      "tmdbId": 93097,
+      "posterPath": "/bCrYA7xyHJtPnTWZU60pVBRSFZc.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["Me — I'm going to live", "without shrinking myself anymore."],
+        "zh": ["我啊，以后要活得", "不再缩着脖子。"],
+        "ja": ["わたしはもう、", "縮こまらずに生きるんだ。"],
+        "ko": ["나, 기죽지 않고 살 거야."]
+      },
+      "title": {
+        "en": "When the Camellia Blooms",
+        "zh": "山茶花开时",
+        "ja": "椿の花咲く頃",
+        "ko": "동백꽃 필 무렵"
+      },
+      "keyword": {
+        "en": "No Longer Shrinking",
+        "zh": "挺胸",
+        "zh-Hant": "挺胸",
+        "ja": "縮こまらず",
+        "ko": "기죽지 않기"
+      }
+    },
+    {
+      "id": "jewel-in-the-palace",
+      "year": 2003,
+      "mediaType": "show",
+      "tmdbId": 333,
+      "posterPath": "/oiDr9sZPluqKJH8o0vuX5Dh61dh.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["I tasted persimmon in the meat.", "You ask how I knew —", "it tasted of persimmon,", "so I thought it was persimmon."],
+        "zh": ["嚼肉时尝到了柿子味……", "您问我怎么想到是柿子——", "尝出柿子味，", "就想到是柿子啊……"],
+        "ja": ["肉から熟し柿の味がしたのです。", "なぜ柿だと問われれば、", "柿の味がしたから", "柿だと思ったのでございます。"],
+        "ko": ["고기에서 홍시 맛이 났는데…", "어찌 홍시라 생각했느냐 하시면,", "그냥 홍시 맛이 나서", "홍시라 생각한 것이온데…"]
+      },
+      "title": {
+        "en": "Jewel in the Palace",
+        "zh": "大长今",
+        "ja": "宮廷女官チャングムの誓い",
+        "ko": "대장금"
+      },
+      "keyword": {
+        "en": "It Tasted of Persimmon",
+        "zh": "柿味",
+        "zh-Hant": "柿味",
+        "ja": "柿の味",
+        "ko": "홍시 맛"
+      }
+    },
+    {
+      "id": "my-own-swordsman",
+      "year": 2006,
+      "mediaType": "show",
+      "tmdbId": 64709,
+      "posterPath": "/xJxeaJJb8r2WwhIinJzdFT3hB4s.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["I was wrong.", "I was wrong from the very start.", "Had I not married into this place,", "my husband would still be alive."],
+        "zh": ["额错咧，额一开始就错咧。", "额如果不嫁过来，", "额滴夫君就不会死。"],
+        "ja": ["わたしが間違ってた。", "最初から間違ってたんだ。", "ここに嫁いでこなければ、", "夫は死なずに済んだ。"],
+        "ko": ["내가 틀렸어, 처음부터 틀렸어.", "이곳에 시집오지 않았으면", "남편은 죽지 않았을 거야."]
+      },
+      "title": {
+        "en": "My Own Swordsman",
+        "zh": "武林外传",
+        "ja": "武林外伝",
+        "ko": "무림외전"
+      },
+      "keyword": {
+        "en": "Wrong from the Start",
+        "zh": "错嫁",
+        "zh-Hant": "錯嫁",
+        "ja": "最初から",
+        "ko": "처음부터 틀렸어"
+      }
+    },
+    {
+      "id": "ming-dynasty-1566",
+      "year": 2007,
+      "mediaType": "show",
+      "tmdbId": 68034,
+      "posterPath": "/aZ2hOkyTYZ7ze8WSbWww7bbSn2r.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["The Yangtze waters its banks;", "so does the Yellow River.", "Favor neither for running clear,", "abandon neither for running muddy."],
+        "zh": ["长江灌两岸，", "黄河也灌两岸。", "不因水清而偏用，", "不因水浊而偏废。"],
+        "ja": ["長江も両岸の田を潤し、", "黄河もまた両岸の田を潤す。", "清いからと偏って用いず、", "濁るからと捨て去らず。"],
+        "ko": ["장강도 양안의 논밭을 적시고,", "황하도 양안의 논밭을 적신다.", "맑다고 치우쳐 쓰지 않고,", "흐리다고 버리지 않는다."]
+      },
+      "title": {
+        "en": "Ming Dynasty in 1566",
+        "zh": "大明王朝1566",
+        "ja": "大明王朝 〜嘉靖帝と海瑞〜",
+        "ko": "대명왕조 1566"
+      },
+      "keyword": {
+        "en": "Clear Water, Muddy Water",
+        "zh": "清浊",
+        "zh-Hant": "清濁",
+        "ja": "清と濁",
+        "ko": "맑음과 흐림"
+      }
+    },
+    {
+      "id": "lurk",
+      "year": 2009,
+      "mediaType": "show",
+      "tmdbId": 21712,
+      "posterPath": "/nmRYzDi6E8q1i0o9uw7Oc1rDzRw.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["There is a victory called retreat,", "and a defeat called occupation."],
+        "zh": ["有一种胜利叫撤退，", "有一种失败叫占领。"],
+        "ja": ["撤退という名の勝利があり、", "占領という名の敗北がある。"],
+        "ko": ["후퇴라 불리는 승리가 있고,", "점령이라 불리는 패배가 있다."]
+      },
+      "title": {
+        "en": "Lurk",
+        "zh": "潜伏",
+        "ja": "潜伏",
+        "ko": "잠복"
+      },
+      "keyword": {
+        "en": "Victory Called Retreat",
+        "zh": "撤守",
+        "zh-Hant": "撤守",
+        "ja": "退く勝ち",
+        "ko": "후퇴의 승리"
+      }
+    },
+    {
+      "id": "soldiers-sortie",
+      "year": 2006,
+      "mediaType": "show",
+      "tmdbId": 18335,
+      "posterPath": "/7Swf81H73n9A5tt7pESwnYaDzZF.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["Leave no one behind.", "Give nothing up.", "Having meaning is living well,", "and living well is doing so."],
+        "zh": ["不抛弃，不放弃。", "有意义就是好好活，", "好好活就是做有意义的事。"],
+        "ja": ["見捨てない、諦めない。", "意味があるとは、", "ちゃんと生きることだ。"],
+        "ko": ["버리지 않는다, 포기하지 않는다.", "의미가 있다는 건", "잘 사는 것이다."]
+      },
+      "title": {
+        "en": "Soldiers Sortie",
+        "zh": "士兵突击",
+        "ja": "士兵突撃",
+        "ko": "사병돌격"
+      },
+      "keyword": {
+        "en": "Leave No One Behind",
+        "zh": "不弃",
+        "zh-Hant": "不棄",
+        "ja": "見捨てぬ",
+        "ko": "버리지 않기"
+      }
+    },
+    {
+      "id": "journey-to-the-west",
+      "year": 1986,
+      "mediaType": "show",
+      "tmdbId": 13923,
+      "posterPath": "/bAl4rX85qVbGeVslvQqFRDHsQ6X.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["This humble monk comes", "from the Great Tang in the east,", "bound for the Western Heaven", "to seek the scriptures."],
+        "zh": ["贫僧从东土大唐而来，", "去往西天拜佛求经。"],
+        "ja": ["拙僧は東土大唐より参り、", "西天へ経を求めに行く者です。"],
+        "ko": ["소승은 동토 대당에서 왔으며,", "서천으로 불경을 구하러 갑니다."]
+      },
+      "title": {
+        "en": "Journey to the West",
+        "zh": "西游记",
+        "ja": "西遊記",
+        "ko": "서유기"
+      },
+      "keyword": {
+        "en": "Bound for the West",
+        "zh": "取经",
+        "zh-Hant": "取經",
+        "ja": "経を求めて",
+        "ko": "경을 구하러"
+      }
+    },
+    {
+      "id": "the-long-season",
+      "year": 2023,
+      "mediaType": "show",
+      "tmdbId": 225008,
+      "posterPath": "/7b4u442wN7AEmK1VxbLdIfS6Dxo.jpg",
+      "bundled": true,
+      "preferOriginal": true,
+      "lines": {
+        "en": ["Look ahead.", "Don't look back."],
+        "zh": ["往前看，别回头。"],
+        "ja": ["前を見ろ。", "振り返るな。"],
+        "ko": ["앞을 봐.", "뒤돌아보지 마."]
+      },
+      "title": {
+        "en": "The Long Season",
+        "zh": "漫长的季节",
+        "ja": "長い季節",
+        "ko": "긴 계절"
+      },
+      "keyword": {
+        "en": "Look Ahead",
+        "zh": "向前",
+        "zh-Hant": "向前",
+        "ja": "前を見ろ",
+        "ko": "앞을 보다"
+      }
+    },
+    {
+      "id": "the-world-between-us",
+      "year": 2019,
+      "mediaType": "show",
+      "tmdbId": 87969,
+      "posterPath": "/79SrWiXdxuEmhpXY2MD2e6HPLKs.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["What makes a good person,", "and what makes a bad one?", "Do you have a standard answer?"],
+        "zh": ["到底什么是好人，", "什么是坏人，", "你有标准答案吗？"],
+        "ja": ["いったい何が善人で、", "何が悪人なのか。", "標準の答えがありますか。"],
+        "ko": ["대체 무엇이 좋은 사람이고", "무엇이 나쁜 사람입니까?", "표준 답안이 있습니까?"]
+      },
+      "title": {
+        "en": "The World Between Us",
+        "zh": "我们与恶的距离",
+        "ja": "わたしたちと悪の距離",
+        "ko": "우리와 악의 거리"
+      },
+      "keyword": {
+        "en": "Is There a Standard Answer?",
+        "zh": "善恶界",
+        "zh-Hant": "善惡界",
+        "ja": "善と悪と",
+        "ko": "선과 악 사이"
+      }
+    },
+    {
+      "id": "the-greed-of-man",
+      "year": 1992,
+      "mediaType": "show",
+      "tmdbId": 20382,
+      "posterPath": "/ib3bGoQojw1YaSv902xjcZ9SXOL.jpg",
+      "preferOriginal": true,
+      "lines": {
+        "en": ["If you mean to be emperor,", "then I will be the revolution", "that ends you."],
+        "zh": ["你要做皇帝，", "我就来革你的命！"],
+        "ja": ["お前が皇帝になるつもりなら、", "俺がその命を革める革命になる。"],
+        "ko": ["네가 황제가 되겠다면,", "내가 너를 끝낼 혁명이 되겠다."]
+      },
+      "title": {
+        "en": "The Greed of Man",
+        "zh": "大时代",
+        "ja": "大時代",
+        "ko": "대시대"
+      },
+      "keyword": {
+        "en": "I Will Not Kneel",
+        "zh": "不臣",
+        "zh-Hant": "不臣",
+        "ja": "臣とならず",
+        "ko": "굴하지 않기"
       }
     }
   ]

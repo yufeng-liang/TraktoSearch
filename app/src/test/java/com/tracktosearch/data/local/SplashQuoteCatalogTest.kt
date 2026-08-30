@@ -32,8 +32,39 @@ class SplashQuoteCatalogTest {
     fun `台词库能解析出条目且 id 不重复`() = runTest {
         val quotes = quotes()
 
-        assertThat(quotes).isNotEmpty()
+        // 每天取第 epochDay % size 条，正好 365 条才是一年一轮；多一条少一条都会让轮次错位
+        assertThat(quotes).hasSize(365)
         assertThat(quotes.map { it.id }).containsNoDuplicates()
+    }
+
+    /**
+     * 入库标准：1960 年以后首映/首播。
+     *
+     * 更早的作品台词大多经过几十年转述，引文版本互相矛盾，逐条核到原片不现实，
+     * 所以这条线钉在测试里而不是只写在文档里。见 [SplashQuote]。
+     */
+    @Test
+    fun `条目都是 1960 年以后的作品`() = runTest {
+        quotes().forEach { quote ->
+            assertThat(quote.year).isAtLeast(1960)
+        }
+    }
+
+    /**
+     * mediaType 只能是 movie 或 show：详情页拿它选 TMDB 的哪个命名空间。
+     *
+     * 写错一个字不会解析失败（有默认值兜着），但那条会静默打开另一部作品——
+     * 两个命名空间的 tmdbId 各自编号。
+     */
+    @Test
+    fun `条目的 mediaType 只有电影和剧集两种`() = runTest {
+        val quotes = quotes()
+        val kinds = setOf(SplashQuote.MEDIA_TYPE_MOVIE, SplashQuote.MEDIA_TYPE_SHOW)
+
+        quotes.forEach { assertThat(it.mediaType).isIn(kinds) }
+        // 两类都得有：剧集那一支是后来加的，全退回电影就说明数据被覆盖回去了
+        assertThat(quotes.any { it.mediaType == SplashQuote.MEDIA_TYPE_SHOW }).isTrue()
+        assertThat(quotes.any { it.mediaType == SplashQuote.MEDIA_TYPE_MOVIE }).isTrue()
     }
 
     @Test

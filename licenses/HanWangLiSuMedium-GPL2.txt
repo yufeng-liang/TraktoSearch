@@ -35,14 +35,14 @@ Two caveats worth knowing before this font is reused elsewhere:
 
 What ships in this repo:
 
-app/src/main/res/font/hanwang_lisu_seal.ttf — 235 KB subset, 455 glyphs.
+app/src/main/res/font/hanwang_lisu_seal.ttf — 239 KB subset, 464 glyphs.
 Only the Traditional Chinese seal keywords from assets/quotes.json
 (`keyword["zh-Hant"]`) are kept; the full font is 8.1 MB. Produced with:
 
     python -m fontTools.subset HanWangLiSuMedium.ttf \
       --text-file=zh.txt --output-file=hanwang_lisu_seal.ttf \
-      --layout-features= --no-hinting --drop-tables+=DSIG \
-      --name-IDs='*' --recalc-bounds
+      --name-IDs='*' --layout-features='*' \
+      --no-hinting --desubroutinize
 
 `--name-IDs='*'` is deliberate: it keeps the copyright, trademark and GPL
 records listed above inside the subsetted file.

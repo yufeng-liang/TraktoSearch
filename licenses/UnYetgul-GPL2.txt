@@ -26,14 +26,15 @@ next to it and the subsetted TTF keeps every original `name` record.
 
 What ships in this repo:
 
-app/src/main/res/font/unyetgul_seal.ttf — 50 KB subset, 371 codepoints.
-Only the Korean seal keywords from assets/quotes.json (`keyword["ko"]`) are
-kept; the full font is 5.9 MB. Produced with:
+app/src/main/res/font/unyetgul_seal.ttf — 50 KB subset, 377 codepoints (the 376
+characters the Korean keywords use, plus U+0020 for the keywords that contain a
+space). Only the Korean seal keywords from assets/quotes.json (`keyword["ko"]`)
+are kept; the full font is 5.9 MB. Produced with:
 
     python -m fontTools.subset UnYetgul.ttf \
       --text-file=ko.txt --output-file=unyetgul_seal.ttf \
-      --layout-features= --no-hinting --drop-tables+=DSIG \
-      --name-IDs='*' --recalc-bounds
+      --name-IDs='*' --layout-features='*' \
+      --no-hinting --desubroutinize
 
 `--name-IDs='*'` keeps the copyright and GPL records listed above inside the
 subsetted file.
