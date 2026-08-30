@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Color as AndroidColor
 import android.graphics.Picture
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.CubicBezierEasing
@@ -59,6 +60,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
@@ -771,15 +774,25 @@ private fun LatentCard(latent: DailyStampSheet.Latent, palette: SplashPalette) {
     }
 }
 
-/** 糊掉的海报：小图放大 + 一层自上而下加重的纱，卡纸内沿那道发丝线照旧 */
+/**
+ * 糊掉的海报：真模糊 + 一层自上而下加重的纱，卡纸内沿那道发丝线照旧。
+ *
+ * API 31 起走 [Modifier.blur]：真高斯模糊，色块之间是连续过渡，看着就是「隔着毛玻璃
+ * 看一张海报」。低版本 blur 是空操作，退回把图解到十几个像素再放大——那一档只能靠
+ * 插值糊，边界会看出方块，但至少认不出是哪部片。
+ *
+ * 走模糊那条路时解码尺寸要放大一档：40px 配上十几 dp 的模糊半径已经什么都读不出来，
+ * 而 12px 的图再叠模糊会先看到方块的轮廓被抹开，成了「马赛克又被涂了一层」。
+ */
 @Composable
 private fun LatentPoster(url: String?, palette: SplashPalette) {
     val context = LocalContext.current
-    val request = remember(url, context) {
+    val blurs = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val request = remember(url, context, blurs) {
         url?.let { address ->
             ImageRequest.Builder(context)
                 .data(address)
-                .size(LATENT_DECODE_PX)
+                .size(if (blurs) LATENT_BLUR_DECODE_PX else LATENT_DECODE_PX)
                 .scale(Scale.FILL)
                 // 导出用不到这张卡，但两张卡走同一套装裱代码，这里也不要硬件位图
                 .allowHardware(false)
@@ -827,10 +840,23 @@ private fun LatentPoster(url: String?, palette: SplashPalette) {
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     colorFilter = desaturate,
-                    // 十几个像素放到一百多 dp，靠的就是这一档插值。显式写出来是因为默认值
-                    // 要是哪天变成最近邻，糊掉的图会变成马赛克，反而把轮廓切得更清楚
+                    // 低版本靠这一档插值把小图抹开。显式写出来是因为默认值要是哪天变成
+                    // 最近邻，糊掉的图会变成马赛克，反而把轮廓切得更清楚
                     filterQuality = FilterQuality.Low,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(
+                            if (blurs) {
+                                // 边界跟着圆角裁：不裁的话模糊会把颜色晕到卡纸上，
+                                // 像海报洇了出来
+                                Modifier.blur(
+                                    radius = LATENT_BLUR,
+                                    edgeTreatment = BlurredEdgeTreatment(RoundedCornerShape(3.dp)),
+                                )
+                            } else {
+                                Modifier
+                            }
+                        ),
                 )
             }
         }
@@ -1081,6 +1107,13 @@ private fun CardActions(
     }
 }
 
+/**
+ * 一枚动作胶囊。
+ *
+ * 淡掉那一档（未显影的卡片）连点击修饰符都不挂，而不是只把 enabled 置 false：
+ * 那一排按钮看不见但位置还占着，挂着的点击会把落在那块地方的一下吃掉，用户点的是
+ * 一片空白却什么也没发生——那块地方本该和卡片外的空处一样，点一下就把卡片收回去。
+ */
 @Composable
 private fun ActionPill(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -1095,11 +1128,16 @@ private fun ActionPill(
         modifier = Modifier
             .clip(RoundedCornerShape(50))
             .background(palette.sheet.copy(alpha = 0.86f))
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                enabled = enabled,
-                onClick = onClick,
+            .then(
+                if (enabled) {
+                    Modifier.clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = onClick,
+                    )
+                } else {
+                    Modifier
+                }
             )
             .padding(horizontal = 16.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1327,12 +1365,23 @@ private val BAND_MIN: Dp = 480.dp
 private val BAND_MAX: Dp = 600.dp
 
 /**
- * 未显影海报的解码宽度，像素。
+ * 未显影海报的解码宽度，像素。API 31 以下用，见 [LatentPoster]。
  *
  * 十几个像素放到 112dp 宽的开窗里，双线性插值出来的就是一团糊掉的色块：留下的是那天的
  * 色调，不是那部片。这个数字本身就是保密强度，往上调一档就是在多给一点答案。
  */
 private const val LATENT_DECODE_PX = 12
+
+/** 走真模糊那条路时的解码宽度。配上 [LATENT_BLUR] 已经什么都读不出来，见 [LatentPoster] */
+private const val LATENT_BLUR_DECODE_PX = 40
+
+/**
+ * 未显影海报的模糊半径。
+ *
+ * 在常见密度上折成六七十像素，铺在一张三百像素宽的图上，人脸、字、轮廓一样不剩，
+ * 留下的只有色调的走向。
+ */
+private val LATENT_BLUR: Dp = 14.dp
 
 /** 未显影海报压掉多少饱和度：留下色相的方向，压掉「这是一张彩色海报」的存在感 */
 private const val LATENT_SATURATION = 0.45f

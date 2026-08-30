@@ -46,6 +46,7 @@ import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.screen.dailystamp.DailyStampCalendar
 import com.tracktosearch.ui.screen.dailystamp.DailyStampCardOverlay
 import com.tracktosearch.ui.screen.dailystamp.DailyStampViewModel
+import com.tracktosearch.ui.screen.dailystamp.dailyStampCardBlur
 import com.tracktosearch.ui.screen.dailystamp.rememberDailyStampCardPalette
 import com.tracktosearch.ui.screen.dailystamp.rememberDailyStampContent
 import com.tracktosearch.ui.screen.dailystamp.rememberDailyStampPalette
@@ -107,10 +108,15 @@ fun SplashQuoteScreen(
                 .padding(padding)
         ) {
             val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            // 卡片升起时把这一屏推到景深之外，和独立日签页同一套（见 dailyStampCardBlur）：
+            // 两屏点开的是同一张卡，一边模糊一边不模糊会显得是两个功能。列表和吸顶栏是
+            // 兄弟节点，各挂一份；浮层不挂，它是浮在景深之上的那一层。
+            val cardOpen = content.sheet != null
             LazyColumn(
                 state = lazyListState,
                 modifier = Modifier
                     .fillMaxSize()
+                    .dailyStampCardBlur(active = cardOpen)
                     .hazeSource(state = hazeState),
                 contentPadding = PaddingValues(
                     top = 64.dp + statusBarHeight,
@@ -166,6 +172,7 @@ fun SplashQuoteScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .dailyStampCardBlur(active = cardOpen)
                     .hazeTopBar(
                         state = hazeState,
                         style = hazeStyle,

@@ -5,7 +5,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
@@ -19,11 +18,11 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronLeft
@@ -64,6 +63,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -85,12 +85,13 @@ import java.util.Locale
 /**
  * 日签页：一个月的签到日历，每格印着那天的海报和关键词。
  *
- * 颜色跟随当前主题（[DailyStampPalette]），不再是开屏那张暖黄纸；衬线字和拉开的字距
- * 留着——那是日签自己的字面性格，和纸色无关。台词卡片仍是票根质感的纸，见
- * [rememberDailyStampCardPalette]。
+ * 整屏的底、字色、强调色跟随当前主题（[DailyStampPalette]），格子那张纸不跟——
+ * 纸永远是纸黄的（见 [DailyStampPalette.tile]）。衬线字和拉开的字距留着，那是日签
+ * 自己的字面性格。台词卡片仍是票根质感的纸，见 [rememberDailyStampCardPalette]。
  *
- * 格子是「上海报下关键词」：海报按原始 2:3 比例铺满上半格，关键词单独一行落在底下。
- * 早先的版本把关键词压在淡海报上，海报只剩色温差，等于白下载一张图。
+ * 格子是「纸上贴海报，海报下印词」：海报按原始 2:3 比例贴在纸上，四周留一圈白边，
+ * 关键词单独一行落在纸的下沿。早先的版本把关键词压在淡海报上，海报只剩色温差，
+ * 等于白下载一张图。
  *
  * 点格子升起卡片浮层（[DailyStampCardOverlay]），不是 sheet：sheet 从底部推上来会
  * 把日历顶走，而这张卡应该是从那一格里长出来的。
@@ -113,29 +114,16 @@ fun DailyStampScreen(
             .fillMaxSize()
             .background(palette.paper)
     ) {
-        // 卡片升起时把日历推到景深之外。Modifier.blur 要 API 31+，低版本靠浮层
-        // 自己那层更重的压暗顶上（见 DailyStampCardOverlay 的 scrimColor）——
-        // 没有模糊时如果连焦点变化都没有，卡片会像贴在日历上而不是浮在上面。
-        val blurRadius by animateDpAsState(
-            targetValue = if (content.sheet != null) 13.dp else 0.dp,
-            animationSpec = tween(durationMillis = 240),
-            label = "dailyStampBlur",
-        )
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .then(
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && blurRadius > 0.dp) {
-                        Modifier.blur(blurRadius)
-                    } else {
-                        Modifier
-                    }
-                )
+                .dailyStampCardBlur(active = content.sheet != null)
                 .statusBarsPadding()
                 .navigationBarsPadding()
         ) {
             DailyStampTopBar(palette = palette, onBack = onBack)
-            // 海报按 2:3 铺开后六行网格在多数机型上都超过一屏，内容必须能滚
+            // 报头压到一屏能装下六行格子；真装不下（大字号、六行月份加上更高的状态栏）
+            // 仍然能滚，只是常见情况下不必滚
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 DailyStampCalendar(
                     state = state,
@@ -148,7 +136,7 @@ fun DailyStampScreen(
                     onNextMonth = viewModel::nextMonth,
                     onDayClick = { date -> viewModel.select(date) },
                 )
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(10.dp))
             }
         }
         DailyStampCardOverlay(
@@ -160,6 +148,30 @@ fun DailyStampScreen(
             onDismiss = { viewModel.select(null) },
             onQuoteClick = onQuoteClick,
         )
+    }
+}
+
+/**
+ * 卡片升起时把底下那一屏推到景深之外。
+ *
+ * [Modifier.blur] 要 API 31+，低版本靠浮层自己那层更重的压暗顶上（见
+ * DailyStampCardOverlay 的 scrimColor）——没有模糊时如果连焦点变化都没有，
+ * 卡片会像贴在日历上而不是浮在上面。
+ *
+ * 抽成 Modifier 是因为两个入口都要：独立日签页，以及设置里的「每日台词」二级页。
+ * 那两屏点开的是同一张卡，背景处理不一致会显得是两个功能。
+ */
+@Composable
+internal fun Modifier.dailyStampCardBlur(active: Boolean): Modifier {
+    val radius by animateDpAsState(
+        targetValue = if (active) CARD_BLUR_RADIUS else 0.dp,
+        animationSpec = tween(durationMillis = 240),
+        label = "dailyStampBlur",
+    )
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && radius > 0.dp) {
+        this.blur(radius)
+    } else {
+        this
     }
 }
 
@@ -265,9 +277,9 @@ internal fun DailyStampCalendar(
             onPrevious = onPreviousMonth,
             onNext = onNextMonth,
         )
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(10.dp))
         WeekdayRow(locale = locale, palette = palette)
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
         MonthGrid(
             month = state.month,
             locale = locale,
@@ -283,7 +295,7 @@ internal fun DailyStampCalendar(
                 hintTick++
             },
         )
-        Spacer(Modifier.height(22.dp))
+        Spacer(Modifier.height(14.dp))
         FooterHint(
             palette = palette,
             hinted = hinted != null,
@@ -324,10 +336,14 @@ private fun DailyStampTopBar(
 }
 
 /**
- * 月份报头：年月刻度 + 月名 + 左右翻页 + 两个计数。
+ * 月份报头：月名 + 左右翻页，底下一行年月刻度与两个计数。
  *
- * 年月那行用等宽字体、拉开字距，和开屏顶上的日期是同一种处理——那是这两屏之间
+ * 年月那段用等宽字体、拉开字距，和开屏顶上的日期是同一种处理——那是这两屏之间
  * 最直接的呼应。月名走衬线大字，locale 自己给「八月 / August / 8月 / 8월」。
+ *
+ * 刻度和计数挤进同一行、月名收到 23sp，是为了让六行格子在常见机型上一屏装得下。
+ * 各占一行（刻度一行、月名一行、两个竖排计数一行）要 120dp，现在 53dp——
+ * 省下的那 60dp 差不多正好是日历超出一屏的那一截。
  */
 @Composable
 private fun MonthMasthead(
@@ -351,17 +367,9 @@ private fun MonthMasthead(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 10.dp),
+            .padding(top = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            text = tick,
-            color = palette.inkMuted,
-            fontSize = 11.sp,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = 0.42.em,
-        )
-        Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             MonthArrow(
                 icon = Icons.Rounded.ChevronLeft,
@@ -374,7 +382,7 @@ private fun MonthMasthead(
                 text = monthName,
                 modifier = Modifier.padding(horizontal = 6.dp),
                 color = palette.ink,
-                fontSize = 27.sp,
+                fontSize = 23.sp,
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Medium,
                 letterSpacing = 0.04.em,
@@ -388,20 +396,22 @@ private fun MonthMasthead(
                 onClick = onNext,
             )
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(2.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = tick,
+                color = palette.inkMuted,
+                fontSize = 10.sp,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 0.24.em,
+            )
+            CounterDivider(palette = palette)
             Counter(
                 value = pluralStringResource(R.plurals.daily_stamp_day_count, streak, streak),
                 label = stringResource(R.string.daily_stamp_streak),
                 palette = palette,
             )
-            Spacer(
-                Modifier
-                    .padding(horizontal = 20.dp)
-                    .width(1.dp)
-                    .height(22.dp)
-                    .background(palette.inkFaint.copy(alpha = 0.4f))
-            )
+            CounterDivider(palette = palette)
             Counter(
                 value = pluralStringResource(R.plurals.daily_stamp_day_count, total, total),
                 label = stringResource(R.string.daily_stamp_total),
@@ -409,6 +419,17 @@ private fun MonthMasthead(
             )
         }
     }
+}
+
+/** 刻度与两个计数之间的隔点。竖线在这行 13dp 高的字里显得比字还重，改成一个点 */
+@Composable
+private fun CounterDivider(palette: DailyStampPalette) {
+    Text(
+        text = "·",
+        modifier = Modifier.padding(horizontal = 7.dp),
+        color = palette.inkMuted,
+        fontSize = 10.sp,
+    )
 }
 
 /** 翻页箭头：翻不动时留在原位淡下去，不整个消失——按钮忽然没了会让人以为点错了 */
@@ -432,27 +453,27 @@ private fun MonthArrow(
     }
 }
 
-/** 数字在上、名目在下：一眼先看到「几天」，再看到那是连续还是累计 */
+/** 数字和名目排成一行小字：「1天 连续」。竖排两行时这一块占 37dp，横排 13dp */
 @Composable
 private fun Counter(
     value: String,
     label: String,
     palette: DailyStampPalette,
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = value,
             color = palette.ink,
-            fontSize = 16.sp,
+            fontSize = 12.sp,
             fontFamily = FontFamily.Serif,
             fontWeight = FontWeight.Medium,
         )
         Text(
             text = label,
-            modifier = Modifier.padding(top = 2.dp),
+            modifier = Modifier.padding(start = 4.dp),
             color = palette.inkHint,
-            fontSize = 9.5.sp,
-            letterSpacing = 0.2.em,
+            fontSize = 10.sp,
+            letterSpacing = 0.1.em,
         )
     }
 }
@@ -515,10 +536,10 @@ private fun MonthGrid(
     val rows = (leading + length + 6) / 7
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         repeat(rows) { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 repeat(7) { column ->
                     val dayOfMonth = row * 7 + column - leading + 1
                     Box(modifier = Modifier.weight(1f)) {
@@ -553,8 +574,12 @@ private fun MonthGrid(
                             )
                         } else {
                             // 月初月末的空位只占格，不画任何东西。高度要和有内容的格子
-                            // 一致（海报 + 关键词那一行），否则首末行会比中间几行矮。
-                            Column {
+                            // 一致（纸的白边 + 海报 + 关键词那一行），否则首末行会矮一截。
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(TILE_INSET)
+                            ) {
                                 Spacer(Modifier.fillMaxWidth().aspectRatio(POSTER_ASPECT))
                                 Spacer(Modifier.height(KEYWORD_LINE))
                             }
@@ -567,20 +592,20 @@ private fun MonthGrid(
 }
 
 /**
- * 一格：上半格是海报，底下一行是关键词。
+ * 一格：一张纸，纸上贴着那天的海报，海报底下印着关键词。
  *
- * 海报按原始 2:3 比例铺满，不裁成方块——一整月看过去是一墙小海报，那是这一屏的主体。
- * 日期退成海报左上角的小刻度，压在一道自上而下的浅暗渐变上，否则浅色海报上的小字
- * 读不出来。
+ * 纸色不跟随主题（[DailyStampPalette.tile]）。深色主题下跟着主题走的格子只是一块比底色
+ * 高一点的深灰，一整月看过去什么都没有；固定的纸黄让三十一格看起来是一版票根摊在桌上，
+ * 而海报按原始 2:3 比例贴在纸上，四周留一圈白边——照片裱在纸上是这一屏的样子。
  *
- * 四种日子（[DayKind]）靠标记区分，不靠字的深浅：
- * - 签到过：海报 + 关键词 + 一道实线淡框，这是这一屏的奖励，只有真的来过那天才有
- * - 错过：一圈虚线空框，位子留着人没来；点开仍能读到那天的台词，但海报不上墙
- * - 你来之前：只有日期数字，没有底、没有框、没有标记——空白本身就是「那时你还没来」
- * - 还没到：极淡的纸面 + 右上角一个折角，像那一页还没翻开；折角按距今天数递减
+ * 四种日子（[DayKind]）靠纸和标记区分，不靠字的深浅：
+ * - 签到过：整张纸 + 海报 + 关键词，这是这一屏的奖励，只有真的来过那天才有
+ * - 错过：旧一档的纸，海报的位置留一圈虚线，位子在人没来；点开仍能读到那天的台词
+ * - 你来之前：连纸都没有，只有一个日期数字——空白本身就是「那时你还没来」
+ * - 还没到：纸还在，右上角折起来一角，像那一页还没翻开；折角按距今天数递减
  *
- * 日期数字四种都用 [DailyStampPalette.inkHint]（4.9:1 / 9.4:1）。8sp 的数字是信息不是
- * 装饰，不该为了「淡下去」压到 3:1 那一档；要淡的是标记，不是日期本身。
+ * 纸上的日期数字走 [DailyStampPalette.tileInk]（8.1:1），海报上那个走白色压在渐变上。
+ * 没有纸的那一档（你来之前）才用主题的 [DailyStampPalette.inkHint]。
  */
 @Composable
 private fun DayCell(
@@ -596,26 +621,29 @@ private fun DayCell(
     onClick: (() -> Unit)?,
 ) {
     val hasPoster = cell?.poster != null
-    val stamped = kind == DayKind.Stamped
-    val borderColor = when {
-        isToday -> palette.seal.copy(alpha = 0.72f)
-        stamped -> palette.inkFaint.copy(alpha = 0.5f)
-        else -> Color.Transparent
+    // 你来之前那些天不给纸：那一档要的就是空白
+    val tile = when (kind) {
+        DayKind.Stamped -> palette.tile
+        DayKind.Missed -> palette.tileMissed
+        DayKind.Future -> palette.tileLatent
+        DayKind.Unarrived -> Color.Transparent
     }
-    // 还没到的日子给一层极淡的纸：折角要有纸可折，纯透明的格子折不出角来
-    val fill = when {
-        stamped -> palette.cream.copy(alpha = if (palette.isDark) 0.5f else 0.6f)
-        kind == DayKind.Future -> palette.cream.copy(alpha = if (palette.isDark) 0.18f else 0.22f)
-        else -> Color.Transparent
+    val edge = when {
+        kind == DayKind.Unarrived -> Color.Transparent
+        isToday -> palette.tileSeal
+        else -> palette.tileEdge.copy(alpha = 0.34f)
     }
     val numberColor by animateColorAsState(
-        targetValue = if (hinted) palette.inkSoft else palette.inkHint,
+        targetValue = when {
+            hasPoster -> Color.White.copy(alpha = 0.94f)
+            kind == DayKind.Unarrived -> if (hinted) palette.inkSoft else palette.inkHint
+            else -> palette.tileInk
+        },
         animationSpec = tween(durationMillis = 180),
         label = "dayNumberInk",
     )
     val interactionSource = remember { MutableInteractionSource() }
-    val missedStroke = palette.inkMuted
-    val foldInk = palette.inkMuted
+    val missedStroke = palette.tileEdge.copy(alpha = 0.55f)
     val missedLabel = stringResource(R.string.daily_stamp_missed)
     val latentLabel = stringResource(R.string.daily_stamp_latent)
     // 越远越淡：明天那一格最清楚，两周之后收到四成五，再远就只是「有那么一页」
@@ -626,6 +654,21 @@ private fun DayCell(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(TILE_RADIUS))
+            .background(tile)
+            // 纸边先描，折角后画：折角要把右上那一段纸边连着纸一起切掉，
+            // 顺序反过来就会有一道线横穿那个缺口
+            .drawBehind {
+                drawTileEdge(edge, if (isToday) 1.2.dp else 0.7.dp)
+                if (kind == DayKind.Future) {
+                    drawFoldedCorner(
+                        back = palette.tileBack,
+                        crease = palette.tileEdge,
+                        cut = palette.paper,
+                        alpha = foldAlpha,
+                    )
+                }
+            }
             .then(
                 if (onClick != null) {
                     Modifier.clickable(
@@ -639,41 +682,36 @@ private fun DayCell(
             )
             .semantics {
                 contentDescription = dayDescription(date, cell, kind, missedLabel, latentLabel)
-            },
+            }
+            .padding(TILE_INSET),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(POSTER_ASPECT)
-                .clip(RoundedCornerShape(5.dp))
-                .background(fill)
-                .border(if (isToday) 1.2.dp else 0.7.dp, borderColor, RoundedCornerShape(5.dp))
+                .clip(RoundedCornerShape(3.dp))
                 .drawBehind {
-                    when (kind) {
-                        DayKind.Missed -> drawMissedFrame(missedStroke)
-                        DayKind.Future -> drawFoldedCorner(foldInk, foldAlpha, palette.paper)
-                        else -> Unit
-                    }
+                    if (kind == DayKind.Missed) drawMissedFrame(missedStroke)
                 },
         ) {
             if (cell?.poster != null) {
-                CellPoster(model = cell.poster, palette = palette)
+                CellPoster(model = cell.poster)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(15.dp)
+                        .height(18.dp)
                         .background(
                             Brush.verticalGradient(
-                                listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent)
+                                listOf(Color.Black.copy(alpha = 0.52f), Color.Transparent)
                             )
                         )
                 )
             }
             Text(
                 text = date.dayOfMonth.toString(),
-                modifier = Modifier.align(Alignment.TopStart).padding(start = 4.dp, top = 2.dp),
-                color = if (hasPoster) Color.White.copy(alpha = 0.92f) else numberColor,
-                fontSize = 8.sp,
+                modifier = Modifier.align(Alignment.TopStart).padding(start = 3.dp, top = 1.dp),
+                color = numberColor,
+                fontSize = 11.sp,
                 fontFamily = FontFamily.Monospace,
             )
         }
@@ -684,17 +722,31 @@ private fun DayCell(
     }
 }
 
+/** 纸边：一圈发丝线。今天那一格换成朱红，粗一点——那是印在纸边上的记号，不是选中态 */
+private fun DrawScope.drawTileEdge(color: Color, width: Dp) {
+    if (color == Color.Transparent) return
+    val stroke = width.toPx()
+    val inset = stroke / 2f
+    drawRoundRect(
+        color = color,
+        topLeft = Offset(inset, inset),
+        size = Size(size.width - stroke, size.height - stroke),
+        cornerRadius = CornerRadius(TILE_RADIUS.toPx()),
+        style = Stroke(width = stroke),
+    )
+}
+
 /**
- * 错过那天的虚线空框。
+ * 错过那天的虚线空框，画在海报本该贴的那个位置。
  *
- * 虚线对实线：签到过的格子是实线淡框加一张海报，两者一眼分得开，而虚线本身就是
- * 「这里该有东西」的写法。颜色走 inkMuted 而不是 inkFaint——描边色压在底色上只有
- * 1.1:1，看不出是一圈框；inkMuted 是 3.3:1，刚过非文本那条 3:1 的线。
+ * 虚线对海报：签到过的格子那儿贴着一张图，错过的只剩一圈虚线，两者一眼分得开，
+ * 而虚线本身就是「这里该有东西」的写法。颜色走纸上的墨（[DailyStampPalette.tileEdge]）
+ * 而不是主题色——纸是固定的浅色，深色主题的浅墨压在纸上等于白画一圈。
  */
 private fun DrawScope.drawMissedFrame(color: Color) {
     val stroke = 1.dp.toPx()
     val dash = 3.dp.toPx()
-    val radius = CornerRadius(5.dp.toPx())
+    val radius = CornerRadius(3.dp.toPx())
     // 描边沿路径居中长，整圈往里收半个线宽才不会有一半落在圆角裁切之外
     val inset = stroke / 2f
     drawRoundRect(
@@ -710,29 +762,45 @@ private fun DrawScope.drawMissedFrame(color: Color) {
 }
 
 /**
- * 还没到那天的折角。
+ * 还没到那天那一角，真的折过来。
  *
- * 右上角切掉一个三角，用整屏底色 [paper] 盖，看起来是这一页的角被折起来了；斜边补一道
- * 发丝线，折痕才有厚度。日期数字在左上角，右上角是空的，两者不打架。
+ * 三笔，缺一笔就不像折角：
+ * 1. **切掉**：右上角那个三角用整屏底色 [cut] 盖住，那块纸不在原来的位置了；
+ * 2. **翻过来**：被折下来的正是同一个三角，绕折痕翻转后落在纸面里侧——角点 (w,0)
+ *    以折痕为轴的镜像正好是 (w−side, side)，所以折面是
+ *    [(w−side,0), (w,side), (w−side,side)] 这个三角，填的是纸背色 [back]，比正面深；
+ * 3. **压折痕**：斜边补一道 [crease] 发丝线，纸才有厚度。
+ *
+ * 先前只做了第 1 和第 3 笔：角上少一块、斜边一道线，看着像被谁划了一刀，
+ * 而不是一页翻起来的角——折角之所以认得出，靠的是那块翻过来的纸背。
  *
  * [alpha] 按距今天数递减（见调用处）：明天那一页最清楚，越远越像还没走到。
  */
-private fun DrawScope.drawFoldedCorner(ink: Color, alpha: Float, paper: Color) {
+private fun DrawScope.drawFoldedCorner(back: Color, crease: Color, cut: Color, alpha: Float) {
     if (alpha <= 0f) return
     val side = size.width * FOLD_RATIO
-    val corner = Path().apply {
-        moveTo(size.width - side, 0f)
+    val hinge = Offset(size.width - side, 0f)
+    val tip = Offset(size.width, side)
+    val cutAway = Path().apply {
+        moveTo(hinge.x, hinge.y)
         lineTo(size.width, 0f)
-        lineTo(size.width, side)
+        lineTo(tip.x, tip.y)
         close()
     }
-    drawPath(path = corner, color = paper, alpha = alpha)
+    drawPath(path = cutAway, color = cut)
+    val flap = Path().apply {
+        moveTo(hinge.x, hinge.y)
+        lineTo(tip.x, tip.y)
+        lineTo(hinge.x, side)
+        close()
+    }
+    drawPath(path = flap, color = back, alpha = alpha)
     drawLine(
-        color = ink,
-        start = Offset(size.width - side, 0f),
-        end = Offset(size.width, side),
+        color = crease,
+        start = hinge,
+        end = tip,
         strokeWidth = 0.8.dp.toPx(),
-        alpha = alpha,
+        alpha = alpha * 0.55f,
     )
 }
 
@@ -759,18 +827,16 @@ private fun dayDescription(
 }
 
 /**
- * 格子里的海报。
+ * 纸上贴的那张海报。
  *
  * 显式给一个解码尺寸：一屏最多 31 张，按原图 342px 宽解码是没必要的内存开销，而格子
  * 宽也就 45dp 上下。160px 够铺满格子还留一点余量，不至于在大屏上发虚。
  *
- * 只在深色主题下压一点亮度：满亮度的小海报在深底上会一格一格地扎眼。
+ * 不再按主题压亮度：海报现在贴在一张浅色纸上，压暗只会让它比纸还灰。早先海报直接
+ * 铺在深色格子上，满亮度会一格一格地扎眼，那是没有纸的时候的事。
  */
 @Composable
-private fun CellPoster(
-    model: Any,
-    palette: DailyStampPalette,
-) {
+private fun CellPoster(model: Any) {
     val context = LocalContext.current
     val request = remember(model) {
         ImageRequest.Builder(context)
@@ -784,18 +850,19 @@ private fun CellPoster(
         model = request,
         contentDescription = null,
         contentScale = ContentScale.Crop,
-        alpha = if (palette.isDark) 0.88f else 1f,
         modifier = Modifier.fillMaxSize(),
     )
 }
 
 /**
- * 海报底下那行关键词。
+ * 海报底下那行关键词，印在纸上。
  *
  * 一行写完，放不下就省略号。以前关键词压在格子中央的淡海报上，宽度只够两三个字，
  * 拉丁词只能退成一个首字母；现在它独占一行，长词也照原样显示，格子里就是完整的词。
  *
- * 空关键词也要占住这一行的高度：整行都没有关键词时，这一行不能比别行矮。
+ * 高度是**最小值**而不是固定值：钉死 14dp 的话，系统字号放大到 1.2 倍以上时这行字
+ * 比框还高，上下被切掉一截——看起来像两个字叠在一起。空关键词也要占住这个最小高度，
+ * 整行都没有关键词时这一行不能比别行矮。
  */
 @Composable
 private fun CellKeyword(
@@ -805,14 +872,14 @@ private fun CellKeyword(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(KEYWORD_LINE),
+            .heightIn(min = KEYWORD_LINE),
         contentAlignment = Alignment.Center,
     ) {
         if (keyword.isNotBlank()) {
             Text(
                 text = keyword,
-                color = palette.ink,
-                fontSize = 9.sp,
+                color = palette.tileInkSoft,
+                fontSize = 9.5.sp,
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
@@ -858,7 +925,13 @@ private fun FooterHint(
 /** 海报的原始比例，2:3。整月是一墙小海报，比例一改就不像海报了 */
 private const val POSTER_ASPECT = 2f / 3f
 
-/** 关键词那一行的高度。所有格子都留着，空的也留，否则整行没词时这一行会矮一截 */
+/** 纸的圆角。纸片不是卡片，角不该圆到像个按钮 */
+private val TILE_RADIUS = 5.dp
+
+/** 海报四周留的那圈白边，照片裱在纸上的样子。再宽就吃海报，再窄就看不出有纸 */
+private val TILE_INSET = 2.5.dp
+
+/** 关键词那一行的最小高度，见 [CellKeyword] */
 private val KEYWORD_LINE = 14.dp
 
 /** 格子里海报的解码宽度：格子宽 45dp 上下，160px 铺满还留余量 */
@@ -869,3 +942,6 @@ private const val HINT_HOLD_MS = 2400L
 
 /** 折角占格子宽的比例。再大就不像折角，像把右上角剪掉了 */
 private const val FOLD_RATIO = 0.30f
+
+/** 卡片升起时底下那一屏的模糊半径，见 [dailyStampCardBlur] */
+private val CARD_BLUR_RADIUS = 13.dp
