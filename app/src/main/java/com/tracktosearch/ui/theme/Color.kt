@@ -76,6 +76,23 @@ val FeedbackOther = Color(0xFF9CA3AF)     // 其他 — 中性灰
 val FeedbackReplied = Color(0xFF10B981)   // 已回复 / 上传成功 — 翠绿
 val FeedbackDeveloper = Color(0xFF34D399) // 开发者角色标识 — 薄荷绿
 
+// ====== 影视状态固定色（详情页状态绑带共用，不随主题变化） ======
+// 原先散在 DetailHeaderContent.getStatusColor 里，9 个 Color(0xFF...) 直接写在 when 分支上，
+// 违反「颜色统一收在 Color.kt」的约定。取色逻辑见 DetailVisuals.detailStatusColor
+val StatusReleased = Color(0xFF4CAF50)       // 已上映 / 连载中 — 绿
+val StatusInProduction = Color(0xFFFF9800)   // 制作中 / 后期 / 试播 — 橙
+val StatusPlanned = Color(0xFF2196F3)        // 计划中 — 蓝
+val StatusRumored = Color(0xFF9C27B0)        // 传闻中 — 紫
+val StatusCanceled = Color(0xFFF44336)       // 已取消 — 红
+val StatusEnded = Color(0xFF9E9E9E)          // 已完结 — 灰
+val StatusUnknown = Color(0xFF757575)        // 未知状态 — 深灰
+
+/** 已看标记专用绿：季集进度条 / 已看计数 / 勾选图标共用。 */
+val WatchedGreen = Color(0xFF4CAF50)
+
+/** 拟态玻璃浅色主题描边：原先在 DetailComments 抄了 3 遍、SearchScreen 1 遍。 */
+val NeumorphicBorderLight = Color(0xFFD0D5DC)
+
 private val MonetDoubanGreenLight = Color(0xFF5E916A)
 private val MonetDoubanGreenDark = Color(0xFF78A985)
 

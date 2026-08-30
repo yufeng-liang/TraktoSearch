@@ -31,6 +31,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -64,6 +65,7 @@ import com.tracktosearch.ui.component.usesNeumorphicDecoration
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.theme.WatchedGreen
 
 // ==================== 季/集信息 ====================
 
@@ -93,7 +95,7 @@ internal fun SeasonBadge(seasonNumber: Int) {
 @Composable
 internal fun WatchedProgressBar(watchedCount: Int, totalCount: Int) {
     val progress = if (totalCount > 0) watchedCount.toFloat() / totalCount else 0f
-    val barColor = if (watchedCount > 0) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
+    val barColor = if (watchedCount > 0) WatchedGreen else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
     Column {
         LinearProgressIndicator(
             progress = { progress },
@@ -144,8 +146,9 @@ internal fun SeasonsSection(
         ) {
             Text(
                 text = stringResource(R.string.detail_seasons),
-                style = MaterialTheme.typography.titleSmall,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
+                color = LocalContentColor.current,
                 modifier = Modifier.weight(1f)
             )
             // 展开/折叠更多季（与标题同行）
@@ -243,7 +246,7 @@ internal fun SeasonsSection(
                         Text(
                             text = "$watchedCount/$totalCount",
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (watchedCount > 0) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (watchedCount > 0) WatchedGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.width(4.dp))
@@ -331,7 +334,7 @@ internal fun EpisodeRow(
                 imageVector = Icons.Rounded.CheckCircle,
                 contentDescription = if (isWatched) stringResource(R.string.detail_watched) else stringResource(R.string.detail_not_watched),
                 modifier = Modifier.size(18.dp),
-                tint = if (isWatched) Color(0xFF4CAF50)
+                tint = if (isWatched) WatchedGreen
                 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
             )
         }
@@ -347,13 +350,7 @@ internal fun CollectionSection(
     onMovieClick: (tmdbId: Int, title: String) -> Unit
 ) {
     Column(modifier = Modifier.padding(bottom = 12.dp)) {
-        Text(
-            text = stringResource(R.string.detail_collection_title, collection.name),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 6.dp)
-        )
+        DetailSectionHeader(title = stringResource(R.string.detail_collection_title, collection.name))
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(end = 16.dp)

@@ -100,6 +100,8 @@ internal val HelpCatalog: List<HelpSectionSpec> = listOf(
         bullets = listOf(
             R.string.help_detail_custom,
             R.string.help_videos_images,
+            R.string.help_detail_scroll_title,
+            R.string.help_detail_pull_refresh,
         ),
     ),
     HelpSectionSpec(

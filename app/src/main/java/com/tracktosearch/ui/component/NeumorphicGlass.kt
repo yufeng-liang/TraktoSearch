@@ -65,7 +65,8 @@ fun Modifier.hazeTopBar(
     blurRadius: Dp = 24.dp,
     isContentUnderTopBar: Boolean? = null,
     backdropOverride: Backdrop? = null,
-    scene: GlassScene = GlassScene()
+    scene: GlassScene = GlassScene(),
+    sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind
 ): Modifier {
     // Blur 效果节点常驻、用透明度插值，避免布尔硬切换导致的新节点首帧未就绪闪透明。
     // Backdrop 在初始位置不注册采样；滚动后再恢复完整的 Glass 光学效果。
@@ -85,7 +86,7 @@ fun Modifier.hazeTopBar(
         alpha(visible)
     }
     return appVisualEffect(
-        input = HazeInput.Sources(state),
+        input = HazeInput.Sources(state, selection = sourceSelection),
         hazeStyle = resolvedStyle,
         glassRole = GlassSurfaceRole.TopBar,
         glassShape = RoundedCornerShape(0.dp),

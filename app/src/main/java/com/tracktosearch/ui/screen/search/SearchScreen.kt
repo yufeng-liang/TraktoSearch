@@ -193,6 +193,7 @@ import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.theme.ambientTextHalo
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.theme.NeumorphicBorderLight
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -1207,7 +1208,7 @@ private fun NeumorphicChip(
     val borderColor = if (isSelected) {
         if (isDark) Color(0xFF5C6BC0).copy(alpha = 0.4f) else Color(0xFF5C6BC0).copy(alpha = 0.25f)
     } else {
-        if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFD0D5DC).copy(alpha = 0.85f)
+        if (isDark) Color.White.copy(alpha = 0.12f) else NeumorphicBorderLight.copy(alpha = 0.85f)
     }
     val elevation = 5.dp
     val chipShape = RoundedCornerShape(22.dp)
