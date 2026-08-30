@@ -12,14 +12,15 @@ import java.time.LocalDate
  * 格子上印的是关键词而不是日期数字——日签的主体是那个词，日期退成角上的小刻度。
  * [poster] 只作为格子底纹（压得很淡），让整月看起来像一版票根拼贴；海报没下载时为 null，
  * 格子退化成纯纸底，不画占位框。
+ *
+ * 这里不带「点不点得开」：能翻开的是哪些天由 DailyStampContent.sheets 说，那张表算过
+ * 台词能不能排成一张卡，也含错过的和还没到的那些天——它们根本没有格子内容。
  */
 @Immutable
 data class DailyStampCellUi(
     val date: LocalDate,
     val keyword: String,
     val poster: Any?,
-    /** 台词解析不出来时格子仍是「来过」，只是点不开卡片 */
-    val openable: Boolean,
 )
 
 /**
@@ -141,7 +142,6 @@ internal fun DailyStamp.toCell(lang: String) = DailyStampCellUi(
     date = date,
     keyword = quote?.keywordFor(lang).orEmpty(),
     poster = poster,
-    openable = openable,
 )
 
 /**

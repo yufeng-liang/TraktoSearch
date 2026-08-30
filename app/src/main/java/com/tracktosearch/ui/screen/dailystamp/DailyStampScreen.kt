@@ -35,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -242,7 +243,11 @@ internal fun DailyStampCalendar(
 ) {
     // 点了「你来之前」那种格子的那一下：底下那行字临时换成东隅那句，过一会儿换回来
     var hinted by remember { mutableStateOf<LocalDate?>(null) }
-    LaunchedEffect(hinted) {
+    // 计时的 key 不能是 hinted 本身：连点同一格时它前后一样，LaunchedEffect 不会重启，
+    // 第二下只能沿用第一下剩下的那点时间——点得越快提示消失得越突然。每次点击自增一个
+    // 计数，日期没变也算换了 key，2.4 秒于是从头再走一遍。
+    var hintTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(hintTick) {
         if (hinted != null) {
             delay(HINT_HOLD_MS)
             hinted = null
@@ -273,7 +278,10 @@ internal fun DailyStampCalendar(
             openable = openable,
             hinted = hinted,
             onDayClick = onDayClick,
-            onUnarrivedClick = { date -> hinted = date },
+            onUnarrivedClick = { date ->
+                hinted = date
+                hintTick++
+            },
         )
         Spacer(Modifier.height(22.dp))
         FooterHint(

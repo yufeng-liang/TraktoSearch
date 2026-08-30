@@ -54,15 +54,14 @@ class DailyStampModelsTest {
         assertThat(cell.date).isEqualTo(date)
         assertThat(cell.keyword).isEqualTo("命定")
         assertThat(cell.poster).isEqualTo("poster-model")
-        assertThat(cell.openable).isTrue()
     }
 
     @Test
-    fun `台词下线的那天格子仍在但打不开`() {
+    fun `台词下线的那天格子仍在但没有关键词`() {
         val cell = stamp(null).toCell("zh")
 
+        assertThat(cell.date).isEqualTo(date)
         assertThat(cell.keyword).isEmpty()
-        assertThat(cell.openable).isFalse()
     }
 
     @Test

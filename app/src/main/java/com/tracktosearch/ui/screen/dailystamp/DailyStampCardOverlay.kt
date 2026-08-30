@@ -20,6 +20,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -29,13 +30,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.Movie
@@ -148,7 +152,10 @@ internal fun DailyStampCardOverlay(
     BackHandler(enabled = visible) { onDismiss() }
 
     val interactionSource = remember { MutableInteractionSource() }
-    Box(modifier = Modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        // 窗口有多高，下面那层滚动内容至少撑这么高：装得下时没有滚动距离，卡片照旧居中；
+        // 装不下才真的滚起来。见下面那个 heightIn。
+        val viewport = maxHeight
         AnimatedVisibility(
             visible = visible,
             enter = fadeIn(tween(220)),
@@ -158,28 +165,46 @@ internal fun DailyStampCardOverlay(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(scrimColor(palette))
-                    .clickable(
-                        interactionSource = interactionSource,
-                        indication = null,
-                        onClick = onDismiss,
-                    )
             )
         }
         AnimatedVisibility(
             visible = visible,
             enter = fadeIn(tween(240)) + scaleIn(tween(280, easing = CardEasing), initialScale = 0.93f),
             exit = fadeOut(tween(160)) + scaleOut(tween(200), targetScale = 0.96f),
-            modifier = Modifier.align(Alignment.Center),
         ) {
             if (content != null) {
-                CardCarousel(
-                    current = content.date,
-                    dates = openableDates,
-                    sheets = sheets,
-                    palette = palette,
-                    onSelect = onSelect,
-                    onQuoteClick = onQuoteClick,
-                )
+                // 卡片那一排加底下的动作，合起来可能比窗口还高：横屏、分屏、小折叠屏内屏
+                // 都会。那时整块跟着滚，动作行才不至于被挤到屏幕外边点不着——日历页
+                // 本身也是这么处理的（见 DailyStampScreen 的 verticalScroll）。
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = viewport)
+                            // 点空处关掉。关闭区跟着滚动内容走，不再留在压暗层上：
+                            // 压暗层被这一层整个盖住了，留在那儿就收不到点击。
+                            // 落在卡面上的那一下由卡片自己吃掉，见 CarouselPage。
+                            .clickable(
+                                interactionSource = interactionSource,
+                                indication = null,
+                                onClick = onDismiss,
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CardCarousel(
+                            current = content.date,
+                            dates = openableDates,
+                            sheets = sheets,
+                            palette = palette,
+                            onSelect = onSelect,
+                            onQuoteClick = onQuoteClick,
+                        )
+                    }
+                }
             }
         }
     }
@@ -404,13 +429,17 @@ private fun pageTurn(currentPage: Int, offsetFraction: Float, page: Int): Float 
 /**
  * 卡片那一圈的高度。
  *
- * 屏幕高减去底下那排动作和上下留白，夹在一个区间里：太矮的机型上卡片会比这一圈高，
- * 那时它只是上下探出去一点（横向滚动容器不裁纵向），比让整排卡跟着内容变高要稳。
+ * 钉死一个值而不是随内容长：翻页落定那一下，相邻两页的卡片高度不同会让整排跟着上下跳。
+ *
+ * 窗口高减去底下那排动作和上下留白，再夹进一个区间。下限按「一整张卡大致多高」定，
+ * 窗口比这还矮时卡片就不再缩——缩下去只会把台词和印章切掉，而浮层本身是能滚的
+ * （见 [DailyStampCardOverlay]），动作行不会因此被挤出屏幕。上限是防超高屏上卡片
+ * 被拉成一条：卡面内容撑不满，多出来的都是空处。
  */
 @Composable
 private fun bandHeight(): Dp {
     val screenHeight = LocalConfiguration.current.screenHeightDp
-    return (screenHeight - 132).dp.coerceIn(360.dp, 600.dp)
+    return (screenHeight - BAND_CHROME).dp.coerceIn(BAND_MIN, BAND_MAX)
 }
 
 /**
@@ -1289,6 +1318,13 @@ private const val CAMERA_DISTANCE = 16f
  * 那张挤窄的位置。
  */
 private val SIDE_PEEK: Dp = 40.dp
+
+/** 卡片那一圈之外还要占掉的高度：底下那排动作、它上面那条间距，以及上下留白。见 bandHeight */
+private const val BAND_CHROME = 132
+
+/** 卡片那一圈的最矮和最高，见 bandHeight */
+private val BAND_MIN: Dp = 480.dp
+private val BAND_MAX: Dp = 600.dp
 
 /**
  * 未显影海报的解码宽度，像素。

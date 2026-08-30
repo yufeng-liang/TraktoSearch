@@ -26,10 +26,7 @@ data class DailyStamp(
     val date: LocalDate,
     val quote: SplashQuote?,
     val poster: Any?,
-) {
-    /** 卡片能不能打开：解析不出台词的格子只是个印记 */
-    val openable: Boolean get() = quote != null
-}
+)
 
 /**
  * 日签：打开 App 就算来过，一天记一条。

@@ -148,7 +148,6 @@ class DailyStampRepositoryTest {
 
         assertThat(days.map { it.date }).containsExactly(first, second).inOrder()
         assertThat(days.map { it.quote?.id }).containsExactly("a", "b").inOrder()
-        assertThat(days.all { it.openable }).isTrue()
     }
 
     /** 台词 id 约定只增不删，真丢了也只是这一格点不开，不能拿空壳凑一张卡 */
@@ -161,7 +160,6 @@ class DailyStampRepositoryTest {
 
         assertThat(day.date).isEqualTo(today)
         assertThat(day.quote).isNull()
-        assertThat(day.openable).isFalse()
     }
 
     @Test
