@@ -78,22 +78,7 @@ internal fun ZoomableImageOverlay(
 ) {
     val scope = rememberCoroutineScope()
     val safeInitial = initialIndex.coerceIn(0, (images.size - 1).coerceAtLeast(0))
-    val pagerState = rememberPagerState(initialPage = safeInitial, pageCount = { images.size })
-    val zoomState = rememberZoomState()
     val closeDesc = stringResource(R.string.detail_close)
-
-    // 切页时重置缩放
-    LaunchedEffect(pagerState.currentPage) { zoomState.reset() }
-
-    // 重开/目标页变化时复位到对应页：pagerState 创建于 AnimatedVisibility 之外并常驻组合,
-    // initialPage 仅在首次组合生效;Dialog 改内联后若不主动复位,重开会停留在上次滑动到的页。
-    // 同时键住 visible,保证"关闭→重开"即使目标页未变化也会复位;复位时同步重置缩放。
-    LaunchedEffect(visible, safeInitial) {
-        if (visible) {
-            pagerState.scrollToPage(safeInitial)
-            zoomState.reset()
-        }
-    }
 
     AnimatedVisibility(
         visible = visible,
@@ -101,6 +86,21 @@ internal fun ZoomableImageOverlay(
         exit = exit
     ) {
         val animatedVisibilityScope = this
+
+        // pagerState / zoomState 建在 AnimatedVisibility 内容里,每次打开都是新的一份,
+        // initialPage 在首次组合就生效,打开动画的第一帧即落在目标页。
+        //
+        // 原先两者建在外层常驻组合,复位靠 LaunchedEffect 里的 scrollToPage —— 那要等到
+        // 下一帧才跑,于是打开动画的第一帧渲染的还是上次看的那页,而且那页的 sharedElement
+        // 会跟自己那张仍可见的缩略图配成一对被抬进转场 overlay。表现为在两张图之间反复
+        // 开关时「打开 a 时 b 闪一下」。也顺带修掉「同一张图横滑几页后重开仍停在旧页」。
+        //
+        // 内容要等退出动画跑完才被丢弃,所以缩回缩略图的动画不受影响。
+        val pagerState = rememberPagerState(initialPage = safeInitial, pageCount = { images.size })
+        val zoomState = rememberZoomState()
+
+        // 切页时重置缩放
+        LaunchedEffect(pagerState.currentPage) { zoomState.reset() }
 
         BackHandler(enabled = true) {
             if (zoomState.scale > 1f) scope.launch { zoomState.changeScale(1f, Offset.Zero) }
