@@ -8,7 +8,7 @@ import android.graphics.Picture
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -17,13 +17,13 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,7 +31,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.IosShare
@@ -40,13 +43,16 @@ import androidx.compose.material.icons.rounded.SaveAlt
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,7 +65,11 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Canvas as GraphicsCanvas
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -68,10 +78,10 @@ import androidx.compose.ui.graphics.drawscope.draw
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
@@ -87,8 +97,10 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.util.lerp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import coil.size.Scale
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.SaveToAlbumResult
 import com.tracktosearch.ui.screen.splash.QuoteSeal
@@ -102,6 +114,8 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.random.Random
 
 /**
  * 日签卡片浮层。
@@ -109,26 +123,27 @@ import java.util.Locale
  * 是页面自己 Box 里的一层，不是 Dialog：Dialog 会开一个新窗口，日历被系统按对话框
  * 处理（另一套边距、另一套暗化），卡片就不再像从那一格里升起来的。
  *
- * 关掉动作有三个：点卡片外、按返回、以及切月（切月由 ViewModel 顺手清掉选中）。
- * 卡片本身吃掉点击，否则点在卡上会穿到背后的关闭区。
+ * 卡片排成一排：中间那张正对着看，左右两张缩小、往里转、压低一点，露出靠内的那条边。
+ * 那两张侧卡本身就是「还能往两边翻」的提示——比在卡上画箭头或者写一行「左右滑动」
+ * 都轻，因为它们就是接下来要看的东西。左右滑、或者直接点侧卡，都能翻过去。
  *
- * 左右拖动翻到相邻的那天，只在当月能打开的日子之间走。手势用
- * [detectHorizontalDragGestures]，它自带横向的 touch slop，竖直方向不会误触发。
+ * 关掉动作有三个：点卡片之外的空处、按返回、以及切月（切月由 ViewModel 顺手清掉选中）。
  */
 @Composable
 internal fun DailyStampCardOverlay(
-    card: DailyStampCardUi?,
+    sheet: DailyStampSheet?,
+    sheets: Map<LocalDate, DailyStampSheet>,
     palette: SplashPalette,
     openableDates: List<LocalDate>,
     onSelect: (LocalDate) -> Unit,
     onDismiss: () -> Unit,
     onQuoteClick: (tmdbId: Int, mediaType: String, title: String, year: Int, posterUrl: String) -> Unit,
 ) {
-    // 退场那一帧 card 已经是 null，留住上一张才有东西可淡出
-    var retained by remember { mutableStateOf<DailyStampCardUi?>(null) }
-    LaunchedEffect(card) { if (card != null) retained = card }
-    val content = card ?: retained
-    val visible = card != null
+    // 退场那一帧 sheet 已经是 null，留住上一张才有东西可淡出
+    var retained by remember { mutableStateOf<DailyStampSheet?>(null) }
+    LaunchedEffect(sheet) { if (sheet != null) retained = sheet }
+    val content = sheet ?: retained
+    val visible = sheet != null
 
     BackHandler(enabled = visible) { onDismiss() }
 
@@ -157,10 +172,11 @@ internal fun DailyStampCardOverlay(
             modifier = Modifier.align(Alignment.Center),
         ) {
             if (content != null) {
-                CardStack(
-                    card = content,
+                CardCarousel(
+                    current = content.date,
+                    dates = openableDates,
+                    sheets = sheets,
                     palette = palette,
-                    openableDates = openableDates,
                     onSelect = onSelect,
                     onQuoteClick = onQuoteClick,
                 )
@@ -170,99 +186,231 @@ internal fun DailyStampCardOverlay(
 }
 
 /**
- * 卡片 + 底下那一排动作。
+ * 一排卡片 + 底下那一排动作。
  *
  * 动作按钮在卡片外面，这样导出的图里只有卡面本身——把「保存」两个字也存进相册里
  * 是最容易犯的错。
+ *
+ * 翻页交给 [HorizontalPager] 而不是自己接横向拖动：它自带甩动、吸附、触摸 slop 和
+ * 无障碍的翻页语义，自己搓一套只会少几样。选中那天由两个方向共同维持——从日历点进来时
+ * 跳到对应那一页，滑停之后把那天写回去，两条各自判断「已经是那一页/那一天」就不会来回抖。
+ *
+ * 卡片带的那一圈高度是钉死的（[bandHeight]）而不是随内容长：台词有两到四行，未来那天
+ * 的卡片又是另一个高度，跟着最高那一页长会让整排卡在翻页落定时忽然上下跳一下。
  */
 @Composable
-private fun CardStack(
-    card: DailyStampCardUi,
+private fun CardCarousel(
+    current: LocalDate,
+    dates: List<LocalDate>,
+    sheets: Map<LocalDate, DailyStampSheet>,
     palette: SplashPalette,
-    openableDates: List<LocalDate>,
     onSelect: (LocalDate) -> Unit,
     onQuoteClick: (tmdbId: Int, mediaType: String, title: String, year: Int, posterUrl: String) -> Unit,
 ) {
+    if (dates.isEmpty()) return
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val picture = remember { Picture() }
-    val dragX = remember { Animatable(0f) }
     var busy by remember { mutableStateOf(false) }
-    // 换到另一天时把拖动位移抹平，否则新卡片会歪在上一次松手的位置
-    LaunchedEffect(card.date) { dragX.snapTo(0f) }
+    val pagerState = rememberPagerState(
+        initialPage = dates.indexOf(current).coerceAtLeast(0),
+        pageCount = { dates.size },
+    )
+    // 每一页各录一份卡面，保存/分享取的是当前那一页的那份。页被回收时顺手删掉，
+    // 免得翻过一个月之后这张表里留着三十份 Picture。
+    val pictures = remember { mutableMapOf<LocalDate, Picture>() }
 
-    val onPosterClick = {
-        onQuoteClick(card.tmdbId, card.mediaType, card.title, card.year, card.posterUrl)
+    // 从日历点进来的那一下：直接跳过去。卡片本来就在淡入，没有滑动过程可看
+    LaunchedEffect(current, dates) {
+        val target = dates.indexOf(current)
+        if (target >= 0 && target != pagerState.currentPage) pagerState.scrollToPage(target)
+    }
+    // 滑停之后把那天写回去：日历那边的选中格、以及关掉再打开时的初始页都看它
+    val selected by rememberUpdatedState(current)
+    LaunchedEffect(pagerState, dates) {
+        snapshotFlow { pagerState.settledPage }.collect { page ->
+            // 换月和退场那会儿，[dates] 已经换成新一列而 pager 还停在旧下标上，选中那天
+            // 也不在这一列里了。这时写回去等于替用户随手翻开新月份里同下标的那天。
+            if (selected !in dates) return@collect
+            dates.getOrNull(page)?.let { if (it != selected) onSelect(it) }
+        }
     }
 
-    /** 把当前卡面重放成位图交给保存/分享，两条路都用同一张软件位图 */
-    val capture: suspend () -> Bitmap = { captureCardPicture(picture) }
+    val currentDate = dates.getOrNull(pagerState.currentPage)
+    val line = currentDate?.let { sheets[it] } as? DailyStampSheet.Line
+    // 未来那天的卡片没有可存的东西，详情按钮更是直接报答案。整排按钮淡掉但位置留着：
+    // 用 AnimatedVisibility 把它撤出布局，整排卡会跟着上下挪一截
+    val actionAlpha by animateFloatAsState(
+        targetValue = if (line != null) 1f else 0f,
+        animationSpec = tween(durationMillis = 180),
+        label = "dailyStampActionAlpha",
+    )
+    val onDetail = {
+        line?.card?.let { onQuoteClick(it.tmdbId, it.mediaType, it.title, it.year, it.posterUrl) }
+        Unit
+    }
+    /** 把当前那一页的卡面重放成位图交给保存/分享，两条路都用同一张软件位图 */
+    val capture: suspend () -> Bitmap = {
+        val picture = currentDate?.let { pictures[it] }
+        requireNotNull(picture) { "Daily stamp card has not been recorded yet" }
+        captureCardPicture(picture)
+    }
 
-    Column(
-        modifier = Modifier.padding(horizontal = 26.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        HorizontalPager(
+            state = pagerState,
+            // 左右各留一条：侧卡就从这里探出来
+            contentPadding = PaddingValues(horizontal = SIDE_PEEK),
+            verticalAlignment = Alignment.CenterVertically,
+            // 相邻两页提前组合好，滑过去时不会先看到一张空卡再长出内容
+            beyondViewportPageCount = 1,
+            modifier = Modifier.fillMaxWidth().height(bandHeight()),
+        ) { page ->
+            val date = dates[page]
+            val pageSheet = sheets[date] ?: return@HorizontalPager
+            CarouselPage(
+                sheet = pageSheet,
+                palette = palette,
+                turn = { pageTurn(pagerState.currentPage, pagerState.currentPageOffsetFraction, page) },
+                pictures = pictures,
+                onPosterClick = onDetail,
+                onSideClick = {
+                    if (page != pagerState.currentPage) {
+                        scope.launch { pagerState.animateScrollToPage(page) }
+                    }
+                },
+            )
+        }
+        Spacer(Modifier.height(18.dp))
+        Box(modifier = Modifier.graphicsLayer { alpha = actionAlpha }) {
+            CardActions(
+                palette = palette,
+                enabled = line != null && !busy,
+                onDetail = onDetail,
+                onSave = {
+                    val date = line?.card?.date
+                    if (!busy && date != null) {
+                        busy = true
+                        scope.launch {
+                            saveCard(context, date, capture)
+                            busy = false
+                        }
+                    }
+                },
+                onShare = {
+                    val date = line?.card?.date
+                    if (!busy && date != null) {
+                        busy = true
+                        scope.launch {
+                            shareCard(context, date, capture)
+                            busy = false
+                        }
+                    }
+                },
+            )
+        }
+    }
+}
+
+/**
+ * 排里的一页。
+ *
+ * [turn] 报的是这一页离正中间有多远：0 是正对着，±1 是左右那一张，滑动过程里是中间值，
+ * 所有形变都从它算出来，滑到哪儿卡片就转到哪儿，不是滑完才跳一下。传进来的是个函数而不是
+ * 算好的数：这个值每一帧都在变，在组合里读它会让三页卡片每帧重组一次，而放在
+ * graphicsLayer 里读只让这一层重画。
+ *
+ * 缩放和旋转的支点放在靠内那条边上：侧卡于是绕着贴着中间卡的那条边往里转，像一叠
+ * 摊开的票根；支点放在中心的话它会整张往外缩，看着是并排三张而不是叠在一起的三张。
+ */
+@Composable
+private fun CarouselPage(
+    sheet: DailyStampSheet,
+    palette: SplashPalette,
+    turn: () -> Float,
+    pictures: MutableMap<LocalDate, Picture>,
+    onPosterClick: () -> Unit,
+    onSideClick: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                val offset = turn()
+                val away = abs(offset)
+                val scale = lerp(1f, SIDE_SCALE, away)
+                scaleX = scale
+                scaleY = scale
+                alpha = lerp(1f, SIDE_ALPHA, away)
+                translationY = away * SIDE_DROP.toPx()
+                // 往中间收一点：露出来的是靠内那条边，卡片才像叠着而不是排着
+                translationX = -offset * SIDE_PULL.toPx()
+                cameraDistance = CAMERA_DISTANCE * density
+                rotationY = -offset * SIDE_TURN_DEG
+                transformOrigin = TransformOrigin(if (offset >= 0f) 0f else 1f, 0.5f)
+            },
+        contentAlignment = Alignment.Center,
     ) {
         Box(
             modifier = Modifier
-                .graphicsLayer { translationX = dragX.value }
-                .pointerInput(card.date, openableDates) {
-                    detectHorizontalDragGestures(
-                        onDragEnd = {
-                            val target = neighbour(card.date, openableDates, dragX.value)
-                            scope.launch {
-                                if (target != null) onSelect(target)
-                                dragX.animateTo(0f, tween(220, easing = CardEasing))
-                            }
-                        },
-                        onDragCancel = {
-                            scope.launch { dragX.animateTo(0f, tween(220)) }
-                        },
-                    ) { _, delta ->
-                        // 位移打三折：卡片是被「掀」一下，不是跟着手指整张走
-                        scope.launch { dragX.snapTo(dragX.value + delta * 0.34f) }
-                    }
-                }
+                // 点侧卡翻过去；点正中间那张什么也不做，但这一下要吃掉——否则会穿到
+                // 背后的关闭区，点自己正在看的卡片反而把它关了。
+                // 只盖住卡面，不盖满整页：卡片比这一圈矮，上下剩出来的那段空处照旧该
+                // 点得着背后的关闭区
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onSideClick,
+                )
                 .shadow(20.dp, RoundedCornerShape(11.dp), clip = false)
         ) {
-            Box(
-                modifier = Modifier.drawWithContent {
-                    // 卡面先录进 Picture，再把这一份回放到屏幕上：屏幕上的和导出的是
-                    // 同一串绘制指令，不会出现「存下来的和看到的不一样」。
-                    recordThenReplay(picture)
+            when (sheet) {
+                is DailyStampSheet.Line -> {
+                    val picture = remember(sheet.card.date) { Picture() }
+                    DisposableEffect(sheet.card.date) {
+                        pictures[sheet.card.date] = picture
+                        onDispose { pictures.remove(sheet.card.date) }
+                    }
+                    Box(
+                        modifier = Modifier.drawWithContent {
+                            // 卡面先录进 Picture，再把这一份回放到屏幕上：屏幕上的和导出的是
+                            // 同一串绘制指令，不会出现「存下来的和看到的不一样」。
+                            recordThenReplay(picture)
+                        }
+                    ) {
+                        DailyStampCard(
+                            card = sheet.card,
+                            palette = palette,
+                            onPosterClick = onPosterClick,
+                        )
+                    }
                 }
-            ) {
-                DailyStampCard(
-                    card = card,
-                    palette = palette,
-                    onPosterClick = onPosterClick,
-                )
+
+                is DailyStampSheet.Latent -> LatentCard(latent = sheet, palette = palette)
             }
         }
-        Spacer(Modifier.height(18.dp))
-        CardActions(
-            palette = palette,
-            enabled = !busy,
-            onDetail = onPosterClick,
-            onSave = {
-                if (!busy) {
-                    busy = true
-                    scope.launch {
-                        saveCard(context, card.date, capture)
-                        busy = false
-                    }
-                }
-            },
-            onShare = {
-                if (!busy) {
-                    busy = true
-                    scope.launch {
-                        shareCard(context, card.date, capture)
-                        busy = false
-                    }
-                }
-            },
-        )
     }
+}
+
+/**
+ * 这一页离正中间有多远：0 正中，+1 右边那张，-1 左边那张。
+ *
+ * 夹到 ±1 之内：再远的页要么在屏幕外，要么已经被回收，让它们和最边上那张形变一致
+ * 就够了，继续按真实距离算只会把它们缩成一个点。
+ */
+private fun pageTurn(currentPage: Int, offsetFraction: Float, page: Int): Float =
+    ((page - currentPage) - offsetFraction).coerceIn(-1f, 1f)
+
+/**
+ * 卡片那一圈的高度。
+ *
+ * 屏幕高减去底下那排动作和上下留白，夹在一个区间里：太矮的机型上卡片会比这一圈高，
+ * 那时它只是上下探出去一点（横向滚动容器不裁纵向），比让整排卡跟着内容变高要稳。
+ */
+@Composable
+private fun bandHeight(): Dp {
+    val screenHeight = LocalConfiguration.current.screenHeightDp
+    return (screenHeight - 132).dp.coerceIn(360.dp, 600.dp)
 }
 
 /**
@@ -517,6 +665,220 @@ private fun CardSource(
     )
 }
 
+/**
+ * 还没到那天的卡片。
+ *
+ * 骨架和 [DailyStampCard] 完全一样（票头、海报、台词、出处、撕口、印），一眼看得出是
+ * 同一种票根，只是每一格都还没显影：
+ * - 海报取 w92 那一档、解到 12 像素再放大。放大靠双线性插值，出来的就是一团糊掉的
+ *   色块——留下的是那天的色调，不是那部片。不用 Modifier.blur：它在 API 30 及以下是
+ *   空操作，靠它保密等于在老机器上把海报直接摊开。糊完再压一层自上而下加重的纱。
+ * - 台词和出处是几行墨条，条数长短按日期播种（[latentBars]），同一天每次打开都一样。
+ *   有形无字：看得出那儿有两行字，读不出是哪两行。
+ * - 印只剩界格，印文没落下。
+ *
+ * 台词、片名、印文这些字段压根没带进这一层（见 [DailyStampSheet.Latent]）：不给看不是
+ * 「先显示再遮住」——遮罩会随实现走样，不带出来才是真的不给看。
+ */
+@Composable
+private fun LatentCard(latent: DailyStampSheet.Latent, palette: SplashPalette) {
+    val tick = remember(latent.date) {
+        latent.date.format(DateTimeFormatter.ofPattern("yyyy.MM.dd", Locale.US))
+    }
+    val serial = remember(latent.date) {
+        String.format(Locale.US, "No.%03d", latent.date.dayOfYear)
+    }
+    val grain = remember { grainBrush() }
+    val bars = remember(latent.date) { latentBars(latent.date) }
+    var cardTop by remember { mutableFloatStateOf(Float.NaN) }
+    var tearCenterY by remember { mutableFloatStateOf(Float.NaN) }
+
+    Column(
+        modifier = Modifier
+            .widthIn(max = 380.dp)
+            .clip(RoundedCornerShape(11.dp))
+            .drawWithContent {
+                drawCardTexture(
+                    palette = palette,
+                    grain = grain,
+                    notchCenterY = tearCenterY - cardTop,
+                )
+            }
+            .background(palette.sheet)
+            .onGloballyPositioned { cardTop = it.positionInRoot().y }
+            .padding(horizontal = 22.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        TicketHeader(tick = tick, serial = serial, palette = palette)
+        Spacer(Modifier.height(20.dp))
+        LatentPoster(url = latent.tinyPosterUrl, palette = palette)
+        Spacer(Modifier.height(22.dp))
+        bars.quote.forEachIndexed { index, row ->
+            if (index > 0) Spacer(Modifier.height(12.dp))
+            InkBars(widths = row, height = 11.dp, palette = palette)
+        }
+        Spacer(Modifier.height(18.dp))
+        InkBars(widths = bars.source, height = 7.dp, palette = palette)
+        Spacer(Modifier.height(22.dp))
+        TearLine(
+            palette = palette,
+            modifier = Modifier.onGloballyPositioned {
+                tearCenterY = it.positionInRoot().y + it.size.height / 2f
+            },
+        )
+        Spacer(Modifier.height(20.dp))
+        LatentSeal(palette = palette)
+        Spacer(Modifier.height(18.dp))
+        Text(
+            text = stringResource(R.string.daily_stamp_future_card),
+            modifier = Modifier.fillMaxWidth(),
+            color = palette.inkSoft,
+            fontSize = 11.sp,
+            lineHeight = 19.sp,
+            fontFamily = FontFamily.Serif,
+            letterSpacing = 0.08.em,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/** 糊掉的海报：小图放大 + 一层自上而下加重的纱，卡纸内沿那道发丝线照旧 */
+@Composable
+private fun LatentPoster(url: String?, palette: SplashPalette) {
+    val context = LocalContext.current
+    val request = remember(url, context) {
+        url?.let { address ->
+            ImageRequest.Builder(context)
+                .data(address)
+                .size(LATENT_DECODE_PX)
+                .scale(Scale.FILL)
+                // 导出用不到这张卡，但两张卡走同一套装裱代码，这里也不要硬件位图
+                .allowHardware(false)
+                .crossfade(false)
+                .build()
+        }
+    }
+    val veil = remember(palette) {
+        Brush.verticalGradient(
+            0f to Color.Transparent,
+            0.42f to palette.sheet.copy(alpha = 0.20f),
+            1f to palette.sheet.copy(alpha = 0.74f),
+        )
+    }
+    val desaturate = remember {
+        ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(LATENT_SATURATION) })
+    }
+    val hairline = palette.ink.copy(alpha = if (palette.isDark) 0.34f else 0.22f)
+    Box(
+        modifier = Modifier
+            .size(width = 122.dp, height = 183.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(palette.cream)
+            .padding(5.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(3.dp))
+                .drawWithContent {
+                    drawContent()
+                    drawRect(brush = veil)
+                    drawRoundRect(
+                        color = hairline,
+                        topLeft = Offset(0.5f, 0.5f),
+                        size = Size(size.width - 1f, size.height - 1f),
+                        cornerRadius = CornerRadius(3.dp.toPx() - 0.5f),
+                        style = Stroke(width = 1f),
+                    )
+                }
+        ) {
+            if (request != null) {
+                AsyncImage(
+                    model = request,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    colorFilter = desaturate,
+                    // 十几个像素放到一百多 dp，靠的就是这一档插值。显式写出来是因为默认值
+                    // 要是哪天变成最近邻，糊掉的图会变成马赛克，反而把轮廓切得更清楚
+                    filterQuality = FilterQuality.Low,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+    }
+}
+
+/** 一行墨条，居中排开。有形无字：看得出那儿有一行字，读不出写的是什么 */
+@Composable
+private fun InkBars(widths: List<Dp>, height: Dp, palette: SplashPalette) {
+    val color = palette.ink.copy(alpha = LATENT_BAR_ALPHA)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        widths.forEach { width ->
+            Box(
+                modifier = Modifier
+                    .width(width)
+                    .height(height)
+                    .clip(RoundedCornerShape(1.5.dp))
+                    .background(color)
+            )
+        }
+    }
+}
+
+/**
+ * 只有界格、没有印文的一枚印。
+ *
+ * 几何与 QuoteSeal 的方印一致（46dp 见方、圆角 3dp、印边 1.4dp、界格 4dp 内缩），只把
+ * 两条线收到不足一半浓度，不铺印泥底、不做旧：这是一枚还没落下的印，不是一枚盖淡了的印。
+ */
+@Composable
+private fun LatentSeal(palette: SplashPalette) {
+    Canvas(modifier = Modifier.size(LATENT_SEAL_SIZE)) {
+        val frame = 1.4.dp.toPx()
+        drawRoundRect(
+            color = palette.seal.copy(alpha = 0.30f),
+            topLeft = Offset(frame / 2f, frame / 2f),
+            size = Size(size.width - frame, size.height - frame),
+            cornerRadius = CornerRadius((3.dp.toPx() - frame / 2f).coerceAtLeast(0f)),
+            style = Stroke(frame),
+        )
+        val inner = 0.7.dp.toPx()
+        val inset = 4.dp.toPx() + inner / 2f
+        drawRoundRect(
+            color = palette.seal.copy(alpha = 0.14f),
+            topLeft = Offset(inset, inset),
+            size = Size(size.width - inset * 2f, size.height - inset * 2f),
+            cornerRadius = CornerRadius((1.5.dp.toPx() - inner / 2f).coerceAtLeast(0f)),
+            style = Stroke(inner),
+        )
+    }
+}
+
+/**
+ * 墨条的条数和长短，按 epochDay 播种。
+ *
+ * 播种是为了同一天每次打开都是同一副样子：随手 random 一下，同一张卡在滑过去滑回来
+ * 之间会变形，那就不像「那天的字还没显出来」，而像一堆随机方块。
+ *
+ * 条数和字数无关，也不该有关：真台词有几个字是当天才该知道的事。
+ */
+private fun latentBars(date: LocalDate): LatentBars {
+    val random = Random(date.toEpochDay())
+    return LatentBars(
+        quote = listOf(
+            List(random.nextInt(6, 10)) { random.nextInt(9, 16).dp },
+            List(random.nextInt(4, 8)) { random.nextInt(9, 16).dp },
+        ),
+        source = List(random.nextInt(3, 6)) { random.nextInt(7, 12).dp },
+    )
+}
+
+private class LatentBars(val quote: List<List<Dp>>, val source: List<Dp>)
+
 /** 票根的撕口：一道虚线，不是实线也不是 Divider——实线会把卡片切成两张 */
 @Composable
 private fun TearLine(palette: SplashPalette, modifier: Modifier = Modifier) {
@@ -718,24 +1080,6 @@ private fun ActionPill(
 }
 
 /**
- * 松手时该翻到哪天。
- *
- * 位移不够就留在原地。往右拖是往前翻（把上一天从左边拉过来），往左拖是往后翻，
- * 和翻纸质日历的方向一致。到头了就没有下一张，不做循环——循环会让人以为月份变了。
- */
-private fun neighbour(
-    current: LocalDate,
-    openable: List<LocalDate>,
-    dragX: Float,
-): LocalDate? {
-    if (kotlin.math.abs(dragX) < SWIPE_COMMIT_PX) return null
-    val index = openable.indexOf(current)
-    if (index < 0) return null
-    val target = if (dragX > 0) index - 1 else index + 1
-    return openable.getOrNull(target)
-}
-
-/**
  * 把卡面录进 [picture]，再把录下来的这一份回放到屏幕上。
  *
  * 这么绕一下是为了让屏幕和导出共用同一串绘制指令：导出是拿同一个 Picture 在软件
@@ -895,8 +1239,61 @@ private const val GRAIN_ALPHA = 0.08f
 /** 齿孔半径。半圆露在卡面上的那一半就是这个尺寸，再大就从票根变成信封的开窗 */
 private val NOTCH_RADIUS: Dp = 7.dp
 
-/** 松手翻页的位移门槛（像素）。位移本身打了三折，这里对应手指约走 130px */
-private const val SWIPE_COMMIT_PX = 44f
+/**
+ * 侧卡缩到多小。
+ *
+ * 底下这一族值一起决定「旁边那两张是同一叠里的下一张」这个观感，单调一个都会走味：
+ * 缩放和透明度让侧卡退到后面，下沉让它像垫在底下那张，内收把露出来的那条边挪到靠中间
+ * 一侧，rotationY 才是把纸面转过去的那一下。全都从 [pageTurn] 那个 0~±1 的量线性插出来，
+ * 所以这些数字是「翻到底时的样子」，滑动过程中取的是中间值。
+ */
+private const val SIDE_SCALE = 0.84f
+
+/** 侧卡淡到多少。再淡就不像下一张卡，像一层没关掉的残影 */
+private const val SIDE_ALPHA = 0.62f
+
+/** 侧卡下沉多少：正中那张才像被托在最上面 */
+private val SIDE_DROP: Dp = 10.dp
+
+/** 侧卡往中间收多少。露出来的要是靠内那条边，卡片才像叠着而不是并排排着 */
+private val SIDE_PULL: Dp = 12.dp
+
+/** 侧卡绕靠内那条边转多少度。配着 [CAMERA_DISTANCE] 调，单看这一个数没有意义 */
+private const val SIDE_TURN_DEG = 18f
+
+/**
+ * 透视的相机距离，单位是「屏幕密度的倍数」（乘 density 之后才是 graphicsLayer 要的值）。
+ *
+ * 太近侧卡会被透视拉成一个夸张的梯形，像被掰弯了；太远就等于没转，[SIDE_TURN_DEG] 也
+ * 跟着白给。16 是这个转角下还看得出是一张平整的纸在转的位置。
+ */
+private const val CAMERA_DISTANCE = 16f
+
+/**
+ * 左右各留出来的那一条，侧卡从这里探出来。
+ *
+ * 这一条就是「还能往两边翻」的全部提示——比在卡上画箭头、或者写一行「左右滑动」都轻，
+ * 因为露出来的正是接下来要看的东西。40dp 是既看得出那是另一张卡的边、又不至于把中间
+ * 那张挤窄的位置。
+ */
+private val SIDE_PEEK: Dp = 40.dp
+
+/**
+ * 未显影海报的解码宽度，像素。
+ *
+ * 十几个像素放到 112dp 宽的开窗里，双线性插值出来的就是一团糊掉的色块：留下的是那天的
+ * 色调，不是那部片。这个数字本身就是保密强度，往上调一档就是在多给一点答案。
+ */
+private const val LATENT_DECODE_PX = 12
+
+/** 未显影海报压掉多少饱和度：留下色相的方向，压掉「这是一张彩色海报」的存在感 */
+private const val LATENT_SATURATION = 0.45f
+
+/** 墨条的浓度。看得出那儿有一行字，读不出写的是什么；再深就像真印了些什么上去 */
+private const val LATENT_BAR_ALPHA = 0.16f
+
+/** 空印的边长，与 QuoteSeal 的方印一致——同一枚印的两种状态，尺寸不该差一个像素 */
+private val LATENT_SEAL_SIZE: Dp = 46.dp
 
 /** 卡片起落用的缓动：快进慢出，像一张纸被托起来 */
 private val CardEasing = CubicBezierEasing(0.2f, 0.75f, 0.28f, 1f)

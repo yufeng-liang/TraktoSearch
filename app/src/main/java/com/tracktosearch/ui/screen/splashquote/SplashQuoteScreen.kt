@@ -152,6 +152,7 @@ fun SplashQuoteScreen(
                             locale = content.locale,
                             today = content.today,
                             cells = content.cells,
+                            openable = content.sheets.keys,
                             onPreviousMonth = viewModel::previousMonth,
                             onNextMonth = viewModel::nextMonth,
                             onDayClick = { date -> viewModel.select(date) },
@@ -202,7 +203,8 @@ fun SplashQuoteScreen(
             }
 
             DailyStampCardOverlay(
-                card = content.card,
+                sheet = content.sheet,
+                sheets = content.sheets,
                 palette = cardPalette,
                 openableDates = content.openableDates,
                 onSelect = { date -> viewModel.select(date) },

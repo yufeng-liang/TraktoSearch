@@ -121,6 +121,58 @@ class DailyStampRepository @Inject constructor(
     /** 累计签到天数 */
     suspend fun totalDays(): Int = dao.count()
 
+    /**
+     * 初次使用那天：最早的那条签到。
+     *
+     * 「打开 App 就算来过」，所以最早一条签到就是这个人第一次打开 App 的那天，不用另存
+     * 安装时间。日历靠它把「你来之前的空白」和「你来了却没打开的那天」分开——前者不是错过。
+     *
+     * 一条签到都没有时为 null，那时整本日历都算「还没来过」。
+     */
+    suspend fun firstUseDate(): LocalDate? = dao.earliestDay()?.let(LocalDate::ofEpochDay)
+
+    /**
+     * 当月错过签到的那些天：初次使用那天之后、今天（含）之前，却没有签到行。
+     *
+     * 台词是现算的（见 [SplashQuoteRepository.quoteFor]），不写回数据库。写回去
+     * [totalDays]、[streak]、[firstUseDate] 全部被污染，等于允许事后补签到——
+     * 签到的意义是那天真的打开过。
+     *
+     * 今天也算在内：今天可能因为拿不到台词而没签上（见 [checkIn]），那一格照样该能翻开。
+     */
+    suspend fun missedMonth(month: YearMonth, today: LocalDate = LocalDate.now()): List<DailyStamp> {
+        val firstUse = firstUseDate() ?: return emptyList()
+        val from = maxOf(month.atDay(1), firstUse)
+        val to = minOf(month.atEndOfMonth(), today)
+        if (from.isAfter(to)) return emptyList()
+        val stamped = dao.range(from.toEpochDay(), to.toEpochDay()).map { it.epochDay }.toSet()
+        return days(from, to)
+            .filterNot { it.toEpochDay() in stamped }
+            .mapNotNull { date -> resolveByDate(date) }
+    }
+
+    /**
+     * 当月未来的那些天。
+     *
+     * 卡片只拿这里的海报路径去糊一张看不清的图，台词一个字都不显示：那天到底给哪一条
+     * 现在算不得准（台词库会变、海报没就绪时会改取一次模），而卡片本来也不打算说。
+     */
+    suspend fun latentMonth(month: YearMonth, today: LocalDate = LocalDate.now()): List<DailyStamp> {
+        val from = maxOf(month.atDay(1), today.plusDays(1))
+        val to = month.atEndOfMonth()
+        if (from.isAfter(to)) return emptyList()
+        return days(from, to).mapNotNull { date -> resolveByDate(date) }
+    }
+
+    private fun days(from: LocalDate, to: LocalDate): List<LocalDate> =
+        (0..(to.toEpochDay() - from.toEpochDay())).map { from.plusDays(it) }
+
+    /** 按日期现算那天的台词，凑一个没有落库的 [DailyStamp] */
+    private suspend fun resolveByDate(date: LocalDate): DailyStamp? {
+        val quote = quotes.quoteFor(date) ?: return null
+        return DailyStamp(date = date, quote = quote, poster = posterStore.posterModel(quote))
+    }
+
     /** 日历能往前翻到哪个月为止：第一次签到那个月 */
     suspend fun earliestMonth(): YearMonth? =
         dao.earliestDay()?.let { YearMonth.from(LocalDate.ofEpochDay(it)) }

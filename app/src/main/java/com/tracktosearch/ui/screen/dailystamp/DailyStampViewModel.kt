@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.tracktosearch.data.repository.DailyStamp
 import com.tracktosearch.data.repository.DailyStampRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,12 +34,22 @@ import javax.inject.Inject
 data class DailyStampUiState(
     val month: YearMonth = YearMonth.now(),
     val stamps: List<DailyStamp> = emptyList(),
+    /**
+     * 当月错过签到的那些天，台词是按日期现算的（见 [DailyStampRepository.missedMonth]）。
+     * 和 [stamps] 分开存：这些天不算签到，不进连续天数、不进累计、格子上不印海报，
+     * 混进同一个列表只会让每处用到的地方都要再筛一次。
+     */
+    val missed: List<DailyStamp> = emptyList(),
+    /** 当月未来的那些天，只用得上海报地址 */
+    val latent: List<DailyStamp> = emptyList(),
     /** 连续签到天数 */
     val streak: Int = 0,
     /** 累计签到天数 */
     val total: Int = 0,
     /** 第一次签到那个月，往前翻到这里为止；一条都没有时为 null */
     val earliestMonth: YearMonth? = null,
+    /** 初次使用那天，用来把「你来之前」和「你错过了」分开；一条签到都没有时为 null */
+    val firstDay: LocalDate? = null,
     val loading: Boolean = true,
     val selected: LocalDate? = null,
 ) {
@@ -46,10 +57,19 @@ data class DailyStampUiState(
     val canGoPrevious: Boolean
         get() = earliestMonth?.let { month.isAfter(it) } ?: false
 
-    /** 还能往后翻：不给看未来的月份，日签只记录已经过去的日子 */
+    /**
+     * 还能往后翻。
+     *
+     * 未来的月份也给看：那些格子是空的，点开也只有一张糊掉的卡，但「翻到年底看看」
+     * 这件事本身就是日历的用法。停在一年之后——台词池正好 365 条一年一轮，
+     * 再往后连色调都开始重复，日历没有必要替人记那么远。
+     */
     val canGoNext: Boolean
-        get() = month.isBefore(YearMonth.now())
+        get() = month.isBefore(YearMonth.now().plusMonths(FUTURE_MONTHS))
 }
+
+/** 往后最多翻多少个月，见 [DailyStampUiState.canGoNext] */
+private const val FUTURE_MONTHS = 12L
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -85,6 +105,7 @@ class DailyStampViewModel @Inject constructor(
                 .collect { (target, stamps) ->
                     _uiState.update { it.copy(month = target, stamps = stamps, loading = false) }
                     refreshCounters()
+                    refreshUnstamped(target)
                 }
         }
     }
@@ -119,5 +140,29 @@ class DailyStampViewModel @Inject constructor(
         val total = repository.totalDays()
         val earliest = repository.earliestMonth()
         _uiState.update { it.copy(streak = streak, total = total, earliestMonth = earliest) }
+    }
+
+    /**
+     * 补上「没有签到行但仍要显示」的那两类日子：错过的和未来的。
+     *
+     * 和 [refreshCounters] 一样跟着每次月份变化重算。查失败就保持原样：这三项决定的是
+     * 空格子长什么样、点不点得开，缺了只是退回「你来之前」那种最保守的样子，
+     * 不该让整页崩在一次查询上。
+     */
+    private suspend fun refreshUnstamped(target: YearMonth) {
+        try {
+            val firstDay = repository.firstUseDate()
+            val missed = repository.missedMonth(target)
+            val latent = repository.latentMonth(target)
+            _uiState.update {
+                // 期间可能已经切到别的月，那时这一批数据属于上一个月，丢掉
+                if (it.month != target) it
+                else it.copy(firstDay = firstDay, missed = missed, latent = latent)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // 只读展示，查不到就当这个月没有这两类日子
+        }
     }
 }

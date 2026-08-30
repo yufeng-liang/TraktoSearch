@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.dailystamp
 
 import android.os.Build
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -32,15 +33,26 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.pluralStringResource
@@ -61,6 +73,7 @@ import coil.size.Scale
 import com.tracktosearch.R
 import com.tracktosearch.data.local.SplashQuote
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.delay
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -103,7 +116,7 @@ fun DailyStampScreen(
         // 自己那层更重的压暗顶上（见 DailyStampCardOverlay 的 scrimColor）——
         // 没有模糊时如果连焦点变化都没有，卡片会像贴在日历上而不是浮在上面。
         val blurRadius by animateDpAsState(
-            targetValue = if (content.card != null) 13.dp else 0.dp,
+            targetValue = if (content.sheet != null) 13.dp else 0.dp,
             animationSpec = tween(durationMillis = 240),
             label = "dailyStampBlur",
         )
@@ -129,6 +142,7 @@ fun DailyStampScreen(
                     locale = content.locale,
                     today = content.today,
                     cells = content.cells,
+                    openable = content.sheets.keys,
                     onPreviousMonth = viewModel::previousMonth,
                     onNextMonth = viewModel::nextMonth,
                     onDayClick = { date -> viewModel.select(date) },
@@ -137,7 +151,8 @@ fun DailyStampScreen(
             }
         }
         DailyStampCardOverlay(
-            card = content.card,
+            sheet = content.sheet,
+            sheets = content.sheets,
             palette = cardPalette,
             openableDates = content.openableDates,
             onSelect = { date -> viewModel.select(date) },
@@ -158,7 +173,10 @@ internal data class DailyStampContent(
     val locale: Locale,
     val today: LocalDate,
     val cells: Map<LocalDate, DailyStampCellUi>,
-    val card: DailyStampCardUi?,
+    /** 当月所有能翻开的日子及其内容：签到过的、错过的、还没到的 */
+    val sheets: Map<LocalDate, DailyStampSheet>,
+    /** 当前选中那天的内容，没选时为 null */
+    val sheet: DailyStampSheet?,
     val openableDates: List<LocalDate>,
 )
 
@@ -172,21 +190,29 @@ internal fun rememberDailyStampContent(state: DailyStampUiState): DailyStampCont
     val cells = remember(state.stamps, lang) {
         state.stamps.associate { it.date to it.toCell(lang) }
     }
-    val card = remember(state.selected, state.stamps, lang) {
-        state.selected
-            ?.let { date -> state.stamps.firstOrNull { it.date == date } }
-            ?.toCard(lang)
+    // 三类日子合成一张表：签到过的、错过的、还没到的。错过的那天没有落库的行，台词是
+    // 现算的（见 DailyStampRepository.missedMonth）；还没到的只带一张糊掉的海报。
+    val sheets = remember(state.stamps, state.missed, state.latent, lang) {
+        buildMap<LocalDate, DailyStampSheet> {
+            state.stamps.forEach { stamp ->
+                stamp.toCard(lang)?.let { put(stamp.date, DailyStampSheet.Line(it)) }
+            }
+            state.missed.forEach { stamp ->
+                stamp.toCard(lang)?.let { put(stamp.date, DailyStampSheet.Line(it)) }
+            }
+            state.latent.forEach { stamp -> put(stamp.date, stamp.toLatent(lang)) }
+        }
     }
-    // 卡片左右滑动只在当月能打开的那些天之间走：越过月边界就得先换月加载，
-    // 换月本来就有上一页/下一页两个箭头，没必要在卡片里再实现一遍。
-    val openableDates = remember(state.stamps) {
-        state.stamps.filter { it.openable }.map { it.date }
-    }
+    // 卡片左右滑动只在当月之内走：越过月边界就得先换月加载，而换月本来就有
+    // 上一页/下一页两个箭头，没必要在卡片里再实现一遍。
+    val openableDates = remember(sheets) { sheets.keys.sorted() }
+    val sheet = remember(sheets, state.selected) { state.selected?.let(sheets::get) }
     return DailyStampContent(
         locale = locale,
         today = today,
         cells = cells,
-        card = card,
+        sheets = sheets,
+        sheet = sheet,
         openableDates = openableDates,
     )
 }
@@ -196,6 +222,10 @@ internal fun rememberDailyStampContent(state: DailyStampUiState): DailyStampCont
  *
  * 不含顶栏、不含背景、不含卡片浮层——浮层要盖满整屏，只能由各自的页面挂在最外层，
  * 嵌在这里会被裁进日历那一块。
+ *
+ * 「你来之前」那些格子的提示也在这里：点一下不开卡片，改把底下那行小字换成那句话。
+ * 放在这一层而不是各页自己实现，是因为那行字本来就属于日历，两个入口才不会一个有
+ * 提示一个没有。
  */
 @Composable
 internal fun DailyStampCalendar(
@@ -204,10 +234,20 @@ internal fun DailyStampCalendar(
     locale: Locale,
     today: LocalDate,
     cells: Map<LocalDate, DailyStampCellUi>,
+    /** 能翻开卡片的那些天，见 [DailyStampContent.sheets] */
+    openable: Set<LocalDate>,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onDayClick: (LocalDate) -> Unit,
 ) {
+    // 点了「你来之前」那种格子的那一下：底下那行字临时换成东隅那句，过一会儿换回来
+    var hinted by remember { mutableStateOf<LocalDate?>(null) }
+    LaunchedEffect(hinted) {
+        if (hinted != null) {
+            delay(HINT_HOLD_MS)
+            hinted = null
+        }
+    }
     Column {
         MonthMasthead(
             month = state.month,
@@ -228,12 +268,18 @@ internal fun DailyStampCalendar(
             locale = locale,
             palette = palette,
             today = today,
+            firstDay = state.firstDay,
             cells = cells,
+            openable = openable,
+            hinted = hinted,
             onDayClick = onDayClick,
+            onUnarrivedClick = { date -> hinted = date },
         )
         Spacer(Modifier.height(22.dp))
         FooterHint(
             palette = palette,
+            hinted = hinted != null,
+            future = state.month.isAfter(YearMonth.from(today)),
             empty = state.stamps.isEmpty() && !state.loading,
         )
     }
@@ -446,8 +492,12 @@ private fun MonthGrid(
     locale: Locale,
     palette: DailyStampPalette,
     today: LocalDate,
+    firstDay: LocalDate?,
     cells: Map<LocalDate, DailyStampCellUi>,
+    openable: Set<LocalDate>,
+    hinted: LocalDate?,
     onDayClick: (LocalDate) -> Unit,
+    onUnarrivedClick: (LocalDate) -> Unit,
 ) {
     val leading = remember(month, locale) {
         val first = WeekFields.of(locale).firstDayOfWeek
@@ -466,13 +516,32 @@ private fun MonthGrid(
                     Box(modifier = Modifier.weight(1f)) {
                         if (dayOfMonth in 1..length) {
                             val date = month.atDay(dayOfMonth)
+                            val cell = cells[date]
+                            val kind = dayKind(
+                                date = date,
+                                today = today,
+                                firstUse = firstDay,
+                                stamped = cell != null,
+                            )
                             DayCell(
                                 date = date,
-                                cell = cells[date],
+                                cell = cell,
+                                kind = kind,
                                 palette = palette,
                                 isToday = date == today,
-                                isFuture = date.isAfter(today),
-                                onClick = { onDayClick(date) },
+                                daysAhead = (date.toEpochDay() - today.toEpochDay()).toInt(),
+                                hinted = date == hinted,
+                                onClick = when {
+                                    // 你来之前那些天不开卡片，只回一句话
+                                    kind == DayKind.Unarrived -> {
+                                        { onUnarrivedClick(date) }
+                                    }
+                                    date in openable -> {
+                                        { onDayClick(date) }
+                                    }
+                                    // 台词解析不出来的那天点了也没有卡可开，索性不给点
+                                    else -> null
+                                },
                             )
                         } else {
                             // 月初月末的空位只占格，不画任何东西。高度要和有内容的格子
@@ -496,31 +565,61 @@ private fun MonthGrid(
  * 日期退成海报左上角的小刻度，压在一道自上而下的浅暗渐变上，否则浅色海报上的小字
  * 读不出来。
  *
- * 没签到过的格子只留日期数字，未来的日子再淡一档，不画空框：空框比空白更吵。关键词
- * 那一行的高度所有格子都留着，不然整行没有关键词时这一行会比别行矮。
+ * 四种日子（[DayKind]）靠标记区分，不靠字的深浅：
+ * - 签到过：海报 + 关键词 + 一道实线淡框，这是这一屏的奖励，只有真的来过那天才有
+ * - 错过：一圈虚线空框，位子留着人没来；点开仍能读到那天的台词，但海报不上墙
+ * - 你来之前：只有日期数字，没有底、没有框、没有标记——空白本身就是「那时你还没来」
+ * - 还没到：极淡的纸面 + 右上角一个折角，像那一页还没翻开；折角按距今天数递减
+ *
+ * 日期数字四种都用 [DailyStampPalette.inkHint]（4.9:1 / 9.4:1）。8sp 的数字是信息不是
+ * 装饰，不该为了「淡下去」压到 3:1 那一档；要淡的是标记，不是日期本身。
  */
 @Composable
 private fun DayCell(
     date: LocalDate,
     cell: DailyStampCellUi?,
+    kind: DayKind,
     palette: DailyStampPalette,
     isToday: Boolean,
-    isFuture: Boolean,
-    onClick: () -> Unit,
+    /** 距今多少天，未来那天的折角按它递减；过去为负数 */
+    daysAhead: Int,
+    /** 是不是刚被点过的那一格「你来之前」，点过的数字亮一下，指明是哪一格答的话 */
+    hinted: Boolean,
+    onClick: (() -> Unit)?,
 ) {
-    val stamped = cell != null
     val hasPoster = cell?.poster != null
+    val stamped = kind == DayKind.Stamped
     val borderColor = when {
         isToday -> palette.seal.copy(alpha = 0.72f)
         stamped -> palette.inkFaint.copy(alpha = 0.5f)
         else -> Color.Transparent
     }
+    // 还没到的日子给一层极淡的纸：折角要有纸可折，纯透明的格子折不出角来
+    val fill = when {
+        stamped -> palette.cream.copy(alpha = if (palette.isDark) 0.5f else 0.6f)
+        kind == DayKind.Future -> palette.cream.copy(alpha = if (palette.isDark) 0.18f else 0.22f)
+        else -> Color.Transparent
+    }
+    val numberColor by animateColorAsState(
+        targetValue = if (hinted) palette.inkSoft else palette.inkHint,
+        animationSpec = tween(durationMillis = 180),
+        label = "dayNumberInk",
+    )
     val interactionSource = remember { MutableInteractionSource() }
+    val missedStroke = palette.inkMuted
+    val foldInk = palette.inkMuted
+    val missedLabel = stringResource(R.string.daily_stamp_missed)
+    val latentLabel = stringResource(R.string.daily_stamp_latent)
+    // 越远越淡：明天那一格最清楚，两周之后收到四成五，再远就只是「有那么一页」
+    val foldAlpha = remember(daysAhead) {
+        if (daysAhead <= 0) 0f
+        else (1f - (daysAhead - 1) / 14f * 0.55f).coerceIn(0.45f, 1f)
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .then(
-                if (cell?.openable == true) {
+                if (onClick != null) {
                     Modifier.clickable(
                         interactionSource = interactionSource,
                         indication = null,
@@ -531,11 +630,7 @@ private fun DayCell(
                 }
             )
             .semantics {
-                contentDescription = if (cell != null && cell.keyword.isNotBlank()) {
-                    "${date.dayOfMonth} ${cell.keyword}"
-                } else {
-                    date.dayOfMonth.toString()
-                }
+                contentDescription = dayDescription(date, cell, kind, missedLabel, latentLabel)
             },
     ) {
         Box(
@@ -543,11 +638,15 @@ private fun DayCell(
                 .fillMaxWidth()
                 .aspectRatio(POSTER_ASPECT)
                 .clip(RoundedCornerShape(5.dp))
-                .background(
-                    if (stamped) palette.cream.copy(alpha = if (palette.isDark) 0.5f else 0.6f)
-                    else Color.Transparent
-                )
-                .border(if (isToday) 1.2.dp else 0.7.dp, borderColor, RoundedCornerShape(5.dp)),
+                .background(fill)
+                .border(if (isToday) 1.2.dp else 0.7.dp, borderColor, RoundedCornerShape(5.dp))
+                .drawBehind {
+                    when (kind) {
+                        DayKind.Missed -> drawMissedFrame(missedStroke)
+                        DayKind.Future -> drawFoldedCorner(foldInk, foldAlpha, palette.paper)
+                        else -> Unit
+                    }
+                },
         ) {
             if (cell?.poster != null) {
                 CellPoster(model = cell.poster, palette = palette)
@@ -565,12 +664,7 @@ private fun DayCell(
             Text(
                 text = date.dayOfMonth.toString(),
                 modifier = Modifier.align(Alignment.TopStart).padding(start = 4.dp, top = 2.dp),
-                color = when {
-                    hasPoster -> Color.White.copy(alpha = 0.92f)
-                    isFuture -> palette.inkMuted
-                    stamped -> palette.inkSoft
-                    else -> palette.inkHint
-                },
+                color = if (hasPoster) Color.White.copy(alpha = 0.92f) else numberColor,
                 fontSize = 8.sp,
                 fontFamily = FontFamily.Monospace,
             )
@@ -579,6 +673,80 @@ private fun DayCell(
             keyword = cell?.keyword.orEmpty(),
             palette = palette,
         )
+    }
+}
+
+/**
+ * 错过那天的虚线空框。
+ *
+ * 虚线对实线：签到过的格子是实线淡框加一张海报，两者一眼分得开，而虚线本身就是
+ * 「这里该有东西」的写法。颜色走 inkMuted 而不是 inkFaint——描边色压在底色上只有
+ * 1.1:1，看不出是一圈框；inkMuted 是 3.3:1，刚过非文本那条 3:1 的线。
+ */
+private fun DrawScope.drawMissedFrame(color: Color) {
+    val stroke = 1.dp.toPx()
+    val dash = 3.dp.toPx()
+    val radius = CornerRadius(5.dp.toPx())
+    // 描边沿路径居中长，整圈往里收半个线宽才不会有一半落在圆角裁切之外
+    val inset = stroke / 2f
+    drawRoundRect(
+        color = color,
+        topLeft = Offset(inset, inset),
+        size = Size(size.width - stroke, size.height - stroke),
+        cornerRadius = radius,
+        style = Stroke(
+            width = stroke,
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash, dash), 0f),
+        ),
+    )
+}
+
+/**
+ * 还没到那天的折角。
+ *
+ * 右上角切掉一个三角，用整屏底色 [paper] 盖，看起来是这一页的角被折起来了；斜边补一道
+ * 发丝线，折痕才有厚度。日期数字在左上角，右上角是空的，两者不打架。
+ *
+ * [alpha] 按距今天数递减（见调用处）：明天那一页最清楚，越远越像还没走到。
+ */
+private fun DrawScope.drawFoldedCorner(ink: Color, alpha: Float, paper: Color) {
+    if (alpha <= 0f) return
+    val side = size.width * FOLD_RATIO
+    val corner = Path().apply {
+        moveTo(size.width - side, 0f)
+        lineTo(size.width, 0f)
+        lineTo(size.width, side)
+        close()
+    }
+    drawPath(path = corner, color = paper, alpha = alpha)
+    drawLine(
+        color = ink,
+        start = Offset(size.width - side, 0f),
+        end = Offset(size.width, side),
+        strokeWidth = 0.8.dp.toPx(),
+        alpha = alpha,
+    )
+}
+
+/**
+ * 读屏念出来的那一格。
+ *
+ * 关键词是那天的内容，能念就念；错过和还没到各有一个词，否则读屏只会念出一串
+ * 光秃秃的数字，看不见的人分不出这三种格子。
+ */
+private fun dayDescription(
+    date: LocalDate,
+    cell: DailyStampCellUi?,
+    kind: DayKind,
+    missedLabel: String,
+    latentLabel: String,
+): String {
+    val day = date.dayOfMonth.toString()
+    return when {
+        cell != null && cell.keyword.isNotBlank() -> "$day ${cell.keyword}"
+        kind == DayKind.Missed -> "$day $missedLabel"
+        kind == DayKind.Future -> "$day $latentLabel"
+        else -> day
     }
 }
 
@@ -647,15 +815,29 @@ private fun CellKeyword(
     }
 }
 
-/** 底部一行小字：这个月一片空白时换成「明天打开就有了」，不摆空状态插画 */
+/**
+ * 底部一行小字，四种情况说四句话。
+ *
+ * [hinted] 是刚点过「你来之前」那种格子：这一行临时换成东隅那句。不用 Snackbar——
+ * 那是一条黑底的 Material 组件，弹在纸面日历上会把这一屏的质感打断，而这行字
+ * 本来就是「说明」的位置。用完整的「东隅已逝，桑榆非晚」而不是只留上半句：
+ * 后半句才是要说的话，光说前半句是责备，配上后半句是邀请。
+ */
 @Composable
 private fun FooterHint(
     palette: DailyStampPalette,
+    hinted: Boolean,
+    future: Boolean,
     empty: Boolean,
 ) {
     Text(
         text = stringResource(
-            if (empty) R.string.daily_stamp_empty else R.string.daily_stamp_hint
+            when {
+                hinted -> R.string.daily_stamp_unarrived_hint
+                future -> R.string.daily_stamp_future_month
+                empty -> R.string.daily_stamp_empty
+                else -> R.string.daily_stamp_hint
+            }
         ),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
         color = palette.inkHint,
@@ -673,3 +855,9 @@ private val KEYWORD_LINE = 14.dp
 
 /** 格子里海报的解码宽度：格子宽 45dp 上下，160px 铺满还留余量 */
 private const val POSTER_DECODE_PX = 160
+
+/** 「东隅已逝」那句话在底下留多久。够读完两句七个字，又不至于让人以为它是常驻文案 */
+private const val HINT_HOLD_MS = 2400L
+
+/** 折角占格子宽的比例。再大就不像折角，像把右上角剪掉了 */
+private const val FOLD_RATIO = 0.30f

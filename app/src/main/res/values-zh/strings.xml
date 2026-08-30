@@ -520,6 +520,11 @@
     <string name="daily_stamp_total">累计</string>
     <string name="daily_stamp_hint">点一天，读那天的句子</string>
     <string name="daily_stamp_empty">还没有日签。明天打开 App，就有一枚了。</string>
+    <string name="daily_stamp_unarrived_hint">东隅已逝，桑榆非晚</string>
+    <string name="daily_stamp_future_month">未来的日子还没显影</string>
+    <string name="daily_stamp_future_card">不必急于翻阅未来，时间自有答案——那天见</string>
+    <string name="daily_stamp_missed">未签到</string>
+    <string name="daily_stamp_latent">还没到</string>
     <string name="daily_stamp_save">保存</string>
     <string name="daily_stamp_share">分享</string>
     <string name="daily_stamp_detail">电影详情</string>

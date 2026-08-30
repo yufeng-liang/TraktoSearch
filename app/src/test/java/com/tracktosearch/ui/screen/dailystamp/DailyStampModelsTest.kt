@@ -8,11 +8,11 @@ import org.junit.Test
 import java.time.LocalDate
 
 /**
- * 日签格子与卡片的映射单测。
+ * 日签格子与卡片的映射单测，外加四种日子的判定。
  *
- * 这两个映射把「哪种语言看到什么」定了下来：英文原文的条目片名仍跟界面语言、
+ * 映射把「哪种语言看到什么」定了下来：英文原文的条目片名仍跟界面语言、
  * 中文语境下印章底下要有英文小字、台词下线的那天不能凑出一张空卡。
- * 都是纯函数，直接测。
+ * [dayKind] 定的是另一件事：一格空白到底空在哪儿。都是纯函数，直接测。
  */
 class DailyStampModelsTest {
 
@@ -160,5 +160,70 @@ class DailyStampModelsTest {
         val card = stamp(quote(mediaType = SplashQuote.MEDIA_TYPE_SHOW)).toCard("zh")!!
 
         assertThat(card.mediaType).isEqualTo("show")
+    }
+
+    /**
+     * 未来那天只带日期和一张最小档海报地址，台词、片名、印文一个字都不带出来。
+     *
+     * 这是保密的实现方式：不显示不是「显示了再遮住」——遮罩会随实现走样，
+     * 而没进 UI 层的字段谁也渲染不出来。地址取 w92 那一档，卡片解到十几个像素再放大。
+     */
+    @Test
+    fun `未来那天的卡片只带日期和最小档海报地址`() {
+        val latent = stamp(quote()).toLatent("zh")
+
+        assertThat(latent.date).isEqualTo(date)
+        assertThat(latent.tinyPosterUrl).contains("w92")
+        assertThat(latent.tinyPosterUrl).endsWith("/poster.jpg")
+    }
+
+    @Test
+    fun `签到过的那天算来过`() {
+        assertThat(dayKind(date, today = date, firstUse = date, stamped = true))
+            .isEqualTo(DayKind.Stamped)
+    }
+
+    @Test
+    fun `还没到的日子既不算错过也不算空白`() {
+        val kind = dayKind(
+            date = date.plusDays(1),
+            today = date,
+            firstUse = date.minusDays(10),
+            stamped = false,
+        )
+
+        assertThat(kind).isEqualTo(DayKind.Future)
+    }
+
+    /**
+     * 「你来之前」和「你错过了」得分开：前者不是错过，不该拿虚线空框去责备。
+     *
+     * 一条签到都没有（firstUse 为 null）时同理——没有任何证据说明这个人来过，
+     * 整本日历的过去都只是空白。
+     */
+    @Test
+    fun `初次使用之前那些天算你还没来`() {
+        val firstUse = date.minusDays(5)
+
+        assertThat(dayKind(firstUse.minusDays(1), date, firstUse, stamped = false))
+            .isEqualTo(DayKind.Unarrived)
+        assertThat(dayKind(date.minusDays(1), date, firstUse = null, stamped = false))
+            .isEqualTo(DayKind.Unarrived)
+    }
+
+    /**
+     * 来过之后没打开的那天才是错过。
+     *
+     * 今天也可能是错过的：拿不到台词时 checkIn 不写库（见 DailyStampRepository.checkIn），
+     * 那一格该能翻开、该显示补看的台词，不能因为「就是今天」而算成还没到。
+     */
+    @Test
+    fun `初次使用之后没打开的那天算错过`() {
+        val firstUse = date.minusDays(5)
+
+        assertThat(dayKind(date.minusDays(2), date, firstUse, stamped = false))
+            .isEqualTo(DayKind.Missed)
+        assertThat(dayKind(date, date, firstUse, stamped = false))
+            .isEqualTo(DayKind.Missed)
     }
 }

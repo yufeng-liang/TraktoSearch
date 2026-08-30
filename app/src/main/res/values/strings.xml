@@ -521,6 +521,16 @@
     <string name="daily_stamp_total">TOTAL</string>
     <string name="daily_stamp_hint">Tap a day to read its line</string>
     <string name="daily_stamp_empty">No stamps yet. Open the app tomorrow and you will have one.</string>
+    <!-- Shown in place of the footer hint when a day before the first launch is tapped. Wang Bo: the morning is gone, but the evening is not late. -->
+    <string name="daily_stamp_unarrived_hint">That morning is long gone — but the evening is not late.</string>
+    <!-- Footer hint while browsing a month that has not happened yet -->
+    <string name="daily_stamp_future_month">The days ahead have not developed yet</string>
+    <!-- Printed at the bottom of the card for a day that has not arrived -->
+    <string name="daily_stamp_future_card">No need to read ahead. Time keeps its own answer — see you that day.</string>
+    <!-- Screen reader label for a day that was missed -->
+    <string name="daily_stamp_missed">missed</string>
+    <!-- Screen reader label for a day that has not arrived -->
+    <string name="daily_stamp_latent">not yet</string>
     <string name="daily_stamp_save">Save</string>
     <string name="daily_stamp_share">Share</string>
     <string name="daily_stamp_detail">Movie</string>

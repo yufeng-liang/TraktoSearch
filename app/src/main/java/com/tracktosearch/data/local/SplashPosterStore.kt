@@ -43,6 +43,16 @@ object SplashPosterUrls {
     fun url(quote: SplashQuote, lang: String): String =
         TmdbImageUrls.build(path(quote, lang), TmdbImageUrls.W342)
 
+    /**
+     * 同一张海报的最小一档地址，w92。
+     *
+     * 日签日历里未来那天的卡片把它解到十几个像素再放大成一团色块，取更大的档只是白下载。
+     * 与 [url] 差一个尺寸段，等于另一条图片缓存记录——那两处本来也不该共用：
+     * 正常卡片要的是清楚，这里要的就是糊。
+     */
+    fun tinyUrl(quote: SplashQuote, lang: String): String =
+        TmdbImageUrls.build(path(quote, lang), TmdbImageUrls.W92)
+
     /** 解析过的走 TMDB 那一版，没解析过的退回台词库自带的 */
     private fun path(quote: SplashQuote, lang: String): String =
         resolvedPaths[cacheKey(quote.id, lang)] ?: quote.posterPath

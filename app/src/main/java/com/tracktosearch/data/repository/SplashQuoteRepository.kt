@@ -60,6 +60,26 @@ class SplashQuoteRepository @Inject constructor(
     }
 
     /**
+     * 某一天按日期取模「本该是」哪条台词。
+     *
+     * 只给日签日历用：错过签到的日子没有落库的行，未来的日子还没到，两种都只能现算。
+     * 这里不看海报就绪、不管开场那一条——它回答的是「日期落在池子的哪一格」这一个问题，
+     * [todayQuote] 那些为了「开屏永远有画面」加的分支在这里都是噪音。
+     *
+     * 现算的结果不是历史真相：往台词库里加删条目会让取模错位（见 DailyStampEntity 的
+     * KDoc），同一个错过的日子在版本更新前后可能换一部片。那天没人看过，没有真相可违背，
+     * 所以接受这个代价，换掉一列数据库字段和一次迁移。
+     *
+     * 用 floorMod 而不是 `%`：1970 年之前的日期 epochDay 是负数，`%` 会给出负下标。
+     * 真实用户碰不到，但这个函数的入参是任意日期，不该由调用方来保证这件事。
+     */
+    suspend fun quoteFor(date: LocalDate): SplashQuote? {
+        val pool = catalog.quotes()
+        if (pool.isEmpty()) return null
+        return pool[Math.floorMod(date.toEpochDay(), pool.size.toLong()).toInt()]
+    }
+
+    /**
      * 开场那一条真的渲染出来之后调用，之后就交还给日期取模。
      *
      * 标记放在「渲染成功」而不是「选中」之后：选中之后海报仍可能解码失败，

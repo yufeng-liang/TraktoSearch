@@ -23,6 +23,73 @@ data class DailyStampCellUi(
 )
 
 /**
+ * 一格是哪一种日子。四种互斥，判定见 [dayKind]。
+ *
+ * 分这四种是因为「没有签到」不是一件事：你来之前那些天本来就不该算你的，你来之后
+ * 没打开的那天才是错过，而还没到的日子既不是错过也不是空白。
+ */
+internal enum class DayKind {
+    /** 那天来过，格子上有海报和关键词 */
+    Stamped,
+
+    /** 初次使用之后、今天（含）之前，没打开过 App */
+    Missed,
+
+    /** 早于初次使用：那时这个人还没来，纸上本来就是空的 */
+    Unarrived,
+
+    /** 还没到的日子 */
+    Future,
+}
+
+/**
+ * 这一天归哪一类。
+ *
+ * [firstUse] 为 null 表示一条签到都没有，那时所有过去的日子都算 [DayKind.Unarrived]——
+ * 没有任何证据说明这个人来过，谈不上错过。
+ */
+internal fun dayKind(
+    date: LocalDate,
+    today: LocalDate,
+    firstUse: LocalDate?,
+    stamped: Boolean,
+): DayKind = when {
+    stamped -> DayKind.Stamped
+    date.isAfter(today) -> DayKind.Future
+    firstUse == null || date.isBefore(firstUse) -> DayKind.Unarrived
+    else -> DayKind.Missed
+}
+
+/**
+ * 浮层里一页的内容。
+ *
+ * 分两种而不是给 [DailyStampCardUi] 加一个布尔：未来那天的卡片没有台词、没有片名、
+ * 没有印文可显示，硬塞进同一个数据类只会让每个字段都要写「未来那天是空的」。
+ */
+@Immutable
+internal sealed interface DailyStampSheet {
+    val date: LocalDate
+
+    /** 完整的一张卡：那天签到过，或者错过之后回来补看 */
+    @Immutable
+    data class Line(val card: DailyStampCardUi) : DailyStampSheet {
+        override val date: LocalDate get() = card.date
+    }
+
+    /**
+     * 还没显影的一张卡：只有日期和一张糊到认不出的海报。
+     *
+     * [tinyPosterUrl] 是 w92 那一档的地址，卡片会把它解到十几个像素再放大——
+     * 留下的是那天的色调，不是那部片。取不到地址时为 null，卡片只剩纸和纹理。
+     */
+    @Immutable
+    data class Latent(
+        override val date: LocalDate,
+        val tinyPosterUrl: String?,
+    ) : DailyStampSheet
+}
+
+/**
  * 日签卡片的内容，与开屏台词层同源。
  *
  * [poster] 这里是 Coil 的加载来源而不是解好的位图：卡片是点开之后才出现的，
@@ -106,3 +173,14 @@ internal fun DailyStamp.toCard(lang: String): DailyStampCardUi? {
         posterUrl = SplashPosterUrls.url(quote, lang),
     )
 }
+
+/**
+ * 未来那天的卡片：只把海报地址带过去，台词、片名、印文一个字都不带。
+ *
+ * 不显示不是「显示了再遮住」——遮罩会随实现走样（Modifier.blur 在 API 30 及以下是
+ * 空操作），而这些字段一旦进了 UI 层就总有一天会被谁渲染出来。真正的保密是不带出来。
+ */
+internal fun DailyStamp.toLatent(lang: String) = DailyStampSheet.Latent(
+    date = date,
+    tinyPosterUrl = quote?.let { SplashPosterUrls.tinyUrl(it, lang) },
+)

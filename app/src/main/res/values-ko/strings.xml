@@ -281,6 +281,11 @@
     <string name="daily_stamp_total">누적</string>
     <string name="daily_stamp_hint">날짜를 누르면 그날의 한 줄을 볼 수 있어요</string>
     <string name="daily_stamp_empty">아직 도장이 없어요. 내일 앱을 열면 하나 생깁니다.</string>
+    <string name="daily_stamp_unarrived_hint">지나간 아침은 돌아오지 않지만, 저녁은 아직 늦지 않았습니다.</string>
+    <string name="daily_stamp_future_month">앞으로의 날들은 아직 나타나지 않았어요</string>
+    <string name="daily_stamp_future_card">미래를 서둘러 펼치지 않아도 됩니다. 시간이 답을 갖고 있으니 — 그날 만나요.</string>
+    <string name="daily_stamp_missed">기록 없음</string>
+    <string name="daily_stamp_latent">아직 오지 않음</string>
     <string name="daily_stamp_save">저장</string>
     <string name="daily_stamp_share">공유</string>
     <string name="daily_stamp_detail">작품 정보</string>

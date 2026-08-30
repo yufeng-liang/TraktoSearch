@@ -281,6 +281,11 @@
     <string name="daily_stamp_total">累計</string>
     <string name="daily_stamp_hint">日付をタップすると、その日の一言が読めます</string>
     <string name="daily_stamp_empty">まだ一枚もありません。明日アプリを開けば、一枚たまります。</string>
+    <string name="daily_stamp_unarrived_hint">過ぎた朝は戻らない。けれど夕暮れはまだ遅くない。</string>
+    <string name="daily_stamp_future_month">これからの日はまだ現れていない</string>
+    <string name="daily_stamp_future_card">未来を急いでめくらなくていい。時間が答えを持っている——その日に会いましょう。</string>
+    <string name="daily_stamp_missed">未記録</string>
+    <string name="daily_stamp_latent">まだ来ていない</string>
     <string name="daily_stamp_save">保存</string>
     <string name="daily_stamp_share">共有</string>
     <string name="daily_stamp_detail">作品詳細</string>
