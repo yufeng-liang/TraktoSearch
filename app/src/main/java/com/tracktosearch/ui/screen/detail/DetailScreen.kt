@@ -35,14 +35,16 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.PrimaryTabRow
@@ -76,8 +78,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -85,6 +86,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -100,24 +102,38 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.AppErrorState
-import com.tracktosearch.ui.component.rememberAppPullToRefreshState
-import com.tracktosearch.ui.component.AppPullToRefreshIndicator
 import com.tracktosearch.ui.component.AppErrorVariant
-import com.tracktosearch.ui.component.LocalActivePosterClickSetter
-import com.tracktosearch.ui.component.LocalActivePosterClickToken
-import com.tracktosearch.ui.component.LocalActivePosterTmdbId
-import com.tracktosearch.ui.component.MovieCard
-import com.tracktosearch.ui.component.NeumorphicIconButton
-import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
+import com.tracktosearch.ui.component.AppPullToRefreshIndicator
 import com.tracktosearch.ui.component.DetailTopBarIcon
-import com.tracktosearch.ui.component.ResourceItemCard
-import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
+import com.tracktosearch.ui.component.LocalActivePosterClickSetter
+import com.tracktosearch.ui.component.LocalActivePosterClickToken
+import com.tracktosearch.ui.component.LocalActivePosterTmdbId
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalBackdrop
+import com.tracktosearch.ui.component.LocalFullscreenSharedKey
+import com.tracktosearch.ui.component.MovieCard
+import com.tracktosearch.ui.component.MovieCardSkeleton
+import com.tracktosearch.ui.component.NeumorphicIconButton
+import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
+import com.tracktosearch.ui.component.ResourceItemCard
+import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.rememberAppPullToRefreshState
+import com.tracktosearch.ui.component.rememberShimmer
+import com.tracktosearch.ui.screen.ai.AiSceneEvent
+import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
+import com.tracktosearch.ui.screen.ai.AiSpriteMotion
+import com.tracktosearch.ui.screen.ai.AiSpriteViewModel
+import com.tracktosearch.ui.screen.ai.automaticSpriteArt
+import com.tracktosearch.ui.screen.ai.rememberSharedAiSpriteViewModel
+import com.tracktosearch.ui.screen.ai.sceneArtFor
+import com.tracktosearch.ui.screen.ai.shouldShowWatchlistAddedScene
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.util.HapticType
@@ -126,27 +142,16 @@ import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
-import com.tracktosearch.ui.screen.ai.AiSceneEvent
-import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
-import com.tracktosearch.ui.screen.ai.AiSpriteMotion
-import com.tracktosearch.ui.screen.ai.AiSpriteViewModel
-import com.tracktosearch.ui.screen.ai.rememberSharedAiSpriteViewModel
-import com.tracktosearch.ui.screen.ai.automaticSpriteArt
-import com.tracktosearch.ui.screen.ai.sceneArtFor
-import com.tracktosearch.ui.screen.ai.shouldShowWatchlistAddedScene
-
-import com.tracktosearch.ui.component.LocalBackdrop
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalFullscreenSharedKey
-import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeSourceSelection
-import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.dropWhile
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -414,6 +419,15 @@ fun DetailScreen(
     // 点击 token,确保只有被点击的卡片参与转场(避免同 tmdbId 海报跨栏目飘错)
     var activeClickToken by remember { mutableStateOf(0) }
 
+    // Tab 栏底色/文字颜色：判据收在 DetailVisuals.rememberDetailTabColors（豆瓣详情页共用同一套）。
+    // 提到 Scaffold 之外算：内容区、吸顶 Tab、淡入顶栏三处都要用同一份 isPinned / 文字色。
+    val isPinned by remember {
+        derivedStateOf { listState.firstVisibleItemIndex >= 1 }
+    }
+    val tabColors = rememberDetailTabColors(uiState.posterDominantColor, isPinned)
+    val tabContainerColor = tabColors.containerColor
+    val tabContentColor = tabColors.contentColor
+
     CompositionLocalProvider(
         LocalActivePosterTmdbId provides activePosterTmdbId,
         LocalActivePosterClickSetter provides { id ->
@@ -464,31 +478,6 @@ fun DetailScreen(
                 else -> null
             }
             CompositionLocalProvider(LocalFullscreenSharedKey provides fullscreenSharedKey) {
-            // Tab 栏底色/文字颜色计算(在 LazyColumn 之外定义,让内容区也能用)
-            // - 非吸顶(tab 还在海报下方):底色透明,文字按海报主色亮度自适应
-            // - 吸顶(tab 滚动到顶部固定):底色为沉浸色与白色 0.5 混合,文字按底色亮度自适应
-            //   不透明:tab 吸顶后使用实色底色,不与下方内容透叠
-            val isPinned by remember {
-                derivedStateOf { listState.firstVisibleItemIndex >= 1 }
-            }
-            val tabContainerColor = if (isPinned) {
-                uiState.posterDominantColor?.let { c ->
-                    lerp(MaterialTheme.colorScheme.background, c, 0.635f)
-                } ?: MaterialTheme.colorScheme.surface
-            } else {
-                Color.Transparent
-            }
-            val tabContentColor = when {
-                isPinned && tabContainerColor.luminance() <= 0.5f -> Color.White
-                !isPinned -> {
-                    // 非吸顶时 tab 在渐变中段,用该位置混合色亮度判断文字颜色
-                    val midColor = uiState.posterDominantColor?.let { c ->
-                        lerp(c, MaterialTheme.colorScheme.background, 0.8f)
-                    } ?: MaterialTheme.colorScheme.background
-                    if (midColor.luminance() <= 0.5f) Color.White else MaterialTheme.colorScheme.onSurface
-                }
-                else -> MaterialTheme.colorScheme.onSurface
-            }
 
             // 吸顶时状态栏区域背景与 tabContainerColor 一致,非吸顶透明(透出渐变)
             Box(
@@ -704,8 +693,15 @@ fun DetailScreen(
                                 )
                             }
                             if (displayedCount < items.size) {
+                                // 原先这里是隐形的 Spacer(56.dp)：滚到底只看到一片空白，
+                                // 分不清是还在加载还是列表已经到底。同为 56dp 高，不影响
+                                // 上面 shouldLoadMore 按 index 判定的触发时机。
                                 item(key = "load_more") {
-                                    Spacer(modifier = Modifier.fillMaxWidth().height(56.dp))
+                                    LoadMoreFooter(
+                                        state = LoadMoreFooterState.Loading,
+                                        onRetry = {},
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
                                 }
                             } else if (items.size > initialCount) {
                                 item(key = "all_loaded") {
@@ -795,16 +791,13 @@ fun DetailScreen(
 
                     if (uiState.isLoadingComments) {
                         item(key = "comments_loading") {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 32.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    strokeWidth = 3.dp
-                                )
+                            // 骨架而非转圈：短评是定高卡片流，骨架能预告条目排布，
+                            // 数据到达时不整块跳变。三条共享一份 shimmer 动画。
+                            val commentShimmer = rememberShimmer()
+                            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                                repeat(3) {
+                                    CommentSkeleton(shimmer = commentShimmer)
+                                }
                             }
                         }
                     }
@@ -879,12 +872,26 @@ fun DetailScreen(
                     val recommendations = uiState.recommendations
                     when {
                         uiState.isLoadingRecommendations -> {
+                            // 骨架按真实 3 列网格铺，与下方 MovieCard 同宽同比例，
+                            // 数据到达时列宽不变；三行共享一份 shimmer 动画。
                             item(key = "rec_loading") {
-                                Box(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator()
+                                val recShimmer = rememberShimmer()
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    repeat(3) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            repeat(3) {
+                                                MovieCardSkeleton(
+                                                    modifier = Modifier.weight(1f),
+                                                    shimmer = recShimmer
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -910,9 +917,11 @@ fun DetailScreen(
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        text = stringResource(R.string.detail_no_recommendations),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    // 原先是一句裸 Text，跟同页短评空态的 EmptyStateCard 完全两种画法
+                                    EmptyStateCard(
+                                        isDark = detailIsDark,
+                                        icon = Icons.Rounded.Movie,
+                                        title = stringResource(R.string.detail_no_recommendations)
                                     )
                                 }
                             }
@@ -988,6 +997,44 @@ fun DetailScreen(
             // 无同 state 祖先源，若未来被重新嵌回源子树，Behind 会因 0<0 静默丢源导致模糊失效，
             // All 直接强制采样内容源，blur/glass 两种模式都稳定生效。
             CompositionLocalProvider(LocalBackdrop provides null) {
+            // 滚动后淡入的模糊标题栏：原先滚过头部就只剩两个孤立的悬浮圆按钮，
+            // 页面上没有任何地方还写着在看哪部片。未滚动时 alpha=0 完全让位给沉浸头部。
+            // 与下方按钮同样显式 HazeSourceSelection.All（理由见上方长注释）。
+            val topBarTitleAlpha by animateFloatAsState(
+                targetValue = if (isPinned) 1f else 0f,
+                animationSpec = tween(durationMillis = 220),
+                label = "detailTopBarTitleAlpha"
+            )
+            if (topBarTitleAlpha > 0.01f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter)
+                        .graphicsLayer { alpha = topBarTitleAlpha }
+                        .hazeTopBar(
+                            state = detailHazeState,
+                            style = HazeMaterials.ultraThin(),
+                            isContentUnderTopBar = isPinned,
+                            scene = detailGlassScene,
+                            sourceSelection = HazeSourceSelection.All
+                        )
+                        .statusBarsPadding()
+                        .height(48.dp)
+                        // 左右各让出 64dp 给返回/分享按钮，标题始终居中不被压到按钮下面
+                        .padding(horizontal = 64.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = uiState.displayTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = tabContentColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
             // 返回按钮：与详情页其他操作统一使用拟态玻璃，并保留真实 Haze 背景采样。
             NeumorphicIconButton(
                 onClick = { view.performHaptic(HapticType.TICK); onBack(uiState.watchlistChanged, uiState.watchedChanged) },
@@ -1270,23 +1317,56 @@ fun DetailScreen(
 
 // ==================== 搜索状态 ====================
 
+/**
+ * 资源搜索中状态。
+ *
+ * 原先是个不确定进度圈——但 completedSources / totalSources 本来就已知，
+ * 转圈把「10 个源已回 8 个」这条信息白白扔掉了。改成确定进度条，
+ * 进度值带 [animateFloatAsState] 避免每回一个源就跳一格。
+ */
 @Composable
 private fun SearchingState(completedSources: Int, totalSources: Int) {
+    val rawProgress = if (totalSources > 0) {
+        (completedSources.toFloat() / totalSources).coerceIn(0f, 1f)
+    } else 0f
+    val progress by animateFloatAsState(
+        targetValue = rawProgress,
+        animationSpec = tween(durationMillis = 320),
+        label = "searchProgress"
+    )
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 32.dp),
+            .padding(horizontal = 32.dp, vertical = 32.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(modifier = Modifier.size(32.dp), strokeWidth = 3.dp)
-            Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = stringResource(R.string.detail_searching),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+            if (totalSources > 0) {
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp)),
+                    strokeCap = StrokeCap.Round
+                )
+            } else {
+                // 源总数还没确定（初始化阶段），此时确实没有进度可言
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp)),
+                    strokeCap = StrokeCap.Round
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = stringResource(R.string.detail_searching_info, completedSources, totalSources),
                 style = MaterialTheme.typography.labelSmall,
@@ -1323,7 +1403,7 @@ private fun EmptyState(onRetry: () -> Unit) {
 // 以下 Composable 已拆分到独立文件：
 // - DetailHeaderContent.kt: DetailHeaderContent, ExpandableText
 // - DetailRatingsDialog.kt: RatingsRow, RatingBadge, UserRatingBar, RatingDialog
-// - DetailCrewSection.kt: CrewSection, CastCard, FullCastCrewSheet, SectionHeader, FullCastItem
+// - DetailCrewSection.kt: CrewSection, CastCard, FullCastCrewSheet, FullCastGroupHeader, FullCastItem
 // - DetailSeasonsSection.kt: SeasonBadge, WatchedProgressBar, SeasonsSection, EpisodeRow, CollectionSection
 // - DetailMarkWatchedDialog.kt: MarkWatchedDialog
 // - DetailFilterSection.kt: FilterSection

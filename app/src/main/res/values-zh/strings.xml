@@ -335,6 +335,12 @@
     <string name="detail_original_title">原名：%1$s</string>
     <string name="detail_runtime_hours">%1$d小时%2$d分</string>
     <string name="detail_runtime_minutes">%1$d分钟</string>
+    <!-- 元信息胶囊无障碍标签：胶囊只显示值，读屏需要字段名 -->
+    <string name="detail_meta_genres_desc">类型：%1$s</string>
+    <string name="detail_meta_country_desc">国家/地区：%1$s</string>
+    <string name="detail_meta_release_date_desc">上映日期：%1$s</string>
+    <string name="detail_meta_runtime_desc">时长：%1$s</string>
+    <string name="douban_detail_comment_quote">「%1$s」</string>
     <string name="detail_year">%1$d年</string>
     <string name="detail_collapse">收起 ▲</string>
     <string name="detail_expand">展开 ▼</string>
@@ -693,6 +699,8 @@
   diskTypePath = $.type</string>
     <string name="help_detail_custom">自定义详情页：在设置中可以控制详情页各模块（演职员、预告片与截图、简介、我的评分、评论、推荐）的显示与隐藏</string>
     <string name="help_videos_images">预告片与截图：详情页展示预告片和剧照，点击预告片可在浏览器中播放，点击截图可查看大图并保存到相册</string>
+    <string name="help_detail_scroll_title">滚动标题栏：影视详情页与豆瓣详情页滚过头部后，顶部会淡入一条模糊标题栏，随时知道当前在看哪部</string>
+    <string name="help_detail_pull_refresh">下拉刷新：影视详情页下拉可重拉评分/演职员/季集/短评/推荐；豆瓣详情页下拉可重拉条目信息，已搜过资源时一并重搜</string>
     <string name="help_discover_filter_b1">影视筛选：在发现页标题栏点击筛选图标，或底部"去影视筛选页"卡片，可进入筛选页</string>
     <string name="help_discover_filter_b2">支持按类型、地区、标签、评分区间、年代筛选，可按热度、上映时间或评分排序</string>
     <string name="help_discover_filter_b3">电影与电视剧的筛选条件互相独立，切换 Tab 会保留各自的筛选选择</string>
@@ -704,6 +712,7 @@
     
     
     <string name="help_tips_b12">开启自动上报后，崩溃日志会在下次启动时上传，记录可在反馈与建议页查看；日志可能包含设备与应用状态等诊断信息。</string>
+    <string name="help_tips_b13">消息页把未读消息向右滑动即可标记已读；标题栏的「全部已读」一次清空所有未读。</string>
     <string name="help_vpn">VPN 说明</string>
     <string name="help_vpn_b1">本应用部分功能需要访问国外服务，不开启VPN可能无法正常访问</string>
     <string name="help_vpn_b2">涉及功能：预告片缩略图（YouTube）、Trakt 数据（热门/推荐/期待榜）、TMDB 数据（影视详情/海报）</string>
@@ -1562,6 +1571,16 @@
     <string name="feedback_closed_hint">该反馈已关闭</string>
     <string name="feedback_load_more">加载更多</string>
     <string name="feedback_id_format">#%1$s</string>
+    <string name="feedback_day_today">今天</string>
+    <string name="feedback_day_yesterday">昨天</string>
+    <string name="feedback_timeline_submitted">已提交</string>
+    <string name="feedback_unread_reply">有新回复</string>
+    <string name="feedback_mark_read">标记已读</string>
+    <string name="feedback_screenshots_hint">最多 5 张 · 长按拖动排序</string>
+    <string name="feedback_type_required">先选一个类型</string>
+    <string name="feedback_discard_title">放弃这条反馈？</string>
+    <string name="feedback_discard_message">已经写好的内容不会保存。</string>
+    <string name="feedback_discard_confirm">放弃</string>
     <!-- 豆瓣同步稳定阶段文案 -->
     <string name="douban_sync_stage_idle">空闲</string>
     <string name="douban_sync_stage_preparing">准备同步</string>

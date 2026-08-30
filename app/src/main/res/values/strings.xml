@@ -335,6 +335,12 @@
     <string name="detail_original_title">Original: %1$s</string>
     <string name="detail_runtime_hours">%1$dh %2$dm</string>
     <string name="detail_runtime_minutes">%1$dm</string>
+    <!-- Meta chip accessibility labels: chips show only the value, so screen readers need the field name -->
+    <string name="detail_meta_genres_desc">Genre: %1$s</string>
+    <string name="detail_meta_country_desc">Country/Region: %1$s</string>
+    <string name="detail_meta_release_date_desc">Release date: %1$s</string>
+    <string name="detail_meta_runtime_desc">Runtime: %1$s</string>
+    <string name="douban_detail_comment_quote">“%1$s”</string>
     <string name="detail_year">%1$d</string>
     <string name="detail_collapse">Collapse ▲</string>
     <string name="detail_expand">Expand ▼</string>
@@ -695,6 +701,8 @@ Config:
   diskTypePath = $.type</string>
     <string name="help_detail_custom">Custom Detail Page: In settings you can control the visibility of each detail page module (cast, videos &amp; screenshots, overview, my rating, comments, recommendations)</string>
     <string name="help_videos_images">Videos &amp; Screenshots: The detail page shows trailers and stills. Tap a trailer to play it in the browser, tap a screenshot to view fullscreen and save to gallery</string>
+    <string name="help_detail_scroll_title">Scrolling title bar: Once you scroll past the header on a movie/TV or Douban detail page, a blurred bar fades in at the top showing the title, so you always know what you are looking at</string>
+    <string name="help_detail_pull_refresh">Pull to refresh: Pull down on a movie/TV detail page to reload ratings, cast, seasons, comments and recommendations; on a Douban item page it reloads the item info and re-searches resources if you already searched</string>
     <string name="help_discover_filter_b1">Discover Filter: Tap the filter icon in the discover page toolbar (or the \"Go to Discover Filter\" card at the bottom) to enter the filter page</string>
     <string name="help_discover_filter_b2">Filter by genre, region, tag, rating range, decade, and sort by popularity, release date, or rating</string>
     <string name="help_discover_filter_b3">Movie and TV show filters are independent — switching tabs keeps each type\'s previous filter selections</string>
@@ -706,6 +714,7 @@ Config:
     
     
     <string name="help_tips_b12">If automatic crash-log upload is enabled, logs upload on the next launch; review upload history on Feedback. Logs may contain diagnostic device and app-state data.</string>
+    <string name="help_tips_b13">In Messages, swipe an unread item to the right to mark it read; Mark all as read in the top bar clears every unread at once.</string>
     <string name="help_vpn">VPN Notice</string>
     <string name="help_vpn_b1">Some features require access to overseas services. VPN may be needed for normal access</string>
     <string name="help_vpn_b2">Affected features: Trailer thumbnails (YouTube), Trakt data (trending/recommendations), TMDB data (movie details/posters)</string>
@@ -1565,6 +1574,16 @@ Config:
     <string name="feedback_closed_hint">This feedback is closed</string>
     <string name="feedback_load_more">Load more</string>
     <string name="feedback_id_format">#%1$s</string>
+    <string name="feedback_day_today">Today</string>
+    <string name="feedback_day_yesterday">Yesterday</string>
+    <string name="feedback_timeline_submitted">Submitted</string>
+    <string name="feedback_unread_reply">New reply</string>
+    <string name="feedback_mark_read">Mark as read</string>
+    <string name="feedback_screenshots_hint">Up to 5 · long-press to reorder</string>
+    <string name="feedback_type_required">Pick a type first</string>
+    <string name="feedback_discard_title">Discard this feedback?</string>
+    <string name="feedback_discard_message">What you have written will not be saved.</string>
+    <string name="feedback_discard_confirm">Discard</string>
     <!-- Stable Douban sync stage labels -->
     <string name="douban_sync_stage_idle">Idle</string>
     <string name="douban_sync_stage_preparing">Preparing sync</string>

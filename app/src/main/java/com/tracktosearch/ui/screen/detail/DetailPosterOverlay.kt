@@ -48,6 +48,7 @@ import com.tracktosearch.ui.component.queryExistingFile
 import com.tracktosearch.ui.component.savePosterToGallery
 import com.tracktosearch.ui.component.zoomSharedTarget
 import com.tracktosearch.ui.util.showToast
+import com.tracktosearch.ui.theme.WatchedGreen
 import kotlinx.coroutines.launch
 import net.engawapg.lib.zoomable.rememberZoomState
 import net.engawapg.lib.zoomable.zoomable
@@ -232,7 +233,7 @@ internal fun PosterFullscreenOverlay(
                             Icon(
                                 Icons.Rounded.Check,
                                 contentDescription = stringResource(R.string.content_desc_saved),
-                                tint = Color(0xFF4CAF50), // 绿色
+                                tint = WatchedGreen,
                                 modifier = Modifier.size(22.dp)
                             )
                         } else {

@@ -510,6 +510,12 @@
     <string name="detail_original_title">原題: %1$s</string>
     <string name="detail_runtime_hours">%1$d時間%2$d分</string>
     <string name="detail_runtime_minutes">%1$d分</string>
+    <!-- メタ情報チップのアクセシビリティラベル -->
+    <string name="detail_meta_genres_desc">ジャンル：%1$s</string>
+    <string name="detail_meta_country_desc">国/地域：%1$s</string>
+    <string name="detail_meta_release_date_desc">公開日：%1$s</string>
+    <string name="detail_meta_runtime_desc">上映時間：%1$s</string>
+    <string name="douban_detail_comment_quote">「%1$s」</string>
     <string name="detail_year">%1$d年</string>
     <string name="detail_collapse">折りたたむ ▲</string>
     <string name="detail_expand">展開する ▼</string>
@@ -1438,6 +1444,8 @@
   diskTypePath = $.type</string>
     <string name="help_detail_custom">カスタム詳細ページ：設定で詳細ページの各モジュール（キャスト、予告編とスクリーンショット、あらすじ、マイレーティング、コメント、おすすめ）の表示/非表示を制御</string>
     <string name="help_videos_images">予告編とスクリーンショット：詳細ページに予告編とスチールを表示、予告編をタップしてブラウザで再生、スクリーンショットをタップして拡大表示しアルバムに保存</string>
+    <string name="help_detail_scroll_title">スクロールタイトルバー：作品詳細ヘージと豆矣詳細ヘージでヘッダーを過ぎてスクロールすると、上部にタイトル付きのやわらかなぼかしバーがフェードインします</string>
+    <string name="help_detail_pull_refresh">プルトゥリフレッシュ：作品詳細ヘージで下に引くと評価/キャスト/シーズン/コメント/おすすめを再取得。豆矣詳細ヘージでは作品情報を再取得し、検索済みの場合はリソースも再検索します</string>
     <string name="help_discover_filter_b1">作品フィルター：発見ページのタイトルバーでフィルターアイコンをタップ、または下部の「作品フィルターページへ」カードからフィルターページに移動</string>
     <string name="help_discover_filter_b2">ジャンル、地域、タグ、評価範囲、年代でフィルタリング、人気度、公開日、評価で並べ替え可能</string>
     <string name="help_discover_filter_b3">映画とテレビ番組のフィルター条件は独立、タブ切り替えでそれぞれのフィルター選択を保持</string>
@@ -1449,6 +1457,7 @@
     
     
     <string name="help_tips_b12">自動アップロードを有効にすると、クラッシュログは次回起動時に送信され、履歴はフィードバックページで確認できます。ログには端末やアプリ状態などの診断情報が含まれる場合があります。</string>
+    <string name="help_tips_b13">メッセージ画面で未読の項目を右にスワイプすると既読になります。上部の「すべて既読」で一括処理できます。</string>
 
     <!-- 彩蛋メッセージ（9アニメ × 3メッセージ） -->
     <string name="easter_msg_shy_1">つつかれました、くすぐったい！</string>
@@ -1576,6 +1585,16 @@
     <string name="feedback_closed_hint">このフィードバックは閉じられました</string>
     <string name="feedback_load_more">もっと読み込む</string>
     <string name="feedback_id_format">#%1$s</string>
+    <string name="feedback_day_today">今日</string>
+    <string name="feedback_day_yesterday">昨日</string>
+    <string name="feedback_timeline_submitted">送信済み</string>
+    <string name="feedback_unread_reply">新しい返信</string>
+    <string name="feedback_mark_read">既読にする</string>
+    <string name="feedback_screenshots_hint">最大 5 枚・長押しで並べ替え</string>
+    <string name="feedback_type_required">まず種類を選んでください</string>
+    <string name="feedback_discard_title">この内容を破棄しますか？</string>
+    <string name="feedback_discard_message">入力した内容は保存されません。</string>
+    <string name="feedback_discard_confirm">破棄</string>
     <string name="douban_sync_stage_idle">待機中</string>
     <string name="douban_sync_stage_preparing">同期を準備中</string>
     <string name="douban_sync_stage_fetching_list">リストを取得中</string>

@@ -510,6 +510,12 @@
     <string name="detail_original_title">원제: %1$s</string>
     <string name="detail_runtime_hours">%1$d시간 %2$d분</string>
     <string name="detail_runtime_minutes">%1$d분</string>
+    <!-- 메타 정보 칩 접근성 라벨 -->
+    <string name="detail_meta_genres_desc">장르: %1$s</string>
+    <string name="detail_meta_country_desc">국가/지역: %1$s</string>
+    <string name="detail_meta_release_date_desc">개봉일: %1$s</string>
+    <string name="detail_meta_runtime_desc">상오 시간: %1$s</string>
+    <string name="douban_detail_comment_quote">“%1$s”</string>
     <string name="detail_year">%1$d년</string>
     <string name="detail_collapse">접기 ▲</string>
     <string name="detail_expand">펼치기 ▼</string>
@@ -1438,6 +1444,8 @@
   diskTypePath = $.type</string>
     <string name="help_detail_custom">사용자 정의 상세 페이지: 설정에서 상세 페이지의 각 모듈(출연진, 예고편과 스크린샷, 줄거리, 내 평가, 댓글, 추천)의 표시/숨기기를 제어</string>
     <string name="help_videos_images">예고편과 스크린샷: 상세 페이지에 예고편과 스틸컷 표시, 예고편 탭하여 브라우저에서 재생, 스크린샷 탭하여 크게 보기 및 앨범에 저장</string>
+    <string name="help_detail_scroll_title">스톰링 제목 바: 상세 페이지와 더반 상세 페이지에서 헤더를 지나 스톰링하면 상단에 제목이 들어있는 부드러운 효과의 바가 나타납니다</string>
+    <string name="help_detail_pull_refresh">당기어 새로고침: 상세 페이지에서 아래로 당기면 평점/배우/시즌/한줄평/추천을 다시 불러오고, 더반 상세 페이지에서는 항목 정부를 다시 불러오며 이밌 검상한 경우 리소스도 다시 검상합니다</string>
     <string name="help_discover_filter_b1">작품 필터: 발견 페이지 제목 표시줄에서 필터 아이콘 탭, 또는 하단 「작품 필터 페이지로」 카드에서 필터 페이지로 이동</string>
     <string name="help_discover_filter_b2">장르, 지역, 태그, 평점 범위, 연대별 필터링 지원, 인기도, 개봉일 또는 평점으로 정렬 가능</string>
     <string name="help_discover_filter_b3">영화와 TV 프로그램의 필터 조건은 독립적, 탭 전환 시 각각의 필터 선택 유지</string>
@@ -1449,6 +1457,7 @@
     
     
     <string name="help_tips_b12">자동 업로드를 켜면 크래시 로그가 다음 실행 때 전송되며 기록은 피드백 페이지에서 확인할 수 있습니다. 로그에는 기기와 앱 상태 등 진단 정보가 포함될 수 있습니다.</string>
+    <string name="help_tips_b13">메시지 화면에서 읽지 않은 항목을 오른쪽으로 밀면 읽음으로 표시됩니다. 상단의 모두 읽음 버튼으로 한 번에 처리할 수 있습니다.</string>
 
     <!-- 이스터에그 메시지 (9애니메이션 × 3메시지) -->
     <string name="easter_msg_shy_1">찔렀어요, 간지러워!</string>
@@ -1576,6 +1585,16 @@
     <string name="feedback_closed_hint">이 피드백은 닫혔습니다</string>
     <string name="feedback_load_more">더 불러오기</string>
     <string name="feedback_id_format">#%1$s</string>
+    <string name="feedback_day_today">오늘</string>
+    <string name="feedback_day_yesterday">어제</string>
+    <string name="feedback_timeline_submitted">제출됨</string>
+    <string name="feedback_unread_reply">새 답장</string>
+    <string name="feedback_mark_read">읽음으로 표시</string>
+    <string name="feedback_screenshots_hint">최대 5장 · 길게 눌러 순서 변경</string>
+    <string name="feedback_type_required">종류를 먼저 선택하세요</string>
+    <string name="feedback_discard_title">이 피드백을 삭제할까요?</string>
+    <string name="feedback_discard_message">작성한 내용은 저장되지 않습니다.</string>
+    <string name="feedback_discard_confirm">삭제</string>
     <string name="douban_sync_stage_idle">대기 중</string>
     <string name="douban_sync_stage_preparing">동기화 준비 중</string>
     <string name="douban_sync_stage_fetching_list">목록 가져오는 중</string>

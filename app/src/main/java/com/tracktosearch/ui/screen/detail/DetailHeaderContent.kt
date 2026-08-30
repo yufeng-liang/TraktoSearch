@@ -2,7 +2,6 @@ package com.tracktosearch.ui.screen.detail
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -21,9 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bookmark
@@ -49,11 +45,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
@@ -85,6 +78,7 @@ import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.rememberShimmer
 import com.tracktosearch.ui.component.zoomSharedSource
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
@@ -135,20 +129,10 @@ internal fun DetailHeaderContent(
     val context = LocalContext.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
-    // 根据海报主色调亮度自适应文字颜色,增强沉浸背景下的可读性
-    // 亮色海报 → 深色文字;暗色海报 → 浅色文字;无海报色 → 回退主题色
-    // 注意实际底色不是原始 posterColor，而是海报色(alpha 0.70)叠主题 background 的渐变
-    // (见 DetailScreen immersiveBackgroundModifier)。与同页 Tab 的做法一致：先 lerp 0.8f
-    // 得到真实混合底色再判亮度，否则较亮的海报会被误判成暗底而配白字、看不清
+    // 沉浸背景下的自适应文字色，判据收在 DetailVisuals（豆瓣详情页共用同一套）
     val posterColor = uiState.posterDominantColor
-    val onPosterColor = posterColor?.let { c ->
-        val blended = lerp(c, MaterialTheme.colorScheme.background, 0.8f)
-        if (blended.luminance() > 0.5f) Color.Black.copy(alpha = 0.92f) else Color.White
-    } ?: MaterialTheme.colorScheme.onSurface
-    val onPosterVariantColor = posterColor?.let { c ->
-        val blended = lerp(c, MaterialTheme.colorScheme.background, 0.8f)
-        if (blended.luminance() > 0.5f) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.72f)
-    } ?: MaterialTheme.colorScheme.onSurfaceVariant
+    val onPosterColor = detailOnPosterColor(posterColor)
+    val onPosterVariantColor = detailOnPosterVariantColor(posterColor)
     Column(
         modifier = Modifier
             // GLASS 模式将 tab 栏之上的全部头部内容注册为 Backdrop 采样源，
@@ -306,85 +290,38 @@ internal fun DetailHeaderContent(
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // 标题/类型/日期/评分/标记已看
+            // 标题/原名/元信息胶囊/评分/标记已看
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                // 标题
-                Box(modifier = Modifier.height(28.dp), contentAlignment = Alignment.CenterStart) {
+                // 标题：放开两行。原先塞在 Box(height(28.dp)) 里被迫 maxLines = 1，
+                // 《银翼杀手 2049 加长版》这类长片名直接被切掉后半段
+                Text(
+                    text = uiState.displayTitle,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = onPosterColor,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 26.sp
+                )
+
+                // 原名：有值才占位。原先固定 18dp 槽，纯中文片源（无原名）也留一条死白
+                if (uiState.originalTitle.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = uiState.displayTitle,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = onPosterColor,
+                        text = stringResource(R.string.detail_original_title, uiState.originalTitle),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = onPosterVariantColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                // 原名
-                Box(modifier = Modifier.height(18.dp), contentAlignment = Alignment.CenterStart) {
-                    if (uiState.originalTitle.isNotEmpty()) {
-                        Text(
-                            text = stringResource(R.string.detail_original_title, uiState.originalTitle),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = onPosterVariantColor,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-                // 类型
-                Box(modifier = Modifier.height(18.dp), contentAlignment = Alignment.CenterStart) {
-                    if (uiState.genres.isNotEmpty()) {
-                        Text(
-                            text = uiState.genres,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = onPosterVariantColor,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-                // 国家
-                Box(modifier = Modifier.height(18.dp), contentAlignment = Alignment.CenterStart) {
-                    if (uiState.country.isNotEmpty()) {
-                        Text(
-                            text = uiState.country,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = onPosterVariantColor,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-                // 上映日期 + 时长
-                Box(modifier = Modifier.height(18.dp), contentAlignment = Alignment.CenterStart) {
-                    val dateText = if (!uiState.releaseDate.isEmpty()) {
-                        if (uiState.releaseDate.length >= 10) {
-                            "${uiState.releaseDate.substring(0, 4)}-${uiState.releaseDate.substring(5, 7)}-${uiState.releaseDate.substring(8, 10)}"
-                        } else {
-                            uiState.releaseDate
-                        }
-                    } else if (uiState.year != null) {
-                        stringResource(R.string.detail_year_suffix, uiState.year)
-                    } else ""
-                    val runtimeText = if (uiState.runtime != null && uiState.runtime > 0) {
-                        val hours = uiState.runtime / 60
-                        val minutes = uiState.runtime % 60
-                        if (hours > 0) {
-                            " (${stringResource(R.string.detail_runtime_hours, hours, minutes)})"
-                        } else {
-                            " (${stringResource(R.string.detail_runtime_minutes, minutes)})"
-                        }
-                    } else ""
-                    if (dateText.isNotEmpty() || runtimeText.isNotEmpty()) {
-                        Text(
-                            text = dateText + runtimeText,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = onPosterVariantColor,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                // 类型/国家/日期/时长：原先是四个 18dp 固定槽竖排，同字号同颜色分不出主次，
+                // 空字段照样占位。收成一行胶囊，FlowRow 装不下自然换行
+                val metaChips = buildDetailMetaChips(uiState)
+                if (metaChips.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    DetailMetaChips(chips = metaChips, contentColor = onPosterColor)
                 }
                 // 多平台评分（固定高度区域）
                 Spacer(modifier = Modifier.height(8.dp))
@@ -461,6 +398,8 @@ internal fun DetailHeaderContent(
         // 第二行：演职员（海报下方独立一行，左对齐，始终预留空间避免布局跳动）
         // 头部下方内容(cast/视频/简介/系列/季集)统一淡入,营造"沉浸背景先现,内容后显"效果
         if (contentReady) {
+        // 演职员/预告片/简介三处骨架共享一份 shimmer 动画，避免各跑一条无限动画
+        val headerShimmer = rememberShimmer()
         Column(modifier = Modifier.alpha(contentAlpha)) {
         // 纯豆瓣条目(tmdbId=0)没有 TMDB 演职员数据(cast/crew 只来自 TMDB),直接隐藏整栏,
         // 否则骨架卡与「全部」按钮永远等不到内容,永久空挂
@@ -480,55 +419,18 @@ internal fun DetailHeaderContent(
             } else {
                 // 加载中/失败占位：仅栏目标题直接显示，卡片区保留骨架或错误态重试入口；
                 // 「全部」此时隐藏，避免数据未就绪时点开空 sheet（仅 hasCredits 的 CrewSection 提供该入口）
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.detail_cast_crew),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                DetailSectionHeader(title = stringResource(R.string.detail_cast_crew))
+                if (uiState.creditsError) {
+                    // 加载失败：以前失败也照样显示骨架，用户永远等不到内容也不知道该重试
+                    AppErrorState(
+                        message = stringResource(R.string.detail_load_error),
+                        onRetry = onRetryCredits,
+                        variant = AppErrorVariant.Inline,
+                        inlineLabel = stringResource(R.string.detail_load_error),
+                        showDetail = false
                     )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    if (uiState.creditsError) {
-                        // 加载失败：以前失败也照样显示骨架，用户永远等不到内容也不知道该重试
-                        AppErrorState(
-                            message = stringResource(R.string.detail_load_error),
-                            onRetry = onRetryCredits,
-                            variant = AppErrorVariant.Inline,
-                            inlineLabel = stringResource(R.string.detail_load_error),
-                            showDetail = false
-                        )
-                    } else {
-                    repeat(5) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier.size(width = 68.dp, height = 95.dp)
-                            ) {}
-                            Spacer(modifier = Modifier.height(5.dp))
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier.width(56.dp).height(10.dp)
-                            ) {}
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier.width(40.dp).height(8.dp)
-                            ) {}
-                        }
-                    }
-                    }
+                } else {
+                    CastRowSkeleton(shimmer = headerShimmer)
                 }
             }
             if (showFullCast) {
@@ -557,12 +459,7 @@ internal fun DetailHeaderContent(
             } else if (uiState.videosError) {
                 // 加载失败：与评分区一致的 Inline 错误态，带重试入口
                 Column(modifier = Modifier.padding(bottom = 12.dp)) {
-                    Text(
-                        text = stringResource(R.string.detail_videos_section),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    DetailSectionHeader(title = stringResource(R.string.detail_videos_section))
                     AppErrorState(
                         message = stringResource(R.string.detail_load_error),
                         onRetry = onRetryVideos,
@@ -574,34 +471,8 @@ internal fun DetailHeaderContent(
             } else {
                 // 骨架屏占位，防止加载后内容跳变；栏目标题为静态文字直接显示，「全部」随数据到达后出现
                 Column(modifier = Modifier.padding(bottom = 12.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 2.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = stringResource(R.string.detail_videos_section),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(horizontal = 0.dp)
-                    ) {
-                        items(3) {
-                            Box(
-                                modifier = Modifier
-                                    .width(240.dp)
-                                    .height(135.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                            )
-                        }
-                    }
+                    DetailSectionHeader(title = stringResource(R.string.detail_videos_section))
+                    VideosRowSkeleton(shimmer = headerShimmer)
                 }
             }
         }
@@ -610,40 +481,14 @@ internal fun DetailHeaderContent(
         if (sectionVisible.overview) {
             if (uiState.overview.isNotEmpty()) {
                 Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                    Text(
-                        text = stringResource(R.string.detail_overview_label),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    DetailSectionHeader(title = stringResource(R.string.detail_overview_label))
                     ExpandableText(text = uiState.overview)
                 }
             } else if (uiState.isLoading) {
                 // 简介骨架占位，防止加载后推下下方内容；「简介」标签为静态文字直接显示，仅正文保留骨架
                 Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                    Text(
-                        text = stringResource(R.string.detail_overview_label),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    repeat(3) { index ->
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(
-                                    when (index) {
-                                        0 -> 1f
-                                        1 -> 0.95f
-                                        else -> 0.7f
-                                    }
-                                )
-                                .height(14.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        )
-                        if (index < 2) Spacer(modifier = Modifier.height(6.dp))
-                    }
+                    DetailSectionHeader(title = stringResource(R.string.detail_overview_label))
+                    TextBlockSkeleton(shimmer = headerShimmer)
                 }
             }
         }
@@ -672,12 +517,7 @@ internal fun DetailHeaderContent(
         } else if (uiState.seasonsError) {
             // 季信息加载失败：以前整个区块直接消失，用户分不清「这部剧没有季信息」和「没加载上」
             Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                Text(
-                    text = stringResource(R.string.detail_seasons),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
+                DetailSectionHeader(title = stringResource(R.string.detail_seasons))
                 AppErrorState(
                     message = stringResource(R.string.detail_load_error),
                     onRetry = onRetrySeasons,
@@ -691,6 +531,56 @@ internal fun DetailHeaderContent(
         } // end if (contentReady)
     }
 }
+
+// ==================== 头部元信息胶囊 ====================
+
+/**
+ * 把类型 / 国家 / 上映日期 / 时长拼成胶囊列表。
+ *
+ * 类型与国家在 ViewModel 里已经是 `" / "` 拼好的字符串（少数富化路径可能用逗号或顿号），
+ * 这里按几种分隔符统一拆开各成一枚胶囊——拼成一长串再 ellipsis 的话，三个类型只能看到
+ * 第一个半。日期和时长各一枚，与原先「日期 (时长)」合并成一行的写法相比更好扫读。
+ */
+@Composable
+private fun buildDetailMetaChips(uiState: DetailUiState): List<DetailMetaChip> {
+    val genresDesc = stringResource(R.string.detail_meta_genres_desc)
+    val countryDesc = stringResource(R.string.detail_meta_country_desc)
+    val dateDesc = stringResource(R.string.detail_meta_release_date_desc)
+    val runtimeDesc = stringResource(R.string.detail_meta_runtime_desc)
+    val chips = mutableListOf<DetailMetaChip>()
+    splitMetaValues(uiState.genres).forEach { chips += DetailMetaChip(it, genresDesc.format(it)) }
+    splitMetaValues(uiState.country).forEach { chips += DetailMetaChip(it, countryDesc.format(it)) }
+
+    val dateText = when {
+        uiState.releaseDate.length >= 10 ->
+            "${uiState.releaseDate.substring(0, 4)}-${uiState.releaseDate.substring(5, 7)}-${uiState.releaseDate.substring(8, 10)}"
+        uiState.releaseDate.isNotEmpty() -> uiState.releaseDate
+        uiState.year != null -> stringResource(R.string.detail_year_suffix, uiState.year)
+        else -> ""
+    }
+    if (dateText.isNotEmpty()) chips += DetailMetaChip(dateText, dateDesc.format(dateText))
+
+    val runtime = uiState.runtime
+    if (runtime != null && runtime > 0) {
+        val hours = runtime / 60
+        val minutes = runtime % 60
+        val runtimeText = if (hours > 0) {
+            stringResource(R.string.detail_runtime_hours, hours, minutes)
+        } else {
+            stringResource(R.string.detail_runtime_minutes, minutes)
+        }
+        chips += DetailMetaChip(runtimeText, runtimeDesc.format(runtimeText))
+    }
+    return chips
+}
+
+/** 按 `/`、`,`、`、` 拆分富化字段，去空去重，最多留 4 项避免胶囊行挤掉评分卡。 */
+private fun splitMetaValues(raw: String): List<String> =
+    if (raw.isBlank()) emptyList() else raw.split('/', ',', '，', '、')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .distinct()
+        .take(4)
 
 // ==================== 折叠展开文本 ====================
 
@@ -756,26 +646,10 @@ internal fun ExpandableText(
 
 // ==================== 状态绑带 ====================
 
-/** 状态绑带颜色 */
-private fun getStatusColor(status: String): Color {
-    return when (status) {
-        "Released" -> Color(0xFF4CAF50)
-        "Returning Series" -> Color(0xFF4CAF50)
-        "In Production" -> Color(0xFFFF9800)
-        "Post Production" -> Color(0xFFFF9800)
-        "Pilot" -> Color(0xFFFF9800)
-        "Planned" -> Color(0xFF2196F3)
-        "Rumored" -> Color(0xFF9C27B0)
-        "Canceled" -> Color(0xFFF44336)
-        "Ended" -> Color(0xFF9E9E9E)
-        else -> Color(0xFF757575)
-    }
-}
-
 /** 状态标签：右下角圆角矩形 */
 @Composable
 private fun StatusRibbon(status: String, modifier: Modifier = Modifier) {
-    val backgroundColor = getStatusColor(status)
+    val backgroundColor = detailStatusColor(status)
     val displayText = getStatusDisplayText(status)
     Surface(
         modifier = modifier.padding(4.dp),
