@@ -10,9 +10,17 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +42,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -41,6 +50,7 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.LocationOn
+import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
@@ -66,7 +76,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -144,6 +156,11 @@ fun PrivacyScreen(
                     bottom = 80.dp
                 )
             ) {
+                // 首屏摘要：先给出数据边界，再进入可操作开关
+                item {
+                    PrivacySummaryCard()
+                }
+
                 // 区块 A：数据开关（AI taste / 崩溃上报 / 位置授权）
                 item {
                     PrivacySectionCard(
@@ -245,6 +262,67 @@ fun PrivacyScreen(
                     ),
                     windowInsets = WindowInsets(0, 0, 0, 0)
                 )
+            }
+        }
+    }
+}
+
+/** 首屏数据边界摘要：用一张轻量卡片建立阅读预期。 */
+@Composable
+private fun PrivacySummaryCard() {
+    val isDark = isAppDarkTheme()
+    val accent = MaterialTheme.colorScheme.primary
+    Surface(
+        color = accent.copy(alpha = if (isDark) 0.14f else 0.09f),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, accent.copy(alpha = if (isDark) 0.22f else 0.16f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(18.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .background(accent.copy(alpha = 0.16f), RoundedCornerShape(14.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Shield,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.privacy_hero_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = stringResource(R.string.privacy_hero_desc),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.3f
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PrivacyBadgePill(
+                        icon = Icons.Rounded.Shield,
+                        text = stringResource(R.string.privacy_badge_b1)
+                    )
+                    PrivacyBadgePill(
+                        icon = Icons.Rounded.VisibilityOff,
+                        text = stringResource(R.string.privacy_badge_b2)
+                    )
+                }
             }
         }
     }
@@ -456,13 +534,316 @@ private fun PrivacyLocationRow() {
     }
 }
 
-/**
- * 区块 B「隐私说明」内容：导语 + 本地说明 + 网络说明 + 技术细节折叠块 + 徽章行。
- */
+private data class PrivacyFlowUi(
+    val title: String,
+    val caption: String,
+    val middleNode: String,
+    val endNode: String
+)
+
+/** 说明分组：用次级表面拆开长内容，降低连续阅读负担。 */
+@Composable
+private fun PrivacyInfoBlock(
+    icon: ImageVector,
+    title: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface.copy(alpha = if (isAppDarkTheme()) 0.32f else 0.52f),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Column(content = content)
+        }
+    }
+}
+
+/** 与网页版隐私区同一信息结构的原生数据流动画：仅示意，不读取真实网络状态。 */
+@Composable
+private fun PrivacyDataFlowCard() {
+    val flows = listOf(
+        PrivacyFlowUi(
+            title = stringResource(R.string.privacy_flow_local_title),
+            caption = stringResource(R.string.privacy_flow_local_caption),
+            middleNode = stringResource(R.string.privacy_flow_local_node),
+            endNode = stringResource(R.string.privacy_flow_local_end)
+        ),
+        PrivacyFlowUi(
+            title = stringResource(R.string.privacy_flow_account_title),
+            caption = stringResource(R.string.privacy_flow_account_caption),
+            middleNode = stringResource(R.string.privacy_flow_account_node),
+            endNode = stringResource(R.string.privacy_flow_account_end)
+        ),
+        PrivacyFlowUi(
+            title = stringResource(R.string.privacy_flow_metadata_title),
+            caption = stringResource(R.string.privacy_flow_metadata_caption),
+            middleNode = stringResource(R.string.privacy_flow_metadata_node),
+            endNode = stringResource(R.string.privacy_flow_metadata_end)
+        ),
+        PrivacyFlowUi(
+            title = stringResource(R.string.privacy_flow_resource_title),
+            caption = stringResource(R.string.privacy_flow_resource_caption),
+            middleNode = stringResource(R.string.privacy_flow_resource_node),
+            endNode = stringResource(R.string.privacy_flow_resource_end)
+        ),
+        PrivacyFlowUi(
+            title = stringResource(R.string.privacy_flow_feedback_title),
+            caption = stringResource(R.string.privacy_flow_feedback_caption),
+            middleNode = stringResource(R.string.privacy_flow_feedback_node),
+            endNode = stringResource(R.string.privacy_flow_feedback_end)
+        )
+    )
+    var selectedIndex by rememberSaveable { mutableStateOf(0) }
+    val selectedFlow = flows[selectedIndex.coerceIn(0, flows.lastIndex)]
+    val infiniteTransition = rememberInfiniteTransition(label = "privacy_flow_packet")
+    val packetProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1800, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "privacy_flow_packet_progress"
+    )
+    val primary = MaterialTheme.colorScheme.primary
+    val isDark = isAppDarkTheme()
+
+    Surface(
+        color = primary.copy(alpha = if (isDark) 0.10f else 0.06f),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, primary.copy(alpha = 0.16f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.privacy_flow_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = stringResource(R.string.privacy_flow_summary),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = MaterialTheme.typography.bodySmall.lineHeight * 1.3f
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Surface(
+                    color = primary.copy(alpha = 0.14f),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.privacy_flow_live),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = primary,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            PrivacyFlowTrack(
+                middleNode = selectedFlow.middleNode,
+                endNode = selectedFlow.endNode,
+                packetProgress = packetProgress
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.privacy_flow_hint),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+            PrivacyFlowOptionRow(
+                options = listOf(0 to flows[0], 1 to flows[1]),
+                selectedIndex = selectedIndex,
+                onSelect = { selectedIndex = it }
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            PrivacyFlowOptionRow(
+                options = listOf(2 to flows[2], 3 to flows[3]),
+                selectedIndex = selectedIndex,
+                onSelect = { selectedIndex = it }
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            PrivacyFlowOption(
+                flow = flows[4],
+                selected = selectedIndex == 4,
+                onClick = { selectedIndex = 4 },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.28f else 0.60f),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = selectedFlow.title,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = primary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = selectedFlow.caption,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = MaterialTheme.typography.bodySmall.lineHeight * 1.35f
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PrivacyFlowTrack(
+    middleNode: String,
+    endNode: String,
+    packetProgress: Float
+) {
+    val primary = MaterialTheme.colorScheme.primary
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(86.dp)
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val nodeWidth = 92.dp.toPx()
+            val startX = nodeWidth / 2f
+            val middleX = size.width / 2f
+            val endX = size.width - nodeWidth / 2f
+            val y = 16.dp.toPx()
+            val trackColor = primary.copy(alpha = 0.22f)
+            drawLine(trackColor, Offset(startX, y), Offset(endX, y), 4.dp.toPx(), StrokeCap.Round)
+            drawCircle(trackColor, 8.dp.toPx(), Offset(startX, y))
+            drawCircle(trackColor, 8.dp.toPx(), Offset(middleX, y))
+            drawCircle(trackColor, 8.dp.toPx(), Offset(endX, y))
+            val packetX = startX + (endX - startX) * packetProgress
+            drawCircle(primary, 6.dp.toPx(), Offset(packetX, y))
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            PrivacyFlowNode(stringResource(R.string.privacy_flow_device))
+            PrivacyFlowNode(middleNode)
+            PrivacyFlowNode(endNode)
+        }
+    }
+}
+
+@Composable
+private fun PrivacyFlowNode(label: String) {
+    Column(
+        modifier = Modifier.width(92.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .background(
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+            )
+        }
+        Spacer(modifier = Modifier.height(5.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            maxLines = 2
+        )
+    }
+}
+
+@Composable
+private fun PrivacyFlowOptionRow(
+    options: List<Pair<Int, PrivacyFlowUi>>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        options.forEach { (index, flow) ->
+            PrivacyFlowOption(
+                flow = flow,
+                selected = selectedIndex == index,
+                onClick = { onSelect(index) },
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun PrivacyFlowOption(
+    flow: PrivacyFlowUi,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val primary = MaterialTheme.colorScheme.primary
+    Surface(
+        color = if (selected) primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.48f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, if (selected) primary.copy(alpha = 0.32f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.10f)),
+        modifier = modifier.clickable(onClick = onClick)
+    ) {
+        Text(
+            text = flow.title,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (selected) primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 8.dp)
+        )
+    }
+}
+
+/** 区块 B「隐私说明」内容：本地/联网边界、技术实现与动画示意。 */
 @Composable
 private fun PrivacyStatementContent() {
     var techExpanded by rememberSaveable { mutableStateOf(false) }
-    // 展开时箭头旋转 180° 的动画
     val expandRotation by animateFloatAsState(
         targetValue = if (techExpanded) 180f else 0f,
         label = "privacy_tech_expand"
@@ -472,48 +853,49 @@ private fun PrivacyStatementContent() {
             text = stringResource(R.string.privacy_statement_intro),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 12.dp)
+            lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.35f,
+            modifier = Modifier.padding(bottom = 14.dp)
         )
 
-        // 本地数据说明
-        Text(
-            text = stringResource(R.string.privacy_local_title),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 6.dp)
-        )
-        PrivacyBullet(stringResource(R.string.privacy_local_b1))
-        PrivacyBullet(stringResource(R.string.privacy_local_b2))
-        PrivacyBullet(stringResource(R.string.privacy_local_b3))
-        Spacer(modifier = Modifier.height(12.dp))
+        PrivacyInfoBlock(
+            icon = Icons.Rounded.Shield,
+            title = stringResource(R.string.privacy_local_title)
+        ) {
+            PrivacyBullet(stringResource(R.string.privacy_local_b1))
+            PrivacyBullet(stringResource(R.string.privacy_local_b2))
+            PrivacyBullet(stringResource(R.string.privacy_local_b3))
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        PrivacyInfoBlock(
+            icon = Icons.Rounded.Public,
+            title = stringResource(R.string.privacy_network_title)
+        ) {
+            PrivacyBullet(stringResource(R.string.privacy_network_b1))
+            PrivacyBullet(stringResource(R.string.privacy_network_b2))
+            PrivacyBullet(stringResource(R.string.privacy_network_b3))
+            PrivacyBullet(stringResource(R.string.privacy_network_b4))
+            PrivacyBullet(stringResource(R.string.privacy_network_b5))
+            PrivacyBullet(stringResource(R.string.privacy_network_b6))
+            PrivacyBullet(stringResource(R.string.privacy_network_b7))
+            PrivacyBullet(stringResource(R.string.privacy_network_b8))
+        }
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // 网络传输说明
-        Text(
-            text = stringResource(R.string.privacy_network_title),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 6.dp)
-        )
-        PrivacyBullet(stringResource(R.string.privacy_network_b1))
-        PrivacyBullet(stringResource(R.string.privacy_network_b2))
-        PrivacyBullet(stringResource(R.string.privacy_network_b3))
-        PrivacyBullet(stringResource(R.string.privacy_network_b4))
-        PrivacyBullet(stringResource(R.string.privacy_network_b5))
-        PrivacyBullet(stringResource(R.string.privacy_network_b6))
-        PrivacyBullet(stringResource(R.string.privacy_network_b7))
-        PrivacyBullet(stringResource(R.string.privacy_network_b8))
-        Spacer(modifier = Modifier.height(4.dp))
-
-        // 技术细节折叠块
+        // 技术实现展开后同时显示与网页版一致的数据流动画示意。
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { techExpanded = !techExpanded }
-                .padding(vertical = 8.dp),
+                .padding(vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Icon(
+                imageVector = Icons.Rounded.Shield,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = stringResource(R.string.privacy_tech_title),
                 style = MaterialTheme.typography.titleSmall,
@@ -530,17 +912,18 @@ private fun PrivacyStatementContent() {
         }
         AnimatedVisibility(
             visible = techExpanded,
-            enter = expandVertically() + fadeIn()
+            enter = expandVertically() + fadeIn(),
+            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
         ) {
             Column {
                 PrivacyBullet(stringResource(R.string.privacy_tech_b1))
                 PrivacyBullet(stringResource(R.string.privacy_tech_b2))
                 PrivacyBullet(stringResource(R.string.privacy_tech_b3))
+                PrivacyDataFlowCard()
             }
         }
         Spacer(modifier = Modifier.height(12.dp))
 
-        // 徽章行：两个小胶囊概括隐私承诺
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PrivacyBadgePill(
                 icon = Icons.Rounded.Shield,
@@ -564,10 +947,10 @@ private fun PrivacyLegalContent() {
             text = stringResource(R.string.privacy_legal_intro),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 12.dp)
+            lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.35f,
+            modifier = Modifier.padding(bottom = 14.dp)
         )
 
-        // 5 节使用与权利说明，节间留白
         PrivacyLegalSection(
             title = stringResource(R.string.privacy_legal_b1_title),
             body = stringResource(R.string.privacy_legal_b1)
@@ -589,13 +972,13 @@ private fun PrivacyLegalContent() {
             body = stringResource(R.string.privacy_legal_b5)
         )
 
-        // 权利请求卡片：CustomTabs 打开权利请求页
         Surface(
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 4.dp)
+                .padding(top = 2.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
@@ -604,19 +987,26 @@ private fun PrivacyLegalContent() {
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(5.dp))
                 Text(
                     text = stringResource(R.string.privacy_rights_desc),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = MaterialTheme.typography.bodySmall.lineHeight * 1.35f
                 )
-                Spacer(modifier = Modifier.height(12.dp))
-                Button(onClick = {
-                    view.performHaptic(HapticType.CLICK)
-                    // CustomTabs 打开外部网页（与开源页仓库链接同款方式）
-                    CustomTabsIntent.Builder().build()
-                        .launchUrl(context, RIGHTS_URL.toUri())
-                }) {
+                Spacer(modifier = Modifier.height(8.dp))
+                PrivacyBullet(stringResource(R.string.privacy_rights_b1))
+                PrivacyBullet(stringResource(R.string.privacy_rights_b2))
+                PrivacyBullet(stringResource(R.string.privacy_rights_b3))
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        view.performHaptic(HapticType.CLICK)
+                        CustomTabsIntent.Builder().build()
+                            .launchUrl(context, RIGHTS_URL.toUri())
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text(stringResource(R.string.privacy_rights_open))
                 }
             }
@@ -627,19 +1017,30 @@ private fun PrivacyLegalContent() {
 /** 使用与权利单节：小标题 + 正文，节间留白。 */
 @Composable
 private fun PrivacyLegalSection(title: String, body: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.padding(bottom = 4.dp)
-    )
-    Text(
-        text = body,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(bottom = 12.dp)
-    )
+    Surface(
+        color = MaterialTheme.colorScheme.surface.copy(alpha = if (isAppDarkTheme()) 0.28f else 0.48f),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(5.dp))
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.35f
+            )
+        }
+    }
 }
 
 /** 徽章胶囊：surface 底 + 12dp 圆角 + 图标 + 小字。 */
@@ -673,20 +1074,29 @@ private fun PrivacyBadgePill(icon: ImageVector, text: String) {
 @Composable
 private fun PrivacyBullet(text: String) {
     Row(
-        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+        modifier = Modifier.padding(bottom = 7.dp),
         verticalAlignment = Alignment.Top
     ) {
-        Text(
-            text = "•",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(end = 6.dp)
-        )
+        Box(
+            modifier = Modifier
+                .padding(top = 2.dp)
+                .size(18.dp)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = text,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.4f
+            lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.35f,
+            modifier = Modifier.weight(1f)
         )
     }
 }
