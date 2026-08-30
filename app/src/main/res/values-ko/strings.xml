@@ -1449,6 +1449,7 @@
     
     
     <string name="help_tips_b12">자동 업로드를 켜면 크래시 로그가 다음 실행 때 전송되며 기록은 피드백 페이지에서 확인할 수 있습니다. 로그에는 기기와 앱 상태 등 진단 정보가 포함될 수 있습니다.</string>
+    <string name="help_tips_b13">메시지 화면에서 읽지 않은 항목을 오른쪽으로 밀면 읽음으로 표시됩니다. 상단의 모두 읽음 버튼으로 한 번에 처리할 수 있습니다.</string>
 
     <!-- 이스터에그 메시지 (9애니메이션 × 3메시지) -->
     <string name="easter_msg_shy_1">찔렀어요, 간지러워!</string>
@@ -1576,6 +1577,16 @@
     <string name="feedback_closed_hint">이 피드백은 닫혔습니다</string>
     <string name="feedback_load_more">더 불러오기</string>
     <string name="feedback_id_format">#%1$s</string>
+    <string name="feedback_day_today">오늘</string>
+    <string name="feedback_day_yesterday">어제</string>
+    <string name="feedback_timeline_submitted">제출됨</string>
+    <string name="feedback_unread_reply">새 답장</string>
+    <string name="feedback_mark_read">읽음으로 표시</string>
+    <string name="feedback_screenshots_hint">최대 5장 · 길게 눌러 순서 변경</string>
+    <string name="feedback_type_required">종류를 먼저 선택하세요</string>
+    <string name="feedback_discard_title">이 피드백을 삭제할까요?</string>
+    <string name="feedback_discard_message">작성한 내용은 저장되지 않습니다.</string>
+    <string name="feedback_discard_confirm">삭제</string>
     <string name="douban_sync_stage_idle">대기 중</string>
     <string name="douban_sync_stage_preparing">동기화 준비 중</string>
     <string name="douban_sync_stage_fetching_list">목록 가져오는 중</string>

@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.feedback
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -10,14 +11,15 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Lightbulb
-import androidx.compose.material.icons.rounded.MoreHoriz
-import androidx.compose.material.icons.rounded.SentimentDissatisfied
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,13 +41,28 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.LocalFullscreenSharedKey
 import com.tracktosearch.ui.component.ZoomableImageOverlay
+import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.zoomSharedSource
+import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.util.performHaptic
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import dev.chrisbanes.haze.hazeSource
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
 private const val MAX_SCREENSHOTS = 5
+private const val MAX_CONTENT_LENGTH = 2000
+private const val MIN_CONTENT_LENGTH = 5
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** 字数计数器只在快到上限时才提示颜色，平时是普通弱化色。 */
+private const val CONTENT_COUNTER_WARN_FROM = 1800
+
+/** 四个反馈类型的固定顺序，与 [feedbackTypeLabel] 的映射对应。 */
+private val FEEDBACK_TYPES = listOf("FEATURE", "BUG", "UX", "OTHER")
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun NewFeedbackScreen(
     onBack: () -> Unit,
@@ -53,6 +71,12 @@ fun NewFeedbackScreen(
 ) {
     val submitState by viewModel.submitState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val scrollState = rememberScrollState()
+    val hazeState = remember { HazeState() }
+    val hazeStyle = HazeMaterials.thin()
+    val hasContentUnderTopBar by remember {
+        derivedStateOf { scrollState.value > 0 }
+    }
 
     var selectedType by remember { mutableStateOf<String?>(null) }
     var content by remember { mutableStateOf("") }
@@ -60,6 +84,7 @@ fun NewFeedbackScreen(
 
     // 截图全屏查看
     var fullscreenIndex by remember { mutableStateOf<Int?>(null) }
+    var showDiscardDialog by remember { mutableStateOf(false) }
 
     // 图片选择器
     val pickImageLauncher = rememberLauncherForActivityResult(
@@ -85,7 +110,18 @@ fun NewFeedbackScreen(
         }
     }
 
-    val isSubmitting = submitState is FeedbackViewModel.SubmitState.Uploading || submitState is FeedbackViewModel.SubmitState.Submitting
+    val isSubmitting = submitState is FeedbackViewModel.SubmitState.Uploading ||
+        submitState is FeedbackViewModel.SubmitState.Submitting
+    val hasDraft = selectedType != null || content.isNotBlank() || screenshots.isNotEmpty()
+    val canSubmit = selectedType != null &&
+        content.length >= MIN_CONTENT_LENGTH &&
+        !isSubmitting
+
+    // 打了半页字被返回键清空是这页最容易犯的错，有草稿就先问一句
+    val requestBack: () -> Unit = {
+        if (hasDraft && !isSubmitting) showDiscardDialog = true else onBack()
+    }
+    BackHandler(enabled = hasDraft && !isSubmitting) { showDiscardDialog = true }
 
     // 全屏查看器打开时把该 key 广播给缩略图源侧，让源侧置不可见，
     // 保证同一 key 同时只有一侧是 target（否则缩放转场方向会反）
@@ -95,147 +131,183 @@ fun NewFeedbackScreen(
     CompositionLocalProvider(LocalFullscreenSharedKey provides fullscreenSharedKey) {
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.feedback_new), fontWeight = FontWeight.ExtraBold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack, enabled = !isSubmitting) {
-                        Icon(
-                            Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = stringResource(R.string.content_desc_back)
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-            )
-        },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 类型选择 — 四个 chip 宽度符合文字宽度，左对齐排列
-            Text(stringResource(R.string.feedback_select_type), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.Start)
+            val topBarHeight = 64.dp +
+                WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState)
+                    // 原先是固定高度的 Column，键盘弹起后提交按钮被顶出屏幕、
+                    // 大字号下类型 chip 也会被挤掉
+                    .verticalScroll(scrollState)
+                    .padding(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = topBarHeight + 8.dp,
+                        bottom = 24.dp +
+                            WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                    ),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                FeedbackTypeChip(
-                    labelRes = R.string.feedback_type_feature,
-                    color = Color(0xFF34D399),
-                    icon = Icons.Rounded.Lightbulb,
-                    selected = selectedType == "FEATURE"
+                NewFeedbackSectionLabel(text = stringResource(R.string.feedback_select_type))
+                // 单行 Row 在窄屏或大字号下会把第四个 chip 挤出去，改成自动换行
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    selectedType = if (selectedType == "FEATURE") null else "FEATURE"
-                }
-                FeedbackTypeChip(
-                    labelRes = R.string.feedback_type_bug,
-                    color = Color(0xFFFB7185),
-                    icon = Icons.Rounded.BugReport,
-                    selected = selectedType == "BUG"
-                ) {
-                    selectedType = if (selectedType == "BUG") null else "BUG"
-                }
-                FeedbackTypeChip(
-                    labelRes = R.string.feedback_type_ux,
-                    color = Color(0xFFFBBF24),
-                    icon = Icons.Rounded.SentimentDissatisfied,
-                    selected = selectedType == "UX"
-                ) {
-                    selectedType = if (selectedType == "UX") null else "UX"
-                }
-                FeedbackTypeChip(
-                    labelRes = R.string.feedback_type_other,
-                    color = Color(0xFF9CA3AF),
-                    icon = Icons.Rounded.MoreHoriz,
-                    selected = selectedType == "OTHER"
-                ) {
-                    selectedType = if (selectedType == "OTHER") null else "OTHER"
-                }
-            }
-
-            // 正文
-            OutlinedTextField(
-                value = content,
-                onValueChange = { if (it.length <= 2000) content = it },
-                modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
-                placeholder = { Text(stringResource(R.string.feedback_content_placeholder)) },
-                label = { Text(stringResource(R.string.feedback_content_label)) },
-                isError = content.isNotEmpty() && content.length < 5,
-                supportingText = {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        if (content.isNotEmpty() && content.length < 5) {
-                            Text(stringResource(R.string.feedback_content_too_short), color = MaterialTheme.colorScheme.error)
-                        }
-                        Text("${content.length}/2000", fontSize = 11.sp)
-                    }
-                },
-                enabled = !isSubmitting
-            )
-
-            // 截图
-            Text(stringResource(R.string.feedback_screenshots), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            ScreenshotRow(
-                screenshots = screenshots,
-                enabled = !isSubmitting,
-                sharedKeyPrefix = "fb-new",
-                onAddClick = { pickImageLauncher.launch("image/*") },
-                onRemoveClick = { index -> screenshots = screenshots.toMutableList().apply { removeAt(index) } },
-                onImageClick = { index -> fullscreenIndex = index },
-                onReorder = { from, to ->
-                    screenshots = screenshots.toMutableList().apply {
-                        add(to, removeAt(from))
-                    }
-                }
-            )
-
-            // 错误信息
-            (submitState as? FeedbackViewModel.SubmitState.Error)?.let {
-                Text(it.message, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
-            }
-
-            // 提交按钮
-            Button(
-                onClick = {
-                    if (selectedType != null && content.length >= 5) {
-                        viewModel.submit(
-                            type = selectedType!!,
-                            content = content.trim(),
-                            screenshotBytes = screenshots.map { it.first },
-                            screenshotMimeTypes = screenshots.map { it.second }
+                    FEEDBACK_TYPES.forEach { type ->
+                        FeedbackTypeChip(
+                            type = type,
+                            selected = selectedType == type,
+                            enabled = !isSubmitting,
+                            onClick = {
+                                selectedType = if (selectedType == type) null else type
+                            }
                         )
                     }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = selectedType != null && content.length >= 5 && !isSubmitting
-            ) {
-                if (isSubmitting) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    val progressText = when (val s = submitState) {
-                        is FeedbackViewModel.SubmitState.Uploading ->
-                            stringResource(R.string.feedback_uploading, s.current + 1, s.total)
-                        is FeedbackViewModel.SubmitState.Submitting ->
-                            stringResource(R.string.feedback_submitting)
-                        else -> stringResource(R.string.feedback_submitting)
-                    }
-                    Text(text = progressText, fontWeight = FontWeight.Bold)
-                } else {
+                }
+                // 正文写够了但没选类型时，提交键是灰的却看不出为什么
+                if (selectedType == null && content.isNotEmpty()) {
                     Text(
-                        text = stringResource(R.string.feedback_submit),
-                        fontWeight = FontWeight.Bold
+                        text = stringResource(R.string.feedback_type_required),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
+
+                OutlinedTextField(
+                    value = content,
+                    onValueChange = { if (it.length <= MAX_CONTENT_LENGTH) content = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 140.dp),
+                    placeholder = { Text(stringResource(R.string.feedback_content_placeholder)) },
+                    label = { Text(stringResource(R.string.feedback_content_label)) },
+                    isError = content.isNotEmpty() && content.length < MIN_CONTENT_LENGTH,
+                    shape = RoundedCornerShape(16.dp),
+                    supportingText = {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            if (content.isNotEmpty() && content.length < MIN_CONTENT_LENGTH) {
+                                Text(
+                                    text = stringResource(R.string.feedback_content_too_short),
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            } else {
+                                Spacer(Modifier.width(0.dp))
+                            }
+                            Text(
+                                text = "${content.length}/$MAX_CONTENT_LENGTH",
+                                fontSize = 11.sp,
+                                // 只在快到上限时变色，平时不要一直红着催人
+                                color = if (content.length >= CONTENT_COUNTER_WARN_FROM) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        }
+                    },
+                    enabled = !isSubmitting
+                )
+
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    NewFeedbackSectionLabel(text = stringResource(R.string.feedback_screenshots))
+                    // 上限和长按排序原先只有代码知道
+                    Text(
+                        text = stringResource(R.string.feedback_screenshots_hint),
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                ScreenshotRow(
+                    screenshots = screenshots,
+                    enabled = !isSubmitting,
+                    sharedKeyPrefix = "fb-new",
+                    onAddClick = { pickImageLauncher.launch("image/*") },
+                    onRemoveClick = { index ->
+                        screenshots = screenshots.toMutableList().apply { removeAt(index) }
+                    },
+                    onImageClick = { index -> fullscreenIndex = index },
+                    onReorder = { from, to ->
+                        screenshots = screenshots.toMutableList().apply {
+                            add(to, removeAt(from))
+                        }
+                    }
+                )
+
+                (submitState as? FeedbackViewModel.SubmitState.Error)?.let {
+                    FeedbackNoticeBanner(
+                        icon = Icons.Rounded.ErrorOutline,
+                        text = it.message,
+                        accent = MaterialTheme.colorScheme.error
+                    )
+                }
+
+                SubmitFeedbackButton(
+                    submitState = submitState,
+                    isSubmitting = isSubmitting,
+                    enabled = canSubmit,
+                    onSubmit = {
+                        selectedType?.let { type ->
+                            viewModel.submit(
+                                type = type,
+                                content = content.trim(),
+                                screenshotBytes = screenshots.map { it.first },
+                                screenshotMimeTypes = screenshots.map { it.second }
+                            )
+                        }
+                    }
+                )
             }
+
+            NewFeedbackTopBar(
+                hazeState = hazeState,
+                hazeStyle = hazeStyle,
+                isContentUnderTopBar = hasContentUnderTopBar,
+                backEnabled = !isSubmitting,
+                onBack = requestBack
+            )
         }
+    }
+
+    if (showDiscardDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardDialog = false },
+            title = { Text(stringResource(R.string.feedback_discard_title)) },
+            text = { Text(stringResource(R.string.feedback_discard_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDiscardDialog = false
+                        onBack()
+                    }
+                ) {
+                    Text(
+                        text = stringResource(R.string.feedback_discard_confirm),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardDialog = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
     }
 
     // 截图全屏查看
@@ -247,6 +319,120 @@ fun NewFeedbackScreen(
         onDismiss = { fullscreenIndex = null }
     )
     } // CompositionLocalProvider(LocalFullscreenSharedKey)
+}
+
+/** 小标题：类型 / 截图两段共用。 */
+@Composable
+private fun NewFeedbackSectionLabel(text: String) {
+    Text(
+        text = text,
+        fontSize = 14.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontWeight = FontWeight.SemiBold
+    )
+}
+
+/** 写新反馈顶栏：与列表 / 详情 / 消息页同一套 haze 贴顶写法。 */
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun NewFeedbackTopBar(
+    hazeState: HazeState,
+    hazeStyle: HazeBlurStyle,
+    isContentUnderTopBar: Boolean,
+    backEnabled: Boolean,
+    onBack: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .hazeTopBar(
+                state = hazeState,
+                style = hazeStyle,
+                blurRadius = 24.dp,
+                isContentUnderTopBar = isContentUnderTopBar
+            )
+            // 顶栏覆盖内容，拦截空白区域点击，避免穿透到下面的输入框
+            .clickable(enabled = false, onClick = {})
+    ) {
+        Spacer(modifier = Modifier.statusBarsPadding())
+        TopAppBar(
+            title = {
+                Text(
+                    text = stringResource(R.string.feedback_new),
+                    fontWeight = FontWeight.ExtraBold
+                )
+            },
+            navigationIcon = {
+                IconButton(onClick = onBack, enabled = backEnabled) {
+                    Icon(
+                        Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = stringResource(R.string.content_desc_back)
+                    )
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+            windowInsets = WindowInsets(0, 0, 0, 0)
+        )
+    }
+}
+
+/**
+ * 提交按钮。
+ *
+ * 上传是逐张走的，原先只有一个转圈 + 「上传截图 (2/5)」文字；进度条能一眼看出还剩多少。
+ */
+@Composable
+private fun SubmitFeedbackButton(
+    submitState: FeedbackViewModel.SubmitState,
+    isSubmitting: Boolean,
+    enabled: Boolean,
+    onSubmit: () -> Unit
+) {
+    val view = LocalView.current
+    val uploading = submitState as? FeedbackViewModel.SubmitState.Uploading
+    Button(
+        onClick = {
+            view.performHaptic(HapticType.CLICK)
+            onSubmit()
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp),
+        shape = RoundedCornerShape(16.dp),
+        enabled = enabled
+    ) {
+        if (isSubmitting) {
+            if (uploading != null && uploading.total > 0) {
+                CircularProgressIndicator(
+                    progress = { uploading.current.toFloat() / uploading.total },
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            } else {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = if (uploading != null) {
+                    stringResource(
+                        R.string.feedback_uploading,
+                        (uploading.current + 1).coerceAtMost(uploading.total),
+                        uploading.total
+                    )
+                } else {
+                    stringResource(R.string.feedback_submitting)
+                },
+                fontWeight = FontWeight.Bold
+            )
+        } else {
+            Text(stringResource(R.string.feedback_submit), fontWeight = FontWeight.Bold)
+        }
+    }
 }
 
 /**
@@ -294,8 +480,8 @@ private fun ScreenshotRow(
                             scaleY = if (isDragging) 1.08f else 1f
                             shadowElevation = if (isDragging) 12f else 0f
                         }
-                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
-                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .clickable(enabled = enabled) { onImageClick(index) },
                     contentAlignment = Alignment.Center
                 ) {
@@ -314,22 +500,25 @@ private fun ScreenshotRow(
                             // 保证同一 key 同时只有一侧是 target
                             .zoomSharedSource(key = sharedKeyPrefix?.let { "$it-$index" })
                     )
-                    // 右上角删除按钮
+                    // 右上角删除按钮：原先 20dp 且没有 contentDescription，
+                    // 手指点不准、读屏也念不出。放到 36dp——再大就会盖住缩略图中心，
+                    // 变成想点开预览反而删了图
                     if (enabled) {
                         Box(
                             Modifier
                                 .align(Alignment.TopEnd)
-                                .padding(2.dp)
-                                .size(20.dp)
-                                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                                .size(36.dp)
                                 .clickable { onRemoveClick(index) },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Rounded.Close,
-                                contentDescription = null,
+                                contentDescription = stringResource(R.string.cd_delete),
                                 tint = Color.White,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                    .padding(3.dp)
                             )
                         }
                     }
@@ -338,39 +527,70 @@ private fun ScreenshotRow(
         }
         if (screenshots.size < MAX_SCREENSHOTS && enabled) {
             item(key = "add") {
+                val addLabel = stringResource(R.string.feedback_screenshots)
                 Box(
                     Modifier
                         .size(80.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                        .background(
+                            MaterialTheme.colorScheme.surfaceVariant,
+                            RoundedCornerShape(10.dp)
+                        )
                         .clickable { onAddClick() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("+", fontSize = 24.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // 原先是个 "+" 字符，读屏念成加号、字形还跟着系统字体走
+                    Icon(
+                        imageVector = Icons.Rounded.AddPhotoAlternate,
+                        contentDescription = addLabel,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
             }
         }
     }
 }
 
+/** 类型胶囊：换成 M3 FilterChip，选中语义与触控尺寸由组件给，配色走共用的类型强调色。 */
 @Composable
 private fun FeedbackTypeChip(
-    labelRes: Int,
-    color: Color,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    type: String,
     selected: Boolean,
-    modifier: Modifier = Modifier,
+    enabled: Boolean,
     onClick: () -> Unit
 ) {
-    Surface(
-        modifier = modifier.clickable { onClick() },
-        shape = RoundedCornerShape(8.dp),
-        color = if (selected) color.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface,
-        tonalElevation = if (selected) 0.dp else 1.dp,
-        shadowElevation = if (selected) 0.dp else 1.dp
-    ) {
-        Row(modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = if (selected) color else MaterialTheme.colorScheme.onSurface)
-            Text(text = stringResource(labelRes), fontSize = 12.sp, maxLines = 1, color = if (selected) color else MaterialTheme.colorScheme.onSurface)
-        }
-    }
+    val accent = feedbackTypeColor(type)
+    val view = LocalView.current
+    FilterChip(
+        selected = selected,
+        enabled = enabled,
+        onClick = {
+            view.performHaptic(HapticType.CLICK)
+            onClick()
+        },
+        label = { Text(text = feedbackTypeLabel(type), fontSize = 13.sp, maxLines = 1) },
+        leadingIcon = {
+            Icon(
+                imageVector = feedbackTypeIcon(type),
+                contentDescription = null,
+                modifier = Modifier.size(16.dp)
+            )
+        },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = accent.copy(alpha = 0.16f),
+            selectedLabelColor = accent,
+            selectedLeadingIconColor = accent
+        ),
+        shape = RoundedCornerShape(12.dp)
+    )
 }
+
+
+
+
+
+
+
+
+
+

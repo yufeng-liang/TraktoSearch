@@ -67,6 +67,15 @@ val Frost = Color(0xFF1E1E3A)       // 搜索栏玻璃底色
 val RatingGold = Color(0xFFFFD54F)
 val RatingGoldDim = Color(0xFFFFD54F).copy(alpha = 0.7f)
 
+// ====== 反馈类型/状态固定色（四个反馈页共用，不随主题变化） ======
+// 浅色主题下小字号要压暗才够对比度，压暗逻辑见 FeedbackVisuals.feedbackAccent
+val FeedbackFeature = Color(0xFF34D399)   // 功能建议 — 薄荷绿
+val FeedbackBug = Color(0xFFFB7185)       // 问题反馈 — 珊瑚红
+val FeedbackUx = Color(0xFFFBBF24)        // 体验问题 — 琥珀黄
+val FeedbackOther = Color(0xFF9CA3AF)     // 其他 — 中性灰
+val FeedbackReplied = Color(0xFF10B981)   // 已回复 / 上传成功 — 翠绿
+val FeedbackDeveloper = Color(0xFF34D399) // 开发者角色标识 — 薄荷绿
+
 private val MonetDoubanGreenLight = Color(0xFF5E916A)
 private val MonetDoubanGreenDark = Color(0xFF78A985)
 
