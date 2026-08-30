@@ -79,8 +79,13 @@ import java.util.Random
  * 所以视觉上是同一块画面继续往下演，而不是两段动画拼接。
  *
  * 节奏见 [SplashQuoteTiming]：光晕扩散 → 海报浮起 → 台词逐行升起 → 出处淡入 →
- * 停留 3 或 5 秒（当天第一次看给足 5 秒）→ 光晕散开同时整层淡出，露出下面已经组合好的主界面。
+ * 停留 5 秒 → 光晕散开同时整层淡出，露出下面已经组合好的主界面。
  * 任意时刻轻触屏幕直接跳到散开阶段。
+ *
+ * 逐步浮现只演给当天第一次看的人。同一天再进 App 时整页一次摊开：海报、台词、出处、
+ * 印章从第一帧就都在，停留 3 秒后退场。逐行升起那一遍是给人认画面、从头念一遍用的，
+ * 已经看过之后它只是在挡路。系统关掉动效时走的也是这一条路——无障碍设置的意思是
+ * 不要动效，不是不要内容，所以那一档仍按完整可读时长停留。
  *
  * [continuesSystemSplash] 区分这一层是「接着场记板演」还是「后来才盖上来」：冷启动直接进主页时
  * 它紧贴着系统 splash，硬切才没有接缝；先落在登录页、之后才进主页的情况下屏幕上已经有别的画面，
@@ -117,23 +122,31 @@ fun SplashQuoteOverlay(
     // 正常播和关掉动效两条路径都按它计时：一条在演，一条静止，但给的阅读时间一样长。
     val readSpanMs = SplashQuoteTiming.stayStart(lineCount) +
         SplashQuoteTiming.stay(quote.isFirstToday)
+    // 整页一次摊开、不逐步浮现的两种情形：系统关掉了动效，以及今天已经看过这条台词。
+    // 逐行升起那一遍是给当天第一次看的人认画面、从头念一遍用的；同一天再进 App 时
+    // 那一秒多只是在挡路——内容都是同一份，早一点看全没有损失。
+    val instant = reduceMotion || !quote.isFirstToday
+    // 静止那条路留多久。关掉动效仍按完整可读时长算：无障碍设置的意思是不要动效，
+    // 不是不要内容。今天已经看过那一档只留停留时间——浮现本来要花的那一秒多现在不花了，
+    // 整层于是从 4.7 秒收到 3.4 秒。
+    val staticHoldMs = if (quote.isFirstToday) readSpanMs else SplashQuoteTiming.stay(false)
 
-    var bloom by remember { mutableStateOf(reduceMotion) }
-    var posterVisible by remember { mutableStateOf(reduceMotion) }
-    var visibleLines by remember { mutableIntStateOf(if (reduceMotion) lineCount else 0) }
-    var sourceVisible by remember { mutableStateOf(reduceMotion) }
-    var sealVisible by remember { mutableStateOf(reduceMotion) }
-    var skipVisible by remember { mutableStateOf(reduceMotion) }
+    var bloom by remember { mutableStateOf(instant) }
+    var posterVisible by remember { mutableStateOf(instant) }
+    var visibleLines by remember { mutableIntStateOf(if (instant) lineCount else 0) }
+    var sourceVisible by remember { mutableStateOf(instant) }
+    var sealVisible by remember { mutableStateOf(instant) }
+    var skipVisible by remember { mutableStateOf(instant) }
     var exiting by remember { mutableStateOf(false) }
     // 紧接系统 splash 的场合起手就是不透明（硬切），后来才盖上的场合从 0 淡进来。
-    // 关掉动效时同样不淡入：淡入本身就是动效。
-    var entered by remember { mutableStateOf(continuesSystemSplash || reduceMotion) }
+    // 整页一次摊开时同样不淡入：淡入本身就是逐步显示。
+    var entered by remember { mutableStateOf(continuesSystemSplash || instant) }
 
     LaunchedEffect(Unit) {
         onSplashQuoteShown()
         entered = true
-        if (reduceMotion) {
-            delay(readSpanMs)
+        if (instant) {
+            delay(staticHoldMs)
             exiting = true
             return@LaunchedEffect
         }
@@ -364,7 +377,10 @@ private fun QuoteLine(
         fontSize = fontSize.sp,
         lineHeight = (fontSize * lineHeightFactor).sp,
         fontFamily = FontFamily.Serif,
-        fontWeight = FontWeight.Medium,
+        // 600 而不是 500：衬线族在多数机器上只装了 400 和 700 两个字重，中间值按最近的一档取，
+        // 500 会被取回 400——写着 Medium，画出来是常规体，也就是「太细」的由来。600 落到 700
+        // 那一侧，装了可变字体的机器上还能拿到真正的 600。台词是这一层的主体，该比正文重一档。
+        fontWeight = FontWeight.SemiBold,
         fontStyle = if (isEnglish) FontStyle.Italic else FontStyle.Normal,
         letterSpacing = if (isEnglish) 0.006.em else 0.012.em,
         textAlign = TextAlign.Center

@@ -652,7 +652,9 @@ private fun CardLine(
         fontSize = fontSize.sp,
         lineHeight = (fontSize * lineHeightFactor).sp,
         fontFamily = FontFamily.Serif,
-        fontWeight = FontWeight.Medium,
+        // 与开屏台词同一档字重，理由见 SplashQuoteOverlay 的 QuoteLine：500 在只装了 400/700
+        // 的衬线族上会被取回常规体。卡片是要存下来分享的那一张，字更该压得住纸。
+        fontWeight = FontWeight.SemiBold,
         fontStyle = if (isEnglish) FontStyle.Italic else FontStyle.Normal,
         letterSpacing = if (isEnglish) 0.006.em else 0.012.em,
         textAlign = TextAlign.Center,

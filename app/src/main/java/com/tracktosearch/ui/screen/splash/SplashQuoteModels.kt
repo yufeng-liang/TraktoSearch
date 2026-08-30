@@ -46,11 +46,13 @@ data class SplashQuoteUi(
      */
     val keywordLatin: String?,
     /**
-     * 当天是不是第一次看到开屏台词，只用来选停留时长（见 [SplashQuoteTiming.stay]）。
+     * 当天是不是第一次看到开屏台词，决定这一层怎么演：逐行浮现还是整页一次摊开，
+     * 以及停留多久（见 [SplashQuoteTiming.stay] 与 SplashQuoteOverlay 的 instant）。
      *
      * 这个值由加载阶段一并算好塞进来，而不是让台词层自己去问存储：这一层只活几秒，
-     * 停留多久必须在第一帧就定下来。若改成 Overlay 里异步查，查得慢一点计时早就跑掉了，
-     * 「读得完」和「别挡路」两档时长会撞成竞态——同一台机器上两次启动都可能不一样。
+     * 演法和时长必须在第一帧就定下来。若改成 Overlay 里异步查，查得慢一点计时早就跑掉了，
+     * 「读得完」和「别挡路」两档会撞成竞态——同一台机器上两次启动都可能不一样，
+     * 更糟的是逐行浮现可能演到一半才知道今天已经看过。
      */
     val isFirstToday: Boolean,
 )
@@ -155,7 +157,10 @@ internal data class SplashPalette(
  * 停留时长按「今天是不是第一次看」分两档，见 [stay]：原型里只有一个 2000，实测四行台词读不完，
  * 提到 3000 也只够「已经读过、再扫一眼」。当天第一次看的人得先认海报再从头念，给 5000 才读得完整层；
  * 同一天再进 App 的仍是 3000——那时候多留一秒都是在挡路。
- * 整层总时长于是落在 4.5 秒（复看）到 6.5 秒（当天首看）之间，都还在「一次点击就能跳过」的容忍范围内。
+ *
+ * 前面这些浮现时刻只用在当天第一次看那一遍。同一天再进 App 时整页从第一帧就是全的
+ * （见 SplashQuoteOverlay 的 instant），[BLOOM_MS] 到 [SKIP_AT_MS] 这一段一个都不用等，
+ * 整层就是 [STAY_REPEAT_MS] 加 [EXIT_MS]。
  */
 internal object SplashQuoteTiming {
     const val BLOOM_MS = 400L
@@ -185,7 +190,4 @@ internal object SplashQuoteTiming {
 
     /** 读完这一条要留多久，取决于今天见过没有，见 [SplashQuoteUi.isFirstToday] */
     fun stay(isFirstToday: Boolean): Long = if (isFirstToday) STAY_FIRST_MS else STAY_REPEAT_MS
-
-    fun total(lineCount: Int, isFirstToday: Boolean): Long =
-        stayStart(lineCount) + stay(isFirstToday) + EXIT_MS
 }
