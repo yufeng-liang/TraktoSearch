@@ -268,7 +268,12 @@ internal fun SeasonsSection(
                         exit = shrinkVertically() + fadeOut()
                     ) {
                         val episodeList = episodes[season.number] ?: emptyList()
-                        Column(modifier = Modifier.padding(top = 6.dp)) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 6.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
                             if (episodeList.isEmpty()) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(18.dp).padding(2.dp),
