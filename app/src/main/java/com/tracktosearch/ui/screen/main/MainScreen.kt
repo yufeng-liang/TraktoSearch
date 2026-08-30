@@ -109,6 +109,8 @@ import com.tracktosearch.ui.component.NeumorphicActiveTab
 import com.tracktosearch.ui.component.OnboardingOverlay
 import com.tracktosearch.ui.component.LocalAmbientMotionActive
 import com.tracktosearch.ui.component.PageBackground
+import com.tracktosearch.ui.screen.search.CloudThemeProvider
+import com.tracktosearch.ui.screen.swiftie.SwiftieEggScreen
 import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.LocalBackdropSourceEnabled
 import com.tracktosearch.ui.component.VisualSurfaceKind
@@ -127,7 +129,6 @@ import com.tracktosearch.ui.screen.discover.DiscoverScreen
 import com.tracktosearch.ui.screen.feedback.FeedbackViewModel
 import com.tracktosearch.ui.screen.search.SearchScreen
 import com.tracktosearch.ui.screen.search.SearchSourceType
-import com.tracktosearch.ui.screen.settings.AccentColorDialog
 import com.tracktosearch.ui.screen.settings.SettingsScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchViewModel
@@ -246,17 +247,21 @@ fun MainScreen(
     // 新手引导
     val onboardingStorage = remember { OnboardingStorage(context.applicationContext) }
     val onboardingCompleted by onboardingStorage.isCompleted.collectAsState(initial = true)
-    val themeSelectionCompleted by onboardingStorage.isThemeSelectionCompleted.collectAsState(initial = true)
     val themeStorage = remember {
         EntryPointAccessors.fromApplication(context.applicationContext, ThemeStorageEntryPoint::class.java).themeStorage()
     }
-    val currentAccent by themeStorage.accentColor.collectAsState()
-    val currentCustomAccentArgb by themeStorage.customAccentArgb.collectAsState()
-    val currentVisualEffectMode by themeStorage.visualEffectMode.collectAsState()
-    val currentGlassVariant by themeStorage.glassVariant.collectAsState()
     val meshPreset by themeStorage.meshPreset.collectAsState()
     val meshEnabled by themeStorage.meshEnabled.collectAsState()
-    var showAccentOnboarding by remember { mutableStateOf(false) }
+    // 霉粉彩蛋页挂在这一层而不是 SearchScreen：设置页「关于」连点 3 次是三个入口之一
+    // （Spec §3.3），而设置页是 Pager 第 4 页，挂在第 1 页里从设置页触发就看不见
+    val cloudThemeManager = remember {
+        EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            CloudThemeProvider::class.java
+        ).cloudThemeManager()
+    }
+    val swiftieEggVisible by cloudThemeManager.swiftieEggVisible.collectAsState()
+    val swiftieUnlocked by cloudThemeManager.swiftieUnlocked.collectAsState()
     var showOnboarding by remember { mutableStateOf(false) }
     val tabRects = remember { mutableStateOf<List<Rect>>(emptyList()) }
     val connectivityObserver = remember {
@@ -297,10 +302,9 @@ fun MainScreen(
     // 悬浮导航显隐状态(提前声明,供 LaunchedEffect(onboardingCompleted) 使用)
     var isFabVisible by remember { mutableFloatStateOf(1f) }
 
-    LaunchedEffect(onboardingCompleted, themeSelectionCompleted) {
+    LaunchedEffect(onboardingCompleted) {
         if (onboardingCompleted == false) {
-            showAccentOnboarding = !themeSelectionCompleted
-            showOnboarding = themeSelectionCompleted
+            showOnboarding = true
             // 重置到搜索页，确保新手引导从搜索页开始
             // 同时强制显示底部导航(若设置页滚动时把它隐藏了)
             isFabVisible = 1f
@@ -308,48 +312,7 @@ fun MainScreen(
                 pagerState.scrollToPage(0)
                 selectedTab = 0
             }
-        } else if (onboardingCompleted == true && themeSelectionCompleted == false) {
-            // 半完成状态卡死修复: onboarding 已完成但主题选择未完成(如进程被杀打断)
-            // 仍需触发主题选择对话框,否则用户再也看不到入口
-            showAccentOnboarding = true
-            showOnboarding = false
         }
-    }
-
-    if (showAccentOnboarding) {
-        AccentColorDialog(
-            currentAccent = currentAccent,
-            customAccentArgb = currentCustomAccentArgb,
-            onCustomAccentSelected = { argb ->
-                scope.launch { themeStorage.setCustomAccent(argb) }
-            },
-            onAccentSelected = { accent ->
-                // 仅持久化色调选择，不关闭引导弹窗；由「完成」按钮统一推进
-                scope.launch { themeStorage.setAccentColor(accent) }
-            },
-            currentMode = currentVisualEffectMode,
-            currentVariant = currentGlassVariant,
-            onVisualEffectSelected = { mode, variant ->
-                // 仅持久化材质选择，不关闭引导弹窗，用户仍需选择强调色
-                scope.launch { themeStorage.setVisualEffectSelection(mode, variant) }
-            },
-            currentMeshPreset = MeshPreset.fromStorage(meshPreset),
-            currentMeshEnabled = meshEnabled,
-            onMeshSelected = { preset ->
-                scope.launch {
-                    themeStorage.setMeshEnabled(preset != null)
-                    if (preset != null) themeStorage.setMeshPreset(preset.name)
-                }
-            },
-            onDismiss = {
-                scope.launch {
-                    onboardingStorage.setThemeSelectionCompleted(true)
-                    showAccentOnboarding = false
-                    showOnboarding = true
-                }
-            },
-            dialogTitle = stringResource(R.string.onboarding_choose_theme)
-        )
     }
 
     // Pager 滑动 → 同步 selectedTab
@@ -1063,6 +1026,14 @@ fun MainScreen(
                     }
                 )
             }
+
+            // 霉粉彩蛋全屏页。已解锁再进来一定是重看纪念页（Spec §3.3）
+            SwiftieEggScreen(
+                visible = swiftieEggVisible,
+                onDismiss = { solved -> cloudThemeManager.onSwiftieEggDismissed(solved) },
+                onCommitUnlock = { cloudThemeManager.commitSwiftieUnlock() },
+                replay = swiftieUnlocked
+            )
 
         }
     }

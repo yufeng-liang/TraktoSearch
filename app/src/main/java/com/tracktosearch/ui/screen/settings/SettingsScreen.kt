@@ -84,6 +84,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -125,6 +126,7 @@ import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.CloudThemeManager
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.UpdateDialog
@@ -143,11 +145,22 @@ import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
+
+/** EntryPoint 用于在设置页拿到 CloudThemeManager（关于页版本号连点拉起彩蛋题面） */
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface SettingsCloudThemeProvider {
+    fun cloudThemeManager(): CloudThemeManager
+}
 
 private enum class ConsistencyCheckBlocker {
     DOUBAN_LOGIN,
@@ -369,6 +382,17 @@ fun SettingsScreen(
     // 背景光晕：预设 + 开关（用于"色调与材质"弹窗内同材质的背景光晕菜单）
     val currentMeshPreset by viewModel.meshPreset.collectAsStateWithLifecycle()
     val currentMeshEnabled by viewModel.meshEnabled.collectAsStateWithLifecycle()
+    // 霉粉彩蛋解锁位：未解锁时背景光晕列表里整项不出现「星云」
+    val swiftieUnlocked by viewModel.swiftieUnlocked.collectAsStateWithLifecycle()
+    // 关于页版本号连点 3 次拉起彩蛋题面：题面显隐挂在 CloudThemeManager 上
+    val cloudThemeManager = remember {
+        EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            SettingsCloudThemeProvider::class.java
+        ).cloudThemeManager()
+    }
+    var versionTapCount by remember { mutableIntStateOf(0) }
+    var lastVersionTapAt by remember { mutableLongStateOf(0L) }
 
     val openUrl: (String) -> Unit = { url ->
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
@@ -757,7 +781,19 @@ fun SettingsScreen(
                     viewModel = viewModel,
                     hazeState = settingsHazeState,
                     isCheckingUpdate = isCheckingUpdate,
-                    onVersionClick = { viewModel.checkUpdate() },
+                    onVersionClick = {
+                        // 版本号连点 3 次（每两下间隔 1.5s 内）拉起霉粉彩蛋题面，超时归零；
+                        // 未凑满 3 下时仍是原本的「检查更新」
+                        val now = System.currentTimeMillis()
+                        versionTapCount = if (now - lastVersionTapAt > 1500) 1 else versionTapCount + 1
+                        lastVersionTapAt = now
+                        if (versionTapCount >= 3) {
+                            versionTapCount = 0
+                            cloudThemeManager.openSwiftieEgg()
+                        } else {
+                            viewModel.checkUpdate()
+                        }
+                    },
                     onChangelogClick = {
                         viewModel.loadChangelog()
                         showChangelogDialog = true
@@ -847,6 +883,7 @@ fun SettingsScreen(
                 viewModel.setMeshEnabled(preset != null)
                 if (preset != null) viewModel.setMeshPreset(preset.name)
             },
+            swiftieUnlocked = swiftieUnlocked,
             onDismiss = { showAccentColorDialog = false }
         )
     }

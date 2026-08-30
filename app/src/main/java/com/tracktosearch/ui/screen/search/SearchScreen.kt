@@ -144,6 +144,7 @@ import com.airbnb.lottie.compose.rememberLottieComposition
 import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.data.local.CloudPermissionStorage
+import com.tracktosearch.data.local.OnboardingStorage
 import com.tracktosearch.ui.component.DropdownAnchorMenu
 import com.tracktosearch.ui.theme.DesignToken
 import com.tracktosearch.data.local.SearchHistoryItem
@@ -170,6 +171,7 @@ import com.tracktosearch.ui.screen.ai.sceneEventForSearch
 import com.tracktosearch.ui.screen.ai.searchAnchorFor
 import com.tracktosearch.ui.screen.ai.shouldStartSpriteOverlay
 import com.tracktosearch.ui.screen.ai.AI_SPRITE_IDLE_DELAY_MS
+import com.tracktosearch.ui.screen.swiftie.SwiftieEggController
 import com.tracktosearch.ui.component.DiscoverModalBottomSheet
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
@@ -312,6 +314,15 @@ fun SearchScreen(
     val showPermissionDialog by cloudThemeManager.showPermissionDialog.collectAsStateWithLifecycle()
     val easterEggRes by cloudThemeManager.easterEggRes.collectAsStateWithLifecycle()
     val easterMessageRes by cloudThemeManager.easterMessageRes.collectAsStateWithLifecycle()
+    // 霉粉彩蛋：题面可见性进 AI 精灵的 blocking 集合，解题位控制搜索框是否还拦截关键词。
+    // 彩蛋页本身挂在 MainScreen（Pager 之上），这里只读状态
+    val swiftieEggVisible by cloudThemeManager.swiftieEggVisible.collectAsStateWithLifecycle()
+    val swiftieQuizSolved by cloudThemeManager.swiftieQuizSolved.collectAsStateWithLifecycle()
+    // 新手引导期间三个入口全部禁用（Spec §3.3）：OnboardingOverlay 是全屏遮罩，会与彩蛋页打架
+    val onboardingStorage = remember { OnboardingStorage(context.applicationContext) }
+    val onboardingCompleted by onboardingStorage.isCompleted.collectAsStateWithLifecycle(
+        initialValue = true
+    )
     val aiSpriteCloudDescription = stringResource(R.string.ai_sprite_cloud_description)
     var localAiSpriteCenterVisible by remember { mutableStateOf(false) }
     val showAiSpriteCenter = externallyControlledAiSpriteCenterVisible ?: localAiSpriteCenterVisible
@@ -376,6 +387,7 @@ fun SearchScreen(
         showAiSpriteCenter,
         showPermissionDialog,
         easterEggRes,
+        swiftieEggVisible,
         searchBoxBounds,
         showAiSpriteMotion
     ) {
@@ -383,6 +395,7 @@ fun SearchScreen(
         val hasBlockingState = showAiSpriteCenter ||
             showPermissionDialog ||
             easterEggRes != null ||
+            swiftieEggVisible ||
             isSearchFocused ||
             searchQuery.isNotBlank() ||
             nextBounds == null
@@ -401,6 +414,7 @@ fun SearchScreen(
             hasBlockingOverlay = showAiSpriteCenter ||
                 showPermissionDialog ||
                 easterEggRes != null ||
+                swiftieEggVisible ||
                 isSearchFocused ||
                 searchQuery.isNotBlank()
         )
@@ -431,11 +445,13 @@ fun SearchScreen(
         showAiSpriteCenter,
         showPermissionDialog,
         easterEggRes,
+        swiftieEggVisible,
         showAiSpriteMotion
     ) {
         val blocked = showAiSpriteCenter ||
             showPermissionDialog ||
             easterEggRes != null ||
+            swiftieEggVisible ||
             isSearchFocused ||
             searchQuery.isNotBlank() ||
             showAiSpriteMotion
@@ -464,8 +480,8 @@ fun SearchScreen(
         }
     }
 
-    LaunchedEffect(showPermissionDialog, easterEggRes, showAiSpriteCenter) {
-        if (showPermissionDialog || easterEggRes != null || showAiSpriteCenter) {
+    LaunchedEffect(showPermissionDialog, easterEggRes, swiftieEggVisible, showAiSpriteCenter) {
+        if (showPermissionDialog || easterEggRes != null || swiftieEggVisible || showAiSpriteCenter) {
             interruptAiSprite(AiSpriteInterruptReason.BLOCKED)
         }
     }
@@ -581,6 +597,7 @@ fun SearchScreen(
         CloudIconWithAnimation(
             cloudThemeManager = cloudThemeManager,
             isActive = isActive,
+            onboardingCompleted = onboardingCompleted,
             onLongClick = {
                 interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                 setAiSpriteCenterVisible(true)
@@ -834,7 +851,13 @@ fun SearchScreen(
                         },
                         onSearch = {
                             interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                            if (BuildConfig.DEBUG && searchQuery.trim() == "13638719007") {
+                            if (onboardingCompleted &&
+                                !swiftieQuizSolved &&
+                                SwiftieEggController.matchesKeyword(searchQuery)
+                            ) {
+                                // 不发起搜索；searchQuery 保留在框里，用户想搜再按一次（Spec §3.3）
+                                cloudThemeManager.openSwiftieEgg()
+                            } else if (BuildConfig.DEBUG && searchQuery.trim() == "13638719007") {
                                 onSpiderTest?.invoke()
                             } else if (searchQuery.isNotBlank()) {
                                 // 空输入不拦截会写入空历史并发起无效搜索，blank 时直接忽略
@@ -1936,6 +1959,7 @@ private fun getLastKnownLocation(context: android.content.Context): Location? {
 private fun CloudIconWithAnimation(
     cloudThemeManager: CloudThemeManager,
     isActive: Boolean,
+    onboardingCompleted: Boolean,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1950,6 +1974,7 @@ private fun CloudIconWithAnimation(
             CloudEasterEgg(
                 themeManager = cloudThemeManager,
                 modifier = Modifier.fillMaxSize(),
+                onboardingCompleted = onboardingCompleted,
                 onLongClick = onLongClick
             )
         } else {
@@ -1961,7 +1986,7 @@ private fun CloudIconWithAnimation(
                     .combinedClickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null,
-                        onClick = { cloudThemeManager.onCloudClicked() },
+                        onClick = { cloudThemeManager.onCloudClicked(onboardingCompleted) },
                         onLongClick = onLongClick
                     )
             )

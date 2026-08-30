@@ -4,8 +4,14 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.location.Location
 import com.tracktosearch.R
+import com.tracktosearch.data.local.SwiftieEggStorage
+import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.repository.WeatherInfo
 import com.tracktosearch.data.repository.WeatherRepository
+import com.tracktosearch.ui.screen.swiftie.CloudAction
+import com.tracktosearch.ui.screen.swiftie.SwiftieEggController
+import com.tracktosearch.ui.theme.MeshPreset
+import com.tracktosearch.ui.theme.MonetAccent
 import com.tracktosearch.util.Holiday
 import com.tracktosearch.util.HolidayDetector
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -66,7 +72,9 @@ private const val CACHE_VALID_MS = 6 * 60 * 60 * 1000L // 6 小时
 class CloudThemeManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val weatherRepository: WeatherRepository,
-    private val holidayDetector: HolidayDetector
+    private val holidayDetector: HolidayDetector,
+    private val swiftieEggStorage: SwiftieEggStorage,
+    private val themeStorage: ThemeStorage
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val prefs: SharedPreferences = context.getSharedPreferences(CACHE_PREFS_NAME, Context.MODE_PRIVATE)
@@ -94,6 +102,21 @@ class CloudThemeManager @Inject constructor(
     // 夜晚交替状态
     private val _isNightAlternate = MutableStateFlow(false)
     val isNightAlternate: StateFlow<Boolean> = _isNightAlternate
+
+    // 霉粉彩蛋题面是否正在显示。SearchScreen 用它加入 blocking 集合，避免 AI 精灵乱入。
+    private val _swiftieEggVisible = MutableStateFlow(false)
+    val swiftieEggVisible: StateFlow<Boolean> = _swiftieEggVisible
+
+    val swiftieUnlocked: StateFlow<Boolean> = swiftieEggStorage.unlocked
+
+    // 解题机会是否已消耗：搜索关键词拦截只在未解题时生效
+    val swiftieQuizSolved: StateFlow<Boolean> = swiftieEggStorage.quizSolved
+
+    init {
+        scope.launch {
+            swiftieEggStorage.migrateLegacyNebulaUser(themeStorage.readMeshPresetSnapshot())
+        }
+    }
 
     // 随机去重：记录最近播放过的彩蛋索引
     private val recentEasterIndices = ArrayDeque<Int>(2)
@@ -147,24 +170,66 @@ class CloudThemeManager @Inject constructor(
         }
     }
 
-    /** 用户点击白云，触发彩蛋 */
-    fun onCloudClicked() {
-        // 未授权时，弹出权限提示而不是触发彩蛋
-        if (!_hasLocationPermission.value) {
-            _showPermissionDialog.value = true
-            return
-        }
+    /**
+     * 用户点击白云。分派由 [SwiftieEggController.resolveCloudAction] 决定，
+     * 本方法只负责推进计数和落状态。
+     *
+     * @param onboardingCompleted 新手引导是否已完成。未完成时点击被完全忽略、计数也不推进，
+     *   否则用户走完引导第一下就已经不是「第一下」了。
+     */
+    fun onCloudClicked(onboardingCompleted: Boolean) {
+        if (!SwiftieEggController.shouldCountCloudClick(onboardingCompleted)) return
 
-        // 选择彩蛋（避免连续重复）
+        val countBefore = swiftieEggStorage.cloudClickCount.value
+        val action = SwiftieEggController.resolveCloudAction(
+            clickCountBefore = countBefore,
+            quizSolved = swiftieEggStorage.quizSolved.value,
+            onboardingCompleted = onboardingCompleted,
+            hasLocationPermission = _hasLocationPermission.value
+        )
+        scope.launch { swiftieEggStorage.incrementCloudClick() }
+
+        when (action) {
+            CloudAction.IGNORED -> Unit
+            CloudAction.SWIFTIE_EGG -> _swiftieEggVisible.value = true
+            CloudAction.LOCATION_PERMISSION -> _showPermissionDialog.value = true
+            CloudAction.RANDOM_LOTTIE -> showRandomEasterEgg()
+        }
+    }
+
+    /** 供搜索关键词命中、关于页连点等其他入口直接拉起题面。 */
+    fun openSwiftieEgg() {
+        _swiftieEggVisible.value = true
+    }
+
+    fun onSwiftieEggDismissed(solved: Boolean) {
+        _swiftieEggVisible.value = false
+        // 正常路径在 T1100 已经写过了。这里兜住提前退出的情况（「减少动效」直接给终态、
+        // 序列中途被杀等）。三个写入都幂等，重复调用没有副作用。
+        if (solved) commitSwiftieUnlock()
+    }
+
+    /**
+     * 主题接管。**必须在扩散铺满全屏的那一帧调用**（`SwiftieTimeline.THEME_COMMIT_AT`），
+     * 早于此会露出颜色跳变。不可逆，不保存解锁前旧值（Spec §9）。
+     */
+    fun commitSwiftieUnlock() {
+        scope.launch {
+            swiftieEggStorage.markQuizSolved()
+            swiftieEggStorage.markUnlocked()
+            themeStorage.setAccentColor(MonetAccent.RENOIR)
+            themeStorage.setMeshPreset(MeshPreset.NEBULA.name)
+            themeStorage.setMeshEnabled(true)
+        }
+    }
+
+    private fun showRandomEasterEgg() {
         val available = EASTER_EGGS.indices.filter { it !in recentEasterIndices }
         val index = if (available.isNotEmpty()) available.random() else EASTER_EGGS.indices.random()
-
         if (recentEasterIndices.size >= 2) recentEasterIndices.removeFirst()
         recentEasterIndices.addLast(index)
-
         val egg = EASTER_EGGS[index]
         _easterEggRes.value = egg.animRes
-        // 从该动画的候选文案池随机选一条
         _easterMessageRes.value = egg.messageResIds.random()
     }
 

@@ -1,0 +1,40 @@
+package com.tracktosearch.ui.screen.swiftie
+
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import com.tracktosearch.R
+
+/**
+ * 霉粉彩蛋取色的唯一来源。灯箱是「一张复刻图」，这些值**不随深色模式变化**。
+ */
+object SwiftiePalette {
+    /** 闪粉玫红。仅用于无对比度要求的大字号图形——对白字只有 3.98:1。 */
+    val Glitter = Color(0xFFE83A72)
+
+    /** 箔面高光档，配合 [Glitter] 做渐变。 */
+    val GlitterLight = Color(0xFFFF6E96)
+
+    /** 箔面暗部档。 */
+    val GlitterDeep = Color(0xFFC42356)
+
+    /** 承载白色文字的填充块专用，对白字 5.04:1，合规。 */
+    val Badge = Color(0xFFD0295F)
+
+    /** 标题 / 未知数 X / 落款 */
+    val RoyalBlue = Color(0xFF1E3FC4)
+
+    val SkyBlue = Color(0xFF7EC8E8)
+    val CloudPink = Color(0xFFF4A6C8)
+    val Lavender = Color(0xFFC9A8DE)
+    val PeachYellow = Color(0xFFF7D89B)
+    val PinkWhite = Color(0xFFFBE4EE)
+}
+
+object SwiftieFonts {
+    /** 灯箱标题与签名：Pacifico，粗圆花体 */
+    val Script = FontFamily(Font(R.font.swiftie_script))
+
+    /** 算式与输入数字：Gochi Hand，粗手绘马克笔 */
+    val Marker = FontFamily(Font(R.font.swiftie_marker))
+}

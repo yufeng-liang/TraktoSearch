@@ -15,7 +15,7 @@ import com.tracktosearch.ui.theme.MeshPreset
 @Composable
 fun PageBackground(
     modifier: Modifier = Modifier,
-    preset: MeshPreset = MeshPreset.NEBULA,
+    preset: MeshPreset = MeshPreset.BLOOM,
     enabled: Boolean = true,
     motionActive: () -> Boolean = { true },
 ) {

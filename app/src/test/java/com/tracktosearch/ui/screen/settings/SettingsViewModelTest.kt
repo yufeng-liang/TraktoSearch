@@ -206,6 +206,7 @@ class SettingsViewModelTest {
             imageTrafficStorage = mockk(relaxed = true),
             aiTasteStorage = aiTasteStorage,
             statisticsSnapshotStore = mockk(relaxed = true),
+            swiftieEggStorage = mockk(relaxed = true),
             context = context
         )
     }

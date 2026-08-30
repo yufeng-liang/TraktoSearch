@@ -158,6 +158,8 @@ internal fun AccentColorDialog(
     currentMeshPreset: MeshPreset,
     currentMeshEnabled: Boolean,
     onMeshSelected: (MeshPreset?) -> Unit,
+    /** 未解锁霉粉彩蛋时隐藏「星云」选项 */
+    swiftieUnlocked: Boolean,
     onDismiss: () -> Unit,
     dialogTitle: String? = null
 ) {
@@ -218,48 +220,68 @@ internal fun AccentColorDialog(
         val title: String,
         val description: String,
         // 主题色驱动动效：标题旁显「跟随主题色」胶囊标签
-        val isThemeDriven: Boolean = false
+        val isThemeDriven: Boolean = false,
+        // 霉粉彩蛋解锁项：标题旁显「灵感源于 Lover」胶囊，填充色固定不跟主题
+        val loverBadge: Boolean = false
     )
-    val meshOptions = listOf(
-        MeshOption(
-            preset = null,
-            title = stringResource(R.string.bg_glow_off),
-            description = stringResource(R.string.bg_glow_off_desc)
-        ),
-        MeshOption(
-            preset = MeshPreset.NEBULA,
-            title = stringResource(R.string.bg_glow_nebula),
-            description = stringResource(R.string.bg_glow_nebula_desc)
-        ),
-        MeshOption(
-            preset = MeshPreset.INK,
-            title = stringResource(R.string.bg_glow_ink),
-            description = stringResource(R.string.bg_glow_ink_desc)
-        ),
-        MeshOption(
-            preset = MeshPreset.BEACH,
-            title = stringResource(R.string.bg_glow_beach),
-            description = stringResource(R.string.bg_glow_beach_desc)
-        ),
-        MeshOption(
-            preset = MeshPreset.AURORA,
-            title = stringResource(R.string.bg_glow_aurora),
-            description = stringResource(R.string.bg_glow_aurora_desc),
-            isThemeDriven = true
-        ),
-        MeshOption(
-            preset = MeshPreset.LAVA_LAMP,
-            title = stringResource(R.string.bg_glow_lava),
-            description = stringResource(R.string.bg_glow_lava_desc),
-            isThemeDriven = true
-        ),
-        MeshOption(
-            preset = MeshPreset.BLOOM,
-            title = stringResource(R.string.bg_glow_bloom),
-            description = stringResource(R.string.bg_glow_bloom_desc),
-            isThemeDriven = true
+    val meshOptions = buildList {
+        add(
+            MeshOption(
+                preset = null,
+                title = stringResource(R.string.bg_glow_off),
+                description = stringResource(R.string.bg_glow_off_desc)
+            )
         )
-    )
+        // 星云是霉粉彩蛋解锁内容，未解锁时整项不出现在列表里
+        if (swiftieUnlocked) {
+            add(
+                MeshOption(
+                    preset = MeshPreset.NEBULA,
+                    title = stringResource(R.string.bg_glow_nebula),
+                    description = stringResource(R.string.bg_glow_nebula_desc),
+                    loverBadge = true
+                )
+            )
+        }
+        add(
+            MeshOption(
+                preset = MeshPreset.INK,
+                title = stringResource(R.string.bg_glow_ink),
+                description = stringResource(R.string.bg_glow_ink_desc)
+            )
+        )
+        add(
+            MeshOption(
+                preset = MeshPreset.BEACH,
+                title = stringResource(R.string.bg_glow_beach),
+                description = stringResource(R.string.bg_glow_beach_desc)
+            )
+        )
+        add(
+            MeshOption(
+                preset = MeshPreset.AURORA,
+                title = stringResource(R.string.bg_glow_aurora),
+                description = stringResource(R.string.bg_glow_aurora_desc),
+                isThemeDriven = true
+            )
+        )
+        add(
+            MeshOption(
+                preset = MeshPreset.LAVA_LAMP,
+                title = stringResource(R.string.bg_glow_lava),
+                description = stringResource(R.string.bg_glow_lava_desc),
+                isThemeDriven = true
+            )
+        )
+        add(
+            MeshOption(
+                preset = MeshPreset.BLOOM,
+                title = stringResource(R.string.bg_glow_bloom),
+                description = stringResource(R.string.bg_glow_bloom_desc),
+                isThemeDriven = true
+            )
+        )
+    }
     val currentMeshLabel = meshOptions.firstOrNull {
         it.preset == (if (currentMeshEnabled) currentMeshPreset else null)
     }?.title ?: stringResource(R.string.bg_glow_off)
@@ -416,6 +438,25 @@ internal fun AccentColorDialog(
                                                         style = MaterialTheme.typography.labelSmall,
                                                         color = Color.White,
                                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+                                            if (option.loverBadge) {
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Surface(
+                                                    shape = RoundedCornerShape(50),
+                                                    // 固定 #D0295F：白字对比 5.04:1 合规。
+                                                    // 不能用闪粉玫红 #E83A72，对白字只有 3.98:1。
+                                                    color = Color(0xFFD0295F)
+                                                ) {
+                                                    Text(
+                                                        text = stringResource(R.string.bg_glow_lover_inspired),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = Color.White,
+                                                        modifier = Modifier.padding(
+                                                            horizontal = 8.dp,
+                                                            vertical = 2.dp
+                                                        )
                                                     )
                                                 }
                                             }

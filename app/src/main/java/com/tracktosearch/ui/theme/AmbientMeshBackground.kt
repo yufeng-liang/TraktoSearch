@@ -59,10 +59,10 @@ enum class MeshPreset {
     fun toStorage(): String = name
 
     companion object {
-        /** 默认 NEBULA：Paper Shaders 的 Default 预设配色。 */
+        /** 默认 BLOOM：星云是霉粉彩蛋解锁内容，未解锁时选项不可见，不能当默认值。 */
         fun fromStorage(value: String?): MeshPreset {
-            if (value == null) return NEBULA
-            return runCatching { valueOf(value) }.getOrDefault(NEBULA)
+            if (value == null) return BLOOM
+            return runCatching { valueOf(value) }.getOrDefault(BLOOM)
         }
     }
 }
@@ -76,7 +76,7 @@ enum class MeshPreset {
 @Composable
 fun AmbientMeshBackground(
     modifier: Modifier = Modifier,
-    preset: MeshPreset = MeshPreset.NEBULA,
+    preset: MeshPreset = MeshPreset.BLOOM,
     enabled: Boolean = true,
     motionActive: () -> Boolean = { true },
 ) {

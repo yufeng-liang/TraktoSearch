@@ -1994,4 +1994,14 @@
     <string name="privacy_rights_desc">你可以在设置中调整本地开关，在 Android 系统设置中撤回位置授权，并使用应用提供的操作清除本地缓存或凭据；也可以通过权利请求表单提交访问、更正、删除请求或版权通知。表单只收集处理请求所需的信息，请求关闭后保留不超过 180 天。</string>
     <string name="privacy_rights_open">前往权利请求页</string>
     <string name="privacy_footer">© 2026 TraktoSearch · 内容基准 2026-08</string>
+
+    <!-- 霉粉彩蛋 -->
+    <string name="bg_glow_lover_inspired">灵感源于 Lover</string>
+    <string name="swiftie_quiz_a11y">题目：X 加 87 等于 100，X 是多少？当前作答：%1$s</string>
+    <string name="swiftie_quiz_a11y_empty">尚未作答</string>
+    <string name="swiftie_quiz_submit">提交</string>
+    <string name="swiftie_quiz_backspace">删除</string>
+    <string name="swiftie_era_card_a11y">%1$s，发行于 %2$s，共 %3$d 首</string>
+    <string name="swiftie_skip">跳过</string>
+    <string name="swiftie_resume">继续</string>
 </resources>
