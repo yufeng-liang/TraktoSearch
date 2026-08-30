@@ -1,21 +1,29 @@
 package com.tracktosearch.ui.screen.opensource
 
 import androidx.annotation.StringRes
+import com.tracktosearch.BuildConfig
 import com.tracktosearch.R
+import java.util.Base64
 
 /**
- * 开源库条目。名称/版本/许可证/开发者是专有名词不翻译；
+ * 开源库条目。名称/许可证/开发者是专有名词不翻译；
  * 用途说明走字符串资源（opensource_use_*），四语言同步维护。
- * 版本号与 gradle/libs.versions.toml 对齐，升级依赖时同步更新。
+ * 版本号通过 [versionAliases] 从构建期 Version Catalog 快照解析，不再手工复制。
  */
 data class OssLibrary(
     val name: String,
-    val version: String,
+    internal val versionAliases: List<String>,
+    internal val versionPrefix: String = "",
     val license: String,
     val developer: String,
     @StringRes val usageRes: Int,
     val repoUrl: String
-)
+) {
+    val version: String = OpenSourceVersionCatalog.display(
+        aliases = versionAliases,
+        prefix = versionPrefix
+    )
+}
 
 /** 分组小节：标题 + 该组下的库列表 */
 data class OssGroup(
@@ -26,13 +34,55 @@ data class OssGroup(
 private const val ANDROIDX_REPO = "https://github.com/androidx/androidx"
 private const val APACHE = "Apache License 2.0"
 
+internal object OpenSourceVersionCatalog {
+    val versions: Map<String, String> by lazy {
+        decode(BuildConfig.OPEN_SOURCE_VERSION_CATALOG_BASE64)
+    }
+
+    fun display(
+        aliases: List<String>,
+        prefix: String = "",
+        separator: String = " / "
+    ): String {
+        require(aliases.isNotEmpty()) { "Open-source library must reference at least one version alias" }
+        return aliases.joinToString(separator = separator, prefix = prefix, transform = ::version)
+    }
+
+    fun version(alias: String): String {
+        val normalizedAlias = alias.replace('-', '.').replace('_', '.')
+        return checkNotNull(versions[normalizedAlias]) {
+            "Missing version alias '$alias' in generated Version Catalog snapshot"
+        }
+    }
+
+    internal fun decode(encodedCatalog: String): Map<String, String> {
+        val decoded = Base64.getDecoder().decode(encodedCatalog).toString(Charsets.UTF_8)
+        val entries = decoded.lineSequence()
+            .filter { it.isNotBlank() }
+            .map { line ->
+                val separatorIndex = line.indexOf('=')
+                require(separatorIndex in 1 until line.lastIndex) {
+                    "Invalid Version Catalog snapshot entry: $line"
+                }
+                line.substring(0, separatorIndex) to line.substring(separatorIndex + 1)
+            }
+            .toList()
+        return entries.toMap().also { versions ->
+            require(versions.size == entries.size) { "Duplicate aliases in Version Catalog snapshot" }
+        }
+    }
+}
+
+private fun versionAliases(vararg aliases: String): List<String> = aliases.toList()
+
 object OpenSourceData {
 
     val groups: List<OssGroup> = listOf(
         OssGroup(R.string.opensource_group_ui, listOf(
             OssLibrary(
                 name = "Jetpack Compose & Material 3",
-                version = "BOM 2026.06.01",
+                versionAliases = versionAliases("composeBom"),
+                versionPrefix = "BOM ",
                 license = APACHE,
                 developer = "Google",
                 usageRes = R.string.opensource_use_compose,
@@ -40,7 +90,7 @@ object OpenSourceData {
             ),
             OssLibrary(
                 name = "Navigation Compose",
-                version = "2.9.8",
+                versionAliases = versionAliases("navigationCompose"),
                 license = APACHE,
                 developer = "Google",
                 usageRes = R.string.opensource_use_navigation,
@@ -48,7 +98,7 @@ object OpenSourceData {
             ),
             OssLibrary(
                 name = "Haze",
-                version = "2.0.0-beta01",
+                versionAliases = versionAliases("haze"),
                 license = APACHE,
                 developer = "Chris Banes",
                 usageRes = R.string.opensource_use_haze,
@@ -56,7 +106,7 @@ object OpenSourceData {
             ),
             OssLibrary(
                 name = "Lottie Compose",
-                version = "6.7.1",
+                versionAliases = versionAliases("lottie"),
                 license = APACHE,
                 developer = "Airbnb",
                 usageRes = R.string.opensource_use_lottie,
@@ -64,7 +114,7 @@ object OpenSourceData {
             ),
             OssLibrary(
                 name = "Compose RichText",
-                version = "0.20.0",
+                versionAliases = versionAliases("richtext"),
                 license = APACHE,
                 developer = "halilibo",
                 usageRes = R.string.opensource_use_richtext,
@@ -72,7 +122,7 @@ object OpenSourceData {
             ),
             OssLibrary(
                 name = "Reorderable",
-                version = "3.1.0",
+                versionAliases = versionAliases("reorderable"),
                 license = APACHE,
                 developer = "Calvin Liang",
                 usageRes = R.string.opensource_use_reorderable,
@@ -80,7 +130,7 @@ object OpenSourceData {
             ),
             OssLibrary(
                 name = "Zoomable",
-                version = "2.13.0",
+                versionAliases = versionAliases("zoomable"),
                 license = APACHE,
                 developer = "Albert Chang",
                 usageRes = R.string.opensource_use_zoomable,
@@ -88,7 +138,7 @@ object OpenSourceData {
             ),
             OssLibrary(
                 name = "Backdrop",
-                version = "2.0.0",
+                versionAliases = versionAliases("backdrop"),
                 license = APACHE,
                 developer = "Kyant0",
                 usageRes = R.string.opensource_use_backdrop,
@@ -96,7 +146,7 @@ object OpenSourceData {
             ),
             OssLibrary(
                 name = "Compose Mesh Gradient",
-                version = "0.3.0",
+                versionAliases = versionAliases("composeMeshGradient"),
                 license = APACHE,
                 developer = "Omkar Deshmukh",
                 usageRes = R.string.opensource_use_mesh_gradient,
@@ -104,7 +154,7 @@ object OpenSourceData {
             ),
             OssLibrary(
                 name = "Mirage",
-                version = "0.1.0",
+                versionAliases = versionAliases("mirage"),
                 license = APACHE,
                 developer = "Ranbir Singh",
                 usageRes = R.string.opensource_use_mirage,
@@ -112,7 +162,7 @@ object OpenSourceData {
             ),
             OssLibrary(
                 name = "ColorPicker Compose",
-                version = "1.2.0",
+                versionAliases = versionAliases("skydovesColorPicker"),
                 license = APACHE,
                 developer = "skydoves",
                 usageRes = R.string.opensource_use_colorpicker,
@@ -122,7 +172,7 @@ object OpenSourceData {
         OssGroup(R.string.opensource_group_framework, listOf(
             OssLibrary(
                 name = "Kotlin Coroutines & Serialization",
-                version = "1.11.0 / 1.7.3",
+                versionAliases = versionAliases("coroutines", "serialization"),
                 license = APACHE,
                 developer = "JetBrains",
                 usageRes = R.string.opensource_use_kotlin,
@@ -130,7 +180,7 @@ object OpenSourceData {
             ),
             OssLibrary(
                 name = "Hilt",
-                version = "2.60.1",
+                versionAliases = versionAliases("hilt"),
                 license = APACHE,
                 developer = "Google",
                 usageRes = R.string.opensource_use_hilt,
@@ -138,7 +188,7 @@ object OpenSourceData {
             ),
             OssLibrary(
                 name = "Retrofit & OkHttp",
-                version = "2.11.0 / 5.5.0",
+                versionAliases = versionAliases("retrofit", "okhttp"),
                 license = APACHE,
                 developer = "Square, Inc.",
                 usageRes = R.string.opensource_use_square,
@@ -148,7 +198,7 @@ object OpenSourceData {
         OssGroup(R.string.opensource_group_data, listOf(
             OssLibrary(
                 name = "Room",
-                version = "2.8.4",
+                versionAliases = versionAliases("room"),
                 license = APACHE,
                 developer = "Google",
                 usageRes = R.string.opensource_use_room,
@@ -156,7 +206,7 @@ object OpenSourceData {
             ),
             OssLibrary(
                 name = "SQLCipher for Android",
-                version = "4.5.4",
+                versionAliases = versionAliases("sqlcipher"),
                 license = "BSD-style License",
                 developer = "Zetetic LLC",
                 usageRes = R.string.opensource_use_sqlcipher,
@@ -164,7 +214,7 @@ object OpenSourceData {
             ),
             OssLibrary(
                 name = "DataStore",
-                version = "1.2.1",
+                versionAliases = versionAliases("datastore"),
                 license = APACHE,
                 developer = "Google",
                 usageRes = R.string.opensource_use_datastore,
@@ -172,7 +222,7 @@ object OpenSourceData {
             ),
             OssLibrary(
                 name = "WorkManager",
-                version = "2.11.2",
+                versionAliases = versionAliases("workManager"),
                 license = APACHE,
                 developer = "Google",
                 usageRes = R.string.opensource_use_workmanager,
@@ -180,7 +230,7 @@ object OpenSourceData {
             ),
             OssLibrary(
                 name = "Glance",
-                version = "1.1.1",
+                versionAliases = versionAliases("glance"),
                 license = APACHE,
                 developer = "Google",
                 usageRes = R.string.opensource_use_glance,
@@ -190,7 +240,7 @@ object OpenSourceData {
         OssGroup(R.string.opensource_group_image, listOf(
             OssLibrary(
                 name = "Coil",
-                version = "2.7.0",
+                versionAliases = versionAliases("coil"),
                 license = APACHE,
                 developer = "Coil Contributors",
                 usageRes = R.string.opensource_use_coil,
@@ -200,7 +250,7 @@ object OpenSourceData {
         OssGroup(R.string.opensource_group_text, listOf(
             OssLibrary(
                 name = "jsoup",
-                version = "1.23.1",
+                versionAliases = versionAliases("jsoup"),
                 license = "MIT License",
                 developer = "Jonathan Hedley",
                 usageRes = R.string.opensource_use_jsoup,
@@ -208,7 +258,7 @@ object OpenSourceData {
             ),
             OssLibrary(
                 name = "jieba-analysis",
-                version = "1.0.2",
+                versionAliases = versionAliases("jieba-analysis"),
                 license = APACHE,
                 developer = "Huaban Inc.",
                 usageRes = R.string.opensource_use_jieba,
@@ -216,7 +266,7 @@ object OpenSourceData {
             ),
             OssLibrary(
                 name = "pinyin4j",
-                version = "2.5.1",
+                versionAliases = versionAliases("pinyin4j"),
                 license = "BSD License",
                 developer = "belerweb",
                 usageRes = R.string.opensource_use_pinyin,

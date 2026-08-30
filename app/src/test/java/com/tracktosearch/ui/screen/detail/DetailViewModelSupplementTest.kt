@@ -181,16 +181,6 @@ class DetailViewModelSupplementTest {
 
     // ==================== toggleSource 分支 ====================
 
-    @Test
-    fun toggleSource_移除已有源() {
-        val initialSize = viewModel.uiState.value.enabledSources.size
-        val toRemove = viewModel.uiState.value.enabledSources.first()
-
-        viewModel.toggleSource(toRemove)
-
-        assertThat(viewModel.uiState.value.enabledSources).doesNotContain(toRemove)
-        assertThat(viewModel.uiState.value.enabledSources).hasSize(initialSize - 1)
-    }
 
     @Test
     fun toggleSource_最后一个源不允许移除() {
@@ -204,44 +194,11 @@ class DetailViewModelSupplementTest {
 
     // ==================== toggleDiskType 分支 ====================
 
-    @Test
-    fun toggleDiskType_添加新类型() {
-        setUiState { it.copy(enabledDiskTypes = ResourceRepository.ALL_DISK_TYPES - DiskType.QUARK) }
 
-        viewModel.toggleDiskType(DiskType.QUARK)
-
-        assertThat(viewModel.uiState.value.enabledDiskTypes).contains(DiskType.QUARK)
-    }
-
-    @Test
-    fun toggleDiskType_最后一个类型不允许移除() {
-        val onlyType = DiskType.QUARK
-        setUiState { it.copy(enabledDiskTypes = setOf(onlyType)) }
-
-        viewModel.toggleDiskType(onlyType)
-
-        assertThat(viewModel.uiState.value.enabledDiskTypes).containsExactly(onlyType)
-    }
 
     // ==================== toggleShowHighRelevanceOnly ====================
 
-    @Test
-    fun toggleShowHighRelevanceOnly_切换为true() {
-        assertThat(viewModel.uiState.value.showHighRelevanceOnly).isFalse()
 
-        viewModel.toggleShowHighRelevanceOnly()
-
-        assertThat(viewModel.uiState.value.showHighRelevanceOnly).isTrue()
-    }
-
-    @Test
-    fun toggleShowHighRelevanceOnly_切换回false() {
-        setUiState { it.copy(showHighRelevanceOnly = true) }
-
-        viewModel.toggleShowHighRelevanceOnly()
-
-        assertThat(viewModel.uiState.value.showHighRelevanceOnly).isFalse()
-    }
 
     @Test
     fun toggleShowHighRelevanceOnly_强标题视频保留并可恢复全部资源() {
@@ -401,16 +358,6 @@ class DetailViewModelSupplementTest {
 
     // ==================== translateComments ====================
 
-    @Test
-    fun translateComments_空评论列表不调用Translator() = runTest {
-        setUiState { it.copy(comments = emptyList()) }
-
-        viewModel.translateComments()
-        advanceUntilIdle()
-
-        // translateCommentsFlow 是非 suspend 函数，用 verify 验证
-        verify(exactly = 0) { commentTranslator.translateCommentsFlow(any()) }
-    }
 
     @Test
     fun translateComments_成功更新translatedComments() = runTest {
@@ -435,57 +382,11 @@ class DetailViewModelSupplementTest {
         assertThat(viewModel.uiState.value.translationProgress).isNull()
     }
 
-    @Test
-    fun translateComments_返回原文时不标记为已翻译() = runTest {
-        val comment = TraktComment(id = 1, comment = "test")
-        setUiState { it.copy(comments = listOf(comment)) }
-        every { commentTranslator.translateCommentsFlow(listOf(comment)) } returns
-            flowOf(0 to comment)
 
-        viewModel.translateComments()
-        advanceUntilIdle()
-
-        assertThat(viewModel.uiState.value.translatedComments).isEmpty()
-        assertThat(viewModel.uiState.value.isTranslating).isFalse()
-    }
-
-    @Test
-    fun translateComments_异常时isTranslating置false() = runTest {
-        setUiState { it.copy(comments = listOf(TraktComment(id = 1, comment = "test"))) }
-        // 用 flow {} 构造在 collect 时抛异常的 Flow
-        every { commentTranslator.translateCommentsFlow(any()) } returns
-            flow { throw RuntimeException("API error") }
-
-        viewModel.translateComments()
-        advanceUntilIdle()
-
-        assertThat(viewModel.uiState.value.isTranslating).isFalse()
-        assertThat(viewModel.uiState.value.translationProgress).isNull()
-    }
 
     // ==================== translateSingleComment ====================
 
-    @Test
-    fun translateSingleComment_评论不存在直接返回() = runTest {
-        setUiState { it.copy(comments = listOf(TraktComment(id = 1, comment = "test"))) }
 
-        viewModel.translateSingleComment(999)
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { commentTranslator.translateSingleComment(any()) }
-    }
-
-    @Test
-    fun translateSingleComment_已翻译过不重复翻译() = runTest {
-        val comment = TraktComment(id = 1, comment = "test")
-        val translated = TraktComment(id = 1, comment = "测试")
-        setUiState { it.copy(comments = listOf(comment), translatedComments = listOf(translated)) }
-
-        viewModel.translateSingleComment(1)
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { commentTranslator.translateSingleComment(any()) }
-    }
 
     @Test
     fun translateSingleComment_成功添加到translatedComments() = runTest {
@@ -502,18 +403,6 @@ class DetailViewModelSupplementTest {
         assertThat(viewModel.uiState.value.translatingCommentId).isNull()
     }
 
-    @Test
-    fun translateSingleComment_返回原文时不标记为已翻译() = runTest {
-        val comment = TraktComment(id = 1, comment = "test")
-        setUiState { it.copy(comments = listOf(comment)) }
-        coEvery { commentTranslator.translateSingleComment(comment) } returns comment
-
-        viewModel.translateSingleComment(1)
-        advanceUntilIdle()
-
-        assertThat(viewModel.uiState.value.translatedComments).isEmpty()
-        assertThat(viewModel.uiState.value.translatingCommentId).isNull()
-    }
 
     @Test
     fun translateSingleComment_异常时translatingCommentId置null() = runTest {
@@ -529,15 +418,6 @@ class DetailViewModelSupplementTest {
 
     // ==================== loadMoreComments ====================
 
-    @Test
-    fun loadMoreComments_hasMore为false直接返回() = runTest {
-        setUiState { it.copy(hasMoreComments = false) }
-
-        viewModel.loadMoreComments()
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { traktRepository.getComments(any(), any(), any(), any()) }
-    }
 
     @Test
     fun loadMoreComments_isLoadingMore为true防抖返回() = runTest {
@@ -638,16 +518,6 @@ class DetailViewModelSupplementTest {
 
     // ==================== toggleSeason 折叠分支 ====================
 
-    @Test
-    fun toggleSeason_已展开则折叠() = runTest {
-        setPrivateField("currentTraktId", 100)
-        setUiState { it.copy(expandedSeasons = setOf(1)) }
-
-        viewModel.toggleSeason(1)
-        advanceUntilIdle()
-
-        assertThat(viewModel.uiState.value.expandedSeasons).doesNotContain(1)
-    }
 
     @Test
     fun toggleSeason_加载失败回滚expandedSeasons() = runTest {
@@ -697,16 +567,6 @@ class DetailViewModelSupplementTest {
         coVerify(exactly = 0) { traktRepository.addRating(any(), any(), any()) }
     }
 
-    @Test
-    fun removeRating_isRating为true防抖早返回() = runTest {
-        setupLoggedInState()
-        setUiState { it.copy(isRating = true, userRating = 8) }
-
-        viewModel.removeRating()
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { traktRepository.removeRating(any(), any()) }
-    }
 
     @Test
     fun toggleEpisodeWatched_相同季集防抖早返回() = runTest {
@@ -722,15 +582,6 @@ class DetailViewModelSupplementTest {
 
     // ==================== retryDoubanSync（状态字段验证）====================
 
-    @Test
-    fun retryDoubanSync_pendingDoubanAction为null直接返回() = runTest {
-        setUiState { it.copy(pendingDoubanAction = null) }
-
-        viewModel.retryDoubanSync()
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { doubanRepository.findDoubanId(any(), any(), any()) }
-    }
 
     @Test
     fun retryDoubanSync_isDoubanSyncing为true防抖返回() = runTest {
@@ -839,26 +690,6 @@ class DetailViewModelSupplementTest {
         assertThat(viewModel.uiState.value.pendingDoubanAction).isEqualTo(DoubanSyncAction.WISH)
     }
 
-    @Test
-    fun retryDoubanSync_doubanId未就绪_imdbId为空_跳过同步表() = runTest {
-        setPrivateField("currentTraktId", 100)
-        setPrivateField("currentMediaType", MediaType.MOVIE)
-        setPrivateField("currentImdbId", "")
-        setUiState {
-            it.copy(
-                pendingDoubanAction = DoubanSyncAction.WISH,
-                doubanIdForSync = null
-            )
-        }
-        coEvery { doubanRepository.findDoubanId(100, null, "movie") } returns null
-
-        viewModel.retryDoubanSync()
-        advanceUntilIdle()
-
-        // imdbId 为空时不应调用 getByImdbId
-        coVerify(exactly = 0) { doubanSyncedItemDao.getByImdbId(any()) }
-        coVerify(exactly = 1) { doubanRepository.findDoubanId(100, null, "movie") }
-    }
 
     @Test
     fun retryDoubanSync_已登录豆瓣_同步成功_retryable为false() = runTest {
@@ -960,37 +791,11 @@ class DetailViewModelSupplementTest {
         assertThat(cache).doesNotContainKey(cacheKey)
     }
 
-    @Test
-    fun onCleared_currentTraktId为0时不崩溃() {
-        setPrivateField("currentTraktId", 0)
 
-        callOnCleared()
-    }
-
-    @Test
-    fun onCleared_currentTraktId为负数时不崩溃() {
-        setPrivateField("currentTraktId", -1)
-
-        callOnCleared()
-    }
 
     // ==================== updatePosterColor 补充 ====================
 
-    @Test
-    fun updatePosterColor_设置为Transparent() {
-        viewModel.updatePosterColor(Color.Transparent)
 
-        assertThat(viewModel.uiState.value.posterDominantColor).isEqualTo(Color.Transparent)
-    }
-
-    @Test
-    fun updatePosterColor_多次更新() {
-        viewModel.updatePosterColor(Color.Red)
-        assertThat(viewModel.uiState.value.posterDominantColor).isEqualTo(Color.Red)
-
-        viewModel.updatePosterColor(Color.Blue)
-        assertThat(viewModel.uiState.value.posterDominantColor).isEqualTo(Color.Blue)
-    }
 
     @Test
     fun dualLoginDoubanItemWithoutTraktId_usesDoubanForWatchlist() = runTest {

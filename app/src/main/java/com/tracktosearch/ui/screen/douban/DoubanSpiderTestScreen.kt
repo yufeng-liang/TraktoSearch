@@ -773,7 +773,11 @@ fun DoubanSpiderTestScreen(
                         // 标记中
                         if (uiState.isMarking) {
                             Spacer(modifier = Modifier.height(10.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
                                 CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(stringResource(R.string.douban_spider_test_marking), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1080,7 +1084,11 @@ fun DoubanSpiderTestScreen(
                         // 测试中
                         if (uiState.isRecommending) {
                             Spacer(modifier = Modifier.height(10.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
                                 CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(stringResource(R.string.douban_spider_test_recommending), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1212,7 +1220,11 @@ fun DoubanSpiderTestScreen(
                         // 搜索中
                         if (uiState.isSearching) {
                             Spacer(modifier = Modifier.height(10.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
                                 CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(stringResource(R.string.douban_spider_test_searching), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

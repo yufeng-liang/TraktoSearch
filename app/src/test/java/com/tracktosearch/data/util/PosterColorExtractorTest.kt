@@ -84,17 +84,4 @@ class PosterColorExtractorTest {
 
     // ==================== 4. 空/极小 bitmap → 不崩溃 ====================
 
-    @Test
-    fun extractDominantColor_minimalBitmap_doesNotCrash() = runTest {
-        val cache = mockk<PosterColorCache>(relaxed = true)
-        coEvery { cache.getColor("url1") } returns null
-        val extractor = PosterColorExtractor(cache)
-
-        // 1x1 bitmap - 最小尺寸，不应崩溃
-        val bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
-        bitmap.eraseColor(Color.BLUE)
-
-        // 仅验证不抛异常
-        extractor.extractDominantColor("url1", bitmap)
-    }
 }

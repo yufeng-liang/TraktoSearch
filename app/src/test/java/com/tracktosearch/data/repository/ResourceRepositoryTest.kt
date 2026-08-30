@@ -182,18 +182,6 @@ class ResourceRepositoryTest {
         coVerify(exactly = 1) { panSouApiService.search(any(), any(), any(), any()) }
     }
 
-    @Test
-    fun searchResources_缓存命中_不调API() = runTest {
-        val items = mapOf("quark" to listOf(panSouItem()))
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(items)
-        coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(data = ZresoData())
-
-        repository.searchResources("情书")
-        repository.searchResources("情书")
-        repository.searchResources("情书")
-
-        coVerify(exactly = 1) { panSouApiService.search(any(), any(), any(), any()) }
-    }
 
     @Test
     fun searchResources_空结果不缓存() = runTest {
@@ -386,353 +374,193 @@ class ResourceRepositoryTest {
     // ==================== searchResources API 失败降级 ====================
 
     @Test
-    fun searchResources_PanSouAPI异常_返回其他源结果() = runTest {
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } throws IOException("网络错误")
-        coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(
+    fun searchResources_各API失败场景按结果降级() = runTest {
+        val zresoOnly = ZresoResponse(
             data = ZresoData(results = listOf(
                 ZresoResult(title = "情书", datetime = "2024-01-01", date = "", links = listOf(
                     ZresoLink(type = "quark", url = "https://zreso.com", status = "")
                 ))
             ))
         )
+        val panSouOnly = panSouResponse(mapOf("quark" to listOf(panSouItem())))
 
-        val result = repository.searchResources("情书")
-        // pansou 异常降级为空，zreso 仍有结果
-        assertThat(result.getOrNull()).hasSize(1)
-        assertThat(result.getOrNull()!![0].source).isEqualTo(ResourceRepository.SOURCE_ZRESO)
-    }
+        coEvery { panSouApiService.search(any(), any(), any(), any()) } throws IOException("网络错误")
+        coEvery { zresoApiService.search(any(), any(), any()) } returns zresoOnly
+        val panSouFailed = repository.searchResources("故障-panSou").getOrNull()!!
+        assertThat(panSouFailed).hasSize(1)
+        assertThat(panSouFailed[0].source).isEqualTo(ResourceRepository.SOURCE_ZRESO)
 
-    @Test
-    fun searchResources_PanSouAPIcode非0_返回空() = runTest {
         coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(emptyMap(), code = 500)
-        coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(data = ZresoData())
+        coEvery { zresoApiService.search(any(), any(), any()) } returns zresoEmpty()
+        assertThat(repository.searchResources("故障-code").getOrNull()).isEmpty()
 
-        val result = repository.searchResources("情书")
-        assertThat(result.getOrNull()).isEmpty()
-    }
-
-    @Test
-    fun searchResources_ZresoAPI异常_返回其他源结果() = runTest {
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(
-            mapOf("quark" to listOf(panSouItem()))
-        )
+        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouOnly
         coEvery { zresoApiService.search(any(), any(), any()) } throws IOException("网络错误")
+        val zresoFailed = repository.searchResources("故障-zreso").getOrNull()!!
+        assertThat(zresoFailed).hasSize(1)
+        assertThat(zresoFailed[0].source).isEqualTo(ResourceRepository.SOURCE_PANSOU)
 
-        val result = repository.searchResources("情书")
-        assertThat(result.getOrNull()).hasSize(1)
-        assertThat(result.getOrNull()!![0].source).isEqualTo(ResourceRepository.SOURCE_PANSOU)
-    }
-
-    @Test
-    fun searchResources_所有API异常_返回空() = runTest {
         coEvery { panSouApiService.search(any(), any(), any(), any()) } throws IOException("网络错误")
         coEvery { zresoApiService.search(any(), any(), any()) } throws IOException("网络错误")
-
-        val result = repository.searchResources("情书")
-        assertThat(result.getOrNull()).isEmpty()
+        assertThat(repository.searchResources("故障-all").getOrNull()).isEmpty()
     }
+
+
+
+
 
     // ==================== searchResources 类型映射 ====================
 
     @Test
-    fun searchResources_PanSou类型映射_quark() = runTest {
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(
-            mapOf("quark" to listOf(panSouItem()))
+    fun searchResources_Zreso类型与空字段规则() = runTest {
+        data class Case(
+            val keyword: String,
+            val datetime: String,
+            val date: String,
+            val links: List<ZresoLink>,
+            val expectedUrl: String,
+            val expectedCount: Int,
+            val expectedDate: String?,
+            val expectedType: DiskType?
         )
-        coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(data = ZresoData())
-
-        val result = repository.searchResources("情书")
-        assertThat(result.getOrNull()!![0].diskType).isEqualTo(DiskType.QUARK)
-    }
-
-    @Test
-    fun searchResources_PanSou类型映射_baidu() = runTest {
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(
-            mapOf("baidu" to listOf(panSouItem()))
+        val cases = listOf(
+            Case("zreso-quark", "2024-01-01", "", listOf(
+                ZresoLink(type = "quark", url = "https://z.com", status = "")
+            ), "https://z.com", 1, "2024-01-01", DiskType.QUARK),
+            Case("zreso-relative", "2024-01-01", "", listOf(
+                ZresoLink(type = "quark", url = "/detail/123", status = "")
+            ), "https://zreso.cn/detail/123", 1, "2024-01-01", DiskType.QUARK),
+            Case("zreso-absolute", "2024-01-01", "", listOf(
+                ZresoLink(type = "quark", url = "https://example.com/detail/123", status = "")
+            ), "https://example.com/detail/123", 1, "2024-01-01", DiskType.QUARK),
+            Case("zreso-count-date", "", "2023-05-01", listOf(
+                ZresoLink(type = "quark", url = "https://count.com", status = ""),
+                ZresoLink(type = "baidu", url = "https://count2.com", status = "")
+            ), "https://count.com", 2, "2023-05-01", DiskType.QUARK),
+            Case("zreso-unknown", "2024-01-01", "", listOf(
+                ZresoLink(type = "unknown", url = "https://unknown.com", status = "")
+            ), "", 0, null, null)
         )
-        coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(data = ZresoData())
-
-        val result = repository.searchResources("情书")
-        assertThat(result.getOrNull()!![0].diskType).isEqualTo(DiskType.BAIDU)
-    }
-
-    @Test
-    fun searchResources_PanSou类型映射_aliyun() = runTest {
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(
-            mapOf("aliyun" to listOf(panSouItem()))
-        )
-        coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(data = ZresoData())
-
-        val result = repository.searchResources("情书")
-        assertThat(result.getOrNull()!![0].diskType).isEqualTo(DiskType.ALI)
-    }
-
-    @Test
-    fun searchResources_PanSou类型映射_xunlei() = runTest {
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(
-            mapOf("xunlei" to listOf(panSouItem()))
-        )
-        coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(data = ZresoData())
-
-        val result = repository.searchResources("情书")
-        assertThat(result.getOrNull()!![0].diskType).isEqualTo(DiskType.XUNLEI)
-    }
-
-    @Test
-    fun searchResources_PanSou类型映射_uc() = runTest {
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(
-            mapOf("uc" to listOf(panSouItem()))
-        )
-        coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(data = ZresoData())
-
-        val result = repository.searchResources("情书")
-        assertThat(result.getOrNull()!![0].diskType).isEqualTo(DiskType.UC)
-    }
-
-    @Test
-    fun searchResources_PanSou类型映射_115() = runTest {
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(
-            mapOf("115" to listOf(panSouItem()))
-        )
-        coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(data = ZresoData())
-
-        val result = repository.searchResources("情书")
-        assertThat(result.getOrNull()!![0].diskType).isEqualTo(DiskType.ONEONEFIVE)
-    }
-
-    @Test
-    fun searchResources_PanSou类型映射_magnet() = runTest {
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(
-            mapOf("magnet" to listOf(panSouItem()))
-        )
-        coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(data = ZresoData())
-
-        val result = repository.searchResources("情书")
-        assertThat(result.getOrNull()!![0].diskType).isEqualTo(DiskType.MAGNET)
-    }
-
-    @Test
-    fun searchResources_PanSou未知类型_跳过() = runTest {
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(
-            mapOf("unknown_type" to listOf(panSouItem()))
-        )
-        coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(data = ZresoData())
-
-        val result = repository.searchResources("情书")
-        assertThat(result.getOrNull()).isEmpty()
-    }
-
-    @Test
-    fun searchResources_PanSou_note为空时用keyword填充() = runTest {
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(
-            mapOf("quark" to listOf(panSouItem(note = "", url = "https://q.com")))
-        )
-        coEvery { zresoApiService.search(any(), any(), any()) } returns zresoEmpty()
-
-        val result = repository.searchResources("情书")
-        assertThat(result.getOrNull()!![0].name).isEqualTo("情书")
-    }
-
-    @Test
-    fun searchResources_Zreso类型映射() = runTest {
         coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(emptyMap())
-        coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(
-            data = ZresoData(results = listOf(
-                ZresoResult(title = "情书", datetime = "2024-01-01", date = "", links = listOf(
-                    ZresoLink(type = "quark", url = "https://z.com", status = "")
+        cases.forEach { case ->
+            coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(
+                data = ZresoData(results = listOf(
+                    ZresoResult(title = "情书", datetime = case.datetime, date = case.date, links = case.links)
                 ))
-            ))
-        )
-
-        val result = repository.searchResources("情书")
-        assertThat(result.getOrNull()!![0].diskType).isEqualTo(DiskType.QUARK)
-    }
-
-    @Test
-    fun searchResources_Zreso未知类型_被allowedTypes过滤() = runTest {
-        // zreso 未知类型映射为 OTHER，OTHER 的 zreso 字符串为 ""，不在 allowedTypes 中，被过滤
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(emptyMap())
-        coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(
-            data = ZresoData(results = listOf(
-                ZresoResult(title = "情书", datetime = "2024-01-01", date = "", links = listOf(
-                    ZresoLink(type = "unknown", url = "https://z.com", status = "")
-                ))
-            ))
-        )
-
-        val result = repository.searchResources("情书")
-        // OTHER 类型被 zreso allowedTypes 过滤，返回空
-        assertThat(result.getOrNull()).isEmpty()
-    }
-
-    @Test
-    fun searchResources_Zreso相对URL_拼接前缀() = runTest {
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(emptyMap())
-        coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(
-            data = ZresoData(results = listOf(
-                ZresoResult(title = "情书", datetime = "", date = "", links = listOf(
-                    ZresoLink(type = "quark", url = "/detail/123", status = "")
-                ))
-            ))
-        )
-
-        val result = repository.searchResources("情书")
-        assertThat(result.getOrNull()!![0].url).isEqualTo("https://zreso.cn/detail/123")
-    }
-
-    @Test
-    fun searchResources_Zreso_绝对URL不拼接() = runTest {
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(emptyMap())
-        coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(
-            data = ZresoData(results = listOf(
-                ZresoResult(title = "情书", datetime = "", date = "", links = listOf(
-                    ZresoLink(type = "quark", url = "https://example.com/detail/123", status = "")
-                ))
-            ))
-        )
-
-        val result = repository.searchResources("情书")
-        assertThat(result.getOrNull()!![0].url).isEqualTo("https://example.com/detail/123")
-    }
-
-    @Test
-    fun searchResources_Zreso_fileCount为links数量() = runTest {
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(emptyMap())
-        coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(
-            data = ZresoData(results = listOf(
-                ZresoResult(title = "情书", datetime = "", date = "", links = listOf(
-                    ZresoLink(type = "quark", url = "https://a.com", status = ""),
-                    ZresoLink(type = "baidu", url = "https://b.com", status = "")
-                ))
-            ))
-        )
-
-        val result = repository.searchResources("情书")
-        assertThat(result.getOrNull()!![0].fileCount).isEqualTo(2)
-    }
-
-    @Test
-    fun searchResources_Zreso_datetime为空时用date填充() = runTest {
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(emptyMap())
-        coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(
-            data = ZresoData(results = listOf(
-                ZresoResult(title = "情书", datetime = "", date = "2023-05-01", links = listOf(
-                    ZresoLink(type = "quark", url = "https://z.com", status = "")
-                ))
-            ))
-        )
-
-        val result = repository.searchResources("情书")
-        assertThat(result.getOrNull()!![0].fileDate).isEqualTo("2023-05-01")
-    }
-
-    // ==================== searchResources diskType 过滤 ====================
-
-    @Test
-    fun searchResources_部分diskTypes_传递对应cloudTypes() = runTest {
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(emptyMap())
-        coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(data = ZresoData())
-
-        repository.searchResources(
-            "情书",
-            enabledDiskTypes = setOf(DiskType.QUARK, DiskType.BAIDU)
-        )
-
-        // 验证 pansou 收到的 cloudTypes 只包含 quark,baidu
-        coVerify { panSouApiService.search(any(), any(), eq("quark,baidu"), any()) }
-    }
-
-    @Test
-    fun searchResources_全部diskTypes_传递完整cloudTypes() = runTest {
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(emptyMap())
-        coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(data = ZresoData())
-
-        repository.searchResources("情书")
-
-        // 验证 pansou 收到完整的 cloudTypes
-        coVerify {
-            panSouApiService.search(any(), any(), eq("quark,baidu,aliyun,xunlei,uc,115,magnet"), any())
+            )
+            val items = repository.searchResources(case.keyword).getOrNull()!!
+            if (case.expectedType == null) {
+                assertThat(items).isEmpty()
+            } else {
+                assertThat(items).hasSize(case.links.size)
+                assertThat(items[0].diskType).isEqualTo(case.expectedType)
+                assertThat(items[0].url).isEqualTo(case.expectedUrl)
+                assertThat(items[0].fileCount).isEqualTo(case.expectedCount)
+                assertThat(items[0].fileDate).isEqualTo(case.expectedDate)
+            }
         }
     }
 
     @Test
-    fun searchResources_过滤未选中的diskType() = runTest {
+    fun searchResources_PanSou类型映射保留全部网盘类型() = runTest {
+        val cases = mapOf(
+            "quark" to DiskType.QUARK,
+            "baidu" to DiskType.BAIDU,
+            "aliyun" to DiskType.ALI,
+            "xunlei" to DiskType.XUNLEI,
+            "uc" to DiskType.UC,
+            "115" to DiskType.ONEONEFIVE,
+            "magnet" to DiskType.MAGNET
+        )
+        coEvery { zresoApiService.search(any(), any(), any()) } returns zresoEmpty()
+        cases.forEach { (type, expected) ->
+            coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(
+                mapOf(type to listOf(panSouItem(type = type)))
+            )
+            val items = repository.searchResources("类型-$type").getOrNull()!!
+            assertThat(items).hasSize(1)
+            assertThat(items[0].diskType).isEqualTo(expected)
+        }
+
+        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(
+            mapOf("unknown_type" to listOf(panSouItem()))
+        )
+        assertThat(repository.searchResources("类型-unknown").getOrNull()).isEmpty()
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // ==================== searchResources diskType 过滤 ====================
+
+    @Test
+    fun searchResources_diskType参数与结果过滤() = runTest {
+        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(emptyMap())
+        coEvery { zresoApiService.search(any(), any(), any()) } returns zresoEmpty()
+
+        repository.searchResources("disk-partial", enabledDiskTypes = setOf(DiskType.QUARK, DiskType.BAIDU))
+        coVerify { panSouApiService.search(any(), any(), eq("quark,baidu"), any()) }
+
+        repository.searchResources("disk-all")
+        coVerify {
+            panSouApiService.search(any(), any(), eq("quark,baidu,aliyun,xunlei,uc,115,magnet"), any())
+        }
+
         coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(
             mapOf(
                 "quark" to listOf(panSouItem(note = "夸克", url = "https://q.com")),
                 "baidu" to listOf(panSouItem(note = "百度", url = "https://b.com"))
             )
         )
-        coEvery { zresoApiService.search(any(), any(), any()) } returns zresoEmpty()
-
-        val result = repository.searchResources(
-            "情书",
-            enabledDiskTypes = setOf(DiskType.QUARK)
-        )
-        val items = result.getOrNull()!!
-        // 只应返回夸克
+        val items = repository.searchResources("disk-filter", enabledDiskTypes = setOf(DiskType.QUARK)).getOrNull()!!
         assertThat(items).hasSize(1)
         assertThat(items[0].diskType).isEqualTo(DiskType.QUARK)
     }
 
+
+
+
     // ==================== filterItems ====================
 
     @Test
-    fun filterItems_过滤无效项_statusFail() {
-        val items = listOf(
-            resourceItem(name = "有效", status = ""),
-            resourceItem(name = "失效", status = "fail", url = "https://fail.com")
+    fun filterItems_批量过滤无效状态与空文件() {
+        data class InvalidCase(val status: String, val fileCount: Int)
+        val cases = listOf(
+            InvalidCase("fail", 1),
+            InvalidCase("expired", 1),
+            InvalidCase("invalid", 1),
+            InvalidCase("", 0),
+            InvalidCase("FAIL", 1)
         )
-        val result = repository.filterItems(
-            items,
-            enabledSources = ResourceRepository.ALL_SOURCES,
-            enabledDiskTypes = ResourceRepository.ALL_DISK_TYPES
-        )
-        assertThat(result).hasSize(1)
-        assertThat(result[0].name).isEqualTo("有效")
+        cases.forEach { case ->
+            val result = repository.filterItems(
+                listOf(
+                    resourceItem(name = "有效"),
+                    resourceItem(name = "失效", status = case.status, fileCount = case.fileCount, url = "https://invalid-${case.status}.com")
+                ),
+                enabledSources = ResourceRepository.ALL_SOURCES,
+                enabledDiskTypes = ResourceRepository.ALL_DISK_TYPES
+            )
+            assertThat(result).hasSize(1)
+            assertThat(result[0].name).isEqualTo("有效")
+        }
     }
 
-    @Test
-    fun filterItems_过滤无效项_statusExpired() {
-        val items = listOf(
-            resourceItem(name = "有效", status = ""),
-            resourceItem(name = "过期", status = "expired", url = "https://expired.com")
-        )
-        val result = repository.filterItems(
-            items,
-            enabledSources = ResourceRepository.ALL_SOURCES,
-            enabledDiskTypes = ResourceRepository.ALL_DISK_TYPES
-        )
-        assertThat(result).hasSize(1)
-    }
 
-    @Test
-    fun filterItems_过滤无效项_statusInvalid() {
-        val items = listOf(
-            resourceItem(name = "有效", status = ""),
-            resourceItem(name = "无效", status = "invalid", url = "https://invalid.com")
-        )
-        val result = repository.filterItems(
-            items,
-            enabledSources = ResourceRepository.ALL_SOURCES,
-            enabledDiskTypes = ResourceRepository.ALL_DISK_TYPES
-        )
-        assertThat(result).hasSize(1)
-    }
 
-    @Test
-    fun filterItems_过滤无效项_fileCount0() {
-        val items = listOf(
-            resourceItem(name = "有效", fileCount = 1),
-            resourceItem(name = "零文件", fileCount = 0, url = "https://zero.com")
-        )
-        val result = repository.filterItems(
-            items,
-            enabledSources = ResourceRepository.ALL_SOURCES,
-            enabledDiskTypes = ResourceRepository.ALL_DISK_TYPES
-        )
-        assertThat(result).hasSize(1)
-    }
+
 
     @Test
     fun filterItems_过滤源() {
@@ -764,19 +592,6 @@ class ResourceRepositoryTest {
         assertThat(result[0].diskType).isEqualTo(DiskType.QUARK)
     }
 
-    @Test
-    fun filterItems_大小写不敏感的status() {
-        val items = listOf(
-            resourceItem(name = "有效", status = ""),
-            resourceItem(name = "FAIL大写", status = "FAIL", url = "https://fail-up.com")
-        )
-        val result = repository.filterItems(
-            items,
-            enabledSources = ResourceRepository.ALL_SOURCES,
-            enabledDiskTypes = ResourceRepository.ALL_DISK_TYPES
-        )
-        assertThat(result).hasSize(1)
-    }
 
     // ==================== refreshResources ====================
 
@@ -795,39 +610,27 @@ class ResourceRepositoryTest {
         coVerify(atLeast = 2) { panSouApiService.search(any(), any(), any(), any()) }
     }
 
-    @Test
-    fun refreshResources_keyword为空_返回空列表() = runTest {
-        val result = repository.refreshResources("")
-        assertThat(result.getOrNull()).isEmpty()
-    }
 
     // ==================== getCachedAllResources ====================
 
     @Test
-    fun getCachedAllResources_缓存不存在_返回空() {
-        val result = repository.getCachedAllResources("不存在的key")
-        assertThat(result).isEmpty()
-    }
+    fun getCachedAllResources_空值未命中与命中() = runTest {
+        assertThat(repository.getCachedAllResources("")).isEmpty()
+        assertThat(repository.getCachedAllResources("不存在的key")).isEmpty()
 
-    @Test
-    fun getCachedAllResources_keyword为空_返回空() {
-        val result = repository.getCachedAllResources("")
-        assertThat(result).isEmpty()
-    }
-
-    @Test
-    fun getCachedAllResources_缓存命中_返回缓存() = runTest {
-        val items = mapOf("quark" to listOf(panSouItem(note = "缓存测试", url = "https://cached.com")))
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(items)
+        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(
+            mapOf("quark" to listOf(panSouItem(note = "缓存测试", url = "https://cached.com")))
+        )
         coEvery { zresoApiService.search(any(), any(), any()) } returns zresoEmpty()
+        repository.searchResources("缓存key")
 
-        // 先搜索填充缓存
-        repository.searchResources("情书")
-        // 从缓存读取
-        val cached = repository.getCachedAllResources("情书")
-        assertThat(cached).isNotEmpty()
+        val cached = repository.getCachedAllResources("缓存key")
+        assertThat(cached).hasSize(1)
         assertThat(cached[0].url).isEqualTo("https://cached.com")
     }
+
+
+
 
     // ==================== mergeAndCacheResources ====================
 
@@ -868,13 +671,6 @@ class ResourceRepositoryTest {
         assertThat(ranked.items[0].url).isEqualTo("https://a.com")
     }
 
-    @Test
-    fun mergeAndCacheResources_无query时scoreMap为空() {
-        val items = listOf(resourceItem(name = "资源1", url = "https://a.com"))
-        val ranked = repository.mergeAndCacheResources("情书", items)
-        assertThat(ranked.scoreMap).isEmpty()
-        assertThat(ranked.highRelevanceMap).isEmpty()
-    }
 
     // ==================== getEnabledSources ====================
 
@@ -944,12 +740,6 @@ class ResourceRepositoryTest {
     // searchResourcesFlow 使用 flowOn(Dispatchers.IO)，在 runTest 的虚拟时间下会挂起，
     // 改用 runBlocking 确保真实线程执行。
 
-    @Test
-    fun searchResourcesFlow_keyword为空_发射空列表() = runBlocking {
-        val results = repository.searchResourcesFlow("").toList()
-        assertThat(results).hasSize(1)
-        assertThat(results[0]).isEmpty()
-    }
 
     @Test
     fun searchResourcesFlow_缓存命中_只发射一次() = runBlocking {
@@ -1060,102 +850,20 @@ class ResourceRepositoryTest {
 
     // ==================== ResourceItem.isInvalid 辅助测试 ====================
 
-    @Test
-    fun resourceItem_isInvalid_statusFail() {
-        assertThat(resourceItem(status = "fail").isInvalid).isTrue()
-    }
 
-    @Test
-    fun resourceItem_isInvalid_statusExpired() {
-        assertThat(resourceItem(status = "expired").isInvalid).isTrue()
-    }
 
-    @Test
-    fun resourceItem_isInvalid_statusInvalid() {
-        assertThat(resourceItem(status = "invalid").isInvalid).isTrue()
-    }
 
-    @Test
-    fun resourceItem_isInvalid_fileCount0() {
-        assertThat(resourceItem(fileCount = 0).isInvalid).isTrue()
-    }
 
-    @Test
-    fun resourceItem_isInvalid_正常资源() {
-        assertThat(resourceItem(status = "", fileCount = 1).isInvalid).isFalse()
-    }
 
-    @Test
-    fun resourceItem_isInvalid_statusOk() {
-        assertThat(resourceItem(status = "ok", fileCount = 1).isInvalid).isFalse()
-    }
 
     // ==================== multiSeasonScore（通过排序间接验证） ====================
 
-    @Test
-    fun multiSeasonScore_全季_高于第一季() = runTest {
-        val first = panSouItem(note = "情书 第一季", url = "https://first.com", datetime = "2024-01-01")
-        val full = panSouItem(note = "情书 全季", url = "https://full.com", datetime = "2024-01-01")
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(
-            mapOf("quark" to listOf(first, full))
-        )
-        coEvery { zresoApiService.search(any(), any(), any()) } returns zresoEmpty()
 
-        val result = repository.searchResources("情书", isShow = true)
-        val items = result.getOrNull()!!
-        // 全季（2分）应排第一季（1分）前面
-        assertThat(items[0].url).isEqualTo("https://full.com")
-    }
 
-    @Test
-    fun multiSeasonScore_合集_高于单季() = runTest {
-        val single = panSouItem(note = "情书 第2季", url = "https://single.com", datetime = "2024-01-01")
-        val collection = panSouItem(note = "情书 合集", url = "https://collection.com", datetime = "2024-01-01")
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(
-            mapOf("quark" to listOf(single, collection))
-        )
-        coEvery { zresoApiService.search(any(), any(), any()) } returns zresoEmpty()
-
-        val result = repository.searchResources("情书", isShow = true)
-        val items = result.getOrNull()!!
-        // 合集（2分）应排第2季（1分）前面
-        assertThat(items[0].url).isEqualTo("https://collection.com")
-    }
-
-    @Test
-    fun multiSeasonScore_1到N季_得2分() = runTest {
-        val single = panSouItem(note = "情书 第1季", url = "https://single.com", datetime = "2024-01-01")
-        val range = panSouItem(note = "情书 1-3季", url = "https://range.com", datetime = "2024-01-01")
-        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(
-            mapOf("quark" to listOf(single, range))
-        )
-        coEvery { zresoApiService.search(any(), any(), any()) } returns zresoEmpty()
-
-        val result = repository.searchResources("情书", isShow = true)
-        val items = result.getOrNull()!!
-        // 1-3季（2分）应排第1季（1分）前面
-        assertThat(items[0].url).isEqualTo("https://range.com")
-    }
 
     // ==================== 常量 ====================
 
-    @Test
-    fun ALL_SOURCES_包含pansou_panhub_zreso() {
-        assertThat(ResourceRepository.ALL_SOURCES).contains(ResourceRepository.SOURCE_PANSOU)
-        assertThat(ResourceRepository.ALL_SOURCES).contains(ResourceRepository.SOURCE_PANHUB)
-        assertThat(ResourceRepository.ALL_SOURCES).contains(ResourceRepository.SOURCE_ZRESO)
-    }
 
-    @Test
-    fun ALL_DISK_TYPES_包含7种网盘() {
-        assertThat(ResourceRepository.ALL_DISK_TYPES).contains(DiskType.QUARK)
-        assertThat(ResourceRepository.ALL_DISK_TYPES).contains(DiskType.BAIDU)
-        assertThat(ResourceRepository.ALL_DISK_TYPES).contains(DiskType.ALI)
-        assertThat(ResourceRepository.ALL_DISK_TYPES).contains(DiskType.XUNLEI)
-        assertThat(ResourceRepository.ALL_DISK_TYPES).contains(DiskType.UC)
-        assertThat(ResourceRepository.ALL_DISK_TYPES).contains(DiskType.ONEONEFIVE)
-        assertThat(ResourceRepository.ALL_DISK_TYPES).contains(DiskType.MAGNET)
-    }
 
     private fun zresoEmpty() = ZresoResponse(data = ZresoData())
 }

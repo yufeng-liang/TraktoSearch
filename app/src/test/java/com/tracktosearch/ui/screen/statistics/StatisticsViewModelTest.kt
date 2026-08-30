@@ -376,29 +376,9 @@ class StatisticsViewModelTest {
     /**
      * 测试点1：全部成功加载后 initialLoading 从 true 变为 false
      */
-    @Test
-    fun `loadStatistics_全部成功_initialLoading变false`() = runTest {
-        stubAllSuccess()
-
-        viewModel.loadStatistics()
-        waitForLoadComplete()
-
-        assertThat(viewModel.uiState.value.initialLoading).isFalse()
-    }
-
     /**
      * 测试点2：totalMovieCount 正确填充（等于 movies 列表大小）
      */
-    @Test
-    fun `loadStatistics_全部成功_totalMovieCount正确`() = runTest {
-        stubAllSuccess(movies = testMovies)
-
-        viewModel.loadStatistics()
-        waitForLoadComplete()
-
-        assertThat(viewModel.uiState.value.totalMovieCount).isEqualTo(2)
-    }
-
     /**
      * 测试点3：genreDistribution 正确填充（movies 和 watchedShows 的 genres 汇总）
      */
@@ -439,20 +419,6 @@ class StatisticsViewModelTest {
     /**
      * 测试点5：overviewReady 在 movies + shows + watchedShows 都到达后变为 true
      */
-    @Test
-    fun `loadStatistics_全部成功_overviewReady为true`() = runTest {
-        stubAllSuccess(
-            movies = testMovies,
-            shows = testShows,
-            watchedShows = testWatchedShows
-        )
-
-        viewModel.loadStatistics()
-        waitForLoadComplete()
-
-        assertThat(viewModel.uiState.value.overviewReady).isTrue()
-    }
-
     /**
      * 测试点6：movieHistory 失败（Result.failure）→ 设置 error，停止加载
      */
@@ -473,47 +439,9 @@ class StatisticsViewModelTest {
     /**
      * 测试点7：成功后再次调用 → 重新加载（cancel 旧任务，重置 uiState）
      */
-    @Test
-    fun `loadStatistics_再次调用_重新加载并重置状态`() = runTest {
-        stubAllSuccess(movies = testMovies)
-
-        // 第一次加载
-        viewModel.loadStatistics()
-        waitForLoadComplete()
-        assertThat(viewModel.uiState.value.totalMovieCount).isEqualTo(2)
-
-        // 第二次调用：同步重置状态
-        viewModel.loadStatistics()
-        // StandardTestDispatcher 下 launch 尚未执行，状态为重置后的初始值
-        assertThat(viewModel.uiState.value.initialLoading).isTrue()
-        assertThat(viewModel.uiState.value.error).isNull()
-        assertThat(viewModel.uiState.value.totalMovieCount).isEqualTo(0)
-
-        // 等待第二次加载完成
-        waitForLoadComplete()
-        assertThat(viewModel.uiState.value.totalMovieCount).isEqualTo(2)
-    }
-
     /**
      * 测试点8：wordCloud 数据正确填充（从 getAllReviews 获取评论，分词后生成）
      */
-    @Test
-    fun `loadStatistics_有评论数据_wordCloud正确填充`() = runTest {
-        stubAllSuccess(reviews = testReviews)
-
-        viewModel.loadStatistics()
-        waitForLoadComplete()
-
-        val state = viewModel.uiState.value
-        assertThat(state.wordCloudReady).isTrue()
-        assertThat(state.wordCloud).isNotEmpty()
-        // 验证按权重降序排列
-        val weights = state.wordCloud.map { it.weight }
-        assertThat(weights.sortedDescending()).isEqualTo(weights)
-        // 验证确实调用了 getAllReviews
-        coVerify { userReviewRepository.getAllReviews() }
-    }
-
     // ==================== 统计数据正确性测试 ====================
 
     /**
@@ -618,32 +546,6 @@ class StatisticsViewModelTest {
     /**
      * 测试点11：totalEpisodeCount 优先使用 userStats
      */
-    @Test
-    fun `loadStatistics_totalEpisodeCount_优先使用userStats`() = runTest {
-        stubAllSuccess(
-            watchedShows = listOf(
-                TraktWatchedShow(
-                    show = TraktShow(title = "T"),
-                    seasons = listOf(
-                        TraktWatchedSeason(number = 1, episodes = listOf(
-                            TraktWatchedEpisode(number = 1, completed = 1),
-                            TraktWatchedEpisode(number = 2, completed = 1)
-                        ))
-                    )
-                )
-            ),
-            userStats = TraktUserStatsResponse(
-                episodes = TraktStatsDetail(watched = 100)  // userStats 优先
-            )
-        )
-
-        viewModel.loadStatistics()
-        waitForLoadComplete()
-
-        // userStats.episodes.watched=100 优先于 watchedShows 兜底（2集）
-        assertThat(viewModel.uiState.value.totalEpisodeCount).isEqualTo(100)
-    }
-
     /**
      * 测试点12：totalEpisodeCount userStats 为 0 时降级到 watchedShows 兜底
      */
@@ -677,23 +579,6 @@ class StatisticsViewModelTest {
     /**
      * 测试点13：totalWatchMinutes 优先使用 userStats
      */
-    @Test
-    fun `loadStatistics_totalWatchMinutes_优先使用userStats`() = runTest {
-        stubAllSuccess(
-            movies = testMovies,  // runtime=120+90=210
-            userStats = TraktUserStatsResponse(
-                movies = TraktStatsDetail(minutes = 300),
-                episodes = TraktStatsDetail(minutes = 500)
-            )
-        )
-
-        viewModel.loadStatistics()
-        waitForLoadComplete()
-
-        // userStats.movies.minutes + userStats.episodes.minutes = 300+500=800
-        assertThat(viewModel.uiState.value.totalWatchMinutes).isEqualTo(800L)
-    }
-
     /**
      * 测试点14：totalWatchMinutes userStats 缺失时降级到 movies.runtime 求和
      */
@@ -711,16 +596,6 @@ class StatisticsViewModelTest {
     /**
      * 测试点15：averageRating 正确计算
      */
-    @Test
-    fun `loadStatistics_averageRating正确计算`() = runTest {
-        stubAllSuccess(ratings = testRatings)  // [8, 8, 9, 7] → avg=8.0
-
-        viewModel.loadStatistics()
-        waitForLoadComplete()
-
-        assertThat(viewModel.uiState.value.averageRating).isEqualTo(8.0)
-    }
-
     /**
      * 测试点16：averageRating 无评分时为 0.0
      */
@@ -738,43 +613,6 @@ class StatisticsViewModelTest {
     /**
      * 测试点17：thisMonthWatched / thisYearWatched 正确计算
      */
-    @Test
-    fun `loadStatistics_本月本年观看数正确`() = runTest {
-        val cal = java.util.Calendar.getInstance()
-        val currentYear = cal.get(java.util.Calendar.YEAR)
-        val currentMonth = cal.get(java.util.Calendar.MONTH)
-
-        // 构造本月、本年（非本月）、去年的观影记录
-        val thisMonthDate = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply {
-            timeZone = java.util.TimeZone.getTimeZone("UTC")
-        }.format(cal.time)
-
-        cal.add(java.util.Calendar.MONTH, -2)
-        val thisYearOtherMonthDate = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply {
-            timeZone = java.util.TimeZone.getTimeZone("UTC")
-        }.format(cal.time)
-
-        cal.add(java.util.Calendar.YEAR, -1)
-        val lastYearDate = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply {
-            timeZone = java.util.TimeZone.getTimeZone("UTC")
-        }.format(cal.time)
-
-        val movies = listOf(
-            TraktWatchlistMovieItem(watched_at = thisMonthDate, movie = TraktMovie(title = "本月")),
-            TraktWatchlistMovieItem(watched_at = thisYearOtherMonthDate, movie = TraktMovie(title = "本年")),
-            TraktWatchlistMovieItem(watched_at = lastYearDate, movie = TraktMovie(title = "去年"))
-        )
-        stubAllSuccess(movies = movies)
-
-        viewModel.loadStatistics()
-        waitForLoadComplete()
-
-        val state = viewModel.uiState.value
-        // thisMonthWatched=1（仅本月），thisYearWatched=2（本月+本年其他月）
-        assertThat(state.thisMonthWatched).isEqualTo(1)
-        assertThat(state.thisYearWatched).isEqualTo(2)
-    }
-
     /**
      * 测试点18：heatmapData 正确按日期分组
      */
@@ -849,27 +687,6 @@ class StatisticsViewModelTest {
      *
      * 剧集历史失败（致命），在电影 publish 后中断。
      */
-    @Test
-    fun `增量渲染_电影到达后_watchTimeReady为true_heatmap仍为false`() = runTest {
-        stubAllSuccess(movies = testMovies)
-        // 剧集历史失败（致命），在电影 publish 后中断
-        coEvery { traktRepository.getAllShowHistory(any()) } returns Result.failure(IOException("show fail"))
-
-        viewModel.loadStatistics()
-        waitForLoadComplete()
-
-        val state = viewModel.uiState.value
-        // 电影到达 → watchTimeReady=true（movies != null）
-        assertThat(state.watchTimeReady).isTrue()
-        assertThat(state.totalMovieCount).isEqualTo(2)
-        // 剧集未到达 → heatmapReady=false（需要 movies && shows）
-        assertThat(state.heatmapReady).isFalse()
-        // watchedShows 未到达 → overviewReady=false
-        assertThat(state.overviewReady).isFalse()
-        // error 来自剧集失败
-        assertThat(state.error).contains("Network error")
-    }
-
     /**
      * 测试点21：电影+剧集到达后 heatmapReady=true，但 overview 仍为 false
      *

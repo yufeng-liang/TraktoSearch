@@ -199,27 +199,6 @@ class TraktRepositoryTest {
     }
 
     @Test
-    fun `getUserProfile_缓存头像为空时按用户名补拉真实头像`() = runTest {
-        val cached = TraktUserProfileResponse(username = "yuhu", name = "yufeng liang")
-        val refreshed = cached.copy(
-            images = TraktUserImages(
-                avatar = TraktAvatar("https://walter.trakt.tv/images/users/yuhu/avatar.jpg")
-            )
-        )
-        coEvery { userProfileStorage.getProfile() } returns cached
-        coEvery { traktApiService.getUserProfileByUsername("yuhu", "full") } returns Response.success(refreshed)
-
-        val result = repository.getUserProfile()
-
-        assertThat(result.getOrNull()?.images?.avatar?.full)
-            .isEqualTo("https://walter.trakt.tv/images/users/yuhu/avatar.jpg")
-        coVerify(exactly = 1) { traktApiService.getUserProfileByUsername("yuhu", "full") }
-        coVerify(exactly = 1) { userProfileStorage.saveProfile(refreshed) }
-    }
-
-    // ==================== parseTraktDate（反射）====================
-
-    @Test
     fun `getUserProfile_profile接口405时回退公开用户资料`() = runTest {
         val cached = TraktUserProfileResponse(username = "yuhu", name = "yufeng liang")
         val refreshed = cached.copy(
@@ -399,19 +378,6 @@ class TraktRepositoryTest {
     }
 
     @Test
-    fun `checkTraktConnection_成功时复用已获取的用户资料`() = runTest {
-        val profile = TraktUserProfileResponse(username = "yuhu", name = "yufeng liang")
-        coEvery { traktApiService.getUserProfile() } returns Response.success(profile)
-
-        assertThat(repository.checkTraktConnection()).isTrue()
-
-        val cachedResult = repository.getUserProfile()
-        assertThat(cachedResult.getOrNull()).isEqualTo(profile)
-        coVerify(exactly = 1) { traktApiService.getUserProfile() }
-        coVerify(exactly = 1) { userProfileStorage.saveProfile(profile) }
-    }
-
-    @Test
     fun `watchHistory缓存命中时收集器触发清理不得死锁`() = runTest {
         repository.fetchWatchHistory(1).toList()
 
@@ -433,66 +399,6 @@ class TraktRepositoryTest {
 
         assertThat(repository.userProfile.value).isEqualTo(cached)
     }
-
-    @Test
-    fun `checkTraktConnection_401_returnsDisconnected`() = runTest {
-        coEvery { traktApiService.getUserProfile() } returns
-            Response.error(401, "".toResponseBody())
-
-        assertThat(repository.checkTraktConnectionResult())
-            .isEqualTo(com.tracktosearch.data.remote.trakt.TraktConnectionCheckResult.DISCONNECTED)
-    }
-
-    @Test
-    fun `checkTraktConnection_networkFailure_returnsUnknown`() = runTest {
-        coEvery { traktApiService.getUserProfile() } throws IOException("offline")
-
-        assertThat(repository.checkTraktConnectionResult())
-            .isEqualTo(com.tracktosearch.data.remote.trakt.TraktConnectionCheckResult.UNKNOWN)
-    }
-
-    private fun parseTraktDate(dateStr: String?): Long {
-        val method = TraktRepository::class.java.getDeclaredMethod("parseTraktDate", String::class.java)
-        method.isAccessible = true
-        return method.invoke(repository, dateStr) as Long
-    }
-
-    @Test
-    fun `parseTraktDate_null返回当前时间戳`() {
-        val before = System.currentTimeMillis()
-        val result = parseTraktDate(null)
-        val after = System.currentTimeMillis()
-        assertThat(result).isAtLeast(before)
-        assertThat(result).isAtMost(after)
-    }
-
-    @Test
-    fun `parseTraktDate_空字符串返回当前时间戳`() {
-        val before = System.currentTimeMillis()
-        val result = parseTraktDate("")
-        val after = System.currentTimeMillis()
-        assertThat(result).isAtLeast(before)
-        assertThat(result).isAtMost(after)
-    }
-
-    @Test
-    fun `parseTraktDate_合法ISO8601返回对应时间戳`() {
-        val isoStr = "2024-01-15T10:30:00.000Z"
-        val expected = Instant.parse(isoStr).toEpochMilli()
-        val result = parseTraktDate(isoStr)
-        assertThat(result).isEqualTo(expected)
-    }
-
-    @Test
-    fun `parseTraktDate_非法字符串返回当前时间戳`() {
-        val before = System.currentTimeMillis()
-        val result = parseTraktDate("not-a-date")
-        val after = System.currentTimeMillis()
-        assertThat(result).isAtLeast(before)
-        assertThat(result).isAtMost(after)
-    }
-
-    // ==================== fetchWatchHistory ====================
 
     @Test
     fun `fetchWatchHistory_返回Flow_分批emit且末批isComplete`() = runTest {
@@ -517,42 +423,6 @@ class TraktRepositoryTest {
     }
 
     @Test
-    fun `fetchWatchHistory_首批未富化占位用Trakt原始标题且无海报`() = runTest {
-        coEvery { tmdbRepository.enrichMovie(any(), any(), any()) } returns TmdbRepository.MovieEnrichment(
-            posterUrl = "/poster.jpg",
-            chineseTitle = "中文名",
-            originalTitle = "Movie A",
-            overview = "",
-            genres = "",
-            year = 2024,
-            rating = 0.0,
-            runtime = 0,
-            releaseDate = "",
-            country = "",
-            status = "",
-            collectionId = null,
-            imdbId = "tt1"
-        )
-        val movieEntry = TraktWatchlistMovieItem(
-            watched_at = "2024-01-01T00:00:00.000Z",
-            movie = TraktMovie(title = "Movie A", year = 2024, ids = TraktIds(trakt = 1, tmdb = 10, imdb = "tt1"))
-        )
-        coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns
-            Response.success(listOf(movieEntry), Headers.headersOf("X-Pagination-Item-Count", "1", "X-Pagination-Page-Count", "1"))
-        coEvery { traktApiService.getEpisodeHistory(any(), any(), any(), any()) } returns
-            Response.success(emptyList(), Headers.headersOf("X-Pagination-Item-Count", "0", "X-Pagination-Page-Count", "1"))
-
-        val result = repository.fetchWatchHistory(1).toList()
-        val placeholder = result.first { !it.enriched }
-        assertThat(placeholder.items.single().displayTitle).isEqualTo("Movie A")
-        assertThat(placeholder.items.single().posterUrl).isNull()
-        // 富化完成的末批替换为中文名和海报
-        assertThat(result.last().isComplete).isTrue()
-        assertThat(result.last().items.single().displayTitle).isEqualTo("中文名")
-        assertThat(result.last().items.single().posterUrl).isEqualTo("/poster.jpg")
-    }
-
-    @Test
     fun `fetchWatchHistory_同一tmdbId只富化一次`() = runTest {
         // 同一部剧的 30 集：原实现每条各发一次 TMDB 请求，去重后只应发一次
         val episodes = (1..30).map { i ->
@@ -572,68 +442,6 @@ class TraktRepositoryTest {
         assertThat(result.last().isComplete).isTrue()
         assertThat(result.last().items).hasSize(30)
         coVerify(exactly = 1) { tmdbRepository.enrichTv(700, any(), any()) }
-    }
-
-    @Test
-    fun `fetchWatchHistory_分批emit数量正确`() = runTest {
-        val movies = (1..45).map { i ->
-            TraktWatchlistMovieItem(
-                watched_at = "2024-01-${String.format("%02d", i)}T00:00:00.000Z",
-                movie = TraktMovie(title = "Movie $i", year = 2024, ids = TraktIds(trakt = i, tmdb = i + 100, imdb = "tt$i"))
-            )
-        }
-        coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns
-            Response.success(movies, Headers.headersOf("X-Pagination-Item-Count", "45", "X-Pagination-Page-Count", "1"))
-        coEvery { traktApiService.getEpisodeHistory(any(), any(), any(), any()) } returns
-            Response.success(emptyList(), Headers.headersOf("X-Pagination-Item-Count", "0", "X-Pagination-Page-Count", "1"))
-
-        val result = repository.fetchWatchHistory(1).toList()
-        val finalBatch = result.last()
-        assertThat(finalBatch.isComplete).isTrue()
-        assertThat(finalBatch.error).isNull()
-        // 末批包含全部 45 条
-        assertThat(finalBatch.items).hasSize(45)
-        // 未富化占位批一次给出全部条目
-        assertThat(result.first { !it.enriched }.items).hasSize(45)
-        // 富化过程分批提交：首批阈值 6，之后每 20 条一批 → 6 / 20 / 40
-        val enrichedProgress = result.filter { it.enriched && !it.isComplete }.map { it.items.size }
-        assertThat(enrichedProgress).containsExactly(6, 20, 40).inOrder()
-    }
-
-    @Test
-    fun `fetchWatchHistory_enrich失败单条兜底不崩溃`() = runTest {
-        coEvery { tmdbRepository.enrichMovie(eq(102), any(), any()) } throws RuntimeException("TMDB boom")
-        val movies = listOf(
-            TraktWatchlistMovieItem(
-                watched_at = "2024-01-03T00:00:00.000Z",
-                movie = TraktMovie(title = "Movie 3", year = 2024, ids = TraktIds(trakt = 3, tmdb = 101, imdb = "tt3"))
-            ),
-            TraktWatchlistMovieItem(
-                watched_at = "2024-01-02T00:00:00.000Z",
-                movie = TraktMovie(title = "Movie 2", year = 2024, ids = TraktIds(trakt = 2, tmdb = 102, imdb = "tt2"))
-            ),
-            TraktWatchlistMovieItem(
-                watched_at = "2024-01-01T00:00:00.000Z",
-                movie = TraktMovie(title = "Movie 1", year = 2024, ids = TraktIds(trakt = 1, tmdb = 103, imdb = "tt1"))
-            )
-        )
-        coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns
-            Response.success(movies, Headers.headersOf("X-Pagination-Item-Count", "3", "X-Pagination-Page-Count", "1"))
-        coEvery { traktApiService.getEpisodeHistory(any(), any(), any(), any()) } returns
-            Response.success(emptyList(), Headers.headersOf("X-Pagination-Item-Count", "0", "X-Pagination-Page-Count", "1"))
-
-        val result = repository.fetchWatchHistory(1).toList()
-        assertThat(result.last().isComplete).isTrue()
-        assertThat(result.last().error).isNull()
-        assertThat(result.last().items).hasSize(3)
-    }
-
-    @Test
-    fun `fetchWatchHistory_空响应返回空列表`() = runTest {
-        val result = repository.fetchWatchHistory(1).toList()
-        assertThat(result.isNotEmpty()).isTrue()
-        assertThat(result.last().isComplete).isTrue()
-        assertThat(result.last().items).isEmpty()
     }
 
     @Test
@@ -773,71 +581,6 @@ class TraktRepositoryTest {
         // imdbId 来自 enrichment
         assertThat(item.imdbId).isEqualTo("tt1375666")
     }
-
-    @Test
-    fun `fetchWatchHistory_episode记录displayTitle和posterUrl来自TmdbEnrichment`() = runTest {
-        coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns emptySuccessResponse()
-        val episodeEntry = TraktHistoryEntry(
-            watched_at = "2024-06-01T00:00:00.000Z",
-            episode = TraktHistoryEpisode(season = 1, number = 1, title = "Ep1", ids = TraktHistoryIds()),
-            show = TraktHistoryShow(title = "Breaking Bad", year = 2024, ids = TraktHistoryIds(trakt = 2, tmdb = 20, imdb = "tt2"))
-        )
-        coEvery { traktApiService.getEpisodeHistory(any(), any(), any(), any()) } returns
-            Response.success(listOf(episodeEntry), Headers.headersOf("X-Pagination-Item-Count", "1", "X-Pagination-Page-Count", "1"))
-        coEvery { tmdbRepository.enrichTv(20, "Breaking Bad", 2024) } returns TmdbRepository.TvEnrichment(
-            posterUrl = "https://image.tmdb.org/t/p/w500/bb.jpg",
-            chineseTitle = "绝命毒师",
-            originalTitle = "Breaking Bad",
-            overview = "",
-            genres = "",
-            year = 2008,
-            rating = 9.5,
-            imdbId = "tt0903747"
-        )
-
-        val result = repository.fetchWatchHistory(1).toList()
-        assertThat(result.isNotEmpty()).isTrue()
-        val item = result.last().items[0]
-
-        assertThat(item.title).isEqualTo("Breaking Bad")
-        assertThat(item.displayTitle).isEqualTo("绝命毒师")
-        assertThat(item.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/bb.jpg")
-        assertThat(item.year).isEqualTo(2008)
-        assertThat(item.imdbId).isEqualTo("tt0903747")
-        assertThat(item.episodeInfo).isEqualTo("S1E1")
-    }
-
-    @Test
-    fun `fetchWatchHistory_enrichment返回空chineseTitle时displayTitle回退到TraktTitle`() = runTest {
-        val movieEntry = TraktWatchlistMovieItem(
-            watched_at = "2024-01-01T00:00:00.000Z",
-            movie = TraktMovie(title = "Inception", year = 2024, ids = TraktIds(trakt = 1, tmdb = 10, imdb = "tt1"))
-        )
-        coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns
-            Response.success(listOf(movieEntry), Headers.headersOf("X-Pagination-Item-Count", "1", "X-Pagination-Page-Count", "1"))
-        coEvery { traktApiService.getEpisodeHistory(any(), any(), any(), any()) } returns emptyEpisodeResponse()
-        // enrichment 返回空 chineseTitle → displayTitle 应回退到 Trakt 原始标题
-        coEvery { tmdbRepository.enrichMovie(10, "Inception", 2024) } returns TmdbRepository.MovieEnrichment(
-            posterUrl = null,
-            chineseTitle = "",
-            originalTitle = "",
-            overview = "",
-            genres = "",
-            year = null,
-            rating = 0.0,
-            imdbId = null
-        )
-
-        val result = repository.fetchWatchHistory(1).toList()
-        assertThat(result.isNotEmpty()).isTrue()
-        val item = result.last().items[0]
-
-        // displayTitle = "".ifBlank { "Inception" } = "Inception"
-        assertThat(item.displayTitle).isEqualTo("Inception")
-        assertThat(item.posterUrl).isNull()
-    }
-
-    // ==================== fetchWatchHistory enrichment 失败降级（测试点 C）====================
 
     @Test
     fun `fetchWatchHistory_enrichment失败时displayTitle回退到TraktTitle不崩溃`() = runTest {

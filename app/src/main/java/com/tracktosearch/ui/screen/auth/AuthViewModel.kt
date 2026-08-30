@@ -6,12 +6,13 @@ import androidx.lifecycle.viewModelScope
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.auth.AuthCheckScheduler
 import com.tracktosearch.data.auth.AuthManager
-import com.tracktosearch.data.auth.AuthState
+import com.tracktosearch.data.auth.hasGatewayAccess
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -36,34 +37,34 @@ class AuthViewModel @Inject constructor(
     }
 
     private val _uiState = MutableStateFlow(
-        AuthUiState(activated = authManager.authState.value.isActivated())
+        AuthUiState(activated = authManager.authState.value.hasGatewayAccess())
     )
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
     init {
         viewModelScope.launch {
             // 订阅网关授权态：EXPIRED 等状态在登录页停留期间经静默恢复/重新激活转回
-            // 已激活态时，解锁按钮并清理过期错误，避免恢复后仍被邀请码输入困在登录页
+            // 已激活态时解锁平台/访客入口；授权失效时也要立即重新锁定，避免页面保留旧 true，
+            // 防止用户从失效会话继续以“访客”绕过激活边界。
             authManager.authState.collectLatest { state ->
-                if (state.isActivated()) {
-                    _uiState.value = _uiState.value.copy(
-                        activated = true,
-                        error = null,
-                        requiresMigrationInvite = false
+                val activated = state.hasGatewayAccess()
+                _uiState.update { current ->
+                    current.copy(
+                        activated = activated,
+                        error = if (activated) null else current.error,
+                        requiresMigrationInvite = if (activated) false else current.requiresMigrationInvite
                     )
                 }
             }
         }
         viewModelScope.launch {
             authManager.recoveryFailure.collectLatest { failure ->
-                if (failure != null && !authManager.authState.value.isActivated()) {
+                if (failure != null && !authManager.authState.value.hasGatewayAccess()) {
                     _uiState.value = _uiState.value.copy(requiresMigrationInvite = true)
                 }
             }
         }
     }
-
-    private fun AuthState.isActivated(): Boolean = this == AuthState.AUTHORIZED || this == AuthState.OFFLINE
 
     fun updateInviteCode(value: String) {
         // 过滤空白字符并截断到保守上限，防误粘贴整段文本或超长输入

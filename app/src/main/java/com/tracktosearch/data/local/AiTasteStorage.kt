@@ -17,7 +17,7 @@ import javax.inject.Singleton
 private val Context.aiTasteDataStore: DataStore<Preferences> by preferencesDataStore(name = "ai_taste")
 
 /**
- * 「锐评我的看单」隐私偏好存储。
+ * 「AI 锐评看单」隐私偏好存储。
  *
  * - [tasteUploadEnabled]：功能数据上传开关（默认开启），设置页「AI 与隐私」分组控制
  * - [tasteConsentDecided]：用户是否对首次使用说明弹窗做出过决定（默认 false = 从未见过弹窗）

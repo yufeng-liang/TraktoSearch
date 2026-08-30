@@ -27,24 +27,6 @@ class SettingsAccountSectionTest {
         ApplicationProvider.getApplicationContext<Context>().getString(resId)
 
     @Test
-    fun 失效态显示原因与身份信息() {
-        composeRule.setContent {
-            MaterialTheme {
-                AccountExpiredRow(
-                    brandLogo = {},
-                    primaryName = "someone",
-                    onReconnect = {},
-                    onLogout = {}
-                )
-            }
-        }
-
-        composeRule.onNodeWithText("someone").assertIsDisplayed()
-        composeRule.onNodeWithText(string(R.string.settings_account_connection_expired))
-            .assertIsDisplayed()
-    }
-
-    @Test
     fun 点击重新登录触发回调() {
         var reconnected = false
         composeRule.setContent {

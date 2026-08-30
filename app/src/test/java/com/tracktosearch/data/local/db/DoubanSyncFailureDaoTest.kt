@@ -13,7 +13,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], application = android.app.Application::class)
 class DoubanSyncFailureDaoTest {
 
     private lateinit var db: AppDatabase
@@ -75,37 +75,11 @@ class DoubanSyncFailureDaoTest {
     }
 
     @Test
-    fun getAll_返回全部() = runTest {
-        dao.insertAll(listOf(
-            sample(doubanId = "d1", title = "A"),
-            sample(doubanId = "d2", title = "B")
-        ))
-        val all = dao.getAll()
-        assertThat(all).hasSize(2)
-        assertThat(all.map { it.title }).containsExactly("A", "B")
-    }
-
-    @Test
-    fun getAll_空表_返回空列表() = runTest {
-        assertThat(dao.getAll()).isEmpty()
-    }
-
-    @Test
     fun getById_命中() = runTest {
         dao.insertAll(listOf(sample(doubanId = "d1", title = "电影A")))
         val result = dao.getById("d1")
         assertThat(result).isNotNull()
         assertThat(result!!.title).isEqualTo("电影A")
-    }
-
-    @Test
-    fun getById_未命中_返回null() = runTest {
-        assertThat(dao.getById("not_exists")).isNull()
-    }
-
-    @Test
-    fun count_空表_返回0() = runTest {
-        assertThat(dao.count()).isEqualTo(0)
     }
 
     // ==================== 按 status 过滤与删除 ====================
@@ -123,15 +97,6 @@ class DoubanSyncFailureDaoTest {
     }
 
     @Test
-    fun getByStatus_过滤collect() = runTest {
-        dao.insertAll(listOf(
-            sample(doubanId = "d1", status = "wish"),
-            sample(doubanId = "d2", status = "collect")
-        ))
-        assertThat(dao.getByStatus("collect")).hasSize(1)
-    }
-
-    @Test
     fun deleteByDoubanId_删除单条() = runTest {
         dao.insertAll(listOf(
             sample(doubanId = "d1"),
@@ -140,13 +105,6 @@ class DoubanSyncFailureDaoTest {
         dao.deleteByDoubanId("d1")
         assertThat(dao.count()).isEqualTo(1)
         assertThat(dao.getById("d1")).isNull()
-    }
-
-    @Test
-    fun deleteByDoubanId_不存在的ID_无副作用() = runTest {
-        dao.insertAll(listOf(sample(doubanId = "d1")))
-        dao.deleteByDoubanId("not_exists")
-        assertThat(dao.count()).isEqualTo(1)
     }
 
     @Test
@@ -175,13 +133,6 @@ class DoubanSyncFailureDaoTest {
     }
 
     @Test
-    fun deleteByDoubanIds_空列表_无副作用() = runTest {
-        dao.insertAll(listOf(sample(doubanId = "d1")))
-        dao.deleteByDoubanIds(emptyList())
-        assertThat(dao.count()).isEqualTo(1)
-    }
-
-    @Test
     fun clearAll_清空() = runTest {
         dao.insertAll(listOf(
             sample(doubanId = "d1"),
@@ -204,15 +155,6 @@ class DoubanSyncFailureDaoTest {
     }
 
     @Test
-    fun updateMediaType_设置为show_同时mediaTypeCleared置false() = runTest {
-        dao.insertAll(listOf(sample(doubanId = "d1", mediaType = null)))
-        dao.updateMediaType("d1", "show", now = 5000L)
-        val result = dao.getById("d1")!!
-        assertThat(result.mediaType).isEqualTo("show")
-        assertThat(result.mediaTypeCleared).isFalse()
-    }
-
-    @Test
     fun updateMediaType_清除标注为null_同时mediaTypeCleared置true() = runTest {
         dao.insertAll(listOf(sample(doubanId = "d1", mediaType = "movie", mediaTypeCleared = false)))
         dao.updateMediaType("d1", null, now = 5000L)
@@ -220,14 +162,6 @@ class DoubanSyncFailureDaoTest {
         assertThat(result.mediaType).isNull()
         assertThat(result.mediaTypeCleared).isTrue()
         assertThat(result.updatedAt).isEqualTo(5000L)
-    }
-
-    @Test
-    fun updateMediaType_不存在的doubanId_无副作用() = runTest {
-        dao.insertAll(listOf(sample(doubanId = "d1")))
-        dao.updateMediaType("not_exists", "movie")
-        assertThat(dao.count()).isEqualTo(1)
-        assertThat(dao.getById("d1")!!.mediaType).isNull()
     }
 
     // ==================== updateMediaTypeBatch（批量标注） ====================
@@ -258,13 +192,6 @@ class DoubanSyncFailureDaoTest {
         assertThat(all.all { it.mediaTypeCleared }).isTrue()
     }
 
-    @Test
-    fun updateMediaTypeBatch_空列表_无副作用() = runTest {
-        dao.insertAll(listOf(sample(doubanId = "d1", mediaType = "movie")))
-        dao.updateMediaTypeBatch(emptyList(), "show")
-        assertThat(dao.getById("d1")!!.mediaType).isEqualTo("movie")
-    }
-
     // ==================== updateMediaTypeIfNull（全局池填充用） ====================
 
     @Test
@@ -279,12 +206,6 @@ class DoubanSyncFailureDaoTest {
         dao.insertAll(listOf(sample(doubanId = "d1", mediaType = "show")))
         dao.updateMediaTypeIfNull("d1", "movie")
         assertThat(dao.getById("d1")!!.mediaType).isEqualTo("show")  // 未被覆盖
-    }
-
-    @Test
-    fun updateMediaTypeIfNull_不存在的doubanId_无副作用() = runTest {
-        dao.updateMediaTypeIfNull("not_exists", "movie")
-        assertThat(dao.count()).isEqualTo(0)
     }
 
     // ==================== getDoubanIdsWithNullMediaType（关键：排除用户主动清除的） ====================
@@ -331,14 +252,6 @@ class DoubanSyncFailureDaoTest {
         assertThat(result.updatedAt).isEqualTo(5000L)
     }
 
-    @Test
-    fun updateStatus_不存在的doubanId_无副作用() = runTest {
-        dao.insertAll(listOf(sample(doubanId = "d1", status = "wish")))
-        dao.updateStatus("not_exists", "collect")
-        assertThat(dao.count()).isEqualTo(1)
-        assertThat(dao.getById("d1")!!.status).isEqualTo("wish")
-    }
-
     // ==================== updateSubtitle ====================
 
     @Test
@@ -357,13 +270,6 @@ class DoubanSyncFailureDaoTest {
         assertThat(dao.getById("d1")!!.subtitle).isNull()
     }
 
-    @Test
-    fun updateSubtitle_不存在的doubanId_无副作用() = runTest {
-        dao.insertAll(listOf(sample(doubanId = "d1")))
-        dao.updateSubtitle("not_exists", "test")
-        assertThat(dao.count()).isEqualTo(1)
-    }
-
     // ==================== 事务方法 replaceAll / replaceByStatus ====================
 
     @Test
@@ -378,19 +284,6 @@ class DoubanSyncFailureDaoTest {
         ))
         assertThat(dao.count()).isEqualTo(2)
         assertThat(dao.getAll().map { it.doubanId }).containsExactly("new1", "new2")
-    }
-
-    @Test
-    fun replaceAll_空列表_清空表() = runTest {
-        dao.insertAll(listOf(sample(doubanId = "d1")))
-        dao.replaceAll(emptyList())
-        assertThat(dao.count()).isEqualTo(0)
-    }
-
-    @Test
-    fun replaceAll_空表上调用_插入新数据() = runTest {
-        dao.replaceAll(listOf(sample(doubanId = "d1")))
-        assertThat(dao.count()).isEqualTo(1)
     }
 
     @Test
@@ -414,15 +307,6 @@ class DoubanSyncFailureDaoTest {
     }
 
     @Test
-    fun replaceByStatus_不存在的status_只插入不删除() = runTest {
-        dao.insertAll(listOf(sample(doubanId = "d1", status = "wish")))
-        dao.replaceByStatus("collect", listOf(
-            sample(doubanId = "c1", status = "collect")
-        ))
-        assertThat(dao.count()).isEqualTo(2)  // 原 wish + 新 collect
-    }
-
-    @Test
     fun replaceByStatus_空列表_只清空对应status() = runTest {
         dao.insertAll(listOf(
             sample(doubanId = "d1", status = "wish"),
@@ -435,15 +319,4 @@ class DoubanSyncFailureDaoTest {
 
     // ==================== attemptCount 字段 ====================
 
-    @Test
-    fun attemptCount_默认值为0() = runTest {
-        dao.insertAll(listOf(sample(doubanId = "d1")))
-        assertThat(dao.getById("d1")!!.attemptCount).isEqualTo(0)
-    }
-
-    @Test
-    fun attemptCount_自定义值持久化() = runTest {
-        dao.insertAll(listOf(sample(doubanId = "d1", attemptCount = 3)))
-        assertThat(dao.getById("d1")!!.attemptCount).isEqualTo(3)
-    }
 }

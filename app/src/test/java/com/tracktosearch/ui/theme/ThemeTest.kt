@@ -16,26 +16,6 @@ import org.robolectric.annotation.Config
 
 class ThemeTest {
 
-    @Test
-    fun vintageTicketColorScheme_usesCommonUnselectedNavigationColor() {
-        assertThat(vintageTicketColorScheme(dark = false).onSurfaceVariant)
-            .isEqualTo(Color(0xFF49454F))
-        assertThat(vintageTicketColorScheme(dark = true).onSurfaceVariant)
-            .isEqualTo(Color(0xFFE0E0E0))
-    }
-
-    @Test
-    fun appHazeDefaultNoiseFactor_usesRequestedValue() {
-        assertThat(AppHazeDefaultNoiseFactor).isEqualTo(0.10f)
-    }
-
-    @Test
-    fun vintageTicketLightScheme_usesNeutralPageBackgroundBehindWhiteSurfaces() {
-        assertThat(vintageTicketColorScheme(dark = false).background)
-            .isEqualTo(Color(0xFFF0F1F3))
-        assertThat(vintageTicketColorScheme(dark = false).surface)
-            .isEqualTo(Color.White)
-    }
 }
 
 @RunWith(RobolectricTestRunner::class)

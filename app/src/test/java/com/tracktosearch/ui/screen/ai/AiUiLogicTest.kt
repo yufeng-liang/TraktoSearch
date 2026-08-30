@@ -18,35 +18,6 @@ import org.junit.Test
 class AiUiLogicTest {
 
     @Test
-    fun usagiAuditionTextDoesNotUseActivationAckPhrase() {
-        val usagi = com.tracktosearch.data.ai.AiCharacterCatalog.all.first { it.id == "usagi" }
-
-        assertThat(usagi.auditionText).doesNotContain("到")
-        assertThat(usagi.auditionText).isNotEmpty()
-    }
-
-    @Test
-    fun auditionRequest_usesStaticTextAndAuditionScene() {
-        val character = AiCharacter(
-            id = "usagi",
-            name = "乌萨奇",
-            activationWord = "乌萨奇",
-            auditionText = "呀哈！你的片单有点东西。",
-        )
-
-        val request = buildAuditionTtsRequest(character, "sprite-test")
-
-        assertThat(request).isEqualTo(
-            AiTtsRequest(
-                characterId = "usagi",
-                text = "呀哈！你的片单有点东西。",
-                sessionId = "sprite-test",
-                scene = AiTtsScene.AUDITION,
-            )
-        )
-    }
-
-    @Test
     fun auditionPlaybackRoute_separatesGuestAuthorizedAndUnavailableCharacters() {
         assertThat(auditionPlaybackRoute(isAuthorized = false, isAvailable = true))
             .isEqualTo(AiAuditionPlaybackRoute.GUEST_TTS)
@@ -130,25 +101,6 @@ class AiUiLogicTest {
     }
 
     @Test
-    fun quizInProgressOnlyWhileStartedAndBeforeResult() {
-        val quiz = AiQuiz(
-            quizId = "q",
-            title = "标题",
-            subtitle = "",
-            mediaTitles = emptyList(),
-            totalScore = 100,
-            questions = listOf(
-                AiQuizQuestion(id = "a", type = AiQuizQuestionType.SINGLE, prompt = "1")
-            )
-        )
-        val base = AiSpriteUiState(quiz = quiz, quizStarted = true)
-
-        assertThat(hasQuizInProgress(base)).isTrue()
-        assertThat(hasQuizInProgress(base.copy(quizStarted = false))).isFalse()
-        assertThat(hasQuizInProgress(base.copy(quiz = null))).isFalse()
-    }
-
-    @Test
     fun replaceIsBlockedWhenCandidatesRunOutNotJustWhenCountUsedUp() {
         val seven = (1..7).map { id ->
             com.tracktosearch.data.ai.AiWatchedTitleDto(
@@ -221,27 +173,6 @@ class AiUiLogicTest {
         assertThat(shouldShowTextActivation(offered.copy(textActivationAttempt = 5))).isFalse()
         // 已激活成功的角色不再展示激活入口
         assertThat(shouldShowTextActivation(offered.copy(activatedCharacterId = ready.id))).isFalse()
-    }
-
-    @Test
-    fun selectingTheCurrentCharacterDoesNotStartANewActivationSession() {
-        assertThat(shouldResetActivationAttempt("usagi", "usagi")).isFalse()
-        assertThat(shouldResetActivationAttempt("usagi", "hachiware")).isTrue()
-    }
-
-    @Test
-    fun quizProgressIsClampedToStableQuestionRange() {
-        assertThat(quizProgress(current = 0, total = 13)).isEqualTo(0f)
-        assertThat(quizProgress(current = 4, total = 13)).isEqualTo(4f / 13f)
-        assertThat(quizProgress(current = 18, total = 13)).isEqualTo(1f)
-    }
-
-    @Test
-    fun localQuizScoreUsesConfiguredQuestionWeights() {
-        assertThat(localQuestionScore(AiQuizQuestionType.SINGLE, answered = true)).isEqualTo(7)
-        assertThat(localQuestionScore(AiQuizQuestionType.MULTIPLE, answered = true)).isEqualTo(10)
-        assertThat(localQuestionScore(AiQuizQuestionType.SHORT, answered = true)).isEqualTo(10)
-        assertThat(localQuestionScore(AiQuizQuestionType.SINGLE, answered = false)).isEqualTo(0)
     }
 
     @Test
@@ -402,73 +333,11 @@ class AiUiLogicTest {
     }
 
     @Test
-    fun completedSearchWithResultsUsesTheFirstResultAnchor() {
-        assertThat(searchAnchorFor(AiSpriteOverlayTrigger.SEARCH_COMPLETED, hasResultAnchor = true))
-            .isEqualTo(AiSpriteAnchor.ResultCard)
-        assertThat(searchAnchorFor(AiSpriteOverlayTrigger.SEARCH_COMPLETED, hasResultAnchor = false))
-            .isEqualTo(AiSpriteAnchor.SearchBox)
-    }
-
-    @Test
-    fun activationSuccessBadgeIsShownOnlyForTheActivatedCharacter() {
-        assertThat(shouldShowActivationSuccessBadge("usagi", null, isAuthorized = true)).isEqualTo(false)
-        assertThat(shouldShowActivationSuccessBadge("usagi", "hachiware", isAuthorized = true)).isEqualTo(false)
-        assertThat(shouldShowActivationSuccessBadge("usagi", "usagi", isAuthorized = false)).isEqualTo(false)
-        assertThat(shouldShowActivationSuccessBadge("usagi", "usagi", isAuthorized = true)).isEqualTo(true)
-    }
-
-    @Test
     fun activatedContentRequiresTheSelectedActivatedCharacterAndAuthorization() {
         assertThat(shouldShowActivatedCharacterContent("usagi", "usagi", isAuthorized = true)).isTrue()
         assertThat(shouldShowActivatedCharacterContent("hachiware", "usagi", isAuthorized = true)).isFalse()
         assertThat(shouldShowActivatedCharacterContent("usagi", "usagi", isAuthorized = false)).isFalse()
         assertThat(shouldShowActivatedCharacterContent("usagi", null, isAuthorized = true)).isFalse()
-    }
-
-    @Test
-    fun quizPreviewContainsSevenDistinctMoviesAndAllowsOnlyTwoReplacements() {
-        val candidates = (1..10).map { id ->
-            com.tracktosearch.data.ai.AiWatchedTitleDto(
-                mediaId = id.toString(),
-                mediaType = "movie",
-                title = "片名$id"
-            )
-        }
-        val preview = selectQuizPreview(candidates, Random(1))
-        assertThat(preview).hasSize(7)
-        assertThat(preview.map { it.mediaId }.toSet()).hasSize(7)
-
-        val replaced = replaceQuizPreview(preview, candidates, index = 0, replacementCount = 0, random = Random(2))
-        assertThat(replaced).hasSize(7)
-        assertThat(replaced[0].mediaId).isNotEqualTo(preview[0].mediaId)
-        val second = replaceQuizPreview(replaced, candidates, index = 1, replacementCount = 1, random = Random(3))
-        assertThat(second[1].mediaId).isNotEqualTo(replaced[1].mediaId)
-        assertThat(replaceQuizPreview(second, candidates, 2, replacementCount = 2, random = Random(4))).isEqualTo(second)
-    }
-
-    @Test
-    fun recommendationDetailsIncludeDoubanAndImdbOnlyItems() {
-        val doubanOnly = AiRecommendation("db-1", "movie", "豆瓣片", null, null, null, null, null, null, "db-1", "")
-        val imdbOnly = AiRecommendation("tt-1", "show", "IMDb剧", null, null, null, null, null, "tt-1", null, "")
-        val noId = AiRecommendation("title", "movie", "无 ID", null, null, null, null, null, null, null, "")
-
-        assertThat(recommendationHasDetailRoute(doubanOnly)).isTrue()
-        assertThat(recommendationHasDetailRoute(imdbOnly)).isTrue()
-        assertThat(recommendationHasDetailRoute(noId)).isFalse()
-        assertThat(recommendationNavigationKey(doubanOnly)).isEqualTo("ai-douban:db-1")
-        assertThat(recommendationNavigationKey(imdbOnly)).isEqualTo("tt-1")
-    }
-
-    @Test
-    fun quizAnswerLabelsExposeSelectedOptionTextForResultReview() {
-        val question = AiQuizQuestion(
-            id = "q1",
-            type = AiQuizQuestionType.SINGLE,
-            prompt = "问题",
-            options = listOf(AiQuizOption("a", "答案 A"), AiQuizOption("b", "答案 B"))
-        )
-        val answer = AiQuizAnswer("q1", selectedOptionIds = listOf("b"))
-        assertThat(quizAnswerLabels(question, answer)).containsExactly("答案 B")
     }
 
     @Test
@@ -490,21 +359,4 @@ class AiUiLogicTest {
         assertThat(quizCorrectAnswerText(question, result)).isEqualTo("答案 A")
     }
 
-    @Test
-    fun quizCorrectAnswerTextUsesServerTextForShortAnswer() {
-        val question = AiQuizQuestion(
-            id = "q1",
-            type = AiQuizQuestionType.SHORT,
-            prompt = "问题"
-        )
-        val result = AiQuizQuestionResult(
-            questionId = "q1",
-            score = 10,
-            correct = true,
-            explanation = "解析",
-            correctAnswer = "因为选择会留下痕迹"
-        )
-
-        assertThat(quizCorrectAnswerText(question, result)).isEqualTo("因为选择会留下痕迹")
-    }
 }

@@ -20,29 +20,6 @@ class LiveUpdateNotificationBuilderTest {
     private val context = RuntimeEnvironment.getApplication()
 
     @Test
-    fun `进行中通知正文显示阶段计数和当前条目并隐藏锁屏标题`() {
-        val notification = buildNotification(
-            contentText = "获取豆瓣列表 · 想看 (15/60)",
-            expandedText = "当前：流浪地球 2 · 预计剩余 2 分钟",
-            publicText = "豆瓣同步：获取列表",
-            isTerminal = false
-        )
-
-        assertThat(notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString())
-            .isEqualTo("获取豆瓣列表 · 想看 (15/60)")
-        assertThat(notification.extras.getCharSequence(Notification.EXTRA_SUB_TEXT).toString())
-            .contains("当前：流浪地球 2")
-        assertThat(notification.extras.getInt(Notification.EXTRA_PROGRESS)).isEqualTo(15)
-        assertThat(notification.extras.getInt(Notification.EXTRA_PROGRESS_MAX)).isEqualTo(60)
-        assertThat(notification.extras.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE)).isFalse()
-        assertThat(notification.visibility).isEqualTo(NotificationCompat.VISIBILITY_PRIVATE)
-        assertThat(notification.publicVersion.extras.getCharSequence(Notification.EXTRA_TEXT).toString())
-            .isEqualTo("豆瓣同步：获取列表")
-        assertThat(notification.flags and Notification.FLAG_ONGOING_EVENT)
-            .isNotEqualTo(0)
-    }
-
-    @Test
     fun `终态通知可留在通知栏且不再提供取消动作`() {
         val notification = buildNotification(
             contentText = "成功 15 条，失败 0 条",

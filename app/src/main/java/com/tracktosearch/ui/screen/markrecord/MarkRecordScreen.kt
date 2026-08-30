@@ -44,7 +44,6 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -315,52 +314,6 @@ fun MarkRecordScreen(
                         )
                     }
                 }
-                uiState.items.isEmpty() -> {
-                    item(span = { GridItemSpan(2) }) {
-                        // 筛选/搜索把结果筛空了要说清楚，并给一个一键清掉的出口：
-                        // 否则用户看到的是「暂无记录」，会以为数据丢了
-                        val filteredEmpty = uiState.hasActiveFilterOrSearch
-                        // 深链/通知可能把未连 Trakt 的用户（如豆瓣独立模式）带进本页：
-                        // Trakt 已看历史拉不到、本地流水也可能为空，列表永远空白，
-                        // 此时给出「需要 Trakt」的明确原因，而不是让用户面对空的通用空态
-                        val needTraktHint = !traktConnected && !filteredEmpty
-                        EmptyStateCard(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 28.dp),
-                            isDark = isDark,
-                            hazeState = hazeState,
-                            hazeStyle = hazeStyle,
-                            icon = if (filteredEmpty) Icons.Rounded.FilterList else Icons.Rounded.Inbox,
-                            title = if (needTraktHint) {
-                                stringResource(R.string.douban_import_require_trakt_title)
-                            } else if (filteredEmpty) {
-                                stringResource(R.string.mark_records_empty_filtered)
-                            } else {
-                                stringResource(when (uiState.currentTab) {
-                                    MarkRecordTab.ALL -> R.string.mark_records_empty_all
-                                    MarkRecordTab.WATCHLIST -> R.string.mark_records_empty_watchlist
-                                    MarkRecordTab.WATCHED -> R.string.mark_records_empty_watched
-                                    MarkRecordTab.REMOVED -> R.string.mark_records_empty_removed
-                                })
-                            },
-                            description = if (needTraktHint) {
-                                stringResource(R.string.douban_import_require_trakt_desc)
-                            } else null,
-                            actions = {
-                                if (filteredEmpty) {
-                                    TextButton(onClick = {
-                                        collapseSearch()
-                                        viewModel.updateSearchQuery("")
-                                        viewModel.updateFilter(emptySet(), DatePreset.ALL, null, uiState.sortAscending)
-                                    }) {
-                                        Text(stringResource(R.string.mark_records_clear_filter))
-                                    }
-                                }
-                            }
-                        )
-                    }
-                }
                 else -> {
                     itemsIndexed(
                         uiState.items,
@@ -400,6 +353,62 @@ fun MarkRecordScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
+                }
+            }
+        }
+
+        if (!uiState.isLoading && uiState.error == null && uiState.items.isEmpty()) {
+            // 空态不再作为 LazyVerticalGrid 的首个自然高度 item：那会把卡片固定在内容顶部。
+            // 单独覆盖在标题栏以下的可用内容区域，确保横向与纵向都真正居中。
+            val filteredEmpty = uiState.hasActiveFilterOrSearch
+            val needTraktHint = !traktConnected && !filteredEmpty
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = stickyHeaderHeight + 5.dp, bottom = 40.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag("mark_record_empty_state_container"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    EmptyStateCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 32.dp)
+                            .testTag("mark_record_empty_state_card"),
+                        isDark = isDark,
+                        hazeState = hazeState,
+                        hazeStyle = hazeStyle,
+                        icon = if (filteredEmpty) Icons.Rounded.FilterList else Icons.Rounded.Inbox,
+                        title = if (needTraktHint) {
+                            stringResource(R.string.douban_import_require_trakt_title)
+                        } else if (filteredEmpty) {
+                            stringResource(R.string.mark_records_empty_filtered)
+                        } else {
+                            stringResource(when (uiState.currentTab) {
+                                MarkRecordTab.ALL -> R.string.mark_records_empty_all
+                                MarkRecordTab.WATCHLIST -> R.string.mark_records_empty_watchlist
+                                MarkRecordTab.WATCHED -> R.string.mark_records_empty_watched
+                                MarkRecordTab.REMOVED -> R.string.mark_records_empty_removed
+                            })
+                        },
+                        description = if (needTraktHint) {
+                            stringResource(R.string.douban_import_require_trakt_desc)
+                        } else null,
+                        actions = {
+                            if (filteredEmpty) {
+                                TextButton(onClick = {
+                                    collapseSearch()
+                                    viewModel.updateSearchQuery("")
+                                    viewModel.updateFilter(emptySet(), DatePreset.ALL, null, uiState.sortAscending)
+                                }) {
+                                    Text(stringResource(R.string.mark_records_clear_filter))
+                                }
+                            }
+                        }
+                    )
                 }
             }
         }

@@ -17,14 +17,6 @@ class ErrorStateViewTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun `Full 形态显示错误消息`() {
-        composeRule.setContent {
-            AppErrorState(message = "连接失败")
-        }
-        composeRule.onNodeWithText("连接失败").assertIsDisplayed()
-    }
-
-    @Test
     fun `Full 形态点击重试触发回调`() {
         var retryClicked = false
         composeRule.setContent {

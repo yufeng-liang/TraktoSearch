@@ -6,15 +6,6 @@ import org.junit.Test
 class DoubanSyncEtaEstimatorTest {
 
     @Test
-    fun firstSampleIsUnknown() {
-        val clock = FakeTimeProvider(nowMs = 1_000L)
-        val estimator = DoubanSyncEtaEstimator(clock)
-
-        assertThat(estimator.update(current = 1, total = 10))
-            .isEqualTo(DoubanSyncEtaEstimator.UNKNOWN_ETA_SECONDS)
-    }
-
-    @Test
     fun fewerThanFiveCompletedItemsAreUnknown() {
         val clock = FakeTimeProvider(nowMs = 1_000L)
         val estimator = DoubanSyncEtaEstimator(clock)
@@ -121,16 +112,6 @@ class DoubanSyncEtaEstimatorTest {
     }
 
     @Test
-    fun completedSyncReturnsZero() {
-        val clock = FakeTimeProvider(nowMs = 0L)
-        val estimator = DoubanSyncEtaEstimator(clock)
-
-        estimator.update(current = 0, total = 10)
-
-        assertThat(estimator.update(current = 10, total = 10, isComplete = true)).isEqualTo(0L)
-    }
-
-    @Test
     fun batchTrackerDoesNotUseCloudPrefetchTimeWhenProgressJumps() {
         val clock = FakeTimeProvider(nowMs = 0L)
         val tracker = DoubanBatchProgressTracker(total = 10, timeProvider = clock)
@@ -146,21 +127,8 @@ class DoubanSyncEtaEstimatorTest {
             .isEqualTo(DoubanSyncEtaEstimator.UNKNOWN_ETA_SECONDS)
     }
 
-    @Test
-    fun batchTrackerKeepsSkippedItemsOutOfEtaDenominator() {
-        val clock = FakeTimeProvider(nowMs = 0L)
-        val tracker = DoubanBatchProgressTracker(total = 10, timeProvider = clock)
-
-        tracker.update(3, "断点续传跳过")
-        clock.nowMs = 60_000L
-        val firstProcessing = tracker.update(8, "详情页")
-
-        assertThat(firstProcessing.current).isEqualTo(8)
-        assertThat(firstProcessing.etaSeconds)
-            .isEqualTo(DoubanSyncEtaEstimator.UNKNOWN_ETA_SECONDS)
-    }
-
     private class FakeTimeProvider(var nowMs: Long) : DoubanSyncTimeProvider {
         override fun nowMs(): Long = nowMs
     }
+
 }

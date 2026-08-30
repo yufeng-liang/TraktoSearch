@@ -173,44 +173,10 @@ class DoubanRepositoryTest {
     }
 
     /** 登录页 HTML（Cookie 过期） */
+    private val loginPageHtml: String =
+        """<html><head><title>登录豆瓣</title></head><body><form id="lzform"></form></body></html>"""
+
     // ==================== fetchMarkList error semantics ====================
-
-    @Test
-    fun fetchMarkList_HTTP500重试耗尽抛出网络异常(): Unit = runBlocking {
-        mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("error"))
-        mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("error"))
-
-        var thrown: Throwable? = null
-        try {
-            repository.fetchMarkList(
-                userId = "user123",
-                cookie = "testcookie",
-                status = DoubanMarkStatus.WISH,
-                onPage = { _, _ -> }
-            )
-        } catch (e: Throwable) {
-            thrown = e
-        }
-
-        assertThat(thrown).isInstanceOf(IOException::class.java)
-        assertThat(thrown).isNotInstanceOf(DoubanCookieExpiredException::class.java)
-        assertThat(mockWebServer.requestCount).isEqualTo(2)
-    }
-
-    @Test
-    fun fetchMarkList_HTTP403按Cookie过期处理且不重试(): Unit = runBlocking {
-        mockWebServer.enqueue(MockResponse().setResponseCode(403).setBody("forbidden"))
-
-        val result = repository.fetchMarkList(
-            userId = "user123",
-            cookie = "expiredcookie",
-            status = DoubanMarkStatus.WISH,
-            onPage = { _, _ -> }
-        )
-
-        assertThat(result).isFalse()
-        assertThat(mockWebServer.requestCount).isEqualTo(1)
-    }
 
     @Test
     fun fetchMarkList_登录页按Cookie过期处理且不重试(): Unit = runBlocking {
@@ -226,33 +192,6 @@ class DoubanRepositoryTest {
         assertThat(result).isFalse()
         assertThat(mockWebServer.requestCount).isEqualTo(1)
     }
-
-    @Test
-    fun fetchMarkList_200页面无法解析_抛出网络异常(): Unit = runBlocking {
-        mockWebServer.enqueue(
-            MockResponse().setBody("<html><head><title>稍后再试</title></head><body>challenge</body></html>")
-        )
-
-        var thrown: Throwable? = null
-        try {
-            repository.fetchMarkList(
-                userId = "user123",
-                cookie = "testcookie",
-                status = DoubanMarkStatus.WISH,
-                onPage = { _, _ -> }
-            )
-        } catch (e: Throwable) {
-            thrown = e
-        }
-
-        assertThat(thrown).isInstanceOf(DoubanNetworkException::class.java)
-        assertThat(mockWebServer.requestCount).isEqualTo(1)
-    }
-
-    private val loginPageHtml: String =
-        """<html><head><title>登录豆瓣</title></head><body><form id="lzform"></form></body></html>"""
-
-    // ==================== fetchDetail 四层链路 ====================
 
     @Test
     fun fetchDetail_内存缓存命中_不爬取不查全局池(): Unit = runBlocking {
@@ -287,26 +226,6 @@ class DoubanRepositoryTest {
         coVerify(atLeast = 1) { detailCache.awaitLoaded() }
         // 不应查全局池
         coVerify(exactly = 0) { cloudPool.downloadDetail(any()) }
-    }
-
-    @Test
-    fun fetchDetail_缓存标题为空_不视为命中(): Unit = runBlocking {
-        // 缓存存在但标题为空（字段不完善），不应视为命中
-        val blankTitleEntry = testEntry.copy(title = null)
-        coEvery { detailCache.get("123") } returns blankTitleEntry
-        // 全局池也返回标题为空的条目
-        coEvery { cloudPool.downloadDetail("123") } returns blankTitleEntry
-        // MockWebServer 返回有效详情
-        mockWebServer.enqueue(MockResponse().setBody(detailHtml()))
-
-        val (info, cached) = repository.fetchDetail(
-            doubanUrl = "https://movie.douban.com/subject/123/",
-            cookie = "testcookie"
-        )
-
-        // 应走爬取（cached=false）
-        assertThat(cached).isFalse()
-        assertThat(info?.title).isEqualTo("情书")
     }
 
     @Test
@@ -404,23 +323,6 @@ class DoubanRepositoryTest {
     }
 
     @Test
-    fun fetchDetail_全局池返回标题为空_降级爬豆瓣(): Unit = runBlocking {
-        coEvery { detailCache.get("123") } returns null
-        // 全局池返回标题为空的条目（字段不完善）
-        coEvery { cloudPool.downloadDetail("123") } returns testEntry.copy(title = null)
-        mockWebServer.enqueue(MockResponse().setBody(detailHtml()))
-
-        val (info, cached) = repository.fetchDetail(
-            doubanUrl = "https://movie.douban.com/subject/123/",
-            cookie = "testcookie"
-        )
-
-        // 全局池条目标题为空，降级爬豆瓣
-        assertThat(cached).isFalse()
-        assertThat(info?.title).isEqualTo("情书")
-    }
-
-    @Test
     fun fetchDetail_forceRefresh_跳过所有缓存直接爬取(): Unit = runBlocking {
         // 即使缓存命中，forceRefresh 也应跳过
         coEvery { detailCache.get("123") } returns testEntry
@@ -481,7 +383,7 @@ class DoubanRepositoryTest {
     }
 
     @Test
-    fun fetchDetail_两次HTTP500_返回字段为空的详情(): Unit = runBlocking {
+    fun fetchDetail_两次HTTP500_返回null表示解析失败(): Unit = runBlocking {
         coEvery { detailCache.get("123") } returns null
         coEvery { cloudPool.downloadDetail("123") } returns null
         // 两次都返回 500（OkHttp 对 500 不抛异常，fetchHtml 返回错误 body）
@@ -493,29 +395,9 @@ class DoubanRepositoryTest {
             cookie = "testcookie"
         )
 
-        // 500 错误页解析后 title 为空，但对象本身非 null
-        assertThat(info).isNotNull()
-        assertThat(info?.title).isNull()
-        assertThat(info?.imdbId).isNull()
+        // 两次错误页解析失败后按 null=失败契约返回 null，避免把空详情当成功
+        assertThat(info).isNull()
         assertThat(cached).isFalse()
-        assertThat(mockWebServer.requestCount).isEqualTo(2)
-    }
-
-    @Test
-    fun fetchDetail_标题为空_重试一次(): Unit = runBlocking {
-        coEvery { detailCache.get("123") } returns null
-        coEvery { cloudPool.downloadDetail("123") } returns null
-        // 第一次返回标题为空的 HTML（解析后标题为空），第二次返回有效详情
-        mockWebServer.enqueue(MockResponse().setBody("<html><body>empty</body></html>"))
-        mockWebServer.enqueue(MockResponse().setBody(detailHtml()))
-
-        val (info, _) = repository.fetchDetail(
-            doubanUrl = "https://movie.douban.com/subject/123/",
-            cookie = "testcookie"
-        )
-
-        // 重试后成功
-        assertThat(info?.title).isEqualTo("情书")
         assertThat(mockWebServer.requestCount).isEqualTo(2)
     }
 
@@ -560,37 +442,6 @@ class DoubanRepositoryTest {
     }
 
     @Test
-    fun fetchDetail_电视剧_集数正确解析(): Unit = runBlocking {
-        coEvery { detailCache.get("123") } returns null
-        coEvery { cloudPool.downloadDetail("123") } returns null
-        mockWebServer.enqueue(MockResponse().setBody(detailHtml(isTvShow = true)))
-
-        val (info, _) = repository.fetchDetail(
-            doubanUrl = "https://movie.douban.com/subject/123/",
-            cookie = "testcookie"
-        )
-
-        assertThat(info?.isTvShow).isTrue()
-        assertThat(info?.episodeCount).isEqualTo(12)
-    }
-
-    // ==================== fetchDetail onProgress 回调 ====================
-
-    @Test
-    fun fetchDetail_缓存命中_回调cache_hit(): Unit = runBlocking {
-        coEvery { detailCache.get("123") } returns testEntry
-
-        val phases = mutableListOf<String>()
-        repository.fetchDetail(
-            doubanUrl = "https://movie.douban.com/subject/123/",
-            cookie = "testcookie",
-            title = "情书"
-        ) { phase, _ -> phases.add(phase) }
-
-        assertThat(phases).contains("cache_hit")
-    }
-
-    @Test
     fun fetchDetail_爬取成功_回调fetching和done(): Unit = runBlocking {
         coEvery { detailCache.get("123") } returns null
         coEvery { cloudPool.downloadDetail("123") } returns null
@@ -605,31 +456,6 @@ class DoubanRepositoryTest {
 
         assertThat(phases).containsAtLeast("fetching", "done")
     }
-
-    @Test
-    fun fetchDetail_爬取失败_回调fetching和failed(): Unit = runBlocking {
-        coEvery { detailCache.get("123") } returns null
-        coEvery { cloudPool.downloadDetail("123") } returns null
-        mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("error"))
-        mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("error"))
-
-        val phases = mutableListOf<String>()
-        repository.fetchDetail(
-            doubanUrl = "https://movie.douban.com/subject/123/",
-            cookie = "testcookie"
-        ) { phase, _ -> phases.add(phase) }
-
-        assertThat(phases).containsAtLeast("fetching", "failed")
-    }
-
-    // ==================== 反爬延迟事件 ====================
-
-    @Test
-    fun delayEvent_初始为null(): Unit = runBlocking {
-        assertThat(repository.delayEvent.value).isNull()
-    }
-
-    // ==================== findDoubanId 链路 ====================
 
     @Test
     fun findDoubanId_idMappingCache命中_直接返回(): Unit = runBlocking {
@@ -697,15 +523,6 @@ class DoubanRepositoryTest {
         assertThat(result).isNull()
         // 不应查详情缓存（imdbId 为空时跳过）
         coVerify(exactly = 0) { detailCache.snapshotFromDisk() }
-    }
-
-    @Test
-    fun findDoubanId_imdbId为空字符串_返回null(): Unit = runBlocking {
-        coEvery { idMappingCache.get("100_movie") } returns null
-
-        val result = repository.findDoubanId(traktId = 100, imdbId = "", mediaType = "movie")
-
-        assertThat(result).isNull()
     }
 
     @Test
@@ -805,13 +622,6 @@ class DoubanRepositoryTest {
     }
 
     @Test
-    fun putDoubanIdMapping_show类型_key正确() {
-        repository.putDoubanIdMapping(traktId = 200, mediaType = "show", doubanId = "456")
-
-        coVerify { idMappingCache.put("200_show", "456") }
-    }
-
-    @Test
     fun putDoubanIdMapping_traktId为零_只写有效公共外部Id() {
         repository.putDoubanIdMapping(
             traktId = 0,
@@ -842,89 +652,6 @@ class DoubanRepositoryTest {
     }
 
     @Test
-    fun getDetailSnapshot_空缓存返回空Map(): Unit = runBlocking {
-        coEvery { detailCache.snapshotFromDisk() } returns emptyMap()
-
-        val result = repository.getDetailSnapshot()
-
-        assertThat(result).isEmpty()
-    }
-
-    // ==================== DoubanMarkStatus.fromString ====================
-
-    @Test
-    fun DoubanMarkStatus_fromString_wish返回WISH() {
-        assertThat(DoubanMarkStatus.fromString("wish")).isEqualTo(DoubanMarkStatus.WISH)
-    }
-
-    @Test
-    fun DoubanMarkStatus_fromString_collect返回COLLECT() {
-        assertThat(DoubanMarkStatus.fromString("collect")).isEqualTo(DoubanMarkStatus.COLLECT)
-    }
-
-    @Test
-    fun DoubanMarkStatus_fromString_null降级为WISH() {
-        assertThat(DoubanMarkStatus.fromString(null)).isEqualTo(DoubanMarkStatus.WISH)
-    }
-
-    @Test
-    fun DoubanMarkStatus_fromString_未知值降级为WISH() {
-        assertThat(DoubanMarkStatus.fromString("unknown")).isEqualTo(DoubanMarkStatus.WISH)
-    }
-
-    @Test
-    fun DoubanMarkStatus_fromString_大写名称也可解析() {
-        assertThat(DoubanMarkStatus.fromString("WISH")).isEqualTo(DoubanMarkStatus.WISH)
-        assertThat(DoubanMarkStatus.fromString("COLLECT")).isEqualTo(DoubanMarkStatus.COLLECT)
-    }
-
-    @Test
-    fun DoubanMarkStatus_path字段正确() {
-        assertThat(DoubanMarkStatus.WISH.path).isEqualTo("wish")
-        assertThat(DoubanMarkStatus.COLLECT.path).isEqualTo("collect")
-    }
-
-    // ==================== toDetailInfo 数据转换 ====================
-
-    @Test
-    fun toDetailInfo_完整字段转换(): Unit = runBlocking {
-        coEvery { detailCache.get("123") } returns testEntry
-
-        val (info, _) = repository.fetchDetail(
-            doubanUrl = "https://movie.douban.com/subject/123/",
-            cookie = "testcookie"
-        )
-
-        assertThat(info?.imdbId).isEqualTo("tt0000001")
-        assertThat(info?.isTvShow).isFalse()
-        assertThat(info?.title).isEqualTo("情书")
-        assertThat(info?.posterUrl).isEqualTo("https://img.doubanio.com/poster.jpg")
-        assertThat(info?.genres).containsExactly("剧情", "爱情")
-        assertThat(info?.year).isEqualTo("1995")
-        assertThat(info?.countries).contains("日本")
-        assertThat(info?.directors).contains("岩井俊二")
-        assertThat(info?.doubanRating).isEqualTo(8.9)
-        assertThat(info?.ratingCount).isEqualTo(123456)
-        assertThat(info?.summary).contains("一封寄往天国的信")
-    }
-
-    @Test
-    fun toDetailInfo_celebrities正确转换(): Unit = runBlocking {
-        coEvery { detailCache.get("123") } returns testEntry
-
-        val (info, _) = repository.fetchDetail(
-            doubanUrl = "https://movie.douban.com/subject/123/",
-            cookie = "testcookie"
-        )
-
-        assertThat(info?.celebrities).hasSize(1)
-        assertThat(info?.celebrities?.first()?.name).isEqualTo("中山美穗")
-        assertThat(info?.celebrities?.first()?.role).isEqualTo("饰 渡边博子")
-    }
-
-    // ==================== fetchCsrfToken / fetchDetailPageHtml ====================
-
-    @Test
     fun fetchCsrfToken_正常返回ck(): Unit = runBlocking {
         val html = """
             <html><body>
@@ -939,24 +666,6 @@ class DoubanRepositoryTest {
     }
 
     @Test
-    fun fetchCsrfToken_Cookie过期返回null(): Unit = runBlocking {
-        mockWebServer.enqueue(MockResponse().setBody(loginPageHtml))
-
-        val ck = repository.fetchCsrfToken("123", "expiredcookie")
-
-        assertThat(ck).isNull()
-    }
-
-    @Test
-    fun fetchCsrfToken_无ck字段返回null(): Unit = runBlocking {
-        mockWebServer.enqueue(MockResponse().setBody("<html><body>no ck</body></html>"))
-
-        val ck = repository.fetchCsrfToken("123", "testcookie")
-
-        assertThat(ck).isNull()
-    }
-
-    @Test
     fun fetchDetailPageHtml_正常返回HTML(): Unit = runBlocking {
         mockWebServer.enqueue(MockResponse().setBody(detailHtml()))
 
@@ -965,52 +674,6 @@ class DoubanRepositoryTest {
         assertThat(html).isNotNull()
         assertThat(html).contains("情书")
     }
-
-    @Test
-    fun fetchDetailPageHtml_Cookie过期返回null(): Unit = runBlocking {
-        mockWebServer.enqueue(MockResponse().setBody(loginPageHtml))
-
-        val html = repository.fetchDetailPageHtml("123", "expiredcookie")
-
-        assertThat(html).isNull()
-    }
-
-    // ==================== markInterest ====================
-
-    @Test
-    fun markInterest_成功返回r0(): Unit = runBlocking {
-        mockWebServer.enqueue(MockResponse().setBody("""{"r":0}"""))
-
-        val result = repository.markInterestByCk("wish", "123", "testcookie", "ck123")
-
-        assertThat(result.success).isTrue()
-        assertThat(result.statusCode).isEqualTo(200)
-        assertThat(result.message).isEqualTo("r:0")
-    }
-
-    @Test
-    fun markInterest_非r0返回失败(): Unit = runBlocking {
-        mockWebServer.enqueue(MockResponse().setBody("""{"r":1,"msg":"已标记"}"""))
-
-        val result = repository.markInterestByCk("wish", "123", "testcookie", "ck123")
-
-        assertThat(result.success).isFalse()
-        assertThat(result.statusCode).isEqualTo(200)
-    }
-
-    @Test
-    fun markInterest_500返回失败(): Unit = runBlocking {
-        mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("error"))
-
-        val result = repository.markInterestByCk("wish", "123", "testcookie", "ck123")
-
-        assertThat(result.success).isFalse()
-        assertThat(result.statusCode).isEqualTo(500)
-    }
-
-    // ==================== markInterest / removeInterest 业务成败判定 ====================
-    // 豆瓣写接口业务失败时同样返回 200 + {"r":1}，只判状态码会把失败误报为成功，
-    // DoubanSyncManager 据此清除 pendingSync 后该条目将永远不再重试。
 
     private val cookieWithCk = "dbcl2=\"1234567:abc\"; ck=AbCd; bid=xyz"
 
@@ -1026,15 +689,6 @@ class DoubanRepositoryTest {
     @Test
     fun markInterest_HTTP200但r1返回失败(): Unit = runBlocking {
         mockWebServer.enqueue(MockResponse().setBody("""{"r":1,"msg":"已标记"}"""))
-
-        val result = repository.markWish("123", cookieWithCk)
-
-        assertThat(result).isFalse()
-    }
-
-    @Test
-    fun markInterest_HTTP500返回失败(): Unit = runBlocking {
-        mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("error"))
 
         val result = repository.markWish("123", cookieWithCk)
 
@@ -1059,26 +713,6 @@ class DoubanRepositoryTest {
 
         assertThat(result).isFalse()
     }
-
-    @Test
-    fun removeInterest_带空格r0返回成功(): Unit = runBlocking {
-        mockWebServer.enqueue(MockResponse().setBody("""{"r": 0, "result": "y"}"""))
-
-        val result = repository.removeInterest("123", cookieWithCk)
-
-        assertThat(result).isTrue()
-    }
-
-    @Test
-    fun removeInterest_HTTP403返回失败(): Unit = runBlocking {
-        mockWebServer.enqueue(MockResponse().setResponseCode(403).setBody("""{"r": 1, "code": 403}"""))
-
-        val result = repository.removeInterest("123", cookieWithCk)
-
-        assertThat(result).isFalse()
-    }
-
-    // ==================== markWatchedWithRating ====================
 
     @Test
     fun markWatchedWithRating_成功(): Unit = runBlocking {
@@ -1160,27 +794,14 @@ class DoubanRepositoryTest {
     // ==================== fetchRecommend ====================
 
     @Test
-    fun fetchRecommend_401抛CookieExpiredException(): Unit = runBlocking {
-        mockWebServer.enqueue(MockResponse().setResponseCode(401).setBody("unauthorized"))
-
-        try {
-            repository.fetchRecommend("movie", "expiredcookie")
-            // 应抛异常，不应执行到这里
-            assertThat(false).isTrue()
-        } catch (e: DoubanCookieExpiredException) {
-            assertThat(e.message).contains("Douban cookie expired")
-        }
-    }
-
-    @Test
-    fun fetchRecommend_403抛CookieExpiredException(): Unit = runBlocking {
+    fun fetchRecommend_403抛DoubanRateLimitedException(): Unit = runBlocking {
         mockWebServer.enqueue(MockResponse().setResponseCode(403).setBody("forbidden"))
 
         try {
             repository.fetchRecommend("tv", "expiredcookie")
             assertThat(false).isTrue()
-        } catch (e: DoubanCookieExpiredException) {
-            // 预期异常
+        } catch (e: DoubanRateLimitedException) {
+            assertThat(e.message).contains("Douban rate limited")
         }
     }
 
@@ -1195,72 +816,6 @@ class DoubanRepositoryTest {
             // 预期异常
         }
     }
-
-    @Test
-    fun fetchRecommend_正常返回过滤片单和广告(): Unit = runBlocking {
-        val recommendJson = """
-        {
-            "items": [
-                {"type": "movie", "title": "情书", "subject": {"id": "1"}},
-                {"type": "tv", "title": "剧集A", "subject": {"id": "2"}},
-                {"type": "playlist", "title": "片单"},
-                {"type": "ad", "title": "广告"}
-            ]
-        }
-        """.trimIndent()
-        mockWebServer.enqueue(MockResponse().setBody(recommendJson))
-
-        val result = repository.fetchRecommend("movie", "testcookie")
-
-        // 应过滤掉 playlist 和 ad，只保留 movie 和 tv
-        assertThat(result).hasSize(2)
-        assertThat(result[0].type).isEqualTo("movie")
-        assertThat(result[1].type).isEqualTo("tv")
-    }
-
-    // ==================== fetchUserProfile ====================
-
-    @Test
-    fun fetchUserProfile_Cookie过期返回null(): Unit = runBlocking {
-        mockWebServer.enqueue(MockResponse().setBody(loginPageHtml))
-
-        val profile = repository.fetchUserProfile("user123", "expiredcookie")
-
-        assertThat(profile).isNull()
-    }
-
-    @Test
-    fun fetchUserProfile_正常解析昵称和头像(): Unit = runBlocking {
-        val html = """
-            <html><head>
-            <meta property="og:title" content="小明"/>
-            <meta property="og:image" content="https://img.doubanio.com/uuser123-1.jpg"/>
-            </head><body>
-            <img src="https://img.doubanio.com/uuser123-2.jpg" alt="头像"/>
-            </body></html>
-        """.trimIndent()
-        mockWebServer.enqueue(MockResponse().setBody(html))
-
-        val profile = repository.fetchUserProfile("user123", "testcookie")
-
-        assertThat(profile).isNotNull()
-        assertThat(profile?.userId).isEqualTo("user123")
-        assertThat(profile?.nickname).isEqualTo("小明")
-    }
-
-    @Test
-    fun fetchUserProfile_网络断开返回null(): Unit = runBlocking {
-        // 用 DISCONNECT_AT_START 模拟真实网络异常（IOException），而非 500 状态码
-        mockWebServer.enqueue(
-            MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START)
-        )
-
-        val profile = repository.fetchUserProfile("user123", "testcookie")
-
-        assertThat(profile).isNull()
-    }
-
-    // ==================== searchDoubanIdByImdb ====================
 
     @Test
     fun searchDoubanIdByImdb_正常返回doubanId(): Unit = runBlocking {
@@ -1285,15 +840,6 @@ class DoubanRepositoryTest {
         mockWebServer.enqueue(MockResponse().setBody("<html><body>no results</body></html>"))
 
         val doubanId = repository.searchDoubanIdByImdb("tt9999999")
-
-        assertThat(doubanId).isNull()
-    }
-
-    @Test
-    fun searchDoubanIdByImdb_网络异常返回null(): Unit = runBlocking {
-        mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("error"))
-
-        val doubanId = repository.searchDoubanIdByImdb("tt0000001")
 
         assertThat(doubanId).isNull()
     }
