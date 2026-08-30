@@ -79,8 +79,8 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -442,8 +442,8 @@ private fun DailyStampCard(
     }
     // 和开屏是同一块噪点瓦片（固定种子），两屏的纸面纹理必须看起来是同一张纸
     val grain = remember { grainBrush() }
-    var cardTop by remember { mutableFloatStateOf(Float.NaN) }
-    var tearCenterY by remember { mutableFloatStateOf(Float.NaN) }
+    var cardCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var notchCenterY by remember { mutableFloatStateOf(Float.NaN) }
 
     Column(
         modifier = Modifier
@@ -454,11 +454,11 @@ private fun DailyStampCard(
                 drawCardTexture(
                     palette = palette,
                     grain = grain,
-                    notchCenterY = tearCenterY - cardTop,
+                    notchCenterY = notchCenterY,
                 )
             }
             .background(palette.sheet)
-            .onGloballyPositioned { cardTop = it.positionInRoot().y }
+            .onGloballyPositioned { cardCoords = it }
             .padding(horizontal = 22.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -479,8 +479,8 @@ private fun DailyStampCard(
         Spacer(Modifier.height(22.dp))
         TearLine(
             palette = palette,
-            modifier = Modifier.onGloballyPositioned {
-                tearCenterY = it.positionInRoot().y + it.size.height / 2f
+            modifier = Modifier.onGloballyPositioned { tear ->
+                notchCenterY = tearCenterIn(cardCoords, tear)
             },
         )
         Spacer(Modifier.height(20.dp))
@@ -690,8 +690,8 @@ private fun LatentCard(latent: DailyStampSheet.Latent, palette: SplashPalette) {
     }
     val grain = remember { grainBrush() }
     val bars = remember(latent.date) { latentBars(latent.date) }
-    var cardTop by remember { mutableFloatStateOf(Float.NaN) }
-    var tearCenterY by remember { mutableFloatStateOf(Float.NaN) }
+    var cardCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var notchCenterY by remember { mutableFloatStateOf(Float.NaN) }
 
     Column(
         modifier = Modifier
@@ -701,11 +701,11 @@ private fun LatentCard(latent: DailyStampSheet.Latent, palette: SplashPalette) {
                 drawCardTexture(
                     palette = palette,
                     grain = grain,
-                    notchCenterY = tearCenterY - cardTop,
+                    notchCenterY = notchCenterY,
                 )
             }
             .background(palette.sheet)
-            .onGloballyPositioned { cardTop = it.positionInRoot().y }
+            .onGloballyPositioned { cardCoords = it }
             .padding(horizontal = 22.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -722,8 +722,8 @@ private fun LatentCard(latent: DailyStampSheet.Latent, palette: SplashPalette) {
         Spacer(Modifier.height(22.dp))
         TearLine(
             palette = palette,
-            modifier = Modifier.onGloballyPositioned {
-                tearCenterY = it.positionInRoot().y + it.size.height / 2f
+            modifier = Modifier.onGloballyPositioned { tear ->
+                notchCenterY = tearCenterIn(cardCoords, tear)
             },
         )
         Spacer(Modifier.height(20.dp))
@@ -878,6 +878,18 @@ private fun latentBars(date: LocalDate): LatentBars {
 }
 
 private class LatentBars(val quote: List<List<Dp>>, val source: List<Dp>)
+
+/**
+ * 撕线中心在卡面坐标系里的纵坐标；卡片还没量到时是 NaN，齿孔那一步会跳过。
+ *
+ * 不用两次 positionInRoot() 相减：卡片现在坐在轮播页的 graphicsLayer 里，缩放和 rotationY
+ * 都作用在根坐标上，相减得到的差值被 scaleY 乘过一遍（侧卡 0.84），而 drawNotches 拿它
+ * 当卡面内的局部坐标用，齿孔会画偏。更麻烦的是 onGloballyPositioned 只在布局变化时回调，
+ * 侧卡变成中间卡只改图层属性、不重新布局，偏掉的那个值就一直留着。
+ * localPositionOf 会把中间这些变换逆掉，无论页面正处在哪一档形变，量出来的都是卡面内的位置。
+ */
+private fun tearCenterIn(card: LayoutCoordinates?, tear: LayoutCoordinates): Float =
+    card?.localPositionOf(tear, Offset(0f, tear.size.height / 2f))?.y ?: Float.NaN
 
 /** 票根的撕口：一道虚线，不是实线也不是 Divider——实线会把卡片切成两张 */
 @Composable

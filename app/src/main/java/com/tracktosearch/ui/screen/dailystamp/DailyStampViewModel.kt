@@ -7,15 +7,18 @@ import com.tracktosearch.data.repository.DailyStamp
 import com.tracktosearch.data.repository.DailyStampRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.YearMonth
 import javax.inject.Inject
@@ -100,6 +103,9 @@ class DailyStampViewModel @Inject constructor(
         viewModelScope.launch {
             month
                 .flatMapLatest { target -> repository.observeMonth(target).map { target to it } }
+                // 解析一个月的日签会为每条查一次海报文件在不在（SplashPosterStore.posterModel），
+                // 最多 31 次 stat。放在收集端就是切月动画期间在主线程读盘，搬到 IO 上
+                .flowOn(Dispatchers.IO)
                 // 日签是只读展示，查询失败就当这个月没有记录，不该把整页变成错误页
                 .catch { _uiState.update { it.copy(loading = false) } }
                 .collect { (target, stamps) ->
@@ -148,12 +154,18 @@ class DailyStampViewModel @Inject constructor(
      * 和 [refreshCounters] 一样跟着每次月份变化重算。查失败就保持原样：这三项决定的是
      * 空格子长什么样、点不点得开，缺了只是退回「你来之前」那种最保守的样子，
      * 不该让整页崩在一次查询上。
+     *
+     * 整段搬到 IO：错过那些天要为每条查一次海报文件在不在，和 [init] 里解析日签同一笔代价。
      */
     private suspend fun refreshUnstamped(target: YearMonth) {
         try {
-            val firstDay = repository.firstUseDate()
-            val missed = repository.missedMonth(target)
-            val latent = repository.latentMonth(target)
+            val (firstDay, missed, latent) = withContext(Dispatchers.IO) {
+                Triple(
+                    repository.firstUseDate(),
+                    repository.missedMonth(target),
+                    repository.latentMonth(target),
+                )
+            }
             _uiState.update {
                 // 期间可能已经切到别的月，那时这一批数据属于上一个月，丢掉
                 if (it.month != target) it
