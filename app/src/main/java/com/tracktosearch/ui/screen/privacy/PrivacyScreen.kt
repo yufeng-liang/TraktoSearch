@@ -191,7 +191,7 @@ fun PrivacyScreen(
                     }
                 }
 
-                // 区块 B：隐私说明（本地/网络/技术细节折叠 + 徽章）
+                // 区块 B：隐私说明（本地/网络/技术细节折叠）
                 item {
                     PrivacySectionCard(
                         title = stringResource(R.string.privacy_section_statement),
@@ -280,49 +280,42 @@ private fun PrivacySummaryCard() {
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier.padding(18.dp),
-            verticalAlignment = Alignment.Top
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .background(accent.copy(alpha = 0.16f), RoundedCornerShape(14.dp)),
-                contentAlignment = Alignment.Center
+            Text(
+                text = stringResource(R.string.privacy_hero_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = stringResource(R.string.privacy_hero_desc),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.3f,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.Shield,
-                    contentDescription = null,
-                    tint = accent,
-                    modifier = Modifier.size(24.dp)
+                PrivacyBadgePill(
+                    icon = Icons.Rounded.Shield,
+                    text = stringResource(R.string.privacy_badge_b1)
                 )
-            }
-            Spacer(modifier = Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.privacy_hero_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                Spacer(modifier = Modifier.width(8.dp))
+                PrivacyBadgePill(
+                    icon = Icons.Rounded.VisibilityOff,
+                    text = stringResource(R.string.privacy_badge_b2)
                 )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = stringResource(R.string.privacy_hero_desc),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.3f
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PrivacyBadgePill(
-                        icon = Icons.Rounded.Shield,
-                        text = stringResource(R.string.privacy_badge_b1)
-                    )
-                    PrivacyBadgePill(
-                        icon = Icons.Rounded.VisibilityOff,
-                        text = stringResource(R.string.privacy_badge_b2)
-                    )
-                }
             }
         }
     }
@@ -643,13 +636,6 @@ private fun PrivacyDataFlowCard() {
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = stringResource(R.string.privacy_flow_summary),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = MaterialTheme.typography.bodySmall.lineHeight * 1.3f
-                    )
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Surface(
@@ -840,7 +826,7 @@ private fun PrivacyFlowOption(
     }
 }
 
-/** 区块 B「隐私说明」内容：本地/联网边界、技术实现与动画示意。 */
+/** 区块 B「隐私说明」内容：本地/联网边界与技术实现动画示意。 */
 @Composable
 private fun PrivacyStatementContent() {
     var techExpanded by rememberSaveable { mutableStateOf(false) }
@@ -922,18 +908,7 @@ private fun PrivacyStatementContent() {
                 PrivacyDataFlowCard()
             }
         }
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PrivacyBadgePill(
-                icon = Icons.Rounded.Shield,
-                text = stringResource(R.string.privacy_badge_b1)
-            )
-            PrivacyBadgePill(
-                icon = Icons.Rounded.VisibilityOff,
-                text = stringResource(R.string.privacy_badge_b2)
-            )
-        }
+        Spacer(modifier = Modifier.height(4.dp))
     }
 }
 
