@@ -91,6 +91,9 @@ CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments
 - Brainstorm Companion 预览依赖 URL 查询参数 ?key=；部分应用内浏览器重写链接丢 key 显等待页或 403。先 Invoke-WebRequest 验证带 key 地址；服务端正常而浏览器丢 key 改独立本地静态预览服务器，不反复重启同 Companion 会话
 - Android/Gradle 测试构建可能超默认工具超时但仍在跑；用较长单次超时，超时后先查 Gradle 进程、app/build/test-results、app/build/reports、APK 输出，再判成败；勿把工具 timeout 等同 Gradle 失败
 - AuthManager.initialize() 可能同时由 MainActivity 和 AuthCheckWorker 进入；刷新锁内须按调用方看到的旧 access token 二次检查，避串行等待后第二次刷新再轮换 refresh token
+- AuthManager.check() 收到 401 后刷新成功只允许重试一次 check；重试仍 401 应直接失败，禁止再次进入刷新递归，否则会 StackOverflow。
+- 单测优先保留认证/安全/缓存一致性/数据库与网络契约及用户交互；仅静态渲染、存在性、不崩溃、精确视觉参数和同一实现分支的重复空输入/CRUD 测试属于低收益，设计调整时应删除或合并，不要靠同步旧快照维持总量。
+- Robolectric 测试若不验证 Application 启动，且清单 Application 会启动 WorkManager/后台线程，使用 `@Config(application = android.app.Application::class)` 隔离；否则沙箱销毁后的残留线程可能污染下一用例。
 - Git worktree 建新分支后 local.properties 不在版本库，须手动从 F:\trae-project\local.properties 复制到 worktree 目录
 - 单测跨用例污染优先查 preferencesDataStore：委托是进程单例，各用例新建 Repository 仍读同一份磁盘数据；PersistentTtlCache 落盘还有 400ms 攒批且跑在 Repository 私有 scope 上，用例结束后仍会补写。setup 清 persistentCaches、teardown 取消落盘 scope 再清一次
 - 详情页「以 TMDB 为准」类优先级改动须区分纯豆瓣条目（tmdbId=0）：无 TMDB 数据时无条件保留当前值会把豆瓣/Rexxar 结果永久挡在 UI 外
