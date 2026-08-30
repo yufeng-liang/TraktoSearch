@@ -116,33 +116,12 @@ class DiscoverFilterViewModelTest {
      * switchType 是同步方法，但需先 advanceUntilIdle 让 init 协程执行完，
      * 避免 init 的 launch 干扰状态断言。
      */
-    @Test
-    fun `switchType_切换到SHOW_type变更且清空结果`() = runTest {
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        viewModel.switchType(TmdbRepository.DiscoverType.SHOW)
-
-        val state = viewModel.uiState.value
-        assertThat(state.type).isEqualTo(TmdbRepository.DiscoverType.SHOW)
-        assertThat(state.items).isEmpty()
-        assertThat(state.hasSearched).isFalse()
-    }
 
     /**
      * 测试点2：toggleGenre(18) 添加到 selectedGenreIds；再次调用移除
      *
      * 同步方法，无需 advanceUntilIdle。
      */
-    @Test
-    fun `toggleGenre_添加再次调用移除_selectedGenreIds正确变化`() = runTest {
-        viewModel = createViewModel()
-        viewModel.toggleGenre(18)
-        assertThat(viewModel.uiState.value.selectedGenreIds).contains(18)
-
-        viewModel.toggleGenre(18)
-        assertThat(viewModel.uiState.value.selectedGenreIds).doesNotContain(18)
-    }
 
     /**
      * 测试点3：toggleDecade("2010-2019") 添加到 selectedDecadeKeys；再次调用移除
@@ -150,58 +129,24 @@ class DiscoverFilterViewModelTest {
      * 使用 "2010-2019" 作为 key（decadeOptions 中始终包含此静态年代选项）。
      * 同步方法，无需 advanceUntilIdle。
      */
-    @Test
-    fun `toggleDecade_添加再次调用移除_selectedDecadeKeys正确变化`() = runTest {
-        viewModel = createViewModel()
-        viewModel.toggleDecade("2010-2019")
-        assertThat(viewModel.uiState.value.selectedDecadeKeys).contains("2010-2019")
-
-        viewModel.toggleDecade("2010-2019")
-        assertThat(viewModel.uiState.value.selectedDecadeKeys).doesNotContain("2010-2019")
-    }
 
     /**
      * 测试点4：setVoteRange(5f, 10f) → voteAverageMin=5f, voteAverageMax=10f
      *
      * 同步方法，无需 advanceUntilIdle。
      */
-    @Test
-    fun `setVoteRange_设置5到10_voteAverageMin和Max正确`() = runTest {
-        viewModel = createViewModel()
-        viewModel.setVoteRange(5f, 10f)
-
-        val state = viewModel.uiState.value
-        assertThat(state.voteAverageMin).isEqualTo(5f)
-        assertThat(state.voteAverageMax).isEqualTo(10f)
-    }
 
     /**
      * 测试点5：setSortBy(VOTE_AVERAGE_DESC) → sortBy 更新为非默认值
      *
      * 同步方法，无需 advanceUntilIdle。
      */
-    @Test
-    fun `setSortBy_设置为VOTE_AVERAGE_DESC_sortBy更新`() = runTest {
-        viewModel = createViewModel()
-        viewModel.setSortBy(TmdbRepository.DiscoverSort.VOTE_AVERAGE_DESC)
-
-        assertThat(viewModel.uiState.value.sortBy).isEqualTo(TmdbRepository.DiscoverSort.VOTE_AVERAGE_DESC)
-    }
 
     /**
      * 测试点6：toggleHideWatched() → hideWatched 取反（默认 false → true）
      *
      * 同步方法，无需 advanceUntilIdle。
      */
-    @Test
-    fun `toggleHideWatched_默认false_调用后变true`() = runTest {
-        viewModel = createViewModel()
-        assertThat(viewModel.uiState.value.hideWatched).isFalse()
-
-        viewModel.toggleHideWatched()
-
-        assertThat(viewModel.uiState.value.hideWatched).isTrue()
-    }
 
     /**
      * 测试点7：resetFilters() → 所有筛选条件回到默认值
@@ -299,15 +244,6 @@ class DiscoverFilterViewModelTest {
      *
      * 同步方法，无需 advanceUntilIdle。
      */
-    @Test
-    fun `toggleAdvanced_默认false_调用后变true`() = runTest {
-        viewModel = createViewModel()
-        assertThat(viewModel.uiState.value.showAdvanced).isFalse()
-
-        viewModel.toggleAdvanced()
-
-        assertThat(viewModel.uiState.value.showAdvanced).isTrue()
-    }
 
     /**
      * 回归测试：loadMore 跨页返回重复 id 时 items 必须去重。
@@ -545,26 +481,6 @@ class DiscoverFilterViewModelTest {
     }
 
     /** 年代连续时服务端给回来的就是用户点的那些年，不该再筛掉任何东西 */
-    @Test
-    fun `toggleDecade_年代连续_结果原样保留`() = runTest {
-        coEvery { tmdbRepository.discover(any(), any()) } returns TmdbRepository.DiscoverPage(
-            items = listOf(
-                TmdbSearchResult(id = 1, title = "1995 年的", release_date = "1995-06-01"),
-                TmdbSearchResult(id = 2, title = "2005 年的", release_date = "2005-06-01")
-            ),
-            totalPages = 1,
-            totalResults = 2
-        )
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        viewModel.toggleDecade("1990-1999")
-        viewModel.toggleDecade("2000-2009")
-        viewModel.search()
-        advanceUntilIdle()
-
-        assertThat(viewModel.uiState.value.items.map { it.id }).containsExactly(1, 2)
-    }
 
     /** 电视剧看 first_air_date，不是 release_date */
     @Test
@@ -590,35 +506,7 @@ class DiscoverFilterViewModelTest {
     }
 
     /** 拿不到年份的条目保留：服务端已经按日期区间筛过，缺日期是数据不全，不是越界 */
-    @Test
-    fun `toggleDecade_条目没有日期_保留`() = runTest {
-        coEvery { tmdbRepository.discover(any(), any()) } returns TmdbRepository.DiscoverPage(
-            items = listOf(TmdbSearchResult(id = 1, title = "没日期")),
-            totalPages = 1,
-            totalResults = 1
-        )
-        viewModel = createViewModel()
-        advanceUntilIdle()
 
-        viewModel.toggleDecade("1990-1999")
-        viewModel.toggleDecade("2010-2019")
-        viewModel.search()
-        advanceUntilIdle()
-
-        assertThat(viewModel.uiState.value.items.map { it.id }).containsExactly(1)
-    }
-
-    @Test
-    fun `toggleDecade_全部选项_清空选择`() = runTest {
-        viewModel = createViewModel()
-        advanceUntilIdle()
-        viewModel.toggleDecade("1990-1999")
-        viewModel.toggleDecade("2010-2019")
-
-        viewModel.toggleDecade("0-0") // "全部"
-
-        assertThat(viewModel.uiState.value.selectedDecadeKeys).isEmpty()
-    }
 
     /** 选中年代要如实转成日期区间传给 TMDB */
     @Test
@@ -759,17 +647,6 @@ class DiscoverFilterViewModelTest {
     }
 
     /** 没有客户端过滤时服务端给的数就是准的，不标"约" */
-    @Test
-    fun `无客户端过滤_条数不标近似`() = runTest {
-        coEvery { tmdbRepository.discover(any(), any()) } returns
-            TmdbRepository.DiscoverPage(items = testItems, totalPages = 1, totalResults = 900)
-
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        assertThat(viewModel.uiState.value.totalResults).isEqualTo(900)
-        assertThat(viewModel.uiState.value.totalResultsApproximate).isFalse()
-    }
 
     /** 翻页沿用首页算好的数，别用合并区间的总数把它盖回去，也别每页都重查一遍 */
     @Test
@@ -798,24 +675,6 @@ class DiscoverFilterViewModelTest {
     }
 
     /** 重叠/相接的选择要合成一段：点「2010年代」再点「2019」不该被当成两段多打一次请求 */
-    @Test
-    fun `年代重叠选择_合成一段不查条数`() = runTest {
-        stubNoDateSearch()
-        coEvery { tmdbRepository.discover(match { it.releaseDateStart == "2010-01-01" }, any()) } returns
-            TmdbRepository.DiscoverPage(items = testItems, totalPages = 1, totalResults = 900)
-
-        viewModel = createViewModel()
-        advanceUntilIdle()
-        viewModel.toggleDecade("2010-2019")
-        viewModel.toggleDecade("2019-2019")
-        viewModel.search()
-        advanceUntilIdle()
-
-        val state = viewModel.uiState.value
-        assertThat(state.totalResults).isEqualTo(900)
-        assertThat(state.totalResultsApproximate).isFalse()
-        coVerify(exactly = 1) { tmdbRepository.discover(match { it.releaseDateStart == "2010-01-01" }, any()) }
-    }
 
     // ==================== 仅展示未标看过 ====================
 

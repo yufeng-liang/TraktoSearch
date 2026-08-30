@@ -18,6 +18,12 @@ fun resolveWatchlistEmptyState(
     else -> WatchlistEmptyState.NO_ACCOUNTS
 }
 
+/** 观看统计需要至少一个可提供观看记录的平台账号。 */
+fun canOpenWatchStatistics(
+    traktConnected: Boolean,
+    doubanMode: Boolean
+): Boolean = traktConnected || doubanMode
+
 /**
  * 取当前「想看/已看 × 电影/剧/其他」分区的加载失败原因，null 表示这一分区没有失败。
  *

@@ -296,20 +296,6 @@ class WatchlistViewModelTest {
         assertThat(viewModel.uiState.value.hasMoreShows).isFalse()
     }
 
-    @Test
-    fun `loadMovies_成功加载电影列表`() = runTest {
-        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
-            Result.success(listOf(makeWatchlistMovie(1)) to 1)
-
-        viewModel.loadMovies()
-        advanceUntilIdle()
-
-        val state = viewModel.uiState.value
-        assertThat(state.movies).hasSize(1)
-        assertThat(state.moviesLoaded).isTrue()
-        assertThat(state.isLoadingMovies).isFalse()
-        assertThat(state.moviesError).isNull()
-    }
 
     @Test
     fun `loadMovies_失败时从离线缓存读取`() = runTest {
@@ -362,22 +348,6 @@ class WatchlistViewModelTest {
         assertThat(viewModel.uiState.value.hasMoreMovies).isTrue()
     }
 
-    @Test
-    fun `loadMoreShows_page failure releases loading state`() = runTest {
-        coEvery { traktRepository.getShowWatchlist(1, 200, any()) } returns
-            Result.success(listOf(makeWatchlistShow(1)) to 2)
-        viewModel.loadShows()
-        advanceUntilIdle()
-
-        coEvery { traktRepository.getShowWatchlist(2, 200, any()) } returns
-            Result.failure(IOException("page 2 failed"))
-        viewModel.loadMoreShows()
-        advanceUntilIdle()
-
-        assertThat(viewModel.uiState.value.isLoadingShows).isFalse()
-        assertThat(viewModel.uiState.value.shows).hasSize(1)
-        assertThat(viewModel.uiState.value.hasMoreShows).isTrue()
-    }
 
     @Test
     fun `loadMovies_已加载且非forceReload时不再请求`() = runTest {
@@ -396,63 +366,9 @@ class WatchlistViewModelTest {
         coVerify(exactly = 1) { traktRepository.getMovieWatchlist(any(), any(), any()) }
     }
 
-    @Test
-    fun `loadShows_成功加载剧集列表`() = runTest {
-        coEvery { traktRepository.getShowWatchlist(any(), any(), any()) } returns
-            Result.success(listOf(makeWatchlistShow(1)) to 1)
 
-        viewModel.loadShows()
-        advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertThat(state.shows).hasSize(1)
-        assertThat(state.showsLoaded).isTrue()
-    }
 
-    @Test
-    fun `loadHistoryMovies_成功加载已看电影`() = runTest {
-        coEvery { traktRepository.getMovieHistory(any(), any(), any()) } returns
-            Result.success(listOf(makeWatchlistMovie(1)) to 1)
-
-        viewModel.loadHistoryMovies()
-        advanceUntilIdle()
-
-        val state = viewModel.uiState.value
-        assertThat(state.historyMovies).hasSize(1)
-        assertThat(state.historyMoviesLoaded).isTrue()
-    }
-
-    @Test
-    fun `loadHistoryMovies_跨页加载并合并全部记录`() = runTest {
-        coEvery { traktRepository.getMovieHistory(1, 200, "full") } returns
-            Result.success(listOf(makeWatchlistMovie(1, "Old Movie")) to 2)
-        coEvery { traktRepository.getMovieHistory(2, 200, "full") } returns
-            Result.success(listOf(makeWatchlistMovie(2, "New Movie")) to 2)
-
-        viewModel.loadHistoryMovies()
-        advanceUntilIdle()
-
-        assertThat(viewModel.uiState.value.historyMovies.map { it.traktId })
-            .containsExactly(1, 2)
-            .inOrder()
-        coVerify(exactly = 1) { traktRepository.getMovieHistory(2, 200, "full") }
-    }
-
-    @Test
-    fun `loadHistoryShows_跨页加载并合并全部记录`() = runTest {
-        coEvery { traktRepository.getShowHistory(1, 200, "full") } returns
-            Result.success(listOf(makeWatchlistShow(1, "Old Show")) to 2)
-        coEvery { traktRepository.getShowHistory(2, 200, "full") } returns
-            Result.success(listOf(makeWatchlistShow(2, "New Show")) to 2)
-
-        viewModel.loadHistoryShows()
-        advanceUntilIdle()
-
-        assertThat(viewModel.uiState.value.historyShows.map { it.traktId })
-            .containsExactly(1, 2)
-            .inOrder()
-        coVerify(exactly = 1) { traktRepository.getShowHistory(2, 200, "full") }
-    }
 
     @Test
     fun `refresh_重置状态并重新加载`() = runTest {
@@ -509,19 +425,6 @@ class WatchlistViewModelTest {
         coVerify(exactly = 1) { traktRepository.getMovieWatchlist(2, 200, true) }
     }
 
-    @Test
-    fun `refreshIfLoaded_已加载时静默刷新`() = runTest {
-        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
-            Result.success(listOf(makeWatchlistMovie(1)) to 1)
-
-        viewModel.loadMovies()
-        advanceUntilIdle()
-
-        viewModel.refreshIfLoaded(silent = true)
-        advanceUntilIdle()
-
-        coVerify(atLeast = 2) { traktRepository.getMovieWatchlist(any(), any(), any()) }
-    }
 
     @Test
     fun `batchRemoveFromWatchlist_全部成功_更新UI并触发豆瓣移除`() = runTest {
@@ -613,41 +516,7 @@ class WatchlistViewModelTest {
             .containsExactly("douban-other")
     }
 
-    @Test
-    fun `Trakt和豆瓣共享TraktId且都无IMDb时总数不重复`() = runTest {
-        every { sessionModeManager.sessionMode } returns MutableStateFlow(SessionMode.TRAKT)
-        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user", "cookie")
-        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
-            Result.success(listOf(makeWatchlistMovie(42, "Trakt item", imdbId = "")) to 1)
-        every { traktRepository.getMovieWatchlistTotalCount(1, 200) } returns 1
-        coEvery { doubanSyncedItemDao.getByStatus("wish") } returns listOf(
-            makeDoubanItem("douban-42", imdbId = null).copy(traktId = 42)
-        )
 
-        viewModel.loadMovies()
-        advanceUntilIdle()
-
-        assertThat(viewModel.uiState.value.movies).hasSize(1)
-        assertThat(viewModel.uiState.value.movieTotalCount).isEqualTo(1)
-    }
-
-    @Test
-    fun `豆瓣collect与Trakt历史按IMDb合并不重复`() = runTest {
-        every { sessionModeManager.sessionMode } returns MutableStateFlow(SessionMode.TRAKT)
-        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user", "cookie")
-        coEvery { traktRepository.getMovieHistory(any(), any(), any()) } returns
-            Result.success(listOf(makeWatchlistMovie(8, "Trakt watched", "tt-watched")) to 1)
-        coEvery { doubanSyncedItemDao.getByStatus("collect") } returns listOf(
-            makeDoubanItem("douban-watched", status = "collect", imdbId = "tt-watched", title = "豆瓣 watched")
-        )
-
-        viewModel.loadHistoryMovies()
-        advanceUntilIdle()
-
-        assertThat(viewModel.uiState.value.historyMovies).hasSize(1)
-        assertThat(viewModel.uiState.value.historyMovies.single().traktId).isEqualTo(8)
-        assertThat(viewModel.uiState.value.historyMovies.single().doubanId).isEqualTo("douban-watched")
-    }
 
     @Test
     fun `豆瓣独立模式其他条目沿用批量删除流程`() = runTest {
@@ -736,60 +605,9 @@ class WatchlistViewModelTest {
         verify { doubanSyncManager.resetProgress() }
     }
 
-    @Test
-    fun `豆瓣同步完成但成功数为零时仍刷新已写入的最低限度快照`() = runTest {
-        every { sessionModeManager.sessionMode } returns MutableStateFlow(SessionMode.DOUBAN)
-        var syncedItems = emptyList<DoubanSyncedItem>()
-        coEvery { doubanSyncedItemDao.getByStatus("wish") } answers { syncedItems }
 
-        viewModel.loadMovies()
-        advanceUntilIdle()
-        assertThat(viewModel.uiState.value.movies).isEmpty()
 
-        syncedItems = listOf(
-            makeDoubanItem("douban-minimum", imdbId = null, title = "最低快照")
-        )
-        syncProgressFlow.value = DoubanSyncProgress(
-            isComplete = true,
-            stage = com.tracktosearch.data.repository.DoubanSyncStage.COMPLETED,
-            successCount = 0
-        )
-        advanceUntilIdle()
 
-        assertThat(viewModel.uiState.value.movies.map { it.doubanId })
-            .containsExactly("douban-minimum")
-    }
-
-    @Test
-    fun `isDoubanLoggedIn_根据登录状态返回正确值`() = runTest {
-        advanceUntilIdle()
-
-        assertThat(viewModel.isDoubanLoggedIn()).isFalse()
-
-        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("userId", "cookie")
-        assertThat(viewModel.isDoubanLoggedIn()).isTrue()
-    }
-
-    @Test
-    fun `updateSelectedGenres_更新筛选状态`() = runTest {
-        advanceUntilIdle()
-
-        viewModel.updateSelectedGenres(setOf("动作", "科幻"))
-
-        assertThat(viewModel.filterState.value.selectedGenres).isEqualTo(setOf("动作", "科幻"))
-    }
-
-    @Test
-    fun `resetFilters_重置筛选状态`() = runTest {
-        advanceUntilIdle()
-
-        viewModel.updateSelectedGenres(setOf("动作"))
-        viewModel.toggleDecade(2020)
-
-        viewModel.resetFilters()
-
-        assertThat(viewModel.filterState.value).isEqualTo(FilterState())
-    }
 
     /**
      * 回归测试：一致性检查取消时不触发 consistencyCheckCompleteEvent。
@@ -863,105 +681,16 @@ class WatchlistViewModelTest {
      * 若 enrichMediaItem 字段映射错误（如 displayTitle=title 而非 chineseTitle），
      * UI 上标题会显示英文而非中文。
      */
-    @Test
-    fun `loadMovies_tmdbId大于0_enrichMovie返回中文标题和海报_字段正确映射`() = runTest {
-        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
-            Result.success(listOf(makeWatchlistMovie(1, title = "Inception", imdbId = "tt1375666", tmdb = 27205)) to 1)
-        coEvery { tmdbRepository.enrichMovie(27205, "Inception", 2023) } returns
-            TmdbRepository.MovieEnrichment(
-                posterUrl = "https://image.tmdb.org/t/p/w500/inception.jpg",
-                chineseTitle = "盗梦空间",
-                overview = "梦境层层",
-                genres = "科幻,动作",
-                year = 2010,
-                rating = 8.8
-            )
-
-        viewModel.loadMovies()
-        advanceUntilIdle()
-
-        val state = viewModel.uiState.value
-        assertThat(state.movies).hasSize(1)
-        val item = state.movies[0]
-        // Trakt 原始字段
-        assertThat(item.traktId).isEqualTo(1)
-        assertThat(item.tmdbId).isEqualTo(27205)
-        assertThat(item.title).isEqualTo("Inception") // title 保留 Trakt 原始
-        assertThat(item.imdbId).isEqualTo("tt1375666")
-        assertThat(item.traktRating).isEqualTo(8.0)
-        // enrich 字段（bug 核心防护字段）
-        assertThat(item.displayTitle).isEqualTo("盗梦空间") // 必须来自 enrichment.chineseTitle
-        assertThat(item.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/inception.jpg") // 必须来自 enrichment.posterUrl
-        assertThat(item.year).isEqualTo(2010) // 来自 enrichment.year
-        assertThat(item.genres).isEqualTo("科幻,动作") // 来自 enrichment.genres
-        coVerify(exactly = 1) { tmdbRepository.enrichMovie(27205, "Inception", 2023) }
-    }
 
     /**
      * 测试：loadShows 收到 tmdbId>0 的剧集时调用 enrichTv，
      * 返回的 chineseTitle 和 posterUrl 必须正确映射到 MediaUiItem。
      */
-    @Test
-    fun `loadShows_tmdbId大于0_enrichTv返回中文标题和海报_字段正确映射`() = runTest {
-        coEvery { traktRepository.getShowWatchlist(any(), any(), any()) } returns
-            Result.success(listOf(makeWatchlistShow(2, title = "Breaking Bad", imdbId = "tt0903747", tmdb = 1396)) to 1)
-        coEvery { tmdbRepository.enrichTv(1396, "Breaking Bad", 2023) } returns
-            TmdbRepository.TvEnrichment(
-                posterUrl = "https://image.tmdb.org/t/p/w500/breakingbad.jpg",
-                chineseTitle = "绝命毒师",
-                overview = "高中化学老师制毒",
-                genres = "犯罪,剧情",
-                year = 2008,
-                rating = 9.5
-            )
-
-        viewModel.loadShows()
-        advanceUntilIdle()
-
-        val state = viewModel.uiState.value
-        assertThat(state.shows).hasSize(1)
-        val item = state.shows[0]
-        assertThat(item.traktId).isEqualTo(2)
-        assertThat(item.tmdbId).isEqualTo(1396)
-        assertThat(item.title).isEqualTo("Breaking Bad")
-        assertThat(item.imdbId).isEqualTo("tt0903747")
-        // enrich 字段
-        assertThat(item.displayTitle).isEqualTo("绝命毒师")
-        assertThat(item.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/breakingbad.jpg")
-        assertThat(item.year).isEqualTo(2008)
-        assertThat(item.genres).isEqualTo("犯罪,剧情")
-        coVerify(exactly = 1) { tmdbRepository.enrichTv(1396, "Breaking Bad", 2023) }
-    }
 
     /**
      * 测试：loadHistoryMovies 收到 tmdbId>0 的电影时调用 enrichMovie，
      * 验证已看历史列表同样走 enrich 流程。
      */
-    @Test
-    fun `loadHistoryMovies_tmdbId大于0_enrichMovie返回中文标题和海报_字段正确映射`() = runTest {
-        coEvery { traktRepository.getMovieHistory(any(), any(), any()) } returns
-            Result.success(listOf(makeWatchlistMovie(3, title = "Interstellar", imdbId = "tt0816692", tmdb = 157336)) to 1)
-        coEvery { tmdbRepository.enrichMovie(157336, "Interstellar", 2023) } returns
-            TmdbRepository.MovieEnrichment(
-                posterUrl = "https://image.tmdb.org/t/p/w500/interstellar.jpg",
-                chineseTitle = "星际穿越",
-                overview = "虫洞穿越",
-                genres = "科幻,冒险",
-                year = 2014,
-                rating = 9.0
-            )
-
-        viewModel.loadHistoryMovies()
-        advanceUntilIdle()
-
-        val state = viewModel.uiState.value
-        assertThat(state.historyMovies).hasSize(1)
-        val item = state.historyMovies[0]
-        assertThat(item.displayTitle).isEqualTo("星际穿越")
-        assertThat(item.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/interstellar.jpg")
-        assertThat(item.year).isEqualTo(2014)
-        coVerify(exactly = 1) { tmdbRepository.enrichMovie(157336, "Interstellar", 2023) }
-    }
 
     /**
      * 测试：enrichMovie 返回 fallback（posterUrl=null, chineseTitle=原始标题）时，

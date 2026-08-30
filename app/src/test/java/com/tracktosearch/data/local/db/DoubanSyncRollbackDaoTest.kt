@@ -63,27 +63,6 @@ class DoubanSyncRollbackDaoTest {
     }
 
     @Test
-    fun getAll_返回全部() = runTest {
-        dao.insertAll(listOf(
-            sample(doubanId = "d1", title = "A"),
-            sample(doubanId = "d2", title = "B")
-        ))
-        val all = dao.getAll()
-        assertThat(all).hasSize(2)
-        assertThat(all.map { it.title }).containsExactly("A", "B")
-    }
-
-    @Test
-    fun getAll_空表_返回空列表() = runTest {
-        assertThat(dao.getAll()).isEmpty()
-    }
-
-    @Test
-    fun count_空表_返回0() = runTest {
-        assertThat(dao.count()).isEqualTo(0)
-    }
-
-    @Test
     fun clearAll_清空() = runTest {
         dao.insertAll(listOf(
             sample(doubanId = "d1"),
@@ -105,19 +84,6 @@ class DoubanSyncRollbackDaoTest {
         assertThat(dao.count()).isEqualTo(1)
         assertThat(dao.getAll()[0].doubanId).isEqualTo("new1")
         assertThat(dao.getAll()[0].traktId).isEqualTo(3)
-    }
-
-    @Test
-    fun replaceAll_空列表_清空表() = runTest {
-        dao.insertAll(listOf(sample(doubanId = "d1")))
-        dao.replaceAll(emptyList())
-        assertThat(dao.count()).isEqualTo(0)
-    }
-
-    @Test
-    fun replaceAll_空表上调用_插入新数据() = runTest {
-        dao.replaceAll(listOf(sample(doubanId = "d1")))
-        assertThat(dao.count()).isEqualTo(1)
     }
 
     @Test

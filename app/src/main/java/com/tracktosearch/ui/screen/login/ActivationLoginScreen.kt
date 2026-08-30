@@ -105,7 +105,6 @@ fun ActivationLoginScreen(
      * 登录成功后由 AppNavigation 直接进入 MainScreen（豆瓣独立模式）。
      */
     onDoubanLogin: () -> Unit = {},
-    redirectToBrowser: Boolean = false,
     expired: Boolean = false,
     modifier: Modifier = Modifier,
     loginViewModel: LoginViewModel = hiltViewModel(),
@@ -151,16 +150,6 @@ fun ActivationLoginScreen(
             loginViewModel.getAuthorizationUrl()?.let { authUrl ->
                 CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(authUrl))
             }
-        }
-    }
-
-    // 仅授权过期需续期时（redirectToBrowser 由导航层按 EXPIRED 态传入）自动拉起浏览器；
-    // 其余情况（豆瓣用户/访客进入登录页）停留在登录页让用户自选路径，
-    // 避免自动 OAuth 抢占豆瓣入口并把豆瓣按钮禁用在 AUTHORIZING 态。
-    // 只按 redirectToBrowser 作 key：取消授权重置 IDLE 后不会重新拉起浏览器
-    LaunchedEffect(redirectToBrowser) {
-        if (redirectToBrowser && loginState == LoginState.IDLE) {
-            launchAuthorization()
         }
     }
 

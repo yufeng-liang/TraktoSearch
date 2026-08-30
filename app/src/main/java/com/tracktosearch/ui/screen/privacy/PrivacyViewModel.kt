@@ -27,14 +27,14 @@ class PrivacyViewModel @Inject constructor(
     private val crashLogUploader: CrashLogUploader
 ) : ViewModel() {
 
-    /** 「锐评我的看单」数据上传开关（默认开启） */
+    /** 「AI 锐评看单」数据上传开关（默认开启） */
     val aiTasteEnabled: StateFlow<Boolean> = aiTasteStorage.tasteUploadEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     /** 崩溃日志上报开关（默认关闭，需用户授权） */
     val crashLogEnabled: StateFlow<Boolean> = crashLogStorage.enabled
 
-    /** 「锐评我的看单」数据上传开关（关闭后功能项保留，点击时引导回本页开启） */
+    /** 「AI 锐评看单」数据上传开关（关闭后功能项保留，点击时引导回本页开启） */
     fun setAiTasteEnabled(enabled: Boolean) {
         viewModelScope.launch { aiTasteStorage.setTasteUploadEnabled(enabled) }
     }

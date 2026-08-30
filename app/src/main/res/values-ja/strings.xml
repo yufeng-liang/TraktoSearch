@@ -484,7 +484,7 @@
     <string name="login_success">ログイン成功、読み込み中…</string>
     <string name="login_sync_hint">ログイン後、Traktのウォッチリストが同期されます</string>
     <string name="login_activation_locked">○ 未認証 · コードを入力して視聴スペースを解放</string>
-    <string name="login_activation_choose_path">有効化済み · Traktにログインするか、ゲストとして続行してください</string>
+    <string name="login_activation_choose_path">有効化しました。Trakt または豆瓣にログインするか、ひとまずゲストとして続行してください。</string>
     <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
 
     <!-- Ratings -->
@@ -518,6 +518,12 @@
     <string name="detail_original_title">原題: %1$s</string>
     <string name="detail_runtime_hours">%1$d時間%2$d分</string>
     <string name="detail_runtime_minutes">%1$d分</string>
+    <!-- メタ情報チップのアクセシビリティラベル -->
+    <string name="detail_meta_genres_desc">ジャンル：%1$s</string>
+    <string name="detail_meta_country_desc">国/地域：%1$s</string>
+    <string name="detail_meta_release_date_desc">公開日：%1$s</string>
+    <string name="detail_meta_runtime_desc">上映時間：%1$s</string>
+    <string name="douban_detail_comment_quote">「%1$s」</string>
     <string name="detail_year">%1$d年</string>
     <string name="detail_collapse">折りたたむ ▲</string>
     <string name="detail_expand">展開する ▼</string>
@@ -1446,6 +1452,8 @@
   diskTypePath = $.type</string>
     <string name="help_detail_custom">カスタム詳細ページ：設定で詳細ページの各モジュール（キャスト、予告編とスクリーンショット、あらすじ、マイレーティング、コメント、おすすめ）の表示/非表示を制御</string>
     <string name="help_videos_images">予告編とスクリーンショット：詳細ページに予告編とスチールを表示、予告編をタップしてブラウザで再生、スクリーンショットをタップして拡大表示しアルバムに保存</string>
+    <string name="help_detail_scroll_title">スクロールタイトルバー：作品詳細ヘージと豆矣詳細ヘージでヘッダーを過ぎてスクロールすると、上部にタイトル付きのやわらかなぼかしバーがフェードインします</string>
+    <string name="help_detail_pull_refresh">プルトゥリフレッシュ：作品詳細ヘージで下に引くと評価/キャスト/シーズン/コメント/おすすめを再取得。豆矣詳細ヘージでは作品情報を再取得し、検索済みの場合はリソースも再検索します</string>
     <string name="help_discover_filter_b1">作品フィルター：発見ページのタイトルバーでフィルターアイコンをタップ、または下部の「作品フィルターページへ」カードからフィルターページに移動</string>
     <string name="help_discover_filter_b2">ジャンル、地域、タグ、評価範囲、年代でフィルタリング、人気度、公開日、評価で並べ替え可能</string>
     <string name="help_discover_filter_b3">映画とテレビ番組のフィルター条件は独立、タブ切り替えでそれぞれのフィルター選択を保持</string>
@@ -1457,6 +1465,7 @@
     
     
     <string name="help_tips_b12">自動アップロードを有効にすると、クラッシュログは次回起動時に送信され、履歴はフィードバックページで確認できます。ログには端末やアプリ状態などの診断情報が含まれる場合があります。</string>
+    <string name="help_tips_b13">メッセージ画面で未読の項目を右にスワイプすると既読になります。上部の「すべて既読」で一括処理できます。</string>
 
     <!-- 彩蛋メッセージ（9アニメ × 3メッセージ） -->
     <string name="easter_msg_shy_1">つつかれました、くすぐったい！</string>
@@ -1584,6 +1593,16 @@
     <string name="feedback_closed_hint">このフィードバックは閉じられました</string>
     <string name="feedback_load_more">もっと読み込む</string>
     <string name="feedback_id_format">#%1$s</string>
+    <string name="feedback_day_today">今日</string>
+    <string name="feedback_day_yesterday">昨日</string>
+    <string name="feedback_timeline_submitted">送信済み</string>
+    <string name="feedback_unread_reply">新しい返信</string>
+    <string name="feedback_mark_read">既読にする</string>
+    <string name="feedback_screenshots_hint">最大 5 枚・長押しで並べ替え</string>
+    <string name="feedback_type_required">まず種類を選んでください</string>
+    <string name="feedback_discard_title">この内容を破棄しますか？</string>
+    <string name="feedback_discard_message">入力した内容は保存されません。</string>
+    <string name="feedback_discard_confirm">破棄</string>
     <string name="douban_sync_stage_idle">待機中</string>
     <string name="douban_sync_stage_preparing">同期を準備中</string>
     <string name="douban_sync_stage_fetching_list">リストを取得中</string>
@@ -1676,7 +1695,7 @@
     <string name="ai_audio_loading">音声を読み込み中</string>
     <string name="ai_audio_playing">音声を再生中</string>
     <string name="ai_feature_greeting">ニックネーム歓迎</string>
-    <string name="ai_feature_taste">視聴リストを批評</string>
+    <string name="ai_feature_taste">AI 視聴リスト評論</string>
     <string name="settings_ai_group_title">AI とプライバシー</string>
     <string name="settings_ai_taste_subtitle">有効にすると、この機能の利用時に直近 60 件の視聴記録（タイトル、年、評価、視聴日）を本アプリの AI サービスへ送信します。レビュー生成のみに使用します</string>
     <string name="ai_taste_consent_title">視聴リストがアップロードされます</string>
@@ -1942,38 +1961,68 @@
     <string name="privacy_title">データとプライバシー</string>
     <string name="privacy_entry_subtitle">データ設定 · プライバシー · 利用と権利</string>
     <string name="privacy_section_switches">データ設定</string>
-    <string name="privacy_location_title">位置情報の許可（雲のテーマ）</string>
-    <string name="privacy_location_granted">許可済み。雲は現在地の天気や季節イベントで変化します。システム設定で取り消せます</string>
-    <string name="privacy_location_denied">未許可。雲は静止したままで、他の機能への影響はありません</string>
+    <string name="privacy_location_title">位置情報の許可（雲の天気）</string>
+    <string name="privacy_location_granted">許可済み。雲のアニメーションが地域の天気や季節に合わせて変わります。システム設定で取り消せます</string>
+    <string name="privacy_location_denied">未許可。雲は静止したままですが、他の機能には影響しません</string>
     <string name="privacy_location_grant">再許可</string>
     <string name="privacy_location_manage">システム設定</string>
     <string name="privacy_section_statement">プライバシー</string>
-    <string name="privacy_statement_intro">TraktoSearch は広告・分析 SDK を組み込んでいません。視聴履歴・進捗・リストはまず端末内に保存され、ログイン・同期・情報照会・リソース検索、またはフィードバックを明示的に有効にした場合にのみ、必要なリクエストを送信します。</string>
+    <string name="privacy_statement_intro">TraktoSearch は広告 SDK や分析 SDK を組み込みません。視聴履歴、リスト、進捗はまず端末で処理されます。ログイン、同期、作品情報、リソース検索、AI 評論、天気、クラッシュ報告、フィードバックなど、機能に必要な場合だけ通信します。</string>
     <string name="privacy_local_title">端末内に留まるもの</string>
-    <string name="privacy_local_b1">ログイン資格情報とトークン（暗号化して保存）</string>
+    <string name="privacy_local_b1">ログイン資格情報とトークン（保存時に暗号化）</string>
     <string name="privacy_local_b2">検索・閲覧履歴、視聴履歴</string>
     <string name="privacy_local_b3">リスト、評価、視聴進捗</string>
-    <string name="privacy_network_title">ネットワークに送るもの（送信先）</string>
+    <string name="privacy_network_title">必要な場合だけ送信</string>
     <string name="privacy_network_b1">ログイン・同期：Trakt/豆瓣へのリクエスト</string>
     <string name="privacy_network_b2">情報照会：TMDB/豆瓣/OMDb へのリクエスト</string>
-    <string name="privacy_network_b3">リソース検索：作品名キーワードのみ送信</string>
-    <string name="privacy_network_b4">天気：雲をタップして許可した場合にのみ、大まかな位置（都市レベル）を天気サービスへ送信して天気を取得します。アカウントと紐付けず、保存もしません</string>
-    <string name="privacy_network_b5">AI レビュー：初回確認の後、直近 60 件の視聴記録を本アプリの AI サービスへ送信してレビューを生成します。上のスイッチでオフにできます</string>
-    <string name="privacy_network_b6">クラッシュログ：既定ではオフ。オンにすると次回起動時にスタックトレース、OS バージョン、アプリバージョンを送信します</string>
-    <string name="privacy_network_b7">フィードバック：入力した内容と連絡先、OS バージョンのみを送信</string>
-    <string name="privacy_network_b8">認証：デバイス紐付けのため Android ID を送信</string>
+    <string name="privacy_network_b3">リソース検索：検索に必要な作品キーワードのみ</string>
+    <string name="privacy_network_b4">天気：雲をタップしておおよその位置を許可した場合だけ、市区町村レベルの位置を天気サービスへ送信します。アカウントとは結び付けず、アプリには保存しません</string>
+    <string name="privacy_network_b5">AI 評論：初回確認後、最新 60 件の視聴記録を本アプリの AI サービスへ送信します。上のスイッチで停止できます</string>
+    <string name="privacy_network_b6">クラッシュログ：初期状態はオフ。オンにすると次回起動時に必要なスタック、OS、アプリバージョンを送信します</string>
+    <string name="privacy_network_b7">フィードバック：入力した内容と連絡先、対応に必要なシステム情報のみ送信します</string>
+    <string name="privacy_network_b8">アクティベーション：端末紐付けのため Android ID を使用し、広告追跡には使いません</string>
     <string name="privacy_tech_title">技術的な実装を見る</string>
-    <string name="privacy_tech_b1">端末内：トークンと資格情報は EncryptedSharedPreferences で暗号化。リスト・同期記録・進捗は SQLCipher で暗号化したデータベースに保存。Android Keystore がローカル鍵を保護します</string>
-    <string name="privacy_tech_b2">通信：HTTPS とゲートウェイ JWT 認証で中継され、クライアントはサーバー鍵を保持しません</string>
-    <string name="privacy_tech_b3">サーバー：クラウドデータは Worker がサーバー側の鍵で暗号化して保存し、鍵は APK に同梱されません</string>
+    <string name="privacy_tech_b1">端末内：資格情報とトークンは Android Keystore に保護された EncryptedSharedPreferences を使用。リスト、同期記録、評価、進捗は SQLCipher 暗号化データベースに保存します</string>
+    <string name="privacy_tech_b2">通信：HTTPS とゲートウェイ JWT 認証で上流リクエストを中継し、クライアントは Worker Secret を保持しません</string>
+    <string name="privacy_tech_b3">サーバー：保護対象のクラウド同期データと資格情報は Worker がサーバー側の Secret で暗号化します。鍵は APK に含まれません</string>
+    <string name="privacy_hero_title">データはあなたが決める</string>
+    <string name="privacy_hero_desc">視聴記録はまず端末に保存されます。通信が必要な機能では、送信する内容と理由をここで説明します。</string>
+    <string name="privacy_flow_title">データフローの実演</string>
+    <string name="privacy_flow_live">アニメーション例</string>
+    <string name="privacy_flow_summary">機能ごとのデータの動きを確認できます。これは理解のための図解であり、実際の通信を監視するものではありません。</string>
+    <string name="privacy_flow_hint">フローを選んで境界を確認</string>
+    <string name="privacy_flow_device">端末</string>
+    <string name="privacy_flow_local_title">端末内保存</string>
+    <string name="privacy_flow_local_caption">リスト、評価、進捗は端末内の暗号化データベースで読み書きされ、記録の保存に通信は不要です。</string>
+    <string name="privacy_flow_local_node">ローカル暗号化</string>
+    <string name="privacy_flow_local_end">端末内に残る</string>
+    <string name="privacy_flow_account_title">ログインと同期</string>
+    <string name="privacy_flow_account_caption">ログインや同期を開始した場合、必要なリクエストは HTTPS とゲートウェイ認証を経て Trakt または Douban に送られ、結果がアプリに戻ります。</string>
+    <string name="privacy_flow_account_node">安全なゲートウェイ</string>
+    <string name="privacy_flow_account_end">Trakt / Douban</string>
+    <string name="privacy_flow_metadata_title">作品情報</string>
+    <string name="privacy_flow_metadata_caption">詳細を開くと、検索に必要な作品名または ID だけを送り、評価、概要、スタッフ情報などを受け取ります。</string>
+    <string name="privacy_flow_metadata_node">ゲートウェイ中継</string>
+    <string name="privacy_flow_metadata_end">TMDB / Douban / OMDb</string>
+    <string name="privacy_flow_resource_title">リソース検索</string>
+    <string name="privacy_flow_resource_caption">リソース検索では作品キーワードだけを送信します。結果リンクは検索元から返され、動画ファイルをアップロード・ホストしません。</string>
+    <string name="privacy_flow_resource_node">検索リクエスト</string>
+    <string name="privacy_flow_resource_end">結果リンク</string>
+    <string name="privacy_flow_feedback_title">クラッシュ報告</string>
+    <string name="privacy_flow_feedback_caption">報告を有効にするかフィードバックを送った場合だけ、必要なログと入力情報が端末の外へ出ます。</string>
+    <string name="privacy_flow_feedback_node">ゲートウェイ中継</string>
+    <string name="privacy_flow_feedback_end">安全な保存先</string>
+    <string name="privacy_rights_b1">AI 評論、クラッシュ報告、雲の天気の位置情報をいつでも停止・撤回できます</string>
+    <string name="privacy_rights_b2">設定の対応操作からログアウトし、ローカル資格情報とキャッシュを消去できます</string>
+    <string name="privacy_rights_b3">権利リクエストページからアクセス、訂正、削除、著作権対応を依頼できます</string>
     <string name="privacy_badge_b1">オープンソース・コード監査可能</string>
     <string name="privacy_badge_b2">広告・分析 SDK なし</string>
     <string name="privacy_section_legal">利用と権利</string>
-    <string name="privacy_legal_intro">TraktoSearch は独立開発の Android ツールであり、映画プラットフォーム、クラウドドライブ、コンテンツ配信サービスではありません。以下は本プロジェクトの利用範囲とデータ取り扱いの説明であり、特定の状況に対する法的助言ではありません。</string>
+    <string name="privacy_legal_intro">TraktoSearch は独立開発の Android ツールであり、映画プラットフォーム、クラウドドライブ、コンテンツ配信サービスではありません。第三者アカウントやリンクは各規約と地域の法律に従って利用してください。ここはプロジェクトの境界説明であり、法律相談ではありません。</string>
     <string name="privacy_legal_b1_title">独立プロジェクト、第三者と非提携</string>
-    <string name="privacy_legal_b1">豆瓣、Trakt、TMDB、OMDb、PanSou、PanHub、ZReso、各種クラウドドライブ、GitHub、Chiikawa の権利者とは提携・協力・公式承認の関係にありません。表示されるサービス名や商標は互換対象の説明のみに使用します。第三者データの完全性・正確性・継続的な可用性は保証しません。</string>
+    <string name="privacy_legal_b1">Douban、Trakt、TMDB、OMDb、PanSou、PanHub、ZReso、各種クラウドドライブ、GitHub、Chiikawa の権利者とは提携・運営・公式承認の関係にありません。サービス名と商標は互換対象の説明にのみ使用し、第三者データの完全性、正確性、継続利用を保証しません。</string>
     <string name="privacy_legal_b2_title">豆瓣ログイン・取得・書き戻し</string>
-    <string name="privacy_legal_b2">ユーザーの能動的な操作によってのみ実行され、豆瓣アカウントの権限、アクセス方針、CAPTCHA、API 変更の制約を受けます。必ずご自身のアカウントのみを使用してください。アクセス制御の回避、一括取得、サービスへの過負荷、他人のデータ収集に本アプリを使用してはいけません。</string>
+    <string name="privacy_legal_b2">ユーザーが開始した場合だけ実行され、Douban の権限、アクセス規則、認証、API 変更の影響を受けます。自分のアカウントだけを使い、アクセス制御の回避、大量取得、サービスへの過負荷、他人のデータ収集は禁止します。</string>
     <string name="privacy_legal_b3_title">リソースリンクと第三者コンテンツ</string>
     <string name="privacy_legal_b3">検索ソースとクラウドドライブ機能は、第三者が返したリンクの検索またはオープンのみを行います。本アプリは動画ファイルのアップロード・ホスティング・キャッシュ・配布を行わず、リンク先のコンテンツや許諾状態を保証しません。コンテンツの許諾とお住まいの地域の法律要件はご自身で確認してください。</string>
     <string name="privacy_legal_b4_title">第三者データと帰属</string>
@@ -1981,7 +2030,7 @@
     <string name="privacy_legal_b5_title">オープンソースライセンス</string>
     <string name="privacy_legal_b5">独自のオリジナルコードは GNU GPLv3 で提供します。作品情報、第三者 API の返答内容、依存ライブラリ、ポスター、キャラクター素材は、コードのオープンソース化によって自動的に GPLv3 の対象にはなりません。</string>
     <string name="privacy_rights_title">データへのアクセス・訂正・削除</string>
-    <string name="privacy_rights_desc">アクセス・訂正・削除のリクエストや著作権通知は、公式サイトの権利リクエストフォームから送信できます。フォームはリクエスト処理に必要な情報のみを収集し、記録はクローズ後 180 日以内に削除されます。</string>
+    <string name="privacy_rights_desc">設定でローカル項目を変更し、Android のシステム設定で位置情報を取り消し、アプリが提供する操作でローカルキャッシュや資格情報を消去できます。アクセス、訂正、削除、著作権に関する依頼は権利リクエストフォームから送信できます。フォームは処理に必要な情報だけを収集し、終了した依頼は 180 日以内に削除します。</string>
     <string name="privacy_rights_open">権利リクエストページを開く</string>
     <string name="privacy_footer">© 2026 TraktoSearch · 内容基準 2026-08</string>
 </resources>

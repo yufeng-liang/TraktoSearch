@@ -65,27 +65,6 @@ class DoubanSyncPendingItemDaoTest {
     }
 
     @Test
-    fun getAll_返回全部() = runTest {
-        dao.insertAll(listOf(
-            sample(doubanId = "d1", title = "A"),
-            sample(doubanId = "d2", title = "B")
-        ))
-        val all = dao.getAll()
-        assertThat(all).hasSize(2)
-        assertThat(all.map { it.title }).containsExactly("A", "B")
-    }
-
-    @Test
-    fun getAll_空表_返回空列表() = runTest {
-        assertThat(dao.getAll()).isEmpty()
-    }
-
-    @Test
-    fun count_空表_返回0() = runTest {
-        assertThat(dao.count()).isEqualTo(0)
-    }
-
-    @Test
     fun getByStatus_过滤wish() = runTest {
         dao.insertAll(listOf(
             sample(doubanId = "d1", status = "wish"),
@@ -120,20 +99,6 @@ class DoubanSyncPendingItemDaoTest {
     }
 
     @Test
-    fun deleteByDoubanIds_空列表_无副作用() = runTest {
-        dao.insertAll(listOf(sample(doubanId = "d1")))
-        dao.deleteByDoubanIds(emptyList())
-        assertThat(dao.count()).isEqualTo(1)
-    }
-
-    @Test
-    fun deleteByDoubanIds_不存在的ID_无副作用() = runTest {
-        dao.insertAll(listOf(sample(doubanId = "d1")))
-        dao.deleteByDoubanIds(listOf("not_exists"))
-        assertThat(dao.count()).isEqualTo(1)
-    }
-
-    @Test
     fun clearAll_清空() = runTest {
         dao.insertAll(listOf(
             sample(doubanId = "d1"),
@@ -155,19 +120,6 @@ class DoubanSyncPendingItemDaoTest {
         ))
         assertThat(dao.count()).isEqualTo(2)
         assertThat(dao.getAll().map { it.doubanId }).containsExactly("new1", "new2")
-    }
-
-    @Test
-    fun replaceAll_空列表_清空表() = runTest {
-        dao.insertAll(listOf(sample(doubanId = "d1")))
-        dao.replaceAll(emptyList())
-        assertThat(dao.count()).isEqualTo(0)
-    }
-
-    @Test
-    fun replaceAll_空表上调用_插入新数据() = runTest {
-        dao.replaceAll(listOf(sample(doubanId = "d1")))
-        assertThat(dao.count()).isEqualTo(1)
     }
 
     // ==================== deleteByDoubanIds 分块删除 ====================

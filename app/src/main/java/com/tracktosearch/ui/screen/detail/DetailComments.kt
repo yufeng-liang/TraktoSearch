@@ -45,6 +45,7 @@ import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.theme.NeumorphicBorderLight
 
 // ==================== 单条评论 ====================
 
@@ -89,7 +90,7 @@ internal fun OwnCommentComposer(
         blurRadius = 16.dp,
         shadowOffset = 5.dp,
         backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.65f),
-        borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color(0xFFD0D5DC).copy(alpha = 0.9f),
+        borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else NeumorphicBorderLight.copy(alpha = 0.9f),
         darkShadowAlpha = if (isDark) 0.25f else 0.16f,
         lightShadowAlpha = if (isDark) 0.08f else 0.65f,
         hazeState = null,
@@ -178,7 +179,7 @@ internal fun OwnCommentCard(
         blurRadius = 16.dp,
         shadowOffset = 5.dp,
         backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.65f),
-        borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color(0xFFD0D5DC).copy(alpha = 0.9f),
+        borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else NeumorphicBorderLight.copy(alpha = 0.9f),
         darkShadowAlpha = if (isDark) 0.25f else 0.16f,
         lightShadowAlpha = if (isDark) 0.08f else 0.65f,
         hazeState = null,
@@ -258,7 +259,7 @@ internal fun CommentItem(
         blurRadius = 16.dp,
         shadowOffset = 5.dp,
         backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.65f),
-        borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color(0xFFD0D5DC).copy(alpha = 0.9f),
+        borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else NeumorphicBorderLight.copy(alpha = 0.9f),
         darkShadowAlpha = if (isDark) 0.25f else 0.16f,
         lightShadowAlpha = if (isDark) 0.08f else 0.65f,
         hazeState = null,

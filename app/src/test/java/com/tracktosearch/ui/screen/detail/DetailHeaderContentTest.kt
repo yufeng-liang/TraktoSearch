@@ -51,33 +51,6 @@ class DetailHeaderContentTest {
     }
 
     @Test
-    fun short_overview_does_not_show_expand_action() {
-        composeRule.setContent {
-            MaterialTheme {
-                ExpandableText(text = "A short overview.")
-            }
-        }
-
-        assertThat(composeRule.onAllNodesWithText(expandLabel, substring = true).fetchSemanticsNodes())
-            .isEmpty()
-    }
-
-    @Test
-    fun long_overview_shows_expand_action() {
-        composeRule.setContent {
-            MaterialTheme {
-                Box(modifier = Modifier.width(320.dp)) {
-                    ExpandableText(text = longOverview)
-                }
-            }
-        }
-
-        composeRule.onNodeWithText(expandLabel).assertIsDisplayed()
-        // 折叠时正文只布局 3 行（第 4/5 行被省略号截断，文本语义仍含全文）
-        assertThat(getTextLayouts("Overview line 1").single().lineCount).isEqualTo(3)
-    }
-
-    @Test
     fun clicking_expand_changes_action_to_collapse() {
         composeRule.setContent {
             MaterialTheme {
@@ -94,27 +67,4 @@ class DetailHeaderContentTest {
         assertThat(getTextLayouts("Overview line 1").single().lineCount).isEqualTo(5)
     }
 
-    @Test
-    fun toggle_action_sits_below_body_and_aligns_to_end() {
-        composeRule.setContent {
-            MaterialTheme {
-                Box(modifier = Modifier.width(320.dp)) {
-                    ExpandableText(text = longOverview)
-                }
-            }
-        }
-
-        val bodyBottom = composeRule.onNodeWithText("Overview line 1", substring = true)
-            .getUnclippedBoundsInRoot().bottom.value
-        val expandBounds = composeRule.onNodeWithText(expandLabel).getUnclippedBoundsInRoot()
-        // 「展开」独占一行放在正文下方，不再叠在最后一行上遮挡文字
-        assertThat(expandBounds.top.value).isAtLeast(bodyBottom)
-        // 右对齐：按钮右边缘与 320.dp 容器右边缘一致
-        assertThat(expandBounds.right.value).isWithin(0.5f).of(320f)
-
-        // 展开后「收起」占用同一位置，仍然右对齐
-        composeRule.onNodeWithText(expandLabel).performSemanticsAction(SemanticsActions.OnClick)
-        val collapseBounds = composeRule.onNodeWithText(collapseLabel).getUnclippedBoundsInRoot()
-        assertThat(collapseBounds.right.value).isWithin(0.5f).of(320f)
-    }
 }

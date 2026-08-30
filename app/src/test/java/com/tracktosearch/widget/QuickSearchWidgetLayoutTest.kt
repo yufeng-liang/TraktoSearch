@@ -9,25 +9,18 @@ import org.junit.Test
 class QuickSearchWidgetLayoutTest {
 
     @Test
-    fun `120x60 uses compact layout`() {
-        assertThat(resolveWidgetLayout(DpSize(120.dp, 60.dp)))
-            .isEqualTo(QuickSearchWidgetLayout.COMPACT)
+    fun layoutUsesWidthBreakpoint() {
+        listOf(
+            DpSize(120.dp, 60.dp) to QuickSearchWidgetLayout.COMPACT,
+            DpSize(239.dp, 100.dp) to QuickSearchWidgetLayout.COMPACT,
+            DpSize(240.dp, 100.dp) to QuickSearchWidgetLayout.EXPANDED,
+        ).forEach { (size, expected) ->
+            assertThat(resolveWidgetLayout(size)).isEqualTo(expected)
+        }
     }
 
     @Test
-    fun `239x100 uses compact layout`() {
-        assertThat(resolveWidgetLayout(DpSize(239.dp, 100.dp)))
-            .isEqualTo(QuickSearchWidgetLayout.COMPACT)
-    }
-
-    @Test
-    fun `240x100 uses expanded layout`() {
-        assertThat(resolveWidgetLayout(DpSize(240.dp, 100.dp)))
-            .isEqualTo(QuickSearchWidgetLayout.EXPANDED)
-    }
-
-    @Test
-    fun `null accent falls back to vintage ticket`() {
+    fun nullAccentFallsBackToVintageTicket() {
         assertThat(resolveWidgetAccent(null)).isEqualTo(MonetAccent.VINTAGE_TICKET)
     }
 }

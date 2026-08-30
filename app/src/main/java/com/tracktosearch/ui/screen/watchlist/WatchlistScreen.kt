@@ -1085,20 +1085,22 @@ fun WatchlistScreen(
                                                     letterSpacing = (-0.5).sp,
                                                     color = MaterialTheme.colorScheme.onSurface
                                                 )
-                                                // 观看统计入口：以前只能从设置 Tab 进，热力图/词云这类高价值内容
-                                                // 埋得太深。放在标题右侧的空白处，搜索展开时随标题一起淡出。
-                                                IconButton(
-                                                    onClick = onStatisticsClick,
-                                                    modifier = Modifier
-                                                        .padding(start = 4.dp)
-                                                        .size(32.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Rounded.Insights,
-                                                        contentDescription = stringResource(R.string.statistics_title),
-                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.size(20.dp)
-                                                    )
+                                                // 观看统计依赖 Trakt/豆瓣观看记录。访客隐藏入口，避免进入全空页面；
+                                                // 登录后仍保留这条比设置页更浅的入口。
+                                                if (canOpenWatchStatistics(isTraktConnected, isDoubanMode)) {
+                                                    IconButton(
+                                                        onClick = onStatisticsClick,
+                                                        modifier = Modifier
+                                                            .padding(start = 4.dp)
+                                                            .size(32.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.Insights,
+                                                            contentDescription = stringResource(R.string.statistics_title),
+                                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    }
                                                 }
                                                 // 日签入口：紧挨着统计。两个都是「回看自己」的入口，
                                                 // 放一起才不用分别去记在哪。

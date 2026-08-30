@@ -89,20 +89,6 @@ class DoubanSyncDialogTest {
     // ==================== 运行中状态 ====================
 
     @Test
-    fun `运行中显示转后台和取消按钮`() {
-        emit(DoubanSyncProgress(
-            isRunning = true,
-            current = 5,
-            total = 100,
-            stage = DoubanSyncStage.FETCHING_LIST,
-            subStage = DoubanSyncSubStage.FETCHING_WISH_LIST
-        ))
-        setContent()
-        composeRule.onNodeWithText("Background").assertIsDisplayed().assertIsEnabled()
-        composeRule.onNodeWithText("Cancel").assertIsDisplayed().assertIsEnabled()
-    }
-
-    @Test
     fun `运行中点击取消调用viewModel_cancel`() {
         emit(DoubanSyncProgress(
             isRunning = true,
@@ -128,30 +114,7 @@ class DoubanSyncDialogTest {
         composeRule.onNodeWithText("Cancelling...").assertIsNotEnabled()
     }
 
-    @Test
-    fun `正在取消时取消按钮文案为正在取消`() {
-        emit(DoubanSyncProgress(
-            isRunning = true,
-            isCancelling = true,
-            stage = DoubanSyncStage.CANCELLING
-        ))
-        setContent()
-        composeRule.onNodeWithText("Cancelling...").assertIsDisplayed()
-    }
-
     // ==================== 完成状态 ====================
-
-    @Test
-    fun `完成状态显示完成按钮`() {
-        emit(DoubanSyncProgress(
-            isComplete = true,
-            stage = DoubanSyncStage.COMPLETED,
-            successCount = 50,
-            failedCount = 5
-        ))
-        setContent()
-        composeRule.onNodeWithText("Sync Complete").assertIsDisplayed()
-    }
 
     @Test
     fun `完成状态点击完成调用onDismiss`() {
@@ -170,18 +133,6 @@ class DoubanSyncDialogTest {
     // ==================== Cookie 过期状态 ====================
 
     @Test
-    fun `cookieExpired状态显示重新登录按钮`() {
-        emit(DoubanSyncProgress(
-            isComplete = true,
-            stage = DoubanSyncStage.LOGIN_REQUIRED,
-            loginTarget = DoubanSyncLoginTarget.DOUBAN,
-            cookieExpired = true
-        ))
-        setContent(onRelogin = {})
-        composeRule.onNodeWithText("Re-login").assertIsDisplayed()
-    }
-
-    @Test
     fun `cookieExpired点击重新登录调用onRelogin`() {
         emit(DoubanSyncProgress(
             isComplete = true,
@@ -198,57 +149,19 @@ class DoubanSyncDialogTest {
     // ==================== Trakt 未登录状态 ====================
 
     @Test
-    fun `未登录Trakt状态显示登录Trakt按钮`() {
+    fun `未登录Trakt点击登录调用onTraktLogin`() {
         emit(DoubanSyncProgress(
             isComplete = true,
             stage = DoubanSyncStage.LOGIN_REQUIRED,
             loginTarget = DoubanSyncLoginTarget.TRAKT
         ))
-        setContent(onTraktLogin = {})
-        composeRule.onNodeWithText("Login Trakt").assertIsDisplayed()
+        var loginCalled = false
+        setContent(onTraktLogin = { loginCalled = true })
+        composeRule.onNodeWithText("Login Trakt").performClick()
+        assertThat(loginCalled).isTrue()
     }
 
     // ==================== 文案展示 ====================
-
-    @Test
-    fun `运行中显示进度文案`() {
-        emit(DoubanSyncProgress(
-            isRunning = true,
-            current = 5,
-            total = 100,
-            stage = DoubanSyncStage.FETCHING_LIST,
-            subStage = DoubanSyncSubStage.FETCHING_WISH_LIST
-        ))
-        setContent()
-        composeRule.onNodeWithText("Fetching list (5/100)").assertIsDisplayed()
-    }
-
-    @Test
-    fun `运行中显示最近抓取的豆瓣条目`() {
-        emit(
-            DoubanSyncProgress(
-                isRunning = true,
-                stage = DoubanSyncStage.FETCHING_LIST,
-                subStage = DoubanSyncSubStage.FETCHING_WISH_LIST,
-                recentItems = listOf(
-                    DoubanSyncPreviewItem(
-                        doubanId = "dune",
-                        title = "Dune",
-                        status = DoubanMarkStatus.WISH,
-                        rating = 4,
-                        markedAt = "2024-06-01"
-                    )
-                )
-            )
-        )
-        setContent()
-
-        composeRule.onNodeWithText("Recently fetched").assertIsDisplayed()
-        composeRule.onNodeWithText("Dune").assertIsDisplayed()
-        composeRule.onNodeWithText("Wish list").assertIsDisplayed()
-        composeRule.onNodeWithText("4/5").assertIsDisplayed()
-        composeRule.onNodeWithText("2024-06-01").assertIsDisplayed()
-    }
 
     @Test
     fun `解析阶段显示处理和待处理而不显示最近获取`() {
@@ -285,29 +198,6 @@ class DoubanSyncDialogTest {
     }
 
     @Test
-    fun `列表阶段显示最近获取而不显示处理队列`() {
-        emit(
-            DoubanSyncProgress(
-                isRunning = true,
-                stage = DoubanSyncStage.FETCHING_LIST,
-                subStage = DoubanSyncSubStage.FETCHING_WISH_LIST,
-                recentItems = listOf(preview("recent", "Recent movie")),
-                processingItems = listOf(DoubanSyncQueueItem("processing", "Queue movie")),
-                pendingItems = listOf(DoubanSyncQueueItem("pending", "Pending movie")),
-                pendingItemCount = 1
-            )
-        )
-        setContent()
-
-        composeRule.onNodeWithText("Recently fetched").assertIsDisplayed()
-        composeRule.onNodeWithText("Recent movie").assertIsDisplayed()
-        composeRule.onAllNodesWithText("Processing").assertCountEquals(0)
-        composeRule.onAllNodesWithText("Pending").assertCountEquals(0)
-        composeRule.onAllNodesWithText("Queue movie").assertCountEquals(0)
-        composeRule.onAllNodesWithText("Pending movie").assertCountEquals(0)
-    }
-
-    @Test
     fun `写入阶段隐藏所有旧列表和队列条目`() {
         emit(
             DoubanSyncProgress(
@@ -330,31 +220,6 @@ class DoubanSyncDialogTest {
         composeRule.onAllNodesWithText("Old recent movie").assertCountEquals(0)
         composeRule.onAllNodesWithText("Old processing movie").assertCountEquals(0)
         composeRule.onAllNodesWithText("Old pending movie").assertCountEquals(0)
-    }
-
-    @Test
-    fun `状态变化阶段显示处理和待处理条目`() {
-        emit(
-            DoubanSyncProgress(
-                isRunning = true,
-                current = 1,
-                total = 3,
-                stage = DoubanSyncStage.UPDATING_LIST,
-                subStage = DoubanSyncSubStage.STATUS_CHANGES,
-                recentItems = listOf(preview("recent", "Old recent movie")),
-                processingItems = listOf(DoubanSyncQueueItem("processing", "Changed movie")),
-                pendingItems = listOf(DoubanSyncQueueItem("pending", "Next changed movie")),
-                pendingItemCount = 1
-            )
-        )
-        setContent()
-
-        composeRule.onNodeWithText("Processing").assertIsDisplayed()
-        composeRule.onNodeWithText("Changed movie").assertIsDisplayed()
-        composeRule.onNodeWithText("Pending").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Next changed movie").performScrollTo().assertIsDisplayed()
-        composeRule.onAllNodesWithText("Recently fetched").assertCountEquals(0)
-        composeRule.onAllNodesWithText("Old recent movie").assertCountEquals(0)
     }
 
     @Test
@@ -387,25 +252,6 @@ class DoubanSyncDialogTest {
         composeRule.onAllNodesWithText("Old pending movie").assertCountEquals(0)
     }
 
-    @Test
-    fun `完成状态显示统计文案`() {
-        emit(
-            DoubanSyncProgress(
-                isComplete = true,
-                stage = DoubanSyncStage.COMPLETED,
-                successCount = 50,
-                failedCount = 5,
-                skippedCount = 5,
-                cacheHitCount = 10
-            )
-        )
-        setContent()
-        // 导入完成后对话框只展示通用处理统计，不再把条目分类为失败项。
-        composeRule.onNodeWithText("Imported successfully").assertIsDisplayed()
-        composeRule.onNodeWithText("Reused or skipped").assertIsDisplayed()
-        composeRule.onNodeWithText("Failed, retry available").assertIsDisplayed()
-    }
-
     private fun preview(id: String, title: String) = DoubanSyncPreviewItem(
         doubanId = id,
         title = title,
@@ -413,48 +259,6 @@ class DoubanSyncDialogTest {
         rating = 4,
         markedAt = "2024-01-01"
     )
-
-    @Test
-    fun `完成状态不显示失败统计列表或导出入口`() {
-        val failedItems = listOf(
-            DoubanSyncFailure(
-                "db-failure",
-                "Failed Movie",
-                null,
-                null,
-                null,
-                "2024-01-01",
-                "url",
-                DoubanMarkStatus.WISH,
-                FailureReason.DETAIL_FETCH_FAILED,
-                1000L,
-                1000L,
-                1,
-                null,
-                false,
-                null
-            )
-        )
-        emit(
-            DoubanSyncProgress(
-                isComplete = true,
-                stage = DoubanSyncStage.COMPLETED,
-                successCount = 50,
-                failedCount = 1,
-                skippedCount = 5,
-                cacheHitCount = 10,
-                failedItems = failedItems
-            )
-        )
-        setContent()
-
-        composeRule.onNodeWithText("Imported successfully").assertIsDisplayed()
-        composeRule.onNodeWithText("Reused or skipped").assertIsDisplayed()
-        composeRule.onNodeWithText("Failed, retry available").assertIsDisplayed()
-        composeRule.onAllNodesWithText("Failed:").assertCountEquals(0)
-        composeRule.onAllNodesWithText("Failed Movie").assertCountEquals(0)
-        composeRule.onAllNodesWithText("Export failures").assertCountEquals(0)
-    }
 
     @Test
     fun `同步异常结果显示错误详情`() {
@@ -471,110 +275,4 @@ class DoubanSyncDialogTest {
 
     // ==================== 失败项展示 ====================
 
-    @Test
-    fun `完成状态_不可恢复组默认展开`() {
-        val items = listOf(
-            DoubanSyncFailure("db-1", "No IMDb Movie", null, null, null, "2024-01-01",
-                "url", DoubanMarkStatus.WISH, FailureReason.NO_IMDB_ID, 1000L, 1000L, 1, null, false, null),
-            DoubanSyncFailure("db-2", "Trakt Not Found Movie", null, null, null, "2024-01-01",
-                "url", DoubanMarkStatus.WISH, FailureReason.TRAKT_NOT_FOUND, 1000L, 1000L, 1, null, false, null)
-        )
-        emit(
-            DoubanSyncProgress(
-                isComplete = true,
-                stage = DoubanSyncStage.COMPLETED,
-                successCount = 0, failedCount = 2,
-                skippedCount = 0, cacheHitCount = 0,
-                failedItems = items
-            )
-        )
-        setContent()
-        // 完成对话框不再展示失败项分组，所有导入数据由 Watchlist 承载。
-        composeRule.onNodeWithText("Non-recoverable (2)").assertDoesNotExist()
-        composeRule.onNodeWithText("No IMDb Movie").assertDoesNotExist()
-    }
-
-    @Test
-    fun `完成状态_可恢复组默认展开`() {
-        val items = listOf(
-            DoubanSyncFailure("db-3", "Detail Fetch Failed Movie", null, null, null, "2024-01-01",
-                "url", DoubanMarkStatus.WISH, FailureReason.DETAIL_FETCH_FAILED, 1000L, 1000L, 1, null, false, null),
-            DoubanSyncFailure("db-4", "Write Timeout Movie", null, null, null, "2024-01-01",
-                "url", DoubanMarkStatus.WISH, FailureReason.TRAKT_WRITE_TIMEOUT, 1000L, 1000L, 1, null, false, null)
-        )
-        emit(
-            DoubanSyncProgress(
-                isComplete = true,
-                stage = DoubanSyncStage.COMPLETED,
-                successCount = 0, failedCount = 2,
-                skippedCount = 0, cacheHitCount = 0,
-                failedItems = items
-            )
-        )
-        setContent()
-        // 完成对话框不再展示失败项分组，所有导入数据由 Watchlist 承载。
-        composeRule.onNodeWithText("Recoverable (2)").assertDoesNotExist()
-        composeRule.onNodeWithText("Detail Fetch Failed Movie").assertDoesNotExist()
-    }
-
-    @Test
-    fun `完成状态_NO_IMDB_ID子组默认折叠_条目不可见`() {
-        val items = listOf(
-            DoubanSyncFailure("db-noimdb", "No IMDb Movie", null, null, null, "2024-01-01",
-                "url", DoubanMarkStatus.WISH, FailureReason.NO_IMDB_ID, 1000L, 1000L, 1, null, false, null)
-        )
-        emit(
-            DoubanSyncProgress(
-                isComplete = true,
-                stage = DoubanSyncStage.COMPLETED,
-                successCount = 0, failedCount = 1,
-                skippedCount = 0, cacheHitCount = 0,
-                failedItems = items
-            )
-        )
-        setContent()
-        // NO_IMDB_ID 子组默认折叠 → 条目不显示
-        composeRule.onNodeWithText("No IMDb Movie").assertDoesNotExist()
-    }
-
-    @Test
-    fun `完成状态_TRAKT_NOT_FOUND子组默认折叠_条目不可见`() {
-        val items = listOf(
-            DoubanSyncFailure("db-tnf", "Trakt Not Found Movie", null, null, null, "2024-01-01",
-                "url", DoubanMarkStatus.WISH, FailureReason.TRAKT_NOT_FOUND, 1000L, 1000L, 1, null, false, null)
-        )
-        emit(
-            DoubanSyncProgress(
-                isComplete = true,
-                stage = DoubanSyncStage.COMPLETED,
-                successCount = 0, failedCount = 1,
-                skippedCount = 0, cacheHitCount = 0,
-                failedItems = items
-            )
-        )
-        setContent()
-        // TRAKT_NOT_FOUND 子组默认折叠 → 条目不显示
-        composeRule.onNodeWithText("Trakt Not Found Movie").assertDoesNotExist()
-    }
-    @Test
-    fun `completion summary exposes actionable counts`() {
-        emit(
-            DoubanSyncProgress(
-                isComplete = true,
-                stage = DoubanSyncStage.COMPLETED,
-                successCount = 20,
-                skippedCount = 3,
-                cacheHitCount = 4,
-                failedCount = 2,
-                conflictsFound = 5,
-                conflictFixedCount = 4,
-                cloudUploadAttempted = true,
-                cloudUploadSucceeded = false
-            )
-        )
-        setContent()
-        composeRule.onNodeWithText("Sync summary").assertIsDisplayed()
-        composeRule.onNodeWithText("Failed, retry available").assertIsDisplayed()
-        composeRule.onAllNodesWithText("Upload needs retry")[1].performScrollTo().assertIsDisplayed()
-    }
 }

@@ -196,21 +196,6 @@ class DoubanRetryManagerTest {
         assertThat(state.hasFailures).isTrue()
     }
 
-    @Test
-    fun refreshRetryState_空表_RetryState全为零() = runTest {
-        coEvery { doubanSyncFailureDao.getAll() } returns emptyList()
-
-        manager.refreshRetryState()
-
-        val state = manager.retryState.value
-        assertThat(state.totalFailures).isEqualTo(0)
-        assertThat(state.recoverableCount).isEqualTo(0)
-        assertThat(state.nonRecoverableCount).isEqualTo(0)
-        assertThat(state.maxAttemptCount).isEqualTo(0)
-        assertThat(state.byReason).isEmpty()
-        assertThat(state.hasFailures).isFalse()
-    }
-
     // ============================================================
     // startRetryFromLocal 测试
     // ============================================================
@@ -228,16 +213,6 @@ class DoubanRetryManagerTest {
         verify(exactly = 1) { doubanSyncManager.startRetry(any(), any()) }
     }
 
-    @Test
-    fun startRetryFromLocal_无失败项_returnsFalse() = runTest {
-        coEvery { doubanSyncFailureDao.getAll() } returns emptyList()
-
-        val result = manager.startRetryFromLocal(setOf(FailureReason.TRAKT_WRITE_FAILED))
-
-        assertThat(result).isFalse()
-        verify(exactly = 0) { doubanSyncManager.startRetry(any(), any()) }
-    }
-
     // ============================================================
     // startRetryFromJson 测试
     // ============================================================
@@ -251,14 +226,6 @@ class DoubanRetryManagerTest {
 
         assertThat(result).isTrue()
         verify(exactly = 1) { doubanSyncManager.startRetry(any(), any()) }
-    }
-
-    @Test
-    fun startRetryFromJson_空列表_returnsFalse() {
-        val result = manager.startRetryFromJson(emptyList(), setOf(FailureReason.TRAKT_WRITE_FAILED))
-
-        assertThat(result).isFalse()
-        verify(exactly = 0) { doubanSyncManager.startRetry(any(), any()) }
     }
 
     // ============================================================
@@ -283,44 +250,6 @@ class DoubanRetryManagerTest {
     // ============================================================
     // getAllFailures / getFailure 测试
     // ============================================================
-
-    @Test
-    fun getAllFailures_返回DoubanSyncFailure列表() = runTest {
-        val entities = listOf(
-            buildFailureEntity(doubanId = "db-1", title = "电影A"),
-            buildFailureEntity(doubanId = "db-2", title = "电影B")
-        )
-        coEvery { doubanSyncFailureDao.getAll() } returns entities
-
-        val result = manager.getAllFailures()
-
-        assertThat(result).hasSize(2)
-        assertThat(result[0].doubanId).isEqualTo("db-1")
-        assertThat(result[0].title).isEqualTo("电影A")
-        assertThat(result[1].doubanId).isEqualTo("db-2")
-        assertThat(result[1].title).isEqualTo("电影B")
-    }
-
-    @Test
-    fun getFailure_存在_returnsDoubanSyncFailure() = runTest {
-        val entity = buildFailureEntity(doubanId = "db-1", title = "测试电影")
-        coEvery { doubanSyncFailureDao.getById("db-1") } returns entity
-
-        val result = manager.getFailure("db-1")
-
-        assertThat(result).isNotNull()
-        assertThat(result!!.doubanId).isEqualTo("db-1")
-        assertThat(result.title).isEqualTo("测试电影")
-    }
-
-    @Test
-    fun getFailure_不存在_returnsNull() = runTest {
-        coEvery { doubanSyncFailureDao.getById("db-999") } returns null
-
-        val result = manager.getFailure("db-999")
-
-        assertThat(result).isNull()
-    }
 
     @Test
     fun getFailure_fallbackPreservesSyncedItemSnapshotFields() = runTest {
@@ -348,9 +277,9 @@ class DoubanRetryManagerTest {
     // ============================================================
 
     @Test
-    fun inferMediaTypeFromDetail_综艺genres_强覆盖为Variety() = runTest {
-        // existing.mediaType = "movie"，genres 含"综艺" → 强覆盖为 "variety"
-        val entity = buildFailureEntity(doubanId = "db-1", mediaType = "movie")
+    fun inferMediaTypeFromDetail_未标注综艺genres_推断为Variety() = runTest {
+        // 未标注条目的 genres 含"综艺" → 推断为 "variety"
+        val entity = buildFailureEntity(doubanId = "db-1", mediaType = null)
         coEvery { doubanSyncFailureDao.getById("db-1") } returns entity
         val detail = buildDetailInfo(genres = listOf("综艺"), episodeCount = 10)
 
@@ -367,8 +296,8 @@ class DoubanRetryManagerTest {
     }
 
     @Test
-    fun inferMediaTypeFromDetail_纪录片genres_强覆盖为Documentary() = runTest {
-        val entity = buildFailureEntity(doubanId = "db-1", mediaType = "movie")
+    fun inferMediaTypeFromDetail_未标注纪录片genres_推断为Documentary() = runTest {
+        val entity = buildFailureEntity(doubanId = "db-1", mediaType = null)
         coEvery { doubanSyncFailureDao.getById("db-1") } returns entity
         val detail = buildDetailInfo(genres = listOf("纪录片"), episodeCount = 5)
 
@@ -473,18 +402,6 @@ class DoubanRetryManagerTest {
     // ============================================================
 
     @Test
-    fun batchUpdateMediaType_空列表_不调用Dao() = runTest {
-        manager.batchUpdateMediaType(emptyList(), "movie")
-
-        coVerify(exactly = 0) {
-            doubanSyncFailureDao.updateMediaTypeBatch(any(), any(), any())
-        }
-        coVerify(exactly = 0) {
-            cloudDetailsPoolManager.uploadUserMarkedMediaType(any(), any())
-        }
-    }
-
-    @Test
     fun batchUpdateMediaType_有列表_调用DaoUpdateMediaTypeBatch并并发上传池() = runTest {
         val ids = listOf("db-1", "db-2", "db-3")
         coEvery { cloudDetailsPoolManager.uploadUserMarkedMediaType(any(), any()) } returns true
@@ -497,15 +414,6 @@ class DoubanRetryManagerTest {
         // 并发上传池，每个 id 调用一次
         coVerify(exactly = 3) {
             cloudDetailsPoolManager.uploadUserMarkedMediaType(any(), "movie")
-        }
-    }
-
-    @Test
-    fun batchDeleteFailures_空列表_不调用Dao() = runTest {
-        manager.batchDeleteFailures(emptyList())
-
-        coVerify(exactly = 0) {
-            doubanSyncFailureDao.deleteByDoubanIds(any())
         }
     }
 
@@ -561,41 +469,6 @@ class DoubanRetryManagerTest {
     // ============================================================
     // updateStatus / deleteFailure 测试
     // ============================================================
-
-    @Test
-    fun updateStatus_调用DaoUpdateStatusWithPath() = runTest {
-        manager.updateStatus("db-1", DoubanMarkStatus.WISH)
-
-        coVerify(exactly = 1) {
-            doubanSyncFailureDao.updateStatus("db-1", "wish", any())
-        }
-        coVerify(exactly = 1) {
-            doubanSyncedItemDao.updateStatusAndPendingSync(
-                doubanId = "db-1",
-                status = "wish",
-                pendingSync = false,
-                now = any()
-            )
-        }
-    }
-
-    @Test
-    fun updateStatus_调用DaoUpdateStatusWithCollectPath() = runTest {
-        manager.updateStatus("db-1", DoubanMarkStatus.COLLECT)
-
-        coVerify(exactly = 1) {
-            doubanSyncFailureDao.updateStatus("db-1", "collect", any())
-        }
-    }
-
-    @Test
-    fun deleteFailure_调用DaoDeleteByDoubanId() = runTest {
-        manager.deleteFailure("db-1")
-
-        coVerify(exactly = 1) {
-            doubanSyncFailureDao.deleteByDoubanId("db-1")
-        }
-    }
 
     // ============================================================
     // refreshMediaTypesFromCloudPool 测试

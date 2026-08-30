@@ -20,12 +20,12 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.tracktosearch.data.local.DefaultTabStorage
-import com.tracktosearch.data.local.GuestModeStorage
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
 import com.tracktosearch.data.auth.AuthCheckScheduler
+import com.tracktosearch.data.auth.hasGatewayAccess
 import com.tracktosearch.data.remote.trakt.TraktAuthManager
 import com.tracktosearch.data.remote.trakt.TraktConnectionCheckResult
 import com.tracktosearch.data.remote.trakt.TraktConnectionState
@@ -107,9 +107,6 @@ class MainActivity : AppCompatActivity() {
 
     @Inject
     lateinit var authCheckScheduler: AuthCheckScheduler
-
-    @Inject
-    lateinit var guestModeStorage: GuestModeStorage
 
     @Inject
     lateinit var themeStorage: ThemeStorage
@@ -209,11 +206,7 @@ class MainActivity : AppCompatActivity() {
                 authManager.initializeForStartup()
             }
             val authState = authManager.authState.value
-            val isAuthorized = authState == AuthState.AUTHORIZED || authState == AuthState.OFFLINE
-            // 读取访客模式持久化状态：访客模式用户重启 App 后应直接进主页，不被送回登录页
-            val isGuestMode = StartupTrace.measure("local.guest_mode") {
-                guestModeStorage.isGuestMode.first()
-            }
+            val isAuthorized = authState.hasGatewayAccess()
             // 判断 Trakt 授权状态
             // 已授权后检查 Trakt 连接状态
             val cachedTraktProfile = if (isAuthorized) {
@@ -232,11 +225,9 @@ class MainActivity : AppCompatActivity() {
                     else -> TraktConnectionState.CHECKING
                 }
             )
-            startDest = when {
-                isAuthorized -> Routes.MAIN
-                isGuestMode -> Routes.MAIN  // 访客模式：直接进主页，跨重启保留
-                else -> Routes.LOGIN
-            }
+            // 访客也是“已激活网关、未登录 Trakt/豆瓣”的会话模式，不能绕过激活态单独进入主页。
+            // 平台登录状态由 SessionModeManager 派生；这里只负责守住 App 激活边界。
+            startDest = if (isAuthorized) Routes.MAIN else Routes.LOGIN
             // 起点就是主页时门一开始就开着，台词层与系统场记板严丝合缝地接上
             atMainDestination = startDest == Routes.MAIN
             // 根据 Trakt 连接状态选择默认标签页

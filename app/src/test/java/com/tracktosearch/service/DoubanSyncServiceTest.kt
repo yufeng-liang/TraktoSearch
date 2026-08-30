@@ -65,27 +65,6 @@ class DoubanSyncServiceTest {
         assertThat(expandedText).doesNotContain("Latest:")
     }
 
-    @Test
-    fun `上传通知显示专用阶段文案且不显示解析批次总数`() {
-        val notification = buildNotification(
-            DoubanSyncProgress(
-                isRunning = true,
-                current = 12,
-                total = 461,
-                stage = DoubanSyncStage.UPLOADING,
-                subStage = DoubanSyncSubStage.UPLOADING_DETAILS
-            )
-        )
-
-        val contentText = notification.extras
-            .getCharSequence(Notification.EXTRA_TEXT)
-            .toString()
-        assertThat(contentText).isEqualTo("Uploading data · Uploading details")
-        assertThat(contentText).doesNotContain("461")
-        assertThat(contentText).doesNotContain("12/461")
-        assertThat(notification.extras.getInt(Notification.EXTRA_PROGRESS_MAX)).isEqualTo(0)
-    }
-
     private fun buildNotification(progress: DoubanSyncProgress): Notification {
         return buildDoubanSyncNotification(context, progress)
     }

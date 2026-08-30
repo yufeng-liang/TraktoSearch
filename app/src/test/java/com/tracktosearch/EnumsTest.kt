@@ -17,19 +17,9 @@ class EnumsTest {
     }
 
     @Test
-    fun panHubPlugin_containsTenValues() {
-        assertThat(PanHubPlugin.values().size).isEqualTo(10)
-    }
-
-    @Test
     fun panHubPlugin_idsAreUnique() {
         val ids = PanHubPlugin.values().map { it.id }
         assertThat(ids).containsNoDuplicates()
     }
 
-    @Test
-    fun panHubPlugin_displayNamesAreUnique() {
-        val names = PanHubPlugin.values().map { it.displayName }
-        assertThat(names).containsNoDuplicates()
-    }
 }

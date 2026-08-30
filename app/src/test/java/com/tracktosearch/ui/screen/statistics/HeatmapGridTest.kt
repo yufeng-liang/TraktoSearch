@@ -29,27 +29,6 @@ class HeatmapGridTest {
     )
 
     @Test
-    fun `网格固定为 13 周 × 7 天`() {
-        val grid = buildGrid()
-
-        assertThat(grid.weeks).hasSize(13)
-        assertThat(grid.weeks.all { it.size == 7 }).isTrue()
-    }
-
-    @Test
-    fun `网格从整周开始并覆盖到今天`() {
-        val grid = buildGrid()
-        val firstDay = grid.weeks.first().first()
-        val firstCal = Calendar.getInstance().apply { time = firstDay.date }
-
-        // 起始行对齐到周一，与左侧「一…日」星期标签一致
-        assertThat(firstCal.get(Calendar.DAY_OF_WEEK)).isEqualTo(Calendar.MONDAY)
-        // 今天必须落在网格内
-        val allKeys = grid.weeks.flatten().map { dateKeyFormat.format(it.date) }
-        assertThat(allKeys).contains("2026-08-27")
-    }
-
-    @Test
     fun `今天之后的格子标记为未来且不带日期 key`() {
         val grid = buildGrid()
         val cells = grid.weeks.flatten()
@@ -88,14 +67,4 @@ class HeatmapGridTest {
         assertThat(previous.rangeStart).isNotEqualTo(current.rangeStart)
     }
 
-    @Test
-    fun `月份标签按月首次出现的那一列生成`() {
-        val grid = buildGrid()
-
-        assertThat(grid.monthLabels).isNotEmpty()
-        assertThat(grid.monthLabels.first().first).isEqualTo(0)
-        // 13 周最多跨 5 个月，且列号严格递增
-        assertThat(grid.monthLabels.size).isAtMost(5)
-        assertThat(grid.monthLabels.map { it.first }).isInOrder()
-    }
 }

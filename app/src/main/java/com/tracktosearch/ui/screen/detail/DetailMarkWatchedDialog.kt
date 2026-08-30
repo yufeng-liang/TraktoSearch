@@ -36,7 +36,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -46,6 +45,7 @@ import com.tracktosearch.data.remote.trakt.dto.TraktEpisode
 import com.tracktosearch.data.remote.trakt.dto.TraktSeason
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.theme.WatchedGreen
 import kotlinx.coroutines.flow.MutableSharedFlow
 
 // ==================== 标记已看弹窗（电视剧季/集勾选） ====================
@@ -183,7 +183,7 @@ internal fun MarkWatchedDialog(
                                 Text(
                                     text = "$watchedCount/$totalCount",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (watchedCount > 0) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = if (watchedCount > 0) WatchedGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Spacer(modifier = Modifier.width(2.dp))

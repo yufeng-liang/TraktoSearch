@@ -96,4 +96,15 @@ class WatchlistEmptyStateTest {
         assertThat(resolveWatchlistSectionError(state, 0, 1)).isEqualTo("shows failed")
         assertThat(resolveWatchlistSectionError(state, 1, 1)).isNull()
     }
+
+    @Test
+    fun `访客不显示观看统计入口`() {
+        assertThat(canOpenWatchStatistics(traktConnected = false, doubanMode = false)).isFalse()
+    }
+
+    @Test
+    fun `任一平台提供观看记录时显示统计入口`() {
+        assertThat(canOpenWatchStatistics(traktConnected = true, doubanMode = false)).isTrue()
+        assertThat(canOpenWatchStatistics(traktConnected = false, doubanMode = true)).isTrue()
+    }
 }

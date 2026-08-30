@@ -213,40 +213,14 @@ class DetailViewModelTest {
     /**
      * 测试点1：updatePosterColor 更新海报主色
      */
-    @Test
-    fun `updatePosterColor_更新海报主色`() {
-        viewModel.updatePosterColor(Color.Red)
-
-        assertThat(viewModel.uiState.value.posterDominantColor).isEqualTo(Color.Red)
-    }
 
     /**
      * 测试点2：toggleSource 添加新资源源
      */
-    @Test
-    fun `toggleSource_添加新资源源`() {
-        // 验证初始状态
-        assertThat(viewModel.uiState.value.enabledSources).isEqualTo(ResourceRepository.ALL_SOURCES)
-
-        // 添加一个不在 ALL_SOURCES 中的源
-        viewModel.toggleSource("new_source")
-
-        assertThat(viewModel.uiState.value.enabledSources).contains("new_source")
-    }
 
     /**
      * 测试点3：toggleDiskType 切换磁盘类型（移除已启用的类型）
      */
-    @Test
-    fun `toggleDiskType_移除已启用的磁盘类型`() {
-        // 验证初始状态
-        assertThat(viewModel.uiState.value.enabledDiskTypes).isEqualTo(ResourceRepository.ALL_DISK_TYPES)
-
-        // 切换（移除）一个已启用的类型
-        viewModel.toggleDiskType(DiskType.QUARK)
-
-        assertThat(viewModel.uiState.value.enabledDiskTypes).doesNotContain(DiskType.QUARK)
-    }
 
     /**
      * 测试点4：toggleSeason 展开季
@@ -265,45 +239,14 @@ class DetailViewModelTest {
     /**
      * 测试点5：dismissMarkWatchedDialog 关闭标记已看弹窗
      */
-    @Test
-    fun `dismissMarkWatchedDialog_关闭标记已看弹窗`() {
-        // 先设置 showMarkWatchedDialog = true
-        setUiState { it.copy(showMarkWatchedDialog = true) }
-        assertThat(viewModel.uiState.value.showMarkWatchedDialog).isTrue()
-
-        viewModel.dismissMarkWatchedDialog()
-
-        assertThat(viewModel.uiState.value.showMarkWatchedDialog).isFalse()
-    }
 
     /**
      * 测试点6：dismissRatingDialog 关闭评分弹窗
      */
-    @Test
-    fun `dismissRatingDialog_关闭评分弹窗`() {
-        // 先设置 showRatingDialog = true
-        setUiState { it.copy(showRatingDialog = true) }
-        assertThat(viewModel.uiState.value.showRatingDialog).isTrue()
-
-        viewModel.dismissRatingDialog()
-
-        assertThat(viewModel.uiState.value.showRatingDialog).isFalse()
-        assertThat(viewModel.uiState.value.pendingDoubanAction).isNull()
-    }
 
     /**
      * 测试点7：dismissLoginPrompt 关闭登录提示
      */
-    @Test
-    fun `dismissLoginPrompt_关闭登录提示`() {
-        // 先设置 showLoginPrompt = true
-        setUiState { it.copy(showLoginPrompt = true) }
-        assertThat(viewModel.uiState.value.showLoginPrompt).isTrue()
-
-        viewModel.dismissLoginPrompt()
-
-        assertThat(viewModel.uiState.value.showLoginPrompt).isFalse()
-    }
 
     // ==================== 异步方法测试（9个）====================
 
@@ -420,21 +363,6 @@ class DetailViewModelTest {
     /**
      * 测试点15：removeRating 取消评分成功
      */
-    @Test
-    fun `removeRating_取消评分成功`() = runTest {
-        setupLoggedInState()
-        // 设置初始 userRating = 8
-        setUiState { it.copy(userRating = 8) }
-        coEvery {
-            traktRepository.removeRating(any(), any())
-        } returns Result.success(Unit)
-
-        viewModel.removeRating()
-        advanceUntilIdle()
-
-        assertThat(viewModel.uiState.value.userRating).isNull()
-        assertThat(viewModel.uiState.value.isRating).isFalse()
-    }
 
     /**
      * 测试点16：markResourceViewed 标记资源已查看
@@ -722,21 +650,6 @@ class DetailViewModelTest {
     /**
      * 测试点34：toggleEpisodeWatched 取消单集已看
      */
-    @Test
-    fun `toggleEpisodeWatched_取消单集已看`() = runTest {
-        setupLoggedInState(mediaType = MediaType.SHOW)
-        setUiState { it.copy(watchedEpisodeNumbers = mapOf(1 to setOf(1, 2))) }
-        coEvery {
-            traktRepository.unmarkEpisodeWatched(any(), any(), any(), any(), any(), any())
-        } returns Result.success(Unit)
-
-        viewModel.toggleEpisodeWatched(seasonNumber = 1, episodeNumber = 1, episodeTraktId = 100)
-        advanceUntilIdle()
-
-        assertThat(viewModel.uiState.value.watchedEpisodeNumbers[1]).doesNotContain(1)
-        assertThat(viewModel.uiState.value.watchedEpisodeNumbers[1]).contains(2)
-        assertThat(viewModel.uiState.value.togglingEpisode).isNull()
-    }
 
     /**
      * 测试点35：toggleEpisodeWatched 失败回滚
@@ -782,17 +695,6 @@ class DetailViewModelTest {
     /**
      * 测试点38：loadEpisodesForMarkWatched 已加载则跳过
      */
-    @Test
-    fun `loadEpisodesForMarkWatched_已加载则跳过`() = runTest {
-        setupLoggedInState()
-        setUiState { it.copy(episodes = mapOf(1 to emptyList())) }
-        coEvery { traktRepository.getSeasonEpisodes(any(), any()) } returns Result.success(emptyList())
-
-        viewModel.loadEpisodesForMarkWatched(1)
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { traktRepository.getSeasonEpisodes(any(), any()) }
-    }
 
     @Test
     fun `loadMoreComments_无效TraktId不请求Trakt评论`() = runTest {

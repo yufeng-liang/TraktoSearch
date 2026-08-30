@@ -142,7 +142,9 @@ class AuthManager @Inject constructor(
     /**
      * 每日校验（启动时 + 每 24 小时）
      */
-    suspend fun check(): Result<CheckResponse> {
+    suspend fun check(): Result<CheckResponse> = check(allowRefresh = true)
+
+    private suspend fun check(allowRefresh: Boolean): Result<CheckResponse> {
         return try {
             val failedAccessToken = tokenStorage.getCachedAccessToken().orEmpty()
             val response = authApiService.check(CheckRequest(deviceContinuityManager.getAndroidId()))
@@ -158,9 +160,13 @@ class AuthManager @Inject constructor(
                 _nickname.value = body.nickname.takeIf { it.isNotBlank() }
                 Result.success(body)
             } else if (response.code() == 401) {
-                // 令牌失效，尝试刷新
                 response.closeQuietly()
-                refreshAfterCheck(failedAccessToken)
+                if (allowRefresh) {
+                    // 令牌失效时仅允许刷新一次；刷新后的重试仍返回 401 时直接失败，避免递归刷新。
+                    refreshAfterCheck(failedAccessToken)
+                } else {
+                    Result.failure(Exception("Check failed after refresh: 401"))
+                }
             } else if (response.code() == 403) {
                 invalidateSession()
                 response.failureWith("Check failed: ${response.code()}")
@@ -277,8 +283,8 @@ class AuthManager @Inject constructor(
             // 不能手工构造 CheckResponse：friendId 空串、nextCheckAt 旧值会跳过
             // updateFriendIdentity/saveSessionMetadata，服务端账号切换时旧 friendId
             // 的 AI 缓存清理被无限期延迟。新 token 仍 401 时 refreshIfNeeded 判定
-            // token 未变化不重复刷新，直接返回失败，不会递归。
-            check()
+            // 重试仍返回 401 时直接失败，不再进入第二轮刷新。
+            check(allowRefresh = false)
         } else {
             Result.failure(Exception("Refresh failed"))
         }

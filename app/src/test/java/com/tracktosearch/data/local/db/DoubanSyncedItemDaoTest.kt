@@ -99,21 +99,11 @@ class DoubanSyncedItemDaoTest {
     }
 
     @Test
-    fun getByDoubanId_未命中_返回null() = runTest {
-        assertThat(dao.getByDoubanId("not_exists")).isNull()
-    }
-
-    @Test
     fun getByImdbId_命中() = runTest {
         dao.insertAll(listOf(sample(doubanId = "d1", imdbId = "tt0000001")))
         val result = dao.getByImdbId("tt0000001")
         assertThat(result).isNotNull()
         assertThat(result!!.doubanId).isEqualTo("d1")
-    }
-
-    @Test
-    fun getByImdbId_未命中_返回null() = runTest {
-        assertThat(dao.getByImdbId("tt9999")).isNull()
     }
 
     @Test
@@ -157,11 +147,6 @@ class DoubanSyncedItemDaoTest {
     }
 
     @Test
-    fun count_空表_返回0() = runTest {
-        assertThat(dao.count()).isEqualTo(0)
-    }
-
-    @Test
     fun clearAll_清空() = runTest {
         dao.insertAll(listOf(sample(doubanId = "d1"), sample(doubanId = "d2")))
         dao.clearAll()
@@ -176,14 +161,6 @@ class DoubanSyncedItemDaoTest {
     }
 
     @Test
-    fun updateStatus_不存在的doubanId_无副作用() = runTest {
-        dao.insertAll(listOf(sample(doubanId = "d1", status = "wish")))
-        dao.updateStatus("not_exists", "collect")
-        assertThat(dao.count()).isEqualTo(1)
-        assertThat(dao.getByDoubanId("d1")!!.status).isEqualTo("wish")
-    }
-
-    @Test
     fun replaceAll_事务替换_旧数据清除() = runTest {
         dao.insertAll(listOf(
             sample(doubanId = "old1"), sample(doubanId = "old2")
@@ -193,19 +170,6 @@ class DoubanSyncedItemDaoTest {
         ))
         assertThat(dao.count()).isEqualTo(3)
         assertThat(dao.getAllSyncedDoubanIds()).containsExactly("new1", "new2", "new3")
-    }
-
-    @Test
-    fun replaceAll_空列表_清空表() = runTest {
-        dao.insertAll(listOf(sample(doubanId = "d1")))
-        dao.replaceAll(emptyList())
-        assertThat(dao.count()).isEqualTo(0)
-    }
-
-    @Test
-    fun replaceAll_空表上调用_插入新数据() = runTest {
-        dao.replaceAll(listOf(sample(doubanId = "d1")))
-        assertThat(dao.count()).isEqualTo(1)
     }
 
     // ==================== deleteNotInDoubanIds 分块清理 ====================

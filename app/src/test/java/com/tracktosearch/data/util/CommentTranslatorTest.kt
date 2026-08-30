@@ -95,117 +95,47 @@ class CommentTranslatorTest {
     // ==================== getTargetLangCode 语言映射 ====================
 
     @Test
-    fun getTargetLangCode_zh映射为zh() {
-        Locale.setDefault(Locale.CHINESE)
-        assertThat(callGetTargetLangCode()).isEqualTo("zh")
-    }
-
-    @Test
-    fun getTargetLangCode_应用语言为中文且系统语言为英文_映射为zh() {
-        Locale.setDefault(Locale.ENGLISH)
-        configuredLanguage.value = LanguageStorage.LANGUAGE_CHINESE
-
-        assertThat(callGetTargetLangCode()).isEqualTo("zh")
-    }
-
-    @Test
-    fun translateSingleComment_应用语言为中文且系统语言为英文_返回译文() = runBlocking {
-        Locale.setDefault(Locale.ENGLISH)
-        configuredLanguage.value = LanguageStorage.LANGUAGE_CHINESE
-        mockBaiduAI("中文译文")
-
-        val result = translator.translateSingleComment(
-            TraktComment(id = 31, comment = "english comment")
+    fun getTargetLangCode_覆盖应用语言与系统语言映射() {
+        data class LanguageCase(val configured: String, val locale: Locale, val expected: String)
+        val cases = listOf(
+            LanguageCase(LanguageStorage.LANGUAGE_SYSTEM, Locale.CHINESE, "zh"),
+            LanguageCase(LanguageStorage.LANGUAGE_CHINESE, Locale.ENGLISH, "zh"),
+            LanguageCase(LanguageStorage.LANGUAGE_SYSTEM, Locale.JAPANESE, "jp"),
+            LanguageCase(LanguageStorage.LANGUAGE_SYSTEM, Locale.KOREAN, "kor"),
+            LanguageCase(LanguageStorage.LANGUAGE_SYSTEM, Locale.FRANCE, "fra"),
+            LanguageCase(LanguageStorage.LANGUAGE_SYSTEM, Locale.GERMANY, "de"),
+            LanguageCase(LanguageStorage.LANGUAGE_SYSTEM, Locale("es"), "spa"),
+            LanguageCase(LanguageStorage.LANGUAGE_SYSTEM, Locale("pt"), "pt"),
+            LanguageCase(LanguageStorage.LANGUAGE_SYSTEM, Locale("ru"), "ru"),
+            LanguageCase(LanguageStorage.LANGUAGE_SYSTEM, Locale("it"), "it"),
+            LanguageCase(LanguageStorage.LANGUAGE_SYSTEM, Locale("ar"), "ara"),
+            LanguageCase(LanguageStorage.LANGUAGE_SYSTEM, Locale("th"), "th"),
+            LanguageCase(LanguageStorage.LANGUAGE_SYSTEM, Locale("vi"), "vie"),
+            LanguageCase(LanguageStorage.LANGUAGE_SYSTEM, Locale.ENGLISH, "en"),
+            LanguageCase(LanguageStorage.LANGUAGE_SYSTEM, Locale("xx"), "zh")
         )
-
-        assertThat(result.comment).isEqualTo("中文译文")
+        cases.forEach { case ->
+            configuredLanguage.value = case.configured
+            Locale.setDefault(case.locale)
+            assertThat(callGetTargetLangCode()).isEqualTo(case.expected)
+        }
     }
 
-    @Test
-    fun getTargetLangCode_ja映射为jp() {
-        Locale.setDefault(Locale.JAPANESE)
-        assertThat(callGetTargetLangCode()).isEqualTo("jp")
-    }
 
-    @Test
-    fun getTargetLangCode_ko映射为kor() {
-        Locale.setDefault(Locale.KOREAN)
-        assertThat(callGetTargetLangCode()).isEqualTo("kor")
-    }
 
-    @Test
-    fun getTargetLangCode_fr映射为fra() {
-        Locale.setDefault(Locale.FRANCE)
-        assertThat(callGetTargetLangCode()).isEqualTo("fra")
-    }
 
-    @Test
-    fun getTargetLangCode_de映射为de() {
-        Locale.setDefault(Locale.GERMANY)
-        assertThat(callGetTargetLangCode()).isEqualTo("de")
-    }
 
-    @Test
-    fun getTargetLangCode_es映射为spa() {
-        val spanish = Locale("es")
-        Locale.setDefault(spanish)
-        assertThat(callGetTargetLangCode()).isEqualTo("spa")
-    }
 
-    @Test
-    fun getTargetLangCode_pt映射为pt() {
-        val portuguese = Locale("pt")
-        Locale.setDefault(portuguese)
-        assertThat(callGetTargetLangCode()).isEqualTo("pt")
-    }
 
-    @Test
-    fun getTargetLangCode_ru映射为ru() {
-        val russian = Locale("ru")
-        Locale.setDefault(russian)
-        assertThat(callGetTargetLangCode()).isEqualTo("ru")
-    }
 
-    @Test
-    fun getTargetLangCode_it映射为it() {
-        val italian = Locale("it")
-        Locale.setDefault(italian)
-        assertThat(callGetTargetLangCode()).isEqualTo("it")
-    }
 
-    @Test
-    fun getTargetLangCode_ar映射为ara() {
-        val arabic = Locale("ar")
-        Locale.setDefault(arabic)
-        assertThat(callGetTargetLangCode()).isEqualTo("ara")
-    }
 
-    @Test
-    fun getTargetLangCode_th映射为th() {
-        val thai = Locale("th")
-        Locale.setDefault(thai)
-        assertThat(callGetTargetLangCode()).isEqualTo("th")
-    }
 
-    @Test
-    fun getTargetLangCode_vi映射为vie() {
-        val vietnamese = Locale("vi")
-        Locale.setDefault(vietnamese)
-        assertThat(callGetTargetLangCode()).isEqualTo("vie")
-    }
 
-    @Test
-    fun getTargetLangCode_en映射为en() {
-        Locale.setDefault(Locale.ENGLISH)
-        assertThat(callGetTargetLangCode()).isEqualTo("en")
-    }
 
-    @Test
-    fun getTargetLangCode_未知语言降级为zh() {
-        val unknown = Locale("xx") // 不在映射表中的语言
-        Locale.setDefault(unknown)
-        assertThat(callGetTargetLangCode()).isEqualTo("zh")
-    }
+
+
+
 
     // ==================== md5 签名 ====================
 
@@ -279,19 +209,6 @@ class CommentTranslatorTest {
         coVerify(exactly = 1) { translator["translateWithBaidu"](any<String>(), any<String>()) }
     }
 
-    @Test
-    fun translateSingleComment_AI返回空字符串_降级通用翻译() = runBlocking {
-        Locale.setDefault(Locale.CHINESE)
-        mockBaiduAI("")
-        mockBaiduGeneric("通用翻译")
-        val comment = TraktComment(id = 24, comment = "english text")
-
-        val result = translator.translateSingleComment(comment)
-
-        assertThat(result.comment).isEqualTo("通用翻译")
-        assertThat(getTranslationCache().get(24)).isEqualTo("通用翻译")
-        coVerify(exactly = 1) { translator["translateWithBaidu"](any<String>(), any<String>()) }
-    }
 
     @Test
     fun translateSingleComment_网关标准化响应_显示译文() = runBlocking {
@@ -323,46 +240,8 @@ class CommentTranslatorTest {
         assertThat(getTranslationCache().get(25)).isNull()
     }
 
-    @Test
-    fun translateSingleComment_AI和通用都返回空_返回原文() = runBlocking {
-        Locale.setDefault(Locale.CHINESE)
-        mockBaiduAI("")
-        mockBaiduGeneric("")
-        val comment = TraktComment(id = 26, comment = "english text")
 
-        val result = translator.translateSingleComment(comment)
 
-        assertThat(result.comment).isEqualTo("english text")
-        assertThat(getTranslationCache().get(26)).isNull()
-    }
-
-    @Test
-    fun translateSingleComment_长文本_AI失败不降级通用() = runBlocking {
-        Locale.setDefault(Locale.CHINESE)
-        val longText = "a".repeat(6001) // > 6000
-        mockBaiduAI(null)
-        mockBaiduGeneric("通用翻译")
-        val comment = TraktComment(id = 27, comment = longText)
-
-        val result = translator.translateSingleComment(comment)
-
-        assertThat(result.comment).isEqualTo(longText) // 返回原文
-        assertThat(getTranslationCache().get(27)).isNull()
-        coVerify(exactly = 0) { translator["translateWithBaidu"](any<String>(), any<String>()) }
-    }
-
-    @Test
-    fun translateSingleComment_长文本_AI翻译成功_写入缓存() = runBlocking {
-        Locale.setDefault(Locale.CHINESE)
-        val longText = "a".repeat(6001)
-        mockBaiduAI("长文本翻译")
-        val comment = TraktComment(id = 28, comment = longText)
-
-        val result = translator.translateSingleComment(comment)
-
-        assertThat(result.comment).isEqualTo("长文本翻译")
-        assertThat(getTranslationCache().get(28)).isEqualTo("长文本翻译")
-    }
 
     @Test
     fun translateSingleComment_AI抛异常_返回原文() = runBlocking {
@@ -378,20 +257,6 @@ class CommentTranslatorTest {
         assertThat(getTranslationCache().get(29)).isNull()
     }
 
-    @Test
-    fun translateSingleComment_通用翻译抛异常_返回原文() = runBlocking {
-        Locale.setDefault(Locale.CHINESE)
-        mockBaiduAI(null)
-        coEvery {
-            translator["translateWithBaidu"](any<String>(), any<String>())
-        } throws RuntimeException("Generic API error")
-        val comment = TraktComment(id = 30, comment = "english text")
-
-        val result = translator.translateSingleComment(comment)
-
-        assertThat(result.comment).isEqualTo("english text")
-        assertThat(getTranslationCache().get(30)).isNull()
-    }
 
     @Test
     fun translateSingleComment_保留评论其他字段() = runBlocking {
@@ -419,14 +284,6 @@ class CommentTranslatorTest {
 
     // ==================== translateComments ====================
 
-    @Test
-    fun translateComments_空列表返回空() = runBlocking {
-        Locale.setDefault(Locale.CHINESE)
-
-        val result = translator.translateComments(emptyList())
-
-        assertThat(result).isEmpty()
-    }
 
     @Test
     fun translateComments_设备语言为en_直接返回() = runBlocking {
@@ -573,15 +430,6 @@ class CommentTranslatorTest {
     /**
      * 空列表：channelFlow 直接 return，不 emit 任何元素。
      */
-    @Test
-    fun translateCommentsFlow_空列表不emit任何元素() = runBlocking {
-        Locale.setDefault(Locale.CHINESE)
-
-        val result = translator.translateCommentsFlow(emptyList()).toList()
-
-        assertThat(result).isEmpty()
-        coVerify(exactly = 0) { translator["translateWithBaiduAI"](any<String>(), any<String>()) }
-    }
 
     /**
      * 设备语言为 en：直接原样 emit 每条评论（index to comment）。

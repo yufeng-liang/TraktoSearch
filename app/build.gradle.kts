@@ -3,7 +3,9 @@ import java.io.File
 import java.io.FileInputStream
 import java.security.KeyStore
 import java.security.MessageDigest
+import java.util.Base64
 import org.gradle.api.DefaultTask
+import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.tasks.Internal
@@ -32,6 +34,22 @@ plugins {
     id("com.huawei.agconnect") apply false
 }
 
+val versionCatalog = extensions.getByType<VersionCatalogsExtension>().named("libs")
+val openSourceVersionCatalog = versionCatalog.versionAliases
+    .sorted()
+    .joinToString("\n") { alias ->
+        val constraint = versionCatalog.findVersion(alias).orElseThrow()
+        val resolvedVersion = constraint.requiredVersion
+            .ifBlank { constraint.strictVersion }
+            .ifBlank { constraint.preferredVersion }
+        check(resolvedVersion.isNotBlank()) {
+            "Version catalog alias '$alias' does not declare a concrete version"
+        }
+        "$alias=$resolvedVersion"
+    }
+val openSourceVersionCatalogBase64 = Base64.getEncoder()
+    .encodeToString(openSourceVersionCatalog.toByteArray(Charsets.UTF_8))
+
 android {
     namespace = "com.tracktosearch"
     compileSdk = 37
@@ -51,6 +69,12 @@ android {
         buildConfigField("String", "CONFIG_BASE_URL", "\"${properties.getProperty("config.base.url", "https://app-config-1qe.pages.dev/")}\"")
         // 授权网关根域名（固定，不可被远程配置替换）
         buildConfigField("String", "GATEWAY_BASE_URL", "\"${properties.getProperty("gateway.base.url", "https://tracktosearch-gateway.pages.dev/gateway-api")}\"")
+        // 开源相关页的版本号由 Version Catalog 构建期快照提供；升级 libs.versions.toml 后页面自动同步。
+        buildConfigField(
+            "String",
+            "OPEN_SOURCE_VERSION_CATALOG_BASE64",
+            "\"$openSourceVersionCatalogBase64\""
+        )
         // 已迁移到 auth-worker Secrets 的密钥（不再编译进 APK）：
         // GITEE_ACCESS_TOKEN / GITHUB_UPDATE_TOKEN / BAIDU_APP_ID / BAIDU_SECRET_KEY / BAIDU_API_KEY
     }
