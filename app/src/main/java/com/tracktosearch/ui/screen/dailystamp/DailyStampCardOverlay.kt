@@ -276,11 +276,13 @@ private fun CardCarousel(
         line?.card?.let { onQuoteClick(it.tmdbId, it.mediaType, it.title, it.year, it.posterUrl) }
         Unit
     }
+    /** 落款带（图标 + 应用名）只出现在导出图上，屏幕上的卡片没有它，见 [StampBrand] */
+    val brand = rememberStampBrand(palette)
     /** 把当前那一页的卡面重放成位图交给保存/分享，两条路都用同一张软件位图 */
     val capture: suspend () -> Bitmap = {
         val picture = currentDate?.let { pictures[it] }
         requireNotNull(picture) { "Daily stamp card has not been recorded yet" }
-        captureCardPicture(picture)
+        captureCardPicture(picture, brand)
     }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1189,21 +1191,31 @@ private fun ContentDrawScope.recordThenReplay(picture: Picture) {
 }
 
 /**
- * 把最近一次录下来的卡面重放成位图。
+ * 把最近一次录下来的卡面重放成位图，顶上接一条落款带（见 [StampBrand]）。
  *
  * 显式建一张 ARGB_8888 位图，用 android.graphics.Canvas 回放 Picture：整条路都是软件
- * 光栅化，不经过 GPU 快照，也不依赖任何平台图层。
+ * 光栅化，不经过 GPU 快照，也不依赖任何平台图层。位图比卡面高出落款带那一截，
+ * 带子画在顶上，卡面整体下移同样的量再放——落款于是长在这张纸上，不是叠在它上面。
+ *
+ * 齿孔那一刀（DstOut）录在 Picture 自己的离屏层里，回放时擦的还是那一层，
+ * 不会连带把落款带擦出两个洞。
  *
  * 跑在主线程上是因为 Picture 每帧都会被重新录制，换到后台线程读它就会和绘制撞上。
  * 后面的 PNG 压缩另有 IO 线程，那一段才是耗时的。
  */
-private suspend fun captureCardPicture(picture: Picture): Bitmap =
+private suspend fun captureCardPicture(picture: Picture, brand: StampBrand): Bitmap =
     withContext(Dispatchers.Main.immediate) {
         require(picture.width > 0 && picture.height > 0) {
             "Daily stamp card has not been drawn yet"
         }
-        Bitmap.createBitmap(picture.width, picture.height, Bitmap.Config.ARGB_8888)
-            .also { bitmap -> AndroidCanvas(bitmap).drawPicture(picture) }
+        val band = brand.bandHeightPx
+        Bitmap.createBitmap(picture.width, picture.height + band, Bitmap.Config.ARGB_8888)
+            .also { bitmap ->
+                val canvas = AndroidCanvas(bitmap)
+                brand.draw(canvas, picture.width.toFloat())
+                canvas.translate(0f, band.toFloat())
+                canvas.drawPicture(picture)
+            }
     }
 
 private suspend fun saveCard(

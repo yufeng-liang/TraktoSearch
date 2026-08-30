@@ -87,6 +87,9 @@ import java.util.Random
  * 已经看过之后它只是在挡路。系统关掉动效时走的也是这一条路——无障碍设置的意思是
  * 不要动效，不是不要内容，所以那一档仍按完整可读时长停留。
  *
+ * 「一次摊开」说的是页内元素，不含整层淡入：那一下是这一层盖上来的方式，只出现一次、
+ * 320ms，和逐行升起要省掉的那一秒多不是一回事。见下面 [continuesSystemSplash] 那一段。
+ *
  * [continuesSystemSplash] 区分这一层是「接着场记板演」还是「后来才盖上来」：冷启动直接进主页时
  * 它紧贴着系统 splash，硬切才没有接缝；先落在登录页、之后才进主页的情况下屏幕上已经有别的画面，
  * 硬切会像闪了一下，所以整层淡入。淡入这段时间里手指可能还按在屏幕上，
@@ -139,8 +142,10 @@ fun SplashQuoteOverlay(
     var skipVisible by remember { mutableStateOf(instant) }
     var exiting by remember { mutableStateOf(false) }
     // 紧接系统 splash 的场合起手就是不透明（硬切），后来才盖上的场合从 0 淡进来。
-    // 整页一次摊开时同样不淡入：淡入本身就是逐步显示。
-    var entered by remember { mutableStateOf(continuesSystemSplash || instant) }
+    // 整页一次摊开的那一遍仍然淡入：整层淡入是这一层「盖上来」的方式，和页内元素逐个
+    // 浮现是两件事——前者只出现一次、320ms，后者才是要跳过的那一秒多。
+    // 系统关掉动效时不淡入，那是唯一该硬切的情形。
+    var entered by remember { mutableStateOf(continuesSystemSplash || reduceMotion) }
 
     LaunchedEffect(Unit) {
         onSplashQuoteShown()
@@ -753,18 +758,30 @@ private val GLOW_SPOTS = listOf(
  *
  * 日签页也用这一块噪点：两屏的纸面纹理必须是同一种，否则从开屏走到日签会看出换了张纸。
  */
-internal fun grainBrush(): ShaderBrush {
+internal fun grainBrush(): ShaderBrush =
+    ShaderBrush(ImageShader(grainTile().asImageBitmap(), TileMode.Repeated, TileMode.Repeated))
+
+/**
+ * 上面那块噪点瓦片本身。
+ *
+ * 日签导出图顶部的落款带要在 android.graphics.Canvas 上自己铺一遍颗粒（见 DailyStampExport
+ * 的 StampBrand）：那一带不在录下来的卡面里，颗粒没人替它盖。取同一张瓦片而不是各生成
+ * 一份，接缝两侧才真的是同一张纸——纹理强度差一点，导出图上就是一道横线。
+ *
+ * 全进程一份：内容固定，重复生成只是白烧 CPU。
+ */
+internal fun grainTile(): Bitmap = GRAIN_TILE
+
+private val GRAIN_TILE: Bitmap by lazy {
     val size = GRAIN_TILE_PX
     val random = Random(GRAIN_SEED)
     val pixels = IntArray(size * size) {
         val v = 120 + random.nextInt(72)
         (0xFF shl 24) or (v shl 16) or (v shl 8) or v
     }
-    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-    bitmap.setPixels(pixels, 0, size, 0, 0, size, size)
-    return ShaderBrush(
-        ImageShader(bitmap.asImageBitmap(), TileMode.Repeated, TileMode.Repeated)
-    )
+    Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).apply {
+        setPixels(pixels, 0, size, 0, 0, size, size)
+    }
 }
 
 private const val EM_DASH = "—"
