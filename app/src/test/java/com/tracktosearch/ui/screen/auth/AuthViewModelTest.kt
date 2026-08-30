@@ -41,6 +41,20 @@ class AuthViewModelTest {
     }
 
     @Test
+    fun `gateway invalidation locks platform and guest entries`() = runTest {
+        val authState = MutableStateFlow(AuthState.AUTHORIZED)
+        every { authManager.authState } returns authState
+        val viewModel = AuthViewModel(authManager, authCheckScheduler)
+
+        assertThat(viewModel.uiState.value.activated).isTrue()
+
+        authState.value = AuthState.EXPIRED
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.activated).isFalse()
+    }
+
+    @Test
     fun `updating invite code clears previous error`() = runTest {
         every { authManager.authState } returns MutableStateFlow(AuthState.UNAUTHORIZED)
         val viewModel = AuthViewModel(authManager, authCheckScheduler)
@@ -54,8 +68,12 @@ class AuthViewModelTest {
 
     @Test
     fun `successful activation unlocks the login page`() = runTest {
-        every { authManager.authState } returns MutableStateFlow(AuthState.UNAUTHORIZED)
-        coEvery { authManager.activate(any(), any(), any(), any()) } returns Result.success(mockk())
+        val authState = MutableStateFlow(AuthState.UNAUTHORIZED)
+        every { authManager.authState } returns authState
+        coEvery { authManager.activate(any(), any(), any(), any()) } answers {
+            authState.value = AuthState.AUTHORIZED
+            Result.success(mockk())
+        }
         val viewModel = AuthViewModel(authManager, authCheckScheduler)
 
         viewModel.updateInviteCode(" TS-1234567890 ")
@@ -69,8 +87,12 @@ class AuthViewModelTest {
 
     @Test
     fun `activated state ignores repeated activation`() = runTest {
-        every { authManager.authState } returns MutableStateFlow(AuthState.UNAUTHORIZED)
-        coEvery { authManager.activate(any(), any(), any(), any()) } returns Result.success(mockk())
+        val authState = MutableStateFlow(AuthState.UNAUTHORIZED)
+        every { authManager.authState } returns authState
+        coEvery { authManager.activate(any(), any(), any(), any()) } answers {
+            authState.value = AuthState.AUTHORIZED
+            Result.success(mockk())
+        }
         val viewModel = AuthViewModel(authManager, authCheckScheduler)
 
         viewModel.updateInviteCode("TS-1234567890")

@@ -196,7 +196,7 @@
     <string name="login_douban_import">或从豆瓣导入标记</string>
     <string name="login_douban">豆瓣登录</string>
     <string name="login_activation_locked">○ 尚未激活 · 输入邀请码解锁观影空间</string>
-    <string name="login_activation_choose_path">已激活 · 请选择登录 Trakt，或暂时以访客身份进入</string>
+    <string name="login_activation_choose_path">激活成功，请选择 Trakt/豆瓣登录，或暂时以访客身份进入</string>
     <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
     <string name="douban_import_require_trakt_title">需要先登录 Trakt 账号</string>
     <string name="douban_import_require_trakt_desc">从豆瓣导入标记需要先登录 Trakt 账号，标记会同步到你的 Trakt 想看/已看列表。是否现在登录 Trakt？</string>

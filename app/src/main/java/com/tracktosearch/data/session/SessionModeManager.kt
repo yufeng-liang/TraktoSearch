@@ -1,7 +1,7 @@
 package com.tracktosearch.data.session
 
 import com.tracktosearch.data.auth.AuthManager
-import com.tracktosearch.data.auth.AuthState
+import com.tracktosearch.data.auth.hasGatewayAccess
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.remote.trakt.TraktConnectionState
 import kotlinx.coroutines.flow.Flow
@@ -67,7 +67,7 @@ class SessionModeManager @Inject constructor(
         doubanAuthStorage.isLoggedIn,
         _traktConnected
     ) { authState, doubanLoggedIn, traktConnected ->
-        val isAuthorized = authState == AuthState.AUTHORIZED || authState == AuthState.OFFLINE
+        val isAuthorized = authState.hasGatewayAccess()
         when {
             !isAuthorized -> SessionMode.UNAUTHORIZED
             traktConnected -> SessionMode.TRAKT

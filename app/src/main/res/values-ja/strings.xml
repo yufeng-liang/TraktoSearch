@@ -476,7 +476,7 @@
     <string name="login_success">ログイン成功、読み込み中…</string>
     <string name="login_sync_hint">ログイン後、Traktのウォッチリストが同期されます</string>
     <string name="login_activation_locked">○ 未認証 · コードを入力して視聴スペースを解放</string>
-    <string name="login_activation_choose_path">有効化済み · Traktにログインするか、ゲストとして続行してください</string>
+    <string name="login_activation_choose_path">有効化しました。Trakt または豆瓣にログインするか、ひとまずゲストとして続行してください。</string>
     <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
 
     <!-- Ratings -->

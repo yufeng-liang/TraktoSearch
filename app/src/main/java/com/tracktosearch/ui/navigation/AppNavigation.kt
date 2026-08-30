@@ -63,6 +63,7 @@ import com.tracktosearch.data.local.OnboardingStorage
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
+import com.tracktosearch.data.auth.hasGatewayAccess
 import com.tracktosearch.data.util.ConnectivityObserver
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.DoubanAuthStorage
@@ -138,12 +139,6 @@ interface DefaultTabEntryPoint {
 @InstallIn(SingletonComponent::class)
 interface SharedTransitionEntryPoint {
     fun sharedTransitionStorage(): com.tracktosearch.data.local.SharedTransitionStorage
-}
-
-@EntryPoint
-@InstallIn(SingletonComponent::class)
-interface GuestModeEntryPoint {
-    fun guestModeStorage(): com.tracktosearch.data.local.GuestModeStorage
 }
 
 /** EntryPoint 用于在 AppNavigation 读取豆瓣登录态（计算豆瓣独立模式） */
@@ -425,14 +420,11 @@ fun AppNavigation(
     }
 
     /**
-     * 登录成功后进入主界面的统一逻辑（Trakt 登录与豆瓣独立模式共用）。
+     * 平台登录成功后进入主界面的统一逻辑（Trakt 登录与豆瓣独立模式共用）。
      * - 默认 tab：widget 搜索请求 → 搜索页(0)；老用户(已完成新手引导) → 我的页(2)；新用户 → 搜索页(0)
      * - onboarding 标记已由组合期预热，导航不再等待 DataStore 冷读
      */
     fun navigateToMainAfterLogin() {
-        // 登录成功后清除访客模式标记
-        val guestModeStorage = EntryPointAccessors.fromApplication(context, GuestModeEntryPoint::class.java).guestModeStorage()
-        scope.launch { guestModeStorage.setGuestMode(false) }
         scope.launch {
             StartupTrace.mark("login.navigate.main.begin", "onboardingLoaded=$onboardingLoaded")
             mainInitialTab = when {
@@ -559,8 +551,8 @@ fun AppNavigation(
     // 授权失效重定向：撤销可能发生在任意页面，原逻辑只在「状态变化瞬间恰好位于 MAIN」时跳登录页，
     // 用户在详情/搜索页被撤销后返回 MAIN 不再触发，会被困在无会话的主界面。
     // currentRoute 参与重跑：回到 MAIN 时重新校验，保持「在 MAIN 时立即跳」的原行为。
-    // 仅「曾处于授权态（AUTHORIZED/OFFLINE）后失效」才标记踢出：访客模式用户本就以
-    // UNAUTHORIZED 常驻主界面，不能被误踢回登录页。
+    // 仅「曾处于授权态（AUTHORIZED/OFFLINE）后失效」才标记踢出。
+    // 访客同样依赖网关激活态，失效后必须回到激活登录页，不能以平台未登录为由绕过。
     var pendingInvalidationKick by remember { mutableStateOf(false) }
     var previousKickAuthState by remember { mutableStateOf(currentAuthState) }
     LaunchedEffect(currentAuthState, currentRoute) {
@@ -581,19 +573,6 @@ fun AppNavigation(
             navController.navigate(Routes.LOGIN) {
                 popUpTo(Routes.MAIN) { inclusive = true }
             }
-        }
-    }
-
-    // 授权恢复导航：EXPIRED/UNAUTHORIZED 期间静默恢复或重新激活转回 AUTHORIZED 时，
-    // 若用户仍在登录页则自动回主界面（已激活即可进入，首次启动与被踢来的用户一致处理）。
-    // 记录上一状态：豆瓣用户本就以 AUTHORIZED 进入登录页连 Trakt，不能被误判成恢复事件弹回主界面。
-    var previousRecoveryAuthState by remember { mutableStateOf(currentAuthState) }
-    LaunchedEffect(currentAuthState, currentRoute) {
-        val recovered = previousRecoveryAuthState != AuthState.AUTHORIZED &&
-            currentAuthState == AuthState.AUTHORIZED
-        previousRecoveryAuthState = currentAuthState
-        if (recovered && currentRoute == Routes.LOGIN) {
-            navigateToMainAfterLogin()
         }
     }
 
@@ -644,17 +623,12 @@ fun AppNavigation(
                 composable(Routes.LOGIN) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         ActivationLoginScreen(
-                            // 仅授权过期（EXPIRED）需续期时自动拉起 Trakt 授权浏览器，且限定 Trakt 未连
-                            // （Trakt 已连说明问题在网关会话，弹浏览器只会造成「登录成功→被踢回→再弹」循环）。
-                            // 其余情况（豆瓣用户/访客从主界面进入）停留在登录页让用户自选路径，
-                            // 避免自动 OAuth 抢占豆瓣入口并把豆瓣按钮禁用在 AUTHORIZING 态
-                            redirectToBrowser = currentAuthState == AuthState.EXPIRED && !isTraktConnected,
                             expired = currentAuthState == AuthState.EXPIRED,
                             onLoginSuccess = {
                                 // Trakt 登录成功：写入 SessionModeManager，由其驱动 UI 切换到 TRAKT 模式
                                 sessionModeManager.setTraktConnectionState(TraktConnectionState.CONNECTED)
                                 onLoginSuccess()
-                                // 清除访客模式标记、按 onboarding 状态决定默认 tab 并进入主页
+                                // 按 onboarding 状态决定默认 tab 并进入主页
                                 navigateToMainAfterLogin()
                             },
                             onDoubanLogin = {
@@ -663,9 +637,13 @@ fun AppNavigation(
                                 navController.navigate(Routes.DOUBAN_LOGIN)
                             },
                             onGuestMode = {
-                                // 持久化访客模式状态，跨 App 重启保留
-                                val guestModeStorage = EntryPointAccessors.fromApplication(context, GuestModeEntryPoint::class.java).guestModeStorage()
-                                scope.launch { guestModeStorage.setGuestMode(true) }
+                                // 访客是已激活后的平台未登录态；激活状态本身已由 AuthManager 持久化，
+                                // 不再维护第二份 guest 标记，避免授权失效后仍绕过激活页进入主页。
+                                // 直接读取 StateFlow 最新值，避免激活成功后的首帧仍捕获旧 Compose 状态而吞掉点击。
+                                val latestAuthState = authStateHolder.authState.value
+                                if (!latestAuthState.hasGatewayAccess()) {
+                                    return@ActivationLoginScreen
+                                }
                                 if (SearchNavigator.pending.value) {
                                     mainInitialTab = 0
                                     loginTabOverride = true
@@ -887,15 +865,6 @@ fun AppNavigation(
                                 // 也不跳转到激活/登录页——用户仍处于已激活或访客模式，留在设置页即可。
                                 sessionModeManager.setTraktConnectionState(TraktConnectionState.DISCONNECTED)
                                 scope.launch { authStateHolder.disconnectTrakt() }
-                                // 若豆瓣也未登录，用户实际进入访客状态，同步 isGuestMode 标记
-                                // 避免网关后续被撤销时重启 App 因 isGuestMode=false 而进入登录页（应进入主页访客模式）
-                                val guestModeStorage = EntryPointAccessors.fromApplication(context, GuestModeEntryPoint::class.java).guestModeStorage()
-                                scope.launch {
-                                    val doubanLoggedIn = doubanAuthStorage.isLoggedIn.value
-                                    if (!doubanLoggedIn) {
-                                        guestModeStorage.setGuestMode(true)
-                                    }
-                                }
                                 // 不修改 currentStartDest，不导航；MainScreen 的「我的」tab 会自动显示登录提示
                             },
                             onHelpClick = {
