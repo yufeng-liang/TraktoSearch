@@ -20,6 +20,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,6 +33,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.IosShare
+import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.SaveAlt
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -158,7 +161,7 @@ internal fun DailyStampCardOverlay(
 }
 
 /**
- * 卡片 + 底下的两个动作。
+ * 卡片 + 底下那一排动作。
  *
  * 动作按钮在卡片外面，这样导出的图里只有卡面本身——把「保存」两个字也存进相册里
  * 是最容易犯的错。
@@ -237,6 +240,7 @@ private fun CardStack(
         CardActions(
             palette = palette,
             enabled = !busy,
+            onDetail = onPosterClick,
             onSave = {
                 if (!busy) {
                     busy = true
@@ -453,15 +457,36 @@ private fun TearLine(palette: SplashPalette) {
     }
 }
 
-/** 保存和分享：卡片外的两枚小按钮，做成描边药丸，不用 Material 的填充按钮抢卡片的注意力 */
+/**
+ * 影片详情、保存、分享：卡片外的三枚小按钮，做成描边药丸，不用 Material 的填充按钮
+ * 抢卡片的注意力。
+ *
+ * 详情排在最左边：海报和片名本来就能点进详情，但那两处没有任何可点的样式提示，
+ * 摆一枚明写着「电影详情」的按钮才是给第一次用的人看的。
+ *
+ * 用 FlowRow 而不是 Row：三个标签在英文和日文下比中文长得多，窄屏上排不下时让第三枚
+ * 折到第二行，而不是把三枚一起挤到看不清。
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CardActions(
     palette: SplashPalette,
     enabled: Boolean,
+    onDetail: () -> Unit,
     onSave: () -> Unit,
     onShare: () -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ActionPill(
+            icon = Icons.Rounded.Movie,
+            label = stringResource(R.string.daily_stamp_detail),
+            palette = palette,
+            enabled = enabled,
+            onClick = onDetail,
+        )
         ActionPill(
             icon = Icons.Rounded.SaveAlt,
             label = stringResource(R.string.daily_stamp_save),

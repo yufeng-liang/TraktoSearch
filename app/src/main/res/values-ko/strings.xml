@@ -283,6 +283,9 @@
     <string name="daily_stamp_empty">아직 도장이 없어요. 내일 앱을 열면 하나 생깁니다.</string>
     <string name="daily_stamp_save">저장</string>
     <string name="daily_stamp_share">공유</string>
+    <string name="daily_stamp_detail">작품 정보</string>
+    <string name="splash_quote_title">오늘의 대사</string>
+    <string name="splash_quote_section_splash">시작 화면</string>
     <string name="daily_stamp_saved">앨범에 저장했어요</string>
     <string name="daily_stamp_already_saved">앨범에 이미 있어요</string>
     <string name="daily_stamp_save_failed">카드를 저장하지 못했어요</string>

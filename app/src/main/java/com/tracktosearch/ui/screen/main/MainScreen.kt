@@ -220,6 +220,7 @@ fun MainScreen(
     onMessagesClick: () -> Unit = {},
     onSearchSourcesClick: () -> Unit = {},
     onPrivacyClick: () -> Unit = {},
+    onSplashQuoteClick: () -> Unit = {},
     onAiRecommendationClick: ((AiRecommendation) -> Unit)? = null
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
@@ -770,6 +771,7 @@ fun MainScreen(
                         onGlassPilot = onGlassPilot,
                         onSearchSourcesClick = onSearchSourcesClick,
                         onPrivacyClick = onPrivacyClick,
+                        onSplashQuoteClick = onSplashQuoteClick,
                         modifier = Modifier.fillMaxSize()
                     )
                             }

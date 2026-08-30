@@ -213,6 +213,7 @@ fun SettingsScreen(
     onGlassPilot: () -> Unit = {},
     onSearchSourcesClick: () -> Unit = {},
     onPrivacyClick: () -> Unit = {},
+    onSplashQuoteClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -562,7 +563,8 @@ fun SettingsScreen(
                     onThemeClick = { showThemeDialog = true },
                     onAccentColorClick = { showAccentColorDialog = true },
                     onLanguageClick = { showLanguageDialog = true },
-                    onDefaultTabClick = { showDefaultTabDialog = true }
+                    onDefaultTabClick = { showDefaultTabDialog = true },
+                    onSplashQuoteClick = onSplashQuoteClick
                 )
             }
 
@@ -1569,36 +1571,22 @@ private fun SharedTransitionSwitchCard(
 }
 
 /**
- * 开屏每日台词开关卡片（外观分组下，独占一行）。
+ * 开屏每日台词入口卡片（外观分组下，独占一行）。
  *
- * 开关状态在本函数内部收集：切换时只重组本卡片，不波及外观分组其余项。
+ * 从开关改成入口：开屏那一句和日签是同一件事的两面，凑成一个二级页才说得清，
+ * 见 SplashQuoteScreen。这里不再显示开关状态——状态在二级页第一行，点进去就看见。
  */
 @Composable
-private fun SplashQuoteSwitchCard(
-    viewModel: SettingsViewModel,
+private fun SplashQuoteEntryCard(
+    onClick: () -> Unit,
     containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
-    val view = LocalView.current
-    val enabled by viewModel.splashQuoteEnabled.collectAsStateWithLifecycle()
     SettingsItemCard(
         icon = Icons.Rounded.FormatQuote,
         title = stringResource(R.string.settings_splash_quote),
         subtitle = stringResource(R.string.settings_splash_quote_subtitle),
-        onClick = {
-            view.performHaptic(HapticType.CLICK)
-            viewModel.setSplashQuoteEnabled(!enabled)
-        },
-        containerColor = containerColor,
-        trailing = {
-            Switch(
-                checked = enabled,
-                onCheckedChange = { value ->
-                    view.performHaptic(HapticType.CLICK)
-                    viewModel.setSplashQuoteEnabled(value)
-                },
-                colors = appSwitchColors()
-            )
-        }
+        onClick = onClick,
+        containerColor = containerColor
     )
 }
 
@@ -1615,7 +1603,8 @@ private fun AppearanceGroupItem(
     onThemeClick: () -> Unit,
     onAccentColorClick: () -> Unit,
     onLanguageClick: () -> Unit,
-    onDefaultTabClick: () -> Unit
+    onDefaultTabClick: () -> Unit,
+    onSplashQuoteClick: () -> Unit
 ) {
     val currentTheme by viewModel.themeMode.collectAsStateWithLifecycle()
     val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
@@ -1692,9 +1681,9 @@ private fun AppearanceGroupItem(
             onToggle = { viewModel.setSharedTransitionEnabled(it) },
             containerColor = Color.Transparent
         )
-        // 开屏每日台词开关(默认开启):关闭后系统场记板结束直接进主页
-        SplashQuoteSwitchCard(
-            viewModel = viewModel,
+        // 开屏每日台词入口：开关与日签日历都在二级页里
+        SplashQuoteEntryCard(
+            onClick = onSplashQuoteClick,
             containerColor = Color.Transparent
         )
     }

@@ -55,12 +55,26 @@ data class DailyStampUiState(
 @HiltViewModel
 class DailyStampViewModel @Inject constructor(
     private val repository: DailyStampRepository,
+    private val splashQuoteStorage: com.tracktosearch.data.local.SplashQuoteStorage,
 ) : ViewModel() {
 
     private val month = MutableStateFlow(YearMonth.now())
 
     private val _uiState = MutableStateFlow(DailyStampUiState())
     val uiState: StateFlow<DailyStampUiState> = _uiState.asStateFlow()
+
+    /**
+     * 开屏是否显示每日台词。
+     *
+     * 放在日签的 ViewModel 里，是因为设置里的「每日台词」二级页把这个开关和日签日历
+     * 摆在同一页——日签记的就是每天开屏那一句，两者本来是一件事的两面。开关不进
+     * [uiState]：它跟日历的加载、翻月、选中都没有关系，混进去会让每次切月都带上它。
+     */
+    val splashQuoteEnabled: StateFlow<Boolean> = splashQuoteStorage.enabledState
+
+    fun setSplashQuoteEnabled(enabled: Boolean) {
+        viewModelScope.launch { splashQuoteStorage.setEnabled(enabled) }
+    }
 
     init {
         viewModelScope.launch {

@@ -523,6 +523,9 @@
     <string name="daily_stamp_empty">No stamps yet. Open the app tomorrow and you will have one.</string>
     <string name="daily_stamp_save">Save</string>
     <string name="daily_stamp_share">Share</string>
+    <string name="daily_stamp_detail">Movie</string>
+    <string name="splash_quote_title">Daily Line</string>
+    <string name="splash_quote_section_splash">Splash screen</string>
     <string name="daily_stamp_saved">Saved to your album</string>
     <string name="daily_stamp_already_saved">Already in your album</string>
     <string name="daily_stamp_save_failed">Could not save the card</string>

@@ -181,6 +181,9 @@ object Routes {
     const val SEARCH_SOURCE_EDITOR = "searchSourceEditor/{mode}/{payload}"
     const val PRIVACY = "privacy"
 
+    /** 每日台词：开屏台词开关 + 日签日历，设置页外观分组的二级页 */
+    const val SPLASH_QUOTE = "splashQuote"
+
     fun helpRoute(section: String? = null): String =
         if (section == null) "help" else "help?section=$section"
 
@@ -937,6 +940,9 @@ fun AppNavigation(
                             },
                             onPrivacyClick = {
                                 navController.navigate(Routes.PRIVACY)
+                            },
+                            onSplashQuoteClick = {
+                                navController.navigate(Routes.SPLASH_QUOTE)
                             }
                         )
                     }
@@ -1229,6 +1235,27 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         PrivacyScreen(
                             onBack = { navController.popBackStack() }
+                        )
+                    }
+                }
+
+                composable(Routes.SPLASH_QUOTE) {
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        com.tracktosearch.ui.screen.splashquote.SplashQuoteScreen(
+                            onBack = { navController.popBackStack() },
+                            // 台词库全是电影，所以固定 movie；traktId 传 0，详情页按 tmdbId 自己去查
+                            onQuoteClick = { tmdbId, title, year, posterUrl ->
+                                navController.navigate(
+                                    Routes.detailRoute(
+                                        type = "movie",
+                                        traktId = 0,
+                                        tmdbId = tmdbId,
+                                        title = title,
+                                        posterUrl = posterUrl,
+                                        year = year,
+                                    )
+                                )
+                            }
                         )
                     }
                 }

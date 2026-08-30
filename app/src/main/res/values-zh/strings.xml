@@ -522,6 +522,9 @@
     <string name="daily_stamp_empty">还没有日签。明天打开 App，就有一枚了。</string>
     <string name="daily_stamp_save">保存</string>
     <string name="daily_stamp_share">分享</string>
+    <string name="daily_stamp_detail">电影详情</string>
+    <string name="splash_quote_title">每日台词</string>
+    <string name="splash_quote_section_splash">开屏</string>
     <string name="daily_stamp_saved">已存进相册</string>
     <string name="daily_stamp_already_saved">相册里已经有了</string>
     <string name="daily_stamp_save_failed">没能存下这张卡</string>
