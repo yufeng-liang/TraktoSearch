@@ -95,6 +95,7 @@ CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments
 - 单测跨用例污染优先查 preferencesDataStore：委托是进程单例，各用例新建 Repository 仍读同一份磁盘数据；PersistentTtlCache 落盘还有 400ms 攒批且跑在 Repository 私有 scope 上，用例结束后仍会补写。setup 清 persistentCaches、teardown 取消落盘 scope 再清一次
 - 详情页「以 TMDB 为准」类优先级改动须区分纯豆瓣条目（tmdbId=0）：无 TMDB 数据时无条件保留当前值会把豆瓣/Rexxar 结果永久挡在 UI 外
 - Compose 加载态对齐按容器语义处理：整页用 `Box(fillMaxSize, contentAlignment = Center)`，独占状态行用 `Row(fillMaxWidth, horizontalArrangement = Center)`，`AlertDialog.text` 内转圈也要先包全宽居中容器；按钮、图标槽、卡片遮罩等绑定具体操作对象的 loading 保持局部位置，勿一刀切改成整页居中
+- 开源相关页的依赖版本禁止手工复制：`app/build.gradle.kts` 从 `libs` Version Catalog 构建 `OPEN_SOURCE_VERSION_CATALOG_BASE64`，`OpenSourceData` 只声明版本别名；Gradle API 会把 `jieba-analysis` 这类连字符别名规范化成 `jieba.analysis`，解析时须统一 `-`/`_` 为 `.`
 - dsh plugin/dshmarket 更新报 ERR_PNPM_UNEXPECTED_STORE 是 pnpm 11 store 漂移：pnpm 11 配置键是驼峰 storeDir，只认 C:\Users\15778\AppData\Local\pnpm\config\config.yaml（profile .npmrc 连字符 store-dir 无效）；已全局写 storeDir: C:\Users\15778\.pnpm\store\v11 修复。git 源插件首次安装被 pnpm 拦 prepare 脚本，须 ~\.dsh\profiles\web\pnpm-workspace.yaml 的 allowBuilds 置 true 后重跑
 - 授权网关调试 App 默认用可直连 Pages 代理 https://tracktosearch-gateway.pages.dev/gateway-api 转发 auth-worker；勿把 workers.dev 直连写面向普通用户构建，否则部分网络超时
 - 激活后短暂进主界面又回激活页，先核 worktree gateway.base.url 和构建产物 GATEWAY_BASE_URL，再查 auth check 请求是否带 Bearer；不能只凭页面现象判邀请码失效
