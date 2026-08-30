@@ -96,6 +96,7 @@ CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments
 - Robolectric 测试若不验证 Application 启动，且清单 Application 会启动 WorkManager/后台线程，使用 `@Config(application = android.app.Application::class)` 隔离；否则沙箱销毁后的残留线程可能污染下一用例。
 - Git worktree 建新分支后 local.properties 不在版本库，须手动从 F:\trae-project\local.properties 复制到 worktree 目录
 - 单测跨用例污染优先查 preferencesDataStore：委托是进程单例，各用例新建 Repository 仍读同一份磁盘数据；PersistentTtlCache 落盘还有 400ms 攒批且跑在 Repository 私有 scope 上，用例结束后仍会补写。setup 清 persistentCaches、teardown 取消落盘 scope 再清一次
+- Watchlist 四类离线快照共用 `media_items` 表，主键必须包含 `(traktId, type)`：Trakt 电影/剧集 ID 分属不同命名空间，想看/已看也可能同号；只用 `traktId` 会让后写分类覆盖电影快照，冷启动列表少一项并导致后续卡片整体前移。改主键时同步加无损 Room 迁移与跨分类同号回归测试。
 - 详情页「以 TMDB 为准」类优先级改动须区分纯豆瓣条目（tmdbId=0）：无 TMDB 数据时无条件保留当前值会把豆瓣/Rexxar 结果永久挡在 UI 外
 - Compose 加载态对齐按容器语义处理：整页用 `Box(fillMaxSize, contentAlignment = Center)`，独占状态行用 `Row(fillMaxWidth, horizontalArrangement = Center)`，`AlertDialog.text` 内转圈也要先包全宽居中容器；按钮、图标槽、卡片遮罩等绑定具体操作对象的 loading 保持局部位置，勿一刀切改成整页居中
 - 开源相关页的依赖版本禁止手工复制：`app/build.gradle.kts` 从 `libs` Version Catalog 构建 `OPEN_SOURCE_VERSION_CATALOG_BASE64`，`OpenSourceData` 只声明版本别名；Gradle API 会把 `jieba-analysis` 这类连字符别名规范化成 `jieba.analysis`，解析时须统一 `-`/`_` 为 `.`
