@@ -1,8 +1,8 @@
 package com.tracktosearch.ui.screen.dailystamp
 
 import androidx.compose.runtime.Immutable
+import com.tracktosearch.data.local.SplashPosterUrls
 import com.tracktosearch.data.local.SplashQuote
-import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.repository.DailyStamp
 import java.time.LocalDate
 
@@ -59,7 +59,13 @@ data class DailyStampCardUi(
      * 见 SplashQuote.mediaType。
      */
     val mediaType: String,
-    /** 详情页首屏要用的海报网络地址；本地那份是给卡片自己显示的 */
+    /**
+     * 详情页首屏要用的海报网络地址；本地那份是给卡片自己显示的。
+     *
+     * 与开屏下载、详情页富化、沉浸取色缓存用的是同一个地址（见 SplashPosterUrls）。
+     * 三处对齐才有两个好处：图片请求只发一次，以及开屏之后就算好的主色能被详情页直接命中，
+     * 沉浸背景不必等海报加载完再补上。
+     */
     val posterUrl: String,
 )
 
@@ -97,6 +103,6 @@ internal fun DailyStamp.toCard(lang: String): DailyStampCardUi? {
         poster = poster,
         tmdbId = quote.tmdbId,
         mediaType = quote.mediaType,
-        posterUrl = TmdbImageUrls.build(quote.posterPath, TmdbImageUrls.W342),
+        posterUrl = SplashPosterUrls.url(quote, lang),
     )
 }

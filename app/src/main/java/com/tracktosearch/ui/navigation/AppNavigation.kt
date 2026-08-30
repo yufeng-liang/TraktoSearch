@@ -359,7 +359,18 @@ fun AppNavigation(
      * - Trakt 网络校验结果由 MainActivity 调用 [SessionModeManager.setTraktConnectionState] 写入。
      */
     sessionModeManager: SessionModeManager,
-    onLoginSuccess: () -> Unit = {}
+    onLoginSuccess: () -> Unit = {},
+    /**
+     * 导航落到主页时回调。
+     *
+     * 判据只能是路由，不能挂在 [onLoginSuccess] 上：进主页有四条路，只有 Trakt 授权成功那条会调它。
+     * 访客模式在 onGuestMode 里直接 navigate 到 MAIN，豆瓣独立模式登录成功走
+     * navigateToMainAfterLogin，授权静默恢复后从登录页自动回主页走的也是同一个函数——
+     * 这三条都不经过 onLoginSuccess。路由是四条路唯一的共同终点。
+     *
+     * 每次进入主页都会回调（从详情页返回也算），调用方按幂等处理。
+     */
+    onEnterMain: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
@@ -540,6 +551,11 @@ fun AppNavigation(
             popUpTo(Routes.MAIN) { inclusive = false }
             launchSingleTop = true
         }
+    }
+
+    // 开屏台词层的门在这里开：见 [onEnterMain] 的说明，路由是各条进主页路径唯一的共同终点。
+    LaunchedEffect(currentRoute) {
+        if (currentRoute == Routes.MAIN) onEnterMain()
     }
 
     LaunchedEffect(currentAuthState) {

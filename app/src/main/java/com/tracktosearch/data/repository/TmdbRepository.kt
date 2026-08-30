@@ -816,6 +816,26 @@ class TmdbRepository @Inject constructor(
         }
     }
 
+    /**
+     * 取当前语言下的海报路径，电影和剧集两个命名空间都覆盖。
+     *
+     * [mediaType] 不能省：TMDB 的 /movie/{id} 与 /tv/{id} 各自编号，同一个数字在两边是两部
+     * 不同的作品。只查电影接口的话，剧集条目要么 404、要么拿到另一部片的海报——
+     * 开屏台词库里有电视剧条目，这个错会直接显示成配错图的开屏。
+     *
+     * 走的是详情接口那两个永久缓存（key 已带语言），命中之后不再发请求；
+     * 拿不到返回 null，由调用方决定退回哪张图。
+     */
+    suspend fun posterPath(tmdbId: Int, mediaType: MediaType): String? {
+        if (tmdbId <= 0) return null
+        return when (mediaType) {
+            MediaType.MOVIE -> getMovieDetail(tmdbId)?.poster_path
+            MediaType.SHOW -> getTvDetail(tmdbId)?.poster_path
+            // 人物有头像没海报，碟片不是 TMDB 的概念
+            MediaType.PERSON, MediaType.DISK -> null
+        }
+    }
+
     suspend fun getMovieVideos(id: Int): List<TmdbVideo> {
         val key = langKey(id)
         return movieVideosCache.getOrAwait(key) {

@@ -192,6 +192,11 @@ class MainActivity : AppCompatActivity() {
         // 台词层才刚开始加载，中间会露出一帧主界面。
         var splashQuote by mutableStateOf<com.tracktosearch.ui.screen.splash.SplashQuoteUi?>(null)
         var splashQuoteDone by mutableStateOf(false)
+        // 台词层的门：只有导航真的落到主页才放它盖上来。登录页和引导页同样是 Splash 之后的第一屏，
+        // 台词压在上面等于把用户按在一个动不了的登录页上等四秒。
+        // 冷启动就落主页时下面会先把门开着，不等 AppNavigation 的 onEnterMain 回调——
+        // 那条回调要晚一帧到，中间那一帧会从散场的场记板底下露出主界面。
+        var atMainDestination by mutableStateOf(false)
         val opensSearchFromWidget = SearchNavigator.isOpenSearchIntent(intent)
         val notificationOpensWatchlist = intent?.getStringExtra("navigate_to") in setOf(
             "douban_sync",
@@ -232,6 +237,8 @@ class MainActivity : AppCompatActivity() {
                 isGuestMode -> Routes.MAIN  // 访客模式：直接进主页，跨重启保留
                 else -> Routes.LOGIN
             }
+            // 起点就是主页时门一开始就开着，台词层与系统场记板严丝合缝地接上
+            atMainDestination = startDest == Routes.MAIN
             // 根据 Trakt 连接状态选择默认标签页
             initialTab = if (opensSearchFromWidget) {
                 0
@@ -298,13 +305,20 @@ class MainActivity : AppCompatActivity() {
                     // 预取失败无副作用：下次启动或 Worker 会再补
                 }
             }
-            // 日签：打开 App 就算今天来过。传开屏真正展示过的那条 id，
-            // 关掉台词或整层跳过时传 null 由仓库按日期兜底。
-            this@MainActivity.lifecycleScope.launch(Dispatchers.IO) {
-                try {
-                    dailyStampRepository.checkIn(splashQuote?.quoteId)
-                } catch (e: Exception) {
-                    // 签到失败不影响任何已有功能：下次启动或跨天回到前台会再写
+            // 日签：这里只负责「台词层压根不会出现」那种情况的兜底——开关关着、或者海报没就绪
+            // 整层跳过。传 null 让仓库按日期回算，那天照样算来过，日历上不该空一格。
+            //
+            // 拿到台词的那条路不在这里写：台词层现在可能延后到进主页之后才出现，用户完全可能
+            // 停在登录页就退出，一眼没看见那句话。checkIn 认首写，这里抢先写下去，之后台词层
+            // 真的演过再补写同一天会被忽略，日历里就留下一张用户没读过的卡片。改成由覆盖层的
+            // onSplashQuoteShown 触发，见 setContent 里的调用点。
+            if (splashQuote == null) {
+                this@MainActivity.lifecycleScope.launch(Dispatchers.IO) {
+                    try {
+                        dailyStampRepository.checkIn(null)
+                    } catch (e: Exception) {
+                        // 签到失败不影响任何已有功能：下次启动或跨天回到前台会再写
+                    }
                 }
             }
             if (isAuthorized) {
@@ -376,7 +390,8 @@ class MainActivity : AppCompatActivity() {
                         sessionModeManager = sessionModeManager,
                         onLoginSuccess = {
                             currentDestination = Routes.MAIN
-                        }
+                        },
+                        onEnterMain = { atMainDestination = true }
                     )
                 }
 
@@ -388,11 +403,37 @@ class MainActivity : AppCompatActivity() {
 
                 // 开屏台词层：压在最上面，等它自己散场或被点掉。
                 // 只有 isReady 之后才组合——早一帧组合，动画就会在系统场记板背后白跑。
+                // 再加一道 atMainDestination：登录页/引导页也可能是场记板之后的第一屏，
+                // 台词不该盖在上面，得等导航真的落到主页。
                 val quote = splashQuote
-                if (isReady && quote != null && !splashQuoteDone) {
+                if (isReady && quote != null && !splashQuoteDone && atMainDestination) {
                     com.tracktosearch.ui.screen.splash.SplashQuoteOverlay(
                         quote = quote,
-                        onFinished = { splashQuoteDone = true }
+                        // 冷启动直落主页时这一层是接着场记板往下演，同一块画面不该有淡入；
+                        // 先过登录页的那条路上它是后盖到已经画好的主界面上，必须淡进来。
+                        continuesSystemSplash = startDest == Routes.MAIN,
+                        // 台词真的开演了才记当天日签，写的就是屏幕上这一条。
+                        // 约定只回调一次；万一多回调，checkIn 本身按天认首写，重复调用无副作用。
+                        onSplashQuoteShown = {
+                            this@MainActivity.lifecycleScope.launch(Dispatchers.IO) {
+                                try {
+                                    dailyStampRepository.checkIn(quote.quoteId)
+                                } catch (e: Exception) {
+                                    // 签到失败不影响任何已有功能：下次启动或跨天回到前台会再写
+                                }
+                            }
+                        },
+                        // 散场这一刻才是取色最准的时机：动画演完了，CPU 空出来了，而
+                        // 用户走到日签卡片或详情页至少还要几次点击。prefetchUpcoming 里
+                        // 那次是按「台词层最长时长」估的兜底，台词层现在可能延后到进主页
+                        // 之后才出现，估的那个点会落在动画中间。主色已缓存时这一次只是
+                        // 一次查询，两条路重复调没有代价。
+                        onFinished = {
+                            splashQuoteDone = true
+                            this@MainActivity.lifecycleScope.launch(Dispatchers.IO) {
+                                splashQuoteRepository.warmPosterColor(quote.quoteId)
+                            }
+                        }
                     )
                 }
 

@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.dailystamp
 
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.data.local.SplashPosterUrls
 import com.tracktosearch.data.local.SplashQuote
 import com.tracktosearch.data.repository.DailyStamp
 import org.junit.Test
@@ -117,8 +118,35 @@ class DailyStampModelsTest {
 
         assertThat(card.tmdbId).isEqualTo(12405)
         assertThat(card.mediaType).isEqualTo(SplashQuote.MEDIA_TYPE_MOVIE)
+        // 没查过 TMDB 的条目退回台词库自带的路径，卡片照样有地址可给详情页
         assertThat(card.posterUrl).endsWith("/poster.jpg")
-        assertThat(card.posterUrl).contains("w342")
+    }
+
+    /**
+     * 查过 TMDB 的条目跟着那一版海报走。
+     *
+     * 详情页首屏和沉浸取色都按这个地址找缓存，三处对齐才不用重下一张图、重算一次主色。
+     * 用独立 id：SplashPosterUrls 是进程级缓存，登记过的条目别的用例也看得见。
+     */
+    @Test
+    fun `解析过海报路径的条目用 TMDB 那一版地址`() {
+        val resolved = quote(id = "resolved-poster")
+        SplashPosterUrls.remember(resolved.id, "zh", "/from-tmdb.jpg")
+
+        val card = stamp(resolved).toCard("zh")!!
+
+        assertThat(card.posterUrl).endsWith("/from-tmdb.jpg")
+    }
+
+    /** TMDB 海报分语言，一种语言查到的不能顶另一种用，否则中文界面会拿到英文那张 */
+    @Test
+    fun `另一种语言不共用已解析的海报地址`() {
+        val resolved = quote(id = "lang-split-poster")
+        SplashPosterUrls.remember(resolved.id, "zh", "/only-zh.jpg")
+
+        val card = stamp(resolved).toCard("en")!!
+
+        assertThat(card.posterUrl).endsWith("/poster.jpg")
     }
 
     /**

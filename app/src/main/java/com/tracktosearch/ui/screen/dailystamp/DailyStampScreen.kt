@@ -302,7 +302,7 @@ private fun MonthMasthead(
     ) {
         Text(
             text = tick,
-            color = palette.inkFaint,
+            color = palette.inkMuted,
             fontSize = 11.sp,
             fontFamily = FontFamily.Monospace,
             letterSpacing = 0.42.em,
@@ -370,7 +370,9 @@ private fun MonthArrow(
         Icon(
             imageVector = icon,
             contentDescription = description,
-            tint = if (enabled) palette.inkSoft else palette.inkFaint.copy(alpha = 0.28f),
+            // 禁用态从 inkSoft 收一档，不走 inkFaint：那是描边色，压在底色上只有 1.0:1，
+            // 「淡下去」会淡成看不见，正好把上面那句注释想避开的事又做了一遍
+            tint = if (enabled) palette.inkSoft else palette.inkSoft.copy(alpha = 0.45f),
             modifier = Modifier.size(20.dp),
         )
     }
@@ -394,7 +396,7 @@ private fun Counter(
         Text(
             text = label,
             modifier = Modifier.padding(top = 2.dp),
-            color = palette.inkFaint,
+            color = palette.inkHint,
             fontSize = 9.5.sp,
             letterSpacing = 0.2.em,
         )
@@ -421,7 +423,7 @@ private fun WeekdayRow(
             Text(
                 text = label,
                 modifier = Modifier.weight(1f),
-                color = palette.inkFaint,
+                color = palette.inkHint,
                 fontSize = 10.sp,
                 letterSpacing = 0.1.em,
                 textAlign = TextAlign.Center,
@@ -565,9 +567,9 @@ private fun DayCell(
                 modifier = Modifier.align(Alignment.TopStart).padding(start = 4.dp, top = 2.dp),
                 color = when {
                     hasPoster -> Color.White.copy(alpha = 0.92f)
-                    isFuture -> palette.inkFaint.copy(alpha = 0.34f)
-                    stamped -> palette.inkFaint
-                    else -> palette.inkFaint.copy(alpha = 0.62f)
+                    isFuture -> palette.inkMuted
+                    stamped -> palette.inkSoft
+                    else -> palette.inkHint
                 },
                 fontSize = 8.sp,
                 fontFamily = FontFamily.Monospace,
@@ -656,7 +658,7 @@ private fun FooterHint(
             if (empty) R.string.daily_stamp_empty else R.string.daily_stamp_hint
         ),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
-        color = palette.inkFaint,
+        color = palette.inkHint,
         fontSize = 10.5.sp,
         letterSpacing = 0.14.em,
         textAlign = TextAlign.Center,
