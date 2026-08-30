@@ -315,6 +315,7 @@ private fun DailyStampCard(
         QuoteSeal(
             keyword = card.sealKeyword,
             latin = card.keywordLatin,
+            sealLang = card.sealLang,
             palette = palette,
             // 卡面是 sheet 不是 paper，做旧那层要拿卡面色去盖才不留色差
             ground = palette.sheet,

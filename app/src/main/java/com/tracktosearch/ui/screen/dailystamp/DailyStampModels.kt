@@ -45,6 +45,8 @@ data class DailyStampCardUi(
      * 见 SplashQuote.sealKeywordFor。
      */
     val sealKeyword: String,
+    /** [sealKeyword] 那个字形所属的语言，印章用它选字体。见 QuoteSeal.sealTypeface */
+    val sealLang: String,
     /** 印在关键词下方的英文小字；界面本来就是英文时为 null */
     val keywordLatin: String?,
     val poster: Any?,
@@ -82,6 +84,7 @@ internal fun DailyStamp.toCard(lang: String): DailyStampCardUi? {
         year = quote.year,
         keyword = quote.keywordFor(lang),
         sealKeyword = quote.sealKeywordFor(lang),
+        sealLang = lang,
         keywordLatin = quote.keywordFor(SplashQuote.FALLBACK_LANG)
             .takeIf { lang != SplashQuote.FALLBACK_LANG && it.isNotBlank() },
         poster = poster,

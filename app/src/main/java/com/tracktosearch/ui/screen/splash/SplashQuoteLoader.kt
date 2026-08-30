@@ -48,6 +48,7 @@ class SplashQuoteLoader @Inject constructor(
                 titleWrap = SplashQuote.titleWrap(lang),
                 keyword = quote.keywordFor(lang),
                 sealKeyword = quote.sealKeywordFor(lang),
+                sealLang = lang,
                 keywordLatin = quote.keywordFor(SplashQuote.FALLBACK_LANG)
                     .takeIf { lang != SplashQuote.FALLBACK_LANG && it.isNotBlank() },
             )

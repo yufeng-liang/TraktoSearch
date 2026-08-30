@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.tracktosearch.R
 
 /**
  * 日签关键词的印章。
@@ -46,6 +48,9 @@ import androidx.compose.ui.unit.sp
  * 中文印文走繁体（见 SplashQuote.sealKeywordFor），[latin] 是印在方印下方的英文小字，
  * CJK 语言下才有；界面本来是英文时传 null，同一个词印两遍不是设计。
  *
+ * [sealLang] 是 [keyword] 那个字形所属的语言，用来选印文字体，见 [sealTypeface]。
+ * 不从码位反推：中日两种关键词都可能是纯汉字，而它们要走的字库不是同一份。
+ *
  * [ground] 是印章压着的底色。做旧那层是「拿底色按噪点盖掉一部分印面」，所以它必须知道
  * 底色是什么：开屏压在 paper 上，日签卡片压在 sheet 上。传错了会在印面上留下一层色差。
  */
@@ -53,6 +58,7 @@ import androidx.compose.ui.unit.sp
 internal fun QuoteSeal(
     keyword: String,
     latin: String?,
+    sealLang: String,
     palette: SplashPalette,
     modifier: Modifier = Modifier,
     ground: Color = palette.paper,
@@ -61,14 +67,15 @@ internal fun QuoteSeal(
     latinFontSize: TextUnit = 9.sp,
 ) {
     if (keyword.isBlank()) return
+    val typeface = sealTypeface(sealLang)
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (isSquareSeal(keyword)) {
-            CarvedSeal(keyword, palette, ground, sealWidth, fontSize)
+            CarvedSeal(keyword, typeface, palette, ground, sealWidth, fontSize)
         } else {
-            RibbonSeal(keyword, palette, ground, fontSize)
+            RibbonSeal(keyword, typeface, palette, ground, fontSize)
         }
         if (latin != null) {
             Text(
@@ -95,6 +102,7 @@ internal fun QuoteSeal(
 @Composable
 private fun CarvedSeal(
     keyword: String,
+    typeface: SealTypeface,
     palette: SplashPalette,
     ground: Color,
     sealWidth: Dp,
@@ -103,7 +111,7 @@ private fun CarvedSeal(
     val rows = sealRows(keyword)
     // 竖排一列时行距收到 .98，才给界格让出一圈白；两行两列不用收，本来就有余量
     val column = rows.all { it.length == 1 }
-    val glyphSize = fontSize * glyphScale(keyword)
+    val glyphSize = fontSize * glyphScale(keyword, typeface)
     Box(
         modifier = Modifier
             .size(width = sealWidth, height = if (rows.size == 3) RECT_HEIGHT else sealWidth)
@@ -124,8 +132,8 @@ private fun CarvedSeal(
                     color = palette.seal,
                     fontSize = glyphSize,
                     lineHeight = glyphSize * if (column) 0.98f else 1.06f,
-                    fontFamily = SealFontFamily,
-                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = typeface.family,
+                    fontWeight = typeface.weight,
                     letterSpacing = (-0.02).em,
                     style = TightLineStyle,
                 )
@@ -138,6 +146,7 @@ private fun CarvedSeal(
 @Composable
 private fun RibbonSeal(
     keyword: String,
+    typeface: SealTypeface,
     palette: SplashPalette,
     ground: Color,
     fontSize: TextUnit,
@@ -152,8 +161,8 @@ private fun RibbonSeal(
             text = keyword.uppercase(),
             color = palette.seal,
             fontSize = fontSize * 0.62f,
-            fontFamily = SealFontFamily,
-            fontWeight = FontWeight.SemiBold,
+            fontFamily = typeface.family,
+            fontWeight = typeface.weight,
             letterSpacing = 0.2.em,
         )
     }
@@ -272,29 +281,99 @@ private fun sealRows(keyword: String): List<String> =
  * 三字撑成长方印之后不用缩，和两字同一个视觉重量；四字挤在方印里得让一档，
  * 0.88 是两行两列都还不碰界格的上限。
  *
- * 谚文再让一档：韩文的方块比汉字宽，同字号下「석별」竖排一列会顶到界格。
+ * 再乘一档字体自己的补偿：不同字体在同一字号下的字面大小差得很远，见 [SealTypeface.sizeScale]。
  */
-private fun glyphScale(keyword: String): Float {
-    val base = if (keyword.length == 4) 0.88f else 1f
-    return if (keyword.any { it.code in HANGUL_SYLLABLES }) base * 0.88f else base
-}
+private fun glyphScale(keyword: String, typeface: SealTypeface): Float =
+    (if (keyword.length == 4) 0.88f else 1f) * typeface.sizeScale
+
+/** 印文的字体、它该用的字重，以及把它的字面拉到跟基准一致的倍数，见 [sealTypeface] */
+private class SealTypeface(
+    val family: FontFamily,
+    val weight: FontWeight,
+    /**
+     * 字号补偿。
+     *
+     * 同一个字号下各字体的字面大小差很多：量到的字面高度（em = 100 时的墨迹高度）
+     * 衬线汉字 92、王漢宗隸書 74–82、UnYetgul 谚文 83。隸書本来就是扁方结体，
+     * 补偿只补到「墨迹刚好占满界格里的地方」，不去把它拉成方的——那就不是隸書了。
+     *
+     * 每一档都是把台词库里所有关键词逐个算过墨迹余量定下来的，见各字体自己的注释。
+     * 算的是字体度量（行距 + 首行 asc + 末行 desc）而不是真机截图，Compose 的
+     * [TightLineStyle] 居中和这套算法差零点几 dp，所以留的余量都在 1dp 上下。
+     */
+    val sizeScale: Float,
+)
 
 /**
- * 印文字体。
+ * 印文字体，按印面字形的语言选。
  *
  * 设计定的是隸書：横画收笔上扬、结体扁方，正好填满方印，而且隶变之后的字形普通人认得出
  * ——小篆认不出，古印体（隸書骨架 + 边缘残缺）是日本印章行业的专门书体，但唯一免费的
- * 白舟古印体教漢只收 1026 个教育漢字，我们的关键词有 454 个不同汉字，缺字会在一枚印里
+ * 白舟古印体教漢只收 1026 个教育漢字，我们的关键词有 455 个不同汉字，缺字会在一枚印里
  * 混出两种字形。
  *
- * 所以这里暂时落回 [FontFamily.Serif]（Android 上是思源宋体一族）：免费商用中文字体里
- * 隸書这一类几乎全是商业授权，挂开源协议的只有 GPLv3 的 UnYetgul（韓國隸書），GPL 字体
- * 不带字体例外条款打进 APK 有授权风险；王漢宗中隸書繁虽标 GPL，但整个王漢宗系列在台湾
- * 业界被指有侵权争议。真要上隸書，拿一份授权明确的字库子集化后放进 res/font
- * （关键词是闭集，四语合计一两百 KB，做法见 com.tracktosearch.ui.theme.PixelFontFamily），
- * 然后只改这一行。
+ * 免费商用中文字体里隸書一类几乎全是商业授权，挂开源协议的只有两份，仓库里用的就是它们：
+ * - 中文（[HAN_LANG]）走王漢宗中隸書繁，GPL-2.0 或更新版本，繁体关键词 455 字全覆盖。
+ * - 韩文（[HANGUL_LANG]）走 UnYetgul 은 옛글，同为 GNU GPL，韩文关键词 371 字全覆盖。
+ *   它是隸書骨架的谚文字体，和中文那份不同源，但都是「刻」出来的气质。
+ * 两份都是 GPL 且不带字体例外条款，随 APK 分发有授权风险；许可证与出处见
+ * licenses/HanWangLiSuMedium-GPL2.txt、licenses/UnYetgul-GPL2.txt。
+ *
+ * 日文和英文落回 [FontFamily.Serif]：这两份字库都不能完整覆盖日文关键词——王漢宗没有假名，
+ * UnYetgul 缺 56 个汉字，连纯汉字的日文关键词里也有 19 个踩在缺字上。缺一个字就在那枚印
+ * 里混出第二种字形，与其让 112 枚日文印中的 19 枚长得不一样，不如整个日文都用同一套衬线。
+ *
+ * 自带字库按 [FontWeight.Normal] 请求：这两份都只有一个字重，请求 SemiBold 会让 Compose
+ * 合成假粗，把隶书的燕尾糊成一团。Serif 那一支反过来需要加粗才撑得住印面。
  */
-private val SealFontFamily = FontFamily.Serif
+private fun sealTypeface(lang: String): SealTypeface = when (lang) {
+    HAN_LANG -> SealHanLiShu
+    HANGUL_LANG -> SealHangulLiShu
+    else -> SealSerif
+}
+
+/**
+ * 回落用的系统衬线（Android 上是思源宋体一族），日文和英文关键词走它。
+ *
+ * 0.97 是修出来的：衬线汉字的字面比隸書高一截，原来不补偿时 281 枚日文方印里最紧的
+ * 「寄る辺」墨迹压出界格 0.38dp——界格本来就是用来定住那圈留白的，压出去就白设了。
+ * 收到 0.97 之后最紧的「惜別」还剩 0.61dp。
+ *
+ * 长印不吃这一档：[RibbonSeal] 的字号是 fontSize * 0.62 直接算的，不过 [glyphScale]，
+ * 所以英文关键词的观感和这次改动之前一样。
+ */
+private val SealSerif = SealTypeface(FontFamily.Serif, FontWeight.SemiBold, sizeScale = 0.97f)
+
+/**
+ * 王漢宗中隸書繁的子集，只含 assets/quotes.json 里 `keyword["zh-Hant"]` 用到的 455 个字。
+ *
+ * 完整字库 8.1 MB，子集 235 KB。往台词库加中文关键词时得重新子集化，否则新字静默回落系统
+ * 字体。子集化命令记在 licenses/HanWangLiSuMedium-GPL2.txt 里。
+ *
+ * 1.02 是量出来的：全部 365 个中文关键词逐个算墨迹在界格里的余量，这一档下最紧的
+ * 「身後名」还剩 0.36dp，再往上到 1.04 就有「歸處」压出界格 0.03dp。
+ */
+private val SealHanLiShu = SealTypeface(
+    family = FontFamily(Font(R.font.hanwang_lisu_seal)),
+    weight = FontWeight.Normal,
+    sizeScale = 1.02f,
+)
+
+/**
+ * UnYetgul 은 옛글 的子集，只含 `keyword["ko"]` 用到的 371 个字，50 KB（完整 5.9 MB）。
+ *
+ * 0.98 取代了以前给谚文的那一档 0.88：那个 0.88 是按回落衬线的谚文字面定的，而这套字
+ * 自己的字面高 83、比衬线的 94 小一档，再让 0.88 就明显小了半圈。同样逐个量过 161 枚
+ * 方印，最紧的「석별」还剩 1.07dp、横向最宽的「홀로서기」剩 1.34dp。
+ *
+ * 谚文只会出现在韩文关键词里，也就只会走这套字，所以这一档补偿收在这里，
+ * 不再留在 [glyphScale] 里判码位。
+ */
+private val SealHangulLiShu = SealTypeface(
+    family = FontFamily(Font(R.font.unyetgul_seal)),
+    weight = FontWeight.Normal,
+    sizeScale = 0.98f,
+)
 
 /**
  * 印文的行盒：行高严格等于 lineHeight，字形在行盒里居中。
@@ -318,4 +397,7 @@ private val BORDER_WIDTH = 1.4.dp
 private const val GLYPH_SCALE_X = 1.06f
 private const val GLYPH_SCALE_Y = 1.10f
 private const val CJK_START = 0x2E80
-private val HANGUL_SYLLABLES = 0xAC00..0xD7A3
+
+/** 自带隸書字库覆盖到的两种语言，其余语言的印文走系统衬线，见 [sealTypeface] */
+private const val HAN_LANG = "zh"
+private const val HANGUL_LANG = "ko"

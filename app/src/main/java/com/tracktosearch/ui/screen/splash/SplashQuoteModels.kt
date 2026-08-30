@@ -33,6 +33,12 @@ data class SplashQuoteUi(
      */
     val sealKeyword: String,
     /**
+     * [sealKeyword] 那个字形所属的语言，印章用它选字体。
+     *
+     * 中文是 zh 而不是 zh-Hant：繁体只是字形，选的还是那份中文隸書。见 QuoteSeal.sealTypeface。
+     */
+    val sealLang: String,
+    /**
      * 印在关键词下方的英文小字。
      *
      * 界面本来就是英文时为 null——同一个词印两遍不是设计，是重复。
