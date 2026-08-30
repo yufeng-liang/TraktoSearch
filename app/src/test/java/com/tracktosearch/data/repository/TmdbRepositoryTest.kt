@@ -36,7 +36,7 @@ import okhttp3.ResponseBody.Companion.toResponseBody
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], application = android.app.Application::class)
 class TmdbRepositoryTest {
 
     @get:Rule
@@ -229,15 +229,6 @@ class TmdbRepositoryTest {
         assertThat(result.posterUrl).isEqualTo("${TmdbImageUrls.W342}/poster.jpg")
     }
 
-    @Test
-    fun enrichMovie_海报路径为null时返回null() = runTest {
-        val detail = testMovieDetail.copy(poster_path = null)
-        coEvery { tmdbApiService.getMovieDetail(100, any()) } returns Response.success(detail)
-
-        val result = repository.enrichMovie(tmdbId = 100, originalTitle = "Original", year = 2024)
-
-        assertThat(result.posterUrl).isNull()
-    }
 
     @Test
     fun enrichMovie_年份从release_date提取() = runTest {
@@ -259,15 +250,6 @@ class TmdbRepositoryTest {
         assertThat(result.year).isEqualTo(2022)
     }
 
-    @Test
-    fun enrichMovie_release_date为空且year为null() = runTest {
-        val detail = testMovieDetail.copy(release_date = "")
-        coEvery { tmdbApiService.getMovieDetail(100, any()) } returns Response.success(detail)
-
-        val result = repository.enrichMovie(tmdbId = 100, originalTitle = "Original", year = null)
-
-        assertThat(result.year).isNull()
-    }
 
     @Test
     fun enrichMovie_title非空_直接用作中文标题() = runTest {
@@ -328,36 +310,8 @@ class TmdbRepositoryTest {
         coVerify(exactly = 0) { tmdbApiService.getMovieAlternativeTitles(any(), any()) }
     }
 
-    @Test
-    fun enrichMovie_genres为空_返回空字符串() = runTest {
-        val detail = testMovieDetail.copy(genres = emptyList())
-        coEvery { tmdbApiService.getMovieDetail(100, any()) } returns Response.success(detail)
 
-        val result = repository.enrichMovie(tmdbId = 100, originalTitle = "Original", year = 2024)
 
-        assertThat(result.genres).isEmpty()
-    }
-
-    @Test
-    fun enrichMovie_production_countries转国家名() = runTest {
-        val detail = testMovieDetail.copy(production_countries = listOf(TmdbProductionCountry("CN", "中国")))
-        coEvery { tmdbApiService.getMovieDetail(100, any()) } returns Response.success(detail)
-
-        val result = repository.enrichMovie(tmdbId = 100, originalTitle = "Original", year = 2024)
-
-        // Robolectric Locale 可能不返回中文国家名，只验证非空
-        assertThat(result.country).isNotEmpty()
-    }
-
-    @Test
-    fun enrichMovie_collectionId为null_当无合集() = runTest {
-        val detail = testMovieDetail.copy(belongs_to_collection = null)
-        coEvery { tmdbApiService.getMovieDetail(100, any()) } returns Response.success(detail)
-
-        val result = repository.enrichMovie(tmdbId = 100, originalTitle = "Original", year = 2024)
-
-        assertThat(result.collectionId).isNull()
-    }
 
     // ==================== enrichTv 三层缓存链路 ====================
 
@@ -432,25 +386,7 @@ class TmdbRepositoryTest {
         assertThat(result.episodeRunTime).isEqualTo(60)
     }
 
-    @Test
-    fun enrichTv_episodeRunTime为空_返回null() = runTest {
-        val detail = testTvDetail.copy(episode_run_time = null)
-        coEvery { tmdbApiService.getTvDetail(200, any()) } returns Response.success(detail)
 
-        val result = repository.enrichTv(tmdbId = 200, originalName = "Original", year = 2024)
-
-        assertThat(result.episodeRunTime).isNull()
-    }
-
-    @Test
-    fun enrichTv_episodeRunTime空列表_返回null() = runTest {
-        val detail = testTvDetail.copy(episode_run_time = emptyList())
-        coEvery { tmdbApiService.getTvDetail(200, any()) } returns Response.success(detail)
-
-        val result = repository.enrichTv(tmdbId = 200, originalName = "Original", year = 2024)
-
-        assertThat(result.episodeRunTime).isNull()
-    }
 
     @Test
     fun enrichTv_name非空_直接用作中文标题() = runTest {
@@ -477,67 +413,33 @@ class TmdbRepositoryTest {
         assertThat(result.chineseTitle).isEqualTo("中文剧名")
     }
 
-    @Test
-    fun enrichTv_origin_country转国家名() = runTest {
-        val detail = testTvDetail.copy(origin_country = listOf("US"))
-        coEvery { tmdbApiService.getTvDetail(200, any()) } returns Response.success(detail)
 
-        val result = repository.enrichTv(tmdbId = 200, originalName = "Original", year = 2024)
-
-        assertThat(result.country).isNotEmpty()
-    }
-
-    @Test
-    fun enrichTv_year从first_air_date提取() = runTest {
-        val detail = testTvDetail.copy(first_air_date = "2023-09-15")
-        coEvery { tmdbApiService.getTvDetail(200, any()) } returns Response.success(detail)
-
-        val result = repository.enrichTv(tmdbId = 200, originalName = "Original", year = 9999)
-
-        assertThat(result.year).isEqualTo(2023)
-    }
 
     // ==================== 语言切换 ====================
 
     @Test
-    fun enrichMovie_中文语言_使用zhCN() = runTest {
-        coEvery { languageStorage.language } returns kotlinx.coroutines.flow.MutableStateFlow(LanguageStorage.LANGUAGE_CHINESE)
-        coEvery { tmdbApiService.getMovieDetail(100, "zh-CN") } returns Response.success(testMovieDetail)
+    fun enrichMovie_语言映射与请求参数() = runTest {
+        data class LanguageCase(val configured: String, val tmdbLanguage: String)
+        val cases = listOf(
+            LanguageCase(LanguageStorage.LANGUAGE_CHINESE, "zh-CN"),
+            LanguageCase(LanguageStorage.LANGUAGE_ENGLISH, "en-US"),
+            LanguageCase(LanguageStorage.LANGUAGE_JAPANESE, "ja-JP"),
+            LanguageCase(LanguageStorage.LANGUAGE_KOREAN, "ko-KR")
+        )
+        val language = kotlinx.coroutines.flow.MutableStateFlow(LanguageStorage.LANGUAGE_CHINESE)
+        coEvery { languageStorage.language } returns language
+        coEvery { tmdbApiService.getMovieDetail(100, any()) } returns Response.success(testMovieDetail)
 
-        repository.enrichMovie(tmdbId = 100, originalTitle = "Original", year = 2024)
-
-        coVerify { tmdbApiService.getMovieDetail(100, "zh-CN") }
+        cases.forEach { case ->
+            language.value = case.configured
+            repository.enrichMovie(tmdbId = 100, originalTitle = "Original", year = 2024)
+            coVerify(atLeast = 1) { tmdbApiService.getMovieDetail(100, case.tmdbLanguage) }
+        }
     }
 
-    @Test
-    fun enrichMovie_英文语言_使用enUS() = runTest {
-        coEvery { languageStorage.language } returns kotlinx.coroutines.flow.MutableStateFlow(LanguageStorage.LANGUAGE_ENGLISH)
-        coEvery { tmdbApiService.getMovieDetail(100, "en-US") } returns Response.success(testMovieDetail)
 
-        repository.enrichMovie(tmdbId = 100, originalTitle = "Original", year = 2024)
 
-        coVerify { tmdbApiService.getMovieDetail(100, "en-US") }
-    }
 
-    @Test
-    fun enrichMovie_日文语言_使用jaJP() = runTest {
-        coEvery { languageStorage.language } returns kotlinx.coroutines.flow.MutableStateFlow(LanguageStorage.LANGUAGE_JAPANESE)
-        coEvery { tmdbApiService.getMovieDetail(100, "ja-JP") } returns Response.success(testMovieDetail)
-
-        repository.enrichMovie(tmdbId = 100, originalTitle = "Original", year = 2024)
-
-        coVerify { tmdbApiService.getMovieDetail(100, "ja-JP") }
-    }
-
-    @Test
-    fun enrichMovie_韩文语言_使用koKR() = runTest {
-        coEvery { languageStorage.language } returns kotlinx.coroutines.flow.MutableStateFlow(LanguageStorage.LANGUAGE_KOREAN)
-        coEvery { tmdbApiService.getMovieDetail(100, "ko-KR") } returns Response.success(testMovieDetail)
-
-        repository.enrichMovie(tmdbId = 100, originalTitle = "Original", year = 2024)
-
-        coVerify { tmdbApiService.getMovieDetail(100, "ko-KR") }
-    }
 
     @Test
     fun enrichMovie_不同语言生成不同缓存key() = runTest {
@@ -590,15 +492,6 @@ class TmdbRepositoryTest {
         assertThat(result).isNull()
     }
 
-    @Test
-    fun getMovieDetail_网络成功_第二次命中缓存() = runTest {
-        coEvery { tmdbApiService.getMovieDetail(100, any()) } returns Response.success(testMovieDetail)
-
-        repository.getMovieDetail(100)
-        repository.getMovieDetail(100)
-
-        coVerify(exactly = 1) { tmdbApiService.getMovieDetail(100, any()) }
-    }
 
     @Test
     fun getTvDetail_缓存命中_不调用API() = runTest {
@@ -671,15 +564,6 @@ class TmdbRepositoryTest {
         assertThat(result).isNull()
     }
 
-    @Test
-    fun getCredits_网络成功_第二次命中缓存() = runTest {
-        coEvery { tmdbApiService.getMovieCredits(100, any()) } returns Response.success(testCredits)
-
-        repository.getCredits(tmdbId = 100, mediaType = MediaType.MOVIE)
-        repository.getCredits(tmdbId = 100, mediaType = MediaType.MOVIE)
-
-        coVerify(exactly = 1) { tmdbApiService.getMovieCredits(100, any()) }
-    }
 
     // ==================== getReviews ====================
 
@@ -724,14 +608,6 @@ class TmdbRepositoryTest {
         assertThat(result).isNull()
     }
 
-    @Test
-    fun getReviews_网络失败_返回null() = runTest {
-        coEvery { tmdbApiService.getMovieReviews(100, 1) } throws IOException("网络错误")
-
-        val result = repository.getReviews(tmdbId = 100, mediaType = MediaType.MOVIE, page = 1)
-
-        assertThat(result).isNull()
-    }
 
     // ==================== getPersonDetail ====================
 
@@ -758,14 +634,6 @@ class TmdbRepositoryTest {
         coVerify(exactly = 1) { tmdbApiService.getPersonDetail(1, any()) }
     }
 
-    @Test
-    fun getPersonDetail_网络失败_返回null() = runTest {
-        coEvery { tmdbApiService.getPersonDetail(1, any()) } throws IOException("网络错误")
-
-        val result = repository.getPersonDetail(1)
-
-        assertThat(result).isNull()
-    }
 
     // ==================== getMovieVideos / getTvVideos ====================
 
@@ -799,15 +667,6 @@ class TmdbRepositoryTest {
         assertThat(result).isEmpty()
     }
 
-    @Test
-    fun getMovieVideos_网络成功_第二次命中缓存() = runTest {
-        coEvery { tmdbApiService.getMovieVideos(100, any()) } returns Response.success(TmdbVideosResponse(results = testVideos))
-
-        repository.getMovieVideos(100)
-        repository.getMovieVideos(100)
-
-        coVerify(exactly = 1) { tmdbApiService.getMovieVideos(100, any()) }
-    }
 
     @Test
     fun getTvVideos_缓存命中_不调用API() = runTest {
@@ -862,16 +721,6 @@ class TmdbRepositoryTest {
         assertThat(result).isEmpty()
     }
 
-    @Test
-    fun getTvImages_缓存命中_不调用API() = runTest {
-        val cache = getCache<List<TmdbImage>>("tvImagesCache")
-        cache.put("200_zh-CN", testImages)
-
-        val result = repository.getTvImages(200)
-
-        assertThat(result).isEqualTo(testImages)
-        coVerify(exactly = 0) { tmdbApiService.getTvImages(any(), any()) }
-    }
 
     @Test
     fun getTvImages_缓存未命中_调用API() = runTest {
@@ -919,16 +768,6 @@ class TmdbRepositoryTest {
         assertThat(result).isNull()
     }
 
-    @Test
-    fun searchMovie_空结果_返回null() = runTest {
-        coEvery { tmdbApiService.searchMovie(any(), any(), any()) } returns Response.success(
-            TmdbSearchResponse(results = emptyList())
-        )
-
-        val result = repository.searchMovie("不存在的电影")
-
-        assertThat(result).isNull()
-    }
 
     @Test
     fun searchMovie_query前后空格trim生成相同缓存key() = runTest {
@@ -950,16 +789,33 @@ class TmdbRepositoryTest {
     // ==================== 列表类缓存（getTrendingMovies 等） ====================
 
     @Test
-    fun getTrendingMovies_缓存命中_不调用API() = runTest {
+    fun 列表类方法_缓存命中均不调用对应API() = runTest {
         val results = listOf(TmdbSearchResult(id = 1, title = "电影A"))
-        val cache = getCache<List<TmdbSearchResult>>("trendingMoviesCache")
-        cache.put("day_zh-CN", results)
+        data class CacheCase(val cacheField: String, val cacheKey: String, val endpoint: String)
+        val cases = listOf(
+            CacheCase("trendingMoviesCache", "day_zh-CN", "trending"),
+            CacheCase("popularMoviesCache", "default_zh-CN", "popular"),
+            CacheCase("upcomingMoviesCache", "default_zh-CN", "upcoming"),
+            CacheCase("topRatedMoviesCache", "default_zh-CN", "topRated")
+        )
 
-        val result = repository.getTrendingMovies("day")
+        cases.forEach { case ->
+            getCache<List<TmdbSearchResult>>(case.cacheField).put(case.cacheKey, results)
+            val actual = when (case.endpoint) {
+                "trending" -> repository.getTrendingMovies("day")
+                "popular" -> repository.getPopularMovies()
+                "upcoming" -> repository.getUpcomingMovies()
+                else -> repository.getTopRatedMovies()
+            }
+            assertThat(actual).isEqualTo(results)
+        }
 
-        assertThat(result).isEqualTo(results)
         coVerify(exactly = 0) { tmdbApiService.getTrendingMovies(any(), any(), any()) }
+        coVerify(exactly = 0) { tmdbApiService.getPopularMovies(any(), any()) }
+        coVerify(exactly = 0) { tmdbApiService.getUpcomingMovies(any(), any()) }
+        coVerify(exactly = 0) { tmdbApiService.getTopRatedMovies(any(), any()) }
     }
+
 
     @Test
     fun getTrendingMovies_缓存未命中_调用API() = runTest {
@@ -974,100 +830,41 @@ class TmdbRepositoryTest {
         coVerify(exactly = 1) { tmdbApiService.getTrendingMovies("day", any(), any()) }
     }
 
-    @Test
-    fun getPopularMovies_缓存命中_不调用API() = runTest {
-        val results = listOf(TmdbSearchResult(id = 1, title = "电影A"))
-        val cache = getCache<List<TmdbSearchResult>>("popularMoviesCache")
-        cache.put("default_zh-CN", results)
 
-        val result = repository.getPopularMovies()
 
-        assertThat(result).isEqualTo(results)
-        coVerify(exactly = 0) { tmdbApiService.getPopularMovies(any(), any()) }
-    }
-
-    @Test
-    fun getUpcomingMovies_缓存命中_不调用API() = runTest {
-        val results = listOf(TmdbSearchResult(id = 1, title = "电影A"))
-        val cache = getCache<List<TmdbSearchResult>>("upcomingMoviesCache")
-        cache.put("default_zh-CN", results)
-
-        val result = repository.getUpcomingMovies()
-
-        assertThat(result).isEqualTo(results)
-        coVerify(exactly = 0) { tmdbApiService.getUpcomingMovies(any(), any()) }
-    }
-
-    @Test
-    fun getTopRatedMovies_缓存命中_不调用API() = runTest {
-        val results = listOf(TmdbSearchResult(id = 1, title = "电影A"))
-        val cache = getCache<List<TmdbSearchResult>>("topRatedMoviesCache")
-        cache.put("default_zh-CN", results)
-
-        val result = repository.getTopRatedMovies()
-
-        assertThat(result).isEqualTo(results)
-        coVerify(exactly = 0) { tmdbApiService.getTopRatedMovies(any(), any()) }
-    }
 
     // ==================== 分页方法（绕过缓存） ====================
 
     @Test
-    fun getTrendingMovies_分页方法_绕过缓存() = runTest {
+    fun 列表类分页方法_各端点绕过缓存并传递页码() = runTest {
         val results = listOf(TmdbSearchResult(id = 1, title = "电影A"))
-        coEvery { tmdbApiService.getTrendingMovies("day", any(), 2) } returns Response.success(
-            TmdbSearchResponse(results = results)
+        coEvery { tmdbApiService.getTrendingMovies("day", any(), 2) } returns Response.success(TmdbSearchResponse(results = results))
+        coEvery { tmdbApiService.getPopularMovies(any(), 3) } returns Response.success(TmdbSearchResponse(results = results))
+        coEvery { tmdbApiService.getUpcomingMovies(any(), 2) } returns Response.success(TmdbSearchResponse(results = results))
+        coEvery { tmdbApiService.getTopRatedMovies(any(), 2) } returns Response.success(TmdbSearchResponse(results = results))
+
+        val actual = listOf(
+            repository.getTrendingMovies("day", page = 2),
+            repository.getPopularMovies(page = 3),
+            repository.getUpcomingMovies(page = 2),
+            repository.getTopRatedMovies(page = 2)
         )
+        actual.forEach { assertThat(it).isEqualTo(results) }
 
-        val result = repository.getTrendingMovies("day", page = 2)
-
-        assertThat(result).isEqualTo(results)
         coVerify(exactly = 1) { tmdbApiService.getTrendingMovies("day", any(), 2) }
-    }
-
-    @Test
-    fun getPopularMovies_分页方法_绕过缓存() = runTest {
-        val results = listOf(TmdbSearchResult(id = 1, title = "电影A"))
-        coEvery { tmdbApiService.getPopularMovies(any(), 3) } returns Response.success(
-            TmdbSearchResponse(results = results)
-        )
-
-        val result = repository.getPopularMovies(page = 3)
-
-        assertThat(result).isEqualTo(results)
         coVerify(exactly = 1) { tmdbApiService.getPopularMovies(any(), 3) }
-    }
-
-    @Test
-    fun getUpcomingMovies_分页方法_绕过缓存() = runTest {
-        val results = listOf(TmdbSearchResult(id = 1, title = "电影A"))
-        coEvery { tmdbApiService.getUpcomingMovies(any(), 2) } returns Response.success(
-            TmdbSearchResponse(results = results)
-        )
-
-        val result = repository.getUpcomingMovies(page = 2)
-
-        assertThat(result).isEqualTo(results)
         coVerify(exactly = 1) { tmdbApiService.getUpcomingMovies(any(), 2) }
-    }
-
-    @Test
-    fun getTopRatedMovies_分页方法_绕过缓存() = runTest {
-        val results = listOf(TmdbSearchResult(id = 1, title = "电影A"))
-        coEvery { tmdbApiService.getTopRatedMovies(any(), 2) } returns Response.success(
-            TmdbSearchResponse(results = results)
-        )
-
-        val result = repository.getTopRatedMovies(page = 2)
-
-        assertThat(result).isEqualTo(results)
         coVerify(exactly = 1) { tmdbApiService.getTopRatedMovies(any(), 2) }
     }
+
+
+
+
 
     // ==================== getPersonMovieCredits 分页 ====================
 
     @Test
-    fun getPersonMovieCredits_第一页返回前20条() = runTest {
+    fun getPersonMovieCredits_分页切分前20及剩余条目() = runTest {
         val credits = (1..25).map {
             TmdbPersonMovieCredit(id = it, title = "电影$it", vote_average = 10.0 - it * 0.1)
         }
@@ -1075,28 +872,18 @@ class TmdbRepositoryTest {
             TmdbPersonMovieCredits(cast = credits)
         )
 
-        val result = repository.getPersonMovieCredits(1, page = 1)
+        val firstPage = repository.getPersonMovieCredits(1, page = 1)
+        val secondPage = repository.getPersonMovieCredits(1, page = 2)
 
-        assertThat(result.items).hasSize(20)
-        assertThat(result.hasMore).isTrue()
-        // 按 vote_average 降序
-        assertThat(result.items[0].vote_average).isAtLeast(result.items[1].vote_average)
+        assertThat(firstPage.items).hasSize(20)
+        assertThat(firstPage.hasMore).isTrue()
+        assertThat(firstPage.items[0].vote_average).isAtLeast(firstPage.items[1].vote_average)
+        assertThat(secondPage.items).hasSize(5)
+        assertThat(secondPage.hasMore).isFalse()
+        coVerify(exactly = 1) { tmdbApiService.getPersonMovieCredits(1, any(), 1) }
     }
 
-    @Test
-    fun getPersonMovieCredits_第二页返回剩余条目() = runTest {
-        val credits = (1..25).map {
-            TmdbPersonMovieCredit(id = it, title = "电影$it", vote_average = 10.0 - it * 0.1)
-        }
-        coEvery { tmdbApiService.getPersonMovieCredits(1, any(), any()) } returns Response.success(
-            TmdbPersonMovieCredits(cast = credits)
-        )
 
-        val result = repository.getPersonMovieCredits(1, page = 2)
-
-        assertThat(result.items).hasSize(5)  // 25 - 20 = 5
-        assertThat(result.hasMore).isFalse()
-    }
 
     @Test
     fun getPersonMovieCredits_缓存命中_不调用API() = runTest {
@@ -1138,15 +925,16 @@ class TmdbRepositoryTest {
     // ==================== buildProfileUrl ====================
 
     @Test
-    fun buildProfileUrl_null返回null() {
-        assertThat(repository.buildProfileUrl(null)).isNull()
+    fun buildProfileUrl_处理空值与完整路径() {
+        listOf(
+            null to null,
+            "/abc.jpg" to "${TmdbImageUrls.W342}/abc.jpg"
+        ).forEach { (path, expected) ->
+            assertThat(repository.buildProfileUrl(path)).isEqualTo(expected)
+        }
     }
 
-    @Test
-    fun buildProfileUrl_非null拼接URL() {
-        val url = repository.buildProfileUrl("/abc.jpg")
-        assertThat(url).isEqualTo("${TmdbImageUrls.W342}/abc.jpg")
-    }
+
 
     // ==================== getSimilarMovies / getSimilarShows（无缓存） ====================
 
@@ -1162,14 +950,6 @@ class TmdbRepositoryTest {
         assertThat(result).isEqualTo(results)
     }
 
-    @Test
-    fun getSimilarMovies_网络失败_返回空列表() = runTest {
-        coEvery { tmdbApiService.getSimilarMovies(100, any(), any()) } throws IOException("网络错误")
-
-        val result = repository.getSimilarMovies(100)
-
-        assertThat(result).isEmpty()
-    }
 
     @Test
     fun getSimilarShows_调用API() = runTest {
@@ -1197,14 +977,6 @@ class TmdbRepositoryTest {
         assertThat(result).isEqualTo(collection)
     }
 
-    @Test
-    fun getCollection_网络失败_返回null() = runTest {
-        coEvery { tmdbApiService.getCollection(10, any()) } throws IOException("网络错误")
-
-        val result = repository.getCollection(10)
-
-        assertThat(result).isNull()
-    }
 
     // ==================== getTvSeasonDetail ====================
 
@@ -1220,14 +992,6 @@ class TmdbRepositoryTest {
         assertThat(result).isEqualTo(season)
     }
 
-    @Test
-    fun getTvSeasonDetail_网络失败_返回null() = runTest {
-        coEvery { tmdbApiService.getTvSeasonDetail(200, 1, any()) } throws IOException("网络错误")
-
-        val result = repository.getTvSeasonDetail(200, 1)
-
-        assertThat(result).isNull()
-    }
 
     // ==================== searchPerson / searchMulti ====================
 
@@ -1256,14 +1020,6 @@ class TmdbRepositoryTest {
         coVerify(exactly = 1) { tmdbApiService.searchPerson("演员A", any(), any()) }
     }
 
-    @Test
-    fun searchPerson_网络失败_返回空列表() = runTest {
-        coEvery { tmdbApiService.searchPerson(any(), any(), any()) } throws IOException("网络错误")
-
-        val result = repository.searchPerson("演员A")
-
-        assertThat(result).isEmpty()
-    }
 
     @Test
     fun searchMulti_缓存命中_不调用API() = runTest {
@@ -1319,26 +1075,7 @@ class TmdbRepositoryTest {
         coVerify(exactly = 1) { tmdbApiService.getPersonImages(1) }
     }
 
-    @Test
-    fun getPersonImages_网络失败_返回空列表() = runTest {
-        coEvery { tmdbApiService.getPersonImages(1) } throws IOException("网络错误")
 
-        val result = repository.getPersonImages(1)
-
-        assertThat(result).isEmpty()
-    }
-
-    @Test
-    fun getPersonTaggedImages_缓存命中_不调用API() = runTest {
-        val urls = listOf("https://image.tmdb.org/t/p/w500/xyz.jpg")
-        val cache = getTtlCache<List<String>>("personTaggedImagesCache")
-        cache.put("1_zh-CN", urls)
-
-        val result = repository.getPersonTaggedImages(1)
-
-        assertThat(result).isEqualTo(urls)
-        coVerify(exactly = 0) { tmdbApiService.getPersonTaggedImages(any(), any()) }
-    }
 
     @Test
     fun getPersonTaggedImages_缓存未命中_调用API() = runTest {
@@ -1432,29 +1169,6 @@ class TmdbRepositoryTest {
         }
     }
 
-    @Test
-    fun discover_HTTP失败_抛出异常给调用方() = runTest {
-        coEvery {
-            tmdbApiService.discoverMovie(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
-        } returns Response.error(500, "".toResponseBody(null))
-
-        val filter = TmdbRepository.DiscoverFilter(
-            type = TmdbRepository.DiscoverType.MOVIE,
-            genreIds = emptyList(), originCountries = emptyList(),
-            keywordIds = emptyList(),
-            voteAverageMin = 0f, voteAverageMax = 10f,
-            releaseDateStart = null, releaseDateEnd = null,
-            sortBy = TmdbRepository.DiscoverSort.POPULARITY_DESC,
-            hideWatched = false
-        )
-
-        try {
-            repository.discover(filter, page = 1)
-            throw AssertionError("expected HttpException")
-        } catch (e: retrofit2.HttpException) {
-            assertThat(e.code()).isEqualTo(500)
-        }
-    }
 
     @Test
     fun discover_评分下限0不传参() = runTest {

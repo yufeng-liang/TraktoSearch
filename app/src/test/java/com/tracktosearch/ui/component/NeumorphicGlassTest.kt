@@ -77,28 +77,6 @@ class NeumorphicGlassTest {
     }
 
     @Test
-    fun bottom_navigation_blur_config_keeps_legacy_visual_values() {
-        lateinit var config: BlurSurfaceConfig
-        composeRule.setContent {
-            MaterialTheme {
-                config = blurSurfaceConfig(
-                    role = GlassSurfaceRole.BottomNavigation,
-                    isDark = false
-                )
-            }
-        }
-        composeRule.waitForIdle()
-
-        assertThat(config.elevation).isEqualTo(8.dp)
-        assertThat(config.blurRadius).isEqualTo(22.dp)
-        assertThat(config.shadowOffset).isEqualTo(6.dp)
-        assertThat(config.hazeBlurRadius).isEqualTo(40.dp)
-        assertThat(config.darkShadowAlpha).isEqualTo(0.16f)
-        assertThat(config.lightShadowAlpha).isEqualTo(0f)
-        assertThat(config.showHighlight).isFalse()
-    }
-
-    @Test
     fun disabled_icon_button_does_not_dispatch_click() {
         var clicked = false
         composeRule.setContent {

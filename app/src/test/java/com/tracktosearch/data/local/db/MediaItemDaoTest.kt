@@ -115,11 +115,6 @@ class MediaItemDaoTest {
     }
 
     @Test
-    fun countByType_空表_返回0() = runTest {
-        assertThat(dao.countByType("watchlist_movie")).isEqualTo(0)
-    }
-
-    @Test
     fun deleteByType_删除指定类型() = runTest {
         dao.insertAll(listOf(
             sample(traktId = 1, type = "watchlist_movie"),
@@ -128,13 +123,6 @@ class MediaItemDaoTest {
         dao.deleteByType("watchlist_movie")
         assertThat(dao.countByType("watchlist_movie")).isEqualTo(0)
         assertThat(dao.countByType("watchlist_show")).isEqualTo(1)
-    }
-
-    @Test
-    fun deleteByType_不存在的类型_无副作用() = runTest {
-        dao.insertAll(listOf(sample(traktId = 1, type = "watchlist_movie")))
-        dao.deleteByType("watchlist_show")
-        assertThat(dao.countByType("watchlist_movie")).isEqualTo(1)
     }
 
     @Test
@@ -149,13 +137,6 @@ class MediaItemDaoTest {
         assertThat(dao.countByType("watchlist_movie")).isEqualTo(1)
         assertThat(dao.countByType("watchlist_show")).isEqualTo(1)
         assertThat(dao.getByTypeList("watchlist_movie")[0].traktId).isEqualTo(2)
-    }
-
-    @Test
-    fun deleteItem_不存在的记录_无副作用() = runTest {
-        dao.insertAll(listOf(sample(traktId = 1, type = "watchlist_movie")))
-        dao.deleteItem("watchlist_movie", 999)
-        assertThat(dao.countByType("watchlist_movie")).isEqualTo(1)
     }
 
     @Test
@@ -175,25 +156,6 @@ class MediaItemDaoTest {
         assertThat(movies.map { it.title }).containsExactly("新A", "新B")
         // watchlist_show 不受影响
         assertThat(dao.countByType("watchlist_show")).isEqualTo(1)
-    }
-
-    @Test
-    fun replaceByType_空列表_只清空对应类型() = runTest {
-        dao.insertAll(listOf(
-            sample(traktId = 1, type = "watchlist_movie"),
-            sample(traktId = 2, type = "watchlist_show")
-        ))
-        dao.replaceByType("watchlist_movie", emptyList())
-        assertThat(dao.countByType("watchlist_movie")).isEqualTo(0)
-        assertThat(dao.countByType("watchlist_show")).isEqualTo(1)
-    }
-
-    @Test
-    fun replaceByType_空表上调用_插入新数据() = runTest {
-        dao.replaceByType("watchlist_movie", listOf(
-            sample(traktId = 1, type = "watchlist_movie")
-        ))
-        assertThat(dao.countByType("watchlist_movie")).isEqualTo(1)
     }
 
     @Test

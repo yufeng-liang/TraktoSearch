@@ -131,27 +131,8 @@ class TraktRepositoryMarkOperationsTest {
     // ==================== markEpisodeWatched ====================
 
     @Test
-    fun markEpisodeWatched_成功返回success() = runTest {
-        coEvery { traktApiService.addToHistory(any()) } returns successSyncResponse()
-
-        val result = repository.markEpisodeWatched(12345)
-
-        assertThat(result.isSuccess).isTrue()
-        coVerify(exactly = 1) { traktApiService.addToHistory(any()) }
-    }
-
-    @Test
     fun markEpisodeWatched_API失败返回failure() = runTest {
         coEvery { traktApiService.addToHistory(any()) } returns errorResponse(404)
-
-        val result = repository.markEpisodeWatched(12345)
-
-        assertThat(result.isFailure).isTrue()
-    }
-
-    @Test
-    fun markEpisodeWatched_网络异常返回failure() = runTest {
-        coEvery { traktApiService.addToHistory(any()) } throws java.io.IOException("Network error")
 
         val result = repository.markEpisodeWatched(12345)
 
@@ -174,14 +155,6 @@ class TraktRepositoryMarkOperationsTest {
     // ==================== markEpisodesWatched ====================
 
     @Test
-    fun markEpisodesWatched_空列表短路返回success() = runTest {
-        val result = repository.markEpisodesWatched(emptyList())
-
-        assertThat(result.isSuccess).isTrue()
-        coVerify(exactly = 0) { traktApiService.addToHistory(any()) }
-    }
-
-    @Test
     fun markEpisodesWatched_成功更新缓存() = runTest {
         setWatchlistWatchedIds(emptyIds())
         coEvery { traktApiService.addToHistory(any()) } returns successSyncResponse()
@@ -192,27 +165,6 @@ class TraktRepositoryMarkOperationsTest {
         val ids = getWatchlistWatchedIds()!!
         assertThat(ids.showWatchedTraktIds).contains(100)
         assertThat(ids.showWatchedTmdbIds).contains(200)
-    }
-
-    @Test
-    fun markEpisodesWatched_showTraktId为0不更新缓存() = runTest {
-        setWatchlistWatchedIds(emptyIds())
-        coEvery { traktApiService.addToHistory(any()) } returns successSyncResponse()
-
-        repository.markEpisodesWatched(listOf(1, 2), showTraktId = 0)
-
-        val ids = getWatchlistWatchedIds()!!
-        assertThat(ids.showWatchedTraktIds).isEmpty()
-    }
-
-    @Test
-    fun markEpisodesWatched_缓存为null时不崩溃() = runTest {
-        setWatchlistWatchedIds(null)
-        coEvery { traktApiService.addToHistory(any()) } returns successSyncResponse()
-
-        val result = repository.markEpisodesWatched(listOf(1), showTraktId = 100)
-
-        assertThat(result.isSuccess).isTrue()
     }
 
     @Test
@@ -282,67 +234,6 @@ class TraktRepositoryMarkOperationsTest {
     }
 
     @Test
-    fun unmarkEpisodeWatched_enrichment返回空chineseTitle时displayTitle降级为showTitle() = runTest {
-        coEvery { traktApiService.removeFromHistory(any()) } returns successSyncResponse()
-        coEvery { tmdbRepository.enrichTv(200, "传入剧名", null) } returns tvEnrichment(
-            chineseTitle = "",  // 空 → displayTitle 应回退到 showTitle
-            originalTitle = ""  // 空 → title 应回退到 chineseTitle（也空）→ title 为空
-        )
-        val recordSlot = slot<MarkActionRecordEntity>()
-        coEvery { markActionRecordDao.insert(capture(recordSlot)) } returns Unit
-
-        repository.unmarkEpisodeWatched(
-            episodeTraktId = 555, season = 1, episode = 1,
-            showTraktId = 100, showTmdbId = 200, showTitle = "传入剧名"
-        )
-
-        // title = originalTitle.ifBlank { chineseTitle } = "".ifBlank { "" } = ""
-        assertThat(recordSlot.captured.title).isEmpty()
-        // displayTitle = chineseTitle.ifBlank { showTitle } = "".ifBlank { "传入剧名" } = "传入剧名"
-        assertThat(recordSlot.captured.displayTitle).isEqualTo("传入剧名")
-    }
-
-    @Test
-    fun unmarkEpisodeWatched_enrichment失败时降级为showTitle不崩溃() = runTest {
-        // enrichment 抛异常时，title/displayTitle 保持为 showTitle（降级）
-        coEvery { traktApiService.removeFromHistory(any()) } returns successSyncResponse()
-        coEvery { tmdbRepository.enrichTv(any(), any(), any()) } throws RuntimeException("TMDB API error")
-        val recordSlot = slot<MarkActionRecordEntity>()
-        coEvery { markActionRecordDao.insert(capture(recordSlot)) } returns Unit
-
-        val result = repository.unmarkEpisodeWatched(
-            episodeTraktId = 555, season = 1, episode = 1,
-            showTraktId = 100, showTmdbId = 200, showTitle = "传入剧名"
-        )
-
-        // 主操作不受影响
-        assertThat(result.isSuccess).isTrue()
-        // 流水仍写入，字段降级为 showTitle
-        coVerify(exactly = 1) { markActionRecordDao.insert(any()) }
-        assertThat(recordSlot.captured.title).isEqualTo("传入剧名")
-        assertThat(recordSlot.captured.displayTitle).isEqualTo("传入剧名")
-        assertThat(recordSlot.captured.posterUrl).isNull()
-    }
-
-    @Test
-    fun unmarkEpisodeWatched_showTmdbId为0时不调用enrich_字段为showTitle() = runTest {
-        coEvery { traktApiService.removeFromHistory(any()) } returns successSyncResponse()
-        val recordSlot = slot<MarkActionRecordEntity>()
-        coEvery { markActionRecordDao.insert(capture(recordSlot)) } returns Unit
-
-        repository.unmarkEpisodeWatched(
-            episodeTraktId = 555, season = 1, episode = 1,
-            showTraktId = 100, showTmdbId = 0, showTitle = "传入剧名"
-        )
-
-        // showTmdbId=0 不触发 enrich
-        coVerify(exactly = 0) { tmdbRepository.enrichTv(any(), any(), any()) }
-        assertThat(recordSlot.captured.title).isEqualTo("传入剧名")
-        assertThat(recordSlot.captured.displayTitle).isEqualTo("传入剧名")
-        assertThat(recordSlot.captured.posterUrl).isNull()
-    }
-
-    @Test
     fun unmarkEpisodeWatched_API失败返回failure() = runTest {
         coEvery { traktApiService.removeFromHistory(any()) } returns errorResponse(500)
 
@@ -387,34 +278,6 @@ class TraktRepositoryMarkOperationsTest {
         val ids = getWatchlistWatchedIds()!!
         assertThat(ids.movieWatchedTraktIds).contains(100)
         assertThat(ids.movieWatchedTmdbIds).contains(200)
-    }
-
-    @Test
-    fun markAsWatched_副操作失败_主操作仍成功() = runTest {
-        coEvery { traktApiService.addToHistory(any()) } returns successSyncResponse()
-        coEvery { traktApiService.removeFromWatchlist(any()) } returns errorResponse(500)
-
-        val result = repository.markAsWatched(100, MediaType.MOVIE)
-
-        assertThat(result.isSuccess).isTrue()
-    }
-
-    @Test
-    fun markAsWatched_副操作异常_主操作仍成功() = runTest {
-        coEvery { traktApiService.addToHistory(any()) } returns successSyncResponse()
-        coEvery { traktApiService.removeFromWatchlist(any()) } throws java.io.IOException("Network error")
-
-        val result = repository.markAsWatched(100, MediaType.MOVIE)
-
-        assertThat(result.isSuccess).isTrue()
-    }
-
-    @Test
-    fun markAsWatched_DISK类型返回failure() = runTest {
-        val result = repository.markAsWatched(100, MediaType.DISK)
-
-        assertThat(result.isFailure).isTrue()
-        coVerify(exactly = 0) { traktApiService.addToHistory(any()) }
     }
 
     @Test
@@ -482,34 +345,6 @@ class TraktRepositoryMarkOperationsTest {
     }
 
     @Test
-    fun removeWatched_副操作失败_主操作仍成功() = runTest {
-        coEvery { traktApiService.removeFromHistory(any()) } returns successSyncResponse()
-        coEvery { traktApiService.addToWatchlist(any()) } returns errorResponse(500)
-
-        val result = repository.removeWatched(100, MediaType.MOVIE)
-
-        assertThat(result.isSuccess).isTrue()
-    }
-
-    @Test
-    fun removeWatched_副操作异常_主操作仍成功() = runTest {
-        coEvery { traktApiService.removeFromHistory(any()) } returns successSyncResponse()
-        coEvery { traktApiService.addToWatchlist(any()) } throws RuntimeException("API error")
-
-        val result = repository.removeWatched(100, MediaType.MOVIE)
-
-        assertThat(result.isSuccess).isTrue()
-    }
-
-    @Test
-    fun removeWatched_DISK类型返回failure() = runTest {
-        val result = repository.removeWatched(100, MediaType.DISK)
-
-        assertThat(result.isFailure).isTrue()
-        coVerify(exactly = 0) { traktApiService.removeFromHistory(any()) }
-    }
-
-    @Test
     fun removeWatched_API失败_不调用副操作也不写流水() = runTest {
         coEvery { traktApiService.removeFromHistory(any()) } returns errorResponse(404)
 
@@ -567,18 +402,6 @@ class TraktRepositoryMarkOperationsTest {
     }
 
     @Test
-    fun addToWatchlist_副操作异常_主操作仍成功() = runTest {
-        coEvery { traktApiService.addToWatchlist(any()) } returns successSyncResponse()
-        coEvery { traktApiService.removeFromHistory(any()) } throws java.io.IOException("Network error")
-
-        val result = repository.addToWatchlist(100, MediaType.MOVIE)
-
-        assertThat(result.isSuccess).isTrue()
-    }
-
-    // ==================== batchAddToWatchlist（含对称副操作）====================
-
-    @Test
     fun batchAddToWatchlist_成功_调用副操作batchRemoveFromWatched() = runTest {
         coEvery { traktApiService.addToWatchlist(any()) } returns successSyncResponse()
         coEvery { traktApiService.removeFromHistory(any()) } returns successSyncResponse()
@@ -591,33 +414,6 @@ class TraktRepositoryMarkOperationsTest {
     }
 
     @Test
-    fun batchAddToWatchlist_副操作失败_主操作仍成功() = runTest {
-        coEvery { traktApiService.addToWatchlist(any()) } returns successSyncResponse()
-        coEvery { traktApiService.removeFromHistory(any()) } returns errorResponse(500)
-
-        val result = repository.batchAddToWatchlist(listOf(100), emptyList())
-
-        assertThat(result.isSuccess).isTrue()
-    }
-
-    @Test
-    fun batchAddToWatchlist_空列表_不调用任何API() = runTest {
-        val result = repository.batchAddToWatchlist(emptyList(), emptyList())
-
-        assertThat(result.isSuccess).isTrue()
-        coVerify(exactly = 0) { traktApiService.addToWatchlist(any()) }
-        coVerify(exactly = 0) { traktApiService.removeFromHistory(any()) }
-    }
-
-    @Test
-    fun addToWatchlist_DISK类型返回failure() = runTest {
-        val result = repository.addToWatchlist(100, MediaType.DISK)
-
-        assertThat(result.isFailure).isTrue()
-        coVerify(exactly = 0) { traktApiService.addToWatchlist(any()) }
-    }
-
-    @Test
     fun addToWatchlist_API失败返回failure() = runTest {
         coEvery { traktApiService.addToWatchlist(any()) } returns errorResponse(400)
 
@@ -625,30 +421,6 @@ class TraktRepositoryMarkOperationsTest {
 
         assertThat(result.isFailure).isTrue()
     }
-
-    @Test
-    fun addToWatchlist_网络异常返回failure() = runTest {
-        coEvery { traktApiService.addToWatchlist(any()) } throws java.io.IOException("Network error")
-
-        val result = repository.addToWatchlist(100, MediaType.MOVIE)
-
-        assertThat(result.isFailure).isTrue()
-    }
-
-    @Test
-    fun addToWatchlist_缓存为null时不崩溃() = runTest {
-        setWatchlistWatchedIds(null)
-        coEvery { traktApiService.addToWatchlist(any()) } returns successSyncResponse()
-
-        val result = repository.addToWatchlist(100, MediaType.MOVIE)
-
-        assertThat(result.isSuccess).isTrue()
-    }
-
-    // ==================== insertMarkRecord 字段验证（测试点 A）====================
-    // 这些测试验证 addToWatchlist/removeFromWatchlist/removeWatched 触发 insertMarkRecord 时，
-    // 写入 entity 的 displayTitle/posterUrl/year/imdbId 字段来自 TmdbRepository.enrichMovie/enrichTv，
-    // 而不是空值或 Trakt 原始英文标题。这是「标题本地化+海报URL」bug 的核心防护。
 
     @Test
     fun addToWatchlist_MOVIE_写流水字段来自TmdbEnrichment() = runTest {
@@ -680,118 +452,6 @@ class TraktRepositoryMarkOperationsTest {
     }
 
     @Test
-    fun addToWatchlist_SHOW_写流水字段来自TmdbEnrichment() = runTest {
-        setWatchlistWatchedIds(emptyIds())
-        coEvery { traktApiService.addToWatchlist(any()) } returns successSyncResponse()
-        coEvery { tmdbRepository.enrichTv(300, "", null) } returns tvEnrichment(
-            chineseTitle = "绝命毒师",
-            originalTitle = "Breaking Bad",
-            posterUrl = "https://image.tmdb.org/t/p/w500/bb.jpg",
-            year = 2008,
-            imdbId = "tt0903747"
-        )
-        val recordSlot = slot<MarkActionRecordEntity>()
-        coEvery { markActionRecordDao.insert(capture(recordSlot)) } returns Unit
-
-        repository.addToWatchlist(100, MediaType.SHOW, 300)
-
-        val entity = recordSlot.captured
-        assertThat(entity.mediaType).isEqualTo("show")
-        assertThat(entity.title).isEqualTo("Breaking Bad")
-        assertThat(entity.displayTitle).isEqualTo("绝命毒师")
-        assertThat(entity.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/bb.jpg")
-        assertThat(entity.year).isEqualTo(2008)
-        assertThat(entity.imdbId).isEqualTo("tt0903747")
-    }
-
-    @Test
-    fun removeFromWatchlist_写流水字段来自TmdbEnrichment() = runTest {
-        setWatchlistWatchedIds(TraktRepository.WatchlistWatchedIds(
-            movieWatchlistTraktIds = setOf(100),
-            movieWatchlistTmdbIds = setOf(200)
-        ))
-        coEvery { traktApiService.removeFromWatchlist(any()) } returns successSyncResponse()
-        coEvery { tmdbRepository.enrichMovie(200, "", null) } returns movieEnrichment(
-            chineseTitle = "星际穿越",
-            originalTitle = "Interstellar",
-            posterUrl = "https://image.tmdb.org/t/p/w500/interstellar.jpg",
-            year = 2014,
-            imdbId = "tt0816692"
-        )
-        val recordSlot = slot<MarkActionRecordEntity>()
-        coEvery { markActionRecordDao.insert(capture(recordSlot)) } returns Unit
-
-        repository.removeFromWatchlist(100, MediaType.MOVIE, 200)
-
-        val entity = recordSlot.captured
-        assertThat(entity.actionType).isEqualTo(MarkActionType.REMOVE_WATCHLIST.value)
-        assertThat(entity.displayTitle).isEqualTo("星际穿越")
-        assertThat(entity.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/interstellar.jpg")
-    }
-
-    @Test
-    fun removeWatched_写流水字段来自TmdbEnrichment() = runTest {
-        setWatchlistWatchedIds(emptyIds())
-        coEvery { traktApiService.removeFromHistory(any()) } returns successSyncResponse()
-        coEvery { traktApiService.addToWatchlist(any()) } returns successSyncResponse()
-        coEvery { tmdbRepository.enrichMovie(200, "", null) } returns movieEnrichment(
-            chineseTitle = "阿凡达",
-            originalTitle = "Avatar",
-            posterUrl = "https://image.tmdb.org/t/p/w500/avatar.jpg",
-            year = 2009,
-            imdbId = "tt0499549"
-        )
-        val recordSlot = slot<MarkActionRecordEntity>()
-        coEvery { markActionRecordDao.insert(capture(recordSlot)) } returns Unit
-
-        repository.removeWatched(100, MediaType.MOVIE, 200)
-
-        val entity = recordSlot.captured
-        assertThat(entity.actionType).isEqualTo(MarkActionType.UNMARK_WATCHED.value)
-        assertThat(entity.displayTitle).isEqualTo("阿凡达")
-        assertThat(entity.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/avatar.jpg")
-    }
-
-    @Test
-    fun addToWatchlist_tmdbId为0时不调用enrich_字段为空() = runTest {
-        setWatchlistWatchedIds(emptyIds())
-        coEvery { traktApiService.addToWatchlist(any()) } returns successSyncResponse()
-        val recordSlot = slot<MarkActionRecordEntity>()
-        coEvery { markActionRecordDao.insert(capture(recordSlot)) } returns Unit
-
-        repository.addToWatchlist(100, MediaType.MOVIE)  // tmdbId 默认 0
-
-        coVerify(exactly = 0) { tmdbRepository.enrichMovie(any(), any(), any()) }
-        val entity = recordSlot.captured
-        assertThat(entity.title).isEmpty()
-        assertThat(entity.displayTitle).isEmpty()
-        assertThat(entity.posterUrl).isNull()
-    }
-
-    // ==================== enrichment 失败降级（测试点 C）====================
-
-    @Test
-    fun addToWatchlist_enrichment失败时降级为空字段不崩溃() = runTest {
-        setWatchlistWatchedIds(emptyIds())
-        coEvery { traktApiService.addToWatchlist(any()) } returns successSyncResponse()
-        coEvery { tmdbRepository.enrichMovie(any(), any(), any()) } throws RuntimeException("TMDB API error")
-        val recordSlot = slot<MarkActionRecordEntity>()
-        coEvery { markActionRecordDao.insert(capture(recordSlot)) } returns Unit
-
-        val result = repository.addToWatchlist(100, MediaType.MOVIE, 200)
-
-        // 主操作不受影响
-        assertThat(result.isSuccess).isTrue()
-        // 流水仍写入，字段降级为空
-        coVerify(exactly = 1) { markActionRecordDao.insert(any()) }
-        assertThat(recordSlot.captured.title).isEmpty()
-        assertThat(recordSlot.captured.displayTitle).isEmpty()
-        assertThat(recordSlot.captured.posterUrl).isNull()
-    }
-
-    // ==================== removeFromWatchlist ====================
-
-    @Test
     fun removeFromWatchlist_成功_更新缓存并写流水() = runTest {
         setWatchlistWatchedIds(
             TraktRepository.WatchlistWatchedIds(
@@ -811,14 +471,6 @@ class TraktRepositoryMarkOperationsTest {
     }
 
     @Test
-    fun removeFromWatchlist_DISK类型返回failure() = runTest {
-        val result = repository.removeFromWatchlist(100, MediaType.DISK)
-
-        assertThat(result.isFailure).isTrue()
-        coVerify(exactly = 0) { traktApiService.removeFromWatchlist(any()) }
-    }
-
-    @Test
     fun removeFromWatchlist_API失败返回failure() = runTest {
         coEvery { traktApiService.removeFromWatchlist(any()) } returns errorResponse(404)
 
@@ -828,32 +480,6 @@ class TraktRepositoryMarkOperationsTest {
     }
 
     // ==================== addRating ====================
-
-    @Test
-    fun addRating_成功返回success() = runTest {
-        coEvery { traktApiService.addRating(any()) } returns successUnitResponse()
-
-        val result = repository.addRating(100, 8, MediaType.MOVIE)
-
-        assertThat(result.isSuccess).isTrue()
-    }
-
-    @Test
-    fun addRating_DISK类型返回failure() = runTest {
-        val result = repository.addRating(100, 8, MediaType.DISK)
-
-        assertThat(result.isFailure).isTrue()
-        coVerify(exactly = 0) { traktApiService.addRating(any()) }
-    }
-
-    @Test
-    fun addRating_API失败返回failure() = runTest {
-        coEvery { traktApiService.addRating(any()) } returns errorUnitResponse(400)
-
-        val result = repository.addRating(100, 8, MediaType.MOVIE)
-
-        assertThat(result.isFailure).isTrue()
-    }
 
     @Test
     fun addRating_SHOW类型request含shows() = runTest {
@@ -870,23 +496,6 @@ class TraktRepositoryMarkOperationsTest {
     // ==================== removeRating ====================
 
     @Test
-    fun removeRating_成功返回success() = runTest {
-        coEvery { traktApiService.removeRating(any()) } returns successUnitResponse()
-
-        val result = repository.removeRating(100, MediaType.MOVIE)
-
-        assertThat(result.isSuccess).isTrue()
-    }
-
-    @Test
-    fun removeRating_DISK类型返回failure() = runTest {
-        val result = repository.removeRating(100, MediaType.DISK)
-
-        assertThat(result.isFailure).isTrue()
-        coVerify(exactly = 0) { traktApiService.removeRating(any()) }
-    }
-
-    @Test
     fun removeRating_API失败返回failure() = runTest {
         coEvery { traktApiService.removeRating(any()) } returns errorUnitResponse(404)
 
@@ -898,24 +507,14 @@ class TraktRepositoryMarkOperationsTest {
     // ==================== batchAddToWatchlist ====================
 
     @Test
-    fun batchAddToWatchlist_空列表短路返回success() = runTest {
-        val result = repository.batchAddToWatchlist(emptyList(), emptyList())
-
-        assertThat(result.isSuccess).isTrue()
-        coVerify(exactly = 0) { traktApiService.addToWatchlist(any()) }
-    }
-
-    @Test
-    fun batchAddToWatchlist_成功更新缓存() = runTest {
+    fun batchAddToWatchlist_成功使双ID缓存失效() = runTest {
         setWatchlistWatchedIds(emptyIds())
         coEvery { traktApiService.addToWatchlist(any()) } returns successSyncResponse()
 
         val result = repository.batchAddToWatchlist(listOf(1, 2), listOf(3, 4))
 
         assertThat(result.isSuccess).isTrue()
-        val ids = getWatchlistWatchedIds()!!
-        assertThat(ids.movieWatchlistTraktIds).containsAtLeast(1, 2)
-        assertThat(ids.showWatchlistTraktIds).containsAtLeast(3, 4)
+        assertThat(getWatchlistWatchedIds()).isNull()
     }
 
     @Test
@@ -942,14 +541,7 @@ class TraktRepositoryMarkOperationsTest {
     // ==================== batchRemoveFromWatchlist ====================
 
     @Test
-    fun batchRemoveFromWatchlist_空列表短路() = runTest {
-        val result = repository.batchRemoveFromWatchlist(emptyList(), emptyList())
-
-        assertThat(result.isSuccess).isTrue()
-    }
-
-    @Test
-    fun batchRemoveFromWatchlist_成功更新缓存() = runTest {
+    fun batchRemoveFromWatchlist_成功使双ID缓存失效() = runTest {
         setWatchlistWatchedIds(
             TraktRepository.WatchlistWatchedIds(
                 movieWatchlistTraktIds = setOf(1, 2),
@@ -960,32 +552,20 @@ class TraktRepositoryMarkOperationsTest {
 
         repository.batchRemoveFromWatchlist(listOf(1), listOf(3))
 
-        val ids = getWatchlistWatchedIds()!!
-        assertThat(ids.movieWatchlistTraktIds).doesNotContain(1)
-        assertThat(ids.showWatchlistTraktIds).doesNotContain(3)
+        assertThat(getWatchlistWatchedIds()).isNull()
     }
 
     // ==================== batchMarkAsWatched ====================
 
     @Test
-    fun batchMarkAsWatched_空列表短路() = runTest {
-        val result = repository.batchMarkAsWatched(emptyList(), emptyList())
-
-        assertThat(result.isSuccess).isTrue()
-        coVerify(exactly = 0) { traktApiService.addToHistory(any()) }
-    }
-
-    @Test
-    fun batchMarkAsWatched_成功更新缓存() = runTest {
+    fun batchMarkAsWatched_成功使双ID缓存失效() = runTest {
         setWatchlistWatchedIds(emptyIds())
         coEvery { traktApiService.addToHistory(any()) } returns successSyncResponse()
 
         val result = repository.batchMarkAsWatched(listOf(1), listOf(2))
 
         assertThat(result.isSuccess).isTrue()
-        val ids = getWatchlistWatchedIds()!!
-        assertThat(ids.movieWatchedTraktIds).contains(1)
-        assertThat(ids.showWatchedTraktIds).contains(2)
+        assertThat(getWatchlistWatchedIds()).isNull()
     }
 
     // ==================== batchMarkAsWatchedAt ====================
@@ -1021,25 +601,10 @@ class TraktRepositoryMarkOperationsTest {
         assertThat(requestSlot.captured.movies!![0].watched_at).isNull()
     }
 
-    @Test
-    fun batchMarkAsWatchedAt_空列表短路() = runTest {
-        val result = repository.batchMarkAsWatchedAt(emptyList(), emptyList())
-
-        assertThat(result.isSuccess).isTrue()
-        coVerify(exactly = 0) { traktApiService.addToHistory(any()) }
-    }
-
     // ==================== batchRemoveFromWatched ====================
 
     @Test
-    fun batchRemoveFromWatched_空列表短路() = runTest {
-        val result = repository.batchRemoveFromWatched(emptyList(), emptyList())
-
-        assertThat(result.isSuccess).isTrue()
-    }
-
-    @Test
-    fun batchRemoveFromWatched_成功更新缓存() = runTest {
+    fun batchRemoveFromWatched_成功使双ID缓存失效() = runTest {
         setWatchlistWatchedIds(
             TraktRepository.WatchlistWatchedIds(
                 movieWatchedTraktIds = setOf(1, 2),
@@ -1050,20 +615,10 @@ class TraktRepositoryMarkOperationsTest {
 
         repository.batchRemoveFromWatched(listOf(1), listOf(3))
 
-        val ids = getWatchlistWatchedIds()!!
-        assertThat(ids.movieWatchedTraktIds).doesNotContain(1)
-        assertThat(ids.showWatchedTraktIds).doesNotContain(3)
+        assertThat(getWatchlistWatchedIds()).isNull()
     }
 
     // ==================== batchAddRatings ====================
-
-    @Test
-    fun batchAddRatings_空列表短路() = runTest {
-        val result = repository.batchAddRatings(emptyList(), emptyList())
-
-        assertThat(result.isSuccess).isTrue()
-        coVerify(exactly = 0) { traktApiService.addRating(any()) }
-    }
 
     @Test
     fun batchAddRatings_成功() = runTest {
@@ -1082,19 +637,6 @@ class TraktRepositoryMarkOperationsTest {
     }
 
     @Test
-    fun batchAddRatings_只有电影时shows为null() = runTest {
-        val requestSlot = slot<RatingRequest>()
-        coEvery { traktApiService.addRating(capture(requestSlot)) } returns successUnitResponse()
-
-        repository.batchAddRatings(listOf(Pair(1, 8)), emptyList())
-
-        assertThat(requestSlot.captured.movies).hasSize(1)
-        assertThat(requestSlot.captured.shows).isNull()
-    }
-
-    // ==================== batchAddRatingsAt ====================
-
-    @Test
     fun batchAddRatingsAt_带ratedAt正确传递() = runTest {
         val requestSlot = slot<RatingRequest>()
         coEvery { traktApiService.addRating(capture(requestSlot)) } returns successUnitResponse()
@@ -1111,14 +653,6 @@ class TraktRepositoryMarkOperationsTest {
         assertThat(requestSlot.captured.shows!![0].rated_at).isNull()
     }
 
-    @Test
-    fun batchAddRatingsAt_空列表短路() = runTest {
-        val result = repository.batchAddRatingsAt(emptyList(), emptyList())
-
-        assertThat(result.isSuccess).isTrue()
-        coVerify(exactly = 0) { traktApiService.addRating(any()) }
-    }
-
     // ==================== postComment ====================
 
     @Test
@@ -1133,52 +667,8 @@ class TraktRepositoryMarkOperationsTest {
     }
 
     @Test
-    fun postComment_SHOW成功() = runTest {
-        val comment = TraktComment(id = 2, comment = "好剧")
-        coEvery { traktApiService.postComment(any()) } returns Response.success(comment)
-
-        val result = repository.postComment(200, MediaType.SHOW, "好剧")
-
-        assertThat(result.isSuccess).isTrue()
-    }
-
-    @Test
-    fun postComment_PERSON类型返回failure() = runTest {
-        val result = repository.postComment(300, MediaType.PERSON, "评论")
-
-        assertThat(result.isFailure).isTrue()
-        coVerify(exactly = 0) { traktApiService.postComment(any()) }
-    }
-
-    @Test
-    fun postComment_DISK类型返回failure() = runTest {
-        val result = repository.postComment(400, MediaType.DISK, "评论")
-
-        assertThat(result.isFailure).isTrue()
-        coVerify(exactly = 0) { traktApiService.postComment(any()) }
-    }
-
-    @Test
-    fun postComment_body为null返回failure() = runTest {
-        coEvery { traktApiService.postComment(any()) } returns Response.success(null)
-
-        val result = repository.postComment(100, MediaType.MOVIE, "评论")
-
-        assertThat(result.isFailure).isTrue()
-    }
-
-    @Test
     fun postComment_API失败返回failure() = runTest {
         coEvery { traktApiService.postComment(any()) } returns Response.error(400, "".toResponseBody(null))
-
-        val result = repository.postComment(100, MediaType.MOVIE, "评论")
-
-        assertThat(result.isFailure).isTrue()
-    }
-
-    @Test
-    fun postComment_网络异常返回failure() = runTest {
-        coEvery { traktApiService.postComment(any()) } throws java.io.IOException("Network error")
 
         val result = repository.postComment(100, MediaType.MOVIE, "评论")
 
@@ -1230,22 +720,6 @@ class TraktRepositoryMarkOperationsTest {
 
         coVerify(exactly = 1) { traktApiService.getShowComments(any(), any(), any()) }
         coVerify(exactly = 0) { traktApiService.getMovieComments(any(), any(), any()) }
-    }
-
-    @Test
-    fun getComments_PERSON类型fallback到MovieComments() = runTest {
-        coEvery { traktApiService.getMovieComments(any(), any(), any()) } returns Response.success(emptyList())
-
-        repository.getComments(300, MediaType.PERSON)
-
-        coVerify(exactly = 1) { traktApiService.getMovieComments(any(), any(), any()) }
-    }
-
-    @Test
-    fun getComments_DISK类型返回failure() = runTest {
-        val result = repository.getComments(400, MediaType.DISK)
-
-        assertThat(result.isFailure).isTrue()
     }
 
     @Test

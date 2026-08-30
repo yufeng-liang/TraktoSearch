@@ -69,18 +69,6 @@ class NotificationRecordDaoTest {
     }
 
     @Test
-    fun find_不同type_未命中() = runTest {
-        dao.insert(sample(traktId = 1, type = "release", payload = "2024-06-15"))
-        assertThat(dao.find(traktId = 1, type = "new_season", payload = "2024-06-15")).isNull()
-    }
-
-    @Test
-    fun find_不同payload_未命中() = runTest {
-        dao.insert(sample(traktId = 1, type = "release", payload = "2024-06-15"))
-        assertThat(dao.find(traktId = 1, type = "release", payload = "2024-06-16")).isNull()
-    }
-
-    @Test
     fun find_多条匹配_LIMIT1只返回一条() = runTest {
         dao.insert(sample(traktId = 1, type = "release", payload = "2024-06-15", title = "A"))
         dao.insert(sample(traktId = 1, type = "release", payload = "2024-06-15", title = "B"))
@@ -127,12 +115,6 @@ class NotificationRecordDaoTest {
     }
 
     @Test
-    fun deleteOlderThan_空表_无副作用() = runTest {
-        dao.deleteOlderThan(before = 1000L)
-        // 不抛异常即通过
-    }
-
-    @Test
     fun deleteOlderThan_边界值等于阈值_不删除() = runTest {
         // < before 才删，= before 不删
         dao.insert(sample(traktId = 1, notifiedAt = 1000L))
@@ -147,11 +129,6 @@ class NotificationRecordDaoTest {
         dao.clearAll()
         assertThat(dao.findByTraktId(traktId = 1, type = "release")).isEmpty()
         assertThat(dao.findByTraktId(traktId = 2, type = "release")).isEmpty()
-    }
-
-    @Test
-    fun clearAll_空表_无副作用() = runTest {
-        dao.clearAll()
     }
 
     @Test

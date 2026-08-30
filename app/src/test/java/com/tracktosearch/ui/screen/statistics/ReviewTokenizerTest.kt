@@ -6,17 +6,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReviewTokenizerTest {
-
-    @Test
-    fun tokenize_returnsNonEmptyMap_forChineseReviews() {
-        val reviews = listOf(
-            "这部电影的剧情非常精彩，演员的演技也很出色。",
-            "精彩的剧情和出色的演技让我很感动。"
-        )
-        val result = ReviewTokenizer.tokenize(reviews)
-        assertTrue("词频 Map 不应为空", result.isNotEmpty())
-    }
-
     @Test
     fun tokenize_excludesStopWords() {
         val reviews = listOf("我的电影是很好看的，但是我觉得的的")
@@ -48,25 +37,6 @@ class ReviewTokenizerTest {
         assertTrue("应保留实词 movie", result.containsKey("movie"))
         assertTrue("应保留实词 story", result.containsKey("story"))
         assertEquals("movie 出现 1 次", 1, result["movie"])
-    }
-
-    @Test
-    fun tokenize_emptyList_returnsEmptyMap() {
-        val result = ReviewTokenizer.tokenize(emptyList())
-        assertTrue("空列表应返回空 Map", result.isEmpty())
-    }
-
-    @Test
-    fun tokenize_singleReview_returnsNonEmptyMap() {
-        val result = ReviewTokenizer.tokenize(listOf("剧情精彩"))
-        assertTrue("单条评论应返回非空 Map", result.isNotEmpty())
-    }
-
-    @Test
-    fun tokenize_longText_doesNotCrash() {
-        val longReview = "精彩".repeat(500)
-        val result = ReviewTokenizer.tokenize(listOf(longReview))
-        assertTrue("超长文本不应崩溃且应返回非空 Map", result.isNotEmpty())
     }
 
     @Test

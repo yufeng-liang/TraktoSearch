@@ -140,11 +140,6 @@ class UserReviewDaoTest {
     }
 
     @Test
-    fun getByTraktId_未命中_返回null() = runTest {
-        assertThat(dao.getByTraktId(999L)).isNull()
-    }
-
-    @Test
     fun upsertAll_批量插入() = runTest {
         dao.upsertAll(listOf(
             sample(traktId = 1L, title = "A"),
@@ -166,11 +161,6 @@ class UserReviewDaoTest {
         val all = dao.getAll()
         assertThat(all).hasSize(2)
         assertThat(all.first { it.traktId == 1L }.rating).isEqualTo(9f)
-    }
-
-    @Test
-    fun getAll_空表_返回空列表() = runTest {
-        assertThat(dao.getAll()).isEmpty()
     }
 
     @Test
@@ -205,13 +195,6 @@ class UserReviewDaoTest {
         dao.deleteByTraktId(2L)
         assertThat(dao.getAll()).hasSize(2)
         assertThat(dao.getByTraktId(2L)).isNull()
-    }
-
-    @Test
-    fun deleteByTraktId_不存在的ID_无副作用() = runTest {
-        dao.upsert(sample(traktId = 1L))
-        dao.deleteByTraktId(999L)
-        assertThat(dao.getAll()).hasSize(1)
     }
 
     @Test

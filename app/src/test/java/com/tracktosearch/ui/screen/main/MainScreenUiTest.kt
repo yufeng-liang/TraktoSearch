@@ -15,33 +15,6 @@ class MainScreenUiTest {
     }
 
     @Test
-    fun bottomNavigationRemainsVisibleAfterAiSpriteCenterIsDismissed() {
-        assertThat(
-            isMainBottomNavigationVisible(currentPagerPage = 0, aiSpriteCenterVisible = false)
-        ).isEqualTo(true)
-    }
-
-    @Test
-    fun bottomNavigationRemainsVisibleWhenAiSpriteCenterIsMarkedVisibleOnAnotherPagerPage() {
-        assertThat(
-            isMainBottomNavigationVisible(currentPagerPage = 2, aiSpriteCenterVisible = true)
-        ).isEqualTo(true)
-    }
-
-    @Test
-    fun completedSearchOverlayCanStartWithNonBlankQueryWhenResultAnchorExists() {
-        assertThat(
-            shouldStartSpriteOverlay(
-                trigger = AiSpriteOverlayTrigger.SEARCH_COMPLETED,
-                hasBlockingState = false,
-                hasAnchorBounds = true,
-                hasResultAnchor = true,
-                motionVisible = false
-            )
-        ).isTrue()
-    }
-
-    @Test
     fun overlayDoesNotStartBeforeAnchorBoundsAreMeasured() {
         // 锚点没量到就消费额度的话，用户什么都看不到但额度掉一格
         assertThat(

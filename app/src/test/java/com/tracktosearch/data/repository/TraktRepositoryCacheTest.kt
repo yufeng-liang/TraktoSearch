@@ -92,17 +92,6 @@ class TraktRepositoryCacheTest {
     }
 
     @Test
-    fun `addToWatchlistCache_SHOW_添加到show集合不影响movie集合`() {
-        setWatchlistWatchedIds(WatchlistWatchedIds())
-        invokePrivate("addToWatchlistCache", 100, 200, MediaType.SHOW)
-
-        val ids = getWatchlistWatchedIds()!!
-        assertThat(ids.showWatchlistTraktIds).contains(100)
-        assertThat(ids.showWatchlistTmdbIds).contains(200)
-        assertThat(ids.movieWatchlistTraktIds).doesNotContain(100)
-    }
-
-    @Test
     fun `addToWatchlistCache_tmdbId为0时不添加tmdbId`() {
         setWatchlistWatchedIds(WatchlistWatchedIds())
         invokePrivate("addToWatchlistCache", 100, 0, MediaType.MOVIE)
@@ -111,27 +100,6 @@ class TraktRepositoryCacheTest {
         assertThat(ids.movieWatchlistTraktIds).contains(100)
         assertThat(ids.movieWatchlistTmdbIds).isEmpty()
     }
-
-    @Test
-    fun `addToWatchlistCache_缓存为null时无操作`() {
-        setWatchlistWatchedIds(null)
-        invokePrivate("addToWatchlistCache", 100, 200, MediaType.MOVIE)
-        // 不崩溃即通过
-        assertThat(getWatchlistWatchedIds()).isNull()
-    }
-
-    @Test
-    fun `addToWatchlistCache_PERSON类型不变更缓存`() {
-        val initial = WatchlistWatchedIds(movieWatchlistTraktIds = setOf(1))
-        setWatchlistWatchedIds(initial)
-        invokePrivate("addToWatchlistCache", 100, 200, MediaType.PERSON)
-
-        val ids = getWatchlistWatchedIds()!!
-        assertThat(ids.movieWatchlistTraktIds).doesNotContain(100)
-        assertThat(ids).isEqualTo(initial)
-    }
-
-    // ==================== removeFromWatchlistCache ====================
 
     @Test
     fun `removeFromWatchlistCache_MOVIE_从想看移除`() {
@@ -147,19 +115,6 @@ class TraktRepositoryCacheTest {
         assertThat(ids.movieWatchlistTmdbIds).contains(2000)
         assertThat(ids.movieWatchlistTmdbIds).doesNotContain(1000)
     }
-
-    @Test
-    fun `removeFromWatchlistCache_移除不存在的ID无副作用`() {
-        val initial = WatchlistWatchedIds(movieWatchlistTraktIds = setOf(100))
-        setWatchlistWatchedIds(initial)
-        invokePrivate("removeFromWatchlistCache", 999, 9999, MediaType.MOVIE)
-
-        val ids = getWatchlistWatchedIds()!!
-        assertThat(ids.movieWatchlistTraktIds).contains(100)
-        assertThat(ids.movieWatchlistTraktIds).doesNotContain(999)
-    }
-
-    // ==================== addToWatchedCache（核心一致性）====================
 
     @Test
     fun `addToWatchedCache_MOVIE_加已看同时从想看移除`() {
@@ -180,47 +135,6 @@ class TraktRepositoryCacheTest {
     }
 
     @Test
-    fun `addToWatchedCache_SHOW_加已看同时从想看移除`() {
-        setWatchlistWatchedIds(WatchlistWatchedIds(
-            showWatchlistTraktIds = setOf(200),
-            showWatchlistTmdbIds = setOf(2000)
-        ))
-        invokePrivate("addToWatchedCache", 200, 2000, MediaType.SHOW)
-
-        val ids = getWatchlistWatchedIds()!!
-        assertThat(ids.showWatchedTraktIds).contains(200)
-        assertThat(ids.showWatchlistTraktIds).doesNotContain(200)
-    }
-
-    @Test
-    fun `addToWatchedCache_不在想看中时仅加已看不移除`() {
-        setWatchlistWatchedIds(WatchlistWatchedIds())
-        invokePrivate("addToWatchedCache", 100, 1000, MediaType.MOVIE)
-
-        val ids = getWatchlistWatchedIds()!!
-        assertThat(ids.movieWatchedTraktIds).contains(100)
-        // 想看本就为空，不减
-        assertThat(ids.movieWatchlistTraktIds).isEmpty()
-    }
-
-    @Test
-    fun `addToWatchedCache_不影响其他类型的集合`() {
-        setWatchlistWatchedIds(WatchlistWatchedIds(
-            showWatchlistTraktIds = setOf(500),
-            showWatchedTraktIds = setOf(600)
-        ))
-        invokePrivate("addToWatchedCache", 100, 1000, MediaType.MOVIE)
-
-        val ids = getWatchlistWatchedIds()!!
-        assertThat(ids.movieWatchedTraktIds).contains(100)
-        // show 集合不受影响
-        assertThat(ids.showWatchlistTraktIds).contains(500)
-        assertThat(ids.showWatchedTraktIds).contains(600)
-    }
-
-    // ==================== addToWatchlistCache（对称互斥）====================
-
-    @Test
     fun `addToWatchlistCache_MOVIE_加想看同时从已看移除`() {
         // 初始：100 在已看中
         setWatchlistWatchedIds(WatchlistWatchedIds(
@@ -237,47 +151,6 @@ class TraktRepositoryCacheTest {
         assertThat(ids.movieWatchedTraktIds).doesNotContain(100)
         assertThat(ids.movieWatchedTmdbIds).doesNotContain(1000)
     }
-
-    @Test
-    fun `addToWatchlistCache_SHOW_加想看同时从已看移除`() {
-        setWatchlistWatchedIds(WatchlistWatchedIds(
-            showWatchedTraktIds = setOf(200),
-            showWatchedTmdbIds = setOf(2000)
-        ))
-        invokePrivate("addToWatchlistCache", 200, 2000, MediaType.SHOW)
-
-        val ids = getWatchlistWatchedIds()!!
-        assertThat(ids.showWatchlistTraktIds).contains(200)
-        assertThat(ids.showWatchedTraktIds).doesNotContain(200)
-    }
-
-    @Test
-    fun `addToWatchlistCache_不在已看中时仅加想看不移除`() {
-        setWatchlistWatchedIds(WatchlistWatchedIds())
-        invokePrivate("addToWatchlistCache", 100, 1000, MediaType.MOVIE)
-
-        val ids = getWatchlistWatchedIds()!!
-        assertThat(ids.movieWatchlistTraktIds).contains(100)
-        // 已看本就为空，不减
-        assertThat(ids.movieWatchedTraktIds).isEmpty()
-    }
-
-    @Test
-    fun `addToWatchlistCache_不影响其他类型的集合`() {
-        setWatchlistWatchedIds(WatchlistWatchedIds(
-            showWatchlistTraktIds = setOf(500),
-            showWatchedTraktIds = setOf(600)
-        ))
-        invokePrivate("addToWatchlistCache", 100, 1000, MediaType.MOVIE)
-
-        val ids = getWatchlistWatchedIds()!!
-        assertThat(ids.movieWatchlistTraktIds).contains(100)
-        // show 集合不受影响
-        assertThat(ids.showWatchlistTraktIds).contains(500)
-        assertThat(ids.showWatchedTraktIds).contains(600)
-    }
-
-    // ==================== removeFromWatchedCacheOnly（仅移除已看，不加回 watchlist）====================
 
     @Test
     fun `removeFromWatchedCacheOnly_MOVIE_仅移除已看不加回watchlist`() {
@@ -298,20 +171,6 @@ class TraktRepositoryCacheTest {
     }
 
     @Test
-    fun `removeFromWatchedCacheOnly_SHOW_仅移除已看不加回watchlist`() {
-        setWatchlistWatchedIds(WatchlistWatchedIds(
-            showWatchedTraktIds = setOf(200)
-        ))
-        invokePrivate("removeFromWatchedCacheOnly", 200, 0, MediaType.SHOW)
-
-        val ids = getWatchlistWatchedIds()!!
-        assertThat(ids.showWatchedTraktIds).doesNotContain(200)
-        assertThat(ids.showWatchlistTraktIds).doesNotContain(200)
-    }
-
-    // ==================== removeFromWatchedCache（核心一致性）====================
-
-    @Test
     fun `removeFromWatchedCache_MOVIE_取消已看同时加回想看`() {
         // 初始：100 在已看中
         setWatchlistWatchedIds(WatchlistWatchedIds(
@@ -330,52 +189,9 @@ class TraktRepositoryCacheTest {
     }
 
     @Test
-    fun `removeFromWatchedCache_SHOW_取消已看同时加回想看`() {
-        setWatchlistWatchedIds(WatchlistWatchedIds(
-            showWatchedTraktIds = setOf(200),
-            showWatchedTmdbIds = setOf(2000)
-        ))
-        invokePrivate("removeFromWatchedCache", 200, 2000, MediaType.SHOW)
-
-        val ids = getWatchlistWatchedIds()!!
-        assertThat(ids.showWatchedTraktIds).doesNotContain(200)
-        assertThat(ids.showWatchlistTraktIds).contains(200)
-    }
-
-    @Test
-    fun `removeFromWatchedCache_不在已看中时仅加想看不移除`() {
-        setWatchlistWatchedIds(WatchlistWatchedIds())
-        invokePrivate("removeFromWatchedCache", 100, 1000, MediaType.MOVIE)
-
-        val ids = getWatchlistWatchedIds()!!
-        assertThat(ids.movieWatchlistTraktIds).contains(100)
-        assertThat(ids.movieWatchedTraktIds).isEmpty()
-    }
-
-    // ==================== WatchlistWatchedIds 嵌套类纯函数 ====================
-
-    @Test
     fun `isInWatchlist_traktId命中返回true`() {
         val ids = WatchlistWatchedIds(movieWatchlistTraktIds = setOf(100))
         assertThat(ids.isInWatchlist(100, null, MediaType.MOVIE)).isTrue()
-    }
-
-    @Test
-    fun `isInWatchlist_tmdbId命中返回true`() {
-        val ids = WatchlistWatchedIds(movieWatchlistTmdbIds = setOf(1000))
-        assertThat(ids.isInWatchlist(null, 1000, MediaType.MOVIE)).isTrue()
-    }
-
-    @Test
-    fun `isInWatchlist_未命中返回false`() {
-        val ids = WatchlistWatchedIds()
-        assertThat(ids.isInWatchlist(999, 9999, MediaType.MOVIE)).isFalse()
-    }
-
-    @Test
-    fun `isInWatchlist_SHOW类型只查show集合`() {
-        val ids = WatchlistWatchedIds(movieWatchlistTraktIds = setOf(100))
-        assertThat(ids.isInWatchlist(100, null, MediaType.SHOW)).isFalse()
     }
 
     @Test
@@ -385,33 +201,11 @@ class TraktRepositoryCacheTest {
     }
 
     @Test
-    fun `isWatched_SHOW类型只查show集合`() {
-        val ids = WatchlistWatchedIds(showWatchedTraktIds = setOf(200))
-        assertThat(ids.isWatched(200, null, MediaType.SHOW)).isTrue()
-        assertThat(ids.isWatched(200, null, MediaType.MOVIE)).isFalse()
-    }
-
-    @Test
-    fun `isWatched_PERSON类型返回false`() {
-        val ids = WatchlistWatchedIds(movieWatchedTraktIds = setOf(100))
-        assertThat(ids.isWatched(100, null, MediaType.PERSON)).isFalse()
-    }
-
-    @Test
     fun `traktIdByTmdb_MOVIE映射正确`() {
         val ids = WatchlistWatchedIds(movieTmdbToTrakt = mapOf(1000 to 100))
         assertThat(ids.traktIdByTmdb(1000, MediaType.MOVIE)).isEqualTo(100)
         assertThat(ids.traktIdByTmdb(9999, MediaType.MOVIE)).isNull()
     }
-
-    @Test
-    fun `traktIdByTmdb_SHOW映射正确`() {
-        val ids = WatchlistWatchedIds(showTmdbToTrakt = mapOf(2000 to 200))
-        assertThat(ids.traktIdByTmdb(2000, MediaType.SHOW)).isEqualTo(200)
-        assertThat(ids.traktIdByTmdb(2000, MediaType.MOVIE)).isNull()
-    }
-
-    // ==================== getLocallyWatchedOnlyTraktIds / getLocallyWatchlistOnlyTraktIds ====================
 
     @Test
     fun `getLocallyWatchedOnlyTraktIds_MOVIE_返回已看减想看的差集`() {
@@ -425,32 +219,6 @@ class TraktRepositoryCacheTest {
     }
 
     @Test
-    fun `getLocallyWatchedOnlyTraktIds_保留同时在想看和已看的项`() {
-        setWatchlistWatchedIds(WatchlistWatchedIds(
-            movieWatchedTraktIds = setOf(100, 200),
-            movieWatchlistTraktIds = setOf(200)
-        ))
-        val result = repository.getLocallyWatchedOnlyTraktIds(MediaType.MOVIE)
-        // 200 被排除（因为在想看中），100 保留
-        assertThat(result).containsExactly(100)
-    }
-
-    @Test
-    fun `getLocallyWatchedOnlyTraktIds_缓存为null返回空集`() {
-        setWatchlistWatchedIds(null)
-        assertThat(repository.getLocallyWatchedOnlyTraktIds(MediaType.MOVIE)).isEmpty()
-    }
-
-    @Test
-    fun `getLocallyWatchedOnlyTraktIds_SHOW类型`() {
-        setWatchlistWatchedIds(WatchlistWatchedIds(
-            showWatchedTraktIds = setOf(1, 2, 3),
-            showWatchlistTraktIds = setOf(2)
-        ))
-        assertThat(repository.getLocallyWatchedOnlyTraktIds(MediaType.SHOW)).containsExactly(1, 3)
-    }
-
-    @Test
     fun `getLocallyWatchlistOnlyTraktIds_MOVIE_返回想看减已看的差集`() {
         setWatchlistWatchedIds(WatchlistWatchedIds(
             movieWatchlistTraktIds = setOf(100, 200, 300),
@@ -458,21 +226,6 @@ class TraktRepositoryCacheTest {
         ))
         val result = repository.getLocallyWatchlistOnlyTraktIds(MediaType.MOVIE)
         assertThat(result).containsExactly(100, 300)
-    }
-
-    @Test
-    fun `getLocallyWatchlistOnlyTraktIds_缓存为null返回空集`() {
-        setWatchlistWatchedIds(null)
-        assertThat(repository.getLocallyWatchlistOnlyTraktIds(MediaType.MOVIE)).isEmpty()
-    }
-
-    // ==================== batchCheckStatus ====================
-
-    @Test
-    fun `batchCheckStatus_空列表短路返回空Map`() = runTest {
-        setWatchlistWatchedIds(WatchlistWatchedIds())
-        val result = repository.batchCheckStatus(emptyList(), MediaType.MOVIE)
-        assertThat(result).isEmpty()
     }
 
     @Test

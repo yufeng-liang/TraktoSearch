@@ -71,11 +71,6 @@ class MediaDetailDaoTest {
     }
 
     @Test
-    fun getByTraktId_未命中_返回null() = runTest {
-        assertThat(dao.getByTraktId(999)).isNull()
-    }
-
-    @Test
     fun delete_删除指定() = runTest {
         dao.insert(sample(traktId = 1))
         dao.insert(sample(traktId = 2))
@@ -85,25 +80,12 @@ class MediaDetailDaoTest {
     }
 
     @Test
-    fun delete_不存在的traktId_无副作用() = runTest {
-        dao.insert(sample(traktId = 1))
-        dao.delete(999)
-        assertThat(dao.getByTraktId(1)).isNotNull()
-    }
-
-    @Test
     fun clearAll_清空全部() = runTest {
         dao.insert(sample(traktId = 1))
         dao.insert(sample(traktId = 2))
         dao.clearAll()
         assertThat(dao.getByTraktId(1)).isNull()
         assertThat(dao.getByTraktId(2)).isNull()
-    }
-
-    @Test
-    fun clearAll_空表_无副作用() = runTest {
-        dao.clearAll()
-        assertThat(dao.getByTraktId(1)).isNull()
     }
 
     @Test

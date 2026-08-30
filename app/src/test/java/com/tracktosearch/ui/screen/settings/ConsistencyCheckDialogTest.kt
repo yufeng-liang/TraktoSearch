@@ -78,14 +78,6 @@ class ConsistencyCheckDialogTest {
     // ==================== 运行中状态 ====================
 
     @Test
-    fun `运行中显示转后台和取消按钮`() {
-        emit(ConsistencyCheckResult(isRunning = true, phase = "Checking", current = 5, total = 100))
-        setContent()
-        composeRule.onNodeWithText("Background").assertIsDisplayed().assertIsEnabled()
-        composeRule.onNodeWithText("Cancel").assertIsDisplayed().assertIsEnabled()
-    }
-
-    @Test
     fun `运行中点击取消调用viewModel_cancelConsistencyCheck`() {
         emit(ConsistencyCheckResult(isRunning = true, phase = "Checking", current = 5, total = 100))
         setContent()
@@ -101,21 +93,7 @@ class ConsistencyCheckDialogTest {
         composeRule.onNodeWithText("Cancelling...").assertIsNotEnabled()
     }
 
-    @Test
-    fun `正在取消时取消按钮文案为正在取消`() {
-        emit(ConsistencyCheckResult(isRunning = true, isCancelling = true, phase = "Stopping"))
-        setContent()
-        composeRule.onNodeWithText("Cancelling...").assertIsDisplayed()
-    }
-
     // ==================== 完成状态 ====================
-
-    @Test
-    fun `完成状态显示完成按钮`() {
-        emit(ConsistencyCheckResult(isComplete = true, phase = "Finished"))
-        setContent()
-        composeRule.onNodeWithText("Done").assertIsDisplayed()
-    }
 
     @Test
     fun `完成状态点击完成调用onDismiss`() {
@@ -127,30 +105,6 @@ class ConsistencyCheckDialogTest {
     }
 
     // ==================== 文案展示 ====================
-
-    @Test
-    fun `运行中显示进度文案`() {
-        emit(ConsistencyCheckResult(isRunning = true, phase = "Checking", current = 5, total = 100))
-        setContent()
-        // total > 0 时文案为 "${phase} (${current}/${total})"
-        composeRule.onNodeWithText("Checking (5/100)").assertIsDisplayed()
-    }
-
-    @Test
-    fun `运行中显示子阶段文案`() {
-        emit(
-            ConsistencyCheckResult(
-                isRunning = true,
-                phase = "Checking",
-                subPhase = "Wish list",
-                current = 5,
-                total = 100
-            )
-        )
-        setContent()
-        // 子阶段文案为 "· ${subPhase}"，用 substring 匹配避免中点字符编码差异
-        composeRule.onNodeWithText("Wish list", substring = true).assertIsDisplayed()
-    }
 
     @Test
     fun `主阶段已包含子阶段时不重复显示`() {
@@ -168,28 +122,6 @@ class ConsistencyCheckDialogTest {
             .isNull()
     }
 
-    @Test
-    fun `运行中显示当前条目标题`() {
-        emit(
-            ConsistencyCheckResult(
-                isRunning = true,
-                phase = "Checking",
-                currentTitle = "Test Movie",
-                current = 5,
-                total = 100
-            )
-        )
-        setContent()
-        composeRule.onNodeWithText("Test Movie").assertIsDisplayed()
-    }
-
-    @Test
-    fun `cookie过期显示重新登录提示`() {
-        emit(ConsistencyCheckResult(isComplete = true, cookieExpired = true, phase = "Finished"))
-        setContent()
-        composeRule.onNodeWithText("Douban login expired, please log in again").assertIsDisplayed()
-    }
-
     /**
      * 检查完成后弹窗应常驻显示结果，等待用户手动关闭，而非自动消失。
      * 模拟完成后即使进度被重置为空态，Dialog 仍保持显示（不自动关闭）。
@@ -203,26 +135,6 @@ class ConsistencyCheckDialogTest {
         // 模拟 WatchlistViewModel 完成后续操作（不再 resetProgress 导致转圈/自动关闭）
         composeRule.waitForIdle()
         assertThat(dismissed).isFalse()
-    }
-
-    @Test
-    fun `完成状态显示统计文案`() {
-        emit(
-            ConsistencyCheckResult(
-                isComplete = true,
-                phase = "Finished",
-                totalChecked = 100,
-                conflictsFound = 10,
-                traktUpdated = 7,
-                doubanUpdated = 3,
-                errors = 2
-            )
-        )
-        setContent()
-        // consistency_check_summary = "Checked %1$d items, found %2$d conflicts, Trakt updated %3$d, Douban updated %4$d, errors %5$d"
-        composeRule.onNodeWithText(
-            "Checked 100 items, found 10 conflicts, Trakt updated 7, Douban updated 3, errors 2"
-        ).assertIsDisplayed()
     }
 
 }

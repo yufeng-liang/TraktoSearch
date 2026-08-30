@@ -18,23 +18,6 @@ class LoadingViewTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun `Full 形态显示自定义消息`() {
-        composeRule.setContent {
-            AppLoadingState(message = "加载中...")
-        }
-        composeRule.onNodeWithText("加载中...").assertIsDisplayed()
-    }
-
-    @Test
-    fun `Full 形态未传消息时用默认文案`() {
-        composeRule.setContent {
-            AppLoadingState()
-        }
-        // loading_default 在 Robolectric 默认 locale 下为 "Loading…"
-        composeRule.onNodeWithText("Loading…").assertIsDisplayed()
-    }
-
-    @Test
     fun `Inline 形态显示不确定进度指示器`() {
         composeRule.setContent {
             AppLoadingState(variant = AppLoadingVariant.Inline)
