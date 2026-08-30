@@ -43,6 +43,9 @@ data class SplashQuote(
      *
      * 关键词参照整部片的主旨提炼，不取自台词原文；中文限 2–4 字以便刻进方形印章，
      * 其余语言不限长度。
+     *
+     * 除四种界面语言外还有一个 [SEAL_LANG_ZH] 键，存中文关键词的繁体字形，只给印章用，
+     * 见 [sealKeywordFor]。
      */
     val keyword: Map<String, String> = emptyMap(),
 ) {
@@ -59,6 +62,21 @@ data class SplashQuote(
         keyword[lang] ?: keyword[FALLBACK_LANG] ?: ""
 
     /**
+     * 印章上刻的关键词：中文走繁体，其余语言与 [keywordFor] 相同。
+     *
+     * 篆刻里没有简体——印章是这套设计里唯一「刻」出来的东西，用简体字形会立刻塌成
+     * 一个普通标签。但界面正文和无障碍朗读仍走 [keywordFor]：读屏念的应该是界面语言，
+     * 日历格子上的词也得跟界面一致，所以繁体只用在印面上，不替换关键词本身。
+     *
+     * 繁体字形是逐条写定在 assets/quotes.json 里的，不在运行时查简繁字表：一对多的字
+     * （余/餘、后/後、里/裡、发/發、尽/盡、游/遊、舍/捨…）选哪个得看词义，字表会在
+     * 「余情」「表里」这类词上给出错解，而这个错字是要印在图片上分享出去的。
+     * 繁体缺失时回落到简体，宁可字形不对也不能空着一枚印。
+     */
+    fun sealKeywordFor(lang: String): String =
+        if (lang == "zh") keyword[SEAL_LANG_ZH] ?: keywordFor(lang) else keywordFor(lang)
+
+    /**
      * 台词实际渲染用的语言。
      *
      * [preferOriginal] 的条目一律走英文；片名不跟着切，界面语言下的片名才认得出是哪部片。
@@ -68,6 +86,9 @@ data class SplashQuote(
 
     companion object {
         const val FALLBACK_LANG = "en"
+
+        /** [keyword] 里存繁体字形的键，只有中文有，只给印章用 */
+        const val SEAL_LANG_ZH = "zh-Hant"
 
         /** 台词库覆盖的语言 */
         private val SUPPORTED_LANGS = setOf("en", "zh", "ja", "ko")

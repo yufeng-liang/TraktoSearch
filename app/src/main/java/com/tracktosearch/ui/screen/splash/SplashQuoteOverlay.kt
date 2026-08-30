@@ -415,7 +415,7 @@ private fun StampedSeal(
         label = "quoteSealScale"
     )
     QuoteSeal(
-        keyword = quote.keyword,
+        keyword = quote.sealKeyword,
         latin = quote.keywordLatin,
         palette = palette,
         modifier = Modifier.graphicsLayer {

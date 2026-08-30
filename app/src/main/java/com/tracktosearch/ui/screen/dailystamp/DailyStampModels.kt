@@ -38,6 +38,13 @@ data class DailyStampCardUi(
     val titleWrap: Pair<String, String>,
     val year: Int,
     val keyword: String,
+    /**
+     * 刻在印面上的字形：中文是繁体，其余语言与 [keyword] 相同。
+     *
+     * 和 [keyword] 分开存而不是就地替换：读屏念的该是界面语言的字形，只有印面走繁体。
+     * 见 SplashQuote.sealKeywordFor。
+     */
+    val sealKeyword: String,
     /** 印在关键词下方的英文小字；界面本来就是英文时为 null */
     val keywordLatin: String?,
     val poster: Any?,
@@ -74,6 +81,7 @@ internal fun DailyStamp.toCard(lang: String): DailyStampCardUi? {
         titleWrap = SplashQuote.titleWrap(lang),
         year = quote.year,
         keyword = quote.keywordFor(lang),
+        sealKeyword = quote.sealKeywordFor(lang),
         keywordLatin = quote.keywordFor(SplashQuote.FALLBACK_LANG)
             .takeIf { lang != SplashQuote.FALLBACK_LANG && it.isNotBlank() },
         poster = poster,

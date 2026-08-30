@@ -23,6 +23,7 @@
       "keyword": {
         "en": "Farewell",
         "zh": "惜别",
+        "zh-Hant": "惜別",
         "ja": "惜別",
         "ko": "석별"
       }
@@ -49,6 +50,7 @@
       "keyword": {
         "en": "Glimmer",
         "zh": "微光",
+        "zh-Hant": "微光",
         "ja": "微光",
         "ko": "희미한 빛"
       }
@@ -74,6 +76,7 @@
       "keyword": {
         "en": "Wedded to the Stage",
         "zh": "殉戏",
+        "zh-Hant": "殉戲",
         "ja": "芝居に殉ず",
         "ko": "무대에 바친 생"
       }
@@ -100,6 +103,7 @@
       "keyword": {
         "en": "Transience",
         "zh": "消散",
+        "zh-Hant": "消散",
         "ja": "泡沫",
         "ko": "덧없음"
       }
@@ -125,6 +129,7 @@
       "keyword": {
         "en": "Brushing Past",
         "zh": "擦肩",
+        "zh-Hant": "擦肩",
         "ja": "すれ違い",
         "ko": "스침"
       }
@@ -151,6 +156,7 @@
       "keyword": {
         "en": "The Innocent",
         "zh": "赤子",
+        "zh-Hant": "赤子",
         "ja": "無垢",
         "ko": "순수"
       }
@@ -176,6 +182,7 @@
       "keyword": {
         "en": "One's True Name",
         "zh": "本名",
+        "zh-Hant": "本名",
         "ja": "本当の名",
         "ko": "본디 이름"
       }
@@ -201,6 +208,7 @@
       "keyword": {
         "en": "What Remains",
         "zh": "余情",
+        "zh-Hant": "餘情",
         "ja": "余情",
         "ko": "남은 마음"
       }
@@ -226,6 +234,7 @@
       "keyword": {
         "en": "Gravity",
         "zh": "引力",
+        "zh-Hant": "引力",
         "ja": "引力",
         "ko": "끌림"
       }
@@ -251,6 +260,7 @@
       "keyword": {
         "en": "The Smell",
         "zh": "气味",
+        "zh-Hant": "氣味",
         "ja": "匂い",
         "ko": "냄새"
       }
@@ -277,6 +287,7 @@
       "keyword": {
         "en": "The Family",
         "zh": "家门",
+        "zh-Hant": "家門",
         "ja": "家門",
         "ko": "가문"
       }
@@ -303,6 +314,7 @@
       "keyword": {
         "en": "Tomorrow",
         "zh": "明日",
+        "zh-Hant": "明日",
         "ja": "明日",
         "ko": "내일"
       }
@@ -329,6 +341,7 @@
       "keyword": {
         "en": "Home",
         "zh": "归处",
+        "zh-Hant": "歸處",
         "ja": "帰る場所",
         "ko": "돌아갈 곳"
       }
@@ -355,6 +368,7 @@
       "keyword": {
         "en": "The Inner Eye",
         "zh": "心眼",
+        "zh-Hant": "心眼",
         "ja": "心の目",
         "ko": "마음의 눈"
       }
@@ -381,6 +395,7 @@
       "keyword": {
         "en": "Night Drive",
         "zh": "夜行",
+        "zh-Hant": "夜行",
         "ja": "夜行",
         "ko": "밤길"
       }
@@ -407,6 +422,7 @@
       "keyword": {
         "en": "Fingertip",
         "zh": "指尖",
+        "zh-Hant": "指尖",
         "ja": "指先",
         "ko": "손끝"
       }
@@ -433,6 +449,7 @@
       "keyword": {
         "en": "Airborne",
         "zh": "腾空",
+        "zh-Hant": "騰空",
         "ja": "飛翔",
         "ko": "비상"
       }
@@ -459,6 +476,7 @@
       "keyword": {
         "en": "A Poet's Heart",
         "zh": "诗心",
+        "zh-Hant": "詩心",
         "ja": "詩心",
         "ko": "시심"
       }
@@ -485,6 +503,7 @@
       "keyword": {
         "en": "Self-Made Fate",
         "zh": "造命",
+        "zh-Hant": "造命",
         "ja": "自ら作る運命",
         "ko": "스스로 만드는 운명"
       }
@@ -511,6 +530,7 @@
       "keyword": {
         "en": "Life's Way",
         "zh": "生路",
+        "zh-Hant": "生路",
         "ja": "活路",
         "ko": "살길"
       }
@@ -537,6 +557,7 @@
       "keyword": {
         "en": "The Names",
         "zh": "存名",
+        "zh-Hant": "存名",
         "ja": "名を刻む",
         "ko": "이름을 남기다"
       }
@@ -563,6 +584,7 @@
       "keyword": {
         "en": "Rightful Place",
         "zh": "归位",
+        "zh-Hant": "歸位",
         "ja": "己の座",
         "ko": "제자리"
       }
@@ -588,6 +610,7 @@
       "keyword": {
         "en": "Someone to Lean On",
         "zh": "相依",
+        "zh-Hant": "相依",
         "ja": "寄る辺",
         "ko": "기댈 곳"
       }
@@ -614,6 +637,7 @@
       "keyword": {
         "en": "A Vow at Sea",
         "zh": "海誓",
+        "zh-Hant": "海誓",
         "ja": "海の誓い",
         "ko": "바다의 맹세"
       }
@@ -640,6 +664,7 @@
       "keyword": {
         "en": "No Blame",
         "zh": "无咎",
+        "zh-Hant": "無咎",
         "ja": "咎なし",
         "ko": "허물없음"
       }
@@ -666,6 +691,7 @@
       "keyword": {
         "en": "Beyond the Door",
         "zh": "门外",
+        "zh-Hant": "門外",
         "ja": "扉の外",
         "ko": "문 밖"
       }
@@ -692,6 +718,7 @@
       "keyword": {
         "en": "Unbound",
         "zh": "解缚",
+        "zh-Hant": "解縛",
         "ja": "解き放たれる",
         "ko": "풀려남"
       }
@@ -718,6 +745,7 @@
       "keyword": {
         "en": "Echo",
         "zh": "回响",
+        "zh-Hant": "回響",
         "ja": "響き",
         "ko": "울림"
       }
@@ -744,6 +772,7 @@
       "keyword": {
         "en": "Fellowship",
         "zh": "同行",
+        "zh-Hant": "同行",
         "ja": "同行",
         "ko": "동행"
       }
@@ -770,6 +799,7 @@
       "keyword": {
         "en": "The Long Swim",
         "zh": "洄游",
+        "zh-Hant": "洄游",
         "ja": "回遊",
         "ko": "헤엄"
       }
@@ -796,6 +826,7 @@
       "keyword": {
         "en": "Bearing the Blame",
         "zh": "负名",
+        "zh-Hant": "負名",
         "ja": "汚名を負う",
         "ko": "오명을 지다"
       }
@@ -822,6 +853,7 @@
       "keyword": {
         "en": "The Journey Out",
         "zh": "远行",
+        "zh-Hant": "遠行",
         "ja": "遠出",
         "ko": "먼 길"
       }
@@ -848,6 +880,7 @@
       "keyword": {
         "en": "Building Dreams",
         "zh": "造梦",
+        "zh-Hant": "造夢",
         "ja": "夢を築く",
         "ko": "꿈을 짓다"
       }
@@ -874,6 +907,7 @@
       "keyword": {
         "en": "Chasing the Dream",
         "zh": "追梦",
+        "zh-Hant": "追夢",
         "ja": "夢を追う",
         "ko": "꿈을 좇다"
       }
@@ -900,6 +934,7 @@
       "keyword": {
         "en": "Knowing",
         "zh": "知命",
+        "zh-Hant": "知命",
         "ja": "命を知る",
         "ko": "운명을 알다"
       }
@@ -926,6 +961,7 @@
       "keyword": {
         "en": "One Another",
         "zh": "相扶",
+        "zh-Hant": "相扶",
         "ja": "支え合い",
         "ko": "서로 돕기"
       }
@@ -951,6 +987,7 @@
       "keyword": {
         "en": "One More Ticket",
         "zh": "船票",
+        "zh-Hant": "船票",
         "ja": "もう一枚の切符",
         "ko": "한 장의 표"
       }
@@ -976,6 +1013,7 @@
       "keyword": {
         "en": "Too Late",
         "zh": "追悔",
+        "zh-Hant": "追悔",
         "ja": "悔い",
         "ko": "후회"
       }
@@ -1001,6 +1039,7 @@
       "keyword": {
         "en": "Letting Go",
         "zh": "舍得",
+        "zh-Hant": "捨得",
         "ja": "手放す",
         "ko": "놓아주기"
       }
@@ -1026,6 +1065,7 @@
       "keyword": {
         "en": "Surviving",
         "zh": "苟全",
+        "zh-Hant": "苟全",
         "ja": "生き延びる",
         "ko": "살아남기"
       }
@@ -1051,6 +1091,7 @@
       "keyword": {
         "en": "Constancy",
         "zh": "念念",
+        "zh-Hant": "念念",
         "ja": "念々",
         "ko": "한결같은 마음"
       }
@@ -1076,6 +1117,7 @@
       "keyword": {
         "en": "One Minute",
         "zh": "一分钟",
+        "zh-Hant": "一分鐘",
         "ja": "一分間",
         "ko": "1분"
       }
@@ -1101,6 +1143,7 @@
       "keyword": {
         "en": "Laying Down the Sword",
         "zh": "止戈",
+        "zh-Hant": "止戈",
         "ja": "剣を収める",
         "ko": "칼을 거두다"
       }
@@ -1126,6 +1169,7 @@
       "keyword": {
         "en": "One's Own Worth",
         "zh": "自许",
+        "zh-Hant": "自許",
         "ja": "自負",
         "ko": "자부"
       }
@@ -1151,6 +1195,7 @@
       "keyword": {
         "en": "The Other Half",
         "zh": "半面",
+        "zh-Hant": "半面",
         "ja": "見えない半分",
         "ko": "보이지 않는 반쪽"
       }
@@ -1176,6 +1221,7 @@
       "keyword": {
         "en": "In Between",
         "zh": "无间",
+        "zh-Hant": "無間",
         "ja": "無間",
         "ko": "무간"
       }
@@ -1201,6 +1247,7 @@
       "keyword": {
         "en": "A Laugh",
         "zh": "一笑",
+        "zh-Hant": "一笑",
         "ja": "笑い一つ",
         "ko": "한 번의 웃음"
       }
@@ -1226,6 +1273,7 @@
       "keyword": {
         "en": "Composure",
         "zh": "从容",
+        "zh-Hant": "從容",
         "ja": "泰然",
         "ko": "태연"
       }
@@ -1251,6 +1299,7 @@
       "keyword": {
         "en": "Coexistence",
         "zh": "共生",
+        "zh-Hant": "共生",
         "ja": "共生",
         "ko": "공생"
       }
@@ -1276,6 +1325,7 @@
       "keyword": {
         "en": "Leaving the Nest",
         "zh": "离巢",
+        "zh-Hant": "離巢",
         "ja": "巣立ち",
         "ko": "홀로서기"
       }
@@ -1301,6 +1351,7 @@
       "keyword": {
         "en": "Rooted",
         "zh": "扎根",
+        "zh-Hant": "扎根",
         "ja": "大地に根を",
         "ko": "뿌리내림"
       }
@@ -1326,6 +1377,7 @@
       "keyword": {
         "en": "Fireflies",
         "zh": "萤火",
+        "zh-Hant": "螢火",
         "ja": "螢火",
         "ko": "반딧불"
       }
@@ -1351,6 +1403,7 @@
       "keyword": {
         "en": "Searching",
         "zh": "相寻",
+        "zh-Hant": "相尋",
         "ja": "探し合う",
         "ko": "서로 찾다"
       }
@@ -1376,6 +1429,7 @@
       "keyword": {
         "en": "The Ferryman",
         "zh": "摆渡",
+        "zh-Hant": "擺渡",
         "ja": "送り人",
         "ko": "보내는 이"
       }
@@ -1401,6 +1455,7 @@
       "keyword": {
         "en": "A Greeting",
         "zh": "问安",
+        "zh-Hant": "問安",
         "ja": "お元気ですか",
         "ko": "안녕하신가요"
       }
@@ -1426,6 +1481,7 @@
       "keyword": {
         "en": "Chosen Family",
         "zh": "结缘",
+        "zh-Hant": "結緣",
         "ja": "縁を結ぶ",
         "ko": "인연을 맺다"
       }
@@ -1451,6 +1507,7 @@
       "keyword": {
         "en": "Every Day",
         "zh": "日日",
+        "zh-Hant": "日日",
         "ja": "日日是好日",
         "ko": "하루하루"
       }
@@ -1476,6 +1533,7 @@
       "keyword": {
         "en": "Old Grudge",
         "zh": "宿怨",
+        "zh-Hant": "宿怨",
         "ja": "宿怨",
         "ko": "묵은 원한"
       }
@@ -1501,6 +1559,7 @@
       "keyword": {
         "en": "The Bridge",
         "zh": "架桥",
+        "zh-Hant": "架橋",
         "ja": "橋を架ける",
         "ko": "다리를 놓다"
       }
@@ -1526,6 +1585,7 @@
       "keyword": {
         "en": "Keepsake",
         "zh": "留影",
+        "zh-Hant": "留影",
         "ja": "面影",
         "ko": "남은 사진"
       }
@@ -1551,6 +1611,7 @@
       "keyword": {
         "en": "Impermanence",
         "zh": "无常",
+        "zh-Hant": "無常",
         "ja": "無常",
         "ko": "무상"
       }
@@ -1576,6 +1637,7 @@
       "keyword": {
         "en": "Providence",
         "zh": "因缘",
+        "zh-Hant": "因緣",
         "ja": "因縁",
         "ko": "인연"
       }
@@ -1601,6 +1663,7 @@
       "keyword": {
         "en": "Nostalgia",
         "zh": "乡愁",
+        "zh-Hant": "鄉愁",
         "ja": "郷愁",
         "ko": "향수"
       }
@@ -1626,6 +1689,7 @@
       "keyword": {
         "en": "A Father's Shelter",
         "zh": "父荫",
+        "zh-Hant": "父蔭",
         "ja": "父の傘",
         "ko": "아버지의 그늘"
       }
@@ -1651,6 +1715,7 @@
       "keyword": {
         "en": "Small Kindnesses",
         "zh": "小善",
+        "zh-Hant": "小善",
         "ja": "小さな善",
         "ko": "작은 선의"
       }
@@ -1676,6 +1741,7 @@
       "keyword": {
         "en": "The Finite",
         "zh": "有涯",
+        "zh-Hant": "有涯",
         "ja": "限りあるもの",
         "ko": "유한"
       }
@@ -1701,6 +1767,7 @@
       "keyword": {
         "en": "All Is Well",
         "zh": "宽心",
+        "zh-Hant": "寬心",
         "ja": "万事順調",
         "ko": "다 잘될 거야"
       }
@@ -1727,6 +1794,7 @@
       "keyword": {
         "en": "Rich in Friends",
         "zh": "有邻",
+        "zh-Hant": "有鄰",
         "ja": "隣人あり",
         "ko": "이웃이 있다"
       }
@@ -1753,6 +1821,7 @@
       "keyword": {
         "en": "Faded Glory",
         "zh": "虚火",
+        "zh-Hant": "虛火",
         "ja": "残り火",
         "ko": "사그라든 불"
       }
@@ -1779,6 +1848,7 @@
       "keyword": {
         "en": "The Next Wave",
         "zh": "后浪",
+        "zh-Hant": "後浪",
         "ja": "新しい波",
         "ko": "뒷물결"
       }
@@ -1805,6 +1875,7 @@
       "keyword": {
         "en": "Dignity",
         "zh": "尊严",
+        "zh-Hant": "尊嚴",
         "ja": "品位",
         "ko": "품위"
       }
@@ -1831,6 +1902,7 @@
       "keyword": {
         "en": "A Day to Keep",
         "zh": "旧游",
+        "zh-Hant": "舊遊",
         "ja": "思い出の日",
         "ko": "간직할 하루"
       }
@@ -1856,6 +1928,7 @@
       "keyword": {
         "en": "Obsession",
         "zh": "执念",
+        "zh-Hant": "執念",
         "ja": "執念",
         "ko": "집념"
       }
@@ -1882,6 +1955,7 @@
       "keyword": {
         "en": "The Inner Demon",
         "zh": "心魔",
+        "zh-Hant": "心魔",
         "ja": "心の魔",
         "ko": "내면의 광기"
       }
@@ -1908,6 +1982,7 @@
       "keyword": {
         "en": "One Life Between Two",
         "zh": "同命",
+        "zh-Hant": "同命",
         "ja": "一つの命に",
         "ko": "하나의 목숨"
       }
@@ -1934,6 +2009,7 @@
       "keyword": {
         "en": "Making One's Fate",
         "zh": "立命",
+        "zh-Hant": "立命",
         "ja": "命を立てる",
         "ko": "운명을 세우다"
       }
@@ -1960,6 +2036,7 @@
       "keyword": {
         "en": "In Another's Skin",
         "zh": "设身",
+        "zh-Hant": "設身",
         "ja": "相手の身に",
         "ko": "그의 처지에"
       }
@@ -1986,6 +2063,7 @@
       "keyword": {
         "en": "A Window Opens",
         "zh": "开窗",
+        "zh-Hant": "開窗",
         "ja": "窓が開く",
         "ko": "창이 열리다"
       }
@@ -2011,6 +2089,7 @@
       "keyword": {
         "en": "Adrift",
         "zh": "迷途",
+        "zh-Hant": "迷途",
         "ja": "迷い",
         "ko": "길 잃음"
       }
@@ -2037,6 +2116,7 @@
       "keyword": {
         "en": "The Machine's Mind",
         "zh": "机心",
+        "zh-Hant": "機心",
         "ja": "機械の心",
         "ko": "기계의 마음"
       }
@@ -2062,6 +2142,7 @@
       "keyword": {
         "en": "Vision",
         "zh": "远见",
+        "zh-Hant": "遠見",
         "ja": "先見",
         "ko": "선견"
       }
@@ -2088,6 +2169,7 @@
       "keyword": {
         "en": "Knowing Without Words",
         "zh": "相知",
+        "zh-Hant": "相知",
         "ja": "言わずと知る",
         "ko": "말없이 아는 마음"
       }
@@ -2114,6 +2196,7 @@
       "keyword": {
         "en": "The Right to Choose",
         "zh": "抉择",
+        "zh-Hant": "抉擇",
         "ja": "選ぶ自由",
         "ko": "선택할 자유"
       }
@@ -2140,6 +2223,7 @@
       "keyword": {
         "en": "The Lonely Summit",
         "zh": "孤峰",
+        "zh-Hant": "孤峰",
         "ja": "孤峰",
         "ko": "홀로 선 정점"
       }
@@ -2165,6 +2249,7 @@
       "keyword": {
         "en": "A Muddied World",
         "zh": "浊世",
+        "zh-Hant": "濁世",
         "ja": "濁世",
         "ko": "탁한 세상"
       }
@@ -2191,6 +2276,7 @@
       "keyword": {
         "en": "The Attempt",
         "zh": "一试",
+        "zh-Hant": "一試",
         "ja": "試み",
         "ko": "시도"
       }
@@ -2217,6 +2303,7 @@
       "keyword": {
         "en": "The Deep",
         "zh": "深渊",
+        "zh-Hant": "深淵",
         "ja": "深淵",
         "ko": "심연"
       }
@@ -2243,6 +2330,7 @@
       "keyword": {
         "en": "Going the Distance",
         "zh": "终场",
+        "zh-Hant": "終場",
         "ja": "最後まで",
         "ko": "끝까지"
       }
@@ -2269,6 +2357,7 @@
       "keyword": {
         "en": "Outrage",
         "zh": "众怒",
+        "zh-Hant": "眾怒",
         "ja": "憤り",
         "ko": "분노"
       }
@@ -2295,6 +2384,7 @@
       "keyword": {
         "en": "Moving On",
         "zh": "流转",
+        "zh-Hant": "流轉",
         "ja": "移ろい",
         "ko": "흘러감"
       }
@@ -2321,6 +2411,7 @@
       "keyword": {
         "en": "One Shot",
         "zh": "一枪",
+        "zh-Hant": "一槍",
         "ja": "一発",
         "ko": "한 발"
       }
@@ -2347,6 +2438,7 @@
       "keyword": {
         "en": "The Cold Dark",
         "zh": "冷寂",
+        "zh-Hant": "冷寂",
         "ja": "冷たい静寂",
         "ko": "차가운 정적"
       }
@@ -2373,6 +2465,7 @@
       "keyword": {
         "en": "The Heart of Darkness",
         "zh": "幽暗",
+        "zh-Hant": "幽暗",
         "ja": "闇の奥",
         "ko": "어둠의 심연"
       }
@@ -2399,6 +2492,7 @@
       "keyword": {
         "en": "Keeper of the Place",
         "zh": "困守",
+        "zh-Hant": "困守",
         "ja": "守り人",
         "ko": "관리인"
       }
@@ -2425,6 +2519,7 @@
       "keyword": {
         "en": "Resolve",
         "zh": "笃行",
+        "zh-Hant": "篤行",
         "ja": "やり遂げる",
         "ko": "해내다"
       }
@@ -2450,6 +2545,7 @@
       "keyword": {
         "en": "From Within",
         "zh": "心源",
+        "zh-Hant": "心源",
         "ja": "内なる力",
         "ko": "안에서"
       }
@@ -2475,6 +2571,7 @@
       "keyword": {
         "en": "Ambition",
         "zh": "野心",
+        "zh-Hant": "野心",
         "ja": "野心",
         "ko": "야심"
       }
@@ -2501,6 +2598,7 @@
       "keyword": {
         "en": "The Relentless",
         "zh": "铁心",
+        "zh-Hant": "鐵心",
         "ja": "鉄の心",
         "ko": "강철의 심장"
       }
@@ -2526,6 +2624,7 @@
       "keyword": {
         "en": "Mediocrity",
         "zh": "平庸",
+        "zh-Hant": "平庸",
         "ja": "凡庸",
         "ko": "평범함"
       }
@@ -2551,6 +2650,7 @@
       "keyword": {
         "en": "One of Us",
         "zh": "同类",
+        "zh-Hant": "同類",
         "ja": "同類",
         "ko": "같은 부류"
       }
@@ -2577,6 +2677,7 @@
       "keyword": {
         "en": "A Farm in Africa",
         "zh": "故园",
+        "zh-Hant": "故園",
         "ja": "かの農場",
         "ko": "그 농장"
       }
@@ -2603,6 +2704,7 @@
       "keyword": {
         "en": "Boyhood Days",
         "zh": "少时",
+        "zh-Hant": "少時",
         "ja": "幼き日",
         "ko": "어린 날"
       }
@@ -2628,6 +2730,7 @@
       "keyword": {
         "en": "The Sharp Edge",
         "zh": "锋芒",
+        "zh-Hant": "鋒芒",
         "ja": "気鋭",
         "ko": "예기"
       }
@@ -2653,6 +2756,7 @@
       "keyword": {
         "en": "True Love",
         "zh": "痴心",
+        "zh-Hant": "癡心",
         "ja": "一途",
         "ko": "한마음"
       }
@@ -2679,6 +2783,7 @@
       "keyword": {
         "en": "Greed",
         "zh": "贪念",
+        "zh-Hant": "貪念",
         "ja": "貪欲",
         "ko": "탐욕"
       }
@@ -2705,6 +2810,7 @@
       "keyword": {
         "en": "In Time",
         "zh": "日久",
+        "zh-Hant": "日久",
         "ja": "歳月のうちに",
         "ko": "세월이 흘러"
       }
@@ -2731,6 +2837,7 @@
       "keyword": {
         "en": "One Belief",
         "zh": "一念",
+        "zh-Hant": "一念",
         "ja": "一念",
         "ko": "일념"
       }
@@ -2756,6 +2863,7 @@
       "keyword": {
         "en": "The Leap of Faith",
         "zh": "凌虚",
+        "zh-Hant": "凌虛",
         "ja": "虚を踏む",
         "ko": "허공을 딛다"
       }
@@ -2782,6 +2890,7 @@
       "keyword": {
         "en": "The Good Life",
         "zh": "浮华",
+        "zh-Hant": "浮華",
         "ja": "虚栄",
         "ko": "허영"
       }
@@ -2808,6 +2917,7 @@
       "keyword": {
         "en": "Falling Snow",
         "zh": "落雪",
+        "zh-Hant": "落雪",
         "ja": "雪が降る",
         "ko": "내리는 눈"
       }
@@ -2833,6 +2943,7 @@
       "keyword": {
         "en": "The Getaway",
         "zh": "出逃",
+        "zh-Hant": "出逃",
         "ja": "逃走",
         "ko": "탈주"
       }
@@ -2859,6 +2970,7 @@
       "keyword": {
         "en": "As Old as Time",
         "zh": "亘古",
+        "zh-Hant": "亙古",
         "ja": "永久",
         "ko": "아득한 옛날"
       }
@@ -2885,6 +2997,7 @@
       "keyword": {
         "en": "The Truth",
         "zh": "直言",
+        "zh-Hant": "直言",
         "ja": "直言",
         "ko": "직언"
       }
@@ -2911,6 +3024,7 @@
       "keyword": {
         "en": "The Right Road",
         "zh": "正道",
+        "zh-Hant": "正道",
         "ja": "正道",
         "ko": "바른 길"
       }
@@ -2937,6 +3051,7 @@
       "keyword": {
         "en": "Again",
         "zh": "重来",
+        "zh-Hant": "重來",
         "ja": "やり直し",
         "ko": "다시"
       }
@@ -2963,6 +3078,7 @@
       "keyword": {
         "en": "First Meeting",
         "zh": "初遇",
+        "zh-Hant": "初遇",
         "ja": "出会い",
         "ko": "첫 만남"
       }
@@ -2989,6 +3105,7 @@
       "keyword": {
         "en": "A Child's Heart",
         "zh": "童心",
+        "zh-Hant": "童心",
         "ja": "童心",
         "ko": "동심"
       }
@@ -3015,6 +3132,7 @@
       "keyword": {
         "en": "Freedom",
         "zh": "自由",
+        "zh-Hant": "自由",
         "ja": "自由",
         "ko": "자유"
       }
@@ -3041,6 +3159,7 @@
       "keyword": {
         "en": "Original Sin",
         "zh": "原罪",
+        "zh-Hant": "原罪",
         "ja": "原罪",
         "ko": "원죄"
       }
@@ -3067,6 +3186,7 @@
       "keyword": {
         "en": "Sleight of Hand",
         "zh": "障眼",
+        "zh-Hant": "障眼",
         "ja": "目くらまし",
         "ko": "눈속임"
       }
@@ -3093,6 +3213,7 @@
       "keyword": {
         "en": "More Than Money",
         "zh": "世情",
+        "zh-Hant": "世情",
         "ja": "人の世",
         "ko": "세상사"
       }
@@ -3119,6 +3240,7 @@
       "keyword": {
         "en": "At Hello",
         "zh": "倾心",
+        "zh-Hant": "傾心",
         "ja": "一目惚れ",
         "ko": "한눈에"
       }
@@ -3144,6 +3266,7 @@
       "keyword": {
         "en": "Sinking",
         "zh": "沉沦",
+        "zh-Hant": "沉淪",
         "ja": "堕ちる",
         "ko": "타락"
       }
@@ -3170,6 +3293,7 @@
       "keyword": {
         "en": "A Better Man",
         "zh": "向善",
+        "zh-Hant": "向善",
         "ja": "よき人へ",
         "ko": "더 나은 사람"
       }
@@ -3196,6 +3320,7 @@
       "keyword": {
         "en": "Earn It",
         "zh": "负重",
+        "zh-Hant": "負重",
         "ja": "背負う",
         "ko": "짊어지다"
       }
@@ -3222,6 +3347,7 @@
       "keyword": {
         "en": "Drifting Beauty",
         "zh": "随风",
+        "zh-Hant": "隨風",
         "ja": "風に舞う",
         "ko": "바람에 날리다"
       }
@@ -3247,6 +3373,7 @@
       "keyword": {
         "en": "World-Weary",
         "zh": "倦世",
+        "zh-Hant": "倦世",
         "ja": "世に倦む",
         "ko": "세상에 지치다"
       }
@@ -3273,6 +3400,7 @@
       "keyword": {
         "en": "Just a Girl",
         "zh": "凡心",
+        "zh-Hant": "凡心",
         "ja": "ただの女の子",
         "ko": "그저 한 사람"
       }
@@ -3299,6 +3427,7 @@
       "keyword": {
         "en": "What the Tide Brings",
         "zh": "潮信",
+        "zh-Hant": "潮信",
         "ja": "潮の便り",
         "ko": "밀물의 소식"
       }
@@ -3324,6 +3453,7 @@
       "keyword": {
         "en": "Uncool and True",
         "zh": "赤诚",
+        "zh-Hant": "赤誠",
         "ja": "誠",
         "ko": "진심"
       }
@@ -3350,6 +3480,7 @@
       "keyword": {
         "en": "Layers",
         "zh": "表里",
+        "zh-Hant": "表裡",
         "ja": "幾重にも",
         "ko": "여러 겹"
       }
@@ -3376,6 +3507,7 @@
       "keyword": {
         "en": "A Clear Mind",
         "zh": "明心",
+        "zh-Hant": "明心",
         "ja": "明らかな心",
         "ko": "맑은 마음"
       }
@@ -3402,6 +3534,7 @@
       "keyword": {
         "en": "The Mirror's Image",
         "zh": "镜影",
+        "zh-Hant": "鏡影",
         "ja": "鏡の影",
         "ko": "거울 속 그림자"
       }
@@ -3428,6 +3561,7 @@
       "keyword": {
         "en": "Responsibility",
         "zh": "担当",
+        "zh-Hant": "擔當",
         "ja": "責任",
         "ko": "책임"
       }
@@ -3454,6 +3588,7 @@
       "keyword": {
         "en": "Worth Fighting For",
         "zh": "所守",
+        "zh-Hant": "所守",
         "ja": "守るもの",
         "ko": "지킬 것"
       }
@@ -3480,6 +3615,7 @@
       "keyword": {
         "en": "I'll Carry You",
         "zh": "相携",
+        "zh-Hant": "相攜",
         "ja": "背負っていく",
         "ko": "함께 가다"
       }
@@ -3505,6 +3641,7 @@
       "keyword": {
         "en": "A Brief While",
         "zh": "一晌",
+        "zh-Hant": "一晌",
         "ja": "ひととき",
         "ko": "한때"
       }
@@ -3530,6 +3667,7 @@
       "keyword": {
         "en": "The Tale He Became",
         "zh": "传奇",
+        "zh-Hant": "傳奇",
         "ja": "伝説",
         "ko": "전설"
       }
@@ -3555,6 +3693,7 @@
       "keyword": {
         "en": "Meeting Again",
         "zh": "重逢",
+        "zh-Hant": "重逢",
         "ja": "再会",
         "ko": "재회"
       }
@@ -3581,6 +3720,7 @@
       "keyword": {
         "en": "Every Day's Work",
         "zh": "日课",
+        "zh-Hant": "日課",
         "ja": "日課",
         "ko": "일과"
       }
@@ -3606,6 +3746,7 @@
       "keyword": {
         "en": "My Darling, My Blood",
         "zh": "至亲",
+        "zh-Hant": "至親",
         "ja": "わが血よ",
         "ko": "내 혈육"
       }
@@ -3632,6 +3773,7 @@
       "keyword": {
         "en": "Longing",
         "zh": "牵念",
+        "zh-Hant": "牽念",
         "ja": "未練",
         "ko": "미련"
       }
@@ -3658,6 +3800,7 @@
       "keyword": {
         "en": "Rising Again",
         "zh": "再起",
+        "zh-Hant": "再起",
         "ja": "再起",
         "ko": "재기"
       }
@@ -3684,6 +3827,7 @@
       "keyword": {
         "en": "Bewitched",
         "zh": "心折",
+        "zh-Hant": "心折",
         "ja": "心を奪われ",
         "ko": "마음을 빼앗기다"
       }
@@ -3710,6 +3854,7 @@
       "keyword": {
         "en": "Knocking",
         "zh": "敲门",
+        "zh-Hant": "敲門",
         "ja": "扉を叩く",
         "ko": "문을 두드리다"
       }
@@ -3736,6 +3881,7 @@
       "keyword": {
         "en": "The Daring",
         "zh": "敢为",
+        "zh-Hant": "敢為",
         "ja": "敢えて挑む",
         "ko": "감히 나서다"
       }
@@ -3762,6 +3908,7 @@
       "keyword": {
         "en": "Shared Joy",
         "zh": "分甘",
+        "zh-Hant": "分甘",
         "ja": "分かち合う",
         "ko": "나누다"
       }
@@ -3788,6 +3935,7 @@
       "keyword": {
         "en": "What's Coming",
         "zh": "天数",
+        "zh-Hant": "天數",
         "ja": "天命",
         "ko": "정해진 일"
       }
@@ -3814,6 +3962,7 @@
       "keyword": {
         "en": "To Really Live",
         "zh": "生趣",
+        "zh-Hant": "生趣",
         "ja": "生きる楽しみ",
         "ko": "사는 재미"
       }
@@ -3840,6 +3989,7 @@
       "keyword": {
         "en": "Backward Life",
         "zh": "逆生",
+        "zh-Hant": "逆生",
         "ja": "逆さの生",
         "ko": "거꾸로 사는 삶"
       }
@@ -3865,6 +4015,7 @@
       "keyword": {
         "en": "It Is Written",
         "zh": "命定",
+        "zh-Hant": "命定",
         "ja": "運命",
         "ko": "운명"
       }
@@ -3891,6 +4042,7 @@
       "keyword": {
         "en": "All Connected",
         "zh": "相连",
+        "zh-Hant": "相連",
         "ja": "繋がり",
         "ko": "이어짐"
       }
@@ -3917,6 +4069,7 @@
       "keyword": {
         "en": "Always There",
         "zh": "长伴",
+        "zh-Hant": "長伴",
         "ja": "ずっと側に",
         "ko": "언제나 곁에"
       }
@@ -3942,6 +4095,7 @@
       "keyword": {
         "en": "Pity the Living",
         "zh": "悲悯",
+        "zh-Hant": "悲憫",
         "ja": "憐れみ",
         "ko": "연민"
       }
@@ -3967,6 +4121,7 @@
       "keyword": {
         "en": "You Matter",
         "zh": "珍重",
+        "zh-Hant": "珍重",
         "ja": "大切に",
         "ko": "소중히"
       }
@@ -3993,6 +4148,7 @@
       "keyword": {
         "en": "The Reflection",
         "zh": "倒影",
+        "zh-Hant": "倒影",
         "ja": "水鏡",
         "ko": "물그림자"
       }
@@ -4018,6 +4174,7 @@
       "keyword": {
         "en": "Infinite",
         "zh": "无限",
+        "zh-Hant": "無限",
         "ja": "無限",
         "ko": "무한"
       }
@@ -4044,6 +4201,7 @@
       "keyword": {
         "en": "Grace",
         "zh": "宽恕",
+        "zh-Hant": "寬恕",
         "ja": "赦し",
         "ko": "용서"
       }
@@ -4069,6 +4227,7 @@
       "keyword": {
         "en": "Talking to Myself",
         "zh": "独语",
+        "zh-Hant": "獨語",
         "ja": "独り語り",
         "ko": "혼잣말"
       }
@@ -4094,6 +4253,7 @@
       "keyword": {
         "en": "Travelling Together",
         "zh": "共度",
+        "zh-Hant": "共度",
         "ja": "共に過ごす",
         "ko": "함께 지내다"
       }
@@ -4120,6 +4280,7 @@
       "keyword": {
         "en": "Setting Out",
         "zh": "启程",
+        "zh-Hant": "啟程",
         "ja": "旅立ち",
         "ko": "떠나기"
       }
@@ -4145,6 +4306,7 @@
       "keyword": {
         "en": "Right Now",
         "zh": "此刻",
+        "zh-Hant": "此刻",
         "ja": "この瞬間",
         "ko": "이 순간"
       }
@@ -4171,6 +4333,7 @@
       "keyword": {
         "en": "Tempered",
         "zh": "淬火",
+        "zh-Hant": "淬火",
         "ja": "焼き入れ",
         "ko": "담금질"
       }
@@ -4196,6 +4359,7 @@
       "keyword": {
         "en": "The Last Manners",
         "zh": "旧礼",
+        "zh-Hant": "舊禮",
         "ja": "古き礼",
         "ko": "옛 예의"
       }
@@ -4222,6 +4386,7 @@
       "keyword": {
         "en": "Room for Sadness",
         "zh": "容悲",
+        "zh-Hant": "容悲",
         "ja": "悲しみの席",
         "ko": "슬픔의 자리"
       }
@@ -4247,6 +4412,7 @@
       "keyword": {
         "en": "All Broken",
         "zh": "破碎",
+        "zh-Hant": "破碎",
         "ja": "壊れもの",
         "ko": "부서짐"
       }
@@ -4272,6 +4438,7 @@
       "keyword": {
         "en": "Becoming",
         "zh": "自成",
+        "zh-Hant": "自成",
         "ja": "自らなる",
         "ko": "스스로 되다"
       }
@@ -4297,6 +4464,7 @@
       "keyword": {
         "en": "The Warmth Left",
         "zh": "余温",
+        "zh-Hant": "餘溫",
         "ja": "残る熱",
         "ko": "남은 열"
       }
@@ -4323,6 +4491,7 @@
       "keyword": {
         "en": "Remember Me",
         "zh": "追念",
+        "zh-Hant": "追念",
         "ja": "追憶",
         "ko": "추념"
       }
@@ -4348,6 +4517,7 @@
       "keyword": {
         "en": "Attention",
         "zh": "用心",
+        "zh-Hant": "用心",
         "ja": "心を向ける",
         "ko": "마음을 쓰다"
       }
@@ -4374,6 +4544,7 @@
       "keyword": {
         "en": "The Mask",
         "zh": "面具",
+        "zh-Hant": "面具",
         "ja": "仮面",
         "ko": "가면"
       }
@@ -4400,6 +4571,7 @@
       "keyword": {
         "en": "The Spark",
         "zh": "火花",
+        "zh-Hant": "火花",
         "ja": "きらめき",
         "ko": "불꽃"
       }
@@ -4426,6 +4598,7 @@
       "keyword": {
         "en": "See You Down the Road",
         "zh": "行路",
+        "zh-Hant": "行路",
         "ja": "路の上",
         "ko": "길 위에서"
       }
@@ -4452,6 +4625,7 @@
       "keyword": {
         "en": "Steady Mind",
         "zh": "定心",
+        "zh-Hant": "定心",
         "ja": "心を定める",
         "ko": "흔들리지 않는 마음"
       }
@@ -4478,6 +4652,7 @@
       "keyword": {
         "en": "Be Kind",
         "zh": "善念",
+        "zh-Hant": "善念",
         "ja": "優しさ",
         "ko": "다정"
       }
@@ -4504,6 +4679,7 @@
       "keyword": {
         "en": "Instinct",
         "zh": "本能",
+        "zh-Hant": "本能",
         "ja": "本能",
         "ko": "본능"
       }
@@ -4530,6 +4706,7 @@
       "keyword": {
         "en": "Karmic Fire",
         "zh": "业火",
+        "zh-Hant": "業火",
         "ja": "業火",
         "ko": "업의 불"
       }
@@ -4555,6 +4732,7 @@
       "keyword": {
         "en": "One Chance",
         "zh": "志气",
+        "zh-Hant": "志氣",
         "ja": "気概",
         "ko": "기개"
       }
@@ -4580,6 +4758,7 @@
       "keyword": {
         "en": "Enduring",
         "zh": "隐忍",
+        "zh-Hant": "隱忍",
         "ja": "忍ぶ",
         "ko": "인내"
       }
@@ -4605,6 +4784,7 @@
       "keyword": {
         "en": "Like a Dream",
         "zh": "如幻",
+        "zh-Hant": "如幻",
         "ja": "夢幻のごとく",
         "ko": "환영처럼"
       }
@@ -4630,6 +4810,7 @@
       "keyword": {
         "en": "Frost Over the Lake",
         "zh": "霜天",
+        "zh-Hant": "霜天",
         "ja": "霜の空",
         "ko": "서리 하늘"
       }
@@ -4655,6 +4836,7 @@
       "keyword": {
         "en": "Blazing",
         "zh": "炽烈",
+        "zh-Hant": "熾烈",
         "ja": "熱く烈しく",
         "ko": "타오르다"
       }
@@ -4680,6 +4862,7 @@
       "keyword": {
         "en": "A Laugh Across the Sea",
         "zh": "沧海",
+        "zh-Hant": "滄海",
         "ja": "滄海",
         "ko": "창해"
       }
@@ -4705,6 +4888,7 @@
       "keyword": {
         "en": "Deep Courtyard",
         "zh": "深院",
+        "zh-Hant": "深院",
         "ja": "奥の院",
         "ko": "깊은 뜰"
       }
@@ -4730,6 +4914,7 @@
       "keyword": {
         "en": "Where There Are People",
         "zh": "江湖",
+        "zh-Hant": "江湖",
         "ja": "江湖",
         "ko": "강호"
       }
@@ -4755,6 +4940,7 @@
       "keyword": {
         "en": "An Explanation",
         "zh": "说法",
+        "zh-Hant": "說法",
         "ja": "筋を通す",
         "ko": "해명"
       }
@@ -4780,6 +4966,7 @@
       "keyword": {
         "en": "Love's Ordeal",
         "zh": "情劫",
+        "zh-Hant": "情劫",
         "ja": "情の業",
         "ko": "사랑의 업"
       }
@@ -4805,6 +4992,7 @@
       "keyword": {
         "en": "Timing",
         "zh": "火候",
+        "zh-Hant": "火候",
         "ja": "火加減",
         "ko": "불 조절"
       }
@@ -4830,6 +5018,7 @@
       "keyword": {
         "en": "The Wine of Forgetting",
         "zh": "醉生梦死",
+        "zh-Hant": "醉生夢死",
         "ja": "酔生夢死",
         "ko": "취생몽사"
       }
@@ -4855,6 +5044,7 @@
       "keyword": {
         "en": "Unreliable Memory",
         "zh": "浮忆",
+        "zh-Hant": "浮憶",
         "ja": "おぼろな記憶",
         "ko": "흐릿한 기억"
       }
@@ -4880,6 +5070,7 @@
       "keyword": {
         "en": "Passing By",
         "zh": "错身",
+        "zh-Hant": "錯身",
         "ja": "行き違い",
         "ko": "엇갈림"
       }
@@ -4905,6 +5096,7 @@
       "keyword": {
         "en": "With Heart",
         "zh": "有心",
+        "zh-Hant": "有心",
         "ja": "心あれば",
         "ko": "마음만 있으면"
       }
@@ -4930,6 +5122,7 @@
       "keyword": {
         "en": "A Foreign City",
         "zh": "他乡",
+        "zh-Hant": "他鄉",
         "ja": "異郷",
         "ko": "타향"
       }
@@ -4955,6 +5148,7 @@
       "keyword": {
         "en": "Entangled",
         "zh": "纠缠",
+        "zh-Hant": "糾纏",
         "ja": "縺れ",
         "ko": "얽힘"
       }
@@ -4980,6 +5174,7 @@
       "keyword": {
         "en": "I Miss It",
         "zh": "念旧",
+        "zh-Hant": "念舊",
         "ja": "懐かしむ",
         "ko": "그리워하다"
       }
@@ -5005,6 +5200,7 @@
       "keyword": {
         "en": "A Dream to Keep",
         "zh": "有梦",
+        "zh-Hant": "有夢",
         "ja": "夢を持つ",
         "ko": "꿈이 있다"
       }
@@ -5030,6 +5226,7 @@
       "keyword": {
         "en": "Speed",
         "zh": "迅疾",
+        "zh-Hant": "迅疾",
         "ja": "迅さ",
         "ko": "빠름"
       }
@@ -5055,6 +5252,7 @@
       "keyword": {
         "en": "Damp Memory",
         "zh": "潮湿",
+        "zh-Hant": "潮濕",
         "ja": "湿った記憶",
         "ko": "젖은 기억"
       }
@@ -5080,6 +5278,7 @@
       "keyword": {
         "en": "Stay or Go",
         "zh": "去留",
+        "zh-Hant": "去留",
         "ja": "去るか留まるか",
         "ko": "떠남과 머묾"
       }
@@ -5105,6 +5304,7 @@
       "keyword": {
         "en": "Keep Faith",
         "zh": "存信",
+        "zh-Hant": "存信",
         "ja": "信じること",
         "ko": "믿음을 지니다"
       }
@@ -5130,6 +5330,7 @@
       "keyword": {
         "en": "Aftershock",
         "zh": "余震",
+        "zh-Hant": "餘震",
         "ja": "余震",
         "ko": "여진"
       }
@@ -5155,6 +5356,7 @@
       "keyword": {
         "en": "Stand Up",
         "zh": "挺立",
+        "zh-Hant": "挺立",
         "ja": "立ち上がる",
         "ko": "일어서다"
       }
@@ -5180,6 +5382,7 @@
       "keyword": {
         "en": "Grass in the Wind",
         "zh": "草莽",
+        "zh-Hant": "草莽",
         "ja": "風になびく草",
         "ko": "바람에 눕는 풀"
       }
@@ -5205,6 +5408,7 @@
       "keyword": {
         "en": "Savage Pride",
         "zh": "傲骨",
+        "zh-Hant": "傲骨",
         "ja": "誇り",
         "ko": "자존"
       }
@@ -5230,6 +5434,7 @@
       "keyword": {
         "en": "Green Years",
         "zh": "青涩",
+        "zh-Hant": "青澀",
         "ja": "青くさい",
         "ko": "풋내"
       }
@@ -5255,6 +5460,7 @@
       "keyword": {
         "en": "High Spirits",
         "zh": "意气",
+        "zh-Hant": "意氣",
         "ja": "意気",
         "ko": "의기"
       }
@@ -5280,6 +5486,7 @@
       "keyword": {
         "en": "Restraint",
         "zh": "克制",
+        "zh-Hant": "克制",
         "ja": "抑制",
         "ko": "절제"
       }
@@ -5305,6 +5512,7 @@
       "keyword": {
         "en": "The Blue Phoenix",
         "zh": "青鸾",
+        "zh-Hant": "青鸞",
         "ja": "青鸞",
         "ko": "청란"
       }
@@ -5330,6 +5538,7 @@
       "keyword": {
         "en": "One Stretch of Road",
         "zh": "一程",
+        "zh-Hant": "一程",
         "ja": "ひと道",
         "ko": "한 구간"
       }
@@ -5355,6 +5564,7 @@
       "keyword": {
         "en": "Let It Pass",
         "zh": "放下",
+        "zh-Hant": "放下",
         "ja": "捨て置く",
         "ko": "내려놓다"
       }
@@ -5380,6 +5590,7 @@
       "keyword": {
         "en": "One Clean Drop",
         "zh": "一滴",
+        "zh-Hant": "一滴",
         "ja": "一滴",
         "ko": "한 방울"
       }
@@ -5405,6 +5616,7 @@
       "keyword": {
         "en": "Knowing Kindness",
         "zh": "知善",
+        "zh-Hant": "知善",
         "ja": "善を知る",
         "ko": "선을 알다"
       }
@@ -5430,6 +5642,7 @@
       "keyword": {
         "en": "The Inner Cosmos",
         "zh": "内宇宙",
+        "zh-Hant": "內宇宙",
         "ja": "内なる宇宙",
         "ko": "내면의 우주"
       }
@@ -5455,6 +5668,7 @@
       "keyword": {
         "en": "Courage to Come",
         "zh": "无畏",
+        "zh-Hant": "無畏",
         "ja": "畏れなき",
         "ko": "두려움 없이"
       }
@@ -5480,6 +5694,7 @@
       "keyword": {
         "en": "To Live",
         "zh": "求生",
+        "zh-Hant": "求生",
         "ja": "生きたい",
         "ko": "살고 싶다"
       }
@@ -5505,6 +5720,7 @@
       "keyword": {
         "en": "Choosing Hope",
         "zh": "寄望",
+        "zh-Hant": "寄望",
         "ja": "希望に賭ける",
         "ko": "희망을 걸다"
       }
@@ -5530,6 +5746,7 @@
       "keyword": {
         "en": "My Fate Is Mine",
         "zh": "逆天",
+        "zh-Hant": "逆天",
         "ja": "天に逆らう",
         "ko": "하늘을 거스르다"
       }
@@ -5555,6 +5772,7 @@
       "keyword": {
         "en": "I'll Protect You",
         "zh": "相护",
+        "zh-Hant": "相護",
         "ja": "守り合う",
         "ko": "서로 지키다"
       }
@@ -5580,6 +5798,7 @@
       "keyword": {
         "en": "Do Not Forget",
         "zh": "勿忘",
+        "zh-Hant": "勿忘",
         "ja": "忘れざれ",
         "ko": "잊지 말라"
       }
@@ -5605,6 +5824,7 @@
       "keyword": {
         "en": "Safe and Well",
         "zh": "安好",
+        "zh-Hant": "安好",
         "ja": "健やかに",
         "ko": "무탈하기를"
       }
@@ -5630,6 +5850,7 @@
       "keyword": {
         "en": "Seeing Off",
         "zh": "送行",
+        "zh-Hant": "送行",
         "ja": "見送り",
         "ko": "배웅"
       }
@@ -5655,6 +5876,7 @@
       "keyword": {
         "en": "Turning It Around",
         "zh": "翻身",
+        "zh-Hant": "翻身",
         "ja": "起き上がる",
         "ko": "일어서기"
       }
@@ -5680,6 +5902,7 @@
       "keyword": {
         "en": "Doubt",
         "zh": "疑心",
+        "zh-Hant": "疑心",
         "ja": "疑心",
         "ko": "의심"
       }
@@ -5705,6 +5928,7 @@
       "keyword": {
         "en": "Toward Life",
         "zh": "向生",
+        "zh-Hant": "向生",
         "ja": "生へ",
         "ko": "삶을 향해"
       }
@@ -5730,6 +5954,7 @@
       "keyword": {
         "en": "He Stole Your Heart",
         "zh": "窃心",
+        "zh-Hant": "竊心",
         "ja": "心を盗む",
         "ko": "마음을 훔치다"
       }
@@ -5755,6 +5980,7 @@
       "keyword": {
         "en": "Clad in Blue",
         "zh": "蓝衣",
+        "zh-Hant": "藍衣",
         "ja": "青き衣",
         "ko": "푸른 옷"
       }
@@ -5780,6 +6006,7 @@
       "keyword": {
         "en": "True Happiness",
         "zh": "真福",
+        "zh-Hant": "真福",
         "ja": "まことの幸い",
         "ko": "참된 행복"
       }
@@ -5805,6 +6032,7 @@
       "keyword": {
         "en": "Runaway Power",
         "zh": "暴走",
+        "zh-Hant": "暴走",
         "ja": "暴走",
         "ko": "폭주"
       }
@@ -5830,6 +6058,7 @@
       "keyword": {
         "en": "Wings",
         "zh": "振翅",
+        "zh-Hant": "振翅",
         "ja": "羽ばたき",
         "ko": "날갯짓"
       }
@@ -5855,6 +6084,7 @@
       "keyword": {
         "en": "Not Yet",
         "zh": "未央",
+        "zh-Hant": "未央",
         "ja": "まあだだよ",
         "ko": "아직이야"
       }
@@ -5880,6 +6110,7 @@
       "keyword": {
         "en": "The Country Road",
         "zh": "小径",
+        "zh-Hant": "小徑",
         "ja": "小径",
         "ko": "작은 길"
       }
@@ -5905,6 +6136,7 @@
       "keyword": {
         "en": "Ghost and Shell",
         "zh": "灵壳",
+        "zh-Hant": "靈殼",
         "ja": "魂と殻",
         "ko": "영과 껍데기"
       }
@@ -5930,6 +6162,7 @@
       "keyword": {
         "en": "We're Just Starting",
         "zh": "起手",
+        "zh-Hant": "起手",
         "ja": "始まったばかり",
         "ko": "이제 시작"
       }
@@ -5955,6 +6188,7 @@
       "keyword": {
         "en": "It Takes Two",
         "zh": "共舞",
+        "zh-Hant": "共舞",
         "ja": "共に踊る",
         "ko": "함께 춤추다"
       }
@@ -5980,6 +6214,7 @@
       "keyword": {
         "en": "One Memory",
         "zh": "择忆",
+        "zh-Hant": "擇憶",
         "ja": "記憶を選ぶ",
         "ko": "기억을 고르다"
       }
@@ -6005,6 +6240,7 @@
       "keyword": {
         "en": "Waiting for Spring",
         "zh": "待春",
+        "zh-Hant": "待春",
         "ja": "春を待つ",
         "ko": "봄을 기다리다"
       }
@@ -6030,6 +6266,7 @@
       "keyword": {
         "en": "Growing Up",
         "zh": "长成",
+        "zh-Hant": "長成",
         "ja": "大人になる",
         "ko": "자라나기"
       }
@@ -6055,6 +6292,7 @@
       "keyword": {
         "en": "Chasing a Shadow",
         "zh": "追影",
+        "zh-Hant": "追影",
         "ja": "影を追う",
         "ko": "그림자를 좇다"
       }
@@ -6080,6 +6318,7 @@
       "keyword": {
         "en": "Light-Years Apart",
         "zh": "天涯",
+        "zh-Hant": "天涯",
         "ja": "天涯",
         "ko": "아득한 거리"
       }
@@ -6105,6 +6344,7 @@
       "keyword": {
         "en": "Your Own Time",
         "zh": "自适",
+        "zh-Hant": "自適",
         "ja": "自分の時間",
         "ko": "나만의 시간"
       }
@@ -6130,6 +6370,7 @@
       "keyword": {
         "en": "I'll Wait in the Future",
         "zh": "来日",
+        "zh-Hant": "來日",
         "ja": "未来で待つ",
         "ko": "미래에서 기다리다"
       }
@@ -6155,6 +6396,7 @@
       "keyword": {
         "en": "Falling Petals",
         "zh": "落樱",
+        "zh-Hant": "落櫻",
         "ja": "桜舞う",
         "ko": "지는 벚꽃"
       }
@@ -6180,6 +6422,7 @@
       "keyword": {
         "en": "Facing It",
         "zh": "迎战",
+        "zh-Hant": "迎戰",
         "ja": "立ち向かう",
         "ko": "맞서다"
       }
@@ -6205,6 +6448,7 @@
       "keyword": {
         "en": "Always Just Missed",
         "zh": "错过",
+        "zh-Hant": "錯過",
         "ja": "間に合わず",
         "ko": "놓치다"
       }
@@ -6230,6 +6474,7 @@
       "keyword": {
         "en": "All Together",
         "zh": "一家",
+        "zh-Hant": "一家",
         "ja": "一家",
         "ko": "한 식구"
       }
@@ -6255,6 +6500,7 @@
       "keyword": {
         "en": "Part of My Heart",
         "zh": "心上",
+        "zh-Hant": "心上",
         "ja": "心の一部",
         "ko": "마음의 한켠"
       }
@@ -6280,6 +6526,7 @@
       "keyword": {
         "en": "Thirteen Years, Gone",
         "zh": "转眼",
+        "zh-Hant": "轉眼",
         "ja": "瞬く間",
         "ko": "눈 깜짝할 사이"
       }
@@ -6305,6 +6552,7 @@
       "keyword": {
         "en": "Learning to Walk",
         "zh": "学步",
+        "zh-Hant": "學步",
         "ja": "歩き方を学ぶ",
         "ko": "걸음을 배우다"
       }
@@ -6330,6 +6578,7 @@
       "keyword": {
         "en": "The Wind Rises",
         "zh": "起风",
+        "zh-Hant": "起風",
         "ja": "風立ちぬ",
         "ko": "바람이 일다"
       }
@@ -6355,6 +6604,7 @@
       "keyword": {
         "en": "Becoming a Father",
         "zh": "为父",
+        "zh-Hant": "為父",
         "ja": "父になる",
         "ko": "아버지 되기"
       }
@@ -6380,6 +6630,7 @@
       "keyword": {
         "en": "The Taste of This World",
         "zh": "人间味",
+        "zh-Hant": "人間味",
         "ja": "この世の味",
         "ko": "이 세상의 맛"
       }
@@ -6405,6 +6656,7 @@
       "keyword": {
         "en": "A Sea of Words",
         "zh": "词海",
+        "zh-Hant": "詞海",
         "ja": "言葉の海",
         "ko": "말의 바다"
       }
@@ -6430,6 +6682,7 @@
       "keyword": {
         "en": "The Sword Within",
         "zh": "胸中剑",
+        "zh-Hant": "胸中劍",
         "ja": "胸の中の剣",
         "ko": "가슴 속의 검"
       }
@@ -6455,6 +6708,7 @@
       "keyword": {
         "en": "Reaching Out",
         "zh": "伸手",
+        "zh-Hant": "伸手",
         "ja": "手を伸ばす",
         "ko": "손을 내밀다"
       }
@@ -6480,6 +6734,7 @@
       "keyword": {
         "en": "A Corner of the World",
         "zh": "一隅",
+        "zh-Hant": "一隅",
         "ja": "片隅",
         "ko": "한 구석"
       }
@@ -6505,6 +6760,7 @@
       "keyword": {
         "en": "It Will Clear Up",
         "zh": "转晴",
+        "zh-Hant": "轉晴",
         "ja": "晴れゆく",
         "ko": "맑아지다"
       }
@@ -6530,6 +6786,7 @@
       "keyword": {
         "en": "Set Your Heart Ablaze",
         "zh": "燃心",
+        "zh-Hant": "燃心",
         "ja": "心を燃やせ",
         "ko": "마음을 불태워라"
       }
@@ -6555,6 +6812,7 @@
       "keyword": {
         "en": "Facing the Hurt",
         "zh": "正视",
+        "zh-Hant": "正視",
         "ja": "向き合う",
         "ko": "마주하기"
       }
@@ -6580,6 +6838,7 @@
       "keyword": {
         "en": "A Bouquet",
         "zh": "花束",
+        "zh-Hant": "花束",
         "ja": "花束",
         "ko": "꽃다발"
       }
@@ -6605,6 +6864,7 @@
       "keyword": {
         "en": "Not Over Yet",
         "zh": "未竟",
+        "zh-Hant": "未竟",
         "ja": "まだ終わらない",
         "ko": "아직 끝나지 않았다"
       }
@@ -6630,6 +6890,7 @@
       "keyword": {
         "en": "I'm Off, I'll Be Back",
         "zh": "往还",
+        "zh-Hant": "往還",
         "ja": "行ってきます",
         "ko": "다녀오겠습니다"
       }
@@ -6655,6 +6916,7 @@
       "keyword": {
         "en": "Survivor's War",
         "zh": "生还",
+        "zh-Hant": "生還",
         "ja": "生きて還る",
         "ko": "살아 돌아오다"
       }
@@ -6680,6 +6942,7 @@
       "keyword": {
         "en": "How Will You Live?",
         "zh": "问生",
+        "zh-Hant": "問生",
         "ja": "いかに生きるか",
         "ko": "어떻게 살 것인가"
       }
@@ -6705,6 +6968,7 @@
       "keyword": {
         "en": "The Branch or the Heart",
         "zh": "心动",
+        "zh-Hant": "心動",
         "ja": "心が動く",
         "ko": "마음이 흔들리다"
       }
@@ -6730,6 +6994,7 @@
       "keyword": {
         "en": "Staying by Her",
         "zh": "厮守",
+        "zh-Hant": "廝守",
         "ja": "添い遂げる",
         "ko": "곁을 지키다"
       }
@@ -6755,6 +7020,7 @@
       "keyword": {
         "en": "Only Today",
         "zh": "今日",
+        "zh-Hant": "今日",
         "ja": "今日だけ",
         "ko": "오늘만"
       }
@@ -6780,6 +7046,7 @@
       "keyword": {
         "en": "Against the Wind",
         "zh": "破风",
+        "zh-Hant": "破風",
         "ja": "風を破る",
         "ko": "바람을 가르다"
       }
@@ -6805,6 +7072,7 @@
       "keyword": {
         "en": "Pulling Strings",
         "zh": "攀附",
+        "zh-Hant": "攀附",
         "ja": "コネ",
         "ko": "연줄"
       }
@@ -6830,6 +7098,7 @@
       "keyword": {
         "en": "The Double",
         "zh": "替身",
+        "zh-Hant": "替身",
         "ja": "影武者",
         "ko": "대역"
       }
@@ -6855,6 +7124,7 @@
       "keyword": {
         "en": "The People's Sovereignty",
         "zh": "民本",
+        "zh-Hant": "民本",
         "ja": "民が本",
         "ko": "국민이 주인"
       }
@@ -6880,6 +7150,7 @@
       "keyword": {
         "en": "It's a Door",
         "zh": "破壁",
+        "zh-Hant": "破壁",
         "ja": "壁を破る",
         "ko": "벽을 깨다"
       }
@@ -6905,6 +7176,7 @@
       "keyword": {
         "en": "Twelve Ships",
         "zh": "十二艘",
+        "zh-Hant": "十二艘",
         "ja": "十二隻",
         "ko": "열두 척"
       }
@@ -6930,6 +7202,7 @@
       "keyword": {
         "en": "Backbone",
         "zh": "骨气",
+        "zh-Hant": "骨氣",
         "ja": "気骨",
         "ko": "배짱"
       }
@@ -6955,6 +7228,7 @@
       "keyword": {
         "en": "My Savior, My Ruin",
         "zh": "共谋",
+        "zh-Hant": "共謀",
         "ja": "共謀",
         "ko": "공모"
       }
@@ -6980,6 +7254,7 @@
       "keyword": {
         "en": "Giving Himself Up",
         "zh": "舍身",
+        "zh-Hant": "捨身",
         "ja": "身を捨てる",
         "ko": "몸을 던지다"
       }
@@ -7005,6 +7280,7 @@
       "keyword": {
         "en": "Will It Change Anything?",
         "zh": "星火",
+        "zh-Hant": "星火",
         "ja": "一つの火",
         "ko": "작은 불씨"
       }
@@ -7030,6 +7306,7 @@
       "keyword": {
         "en": "How Should I Live?",
         "zh": "彷徨",
+        "zh-Hant": "彷徨",
         "ja": "彷徨い",
         "ko": "방황"
       }
@@ -7055,6 +7332,7 @@
       "keyword": {
         "en": "Minari Grows Anywhere",
         "zh": "水芹",
+        "zh-Hant": "水芹",
         "ja": "セリ",
         "ko": "미나리"
       }
@@ -7080,6 +7358,7 @@
       "keyword": {
         "en": "Utterly Undone",
         "zh": "崩塌",
+        "zh-Hant": "崩塌",
         "ja": "崩れる",
         "ko": "무너지다"
       }
@@ -7105,6 +7384,7 @@
       "keyword": {
         "en": "A Coup or a Revolution?",
         "zh": "窃国",
+        "zh-Hant": "竊國",
         "ja": "国を盗む",
         "ko": "나라를 훔치다"
       }
@@ -7130,6 +7410,7 @@
       "keyword": {
         "en": "The Severed Spine",
         "zh": "地脉",
+        "zh-Hant": "地脈",
         "ja": "地脈",
         "ko": "지맥"
       }
@@ -7155,6 +7436,7 @@
       "keyword": {
         "en": "Knowledge, Not Faith",
         "zh": "求知",
+        "zh-Hant": "求知",
         "ja": "知を求む",
         "ko": "지를 구하다"
       }
@@ -7180,6 +7462,7 @@
       "keyword": {
         "en": "Candor",
         "zh": "坦然",
+        "zh-Hant": "坦然",
         "ja": "率直",
         "ko": "솔직"
       }
@@ -7205,6 +7488,7 @@
       "keyword": {
         "en": "When the Child Was a Child",
         "zh": "初心",
+        "zh-Hant": "初心",
         "ja": "初心",
         "ko": "초심"
       }
@@ -7230,6 +7514,7 @@
       "keyword": {
         "en": "The Feast",
         "zh": "盛宴",
+        "zh-Hant": "盛宴",
         "ja": "饗宴",
         "ko": "만찬"
       }
@@ -7255,6 +7540,7 @@
       "keyword": {
         "en": "Poetry for Whoever Needs It",
         "zh": "赠诗",
+        "zh-Hant": "贈詩",
         "ja": "詩を贈る",
         "ko": "시를 주다"
       }
@@ -7280,6 +7566,7 @@
       "keyword": {
         "en": "The Landing",
         "zh": "着地",
+        "zh-Hant": "著地",
         "ja": "着地",
         "ko": "착지"
       }
@@ -7305,6 +7592,7 @@
       "keyword": {
         "en": "Running",
         "zh": "疾走",
+        "zh-Hant": "疾走",
         "ja": "疾走",
         "ko": "질주"
       }
@@ -7330,6 +7618,7 @@
       "keyword": {
         "en": "Like Electricity",
         "zh": "触电",
+        "zh-Hant": "觸電",
         "ja": "電気のように",
         "ko": "감전된 듯"
       }
@@ -7356,6 +7645,7 @@
       "keyword": {
         "en": "An Island",
         "zh": "孤岛",
+        "zh-Hant": "孤島",
         "ja": "孤島",
         "ko": "섬"
       }
@@ -7381,6 +7671,7 @@
       "keyword": {
         "en": "Nothing Is Simple",
         "zh": "难言",
+        "zh-Hant": "難言",
         "ja": "言い難し",
         "ko": "말하기 어려운"
       }
@@ -7406,6 +7697,7 @@
       "keyword": {
         "en": "No Way Out",
         "zh": "困局",
+        "zh-Hant": "困局",
         "ja": "袋の鼠",
         "ko": "덫"
       }
@@ -7431,6 +7723,7 @@
       "keyword": {
         "en": "The Country She Believed In",
         "zh": "故国",
+        "zh-Hant": "故國",
         "ja": "母の国",
         "ko": "그 나라"
       }
@@ -7457,6 +7750,7 @@
       "keyword": {
         "en": "Love Is All Around",
         "zh": "遍在",
+        "zh-Hant": "遍在",
         "ja": "あまねく",
         "ko": "곳곳에"
       }
@@ -7482,6 +7776,7 @@
       "keyword": {
         "en": "Let the World Change You",
         "zh": "历世",
+        "zh-Hant": "歷世",
         "ja": "世を経る",
         "ko": "세상을 겪다"
       }
@@ -7507,6 +7802,7 @@
       "keyword": {
         "en": "Back to Her Kingdom",
         "zh": "归途",
+        "zh-Hant": "歸途",
         "ja": "帰る道",
         "ko": "돌아가는 길"
       }
@@ -7532,6 +7828,7 @@
       "keyword": {
         "en": "The Sonata",
         "zh": "一曲",
+        "zh-Hant": "一曲",
         "ja": "一曲",
         "ko": "한 곡"
       }
@@ -7557,6 +7854,7 @@
       "keyword": {
         "en": "Atonement",
         "zh": "补过",
+        "zh-Hant": "補過",
         "ja": "償い",
         "ko": "속죄"
       }
@@ -7582,6 +7880,7 @@
       "keyword": {
         "en": "Let Me In",
         "zh": "邀入",
+        "zh-Hant": "邀入",
         "ja": "招き入れる",
         "ko": "들이다"
       }
@@ -7607,6 +7906,7 @@
       "keyword": {
         "en": "The Unclosed Case",
         "zh": "悬案",
+        "zh-Hant": "懸案",
         "ja": "未決",
         "ko": "미결"
       }
@@ -7633,6 +7933,7 @@
       "keyword": {
         "en": "I Have a Voice",
         "zh": "发声",
+        "zh-Hant": "發聲",
         "ja": "声を持つ",
         "ko": "목소리를 갖다"
       }
@@ -7658,6 +7959,7 @@
       "keyword": {
         "en": "The Only Trace",
         "zh": "痕迹",
+        "zh-Hant": "痕跡",
         "ja": "痕跡",
         "ko": "흔적"
       }
@@ -7683,6 +7985,7 @@
       "keyword": {
         "en": "Happy-Sad",
         "zh": "悲喜",
+        "zh-Hant": "悲喜",
         "ja": "悲喜",
         "ko": "희비"
       }
@@ -7709,6 +8012,7 @@
       "keyword": {
         "en": "Kind and Polite",
         "zh": "温良",
+        "zh-Hant": "溫良",
         "ja": "優しく礼儀正しく",
         "ko": "친절과 예의"
       }
@@ -7734,6 +8038,7 @@
       "keyword": {
         "en": "The Gaze",
         "zh": "凝视",
+        "zh-Hant": "凝視",
         "ja": "見つめ合う",
         "ko": "응시"
       }
@@ -7759,6 +8064,7 @@
       "keyword": {
         "en": "Fallen Out",
         "zh": "相厌",
+        "zh-Hant": "相厭",
         "ja": "嫌になる",
         "ko": "싫어지다"
       }
@@ -7784,6 +8090,7 @@
       "keyword": {
         "en": "A Silence With No Sound",
         "zh": "默语",
+        "zh-Hant": "默語",
         "ja": "沈黙の声",
         "ko": "침묵의 말"
       }
@@ -7809,6 +8116,7 @@
       "keyword": {
         "en": "Look Back",
         "zh": "回望",
+        "zh-Hant": "回望",
         "ja": "振り返る",
         "ko": "돌아보다"
       }
@@ -7834,6 +8142,7 @@
       "keyword": {
         "en": "Every Child's Gift",
         "zh": "异才",
+        "zh-Hant": "異才",
         "ja": "それぞれの才",
         "ko": "저마다의 재능"
       }
@@ -7860,6 +8169,7 @@
       "keyword": {
         "en": "Let It Go",
         "zh": "解冻",
+        "zh-Hant": "解凍",
         "ja": "解け放つ",
         "ko": "녹아내리다"
       }
@@ -7885,6 +8195,7 @@
       "keyword": {
         "en": "The Wrong Train",
         "zh": "错车",
+        "zh-Hant": "錯車",
         "ja": "乗り違え",
         "ko": "잘못 탄 기차"
       }
@@ -7910,6 +8221,7 @@
       "keyword": {
         "en": "Our Daughters",
         "zh": "巾帼",
+        "zh-Hant": "巾幗",
         "ja": "女傑",
         "ko": "여장부"
       }
@@ -7936,6 +8248,7 @@
       "keyword": {
         "en": "To the Sea",
         "zh": "向海",
+        "zh-Hant": "向海",
         "ja": "海へ",
         "ko": "바다로"
       }
@@ -7962,6 +8275,7 @@
       "keyword": {
         "en": "Anyone Can Be Anything",
         "zh": "无界",
+        "zh-Hant": "無界",
         "ja": "境なし",
         "ko": "경계 없이"
       }
@@ -7987,6 +8301,7 @@
       "keyword": {
         "en": "Abandoned",
         "zh": "弃儿",
+        "zh-Hant": "棄兒",
         "ja": "捨て子",
         "ko": "버려진 아이"
       }
@@ -8012,6 +8327,7 @@
       "keyword": {
         "en": "Carrying It for Her",
         "zh": "承重",
+        "zh-Hant": "承重",
         "ja": "重さを担う",
         "ko": "무게를 대신 지다"
       }
@@ -8037,6 +8353,7 @@
       "keyword": {
         "en": "The Mediator Must Be the Heart",
         "zh": "居间",
+        "zh-Hant": "居間",
         "ja": "仲立ち",
         "ko": "중재"
       }
@@ -8063,6 +8380,7 @@
       "keyword": {
         "en": "You Can See Now?",
         "zh": "相认",
+        "zh-Hant": "相認",
         "ja": "気づく",
         "ko": "알아보다"
       }
@@ -8088,6 +8406,7 @@
       "keyword": {
         "en": "Trapped in Myself",
         "zh": "自困",
+        "zh-Hant": "自困",
         "ja": "自らに囚われ",
         "ko": "스스로에 갇히다"
       }
@@ -8113,6 +8432,7 @@
       "keyword": {
         "en": "Borders Are Man-Made",
         "zh": "疆界",
+        "zh-Hant": "疆界",
         "ja": "国境",
         "ko": "국경"
       }
@@ -8138,6 +8458,7 @@
       "keyword": {
         "en": "Everyone Has Their Reasons",
         "zh": "情理",
+        "zh-Hant": "情理",
         "ja": "それぞれの理",
         "ko": "각자의 이유"
       }
@@ -8164,6 +8485,7 @@
       "keyword": {
         "en": "I'll Be There",
         "zh": "同苦",
+        "zh-Hant": "同苦",
         "ja": "苦を共に",
         "ko": "고통을 함께"
       }
@@ -8189,6 +8511,7 @@
       "keyword": {
         "en": "Never the Time to Judge",
         "zh": "容人",
+        "zh-Hant": "容人",
         "ja": "人を容れる",
         "ko": "사람을 품다"
       }
@@ -8215,6 +8538,7 @@
       "keyword": {
         "en": "The Stuff of Dreams",
         "zh": "幻物",
+        "zh-Hant": "幻物",
         "ja": "夢の材",
         "ko": "꿈의 재료"
       }
@@ -8240,6 +8564,7 @@
       "keyword": {
         "en": "An Ordinary Woman's Storm",
         "zh": "隐情",
+        "zh-Hant": "隱情",
         "ja": "秘めた情",
         "ko": "숨긴 마음"
       }
@@ -8265,6 +8590,7 @@
       "keyword": {
         "en": "Why Do You Dance?",
         "zh": "痴舞",
+        "zh-Hant": "癡舞",
         "ja": "舞に憑かれ",
         "ko": "춤에 홀리다"
       }
@@ -8291,6 +8617,7 @@
       "keyword": {
         "en": "The Kindness of Strangers",
         "zh": "陌客",
+        "zh-Hant": "陌客",
         "ja": "見知らぬ人",
         "ko": "낯선 이"
       }
@@ -8316,6 +8643,7 @@
       "keyword": {
         "en": "Mercy",
         "zh": "慈悲",
+        "zh-Hant": "慈悲",
         "ja": "慈悲",
         "ko": "자비"
       }
@@ -8341,6 +8669,7 @@
       "keyword": {
         "en": "The Last Refuge",
         "zh": "遮羞",
+        "zh-Hant": "遮羞",
         "ja": "体裁を隠す",
         "ko": "부끄러움을 가리다"
       }
@@ -8366,6 +8695,7 @@
       "keyword": {
         "en": "Delusion",
         "zh": "妄执",
+        "zh-Hant": "妄執",
         "ja": "妄執",
         "ko": "망집"
       }
@@ -8391,6 +8721,7 @@
       "keyword": {
         "en": "What Does It Matter?",
         "zh": "身后名",
+        "zh-Hant": "身後名",
         "ja": "死後の名",
         "ko": "죽은 뒤의 이름"
       }
@@ -8416,6 +8747,7 @@
       "keyword": {
         "en": "What a Strange Road",
         "zh": "歧路",
+        "zh-Hant": "歧路",
         "ja": "奇しき道",
         "ko": "이상한 길"
       }
@@ -8441,6 +8773,7 @@
       "keyword": {
         "en": "An Empty Shell",
         "zh": "虚仪",
+        "zh-Hant": "虛儀",
         "ja": "虚礼",
         "ko": "허례"
       }
@@ -8466,6 +8799,7 @@
       "keyword": {
         "en": "Alone in the End",
         "zh": "独坐",
+        "zh-Hant": "獨坐",
         "ja": "独り座す",
         "ko": "홀로 앉아"
       }
@@ -8491,6 +8825,7 @@
       "keyword": {
         "en": "Everything Must Change",
         "zh": "变以守常",
+        "zh-Hant": "變以守常",
         "ja": "変えて守る",
         "ko": "바꾸어 지키다"
       }
@@ -8516,6 +8851,7 @@
       "keyword": {
         "en": "Shoveling Sand",
         "zh": "徒劳",
+        "zh-Hant": "徒勞",
         "ja": "徒労",
         "ko": "헛수고"
       }
@@ -8541,6 +8877,7 @@
       "keyword": {
         "en": "Think for Yourself",
         "zh": "自思",
+        "zh-Hant": "自思",
         "ja": "自ら考えよ",
         "ko": "스스로 생각하라"
       }
@@ -8567,6 +8904,7 @@
       "keyword": {
         "en": "I Am a Man",
         "zh": "为人",
+        "zh-Hant": "為人",
         "ja": "人である",
         "ko": "사람이다"
       }
@@ -8592,6 +8930,7 @@
       "keyword": {
         "en": "A Reason to Surface",
         "zh": "浮沉",
+        "zh-Hant": "浮沉",
         "ja": "浮き沈み",
         "ko": "부침"
       }
@@ -8618,6 +8957,7 @@
       "keyword": {
         "en": "Knowing Who I Am",
         "zh": "知我",
+        "zh-Hant": "知我",
         "ja": "我を知る",
         "ko": "나를 알다"
       }
@@ -8643,6 +8983,7 @@
       "keyword": {
         "en": "The Child I Still Carry",
         "zh": "旧我",
+        "zh-Hant": "舊我",
         "ja": "昔の自分",
         "ko": "옛날의 나"
       }
@@ -8668,6 +9009,7 @@
       "keyword": {
         "en": "We Covet What We See",
         "zh": "所欲",
+        "zh-Hant": "所欲",
         "ja": "欲するもの",
         "ko": "탐하는 것"
       }
@@ -8693,6 +9035,7 @@
       "keyword": {
         "en": "Nothing Left to Do",
         "zh": "留白",
+        "zh-Hant": "留白",
         "ja": "余白",
         "ko": "여백"
       }
@@ -8718,6 +9061,7 @@
       "keyword": {
         "en": "The Voice Within",
         "zh": "心声",
+        "zh-Hant": "心聲",
         "ja": "心の声",
         "ko": "마음의 소리"
       }
@@ -8744,6 +9088,7 @@
       "keyword": {
         "en": "No Strength Saved",
         "zh": "竭尽",
+        "zh-Hant": "竭盡",
         "ja": "力を尽くす",
         "ko": "온 힘을 다해"
       }
@@ -8770,6 +9115,7 @@
       "keyword": {
         "en": "Not Your Job",
         "zh": "空身",
+        "zh-Hant": "空身",
         "ja": "身一つ",
         "ko": "빈 몸"
       }
@@ -8795,6 +9141,7 @@
       "keyword": {
         "en": "Lies We Live By",
         "zh": "自欺",
+        "zh-Hant": "自欺",
         "ja": "自ら欺く",
         "ko": "자기기만"
       }
@@ -8820,6 +9167,7 @@
       "keyword": {
         "en": "The Stone You Carry",
         "zh": "负石",
+        "zh-Hant": "負石",
         "ja": "石を負う",
         "ko": "돌을 지다"
       }
@@ -8846,6 +9194,7 @@
       "keyword": {
         "en": "Ideas Are Bulletproof",
         "zh": "火种",
+        "zh-Hant": "火種",
         "ja": "火種",
         "ko": "꺼지지 않는 불씨"
       }
@@ -8871,6 +9220,7 @@
       "keyword": {
         "en": "Just Feed Them",
         "zh": "一饭",
+        "zh-Hant": "一飯",
         "ja": "一飯",
         "ko": "한 끼"
       }
@@ -8896,6 +9246,7 @@
       "keyword": {
         "en": "Who Gave You the Right?",
         "zh": "问天",
+        "zh-Hant": "問天",
         "ja": "天に問う",
         "ko": "하늘에 묻다"
       }
@@ -8921,6 +9272,7 @@
       "keyword": {
         "en": "Where Is the Poem?",
         "zh": "寻诗",
+        "zh-Hant": "尋詩",
         "ja": "詩を探す",
         "ko": "시를 찾다"
       }
@@ -8946,6 +9298,7 @@
       "keyword": {
         "en": "Not to Be Changed",
         "zh": "守己",
+        "zh-Hant": "守己",
         "ja": "己を守る",
         "ko": "나를 지키다"
       }
@@ -8971,6 +9324,7 @@
       "keyword": {
         "en": "Then Becomes Now",
         "zh": "今昔",
+        "zh-Hant": "今昔",
         "ja": "今昔",
         "ko": "지금과 옛날"
       }
@@ -8996,6 +9350,7 @@
       "keyword": {
         "en": "From Womb to Tomb",
         "zh": "因果",
+        "zh-Hant": "因果",
         "ja": "因果",
         "ko": "인과"
       }
@@ -9021,6 +9376,7 @@
       "keyword": {
         "en": "The Root of All Evil",
         "zh": "孽债",
+        "zh-Hant": "孽債",
         "ja": "業の債",
         "ko": "업보의 빚"
       }
@@ -9046,6 +9402,7 @@
       "keyword": {
         "en": "The Tide of an Era",
         "zh": "时浪",
+        "zh-Hant": "時浪",
         "ja": "時の波",
         "ko": "시대의 물결"
       }
@@ -9071,6 +9428,7 @@
       "keyword": {
         "en": "What Did I Do Wrong?",
         "zh": "无辜",
+        "zh-Hant": "無辜",
         "ja": "罪なき",
         "ko": "죄 없음"
       }
@@ -9096,6 +9454,7 @@
       "keyword": {
         "en": "I Forgave You Long Ago",
         "zh": "释怨",
+        "zh-Hant": "釋怨",
         "ja": "怨みを解く",
         "ko": "원망을 풀다"
       }
@@ -9121,6 +9480,7 @@
       "keyword": {
         "en": "One Look from My Father",
         "zh": "一眼",
+        "zh-Hant": "一眼",
         "ja": "ひと目",
         "ko": "한 번의 눈길"
       }
@@ -9146,6 +9506,7 @@
       "keyword": {
         "en": "When Can We Just Play?",
         "zh": "和好",
+        "zh-Hant": "和好",
         "ja": "仲直り",
         "ko": "화해"
       }
@@ -9171,6 +9532,7 @@
       "keyword": {
         "en": "A Heart That Stays Broken",
         "zh": "旧伤",
+        "zh-Hant": "舊傷",
         "ja": "古傷",
         "ko": "옛 상처"
       }
@@ -9196,6 +9558,7 @@
       "keyword": {
         "en": "Anger Begets Anger",
         "zh": "息怒",
+        "zh-Hant": "息怒",
         "ja": "怒りを収める",
         "ko": "분노를 거두다"
       }
@@ -9221,6 +9584,7 @@
       "keyword": {
         "en": "The Great Hunger",
         "zh": "饥心",
+        "zh-Hant": "飢心",
         "ja": "心の飢え",
         "ko": "마음의 허기"
       }
@@ -9246,6 +9610,7 @@
       "keyword": {
         "en": "Caged Here",
         "zh": "笼中",
+        "zh-Hant": "籠中",
         "ja": "籠の中",
         "ko": "새장 속"
       }

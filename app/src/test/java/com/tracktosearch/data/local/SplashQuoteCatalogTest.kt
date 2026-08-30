@@ -71,6 +71,39 @@ class SplashQuoteCatalogTest {
         assertThat(quotes().map { it.keywordFor("zh") }).containsNoDuplicates()
     }
 
+    /**
+     * 印面刻的是繁体，而繁体是逐条写定的数据、不是运行时查字表，所以它得和简体一样逐条体检。
+     *
+     * 漏一条就会在那天的印章上混出一个简体字形，而这枚印是要导出成图片分享出去的。
+     * 字数也必须一致：印文分行按字数走（两三字竖排一列、四字 2+2），繁体多一个字就换了排法。
+     */
+    @Test
+    fun `中文关键词都配了繁体字形且字数一致`() = runTest {
+        quotes().forEach { quote ->
+            val traditional = quote.keyword[SplashQuote.SEAL_LANG_ZH]
+
+            assertThat(traditional).isNotNull()
+            assertThat(traditional).hasLength(quote.keywordFor("zh").length)
+            assertThat(quote.sealKeywordFor("zh")).isEqualTo(traditional)
+        }
+    }
+
+    /** 简体不重复不代表繁体不重复：简繁一对多的字（游/遊 一类）合并回去就可能撞成同一枚印 */
+    @Test
+    fun `繁体关键词互不重复`() = runTest {
+        assertThat(quotes().map { it.sealKeywordFor("zh") }).containsNoDuplicates()
+    }
+
+    /** 繁体那一支只管中文，其余语言的印面字形就是关键词本身 */
+    @Test
+    fun `非中文的印面字形与关键词一致`() = runTest {
+        quotes().forEach { quote ->
+            listOf("en", "ja", "ko").forEach { lang ->
+                assertThat(quote.sealKeywordFor(lang)).isEqualTo(quote.keywordFor(lang))
+            }
+        }
+    }
+
     @Test
     fun `海报路径都是 TMDB 的相对路径`() = runTest {
         quotes().forEach { quote ->
