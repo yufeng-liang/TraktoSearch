@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.ui.screen.swiftie.rememberIsLowRamDevice
@@ -44,9 +45,6 @@ private const val SWEEP_DELAY_MS: Long = 600L
 /** 扫光走完一趟。 */
 private const val SWEEP_MS: Float = 2_200f
 
-/** 单行行高，固定值 —— 18 行也只有 288dp。 */
-private val ROW_HEIGHT = 16.dp
-
 /**
  * 一张专辑的完整曲目列：逐行点亮 + 一趟扫光（Spec §6.2）。
  *
@@ -55,11 +53,14 @@ private val ROW_HEIGHT = 16.dp
  *
  * @param elapsedInCard 这张卡片自己的已用毫秒
  * @param textColors 压暗到 AA 的一组文字色，由卡片算好传进来（见 `SwiftieEraContrast`）
+ * @param rowHeight 单行行高，由卡片按可用高度与曲目数算好（见 `trackRowHeight`）。
+ *   字号跟着它等比缩放，所以 31 首的 TTPD Anthology 在小屏上也排得下
  */
 @Composable
 internal fun SwiftieEraTracklist(
     era: SwiftieEra,
     textColors: SwiftieEraTextColors,
+    rowHeight: Dp,
     elapsedInCard: () -> Long,
     modifier: Modifier = Modifier
 ) {
@@ -67,14 +68,16 @@ internal fun SwiftieEraTracklist(
     val stagger = if (lowRam) TRACK_STAGGER_LOW_RAM_MS else TRACK_STAGGER_MS
     val revealDoneAt = TRACK_REVEAL_START_MS + stagger * era.tracks.size
 
-    val numberStyle = remember(textColors) {
+    // 16dp 行高换算出 12sp / 11sp，与压缩前逐像素一致；压到 12dp 就是 9sp / 8.25sp
+    val numberWidth = rowHeight * 1.375f
+    val numberStyle = remember(textColors, rowHeight) {
         TextStyle(
-            fontSize = 11.sp,
+            fontSize = (rowHeight.value * 0.6875f).sp,
             color = textColors.number.copy(alpha = SwiftieEraContrast.NUMBER_ALPHA)
         )
     }
-    val titleStyle = remember(textColors) {
-        TextStyle(fontSize = 12.sp, color = textColors.body)
+    val titleStyle = remember(textColors, rowHeight) {
+        TextStyle(fontSize = (rowHeight.value * 0.75f).sp, color = textColors.body)
     }
 
     Box(
@@ -88,7 +91,7 @@ internal fun SwiftieEraTracklist(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(ROW_HEIGHT)
+                        .height(rowHeight)
                         // 在 graphicsLayer 里读时钟：每帧只失效 draw，不重组
                         .graphicsLayer {
                             val p = ((elapsedInCard() - appearAt) / TRACK_FADE_MS)
@@ -102,7 +105,7 @@ internal fun SwiftieEraTracklist(
                         // 固定 Locale.US：某些地区会把 %02d 渲染成本地数字
                         text = String.format(Locale.US, "%02d", index + 1),
                         style = numberStyle,
-                        modifier = Modifier.width(22.dp)
+                        modifier = Modifier.width(numberWidth)
                     )
                     Text(
                         text = title,

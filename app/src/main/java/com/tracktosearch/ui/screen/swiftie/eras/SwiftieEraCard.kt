@@ -26,6 +26,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
@@ -52,6 +53,27 @@ private const val MOTIF_CYCLE_MS: Long = 3_600L
 /** 卡片圆角。 */
 private val CARD_SHAPE = RoundedCornerShape(20.dp)
 
+/** 曲目行的理想行高。18 行只有 288dp，绝大多数屏幕都用这个值。 */
+private val TRACK_ROW_HEIGHT_MAX = 16.dp
+
+/** 行高下限。低于这个字就糊了，宁可让卡片顶出插槽也不再压。 */
+private val TRACK_ROW_HEIGHT_MIN = 11.dp
+
+/** 卡片除曲目列以外占的高度：标题（最多两行）+ 日期 + 两处间距 + 上下内边距。 */
+private val CARD_CHROME_HEIGHT = 118.dp
+
+/**
+ * 按插槽剩余高度定行高。
+ *
+ * TTPD 用 Anthology 版 31 首，16dp 行高要 496dp —— 大屏放得下，360×640 的小屏放不下。
+ * 这里只在放不下时才压，所以其余 11 张卡片与压缩前逐像素一致。
+ */
+private fun trackRowHeight(slotHeight: Dp, trackCount: Int): Dp {
+    if (trackCount <= 0) return TRACK_ROW_HEIGHT_MAX
+    return ((slotHeight - CARD_CHROME_HEIGHT) / trackCount)
+        .coerceIn(TRACK_ROW_HEIGHT_MIN, TRACK_ROW_HEIGHT_MAX)
+}
+
 /**
  * 一个时代的卡片：从轴上长出 → 停留（曲目逐行点亮 + 扫光）→ 回落。
  *
@@ -60,6 +82,7 @@ private val CARD_SHAPE = RoundedCornerShape(20.dp)
  * @param elapsedInCard 这张卡片起点以来的毫秒
  * @param durationMs 这张卡片分到的总时长，取自 `SwiftieTimeline.cardDurationMs`
  * @param originFractionX 对应色带在轴上的中心比例，用作缩放轴心
+ * @param slotHeight 卡片可用的最大高度，由 `SwiftieErasStage` 量出来。曲目行高按它折算
  */
 @Composable
 fun SwiftieEraCard(
@@ -67,12 +90,14 @@ fun SwiftieEraCard(
     elapsedInCard: () -> Long,
     durationMs: Long,
     originFractionX: Float,
+    slotHeight: Dp,
     modifier: Modifier = Modifier
 ) {
     val lowRam = rememberIsLowRamDevice()
     val titleFont = remember(era.fontResId) { FontFamily(Font(era.fontResId)) }
     // 浅色时代主色印在白卡上读不出来，这里取压暗到 AA 的那一组（见 SwiftieEraContrast）
     val textColors = remember(era) { SwiftieEraTextColors(era) }
+    val rowHeight = trackRowHeight(slotHeight, era.tracks.size)
     val description = stringResource(
         R.string.swiftie_era_card_a11y,
         era.name,
@@ -143,6 +168,7 @@ fun SwiftieEraCard(
             SwiftieEraTracklist(
                 era = era,
                 textColors = textColors,
+                rowHeight = rowHeight,
                 elapsedInCard = elapsedInCard,
                 modifier = Modifier.fillMaxWidth()
             )

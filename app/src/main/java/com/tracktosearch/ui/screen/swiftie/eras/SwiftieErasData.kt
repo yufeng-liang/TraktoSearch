@@ -324,7 +324,7 @@ object SwiftieErasData {
         textColor = Color(0xFF4A453E),
         fontResId = R.font.era_ttpd,
         motif = SwiftieEraMotif.TYPEWRITER_PAPER,
-        // 标准版 16 首。The Anthology 的 15 首不列
+        // The Anthology 版 31 首（需求方指定）：标准版 16 首 + Anthology 加曲 15 首
         tracks = listOf(
             "Fortnight",
             "The Tortured Poets Department",
@@ -342,7 +342,25 @@ object SwiftieErasData {
             "I Can Do It With a Broken Heart",
             "The Smallest Man Who Ever Lived",
             "The Alchemy",
-            "Clara Bow"
+            "Clara Bow",
+            // ---- The Anthology 加曲 17–31 ----
+            "The Black Dog",
+            // 官方无空格全小写
+            "imgonnagetyouback",
+            "The Albatross",
+            "Chloe or Sam or Sophia or Marcus",
+            "How Did It End?",
+            "So High School",
+            "I Hate It Here",
+            // 官方大小写刻意拼出 KIM，别顺手改成 Thank You Aimee
+            "thanK you aIMee",
+            "I Look in People's Windows",
+            "The Prophecy",
+            "Cassandra",
+            "Peter",
+            "The Bolter",
+            "Robin",
+            "The Manuscript"
         )
     )
 

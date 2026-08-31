@@ -60,6 +60,14 @@ private val CONTENT_GAP = 20.dp
 private const val WRONG_SHAKE_MS = 300L
 
 /**
+ * 终局交还给 Lover 收尾的交叉淡变窗口。
+ *
+ * 配乐 1:58 唱到 Lover，此时签名与手链已经放完，两层在这 500ms 里对调（见
+ * [SwiftieTimeline] 的类注释）。倒滑总共 1500ms，淡变走完还剩 1000ms 看播放头飞回去。
+ */
+private const val FINALE_HANDOFF_MS = 500f
+
+/**
  * 霉粉彩蛋全屏页：1:1 灯箱复刻 + 自绘数字键盘，答对后驱动整条 120s 序列。
  *
  * @param onDismiss solved = true 表示答对通关；false 表示用户主动关闭（不消耗解题机会）
@@ -138,10 +146,26 @@ private fun SwiftieEggContent(
             clock.elapsedMs >= SwiftieTimeline.DIFFUSION_START + SwiftieTimeline.DIFFUSION_MS
         }
     }
-    // T0–1100 与 T107000 之后开着，中间 106s 关掉（Spec §5 约束 2、3）
+    // T0–1100 与 T105950 之后开着，中间 105s 关掉（Spec §5 约束 2、3）
     val meshMotionActive: () -> Boolean = {
         clock.elapsedMs < SwiftieTimeline.THEME_COMMIT_AT ||
             clock.elapsedMs >= SwiftieTimeline.MOTION_PREHEAT_AT
+    }
+
+    // T118000 起 500ms 交叉淡变：签名与手链化开，轴与 Lover 卡片浮回来。
+    // 两个 lambda 都只在 draw 阶段读时钟，所以每帧只失效绘制、不重组
+    val finaleAlpha: () -> Float = {
+        1f - ((clock.elapsedMs - SwiftieTimeline.REWIND_START).toFloat() / FINALE_HANDOFF_MS)
+            .coerceIn(0f, 1f)
+    }
+    // 前半段（12 张卡片）必须恒为 1f —— 直接套上面那道斜坡会因为差值为负而把整段压成 0
+    val erasAlpha: () -> Float = {
+        if (clock.elapsedMs < SwiftieTimeline.SIGNATURE_START) {
+            1f
+        } else {
+            ((clock.elapsedMs - SwiftieTimeline.REWIND_START).toFloat() / FINALE_HANDOFF_MS)
+                .coerceIn(0f, 1f)
+        }
     }
 
     // 答错：Reject 触觉 + 摇晃走完后自动清空
@@ -200,7 +224,7 @@ private fun SwiftieEggContent(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            // T118460–120000：整层淡出，露出已经在运动的星云背景（Spec §5）。
+            // T123000–125000：整层淡出，露出已经在运动的星云背景（Spec §5）。
             // 必须插在 background 之前 —— 写在之后只淡出子内容、底色仍然挡着星云
             .graphicsLayer {
                 alpha = 1f - ((clock.elapsedMs - SwiftieTimeline.FADE_OUT_START).toFloat() /
@@ -241,17 +265,28 @@ private fun SwiftieEggContent(
             )
         }
 
-        if (phase >= SwiftieSequencePhase.ERAS_INTRO && phase <= SwiftieSequencePhase.LOVER_BLOOM) {
+        // Eras 舞台分两段挂载：开场轴线 + 12 张卡片，然后整层卸载让位给终局；
+        // 配乐唱到 Lover 时再回来做倒滑与绽放，收在最后一帧
+        if (phase == SwiftieSequencePhase.ERAS_INTRO ||
+            phase == SwiftieSequencePhase.ERAS_CARDS ||
+            phase == SwiftieSequencePhase.REWIND ||
+            phase == SwiftieSequencePhase.LOVER_BLOOM
+        ) {
             SwiftieErasStage(
                 clock = clock,
                 frozen = seekFrozen,
                 onFrozenChange = { seekFrozen = it },
-                replay = replay
+                replay = replay,
+                modifier = Modifier.graphicsLayer { alpha = erasAlpha() }
             )
         }
 
+        // 终局一直挂到最后：倒滑那 500ms 里淡出，之后 alpha 已经是 0，不再出帧
         if (phase >= SwiftieSequencePhase.SIGNATURE && phase != SwiftieSequencePhase.DONE) {
-            SwiftieFinaleStage(elapsedMs = { clock.elapsedMs })
+            SwiftieFinaleStage(
+                elapsedMs = { clock.elapsedMs },
+                modifier = Modifier.graphicsLayer { alpha = finaleAlpha() }
+            )
         }
 
         if (staticFinale) {

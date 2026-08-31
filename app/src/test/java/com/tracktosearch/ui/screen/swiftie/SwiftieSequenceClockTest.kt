@@ -12,13 +12,37 @@ class SwiftieSequenceClockTest {
         assertThat(swiftiePhaseAt(400L)).isEqualTo(SwiftieSequencePhase.DIFFUSION)
         assertThat(swiftiePhaseAt(1_100L)).isEqualTo(SwiftieSequencePhase.ERAS_INTRO)
         assertThat(swiftiePhaseAt(3_100L)).isEqualTo(SwiftieSequencePhase.ERAS_CARDS)
-        assertThat(swiftiePhaseAt(97_460L)).isEqualTo(SwiftieSequencePhase.REWIND)
-        assertThat(swiftiePhaseAt(98_960L)).isEqualTo(SwiftieSequencePhase.LOVER_BLOOM)
-        assertThat(swiftiePhaseAt(100_460L)).isEqualTo(SwiftieSequencePhase.SIGNATURE)
-        assertThat(swiftiePhaseAt(108_460L)).isEqualTo(SwiftieSequencePhase.BRACELET)
-        assertThat(swiftiePhaseAt(112_960L)).isEqualTo(SwiftieSequencePhase.FINAL_HOLD)
-        assertThat(swiftiePhaseAt(118_460L)).isEqualTo(SwiftieSequencePhase.FADE_OUT)
-        assertThat(swiftiePhaseAt(120_000L)).isEqualTo(SwiftieSequencePhase.DONE)
+        assertThat(swiftiePhaseAt(99_409L)).isEqualTo(SwiftieSequencePhase.ERAS_CARDS)
+        // 终局排在倒滑之前：配乐末尾那句 Lover 留给绽放
+        assertThat(swiftiePhaseAt(99_410L)).isEqualTo(SwiftieSequencePhase.SIGNATURE)
+        assertThat(swiftiePhaseAt(107_410L)).isEqualTo(SwiftieSequencePhase.BRACELET)
+        assertThat(swiftiePhaseAt(111_910L)).isEqualTo(SwiftieSequencePhase.FINAL_HOLD)
+        assertThat(swiftiePhaseAt(117_999L)).isEqualTo(SwiftieSequencePhase.FINAL_HOLD)
+        assertThat(swiftiePhaseAt(118_000L)).isEqualTo(SwiftieSequencePhase.REWIND)
+        assertThat(swiftiePhaseAt(119_500L)).isEqualTo(SwiftieSequencePhase.LOVER_BLOOM)
+        assertThat(swiftiePhaseAt(123_000L)).isEqualTo(SwiftieSequencePhase.FADE_OUT)
+        assertThat(swiftiePhaseAt(125_000L)).isEqualTo(SwiftieSequencePhase.DONE)
+    }
+
+    @Test
+    fun phaseDeclarationOrderMatchesTimeOrder() {
+        // 段落门控用 compareTo（phase >= SIGNATURE 之类），枚举顺序错了整条序列就乱
+        val starts = listOf(
+            0L,
+            SwiftieTimeline.DIFFUSION_START,
+            SwiftieTimeline.ERAS_INTRO_START,
+            SwiftieTimeline.ERAS_CARDS_START,
+            SwiftieTimeline.SIGNATURE_START,
+            SwiftieTimeline.BRACELET_START,
+            SwiftieTimeline.FINAL_HOLD_START,
+            SwiftieTimeline.REWIND_START,
+            SwiftieTimeline.LOVER_BLOOM_START,
+            SwiftieTimeline.FADE_OUT_START,
+            SwiftieTimeline.TOTAL_MS
+        )
+        assertThat(starts).isInOrder()
+        assertThat(starts.map { swiftiePhaseAt(it) })
+            .isEqualTo(SwiftieSequencePhase.values().toList())
     }
 
     @Test

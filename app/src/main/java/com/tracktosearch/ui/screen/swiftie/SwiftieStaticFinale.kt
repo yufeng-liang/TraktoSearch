@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.ui.screen.swiftie.bracelet.BRACELET_SETTLED_MS
@@ -83,6 +84,8 @@ fun SwiftieStaticFinale(modifier: Modifier = Modifier) {
                     durationMs = SwiftieTimeline.cardDurationMs(index, era.tracks.size),
                     // 静态列表里没有色带，从卡片自己中间长出即可
                     originFractionX = 0.5f,
+                    // 外层是 verticalScroll，高度不受限，所以曲目行高不必压
+                    slotHeight = Dp.Infinity,
                     modifier = Modifier
                         .fillMaxWidth()
                         .widthIn(max = 480.dp)

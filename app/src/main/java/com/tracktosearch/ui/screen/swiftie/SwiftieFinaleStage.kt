@@ -28,7 +28,9 @@ private const val CAPTION_FADE_MS: Float = 800f
 private val BRACELET_HEIGHT = 170.dp
 
 /**
- * 终局：签名 + 落款 + 手链（Spec §5 的 T100460–118460、§7、§8）。
+ * 终局：签名 + 落款 + 手链（Spec §5 的 T99410–118000、§7、§8）。
+ *
+ * 排在倒滑之前 —— 配乐末尾那句 Lover 要留给绽放（见 `SwiftieTimeline` 的类注释）。
  *
  * @param elapsedMs 序列全局已用毫秒。每一段自己减起点，段落之间不互相传时间
  */

@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.swiftie.eras
 import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -57,7 +58,9 @@ private fun activeEraIndexAt(elapsedMs: Long): Int =
 /**
  * Eras 回顾段的驱动层：轴 + 当前卡片 + 跳过 / 继续。
  *
- * 只在 `ERAS_INTRO`..`LOVER_BLOOM` 之间挂载，所以内部不必再判段落。
+ * 挂载区间是 `ERAS_INTRO`..`ERAS_CARDS` 与 `REWIND`..`LOVER_BLOOM` 两段 ——
+ * 中间的终局（签名 / 手链 / 定格）期间整层卸载，配乐唱到 Lover 时再回来做收尾。
+ * 所以内部只需判一处：终局之后要把「跳过」关掉（见 `skipVisible`）。
  *
  * @param frozen 拖过播放头之后的定格状态，由 `SwiftieEggScreen` 持有 ——
  *   它要和「按住暂停」或起来一起喂给 `clock.paused`
@@ -120,13 +123,15 @@ fun SwiftieErasStage(
 
     Box(modifier = modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Box(
+            BoxWithConstraints(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
                 contentAlignment = Alignment.BottomCenter
             ) {
+                // 卡片自己按这个高度折算曲目行高：31 首的 TTPD Anthology 在小屏上要压行
+                val slotHeight = maxHeight
                 // key 换值就重挂：新卡片的 elapsedInCard 从 0 起算，
                 // 上一张此时 scaleY 已经收到 0，看不到硬切
                 key(activeIndex) {
@@ -141,6 +146,7 @@ fun SwiftieErasStage(
                         },
                         durationMs = cardDurationMs,
                         originFractionX = swiftieEraCenterFraction(activeIndex),
+                        slotHeight = slotHeight,
                         modifier = Modifier
                             .fillMaxWidth()
                             .widthIn(max = 480.dp)
@@ -191,9 +197,14 @@ fun SwiftieErasStage(
         }
 
         // alpha = 0 的按钮照样点得到（graphicsLayer 只改绘制、不改命中区域），
-        // 所以淡入没走完之前必须同时 enabled = false
+        // 所以淡入没走完之前必须同时 enabled = false。
+        // 收尾的倒滑与绽放期间也一并关掉：那时终局已经放完，跳过没有意义，
+        // 而 skipToFinalHold 会把时钟倒拨回去，Lover 就与配乐错开了
         val skipVisible by remember {
-            derivedStateOf { replay || clock.elapsedMs >= SKIP_FADE_IN_AT_MS }
+            derivedStateOf {
+                clock.elapsedMs < SwiftieTimeline.SIGNATURE_START &&
+                    (replay || clock.elapsedMs >= SKIP_FADE_IN_AT_MS)
+            }
         }
         TextButton(
             onClick = {
@@ -206,10 +217,12 @@ fun SwiftieErasStage(
                 .padding(end = 8.dp, bottom = 4.dp)
                 .graphicsLayer {
                     // 重看时立刻可用；首次要等到 T3000 才淡入
-                    alpha = if (replay) {
-                        1f
-                    } else {
-                        ((clock.elapsedMs - SKIP_FADE_IN_AT_MS) / SKIP_FADE_MS).coerceIn(0f, 1f)
+                    alpha = when {
+                        clock.elapsedMs >= SwiftieTimeline.SIGNATURE_START -> 0f
+                        replay -> 1f
+                        else ->
+                            ((clock.elapsedMs - SKIP_FADE_IN_AT_MS) / SKIP_FADE_MS)
+                                .coerceIn(0f, 1f)
                     }
                 }
         ) {

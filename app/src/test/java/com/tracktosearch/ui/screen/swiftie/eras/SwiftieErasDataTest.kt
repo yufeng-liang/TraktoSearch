@@ -8,9 +8,24 @@ class SwiftieErasDataTest {
 
     @Test
     fun trackCountsMatchTheDurationLedger() {
-        // 账本按这些数字算出 94360ms。抄漏一首这里就红
+        // 账本按这些数字算出 96310ms。抄漏一首这里就红
         assertThat(SwiftieErasData.ALL.map { it.tracks.size })
             .isEqualTo(SwiftieTimeline.ERA_TRACK_COUNTS)
+    }
+
+    @Test
+    fun torturedPoetsUsesTheAnthologyEdition() {
+        val ttpd = SwiftieErasData.ALL[10]
+        assertThat(ttpd.name).isEqualTo("The Tortured Poets Department")
+        assertThat(ttpd.tracks).hasSize(31)
+        // 标准版最后一首在第 16 位，加曲从第 17 位接上
+        assertThat(ttpd.tracks[15]).isEqualTo("Clara Bow")
+        assertThat(ttpd.tracks[16]).isEqualTo("The Black Dog")
+        assertThat(ttpd.tracks.last()).isEqualTo("The Manuscript")
+        // 官方大小写刻意拼出 KIM，自动纠错最容易把它改掉
+        assertThat(ttpd.tracks).contains("thanK you aIMee")
+        assertThat(ttpd.tracks).contains("imgonnagetyouback")
+        assertThat(ttpd.tracks.toSet()).hasSize(31)
     }
 
     @Test

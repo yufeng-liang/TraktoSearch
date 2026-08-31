@@ -10,22 +10,27 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 
-/** 序列的十一个段落。所有渲染分支都从这里派生，段落自己不计时。 */
+/**
+ * 序列的十一个段落。所有渲染分支都从这里派生，段落自己不计时。
+ *
+ * **声明顺序 = 时间顺序**，`compareTo` 的段落门控靠它。倒滑与绽放排在终局之后
+ * （见 [SwiftieTimeline] 的类注释：配乐末尾唱 Lover）。
+ */
 enum class SwiftieSequencePhase {
-    SOLVE, DIFFUSION, ERAS_INTRO, ERAS_CARDS, REWIND,
-    LOVER_BLOOM, SIGNATURE, BRACELET, FINAL_HOLD, FADE_OUT, DONE
+    SOLVE, DIFFUSION, ERAS_INTRO, ERAS_CARDS, SIGNATURE, BRACELET, FINAL_HOLD,
+    REWIND, LOVER_BLOOM, FADE_OUT, DONE
 }
 
 fun swiftiePhaseAt(elapsedMs: Long): SwiftieSequencePhase = when {
     elapsedMs < SwiftieTimeline.DIFFUSION_START -> SwiftieSequencePhase.SOLVE
     elapsedMs < SwiftieTimeline.ERAS_INTRO_START -> SwiftieSequencePhase.DIFFUSION
     elapsedMs < SwiftieTimeline.ERAS_CARDS_START -> SwiftieSequencePhase.ERAS_INTRO
-    elapsedMs < SwiftieTimeline.REWIND_START -> SwiftieSequencePhase.ERAS_CARDS
-    elapsedMs < SwiftieTimeline.LOVER_BLOOM_START -> SwiftieSequencePhase.REWIND
-    elapsedMs < SwiftieTimeline.SIGNATURE_START -> SwiftieSequencePhase.LOVER_BLOOM
+    elapsedMs < SwiftieTimeline.SIGNATURE_START -> SwiftieSequencePhase.ERAS_CARDS
     elapsedMs < SwiftieTimeline.BRACELET_START -> SwiftieSequencePhase.SIGNATURE
     elapsedMs < SwiftieTimeline.FINAL_HOLD_START -> SwiftieSequencePhase.BRACELET
-    elapsedMs < SwiftieTimeline.FADE_OUT_START -> SwiftieSequencePhase.FINAL_HOLD
+    elapsedMs < SwiftieTimeline.REWIND_START -> SwiftieSequencePhase.FINAL_HOLD
+    elapsedMs < SwiftieTimeline.LOVER_BLOOM_START -> SwiftieSequencePhase.REWIND
+    elapsedMs < SwiftieTimeline.FADE_OUT_START -> SwiftieSequencePhase.LOVER_BLOOM
     elapsedMs < SwiftieTimeline.TOTAL_MS -> SwiftieSequencePhase.FADE_OUT
     else -> SwiftieSequencePhase.DONE
 }
