@@ -2006,4 +2006,7 @@ Config:
     <string name="swiftie_era_card_a11y">%1$s, released %2$s, %3$d tracks</string>
     <string name="swiftie_skip">Skip</string>
     <string name="swiftie_resume">Resume</string>
+    <string name="swiftie_audio_hint_all">Sound on and headphones for the best experience</string>
+    <string name="swiftie_audio_hint_volume">Turn the sound on for the best experience</string>
+    <string name="swiftie_audio_hint_headphones">Headphones for the best experience</string>
 </resources>

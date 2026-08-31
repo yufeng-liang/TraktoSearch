@@ -2006,4 +2006,17 @@
     <string name="privacy_rights_desc">설정에서 로컬 항목을 변경하고, Android 시스템 설정에서 위치 권한을 철회하며, 앱이 제공하는 작업으로 로컬 캐시나 자격 증명을 삭제할 수 있습니다. 접근·정정·삭제 요청과 저작권 알림은 권리 요청 양식으로 제출하세요. 양식은 처리에 필요한 정보만 수집하며 종료된 요청은 180일 이내에 삭제됩니다.</string>
     <string name="privacy_rights_open">권리 요청 페이지 열기</string>
     <string name="privacy_footer">© 2026 TraktoSearch · 콘텐츠 기준 2026-08</string>
+
+    <!-- 霉粉彩蛋 -->
+    <string name="bg_glow_lover_inspired">Lover에서 영감을 받음</string>
+    <string name="swiftie_quiz_a11y">문제: X 더하기 87은 100입니다. X는 얼마입니까? 현재 답: %1$s</string>
+    <string name="swiftie_quiz_a11y_empty">아직 답하지 않음</string>
+    <string name="swiftie_quiz_submit">제출</string>
+    <string name="swiftie_quiz_backspace">삭제</string>
+    <string name="swiftie_era_card_a11y">%1$s, %2$s 발매, 총 %3$d곡</string>
+    <string name="swiftie_skip">건너뛰기</string>
+    <string name="swiftie_resume">계속</string>
+    <string name="swiftie_audio_hint_all">소리를 켜고 이어폰을 착용하면 가장 좋습니다</string>
+    <string name="swiftie_audio_hint_volume">소리를 켜면 가장 좋습니다</string>
+    <string name="swiftie_audio_hint_headphones">이어폰을 착용하면 가장 좋습니다</string>
 </resources>

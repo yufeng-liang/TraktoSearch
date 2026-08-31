@@ -56,6 +56,14 @@ private val CONTENT_MAX_WIDTH = 480.dp
 /** 灯箱与键盘之间的间距。 */
 private val CONTENT_GAP = 20.dp
 
+/**
+ * 底部音频提示带的高度。够放两行 12sp —— 韩文那句最长，窄屏上会折行。
+ *
+ * **恒定预留**，不管提示当前是否显示 —— 用户中途插上耳机时提示会消失，
+ * 若这块位子跟着让出来，灯箱就会在题面上重新排版跳一下。
+ */
+private val AUDIO_HINT_BAND = 40.dp
+
 /** 答错摇晃时长，与 [SwiftieBillboard] 的 keyframes 对齐。 */
 private const val WRONG_SHAKE_MS = 300L
 
@@ -311,7 +319,7 @@ private fun SwiftieEggContent(
     }
 }
 
-/** 题面版面（灯箱 + 键盘）。状态由外部持有，本函数只负责摆位与转发回调。 */
+/** 题面版面（灯箱 + 键盘 + 音频提示）。状态由外部持有，本函数只负责摆位与转发回调。 */
 @Composable
 private fun SwiftieQuizStage(
     quiz: SwiftieQuizState,
@@ -319,6 +327,9 @@ private fun SwiftieQuizStage(
     onSubmitCenter: (Offset) -> Unit,
     onKeyHaptic: () -> Unit
 ) {
+    // 无条件调用，题面在屏上就一直跟踪：用户中途插耳机或调音量，提示要自己消失
+    val audioAdvice = rememberSwiftieAudioAdvice()
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -326,10 +337,11 @@ private fun SwiftieQuizStage(
         contentAlignment = Alignment.Center
     ) {
         // 版面总高 = 灯箱(1×宽) + 间距 + 键盘(≈0.833×宽 + 13dp) ⇒ 1.833×宽 + 33dp
-        val fitByHeight = (maxHeight - CONTENT_GAP - 13.dp) / 1.833f
+        val fitByHeight = (maxHeight - AUDIO_HINT_BAND - CONTENT_GAP - 13.dp) / 1.833f
         val contentWidth = minOf(maxWidth - 40.dp, CONTENT_MAX_WIDTH, fitByHeight)
 
         Column(
+            modifier = Modifier.padding(bottom = AUDIO_HINT_BAND),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -349,6 +361,16 @@ private fun SwiftieQuizStage(
                 onSubmit = { onQuizChange(quiz.submit()) },
                 onSubmitCenter = onSubmitCenter,
                 modifier = Modifier.width(contentWidth)
+            )
+        }
+
+        // 答对之后不再提示 —— 那时已经来不及去开声音了，序列马上就要起
+        if (!quiz.solved) {
+            SwiftieAudioHint(
+                advice = audioAdvice,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
             )
         }
     }

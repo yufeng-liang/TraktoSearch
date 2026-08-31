@@ -14,8 +14,13 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import com.tracktosearch.R
 
-/** 静音档不播（Spec §5.1）。铃声静音或媒体音量为 0 都算。 */
-private fun AudioManager.isSilenced(): Boolean =
+/**
+ * 静音档不播（Spec §5.1）。铃声静音或媒体音量为 0 都算。
+ *
+ * `SwiftieAudioHint` 用同一个判断决定要不要劝用户开声音 —— 两处必须一致，
+ * 否则会出现「提示说声音是开的、实际却不播」。
+ */
+internal fun AudioManager.isSwiftieSilenced(): Boolean =
     ringerMode == AudioManager.RINGER_MODE_SILENT ||
         getStreamVolume(AudioManager.STREAM_MUSIC) == 0
 
@@ -47,7 +52,7 @@ fun SwiftieMusic(
     }
 
     DisposableEffect(enabled, audioManager) {
-        if (!enabled || audioManager == null || audioManager.isSilenced()) {
+        if (!enabled || audioManager == null || audioManager.isSwiftieSilenced()) {
             return@DisposableEffect onDispose { }
         }
         val attributes = AudioAttributes.Builder()
