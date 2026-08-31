@@ -68,15 +68,21 @@ Android 按资源 ID 加载 `res/font/*.ttf`，不看内部家族名，所以改
 
 | 路径 | 来源文件 | 时长 | 格式 | 大小 |
 | --- | --- | --- | --- | --- |
-| app/src/main/res/raw/swiftie_theme.mp3 | The Eras Tour Intro(2.0 official).mp3 | 126.067 s | MP3 320 kbps 44.1 kHz 单一比特率 | 4.81 MiB |
+| app/src/main/res/raw/swiftie_theme.ogg | The Eras Tour Intro(2.0 official).mp3 | 125.998 s | Ogg Opus，128 kbps VBR，48 kHz 立体声 | 1.93 MiB |
 
 霉粉彩蛋的配乐，由需求方提供并指定随包分发。彩蛋序列的时长账本
 （`SwiftieTimeline.TOTAL_MS`）从这个文件的实际长度倒推，两者必须一致：换音轨
 必须同步改账本，否则 Lover 绽放会与配乐错开。
 
-原文件带 162 699 字节 ID3v2.3 标签，其中 `APIC` 帧是 160 107 字节的专辑封面图。
-入库前已整段剥除 ID3 标签，只保留音频帧 —— 项目的彩蛋素材红线里包含「不含专辑
-封面图」，随 ID3 夹带进 APK 同样违反该条。剥除不改变音频数据本身。
+源文件是 320 kbps MP3（126.067 s，4.81 MiB），已转码为 Opus 128 kbps VBR
+（`ffmpeg -c:a libopus -b:a 128k -vbr on -application audio`），体积降 60%。
+Opus 按 20ms 帧对齐，预跳裁掉 69ms，所以时长从 126.067 s 变成 125.998 s ——
+账本已同步。转码是有损转有损；这个码率下对手机喇叭与耳机的听感没有可辨差异。
+Opus 解码自 Android 5.0 起支持、Ogg 容器同期可用，本项目 `minSdk` 为 26。
+
+源文件带 162 699 字节 ID3v2.3 标签，其中 `APIC` 帧是 160 107 字节的专辑封面图。
+转码时用 `-vn -map_metadata -1` 一并丢弃 —— 项目的彩蛋素材红线里包含「不含专辑
+封面图」，随 ID3 夹带进 APK 同样违反该条。
 
 **授权状态：未核实。** 文件名指向 The Eras Tour 的开场音乐，本项目未取得权利人
 许可，也未能确认其为可自由分发的素材。需求方在知悉该风险后指示随包分发，授权
