@@ -78,7 +78,6 @@ import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
@@ -247,8 +246,6 @@ fun WatchlistScreen(
     onNavigateToLogin: () -> Unit = {},
     // 直接发起 Trakt 授权（CustomTabs 打开授权页）；未提供时回退到导航激活登录页
     onTraktLogin: () -> Unit = onNavigateToLogin,
-    // 观看统计入口：设置 Tab 里的入口保留，这里只是多一条更浅的路径
-    onStatisticsClick: () -> Unit = {},
     onDailyStampClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: WatchlistViewModel = hiltViewModel()
@@ -1081,25 +1078,7 @@ fun WatchlistScreen(
                                                     letterSpacing = (-0.5).sp,
                                                     color = MaterialTheme.colorScheme.onSurface
                                                 )
-                                                // 观看统计依赖 Trakt/豆瓣观看记录。访客隐藏入口，避免进入全空页面；
-                                                // 登录后仍保留这条比设置页更浅的入口。
-                                                if (canOpenWatchStatistics(isTraktConnected, isDoubanMode)) {
-                                                    IconButton(
-                                                        onClick = onStatisticsClick,
-                                                        modifier = Modifier
-                                                            .padding(start = 4.dp)
-                                                            .size(32.dp)
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Rounded.Insights,
-                                                            contentDescription = stringResource(R.string.statistics_title),
-                                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                            modifier = Modifier.size(20.dp)
-                                                        )
-                                                    }
-                                                }
-                                                // 日签入口：紧挨着统计。两个都是「回看自己」的入口，
-                                                // 放一起才不用分别去记在哪。
+                                                // 日签入口：「回看自己」的入口。
                                                 IconButton(
                                                     onClick = onDailyStampClick,
                                                     modifier = Modifier.size(32.dp)

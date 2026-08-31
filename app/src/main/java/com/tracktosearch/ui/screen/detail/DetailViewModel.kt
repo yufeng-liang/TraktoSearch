@@ -21,6 +21,7 @@ import com.tracktosearch.data.remote.douban.DoubanRexxarMediaType
 import com.tracktosearch.data.remote.douban.DoubanRexxarRepository
 import com.tracktosearch.data.remote.douban.DoubanRexxarShortComment
 import com.tracktosearch.data.remote.douban.mergeDoubanDetail
+import com.tracktosearch.data.remote.douban.normalizeDoubanCountryNames
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
@@ -288,7 +289,9 @@ private data class DoubanDetailSupplement(
     val overview: String?
         get() = detail?.summary?.takeIf { it.isNotBlank() }
     val country: String?
-        get() = detail?.countries?.takeIf { it.isNotEmpty() }?.joinToString(" / ")
+        get() = normalizeDoubanCountryNames(detail?.countries.orEmpty())
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString(" / ")
     val originalTitle: String?
         get() = item?.subtitle?.takeIf { it.isNotBlank() }
     val runtimeMinutes: Int?
