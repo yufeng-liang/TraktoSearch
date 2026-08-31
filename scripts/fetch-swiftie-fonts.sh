@@ -65,5 +65,8 @@ for f in permanentmarker yellowtail; do
     -o "$LIC/$f-LICENSE.txt"
 done
 
+# 子集化是 OFL 定义的 Modified Version，带 Reserved Font Name 的 5 个字体必须改内部家族名
+python scripts/rename-swiftie-font-rfn.py
+
 du -ch "$OUT"/*.ttf | tail -1
 rm -rf "$TMP"
