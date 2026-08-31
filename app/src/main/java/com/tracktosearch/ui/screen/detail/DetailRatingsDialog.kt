@@ -2,10 +2,17 @@ package com.tracktosearch.ui.screen.detail
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.glassBorderColor
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.BrandDouban
+import com.tracktosearch.ui.theme.BrandImdb
+import com.tracktosearch.ui.theme.BrandMetacritic
+import com.tracktosearch.ui.theme.BrandRottenTomatoes
+import com.tracktosearch.ui.theme.BrandTmdb
+import com.tracktosearch.ui.theme.OnBrandImdb
 import com.tracktosearch.ui.theme.RatingGold
 import com.tracktosearch.ui.theme.VisualEffectMode
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
@@ -13,14 +20,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -46,12 +52,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
@@ -60,11 +67,22 @@ import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import java.util.Locale
 
-// ==================== 评分行 ====================
+// ==================== 四平台评分卡 ====================
 
 internal const val RATING_CARD_TEST_TAG = "detail_ratings_card"
 
-private val LEFT_RATING_LABEL_SLOT_WIDTH = 44.dp
+/**
+ * 评分卡高度：平台标记(16) + 间距(3) + 分数(24) + 上下内边距(2×10) ≈ 66dp，
+ * 加载占位与实际内容共用，数据到达时卡片不改高。
+ *
+ * 原先是 64dp 的 2×2 网格挤在海报右侧约 230dp 宽的列里：一行两个平台，
+ * 「品牌标签 + 分数」横排，分数只有 15sp 且要靠一层文字阴影才勉强够对比度。
+ * 现在整宽四等分，每格约 90dp，标记与分数上下排，分数放到 20sp。
+ */
+private val RATING_CARD_HEIGHT = 66.dp
+
+/** 平台标记行高度：字标色块、豆瓣 logo、emoji 三种画法行高各不相同，锁死才能让四格分数对齐。 */
+private val RATING_MARK_HEIGHT = 16.dp
 
 private enum class RatingSource {
     IMDb,
@@ -78,6 +96,7 @@ private data class RatingBadgeData(
     val source: RatingSource,
     val label: String,
     val brandColor: Color,
+    val onBrandColor: Color,
     val value: String,
     val normalizedScore: Double?
 )
@@ -105,7 +124,8 @@ internal fun RatingsRow(
         RatingBadgeData(
             source = RatingSource.Douban,
             label = stringResource(R.string.detail_info_douban_rating),
-            brandColor = Color(0xFF2E963D),
+            brandColor = BrandDouban,
+            onBrandColor = Color.White,
             value = validDoubanRating?.let {
                 String.format(Locale.getDefault(), "%.1f", it)
             } ?: missingValue,
@@ -115,27 +135,30 @@ internal fun RatingsRow(
         RatingBadgeData(
             source = RatingSource.Metacritic,
             label = stringResource(R.string.detail_info_metacritic_rating),
-            brandColor = Color(0xFFFF9500),
+            brandColor = BrandMetacritic,
+            onBrandColor = Color.White,
             value = displayRating(ratings.metacritic, missingValue),
             normalizedScore = normalizePercentRating(ratings.metacritic)
         )
     }
 
-    val row1 = listOf(
+    // 固定四格：IMDb / 豆瓣或 MTC / TMDB / 烂番茄。有豆瓣评分时豆瓣顶掉 MTC 槽，
+    // 格数恒定，切换数据源不会让卡片宽度重排。
+    val badges = listOf(
         RatingBadgeData(
             source = RatingSource.IMDb,
             label = stringResource(R.string.detail_info_imdb_rating),
-            brandColor = Color(0xFFF5C518),
+            brandColor = BrandImdb,
+            onBrandColor = OnBrandImdb,
             value = displayTenPointRating(ratings.imdbRating, missingValue),
             normalizedScore = parseTenPointRating(ratings.imdbRating)
         ),
-        row1Second
-    )
-    val row2 = listOf(
+        row1Second,
         RatingBadgeData(
             source = RatingSource.TMDB,
             label = stringResource(R.string.detail_info_tmdb_rating),
-            brandColor = Color(0xFFF5C518),
+            brandColor = BrandTmdb,
+            onBrandColor = Color.White,
             value = displayTenPointRating(
                 ratings.tmdbRating.takeIf { it > 0.0 },
                 missingValue
@@ -146,33 +169,49 @@ internal fun RatingsRow(
         RatingBadgeData(
             source = RatingSource.RottenTomatoes,
             label = stringResource(R.string.detail_info_rotten_tomatoes_rating),
-            brandColor = Color(0xFFFF4444),
+            brandColor = BrandRottenTomatoes,
+            onBrandColor = Color.White,
             value = displayRating(ratings.rottenTomatoes, missingValue),
             normalizedScore = normalizePercentRating(ratings.rottenTomatoes)
         )
     )
 
     RatingCard(immersionColor = immersionColor) { cardColor ->
-        RatingBadgeRow(row1, cardColor)
-        RatingBadgeRow(row2, cardColor)
+        val dividerColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+        badges.forEachIndexed { index, badge ->
+            if (index > 0) {
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(26.dp)
+                        .background(dividerColor)
+                )
+            }
+            RatingCell(badge = badge, cardColor = cardColor, modifier = Modifier.weight(1f))
+        }
     }
 }
 
 @Composable
 internal fun RatingsLoadingPlaceholder(immersionColor: Color? = null) {
+    val placeholderColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     RatingCard(immersionColor = immersionColor) {
-        repeat(2) {
-            Row(
-                modifier = Modifier.fillMaxWidth().height(22.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+        repeat(4) {
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
-                repeat(2) {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.weight(1f).height(22.dp)
-                    ) {}
-                }
+                Surface(
+                    shape = RoundedCornerShape(3.dp),
+                    color = placeholderColor,
+                    modifier = Modifier.width(30.dp).height(16.dp)
+                ) {}
+                Surface(
+                    shape = RoundedCornerShape(3.dp),
+                    color = placeholderColor,
+                    modifier = Modifier.width(34.dp).height(20.dp)
+                ) {}
             }
         }
     }
@@ -181,7 +220,7 @@ internal fun RatingsLoadingPlaceholder(immersionColor: Color? = null) {
 @Composable
 private fun RatingCard(
     immersionColor: Color?,
-    content: @Composable ColumnScope.(Color) -> Unit
+    content: @Composable RowScope.(Color) -> Unit
 ) {
     val darkTheme = isSystemInDarkTheme()
     val baseColor = immersionColor ?: MaterialTheme.colorScheme.surface
@@ -198,42 +237,117 @@ private fun RatingCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(64.dp)
+            .height(RATING_CARD_HEIGHT)
             .testTag(RATING_CARD_TEST_TAG),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(14.dp),
         color = cardColor,
         border = BorderStroke(1.dp, cardBorderColor),
         shadowElevation = 0.dp,
         tonalElevation = 0.dp
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+        Row(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
             content = { content(cardColor) }
         )
     }
 }
 
+/** 单格：平台标记在上、分数在下。分数按分档取色（见 RatingPresentation.ratingBandColor）。 */
 @Composable
-private fun RatingBadgeRow(badges: List<RatingBadgeData>, cardColor: Color) {
-    Row(
-        modifier = Modifier.fillMaxWidth().height(22.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically
+private fun RatingCell(
+    badge: RatingBadgeData,
+    cardColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val scoreColor = ratingBandColor(
+        band = ratingBand(badge.normalizedScore),
+        surfaceColor = cardColor,
+        unavailableColor = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        badges.forEachIndexed { index, badge ->
-            RatingBadge(
-                badge = badge,
-                cardColor = cardColor,
-                labelSlotWidth = if (index == 0) {
-                    LEFT_RATING_LABEL_SLOT_WIDTH
-                } else {
-                    null
-                },
-                modifier = Modifier.weight(1f)
-            )
+        RatingMark(badge)
+        Text(
+            text = badge.value,
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontSize = 20.sp,
+                lineHeight = 24.sp
+            ),
+            fontWeight = FontWeight.Bold,
+            color = scoreColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * 单格顶部的平台标记：各平台沿用自己的识别物 —— IMDb/TMDB 是品牌色底的字标，
+ * 豆瓣是 logo 图，烂番茄与 Metacritic 是 🍅 / 🎯。
+ *
+ * 三种画法统一压在 [RATING_MARK_HEIGHT] 高的行里（emoji 的行高比字标高一截，
+ * 不锁高度四格的分数会错开）。图标与 emoji 都对读屏屏蔽：紧邻的平台名已经念过一遍。
+ */
+@Composable
+private fun RatingMark(badge: RatingBadgeData) {
+    val labelStyle = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
+    Row(
+        modifier = Modifier.height(RATING_MARK_HEIGHT),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        when (badge.source) {
+            // 字标平台：品牌色底 + 反色字，这本身就是它们 logo 的样子
+            RatingSource.IMDb, RatingSource.TMDB -> Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = badge.brandColor
+            ) {
+                Text(
+                    text = badge.label,
+                    style = labelStyle,
+                    fontWeight = FontWeight.Bold,
+                    color = badge.onBrandColor,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                )
+            }
+            RatingSource.Douban -> {
+                Image(
+                    painter = painterResource(R.drawable.ic_douban_logo),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(14.dp)
+                        .clearAndSetSemantics {}
+                )
+                RatingMarkLabel(badge = badge, style = labelStyle)
+            }
+            RatingSource.RottenTomatoes, RatingSource.Metacritic -> {
+                Text(
+                    text = if (badge.source == RatingSource.RottenTomatoes) "🍅" else "🎯",
+                    fontSize = 12.sp,
+                    lineHeight = 14.sp,
+                    modifier = Modifier.clearAndSetSemantics {}
+                )
+                RatingMarkLabel(badge = badge, style = labelStyle)
+            }
         }
     }
+}
+
+/** 图标右侧的平台名，用品牌色（IMDb/TMDB 的字标不走这里，它们的名字在色块里）。 */
+@Composable
+private fun RatingMarkLabel(badge: RatingBadgeData, style: TextStyle) {
+    Text(
+        text = badge.label,
+        style = style,
+        fontWeight = FontWeight.Bold,
+        color = badge.brandColor,
+        maxLines = 1
+    )
 }
 
 private fun displayRating(value: String, missingValue: String): String {
@@ -256,101 +370,6 @@ private fun displayTenPointRating(value: Double?, missingValue: String): String 
         ?.takeIf { normalizeTenPointRating(it) != null }
         ?.let { String.format(Locale.getDefault(), "%.1f", it) }
         ?: missingValue
-}
-
-/** 单个评分项：平台识别使用品牌色，评分数字使用分档色。 */
-@Composable
-private fun RatingBadge(
-    badge: RatingBadgeData,
-    cardColor: Color,
-    labelSlotWidth: Dp?,
-    modifier: Modifier = Modifier
-) {
-    val source = badge.source
-    val scoreColor = ratingBandColor(
-        band = ratingBand(badge.normalizedScore),
-        surfaceColor = cardColor,
-        unavailableColor = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = if (labelSlotWidth == null) {
-            Arrangement.SpaceBetween
-        } else {
-            Arrangement.Start
-        }
-    ) {
-        Row(
-            modifier = labelSlotWidth?.let { Modifier.width(it) } ?: Modifier,
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(3.dp)
-        ) {
-        when (source) {
-            RatingSource.TMDB -> Unit
-            RatingSource.IMDb -> Surface(
-                shape = RoundedCornerShape(2.dp),
-                color = badge.brandColor
-            ) {
-                Text(
-                    text = badge.label,
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontSize = 12.sp, fontWeight = FontWeight.Bold
-                    ),
-                    color = Color.Black,
-                    modifier = Modifier.padding(horizontal = 3.dp, vertical = 0.dp)
-                )
-            }
-            RatingSource.RottenTomatoes -> Text(
-                text = "🍅",
-                fontSize = 16.sp,
-                modifier = Modifier.offset(y = -1.dp)
-            )
-            RatingSource.Douban -> androidx.compose.foundation.Image(
-                painter = painterResource(com.tracktosearch.R.drawable.ic_douban_logo),
-                contentDescription = stringResource(R.string.detail_info_douban_rating),
-                modifier = Modifier.size(16.dp)
-            )
-            RatingSource.Metacritic -> Text(
-                text = "🎯",
-                fontSize = 16.sp,
-                modifier = Modifier.offset(y = -1.dp)
-            )
-        }
-
-        if (source != RatingSource.IMDb) {
-            Text(
-                text = badge.label,
-                style = MaterialTheme.typography.titleSmall.copy(fontSize = 13.sp),
-                fontWeight = FontWeight.Bold,
-                // TMDB 无品牌底色也无图标，纯文字用 IMDb 黄在浅色卡片上对比度差，改中性色；
-                // 豆瓣/番茄/Metacritic 有品牌色或图标的不变
-                color = if (source == RatingSource.TMDB) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    badge.brandColor
-                }
-            )
-        }
-        }
-
-        Text(
-            text = badge.value,
-            modifier = Modifier.padding(start = 4.dp),
-            style = MaterialTheme.typography.titleSmall.copy(
-                fontSize = 15.sp,
-                shadow = androidx.compose.ui.graphics.Shadow(
-                    color = Color.Black.copy(alpha = 0.38f),
-                    offset = androidx.compose.ui.geometry.Offset.Zero,
-                    blurRadius = 1.2f
-                )
-            ),
-            fontWeight = FontWeight.Bold,
-            color = scoreColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
 }
 
 // ==================== 用户评分控件 ====================

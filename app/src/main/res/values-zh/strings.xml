@@ -707,7 +707,6 @@
   diskTypePath = $.type</string>
     <string name="help_detail_custom">自定义详情页：在设置中可以控制详情页各模块（演职员、预告片与截图、简介、我的评分、评论、推荐）的显示与隐藏</string>
     <string name="help_videos_images">预告片与截图：详情页展示预告片和剧照，点击预告片可在浏览器中播放，点击截图可查看大图并保存到相册</string>
-    <string name="help_detail_scroll_title">滚动标题栏：影视详情页与豆瓣详情页滚过头部后，顶部会淡入一条模糊标题栏，随时知道当前在看哪部</string>
     <string name="help_detail_pull_refresh">下拉刷新：影视详情页下拉可重拉评分/演职员/季集/短评/推荐；豆瓣详情页下拉可重拉条目信息，已搜过资源时一并重搜</string>
     <string name="help_discover_filter_b1">影视筛选：在发现页标题栏点击筛选图标，或底部"去影视筛选页"卡片，可进入筛选页</string>
     <string name="help_discover_filter_b2">支持按类型、地区、标签、评分区间、年代筛选，可按热度、上映时间或评分排序</string>

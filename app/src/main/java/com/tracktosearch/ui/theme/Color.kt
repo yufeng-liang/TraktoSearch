@@ -87,6 +87,16 @@ val StatusCanceled = Color(0xFFF44336)       // 已取消 — 红
 val StatusEnded = Color(0xFF9E9E9E)          // 已完结 — 灰
 val StatusUnknown = Color(0xFF757575)        // 未知状态 — 深灰
 
+// ====== 评分平台品牌色（详情页四平台评分区，不随主题变化） ======
+// 原先五个 Color(0xFF...) 直接写在 DetailRatingsDialog.RatingsRow 的 badge 构造里。
+// 顺带修正 TMDB：以前误用了 IMDb 的黄，两个平台底色一模一样分不出来。
+val BrandImdb = Color(0xFFF5C518)            // IMDb 黄
+val OnBrandImdb = Color(0xFF000000)
+val BrandDouban = Color(0xFF2E963D)          // 豆瓣绿
+val BrandTmdb = Color(0xFF01B4E4)            // TMDB 青
+val BrandRottenTomatoes = Color(0xFFFA320A)  // 烂番茄红
+val BrandMetacritic = Color(0xFFFF9500)      // Metacritic 橙
+
 /** 已看标记专用绿：季集进度条 / 已看计数 / 勾选图标共用。 */
 val WatchedGreen = Color(0xFF4CAF50)
 

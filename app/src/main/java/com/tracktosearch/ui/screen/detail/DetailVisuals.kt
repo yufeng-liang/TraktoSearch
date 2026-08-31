@@ -1,7 +1,5 @@
 package com.tracktosearch.ui.screen.detail
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -12,7 +10,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -34,10 +31,10 @@ import com.tracktosearch.ui.theme.StatusUnknown
 /**
  * 影视详情页与豆瓣条目详情页的共用视觉层。
  *
- * 两个页面都铺同一套沉浸式海报渐变，于是「文字该配黑还是白」「吸顶 Tab 底色怎么算」
+ * 两个页面都铺同一套沉浸式海报渐变，于是「文字该配黑还是白」「顶栏底色怎么算」
  * 这两段判据被逐字抄了好几份：onPosterColor / onPosterVariantColor 在
- * [DetailHeaderContent] 和 DoubanItemHeader 各一份共 4 处，tabContainerColor /
- * tabContentColor 那 ~25 行在 DetailScreen 和 DoubanItemDetailScreen 里完全重复。
+ * [DetailHeaderContent] 和 DoubanItemHeader 各一份共 4 处，吸顶 Tab 底色那
+ * ~25 行在 DetailScreen 和 DoubanItemDetailScreen 里完全重复。
  * 判据收在这里，页面只管排版。
  */
 
@@ -66,46 +63,26 @@ internal fun detailOnPosterVariantColor(posterColor: Color?): Color = posterColo
     if (blendedBackdropIsLight(c)) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.72f)
 } ?: MaterialTheme.colorScheme.onSurfaceVariant
 
-// ====== 吸顶 Tab 配色 ======
-
-@Immutable
-internal data class DetailTabColors(
-    val containerColor: Color,
-    val contentColor: Color
-)
+// ====== 顶栏 / 吸顶 Tab 栏底色 ======
 
 /**
- * 吸顶 Tab 栏的底色与文字色。
+ * 影视详情页顶栏与吸顶 Tab 栏共用的底色：主题 surface 实色。
  *
- * - 非吸顶（Tab 还在海报下方）：底色透明透出渐变，文字按渐变中段混合色亮度自适应
- * - 吸顶：底色为主题 background 与海报色 0.635 混合，文字按该底色亮度自适应
+ * 原先顶部是三段各走一套材质的横条：状态栏铺「主题 background × 海报色 0.635」的沉浸实色、
+ * 标题栏是 Haze 毛玻璃、吸顶 Tab 栏又是那个沉浸实色。滚动后三条深浅不一地叠在一起。
+ * 现在统一成同一个实色，标题行与 Tab 行同在一个 Column 里一次铺底、中间不加分隔线，
+ * 状态栏条用同一个值，滚过临界点时三者一起淡入。
  *
- * 底色带 [animateColorAsState] 过渡：原先两页都是 `if (isPinned) 实色 else Transparent`
- * 的硬跳变，滚过临界点时 Tab 底色瞬间闪一下。
+ * 不掺海报色也不留透明度：沉浸渐变留给页面背景，顶栏只做「浮在内容之上的一条」。
+ * 半透明会让下面滚过的海报、卡片、文字隐约透上来，吸顶后这一条始终糊着一层动的东西；
+ * surface 与 background 本身就差一档（浅色 #FFFFFF vs #F0F1F3、深色 #1A1A2E vs #0F0F1A），
+ * 实色照样能和内容区分开。文字色因此可以固定走主题 onSurface，不必再按海报亮度翻来翻去。
  */
 @Composable
-internal fun rememberDetailTabColors(posterColor: Color?, isPinned: Boolean): DetailTabColors {
-    val background = MaterialTheme.colorScheme.background
-    val onSurface = MaterialTheme.colorScheme.onSurface
-    val surface = MaterialTheme.colorScheme.surface
-    val pinnedContainer = posterColor?.let { lerp(background, it, 0.635f) } ?: surface
-    val targetContainer = if (isPinned) pinnedContainer else Color.Transparent
-    val containerColor by animateColorAsState(
-        targetValue = targetContainer,
-        animationSpec = tween(durationMillis = 180),
-        label = "detailTabContainerColor"
-    )
-    // 文字色跟着目标底色算，不跟动画中间值算：中间值处于半透明过渡期，
-    // 按它判亮度会在过渡的两三帧里把文字色翻来翻去。
-    val contentColor = when {
-        isPinned -> if (pinnedContainer.luminance() <= 0.5f) Color.White else onSurface
-        else -> {
-            val midColor = posterColor?.let { lerp(it, background, 0.8f) } ?: background
-            if (midColor.luminance() <= 0.5f) Color.White else onSurface
-        }
-    }
-    return DetailTabColors(containerColor = containerColor, contentColor = contentColor)
-}
+internal fun detailBarColor(): Color = MaterialTheme.colorScheme.surface
+
+/** 顶栏标题行高度，与悬浮的返回/分享按钮（40dp + 4dp 上边距）对齐。 */
+internal val DETAIL_TOP_BAR_HEIGHT = 48.dp
 
 // ====== 影视状态色 ======
 

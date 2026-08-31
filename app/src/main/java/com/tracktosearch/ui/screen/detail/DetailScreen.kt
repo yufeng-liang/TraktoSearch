@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.detail
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -122,7 +123,6 @@ import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
-import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberAppPullToRefreshState
 import com.tracktosearch.ui.component.rememberShimmer
@@ -417,14 +417,22 @@ fun DetailScreen(
     // 点击 token,确保只有被点击的卡片参与转场(避免同 tmdbId 海报跨栏目飘错)
     var activeClickToken by remember { mutableStateOf(0) }
 
-    // Tab 栏底色/文字颜色：判据收在 DetailVisuals.rememberDetailTabColors（豆瓣详情页共用同一套）。
-    // 提到 Scaffold 之外算：内容区、吸顶 Tab、淡入顶栏三处都要用同一份 isPinned / 文字色。
+    // 顶栏与吸顶 Tab 栏共用一条实色底（取色见 DetailVisuals.detailBarColor）。
+    // 提到 Scaffold 之外算：状态栏条、吸顶栏、标题淡入三处要用同一份 isPinned。
     val isPinned by remember {
         derivedStateOf { listState.firstVisibleItemIndex >= 1 }
     }
-    val tabColors = rememberDetailTabColors(uiState.posterDominantColor, isPinned)
-    val tabContainerColor = tabColors.containerColor
-    val tabContentColor = tabColors.contentColor
+    val pinnedBarColor = detailBarColor()
+    val barColor by animateColorAsState(
+        targetValue = if (isPinned) pinnedBarColor else Color.Transparent,
+        animationSpec = tween(durationMillis = 180),
+        label = "detailBarColor"
+    )
+    val topBarTitleAlpha by animateFloatAsState(
+        targetValue = if (isPinned) 1f else 0f,
+        animationSpec = tween(durationMillis = 220),
+        label = "detailTopBarTitleAlpha"
+    )
 
     CompositionLocalProvider(
         LocalActivePosterTmdbId provides activePosterTmdbId,
@@ -477,12 +485,14 @@ fun DetailScreen(
             }
             CompositionLocalProvider(LocalFullscreenSharedKey provides fullscreenSharedKey) {
 
-            // 吸顶时状态栏区域背景与 tabContainerColor 一致,非吸顶透明(透出渐变)
+            // 状态栏条：与顶栏同色同步淡入，让顶栏在视觉上延伸到状态栏底下。
+            // 原先这里铺的是掺了海报色的沉浸实色，且不吸顶时才透明——顶栏、Tab 栏、
+            // 状态栏三段颜色各算一套，滚动后顶部是三条深浅不一的横带。
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .windowInsetsTopHeight(WindowInsets.statusBars)
-                    .background(tabContainerColor)
+                    .background(barColor)
                     .align(Alignment.TopCenter)
             )
 
@@ -515,10 +525,10 @@ fun DetailScreen(
             LaunchedEffect(tabCount) {
                 if (selectedTab > tabCount - 1) selectedTab = tabCount - 1
             }
-            // 单 LazyColumn：头部(item) + TabRow(stickyHeader) + 内容(根据Tab切换)
-            // 通过 LocalContentColor 把 tabContentColor 传下去,内部搜索源/网盘类型/找到xx个资源等文字可自适应
+            // 单 LazyColumn：头部(item) + 顶栏/TabRow(stickyHeader) + 内容(根据Tab切换)
+            // 吸顶栏不再染沉浸色，内部搜索源/网盘类型/找到xx个资源等文字统一走主题色
             androidx.compose.runtime.CompositionLocalProvider(
-                androidx.compose.material3.LocalContentColor provides tabContentColor
+                androidx.compose.material3.LocalContentColor provides MaterialTheme.colorScheme.onSurface
             ) {
             // 将详情内容整体作为唯一内容 source，避免 LazyColumn 自身的绘制层影响 Haze 采样。
             AppPullToRefreshIndicator(
@@ -573,17 +583,39 @@ fun DetailScreen(
                 // 首帧只组合 header(海报+标题+按钮),大幅降低转场期间首帧工作量。
                 // contentReady 由 posterDominantColor 就绪或 400ms 兜底触发,转场结束后即 true。
                 if (contentReadyForTransition) {
-                // Tab 行（吸顶，共用同一个）
+                // 顶栏 + Tab 行（吸顶，共用同一个）
                 stickyHeader(key = "tab_row") {
-                    // isPinned / tabContainerColor / tabContentColor 在 LazyColumn 外已计算
-                    // 吸顶时 Tab 栏使用实色背景,indicator 保持主题色
-                    PrimaryTabRow(
-                        selectedTabIndex = selectedTab,
-                        containerColor = tabContainerColor,
-                        contentColor = tabContentColor,
+                    // 标题行与 Tab 行同在一个 Column 里、共用一次铺底、中间不加分隔线，
+                    // 吸顶后就是一整条。标题行高度恒定（不吸顶时只是透明占位），
+                    // 否则吸顶瞬间 sticky item 长高会把下方内容整体往下推一截。
+                    Column(
                         modifier = Modifier
                             .alpha(contentAlpha)
+                            .background(barColor)
                     ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(DETAIL_TOP_BAR_HEIGHT)
+                                // 左右各让出 64dp 给悬浮的返回/分享按钮，标题居中不被压在按钮下
+                                .padding(horizontal = 64.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = uiState.displayTitle,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.graphicsLayer { alpha = topBarTitleAlpha }
+                            )
+                        }
+                        PrimaryTabRow(
+                            selectedTabIndex = selectedTab,
+                            containerColor = Color.Transparent,
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        ) {
                             Tab(
                                 selected = selectedTab == 0,
                                 onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 0 },
@@ -606,6 +638,7 @@ fun DetailScreen(
                             }
                         }
                     }
+                }
 
                 // ===== 资源 Tab 内容 =====
                 if (selectedTab == 0) {
@@ -720,15 +753,17 @@ fun DetailScreen(
                     val commentsToShow = uiState.comments.filter { it.id != uiState.traktCommentId }
                     // 豆瓣评论基本都是中文，无需翻译，只有存在非豆瓣评论时才显示全部翻译
                     val translatableComments = commentsToShow.filter { it.source != DOUBAN_COMMENT_SOURCE }
-                    // 评论标题已移除，翻译按钮单独右对齐显示
+                    // 评论区工具行：「全部翻译」原先是右上角一枚孤立悬着的胶囊，
+                    // 与下方卡片的左边界对不上，也看不出属于哪一段。改成左对齐的一条
+                    // 工具行，与资源 Tab 的筛选器同一位置、同一内边距。
                     if (translatableComments.isNotEmpty() && uiState.translatedComments.size < translatableComments.size) {
                         item(key = "comments_translate") {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.End
+                                horizontalArrangement = Arrangement.Start
                             ) {
                                 Surface(
                                     onClick = { viewModel.translateComments() },
@@ -995,43 +1030,8 @@ fun DetailScreen(
             // 无同 state 祖先源，若未来被重新嵌回源子树，Behind 会因 0<0 静默丢源导致模糊失效，
             // All 直接强制采样内容源，blur/glass 两种模式都稳定生效。
             CompositionLocalProvider(LocalBackdrop provides null) {
-            // 滚动后淡入的模糊标题栏：原先滚过头部就只剩两个孤立的悬浮圆按钮，
-            // 页面上没有任何地方还写着在看哪部片。未滚动时 alpha=0 完全让位给沉浸头部。
-            // 与下方按钮同样显式 HazeSourceSelection.All（理由见上方长注释）。
-            val topBarTitleAlpha by animateFloatAsState(
-                targetValue = if (isPinned) 1f else 0f,
-                animationSpec = tween(durationMillis = 220),
-                label = "detailTopBarTitleAlpha"
-            )
-            if (topBarTitleAlpha > 0.01f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.TopCenter)
-                        .graphicsLayer { alpha = topBarTitleAlpha }
-                        .hazeTopBar(
-                            state = detailHazeState,
-                            style = HazeMaterials.ultraThin(),
-                            isContentUnderTopBar = isPinned,
-                            scene = detailGlassScene,
-                            sourceSelection = HazeSourceSelection.All
-                        )
-                        .statusBarsPadding()
-                        .height(48.dp)
-                        // 左右各让出 64dp 给返回/分享按钮，标题始终居中不被压到按钮下面
-                        .padding(horizontal = 64.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = uiState.displayTitle,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = tabContentColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
+            // 滚动后淡入的标题栏已并进吸顶 stickyHeader（与 Tab 行共用一次铺底），
+            // 这里只剩返回/分享等悬浮圆按钮，正好压在标题行两侧留出的 64dp 上。
 
             // 返回按钮：与详情页其他操作统一使用拟态玻璃，并保留真实 Haze 背景采样。
             NeumorphicIconButton(
