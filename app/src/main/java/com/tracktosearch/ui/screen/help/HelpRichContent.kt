@@ -14,7 +14,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -24,34 +26,32 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
 
 /**
  * 段落里那些没法用一串 StringRes 表达的手写内容：三张数据卡、参数表、对照表、代码块。
  *
- * 这些是全页最不像「纸质说明书」的部分——表格和等宽字天生属于技术文档。做法是把它们
- * 收进 [HelpPaperPanel]（另一档纸色），当成手册末尾的技术附录页，而不是硬拗成散文。
+ * 表格和等宽字天生属于技术文档，做法是把它们收进 [HelpPanel]（比段落卡差一档的底色），
+ * 当成手册末尾的技术附录页。
  */
 @Composable
 internal fun HelpExtraContent(
     extra: HelpExtra,
-    paper: HelpPaper,
     query: String,
 ) {
     when (extra) {
-        HelpExtra.DATA_SOURCES -> HelpDataSources(paper = paper, query = query)
-        HelpExtra.CUSTOM_SOURCE_SPEC -> HelpCustomSourceSpec(paper, query)
-        HelpExtra.CONSISTENCY_TABLE -> HelpConsistencyTable(paper)
+        HelpExtra.DATA_SOURCES -> HelpDataSources(query = query)
+        HelpExtra.CUSTOM_SOURCE_SPEC -> HelpCustomSourceSpec(query)
+        HelpExtra.CONSISTENCY_TABLE -> HelpConsistencyTable()
     }
 }
 
 /** 导出 / IMDb 导入 / 豆瓣同步三件事，每件一行：图标、名字、格式、入口、说明。 */
 @Composable
-private fun HelpDataSources(paper: HelpPaper, query: String) {
-    HelpSubtitle(stringResource(R.string.help_data_table_title), paper)
-    HelpPaperPanel(paper = paper) {
+private fun HelpDataSources(query: String) {
+    HelpSubtitle(stringResource(R.string.help_data_table_title))
+    HelpPanel {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             HelpDataRow(
                 icon = Icons.Rounded.FileDownload,
@@ -59,39 +59,46 @@ private fun HelpDataSources(paper: HelpPaper, query: String) {
                 format = stringResource(R.string.help_dc_export_fmt),
                 entry = stringResource(R.string.help_dc_export_entry),
                 description = stringResource(R.string.help_dc_export_desc),
-                paper = paper,
                 query = query,
             )
-            HelpInkRule(paper)
+            HelpDivider()
             HelpDataRow(
                 icon = Icons.Rounded.FileUpload,
                 title = stringResource(R.string.help_dc_imdb_t),
                 format = stringResource(R.string.help_dc_imdb_fmt),
                 entry = stringResource(R.string.help_dc_imdb_entry),
                 description = stringResource(R.string.help_dc_imdb_desc),
-                paper = paper,
                 query = query,
             )
-            HelpInkRule(paper)
+            HelpDivider()
             HelpDataRow(
                 icon = Icons.Rounded.Sync,
                 title = stringResource(R.string.help_dc_douban_t),
                 format = stringResource(R.string.help_dc_douban_fmt),
                 entry = stringResource(R.string.help_dc_douban_entry),
                 description = stringResource(R.string.help_dc_douban_desc),
-                paper = paper,
                 query = query,
             )
         }
     }
 }
 
+/** 附录面板内部的分隔线。原先是自制的极淡墨线，改走 M3 的 [HorizontalDivider]。 */
+@Composable
+private fun HelpDivider(modifier: Modifier = Modifier) {
+    HorizontalDivider(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.outlineVariant,
+    )
+}
+
 /**
  * 一行数据操作。
  *
- * 格式标签做成描边小签而不是 Material 的填充色块：填充块会在纸面上变成一个塑料贴片。
- * 入口那一行原本前面挂了个 📍 emoji，纸面上一个彩色 emoji 比整段文字都抢眼，去掉，
- * 改用更淡的墨色把它压成注解。
+ * 格式标签做成描边小签而不是填充色块：这一格是「CSV」「JSON」这类字面值，
+ * 描边把它标成技术标注，填充块看起来像可点的按钮。
+ * 入口那一行原本前面挂了个 📍 emoji，一个彩色 emoji 比整段文字都抢眼，去掉，
+ * 改用更弱一档的颜色把它压成注解。
  */
 @Composable
 private fun HelpDataRow(
@@ -100,51 +107,49 @@ private fun HelpDataRow(
     format: String,
     entry: String,
     description: String,
-    paper: HelpPaper,
     query: String,
 ) {
     Row(verticalAlignment = Alignment.Top) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = paper.palette.ochre,
+            tint = MaterialTheme.colorScheme.secondary,
             modifier = Modifier
                 .padding(top = 2.dp, end = 10.dp)
-                .size(16.dp),
+                .size(18.dp),
         )
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = helpHighlight(title, query, paper.palette.seal),
-                    color = paper.palette.ink,
-                    fontSize = 13.sp,
-                    fontFamily = FontFamily.Serif,
+                    text = helpHighlight(title, query, MaterialTheme.colorScheme.primary),
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(end = 8.dp),
                 )
-                HelpFormatTag(format, paper)
+                HelpFormatTag(format)
             }
             Spacer(Modifier.height(3.dp))
-            HelpFineLine(entry, paper, query, muted = true)
-            HelpFineLine(description, paper, query, muted = false)
+            HelpFineLine(entry, query, muted = true)
+            HelpFineLine(description, query, muted = false)
         }
     }
 }
 
 /** 格式标签：主题强调色描边小签，等宽字保留技术文档层级。 */
 @Composable
-private fun HelpFormatTag(format: String, paper: HelpPaper) {
+private fun HelpFormatTag(format: String) {
+    val primary = MaterialTheme.colorScheme.primary
     Text(
         text = format,
-        color = paper.palette.seal,
-        fontSize = 9.5.sp,
+        style = MaterialTheme.typography.labelSmall,
         fontFamily = FontFamily.Monospace,
-        letterSpacing = 0.1.em,
+        color = primary,
         modifier = Modifier
             .border(
                 width = 1.dp,
-                color = paper.palette.seal.copy(alpha = 0.42f),
-                shape = RoundedCornerShape(3.dp),
+                color = primary.copy(alpha = 0.42f),
+                shape = RoundedCornerShape(4.dp),
             )
             .padding(horizontal = 5.dp, vertical = 1.dp),
     )
@@ -154,16 +159,18 @@ private fun HelpFormatTag(format: String, paper: HelpPaper) {
 @Composable
 private fun HelpFineLine(
     text: String,
-    paper: HelpPaper,
     query: String,
     muted: Boolean,
 ) {
     Text(
-        text = helpHighlight(text, query, paper.palette.seal),
-        color = if (muted) paper.palette.inkSoft else paper.body,
-        fontSize = 11.5.sp,
+        text = helpHighlight(text, query, MaterialTheme.colorScheme.primary),
+        style = MaterialTheme.typography.bodySmall,
+        color = if (muted) {
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
         lineHeight = 18.sp,
-        fontFamily = FontFamily.Serif,
         modifier = Modifier.padding(top = 1.dp),
     )
 }
@@ -171,16 +178,16 @@ private fun HelpFineLine(
 /**
  * 自定义搜索源的技术规格：参数表 → 解析说明 → 三段示例 JSON。
  *
- * 解析说明那三条重新从「一」编号：它们是这一小节的第一二三条，不是整段的第九十十一条。
+ * 解析说明那三条重新从「①」编号：它们是这一小节的第一二三条，不是整段的第九十十一条。
  */
 @Composable
-private fun HelpCustomSourceSpec(paper: HelpPaper, query: String) {
-    val seal = paper.palette.seal
-    HelpSubtitle(stringResource(R.string.help_custom_source_params), paper)
-    HelpParamsTable(paper)
+private fun HelpCustomSourceSpec(query: String) {
+    val primary = MaterialTheme.colorScheme.primary
+    HelpSubtitle(stringResource(R.string.help_custom_source_params))
+    HelpParamsTable()
 
     Spacer(Modifier.height(14.dp))
-    HelpSubtitle(stringResource(R.string.help_custom_source_parse_title), paper)
+    HelpSubtitle(stringResource(R.string.help_custom_source_parse_title))
     listOf(
         R.string.help_custom_source_parse_b1,
         R.string.help_custom_source_parse_b2,
@@ -188,24 +195,23 @@ private fun HelpCustomSourceSpec(paper: HelpPaper, query: String) {
     ).forEachIndexed { index, res ->
         HelpItem(
             numeral = helpItemNumeral(index),
-            text = helpHighlight(stringResource(res), query, seal),
-            paper = paper,
+            text = helpHighlight(stringResource(res), query, primary),
         )
     }
 
     Spacer(Modifier.height(6.dp))
-    HelpCodeBlock(stringResource(R.string.help_custom_source_parse_pansou_example), paper)
+    HelpCodeBlock(stringResource(R.string.help_custom_source_parse_pansou_example))
     Spacer(Modifier.height(6.dp))
-    HelpCodeBlock(stringResource(R.string.help_custom_source_parse_zreso_example), paper)
+    HelpCodeBlock(stringResource(R.string.help_custom_source_parse_zreso_example))
 
     Spacer(Modifier.height(14.dp))
-    HelpSubtitle(stringResource(R.string.help_custom_source_example_title), paper)
-    HelpCodeBlock(stringResource(R.string.help_custom_source_example), paper)
+    HelpSubtitle(stringResource(R.string.help_custom_source_example_title))
+    HelpCodeBlock(stringResource(R.string.help_custom_source_example))
 }
 
 /** 十四个可配参数。参数名和示例值保留等宽字——这两列是要照着抄的。 */
 @Composable
-private fun HelpParamsTable(paper: HelpPaper) {
+private fun HelpParamsTable() {
     val params = listOf(
         Triple("name", stringResource(R.string.help_cs_param_name), "我的搜索源"),
         Triple("baseUrl", stringResource(R.string.help_cs_param_baseUrl), "https://example.com/"),
@@ -222,7 +228,7 @@ private fun HelpParamsTable(paper: HelpPaper) {
         Triple("diskTypePath", stringResource(R.string.help_cs_param_diskTypePath), "$.type"),
         Triple("datePath", stringResource(R.string.help_cs_param_datePath), "$.datetime"),
     )
-    HelpPaperPanel(paper = paper) {
+    HelpPanel {
         Column {
             HelpTableHead(
                 cells = listOf(
@@ -230,7 +236,6 @@ private fun HelpParamsTable(paper: HelpPaper) {
                     stringResource(R.string.help_cs_table_desc) to 0.40f,
                     stringResource(R.string.help_cs_table_example) to 0.30f,
                 ),
-                paper = paper,
             )
             params.forEach { (param, desc, example) ->
                 HelpTableRow(
@@ -239,7 +244,6 @@ private fun HelpParamsTable(paper: HelpPaper) {
                         HelpCell(desc, 0.40f, mono = false),
                         HelpCell(example, 0.30f, mono = true),
                     ),
-                    paper = paper,
                 )
             }
         }
@@ -248,7 +252,7 @@ private fun HelpParamsTable(paper: HelpPaper) {
 
 /** 豆瓣状态 × Trakt 状态 → 结果与动作，八种组合。 */
 @Composable
-private fun HelpConsistencyTable(paper: HelpPaper) {
+private fun HelpConsistencyTable() {
     val rows = listOf(
         listOf(R.string.watchlist_mode_watched, R.string.watchlist_mode_watchlist, R.string.watchlist_mode_watched, R.string.help_consistency_act_trakt_watched_remove_wish),
         listOf(R.string.watchlist_mode_watchlist, R.string.watchlist_mode_watched, R.string.watchlist_mode_watched, R.string.help_consistency_act_douban_watched_upgrade),
@@ -260,7 +264,7 @@ private fun HelpConsistencyTable(paper: HelpPaper) {
         listOf(R.string.watchlist_mode_watchlist, R.string.watchlist_mode_watchlist, R.string.watchlist_mode_watchlist, R.string.help_no_action),
     )
     val weights = listOf(0.21f, 0.21f, 0.17f, 0.41f)
-    HelpPaperPanel(paper = paper) {
+    HelpPanel {
         Column {
             HelpTableHead(
                 cells = listOf(
@@ -269,14 +273,12 @@ private fun HelpConsistencyTable(paper: HelpPaper) {
                     stringResource(R.string.help_consistency_col_result) to weights[2],
                     stringResource(R.string.help_consistency_col_action) to weights[3],
                 ),
-                paper = paper,
             )
             rows.forEach { row ->
                 HelpTableRow(
                     cells = row.mapIndexed { column, res ->
                         HelpCell(stringResource(res), weights[column], mono = false)
                     },
-                    paper = paper,
                 )
             }
         }
@@ -292,27 +294,26 @@ private data class HelpCell(
 
 /** 表头：主题强调色小字 + 一道分隔线收底。 */
 @Composable
-private fun HelpTableHead(cells: List<Pair<String, Float>>, paper: HelpPaper) {
+private fun HelpTableHead(cells: List<Pair<String, Float>>) {
     Row(modifier = Modifier.fillMaxWidth()) {
         cells.forEach { (text, weight) ->
             Text(
                 text = text,
-                color = paper.palette.seal,
-                fontSize = 10.sp,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
                 lineHeight = 15.sp,
-                fontFamily = FontFamily.Serif,
-                letterSpacing = 0.06.em,
                 modifier = Modifier
                     .weight(weight)
                     .padding(end = 6.dp),
             )
         }
     }
-    HelpInkRule(paper, modifier = Modifier.padding(top = 5.dp, bottom = 6.dp))
+    HelpDivider(modifier = Modifier.padding(top = 5.dp, bottom = 6.dp))
 }
 
 @Composable
-private fun HelpTableRow(cells: List<HelpCell>, paper: HelpPaper) {
+private fun HelpTableRow(cells: List<HelpCell>) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -321,10 +322,10 @@ private fun HelpTableRow(cells: List<HelpCell>, paper: HelpPaper) {
         cells.forEach { cell ->
             Text(
                 text = cell.text,
-                color = paper.body,
-                fontSize = if (cell.mono) 10.sp else 10.5.sp,
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = if (cell.mono) FontFamily.Monospace else null,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 15.sp,
-                fontFamily = if (cell.mono) FontFamily.Monospace else FontFamily.Serif,
                 modifier = Modifier
                     .weight(cell.weight)
                     .padding(end = 6.dp),

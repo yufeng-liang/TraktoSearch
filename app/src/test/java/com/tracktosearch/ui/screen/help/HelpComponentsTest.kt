@@ -5,11 +5,11 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 /**
- * 说明书编号与命中高亮的单测。
+ * 帮助页编号与命中高亮的单测。
  *
  * 章节编号不再按语言分支；正文圆圈数字必须覆盖 1 至 20，超出后安全回退普通数字。
  */
-class HelpPaperTest {
+class HelpComponentsTest {
 
     private val seal = Color(0xFFB4472F)
 

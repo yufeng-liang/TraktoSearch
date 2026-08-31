@@ -3,10 +3,9 @@ package com.tracktosearch.ui.screen.help
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -15,6 +14,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,7 +33,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -45,8 +43,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -64,11 +66,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -78,19 +83,19 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.EmptyStateCard
+import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
@@ -102,7 +107,7 @@ import kotlinx.coroutines.launch
  * 深链要滚到第 N 段时得知道那一段在列表里排第几行，而它前面有多少个小标题是变量。
  */
 private sealed interface HelpRow {
-    /** 页首：题签，或搜索时的结果计数 */
+    /** 搜索时的结果计数。浏览态没有这一行：页名已经写在顶栏上。 */
     data object Head : HelpRow
 
     data class GroupLabel(val group: HelpGroup) : HelpRow
@@ -113,9 +118,10 @@ private sealed interface HelpRow {
     data object Empty : HelpRow
 }
 
-/** 按命中集合摊平成行。空集合（搜不到）只出一行空状态，连题签都不留。 */
-private fun helpRows(matched: Set<Int>): List<HelpRow> {
-    val rows = mutableListOf<HelpRow>(HelpRow.Head)
+/** 按命中集合摊平成行。空集合（搜不到）只出一行空状态。 */
+private fun helpRows(matched: Set<Int>, searching: Boolean): List<HelpRow> {
+    val rows = mutableListOf<HelpRow>()
+    if (searching) rows += HelpRow.Head
     if (matched.isEmpty()) {
         rows += HelpRow.Empty
         return rows
@@ -132,8 +138,9 @@ private fun helpRows(matched: Set<Int>): List<HelpRow> {
 /**
  * 帮助与说明。
  *
- * 保留说明书的衬线字、清晰层级和细分隔线，但颜色完全跟随当前 MaterialTheme。
- * 顶栏初始透明沉浸，列表发生位移后才启用与其他设置子页一致的 Haze。
+ * 视觉与搜索源管理页同一套：主题排版、20dp 圆角 surfaceVariant 卡片、毛玻璃顶栏、
+ * 拟态圆按钮。原先这一页自成一套「纸质说明书」——整页衬线字、em 级字距、题签加短横线、
+ * 用极淡墨线代替卡片，从设置页点进来像换了个应用。
  *
  * @param initialSection 功能页带过来的段落 key（见 [HelpSections]）：进入后展开并滚到该段
  */
@@ -142,7 +149,6 @@ fun HelpScreen(
     onBack: () -> Unit,
     initialSection: String? = null,
 ) {
-    val paper = rememberHelpPaper()
     val context = LocalContext.current
 
     var query by rememberSaveable { mutableStateOf("") }
@@ -179,8 +185,7 @@ fun HelpScreen(
         keyboardController?.hide()
     }
     val hazeState = remember { HazeState() }
-    // HazeMaterials.thin() 读取 MaterialTheme，不能用 remember 缓存。
-    val hazeStyle = HazeMaterials.thin()
+    val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     val matched = remember(query, context) {
         HelpCatalog.withIndex()
@@ -190,7 +195,7 @@ fun HelpScreen(
             .map { it.index }
             .toSet()
     }
-    val rows = remember(matched) { helpRows(matched) }
+    val rows = remember(matched, searching) { helpRows(matched, searching) }
 
     // 深链：展开对应段并滚到它，省得用户在十四段里自己找
     LaunchedEffect(initialSection) {
@@ -206,7 +211,7 @@ fun HelpScreen(
         onDispose { scrollToTopProvider.unregister() }
     }
 
-    // 与 OpenSourceScreen 相同：列表只要真正发生位移，才启用顶栏 Haze。
+    // 与搜索源管理页相同：列表只要真正发生位移，才启用顶栏 Haze。
     val hasContentUnderTopBar by remember {
         derivedStateOf {
             hasListScrolled(
@@ -225,119 +230,108 @@ fun HelpScreen(
 
     BackHandler(enabled = searchVisible) { collapseSearch() }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(paper.palette.paper)
-            .onGloballyPositioned { rootPositionInRoot = it.positionInRoot() }
-            .pointerInput(searchVisible) {
-                if (!searchVisible) return@pointerInput
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    val up = waitForUpOrCancellation()
-                    if (up != null && currentSearchBoundsInRootLocal?.contains(down.position) != true) {
-                        collapseSearch()
-                    }
-                }
-            }
-    ) {
-        HelpPaperBackdrop(paper)
-        val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-        LazyColumn(
-            state = listState,
+    Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = MaterialTheme.colorScheme.background,
+    ) { _ ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .hazeSource(state = hazeState),
-            contentPadding = PaddingValues(
-                start = 22.dp,
-                end = 22.dp,
-                top = 52.dp + statusBarHeight,
-                bottom = 96.dp,
-            ),
-        ) {
-            items(
-                count = rows.size,
-                key = { index ->
-                    when (val row = rows[index]) {
-                        HelpRow.Head -> "head"
-                        HelpRow.Empty -> "empty"
-                        is HelpRow.GroupLabel -> "group-${row.group.name}"
-                        is HelpRow.Section -> "section-${row.spec.key}"
+                .onGloballyPositioned { rootPositionInRoot = it.positionInRoot() }
+                .pointerInput(searchVisible) {
+                    if (!searchVisible) return@pointerInput
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val up = waitForUpOrCancellation()
+                        if (up != null && currentSearchBoundsInRootLocal?.contains(down.position) != true) {
+                            collapseSearch()
+                        }
                     }
-                },
-            ) { index ->
-                HelpRowContent(
-                    row = rows[index],
-                    paper = paper,
-                    query = query,
-                    matchCount = matched.size,
-                    isExpanded = { section ->
-                        if (searching) section !in collapsedWhileSearching else browseExpanded == section
-                    },
-                    onToggle = { section ->
-                        if (searching) {
-                            if (section in collapsedWhileSearching) {
-                                collapsedWhileSearching.remove(section)
-                            } else {
-                                collapsedWhileSearching.add(section)
-                            }
-                        } else {
-                            browseExpanded = if (browseExpanded == section) -1 else section
+                }
+        ) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState),
+                contentPadding = PaddingValues(
+                    top = 65.dp + statusBarHeight,
+                    bottom = 80.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                items(
+                    count = rows.size,
+                    key = { index ->
+                        when (val row = rows[index]) {
+                            HelpRow.Head -> "head"
+                            HelpRow.Empty -> "empty"
+                            is HelpRow.GroupLabel -> "group-${row.group.name}"
+                            is HelpRow.Section -> "section-${row.spec.key}"
                         }
                     },
-                )
+                ) { index ->
+                    HelpRowContent(
+                        row = rows[index],
+                        query = query,
+                        matchCount = matched.size,
+                        isExpanded = { section ->
+                            if (searching) section !in collapsedWhileSearching else browseExpanded == section
+                        },
+                        onToggle = { section ->
+                            if (searching) {
+                                if (section in collapsedWhileSearching) {
+                                    collapsedWhileSearching.remove(section)
+                                } else {
+                                    collapsedWhileSearching.add(section)
+                                }
+                            } else {
+                                browseExpanded = if (browseExpanded == section) -1 else section
+                            }
+                        },
+                    )
+                }
             }
-        }
 
-        HelpPaperTopBar(
-            paper = paper,
-            titleVisible = hasContentUnderTopBar,
-            ruleVisible = hasContentUnderTopBar,
-            hasContentUnderTopBar = hasContentUnderTopBar,
-            hazeState = hazeState,
-            hazeStyle = hazeStyle,
-            searchVisible = searchVisible,
-            query = query,
-            focusRequester = focusRequester,
-            searchInteractionSource = searchInteractionSource,
-            onQueryChange = { query = it },
-            onBack = onBack,
-            onExpandSearch = { searchVisible = true },
-            onCollapseSearch = collapseSearch,
-            onSearchAction = {
-                focusManager.clearFocus(force = true)
-                keyboardController?.hide()
-            },
-            onSearchBoundsChanged = { searchBoundsInRoot = it },
-        )
+            HelpHeaderBar(
+                hazeState = hazeState,
+                isContentUnderTopBar = hasContentUnderTopBar,
+                searchVisible = searchVisible,
+                query = query,
+                focusRequester = focusRequester,
+                searchInteractionSource = searchInteractionSource,
+                onQueryChange = { query = it },
+                onBack = onBack,
+                onExpandSearch = { searchVisible = true },
+                onCollapseSearch = collapseSearch,
+                onSearchAction = {
+                    focusManager.clearFocus(force = true)
+                    keyboardController?.hide()
+                },
+                onSearchBoundsChanged = { searchBoundsInRoot = it },
+            )
+        }
     }
 }
 
 @Composable
 private fun HelpRowContent(
     row: HelpRow,
-    paper: HelpPaper,
     query: String,
     matchCount: Int,
     isExpanded: (Int) -> Boolean,
     onToggle: (Int) -> Unit,
 ) {
     when (row) {
-        // 搜索时题签让位给结果计数：正在筛的时候书名不重要，命中几段才重要
-        HelpRow.Head -> if (query.isBlank()) {
-            HelpMasthead(stringResource(R.string.help_title), paper)
-        } else {
-            HelpResultCount(matchCount, paper)
-        }
+        HelpRow.Head -> HelpResultCount(matchCount)
 
-        HelpRow.Empty -> HelpEmptyResult(paper)
+        HelpRow.Empty -> HelpEmptyResult()
 
-        is HelpRow.GroupLabel -> HelpGroupLabel(stringResource(row.group.label), paper)
+        is HelpRow.GroupLabel -> HelpGroupLabel(stringResource(row.group.label))
 
-        is HelpRow.Section -> HelpSectionBlock(
+        is HelpRow.Section -> HelpSectionCard(
             index = row.index,
             spec = row.spec,
-            paper = paper,
             query = query,
             expanded = isExpanded(row.index),
             onToggle = { onToggle(row.index) },
@@ -345,23 +339,28 @@ private fun HelpRowContent(
     }
 }
 
-/** 一段：标题行 + 展开的正文 + 收底的墨线。 */
+/** 一段：一张卡，卡里是标题行 + 展开的正文。原先段与段之间靠一道极淡墨线分界。 */
 @Composable
-private fun HelpSectionBlock(
+private fun HelpSectionCard(
     index: Int,
     spec: HelpSectionSpec,
-    paper: HelpPaper,
     query: String,
     expanded: Boolean,
     onToggle: () -> Unit,
 ) {
-    val seal = paper.palette.seal
-    Column(modifier = Modifier.fillMaxWidth()) {
+    val primary = MaterialTheme.colorScheme.primary
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .shadow(1.dp, HELP_CARD_SHAPE)
+            .clip(HELP_CARD_SHAPE)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+    ) {
         HelpSectionHeader(
             numeral = helpSectionNumeral(index),
-            title = helpHighlight(stringResource(spec.title), query, seal),
+            title = helpHighlight(stringResource(spec.title), query, primary),
             expanded = expanded,
-            paper = paper,
             onToggle = onToggle,
         )
         AnimatedVisibility(
@@ -369,84 +368,60 @@ private fun HelpSectionBlock(
             enter = expandVertically(tween(220)),
             exit = shrinkVertically(tween(180)),
         ) {
-            Column(modifier = Modifier.padding(start = 2.dp, bottom = 16.dp)) {
+            // 正文左边缘与标题行的编号列对齐
+            Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp)) {
                 spec.bullets.forEachIndexed { position, res ->
                     HelpItem(
                         numeral = helpItemNumeral(position),
-                        text = helpHighlight(stringResource(res), query, seal),
-                        paper = paper,
+                        text = helpHighlight(stringResource(res), query, primary),
                     )
                 }
                 spec.extra?.let { extra ->
                     Spacer(Modifier.height(6.dp))
-                    HelpExtraContent(extra = extra, paper = paper, query = query)
+                    HelpExtraContent(extra = extra, query = query)
                 }
             }
         }
-        HelpInkRule(paper)
     }
 }
 
-/** 搜索结果计数。主题强调色小字居中，占位和题签一样高，切换时页面不跳。 */
+/** 搜索结果计数。 */
 @Composable
-private fun HelpResultCount(count: Int, paper: HelpPaper) {
+private fun HelpResultCount(count: Int) {
     Text(
         text = pluralStringResource(R.plurals.help_search_matches, count, count),
-        color = paper.palette.seal,
-        fontSize = 11.sp,
-        fontFamily = FontFamily.Serif,
-        letterSpacing = 0.14.em,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 16.dp, bottom = 20.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 4.dp),
     )
 }
 
-/** 一段都没命中。以前这里是一片空白，看不出是搜错了还是页面坏了。 */
+/** 一段都没命中。走全 App 共用的空状态卡，不再是一行孤零零的小字。 */
 @Composable
-private fun HelpEmptyResult(paper: HelpPaper) {
-    Column(
+private fun HelpEmptyResult() {
+    EmptyStateCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 64.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = stringResource(R.string.help_search_empty),
-            color = paper.palette.inkSoft,
-            fontSize = 13.sp,
-            fontFamily = FontFamily.Serif,
-            letterSpacing = 0.06.em,
-            textAlign = TextAlign.Center,
-        )
-    }
-}
-
-/** 中性背景层：只使用当前主题 background，不绘制黄纸纹理或暖色洗底。 */
-@Composable
-private fun HelpPaperBackdrop(paper: HelpPaper) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(paper.palette.paper)
+            .padding(horizontal = 16.dp, vertical = 24.dp),
+        isDark = isAppDarkTheme(),
+        title = stringResource(R.string.help_search_empty),
+        icon = Icons.Rounded.SearchOff,
     )
 }
 
 /**
- * 说明书标题栏。
+ * 毛玻璃吸顶标题栏：返回 + 标题 + 搜索，规格与搜索源管理页的 HeaderBar 一致。
  *
- * 栏底保持透明；列表发生位移后由 [hazeTopBar] 提供模糊。搜索按钮在右侧原位横向展开，
- * 标题同时淡出。整栏覆盖列表，点击搜索框外由页面根节点优先收起搜索。
+ * 标题不再随滚动淡入淡出——它是页名，一进来就该看见。搜索按钮在右侧原位横向展开成
+ * 输入框，标题同时淡出。整栏覆盖列表，点击搜索框外由页面根节点优先收起搜索。
  */
 @Composable
-private fun HelpPaperTopBar(
-    paper: HelpPaper,
-    titleVisible: Boolean,
-    ruleVisible: Boolean,
-    hasContentUnderTopBar: Boolean,
+private fun HelpHeaderBar(
     hazeState: HazeState,
-    hazeStyle: HazeBlurStyle,
+    isContentUnderTopBar: Boolean,
     searchVisible: Boolean,
     query: String,
     focusRequester: FocusRequester,
@@ -458,16 +433,18 @@ private fun HelpPaperTopBar(
     onSearchAction: () -> Unit,
     onSearchBoundsChanged: (Rect) -> Unit,
 ) {
+    val isDark = isAppDarkTheme()
     val topBarInteractionSource = remember { MutableInteractionSource() }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .hazeTopBar(
                 state = hazeState,
-                style = hazeStyle,
+                style = HazeMaterials.thin(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)),
                 blurRadius = 24.dp,
-                isContentUnderTopBar = hasContentUnderTopBar,
+                isContentUnderTopBar = isContentUnderTopBar,
             )
+            // 拦截点击：顶栏覆盖可滚动列表，不消费会让点击穿透到下方列表项
             .clickable(
                 interactionSource = topBarInteractionSource,
                 indication = null,
@@ -479,120 +456,135 @@ private fun HelpPaperTopBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp)
-                .padding(horizontal = 6.dp),
+                .padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 1.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = stringResource(R.string.content_desc_back),
-                    tint = paper.palette.ink,
-                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary,
                 )
             }
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(42.dp),
-                contentAlignment = Alignment.Center,
+                    .height(48.dp),
             ) {
-                HelpTopBarTitle(
-                    visible = titleVisible && !searchVisible,
-                    paper = paper,
+                // 搜索展开时标题淡出让位给输入框。这里不用 AnimatedVisibility：
+                // 外层是 Row，Box 内同时能看到 RowScope 与 BoxScope 两个隐式接收者，
+                // 重载会解析到 RowScope 那个扩展上，而它在 Box 里不成立。
+                val titleAlpha by animateFloatAsState(
+                    targetValue = if (searchVisible) 0f else 1f,
+                    animationSpec = tween(durationMillis = 180),
+                    label = "help_title_alpha",
                 )
-                BoxWithConstraints(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.CenterEnd,
+                Text(
+                    text = stringResource(R.string.help_title),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .graphicsLayer { alpha = titleAlpha },
+                )
+                HelpSearchSlot(
+                    searchVisible = searchVisible,
+                    query = query,
+                    isDark = isDark,
+                    hazeState = hazeState,
+                    focusRequester = focusRequester,
+                    searchInteractionSource = searchInteractionSource,
+                    onQueryChange = onQueryChange,
+                    onExpandSearch = onExpandSearch,
+                    onSearchAction = onSearchAction,
+                    onSearchBoundsChanged = onSearchBoundsChanged,
+                )
+            }
+        }
+    }
+}
+
+/** 右端的搜索位：收起是一枚拟态圆按钮，展开时横向铺满整条顶栏。 */
+@Composable
+private fun HelpSearchSlot(
+    searchVisible: Boolean,
+    query: String,
+    isDark: Boolean,
+    hazeState: HazeState,
+    focusRequester: FocusRequester,
+    searchInteractionSource: MutableInteractionSource,
+    onQueryChange: (String) -> Unit,
+    onExpandSearch: () -> Unit,
+    onSearchAction: () -> Unit,
+    onSearchBoundsChanged: (Rect) -> Unit,
+) {
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.CenterEnd,
+    ) {
+        val searchWidth by animateDpAsState(
+            targetValue = if (searchVisible) maxWidth else 42.dp,
+            animationSpec = tween(durationMillis = 240),
+            label = "help_search_width",
+        )
+        Box(
+            modifier = Modifier
+                .width(searchWidth)
+                .height(42.dp)
+                .onGloballyPositioned { onSearchBoundsChanged(it.boundsInRoot()) },
+            contentAlignment = Alignment.CenterEnd,
+        ) {
+            if (searchVisible) {
+                HelpSearchField(
+                    query = query,
+                    onQueryChange = onQueryChange,
+                    focusRequester = focusRequester,
+                    interactionSource = searchInteractionSource,
+                    onSearchAction = onSearchAction,
+                )
+            } else {
+                NeumorphicIconButton(
+                    onClick = onExpandSearch,
+                    isDark = isDark,
+                    lightBorderAlpha = 0.35f,
+                    hazeState = hazeState,
                 ) {
-                    val searchWidth by animateDpAsState(
-                        targetValue = if (searchVisible) maxWidth else 42.dp,
-                        animationSpec = tween(durationMillis = 240),
-                        label = "help_search_width",
-                    )
-                    Box(
-                        modifier = Modifier
-                            .width(searchWidth)
-                            .fillMaxHeight()
-                            .onGloballyPositioned { onSearchBoundsChanged(it.boundsInRoot()) },
-                        contentAlignment = Alignment.CenterEnd,
-                    ) {
-                        if (searchVisible) {
-                            HelpSearchField(
-                                query = query,
-                                onQueryChange = onQueryChange,
-                                paper = paper,
-                                focusRequester = focusRequester,
-                                interactionSource = searchInteractionSource,
-                                onSearchAction = onSearchAction,
-                            )
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = stringResource(R.string.help_search_hint),
+                        // 有搜索词时按钮本身就是「正在筛」的指示，用强调色
+                        tint = if (query.isNotBlank()) {
+                            MaterialTheme.colorScheme.primary
                         } else {
-                            IconButton(
-                                onClick = onExpandSearch,
-                                modifier = Modifier
-                                    .size(42.dp)
-                                    .background(paper.palette.cream, CircleShape)
-                                    .border(1.dp, paper.palette.inkFaint, CircleShape),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Search,
-                                    contentDescription = stringResource(R.string.help_search_hint),
-                                    tint = if (query.isNotBlank()) {
-                                        paper.palette.seal
-                                    } else {
-                                        paper.palette.ink
-                                    },
-                                    modifier = Modifier.size(19.dp),
-                                )
-                            }
-                        }
-                    }
+                            LocalContentColor.current
+                        },
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
             }
         }
-        AnimatedVisibility(
-            visible = ruleVisible,
-            enter = fadeIn(tween(180)),
-            exit = fadeOut(tween(180)),
-        ) {
-            HelpInkRule(paper)
-        }
     }
 }
-
-/** 顶栏标题；搜索展开时与列表未滚动时都淡出。 */
-@Composable
-private fun HelpTopBarTitle(visible: Boolean, paper: HelpPaper) {
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(tween(180)),
-        exit = fadeOut(tween(180)),
-    ) {
-        Text(
-            text = stringResource(R.string.help_title),
-            color = paper.palette.ink,
-            fontSize = 14.sp,
-            fontFamily = FontFamily.Serif,
-            letterSpacing = 0.16.em,
-        )
-    }
-}
-
-/** 中性 surface 上的衬线搜索输入；保留清除按钮，不承担搜索匹配逻辑。 */
+/** 搜索输入：surfaceVariant 底 + outlineVariant 描边，字号与列表正文同一档。 */
 @Composable
 private fun HelpSearchField(
     query: String,
     onQueryChange: (String) -> Unit,
-    paper: HelpPaper,
     focusRequester: FocusRequester,
     interactionSource: MutableInteractionSource,
     onSearchAction: () -> Unit,
 ) {
-    val seal = paper.palette.seal
-    val selectionColors = remember(seal) {
-        TextSelectionColors(handleColor = seal, backgroundColor = seal.copy(alpha = 0.22f))
+    val colors = MaterialTheme.colorScheme
+    val selectionColors = remember(colors.primary) {
+        TextSelectionColors(
+            handleColor = colors.primary,
+            backgroundColor = colors.primary.copy(alpha = 0.22f),
+        )
     }
     val shape = RoundedCornerShape(21.dp)
+    val hintStyle = MaterialTheme.typography.bodyMedium
     CompositionLocalProvider(LocalTextSelectionColors provides selectionColors) {
         BasicTextField(
             value = query,
@@ -600,16 +592,12 @@ private fun HelpSearchField(
             singleLine = true,
             modifier = Modifier
                 .fillMaxSize()
-                .background(paper.palette.cream, shape)
-                .border(1.dp, paper.palette.inkFaint, shape)
+                .clip(shape)
+                .background(colors.surfaceVariant)
+                .border(1.dp, colors.outlineVariant, shape)
                 .focusRequester(focusRequester),
-            textStyle = TextStyle(
-                color = paper.body,
-                fontSize = 13.sp,
-                fontFamily = FontFamily.Serif,
-                letterSpacing = 0.04.em,
-            ),
-            cursorBrush = SolidColor(seal),
+            textStyle = hintStyle.copy(color = colors.onSurface),
+            cursorBrush = SolidColor(colors.primary),
             interactionSource = interactionSource,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { onSearchAction() }),
@@ -623,7 +611,7 @@ private fun HelpSearchField(
                     Icon(
                         imageVector = Icons.Rounded.Search,
                         contentDescription = null,
-                        tint = paper.palette.inkSoft,
+                        tint = colors.onSurfaceVariant,
                         modifier = Modifier.size(18.dp),
                     )
                     Box(
@@ -635,10 +623,10 @@ private fun HelpSearchField(
                         if (query.isEmpty()) {
                             Text(
                                 text = stringResource(R.string.help_search_hint),
-                                color = paper.palette.inkSoft,
-                                fontSize = 13.sp,
-                                fontFamily = FontFamily.Serif,
-                                letterSpacing = 0.04.em,
+                                style = hintStyle,
+                                color = colors.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                         field()
@@ -651,8 +639,8 @@ private fun HelpSearchField(
                             Icon(
                                 imageVector = Icons.Rounded.Close,
                                 contentDescription = stringResource(R.string.content_desc_clear),
-                                tint = paper.palette.inkSoft,
-                                modifier = Modifier.size(15.dp),
+                                tint = colors.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp),
                             )
                         }
                     }
