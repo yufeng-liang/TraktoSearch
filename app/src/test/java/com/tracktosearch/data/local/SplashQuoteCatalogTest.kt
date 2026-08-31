@@ -3,6 +3,7 @@ package com.tracktosearch.data.local
 import android.content.Context
 import android.graphics.BitmapFactory
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.R
 import com.tracktosearch.data.repository.SplashQuoteRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
@@ -11,6 +12,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import java.awt.Font
 
 /**
  * 直接对 assets/quotes.json 本体做体检。
@@ -143,6 +145,19 @@ class SplashQuoteCatalogTest {
             assertThat(traditional).hasLength(quote.keywordFor("zh").length)
             assertThat(quote.sealKeywordFor("zh")).isEqualTo(traditional)
         }
+    }
+
+    @Test
+    fun `中文印章隶书子集覆盖全部繁体关键词字形`() = runTest {
+        val font = appContext.resources.openRawResource(R.font.hanwang_lisu_seal).use { input ->
+            Font.createFont(Font.TRUETYPE_FONT, input)
+        }
+        val required = quotes()
+            .flatMap { it.sealKeywordFor("zh").toList() }
+            .toSet()
+
+        val missing = required.filterNot { font.canDisplay(it) }
+        assertThat(missing).isEmpty()
     }
 
     /** 简体不重复不代表繁体不重复：简繁一对多的字（游/遊 一类）合并回去就可能撞成同一枚印 */

@@ -35,7 +35,7 @@ Two caveats worth knowing before this font is reused elsewhere:
 
 What ships in this repo:
 
-app/src/main/res/font/hanwang_lisu_seal.ttf — 239 KB subset, 464 glyphs.
+app/src/main/res/font/hanwang_lisu_seal.ttf — 238 KB subset, 464 glyphs.
 Only the Traditional Chinese seal keywords from assets/quotes.json
 (`keyword["zh-Hant"]`) are kept; the full font is 8.1 MB. Produced with:
 
