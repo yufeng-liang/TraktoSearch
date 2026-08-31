@@ -29,10 +29,12 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.luminance
@@ -61,15 +63,6 @@ private val TicketPaperLight = Color(0xFFFBF6EC)
 
 /** 深色主题纸色。本项目深色主题的页面底色是 #D9CFC2，票得更亮才像纸。 */
 private val TicketPaperDark = Color(0xFFF3ECE0)
-
-/**
- * 页面底色，必须跟 ActivationLoginScreen 的 loginBackground 逐值保持一致。
- *
- * 票根撕口和底边锯齿是「用页面底色的实心圆盖住纸面」抠出来的，不是从 Path 上挖洞；
- * 这两个值一旦跟页面底色对不上，缺口里会露出一圈色差，票看着像补了两块补丁。
- */
-private val TicketPageBackgroundLight = Color(0xFFF7EFE2)
-private val TicketPageBackgroundDark = Color(0xFFD9CFC2)
 
 /** 票面文字色。深色主题下纸面依旧是亮的，所以两套主题共用这一个深棕。 */
 private val TicketInkColor = Color(0xFF3A2E24)
@@ -168,7 +161,6 @@ internal fun CinemaTicket(
     // 主题判断方式与 ActivationLoginScreen 里的取色保持一致
     val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val paperColor = if (isDarkTheme) TicketPaperDark else TicketPaperLight
-    val pageColor = if (isDarkTheme) TicketPageBackgroundDark else TicketPageBackgroundLight
     val seatText = stringResource(R.string.ticket_seat, stub.row, stub.seat)
     // 浏览器授权中和换 token 中都不能再点第二次登录，两个平台入口共用这一个判断
     val authBusy = loginState == LoginState.AUTHORIZING || loginState == LoginState.CONNECTING
@@ -196,7 +188,7 @@ internal fun CinemaTicket(
                 // 给自绘投影留一条落地空间：裁切正好停在票的下沿，不留这 2.dp
                 // 投影会被整条切掉，票看起来就是直接印在机壳上而不是搭在机壳上
                 .padding(bottom = TicketShadowOffset)
-                .drawBehind { drawTicketPaper(paperColor = paperColor, pageColor = pageColor) }
+                .drawBehind { drawTicketPaper(paperColor = paperColor) }
                 .padding(horizontal = 16.dp, vertical = 14.dp)
         ) {
             Row(
@@ -431,42 +423,52 @@ private fun TicketText(
 }
 
 /**
- * 画票形：投影、纸面、两个票根撕口、一排底边锯齿。
+ * 画票：投影在下，纸面在上，两者共用同一条票形 Path。
  *
- * 撕口和锯齿不是从 Path 上抠洞，而是拿页面底色的实心圆盖在纸面之上。
- * 用 arcTo 沿轮廓拼出两个半圆加十几颗锯齿要算一长串弧段，盖圆只有几行、形状完全一致；
- * 代价是这两种缺口只能落在页面底色上，所以 TicketPageBackground* 必须跟着 loginBackground 走。
+ * 票形是「圆角矩形减掉一串圆」—— 左右各一个撕口半圆，底边一排锯齿圆，
+ * 用 [PathOperation.Difference] 真挖掉，而不是拿背景色的实心圆盖在纸面上。
+ * 盖圆那种做法更短，但它要求票背后正好是页面底色；票实际是画在取票机机壳
+ * （深金属 + 毛玻璃）上的，页面底色跟纸色只差两个色阶，缺口会整个看不见。
+ * 挖洞跟背后是什么无关，机壳、页面底色、以后换别的容器都能照样透出来。
  *
- * 投影和纸面共用同一条 Path，只在纵向错开 [TicketShadowOffset]，两者轮廓永远对得上。
+ * 投影用的是同一条挖过洞的 Path，所以缺口处的影子也跟着缺，撕口才像真撕出来的。
  */
-private fun DrawScope.drawTicketPaper(paperColor: Color, pageColor: Color) {
-    val cornerRadius = TicketCornerRadius.toPx()
+private fun DrawScope.drawTicketPaper(paperColor: Color) {
+    val ticket = buildTicketPath()
+    translate(top = TicketShadowOffset.toPx()) {
+        drawPath(path = ticket, color = TicketShadowColor)
+    }
+    drawPath(path = ticket, color = paperColor)
+}
+
+private fun DrawScope.buildTicketPath(): Path {
+    val width = size.width
+    val height = size.height
+    val corner = TicketCornerRadius.toPx()
     val body = Path().apply {
         addRoundRect(
             RoundRect(
                 left = 0f,
                 top = 0f,
-                right = size.width,
-                bottom = size.height,
-                cornerRadius = CornerRadius(cornerRadius, cornerRadius)
+                right = width,
+                bottom = height,
+                cornerRadius = CornerRadius(corner, corner)
             )
         )
     }
-    translate(top = TicketShadowOffset.toPx()) {
-        drawPath(path = body, color = TicketShadowColor)
-    }
-    drawPath(path = body, color = paperColor)
-
-    val notchCenterY = size.height * TICKET_NOTCH_CENTER_FRACTION
+    val notchCenterY = height * TICKET_NOTCH_CENTER_FRACTION
     val notchRadius = TicketNotchRadius.toPx()
-    drawCircle(color = pageColor, radius = notchRadius, center = Offset(0f, notchCenterY))
-    drawCircle(color = pageColor, radius = notchRadius, center = Offset(size.width, notchCenterY))
-
     val toothRadius = TicketToothRadius.toPx()
     val toothStep = TicketToothSpacing.toPx()
-    var toothX = 0f
-    while (toothX <= size.width) {
-        drawCircle(color = pageColor, radius = toothRadius, center = Offset(toothX, size.height))
-        toothX += toothStep
+    val cutouts = Path().apply {
+        // 撕口整圆落在票的左右边线上，挖完各剩半个
+        addOval(Rect(center = Offset(0f, notchCenterY), radius = notchRadius))
+        addOval(Rect(center = Offset(width, notchCenterY), radius = notchRadius))
+        var toothX = 0f
+        while (toothX <= width) {
+            addOval(Rect(center = Offset(toothX, height), radius = toothRadius))
+            toothX += toothStep
+        }
     }
+    return Path().apply { op(body, cutouts, PathOperation.Difference) }
 }
