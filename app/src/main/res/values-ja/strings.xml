@@ -544,7 +544,7 @@
     <string name="detail_load_more_comments">下にスクロールしてさらに読み込む</string>
     <string name="detail_all_comments_loaded">全 %1$d 件のコメントを読み込みました</string>
     <string name="detail_cast_crew">キャスト＆スタッフ</string>
-    <string name="detail_cast_all">すべて ></string>
+    <string name="detail_cast_all">すべて</string>
     <string name="detail_director_tag">監督</string>
     <string name="detail_cast_as">%1$s 役</string>
     <string name="detail_writer_tag">脚本</string>

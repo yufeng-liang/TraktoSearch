@@ -544,7 +544,7 @@
     <string name="detail_load_more_comments">아래로 스크롤하여 더 불러오기</string>
     <string name="detail_all_comments_loaded">전체 %1$d개 댓글 로딩 완료</string>
     <string name="detail_cast_crew">출연진 및 제작진</string>
-    <string name="detail_cast_all">전체 ></string>
+    <string name="detail_cast_all">전체</string>
     <string name="detail_director_tag">감독</string>
     <string name="detail_cast_as">%1$s 역</string>
     <string name="detail_writer_tag">각본</string>
