@@ -705,7 +705,6 @@ fun MainScreen(
                             onNavigateToDoubanLogin = onNavigateToDoubanLogin,
                             onNavigateToLogin = onNavigateToLogin,
                             onTraktLogin = onTraktLogin,
-                            onStatisticsClick = onStatisticsClick,
                             onDailyStampClick = onDailyStampClick,
                             modifier = Modifier.fillMaxSize()
                         )
