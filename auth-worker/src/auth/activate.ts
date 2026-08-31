@@ -37,6 +37,8 @@ interface ActivateRequest {
 
 interface ActivateResponse {
     deviceId: string;
+    // 激活成功那一刻客户端就要显示昵称，此时 check 还没跑，只能由 activate 带回。
+    nickname: string;
     accessToken: string;
     refreshToken: string;
     accessExpiresAt: number;
@@ -77,9 +79,11 @@ export async function handleActivate(
         used_at: number | null; revoked_at: number | null; device_id: string | null;
         code_mask: string | null;
         friend_status: string; max_devices: number; friend_expires_at: number | null;
+        friend_nickname: string;
     }>(env.DB.prepare(`
         SELECT i.id, i.friend_id, i.kind, i.expires_at, i.used_at, i.revoked_at, i.code_mask, i.device_id,
-               f.status as friend_status, f.max_devices, f.expires_at as friend_expires_at
+               f.status as friend_status, f.max_devices, f.expires_at as friend_expires_at,
+               f.nickname as friend_nickname
         FROM invites i
         JOIN friends f ON i.friend_id = f.id
         WHERE i.code_hash = ?
@@ -295,6 +299,8 @@ export async function handleActivate(
 
     const response: ActivateResponse = {
         deviceId,
+        // 昵称随主查询的 JOIN friends 一并取回，不额外查库。
+        nickname: invite.friend_nickname,
         accessToken,
         refreshToken,
         accessExpiresAt,
