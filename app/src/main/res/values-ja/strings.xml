@@ -1,14 +1,14 @@
 <resources>
-    <string name="auth_migration_invite_hint">自動復元を完了できませんでした。移行用の招待コードを入力して続行してください。</string>
+    <string name="auth_migration_invite_hint">自動復元を完了できませんでした。移行用のチケットコードを入力して続行してください。</string>
     <string name="auth_offline_mode">オフラインモード: キャッシュデータを使用しています。</string>
     <string name="app_name">TraktoSearch</string>
-    <string name="auth_expired_message">ネットワークに接続して、アクセスを再度有効化してください。</string>
-    <string name="auth_invite_code">6桁のアクティベーションコードを入力</string>
-    <string name="auth_activate">有効化</string>
-    <string name="auth_error_invalid_invite">招待コードが無効です。</string>
-    <string name="auth_error_invite_used">この招待コードは使用済みです。新しいコードを管理者に依頼してください。</string>
-    <string name="auth_error_invite_revoked">この招待コードは取り消されています。管理者に連絡してください。</string>
-    <string name="auth_error_invite_expired">招待コードの有効期限が切れています。</string>
+    <string name="auth_expired_message">ネットワークに接続して、もう一度発券してください。</string>
+    <string name="auth_invite_code">6桁のチケットコードを入力</string>
+    <string name="auth_activate">発券</string>
+    <string name="auth_error_invalid_invite">チケットコードが無効です。</string>
+    <string name="auth_error_invite_used">このチケットコードは使用済みです。新しいコードを管理者に依頼してください。</string>
+    <string name="auth_error_invite_revoked">このチケットコードは取り消されています。管理者に連絡してください。</string>
+    <string name="auth_error_invite_expired">チケットコードの有効期限が切れています。</string>
     <string name="auth_error_device_limit">デバイス上限に達しました。</string>
     <string name="auth_error_migration_device_not_found">移行には既存の登録デバイスが必要です。</string>
     <string name="auth_error_migration_device_mismatch">このデバイスは別の友達に属しています。</string>
@@ -17,6 +17,36 @@
     <string name="auth_error_network">ネットワークに接続できません。確認してもう一度お試しください。</string>
     <string name="auth_error_rate_limited">試行回数が多すぎます。数分待ってからもう一度お試しください。</string>
     <string name="auth_error_generic">有効化に失敗しました。もう一度お試しください。</string>
+
+    <!-- Ticket Machine -->
+    <string name="machine_status_ready">コード入力</string>
+    <string name="machine_status_printing">印刷中…</string>
+    <string name="machine_status_collected">発券完了</string>
+    <string name="machine_status_invalid">コード不正</string>
+    <string name="machine_status_used">使用済み</string>
+    <string name="machine_status_revoked">取消済み</string>
+    <string name="machine_status_expired">期限切れ</string>
+    <string name="machine_status_device_limit">上限到達</string>
+    <string name="machine_status_device_bound">登録済み</string>
+    <string name="machine_status_migration_missing">端末なし</string>
+    <string name="machine_status_migration_mismatch">端末不一致</string>
+    <string name="machine_status_friend_disabled">無効化</string>
+    <string name="machine_status_rate_limited">少々お待ち</string>
+    <string name="machine_status_network">通信不能</string>
+    <string name="machine_status_failed">発券失敗</string>
+    <string name="machine_status_clipboard_empty">コードなし</string>
+    <string name="machine_key_paste">貼り付け</string>
+    <string name="machine_key_backspace_desc">バックスペース</string>
+    <string name="machine_submit">発券</string>
+    <string name="machine_code_progress">チケットコード %1$s、残り %2$d 桁</string>
+
+    <!-- Ticket -->
+    <string name="ticket_admit_one">ADMIT ONE</string>
+    <string name="ticket_hall">スクリーン %1$d</string>
+    <string name="ticket_seat">%1$d 列 %2$d 番</string>
+    <string name="ticket_entry_trakt">Traktでログイン</string>
+    <string name="ticket_entry_douban">豆瓣でログイン</string>
+    <string name="ticket_entry_guest">ゲストとして入場</string>
 
     <!-- Main Screen -->
     <string name="tab_search">検索</string>
@@ -484,9 +514,8 @@
     <string name="login_denied">認証が拒否されました</string>
     <string name="login_success">ログイン成功、読み込み中…</string>
     <string name="login_sync_hint">ログイン後、Traktのウォッチリストが同期されます</string>
-    <string name="login_activation_locked">○ 未認証 · コードを入力して視聴スペースを解放</string>
-    <string name="login_activation_choose_path">有効化しました。Trakt または豆瓣にログインするか、ひとまずゲストとして続行してください。</string>
-    <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
+    <string name="login_activation_locked">○ 未発券 · コードを入力して入場券を引き換え</string>
+    <string name="login_personal_cinema_access">TICKET MACHINE · PERSONAL CINEMA</string>
 
     <!-- Ratings -->
 

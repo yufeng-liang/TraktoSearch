@@ -2,41 +2,36 @@
 
 package com.tracktosearch.ui.screen.login
 
+import android.content.ClipboardManager
+import android.content.Context
 import android.net.Uri
+import android.provider.Settings
 import androidx.browser.customtabs.CustomTabsIntent
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.HelpOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -48,25 +43,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
-import androidx.compose.foundation.layout.offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -75,23 +63,18 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.OAuthCallback
 import com.tracktosearch.R
-import com.tracktosearch.ui.component.DoubanLogo
 import com.tracktosearch.ui.component.CinemaClapperIcon
-import com.tracktosearch.ui.component.GlassScene
-import com.tracktosearch.ui.component.GlassSurfaceRole
-import com.tracktosearch.ui.component.appVisualEffect
-import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropSource
+import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
-import com.tracktosearch.ui.theme.PixelFontFamily
-import com.tracktosearch.ui.theme.monetDoubanGreen
-import com.tracktosearch.ui.theme.pixelFontSize
-import com.tracktosearch.ui.theme.onMonetDoubanGreen
+import com.tracktosearch.ui.screen.auth.AuthViewModel
+import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.toUserMessage
-import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
@@ -112,9 +95,9 @@ fun ActivationLoginScreen(
     expired: Boolean = false,
     modifier: Modifier = Modifier,
     loginViewModel: LoginViewModel = hiltViewModel(),
-    authViewModel: com.tracktosearch.ui.screen.auth.AuthViewModel = hiltViewModel()
+    authViewModel: AuthViewModel = hiltViewModel()
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     val loginState by loginViewModel.loginState.collectAsStateWithLifecycle()
     val errorMessage by loginViewModel.errorMessage.collectAsStateWithLifecycle()
     val authState by authViewModel.uiState.collectAsStateWithLifecycle()
@@ -123,29 +106,93 @@ fun ActivationLoginScreen(
     val scrollState = rememberScrollState()
     val isDarkTheme = isAppDarkTheme()
     val loginBackground = if (isDarkTheme) Color(0xFFD9CFC2) else Color(0xFFF7EFE2)
-    val loginTextColor = if (isDarkTheme) Color(0xFF4A3529) else MaterialTheme.colorScheme.onSurface
     val loginSecondaryTextColor = if (isDarkTheme) Color(0xFF624B3C) else MaterialTheme.colorScheme.onSurfaceVariant
     var showWhatIsTraktDialog by remember { mutableStateOf(false) }
 
     val isActivated = authState.activated
     val loginGlassScene = glassSceneForContent(
-        contentCount = 7 + if (authState.requiresMigrationInvite) 2 else 0,
+        // 取票机面板上的可数元素远多于原来那张卡片：12 个键 + 6 格 + 像素屏 + 取票键。
+        contentCount = 20 + if (authState.requiresMigrationInvite) 2 else 0,
         readabilityDemand = when {
             authState.error != null || errorMessage != null -> 0.96f
             isActivated -> 0.82f
             else -> 0.88f
         },
         ambientColor = loginBackground,
-        contentCapacity = 12
+        contentCapacity = 20
     )
-    var showCelebration by remember { mutableStateOf(false) }
+
+    val view = LocalView.current
+    val printProgress = remember { Animatable(0f) }
+    var isPrinting by remember { mutableStateOf(false) }
+    // 粘贴没抽到 6 位数字时的一次性提示。只占像素屏，不进 AuthUiState——
+    // 它不是一次激活失败，下一次按键就该消失。
+    var pasteMissed by remember { mutableStateOf(false) }
     var observedActivated by remember { mutableStateOf(isActivated) }
 
     LaunchedEffect(isActivated) {
-        if (shouldShowActivationCelebration(observedActivated, isActivated)) {
-            showCelebration = true
+        when {
+            shouldPlayTicketPrint(observedActivated, isActivated) -> {
+                if (animatorDurationScale(context) == 0f) {
+                    // 系统关闭动画时直接进已取票态。这是无障碍要求，不是可选项。
+                    printProgress.snapTo(1f)
+                } else {
+                    isPrinting = true
+                    printProgress.snapTo(0f)
+                    printProgress.animateTo(
+                        targetValue = 1f,
+                        animationSpec = tween(TICKET_PRINT_DURATION_MS, easing = LinearEasing)
+                    )
+                    isPrinting = false
+                }
+            }
+            // 冷启动或回访进入已激活态：票静态停在出票口，不重播推出。
+            isActivated -> printProgress.snapTo(1f)
+            else -> printProgress.snapTo(0f)
         }
         observedActivated = isActivated
+    }
+
+    LaunchedEffect(Unit) {
+        // 走纸阶段是 6 步阶跃，revealFraction 每跳一档给一次轻触觉，六次连击就是「咔咔咔」。
+        // distinctUntilChanged 天然对齐步数，不用自己数帧。
+        snapshotFlow { phaseAt(printProgress.value).revealFraction }
+            .distinctUntilChanged()
+            .collect { if (isPrinting) view.performHaptic(HapticType.TICK) }
+    }
+
+    LaunchedEffect(authState.error) {
+        if (authState.error == null) return@LaunchedEffect
+        // 等六格抖完再清空：抖动过程中清空，用户看不出发生了什么。
+        // 用 clearTicketCode 而不是 updateInviteCode("")，后者会顺手把 error 置 null，
+        // 刚显示出来的错误文案会立刻消失。
+        delay(TICKET_ERROR_CLEAR_DELAY_MS)
+        authViewModel.clearTicketCode()
+    }
+
+    LaunchedEffect(authState.inviteCode) {
+        if (authState.inviteCode.isNotEmpty()) pasteMissed = false
+    }
+
+    val printPhase = phaseAt(printProgress.value)
+    // authState 是委托属性，authState.error 上没有智能转换，先取一次到局部量
+    val authError = authState.error
+    // 已取票态六格显示固定的 ****** ：取票码本身不落盘，屏上这串不含信息。
+    val machineCode = if (isActivated) COLLECTED_CODE_MASK else authState.inviteCode
+    val machineStatus = when {
+        authError != null -> stringResource(machineStatusString(authError))
+        pasteMissed -> stringResource(R.string.machine_status_clipboard_empty)
+        isPrinting -> stringResource(R.string.machine_status_printing)
+        isActivated -> stringResource(R.string.machine_status_collected)
+        else -> stringResource(R.string.machine_status_ready)
+    }
+    // 像素屏只放短状态，完整引导句子留在机器下方：屏宽装不下
+    // 「请向管理员索取新的取票码」这类话，只靠屏幕报错会丢掉「下一步该干什么」。
+    val machineHint = when {
+        authError != null -> stringResource(authErrorString(authError))
+        authState.requiresMigrationInvite -> stringResource(R.string.auth_migration_invite_hint)
+        !isActivated -> stringResource(R.string.login_activation_locked)
+        else -> null
     }
 
     fun launchAuthorization() {
@@ -279,19 +326,48 @@ fun ActivationLoginScreen(
                         textAlign = TextAlign.Center
                     )
                 }
-                ActivationCard(
-                    authState = authState,
-                    authViewModel = authViewModel,
+                TicketMachine(
+                    code = machineCode,
+                    statusText = machineStatus,
+                    statusIsError = authState.error != null || pasteMissed,
+                    hintText = machineHint,
+                    hintIsError = authState.error != null || authState.requiresMigrationInvite,
+                    isLoading = authState.isLoading,
+                    keypadEnabled = !isActivated && !authState.isLoading,
+                    submitEnabled = authState.inviteCode.length == TICKET_CODE_DIGITS &&
+                        !authState.isLoading &&
+                        !isActivated,
                     hazeState = hazeState,
-                    loginState = loginState,
-                    onLoginClick = { launchAuthorization() },
-                    onCancelAuth = { loginViewModel.reset() },
-                    canUseActions = isActivated,
                     scene = loginGlassScene,
-                    modifier = Modifier.padding(top = if (expired) 14.dp else 0.dp)
+                    onDigit = { digit -> authViewModel.updateInviteCode(authState.inviteCode + digit) },
+                    onBackspace = { authViewModel.updateInviteCode(authState.inviteCode.dropLast(1)) },
+                    onPaste = {
+                        // Android 12 起每次读剪贴板都会弹系统提示，所以只在用户按下粘贴键时读，
+                        // 绝不在进入页面时自动读。
+                        pasteMissed = !authViewModel.pasteTicketCode(readClipboardText(context))
+                    },
+                    onSubmit = { authViewModel.activate() },
+                    modifier = Modifier.padding(top = if (expired) 14.dp else 0.dp),
+                    ticketSlot = {
+                        val stub = authState.ticket
+                        if (stub != null) {
+                            CinemaTicket(
+                                stub = stub,
+                                phase = printPhase,
+                                loginState = loginState,
+                                // 打印中三个入口不可点：票还在推出，按下去等于对着半张纸下单
+                                traktEnabled = isActivated && !isPrinting,
+                                doubanEnabled = isActivated && !isPrinting,
+                                guestEnabled = isActivated && !isPrinting,
+                                onTraktLogin = { launchAuthorization() },
+                                onCancelAuth = { loginViewModel.reset() },
+                                onDoubanLogin = onDoubanLogin,
+                                onGuestMode = onGuestMode
+                            )
+                        }
+                    }
                 )
 
-                val canUseActions = isActivated
                 if (loginState == LoginState.ERROR) {
                     // LoginViewModel 存原始异常,组合期转本地化文案
                     Text(
@@ -303,33 +379,8 @@ fun ActivationLoginScreen(
                         textAlign = TextAlign.Center
                     )
                 }
-
-                ActivationSecondaryActions(
-                    guestEnabled = canUseActions,
-                    doubanEnabled = canUseActions &&
-                        loginState != LoginState.AUTHORIZING &&
-                        loginState != LoginState.CONNECTING,
-                    hazeState = hazeState,
-                    guestContentColor = loginTextColor,
-                    onDoubanLogin = onDoubanLogin,
-                    onGuestMode = onGuestMode,
-                    scene = loginGlassScene,
-                    modifier = Modifier.fillMaxWidth()
-                )
                 Spacer(modifier = Modifier.height(20.dp))
             }
-
-            ActivationCelebration(
-                visible = showCelebration,
-                onFinished = { showCelebration = false },
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .padding(top = 174.dp)
-                    // 提到内容层（zIndex=1）之上展示烟花；仍低于右上角帮助按钮（zIndex=2），
-                    // 烟花无交互属性不拦截点击
-                    .zIndex(1.5f)
-            )
         }
     }
 
@@ -354,288 +405,64 @@ fun ActivationLoginScreen(
     }
 }
 
-@Composable
-internal fun ActivationSecondaryActions(
-    guestEnabled: Boolean,
-    doubanEnabled: Boolean = guestEnabled,
-    hazeState: HazeState,
-    guestContentColor: Color,
-    onDoubanLogin: () -> Unit,
-    onGuestMode: () -> Unit,
-    scene: GlassScene = GlassScene(),
-    modifier: Modifier = Modifier
-) {
-    val doubanGreen = MaterialTheme.colorScheme.monetDoubanGreen()
-    val doubanButtonShape = RoundedCornerShape(14.dp)
-    val doubanInteractionSource = remember { MutableInteractionSource() }
-    val doubanHazeStyle = HazeMaterials.thin(
-        doubanGreen.copy(alpha = if (doubanEnabled) 0.72f else 0.24f)
-    )
-    Column(
-        modifier = modifier.padding(start = 18.dp, top = 8.dp, end = 18.dp)
-    ) {
-        Button(
-            onClick = onDoubanLogin,
-            enabled = doubanEnabled,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .clip(doubanButtonShape)
-                .appVisualEffect(
-                    input = HazeInput.Sources(hazeState),
-                    hazeStyle = doubanHazeStyle,
-                    glassRole = GlassSurfaceRole.DetailAction,
-                    glassShape = doubanButtonShape,
-                    glassTint = doubanGreen.copy(alpha = if (doubanEnabled) 0.72f else 0.24f),
-                    scene = scene,
-                    interactionSource = doubanInteractionSource
-                ),
-            shape = doubanButtonShape,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color.Transparent,
-                contentColor = MaterialTheme.colorScheme.onMonetDoubanGreen(),
-                disabledContainerColor = Color.Transparent,
-                disabledContentColor = MaterialTheme.colorScheme.onMonetDoubanGreen().copy(alpha = 0.38f)
-            ),
-            interactionSource = doubanInteractionSource
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // 品牌图标的 Image 不读 LocalContentColor，需按禁用态内容色 alpha 手动变淡
-                val contentAlpha = LocalContentColor.current.alpha
-                DoubanLogo(
-                    contentDescription = stringResource(R.string.settings_account_douban),
-                    modifier = Modifier.size(18.dp).alpha(contentAlpha)
-                )
-                Text(stringResource(R.string.login_douban))
-            }
-        }
-        TextButton(
-            onClick = onGuestMode,
-            enabled = guestEnabled,
-            colors = ButtonDefaults.textButtonColors(
-                contentColor = guestContentColor,
-                disabledContentColor = guestContentColor.copy(alpha = 0.38f)
-            ),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(stringResource(R.string.login_guest))
-        }
-    }
+/** 取票码位数。六格键盘只收这么多位，满位才点亮取票键。 */
+private const val TICKET_CODE_DIGITS = 6
+
+/**
+ * 已取票态六格里显示的固定串。
+ *
+ * 取票码本身不落盘（只存派生出的厅排座），所以这里显示的不是脱敏后的真码，
+ * 而是一串不含任何信息的占位——它只负责让机器看起来「装着一张已出的票」。
+ */
+private const val COLLECTED_CODE_MASK = "******"
+
+/** 报错后清空六格前的等待时长：够六格抖完（5 段 × 45ms），抖动中清空看不出发生了什么。 */
+private const val TICKET_ERROR_CLEAR_DELAY_MS = 320L
+
+/**
+ * 像素屏上的短状态。分支与 authErrorString 一一对应：屏宽只够放几个字，
+ * 完整引导文案仍走 authErrorString 印在机器下方，两处不能有一边漏掉某个错误码。
+ */
+internal fun machineStatusString(error: String): Int = when {
+    error.contains("MIGRATION_DEVICE_NOT_FOUND") -> R.string.machine_status_migration_missing
+    error.contains("MIGRATION_DEVICE_MISMATCH") -> R.string.machine_status_migration_mismatch
+    error.contains("DEVICE_ALREADY_BOUND") -> R.string.machine_status_device_bound
+    error.contains("INVITE_BOUND") -> R.string.machine_status_device_bound
+    error.contains("DEVICE_LIMIT_REACHED") -> R.string.machine_status_device_limit
+    error.contains("INVITE_ALREADY_USED") -> R.string.machine_status_used
+    error.contains("INVITE_REVOKED") -> R.string.machine_status_revoked
+    error.contains("INVITE_EXPIRED") -> R.string.machine_status_expired
+    error.contains("FRIEND_DISABLED") -> R.string.machine_status_friend_disabled
+    error.contains("INVALID_INVITE") -> R.string.machine_status_invalid
+    error.contains("RATE_LIMITED") -> R.string.machine_status_rate_limited
+    error.contains("timeout", ignoreCase = true) ||
+        error.contains("unable to resolve host", ignoreCase = true) ||
+        error.contains("failed to connect", ignoreCase = true) ||
+        error.contains("network is unreachable", ignoreCase = true) -> R.string.machine_status_network
+    else -> R.string.machine_status_failed
 }
 
-/** v7 原型中的场记板图标：三条斜切片、圆角棕色底和双层镜头圆环。 */
-@Composable
-private fun ActivationCard(
-    authState: com.tracktosearch.ui.screen.auth.AuthUiState,
-    authViewModel: com.tracktosearch.ui.screen.auth.AuthViewModel,
-    hazeState: HazeState,
-    loginState: LoginState,
-    onLoginClick: () -> Unit,
-    onCancelAuth: () -> Unit,
-    canUseActions: Boolean,
-    scene: GlassScene = GlassScene(),
-    modifier: Modifier = Modifier
-) {
-    val shape = RoundedCornerShape(20.dp)
-    val accent = MaterialTheme.colorScheme.primary
-    val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val inputFillColor = if (isDarkTheme) {
-        Color.Black.copy(alpha = 0.72f)
-    } else {
-        Color.White.copy(alpha = 0.68f)
-    }
-    val inputTextColor = if (isDarkTheme) Color.White else MaterialTheme.colorScheme.onSurface
-    val inputPlaceholderColor = if (isDarkTheme) {
-        Color(0xFFBDBDBD)
-    } else {
-        accent.copy(alpha = 0.72f)
-    }
-    val hazeStyle = HazeMaterials.thin(
-        MaterialTheme.colorScheme.surface.copy(alpha = 0.48f)
-    ).then {
-        blurRadius(36.dp)
-        noiseFactor(0f)
-        blurEnabled(true)
-    }
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .zIndex(1f)
-            .appVisualEffect(
-                input = HazeInput.Sources(hazeState),
-                hazeStyle = hazeStyle,
-                glassRole = GlassSurfaceRole.LoginSurface,
-                glassShape = shape,
-                glassTint = MaterialTheme.colorScheme.surface.copy(alpha = 0.48f),
-                scene = scene
-            )
-            .background(Color.Transparent, shape)
-            .border(BorderStroke(1.dp, accent.copy(alpha = 0.30f)), shape)
-            .padding(horizontal = 18.dp, vertical = 16.dp)
-    ) {
-        Text(
-            text = stringResource(R.string.login_personal_cinema_access),
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-                letterSpacing = 1.43.sp
-            ),
-            color = accent,
-            fontWeight = FontWeight.Bold
-        )
-        if (authState.requiresMigrationInvite) {
-            Text(
-                text = stringResource(R.string.auth_migration_invite_hint),
-                modifier = Modifier.padding(top = 8.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error
-            )
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            val inputShape = RoundedCornerShape(13.dp)
-            // 激活码用点阵字体，字号必须落在 12px 网格的整数倍上，否则像素边缘被插值成灰边。
-            // pixelFontSize 向下取整到网格倍数，所以字号是跳档的：density 3.5 下
-            // 16.dp（56px）落到 4 倍 48px，18.dp（63px）才够 5 倍 60px，两者之间没有中间档。
-            // 占位与实际输入分两档：中文占位「输入 12 位激活码」比 12 位码宽得多，5 倍会顶右边缘，
-            // 所以占位取 4 倍；真正输入的是 ASCII 短串，5 倍更好认，且撑不满输入框。
-            // 输入框高度固定 48.dp（168px），5 倍字号的行高远小于它，切换空/非空不会跳高。
-            val placeholderFontSize = pixelFontSize(16.dp)
-            val codeFontSize = pixelFontSize(18.dp)
-            // 邀请码可提交的条件：非空、不在提交中、还没激活。原来空输入也可点，
-            // 点了才被 AuthViewModel 本地拦成 INVALID_INVITE，让用户先白撞一次错。
-            val canActivate = authState.inviteCode.isNotBlank() &&
-                !authState.isLoading &&
-                !authState.activated
-            BasicTextField(
-                value = authState.inviteCode,
-                onValueChange = authViewModel::updateInviteCode,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp)
-                    .clip(inputShape)
-                    .background(inputFillColor, inputShape)
-                    .border(
-                        width = 1.dp,
-                        color = if (authState.error != null) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            accent.copy(alpha = 0.30f)
-                        },
-                        shape = inputShape
-                    )
-                    .padding(horizontal = 14.dp),
-                singleLine = true,
-                // 邀请码是字母数字串：关掉自动纠错与首字母大写，回车直接提交。
-                // 缺这些设置时输入法会插空格、改大小写，用户以为码错了。
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Ascii,
-                    autoCorrectEnabled = false,
-                    capitalization = KeyboardCapitalization.None,
-                    imeAction = ImeAction.Go
-                ),
-                keyboardActions = KeyboardActions(
-                    onGo = { if (canActivate) authViewModel.activate() }
-                ),
-                textStyle = TextStyle(
-                    color = inputTextColor,
-                    fontFamily = PixelFontFamily,
-                    fontSize = codeFontSize
-                ),
-                cursorBrush = SolidColor(accent),
-                decorationBox = { innerTextField ->
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        if (authState.inviteCode.isEmpty()) {
-                            Text(
-                                text = stringResource(R.string.auth_invite_code),
-                                color = inputPlaceholderColor,
-                                fontFamily = PixelFontFamily,
-                                fontSize = placeholderFontSize
-                            )
-                        }
-                        innerTextField()
-                    }
-                }
-            )
-            Button(
-                onClick = authViewModel::activate,
-                enabled = canActivate,
-                modifier = Modifier
-                    .padding(start = 8.dp)
-                    .height(48.dp),
-                shape = RoundedCornerShape(13.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = accent,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            ) {
-                if (authState.isLoading) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                else Text(stringResource(R.string.auth_activate))
-            }
-        }
-        authState.error?.let { error ->
-            Text(
-                text = stringResource(authErrorString(error)),
-                modifier = Modifier.padding(top = 7.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error
-            )
-        } ?: Text(
-            text = stringResource(if (authState.activated) R.string.login_activation_choose_path else R.string.login_activation_locked),
-            modifier = Modifier.padding(top = 8.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+/**
+ * 系统的动画时长倍率。为 0 表示用户在开发者选项或无障碍设置里关掉了动画，
+ * 此时必须跳过出票推出直接进已取票态。
+ */
+private fun animatorDurationScale(context: Context): Float = runCatching {
+    Settings.Global.getFloat(
+        context.contentResolver,
+        Settings.Global.ANIMATOR_DURATION_SCALE,
+        1f
+    )
+}.getOrDefault(1f)
 
-        val loginButtonColors = ButtonDefaults.buttonColors(
-            containerColor = accent,
-            disabledContainerColor = Color(0xFFDED6CE),
-            disabledContentColor = Color(0xFF9A9189)
-        )
-        Button(
-            onClick = onLoginClick,
-            enabled = canUseActions && loginState != LoginState.AUTHORIZING && loginState != LoginState.CONNECTING,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp)
-                .height(48.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = loginButtonColors
-        ) {
-            when (loginState) {
-                LoginState.CONNECTING -> CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                LoginState.ERROR -> Text(stringResource(R.string.login_retry))
-                else -> Text(stringResource(R.string.login_button))
-            }
-        }
-        if (loginState == LoginState.AUTHORIZING) {
-            // CustomTabs 取消授权不产生回调：显示等待提示与取消逃生，避免 AUTHORIZING 永久锁死
-            Text(
-                text = stringResource(R.string.douban_login_waiting_auth),
-                modifier = Modifier.padding(top = 8.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-            TextButton(
-                onClick = onCancelAuth,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(stringResource(R.string.common_cancel))
-            }
-        }
-    }
+/** 读剪贴板首项文本。取不到返回空串，交给 pasteTicketCode 判定「没抽到码」。 */
+private fun readClipboardText(context: Context): String {
+    val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+    return manager?.primaryClip
+        ?.takeIf { it.itemCount > 0 }
+        ?.getItemAt(0)
+        ?.text
+        ?.toString()
+        .orEmpty()
 }
 
 @Composable
@@ -696,10 +523,13 @@ private fun MovieBackdrop(modifier: Modifier = Modifier) {
     }
 }
 
-private fun authErrorString(error: String): Int = when {
+internal fun authErrorString(error: String): Int = when {
     error.contains("MIGRATION_DEVICE_NOT_FOUND") -> R.string.auth_error_migration_device_not_found
     error.contains("MIGRATION_DEVICE_MISMATCH") -> R.string.auth_error_migration_device_mismatch
     error.contains("DEVICE_ALREADY_BOUND") -> R.string.auth_error_device_already_bound
+    // AuthViewModel 在「静默恢复也没救回来」时发的是 INVITE_BOUND，原来没有对应分支，
+    // 会落到 auth_error_generic，用户看到「取票失败」以为是码的问题继续换码试。
+    error.contains("INVITE_BOUND") -> R.string.auth_error_device_already_bound
     error.contains("DEVICE_LIMIT_REACHED") -> R.string.auth_error_device_limit
     error.contains("INVITE_ALREADY_USED") -> R.string.auth_error_invite_used
     error.contains("INVITE_REVOKED") -> R.string.auth_error_invite_revoked

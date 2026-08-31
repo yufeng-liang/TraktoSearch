@@ -1,14 +1,14 @@
 <resources>
-    <string name="auth_migration_invite_hint">Silent recovery was not completed. Enter a migration invitation code to continue.</string>
+    <string name="auth_migration_invite_hint">Silent recovery was not completed. Enter a migration ticket code to continue.</string>
     <string name="auth_offline_mode">Offline mode: using cached data.</string>
     <string name="app_name">TraktoSearch</string>
-    <string name="auth_expired_message">Connect to the internet and activate access again.</string>
-    <string name="auth_invite_code">Enter 6-digit activation code</string>
-    <string name="auth_activate">Activate</string>
-    <string name="auth_error_invalid_invite">This invitation code is invalid.</string>
-    <string name="auth_error_invite_used">This invitation code has already been used. Please request a new one.</string>
-    <string name="auth_error_invite_revoked">This invitation code has been revoked. Please contact the administrator.</string>
-    <string name="auth_error_invite_expired">This invitation code has expired.</string>
+    <string name="auth_expired_message">Connect to the internet and collect your ticket again.</string>
+    <string name="auth_invite_code">Enter 6-digit ticket code</string>
+    <string name="auth_activate">Get ticket</string>
+    <string name="auth_error_invalid_invite">This ticket code is invalid.</string>
+    <string name="auth_error_invite_used">This ticket code has already been used. Please request a new one.</string>
+    <string name="auth_error_invite_revoked">This ticket code has been revoked. Please contact the administrator.</string>
+    <string name="auth_error_invite_expired">This ticket code has expired.</string>
     <string name="auth_error_device_limit">The device limit has been reached.</string>
     <string name="auth_error_migration_device_not_found">Migration requires an existing bound device.</string>
     <string name="auth_error_migration_device_mismatch">This device belongs to another friend.</string>
@@ -17,6 +17,36 @@
     <string name="auth_error_network">Unable to connect. Check your network and try again.</string>
     <string name="auth_error_rate_limited">Too many attempts. Please wait a few minutes and try again.</string>
     <string name="auth_error_generic">Activation failed. Please try again.</string>
+
+    <!-- Ticket Machine -->
+    <string name="machine_status_ready">ENTER CODE</string>
+    <string name="machine_status_printing">PRINTING…</string>
+    <string name="machine_status_collected">COLLECTED</string>
+    <string name="machine_status_invalid">BAD CODE</string>
+    <string name="machine_status_used">CODE USED</string>
+    <string name="machine_status_revoked">REVOKED</string>
+    <string name="machine_status_expired">EXPIRED</string>
+    <string name="machine_status_device_limit">NO SLOT</string>
+    <string name="machine_status_device_bound">BOUND</string>
+    <string name="machine_status_migration_missing">NO DEVICE</string>
+    <string name="machine_status_migration_mismatch">MISMATCH</string>
+    <string name="machine_status_friend_disabled">DISABLED</string>
+    <string name="machine_status_rate_limited">WAIT</string>
+    <string name="machine_status_network">NO NET</string>
+    <string name="machine_status_failed">FAILED</string>
+    <string name="machine_status_clipboard_empty">NO CODE</string>
+    <string name="machine_key_paste">PASTE</string>
+    <string name="machine_key_backspace_desc">Backspace</string>
+    <string name="machine_submit">GET TICKET</string>
+    <string name="machine_code_progress">Ticket code %1$s, %2$d digits left</string>
+
+    <!-- Ticket -->
+    <string name="ticket_admit_one">ADMIT ONE</string>
+    <string name="ticket_hall">HALL %1$d</string>
+    <string name="ticket_seat">ROW %1$d SEAT %2$d</string>
+    <string name="ticket_entry_trakt">Sign in with Trakt</string>
+    <string name="ticket_entry_douban">Sign in with Douban</string>
+    <string name="ticket_entry_guest">Enter as guest</string>
 
     <!-- Main Screen -->
     <string name="tab_search">Search</string>
@@ -196,9 +226,8 @@
     <string name="login_guest">Continue as guest</string>
     <string name="login_douban_import">Or import from Douban</string>
     <string name="login_douban">Login with Douban</string>
-    <string name="login_activation_locked">○ Not activated · Enter your code to unlock</string>
-    <string name="login_activation_choose_path">Activation successful. Sign in with Trakt or Douban, or continue as a guest for now.</string>
-    <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
+    <string name="login_activation_locked">○ No ticket yet · Enter a ticket code to redeem your admission pass</string>
+    <string name="login_personal_cinema_access">TICKET MACHINE · PERSONAL CINEMA</string>
     <string name="douban_import_require_trakt_title">Login to Trakt required</string>
     <string name="douban_import_require_trakt_desc">Importing Douban marks requires logging into Trakt first, marks will sync to your Trakt watchlist/watched list. Login to Trakt now?</string>
     <string name="douban_import_require_trakt_login">Login Trakt</string>

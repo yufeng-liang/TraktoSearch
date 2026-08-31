@@ -95,7 +95,10 @@ data class ActivateResponse(
     val refreshToken: String,
     val accessExpiresAt: Long,
     val refreshExpiresAt: Long,
-    val nextCheckAt: Long
+    val nextCheckAt: Long,
+    // 默认值不可省：recover 端点复用同一响应类型且不返回昵称，而 ignoreUnknownKeys 只放过多余字段、
+    // 缺字段仍会抛，没默认值会让静默恢复整条链路反序列化失败。
+    val nickname: String = ""
 )
 
 @Serializable
