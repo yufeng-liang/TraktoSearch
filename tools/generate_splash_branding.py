@@ -183,7 +183,8 @@ def main():
     draw_popcorn(td, 674, 278, 48)
     draw_film_strip(td, 750, 276, 52)
     draw_mini_clapper(td, 838, 274, 54)
-    draw_centered_spaced_text(td, 1052, 90, "07", font(SERIF, 112), CLAY_DARK, 0)
+    draw_centered_spaced_text(td, 1052, 90, "08", font(SERIF, 112), CLAY_DARK, 0)
+    draw_centered_spaced_text(td, 1052, 226, "08.11", font(MONO, 44), MUTED, 2.2)
     draw_centered_spaced_text(td, 1052, 286, "SCREEN", font(MONO, 27), CLAY_DARK, 3.3)
 
     # CSS 的 overflow:hidden 会把打孔裁成票根边缘的缺口，不能保留贯穿的直线边框。
