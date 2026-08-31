@@ -1,7 +1,8 @@
 // 公开邀请码申请：直接原子分配名额，并通过事务邮件发信。
 
 import { AppError, errorResponse, now, successResponse } from './util/errors.ts';
-import { generateId, generateInviteCode, generateSecureToken, sha256, timingSafeEqual } from './util/crypto.ts';
+import { generateId, generateSecureToken, maskInviteCode, sha256, timingSafeEqual } from './util/crypto.ts';
+import { reserveInviteCode } from './util/invite-code.ts';
 import { clientIp } from './util/client-ip.ts';
 import { consumeRateLimit } from './util/rate-limit.ts';
 
@@ -292,9 +293,8 @@ export async function issueInvitation(
 
     const friendId = generateId();
     const inviteId = generateId();
-    const inviteCode = generateInviteCode();
-    const codeHash = await sha256(inviteCode);
-    const codeMask = `${inviteCode.slice(0, 4)}****${inviteCode.slice(-4)}`;
+    const { code: inviteCode, codeHash } = await reserveInviteCode(env.DB);
+    const codeMask = maskInviteCode(inviteCode);
     const expiresAt = currentTime + PUBLIC_INVITE_RESERVATION_TTL_SECONDS;
 
     const statements = [
@@ -481,9 +481,8 @@ export async function resendInvitation(
     }
 
     const inviteId = generateId();
-    const inviteCode = generateInviteCode();
-    const codeHash = await sha256(inviteCode);
-    const codeMask = `${inviteCode.slice(0, 4)}****${inviteCode.slice(-4)}`;
+    const { code: inviteCode, codeHash } = await reserveInviteCode(env.DB);
+    const codeMask = maskInviteCode(inviteCode);
     const expiresAt = currentTime + PUBLIC_INVITE_RESERVATION_TTL_SECONDS;
 
     const results = await env.DB.batch([

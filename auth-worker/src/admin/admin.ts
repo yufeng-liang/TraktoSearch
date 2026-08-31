@@ -1,7 +1,8 @@
 // Admin API — 朋友/设备/邀请码/审计日志 CRUD
 
 import { AppError, successResponse, now } from '../util/errors';
-import { generateId, sha256, generateInviteCode } from '../util/crypto';
+import { generateId, maskInviteCode } from '../util/crypto';
+import { reserveInviteCode } from '../util/invite-code';
 
 // === 朋友管理 ===
 
@@ -459,8 +460,7 @@ export async function createInvite(
     if (!Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > 365) {
         throw new AppError('INVALID_REQUEST', 'expiresInDays must be an integer between 1 and 365', 400);
     }
-    const code = generateInviteCode();
-    const codeHash = await sha256(code);
+    const { code, codeHash } = await reserveInviteCode(env.DB);
     const codeMask = maskInviteCode(code);
     const id = generateId();
     const currentTime = now();
@@ -615,10 +615,6 @@ export async function listInvites(
         offset,
         hasMore: offset + results.length < totalFiltered,
     }, requestId);
-}
-
-function maskInviteCode(code: string): string {
-    return code.length >= 8 ? `${code.slice(0, 4)}****${code.slice(-4)}` : '****';
 }
 
 // === 审计日志 ===

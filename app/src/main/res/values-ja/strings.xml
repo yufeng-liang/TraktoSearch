@@ -3,7 +3,7 @@
     <string name="auth_offline_mode">オフラインモード: キャッシュデータを使用しています。</string>
     <string name="app_name">TraktoSearch</string>
     <string name="auth_expired_message">ネットワークに接続して、アクセスを再度有効化してください。</string>
-    <string name="auth_invite_code">12桁のアクティベーションコードを入力</string>
+    <string name="auth_invite_code">6桁のアクティベーションコードを入力</string>
     <string name="auth_activate">有効化</string>
     <string name="auth_error_invalid_invite">招待コードが無効です。</string>
     <string name="auth_error_invite_used">この招待コードは使用済みです。新しいコードを管理者に依頼してください。</string>
@@ -15,6 +15,7 @@
     <string name="auth_error_device_already_bound">このデバイスはすでに登録されています。</string>
     <string name="auth_error_friend_disabled">このアクセスは無効化されています。</string>
     <string name="auth_error_network">ネットワークに接続できません。確認してもう一度お試しください。</string>
+    <string name="auth_error_rate_limited">試行回数が多すぎます。数分待ってからもう一度お試しください。</string>
     <string name="auth_error_generic">有効化に失敗しました。もう一度お試しください。</string>
 
     <!-- Main Screen -->

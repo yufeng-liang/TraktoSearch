@@ -706,6 +706,9 @@ private fun authErrorString(error: String): Int = when {
     error.contains("INVITE_EXPIRED") -> R.string.auth_error_invite_expired
     error.contains("FRIEND_DISABLED") -> R.string.auth_error_friend_disabled
     error.contains("INVALID_INVITE") -> R.string.auth_error_invalid_invite
+    // 6 位纯数字码可暴破，服务端在激活入口加了单 IP 限流；连续输错会撞到 429，
+    // 落到 auth_error_generic 会让用户以为码本身有问题继续换码试。
+    error.contains("RATE_LIMITED") -> R.string.auth_error_rate_limited
     error.contains("timeout", ignoreCase = true) ||
         error.contains("unable to resolve host", ignoreCase = true) ||
         error.contains("failed to connect", ignoreCase = true) ||

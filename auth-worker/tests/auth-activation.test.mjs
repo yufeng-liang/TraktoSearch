@@ -152,7 +152,7 @@ function createRaceDb(options = {}) {
 function activationRequest() {
     return new Request('https://example.test/api/auth/activate', {
         method: 'POST',
-        body: JSON.stringify({ inviteCode: 'ABCD1234WXYZ', publicKey: 'public-key' }),
+        body: JSON.stringify({ inviteCode: '123456', publicKey: 'public-key' }),
         headers: { 'Content-Type': 'application/json' },
     });
 }
@@ -245,7 +245,7 @@ test('normal activation rejects a new key on an already active installation', as
     const request = new Request('https://example.test/api/auth/activate', {
         method: 'POST',
         body: JSON.stringify({
-            inviteCode: 'ABCD1234WXYZ',
+            inviteCode: '123456',
             publicKey: 'new-public-key',
             androidId: 'same-installation',
         }),
@@ -261,4 +261,50 @@ test('normal activation rejects a new key on an already active installation', as
         error => error?.code === 'DEVICE_ALREADY_BOUND',
     );
     assert.equal(db.wasBatchCalled(), false);
+});
+
+// 限流桶已达上限：consumeRateLimit 的条件 UPSERT 命中 0 行
+function createRateLimitedDb() {
+    const preparedSql = [];
+    return {
+        preparedSql,
+        prepare(sql) {
+            preparedSql.push(sql);
+            return {
+                bind() {
+                    return {
+                        sql,
+                        async all() { return { results: [] }; },
+                        async first() { return null; },
+                        async run() {
+                            if (sql.includes('INSERT INTO rate_limits')) return { meta: { changes: 0 } };
+                            return { success: true, meta: { changes: 1 } };
+                        },
+                    };
+                },
+            };
+        },
+        async batch() {
+            throw new Error('batch must not run for a rate limited activation');
+        },
+    };
+}
+
+test('activation rejects a rate limited IP before reading the invite table', async () => {
+    const db = createRateLimitedDb();
+
+    await assert.rejects(
+        () => handleActivate(activationRequest(), {
+            DB: db,
+            JWT_SIGNING_KEY: 'jwt-secret',
+            DEVICE_RECOVERY_HMAC_KEY: 'recovery-secret',
+        }, 'request-1'),
+        error => error?.code === 'RATE_LIMITED' && error?.statusCode === 429,
+    );
+    // 6 位纯数字码只有 10^6 种，限流必须挡在邀请码查询之前，
+    // 否则每次猜测都能换来一次 D1 读，暴破成本几乎为零。
+    assert.ok(
+        !db.preparedSql.some(sql => sql.includes('FROM invites i')),
+        'rate limited request must not query invites',
+    );
 });

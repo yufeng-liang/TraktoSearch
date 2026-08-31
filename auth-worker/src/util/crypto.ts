@@ -30,12 +30,35 @@ export function generateSecureToken(length: number = 32): string {
     return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// 生成邀请码（12 位，去混淆字符）
+// 邀请码长度（6 位纯数字，便于口述与数字键盘输入）
+export const INVITE_CODE_LENGTH = 6;
+
+// 生成邀请码（6 位纯数字）
+//
+// 拒绝采样：只采用 0-249（250 是 10 的整数倍），落在 250-255 的字节丢弃重抽。
+// 直接 byte % 10 会让数字 0-5 各多出 1/256 概率，把 10^6 的有效空间再削一截；
+// 原 12 位字母表长度 32 整除 256 所以没有这个问题，改成 10 之后必须显式处理。
 export function generateInviteCode(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 不含 0/O/I/1/L
-    const bytes = new Uint8Array(12);
-    crypto.getRandomValues(bytes);
-    return Array.from(bytes, b => chars[b % chars.length]).join('');
+    const digits: string[] = [];
+    while (digits.length < INVITE_CODE_LENGTH) {
+        const bytes = new Uint8Array(INVITE_CODE_LENGTH - digits.length);
+        crypto.getRandomValues(bytes);
+        for (const byte of bytes) {
+            if (byte < 250) digits.push(String(byte % 10));
+        }
+    }
+    return digits.join('');
+}
+
+// 邀请码掩码：落库到 invites.code_mask 与审计日志 detail 的脱敏串。
+//
+// 6 位纯数字空间只有 10^6，露出任意一位都会把可暴破空间压掉一个数量级，
+// 而按 12 位写法取首尾 4 位（slice(0,4) + slice(-4)）在 6 位码上会拼出完整明文，
+// 等于把码原样写进数据库和审计日志。因此短码整体掩掉，只保留长度形状；
+// 历史 12 位字母数字码仍保留首尾 4 位，方便人工对账旧记录。
+export function maskInviteCode(code: string): string {
+    if (code.length >= 12) return `${code.slice(0, 4)}****${code.slice(-4)}`;
+    return '*'.repeat(Math.max(code.length, 4));
 }
 
 // 生成设备/会话 ID

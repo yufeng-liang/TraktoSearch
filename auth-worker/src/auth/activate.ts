@@ -4,6 +4,17 @@ import { AppError, successResponse, now } from '../util/errors.ts';
 import { sha256, generateSecureToken, generateId, hmacDeviceContinuityId } from '../util/crypto.ts';
 import { signAccessToken } from '../util/jwt.ts';
 import { firstRow } from '../util/db.ts';
+import { clientIp } from '../util/client-ip.ts';
+import { consumeRateLimit } from '../util/rate-limit.ts';
+
+// 激活尝试限流：窗口 300 秒 / 单 IP 5 次（与 recover.ts 的恢复端点同档）。
+//
+// 邀请码从 12 位字母数字（32^12 ≈ 1.2e18）改成 6 位纯数字后空间只剩 10^6，
+// 不限速的话单机就能在数小时内枚举完整个空间，撞到任意一个未使用的码即可
+// 绑定设备并拿到 JWT。按 60 次/小时/IP 计，枚举 10^6 需约 1.7 万 IP·小时。
+// 正常用户一次成功即止，输错重试 5 次也够用。
+const ACTIVATION_RATE_WINDOW_SECONDS = 300;
+const ACTIVATION_RATE_MAX_ATTEMPTS = 5;
 
 export function isActivationBindingConflict(
     existingDevice: { status: string; deleted_at: number | null } | null,
@@ -53,6 +64,9 @@ export async function handleActivate(
     if (!body.inviteCode || !body.publicKey) {
         return logAndThrowActivationFailure(env, requestId, 'INVALID_INVITE', 'inviteCode and publicKey are required');
     }
+
+    // 先限流再查库：6 位纯数字码可暴破，这道闸必须挡在邀请码查询之前。
+    await enforceActivationRateLimit(env, request);
 
     const codeHash = await sha256(body.inviteCode);
     const currentTime = now();
@@ -344,6 +358,25 @@ async function throwActivationRaceFailure(
     }
 
     return logAndThrowActivationFailure(env, requestId, 'INVITE_UNAVAILABLE', 'Invite code is no longer available', invite);
+}
+
+async function enforceActivationRateLimit(
+    env: { DB: D1Database },
+    request: Request,
+): Promise<void> {
+    // 经 gateway 转发时 CF-Connecting-IP 已被改写为边缘出口 IP，须优先取 X-Real-IP；
+    // 公网直连只信 CF-Connecting-IP。统一由 clientIp 处理。
+    const ip = clientIp(request) || 'unknown';
+    // D1 条件 UPSERT 原子限流；存储故障时 consumeRateLimit 走 fail-open。
+    const allowed = await consumeRateLimit(
+        env.DB,
+        `activate-rate:${await sha256(ip)}`,
+        ACTIVATION_RATE_MAX_ATTEMPTS,
+        ACTIVATION_RATE_WINDOW_SECONDS,
+    );
+    if (!allowed) {
+        throw new AppError('RATE_LIMITED', 'Too many activation attempts', 429);
+    }
 }
 
 async function logAndThrowActivationFailure(

@@ -3,7 +3,7 @@
     <string name="auth_offline_mode">Offline mode: using cached data.</string>
     <string name="app_name">TraktoSearch</string>
     <string name="auth_expired_message">Connect to the internet and activate access again.</string>
-    <string name="auth_invite_code">Enter 12-digit activation code</string>
+    <string name="auth_invite_code">Enter 6-digit activation code</string>
     <string name="auth_activate">Activate</string>
     <string name="auth_error_invalid_invite">This invitation code is invalid.</string>
     <string name="auth_error_invite_used">This invitation code has already been used. Please request a new one.</string>
@@ -15,6 +15,7 @@
     <string name="auth_error_device_already_bound">This device is already bound.</string>
     <string name="auth_error_friend_disabled">This access has been disabled.</string>
     <string name="auth_error_network">Unable to connect. Check your network and try again.</string>
+    <string name="auth_error_rate_limited">Too many attempts. Please wait a few minutes and try again.</string>
     <string name="auth_error_generic">Activation failed. Please try again.</string>
 
     <!-- Main Screen -->
