@@ -4,7 +4,11 @@ import android.graphics.Bitmap
 import android.provider.Settings
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -36,7 +40,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -46,7 +52,6 @@ import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
@@ -61,6 +66,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -71,6 +77,11 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.Random
+import kotlin.math.PI
+import kotlin.math.atan2
+import kotlin.math.floor
+import kotlin.math.hypot
+import kotlin.math.min
 
 /**
  * 开屏「每日一句」台词层。
@@ -197,7 +208,7 @@ fun SplashQuoteOverlay(
         animationSpec = tween(durationMillis = if (exiting) exitMs else ENTER_FADE_MS),
         label = "splashLayerAlpha"
     )
-    val glowScale by animateFloatAsState(
+    val beamScale by animateFloatAsState(
         targetValue = when {
             exiting -> 1.55f
             bloom -> 1f
@@ -205,19 +216,14 @@ fun SplashQuoteOverlay(
         },
         animationSpec = tween(
             durationMillis = if (exiting) 620 else 900,
-            easing = GlowEasing
+            easing = BeamEasing
         ),
-        label = "splashGlowScale"
+        label = "splashBeamScale"
     )
-    val glowAlpha by animateFloatAsState(
-        targetValue = if (exiting || !bloom) 0f else palette.glowAlpha,
+    val beamAlpha by animateFloatAsState(
+        targetValue = if (exiting || !bloom) 0f else palette.beamAlpha,
         animationSpec = tween(durationMillis = if (exiting) 620 else 400),
-        label = "splashGlowAlpha"
-    )
-    val washAlpha by animateFloatAsState(
-        targetValue = if (exiting || !bloom) 0f else WASH_ALPHA,
-        animationSpec = tween(durationMillis = 460),
-        label = "splashWashAlpha"
+        label = "splashBeamAlpha"
     )
     val grainAlpha by animateFloatAsState(
         targetValue = if (bloom) palette.grainAlpha else 0f,
@@ -270,11 +276,13 @@ fun SplashQuoteOverlay(
     ) {
         SplashBackdrop(
             palette = palette,
-            glowScale = glowScale,
-            glowAlpha = glowAlpha,
-            washAlpha = washAlpha,
+            beamScale = beamScale,
+            beamAlpha = beamAlpha,
             grainAlpha = grainAlpha,
-            vignetteAlpha = vignetteAlpha
+            vignetteAlpha = vignetteAlpha,
+            // 关掉动效时尘埃不飘。这一条和别处不同：别处静止的是「浮现」，
+            // 这里静止的是环境里一直在动的东西，飘不飘都不影响内容
+            drift = !reduceMotion
         )
 
         Text(
@@ -547,109 +555,237 @@ private fun QuotePoster(
 }
 
 /**
- * 背景：暖色漏光 + 中央可读性蒙层 + 四角压暗。
+ * 背景：一束放映机光锥 + 左右两条胶片齿孔轨 + 颗粒 + 四角压暗。
  *
- * 光晕本来分两条路：API 33+ 走 mirage 的 AGSL 着色器，低版本回退径向渐变。现在两条都不留，
- * 统一画四团手摆位置的椭圆光斑。着色器算出来的弥散太匀，而匀恰恰是「渲染出来的光」的味道；
- * 相纸上的漏光从来是几处深几处浅，位置也不讲道理。少一条按系统版本分叉的实现还有个好处：
- * 开屏只有一套观感，不必再判断两台设备看起来不一样是设备差异还是分支差异。
+ * 上一版是四团手摆的暖色椭圆漏光：明色下用 Multiply 压在暖纸上，再拿一层中央纸色蒙层
+ * 把台词那一片擦回纯纸色。那条路的方向是反的——把暖色 Multiply 到暖纸上是把纸染脏，
+ * 不是打光，所以只好再擦一遍。先弄脏再擦干净，剩下的就是一圈说不清来路的褐晕，
+ * 而整屏最平的那块恰好是眼睛要落的地方（台词）。
+ *
+ * 现在只有一个光源：一束斜切下来的光锥。中央蒙层因此整层删掉，光锥自己就是那个亮的中心。
+ * 光锥里飘着尘埃；光锥之外，左右两条边上钉着胶片齿孔。一柔一硬：一团光配一排硬边小孔，
+ * 画面才有结构可看，而齿孔又和日签卡片撕口上的齿孔是同一套语言。
+ *
+ * 明暗两套的画法是反的，见 [SplashPalette.beamAlpha]：暗色主题把光加上去（Screen），
+ * 明色主题把光锥之外压暗一档。亮纸上加不出光——纸已经快到白了，Screen 再怎么加也只剩
+ * 三四个色阶的余量，那正是上一版明色下什么都看不出来的原因。
  */
 @Composable
 private fun SplashBackdrop(
     palette: SplashPalette,
-    glowScale: Float,
-    glowAlpha: Float,
-    washAlpha: Float,
+    beamScale: Float,
+    beamAlpha: Float,
     grainAlpha: Float,
     vignetteAlpha: Float,
+    drift: Boolean,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
-        LeakGlow(palette, glowScale, glowAlpha, grainAlpha)
-        ReadabilityOverlay(palette, washAlpha, vignetteAlpha)
+        ProjectorBeam(
+            palette = palette,
+            beamScale = beamScale,
+            beamAlpha = beamAlpha,
+            grainAlpha = grainAlpha,
+            drift = drift,
+        )
+        // 齿孔轨和四角压暗同一个淡入：两者都是「这张纸的边界」，一起浮起来才像同一张纸
+        FilmRails(palette = palette, alpha = vignetteAlpha)
+        Vignette(palette = palette, alpha = vignetteAlpha)
     }
 }
 
 /**
- * 四团漏光 + 平铺颗粒。
+ * 一束光锥 + 光锥里的尘埃 + 平铺颗粒。
  *
- * 光斑取椭圆而不是正圆：正圆一眼就看得出是个圆，各自长宽比不同的椭圆才像光顺着纸边渗进来的一片。
- * 颗粒画在同一层里：原先只有低版本分支铺噪点，新系统靠着色器自己出噪声，
- * 着色器一撤，这层纸的纹理就得由这里补上，否则新系统上纸面是干净的塑料感。
+ * 光锥是一段角度，不是一个画上去的形状：两条边的延长线交在画布外的一个顶点上（见
+ * [beamGeometry]），亮度只由「偏离轴多少度」决定，用一条以那个顶点为心的 sweep 渐变画出来。
+ * 于是光锥的边缘处处是软的，而软的那一段跟着光锥一起张开——离顶点越远，锥越宽，
+ * 过渡带也越宽，正如一束真的光。轴向 [BEAM_FROM] 到 [BEAM_TO] 斜切而下，半宽从
+ * [BEAM_NEAR_HALF] 张到 [BEAM_FAR_HALF]，都按屏幕短边算，换设备时光锥的粗细一致；
+ * 再乘 [beamScale]，开场那一下就是「光从顶点推开」，退场是「光散掉」。
+ *
+ * 上一版是画一个梯形再 clip：往下走梯形比渐变宽，边是软的；往上走梯形比渐变窄，
+ * 于是左上那一段露出一道两三成 alpha 的直边——整屏最扎眼的一样东西是它。
+ * 角度渐变没有这个问题，因为再没有一个形状要被裁。
+ *
+ * 明色主题的光是「压暗光锥之外」，暗色主题的光是琥珀色 Screen 加上去，见
+ * [SplashPalette.beamAlpha] 与 [BeamGeometry.sweep]。
  */
 @Composable
-private fun LeakGlow(
+private fun ProjectorBeam(
     palette: SplashPalette,
-    glowScale: Float,
-    glowAlpha: Float,
+    beamScale: Float,
+    beamAlpha: Float,
     grainAlpha: Float,
+    drift: Boolean,
 ) {
     val grain = remember { grainBrush() }
+    val motes = remember { dustMotes() }
+    val driftT = dustDrift(drift)
     Canvas(modifier = Modifier.fillMaxSize()) {
-        val w = size.width
-        val h = size.height
-        if (w <= 0f || h <= 0f) return@Canvas
-        // 明色主题用 Multiply 让暖光像颜料渗进纸里，暗色主题改 Screen，
-        // 否则几团深棕叠在深底上会糊成一片黑
-        val glowBlend = if (palette.isDark) BlendMode.Screen else BlendMode.Multiply
-        if (glowAlpha > EPSILON) {
-            GLOW_SPOTS.forEach { spot ->
-                drawLeakSpot(spot, palette, glowScale, glowAlpha, glowBlend)
-            }
-        }
-        if (grainAlpha > EPSILON) {
-            drawRect(brush = grain, alpha = grainAlpha, blendMode = BlendMode.Multiply)
-        }
+        drawProjectorBeam(
+            palette = palette,
+            motes = motes,
+            grain = grain,
+            beamScale = beamScale,
+            beamAlpha = beamAlpha,
+            grainAlpha = grainAlpha,
+            driftT = driftT,
+        )
     }
 }
 
 /**
- * 中央纸色蒙层与四角压暗，两条都只为台词的对比度服务。
+ * 光锥、尘埃、颗粒三层的实际绘制。
  *
- * 蒙层是这一层唯一的可读性衬底：光斑压上来之后纸色会往暖里偏，它把台词那一片拉回纯纸色。
- * 所以调低 [WASH_ALPHA] 一定要连着光斑的基准 alpha 一起调，单降一边就是拿对比度换气质。
+ * 从 [ProjectorBeam] 里拆出来只为一件事：它是纯绘制，不碰组合，于是临时把可见性放开、
+ * 接到一张软件位图上就能单独放一遍——改这一屏的观感时不必装到手机上才看得见结果。
+ * [drawFilmRails]、[drawVignette] 同理。
+ */
+private fun DrawScope.drawProjectorBeam(
+    palette: SplashPalette,
+    motes: List<DustMote>,
+    grain: Brush,
+    beamScale: Float,
+    beamAlpha: Float,
+    grainAlpha: Float,
+    driftT: Float,
+) {
+    val w = size.width
+    val h = size.height
+    if (w <= 0f || h <= 0f) return
+    if (beamAlpha > EPSILON) {
+        val beam = beamGeometry(w, h, beamScale)
+        drawRect(
+            brush = beam.sweep(
+                color = if (palette.isDark) palette.caramel else BEAM_SHADE_LIGHT,
+                lit = palette.isDark,
+            ),
+            alpha = beamAlpha,
+            // 暗色是加光，明色是压暗光锥之外，见 SplashBackdrop 的 KDoc
+            blendMode = if (palette.isDark) BlendMode.Screen else BlendMode.SrcOver,
+        )
+        drawDust(motes, beam, palette, beamAlpha, driftT)
+    }
+    if (grainAlpha > EPSILON) {
+        drawRect(brush = grain, alpha = grainAlpha, blendMode = BlendMode.Multiply)
+    }
+}
+
+/**
+ * 尘埃缓慢下飘的进度，0 到 1 循环一遍要 [DUST_DRIFT_MS]。
+ *
+ * 关掉动效时直接返回 0，连动画都不起：这一层只活几秒，起一个每帧都要重画的循环动画
+ * 却没人看得到位移，纯是白烧。[enabled] 在这一层的整个生命里不会变（它由 reduceMotion 算出来），
+ * 所以这里提前 return 不会让组合结构在两次重组之间跳来跳去。
  */
 @Composable
-private fun ReadabilityOverlay(
-    palette: SplashPalette,
-    washAlpha: Float,
-    vignetteAlpha: Float,
-) {
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val w = size.width
-        val h = size.height
-        if (w <= 0f || h <= 0f) return@Canvas
-        if (washAlpha > EPSILON) {
-            // 光晕铺满之后台词区域对比度会掉，这层把中央拉回纯纸色
-            val center = Offset(0.5f * w, 0.48f * h)
-            val radius = 0.80f * w
-            drawCircle(
-                brush = Brush.radialGradient(
-                    0f to palette.paper,
-                    0.74f to Color.Transparent,
-                    center = center,
-                    radius = radius
-                ),
-                radius = radius,
-                center = center,
-                alpha = washAlpha
-            )
-        }
-        if (vignetteAlpha > EPSILON) {
-            val center = Offset(0.5f * w, 0.44f * h)
-            val radius = 0.78f * maxOf(w, h)
-            drawCircle(
-                brush = Brush.radialGradient(
-                    0.44f to Color.Transparent,
-                    1f to VIGNETTE_COLOR,
-                    center = center,
-                    radius = radius
-                ),
-                radius = radius,
-                center = center,
-                alpha = vignetteAlpha
+private fun dustDrift(enabled: Boolean): Float {
+    if (!enabled) return 0f
+    val transition = rememberInfiniteTransition(label = "splashDust")
+    val drift by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = DUST_DRIFT_MS, easing = LinearEasing),
+        ),
+        label = "splashDustDrift",
+    )
+    return drift
+}
+
+/**
+ * 左右两条胶片齿孔轨，各一列圆角小孔加一道片边线。
+ *
+ * 这是整屏唯一的硬边元素。背景其余部分全是柔的（一束光、一层颗粒、四角压暗），
+ * 柔的东西堆再多也只是雾；要有一样东西边缘是清楚的、有节奏的、重复的，画面才立得住。
+ * 取齿孔而不是别的图形，是因为日签卡片撕口两端就是齿孔——同一套语言，两屏才像一件东西。
+ *
+ * 墨色只给 5%（暗色 7%）：它是纸上压出来的孔，不是画上去的图案。孔列按屏高排满并整列居中，
+ * 上下各留半个间距，任何屏幕上都不会出现顶头半个孔的样子。
+ *
+ * 不会压到内容：台词那一列有 34dp 横向内边距，齿孔连边线一起只占到边上 [RAIL_INSET] 加
+ * 孔宽那一小段；日期和跳过提示都是居中的。
+ */
+@Composable
+private fun FilmRails(palette: SplashPalette, alpha: Float) {
+    Canvas(modifier = Modifier.fillMaxSize()) { drawFilmRails(palette, alpha) }
+}
+
+/** 齿孔轨的实际绘制，拆出来的理由同 [drawProjectorBeam] */
+private fun DrawScope.drawFilmRails(palette: SplashPalette, alpha: Float) {
+    if (alpha <= EPSILON || size.width <= 0f || size.height <= 0f) return
+    val holeW = RAIL_HOLE_W.toPx()
+    val holeH = RAIL_HOLE_H.toPx()
+    val pitch = holeH + RAIL_HOLE_GAP.toPx()
+    val inset = RAIL_INSET.toPx()
+    if (pitch <= 0f) return
+    val count = floor(size.height / pitch).toInt()
+    if (count <= 0) return
+    val holeAlpha = (if (palette.isDark) RAIL_INK_DARK else RAIL_INK_LIGHT) * alpha
+    // 整列居中：剩下的空处上下对半分，首孔再往下让半个间距
+    val top = (size.height - count * pitch + (pitch - holeH)) / 2f
+    val holeX = listOf(inset, size.width - inset - holeW)
+    repeat(count) { index ->
+        val y = top + index * pitch
+        holeX.forEach { x ->
+            drawRoundRect(
+                color = palette.ink,
+                topLeft = Offset(x, y),
+                size = Size(holeW, holeH),
+                cornerRadius = CornerRadius(holeW / 2f),
+                alpha = holeAlpha,
             )
         }
     }
+    val lineAlpha = RAIL_LINE_INK * alpha
+    val lineGap = RAIL_LINE_GAP.toPx()
+    listOf(inset + holeW + lineGap, size.width - inset - holeW - lineGap).forEach { x ->
+        drawLine(
+            color = palette.ink,
+            start = Offset(x, 0f),
+            end = Offset(x, size.height),
+            strokeWidth = RAIL_LINE_W.toPx(),
+            alpha = lineAlpha,
+        )
+    }
+}
+
+/**
+ * 四角压暗。
+ *
+ * 光锥只管亮的那一条，暗的这一头交给它：有明才有暗，两头都得有人管，否则纸是一整片匀的。
+ *
+ * 深浅分明暗两档（[VIGNETTE_INK_LIGHT] / [VIGNETTE_INK_DARK]）。明色这一档只有暗色的四分之一：
+ * 明色下光锥本身已经是「把锥外压暗一档」，而锥外正是右上和左下那两个角，四角压暗压的也是它们。
+ * 同一处叠两遍，纸会沉成土色。
+ *
+ * 起手 0.44 倍半径才开始压：顶部那行日期落在 0.45 附近，压到它头上等于拿它的对比度换气质。
+ */
+@Composable
+private fun Vignette(palette: SplashPalette, alpha: Float) {
+    Canvas(modifier = Modifier.fillMaxSize()) { drawVignette(palette, alpha) }
+}
+
+/** 四角压暗的实际绘制，拆出来的理由同 [drawProjectorBeam] */
+private fun DrawScope.drawVignette(palette: SplashPalette, alpha: Float) {
+    if (alpha <= EPSILON || size.width <= 0f || size.height <= 0f) return
+    val center = Offset(0.5f * size.width, 0.44f * size.height)
+    val radius = 0.78f * maxOf(size.width, size.height)
+    val ink = VIGNETTE_INK.copy(
+        alpha = if (palette.isDark) VIGNETTE_INK_DARK else VIGNETTE_INK_LIGHT,
+    )
+    drawCircle(
+        brush = Brush.radialGradient(
+            // 透明那一头取同色零透明，不用 Color.Transparent：渐变两端色相一致才不会在中途泛灰
+            0.44f to ink.copy(alpha = 0f),
+            1f to ink,
+            center = center,
+            radius = radius,
+        ),
+        radius = radius,
+        center = center,
+        alpha = alpha,
+    )
 }
 
 /**
@@ -657,98 +793,200 @@ private fun ReadabilityOverlay(
  *
  * 日期是装饰性刻度，按 WCAG 只需要 3:1，可以比正文淡；但不能淡到看不见——
  * [SplashPalette.inkFaint]（0.32 倍墨）在纸上只有 1.60:1（暗色 2.23:1），等于没印上去。
- * 这里按正文墨另兑一档：明色 0.76 得 3.53:1，暗色 0.44 得 3.64:1，两套的淡法看上去一致。
- * 留的余量是给光斑的：日期落在中央蒙层的圆外面，底下那点暖光没人帮它拉回纸色，
- * 实际比值会掉到 3.30:1（暗色 3.51:1），压着 3:1 取值就等于不留余量。
+ * 这里按正文墨另兑一档：明色 0.82 在纸上是 4.00:1，暗色 0.44 是 3.64:1，两套的淡法看上去一致。
+ *
+ * 明色那一档留的余量是给背景的：日期落在屏幕顶部偏中，那一带在光锥的压暗区里
+ * （光是从左上斜下来的，右上本来就该暗），再叠上颗粒，实测掉到 3.18:1。
+ * 0.76 是原来的值，同样的背景下只有 2.89:1——不够。
  *
  * 不去改 inkFaint 本身，是因为日签页拿它画撕口虚线和日历格线：
  * 为了这一行日期把它压深，那一屏的细线会立刻变成描边。
  */
 private fun dateInk(palette: SplashPalette): Color =
-    palette.ink.copy(alpha = if (palette.isDark) 0.44f else 0.76f)
+    palette.ink.copy(alpha = if (palette.isDark) 0.44f else 0.82f)
 
 /**
  * 底部「轻触跳过」那一行的墨色。
  *
- * 这行是操作提示不是装饰，得按正文的 4.5:1 要求给色；而它和日期一样落在中央蒙层的圆外，
- * 底下叠着暖光斑和四角压暗，实际比值比纸上算出来的要低半档。明色索引到实心墨
- * （纸上 5.87:1，把光斑和压暗算进去 4.98:1）；暗色的浅墨本来就富裕，0.60 已经是 5.46:1，
+ * 这行是操作提示不是装饰，得按正文的 4.5:1 要求给色。明色索引到实心墨（纸上 5.87:1，
+ * 把四角压暗和颗粒算进去 4.60:1）；暗色的浅墨本来就富裕，0.60 实测 5.45:1，
  * 再往上加只会让一行小字比台词还抢眼。
  */
 private fun hintInk(palette: SplashPalette): Color =
     palette.ink.copy(alpha = if (palette.isDark) 0.60f else 1f)
 
 /**
- * 画一团漏光。
+ * 光锥的几何，全在像素空间里算。
  *
- * 做法是先把画布按 ry/rx 纵向压扁，再画一个半径 rx 的正圆径向渐变：出来是软边的椭圆。
- * 直接 drawOval 配径向画笔不行——径向渐变本身是圆的，被椭圆一裁，边上会留一道硬边。
+ * 不在归一化坐标里算是因为那套坐标不等比：x 比宽、y 比高，同一个「垂直于轴」的方向在竖屏上
+ * 会被拉斜，光锥的两条边就不再平行于它自己的轴。先换成像素再算，角度和宽度才是几何上的。
+ *
+ * 角度存的是「整圈的几分之几」而不是弧度：sweep 渐变的色标就是这个单位（0 在三点钟方向，
+ * 顺着屏幕坐标转一圈是 1），存成它省得每次画都换算一遍。
  */
-private fun DrawScope.drawLeakSpot(
-    spot: GlowSpot,
-    palette: SplashPalette,
-    glowScale: Float,
-    glowAlpha: Float,
-    blendMode: BlendMode,
+private class BeamGeometry(
+    /** 两条边的延长线交汇处，落在画布外，见 [beamGeometry] */
+    val apex: Offset,
+    /** 轴的方向角，单位是整圈的比例 */
+    private val axisTurn: Float,
+    /** 半张角，单位同 [axisTurn] */
+    private val halfTurn: Float,
+    /** 轴起点，[BEAM_FROM] 换算成像素 */
+    val from: Offset,
+    /** 单位轴向 */
+    val axis: Offset,
+    /** 单位法向，指向轴的右手边 */
+    val normal: Offset,
+    val length: Float,
+    private val nearHalf: Float,
+    private val farHalf: Float,
 ) {
-    val rx = spot.rx * size.width * glowScale
-    val ry = spot.ry * size.height * glowScale
-    if (rx <= 0f || ry <= 0f) return
-    val center = Offset(spot.cx * size.width, spot.cy * size.height)
-    val color = spot.tint(palette)
-    scale(scaleX = 1f, scaleY = ry / rx, pivot = center) {
-        drawCircle(
-            brush = Brush.radialGradient(
-                0f to color,
-                0.68f to color.copy(alpha = 0f),
-                center = center,
-                radius = rx
-            ),
-            radius = rx,
-            center = center,
-            alpha = (glowAlpha * spot.jitter).coerceIn(0f, 1f),
-            blendMode = blendMode
+    /** 轴上 [t]（0 是 [from]，1 是轴终点）处的半宽，尘埃靠它待在光里 */
+    fun halfWidthAt(t: Float): Float = nearHalf + (farHalf - nearHalf) * t
+
+    /**
+     * 把光锥调成一把以 [apex] 为心的角度渐变。
+     *
+     * [lit] 为真时 [color] 是光：轴上最浓，到锥边收成零透明，锥外什么都不加（拿去 Screen）。
+     * 为假时反过来，[color] 是阴影：轴上零透明，锥外满上（拿去 SrcOver 压暗）。两档共用
+     * 同一条横截面曲线 [BEAM_PROFILE]，边缘的软硬因此一致。
+     *
+     * 压暗那一档的张角要乘 [BEAM_SHADE_SPREAD]。加光时锥外不加东西，锥窄一点只是光细一束；
+     * 压暗时锥外是要被压的，锥窄就等于「整屏都暗了一档，只有一条不暗」——纸会整片沉下去，
+     * 每一行字的对比度跟着掉。张开到 1.7 倍之后，日期、海报、台词、印章、跳过提示全落在
+     * 没被压过的那片纸上，暗的只剩右上和左下两个角：亮的是整整一条斜过去的纸，
+     * 而不是一条打在暗纸上的细光。
+     *
+     * 色标的透明档全用 `color.copy(alpha = 0f)` 而不是 [Color.Transparent]：一头是暖褐、
+     * 一头是透明黑的话，渐变中段会掉进灰里去。
+     *
+     * 一圈里剩下的角度补上两个端点色标压住。[BEAM_FROM] 到 [BEAM_TO] 是往右下走的，
+     * 轴角必落在 0 到四分之一圈之间，窗口不会跨过 0 那道缝，所以这里不必处理绕圈。
+     */
+    fun sweep(color: Color, lit: Boolean): Brush {
+        val ends = color.copy(alpha = if (lit) 0f else 1f)
+        val half = if (lit) halfTurn else halfTurn * BEAM_SHADE_SPREAD
+        val stops = ArrayList<Pair<Float, Color>>(BEAM_PROFILE.size * 2 + 1)
+        val windowStart = axisTurn - half
+        val windowEnd = axisTurn + half
+        if (windowStart > 0f) stops += 0f to ends
+        BEAM_PROFILE.forEach { (offset, lightness) ->
+            stops += crossStop(axisTurn - half * offset, color, lightness, lit)
+        }
+        BEAM_PROFILE.asReversed().forEach { (offset, lightness) ->
+            if (offset > 0f) {
+                stops += crossStop(axisTurn + half * offset, color, lightness, lit)
+            }
+        }
+        if (windowEnd < 1f) stops += 1f to ends
+        return Brush.sweepGradient(*stops.toTypedArray(), center = apex)
+    }
+
+    private fun crossStop(
+        turn: Float,
+        color: Color,
+        lightness: Float,
+        lit: Boolean,
+    ): Pair<Float, Color> =
+        turn.coerceIn(0f, 1f) to color.copy(alpha = if (lit) lightness else 1f - lightness)
+}
+
+/**
+ * 由轴的两端和两处半宽推出光锥的顶点与张角。
+ *
+ * 半宽在 [BEAM_FROM] 处是 [BEAM_NEAR_HALF]、在 [BEAM_TO] 处是 [BEAM_FAR_HALF]，两条边于是
+ * 交在轴起点之后 `轴长 / (远近半宽之比 − 1)` 那个点上。这个距离只跟两个常量的比值有关，
+ * [scale] 在里面约掉了——光锥张开缩回时顶点是钉住的，动起来才是「从一处推开」，
+ * 而不是整束光平移。
+ */
+private fun beamGeometry(width: Float, height: Float, scale: Float): BeamGeometry {
+    val from = Offset(BEAM_FROM.x * width, BEAM_FROM.y * height)
+    val to = Offset(BEAM_TO.x * width, BEAM_TO.y * height)
+    val span = to - from
+    val length = hypot(span.x, span.y)
+    val axis = Offset(span.x / length, span.y / length)
+    val normal = Offset(-axis.y, axis.x)
+    val shortSide = min(width, height)
+    val nearHalf = BEAM_NEAR_HALF * shortSide * scale
+    val farHalf = BEAM_FAR_HALF * shortSide * scale
+    val apexDistance = length / (BEAM_FAR_HALF / BEAM_NEAR_HALF - 1f)
+    return BeamGeometry(
+        apex = from - axis * apexDistance,
+        axisTurn = atan2(axis.y, axis.x) / TWO_PI,
+        halfTurn = atan2(farHalf, apexDistance + length) / TWO_PI,
+        from = from,
+        axis = axis,
+        normal = normal,
+        length = length,
+        nearHalf = nearHalf,
+        farHalf = farHalf,
+    )
+}
+
+/**
+ * 光柱里的一粒尘埃。位置不存屏幕坐标，存「在轴上多远（[t]）、离轴多偏（[across]，±1 是光锥边）」。
+ *
+ * 这样存的好处是尘埃永远在光里：换屏幕、光锥宽窄变化，它们跟着光走，不会飘到暗处去。
+ */
+private class DustMote(
+    val t: Float,
+    val across: Float,
+    val radius: Dp,
+    val alpha: Float,
+)
+
+/**
+ * 十几粒尘埃，固定种子摆位。
+ *
+ * 和颗粒同一个道理：随机的话每帧都换一处，看上去是在闪。[DUST_ACROSS] 只到 0.60——
+ * 再往边上放就落在光锥的暗尾里，那时候它读起来不是尘埃，是屏幕上的一个脏点。
+ */
+private fun dustMotes(): List<DustMote> {
+    val random = Random(DUST_SEED)
+    return List(DUST_COUNT) {
+        DustMote(
+            t = DUST_T_FROM + random.nextFloat() * (DUST_T_TO - DUST_T_FROM),
+            across = (random.nextFloat() * 2f - 1f) * DUST_ACROSS,
+            radius = (DUST_RADIUS_MIN + random.nextFloat() * DUST_RADIUS_SPAN).dp,
+            alpha = DUST_ALPHA_MIN + random.nextFloat() * DUST_ALPHA_SPAN,
         )
     }
 }
 
 /**
- * 一团漏光的摆位，全部按屏幕比例存：中心与半径横向比宽、纵向比高，换屏幕时四团的相对关系不变。
- * 横竖各自取比例的结果是竖屏手机上每团都略微竖长，四团的长宽比还各不相同，没有一团是正圆。
+ * 画尘埃。
  *
- * [jitter] 是这一团独有的亮度系数。四团共用一个 alpha 就又回到「算出来的光」，
- * 差一成才有先后深浅。写成常量而不是启动时随机：随机的话每次重绘都换一个数，看上去是在闪。
+ * 明暗两套的方向是相反的：暗色主题下背景是深棕，尘埃是被光照亮的一粒，用奶色 Screen 加上去；
+ * 明色主题下纸本来就快到白了，加光加不出东西来，逆光看到的尘埃反而是比纸暗的一点，
+ * 所以改成赭色画上去，透明度还要再收一档——同样的深浅在亮纸上比在暗底上显眼得多。
+ *
+ * 整片尘埃跟着 [beamAlpha] 一起亮起来、一起散掉：它们是光的一部分，不是钉在纸上的点。
  */
-private class GlowSpot(
-    val cx: Float,
-    val cy: Float,
-    val rx: Float,
-    val ry: Float,
-    val jitter: Float,
-    val tint: (SplashPalette) -> Color,
-)
-
-/**
- * 四团漏光的位置，手摆的。
- *
- * 四个中心任取三个都不共线，也没有一对是关于屏幕中轴或中心镜像的——一旦对称，
- * 人眼立刻读出「这是按公式摆的」。尺寸和长宽比也四团各不相同：最大的一团压在左下，
- * 最小的一团缩在右下，亮区于是从左上斜着往右下走，顺着海报、台词、印章往下排的方向。
- * 中心大多贴在边上或干脆出屏（0.94、0.86），只让光的一角照进画面，光源本身留在纸外。
- *
- * 四团都只擦到中央那片台词区的边，不盖到它头上：径向渐变到 0.68 倍半径就透明了，
- * 按这四组数算下来，屏幕正中 x 0.48-0.63、y 0.35-0.56 那一块几乎不落光。
- * 这是有意留的——台词是要读的，读的地方就该是干净的纸。
- *
- * 抖动取 1.09 / 0.92 / 1.06 / 0.90：两明两暗交错，平均 0.99——整屏亮度和不抖动时基本一样，
- * 只是把光挪得深浅不匀。
- */
-private val GLOW_SPOTS = listOf(
-    GlowSpot(cx = 0.13f, cy = 0.15f, rx = 0.52f, ry = 0.30f, jitter = 1.09f) { it.caramel },
-    GlowSpot(cx = 0.94f, cy = 0.37f, rx = 0.46f, ry = 0.34f, jitter = 0.92f) { it.ochre },
-    GlowSpot(cx = 0.22f, cy = 0.86f, rx = 0.60f, ry = 0.28f, jitter = 1.06f) { it.cream },
-    GlowSpot(cx = 0.79f, cy = 0.70f, rx = 0.36f, ry = 0.20f, jitter = 0.90f) { it.caramel },
-)
+private fun DrawScope.drawDust(
+    motes: List<DustMote>,
+    beam: BeamGeometry,
+    palette: SplashPalette,
+    beamAlpha: Float,
+    driftT: Float,
+) {
+    val color = if (palette.isDark) palette.cream else palette.ochre
+    val blend = if (palette.isDark) BlendMode.Screen else BlendMode.SrcOver
+    val scale = if (palette.isDark) 1f else DUST_ALPHA_LIGHT_SCALE
+    val slide = DUST_DRIFT.toPx() * driftT
+    motes.forEach { mote ->
+        val along = beam.from + beam.axis * (beam.length * mote.t)
+        val center = along +
+            beam.normal * (beam.halfWidthAt(mote.t) * mote.across) +
+            Offset(slide * DUST_DRIFT_X_RATIO, slide)
+        drawCircle(
+            color = color,
+            radius = mote.radius.toPx(),
+            center = center,
+            alpha = (mote.alpha * beamAlpha * scale).coerceIn(0f, 1f),
+            blendMode = blend,
+        )
+    }
+}
 
 /**
  * 生成一小块噪点并平铺成胶片颗粒，明暗两套主题、所有系统版本共用这一份。
@@ -785,16 +1023,112 @@ private val GRAIN_TILE: Bitmap by lazy {
 }
 
 private const val EM_DASH = "—"
-/**
- * 中央纸色蒙层的峰值透明度。
- *
- * 原先是 0.66，配的是几乎盖满整屏的着色器光晕；现在光斑只从四边漏进来、基准 alpha 也压低了，
- * 蒙层跟着退到 0.58——再厚下去中央就成了一块没有光的奶白饼，纸和光的关系反而看不出来。
- */
-private const val WASH_ALPHA = 0.58f
 private const val EPSILON = 0.001f
 private const val GRAIN_TILE_PX = 128
 private const val GRAIN_SEED = 20260828L
+
+/**
+ * 四角压暗和明色光锥共用的那个褐，见 [drawVignette] 与 [BEAM_SHADE_LIGHT]。
+ *
+ * 声明在光锥那几个常量之前是必须的：文件里的顶层属性按书写顺序初始化，
+ * [BEAM_SHADE_LIGHT] 引用它，写在它后面就会拿到 0（Color 是内联的 ULong，
+ * 没初始化不报错，只是悄悄变成全透明）。
+ */
+private val VIGNETTE_INK = Color(0xFF3C2212)
+
+/**
+ * 四角压暗的浓度，明暗各一档。
+ *
+ * 明色只有暗色的四分之一：那一档的光锥本身就是在压暗（见 [BEAM_SHADE_LIGHT]），
+ * 而它压的地方——右上、左下两个角——正是四角压暗压得最狠的地方，两层叠在一处。
+ * 照暗色那个力度再压一遍，角上就是 0.30 往上，纸沉成土色，底部那行提示也保不住 4.5:1。
+ */
+private const val VIGNETTE_INK_LIGHT = 0.06f
+private const val VIGNETTE_INK_DARK = 0.24f
+
+/**
+ * 光锥轴的两端，归一化坐标（x 比宽、y 比高）。
+ *
+ * 起点在左上偏内、终点在右下偏内。真正的进光口在画布外——两条边的延长线交汇的那个顶点在
+ * 起点之后（见 [beamGeometry]），所以屏幕上看不到光锥收口那一下。这条轴在 t≈0.55 处经过
+ * 屏幕中央偏上那一片——正是海报和台词落的位置。光该照在要读的东西上，不是照在旁边的空处。
+ */
+private val BEAM_FROM = Offset(0.12f, 0.10f)
+private val BEAM_TO = Offset(0.80f, 0.86f)
+
+/**
+ * 光锥的半宽，从近端（[BEAM_FROM]）到远端（[BEAM_TO]），按屏幕短边的比例。
+ *
+ * 0.22 到 0.40 是「张开得看得出来，又还留着暗角」的一档：斜着穿过竖屏之后，光锥在画面中段
+ * 的横向覆盖大约是屏宽的三分之二，右上和左下两个角留在光外。再宽一点两角就保不住，
+ * 整屏又回到一片匀的亮；再窄一点它就不像一束光，像一条带子。
+ *
+ * 这两个数还定下了顶点的远近：比值 1.8 意味着顶点落在起点之前 1.2 倍轴长处，
+ * 也就是屏幕左上角外一屏多的地方。比值再大顶点就压进画面里，光锥收成一个尖，像手电筒；
+ * 再小则两条边几乎平行，锥就成了带子。
+ */
+private const val BEAM_NEAR_HALF = 0.22f
+private const val BEAM_FAR_HALF = 0.40f
+
+/**
+ * 光锥的横截面：偏离轴多远（1 是锥边）对应多浓。
+ *
+ * 中间满、到边收零，中段那两档让曲线鼓一点——线性过渡看着像一块半透明的板子，
+ * 鼓起来才像空气里的一束光。明色主题下这条曲线整个反过来用，见 [BeamGeometry.sweep]。
+ */
+private val BEAM_PROFILE = listOf(
+    1f to 0f,
+    0.72f to 0.30f,
+    0.40f to 0.74f,
+    0f to 1f,
+)
+
+/**
+ * 明色主题下压在光锥之外的那一层暖褐。
+ *
+ * 亮纸上没法加光：纸已经是 #F7EFE2，Screen 上去只剩三四个色阶的余量，怎么调都是「什么都
+ * 没发生」。改成压暗锥外一档，光锥自己就是那块没被压过的纸——画上光的办法从来是先画暗。
+ * 取和四角压暗同一个褐（[VIGNETTE_INK]），两层叠在角上才是同一种暗，不会显出两个色相。
+ */
+private val BEAM_SHADE_LIGHT = VIGNETTE_INK
+
+/** 压暗那一档的张角倍数，理由见 [BeamGeometry.sweep] */
+private const val BEAM_SHADE_SPREAD = 1.7f
+
+private const val TWO_PI = (2 * PI).toFloat()
+
+private const val DUST_COUNT = 14
+private const val DUST_SEED = 20260831L
+private const val DUST_T_FROM = 0.16f
+private const val DUST_T_TO = 0.92f
+private const val DUST_ACROSS = 0.60f
+private const val DUST_RADIUS_MIN = 0.8f
+private const val DUST_RADIUS_SPAN = 1.4f
+private const val DUST_ALPHA_MIN = 0.10f
+private const val DUST_ALPHA_SPAN = 0.20f
+/** 明色主题下尘埃再收一档：同样的深浅压在亮纸上比压在暗底上显眼得多 */
+private const val DUST_ALPHA_LIGHT_SCALE = 0.62f
+/** 一个循环里尘埃往下飘多远，以及横向跟着挪的比例——竖直落下太规整，略微斜着才像飘 */
+private val DUST_DRIFT: Dp = 10.dp
+private const val DUST_DRIFT_X_RATIO = 0.25f
+/**
+ * 飘一个来回的时长。
+ *
+ * 6.2 秒略长于这一层最长的寿命（当天首看约 6.5 秒），所以整场看下来尘埃只是一直在缓缓下沉，
+ * 不会走到循环的接缝、跳回原处。
+ */
+private const val DUST_DRIFT_MS = 6200
+
+private val RAIL_INSET: Dp = 7.dp
+private val RAIL_HOLE_W: Dp = 9.dp
+private val RAIL_HOLE_H: Dp = 13.dp
+private val RAIL_HOLE_GAP: Dp = 11.dp
+/** 片边线离齿孔多远、多粗 */
+private val RAIL_LINE_GAP: Dp = 5.dp
+private val RAIL_LINE_W: Dp = 0.8.dp
+private const val RAIL_INK_LIGHT = 0.05f
+private const val RAIL_INK_DARK = 0.07f
+private const val RAIL_LINE_INK = 0.04f
 
 /**
  * 海报回落小尺寸的屏高阈值，单位 dp。
@@ -820,8 +1154,7 @@ private const val POSTER_COMPACT_FONT_SCALE = 1.15f
  */
 private const val ENTER_FADE_MS = 320
 
-private val VIGNETTE_COLOR = Color(0x383C2212)
-private val GlowEasing = CubicBezierEasing(0.22f, 0.7f, 0.25f, 1f)
+private val BeamEasing = CubicBezierEasing(0.22f, 0.7f, 0.25f, 1f)
 private val RiseEasing = CubicBezierEasing(0.2f, 0.75f, 0.28f, 1f)
 private val PosterEasing = CubicBezierEasing(0.2f, 0.75f, 0.28f, 1f)
 

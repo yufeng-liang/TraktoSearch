@@ -111,12 +111,17 @@ internal data class SplashPalette(
     val sheet: Color,
     val grainAlpha: Float,
     /**
-     * 四个漏光斑的基准透明度，见 SplashQuoteOverlay 的 LeakGlow。
+     * 光锥那一层的浓度，见 SplashQuoteOverlay 的 ProjectorBeam。
      *
-     * 比原先的 0.74/0.58 各低一档：光斑改成手摆的四个椭圆之后彼此有重叠，
-     * 沿用老数值会把中央糊成一片亮，纸的质地就没了——光该是漏进来的，不是打上来的。
+     * 两套主题里这一档的意思是反的。暗色是加光：底是深棕，琥珀色 Screen 上去能把光锥抬到
+     * #4C3420 上下，那束光在暗房里就是主角；0.42 之上光会开始糊成一片亮，台词那一片实测
+     * 9.06:1，也已经到了「再亮就没有暗处」的边上。明色是压暗光锥之外：纸已经是 #F7EFE2，
+     * Screen 再怎么加都只剩三四个色阶的余量，加光这条路在亮纸上根本走不通（上一版明色下的
+     * 0.55 几乎什么都看不出来，就是这个缘故）。压暗只要 0.11——纸和角上差二十来个色阶已经
+     * 看得出一束光斜切下来，再深纸就沉了，而底部那行跳过提示落在压暗区的边上，
+     * 0.11 下是 4.60:1，深一档就跌破 4.5:1。
      */
-    val glowAlpha: Float,
+    val beamAlpha: Float,
     val isDark: Boolean,
 ) {
     companion object {
@@ -131,7 +136,7 @@ internal data class SplashPalette(
             seal = Color(0xFFB4472F),
             sheet = Color(0xFFFDF8EF),
             grainAlpha = 0.16f,
-            glowAlpha = 0.48f,
+            beamAlpha = 0.11f,
             isDark = false,
         )
         val Dark = SplashPalette(
@@ -145,7 +150,7 @@ internal data class SplashPalette(
             seal = Color(0xFFC85A3E),
             sheet = Color(0xFF2E211A),
             grainAlpha = 0.22f,
-            glowAlpha = 0.40f,
+            beamAlpha = 0.42f,
             isDark = true,
         )
     }
