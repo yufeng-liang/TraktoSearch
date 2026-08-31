@@ -88,10 +88,10 @@
       "posterPath": "/43I9DcNoCzpyzK8JCkJYpHqHqGG.jpg",
       "bundled": true,
       "lines": {
-        "en": ["If memories could be canned,", "I hope this one never expires."],
-        "zh": ["如果记忆是一个罐头的话，", "我希望这罐罐头", "永远不会过期。"],
-        "ja": ["記憶が缶詰なら、", "この缶だけは", "賞味期限が", "来ないでほしい。"],
-        "ko": ["기억이 통조림이라면,", "이 통조림만은", "유통기한이 없기를."]
+        "en": ["At our closest,", "the distance between us", "was only 0.01 centimeters."],
+        "zh": ["我们最接近的时候，", "我跟她之间的距离", "只有 0.01 公分。"],
+        "ja": ["僕たちがいちばん近づいたとき、", "二人の距離は", "わずか0.01センチだった。"],
+        "ko": ["우리가 가장 가까웠을 때,", "우리 사이의 거리는", "불과 0.01센티미터였다."]
       },
       "title": {
         "en": "Chungking Express",
@@ -100,11 +100,11 @@
         "ko": "중경삼림"
       },
       "keyword": {
-        "en": "Brushing Past",
-        "zh": "擦肩",
-        "zh-Hant": "擦肩",
-        "ja": "すれ違い",
-        "ko": "스침"
+        "en": "Within Reach",
+        "zh": "咫尺",
+        "zh-Hant": "咫尺",
+        "ja": "間近",
+        "ko": "지척"
       }
     },
     {
