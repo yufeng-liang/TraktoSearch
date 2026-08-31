@@ -362,7 +362,7 @@
     <string name="detail_load_more_comments">下滑加载更多</string>
     <string name="detail_all_comments_loaded">已加载全部 %1$d 条评论</string>
     <string name="detail_cast_crew">演职员</string>
-    <string name="detail_cast_all">全部 ></string>
+    <string name="detail_cast_all">全部</string>
     <string name="detail_director_tag">导演</string>
     <string name="detail_cast_as">饰 %1$s</string>
     <string name="detail_writer_tag">编剧</string>

@@ -362,7 +362,7 @@
     <string name="detail_load_more_comments">Scroll down to load more</string>
     <string name="detail_all_comments_loaded">All %1$d comments loaded</string>
     <string name="detail_cast_crew">Cast &amp; Crew</string>
-    <string name="detail_cast_all">All ></string>
+    <string name="detail_cast_all">All</string>
     <string name="detail_director_tag">Director</string>
     <string name="detail_cast_as">as %1$s</string>
     <string name="detail_writer_tag">Writer</string>
