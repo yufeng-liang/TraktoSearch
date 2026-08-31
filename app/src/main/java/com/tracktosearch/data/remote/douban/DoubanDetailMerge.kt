@@ -64,7 +64,9 @@ fun mergeDoubanDetail(
             existing?.releaseDates
         ),
         genres = firstNonEmpty(rexxar?.genres, html?.genres, snapshotGenres, existing?.genres),
-        countries = firstNonEmpty(rexxar?.countries, html?.countries, existing?.countries),
+        countries = normalizeDoubanCountryNames(
+            firstNonEmpty(rexxar?.countries, html?.countries, existing?.countries)
+        ),
         directors = firstNonEmpty(rexxar?.directors, html?.directors, existing?.directors),
         writers = firstNonEmpty(rexxar?.writers, html?.writers, existing?.writers),
         cast = firstNonEmpty(rexxar?.cast, html?.cast, existing?.cast),
@@ -111,6 +113,17 @@ fun choosePosterUrl(
         ?: snapshotPoster.present()
 }
 
+/**
+ * 统一豆瓣新旧来源的地区写法，避免旧 HTML 缓存与 Rexxar 返回同一地区时触发文本跳变。
+ */
+internal fun normalizeDoubanCountryNames(values: List<String>): List<String> = values
+    .asSequence()
+    .map(String::trim)
+    .filter(String::isNotEmpty)
+    .map { DOUBAN_COUNTRY_ALIASES[it] ?: it }
+    .distinct()
+    .toList()
+
 private fun String?.present(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
 
 private fun String?.toYear(): Int? = this?.let {
@@ -119,5 +132,12 @@ private fun String?.toYear(): Int? = this?.let {
 
 private fun <T> firstNonEmpty(vararg values: List<T>?): List<T> =
     values.firstOrNull { !it.isNullOrEmpty() }.orEmpty()
+
+private val DOUBAN_COUNTRY_ALIASES = mapOf(
+    "大陆" to "中国大陆",
+    "香港" to "中国香港",
+    "澳门" to "中国澳门",
+    "台湾" to "中国台湾"
+)
 
 private val YEAR_PATTERN = Regex("\\d{4}")
