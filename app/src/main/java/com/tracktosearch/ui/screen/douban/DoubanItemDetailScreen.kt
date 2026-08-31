@@ -11,6 +11,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -160,7 +161,6 @@ import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
-import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberAppPullToRefreshState
 import com.tracktosearch.ui.component.zoomSharedSource
@@ -173,7 +173,8 @@ import com.tracktosearch.ui.screen.detail.FilterSection
 import com.tracktosearch.ui.screen.detail.PosterFullscreenOverlay
 import com.tracktosearch.ui.screen.detail.detailOnPosterColor
 import com.tracktosearch.ui.screen.detail.detailOnPosterVariantColor
-import com.tracktosearch.ui.screen.detail.rememberDetailTabColors
+import com.tracktosearch.ui.screen.detail.DETAIL_TOP_BAR_HEIGHT
+import com.tracktosearch.ui.screen.detail.detailBarColor
 import com.tracktosearch.ui.theme.RatingGold
 import com.tracktosearch.ui.theme.RatingGoldDim
 import com.tracktosearch.ui.util.HapticType
@@ -1267,17 +1268,36 @@ fun DoubanItemDetailScreen(
 
             val failure = uiState.failure
 
-            // Tab 栏底色/文字颜色：判据与普通详情页共用 DetailVisuals.rememberDetailTabColors。
+            // 顶栏与吸顶 Tab 栏共用一条实色底（取色见 DetailVisuals.detailBarColor），与影视详情页同一套。
             // isPinned 判定原先抄的是普通详情页的 `>= 1`，但本页 item 顺序是
             // header(0) / writeback_actions(1) / tab_row(2)，导致 Tab 还在屏幕中段
             // 底色就变实色了。这里按本页真实 index 修正为 `>= 2`。
-            // 提到采样源 Box 之外算：吸顶 Tab 与外层淡入顶栏都要用同一份。
+            // 提到采样源 Box 之外算：状态栏条、吸顶栏、标题淡入三处要用同一份。
             val isPinned by remember {
                 derivedStateOf { listState.firstVisibleItemIndex >= 2 }
             }
-            val tabColors = rememberDetailTabColors(uiState.posterDominantColor, isPinned)
-            val tabContainerColor = tabColors.containerColor
-            val tabContentColor = tabColors.contentColor
+            val pinnedBarColor = detailBarColor()
+            val barColor by animateColorAsState(
+                targetValue = if (isPinned) pinnedBarColor else Color.Transparent,
+                animationSpec = tween(durationMillis = 180),
+                label = "doubanBarColor"
+            )
+            // 沉浸渐变上的文字色：本页的栏目标题、演职员名等直接画在渐变上（不在卡片里），
+            // 按海报亮度自适应。原先取的是吸顶 Tab 栏的文字色，那个值现在跟着实色顶栏走主题色，
+            // 拿来染渐变上的文字会在深色海报 + 浅色主题时对比度不足。
+            val onImmersiveColor = detailOnPosterColor(uiState.posterDominantColor)
+
+            // 吸顶栏标题行里的条目名：滚过头部才淡入。原先滚过头部就只剩几个孤立的
+            // 悬浮圆按钮，页面上没有任何地方还写着在看哪个条目。
+            val topBarTitle = uiState.failure?.title
+                ?.let { if (it.contains("/")) it.substringBefore("/") else it }
+                ?.trim()
+                .orEmpty()
+            val topBarTitleAlpha by animateFloatAsState(
+                targetValue = if (isPinned && topBarTitle.isNotEmpty()) 1f else 0f,
+                animationSpec = tween(durationMillis = 220),
+                label = "doubanTopBarTitleAlpha"
+            )
 
             // blur 与 glass 都注册同一 Haze source：blur 直接采样，glass 悬浮控件用同一
             // Haze 状态做实时采样（悬浮控件处 LocalBackdrop=null 强制退化），保证沉浸渐变与
@@ -1288,12 +1308,12 @@ fun DoubanItemDetailScreen(
                     .hazeSource(state = hazeState, zIndex = 0f)
                     .then(immersiveBackgroundModifier)
             ) {
-            // 吸顶时状态栏区域背景与 tabContainerColor 一致,非吸顶透明(透出渐变)
+            // 状态栏条与顶栏同色，滚过临界点时一起淡入；非吸顶透明（透出渐变）
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .windowInsetsTopHeight(WindowInsets.statusBars)
-                    .background(tabContainerColor)
+                    .background(barColor)
                     .align(Alignment.TopCenter)
             )
 
@@ -1309,9 +1329,9 @@ fun DoubanItemDetailScreen(
                     DoubanHeaderSkeleton(modifier = Modifier.padding(top = 56.dp))
                 }
             } else if (failure != null) {
-                // 通过 LocalContentColor 把 tabContentColor 传下去,内部搜索源/网盘类型等文字可自适应
+                // 沉浸渐变上的文字（栏目标题、内部搜索源/网盘类型等）随海报亮度自适应
                 CompositionLocalProvider(
-                    LocalContentColor provides tabContentColor
+                    LocalContentColor provides onImmersiveColor
                 ) {
                 AppPullToRefreshIndicator(
                     state = doubanPullToRefreshState,
@@ -1359,47 +1379,71 @@ fun DoubanItemDetailScreen(
                         }
                     }
 
-                    // Tab 行(吸顶) —
-                    // - 非吸顶(tab 还在海报下方):透明
-                    // - 吸顶:沉浸色与白色 0.5f 混合,文字按底色亮度自适应
+                    // 标题行 + Tab 行(吸顶)：与影视详情页同一处理 —— 两行同在一个 Column 里
+                    // 共用一次铺底、中间不加分隔线，吸顶后就是一整条实色顶栏。原先标题栏是
+                    // 页面外层一条独立的 Haze 毛玻璃，与这条吸顶栏深浅不一地叠在一起。
+                    // 标题行高度恒定（不吸顶时只是透明占位），否则吸顶瞬间 sticky item
+                    // 长高会把下方内容整体往下推一截。
                     stickyHeader(key = "tab_row") {
-                        // isPinned / tabContainerColor / tabContentColor 在 LazyColumn 外已计算
-                        PrimaryTabRow(
-                            selectedTabIndex = selectedTab,
-                            containerColor = tabContainerColor,
-                            contentColor = tabContentColor,
-                            modifier = Modifier.alpha(contentAlpha)
+                        Column(
+                            modifier = Modifier
+                                .alpha(contentAlpha)
+                                .background(barColor)
                         ) {
-                            Tab(
-                                selected = selectedTab == 0,
-                                onClick = {
-                                    view.performHaptic(HapticType.CLICK)
-                                    selectedTab = 0
-                                },
-                                text = {
-                                    Text(
-                                        stringResource(R.string.screen_douban_item_detail_tab_info),
-                                        maxLines = 1
-                                    )
-                                }
-                            )
-                            Tab(
-                                selected = selectedTab == 1,
-                                onClick = {
-                                    view.performHaptic(HapticType.CLICK)
-                                    selectedTab = 1
-                                    // 首次切换到资源搜索 Tab 时才触发搜索(延迟加载,减少进入页面时的并发负担)
-                                    if (!uiState.searchAttempted && !uiState.isSearching) {
-                                        viewModel.searchResources()
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(DETAIL_TOP_BAR_HEIGHT)
+                                    // 左右各让出 64dp 给悬浮的返回按钮与右上角按钮组
+                                    .padding(horizontal = 64.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = topBarTitle,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.graphicsLayer { alpha = topBarTitleAlpha }
+                                )
+                            }
+                            PrimaryTabRow(
+                                selectedTabIndex = selectedTab,
+                                containerColor = Color.Transparent,
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            ) {
+                                Tab(
+                                    selected = selectedTab == 0,
+                                    onClick = {
+                                        view.performHaptic(HapticType.CLICK)
+                                        selectedTab = 0
+                                    },
+                                    text = {
+                                        Text(
+                                            stringResource(R.string.screen_douban_item_detail_tab_info),
+                                            maxLines = 1
+                                        )
                                     }
-                                },
-                                text = {
-                                    Text(
-                                        "${stringResource(R.string.screen_douban_item_detail_tab_resources)}(${uiState.searchResults.size})",
-                                        maxLines = 1
-                                    )
-                                }
-                            )
+                                )
+                                Tab(
+                                    selected = selectedTab == 1,
+                                    onClick = {
+                                        view.performHaptic(HapticType.CLICK)
+                                        selectedTab = 1
+                                        // 首次切换到资源搜索 Tab 时才触发搜索(延迟加载,减少进入页面时的并发负担)
+                                        if (!uiState.searchAttempted && !uiState.isSearching) {
+                                            viewModel.searchResources()
+                                        }
+                                    },
+                                    text = {
+                                        Text(
+                                            "${stringResource(R.string.screen_douban_item_detail_tab_resources)}(${uiState.searchResults.size})",
+                                            maxLines = 1
+                                        )
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -1589,46 +1633,8 @@ fun DoubanItemDetailScreen(
             // 以 zIndex 0<0 过滤掉自身导致模糊静默失效）；LocalBackdrop=null 让 glass 退化到
             // Haze 实时采样，再配合 HazeSourceSelection.All 强制采样内容源，blur/glass 都生效。
             CompositionLocalProvider(LocalBackdrop provides null) {
-            // 滚动后淡入的模糊标题栏：与普通详情页同一处理。原先滚过头部就只剩几个
-            // 孤立的悬浮圆按钮，页面上没有任何地方还写着在看哪个条目。
-            val topBarTitle = uiState.failure?.title
-                ?.let { if (it.contains("/")) it.substringBefore("/") else it }
-                ?.trim()
-                .orEmpty()
-            val topBarTitleAlpha by animateFloatAsState(
-                targetValue = if (isPinned && topBarTitle.isNotEmpty()) 1f else 0f,
-                animationSpec = tween(durationMillis = 220),
-                label = "doubanTopBarTitleAlpha"
-            )
-            if (topBarTitleAlpha > 0.01f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.TopCenter)
-                        .graphicsLayer { alpha = topBarTitleAlpha }
-                        .hazeTopBar(
-                            state = hazeState,
-                            style = dev.chrisbanes.haze.blur.materials.HazeMaterials.ultraThin(),
-                            isContentUnderTopBar = isPinned,
-                            scene = doubanGlassScene,
-                            sourceSelection = HazeSourceSelection.All
-                        )
-                        .statusBarsPadding()
-                        .height(48.dp)
-                        // 左右各让出 64dp 给返回按钮与右上角按钮组
-                        .padding(horizontal = 64.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = topBarTitle,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = tabContentColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
+            // 滚动后淡入的标题栏已并进吸顶 stickyHeader（与 Tab 行共用一次铺底），
+            // 这里只剩返回/标记/分享等悬浮圆按钮，正好压在标题行两侧留出的 64dp 上。
 
             // 返回按钮：使用与正常详情页一致的拟态玻璃和 ultraThin Haze。
             NeumorphicIconButton(

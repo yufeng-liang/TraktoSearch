@@ -44,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
@@ -55,6 +56,11 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -594,31 +600,66 @@ private fun splitMetaValues(raw: String): List<String> =
 // ==================== 折叠展开文本 ====================
 
 /**
- * 折叠/展开文本：折叠时正文用省略号截断，「展开」「收起」按钮都独占一行、右对齐放在正文下方，
- * 两种状态下按钮位置一致。按钮不再叠放在正文最后一行上，避免遮挡文字。
- * 点击整段正文或按钮均可切换，高度变化带动画。
+ * 折叠/展开文本：折叠时正文截到最后一行放得下的位置，行末紧接一个主题色的「… 展开」；
+ * 展开后正文末尾同样内联一个主题色的「收起」。省略号与动作词同色 —— 省略号就是
+ * 「后面还有」的提示，属于动作的一部分。
  *
- * [leadingAction] 落在这一行的左端，给调用方放自己的动作（评论卡片的「翻译」「原文/译文」
- * 原先各自另起一行右对齐，一条两行短评能排成四行高）。没有溢出、只有 leadingAction 时这行照样出。
+ * 动作嵌在正文行里而不另起一行：原先「展开」独占一行右对齐，一段 3 行简介要占掉 4 行高，
+ * 评论卡里一条两行短评更明显。点击整段正文即切换（动作本身就在这段文字里，点它就是点正文），
+ * 高度变化带动画。
+ *
+ * [bottomAction] 落在正文下方一行的左端，给调用方放自己的动作（评论卡片的「翻译」
+ * 「原文/译文」）。为 null 时不产生这一行。
  */
 @Composable
 internal fun ExpandableText(
     text: String,
     maxLines: Int = 3,
-    leadingAction: (@Composable () -> Unit)? = null
+    bottomAction: (@Composable () -> Unit)? = null
 ) {
     val effectiveMaxLines = maxLines.coerceAtLeast(1)
     val expandLabel = stringResource(R.string.detail_text_expand)
     val collapseLabel = stringResource(R.string.detail_text_collapse)
-    val primaryColor = MaterialTheme.colorScheme.primary
     val bodyColor = MaterialTheme.colorScheme.onSurfaceVariant
     val bodyStyle = MaterialTheme.typography.bodyMedium
+    val actionSpan = SpanStyle(
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.SemiBold
+    )
+    val expandSuffix = "… $expandLabel"
+    val collapseSuffix = "  $collapseLabel"
 
     var expanded by rememberSaveable(text, effectiveMaxLines) { mutableStateOf(false) }
-    // 溢出检测由 onTextLayout 驱动：仅折叠且实际超出 maxLines 时置 true
-    var hasOverflow by remember(text, effectiveMaxLines) { mutableStateOf(false) }
-    // 仅溢出（或已展开）时才可点击；未溢出文本不响应点击、不显示按钮
-    val canToggle = hasOverflow || expanded
+    // 折叠态的切字位置：null = 还没量过 / 正文本来就放得下，此时不显示动作也不响应点击。
+    // 由 onTextLayout 回填一次；回填后正文已经短到不再溢出，靠这个非空值记住「曾经溢出」。
+    var collapsedCut by remember(text, effectiveMaxLines) { mutableStateOf<Int?>(null) }
+    val canToggle = collapsedCut != null
+
+    // 「… 展开」占多宽，用来在最后一行右端反推该从哪个字切开。
+    // 按 SemiBold 量（动作词就是 SemiBold）并多留一个空格的余量，免得切点偏大导致
+    // 内置 Ellipsis 反过来把「展开」自己吃掉半截。
+    val textMeasurer = rememberTextMeasurer()
+    val suffixWidth = remember(expandSuffix, bodyStyle, textMeasurer) {
+        textMeasurer.measure(
+            text = AnnotatedString("$expandSuffix "),
+            style = bodyStyle.copy(fontWeight = FontWeight.SemiBold)
+        ).size.width.toFloat()
+    }
+
+    val displayText = remember(text, expanded, collapsedCut, expandSuffix, collapseSuffix, actionSpan) {
+        buildAnnotatedString {
+            val cut = collapsedCut
+            if (expanded || cut == null) {
+                append(text)
+                if (expanded && cut != null) {
+                    withStyle(actionSpan) { append(collapseSuffix) }
+                }
+            } else {
+                append(text.take(cut).trimEnd())
+                withStyle(actionSpan) { append(expandSuffix) }
+            }
+        }
+    }
     val toggleModifier = if (canToggle) {
         Modifier.clickable(
             interactionSource = remember { MutableInteractionSource() },
@@ -632,36 +673,29 @@ internal fun ExpandableText(
             .animateContentSize()
     ) {
         Text(
-            text = text,
+            text = displayText,
             style = bodyStyle,
             color = bodyColor,
             maxLines = if (expanded) Int.MAX_VALUE else effectiveMaxLines,
             overflow = TextOverflow.Ellipsis,
             onTextLayout = { layoutResult ->
-                hasOverflow = !expanded && layoutResult.hasVisualOverflow
+                // 只在折叠、还没量过、且确实溢出时算一次切点。
+                // x 取「整宽 - 后缀宽」而不是「本行右端 - 后缀宽」：溢出也可能只是因为后面还有
+                // 硬换行，此时最后一行本身并没排满，按本行右端算会把一行放得下的字白白切掉。
+                if (!expanded && collapsedCut == null && layoutResult.hasVisualOverflow) {
+                    val lastLine = layoutResult.lineCount - 1
+                    val x = (layoutResult.size.width - suffixWidth).coerceAtLeast(0f)
+                    val y = (layoutResult.getLineTop(lastLine) + layoutResult.getLineBottom(lastLine)) / 2f
+                    val lineEnd = layoutResult.getLineEnd(lastLine, visibleEnd = true)
+                    collapsedCut = layoutResult.getOffsetForPosition(Offset(x, y))
+                        .coerceAtMost(lineEnd)
+                        .coerceAtLeast(0)
+                }
             },
             modifier = toggleModifier.fillMaxWidth()
         )
-        // 「展开」「收起」共用同一个位置：独占一行、右对齐。
-        // 旧实现把「展开」叠在正文最后一行右侧，会压住文字，故改为独立一行。
-        if (canToggle || leadingAction != null) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                leadingAction?.invoke()
-                Spacer(modifier = Modifier.weight(1f))
-                if (canToggle) {
-                    Text(
-                        text = if (expanded) collapseLabel else expandLabel,
-                        style = bodyStyle.copy(fontWeight = FontWeight.SemiBold),
-                        color = primaryColor,
-                        modifier = toggleModifier
-                    )
-                }
-            }
+        if (bottomAction != null) {
+            Box(modifier = Modifier.padding(top = 4.dp)) { bottomAction() }
         }
     }
 }

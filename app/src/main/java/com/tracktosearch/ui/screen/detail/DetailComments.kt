@@ -409,7 +409,7 @@ internal fun CommentItem(
                     }
                     else -> null
                 }
-                ExpandableText(text = displayText, leadingAction = bottomAction)
+                ExpandableText(text = displayText, bottomAction = bottomAction)
             }
         }
     }

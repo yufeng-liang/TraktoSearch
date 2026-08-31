@@ -12,6 +12,7 @@ import com.tracktosearch.ui.theme.RatingGold
 import com.tracktosearch.ui.theme.VisualEffectMode
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
@@ -51,7 +52,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,14 +72,17 @@ import java.util.Locale
 internal const val RATING_CARD_TEST_TAG = "detail_ratings_card"
 
 /**
- * 评分卡高度：品牌标签(16) + 间距(3) + 分数(24) + 上下内边距(2×10) ≈ 66dp，
+ * 评分卡高度：平台标记(16) + 间距(3) + 分数(24) + 上下内边距(2×10) ≈ 66dp，
  * 加载占位与实际内容共用，数据到达时卡片不改高。
  *
  * 原先是 64dp 的 2×2 网格挤在海报右侧约 230dp 宽的列里：一行两个平台，
  * 「品牌标签 + 分数」横排，分数只有 15sp 且要靠一层文字阴影才勉强够对比度。
- * 现在整宽四等分，每格约 90dp，标签与分数上下排，分数放到 20sp。
+ * 现在整宽四等分，每格约 90dp，标记与分数上下排，分数放到 20sp。
  */
 private val RATING_CARD_HEIGHT = 66.dp
+
+/** 平台标记行高度：字标色块、豆瓣 logo、emoji 三种画法行高各不相同，锁死才能让四格分数对齐。 */
+private val RATING_MARK_HEIGHT = 16.dp
 
 private enum class RatingSource {
     IMDb,
@@ -246,7 +253,7 @@ private fun RatingCard(
     }
 }
 
-/** 单格：品牌标签在上、分数在下。分数按分档取色（见 RatingPresentation.ratingBandColor）。 */
+/** 单格：平台标记在上、分数在下。分数按分档取色（见 RatingPresentation.ratingBandColor）。 */
 @Composable
 private fun RatingCell(
     badge: RatingBadgeData,
@@ -263,19 +270,7 @@ private fun RatingCell(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        // 五个平台统一成同一种品牌色小标签。原先四格是四种画法：IMDb 黄底黑字、
-        // 豆瓣一张 logo 图、番茄与 Metacritic 是 emoji（🍅 🎯，字形跟系统字体走、各机不一）、
-        // TMDB 纯文字，并排看像四个来源拼盘。
-        Surface(shape = RoundedCornerShape(4.dp), color = badge.brandColor) {
-            Text(
-                text = badge.label,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                fontWeight = FontWeight.Bold,
-                color = badge.onBrandColor,
-                maxLines = 1,
-                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-            )
-        }
+        RatingMark(badge)
         Text(
             text = badge.value,
             style = MaterialTheme.typography.titleMedium.copy(
@@ -288,6 +283,71 @@ private fun RatingCell(
             overflow = TextOverflow.Ellipsis
         )
     }
+}
+
+/**
+ * 单格顶部的平台标记：各平台沿用自己的识别物 —— IMDb/TMDB 是品牌色底的字标，
+ * 豆瓣是 logo 图，烂番茄与 Metacritic 是 🍅 / 🎯。
+ *
+ * 三种画法统一压在 [RATING_MARK_HEIGHT] 高的行里（emoji 的行高比字标高一截，
+ * 不锁高度四格的分数会错开）。图标与 emoji 都对读屏屏蔽：紧邻的平台名已经念过一遍。
+ */
+@Composable
+private fun RatingMark(badge: RatingBadgeData) {
+    val labelStyle = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
+    Row(
+        modifier = Modifier.height(RATING_MARK_HEIGHT),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        when (badge.source) {
+            // 字标平台：品牌色底 + 反色字，这本身就是它们 logo 的样子
+            RatingSource.IMDb, RatingSource.TMDB -> Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = badge.brandColor
+            ) {
+                Text(
+                    text = badge.label,
+                    style = labelStyle,
+                    fontWeight = FontWeight.Bold,
+                    color = badge.onBrandColor,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                )
+            }
+            RatingSource.Douban -> {
+                Image(
+                    painter = painterResource(R.drawable.ic_douban_logo),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(14.dp)
+                        .clearAndSetSemantics {}
+                )
+                RatingMarkLabel(badge = badge, style = labelStyle)
+            }
+            RatingSource.RottenTomatoes, RatingSource.Metacritic -> {
+                Text(
+                    text = if (badge.source == RatingSource.RottenTomatoes) "🍅" else "🎯",
+                    fontSize = 12.sp,
+                    lineHeight = 14.sp,
+                    modifier = Modifier.clearAndSetSemantics {}
+                )
+                RatingMarkLabel(badge = badge, style = labelStyle)
+            }
+        }
+    }
+}
+
+/** 图标右侧的平台名，用品牌色（IMDb/TMDB 的字标不走这里，它们的名字在色块里）。 */
+@Composable
+private fun RatingMarkLabel(badge: RatingBadgeData, style: TextStyle) {
+    Text(
+        text = badge.label,
+        style = style,
+        fontWeight = FontWeight.Bold,
+        color = badge.brandColor,
+        maxLines = 1
+    )
 }
 
 private fun displayRating(value: String, missingValue: String): String {
