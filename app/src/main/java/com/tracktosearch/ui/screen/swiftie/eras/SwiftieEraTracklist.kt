@@ -54,10 +54,12 @@ private val ROW_HEIGHT = 16.dp
  * 只借该时代的主色。
  *
  * @param elapsedInCard 这张卡片自己的已用毫秒
+ * @param textColors 压暗到 AA 的一组文字色，由卡片算好传进来（见 `SwiftieEraContrast`）
  */
 @Composable
-fun SwiftieEraTracklist(
+internal fun SwiftieEraTracklist(
     era: SwiftieEra,
+    textColors: SwiftieEraTextColors,
     elapsedInCard: () -> Long,
     modifier: Modifier = Modifier
 ) {
@@ -65,11 +67,14 @@ fun SwiftieEraTracklist(
     val stagger = if (lowRam) TRACK_STAGGER_LOW_RAM_MS else TRACK_STAGGER_MS
     val revealDoneAt = TRACK_REVEAL_START_MS + stagger * era.tracks.size
 
-    val numberStyle = remember(era) {
-        TextStyle(fontSize = 11.sp, color = era.mainColor.copy(alpha = 0.55f))
+    val numberStyle = remember(textColors) {
+        TextStyle(
+            fontSize = 11.sp,
+            color = textColors.number.copy(alpha = SwiftieEraContrast.NUMBER_ALPHA)
+        )
     }
-    val titleStyle = remember(era) {
-        TextStyle(fontSize = 12.sp, color = era.textColor)
+    val titleStyle = remember(textColors) {
+        TextStyle(fontSize = 12.sp, color = textColors.body)
     }
 
     Box(

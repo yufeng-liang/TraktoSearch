@@ -29,16 +29,18 @@ private class SwiftieMusicHolder {
  *
  * @param enabled 整段是否该有声音。「减少动效」路径传 false
  * @param paused 与 [SwiftieSequenceClock.paused] 联动
- * @param onTransientLoss 焦点被抢走时回调，调用方应把整条序列一起暂停
+ * @param onFocusChange 焦点变化。false 表示被抢走，调用方应把整条序列一起暂停；
+ *   true 表示重新拿回来，应当继续（Spec §5.1）。**必须成对处理** ——
+ *   只处理丢失会让一条系统提示音永久冻住整段 120s 序列
  */
 @Composable
 fun SwiftieMusic(
     enabled: Boolean,
     paused: Boolean,
-    onTransientLoss: () -> Unit
+    onFocusChange: (hasFocus: Boolean) -> Unit
 ) {
     val context = LocalContext.current
-    val latestLoss by rememberUpdatedState(onTransientLoss)
+    val latestFocusChange by rememberUpdatedState(onFocusChange)
     val holder = remember { SwiftieMusicHolder() }
     val audioManager = remember(context) {
         context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
@@ -56,7 +58,12 @@ fun SwiftieMusic(
             .Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
             .setAudioAttributes(attributes)
             .setOnAudioFocusChangeListener { change ->
-                if (change != AudioManager.AUDIOFOCUS_GAIN) latestLoss()
+                // MAY_DUCK 表示对方允许我们压低音量继续放，不必停整条序列
+                when (change) {
+                    AudioManager.AUDIOFOCUS_GAIN -> latestFocusChange(true)
+                    AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> Unit
+                    else -> latestFocusChange(false)
+                }
             }
             .build()
         val granted = audioManager.requestAudioFocus(request) ==

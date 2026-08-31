@@ -116,10 +116,12 @@ private fun SwiftieEggContent(
     val sequenceRunning = quiz.solved && !reducedMotion
     val clock = rememberSwiftieSequenceClock(running = sequenceRunning)
 
-    // 暂停有两个来源，必须分开记：按住松手就恢复，拖动定格要点「继续」
+    // 暂停有三个来源，必须分开记：按住松手就恢复，拖动定格要点「继续」，
+    // 焦点被抢走要等焦点回来 —— 混成一个布尔值就会互相清掉
     var holdPaused by remember { mutableStateOf(false) }
     var seekFrozen by remember { mutableStateOf(false) }
-    val framePaused = holdPaused || seekFrozen
+    var focusPaused by remember { mutableStateOf(false) }
+    val framePaused = holdPaused || seekFrozen || focusPaused
     LaunchedEffect(framePaused) { clock.paused = framePaused }
 
     // 每帧变化的量只在 draw lambda 里读；组合里只读这些「翻转一次」的派生量
@@ -129,6 +131,12 @@ private fun SwiftieEggContent(
     }
     val quizMounted by remember {
         derivedStateOf { clock.elapsedMs < SwiftieTimeline.ERAS_INTRO_START }
+    }
+    // 扩散铺满之后天空就定住了，用它把逐帧的时钟读断开（见下方 SwiftieDiffusion 处的注释）
+    val diffusionDone by remember {
+        derivedStateOf {
+            clock.elapsedMs >= SwiftieTimeline.DIFFUSION_START + SwiftieTimeline.DIFFUSION_MS
+        }
     }
     // T0–1100 与 T107000 之后开着，中间 106s 关掉（Spec §5 约束 2、3）
     val meshMotionActive: () -> Boolean = {
@@ -166,8 +174,9 @@ private fun SwiftieEggContent(
     SwiftieMusic(
         enabled = sequenceRunning,
         paused = framePaused,
-        // 别的应用抢走焦点：画面与音乐一起停，回来时接着走
-        onTransientLoss = { holdPaused = true }
+        // 别的应用抢走焦点：画面与音乐一起停，焦点回来时自己接着走。
+        // 这里必须双向处理 —— 只处理丢失的话，一条系统提示音就能永久冻住整段序列
+        onFocusChange = { hasFocus -> focusPaused = !hasFocus }
     )
 
     // 按住屏幕任意处暂停，松手继续（Spec §6.1）。走 Initial pass 不消费事件，
@@ -218,9 +227,16 @@ private fun SwiftieEggContent(
         if (quiz.solved && !staticFinale) {
             SwiftieDiffusion(
                 origin = { submitCenter },
+                // 铺满之后返回常量 1f，且**不再读时钟** —— 这一层要在屏上待满 120s，
+                // 继续每帧读 elapsedMs 会让整块全屏水彩天空跟着每帧失效重绘。
+                // diffusionDone 是 derivedStateOf，只翻转一次，之后就不再通知依赖方
                 progress = {
-                    ((clock.elapsedMs - SwiftieTimeline.DIFFUSION_START).toFloat() /
-                        SwiftieTimeline.DIFFUSION_MS).coerceIn(0f, 1f)
+                    if (diffusionDone) {
+                        1f
+                    } else {
+                        ((clock.elapsedMs - SwiftieTimeline.DIFFUSION_START).toFloat() /
+                            SwiftieTimeline.DIFFUSION_MS).coerceIn(0f, 1f)
+                    }
                 }
             )
         }

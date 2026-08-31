@@ -71,6 +71,8 @@ fun SwiftieEraCard(
 ) {
     val lowRam = rememberIsLowRamDevice()
     val titleFont = remember(era.fontResId) { FontFamily(Font(era.fontResId)) }
+    // 浅色时代主色印在白卡上读不出来，这里取压暗到 AA 的那一组（见 SwiftieEraContrast）
+    val textColors = remember(era) { SwiftieEraTextColors(era) }
     val description = stringResource(
         R.string.swiftie_era_card_a11y,
         era.name,
@@ -122,7 +124,7 @@ fun SwiftieEraCard(
                 style = TextStyle(
                     fontFamily = titleFont,
                     fontSize = titleFontSizeFor(era.name),
-                    color = era.textColor
+                    color = textColors.body
                 ),
                 // 允许折两行：13 个字体的字宽差得很远，按字数估的字号可能还是偏大，
                 // 折行总比裁掉专辑名好
@@ -132,11 +134,15 @@ fun SwiftieEraCard(
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = era.releaseDate,
-                style = TextStyle(fontSize = 11.sp, color = era.textColor.copy(alpha = 0.40f))
+                style = TextStyle(
+                    fontSize = 11.sp,
+                    color = textColors.date.copy(alpha = SwiftieEraContrast.DATE_ALPHA)
+                )
             )
             Spacer(modifier = Modifier.height(10.dp))
             SwiftieEraTracklist(
                 era = era,
+                textColors = textColors,
                 elapsedInCard = elapsedInCard,
                 modifier = Modifier.fillMaxWidth()
             )

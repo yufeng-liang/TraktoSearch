@@ -26,12 +26,12 @@ private fun readReducedMotion(context: Context): Boolean {
     val animatorScale = runCatching {
         Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
     }.getOrDefault(1f)
-    val transitionScale = runCatching {
-        Settings.Global.getFloat(resolver, Settings.Global.TRANSITION_ANIMATION_SCALE, 1f)
-    }.getOrDefault(1f)
     // 这个键不是公开 API，getInt 读不到会直接返回默认值，不抛异常
     val a11yDisabled = runCatching {
         Settings.Global.getInt(resolver, KEY_A11Y_ANIMATION_DISABLED, 0)
     }.getOrDefault(0)
-    return animatorScale == 0f || transitionScale == 0f || a11yDisabled == 1
+    // 刻意**不看** TRANSITION_ANIMATION_SCALE：那个滑块只管窗口切换动画，
+    // 不少人把它调到 0 只为界面跳转更快，并不代表不想看应用内动画。
+    // 把它算进来会让这批用户永远拿到静态终态、连配乐都听不到（Spec §11.1 只列了这两个条件）
+    return animatorScale == 0f || a11yDisabled == 1
 }

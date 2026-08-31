@@ -44,6 +44,12 @@ fun SwiftieDiffusion(
             .drawWithContent {
                 val p = progress().coerceIn(0f, 1f)
                 if (p <= 0f) return@drawWithContent
+                // 铺满之后不再裁：圆早就盖过四角了，继续裁只是白搭一次 Path 分配
+                // 和一次 clip —— 而这一层要在屏上待满 120s，每帧省下来的都算
+                if (p >= 1f) {
+                    drawContent()
+                    return@drawWithContent
+                }
                 val center = origin().takeIf { it.isSpecified } ?: this.center
                 val radius = maxCornerDistance(center, size) * p
                 clipPath(
