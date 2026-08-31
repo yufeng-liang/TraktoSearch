@@ -701,7 +701,7 @@ Config:
   diskTypePath = $.type</string>
     <string name="help_detail_custom">Custom Detail Page: In settings you can control the visibility of each detail page module (cast, videos &amp; screenshots, overview, my rating, comments, recommendations)</string>
     <string name="help_videos_images">Videos &amp; Screenshots: The detail page shows trailers and stills. Tap a trailer to play it in the browser, tap a screenshot to view fullscreen and save to gallery</string>
-    <string name="help_detail_scroll_title">Scrolling title bar: Once you scroll past the header on a movie/TV or Douban detail page, a blurred bar fades in at the top showing the title, so you always know what you are looking at</string>
+    <string name="help_detail_scroll_title">Scrolling title bar: Once you scroll past the header, a bar with the title fades in at the top. On a movie/TV detail page the Sources/Comments/Recommended tabs stick to it as one solid bar; on a Douban detail page the bar is blurred</string>
     <string name="help_detail_pull_refresh">Pull to refresh: Pull down on a movie/TV detail page to reload ratings, cast, seasons, comments and recommendations; on a Douban item page it reloads the item info and re-searches resources if you already searched</string>
     <string name="help_discover_filter_b1">Discover Filter: Tap the filter icon in the discover page toolbar (or the \"Go to Discover Filter\" card at the bottom) to enter the filter page</string>
     <string name="help_discover_filter_b2">Filter by genre, region, tag, rating range, decade, and sort by popularity, release date, or rating</string>

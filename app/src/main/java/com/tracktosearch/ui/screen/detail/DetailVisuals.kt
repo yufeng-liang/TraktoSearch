@@ -66,7 +66,28 @@ internal fun detailOnPosterVariantColor(posterColor: Color?): Color = posterColo
     if (blendedBackdropIsLight(c)) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.72f)
 } ?: MaterialTheme.colorScheme.onSurfaceVariant
 
-// ====== 吸顶 Tab 配色 ======
+// ====== 顶栏 / 吸顶 Tab 栏底色 ======
+
+/**
+ * 影视详情页顶栏与吸顶 Tab 栏共用的底色：主题 surface 实色。
+ *
+ * 原先顶部是三段各走一套材质的横条：状态栏铺「主题 background × 海报色 0.635」的沉浸实色、
+ * 标题栏是 Haze 毛玻璃、吸顶 Tab 栏又是那个沉浸实色。滚动后三条深浅不一地叠在一起。
+ * 现在统一成同一个实色，标题行与 Tab 行同在一个 Column 里一次铺底、中间不加分隔线，
+ * 状态栏条用同一个值，滚过临界点时三者一起淡入。
+ *
+ * 不掺海报色也不留透明度：沉浸渐变留给页面背景，顶栏只做「浮在内容之上的一条」。
+ * 半透明会让下面滚过的海报、卡片、文字隐约透上来，吸顶后这一条始终糊着一层动的东西；
+ * surface 与 background 本身就差一档（浅色 #FFFFFF vs #F0F1F3、深色 #1A1A2E vs #0F0F1A），
+ * 实色照样能和内容区分开。文字色因此可以固定走主题 onSurface，不必再按海报亮度翻来翻去。
+ */
+@Composable
+internal fun detailBarColor(): Color = MaterialTheme.colorScheme.surface
+
+/** 顶栏标题行高度，与悬浮的返回/分享按钮（40dp + 4dp 上边距）对齐。 */
+internal val DETAIL_TOP_BAR_HEIGHT = 48.dp
+
+// ====== 吸顶 Tab 配色（豆瓣条目详情页仍在用） ======
 
 @Immutable
 internal data class DetailTabColors(

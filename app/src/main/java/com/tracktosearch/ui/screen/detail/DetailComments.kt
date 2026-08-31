@@ -3,7 +3,6 @@ package com.tracktosearch.ui.screen.detail
 import androidx.compose.foundation.clickable
 import com.tracktosearch.ui.theme.RatingGold
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -36,8 +35,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
@@ -79,24 +81,42 @@ internal fun OwnCommentComposer(
     scene: GlassScene = GlassScene()
 ) {
     var comment by remember(initialComment) { mutableStateOf(initialComment) }
+    // 收起态：原先一进评论 Tab 就是一张带 3 行空输入框的大卡，占掉小半屏，
+    // 而多数人是来看别人短评的。默认收成一行入口，点开才展开输入框；
+    // 编辑既有短评（isEditing）或已经写了草稿时直接展开。
+    var expanded by remember(initialComment, isEditing) {
+        mutableStateOf(isEditing || initialComment.isNotBlank())
+    }
     val isDark = isAppDarkTheme()
-    NeumorphicFrostedSurface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        isDark = isDark,
-        shape = RoundedCornerShape(18.dp),
-        elevation = 6.dp,
-        blurRadius = 16.dp,
-        shadowOffset = 5.dp,
-        backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.65f),
-        borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else NeumorphicBorderLight.copy(alpha = 0.9f),
-        darkShadowAlpha = if (isDark) 0.25f else 0.16f,
-        lightShadowAlpha = if (isDark) 0.08f else 0.65f,
-        hazeState = null,
-        glassRole = GlassSurfaceRole.Card,
-        scene = scene
-    ) {
+    CommentCardSurface(isDark = isDark, scene = scene) {
+        if (!expanded) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { expanded = true }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Edit,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = ownCommentPlaceholder(targets),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            return@CommentCardSurface
+        }
         Column(modifier = Modifier.padding(16.dp)) {
             // 标题行：标题在左，发布按钮右对齐
             Row(
@@ -152,6 +172,34 @@ internal fun OwnCommentComposer(
     }
 }
 
+/** 评论区三张卡（我的短评收起态/展开态、他人短评）共用的拟态玻璃底。
+ * 原先这 14 行配置在三处逐字重复。 */
+@Composable
+private fun CommentCardSurface(
+    isDark: Boolean,
+    scene: GlassScene,
+    content: @Composable () -> Unit
+) {
+    NeumorphicFrostedSurface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        isDark = isDark,
+        shape = RoundedCornerShape(18.dp),
+        elevation = 6.dp,
+        blurRadius = 16.dp,
+        shadowOffset = 5.dp,
+        backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.65f),
+        borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else NeumorphicBorderLight.copy(alpha = 0.9f),
+        darkShadowAlpha = if (isDark) 0.25f else 0.16f,
+        lightShadowAlpha = if (isDark) 0.08f else 0.65f,
+        hazeState = null,
+        glassRole = GlassSurfaceRole.Card,
+        scene = scene,
+        content = { content() }
+    )
+}
+
 @Composable
 internal fun OwnCommentCard(
     comment: String,
@@ -169,23 +217,7 @@ internal fun OwnCommentCard(
         OwnCommentTarget.TRAKT in retryTargets -> stringResource(R.string.detail_own_comment_target_trakt)
         else -> stringResource(R.string.detail_own_comment_target_douban)
     }
-    NeumorphicFrostedSurface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        isDark = isDark,
-        shape = RoundedCornerShape(18.dp),
-        elevation = 6.dp,
-        blurRadius = 16.dp,
-        shadowOffset = 5.dp,
-        backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.65f),
-        borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else NeumorphicBorderLight.copy(alpha = 0.9f),
-        darkShadowAlpha = if (isDark) 0.25f else 0.16f,
-        lightShadowAlpha = if (isDark) 0.08f else 0.65f,
-        hazeState = null,
-        glassRole = GlassSurfaceRole.Card,
-        scene = scene
-    ) {
+    CommentCardSurface(isDark = isDark, scene = scene) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -229,6 +261,22 @@ internal fun OwnCommentCard(
     }
 }
 
+/** 评论卡片底部的文字动作（翻译 / 原文·译文切换）：无涟漪、labelSmall、主色。 */
+@Composable
+private fun CommentActionText(text: String, onClick: () -> Unit) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Medium,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onClick = onClick
+        )
+    )
+}
+
 @Composable
 internal fun CommentItem(
     comment: TraktComment,
@@ -248,41 +296,37 @@ internal fun CommentItem(
     } else {
         comment.source
     }
+    val sourceDescription = stringResource(R.string.detail_comment_source, sourceLabel)
 
-    NeumorphicFrostedSurface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        isDark = isDark,
-        shape = RoundedCornerShape(18.dp),
-        elevation = 6.dp,
-        blurRadius = 16.dp,
-        shadowOffset = 5.dp,
-        backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.65f),
-        borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else NeumorphicBorderLight.copy(alpha = 0.9f),
-        darkShadowAlpha = if (isDark) 0.25f else 0.16f,
-        lightShadowAlpha = if (isDark) 0.08f else 0.65f,
-        hazeState = null,
-        glassRole = GlassSurfaceRole.Card,
-        scene = scene
-    ) {
+    CommentCardSurface(isDark = isDark, scene = scene) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // 用户名 + 评分
+            // 身份行：用户名 —— 来源 · ★评分。
+            // 原先这一行塞了四类东西（12sp 用户名、来源、评分、翻译按钮），用 Spacer
+            // 手动拉开，用户名一长就把右端的翻译按钮挤出可视区。现在这行只留身份信息，
+            // 用户名放大到 bodyMedium 并允许自己截断，来源与评分成组贴右。
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = comment.user.username,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                // 来源只显示平台名，读屏走完整的「（来源：xx）」，否则念出来是个孤立词
                 Text(
-                    text = stringResource(R.string.detail_comment_source, sourceLabel),
+                    text = sourceLabel,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    modifier = Modifier.clearAndSetSemantics {
+                        contentDescription = sourceDescription
+                    }
                 )
                 if (comment.user_rating != null) {
                     Spacer(modifier = Modifier.width(6.dp))
@@ -292,43 +336,17 @@ internal fun CommentItem(
                         modifier = Modifier.size(12.dp),
                         tint = RatingGold
                     )
+                    Spacer(modifier = Modifier.width(2.dp))
                     Text(
                         text = String.format("%.0f", comment.user_rating),
                         style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Spacer(modifier = Modifier.weight(1f))
-                // 单条翻译按钮（剧透未揭示时不显示）
-                if ((!comment.spoiler || spoilerRevealed) && comment.source != DOUBAN_COMMENT_SOURCE) {
-                    if (translatedText == null && !isThisTranslating) {
-                        Text(
-                            text = stringResource(R.string.detail_translate),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) { onTranslate(comment.id) }
-                        )
-                    } else if (isThisTranslating) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(12.dp),
-                                strokeWidth = 1.5.dp
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = stringResource(R.string.detail_translating),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // 剧透遮罩
             if (comment.spoiler && !spoilerRevealed) {
@@ -348,27 +366,50 @@ internal fun CommentItem(
                     )
                 }
             } else {
-                // 评论正文（折叠展开）
-                ExpandableText(text = displayText)
-
-                // 原文/译文切换
-                if (translatedText != null) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Text(
-                            text = if (showOriginal) stringResource(R.string.detail_translated) else stringResource(R.string.detail_original),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) { showOriginal = !showOriginal }
-                        )
+                // 正文与底部动作行。「翻译」「原文/译文」交给 ExpandableText 的 leadingAction，
+                // 与右侧的「展开」同处一行：原先两者各占一行（翻译挂在身份行右端、原文切换
+                // 又在正文下方另起一行右对齐），一条两行短评能排成四行高。
+                val bottomAction: (@Composable () -> Unit)? = when {
+                    translatedText != null -> {
+                        {
+                            CommentActionText(
+                                text = if (showOriginal) {
+                                    stringResource(R.string.detail_translated)
+                                } else {
+                                    stringResource(R.string.detail_original)
+                                },
+                                onClick = { showOriginal = !showOriginal }
+                            )
+                        }
                     }
+                    isThisTranslating -> {
+                        {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(12.dp),
+                                    strokeWidth = 1.5.dp
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = stringResource(R.string.detail_translating),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                    // 豆瓣短评本身是中文，不提供翻译入口
+                    comment.source != DOUBAN_COMMENT_SOURCE -> {
+                        {
+                            CommentActionText(
+                                text = stringResource(R.string.detail_translate),
+                                onClick = { onTranslate(comment.id) }
+                            )
+                        }
+                    }
+                    else -> null
                 }
+                ExpandableText(text = displayText, leadingAction = bottomAction)
             }
         }
     }

@@ -10,11 +10,9 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,6 +28,7 @@ import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -88,6 +87,9 @@ import kotlinx.coroutines.withContext
 
 // ==================== 头部内容 ====================
 
+/** 头部海报宽度：固定 118dp（2:3 比例 → 177dp 高）。为什么不能再跟随右列见下方 Row 注释。 */
+private val HEADER_POSTER_WIDTH = 118.dp
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun DetailHeaderContent(
@@ -133,6 +135,10 @@ internal fun DetailHeaderContent(
     val posterColor = uiState.posterDominantColor
     val onPosterColor = detailOnPosterColor(posterColor)
     val onPosterVariantColor = detailOnPosterVariantColor(posterColor)
+    // 沉浸渐变上的栏目标题（演职员 / 预告片与截图 / 简介 …）走 LocalContentColor。
+    // 页面级原先 provide 的是随海报色调制的 tabContentColor，现在吸顶栏不再染沉浸色、
+    // 页面级已改回主题色；而头部这一段仍压在渐变上，就地 provide 海报自适应色。
+    CompositionLocalProvider(LocalContentColor provides onPosterColor) {
     Column(
         modifier = Modifier
             // GLASS 模式将 tab 栏之上的全部头部内容注册为 Backdrop 采样源，
@@ -143,21 +149,22 @@ internal fun DetailHeaderContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                // 右列含标题+四行信息+评分卡(64dp)+想看/已看/评分按钮组，固定高度装不下：
-                // 评分卡被压成一行(TMDB/烂番茄被裁)、按钮组分到 0 高度直接消失，
-                // 故恢复 IntrinsicSize.Max 让行高由内容决定。它多出的 intrinsic measure
-                // pass 开销已由 contentReady 延迟组合抵消，视觉正确优先。
-                // 海报 fillMaxHeight 跟随内容高度，恢复底部与按钮组对齐的原设计。
-                .height(IntrinsicSize.Max)
+                // 原先这一行是 height(IntrinsicSize.Max)，让海报高度跟随右列（当时右列还
+                // 装着评分卡和按钮组）。但元信息改成 FlowRow 胶囊后，右列高度开始依赖宽度，
+                // 而 Row 做内在测量时喂给右列的宽度并不是它最终拿到的宽度（海报侧
+                // fillMaxHeight + aspectRatio 报不出内在宽度，权重分配把整行宽度都算给了右列），
+                // 于是估出的行高比真实需要的少一行胶囊；Column 再按这个偏小的高度自上而下派，
+                // 排在最后的按钮组分到的高度不够，图标 + 文字被压成一条。
+                // 现在海报固定宽高、整行 wrap content：右列一开始拿到的就是真实宽度，
+                // 评分卡与按钮组各自整宽独占一行，全程不再有任何内在测量。
                 .padding(bottom = 12.dp)
                 .onGloballyPositioned { onHeaderAnchorBoundsChanged(it.boundsInRoot()) },
             verticalAlignment = Alignment.Top
         ) {
-            // 海报：fillMaxHeight 让海报高度跟随右侧信息列（含按钮组），
-            // 实现海报底部与想看/已看/评分按钮底部对齐。
+            // 海报：固定 118dp 宽、2:3 比例（177dp 高）
             Box(
                 modifier = Modifier
-                    .fillMaxHeight()
+                    .width(HEADER_POSTER_WIDTH)
                     .aspectRatio(2f / 3f)
             ) {
                 Surface(
@@ -288,9 +295,9 @@ internal fun DetailHeaderContent(
                 }
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(14.dp))
 
-            // 标题/原名/元信息胶囊/评分/标记已看
+            // 标题/原名/元信息胶囊
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(0.dp)) {
                 // 标题：放开两行。原先塞在 Box(height(28.dp)) 里被迫 maxLines = 1，
                 // 《银翼杀手 2049 加长版》这类长片名直接被切掉后半段
@@ -323,35 +330,38 @@ internal fun DetailHeaderContent(
                     Spacer(modifier = Modifier.height(6.dp))
                     DetailMetaChips(chips = metaChips, contentColor = onPosterColor)
                 }
-                // 多平台评分（固定高度区域）
-                Spacer(modifier = Modifier.height(8.dp))
-                Box(modifier = Modifier.height(64.dp)) {
-                    if (
-                        uiState.ratings != null &&
-                        uiState.ratingSource != DetailRatingSource.UNKNOWN
-                    ) {
-                        RatingsRow(
-                            ratings = uiState.ratings,
-                            ratingSource = uiState.ratingSource,
-                            immersionColor = posterColor
-                        )
-                    } else if (uiState.ratingsError) {
-                        // 评分聚合失败：以前这里一直转圈，用户看不出是「这部片没有评分」还是「没加载上」
-                        AppErrorState(
-                            message = stringResource(R.string.detail_load_error),
-                            onRetry = onRetryRatings,
-                            variant = AppErrorVariant.Inline,
-                            inlineLabel = stringResource(R.string.detail_load_error),
-                            showDetail = false
-                        )
-                    } else {
-                        RatingsLoadingPlaceholder(immersionColor = posterColor)
-                    }
-                }
-                // 操作按钮组：想看 / 已看 / 评分
-                // 按钮组属于 Glass overlay：置于采样源之外（LocalBackdrop=null），
-                // 避免把自身 drawBackdrop 录回头部采样源造成 RenderThread 递归。
-                CompositionLocalProvider(LocalBackdrop provides null) {
+            }
+        }
+
+        // 四平台评分：整宽独占一行。原先挤在海报右侧的半屏列里做 2×2 网格，
+        // 每个平台只有约 110dp 宽，分数被压到 15sp 还得靠一层文字阴影凑对比度。
+        if (
+            uiState.ratings != null &&
+            uiState.ratingSource != DetailRatingSource.UNKNOWN
+        ) {
+            RatingsRow(
+                ratings = uiState.ratings,
+                ratingSource = uiState.ratingSource,
+                immersionColor = posterColor
+            )
+        } else if (uiState.ratingsError) {
+            // 评分聚合失败：以前这里一直转圈，用户看不出是「这部片没有评分」还是「没加载上」
+            AppErrorState(
+                message = stringResource(R.string.detail_load_error),
+                onRetry = onRetryRatings,
+                variant = AppErrorVariant.Inline,
+                inlineLabel = stringResource(R.string.detail_load_error),
+                showDetail = false
+            )
+        } else {
+            RatingsLoadingPlaceholder(immersionColor = posterColor)
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // 操作按钮组：想看 / 已看 / 评分。整宽三等分，图标 + 文字两行恢复正常高度。
+        // 按钮组属于 Glass overlay：置于采样源之外（LocalBackdrop=null），
+        // 避免把自身 drawBackdrop 录回头部采样源造成 RenderThread 递归。
+        CompositionLocalProvider(LocalBackdrop provides null) {
                 ActionButtonRow(
                     actions = listOf(
                         ActionItem(
@@ -388,12 +398,10 @@ internal fun DetailHeaderContent(
                             }
                         )
                     ),
-                    modifier = Modifier.padding(top = 8.dp),
-                    verticalPadding = 5.dp
+                    verticalPadding = 7.dp
                 )
-                }
-            }
         }
+        Spacer(modifier = Modifier.height(14.dp))
 
         // 第二行：演职员（海报下方独立一行，左对齐，始终预留空间避免布局跳动）
         // 头部下方内容(cast/视频/简介/系列/季集)统一淡入,营造"沉浸背景先现,内容后显"效果
@@ -530,6 +538,7 @@ internal fun DetailHeaderContent(
         } // end Column(alpha = contentAlpha)
         } // end if (contentReady)
     }
+    } // end CompositionLocalProvider(LocalContentColor)
 }
 
 // ==================== 头部元信息胶囊 ====================
@@ -588,11 +597,15 @@ private fun splitMetaValues(raw: String): List<String> =
  * 折叠/展开文本：折叠时正文用省略号截断，「展开」「收起」按钮都独占一行、右对齐放在正文下方，
  * 两种状态下按钮位置一致。按钮不再叠放在正文最后一行上，避免遮挡文字。
  * 点击整段正文或按钮均可切换，高度变化带动画。
+ *
+ * [leadingAction] 落在这一行的左端，给调用方放自己的动作（评论卡片的「翻译」「原文/译文」
+ * 原先各自另起一行右对齐，一条两行短评能排成四行高）。没有溢出、只有 leadingAction 时这行照样出。
  */
 @Composable
 internal fun ExpandableText(
     text: String,
-    maxLines: Int = 3
+    maxLines: Int = 3,
+    leadingAction: (@Composable () -> Unit)? = null
 ) {
     val effectiveMaxLines = maxLines.coerceAtLeast(1)
     val expandLabel = stringResource(R.string.detail_text_expand)
@@ -631,15 +644,24 @@ internal fun ExpandableText(
         )
         // 「展开」「收起」共用同一个位置：独占一行、右对齐。
         // 旧实现把「展开」叠在正文最后一行右侧，会压住文字，故改为独立一行。
-        if (canToggle) {
-            Text(
-                text = if (expanded) collapseLabel else expandLabel,
-                style = bodyStyle.copy(fontWeight = FontWeight.SemiBold),
-                color = primaryColor,
-                modifier = toggleModifier
-                    .align(Alignment.End)
-                    .padding(top = 4.dp)
-            )
+        if (canToggle || leadingAction != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                leadingAction?.invoke()
+                Spacer(modifier = Modifier.weight(1f))
+                if (canToggle) {
+                    Text(
+                        text = if (expanded) collapseLabel else expandLabel,
+                        style = bodyStyle.copy(fontWeight = FontWeight.SemiBold),
+                        color = primaryColor,
+                        modifier = toggleModifier
+                    )
+                }
+            }
         }
     }
 }

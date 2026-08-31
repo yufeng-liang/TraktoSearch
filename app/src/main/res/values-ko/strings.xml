@@ -1444,7 +1444,7 @@
   diskTypePath = $.type</string>
     <string name="help_detail_custom">사용자 정의 상세 페이지: 설정에서 상세 페이지의 각 모듈(출연진, 예고편과 스크린샷, 줄거리, 내 평가, 댓글, 추천)의 표시/숨기기를 제어</string>
     <string name="help_videos_images">예고편과 스크린샷: 상세 페이지에 예고편과 스틸컷 표시, 예고편 탭하여 브라우저에서 재생, 스크린샷 탭하여 크게 보기 및 앨범에 저장</string>
-    <string name="help_detail_scroll_title">스톰링 제목 바: 상세 페이지와 더반 상세 페이지에서 헤더를 지나 스톰링하면 상단에 제목이 들어있는 부드러운 효과의 바가 나타납니다</string>
+    <string name="help_detail_scroll_title">스크롤 제목 바: 헤더를 지나 스크롤하면 상단에 제목이 들어있는 바가 나타납니다. 영상 상세 페이지에서는 리소스/댓글/추천 탭이 이 바와 하나의 불투명한 바로 합쳐지고, 더우반 상세 페이지는 부드러운 효과의 바를 유지합니다</string>
     <string name="help_detail_pull_refresh">당기어 새로고침: 상세 페이지에서 아래로 당기면 평점/배우/시즌/한줄평/추천을 다시 불러오고, 더반 상세 페이지에서는 항목 정부를 다시 불러오며 이밌 검상한 경우 리소스도 다시 검상합니다</string>
     <string name="help_discover_filter_b1">작품 필터: 발견 페이지 제목 표시줄에서 필터 아이콘 탭, 또는 하단 「작품 필터 페이지로」 카드에서 필터 페이지로 이동</string>
     <string name="help_discover_filter_b2">장르, 지역, 태그, 평점 범위, 연대별 필터링 지원, 인기도, 개봉일 또는 평점으로 정렬 가능</string>
