@@ -21,7 +21,7 @@ class SwiftieSequenceClockTest {
         assertThat(swiftiePhaseAt(118_000L)).isEqualTo(SwiftieSequencePhase.REWIND)
         assertThat(swiftiePhaseAt(119_500L)).isEqualTo(SwiftieSequencePhase.LOVER_BLOOM)
         assertThat(swiftiePhaseAt(123_000L)).isEqualTo(SwiftieSequencePhase.FADE_OUT)
-        assertThat(swiftiePhaseAt(125_000L)).isEqualTo(SwiftieSequencePhase.DONE)
+        assertThat(swiftiePhaseAt(126_067L)).isEqualTo(SwiftieSequencePhase.DONE)
     }
 
     @Test

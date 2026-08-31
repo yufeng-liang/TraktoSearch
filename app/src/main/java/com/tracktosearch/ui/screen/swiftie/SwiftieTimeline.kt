@@ -3,20 +3,25 @@ package com.tracktosearch.ui.screen.swiftie
 /**
  * 彩蛋序列的时长账本。**所有**时间都从这里取，没有任何段落自己写死毫秒数。
  *
- * 总长由需求方自备的配乐倒推（2 分 05 秒 = [TOTAL_MS]），因此各段相加必须正好
+ * 总长由需求方自备的配乐倒推（实测 2:06.067 = [TOTAL_MS]），因此各段相加必须正好
  * [TOTAL_MS]。`SwiftieTimelineTest` 会守着这条不变式。
  *
  * ## 为什么终局排在倒滑之前
  *
  * 配乐末尾 1:58–2:02 唱的是 Lover，所以 [REWIND_START] 与 [LOVER_BLOOM_END] 是
- * **配乐钉死的两个点**，不能挪。绽放收在 2:03，离总长只剩 2000ms，而签名 8s +
+ * **配乐钉死的两个点**，不能挪。绽放收在 2:03，离总长只剩 3067ms，而签名 8s +
  * 手链 4.5s + 定格 5.5s 共 18s 放不下 —— 于是终局整块排在倒滑之前，
  * 倒滑与绽放成为收尾：12 个时代 → 签名 → 手链 → 定格 → 飞回 Lover → 绽放 → 淡出。
  */
 object SwiftieTimeline {
 
-    /** 配乐总长：2 分 05 秒。 */
-    const val TOTAL_MS: Long = 125_000L
+    /**
+     * 配乐总长。
+     *
+     * `swiftie_theme.mp3` 逐帧解析出来的精确长度（4826 帧 × 1152 样本 / 44100Hz）——
+     * 需求方口述的「2 分 05 秒」实测是 2:06.067。视觉与音频在同一帧收束，所以取整数会差 67ms。
+     */
+    const val TOTAL_MS: Long = 126_067L
 
     // ---- 配乐钉死的两个点（Spec §5，实测自备配乐）----
 
@@ -106,7 +111,7 @@ object SwiftieTimeline {
     val LOVER_BLOOM_START: Long = REWIND_START + REWIND_MS
     val LOVER_BLOOM_MS: Long = LOVER_BLOOM_END - LOVER_BLOOM_START
 
-    /** T123000–125000：整层淡出，露出已经在运动的星云背景。 */
+    /** T123000–126067：整层淡出，露出已经在运动的星云背景。 */
     val FADE_OUT_START: Long = LOVER_BLOOM_END
     val FADE_OUT_MS: Long = TOTAL_MS - FADE_OUT_START
 

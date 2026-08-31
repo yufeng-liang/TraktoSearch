@@ -7,10 +7,10 @@ class SwiftieTimelineTest {
 
     @Test
     fun segmentsSumToExactlyTheSoundtrackLength() {
-        // 配乐是 2 分 05 秒，差一毫秒都算错开
+        // swiftie_theme.mp3 逐帧解析出来是 126067ms，差一毫秒都算错开
         assertThat(SwiftieTimeline.FADE_OUT_START + SwiftieTimeline.FADE_OUT_MS)
             .isEqualTo(SwiftieTimeline.TOTAL_MS)
-        assertThat(SwiftieTimeline.TOTAL_MS).isEqualTo(125_000L)
+        assertThat(SwiftieTimeline.TOTAL_MS).isEqualTo(126_067L)
     }
 
     @Test
@@ -37,10 +37,10 @@ class SwiftieTimelineTest {
 
     @Test
     fun finaleRunsBeforeTheRewindSoLoverLandsOnTheClosingBars() {
-        // 绽放收在 2:03，之后只剩 2000ms —— 18s 的终局塞不进去，只能排在倒滑之前
+        // 绽放收在 2:03，之后只剩 3067ms —— 18s 的终局塞不进去，只能排在倒滑之前
         assertThat(SwiftieTimeline.SIGNATURE_START).isLessThan(SwiftieTimeline.REWIND_START)
         assertThat(SwiftieTimeline.FINAL_HOLD_START).isLessThan(SwiftieTimeline.REWIND_START)
-        assertThat(SwiftieTimeline.FADE_OUT_MS).isEqualTo(2_000L)
+        assertThat(SwiftieTimeline.FADE_OUT_MS).isEqualTo(3_067L)
     }
 
     @Test

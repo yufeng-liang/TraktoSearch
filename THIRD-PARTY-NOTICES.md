@@ -40,6 +40,18 @@
 字体只用于彩蛋的专辑名、算式与签名渲染。专辑名与曲目名是事实性元数据，
 彩蛋不含任何歌词、专辑封面图，签名是 Pacifico 字形而非真实签名。
 
+## 随包音频
+
+`app/src/main/res/raw/swiftie_theme.mp3`（4.81 MiB，126.067 s）是霉粉彩蛋的配乐，
+由需求方提供并指示随包分发。
+
+**该文件的授权未核实。** 文件名指向 The Eras Tour 的开场音乐，本项目未取得权利人
+许可。它与随包字体不同 —— 字体有明确的 OFL-1.1 / Apache-2.0 授权，这个音频没有。
+公开发布前必须取得书面许可、替换为自制或已授权音轨，或改为不随包。风险与责任
+明细见 [ASSET-LICENSES.md](ASSET-LICENSES.md) 的「随包音频」一节。
+
+原文件的 ID3v2 标签（含 160 107 字节专辑封面图）已在入库前整段剥除。
+
 ## Cloudflare Workers 依赖
 
 - wrangler、TypeScript 和 Cloudflare Workers 类型包属于开发 / 构建工具，不是运行时业务授权。
