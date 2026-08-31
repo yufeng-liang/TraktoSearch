@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.glance.appwidget.updateAll
 import com.tracktosearch.ui.theme.GlassVariant
+import com.tracktosearch.ui.theme.MeshPreset
 import com.tracktosearch.ui.theme.MonetAccent
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.widget.QuickSearchWidget
@@ -64,8 +65,8 @@ class ThemeStorage private constructor(
     private val _customAccentArgb = MutableStateFlow<Long?>(null)
     val customAccentArgb: StateFlow<Long?> = _customAccentArgb.asStateFlow()
 
-    // 主页面背景彩色弥散光晕：预设(枚举名)与开关。默认 NEBULA（Paper Shaders Default 预设配色）
-    private val _meshPreset = MutableStateFlow("NEBULA")
+    // 主页面背景彩色弥散光晕：预设(枚举名)与开关。默认 BLOOM（星云需解锁霉粉彩蛋）
+    private val _meshPreset = MutableStateFlow("BLOOM")
     val meshPreset: StateFlow<String> = _meshPreset.asStateFlow()
 
     // 背景动效默认关闭，用户需要时再手动开启
@@ -81,7 +82,7 @@ class ThemeStorage private constructor(
             _visualEffectMode.value = VisualEffectMode.fromStorageValue(prefs[KEY_VISUAL_EFFECT_MODE])
             _glassVariant.value = GlassVariant.fromStorageValue(prefs[KEY_GLASS_VARIANT])
             _customAccentArgb.value = prefs[KEY_CUSTOM_ACCENT_ARGB]
-            _meshPreset.value = prefs[KEY_MESH_PRESET] ?: "NEBULA"
+            _meshPreset.value = prefs[KEY_MESH_PRESET] ?: "BLOOM"
             _meshEnabled.value = prefs[KEY_MESH_ENABLED] ?: false
             initializationComplete.complete(Unit)
         }.invokeOnCompletion { throwable ->
@@ -157,6 +158,12 @@ class ThemeStorage private constructor(
         initializationComplete.await()
         val prefs = dataStore.data.first()
         return decodeAccentName(prefs[KEY_ACCENT_COLOR])
+    }
+
+    suspend fun readMeshPresetSnapshot(): String {
+        initializationComplete.await()
+        val prefs = dataStore.data.first()
+        return prefs[KEY_MESH_PRESET] ?: MeshPreset.BLOOM.name
     }
 
     private fun decodeAccentName(name: String?): MonetAccent? {

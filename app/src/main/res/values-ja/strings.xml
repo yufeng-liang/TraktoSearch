@@ -2032,4 +2032,17 @@
     <string name="privacy_rights_desc">設定でローカル項目を変更し、Android のシステム設定で位置情報を取り消し、アプリが提供する操作でローカルキャッシュや資格情報を消去できます。アクセス、訂正、削除、著作権に関する依頼は権利リクエストフォームから送信できます。フォームは処理に必要な情報だけを収集し、終了した依頼は 180 日以内に削除します。</string>
     <string name="privacy_rights_open">権利リクエストページを開く</string>
     <string name="privacy_footer">© 2026 TraktoSearch · 内容基準 2026-08</string>
+
+    <!-- 霉粉彩蛋 -->
+    <string name="bg_glow_lover_inspired">Lover から着想</string>
+    <string name="swiftie_quiz_a11y">問題：X ＋ 87 ＝ 100。X はいくつですか？現在の解答：%1$s</string>
+    <string name="swiftie_quiz_a11y_empty">未回答</string>
+    <string name="swiftie_quiz_submit">送信</string>
+    <string name="swiftie_quiz_backspace">削除</string>
+    <string name="swiftie_era_card_a11y">%1$s、%2$s リリース、全 %3$d 曲</string>
+    <string name="swiftie_skip">スキップ</string>
+    <string name="swiftie_resume">再開</string>
+    <string name="swiftie_audio_hint_all">音量をオンにしてイヤホン着用で最高の体験に</string>
+    <string name="swiftie_audio_hint_volume">音量をオンにすると最高の体験に</string>
+    <string name="swiftie_audio_hint_headphones">イヤホン着用で最高の体験に</string>
 </resources>

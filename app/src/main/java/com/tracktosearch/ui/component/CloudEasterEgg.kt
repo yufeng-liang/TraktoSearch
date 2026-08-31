@@ -35,7 +35,9 @@ fun CloudEasterEgg(
     themeManager: CloudThemeManager,
     size: Dp = 182.dp,
     modifier: Modifier = Modifier,
-    onCloudClicked: () -> Unit = { themeManager.onCloudClicked() },
+    // 新手引导未完成时白云点击不做任何分派，计数也不累加（Spec §3.3）
+    onboardingCompleted: Boolean = true,
+    onCloudClicked: () -> Unit = { themeManager.onCloudClicked(onboardingCompleted) },
     onLongClick: (() -> Unit)? = null
 ) {
     val theme by themeManager.currentTheme.collectAsStateWithLifecycle()

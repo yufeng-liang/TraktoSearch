@@ -22,6 +22,36 @@
 
 依赖许可证的完整文本通常随 Gradle 缓存或发布包提供；packaging.resources.excludes 只影响 APK 中部分重复许可证文件的打包方式，不代表项目取消了第三方归属义务。
 
+## 随包字体
+
+`app/src/main/res/font/` 下 13 个字体来自 Google Fonts，OFL-1.1 或 Apache-2.0，
+均允许嵌入与商业分发。逐个文件的上游名称、版权持有人、许可证、子集化范围以及
+保留字体名改名记录见 [ASSET-LICENSES.md](ASSET-LICENSES.md) 的「随包字体」一节。
+
+发布 APK 时的三条义务：
+
+- 许可证全文随包提供 —— 已放在 `app/src/main/assets/fonts/licenses/`（13 份），
+  不要在 packaging 规则里排除 `assets/fonts/`。
+- OFL-1.1 第 3 条：子集化后的字体不得沿用 Reserved Font Name。带 RFN 的 5 个字体
+  已改内部家族名，改动脚本随仓库提交。
+- Apache-2.0 第 4 条：需声明已修改。两个 Apache 字体（Yellowtail、Permanent Marker）
+  的子集化事实已在 ASSET-LICENSES.md 中声明。
+
+字体只用于彩蛋的专辑名、算式与签名渲染。专辑名与曲目名是事实性元数据，
+彩蛋不含任何歌词、专辑封面图，签名是 Pacifico 字形而非真实签名。
+
+## 随包音频
+
+`app/src/main/res/raw/swiftie_theme.ogg`（Ogg Opus 128 kbps，1.93 MiB，125.998 s）
+是霉粉彩蛋的配乐，由需求方提供并指示随包分发。源文件为 320 kbps MP3，已转码。
+
+**该文件的授权未核实。** 文件名指向 The Eras Tour 的开场音乐，本项目未取得权利人
+许可。它与随包字体不同 —— 字体有明确的 OFL-1.1 / Apache-2.0 授权，这个音频没有。
+公开发布前必须取得书面许可、替换为自制或已授权音轨，或改为不随包。风险与责任
+明细见 [ASSET-LICENSES.md](ASSET-LICENSES.md) 的「随包音频」一节。
+
+源文件的 ID3v2 标签（含 160 107 字节专辑封面图）已在转码时丢弃。
+
 ## Cloudflare Workers 依赖
 
 - wrangler、TypeScript 和 Cloudflare Workers 类型包属于开发 / 构建工具，不是运行时业务授权。

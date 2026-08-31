@@ -24,6 +24,7 @@ import com.tracktosearch.data.local.NotificationStorage
 import com.tracktosearch.data.local.PanHubConfigStorage
 import com.tracktosearch.data.local.SearchSourceStorage
 import com.tracktosearch.data.local.SharedTransitionStorage
+import com.tracktosearch.data.local.SwiftieEggStorage
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
@@ -138,6 +139,7 @@ class SettingsViewModel @Inject constructor(
     private val imageTrafficStorage: ImageTrafficStorage,
     private val aiTasteStorage: com.tracktosearch.data.local.AiTasteStorage,
     private val statisticsSnapshotStore: com.tracktosearch.data.local.StatisticsSnapshotStore,
+    private val swiftieEggStorage: SwiftieEggStorage,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -158,6 +160,9 @@ class SettingsViewModel @Inject constructor(
     // 主页面背景彩色弥散光晕
     val meshPreset: StateFlow<String> = themeStorage.meshPreset
     val meshEnabled: StateFlow<Boolean> = themeStorage.meshEnabled
+
+    /** 霉粉彩蛋解锁位：未解锁时「背景光晕」列表里整项不出现「星云」 */
+    val swiftieUnlocked: StateFlow<Boolean> = swiftieEggStorage.unlocked
 
     val defaultTab: StateFlow<Int> = defaultTabStorage.defaultTab
 

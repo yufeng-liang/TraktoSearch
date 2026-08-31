@@ -2027,4 +2027,17 @@ Config:
     <string name="privacy_rights_desc">You can change local controls in Settings, revoke location permission in Android settings, clear local cache or credentials where the app provides that action, and submit access, correction, deletion or copyright requests through the rights form. The form collects only what is needed to process the request; closed requests are retained for no more than 180 days.</string>
     <string name="privacy_rights_open">Open the rights request page</string>
     <string name="privacy_footer">© 2026 TraktoSearch · Content baseline 2026-08</string>
+
+    <!-- 霉粉彩蛋 -->
+    <string name="bg_glow_lover_inspired">Inspired by Lover</string>
+    <string name="swiftie_quiz_a11y">Puzzle: X plus 87 equals 100. What is X? Your answer: %1$s</string>
+    <string name="swiftie_quiz_a11y_empty">not answered yet</string>
+    <string name="swiftie_quiz_submit">Submit</string>
+    <string name="swiftie_quiz_backspace">Delete</string>
+    <string name="swiftie_era_card_a11y">%1$s, released %2$s, %3$d tracks</string>
+    <string name="swiftie_skip">Skip</string>
+    <string name="swiftie_resume">Resume</string>
+    <string name="swiftie_audio_hint_all">Sound on and headphones for the best experience</string>
+    <string name="swiftie_audio_hint_volume">Turn the sound on for the best experience</string>
+    <string name="swiftie_audio_hint_headphones">Headphones for the best experience</string>
 </resources>

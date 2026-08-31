@@ -28,6 +28,10 @@ class OnboardingStorage @Inject constructor(
         prefs[KEY_COMPLETED] ?: false
     }.distinctUntilChanged()
 
+    @Deprecated(
+        "引导阶段已不再弹主题选择弹窗。key 保留不删，避免对存量数据多做一次迁移。",
+        level = DeprecationLevel.WARNING
+    )
     val isThemeSelectionCompleted: Flow<Boolean> = context.onboardingDataStore.data.map { prefs ->
         prefs[KEY_THEME_SELECTION_COMPLETED] ?: false
     }.distinctUntilChanged()
@@ -38,6 +42,10 @@ class OnboardingStorage @Inject constructor(
         }
     }
 
+    @Deprecated(
+        "引导阶段已不再弹主题选择弹窗。key 保留不删，避免对存量数据多做一次迁移。",
+        level = DeprecationLevel.WARNING
+    )
     suspend fun setThemeSelectionCompleted(completed: Boolean) {
         context.onboardingDataStore.edit { prefs ->
             prefs[KEY_THEME_SELECTION_COMPLETED] = completed
