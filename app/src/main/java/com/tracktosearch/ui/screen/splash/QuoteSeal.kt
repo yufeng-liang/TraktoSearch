@@ -351,9 +351,9 @@ private fun sealTypeface(lang: String): SealTypeface = when (lang) {
 private val SealSerif = SealTypeface(FontFamily.Serif, FontWeight.SemiBold, sizeScale = 0.97f)
 
 /**
- * 王漢宗中隸書繁的子集，只含 assets/quotes.json 里 `keyword["zh-Hant"]` 用到的 464 个字。
+ * 王漢宗中隸書繁的子集，只含 assets/quotes.json 里 `keyword["zh-Hant"]` 用到的 473 个字。
  *
- * 完整字库 8.1 MB，子集 238 KB。往台词库加中文关键词时得重新子集化，否则新字静默回落系统
+ * 完整字库 8.1 MB，子集 240 KB。往台词库加中文关键词时得重新子集化，否则新字静默回落系统
  * 字体。子集化命令记在 licenses/HanWangLiSuMedium-GPL2.txt 里。
  *
  * 1.02 是量出来的：全部 365 个中文关键词逐个算余量，这一档下最紧的「命定」还剩 2.21dp，
