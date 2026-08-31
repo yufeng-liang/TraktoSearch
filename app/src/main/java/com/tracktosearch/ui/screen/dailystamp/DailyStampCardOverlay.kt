@@ -51,6 +51,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -396,24 +397,46 @@ private fun CarouselPage(
                         pictures[sheet.card.date] = picture
                         onDispose { pictures.remove(sheet.card.date) }
                     }
-                    Box(
-                        modifier = Modifier.drawWithContent {
-                            // 卡面先录进 Picture，再把这一份回放到屏幕上：屏幕上的和导出的是
-                            // 同一串绘制指令，不会出现「存下来的和看到的不一样」。
-                            recordThenReplay(picture)
-                        }
-                    ) {
-                        DailyStampCard(
-                            card = sheet.card,
-                            palette = palette,
-                            onPosterClick = onPosterClick,
-                        )
-                    }
+                    RecordedDailyStampCard(
+                        picture = picture,
+                        card = sheet.card,
+                        palette = palette,
+                        onPosterClick = onPosterClick,
+                    )
                 }
 
                 is DailyStampSheet.Latent -> LatentCard(latent = sheet, palette = palette)
             }
         }
+    }
+}
+
+/**
+ * 卡面旁路录进 Picture，同时由 Compose 直接绘到屏幕。
+ *
+ * Picture 只供保存/分享使用，不能再回放成屏幕内容：异步图片的绘制节点不会可靠进入它，
+ * 结果就是卡纸和文字都有、海报开窗却一直空着。
+ */
+@Composable
+private fun RecordedDailyStampCard(
+    picture: Picture,
+    card: DailyStampCardUi,
+    palette: SplashPalette,
+    onPosterClick: () -> Unit,
+) {
+    var posterRevision by remember(card.date, card.poster) { mutableIntStateOf(0) }
+    Box(
+        modifier = Modifier.drawWithContent {
+            // 在 draw 阶段读取 revision；海报成功后明确让包住整张卡的绘制层失效。
+            recordThenDraw(picture, posterRevision)
+        }
+    ) {
+        DailyStampCard(
+            card = card,
+            palette = palette,
+            onPosterClick = onPosterClick,
+            onPosterLoaded = { posterRevision += 1 },
+        )
     }
 }
 
@@ -461,6 +484,7 @@ private fun DailyStampCard(
     card: DailyStampCardUi,
     palette: SplashPalette,
     onPosterClick: () -> Unit,
+    onPosterLoaded: () -> Unit,
 ) {
     val tick = remember(card.date) {
         card.date.format(DateTimeFormatter.ofPattern("yyyy.MM.dd", Locale.US))
@@ -493,7 +517,12 @@ private fun DailyStampCard(
     ) {
         TicketHeader(tick = tick, serial = serial, palette = palette)
         Spacer(Modifier.height(20.dp))
-        CardPoster(card = card, palette = palette, onClick = onPosterClick)
+        CardPoster(
+            card = card,
+            palette = palette,
+            onClick = onPosterClick,
+            onLoaded = onPosterLoaded,
+        )
         Spacer(Modifier.height(22.dp))
         card.lines.forEach { line ->
             CardLine(
@@ -573,6 +602,7 @@ private fun CardPoster(
     card: DailyStampCardUi,
     palette: SplashPalette,
     onClick: () -> Unit,
+    onLoaded: () -> Unit,
 ) {
     if (card.poster == null) return
     val tintColor = if (palette.isDark) Color(0xFF16100B) else palette.paper
@@ -585,7 +615,7 @@ private fun CardPoster(
     val posterRequest = remember(card.poster, context) {
         ImageRequest.Builder(context)
             .data(card.poster)
-            // 导出会在软件 Canvas 上重放卡面，硬件 Bitmap 无法参与这次绘制。
+            // Picture 仍会旁路录制供导出，硬件 Bitmap 不能参与软件 Canvas 绘制。
             .allowHardware(false)
             .build()
     }
@@ -604,6 +634,7 @@ private fun CardPoster(
         AsyncImage(
             model = posterRequest,
             contentDescription = card.title,
+            onSuccess = { onLoaded() },
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxSize()
@@ -1121,10 +1152,10 @@ private fun ActionPill(
 }
 
 /**
- * 把卡面录进 [picture]，再把录下来的这一份回放到屏幕上。
+ * 把卡面旁路录进 [picture]，屏幕仍直接绘制 Compose 内容。
  *
- * 这么绕一下是为了让屏幕和导出共用同一串绘制指令：导出是拿同一个 Picture 在软件
- * Canvas 上再放一遍（见 [captureCardPicture]），两边一定长得一样。
+ * 导出拿 Picture 在软件 Canvas 上放一遍（见 [captureCardPicture]）；屏幕不能回放 Picture，
+ * 因为异步图片绘制节点不会可靠录入，回放会让海报开窗一直空着。
  *
  * 之前走的是 GraphicsLayer 快照：内容先录进平台图层，再向图层要像素，部分 Android 9
  * 以上的设备会返回尺寸正常、内容全白的位图。Picture 只是一串指令，光栅化在哪张画布上
@@ -1132,7 +1163,13 @@ private fun ActionPill(
  *
  * 尺寸还没量出来的那一帧照常画内容，只是不录——录一张 0×0 的 Picture 会让导出拿到空图。
  */
-private fun ContentDrawScope.recordThenReplay(picture: Picture) {
+private fun ContentDrawScope.recordThenDraw(
+    picture: Picture,
+    contentRevision: Int,
+) {
+    // 只为在 draw 阶段订阅 Snapshot；数值不参与画面。
+    @Suppress("UNUSED_VARIABLE")
+    val observedRevision = contentRevision
     val width = size.width.toInt()
     val height = size.height.toInt()
     if (width <= 0 || height <= 0) {
@@ -1142,10 +1179,11 @@ private fun ContentDrawScope.recordThenReplay(picture: Picture) {
     val recordingCanvas = GraphicsCanvas(picture.beginRecording(width, height))
     // draw 会把当前 DrawScope 的画布临时换成录制画布，drawContent 于是画进了 Picture
     draw(this, layoutDirection, recordingCanvas, size) {
-        this@recordThenReplay.drawContent()
+        this@recordThenDraw.drawContent()
     }
     picture.endRecording()
-    drawIntoCanvas { canvas -> canvas.nativeCanvas.drawPicture(picture) }
+    // 屏幕直接画 Compose 内容；Picture 只留给导出，避免它吞掉图片绘制节点。
+    drawContent()
 }
 
 /**
