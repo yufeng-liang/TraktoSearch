@@ -87,8 +87,11 @@ class SplashQuoteRepository @Inject constructor(
      * 同一个时机顺带记下当天看过（[SplashQuoteStorage.markShownOn]）——「今天第一次」
      * 说的就是「今天真的看见过一次」，没有比这里更准的落点。
      */
-    suspend fun markShown(quote: SplashQuote) {
-        if (quote.id == DEBUT_QUOTE_ID) storage.markDebutShown()
+    suspend fun markShown(quote: SplashQuote) = markShown(quote.id)
+
+    /** UI 层只保留轻量 quoteId 时使用；写入语义与领域对象重载完全一致。 */
+    suspend fun markShown(quoteId: String) {
+        if (quoteId == DEBUT_QUOTE_ID) storage.markDebutShown()
         storage.markShownOn(daySeed())
     }
 

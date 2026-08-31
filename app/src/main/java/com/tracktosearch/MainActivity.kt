@@ -403,14 +403,19 @@ class MainActivity : AppCompatActivity() {
                         // 冷启动直落主页时这一层是接着场记板往下演，同一块画面不该有淡入；
                         // 先过登录页的那条路上它是后盖到已经画好的主界面上，必须淡进来。
                         continuesSystemSplash = startDest == Routes.MAIN,
-                        // 台词真的开演了才记当天日签，写的就是屏幕上这一条。
-                        // 约定只回调一次；万一多回调，checkIn 本身按天认首写，重复调用无副作用。
+                        // 台词真的开演了才落「已展示」与当天日签，写的都是屏幕上这一条。
+                        // 约定只回调一次；两处存储本身也按首次写入幂等，重复调用无副作用。
                         onSplashQuoteShown = {
                             this@MainActivity.lifecycleScope.launch(Dispatchers.IO) {
                                 try {
+                                    splashQuoteRepository.markShown(quote.quoteId)
+                                } catch (e: Exception) {
+                                    // 展示标记失败时下次启动再展示一次，比提前吞掉首次体验更安全
+                                }
+                                try {
                                     dailyStampRepository.checkIn(quote.quoteId)
                                 } catch (e: Exception) {
-                                    // 签到失败不影响任何已有功能：下次启动或跨天回到前台会再写
+                                    // 签到失败不影响已有功能：下次启动或跨天回到前台会再写
                                 }
                             }
                         },

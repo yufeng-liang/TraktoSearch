@@ -36,11 +36,9 @@ class SplashQuoteLoader @Inject constructor(
             val bytes = posterStore.readBytes(quote) ?: return@withContext null
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                 ?: return@withContext null
-            // 「今天第一次」必须在 markShown 之前问：那一步就把今天记下了，
-            // 顺序反过来这个值永远是 false，两档停留时长会退化成只剩「复看」那一档。
+            // 这里只判断展示档位，不提前落「已展示」标记：用户此时可能仍停在激活页，
+            // 真正开演后由 MainActivity 的 onSplashQuoteShown 统一记录。
             val isFirstToday = repository.isFirstShowToday()
-            // 到这里画面已经凑齐，开场那一条才算真的展示过
-            repository.markShown(quote)
             SplashQuoteUi(
                 quoteId = quote.id,
                 lines = lines,
