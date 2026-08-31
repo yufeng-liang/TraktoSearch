@@ -1977,7 +1977,6 @@
     <string name="privacy_hero_desc">观影记录先留在手机上；功能确实需要联网时，这里会说明发送什么、为什么发送。</string>
     <string name="privacy_flow_title">数据流转实况</string>
     <string name="privacy_flow_live">动画示意</string>
-    <string name="privacy_flow_summary">点选不同功能，看看数据如何移动。动画是阅读用的视觉说明，不是实时网络抓包。</string>
     <string name="privacy_flow_hint">点选流程查看数据边界</string>
     <string name="privacy_flow_device">手机</string>
     <string name="privacy_flow_local_title">本地保存</string>

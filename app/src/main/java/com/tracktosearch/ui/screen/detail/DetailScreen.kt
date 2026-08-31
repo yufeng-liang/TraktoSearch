@@ -172,7 +172,8 @@ fun DetailScreen(
     onPersonClick: (personId: Int, personName: String, profileUrl: String?, avatarColor: Color?) -> Unit = { _, _, _, _ -> },
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit = { _, _, _, _, _ -> },
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit = { _, _, _, _, _ -> },
-    onNavigateToLogin: () -> Unit = {},
+    onTraktLogin: () -> Unit = {},
+    onDoubanLogin: () -> Unit = {},
     viewModel: DetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -183,9 +184,6 @@ fun DetailScreen(
     // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的推荐卡片参与共享元素转场
     var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
     var showRatingDialog by remember { mutableStateOf(false) }
-    // 评分入口的本地登录引导标记：ViewModel 没有单独的「请求登录引导」入口，
-    // 未登录点评分时在 UI 层直接弹引导框，不打开评分弹窗（随 uiState.showLoginPrompt 一起控制下方对话框）
-    var showLoginPromptLocal by remember { mutableStateOf(false) }
     var detailHeaderBounds by remember { mutableStateOf<Rect?>(null) }
     var showWatchlistScene by remember { mutableStateOf(false) }
     var handledWatchlistRevision by remember(traktId, tmdbId) { mutableStateOf(0L) }
@@ -492,14 +490,14 @@ fun DetailScreen(
             // 减少分配并为后续按字段跳过重组打基础。置于 LazyColumn 之前(@Composable 上下文)。
             val onToggleWatched = remember { { viewModel.toggleWatched() } }
             val onToggleWatchlist = remember { { viewModel.toggleWatchlist() } }
-            // 评分入口预检登录态：Trakt 模式未登录时直接引导登录，不打开评分弹窗，
-            // 避免用户填完评分点确认才被告知要登录、输入丢失（豆瓣独立模式 isLoggedIn 恒为 true 不受影响）
-            val onShowRatingDialog = remember {
+            // 评分入口先判断登录态，避免用户填完评分才被告知要登录；
+            // 由 ViewModel 根据当前条目选择 Trakt 或豆瓣，不能统一送回激活页。
+            val onShowRatingDialog = remember(uiState.isLoggedIn) {
                 {
                     if (uiState.isLoggedIn) {
                         showRatingDialog = true
                     } else {
-                        showLoginPromptLocal = true
+                        viewModel.requestLoginForCurrentItem()
                     }
                 }
             }
@@ -1251,21 +1249,23 @@ fun DetailScreen(
                 )
             }
 
-            // 未登录用户引导登录弹窗（含评分入口预检触发的本地路径）
-            if (uiState.showLoginPrompt || showLoginPromptLocal) {
-                val dismissLoginPrompt: () -> Unit = {
-                    viewModel.dismissLoginPrompt()
-                    showLoginPromptLocal = false
-                }
+            // 未登录用户引导登录弹窗：确认后直达当前条目对应的平台网页登录流程。
+            if (uiState.showLoginPrompt) {
+                val loginTarget = uiState.loginTarget
+                val dismissLoginPrompt: () -> Unit = viewModel::dismissLoginPrompt
                 AlertDialog(
                     onDismissRequest = dismissLoginPrompt,
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     title = { Text(stringResource(R.string.detail_login_required_title)) },
                     text = { Text(stringResource(R.string.detail_login_required_message)) },
                     confirmButton = {
                         TextButton(onClick = {
                             dismissLoginPrompt()
-                            onNavigateToLogin()
+                            when (loginTarget) {
+                                DetailLoginTarget.TRAKT -> onTraktLogin()
+                                DetailLoginTarget.DOUBAN -> onDoubanLogin()
+                                null -> Unit
+                            }
                         }) {
                             Text(stringResource(R.string.detail_login_go))
                         }

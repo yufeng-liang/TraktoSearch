@@ -1984,7 +1984,6 @@ Config:
     <string name="privacy_hero_desc">Your records stay on the device first. When a feature needs the network, this page explains what leaves the device and why.</string>
     <string name="privacy_flow_title">Live data flow</string>
     <string name="privacy_flow_live">Animated example</string>
-    <string name="privacy_flow_summary">See how each feature moves data. The animation is a visual explanation, not a live network trace.</string>
     <string name="privacy_flow_hint">Select a flow to see its boundary</string>
     <string name="privacy_flow_device">Phone</string>
     <string name="privacy_flow_local_title">Local save</string>

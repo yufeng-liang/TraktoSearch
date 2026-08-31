@@ -39,8 +39,8 @@ class DiscoverSectionStorage @Inject constructor(
         // 所有发现页栏目 ID（默认顺序）
         val ALL_SECTION_IDS = listOf(
             SECTION_ID_DOUBAN_RECOMMEND,
-            "douban-movie",
             "douban-weekly",
+            "douban-movie",
             "douban-top250",
             "douban-nowplaying",
             "tmdb-popular",

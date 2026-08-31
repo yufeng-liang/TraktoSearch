@@ -258,7 +258,19 @@ class DetailViewModelTest {
         // getCachedAccessToken 默认返回 null（relaxed mock）
         viewModel.toggleWatchlist()
 
-        assertThat(viewModel.uiState.value.showLoginPrompt).isTrue()
+        assertThat(viewModel.uiState.value.loginTarget).isEqualTo(DetailLoginTarget.TRAKT)
+    }
+
+    @Test
+    fun `豆瓣承载条目未登录时提示豆瓣登录`() {
+        setPrivateField("currentSessionMode", SessionMode.GUEST)
+        setPrivateField("currentDoubanId", "db-guest")
+        setUiState { it.copy(doubanIdForSync = "db-guest") }
+        every { doubanAuthStorage.getCredentials() } returns null
+
+        viewModel.toggleWatchlist()
+
+        assertThat(viewModel.uiState.value.loginTarget).isEqualTo(DetailLoginTarget.DOUBAN)
     }
 
     /**
@@ -307,7 +319,7 @@ class DetailViewModelTest {
         // getCachedAccessToken 默认返回 null（relaxed mock）
         viewModel.toggleWatched()
 
-        assertThat(viewModel.uiState.value.showLoginPrompt).isTrue()
+        assertThat(viewModel.uiState.value.loginTarget).isEqualTo(DetailLoginTarget.TRAKT)
     }
 
     /**
@@ -357,7 +369,7 @@ class DetailViewModelTest {
         viewModel.setRating(8)
         advanceUntilIdle()
 
-        assertThat(viewModel.uiState.value.showLoginPrompt).isTrue()
+        assertThat(viewModel.uiState.value.loginTarget).isEqualTo(DetailLoginTarget.TRAKT)
     }
 
     /**
@@ -674,7 +686,7 @@ class DetailViewModelTest {
         // getCachedAccessToken 默认返回 null（relaxed mock）
         viewModel.toggleEpisodeWatched(seasonNumber = 1, episodeNumber = 1, episodeTraktId = 100)
 
-        assertThat(viewModel.uiState.value.showLoginPrompt).isTrue()
+        assertThat(viewModel.uiState.value.loginTarget).isEqualTo(DetailLoginTarget.TRAKT)
     }
 
     /**

@@ -74,7 +74,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
-import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
@@ -85,7 +84,6 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -916,8 +914,6 @@ fun WatchlistScreen(
                             ) {
                                 WatchlistPosterCard(
                                     item = item,
-                                    isInWatchlist = selectedMode == 0,
-                                    isWatched = selectedMode == 1,
                                     isSelected = isSelected,
                                     isResolving = isResolving,
                                     isMultiSelectMode = isMultiSelectMode,
@@ -1978,8 +1974,6 @@ fun WatchlistScreen(
 @Composable
 private fun WatchlistPosterCard(
     item: MediaUiItem,
-    isInWatchlist: Boolean,
-    isWatched: Boolean,
     isSelected: Boolean,
     isResolving: Boolean,
     isMultiSelectMode: Boolean,
@@ -2051,48 +2045,6 @@ private fun WatchlistPosterCard(
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(8.dp)
                     )
-                }
-            }
-            // 想看/已看角标（海报左上角，沿用 MovieCard 样式）
-            if (isWatched || isInWatchlist) {
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(4.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            color = if (isWatched) Color(0xCC000000)
-                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
-                        )
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    if (isWatched) {
-                        Icon(
-                            imageVector = Icons.Rounded.Visibility,
-                            contentDescription = null,
-                            modifier = Modifier.size(12.dp),
-                            tint = Color.White
-                        )
-                        Text(
-                            text = stringResource(R.string.cd_watched_badge),
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                            color = Color.White
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Rounded.Bookmark,
-                            contentDescription = null,
-                            modifier = Modifier.size(10.dp),
-                            tint = Color.White
-                        )
-                        Text(
-                            text = stringResource(R.string.cd_watchlist_badge),
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                            color = Color.White
-                        )
-                    }
                 }
             }
             // 加载遮罩

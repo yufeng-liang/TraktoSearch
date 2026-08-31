@@ -1989,7 +1989,6 @@
     <string name="privacy_hero_desc">視聴記録はまず端末に保存されます。通信が必要な機能では、送信する内容と理由をここで説明します。</string>
     <string name="privacy_flow_title">データフローの実演</string>
     <string name="privacy_flow_live">アニメーション例</string>
-    <string name="privacy_flow_summary">機能ごとのデータの動きを確認できます。これは理解のための図解であり、実際の通信を監視するものではありません。</string>
     <string name="privacy_flow_hint">フローを選んで境界を確認</string>
     <string name="privacy_flow_device">端末</string>
     <string name="privacy_flow_local_title">端末内保存</string>

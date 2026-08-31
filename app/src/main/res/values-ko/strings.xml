@@ -1989,7 +1989,6 @@
     <string name="privacy_hero_desc">시청 기록은 먼저 기기에 남습니다. 네트워크가 필요한 기능은 무엇을 왜 보내는지 이곳에서 설명합니다.</string>
     <string name="privacy_flow_title">데이터 흐름 실시간 예시</string>
     <string name="privacy_flow_live">애니메이션 예시</string>
-    <string name="privacy_flow_summary">기능별 데이터 이동을 확인하세요. 이해를 돕는 시각적 설명이며 실제 네트워크 추적은 아닙니다.</string>
     <string name="privacy_flow_hint">흐름을 선택해 경계를 확인하세요</string>
     <string name="privacy_flow_device">기기</string>
     <string name="privacy_flow_local_title">기기 내 저장</string>
