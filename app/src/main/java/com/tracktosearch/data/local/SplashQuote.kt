@@ -37,7 +37,7 @@ data class SplashQuote(
     val mediaType: String = MEDIA_TYPE_MOVIE,
     val tmdbId: Int,
     val posterPath: String,
-    /** 是否随 APK 内置了海报：随包的 5 条保证首次安装当天就有画面 */
+    /** 是否随 APK 内置了海报：随包的 9 条保证首次安装当天就有画面 */
     val bundled: Boolean = false,
     /**
      * 台词是否以英文原文示人。

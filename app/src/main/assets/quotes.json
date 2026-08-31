@@ -808,8 +808,8 @@
       "id": "la-la-land",
       "year": 2016,
       "tmdbId": 313369,
-      "posterPath": "/uDO8zWDhfWwoFdKS4fzkUJt0Rf0.jpg",
-      "bundled": false,
+      "posterPath": "/wEOWf7ahe1yeDkng1AxIcuIXcB.jpg",
+      "bundled": true,
       "preferOriginal": true,
       "lines": {
         "en": ["Here's to the ones", "who dream,", "foolish as they may seem."],
@@ -5356,8 +5356,8 @@
       "id": "the-great-buddha-plus",
       "year": 2017,
       "tmdbId": 475149,
-      "posterPath": "/hUVHENyEicvL25aaC03xnCk0XTs.jpg",
-      "bundled": false,
+      "posterPath": "/7bnrYgr5qDBQYIR0N0CRmrpZPKE.jpg",
+      "bundled": true,
       "lines": {
         "en": ["This is the space age.", "We can fly to the moon,", "but we cannot see", "the universe inside a person."],
         "zh": ["现在是太空时代，", "人类可以坐太空船去月球，", "却没办法看到", "别人内心的宇宙。"],
@@ -6500,8 +6500,8 @@
       "id": "we-made-a-beautiful-bouquet",
       "year": 2021,
       "tmdbId": 695932,
-      "posterPath": "/73EMVPCQ3G2mTLgXJrFuOgxJfkp.jpg",
-      "bundled": false,
+      "posterPath": "/nvStCqSfgtEAUMv31iXAE99pzEp.jpg",
+      "bundled": true,
       "lines": {
         "en": ["When I listened alone,", "that song was just a song."],
         "zh": ["一个人听的时候，", "那首歌只是那首歌。"],

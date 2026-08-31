@@ -51,8 +51,8 @@ class DailyStampRepositoryTest {
 
     @Test
     fun `签到记下开屏真正展示过的那条而不是自己再算一次`() = runTest {
-        // 装完第一屏展示的是开场那一条，而它展示完就被标记掉了：
-        // 这里再调 todayQuote 拿到的是日期取模那条，跟屏幕上的不是同一部片。
+        // 固定开场序列和普通轮换都应记录屏幕真正展示的 id；仓库不自行重算，
+        // 避免展示状态推进或海报就绪子集变化时把另一部片写进日签。
         coEvery { dao.find(today.toEpochDay()) } returns null
         coEvery { dao.insertIfAbsent(any()) } returns 1L
         coEvery { quotes.todayQuote() } returns quote("date-seeded")

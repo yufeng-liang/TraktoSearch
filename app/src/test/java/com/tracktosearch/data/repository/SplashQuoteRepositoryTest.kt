@@ -30,7 +30,7 @@ class SplashQuoteRepositoryTest {
     private val posterColorExtractor = mockk<PosterColorExtractor>(relaxed = true)
 
     /**
-     * 默认按「开场那一条早就展示过」配置，日期取模的用例才是常规路径。
+     * 默认按「固定开场序列早已展示完」配置，日期取模的用例才是常规路径。
      *
      * TMDB 默认查不到路径、海报字节默认读不出来：前者让选片走兜底，后者让取色预热早退，
      * 两条都不是这些用例的被测对象，喂空值免得它们干扰下载次数的断言。
@@ -42,7 +42,7 @@ class SplashQuoteRepositoryTest {
         tmdbRepository,
         posterColorExtractor,
     ).also {
-        coEvery { storage.isDebutPending() } returns false
+        coEvery { storage.openingSequenceIndex(any(), any()) } returns null
         coEvery { tmdbRepository.posterPath(any(), any()) } returns null
         coEvery { posterColorExtractor.getCachedColor(any()) } returns null
         coEvery { posterStore.readBytes(any()) } returns null
@@ -162,21 +162,23 @@ class SplashQuoteRepositoryTest {
     }
 
     @Test
-    fun `还没展示过开场那一条时无视日期直接给它`() = runTest {
-        val pool = listOf("a", SplashQuoteRepository.DEBUT_QUOTE_ID, "c").map { quote(it) }
+    fun `固定开场序列按存储下标依次选三条`() = runTest {
+        val opening = SplashQuoteRepository.OPENING_QUOTE_IDS.map { quote(it) }
+        val pool = listOf(quote("a")) + opening + quote("z")
         coEvery { catalog.quotes() } returns pool
         every { posterStore.isReady(any()) } returns true
         val repository = repository()
-        coEvery { storage.isDebutPending() } returns true
 
-        val result = repository.todayQuote()
-
-        assertThat(result?.id).isEqualTo(SplashQuoteRepository.DEBUT_QUOTE_ID)
+        opening.forEachIndexed { index, expected ->
+            coEvery { storage.openingSequenceIndex(any(), opening.size) } returns index
+            assertThat(repository.todayQuote()).isEqualTo(expected)
+        }
     }
 
     @Test
-    fun `开场那一条展示过之后回到日期取模`() = runTest {
-        val pool = listOf("a", SplashQuoteRepository.DEBUT_QUOTE_ID, "c", "d", "e").map { quote(it) }
+    fun `固定开场序列完成后回到日期取模`() = runTest {
+        val pool = (listOf("a") + SplashQuoteRepository.OPENING_QUOTE_IDS + listOf("z"))
+            .map { quote(it) }
         coEvery { catalog.quotes() } returns pool
         every { posterStore.isReady(any()) } returns true
 
@@ -186,25 +188,29 @@ class SplashQuoteRepositoryTest {
     }
 
     @Test
-    fun `台词库里没有开场那一条时不搞例外直接走日期取模`() = runTest {
+    fun `台词库缺少当前固定条目时直接走日期取模`() = runTest {
         val pool = listOf("a", "b", "c").map { quote(it) }
         coEvery { catalog.quotes() } returns pool
         every { posterStore.isReady(any()) } returns true
         val repository = repository()
-        coEvery { storage.isDebutPending() } returns true
+        coEvery { storage.openingSequenceIndex(any(), any()) } returns 1
 
         assertThat(repository.todayQuote()).isEqualTo(pool[(seed() % pool.size).toInt()])
     }
 
     @Test
-    fun `markShown 只对开场那一条落盘`() = runTest {
+    fun `markShown 只在展示当前固定条目时推进序列`() = runTest {
         val repository = repository()
+        val index = 1
+        coEvery { storage.openingSequenceIndex(any(), any()) } returns index
 
-        repository.markShown(quote("a"))
-        coVerify(exactly = 0) { storage.markDebutShown() }
+        repository.markShown("a")
+        coVerify(exactly = 0) { storage.markOpeningQuoteShown(any(), any(), any()) }
 
-        repository.markShown(quote(SplashQuoteRepository.DEBUT_QUOTE_ID))
-        coVerify(exactly = 1) { storage.markDebutShown() }
+        repository.markShown(SplashQuoteRepository.OPENING_QUOTE_IDS[index])
+        coVerify(exactly = 1) {
+            storage.markOpeningQuoteShown(index, seed(), SplashQuoteRepository.OPENING_QUOTE_IDS.size)
+        }
     }
 
     /** 停留时长分两档要靠它，而它只在「今天真的看见过一次」之后才该翻面 */

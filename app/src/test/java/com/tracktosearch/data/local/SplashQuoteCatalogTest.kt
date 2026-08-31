@@ -1,7 +1,9 @@
 package com.tracktosearch.data.local
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.data.repository.SplashQuoteRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -43,6 +45,30 @@ class SplashQuoteCatalogTest {
      * 更早的作品台词大多经过几十年转述，引文版本互相矛盾，逐条核到原片不现实，
      * 所以这条线钉在测试里而不是只写在文档里。见 [SplashQuote]。
      */
+    @Test
+    fun `前三个打开日固定顺序且海报都随 APK 内置`() = runTest {
+        assertThat(SplashQuoteRepository.OPENING_QUOTE_IDS).containsExactly(
+            "la-la-land",
+            "we-made-a-beautiful-bouquet",
+            "the-great-buddha-plus",
+        ).inOrder()
+        val expectedPosterPaths = mapOf(
+            "la-la-land" to "/wEOWf7ahe1yeDkng1AxIcuIXcB.jpg",
+            "we-made-a-beautiful-bouquet" to "/nvStCqSfgtEAUMv31iXAE99pzEp.jpg",
+            "the-great-buddha-plus" to "/7bnrYgr5qDBQYIR0N0CRmrpZPKE.jpg",
+        )
+        val index = quotes().associateBy { it.id }
+
+        SplashQuoteRepository.OPENING_QUOTE_IDS.forEach { id ->
+            val quote = index.getValue(id)
+            assertThat(quote.posterPath).isEqualTo(expectedPosterPaths.getValue(id))
+            assertThat(quote.bundled).isTrue()
+            val bytes = appContext.assets.open("splash_posters/$id.jpg").use { it.readBytes() }
+            assertThat(bytes).isNotEmpty()
+            assertThat(BitmapFactory.decodeByteArray(bytes, 0, bytes.size)).isNotNull()
+        }
+    }
+
     @Test
     fun `条目都是 1960 年以后的作品`() = runTest {
         quotes().forEach { quote ->
