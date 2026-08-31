@@ -96,6 +96,10 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
+// 激活页品牌图标固定使用浅色模式配色，避免跟随深色主题改变品牌外观。
+private val ActivationClapperAccentColor = Color(0xFF9A6242)
+private val ActivationClapperPaperColor = Color.White
+
 @Composable
 fun ActivationLoginScreen(
     onLoginSuccess: () -> Unit = {},
@@ -238,7 +242,10 @@ fun ActivationLoginScreen(
                 Spacer(modifier = Modifier.statusBarsPadding().height(53.dp))
                 Box(modifier = Modifier.offset(y = 15.dp)) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CinemaClapperIcon()
+                        CinemaClapperIcon(
+                            accentColor = ActivationClapperAccentColor,
+                            paperColor = ActivationClapperPaperColor
+                        )
                         Spacer(modifier = Modifier.height(22.dp))
                         Text(
                             text = stringResource(R.string.login_title),
