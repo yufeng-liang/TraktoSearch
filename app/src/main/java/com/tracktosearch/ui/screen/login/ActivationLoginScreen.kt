@@ -138,12 +138,18 @@ fun ActivationLoginScreen(
                     printProgress.snapTo(1f)
                 } else {
                     isPrinting = true
-                    printProgress.snapTo(0f)
-                    printProgress.animateTo(
-                        targetValue = 1f,
-                        animationSpec = tween(TICKET_PRINT_DURATION_MS, easing = LinearEasing)
-                    )
-                    isPrinting = false
+                    // finally 不能省：打印途中授权被吊销（isActivated 翻假）会让本
+                    // LaunchedEffect 在 animateTo 处被取消，漏掉复位的话 isPrinting
+                    // 会永久停在 true——像素屏一直显示「正在打印…」，键盘却是可用的。
+                    try {
+                        printProgress.snapTo(0f)
+                        printProgress.animateTo(
+                            targetValue = 1f,
+                            animationSpec = tween(TICKET_PRINT_DURATION_MS, easing = LinearEasing)
+                        )
+                    } finally {
+                        isPrinting = false
+                    }
                 }
             }
             // 冷启动或回访进入已激活态：票静态停在出票口，不重播推出。
@@ -154,10 +160,12 @@ fun ActivationLoginScreen(
     }
 
     LaunchedEffect(Unit) {
-        // 走纸阶段是 6 步阶跃，revealFraction 每跳一档给一次轻触觉，六次连击就是「咔咔咔」。
-        // distinctUntilChanged 天然对齐步数，不用自己数帧。
-        snapshotFlow { phaseAt(printProgress.value).revealFraction }
+        // 走纸是 6 步阶跃，每跳一档给一次轻触觉，六次连击就是「咔咔咔」。
+        // 挂 feedStep 而不是 revealFraction：探头那 120ms 的 revealFraction 是连续插值，
+        // distinctUntilChanged 对它无效，60Hz 上会先糊出七八次连续震动。
+        snapshotFlow { phaseAt(printProgress.value).feedStep }
             .distinctUntilChanged()
+            .filter { it > 0 }
             .collect { if (isPrinting) view.performHaptic(HapticType.TICK) }
     }
 
@@ -174,11 +182,16 @@ fun ActivationLoginScreen(
         if (authState.inviteCode.isNotEmpty()) pasteMissed = false
     }
 
-    val printPhase = phaseAt(printProgress.value)
     // authState 是委托属性，authState.error 上没有智能转换，先取一次到局部量
     val authError = authState.error
     // 已取票态六格显示固定的 ****** ：取票码本身不落盘，屏上这串不含信息。
     val machineCode = if (isActivated) COLLECTED_CODE_MASK else authState.inviteCode
+    // 屏上那串占位符不能直接念给读屏——「取票码 * * * * * *，还需 0 位」不是实话。
+    val machineCodeDescription = if (isActivated) {
+        stringResource(R.string.machine_code_collected)
+    } else {
+        null
+    }
     val machineStatus = when {
         authError != null -> stringResource(machineStatusString(authError))
         pasteMissed -> stringResource(R.string.machine_status_clipboard_empty)
@@ -339,8 +352,8 @@ fun ActivationLoginScreen(
                         !isActivated,
                     hazeState = hazeState,
                     scene = loginGlassScene,
-                    onDigit = { digit -> authViewModel.updateInviteCode(authState.inviteCode + digit) },
-                    onBackspace = { authViewModel.updateInviteCode(authState.inviteCode.dropLast(1)) },
+                    onDigit = authViewModel::appendDigit,
+                    onBackspace = authViewModel::deleteLastDigit,
                     onPaste = {
                         // Android 12 起每次读剪贴板都会弹系统提示，所以只在用户按下粘贴键时读，
                         // 绝不在进入页面时自动读。
@@ -348,12 +361,16 @@ fun ActivationLoginScreen(
                     },
                     onSubmit = { authViewModel.activate() },
                     modifier = Modifier.padding(top = if (expired) 14.dp else 0.dp),
+                    codeDescription = machineCodeDescription,
                     ticketSlot = {
                         val stub = authState.ticket
                         if (stub != null) {
+                            // printProgress 在这个 lambda 里读，不在屏幕组合体里读：
+                            // 出票动画约 84 帧，在外面读会让整屏（含机壳毛玻璃和 12 个键）
+                            // 每帧重组一次；读在这里，失效范围收在票内。
                             CinemaTicket(
                                 stub = stub,
-                                phase = printPhase,
+                                phase = phaseAt(printProgress.value),
                                 loginState = loginState,
                                 // 打印中三个入口不可点：票还在推出，按下去等于对着半张纸下单
                                 traktEnabled = isActivated && !isPrinting,

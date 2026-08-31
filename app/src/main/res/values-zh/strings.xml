@@ -39,6 +39,7 @@
     <string name="machine_key_backspace_desc">退格</string>
     <string name="machine_submit">取票</string>
     <string name="machine_code_progress">取票码 %1$s，还需 %2$d 位</string>
+    <string name="machine_code_collected">取票码已使用，票已取出</string>
 
     <!-- Ticket -->
     <string name="ticket_admit_one">ADMIT ONE</string>
@@ -1675,7 +1676,6 @@
     <string name="douban_sync_notification_public">豆瓣同步：%1$s</string>
     <string name="douban_sync_notification_channel_description">显示豆瓣同步进度</string>
     <string name="douban_login_waiting_auth">等待授权完成…</string>
-    <string name="auth_invite_bound_this_device">该邀请码已绑定设备。重启应用可尝试恢复，或更换新邀请码</string>
     <string name="douban_detail_entry_not_found">该条目尚未同步到本机，暂无法查看</string>
     <string name="douban_batch_remove_remote_failed">%1$d 个条目从豆瓣移除失败，将在下次同步时重试</string>
     <string name="detail_credits_douban_unavailable">豆瓣条目暂无演职员信息</string>

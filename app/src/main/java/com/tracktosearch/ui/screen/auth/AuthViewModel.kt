@@ -10,6 +10,7 @@ import com.tracktosearch.data.auth.hasGatewayAccess
 import com.tracktosearch.data.local.TicketStub
 import com.tracktosearch.data.local.TicketStubStorage
 import com.tracktosearch.data.local.deriveTicketSeat
+import com.tracktosearch.data.local.isTicketDigit
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,8 +43,10 @@ class AuthViewModel @Inject constructor(
         // 所以过滤和截断都放在这里，不依赖调用方。
         private const val TICKET_CODE_LENGTH = 6
 
-        // 提到常量：粘贴是高频交互，没必要每次调用都重新编译一遍正则
-        private val TICKET_CODE_PATTERN = Regex("""\d{6}""")
+        // 提到常量：粘贴是高频交互，没必要每次调用都重新编译一遍正则。
+        // 写 [0-9] 而不是 \d：默认 \d 就是 ASCII，但写死区间才不用读者去查有没有开
+        // UNICODE_CHARACTER_CLASS——全角数字进来会一路过掉长度校验再被服务端拒。
+        private val TICKET_CODE_PATTERN = Regex("[0-9]{6}")
     }
 
     private val _uiState = MutableStateFlow(
@@ -85,8 +88,30 @@ class AuthViewModel @Inject constructor(
     }
 
     fun updateInviteCode(value: String) {
-        val sanitized = value.filter { it.isDigit() }.take(TICKET_CODE_LENGTH)
+        val sanitized = value.filter { it.isTicketDigit() }.take(TICKET_CODE_LENGTH)
         _uiState.value = _uiState.value.copy(inviteCode = sanitized, error = null)
+    }
+
+    /**
+     * 追加一位取票码。
+     *
+     * 追加动作必须在这里做，不能由 UI 写成 updateInviteCode(state.inviteCode + digit)：
+     * 屏幕上的 inviteCode 来自 collectAsStateWithLifecycle，写进 MutableStateFlow 之后
+     * 要到下一帧才传播回组合。同一帧内的两次按键（双指同按两个键、外接键盘连打时
+     * 一批多个 KeyDown）会读到同一个旧值，后一次把前一次覆盖掉，用户少一位。
+     * 这里读的是 _uiState.value，同步的，不会丢。
+     */
+    fun appendDigit(digit: Char) {
+        val current = _uiState.value.inviteCode
+        if (current.length >= TICKET_CODE_LENGTH) return
+        updateInviteCode(current + digit)
+    }
+
+    /** 退一位。理由同 [appendDigit]：当前值只能在这里读。 */
+    fun deleteLastDigit() {
+        val current = _uiState.value.inviteCode
+        if (current.isEmpty()) return
+        updateInviteCode(current.dropLast(1))
     }
 
     /**

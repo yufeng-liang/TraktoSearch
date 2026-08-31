@@ -2,10 +2,13 @@ package com.tracktosearch.ui.screen.login
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.remember
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -42,6 +45,7 @@ class ActivationLoginActionsTest {
         code: String,
         submitEnabled: Boolean = code.length == 6,
         keypadEnabled: Boolean = true,
+        codeDescription: String? = null,
         onDigit: (Char) -> Unit = {},
         onSubmit: () -> Unit = {},
     ) {
@@ -62,6 +66,7 @@ class ActivationLoginActionsTest {
                     onBackspace = {},
                     onPaste = {},
                     onSubmit = onSubmit,
+                    codeDescription = codeDescription,
                 )
             }
         }
@@ -125,6 +130,37 @@ class ActivationLoginActionsTest {
         composeRule
             .onNodeWithText(context.getString(R.string.machine_submit))
             .assertIsNotEnabled()
+    }
+
+    @Test
+    fun `输入途中六格整体播报已输入的位与还差几位`() {
+        // 自绘键盘没有系统输入法白送的播报，六格合成一个语义节点，这是唯一的播报来源
+        setMachine(code = "49")
+        composeRule
+            .onNodeWithContentDescription(
+                context.getString(R.string.machine_code_progress, "4 9", 4)
+            )
+            .assertExists()
+    }
+
+    @Test
+    fun `已取票态六格不把占位星号念给读屏`() {
+        // 屏上那串 ****** 是占位符不是脱敏后的真码，念「取票码 * * * * * *，还需 0 位」
+        // 既不是实话也没有信息，此时该由调用方给一句「已使用」
+        setMachine(
+            code = "******",
+            keypadEnabled = false,
+            submitEnabled = false,
+            codeDescription = context.getString(R.string.machine_code_collected),
+        )
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.machine_code_collected))
+            .assertExists()
+        composeRule
+            .onAllNodesWithContentDescription(
+                context.getString(R.string.machine_code_progress, "* * * * * *", 0)
+            )
+            .assertCountEquals(0)
     }
 
     @Test

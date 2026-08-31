@@ -48,27 +48,14 @@ class TicketStubTest {
     }
 
     @Test
-    fun ticketBarcodeWidths_printsEighteenBarsWithinThreeLevels() {
-        val widths = ticketBarcodeWidths("492013")
-
-        assertThat(widths).hasSize(18)
-        widths.forEachIndexed { index, width ->
-            assertWithMessage("第 $index 根竖条").that(width).isAtLeast(1)
-            assertWithMessage("第 $index 根竖条").that(width).isAtMost(3)
+    fun isTicketDigit_acceptsAsciiDigitsOnly() {
+        ('0'..'9').forEach { char ->
+            assertWithMessage("「$char」应是取票码数字").that(char.isTicketDigit()).isTrue()
         }
-    }
-
-    @Test
-    fun ticketBarcodeWidths_isStablePerCodeAndDiffersBetweenCodes() {
-        assertThat(ticketBarcodeWidths("492013")).isEqualTo(ticketBarcodeWidths("492013"))
-        assertThat(ticketBarcodeWidths("492013")).isNotEqualTo(ticketBarcodeWidths("000000"))
-    }
-
-    @Test
-    fun ticketBarcodeWidths_fallsBackToFlatBarsOnDirtyCode() {
-        DIRTY_CODES.forEach { code ->
-            assertWithMessage("脏码「$code」").that(ticketBarcodeWidths(code))
-                .isEqualTo(List(18) { 1 })
+        // Char.isDigit() 会把这些也算数字，取票码不能认：长度校验会误判为已满 6 位，
+        // 把一串服务端必然拒绝的码放出去，票面座位也会静默退回 1 厅 1 排 1 座
+        listOf('４', '٤', '௪', 'a', ' ', '-').forEach { char ->
+            assertWithMessage("「$char」不该是取票码数字").that(char.isTicketDigit()).isFalse()
         }
     }
 
@@ -82,7 +69,12 @@ class TicketStubTest {
     }
 
     private companion object {
-        /** 长度不对、含非数字：都不该抛异常，票面是装饰信息 */
-        val DIRTY_CODES = listOf("", "12345", "12345a", "1234567")
+        /**
+         * 长度不对、含非数字：都不该抛异常，票面是装饰信息。
+         *
+         * 后两条是长度恰好 6 但用了全角/阿拉伯-印度数字的码 —— 只看长度会当成合法码，
+         * 送进 toInt() 却得到另一个数，正是 isTicketDigit 要挡住的那一类。
+         */
+        val DIRTY_CODES = listOf("", "12345", "12345a", "1234567", "４９２０１３", "٤٩٢٠١٣")
     }
 }

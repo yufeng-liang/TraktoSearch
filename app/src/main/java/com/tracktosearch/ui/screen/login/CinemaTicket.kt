@@ -52,6 +52,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.local.TicketStub
 import com.tracktosearch.ui.component.DoubanLogo
 import java.time.LocalDate
+import java.util.Locale
 import kotlin.math.roundToInt
 
 // 票是纸，不是玻璃：这里是对全站毛玻璃体系的一次有意偏离，不用 haze / appVisualEffect。
@@ -110,9 +111,13 @@ internal fun shouldPlayTicketPrint(
  *
  * 取票码本身不落盘，所以条码不能直接从码算；用座位三元组拼出一个 6 位数字串再展开，
  * 同一张票每次渲染得到同一段条码，不同票之间又互不相同。
+ *
+ * format 显式给 [Locale.ROOT]：默认 locale 在阿拉伯语等环境下会把 %02d 输出成
+ * 另一套数字字形（٠٢），后面按字符取数就不再是这里想要的那三段。理由同
+ * [formatIssuedDate] 不走 DateTimeFormatter。
  */
-private fun ticketBarcodeWidths(stub: TicketStub): List<Int> {
-    val digits = "%02d%02d%02d".format(stub.hall, stub.row, stub.seat)
+internal fun ticketBarcodeWidths(stub: TicketStub): List<Int> {
+    val digits = "%02d%02d%02d".format(Locale.ROOT, stub.hall, stub.row, stub.seat)
     return digits.flatMap { char ->
         val digit = char.digitToIntOrNull() ?: 0
         (0..2).map { k -> (digit + k) % 3 + 1 }

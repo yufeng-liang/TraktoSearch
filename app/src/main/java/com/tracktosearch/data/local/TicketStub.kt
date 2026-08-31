@@ -24,12 +24,6 @@ private const val HALL_COUNT = 6
 private const val ROW_COUNT = 12
 private const val SEAT_COUNT = 20
 
-/** 每位码印几根竖条 */
-private const val BARS_PER_DIGIT = 3
-
-/** 竖条宽度档位数，宽度落在 1 到 [BAR_WIDTH_LEVELS] */
-private const val BAR_WIDTH_LEVELS = 3
-
 /** 脏数据兜底票面：1 厅 1 排 1 座 */
 private val FALLBACK_SEAT = TicketSeat(1, 1, 1)
 
@@ -53,26 +47,15 @@ fun deriveTicketSeat(code: String): TicketSeat {
 }
 
 /**
- * 由取票码派生条码竖条宽度，长度恒为 [TICKET_CODE_LENGTH] 乘 [BARS_PER_DIGIT] 根。
+ * 取票码里允许出现的字符：只认 ASCII 数字。
  *
- * 同码同条码，理由同 [deriveTicketSeat]：票是认人的，不能每次画得不一样。
- * 同一位码内三根竖条按序号错开宽度，相邻竖条不会等宽，看着才像条码而不是一排栅栏。
- *
- * 输入不合法时返回全 1，同样是为了脏数据不崩页面。
+ * 不用 Char.isDigit()：它会放过全角（４）与阿拉伯-印度数字（٤）。这些字符送进
+ * toInt() 得到的数值不是用户看到的数字，票面会和码对不上；长度校验也会误判为「已满 6 位」
+ * 从而把一串服务端必然拒绝的码放出去。输入过滤与票面派生共用这一条判定，
+ * 两处不能有一边宽一边严。
  */
-fun ticketBarcodeWidths(code: String): List<Int> {
-    if (!code.isTicketCode()) return List(TICKET_CODE_LENGTH * BARS_PER_DIGIT) { 1 }
-    return code.flatMap { char ->
-        val digit = char - '0'
-        (0 until BARS_PER_DIGIT).map { index -> (digit + index) % BAR_WIDTH_LEVELS + 1 }
-    }
-}
+internal fun Char.isTicketDigit(): Boolean = this in '0'..'9'
 
-/**
- * 是否是可派生票面的取票码。
- *
- * 只认 ASCII 数字：Char.isDigit() 会放过全角与阿拉伯-印度数字，那些字符
- * 送进 toInt() 得到的数值不是用户看到的数字，票面会和码对不上。
- */
+/** 是否是可派生票面的取票码。 */
 private fun String.isTicketCode(): Boolean =
-    length == TICKET_CODE_LENGTH && all { it in '0'..'9' }
+    length == TICKET_CODE_LENGTH && all { it.isTicketDigit() }

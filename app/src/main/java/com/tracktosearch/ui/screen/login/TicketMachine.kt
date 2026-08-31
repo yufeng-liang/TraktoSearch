@@ -107,6 +107,8 @@ private val SlotWallColor = Color(0xFF1A1310)
  * 状态文案和错误判定全在调用方算好，这里只负责画机器、把按键抛回去。
  *
  * @param code 已输入的数字串，长度 0..6，调用方保证只含数字
+ * @param codeDescription 六格整体的读屏文案，为 null 时按已输入位数自动生成。
+ *   已取票态屏上那串是占位符不是真码，念它没有意义，由调用方给一句实话
  * @param statusText 像素屏上那行短状态，已是最终文案
  * @param hintText 机器下方的完整引导句（像素屏装不下的长句子），为 null 时不占位
  * @param keypadEnabled 已取票态整块键盘置灰但保留，机器不该只剩半截
@@ -129,6 +131,7 @@ internal fun TicketMachine(
     onPaste: () -> Unit,
     onSubmit: () -> Unit,
     modifier: Modifier = Modifier,
+    codeDescription: String? = null,
     ticketSlot: @Composable () -> Unit = {},
 ) {
     val accent = MaterialTheme.colorScheme.primary
@@ -259,7 +262,7 @@ internal fun TicketMachine(
             }
             // 自绘键盘拿不到系统输入法白送的读屏播报，六格合成一个语义节点整体报。
             // 数字之间加空格是故意的：连读「492013」会被念成一个大数字
-            val progressDescription = stringResource(
+            val progressDescription = codeDescription ?: stringResource(
                 R.string.machine_code_progress,
                 code.map { it }.joinToString(" "),
                 CODE_LENGTH - code.length,

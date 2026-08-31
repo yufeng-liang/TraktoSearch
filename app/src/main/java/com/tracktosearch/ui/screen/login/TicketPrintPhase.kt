@@ -13,6 +13,13 @@ data class PrintPhase(
     val rowsVisible: Int,
     /** 条码是否已画出。 */
     val barcodeVisible: Boolean,
+    /**
+     * 走纸步序号，0 表示纸头还在探出、尚未开始步进。
+     *
+     * 触觉挂在这个值的每次递增上，而不是挂 [revealFraction]：探头阶段的
+     * [revealFraction] 是连续插值，按它去抖会变成每帧一次的连续震动。
+     */
+    val feedStep: Int,
 )
 
 // 四段边界一律由毫秒除总时长算出，改 TICKET_PRINT_DURATION_MS 时时序自动跟着走，
@@ -34,11 +41,12 @@ private const val OVERSHOOT_DP = 4f
 /** 票面每行淡入的间隔 */
 private const val ROW_FADE_INTERVAL_MS = 50f
 
-/** 票面入口行数：昵称、取票日期、厅排座 */
+/** 票面上逐行淡入的登录入口行数：Trakt 登录、豆瓣登录、访客进入 */
 private const val TICKET_ROWS = 3
 
 /** 系统关闭动画（ANIMATOR_DURATION_SCALE == 0）时直接用终态，跳过整段推出。 */
-val TICKET_PRINT_FINAL_PHASE: PrintPhase = PrintPhase(1f, 0f, TICKET_ROWS, true)
+val TICKET_PRINT_FINAL_PHASE: PrintPhase =
+    PrintPhase(1f, 0f, TICKET_ROWS, true, PHASE_B_STEPS)
 
 /**
  * 归一化进度对应的出票形态。
@@ -58,6 +66,7 @@ fun phaseAt(progress: Float): PrintPhase {
             overshootDp = 0f,
             rowsVisible = 0,
             barcodeVisible = false,
+            feedStep = 0,
         )
         // 阶段 B：步进走纸，段内保持常量，跨段才跳一级
         clamped < PHASE_B_END -> {
@@ -72,6 +81,7 @@ fun phaseAt(progress: Float): PrintPhase {
                 overshootDp = 0f,
                 rowsVisible = 0,
                 barcodeVisible = false,
+                feedStep = step + 1,
             )
         }
         // 阶段 C：纸走到底后过冲，再弹回原位
@@ -82,6 +92,7 @@ fun phaseAt(progress: Float): PrintPhase {
                 overshootDp = OVERSHOOT_DP * (1f - settled),
                 rowsVisible = 0,
                 barcodeVisible = false,
+                feedStep = PHASE_B_STEPS,
             )
         }
         // 阶段 D：票停稳后再逐行印字，最后压条码
@@ -93,6 +104,7 @@ fun phaseAt(progress: Float): PrintPhase {
                 rowsVisible = (1 + (elapsedMs / ROW_FADE_INTERVAL_MS).toInt())
                     .coerceIn(1, TICKET_ROWS),
                 barcodeVisible = clamped >= BARCODE_START,
+                feedStep = PHASE_B_STEPS,
             )
         }
     }
