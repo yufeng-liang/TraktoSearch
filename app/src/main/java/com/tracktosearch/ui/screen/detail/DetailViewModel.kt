@@ -99,6 +99,12 @@ enum class OwnCommentTarget {
     DOUBAN
 }
 
+/** 详情页登录提示需要打开的平台，不能再用一个布尔值丢失目标信息。 */
+enum class DetailLoginTarget {
+    TRAKT,
+    DOUBAN
+}
+
 const val DOUBAN_COMMENT_SOURCE = "Douban"
 
 /** 标记类操作的种类 */
@@ -205,9 +211,9 @@ data class DetailUiState(
     val creditsError: Boolean = false,
     // 预告片/截图加载失败（TMDB 或豆瓣 rexxar 任一路径失败且当前无数据时为 true）
     val videosError: Boolean = false,
-    // 未登录用户引导登录
+    // 未登录用户引导登录；目标平台决定确认按钮直达哪个网页登录流程
     val isLoggedIn: Boolean = true,
-    val showLoginPrompt: Boolean = false,
+    val loginTarget: DetailLoginTarget? = null,
     // 电视剧标记已看弹窗
     val showMarkWatchedDialog: Boolean = false,
     // 电影标记已看后弹出评分弹窗
@@ -223,7 +229,10 @@ data class DetailUiState(
     val doubanSyncRetryable: Boolean = false,
     /** 待重试的豆瓣动作 */
     val pendingDoubanAction: DoubanSyncAction? = null
-)
+) {
+    val showLoginPrompt: Boolean
+        get() = loginTarget != null
+}
 
 /** 场景 revision 只服务当前页面，详情缓存恢复时不能再次播放旧的加入想看动效。 */
 internal fun DetailUiState.withoutTransientSceneState(): DetailUiState =
@@ -1079,6 +1088,21 @@ class DetailViewModel @Inject constructor(
         return currentTraktId <= 0 && !doubanId.isNullOrBlank()
     }
 
+    private fun requestLogin(
+        target: DetailLoginTarget = if (isDoubanBackedItem()) {
+            DetailLoginTarget.DOUBAN
+        } else {
+            DetailLoginTarget.TRAKT
+        }
+    ) {
+        _uiState.value = _uiState.value.copy(loginTarget = target)
+    }
+
+    /** 评分入口预检也必须保留当前条目的平台目标。 */
+    fun requestLoginForCurrentItem() {
+        requestLogin()
+    }
+
     /** 普通详情没有有效 Trakt ID 时禁止把占位 ID 传给写接口。 */
     private fun canWriteToTrakt(): Boolean {
         if (currentTraktId > 0) return true
@@ -1879,7 +1903,7 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             val targets = resolveOwnCommentTargets()
             if (targets.isEmpty()) {
-                _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+                requestLogin()
                 return@launch
             }
             if (OwnCommentTarget.DOUBAN in targets && current.userRating == null) {
@@ -1902,7 +1926,7 @@ class DetailViewModel @Inject constructor(
             val availableTargets = resolveOwnCommentTargets()
             val targets = current.retryOwnCommentTargets.intersect(availableTargets)
             if (targets.isEmpty()) {
-                _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+                requestLogin()
                 return@launch
             }
             saveOwnCommentToTargets(comment, targets)
@@ -2042,7 +2066,7 @@ class DetailViewModel @Inject constructor(
         }
         // 未登录：弹出登录引导
         if (!isLoggedIn) {
-            _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+            requestLogin(DetailLoginTarget.TRAKT)
             return
         }
         if (!canWriteToTrakt()) return
@@ -2089,7 +2113,7 @@ class DetailViewModel @Inject constructor(
             return
         }
         if (!isLoggedIn) {
-            _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+            requestLogin(DetailLoginTarget.TRAKT)
             return
         }
         if (!canWriteToTrakt()) return
@@ -2171,7 +2195,7 @@ class DetailViewModel @Inject constructor(
         }
         // 未登录：弹出登录引导（与 setRating 保持一致）
         if (!isLoggedIn) {
-            _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+            requestLogin(DetailLoginTarget.TRAKT)
             return
         }
         if (!canWriteToTrakt()) return
@@ -2264,7 +2288,7 @@ class DetailViewModel @Inject constructor(
         if (currentSessionMode == SessionMode.DOUBAN) return
         // 未登录：弹出登录引导
         if (tokenStorage.getCachedAccessToken().isNullOrEmpty()) {
-            _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+            requestLogin(DetailLoginTarget.TRAKT)
             return
         }
         if (!canWriteToTrakt()) return
@@ -2663,7 +2687,7 @@ class DetailViewModel @Inject constructor(
         }
         // 未登录：弹出登录引导（使用 getCachedAccessToken 同步检查，避免异步时序问题）
         if (tokenStorage.getCachedAccessToken().isNullOrEmpty()) {
-            _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+            requestLogin(DetailLoginTarget.TRAKT)
             return
         }
         if (!canWriteToTrakt()) return
@@ -2805,7 +2829,7 @@ class DetailViewModel @Inject constructor(
 
         // 未登录：弹出登录引导（使用 getCachedAccessToken 同步检查，避免异步时序问题）
         if (tokenStorage.getCachedAccessToken().isNullOrEmpty()) {
-            _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+            requestLogin(DetailLoginTarget.TRAKT)
             return
         }
         if (!canWriteToTrakt()) return
@@ -2893,7 +2917,7 @@ class DetailViewModel @Inject constructor(
             // 访客(GUEST)点豆瓣承载条目的标记:引导登录而不是报「同步失败」;
             // 豆瓣登录用户 cred 意外为 null 才算真正的同步失败,保留原 toast
             if (currentSessionMode == SessionMode.GUEST) {
-                _uiState.value = current.copy(showLoginPrompt = true)
+                requestLogin(DetailLoginTarget.DOUBAN)
             } else {
                 viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
             }
@@ -2986,7 +3010,7 @@ class DetailViewModel @Inject constructor(
             // 访客(GUEST)点豆瓣承载条目的标记:引导登录而不是报「同步失败」;
             // 豆瓣登录用户 cred 意外为 null 才算真正的同步失败,保留原 toast
             if (currentSessionMode == SessionMode.GUEST) {
-                _uiState.value = current.copy(showLoginPrompt = true)
+                requestLogin(DetailLoginTarget.DOUBAN)
             } else {
                 viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
             }
@@ -3142,7 +3166,7 @@ class DetailViewModel @Inject constructor(
             // 访客(GUEST)对豆瓣承载条目评分:引导登录而不是报「同步失败」;
             // 豆瓣登录用户 cred 意外为 null 才算真正的同步失败,保留原 toast
             if (currentSessionMode == SessionMode.GUEST) {
-                _uiState.value = current.copy(showLoginPrompt = true)
+                requestLogin(DetailLoginTarget.DOUBAN)
             } else {
                 viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
             }
@@ -3202,7 +3226,7 @@ class DetailViewModel @Inject constructor(
         if (cred == null) {
             // 访客(GUEST)对豆瓣承载条目取消评分:引导登录而不是报「同步失败」(与 setRatingDouban 一致)
             if (currentSessionMode == SessionMode.GUEST) {
-                _uiState.value = current.copy(showLoginPrompt = true)
+                requestLogin(DetailLoginTarget.DOUBAN)
             } else {
                 viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
             }
@@ -3236,7 +3260,7 @@ class DetailViewModel @Inject constructor(
 
     /** 关闭登录引导弹窗 */
     fun dismissLoginPrompt() {
-        _uiState.value = _uiState.value.copy(showLoginPrompt = false)
+        _uiState.value = _uiState.value.copy(loginTarget = null)
     }
 
     /**

@@ -995,11 +995,8 @@ fun AppNavigation(
                             onShowClick = { traktId, tmdbId, title, imdbId, traktRating ->
                                 navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating))
                             },
-                            onNavigateToLogin = {
-                                navController.navigate(Routes.LOGIN) {
-                                    popUpTo(Routes.MAIN) { inclusive = false }
-                                }
-                            }
+                            onTraktLogin = { launchDirectTraktLogin() },
+                            onDoubanLogin = { navController.navigate(Routes.DOUBAN_LOGIN) }
                         )
                     }
                 }

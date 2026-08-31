@@ -108,6 +108,7 @@ CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments
 - Trakt users/me?extended=full 可能只返用户名无头像；补拉优先 users/{username}/profile，网关或上游返 405 再回退 users/{username}，持久化成功返 images.avatar.full
 - assets/quotes.json 的 id 只增不删不改名：日签表 daily_stamp 只存 (epochDay, quoteId)，改名等于把用户翻过的历史卡片抹成打不开的空格子。要换台词或换片就新增一条 id，旧条目留着；池子里多一条只影响之后每天取模选到谁，不动已落库的历史。改台词文案、片名、关键词、海报路径都可以，唯独 id 不能动
 - 访客模式不是独立授权态，而是“网关已激活 + Trakt 未连接 + 豆瓣未登录”的派生会话；勿再用单独 GuestModeStorage 决定启动路由，否则网关撤销/过期后会绕过激活页。激活成功页必须停留让用户选择 Trakt、豆瓣或访客，网关 EXPIRED 也不能自动拉起 Trakt OAuth
+- App 内平台登录提示必须携带明确目标（Trakt/豆瓣），不能只存 `showLoginPrompt` 布尔值；Trakt 确认按钮直调导航层 OAuth Custom Tab，豆瓣确认按钮直进 `DoubanLoginScreen`，`Routes.LOGIN` 仅用于网关未激活/失效，不得作为平台登录兜底
 
 ## Git 规范
 - commit 须 Conventional Commits：<type>(<scope>): <中文描述>
