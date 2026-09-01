@@ -29,6 +29,7 @@ import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.CommentTranslator
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.test.MainDispatcherRule
+import com.tracktosearch.ui.navigation.DetailSeedStore
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -80,6 +81,8 @@ class DetailViewModelDoubanTest {
         val cacheField = DetailViewModel::class.java.getDeclaredField("detailCache")
         cacheField.isAccessible = true
         (cacheField.get(null) as MutableMap<*, *>).clear()
+        // 首帧种子暂存是进程级单例，跨用例会互相污染 year/posterUrl 的兜底值
+        DetailSeedStore.clear()
 
         tmdbRepository = mockk(relaxed = true)
         traktRepository = mockk(relaxed = true)
@@ -540,5 +543,112 @@ class DetailViewModelDoubanTest {
         coVerify(exactly = 1) {
             doubanRexxarRepository.getDetail("db-late", DoubanRexxarMediaType.MOVIE, false)
         }
+    }
+
+    @Test
+    fun lateRexxarMergeDoesNotRewriteHeaderMetaAlreadyFilledByTmdb() = runTest {
+        // 发现页口碑榜入口：路由只带 traktId/tmdbId/title/imdbId，没有 doubanId。
+        // TMDB 富化先落地头部元信息，doubanId 稍后才解析出来并触发 rexxar 合并。
+        coEvery {
+            tmdbRepository.enrichMovie(555, "Route title", null)
+        } returns TmdbRepository.MovieEnrichment(
+            posterUrl = "https://image.tmdb.org/poster.jpg",
+            chineseTitle = "欢迎来龙餐馆",
+            originalTitle = "Once Upon a Time in the Middle East",
+            overview = "TMDB overview",
+            genres = "剧情 · 战争",
+            year = 2026,
+            rating = 7.9,
+            runtime = 140,
+            releaseDate = "2026-08-11",
+            country = "中国",
+            status = "Released"
+        )
+        coEvery { doubanSyncedItemDao.getByImdbId("tt-meta") } returns null
+        coEvery { doubanRepository.getDetailSnapshot() } returns emptyMap()
+        coEvery { doubanRepository.findDoubanId(0, "tt-meta", "movie", 555) } returns "db-meta"
+        coEvery { traktRepository.getRelatedMovies(any()) } returns Result.success(emptyList())
+        coEvery {
+            doubanRexxarRepository.getDetail("db-meta", DoubanRexxarMediaType.MOVIE, false)
+        } returns Result.success(
+            DoubanRexxarDetail(
+                doubanId = "db-meta",
+                type = DoubanRexxarMediaType.MOVIE,
+                title = "豆瓣标题",
+                year = "2025",
+                score = 8.7,
+                countries = listOf("大陆"),
+                initialReleaseDates = listOf("2026-06-20(上海国际电影节)"),
+                runtime = "132分钟"
+            )
+        )
+        coEvery {
+            doubanRexxarRepository.getPhotos("db-meta", DoubanRexxarMediaType.MOVIE, 0, 20, false)
+        } returns Result.failure(IllegalStateException("no photos"))
+
+        viewModel.loadDetail(
+            traktId = 0,
+            tmdbId = 555,
+            title = "Route title",
+            mediaType = MediaType.MOVIE,
+            imdbId = "tt-meta"
+        )
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        // 头部胶囊在 TMDB 富化时已经定稿，rexxar 回来后一个字都不许变
+        assertThat(state.country).isEqualTo("中国")
+        assertThat(state.releaseDate).isEqualTo("2026-08-11")
+        assertThat(state.runtime).isEqualTo(140)
+        assertThat(state.year).isEqualTo(2026)
+        assertThat(state.genres).isEqualTo("剧情 · 战争")
+        assertThat(state.displayTitle).isEqualTo("欢迎来龙餐馆")
+        // 豆瓣分仍要补进评分卡：只是元信息不覆盖，不是整块丢弃
+        assertThat(state.ratings?.doubanRating).isEqualTo(8.7)
+    }
+
+    @Test
+    fun failedTmdbEnrichmentKeepsSeededHeaderFields() = runTest {
+        // peek 命中让首帧就有海报/类型/日期，随后富化请求失败：以前会把这些统统清成空。
+        every {
+            tmdbRepository.peekMovieEnrichment(556, "Route title", null)
+        } returns TmdbRepository.MovieEnrichment(
+            posterUrl = "https://image.tmdb.org/seed.jpg",
+            chineseTitle = "种子标题",
+            originalTitle = "Seed Original",
+            overview = "Seed overview",
+            genres = "剧情",
+            year = 2026,
+            rating = 7.0,
+            runtime = 100,
+            releaseDate = "2026-08-11",
+            country = "中国",
+            status = "Released"
+        )
+        coEvery {
+            tmdbRepository.enrichMovie(556, "Route title", null)
+        } throws IllegalStateException("tmdb unavailable")
+        coEvery { doubanSyncedItemDao.getByImdbId(any()) } returns null
+        coEvery { doubanRepository.getDetailSnapshot() } returns emptyMap()
+        coEvery { doubanRepository.findDoubanId(any(), any(), any(), any()) } returns null
+        coEvery { traktRepository.getRelatedMovies(any()) } returns Result.success(emptyList())
+
+        viewModel.loadDetail(
+            traktId = 0,
+            tmdbId = 556,
+            title = "Route title",
+            mediaType = MediaType.MOVIE,
+            imdbId = "tt-seed"
+        )
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.posterUrl).isEqualTo("https://image.tmdb.org/seed.jpg")
+        assertThat(state.genres).isEqualTo("剧情")
+        assertThat(state.releaseDate).isEqualTo("2026-08-11")
+        assertThat(state.country).isEqualTo("中国")
+        assertThat(state.runtime).isEqualTo(100)
+        assertThat(state.status).isEqualTo("Released")
+        assertThat(state.displayTitle).isEqualTo("种子标题")
     }
 }
