@@ -207,7 +207,9 @@ async function handleActivate(
         throw new AppError('VOICE_NOT_READY', 'Voice for this character is not ready', 400);
     }
     const sessionId = readSessionId(body);
-    const audioData = body.audioData === undefined && body.audio === undefined && body.audioDataUrl === undefined
+    // 音频字段为 null 与整体缺席等价：客户端序列化器默认写出显式 null，
+    // 只判 undefined 会把纯文字激活当成"带了音频"，直接 readAudioData 报 INVALID_AUDIO。
+    const audioData = body.audioData == null && body.audio == null && body.audioDataUrl == null
         ? null
         : readAudioData(body);
     const spokenName = typeof body.spokenName === 'string' ? body.spokenName.trim() : '';
