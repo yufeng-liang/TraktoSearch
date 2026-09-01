@@ -696,7 +696,7 @@ private fun CharacterChoice(character: AiCharacter, selected: Boolean, onClick: 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(5.dp),
-            modifier = Modifier.padding(vertical = 9.dp)
+            modifier = Modifier.padding(top = 9.dp, bottom = 4.dp)
         ) {
             AiCharacterGlyph(character, Modifier.size(58.dp))
             Text(character.name, style = MaterialTheme.typography.labelMedium, maxLines = 1)
