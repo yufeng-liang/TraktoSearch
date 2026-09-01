@@ -52,8 +52,14 @@ internal fun buildSparkles(count: Int): List<Sparkle> {
     }
 }
 
+/**
+ * 量一段马克笔文字的排版结果。
+ *
+ * `internal` 是为了让灯箱能拿它给 `?` 位预留固定宽度 —— 不必真画一份透明文字占位
+ * （那会白跑一遍闪粉 mask 与 60 颗亮点）。
+ */
 @Composable
-private fun rememberMarkerLayout(text: String, fontSize: TextUnit): TextLayoutResult {
+internal fun rememberMarkerLayout(text: String, fontSize: TextUnit): TextLayoutResult {
     val measurer = rememberTextMeasurer()
     val style = remember(fontSize) {
         TextStyle(fontFamily = SwiftieFonts.Marker, fontSize = fontSize)

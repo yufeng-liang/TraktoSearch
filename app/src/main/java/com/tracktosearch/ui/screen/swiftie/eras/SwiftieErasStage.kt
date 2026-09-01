@@ -58,9 +58,11 @@ private fun activeEraIndexAt(elapsedMs: Long): Int =
 /**
  * Eras 回顾段的驱动层：轴 + 当前卡片 + 跳过 / 继续。
  *
- * 挂载区间是 `ERAS_INTRO`..`ERAS_CARDS` 与 `REWIND`..`LOVER_BLOOM` 两段 ——
- * 中间的终局（签名 / 手链 / 定格）期间整层卸载，配乐唱到 Lover 时再回来做收尾。
- * 所以内部只需判一处：终局之后要把「跳过」关掉（见 `skipVisible`）。
+ * 挂载区间是 `ERAS_INTRO`..`ERAS_CARDS` 与 `REWIND`..`FADE_OUT` 两段 ——
+ * 中间的终局（签名 / 手链 / 定格）期间整层卸载，配乐唱到 Lover 时再回来做收尾，
+ * 一直留到最后那 2998ms 的淡出（要淡的主体正是绽放开的 Lover 卡片）。
+ * 所以内部有两处要判：终局之后「跳过」关掉（`skipVisible`），
+ * 轴也不再收触摸（`axisInteractive`）。
  *
  * @param frozen 拖过播放头之后的定格状态，由 `SwiftieEggScreen` 持有 ——
  *   它要和「按住暂停」或起来一起喂给 `clock.paused`
@@ -121,6 +123,12 @@ fun SwiftieErasStage(
         )
     }
 
+    // 卡片段之外不收触摸：重挂载之后（倒滑 / 绽放 / 淡出）碰一下就会把时钟
+    // 倒拨回卡片段，而那三段正是配乐钉死的收尾
+    val axisInteractive by remember {
+        derivedStateOf { clock.elapsedMs < SwiftieTimeline.ERAS_CARDS_END }
+    }
+
     Box(modifier = modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
         Column(modifier = Modifier.fillMaxSize()) {
             BoxWithConstraints(
@@ -166,11 +174,12 @@ fun SwiftieErasStage(
             SwiftieErasAxis(
                 introProgress = introProgress,
                 playheadFraction = playheadFraction,
-                onSeekToEra = { index ->
-                    // 必须读在 seekToEra 之前：那一行会把 userSeeked 置真
-                    val firstTouch = !clock.userSeeked
+                interactive = axisInteractive,
+                onSeekToEra = { index, gestureStart ->
+                    // 「首次」只能在手势的第一个事件上判：seekToEra 会把 userSeeked 置真，
+                    // 拖动的第二个事件读到的就已经是 true，宽限会被拖动自己作废
+                    if (gestureStart) autoResumeArmed = !clock.userSeeked
                     clock.seekToEra(index)
-                    autoResumeArmed = firstTouch
                     seekTick++
                     onFrozenChange(true)
                 },

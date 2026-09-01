@@ -1999,9 +1999,11 @@
     <string name="bg_glow_lover_inspired">灵感源于 Lover</string>
     <string name="swiftie_quiz_a11y">题目：X 加 87 等于 100，X 是多少？当前作答：%1$s</string>
     <string name="swiftie_quiz_a11y_empty">尚未作答</string>
+    <string name="swiftie_quiz_a11y_hint">提示：她的幸运数字。</string>
     <string name="swiftie_quiz_submit">提交</string>
     <string name="swiftie_quiz_backspace">删除</string>
     <string name="swiftie_era_card_a11y">%1$s，发行于 %2$s，共 %3$d 首</string>
+    <string name="swiftie_eras_axis_a11y">专辑时间轴，2006 到 2025，共 12 张专辑。拖动可跳到某个时代。</string>
     <string name="swiftie_skip">跳过</string>
     <string name="swiftie_resume">继续</string>
     <string name="swiftie_audio_hint_all">打开声音并戴上耳机，体验最佳</string>

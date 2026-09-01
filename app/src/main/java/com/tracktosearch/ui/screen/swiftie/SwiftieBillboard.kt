@@ -23,12 +23,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,7 +48,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
 import kotlin.math.cos
 import kotlin.math.sin
@@ -57,7 +59,21 @@ private const val QUESTION = "?"
 private const val TITLE_1 = "Congrats"
 private const val TITLE_2 = "on"
 private const val TITLE_3 = "Forever!"
+
+/**
+ * 连错 3 次后浮出的小字。
+ *
+ * 和 [TITLE_1]…[TITLE_3] 一样**刻意不本地化** —— 灯箱是一张英文实景的复刻，这几行字
+ * 是画面的一部分，不是界面文案。而且它用 `SwiftieFonts.Script`（Pacifico 按这几个
+ * 英文字子集化，只剩 70 个字形），换成中日韩会整行豆腐块。
+ *
+ * 视障用户拿不到这条视觉提示，所以它另有一份本地化的无障碍文案
+ * `R.string.swiftie_quiz_a11y_hint`，由灯箱的 `contentDescription` 带出去。
+ */
 private const val LUCKY_HINT = "Her lucky number."
+
+/** `?` 位预留宽度用的隐形锚：输入最多两位，按最宽的两位数字占位。 */
+private const val SLOT_WIDEST = "00"
 
 /**
  * 1:1 灯箱复刻。算式在上、三行标题在下，配色**不随深色模式变化**（它是一张图，Spec §2.3）。
@@ -71,7 +87,10 @@ fun SwiftieBillboard(
     modifier: Modifier = Modifier
 ) {
     val emptyLabel = stringResource(R.string.swiftie_quiz_a11y_empty)
-    val a11y = stringResource(R.string.swiftie_quiz_a11y, state.input.ifEmpty { emptyLabel })
+    val question = stringResource(R.string.swiftie_quiz_a11y, state.input.ifEmpty { emptyLabel })
+    // 连错 3 次浮出的 Her lucky number. 是纯视觉的，这里补一份本地化文案带给 TalkBack
+    val hint = stringResource(R.string.swiftie_quiz_a11y_hint)
+    val a11y = if (state.showLuckyHint) "$question $hint" else question
 
     // 答错摇晃：wrongCount 每 +1 摇一遍，300ms 三个来回后回零
     val shake = remember { Animatable(0f) }
@@ -117,10 +136,12 @@ fun SwiftieBillboard(
             .clip(RoundedCornerShape(20.dp))
             .semantics(mergeDescendants = true) { contentDescription = a11y }
     ) {
-        // 字号按灯箱宽度算，刻意不跟系统 fontScale
-        val equationSize = (maxWidth.value * 0.112f).sp
-        val titleSize = (maxWidth.value * 0.170f).sp
-        val hintSize = (maxWidth.value * 0.042f).sp
+        // 字号按灯箱宽度算，刻意不跟系统 fontScale ——
+        // 灯箱是 aspectRatio(1f) 的定宽方框，字号跟着 fontScale 长就会顶出去被裁掉。
+        // 裸 .sp 达不到这个目的（.sp 就是跟 fontScale 走的那个单位），必须 Dp.toSp() 把它除掉
+        val equationSize = with(LocalDensity.current) { (maxWidth * 0.112f).toSp() }
+        val titleSize = with(LocalDensity.current) { (maxWidth * 0.170f).toSp() }
+        val hintSize = with(LocalDensity.current) { (maxWidth * 0.042f).toSp() }
 
         SwiftieWatercolorSky(
             modifier = Modifier.matchParentSize(),
@@ -193,6 +214,9 @@ private fun EquationBottomRow(
 
 /**
  * `?` 位。空着显示 `?`；落字时弹一下并爆一次亮点；答错时整组变洋红描边（Spec §4.3）。
+ *
+ * 弹跳与亮点只在**输入变长**时放。原先按 `state.input` / `input.length` 触发，
+ * 删除键也会算成落字 —— 退一位反而弹一下、爆一圈亮点，读起来像又填进去一个数字。
  */
 @Composable
 private fun AnswerSlot(
@@ -202,19 +226,34 @@ private fun AnswerSlot(
 ) {
     val wrong = state.phase == SwiftieQuizPhase.WRONG
     val strokeWidth = with(LocalDensity.current) { 2.dp.toPx() }
+    val widestLayout = rememberMarkerLayout(SLOT_WIDEST, fontSize)
+    val slotWidth = with(LocalDensity.current) { widestLayout.size.width.toDp() }
+
+    // 只数「落进来的字」：变长才 +1，退格与清空不动它。
+    // 计数写在 LaunchedEffect 里而不是组合体里，避免组合期写 state 触发多余的重组
+    var typedCount by remember { mutableIntStateOf(0) }
+    var previousLength by remember { mutableIntStateOf(0) }
 
     // 落字弹一下：新字符出现时从 1.25 回落到 1.0
     val pop = remember { Animatable(1f) }
     LaunchedEffect(state.input) {
-        if (state.input.isEmpty()) {
-            pop.snapTo(1f)
+        val grew = state.input.length > previousLength
+        previousLength = state.input.length
+        if (!grew) {
+            if (state.input.isEmpty()) pop.snapTo(1f)
             return@LaunchedEffect
         }
+        typedCount++
         pop.snapTo(1.25f)
         pop.animateTo(1f, spring(dampingRatio = 0.42f, stiffness = 900f))
     }
 
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+    Box(
+        // 预留两位数字的宽度。少了它，`?` → `1` → `13` 每一步宽度都变，
+        // 整行 `X = ?` 会跟着重新居中、左右跳
+        modifier = modifier.widthIn(min = slotWidth),
+        contentAlignment = Alignment.Center
+    ) {
         when {
             state.input.isEmpty() ->
                 SwiftieGlitterText(text = QUESTION, fontSize = fontSize)
@@ -235,7 +274,7 @@ private fun AnswerSlot(
                 }
             )
         }
-        SparkBurst(trigger = state.input.length, enabled = !wrong)
+        SparkBurst(trigger = typedCount, enabled = !wrong)
     }
 }
 

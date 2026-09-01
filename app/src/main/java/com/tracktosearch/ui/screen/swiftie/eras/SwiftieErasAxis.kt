@@ -22,9 +22,14 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tracktosearch.R
 import com.tracktosearch.ui.screen.swiftie.SwiftiePalette
 import com.tracktosearch.ui.screen.swiftie.SwiftieTimeline
 
@@ -65,11 +70,24 @@ fun swiftiePlayheadFraction(elapsedMs: Long): Float =
     ((elapsedMs - SwiftieTimeline.ERAS_CARDS_START).toFloat() / SwiftieTimeline.ERAS_CARDS_MS)
         .coerceIn(0f, 1f)
 
-/** 色带 12 + 间距 5 + 轴线 + 刻度 6 + 播放头旋钮 = 38dp。 */
-private val AXIS_HEIGHT = 38.dp
+/** 色带 12 + 间距 5 + 轴线 + 刻度 6 + 播放头旋钮 = 38dp 的图形高度。 */
+private val AXIS_VISUAL_HEIGHT = 38.dp
+
+/**
+ * 轴的实际高度 —— 也就是它的**触控目标**。
+ *
+ * 图形只占 [AXIS_VISUAL_HEIGHT]，但拖播放头是这一段唯一的交互，38dp 低于
+ * Material 的 48dp 下限。多出来的 10dp 上下各摊 5dp（见 `drawAxis` 里的 `top`），
+ * 图形位置几乎没动，手指却多了 26% 的余量。
+ */
+private val AXIS_TOUCH_HEIGHT = 48.dp
+
 private val RIBBON_HEIGHT = 12.dp
 private val TICK_HEIGHT = 6.dp
 private val AXIS_SIDE_PADDING = 20.dp
+
+/** 两端年份的字号。跟随系统字号 —— 这一行外层没有定高容器，长大不会被裁。 */
+private val YEAR_FONT_SIZE = 11.sp
 
 /** 未走过的段落：灰化。走过的换成该时代主色。 */
 private val DESATURATED = Color(0xFFB6AFAB)
@@ -82,42 +100,74 @@ private val DESATURATED = Color(0xFFB6AFAB)
  *
  * @param introProgress 0f..1f，T1100–3100 的进度
  * @param playheadFraction 0f..1f，播放头位置。倒滑段由调用方给回退中的值
- * @param onSeekToEra 按下 / 拖动时吸附到的段落索引
+ * @param interactive false 时整块不收触摸（倒滑与绽放期间）
+ * @param onSeekToEra 按下 / 拖动时吸附到的段落索引。`gestureStart` 只在一次手势的
+ *   第一个事件为 true —— 「首次拖动给宽限」这类判断必须只在那一下做，
+ *   拖动过程中每个移动事件都会回调
  */
 @Composable
 fun SwiftieErasAxis(
     introProgress: () -> Float,
     playheadFraction: () -> Float,
-    onSeekToEra: (Int) -> Unit,
+    interactive: Boolean,
+    onSeekToEra: (index: Int, gestureStart: Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val axisLabel = stringResource(R.string.swiftie_eras_axis_a11y)
     Column(modifier = modifier.fillMaxWidth()) {
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(AXIS_HEIGHT)
+                .height(AXIS_TOUCH_HEIGHT)
                 .padding(horizontal = AXIS_SIDE_PADDING)
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        // 按下即吸附，不等滑动阈值 —— 点一下色带就跳过去是最自然的期待
-                        val down = awaitFirstDown()
-                        onSeekToEra(swiftieEraIndexAtFraction(down.position.x / size.width))
-                        // 只消费 Main pass；外层按住暂停走 Initial pass，照样收得到
-                        down.consume()
-                        drag(down.id) { change ->
-                            onSeekToEra(swiftieEraIndexAtFraction(change.position.x / size.width))
-                            change.consume()
-                        }
+                // 倒滑与绽放期间必须整块停掉：alpha 只改绘制、不改命中区域，
+                // 那时候碰一下就会把时钟倒拨回卡片段，配乐钉死的两个点当场失效
+                // （同一个理由让「跳过」也在那之后 enabled = false）
+                .then(
+                    if (!interactive) {
+                        // 不可交互时连语义也清掉：那几段轴的 alpha 已经是 0，
+                        // 留着 contentDescription 只会让 TalkBack 停在一个看不见、
+                        // 也点不动的东西上
+                        Modifier.clearAndSetSemantics { }
+                    } else {
+                        Modifier
+                            // 只给一条静态说明。**刻意不做 slider 语义** ——
+                            // ProgressBarRangeInfo 要读逐帧的播放头位置，而语义 lambda
+                            // 里的 state 读会让整棵语义树每帧失效重建；而且 12 段拖动
+                            // 对读屏用户本来也没有可用性，卡片自己有完整的播报
+                            .semantics { contentDescription = axisLabel }
+                            .pointerInput(Unit) {
+                                awaitEachGesture {
+                                    // 按下即吸附，不等滑动阈值 —— 点一下色带就跳过去是最自然的期待
+                                    val down = awaitFirstDown()
+                                    onSeekToEra(
+                                        swiftieEraIndexAtFraction(down.position.x / size.width),
+                                        true
+                                    )
+                                    // 只消费 Main pass；外层按住暂停走 Initial pass，照样收得到
+                                    down.consume()
+                                    drag(down.id) { change ->
+                                        onSeekToEra(
+                                            swiftieEraIndexAtFraction(change.position.x / size.width),
+                                            false
+                                        )
+                                        change.consume()
+                                    }
+                                }
+                            }
                     }
-                }
+                )
         ) {
             val intro = introProgress().coerceIn(0f, 1f)
             val linePhase = (intro / 0.45f).coerceIn(0f, 1f)
             val tickPhase = ((intro - 0.35f) / 0.35f).coerceIn(0f, 1f)
             val ribbonPhase = ((intro - 0.55f) / 0.45f).coerceIn(0f, 1f)
 
+            // 图形在 48dp 的触控高度里垂直居中，上下各留 5dp 只做触控余量
+            val top = ((size.height - AXIS_VISUAL_HEIGHT.toPx()) / 2f).coerceAtLeast(0f)
             val ribbonHeight = RIBBON_HEIGHT.toPx()
-            val lineY = ribbonHeight + 5.dp.toPx()
+            val ribbonTop = top
+            val lineY = top + ribbonHeight + 5.dp.toPx()
             val tickBottom = lineY + TICK_HEIGHT.toPx()
             val knobY = tickBottom + 7.dp.toPx()
             val gap = 2.dp.toPx()
@@ -149,7 +199,7 @@ fun SwiftieErasAxis(
 
             // 第三拍：色带升上来。先整条灰化，再把走过的部分覆一层饱和色
             if (ribbonPhase > 0f) {
-                val rise = (1f - ribbonPhase) * 4.dp.toPx()
+                val rise = ribbonTop + (1f - ribbonPhase) * 4.dp.toPx()
                 SWIFTIE_ERA_EDGES.zipWithNext().forEach { (from, to) ->
                     drawRoundRect(
                         color = DESATURATED,
@@ -177,7 +227,7 @@ fun SwiftieErasAxis(
                 val headX = playheadFraction().coerceIn(0f, 1f) * size.width
                 drawLine(
                     color = SwiftiePalette.RoyalBlue,
-                    start = Offset(headX, 0f),
+                    start = Offset(headX, ribbonTop),
                     end = Offset(headX, knobY),
                     strokeWidth = 2.5.dp.toPx(),
                     cap = StrokeCap.Round,
@@ -210,11 +260,12 @@ fun SwiftieErasAxis(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             val yearStyle = TextStyle(
-                fontSize = 10.sp,
+                fontSize = YEAR_FONT_SIZE,
                 color = SwiftiePalette.RoyalBlue.copy(alpha = 0.70f)
             )
-            Text(text = "2006", style = yearStyle)
-            Text(text = "2025", style = yearStyle)
+            // 年份是装饰性重复信息（轴本身与 12 张卡片都带日期），对读屏隐身
+            Text(text = "2006", style = yearStyle, modifier = Modifier.clearAndSetSemantics { })
+            Text(text = "2025", style = yearStyle, modifier = Modifier.clearAndSetSemantics { })
         }
     }
 }
