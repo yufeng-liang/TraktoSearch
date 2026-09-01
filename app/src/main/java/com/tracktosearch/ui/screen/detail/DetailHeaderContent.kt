@@ -9,6 +9,7 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -320,7 +321,6 @@ internal fun DetailHeaderContent(
                 minHeight = HEADER_POSTER_HEIGHT,
                 modifier = Modifier.weight(1f),
                 text = {
-                Column {
                     // 标题：放开两行。原先塞在 Box(height(28.dp)) 里被迫 maxLines = 1，
                     // 《银翼杀手 2049 加长版》这类长片名直接被切掉后半段
                     Text(
@@ -352,52 +352,51 @@ internal fun DetailHeaderContent(
                         Spacer(modifier = Modifier.height(6.dp))
                         DetailMetaChips(chips = metaChips, contentColor = onPosterColor)
                     }
-                }
                 },
                 actions = {
-                // 操作按钮组：想看 / 已看 / 评分。右列三等分，图标 + 文字两行。
-                // 按钮组属于 Glass overlay：置于采样源之外（LocalBackdrop=null），
-                // 避免把自身 drawBackdrop 录回头部采样源造成 RenderThread 递归。
-                CompositionLocalProvider(LocalBackdrop provides null) {
-                    ActionButtonRow(
-                        actions = listOf(
-                            ActionItem(
-                                icon = if (isMarkedWatchlist) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
-                                label = stringResource(if (isMarkedWatchlist) R.string.detail_marked_watchlist else R.string.detail_mark_watchlist),
-                                selected = isMarkedWatchlist,
-                                enabled = !isMarkingWatchlist,
-                                isLoading = isMarkingWatchlist,
-                                onClick = {
-                                    view.performHaptic(HapticType.TICK)
-                                    onToggleWatchlist()
-                                }
+                    // 操作按钮组：想看 / 已看 / 评分。右列三等分，图标 + 文字两行。
+                    // 按钮组属于 Glass overlay：置于采样源之外（LocalBackdrop=null），
+                    // 避免把自身 drawBackdrop 录回头部采样源造成 RenderThread 递归。
+                    CompositionLocalProvider(LocalBackdrop provides null) {
+                        ActionButtonRow(
+                            actions = listOf(
+                                ActionItem(
+                                    icon = if (isMarkedWatchlist) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
+                                    label = stringResource(if (isMarkedWatchlist) R.string.detail_marked_watchlist else R.string.detail_mark_watchlist),
+                                    selected = isMarkedWatchlist,
+                                    enabled = !isMarkingWatchlist,
+                                    isLoading = isMarkingWatchlist,
+                                    onClick = {
+                                        view.performHaptic(HapticType.TICK)
+                                        onToggleWatchlist()
+                                    }
+                                ),
+                                ActionItem(
+                                    icon = if (isMarkedWatched) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
+                                    label = stringResource(if (isMarkedWatched) R.string.detail_marked_watched else R.string.detail_mark_watched),
+                                    selected = isMarkedWatched,
+                                    enabled = !isMarkingWatched,
+                                    isLoading = isMarkingWatched,
+                                    onClick = {
+                                        view.performHaptic(HapticType.TICK)
+                                        onToggleWatched()
+                                    }
+                                ),
+                                ActionItem(
+                                    icon = if (uiState.userRating != null && uiState.userRating > 0) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                                    label = stringResource(if (uiState.userRating != null && uiState.userRating > 0) R.string.detail_rated else R.string.detail_rate),
+                                    selected = uiState.userRating != null && uiState.userRating > 0,
+                                    enabled = !uiState.isRating,
+                                    isLoading = uiState.isRating,
+                                    onClick = {
+                                        view.performHaptic(HapticType.TICK)
+                                        onShowRatingDialog()
+                                    }
+                                )
                             ),
-                            ActionItem(
-                                icon = if (isMarkedWatched) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
-                                label = stringResource(if (isMarkedWatched) R.string.detail_marked_watched else R.string.detail_mark_watched),
-                                selected = isMarkedWatched,
-                                enabled = !isMarkingWatched,
-                                isLoading = isMarkingWatched,
-                                onClick = {
-                                    view.performHaptic(HapticType.TICK)
-                                    onToggleWatched()
-                                }
-                            ),
-                            ActionItem(
-                                icon = if (uiState.userRating != null && uiState.userRating > 0) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-                                label = stringResource(if (uiState.userRating != null && uiState.userRating > 0) R.string.detail_rated else R.string.detail_rate),
-                                selected = uiState.userRating != null && uiState.userRating > 0,
-                                enabled = !uiState.isRating,
-                                isLoading = uiState.isRating,
-                                onClick = {
-                                    view.performHaptic(HapticType.TICK)
-                                    onShowRatingDialog()
-                                }
-                            )
-                        ),
-                        verticalPadding = 7.dp
-                    )
-                }
+                            verticalPadding = 7.dp
+                        )
+                    }
                 }
             )
         }
@@ -584,11 +583,11 @@ internal fun DetailHeaderContent(
 private fun HeaderRightColumn(
     minHeight: Dp,
     modifier: Modifier = Modifier,
-    text: @Composable () -> Unit,
+    text: @Composable ColumnScope.() -> Unit,
     actions: @Composable () -> Unit
 ) {
     Layout(
-        contents = listOf(text, actions),
+        contents = listOf({ Column(content = text) }, actions),
         modifier = modifier
     ) { (textMeasurables, actionMeasurables), constraints ->
         // 宽度沿用父级给的精确值（Row 的 weight 已定死），高度放开由内容自报
