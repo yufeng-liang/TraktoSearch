@@ -1,9 +1,9 @@
 package com.tracktosearch.ui.screen.settings
 
-import android.widget.Toast
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -20,8 +20,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -40,19 +40,19 @@ import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Animation
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Feedback
-import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
-import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.FormatQuote
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
-import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Notifications
@@ -79,6 +79,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -94,66 +95,67 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.kyant.backdrop.backdrops.LayerBackdrop
-import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.runtime.CompositionLocalProvider
-import com.tracktosearch.ui.component.LocalBackdrop
-import com.tracktosearch.ui.component.NeumorphicFrostedSurface
-import com.tracktosearch.ui.component.NeumorphicIconButton
-import com.tracktosearch.ui.component.DoubanLogo
-import com.tracktosearch.ui.component.GlassSurfaceRole
-import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
-import com.tracktosearch.ui.component.TopBarBackdropSourcePadding
-import com.tracktosearch.ui.component.TraktLogo
-import com.tracktosearch.ui.component.GlassScene
-import com.tracktosearch.ui.component.glassSceneForContent
-import com.tracktosearch.ui.component.hazeTopBar
-import com.tracktosearch.ui.component.hasListScrolled
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CooldownStatus
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.CloudThemeManager
+import com.tracktosearch.ui.component.DoubanLogo
+import com.tracktosearch.ui.component.GlassScene
+import com.tracktosearch.ui.component.GlassSurfaceRole
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.NeumorphicFrostedSurface
+import com.tracktosearch.ui.component.NeumorphicIconButton
+import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
+import com.tracktosearch.ui.component.TopBarBackdropSourcePadding
+import com.tracktosearch.ui.component.TraktLogo
 import com.tracktosearch.ui.component.UpdateDialog
-import com.tracktosearch.ui.screen.feedback.FeedbackViewModel
+import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.hasListScrolled
+import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
-import com.tracktosearch.ui.theme.MeshPreset
+import com.tracktosearch.ui.screen.feedback.FeedbackViewModel
+import com.tracktosearch.ui.theme.GlassBorderDarkSubtle
+import com.tracktosearch.ui.theme.GlassFillDarkSubtle
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.MeshPreset
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import dev.chrisbanes.haze.hazeSource
+import java.text.SimpleDateFormat
+import java.util.Locale
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 /** EntryPoint 用于在设置页拿到 CloudThemeManager（关于页版本号连点拉起彩蛋题面） */
 @EntryPoint
@@ -1353,12 +1355,12 @@ private fun MarkRecordsEntryCard(
         isDark = isDark,
         shape = RoundedCornerShape(20.dp),
         backgroundColor = if (realBlur) {
-            if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.70f)
+            if (isDark) GlassFillDarkSubtle else Color.White.copy(alpha = 0.70f)
         } else {
             if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
             else Color.White.copy(alpha = 0.82f)
         },
-        borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
+        borderColor = if (isDark) GlassBorderDarkSubtle
                       else Color(0xFFE0E5EC).copy(alpha = 0.9f),
         elevation = 6.dp,
         blurRadius = 18.dp,
@@ -1435,12 +1437,12 @@ private fun SearchSourcesEntryCard(
         isDark = isDark,
         shape = RoundedCornerShape(20.dp),
         backgroundColor = if (realBlur) {
-            if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.70f)
+            if (isDark) GlassFillDarkSubtle else Color.White.copy(alpha = 0.70f)
         } else {
             if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
             else Color.White.copy(alpha = 0.82f)
         },
-        borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
+        borderColor = if (isDark) GlassBorderDarkSubtle
                       else Color(0xFFE0E5EC).copy(alpha = 0.9f),
         elevation = 6.dp,
         blurRadius = 18.dp,
@@ -1517,12 +1519,12 @@ private fun PrivacyEntryCard(
         isDark = isDark,
         shape = RoundedCornerShape(20.dp),
         backgroundColor = if (realBlur) {
-            if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.70f)
+            if (isDark) GlassFillDarkSubtle else Color.White.copy(alpha = 0.70f)
         } else {
             if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
             else Color.White.copy(alpha = 0.82f)
         },
-        borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
+        borderColor = if (isDark) GlassBorderDarkSubtle
                       else Color(0xFFE0E5EC).copy(alpha = 0.9f),
         elevation = 6.dp,
         blurRadius = 18.dp,

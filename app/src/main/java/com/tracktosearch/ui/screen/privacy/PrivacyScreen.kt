@@ -102,6 +102,8 @@ import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.screen.settings.GroupDivider
 import com.tracktosearch.ui.screen.settings.settingsIconContainerColor
+import com.tracktosearch.ui.theme.GlassBorderDarkSubtle
+import com.tracktosearch.ui.theme.GlassFillDarkSubtle
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.theme.appSwitchColors
@@ -334,7 +336,7 @@ private fun PrivacySectionCard(
     val isDark = isAppDarkTheme()
     // BLUR 模式列表卡片不再各自开一层离屏做真模糊，改用更实的填充；GLASS 模式不变。
     val realBlur = LocalVisualEffectMode.current == VisualEffectMode.GLASS
-    val blurFill = if (isDark) Color.White.copy(alpha = 0.08f)
+    val blurFill = if (isDark) GlassFillDarkSubtle
                    else Color.White.copy(alpha = 0.70f)
     val solidFill = if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
                     else blurFill.copy(alpha = (blurFill.alpha + 0.12f).coerceAtMost(0.92f))
@@ -352,7 +354,7 @@ private fun PrivacySectionCard(
             isDark = isDark,
             shape = RoundedCornerShape(20.dp),
             backgroundColor = if (realBlur) blurFill else solidFill,
-            borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
+            borderColor = if (isDark) GlassBorderDarkSubtle
                           else Color(0xFFE0E5EC).copy(alpha = 0.9f),
             elevation = 6.dp,
             blurRadius = 18.dp,

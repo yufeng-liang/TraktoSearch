@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色档的系统启动页背景。
+         少了这一份的话深色模式冷启动会先闪一屏浅奶油（#F7EFE2）再切进深色 App。
+         取值跟 SplashQuoteModels 里深色档 SplashPalette 的 paper 一致。 -->
+    <color name="splash_background">#241914</color>
+</resources>

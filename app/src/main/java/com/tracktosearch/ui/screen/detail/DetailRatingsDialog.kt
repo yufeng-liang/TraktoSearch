@@ -8,7 +8,9 @@ import com.tracktosearch.ui.theme.BrandMetacritic
 import com.tracktosearch.ui.theme.BrandRottenTomatoes
 import com.tracktosearch.ui.theme.BrandTmdb
 import com.tracktosearch.ui.theme.OnBrandImdb
+import com.tracktosearch.ui.theme.OnBrandTmdb
 import com.tracktosearch.ui.theme.RatingGold
+import com.tracktosearch.ui.theme.readableOn
 import com.tracktosearch.ui.theme.VisualEffectMode
 
 import androidx.compose.foundation.BorderStroke
@@ -158,7 +160,7 @@ internal fun RatingsRow(
             source = RatingSource.TMDB,
             label = stringResource(R.string.detail_info_tmdb_rating),
             brandColor = BrandTmdb,
-            onBrandColor = Color.White,
+            onBrandColor = OnBrandTmdb,
             value = displayTenPointRating(
                 ratings.tmdbRating.takeIf { it > 0.0 },
                 missingValue
@@ -338,14 +340,24 @@ private fun RatingMark(badge: RatingBadgeData) {
     }
 }
 
-/** 图标右侧的平台名，用品牌色（IMDb/TMDB 的字标不走这里，它们的名字在色块里）。 */
+/**
+ * 图标右侧的平台名，用品牌色 —— 但压在卡片上先过 [readableOn]。
+ *
+ * 原色直接当 10sp 文字全部不到 AA：豆瓣绿 2.96:1、烂番茄红 2.97:1、
+ * Metacritic 橙在浅卡片上只有 1.72:1。保色相调明度，识别性由左边的图标/emoji 兜住。
+ * IMDb / TMDB 的字标不走这里，它们的名字在色块里，配的是 On* 前景色。
+ */
 @Composable
 private fun RatingMarkLabel(badge: RatingBadgeData, style: TextStyle) {
+    val surface = MaterialTheme.colorScheme.surfaceVariant
+    val labelColor = remember(badge.brandColor, surface) {
+        readableOn(badge.brandColor, surface)
+    }
     Text(
         text = badge.label,
         style = style,
         fontWeight = FontWeight.Bold,
-        color = badge.brandColor,
+        color = labelColor,
         maxLines = 1
     )
 }

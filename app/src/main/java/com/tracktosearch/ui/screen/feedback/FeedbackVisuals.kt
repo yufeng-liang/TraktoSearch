@@ -36,7 +36,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -47,13 +46,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.LoadMoreFooterState
-import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.FeedbackBug
 import com.tracktosearch.ui.theme.FeedbackDeveloper
 import com.tracktosearch.ui.theme.FeedbackFeature
 import com.tracktosearch.ui.theme.FeedbackOther
 import com.tracktosearch.ui.theme.FeedbackReplied
 import com.tracktosearch.ui.theme.FeedbackUx
+import com.tracktosearch.ui.theme.readableOn
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -71,14 +70,20 @@ import java.util.concurrent.TimeUnit
 // ====== 类型 / 状态映射 ======
 
 /**
- * 固定强调色在浅色主题下压暗一档。
+ * 固定强调色调到在当前卡片底上读得清。
  *
  * 这几个色是为深色底挑的，直接拿 0xFFFBBF24 当浅色主题下 12sp 小字，
  * 落在同色淡底胶囊上对比度不够。
+ *
+ * 原先是无条件 `lerp(base, Black, 0.32f)`，一个系数管所有色相 —— 对黄和黄绿远远不够：
+ * 体验问题的 #FBBF24 压暗后压在浅色卡片上只有 2.77:1。改成按目标对比度反解，
+ * 深色档也一样走（深色卡片上 4.5:1 达不到的色会朝白推），不再靠「深色档原样返回」赌运气。
  */
 @Composable
-internal fun feedbackAccent(base: Color): Color =
-    if (isAppDarkTheme()) base else lerp(base, Color.Black, 0.32f)
+internal fun feedbackAccent(base: Color): Color {
+    val surface = MaterialTheme.colorScheme.surfaceVariant
+    return remember(base, surface) { readableOn(base, surface) }
+}
 
 internal fun feedbackTypeBaseColor(type: String): Color = when (type) {
     "FEATURE" -> FeedbackFeature

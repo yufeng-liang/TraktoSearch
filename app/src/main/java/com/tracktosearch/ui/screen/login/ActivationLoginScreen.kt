@@ -67,6 +67,12 @@ import com.tracktosearch.ui.component.CinemaClapperIcon
 import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.theme.LoginActionInk
+import com.tracktosearch.ui.theme.LoginErrorInk
+import com.tracktosearch.ui.theme.LoginPaperDark
+import com.tracktosearch.ui.theme.LoginPaperLight
+import com.tracktosearch.ui.theme.LoginSecondaryInk
+import com.tracktosearch.ui.theme.LoginTitleInk
 import com.tracktosearch.ui.screen.auth.AuthViewModel
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
@@ -105,8 +111,9 @@ fun ActivationLoginScreen(
     val hazeState = remember { HazeState() }
     val scrollState = rememberScrollState()
     val isDarkTheme = isAppDarkTheme()
-    val loginBackground = if (isDarkTheme) Color(0xFFD9CFC2) else Color(0xFFF7EFE2)
-    val loginSecondaryTextColor = if (isDarkTheme) Color(0xFF624B3C) else MaterialTheme.colorScheme.onSurfaceVariant
+    // 整屏不映射主题，见 Color.kt 的「激活登录页固定色」段
+    val loginBackground = if (isDarkTheme) LoginPaperDark else LoginPaperLight
+    val loginSecondaryTextColor = LoginSecondaryInk
     var showWhatIsTraktDialog by remember { mutableStateOf(false) }
 
     val isActivated = authState.activated
@@ -276,7 +283,7 @@ fun ActivationLoginScreen(
                 onClick = { showWhatIsTraktDialog = true },
                 enabled = true,
                 colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                    contentColor = if (isDarkTheme) Color(0xFF6B4632) else MaterialTheme.colorScheme.primary
+                    contentColor = LoginActionInk
                 ),
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -312,7 +319,7 @@ fun ActivationLoginScreen(
                             fontSize = 34.sp,
                             lineHeight = 41.sp,
                             letterSpacing = (-2.04f).sp,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = LoginTitleInk,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Serif
                         )
@@ -391,7 +398,7 @@ fun ActivationLoginScreen(
                         text = errorMessage?.toUserMessage(context, R.string.login_failed)
                             ?: stringResource(R.string.login_denied),
                         modifier = Modifier.padding(top = 8.dp),
-                        color = MaterialTheme.colorScheme.error,
+                        color = LoginErrorInk,
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center
                     )
@@ -404,17 +411,31 @@ fun ActivationLoginScreen(
     if (showWhatIsTraktDialog) {
         AlertDialog(
             onDismissRequest = { showWhatIsTraktDialog = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = LoginPaperLight,
+            titleContentColor = LoginTitleInk,
+            textContentColor = LoginSecondaryInk,
             title = { Text(stringResource(R.string.login_what_is_trakt_title)) },
             text = { Text(stringResource(R.string.login_what_is_trakt_desc)) },
             confirmButton = {
-                Button(onClick = {
-                    showWhatIsTraktDialog = false
-                    CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse("https://trakt.tv/auth/join"))
-                }) { Text(stringResource(R.string.login_what_is_trakt_register)) }
+                Button(
+                    onClick = {
+                        showWhatIsTraktDialog = false
+                        CustomTabsIntent.Builder().build()
+                            .launchUrl(context, Uri.parse("https://trakt.tv/auth/join"))
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = LoginTitleInk,
+                        contentColor = LoginPaperLight
+                    )
+                ) { Text(stringResource(R.string.login_what_is_trakt_register)) }
             },
             dismissButton = {
-                TextButton(onClick = { showWhatIsTraktDialog = false }) {
+                TextButton(
+                    onClick = { showWhatIsTraktDialog = false },
+                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                        contentColor = LoginActionInk
+                    )
+                ) {
                     Text(stringResource(R.string.login_what_is_trakt_close))
                 }
             }
@@ -484,10 +505,10 @@ private fun readClipboardText(context: Context): String {
 
 @Composable
 private fun MovieBackdrop(modifier: Modifier = Modifier) {
-    val primary = MaterialTheme.colorScheme.primary
-    val motifColor = primary.copy(alpha = 0.45f)
-    val reelColor = primary.copy(alpha = 0.24f)
-    val dotColor = primary.copy(alpha = 0.13f)
+    // 底纹也走场景固定墨色：跟着 primary 走的话，冷色主题下牛皮纸上会浮一层蓝点
+    val motifColor = LoginActionInk.copy(alpha = 0.45f)
+    val reelColor = LoginActionInk.copy(alpha = 0.24f)
+    val dotColor = LoginActionInk.copy(alpha = 0.13f)
     Box(
         modifier
             .fillMaxSize()

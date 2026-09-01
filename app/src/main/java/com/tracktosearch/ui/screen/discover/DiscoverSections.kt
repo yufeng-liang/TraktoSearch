@@ -20,9 +20,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -39,19 +39,17 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.shadow.Shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.douban.dto.DoubanRecommendItem
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
-import com.tracktosearch.ui.animation.fadeSlideIn
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedMovieResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedShowResponse
@@ -60,15 +58,17 @@ import com.tracktosearch.data.remote.trakt.dto.TraktRecommendationShowResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktShow
 import com.tracktosearch.data.remote.trakt.dto.TraktTrendingMovieResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktTrendingShowResponse
+import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.ui.animation.fadeSlideIn
 import com.tracktosearch.ui.component.AppVisualSurface
 import com.tracktosearch.ui.component.DoubanHotCardSkeleton
-import com.tracktosearch.ui.component.rememberPosterPrefetch
-import com.tracktosearch.ui.component.SectionHeader
-import com.tracktosearch.ui.component.isAppDarkTheme
-import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.GlassTabIndicator
-import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.ui.component.SectionHeader
+import com.tracktosearch.ui.component.VisualSurfaceKind
+import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.rememberPosterPrefetch
+import com.tracktosearch.ui.theme.GlassFillDark
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import java.util.Locale
@@ -520,14 +520,8 @@ internal fun LoginUnlockCard(onLoginClick: () -> Unit) {
         targetValue = if (isPressed) 0.97f else 1f,
         label = "login_unlock_scale"
     )
-    val isDark = isAppDarkTheme()
     val shape = RoundedCornerShape(20.dp)
-    val gradient = remember(isDark) {
-        Brush.linearGradient(
-            if (isDark) listOf(Color(0xFF1B255F), Color(0xFF26327A))
-            else listOf(Color(0xFF283593), Color(0xFF3949AB))
-        )
-    }
+    val gradient = remember { DiscoverTraktLoginGradient.toBrush() }
     AppVisualSurface(
         kind = VisualSurfaceKind.Content,
         modifier = Modifier
@@ -586,18 +580,7 @@ private fun DoubanLoginGuideCard(promptText: String, onLoginClick: () -> Unit) {
         label = "douban_recommend_login_scale"
     )
     val shape = RoundedCornerShape(20.dp)
-    val isDark = isAppDarkTheme()
-    val gradient = remember(isDark) {
-        Brush.linearGradient(
-            colors = if (isDark) {
-                listOf(Color(0xFF358E60), Color(0xFF378C9B))
-            } else {
-                listOf(Color(0xFF49B879), Color(0xFF42A7B3))
-            },
-            start = Offset(0f, Float.POSITIVE_INFINITY),
-            end = Offset(Float.POSITIVE_INFINITY, 0f)
-        )
-    }
+    val gradient = remember { DiscoverDoubanLoginGradient.toBrush() }
     AppVisualSurface(
         kind = VisualSurfaceKind.Content,
         modifier = Modifier
@@ -851,7 +834,7 @@ internal fun CapsuleTabSelector(
             .width(capsuleWidth)
             .clip(capsuleShape)
             .background(
-                if (isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.35f)
+                if (isDark) GlassFillDark else Color.White.copy(alpha = 0.35f)
             )
     ) {
         // Glass 使用独立指示器；Blur 才保留旧拟态药丸。

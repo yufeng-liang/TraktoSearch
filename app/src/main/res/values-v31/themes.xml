@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Android 12+ (API 31+) SplashScreen API
-         让系统默认启动页就是蓝色渐变背景 + 居中图标，
-         避免出现"先白屏/原图标 → 再切到自定义渐变"的两次启动页。 -->
+         让系统默认启动页就是暖纸背景 + 居中图标，
+         避免出现"先白屏/原图标 → 再切到自绘 splash"的两次启动页。 -->
     <style name="Theme.App.Starting" parent="Theme.SplashScreen">
-        <!-- 系统启动页背景：使用纯色（渐变起点色），与自定义 splash 渐变自然衔接 -->
-        <item name="windowSplashScreenBackground">#F7EFE2</item>
+        <!-- 走 @color/splash_background 而不是写死 hex：深色档由 values-night/colors.xml 覆盖，
+             否则深色模式冷启动会先闪一屏浅奶油再切进深色 App。 -->
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
         <!-- 使用透明 1dp drawable 隐藏系统 splash 图标 -->
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_clapper_animated</item>
-        <!-- 动画时长设为最短 -->
-        <item name="windowSplashScreenIconBackgroundColor">#F7EFE2</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/splash_background</item>
         <item name="android:windowSplashScreenBrandingImage">@drawable/splash_branding_image</item>
+        <!-- 动画时长 -->
         <item name="windowSplashScreenAnimationDuration">720</item>
         <!-- 启动完成后立即切换到的主题 -->
         <item name="postSplashScreenTheme">@style/Theme.TraktoSearch</item>

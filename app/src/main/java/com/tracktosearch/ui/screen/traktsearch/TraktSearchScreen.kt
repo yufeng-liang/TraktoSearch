@@ -54,9 +54,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -90,11 +90,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -115,16 +115,18 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
+import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.util.PersonAvatarColorStore
-import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
+import com.tracktosearch.ui.component.LoadMoreFooter
+import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
@@ -132,27 +134,22 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.MovieCard
-import com.tracktosearch.ui.component.NeumorphicFrostedSurface
-import com.tracktosearch.ui.component.hasListScrolled
-import com.tracktosearch.ui.component.hazeTopBar
-import com.tracktosearch.ui.component.isAppDarkTheme
-import com.tracktosearch.ui.component.glassSceneForContent
-import com.tracktosearch.ui.component.backdropContentSource
-import com.tracktosearch.ui.component.backdropSource
-import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
-import com.tracktosearch.ui.component.appVisualEffect
 import com.tracktosearch.ui.component.MovieCardSkeleton
+import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
-import com.tracktosearch.ui.component.LoadMoreFooter
-import com.tracktosearch.ui.component.LoadMoreFooterState
+import com.tracktosearch.ui.component.appVisualEffect
+import com.tracktosearch.ui.component.backdropContentSource
+import com.tracktosearch.ui.component.backdropSource
+import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.hasListScrolled
+import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.rememberPosterPrefetch
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.LocalScrollToTopProvider
-import com.tracktosearch.ui.util.copyResourceLink
-import com.tracktosearch.ui.util.openResourceLink
-import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.screen.ai.AI_SPRITE_IDLE_DELAY_MS
+import com.tracktosearch.ui.screen.ai.AiSceneEvent
 import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
 import com.tracktosearch.ui.screen.ai.AiSpriteCenter
 import com.tracktosearch.ui.screen.ai.AiSpriteCenterEntryButton
@@ -161,21 +158,26 @@ import com.tracktosearch.ui.screen.ai.AiSpriteInterruptRequest
 import com.tracktosearch.ui.screen.ai.AiSpriteMotion
 import com.tracktosearch.ui.screen.ai.AiSpriteOverlayTrigger
 import com.tracktosearch.ui.screen.ai.AiSpriteViewModel
-import com.tracktosearch.ui.screen.ai.AiSceneEvent
 import com.tracktosearch.ui.screen.ai.automaticSpriteArt
+import com.tracktosearch.ui.screen.ai.rememberSharedAiSpriteViewModel
 import com.tracktosearch.ui.screen.ai.sceneArtFor
 import com.tracktosearch.ui.screen.ai.sceneEventForSearch
 import com.tracktosearch.ui.screen.ai.searchAnchorFor
 import com.tracktosearch.ui.screen.ai.shouldStartSpriteOverlay
-import com.tracktosearch.ui.screen.ai.AI_SPRITE_IDLE_DELAY_MS
-import com.tracktosearch.ui.screen.ai.rememberSharedAiSpriteViewModel
+import com.tracktosearch.ui.theme.GlassBorderDark
+import com.tracktosearch.ui.theme.GlassFillDark
+import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.util.LocalScrollToTopProvider
+import com.tracktosearch.ui.util.copyResourceLink
+import com.tracktosearch.ui.util.openResourceLink
+import com.tracktosearch.ui.util.performHaptic
 import dagger.hilt.android.EntryPointAccessors
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
-import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
 /** 计算网盘tab筛选后的结果数（用于Tab标签显示） */
@@ -754,8 +756,8 @@ fun TraktSearchScreen(
                             .onGloballyPositioned { searchBoxBounds = it.boundsInRoot() },
                         isDark = isDark,
                         shape = RoundedCornerShape(21.dp),
-                        backgroundColor = if (isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.55f),
-                        borderColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.75f),
+                        backgroundColor = if (isDark) GlassFillDark else Color.White.copy(alpha = 0.55f),
+                        borderColor = if (isDark) GlassBorderDark else Color.White.copy(alpha = 0.75f),
                         glassRole = GlassSurfaceRole.SearchField,
                         interactionSource = searchInteractionSource,
                         scene = traktSearchGlassScene,

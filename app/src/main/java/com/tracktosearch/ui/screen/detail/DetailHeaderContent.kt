@@ -85,6 +85,7 @@ import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.rememberShimmer
 import com.tracktosearch.ui.component.zoomSharedSource
+import com.tracktosearch.ui.theme.onColorFor
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import kotlinx.coroutines.Dispatchers
@@ -714,7 +715,9 @@ private fun StatusRibbon(status: String, modifier: Modifier = Modifier) {
     ) {
         Text(
             text = displayText,
-            color = Color.White,
+            // 按状态色亮度取黑白。原先整排写死白字，7 个状态色里 5 个不到 AA ——
+            // 制作中的橙 #FF9800 上白字只有 2.16:1，黑字有 9.74:1。
+            color = onColorFor(backgroundColor),
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1,

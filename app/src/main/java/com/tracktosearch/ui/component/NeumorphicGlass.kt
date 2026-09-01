@@ -46,6 +46,7 @@ import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import com.tracktosearch.ui.theme.isDarkScheme
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 
@@ -637,5 +638,5 @@ fun NeumorphicIconButton(
 @Composable
 fun isAppDarkTheme(): Boolean {
     val colorScheme = MaterialTheme.colorScheme
-    return remember(colorScheme) { colorScheme.background.luminance() < 0.5f }
+    return remember(colorScheme) { colorScheme.isDarkScheme }
 }

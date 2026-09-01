@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
+import com.tracktosearch.ui.theme.GlassFillDark
 
 /**
  * 自绘数字键盘。半透明糖果玻璃圆角块，按下缩到 0.92 并出洋红涟漪。
@@ -169,7 +170,7 @@ private fun RowScope.KeyCell(
     val base = when {
         highlight -> SwiftiePalette.Badge
         isLight -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f)
-        else -> Color.White.copy(alpha = 0.10f)
+        else -> GlassFillDark
     }
     Box(
         modifier = Modifier

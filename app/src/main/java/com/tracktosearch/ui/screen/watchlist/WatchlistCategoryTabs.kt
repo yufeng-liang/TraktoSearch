@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.tracktosearch.ui.component.GlassTabIndicator
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.theme.GlassFillDark
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 
@@ -97,7 +98,7 @@ internal fun WatchlistCategoryTabs(
                             elevation = 3.dp,
                             blurRadius = 10.dp,
                             backgroundColor = if (isDark) {
-                                Color.White.copy(alpha = 0.10f)
+                                GlassFillDark
                             } else {
                                 Color.White.copy(alpha = 0.60f)
                             },

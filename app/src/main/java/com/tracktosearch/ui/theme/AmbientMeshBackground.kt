@@ -81,7 +81,7 @@ fun AmbientMeshBackground(
     motionActive: () -> Boolean = { true },
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val isDark = colorScheme.background.luminance() < 0.5f
+    val isDark = colorScheme.isDarkScheme
     val palette = remember(colorScheme, isDark, preset) {
         if (preset.isPaperPreset) {
             paperPalette(preset, colorScheme.background, isDark)

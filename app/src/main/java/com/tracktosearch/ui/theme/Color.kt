@@ -72,6 +72,71 @@ internal fun onColorFor(background: Color): Color =
 /** 见 [onColorFor]。黑白等对比点，不是随手取的 0.5。 */
 internal const val WcagBlackWhiteCrossover = 0.1791f
 
+/** WCAG AA 普通字号要求。10sp 的角标、12sp 的次要文字都按这个来，不吃大字号豁免。 */
+internal const val WcagAaNormal = 4.5
+
+/** WCAG 相对亮度对比度。两个颜色都必须是不透明的，半透明色先自己合成好再传进来。 */
+internal fun contrastRatio(a: Color, b: Color): Double {
+    val la = a.luminance().toDouble()
+    val lb = b.luminance().toDouble()
+    return (maxOf(la, lb) + 0.05) / (minOf(la, lb) + 0.05)
+}
+
+/**
+ * 把 [base] 朝黑或白推，直到压在 [background] 上够到 [targetContrast]。已经够了就原样返回。
+ *
+ * 用来救那些「颜色本身是语义/品牌的一部分，但原色压在底上读不清」的场景：
+ * 平台品牌色当文字（Metacritic 橙压在浅卡片上只有 1.72:1）、反馈类型色、状态色。
+ * 这类色不能换成主题色（换了就丢识别性），只能在保住色相的前提下调明度。
+ *
+ * 推的方向取 [onColorFor]：它给出的就是对这个底能拿到最高对比的那一端，
+ * 所以浅底往黑推、深底往白推，一定是收敛的方向。沿这条直线对比度单调，二分即可。
+ * 连纯黑/纯白都够不到目标（底色本身在中间调）时返回那一端，是能做到的最好结果。
+ *
+ * 每帧都算的话建议在调用点 remember(base, background) 一下。
+ */
+internal fun readableOn(
+    base: Color,
+    background: Color,
+    targetContrast: Double = WcagAaNormal
+): Color {
+    if (contrastRatio(base, background) >= targetContrast) return base
+    val ink = onColorFor(background)
+    var insufficient = 0f
+    var sufficient = 1f
+    repeat(READABLE_SEARCH_STEPS) {
+        val mid = (insufficient + sufficient) / 2f
+        if (contrastRatio(lerp(base, ink, mid), background) >= targetContrast) {
+            sufficient = mid
+        } else {
+            insufficient = mid
+        }
+    }
+    return lerp(base, ink, sufficient)
+}
+
+/** 10 步二分把区间缩到 1/1024，对 8 位色深来说已经到底了。 */
+private const val READABLE_SEARCH_STEPS = 10
+
+/**
+ * 当前配色是深色档吗。判据是 background 的亮度，不是 `isSystemInDarkTheme()` ——
+ * 本 App 的明暗由 ThemeStorage 控制，可以和系统设置不一致。
+ *
+ * 这个判断此前在 8 处内联重写过（统计色板、氛围背景、设置页色块、豆瓣按钮…），
+ * 阈值和写法各不相同。组合函数里请用 `isAppDarkTheme()`，它在这个之上加了一层
+ * remember 缓存 —— 列表滚动时它是每张卡片都要问一遍的高频调用。
+ */
+val ColorScheme.isDarkScheme: Boolean get() = background.luminance() < DarkSchemeLuminance
+
+/**
+ * 深浅档的分界亮度。
+ *
+ * 这里是 0.5 而不是 [WcagBlackWhiteCrossover]：两者解决的是不同问题 ——
+ * 交叉点回答「压在这个色上该用黑字还是白字」，这个回答「这套配色整体是深还是浅」。
+ * 所有主题的 background 要么在 0.85 以上要么在 0.02 以下，落点离 0.5 都很远。
+ */
+private const val DarkSchemeLuminance = 0.5f
+
 // ====== 错误色（所有主题共用，不跟主题色走） ======
 // 取值来自 Material 3 基线的 Error 色板（material3 1.4.0 的 ColorLightTokens /
 // ColorDarkTokens 实际映射：Error40/100/90/10 与 Error80/20/30/90）。
@@ -121,11 +186,26 @@ internal val TicketPaperDarkVariant = Color(0xFF4A382E)     // 对话框 / 卡�
 internal val TicketInkDark = Color(0xFFF7EDE3)
 internal val TicketInkDarkMuted = Color(0xFFDDCDBE)
 
-// ====== 玻璃棱镜固定色（不随主题变化） ======
-// Glass 效果色（用于 Modifier.drawBehind / brush）
-// GlassHighlight = white.copy(alpha = 0.08f) — 在使用处直接写
-// GlassBorder = white.copy(alpha = 0.12f) — 在使用处直接写
-// GlassRefraction = white.copy(alpha = 0.06f) — 在使用处直接写
+// ====== 玻璃棱镜结构色（深色档） ======
+// 深色档的玻璃是一层「白色薄雾」：填充和描边都是极低透明度的白。
+// 这四个值在 30 处重复出现，原先只在注释里记着「在使用处直接写」——
+// 于是想调一次玻璃质感要翻十几个文件，还容易漏掉几处、留下深浅不一的卡片。
+//
+// 浅色档的对应值**不**收在这里：那一侧各界面底色差别大，透明度是逐处试出来的
+// （0.35 到 0.80 都有），收成常量等于把这些调整抹平。
+//
+// 填充和描边各有「标准」「淡一档」两级，四个常量里有两对当前取值相同
+// （[GlassFillDark] 与 [GlassBorderDarkSubtle] 都是 0.10）。这是有意的：
+// 它们是两个角色，只是眼下撞到同一档透明度，调玻璃观感时可以各自动。
+val GlassFillDark = Color.White.copy(alpha = 0.10f)
+
+/** 比 [GlassFillDark] 再淡一档，用在压在卡片上的小控件：同样的透明度会显得比卡片还实。 */
+val GlassFillDarkSubtle = Color.White.copy(alpha = 0.08f)
+
+val GlassBorderDark = Color.White.copy(alpha = 0.12f)
+
+/** 比 [GlassBorderDark] 再淡一档，用在设置项这类整页平铺的卡片：满屏描边同亮度会显得脏。 */
+val GlassBorderDarkSubtle = Color.White.copy(alpha = 0.10f)
 
 val RatingGold = Color(0xFFFFD54F)
 val RatingGoldDim = Color(0xFFFFD54F).copy(alpha = 0.7f)
@@ -142,36 +222,76 @@ val FeedbackDeveloper = Color(0xFF34D399) // 开发者角色标识 — 薄荷绿
 // ====== 影视状态固定色（详情页状态绑带共用，不随主题变化） ======
 // 原先散在 DetailHeaderContent.getStatusColor 里，9 个 Color(0xFF...) 直接写在 when 分支上，
 // 违反「颜色统一收在 Color.kt」的约定。取色逻辑见 DetailVisuals.detailStatusColor
+//
+// 绑带上的文字颜色不在这里逐个配，走 onColorFor 按亮度算 —— 原先整排都是硬编码白字，
+// 7 个色里 5 个不到 AA（制作中橙只有 2.16:1）。
 val StatusReleased = Color(0xFF4CAF50)       // 已上映 / 连载中 — 绿
 val StatusInProduction = Color(0xFFFF9800)   // 制作中 / 后期 / 试播 — 橙
 val StatusPlanned = Color(0xFF2196F3)        // 计划中 — 蓝
 val StatusRumored = Color(0xFF9C27B0)        // 传闻中 — 紫
 val StatusCanceled = Color(0xFFF44336)       // 已取消 — 红
 val StatusEnded = Color(0xFF9E9E9E)          // 已完结 — 灰
-val StatusUnknown = Color(0xFF757575)        // 未知状态 — 深灰
+// 比 Grey 600 (#757575) 深两档：那个值的亮度 0.1779 正好卡在 WcagBlackWhiteCrossover
+// 上，黑白两边都只有 4.6:1，绑带半透明压在海报上就会掉到 AA 以下。
+// 这一档亮度 0.1441，离交叉点有 0.035 余量，白字有 5.41:1，
+// 余量下限见 ThemeSemanticPaletteTest.MIN_CROSSOVER_MARGIN。
+val StatusUnknown = Color(0xFF6A6A6A)        // 未知状态 — 深灰
 
 // ====== 评分平台品牌色（详情页四平台评分区，不随主题变化） ======
 // 原先五个 Color(0xFF...) 直接写在 DetailRatingsDialog.RatingsRow 的 badge 构造里。
 // 顺带修正 TMDB：以前误用了 IMDb 的黄，两个平台底色一模一样分不出来。
+//
+// 两种用法要分清：IMDb / TMDB 是「品牌色底 + 反色字标」，配套前景色是 On* 那一对；
+// 豆瓣 / 烂番茄 / Metacritic 是「图标 + 品牌色文字」，那种用法必须过 readableOn 压一下 ——
+// 原色当文字压在卡片上全部不到 AA（Metacritic 橙在浅卡片上只有 1.72:1）。
 val BrandImdb = Color(0xFFF5C518)            // IMDb 黄
 val OnBrandImdb = Color(0xFF000000)
 val BrandDouban = Color(0xFF2E963D)          // 豆瓣绿
 val BrandTmdb = Color(0xFF01B4E4)            // TMDB 青
+// TMDB 字标原先配白字，只有 2.43:1。黑字有 8.65:1，也更接近 TMDB 自己在浅底上的用法。
+val OnBrandTmdb = Color(0xFF000000)
 val BrandRottenTomatoes = Color(0xFFFA320A)  // 烂番茄红
 val BrandMetacritic = Color(0xFFFF9500)      // Metacritic 橙
 
 /** 已看标记专用绿：季集进度条 / 已看计数 / 勾选图标共用。 */
 val WatchedGreen = Color(0xFF4CAF50)
 
+// ====== 搜索类型固定色（搜索页类型下拉与历史标签，不随主题变化） ======
+// 四种搜索目标要能一眼分辨，跟随强调色的话四个标签会变成同色系、只剩文字能区分。
+// 这几个色当 10sp 文字用，必须过 readableOn —— 尤其影视剧的琥珀黄，原色压在浅底上不足 2:1。
+val SearchTypeDisk = Color(0xFF26A69A)    // 网盘资源 — 青
+val SearchTypeMovie = Color(0xFF7986CB)   // 电影 — 靛
+val SearchTypeShow = Color(0xFFFFD54F)    // 剧集 — 琥珀
+val SearchTypePerson = Color(0xFFF48FB1)  // 人物 — 粉
+/** 历史记录里存了未知 type 时的兜底色（旧版本写入过别的字符串）。 */
+val SearchTypeUnknown = Color(0xFF4CAF50)
+
 /** 拟态玻璃浅色主题描边：原先在 DetailComments 抄了 3 遍、SearchScreen 1 遍。 */
 val NeumorphicBorderLight = Color(0xFFD0D5DC)
+
+// ====== 激活登录页固定色（取票机场景，整屏不随主题） ======
+// 这一屏是一台放在牛皮纸上的取票机，它的「材质」就是它的身份，跟 SwiftiePalette 同理：
+// 整屏不映射 MaterialTheme。原先是一半跟一半不跟 —— 标题和「什么是 Trakt」按钮读
+// colorScheme.primary，选睡莲紫主题时紫色字压在牛皮纸上，跟场景里其他棕调打架。
+//
+// 两档纸都是浅色（深色档只是把纸压暗一点点，不翻成深底），所以墨色只有一套。
+// 每个墨色对两档纸都验过 ≥ 4.5:1，见 ThemeSemanticPaletteTest。
+val LoginPaperLight = Color(0xFFF7EFE2)
+val LoginPaperDark = Color(0xFFD9CFC2)
+/** 标题的赭红墨。和 [MonetAccent.VINTAGE_TICKET] 同一族，但独立取值：票根主题调色不该牵动登录页。 */
+val LoginTitleInk = Color(0xFF8F4327)
+val LoginSecondaryInk = Color(0xFF5E483A)
+/** 「什么是 Trakt」这类次要动作的墨色。 */
+val LoginActionInk = Color(0xFF7A4A2E)
+/** 登录失败提示。不复用 [ErrorLight]：那个红是为中性底调的，压在牛皮纸上偏冷。 */
+val LoginErrorInk = Color(0xFF96281F)
 
 private val MonetDoubanGreenLight = Color(0xFF5E916A)
 private val MonetDoubanGreenDark = Color(0xFF78A985)
 
 /** 豆瓣按钮专用色：保留绿色识别，同时轻微吸收当前莫奈主题主色。 */
 fun ColorScheme.monetDoubanGreen(): Color {
-    val base = if (background.luminance() < 0.5f) MonetDoubanGreenDark else MonetDoubanGreenLight
+    val base = if (isDarkScheme) MonetDoubanGreenDark else MonetDoubanGreenLight
     return lerp(base, primary, 0.14f)
 }
 

@@ -52,11 +52,13 @@ import com.tracktosearch.ui.component.AdaptiveSingleLineText
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.theme.GlassBorderDarkSubtle
+import com.tracktosearch.ui.theme.GlassFillDarkSubtle
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
-import com.tracktosearch.ui.theme.LocalVisualEffectMode
-import com.tracktosearch.ui.theme.VisualEffectMode
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 
@@ -98,7 +100,7 @@ fun SettingsGroupCard(
 ) {
     val isDark = isAppDarkTheme()
     val realBlur = listCardUsesRealBlur()
-    val blurFill = if (isDark) Color.White.copy(alpha = 0.08f)
+    val blurFill = if (isDark) GlassFillDarkSubtle
                    else Color.White.copy(alpha = 0.70f)
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Text(
@@ -114,7 +116,7 @@ fun SettingsGroupCard(
             isDark = isDark,
             shape = RoundedCornerShape(20.dp),
              backgroundColor = if (realBlur) blurFill else solidCardFill(isDark, blurFill),
-             borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
+             borderColor = if (isDark) GlassBorderDarkSubtle
                            else Color(0xFFE0E5EC).copy(alpha = 0.9f),
             elevation = 6.dp,
             blurRadius = 18.dp,
@@ -395,7 +397,7 @@ internal fun StatisticsCard(
     val view = LocalView.current
     val isDark = isAppDarkTheme()
     val realBlur = listCardUsesRealBlur()
-    val blurFill = if (isDark) Color.White.copy(alpha = 0.08f)
+    val blurFill = if (isDark) GlassFillDarkSubtle
                    else Color.White.copy(alpha = 0.70f)
     NeumorphicFrostedSurface(
         modifier = modifier
@@ -406,7 +408,7 @@ internal fun StatisticsCard(
         isDark = isDark,
         shape = RoundedCornerShape(20.dp),
         backgroundColor = if (realBlur) blurFill else solidCardFill(isDark, blurFill),
-        borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
+        borderColor = if (isDark) GlassBorderDarkSubtle
                       else Color(0xFFE0E5EC).copy(alpha = 0.9f),
         elevation = 6.dp,
         blurRadius = 18.dp,

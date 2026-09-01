@@ -71,6 +71,7 @@ import com.tracktosearch.ui.component.DropdownAnchorMenu
 import com.tracktosearch.ui.component.StickyHeaderChangelogContent
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.theme.onColorFor
+import com.tracktosearch.ui.theme.isDarkScheme
 import com.github.skydoves.colorpicker.compose.HsvColorPicker
 import com.github.skydoves.colorpicker.compose.rememberColorPickerController
 import com.github.skydoves.colorpicker.compose.BrightnessSlider
@@ -169,16 +170,19 @@ internal fun AccentColorDialog(
     var meshMenuExpanded by remember { mutableStateOf(false) }
     var showCustomPicker by remember { mutableStateOf(false) }
 
-    // 壁纸取色选项的渐变色板与勾选图标对比色
-    val dynamicColors = listOf(
-        Color(0xFF7B68AE), Color(0xFFE8915A), Color(0xFF5A8F6B),
-        Color(0xFF6B7FA0), Color(0xFFC4A94D), Color(0xFFD4748A),
-        Color(0xFF4A7FB5), Color(0xFF7B68AE)
-    )
+    // 色块要显示当前深浅色档实际会用到的那一个种子色 ——
+    // 以前一律取 .light，深色模式下点进去和看到的不是一个颜色。
+    val swatchIsDark = MaterialTheme.colorScheme.isDarkScheme
+    // 壁纸取色选项的渐变色板：直接从色板取样，别再抄一份字面量 ——
+    // 原先手写的 8 个值里 #6B7FA0 早就跟枚举对不上了（教堂蓝灰现在是 #6A7180）。
+    // 首尾同色让 sweepGradient 接缝处不出现硬边。
+    val dynamicColors = remember(swatchIsDark) {
+        val ring = MonetAccent.entries.map { if (swatchIsDark) it.dark else it.light }
+        ring + ring.first()
+    }
     // 彩虹渐变上的勾选图标：没有单一底色，所以按「整条渐变里最差的那一档」定黑白 ——
     // 取平均亮度再套阈值会被暗档拉低，结果给出白勾，压在金黄档上只有 2.30:1。
-    // 按最差档算是黑勾 4.43:1，白勾 2.30:1。
-    val dynamicCheckTint = run {
+    val dynamicCheckTint = remember(dynamicColors) {
         fun worstContrast(ink: Float) = dynamicColors.minOf { swatch ->
             val a = swatch.luminance().coerceAtLeast(0f)
             (maxOf(a, ink) + 0.05f) / (minOf(a, ink) + 0.05f)
@@ -498,9 +502,6 @@ internal fun AccentColorDialog(
                     addAll(MonetAccent.entries)
                     add(customMarker) // 自由调色收尾，不打断色环顺序
                 }
-                // 色块要显示当前深浅色档实际会用到的那一个种子色 ——
-                // 以前一律取 .light，深色模式下点进去和看到的不是一个颜色。
-                val swatchIsDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
                 val rows = swatches.chunked(4)
                 rows.forEach { row ->
                     Row(

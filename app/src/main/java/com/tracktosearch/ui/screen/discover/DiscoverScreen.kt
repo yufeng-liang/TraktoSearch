@@ -57,7 +57,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.draw.innerShadow
@@ -376,62 +375,12 @@ fun DiscoverScreen(
                     ) {
                 // 顶部 Hero 分类快捷入口：由栏目设置（显示/隐藏 + 排序）驱动
                 item(key = "discover_hero_categories") {
-                    // 缓存按主题生成的 5 个渐变 Brush，避免每次重组创建新实例
-                    val popularGradient = remember(isDark) {
-                        Brush.linearGradient(
-                            colors = if (isDark) {
-                                listOf(Color(0xFFE05A2D), Color(0xFFD89C2C))
-                            } else {
-                                listOf(Color(0xFFF06A2F), Color(0xFFE6AA35))
-                            },
-                            start = Offset(0f, Float.POSITIVE_INFINITY),
-                            end = Offset(Float.POSITIVE_INFINITY, 0f)
-                        )
-                    }
-                    val upcomingGradient = remember(isDark) {
-                        Brush.linearGradient(
-                            colors = if (isDark) {
-                                listOf(Color(0xFFC26391), Color(0xFF9968CC))
-                            } else {
-                                listOf(Color(0xFFCB6C98), Color(0xFF9C6BD1))
-                            },
-                            start = Offset(0f, Float.POSITIVE_INFINITY),
-                            end = Offset(Float.POSITIVE_INFINITY, 0f)
-                        )
-                    }
-                    val recommendGradient = remember(isDark) {
-                        Brush.linearGradient(
-                            colors = if (isDark) {
-                                listOf(Color(0xFF5587E0), Color(0xFF36A9C4))
-                            } else {
-                                listOf(Color(0xFF5C89E0), Color(0xFF36AFC7))
-                            },
-                            start = Offset(0f, Float.POSITIVE_INFINITY),
-                            end = Offset(Float.POSITIVE_INFINITY, 0f)
-                        )
-                    }
-                    val doubanGradient = remember(isDark) {
-                        Brush.linearGradient(
-                            colors = if (isDark) {
-                                listOf(Color(0xFF43B77A), Color(0xFF3CABBE))
-                            } else {
-                                listOf(Color(0xFF42B87C), Color(0xFF43A9C2))
-                            },
-                            start = Offset(0f, Float.POSITIVE_INFINITY),
-                            end = Offset(Float.POSITIVE_INFINITY, 0f)
-                        )
-                    }
-                    val listsGradient = remember(isDark) {
-                        Brush.linearGradient(
-                            colors = if (isDark) {
-                                listOf(Color(0xFFD86182), Color(0xFFB96D62))
-                            } else {
-                                listOf(Color(0xFFE56B89), Color(0xFFC67A6B))
-                            },
-                            start = Offset(0f, Float.POSITIVE_INFINITY),
-                            end = Offset(Float.POSITIVE_INFINITY, 0f)
-                        )
-                    }
+                    // 缓存渐变 Brush，避免每次重组创建新实例。色值与「为什么不跟主题」见 DiscoverPalette
+                    val popularGradient = remember { DiscoverPopularGradient.toBrush() }
+                    val upcomingGradient = remember { DiscoverUpcomingGradient.toBrush() }
+                    val recommendGradient = remember { DiscoverRecommendGradient.toBrush() }
+                    val doubanGradient = remember { DiscoverDoubanGradient.toBrush() }
+                    val listsGradient = remember { DiscoverListsGradient.toBrush() }
                     val doubanMovieCategory = uiState.doubanHotCategories
                         .firstOrNull { it.id == "douban-movie" }
                     // 栏目 id -> Hero 卡片定义（标题/渐变/点击/数据），仅包含需要展示为 Hero 的栏目
@@ -868,17 +817,7 @@ fun DiscoverScreen(
                     }
                     val shape = RoundedCornerShape(20.dp)
                     // 浅玫瑰紫渐变（与「去豆瓣登录」卡片样式统一，仅渐变配色不同）
-                    val gradient = remember(isDark) {
-                        Brush.linearGradient(
-                            colors = if (isDark) {
-                                listOf(Color(0xFFA85BC2), Color(0xFFD45F7B))
-                            } else {
-                                listOf(Color(0xFFAD65BF), Color(0xFFE26C87))
-                            },
-                            start = Offset(0f, Float.POSITIVE_INFINITY),
-                            end = Offset(Float.POSITIVE_INFINITY, 0f)
-                        )
-                    }
+                    val gradient = remember { DiscoverRoseGradient.toBrush() }
                     AppVisualSurface(
                         kind = VisualSurfaceKind.Content,
                         modifier = cardModifier

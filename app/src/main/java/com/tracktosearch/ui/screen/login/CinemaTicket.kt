@@ -59,14 +59,18 @@ import kotlin.math.roundToInt
 // 糊上毛玻璃之后票会退化成一张普通卡片，失去实物感；票面那些 11.sp 的小字透出背景后
 // 可读性也会掉一档。所以纸面用不透明颜色，立体感靠下面那层自绘投影给。
 
-/** 浅色主题纸色，比页面底色 #F7EFE2 略亮一档。 */
-private val TicketPaperLight = Color(0xFFFBF6EC)
+// 名字带 Printed 前缀是为了跟 ui.theme 里的 TicketPaperLight / TicketPaperDark 区分：
+// 那两个是复古票根**主题**的 surface 阶梯（一浅一深），这三个是这张**打印出来的票**的纸和墨
+// （两档都是浅色）。同名不同义最容易看串，尤其 TicketPaperDark —— 主题那个是暖黑，这个是浅纸。
 
-/** 深色主题纸色。本项目深色主题的页面底色是 #D9CFC2，票得更亮才像纸。 */
-private val TicketPaperDark = Color(0xFFF3ECE0)
+/** 浅色主题下的票纸色，比页面底色 #F7EFE2 略亮一档。 */
+private val PrintedTicketPaperOnLight = Color(0xFFFBF6EC)
 
-/** 票面文字色。深色主题下纸面依旧是亮的，所以两套主题共用这一个深棕。 */
-private val TicketInkColor = Color(0xFF3A2E24)
+/** 深色主题下的票纸色。本项目深色主题的登录页底色是 #D9CFC2，票得更亮才像纸。 */
+private val PrintedTicketPaperOnDark = Color(0xFFF3ECE0)
+
+/** 票面文字色。两档下纸面都是亮的，所以只需要这一个深棕。 */
+private val PrintedTicketInk = Color(0xFF3A2E24)
 
 /** 纸张投影：不加模糊，纸搭在机器上投出来的本来就是硬边影子。 */
 private val TicketShadowColor = Color.Black.copy(alpha = 0.18f)
@@ -165,7 +169,7 @@ internal fun CinemaTicket(
 ) {
     // 主题判断方式与 ActivationLoginScreen 里的取色保持一致
     val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val paperColor = if (isDarkTheme) TicketPaperDark else TicketPaperLight
+    val paperColor = if (isDarkTheme) PrintedTicketPaperOnDark else PrintedTicketPaperOnLight
     val seatText = stringResource(R.string.ticket_seat, stub.row, stub.seat)
     // 浏览器授权中和换 token 中都不能再点第二次登录，两个平台入口共用这一个判断
     val authBusy = loginState == LoginState.AUTHORIZING || loginState == LoginState.CONNECTING
@@ -355,7 +359,7 @@ private fun TicketDashedDivider(modifier: Modifier = Modifier) {
             .drawBehind {
                 val centerY = size.height / 2f
                 drawLine(
-                    color = TicketInkColor.copy(alpha = 0.35f),
+                    color = PrintedTicketInk.copy(alpha = 0.35f),
                     start = Offset(0f, centerY),
                     end = Offset(size.width, centerY),
                     strokeWidth = 1.dp.toPx(),
@@ -391,7 +395,7 @@ private fun TicketBarcode(
             Box(
                 modifier = Modifier
                     .size(width = barWidth.dp, height = TicketBarcodeHeight)
-                    .background(TicketInkColor)
+                    .background(PrintedTicketInk)
             )
         }
     }
@@ -417,7 +421,7 @@ private fun TicketText(
     Text(
         text = text,
         modifier = modifier,
-        color = TicketInkColor.copy(alpha = alpha),
+        color = PrintedTicketInk.copy(alpha = alpha),
         fontSize = fontSize,
         fontWeight = fontWeight,
         fontFamily = FontFamily.Monospace,

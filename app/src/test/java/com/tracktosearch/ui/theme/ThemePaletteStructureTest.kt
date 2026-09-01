@@ -1,12 +1,12 @@
 package com.tracktosearch.ui.theme
 
-import androidx.compose.material3.ColorScheme
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import com.tracktosearch.data.util.mcu.hct.Hct
+import com.tracktosearch.ui.theme.ThemeTestSupport.allSchemes
+import com.tracktosearch.ui.theme.ThemeTestSupport.contrast
 import kotlin.math.abs
 import kotlin.math.min
 import org.junit.Test
@@ -75,26 +75,24 @@ class ThemePaletteStructureTest {
      */
     @Test
     fun 表面阶梯按层级单调() {
-        for (accent in MonetAccent.entries) {
-            for (dark in listOf(false, true)) {
-                val scheme = schemeFor(accent, dark)
-                val rungs = listOf(
-                    "surfaceContainerLowest" to scheme.surfaceContainerLowest,
-                    "surfaceContainerLow" to scheme.surfaceContainerLow,
-                    "surfaceContainer" to scheme.surfaceContainer,
-                    "surfaceContainerHigh" to scheme.surfaceContainerHigh,
-                    "surfaceContainerHighest" to scheme.surfaceContainerHighest,
-                )
-                for (k in 1 until rungs.size) {
-                    val prev = rungs[k - 1].second.luminance()
-                    val cur = rungs[k].second.luminance()
-                    val message = "${accent.name} dark=$dark 的 ${rungs[k].first} " +
-                        "相对 ${rungs[k - 1].first} 方向反了"
-                    if (dark) {
-                        assertWithMessage(message).that(cur).isGreaterThan(prev)
-                    } else {
-                        assertWithMessage(message).that(cur).isLessThan(prev)
-                    }
+        for (case in allSchemes) {
+            val scheme = case.scheme
+            val rungs = listOf(
+                "surfaceContainerLowest" to scheme.surfaceContainerLowest,
+                "surfaceContainerLow" to scheme.surfaceContainerLow,
+                "surfaceContainer" to scheme.surfaceContainer,
+                "surfaceContainerHigh" to scheme.surfaceContainerHigh,
+                "surfaceContainerHighest" to scheme.surfaceContainerHighest,
+            )
+            for (k in 1 until rungs.size) {
+                val prev = rungs[k - 1].second.luminance()
+                val cur = rungs[k].second.luminance()
+                val message = "${case.label} 的 ${rungs[k].first} " +
+                    "相对 ${rungs[k - 1].first} 方向反了"
+                if (case.dark) {
+                    assertWithMessage(message).that(cur).isGreaterThan(prev)
+                } else {
+                    assertWithMessage(message).that(cur).isLessThan(prev)
                 }
             }
         }
@@ -109,16 +107,14 @@ class ThemePaletteStructureTest {
      */
     @Test
     fun 卡片和输入框在各自底色上看得出边界() {
-        for (accent in MonetAccent.entries) {
-            for (dark in listOf(false, true)) {
-                val scheme = schemeFor(accent, dark)
-                assertWithMessage("${accent.name} dark=$dark 的卡片和页面底分不开")
-                    .that(contrast(scheme.surfaceVariant, scheme.background))
-                    .isAtLeast(MIN_SURFACE_SEPARATION)
-                assertWithMessage("${accent.name} dark=$dark 的输入框和卡片分不开")
-                    .that(contrast(scheme.surfaceContainerHighest, scheme.surfaceVariant))
-                    .isAtLeast(MIN_SURFACE_SEPARATION)
-            }
+        for (case in allSchemes) {
+            val scheme = case.scheme
+            assertWithMessage("${case.label} 的卡片和页面底分不开")
+                .that(contrast(scheme.surfaceVariant, scheme.background))
+                .isAtLeast(MIN_SURFACE_SEPARATION)
+            assertWithMessage("${case.label} 的输入框和卡片分不开")
+                .that(contrast(scheme.surfaceContainerHighest, scheme.surfaceVariant))
+                .isAtLeast(MIN_SURFACE_SEPARATION)
         }
     }
 
@@ -220,19 +216,6 @@ class ThemePaletteStructureTest {
          */
         const val NEAR_EXTREME_TONE_HIGH = 98.5
         const val NEAR_EXTREME_TONE_LOW = 3.5
-
-        fun schemeFor(accent: MonetAccent, dark: Boolean): ColorScheme =
-            if (accent == MonetAccent.VINTAGE_TICKET) {
-                vintageTicketColorScheme(dark)
-            } else {
-                monetColorScheme(if (dark) accent.dark else accent.light, dark)
-            }
-
-        fun contrast(a: Color, b: Color): Double {
-            val la = a.luminance().toDouble()
-            val lb = b.luminance().toDouble()
-            return (maxOf(la, lb) + 0.05) / (minOf(la, lb) + 0.05)
-        }
 
         /** 色相是环形的，359° 和 1° 只差 2°。 */
         fun hueDistance(a: Double, b: Double): Double {

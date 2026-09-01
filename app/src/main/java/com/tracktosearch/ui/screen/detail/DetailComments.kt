@@ -1,7 +1,6 @@
 package com.tracktosearch.ui.screen.detail
 
 import androidx.compose.foundation.clickable
-import com.tracktosearch.ui.theme.RatingGold
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -43,11 +42,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
-import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
+import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.theme.GlassFillDarkSubtle
 import com.tracktosearch.ui.theme.NeumorphicBorderLight
+import com.tracktosearch.ui.theme.RatingGold
 
 // ==================== 单条评论 ====================
 
@@ -189,7 +190,7 @@ private fun CommentCardSurface(
         elevation = 6.dp,
         blurRadius = 16.dp,
         shadowOffset = 5.dp,
-        backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.65f),
+        backgroundColor = if (isDark) GlassFillDarkSubtle else Color.White.copy(alpha = 0.65f),
         borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else NeumorphicBorderLight.copy(alpha = 0.9f),
         darkShadowAlpha = if (isDark) 0.25f else 0.16f,
         lightShadowAlpha = if (isDark) 0.08f else 0.65f,
