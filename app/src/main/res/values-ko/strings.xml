@@ -1,21 +1,53 @@
 <resources>
-    <string name="auth_migration_invite_hint">자동 복구를 완료하지 못했습니다. 마이그레이션 초대 코드를 입력하여 계속하세요.</string>
+    <string name="auth_migration_invite_hint">자동 복구를 완료하지 못했습니다. 마이그레이션 티켓 코드를 입력하여 계속하세요.</string>
     <string name="auth_offline_mode">오프라인 모드: 캐시된 데이터를 사용합니다.</string>
     <string name="app_name">TraktoSearch</string>
-    <string name="auth_expired_message">네트워크에 연결한 후 접근 권한을 다시 활성화하세요.</string>
-    <string name="auth_invite_code">12자리 활성화 코드 입력</string>
-    <string name="auth_activate">활성화</string>
-    <string name="auth_error_invalid_invite">초대 코드가 올바르지 않습니다.</string>
-    <string name="auth_error_invite_used">이 초대 코드는 이미 사용되었습니다. 관리자에게 새 코드를 요청하세요.</string>
-    <string name="auth_error_invite_revoked">이 초대 코드는 취소되었습니다. 관리자에게 문의하세요.</string>
-    <string name="auth_error_invite_expired">초대 코드가 만료되었습니다.</string>
+    <string name="auth_expired_message">네트워크에 연결한 후 다시 발권하세요.</string>
+    <string name="auth_invite_code">6자리 티켓 코드 입력</string>
+    <string name="auth_activate">발권</string>
+    <string name="auth_error_invalid_invite">티켓 코드가 올바르지 않습니다.</string>
+    <string name="auth_error_invite_used">이 티켓 코드는 이미 사용되었습니다. 관리자에게 새 코드를 요청하세요.</string>
+    <string name="auth_error_invite_revoked">이 티켓 코드는 취소되었습니다. 관리자에게 문의하세요.</string>
+    <string name="auth_error_invite_expired">티켓 코드가 만료되었습니다.</string>
     <string name="auth_error_device_limit">기기 한도에 도달했습니다.</string>
     <string name="auth_error_migration_device_not_found">마이그레이션하려면 기존에 등록된 기기가 필요합니다.</string>
     <string name="auth_error_migration_device_mismatch">이 기기는 다른 친구에 속해 있습니다.</string>
     <string name="auth_error_device_already_bound">이 기기는 이미 등록되어 있습니다.</string>
     <string name="auth_error_friend_disabled">이 접근 권한은 비활성화되었습니다.</string>
     <string name="auth_error_network">네트워크에 연결할 수 없습니다. 확인 후 다시 시도하세요.</string>
+    <string name="auth_error_rate_limited">시도 횟수가 너무 많습니다. 몇 분 후에 다시 시도하세요.</string>
     <string name="auth_error_generic">활성화하지 못했습니다. 다시 시도하세요.</string>
+
+    <!-- Ticket Machine -->
+    <string name="machine_status_ready">코드 입력</string>
+    <string name="machine_status_printing">인쇄 중…</string>
+    <string name="machine_status_collected">발권 완료</string>
+    <string name="machine_status_invalid">코드 오류</string>
+    <string name="machine_status_used">사용됨</string>
+    <string name="machine_status_revoked">취소됨</string>
+    <string name="machine_status_expired">만료됨</string>
+    <string name="machine_status_device_limit">한도 초과</string>
+    <string name="machine_status_device_bound">이미 등록</string>
+    <string name="machine_status_migration_missing">기기 없음</string>
+    <string name="machine_status_migration_mismatch">불일치</string>
+    <string name="machine_status_friend_disabled">사용 중지</string>
+    <string name="machine_status_rate_limited">잠시 대기</string>
+    <string name="machine_status_network">연결 실패</string>
+    <string name="machine_status_failed">발권 실패</string>
+    <string name="machine_status_clipboard_empty">코드 없음</string>
+    <string name="machine_key_paste">붙여넣기</string>
+    <string name="machine_key_backspace_desc">백스페이스</string>
+    <string name="machine_submit">발권</string>
+    <string name="machine_code_progress">티켓 코드 %1$s, %2$d자리 남음</string>
+    <string name="machine_code_collected">발권 번호 사용 완료, 티켓 출력됨</string>
+
+    <!-- Ticket -->
+    <string name="ticket_admit_one">ADMIT ONE</string>
+    <string name="ticket_hall">%1$d관</string>
+    <string name="ticket_seat">%1$d열 %2$d번</string>
+    <string name="ticket_entry_trakt">Trakt로 로그인</string>
+    <string name="ticket_entry_douban">더우반 로그인</string>
+    <string name="ticket_entry_guest">게스트로 입장</string>
 
     <!-- Main Screen -->
     <string name="tab_search">검색</string>
@@ -483,9 +515,8 @@
     <string name="login_denied">인증이 거부되었습니다</string>
     <string name="login_success">로그인 성공, 로딩 중…</string>
     <string name="login_sync_hint">로그인 후 Trakt 관심목록이 동기화됩니다</string>
-    <string name="login_activation_locked">○ 미활성화 · 코드를 입력해 관람 공간 잠금 해제</string>
-    <string name="login_activation_choose_path">활성화되었습니다. Trakt 또는 더우반에 로그인하거나, 지금은 게스트로 계속하세요.</string>
-    <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
+    <string name="login_activation_locked">○ 미발권 · 티켓 코드를 입력해 입장권으로 교환</string>
+    <string name="login_personal_cinema_access">TICKET MACHINE · PERSONAL CINEMA</string>
 
     <!-- Ratings -->
 
@@ -1658,7 +1689,6 @@
     <string name="douban_sync_notification_public">더우반 동기화: %1$s</string>
     <string name="douban_sync_notification_channel_description">더우반 동기화 진행률 표시</string>
     <string name="douban_login_waiting_auth">인증 완료를 기다리는 중…</string>
-    <string name="auth_invite_bound_this_device">이 초대 코드는 이미 기기에 연결되어 있습니다. 앱을 다시 시작해 복구하거나 새 코드를 사용하세요</string>
     <string name="douban_detail_entry_not_found">이 항목은 아직 이 기기에 동기화되지 않았습니다</string>
     <string name="douban_batch_remove_remote_failed">%1$d개 항목을 豆瓣에서 삭제하지 못했습니다. 다음 동기화 시 재시도됩니다</string>
     <string name="detail_credits_douban_unavailable">豆瓣 전용 항목에는 출연진 정보가 없습니다</string>

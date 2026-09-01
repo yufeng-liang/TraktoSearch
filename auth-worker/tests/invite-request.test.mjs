@@ -214,7 +214,7 @@ test('public resend atomically revokes the old code and creates a new code', asy
             1_700_000_100,
         );
 
-        assert.equal(result.inviteCode.length, 12);
+        assert.match(result.inviteCode, /^[0-9]{6}$/);
         assert.equal(batches.length, 1);
         assert.match(batches[0][0].sql, /UPDATE invites\s+SET revoked_at/);
         assert.match(batches[0][1].sql, /INSERT INTO invites/);
@@ -319,6 +319,8 @@ test('issueInvitation uses an atomic quota guard before creating the friend and 
                         sql,
                         bindings,
                         async all() { return { results: [] }; },
+                        // reserveInviteCode 会先查码位是否被占用
+                        async first() { return null; },
                         async run() { return { meta: { changes: 1 } }; },
                     };
                 },
@@ -351,7 +353,7 @@ test('issueInvitation uses an atomic quota guard before creating the friend and 
         globalThis.fetch = originalFetch;
     }
 
-    assert.equal(result.inviteCode.length, 12);
+    assert.match(result.inviteCode, /^[0-9]{6}$/);
     assert.equal(statements.length, 4);
     assert.match(statements[0].sql, /INSERT INTO friends/);
     assert.match(statements[0].sql, /COUNT\(\*\) FROM invite_requests/);

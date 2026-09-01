@@ -1,21 +1,53 @@
 <resources>
-    <string name="auth_migration_invite_hint">静默恢复未完成，请输入迁移类型的邀请码继续。</string>
+    <string name="auth_migration_invite_hint">静默恢复未完成，请输入迁移类型的取票码继续。</string>
     <string name="auth_offline_mode">当前处于离线模式，将使用本地缓存数据。</string>
     <string name="app_name">TraktoSearch</string>
-    <string name="auth_expired_message">请连接网络后重新激活访问权限。</string>
-    <string name="auth_invite_code">输入 12 位激活码</string>
-    <string name="auth_activate">激活</string>
-    <string name="auth_error_invalid_invite">邀请码无效。</string>
-    <string name="auth_error_invite_used">邀请码已被使用，请向管理员索取新的邀请码。</string>
-    <string name="auth_error_invite_revoked">邀请码已被撤销，请联系管理员。</string>
-    <string name="auth_error_invite_expired">邀请码已过期。</string>
+    <string name="auth_expired_message">请连接网络后重新取票。</string>
+    <string name="auth_invite_code">请输入 6 位取票码</string>
+    <string name="auth_activate">取票</string>
+    <string name="auth_error_invalid_invite">取票码无效。</string>
+    <string name="auth_error_invite_used">取票码已被使用，请向管理员索取新的取票码。</string>
+    <string name="auth_error_invite_revoked">取票码已被撤销，请联系管理员。</string>
+    <string name="auth_error_invite_expired">取票码已过期。</string>
     <string name="auth_error_device_limit">设备上限已满。</string>
     <string name="auth_error_migration_device_not_found">迁移需要已有绑定设备。</string>
     <string name="auth_error_migration_device_mismatch">该设备属于其他朋友。</string>
     <string name="auth_error_device_already_bound">该设备已经绑定。</string>
     <string name="auth_error_friend_disabled">当前访问权限已被停用。</string>
     <string name="auth_error_network">网络连接失败，请检查网络后重试。</string>
+    <string name="auth_error_rate_limited">尝试次数过多，请等几分钟后再试。</string>
     <string name="auth_error_generic">激活失败，请稍后重试。</string>
+
+    <!-- Ticket Machine -->
+    <string name="machine_status_ready">请输入取票码</string>
+    <string name="machine_status_printing">正在打印…</string>
+    <string name="machine_status_collected">已取票</string>
+    <string name="machine_status_invalid">码不对</string>
+    <string name="machine_status_used">码已用过</string>
+    <string name="machine_status_revoked">码已作废</string>
+    <string name="machine_status_expired">码已过期</string>
+    <string name="machine_status_device_limit">设备已满</string>
+    <string name="machine_status_device_bound">设备已绑</string>
+    <string name="machine_status_migration_missing">缺原设备</string>
+    <string name="machine_status_migration_mismatch">设备不符</string>
+    <string name="machine_status_friend_disabled">权限停用</string>
+    <string name="machine_status_rate_limited">请稍候</string>
+    <string name="machine_status_network">网络不通</string>
+    <string name="machine_status_failed">取票失败</string>
+    <string name="machine_status_clipboard_empty">剪贴板没码</string>
+    <string name="machine_key_paste">粘贴</string>
+    <string name="machine_key_backspace_desc">退格</string>
+    <string name="machine_submit">取票</string>
+    <string name="machine_code_progress">取票码 %1$s，还需 %2$d 位</string>
+    <string name="machine_code_collected">取票码已使用，票已取出</string>
+
+    <!-- Ticket -->
+    <string name="ticket_admit_one">ADMIT ONE</string>
+    <string name="ticket_hall">%1$d 号厅</string>
+    <string name="ticket_seat">%1$d 排 %2$d 座</string>
+    <string name="ticket_entry_trakt">Trakt 登录</string>
+    <string name="ticket_entry_douban">豆瓣登录</string>
+    <string name="ticket_entry_guest">访客进入</string>
 
     <!-- Main Screen -->
     <string name="tab_search">搜索</string>
@@ -195,9 +227,8 @@
     <string name="login_guest">以访客身份进入</string>
     <string name="login_douban_import">或从豆瓣导入标记</string>
     <string name="login_douban">豆瓣登录</string>
-    <string name="login_activation_locked">○ 尚未激活 · 输入邀请码解锁观影空间</string>
-    <string name="login_activation_choose_path">激活成功，请选择 Trakt/豆瓣登录，或暂时以访客身份进入</string>
-    <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
+    <string name="login_activation_locked">○ 尚未取票 · 输入取票码换取入场券</string>
+    <string name="login_personal_cinema_access">TICKET MACHINE · PERSONAL CINEMA</string>
     <string name="douban_import_require_trakt_title">需要先登录 Trakt 账号</string>
     <string name="douban_import_require_trakt_desc">从豆瓣导入标记需要先登录 Trakt 账号，标记会同步到你的 Trakt 想看/已看列表。是否现在登录 Trakt？</string>
     <string name="douban_import_require_trakt_login">登录 Trakt</string>
@@ -1645,7 +1676,6 @@
     <string name="douban_sync_notification_public">豆瓣同步：%1$s</string>
     <string name="douban_sync_notification_channel_description">显示豆瓣同步进度</string>
     <string name="douban_login_waiting_auth">等待授权完成…</string>
-    <string name="auth_invite_bound_this_device">该邀请码已绑定设备。重启应用可尝试恢复，或更换新邀请码</string>
     <string name="douban_detail_entry_not_found">该条目尚未同步到本机，暂无法查看</string>
     <string name="douban_batch_remove_remote_failed">%1$d 个条目从豆瓣移除失败，将在下次同步时重试</string>
     <string name="detail_credits_douban_unavailable">豆瓣条目暂无演职员信息</string>
