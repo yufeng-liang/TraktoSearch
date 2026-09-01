@@ -1,9 +1,19 @@
 #!/usr/bin/env python3
 """OFL 1.1 第 3 条：Modified Version 不得沿用 Reserved Font Name。
 
-子集化删掉了绝大多数字形，属于 OFL 定义的 Modified Version，因此带 RFN 的 5 个
-字体必须换掉内部 name 表里的家族名。Android 按资源 ID 加载 res/font/*.ttf，
+子集化删掉了绝大多数字形，属于 OFL 定义的 Modified Version，因此带 RFN 的字体
+必须换掉内部 name 表里的家族名。Android 按资源 ID 加载 res/font/*.ttf，
 不看内部家族名，改名不影响渲染。
+
+判据是**入包的那份二进制**里 name ID 0 有没有 "With Reserved Font Name"，
+不是上游许可文本 —— 两者会不一致：
+  · era_imfell 随包的 imfelldwpica-OFL.txt 版权行没有 RFN 条款，但二进制（2007 年版，
+    从 fonts.googleapis.com/css2 取得）声明了 RFN，所以按二进制算，要改。
+  · era_lover（Parisienne）反过来：二进制没有 RFN 条款，仍然改了名。
+    多改无害，留着不动。
+
+用法：不带参数改全部，带资源名只改指定的几个（避免无谓地重写其余文件）。
+    python scripts/rename-swiftie-font-rfn.py era_imfell
 """
 import sys
 from fontTools.ttLib import TTFont
@@ -15,9 +25,18 @@ RENAMES = {
     "era_lover": ("Swiftie Lover", "SwiftieLover-Regular"),
     "era_showgirl": ("Swiftie Showgirl", "SwiftieShowgirl-Italic"),
     "era_reputation": ("Swiftie Reputation", "SwiftieReputation-Regular"),
+    # folklore 与 evermore 共用这一个字体，所以家族名不跟单个专辑
+    "era_imfell": ("Swiftie Fell", "SwiftieFell-Italic"),
 }
 
+only = set(sys.argv[1:])
+unknown = only - RENAMES.keys()
+if unknown:
+    sys.exit(f"未登记的资源名：{', '.join(sorted(unknown))}")
+
 for resource, (family, postscript) in RENAMES.items():
+    if only and resource not in only:
+        continue
     path = f"app/src/main/res/font/{resource}.ttf"
     font = TTFont(path)
     name = font["name"]

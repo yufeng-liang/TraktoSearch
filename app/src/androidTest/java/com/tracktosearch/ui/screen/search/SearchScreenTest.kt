@@ -59,7 +59,6 @@ class SearchScreenTest {
         composeRule.setContent {
             SearchScreen(
                 onBack = {},
-                onSearchClick = {},
                 viewModel = createMockViewModel()
             )
         }
@@ -73,7 +72,6 @@ class SearchScreenTest {
         composeRule.setContent {
             SearchScreen(
                 onBack = {},
-                onSearchClick = {},
                 viewModel = createMockViewModel()
             )
         }
@@ -88,7 +86,6 @@ class SearchScreenTest {
             SearchScreen(
                 initialKeyword = "初始关键词",
                 onBack = {},
-                onSearchClick = {},
                 viewModel = createMockViewModel()
             )
         }
@@ -104,7 +101,6 @@ class SearchScreenTest {
                 // 传入非空 initialKeyword 使 searchQuery 非空 → isActive=true → 返回按钮显示
                 initialKeyword = "test",
                 onBack = { backClicked = true },
-                onSearchClick = {},
                 viewModel = createMockViewModel()
             )
         }
@@ -120,19 +116,6 @@ class SearchScreenTest {
         composeRule.setContent {
             SearchScreen(
                 onBack = null,
-                onSearchClick = {},
-                viewModel = createMockViewModel()
-            )
-        }
-        composeRule.waitForIdle()
-    }
-
-    @Test
-    fun `onSearchClick_为null时不崩溃`() {
-        composeRule.setContent {
-            SearchScreen(
-                onBack = {},
-                onSearchClick = null,
                 viewModel = createMockViewModel()
             )
         }
@@ -144,7 +127,6 @@ class SearchScreenTest {
         composeRule.setContent {
             SearchScreen(
                 onBack = {},
-                onSearchClick = {},
                 viewModel = createMockViewModel(),
                 searchSourceType = SearchSourceType.MOVIE,
                 onSearchSourceTypeChange = {}
@@ -156,23 +138,10 @@ class SearchScreenTest {
     }
 
     @Test
-    fun `加载状态不崩溃`() {
-        composeRule.setContent {
-            SearchScreen(
-                onBack = {},
-                onSearchClick = {},
-                viewModel = createMockViewModel(isLoading = true)
-            )
-        }
-        composeRule.waitForIdle()
-    }
-
-    @Test
     fun `热门搜索词显示`() {
         composeRule.setContent {
             SearchScreen(
                 onBack = {},
-                onSearchClick = {},
                 viewModel = createMockViewModel(hotSearches = listOf("盗梦空间", "星际穿越"))
             )
         }
@@ -185,7 +154,6 @@ class SearchScreenTest {
         composeRule.setContent {
             SearchScreen(
                 onBack = {},
-                onSearchClick = {},
                 viewModel = createMockViewModel(
                     searchHistory = listOf(SearchHistoryItem("测试电影", "disk"))
                 )
@@ -210,7 +178,6 @@ class SearchScreenTest {
         composeRule.setContent {
             SearchScreen(
                 onBack = {},
-                onSearchClick = {},
                 viewModel = createMockViewModel(),
                 spriteViewModel = spriteViewModel
             )
@@ -221,17 +188,11 @@ class SearchScreenTest {
     }
 
     private fun createMockViewModel(
-        isLoading: Boolean = false,
-        error: String? = null,
         hotSearches: List<String> = emptyList(),
         searchHistory: List<SearchHistoryItem> = emptyList()
     ): SearchViewModel {
         val mock = mockk<SearchViewModel>(relaxed = true)
-        val uiState = SearchUiState(
-            isLoading = isLoading,
-            error = error,
-            searchHistory = searchHistory
-        )
+        val uiState = SearchUiState(searchHistory = searchHistory)
         every { mock.uiState } returns MutableStateFlow(uiState)
         every { mock.hotSearches } returns MutableStateFlow(hotSearches)
         return mock

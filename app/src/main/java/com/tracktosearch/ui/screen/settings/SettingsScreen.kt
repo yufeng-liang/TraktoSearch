@@ -786,16 +786,21 @@ fun SettingsScreen(
                     hazeState = settingsHazeState,
                     isCheckingUpdate = isCheckingUpdate,
                     onVersionClick = {
-                        // 版本号连点 3 次（每两下间隔 1.5s 内）拉起霉粉彩蛋题面，超时归零；
-                        // 未凑满 3 下时仍是原本的「检查更新」
+                        // 版本号连点 3 次（每两下间隔 1.5s 内）拉起霉粉彩蛋题面，超时归零。
+                        //
+                        // 「检查更新」只在**一串连点的第一下**发起：原来 1、2 下都发，
+                        // 于是奔着彩蛋去的人会连打两次更新接口、进度条闪两回。
+                        // 第一下照发是为了不牺牲主功能 —— 只想查更新的人点一下就有反应，
+                        // 不必为了彩蛋把它推迟 1.5s
                         val now = System.currentTimeMillis()
                         versionTapCount = if (now - lastVersionTapAt > 1500) 1 else versionTapCount + 1
                         lastVersionTapAt = now
-                        if (versionTapCount >= 3) {
-                            versionTapCount = 0
-                            cloudThemeManager.openSwiftieEgg()
-                        } else {
-                            viewModel.checkUpdate()
+                        when {
+                            versionTapCount >= 3 -> {
+                                versionTapCount = 0
+                                cloudThemeManager.openSwiftieEgg()
+                            }
+                            versionTapCount == 1 -> viewModel.checkUpdate()
                         }
                     },
                     onChangelogClick = {

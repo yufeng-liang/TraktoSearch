@@ -47,6 +47,81 @@ private val UNIT_HEART: Path = Path().apply {
     close()
 }
 
+/**
+ * 高光量化步长。
+ *
+ * 渐变的圆心跟着倾斜走，而 `Brush` 内部是按尺寸缓存原生 `Shader` 的 —— 每帧 new 一个
+ * 新实例就等于每帧建一批 native Shader（26 颗珠 × 2 个渐变 × 60fps ≈ 每秒三千个）。
+ * 把倾斜量化成 1/32 档，渐变实例就能跨帧留住，只在真的转动到下一档时重建。
+ * 1/32 对应高光位移 0.22×size 里的 0.7%，肉眼看不出台阶。
+ */
+private const val HIGHLIGHT_STEPS = 32f
+
+/** 量化后的倾斜键。键不变就不必重建渐变。 */
+internal fun highlightKey(highlight: Offset): Int {
+    val qx = (highlight.x * HIGHLIGHT_STEPS).toInt()
+    val qy = (highlight.y * HIGHLIGHT_STEPS).toInt()
+    // qx / qy 都在 -32..32，乘 128 错开不会撞键
+    return qx * 128 + qy
+}
+
+/** 与 [highlightKey] 一一对应的量化倾斜值，渐变按它建。 */
+internal fun quantizeHighlight(highlight: Offset): Offset = Offset(
+    x = (highlight.x * HIGHLIGHT_STEPS).toInt() / HIGHLIGHT_STEPS,
+    y = (highlight.y * HIGHLIGHT_STEPS).toInt() / HIGHLIGHT_STEPS
+)
+
+/**
+ * 珠子投影的渐变。**不吃倾斜**，所以每颗珠建一次就够，跟着布局一起缓存。
+ *
+ * 用径向渐变而不是 `Modifier.blur` —— 后者在 API 31 以下**静默失效**，
+ * 那批机器上会变成一块硬边黑影。
+ */
+internal fun beadShadowBrush(center: Offset, size: Float): Brush = Brush.radialGradient(
+    colors = listOf(Color.Black.copy(alpha = 0.22f), Color.Transparent),
+    center = Offset(center.x, center.y + size * 0.22f),
+    radius = size * 0.62f
+)
+
+/** 珠体的渐变。字母珠与圆珠的圆心跟着 [highlight] 偏，心形珠是单位空间的常量。 */
+internal fun beadBodyBrush(
+    bead: SwiftieBead,
+    center: Offset,
+    size: Float,
+    highlight: Offset
+): Brush = when (bead) {
+    // 正面微凸：径向渐变的中心朝光源偏，边缘落到浅灰，读起来就是个鼓面
+    is SwiftieBead.Letter -> Brush.radialGradient(
+        colors = listOf(Color.White, Color(0xFFF2EFEC), Color(0xFFD8D2CC)),
+        center = Offset(
+            x = center.x - highlight.x * size * 0.22f,
+            y = center.y - highlight.y * size * 0.22f
+        ),
+        radius = size * 0.85f
+    )
+    // 半透明：光源侧透光偏淡、中段最浓、背光侧回落。三段渐变就够读出「不是实心」
+    is SwiftieBead.Round -> Brush.radialGradient(
+        colors = listOf(
+            bead.color.copy(alpha = 0.55f),
+            bead.color.copy(alpha = 0.92f),
+            bead.color.copy(alpha = 0.70f)
+        ),
+        center = Offset(
+            x = center.x - highlight.x * size / 2f * 0.40f,
+            y = center.y - highlight.y * size / 2f * 0.40f
+        ),
+        radius = size / 2f * 1.15f
+    )
+    SwiftieBead.Heart -> HEART_BRUSH
+}
+
+/** 心形珠在单位空间里画，渐变与位置、倾斜都无关，全局一个就够。 */
+private val HEART_BRUSH: Brush = Brush.radialGradient(
+    colors = listOf(Color(0xFFFF7A90), Color(0xFFD81B3E)),
+    center = Offset(0.36f, 0.30f),
+    radius = 0.85f
+)
+
 /** 把要用到的字符预排一遍。字母珠只有 `13 87 SWIFTIE` 这些字符，一次量完够用整条序列。 */
 @Composable
 internal fun rememberBeadLetterLayouts(chars: String): Map<Char, TextLayoutResult> {
@@ -64,10 +139,14 @@ internal fun rememberBeadLetterLayouts(chars: String): Map<Char, TextLayoutResul
 /**
  * 画一颗珠子。
  *
+ * 两个渐变由调用方传进来 —— 它们必须跨帧留住实例，否则每帧都要重建原生 `Shader`
+ * （见 [beadShadowBrush] / [beadBodyBrush] 的注释）。
+ *
  * @param center 珠心（px）
  * @param size 珠子边长 / 直径（px）
  * @param rotationDeg 该珠固定的随机旋转，±8°（Spec §8）
- * @param highlight 光源偏移，各轴 -1f..1f，由加速度计给。全 0 就是正对着看
+ * @param highlight 光源偏移，各轴 -1f..1f，由加速度计给。全 0 就是正对着看。
+ *   这里只用来摆那几笔纯色高光；渐变的偏移已经算进 [bodyBrush] 了
  */
 internal fun DrawScope.drawSwiftieBead(
     bead: SwiftieBead,
@@ -75,36 +154,23 @@ internal fun DrawScope.drawSwiftieBead(
     size: Float,
     rotationDeg: Float,
     highlight: Offset,
-    letterLayouts: Map<Char, TextLayoutResult>
+    letterLayouts: Map<Char, TextLayoutResult>,
+    shadowBrush: Brush,
+    bodyBrush: Brush
 ) {
-    drawBeadShadow(center, size)
+    drawCircle(
+        brush = shadowBrush,
+        radius = size * 0.62f,
+        center = Offset(center.x, center.y + size * 0.22f)
+    )
     rotate(degrees = rotationDeg, pivot = center) {
         when (bead) {
-            is SwiftieBead.Letter -> drawLetterBead(bead, center, size, highlight, letterLayouts[bead.char])
-            is SwiftieBead.Round -> drawRoundBead(bead.color, center, size, highlight)
-            SwiftieBead.Heart -> drawHeartBead(center, size, highlight)
+            is SwiftieBead.Letter ->
+                drawLetterBead(bead, center, size, highlight, letterLayouts[bead.char], bodyBrush)
+            is SwiftieBead.Round -> drawRoundBead(center, size, highlight, bodyBrush)
+            SwiftieBead.Heart -> drawHeartBead(center, size, highlight, bodyBrush)
         }
     }
-}
-
-/**
- * 向下的柔和投影。
- *
- * 用径向渐变而不是 `Modifier.blur` —— 后者在 API 31 以下**静默失效**，
- * 那批机器上会变成一块硬边黑影。
- */
-private fun DrawScope.drawBeadShadow(center: Offset, size: Float) {
-    val at = Offset(center.x, center.y + size * 0.22f)
-    val radius = size * 0.62f
-    drawCircle(
-        brush = Brush.radialGradient(
-            colors = listOf(Color.Black.copy(alpha = 0.22f), Color.Transparent),
-            center = at,
-            radius = radius
-        ),
-        radius = radius,
-        center = at
-    )
 }
 
 private fun DrawScope.drawLetterBead(
@@ -112,21 +178,14 @@ private fun DrawScope.drawLetterBead(
     center: Offset,
     size: Float,
     highlight: Offset,
-    layout: TextLayoutResult?
+    layout: TextLayoutResult?,
+    bodyBrush: Brush
 ) {
     val half = size / 2f
     // 0.24：四角明显圆润，但还看得出是方珠。再大就成圆角骰子了
     val corner = CornerRadius(size * 0.24f)
-    // 正面微凸：径向渐变的中心朝光源偏，边缘落到浅灰，读起来就是个鼓面
     drawRoundRect(
-        brush = Brush.radialGradient(
-            colors = listOf(Color.White, Color(0xFFF2EFEC), Color(0xFFD8D2CC)),
-            center = Offset(
-                x = center.x - highlight.x * size * 0.22f,
-                y = center.y - highlight.y * size * 0.22f
-            ),
-            radius = size * 0.85f
-        ),
+        brush = bodyBrush,
         topLeft = Offset(center.x - half, center.y - half),
         size = Size(size, size),
         cornerRadius = corner
@@ -170,29 +229,13 @@ private fun DrawScope.drawLetterBead(
 }
 
 private fun DrawScope.drawRoundBead(
-    color: Color,
     center: Offset,
     size: Float,
-    highlight: Offset
+    highlight: Offset,
+    bodyBrush: Brush
 ) {
     val radius = size / 2f
-    // 半透明：光源侧透光偏淡、中段最浓、背光侧回落。三段渐变就够读出「不是实心」
-    drawCircle(
-        brush = Brush.radialGradient(
-            colors = listOf(
-                color.copy(alpha = 0.55f),
-                color.copy(alpha = 0.92f),
-                color.copy(alpha = 0.70f)
-            ),
-            center = Offset(
-                x = center.x - highlight.x * radius * 0.40f,
-                y = center.y - highlight.y * radius * 0.40f
-            ),
-            radius = radius * 1.15f
-        ),
-        radius = radius,
-        center = center
-    )
+    drawCircle(brush = bodyBrush, radius = radius, center = center)
     // 内反光：背光侧内壁被照亮的一小弧。这一笔是「半透明」最关键的线索
     drawArc(
         color = Color.White,
@@ -216,21 +259,19 @@ private fun DrawScope.drawRoundBead(
     )
 }
 
-private fun DrawScope.drawHeartBead(center: Offset, size: Float, highlight: Offset) {
+private fun DrawScope.drawHeartBead(
+    center: Offset,
+    size: Float,
+    highlight: Offset,
+    bodyBrush: Brush
+) {
     // 心形珠比同排方珠略大一点点，视觉重量才配得上
     val side = size * 1.06f
     withTransform({
         translate(center.x - side / 2f, center.y - side / 2f)
         scale(scaleX = side, scaleY = side, pivot = Offset.Zero)
     }) {
-        drawPath(
-            path = UNIT_HEART,
-            brush = Brush.radialGradient(
-                colors = listOf(Color(0xFFFF7A90), Color(0xFFD81B3E)),
-                center = Offset(0.36f, 0.30f),
-                radius = 0.85f
-            )
-        )
+        drawPath(path = UNIT_HEART, brush = bodyBrush)
     }
     // 心形也有塑料高光，位置在左上鼓包上
     drawOval(

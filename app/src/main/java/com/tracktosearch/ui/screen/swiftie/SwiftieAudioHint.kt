@@ -20,12 +20,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Earbuds
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import com.tracktosearch.R
 import kotlinx.coroutines.delay
 
@@ -52,15 +58,21 @@ internal enum class SwiftieAudioAdvice {
 /**
  * 算「戴着耳机」的输出设备类型。
  *
- * 有线、USB、蓝牙、助听器、LE Audio 都算 —— 判断的是「声音会不会外放出去」，
+ * 有线、USB、蓝牙 A2DP、助听器、LE Audio 都算 —— 判断的是「声音会不会外放出去」，
  * 不是「是不是耳塞」。新增的两个类型按 API 等级加，避免 lint 的 InlinedApi。
+ *
+ * 两个刻意的取舍：
+ * - 收 `TYPE_USB_DEVICE`：USB-C 转 3.5mm 的小尾巴与外置 DAC 有相当一部分报的是
+ *   `TYPE_USB_DEVICE` 而不是 `TYPE_USB_HEADSET`，只认后者会漏掉这批用户。
+ * - **不收** `TYPE_BLUETOOTH_SCO`：那是电话 / 免手持声道，车机与免手持套件都在里面，
+ *   而它们恰恰是「声音会外放」的场景。真正的蓝牙耳机同时支持 A2DP，已经被上一条收了。
  */
 private val HEADPHONE_TYPES: Set<Int> = buildSet {
     add(AudioDeviceInfo.TYPE_WIRED_HEADSET)
     add(AudioDeviceInfo.TYPE_WIRED_HEADPHONES)
     add(AudioDeviceInfo.TYPE_USB_HEADSET)
+    add(AudioDeviceInfo.TYPE_USB_DEVICE)
     add(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP)
-    add(AudioDeviceInfo.TYPE_BLUETOOTH_SCO)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
         add(AudioDeviceInfo.TYPE_HEARING_AID)
     }
@@ -98,6 +110,10 @@ private fun AudioManager.readAdvice(): SwiftieAudioAdvice {
  * 初值在 `remember` 里同步读出来，所以第一帧就是对的 —— 放到 `LaunchedEffect`
  * 里读会让提示晚一帧弹出来。之后每 [AUDIO_POLL_MS] 复查一次：用户中途插上耳机
  * 或调大音量，提示要自己消失。
+ *
+ * 轮询跟着生命周期停：Compose 的组合不会因为切后台而拆掉，不看 `started` 的话
+ * 这个 `while (true)` 会在息屏后继续每 700ms 叫一次 `getDevices` + 两次音量查询。
+ * 回到前台时先立刻读一次再进循环，不用等满一个间隔。
  */
 @Composable
 internal fun rememberSwiftieAudioAdvice(): SwiftieAudioAdvice {
@@ -105,14 +121,16 @@ internal fun rememberSwiftieAudioAdvice(): SwiftieAudioAdvice {
     val audioManager = remember(context) {
         context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     }
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val started = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
     var advice by remember(audioManager) {
         mutableStateOf(audioManager?.readAdvice() ?: SwiftieAudioAdvice.NONE)
     }
-    LaunchedEffect(audioManager) {
-        if (audioManager == null) return@LaunchedEffect
+    LaunchedEffect(audioManager, started) {
+        if (audioManager == null || !started) return@LaunchedEffect
         while (true) {
-            delay(AUDIO_POLL_MS)
             advice = audioManager.readAdvice()
+            delay(AUDIO_POLL_MS)
         }
     }
     return advice
@@ -142,7 +160,10 @@ internal fun SwiftieAudioHint(
     }
     val tint = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
-        modifier = modifier,
+        // liveRegion：这一行是**状态播报**而不是静态标签。用户插上耳机、调大音量，
+        // 文案会换或整块消失，TalkBack 要跟着念出来，否则视障用户只能听到一次初始值。
+        // Polite 而非 Assertive —— 它不该打断正在念的题目
+        modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

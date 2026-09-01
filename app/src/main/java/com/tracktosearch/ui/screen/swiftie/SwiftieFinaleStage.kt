@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.swiftie
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -17,15 +18,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.ui.screen.swiftie.bracelet.SwiftieBracelet
+import com.tracktosearch.ui.screen.swiftie.bracelet.braceletHeightFor
 
 /** 落款。灯箱上的算式原样搬来，**三语均不翻译**（Spec §2.2）。 */
-private const val SIGNATURE_CAPTION = "13 + 87 = 100"
+internal const val SIGNATURE_CAPTION = "13 + 87 = 100"
 
 /** 落款在签名写完前 800ms 开始淡入，收尾闪光时正好到位。 */
 private const val CAPTION_FADE_MS: Float = 800f
-
-/** 手链占的高度。三条堆叠 + 下垂，170dp 放得开。 */
-private val BRACELET_HEIGHT = 170.dp
 
 /**
  * 终局：签名 + 落款 + 手链（Spec §5 的 T99410–118000、§7、§8）。
@@ -67,11 +66,14 @@ fun SwiftieFinaleStage(
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        SwiftieBracelet(
-            elapsedInBracelet = { elapsedMs() - SwiftieTimeline.BRACELET_START },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(BRACELET_HEIGHT)
-        )
+        // 插槽高度按宽度算，见 braceletHeightFor —— 下垂量是宽度的比例
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            SwiftieBracelet(
+                elapsedInBracelet = { elapsedMs() - SwiftieTimeline.BRACELET_START },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(braceletHeightFor(maxWidth))
+            )
+        }
     }
 }

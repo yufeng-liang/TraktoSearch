@@ -1028,12 +1028,16 @@ fun MainScreen(
                 )
             }
 
-            // 霉粉彩蛋全屏页。已解锁再进来一定是重看纪念页（Spec §3.3）
+            // 霉粉彩蛋全屏页。已解锁再进来一定是重看纪念页（Spec §3.3）。
+            //
+            // zIndex 必须高于离线横幅那 4f —— zIndex 覆盖声明顺序，光靠「写在最后」
+            // 不够：断网时那条胶囊会浮在全屏彩蛋上面，而彩蛋是一张 1:1 复刻图
             SwiftieEggScreen(
                 visible = swiftieEggVisible,
                 onDismiss = { solved -> cloudThemeManager.onSwiftieEggDismissed(solved) },
                 onCommitUnlock = { cloudThemeManager.commitSwiftieUnlock() },
-                replay = swiftieUnlocked
+                replay = swiftieUnlocked,
+                modifier = Modifier.zIndex(5f)
             )
 
         }

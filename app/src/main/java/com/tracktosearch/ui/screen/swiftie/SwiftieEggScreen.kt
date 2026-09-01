@@ -30,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,9 +44,12 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 import com.tracktosearch.R
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieErasStage
 import kotlinx.coroutines.delay
@@ -57,12 +61,19 @@ private val CONTENT_MAX_WIDTH = 480.dp
 private val CONTENT_GAP = 20.dp
 
 /**
- * 底部音频提示带的高度。够放两行 12sp —— 韩文那句最长，窄屏上会折行。
+ * 底部音频提示带的基准高度（系统字号 100% 时）。
+ *
+ * 两行 12sp 约 28dp，加上提示自带的上下各 8dp 内边距共 44dp。四档译文里最长的是
+ * **英文默认档**（约 276dp @12sp），窄屏上会折两行。
  *
  * **恒定预留**，不管提示当前是否显示 —— 用户中途插上耳机时提示会消失，
  * 若这块位子跟着让出来，灯箱就会在题面上重新排版跳一下。
+ * 实际用值按 `fontScale` 放大，见 `SwiftieQuizStage`。
  */
-private val AUDIO_HINT_BAND = 40.dp
+private val AUDIO_HINT_BAND_BASE = 44.dp
+
+/** 预留带的上限：再大就该让灯箱缩，而不是继续吃版面。 */
+private val AUDIO_HINT_BAND_MAX = 96.dp
 
 /** 答错摇晃时长，与 [SwiftieBillboard] 的 keyframes 对齐。 */
 private const val WRONG_SHAKE_MS = 300L
@@ -81,13 +92,15 @@ private const val FINALE_HANDOFF_MS = 500f
  * @param onDismiss solved = true 表示答对通关；false 表示用户主动关闭（不消耗解题机会）
  * @param onCommitUnlock 主题接管回调，由内容体在扩散铺满全屏那一帧调用
  * @param replay 已解锁后重看纪念页：「跳过」立即可用，不再等 3s 淡入（Spec §3.3）
+ * @param modifier 调用方用它给整页设 `zIndex` —— 全屏彩蛋必须压在离线横幅之上
  */
 @Composable
 fun SwiftieEggScreen(
     visible: Boolean,
     onDismiss: (solved: Boolean) -> Unit,
     onCommitUnlock: () -> Unit,
-    replay: Boolean = false
+    replay: Boolean = false,
+    modifier: Modifier = Modifier
 ) {
     BackHandler(enabled = visible) { onDismiss(false) }
     LockPortraitWhile(visible)
@@ -95,7 +108,8 @@ fun SwiftieEggScreen(
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(animationSpec = tween(200)),
-        exit = fadeOut(animationSpec = tween(200))
+        exit = fadeOut(animationSpec = tween(200)),
+        modifier = modifier
     ) {
         // 内容随 AnimatedVisibility 一起挂载/销毁，所以每次打开都是新的一道题
         SwiftieEggContent(
@@ -118,6 +132,84 @@ private fun LockPortraitWhile(active: Boolean) {
     }
 }
 
+/**
+ * 序列播放期间保持亮屏。
+ *
+ * 只覆盖序列这 126s，不覆盖题面 —— 题面本来就在收触摸（用户在按键盘），
+ * 系统超时是对的；而序列一旦开始就零触摸输入，撞上默认 30s 息屏会直接烂在
+ * 第 4 张卡片附近。静态终态也不覆盖：那是一张静止画面，正常超时即可。
+ */
+@Composable
+private fun KeepScreenOnWhile(active: Boolean) {
+    val view = LocalView.current
+    DisposableEffect(active, view) {
+        if (!active) return@DisposableEffect onDispose { }
+        val previous = view.keepScreenOn
+        view.keepScreenOn = true
+        onDispose { view.keepScreenOn = previous }
+    }
+}
+
+/**
+ * 吞掉落在本层空白处的触摸。
+ *
+ * Compose 的命中测试会把同一个 `Box` 里所有被命中的兄弟分支都收进来，
+ * 上层没消费的事件照样会派发给下层兄弟。彩蛋是全屏页，不吞就会漏给
+ * `MainScreen` 的悬浮底栏与 Pager。在 Main pass 上消费即可 ——
+ * 键盘按键是更深的子节点，Main pass 上先于本节点收到事件；
+ * 「按住暂停」走 Initial pass，也在本节点之前。
+ */
+private fun Modifier.consumeStrayTouches(): Modifier = pointerInput(Unit) {
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false).consume()
+        var event: PointerEvent
+        do {
+            event = awaitPointerEvent()
+            event.changes.forEach { it.consume() }
+        } while (event.changes.any { it.pressed })
+    }
+}
+
+/**
+ * 序列与静态终态期间强制**深色**系统栏图标。
+ *
+ * 那两段的底是满屏水彩天空（粉白 / 淡蓝 / 薰衣草，相对亮度 0.46–0.86）。深色模式下
+ * `Theme.kt` 把状态栏图标设成浅色，白图标压在这张浅底上只有 1.2–2:1，时间和电量看不见。
+ * 灯箱阶段不需要 —— 那时四周仍是 `surface`，浅色图标是对的。
+ */
+@Composable
+private fun DarkSystemBarIconsWhile(active: Boolean) {
+    val view = LocalView.current
+    val window = LocalActivity.current?.window
+    if (view.isInEditMode || window == null) return
+    val controller = WindowCompat.getInsetsController(window, view)
+
+    DisposableEffect(active) {
+        val previousStatus = controller.isAppearanceLightStatusBars
+        val previousNavigation = controller.isAppearanceLightNavigationBars
+        onDispose {
+            controller.isAppearanceLightStatusBars = previousStatus
+            controller.isAppearanceLightNavigationBars = previousNavigation
+        }
+    }
+
+    // 必须是 SideEffect，不能只在上面的 DisposableEffect 里写一次。
+    //
+    // Compose 的 apply 阶段先派发 RememberObserver（DisposableEffect / LaunchedEffect）
+    // 再跑 SideEffect，而 `Theme.kt` 正是在 SideEffect 里按 darkTheme 设这两个值 ——
+    // 写在 DisposableEffect 里必然被它盖掉。SideEffect 之间按组合顺序执行，彩蛋是主题的
+    // 子树，所以同一帧里我们后写、我们赢。
+    //
+    // 唯一的缝：T1100 落主题那一下若只重组了主题、没重组彩蛋，图标会错几秒 ——
+    // 序列的 phase 每几秒翻一次，彩蛋跟着重组就自己纠回来了
+    if (active) {
+        SideEffect {
+            controller.isAppearanceLightStatusBars = true
+            controller.isAppearanceLightNavigationBars = true
+        }
+    }
+}
+
 @Composable
 private fun SwiftieEggContent(
     onDismiss: (solved: Boolean) -> Unit,
@@ -125,7 +217,9 @@ private fun SwiftieEggContent(
     replay: Boolean
 ) {
     var quiz by remember { mutableStateOf(SwiftieQuizState()) }
-    var submitCenter by remember { mutableStateOf(Offset.Zero) }
+    // Unspecified 而不是 Zero：SwiftieDiffusion 用 isSpecified 判「键盘还没上报坐标」，
+    // 给 Zero 会被当成一个真坐标，扩散就从左上角开始而不是回退到屏幕中心
+    var submitCenter by remember { mutableStateOf(Offset.Unspecified) }
     val haptics = LocalHapticFeedback.current
     val reducedMotion = rememberReducedMotion()
 
@@ -137,8 +231,33 @@ private fun SwiftieEggContent(
     var holdPaused by remember { mutableStateOf(false) }
     var seekFrozen by remember { mutableStateOf(false) }
     var focusPaused by remember { mutableStateOf(false) }
+
+    /**
+     * 焦点被永久抢走之后就不再要配乐了。
+     *
+     * 永久丢失（`AUDIOFOCUS_LOSS`）按系统契约不保证再补发 `GAIN`，
+     * 继续挂在 [focusPaused] 上等于把整条序列永久钉在暂停态 ——
+     * 「继续」只清 [seekFrozen]、按住暂停只翻 [holdPaused]，两者都解不开它。
+     */
+    var audioGivenUp by remember { mutableStateOf(false) }
     val framePaused = holdPaused || seekFrozen || focusPaused
     LaunchedEffect(framePaused) { clock.paused = framePaused }
+
+    /**
+     * 重看纪念页时**不再落主题**。
+     *
+     * `commitSwiftieUnlock` 里的强调色与网格预设不是幂等的：解锁之后用户完全可以
+     * 在设置里换掉它们（星云选项就是给已解锁用户开的）。重播一次就把他的选择
+     * 静默改回 RENOIR + NEBULA，是纯粹的数据损失。
+     */
+    val commitUnlock: () -> Unit = { if (!replay) onCommitUnlock() }
+
+    // 126s 零触摸，不按住就会撞上系统息屏超时（默认 30s）——
+    // 息屏会把 Activity 推进 ON_STOP，帧时钟随之停摆，整段序列烂在中途
+    KeepScreenOnWhile(sequenceRunning)
+
+    // 答对之后底是满屏浅色水彩天空，深色模式的浅色状态栏图标会看不见
+    DarkSystemBarIconsWhile(quiz.solved)
 
     // 每帧变化的量只在 draw lambda 里读；组合里只读这些「翻转一次」的派生量
     val phase by remember { derivedStateOf { swiftiePhaseAt(clock.elapsedMs) } }
@@ -154,11 +273,19 @@ private fun SwiftieEggContent(
             clock.elapsedMs >= SwiftieTimeline.DIFFUSION_START + SwiftieTimeline.DIFFUSION_MS
         }
     }
-    // T0–1100 与 T105950 之后开着，中间 105s 关掉（Spec §5 约束 2、3）
-    val meshMotionActive: () -> Boolean = {
-        clock.elapsedMs < SwiftieTimeline.THEME_COMMIT_AT ||
-            clock.elapsedMs >= SwiftieTimeline.MOTION_PREHEAT_AT
+    // T0–1100 与 T105950 之后开着，中间 105s 关掉（Spec §5 约束 2、3）。
+    //
+    // 必须过一道 derivedStateOf：这个 lambda 由 `AmbientMeshBackground` 在**组合体**里
+    // 求值（`speedScale = if (... && motionActive())`），直接读 elapsedMs 等于把逐帧的
+    // 时钟读进组合阶段，全屏 mesh 层会每帧重组一次、整条序列约 7600 次。
+    // 派生成布尔量之后只翻转两次
+    val meshMotionOn by remember {
+        derivedStateOf {
+            clock.elapsedMs < SwiftieTimeline.THEME_COMMIT_AT ||
+                clock.elapsedMs >= SwiftieTimeline.MOTION_PREHEAT_AT
+        }
     }
+    val meshMotionActive: () -> Boolean = { meshMotionOn }
 
     // T118000 起 500ms 交叉淡变：签名与手链化开，轴与 Lover 卡片浮回来。
     // 两个 lambda 都只在 draw 阶段读时钟，所以每帧只失效绘制、不重组
@@ -191,12 +318,12 @@ private fun SwiftieEggContent(
     // 「减少动效」不跑序列：立刻落地主题，然后给静态终态，等用户自己按 ✕
     val staticFinale = quiz.solved && reducedMotion
     LaunchedEffect(staticFinale) {
-        if (staticFinale) onCommitUnlock()
+        if (staticFinale) commitUnlock()
     }
 
     // T1100 那一帧提交三写入。derivedStateOf 保证只翻转一次，所以只会调一次
     LaunchedEffect(themeCommitted) {
-        if (themeCommitted) onCommitUnlock()
+        if (themeCommitted) commitUnlock()
     }
 
     LaunchedEffect(phase) {
@@ -204,11 +331,23 @@ private fun SwiftieEggContent(
     }
 
     SwiftieMusic(
-        enabled = sequenceRunning,
+        enabled = sequenceRunning && !audioGivenUp,
         paused = framePaused,
-        // 别的应用抢走焦点：画面与音乐一起停，焦点回来时自己接着走。
-        // 这里必须双向处理 —— 只处理丢失的话，一条系统提示音就能永久冻住整段序列
-        onFocusChange = { hasFocus -> focusPaused = !hasFocus }
+        // 时钟是唯一时间来源：重建播放器与响应「跳过」/ 拖播放头都按它对位
+        positionMs = { clock.elapsedMs },
+        seekEpoch = clock.seekEpoch,
+        onFocusChange = { focus ->
+            when (focus) {
+                // 别的应用抢走焦点：画面与音乐一起停，焦点回来时自己接着走
+                SwiftieAudioFocus.GAINED -> focusPaused = false
+                SwiftieAudioFocus.LOST_TRANSIENT -> focusPaused = true
+                // 永久丢失：放弃配乐，让动画静音走完，而不是永久冻住
+                SwiftieAudioFocus.LOST_PERMANENT -> {
+                    focusPaused = false
+                    audioGivenUp = true
+                }
+            }
+        }
     )
 
     // 按住屏幕任意处暂停，松手继续（Spec §6.1）。走 Initial pass 不消费事件，
@@ -232,7 +371,7 @@ private fun SwiftieEggContent(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            // T123000–125000：整层淡出，露出已经在运动的星云背景（Spec §5）。
+            // T123000–125998：整层淡出，露出已经在运动的星云背景（Spec §5）。
             // 必须插在 background 之前 —— 写在之后只淡出子内容、底色仍然挡着星云
             .graphicsLayer {
                 alpha = 1f - ((clock.elapsedMs - SwiftieTimeline.FADE_OUT_START).toFloat() /
@@ -240,6 +379,9 @@ private fun SwiftieEggContent(
             }
             .background(MaterialTheme.colorScheme.surface)
             .then(pauseGesture)
+            // 全屏页必须自己吞掉落在空白处的触摸，否则会穿到下层 MainScreen 的
+            // 悬浮底栏上去 —— 题面阶段点键盘下缘那条带就能把 Pager 切到别的 Tab
+            .consumeStrayTouches()
     ) {
         // 最底层：答对那一帧就挂上几乎透明的 mesh，把 AGSL 编译付在确认窗口里。
         // 静态终态不需要预热，也没有扩散
@@ -250,6 +392,7 @@ private fun SwiftieEggContent(
         if (quizMounted && !staticFinale) {
             SwiftieQuizStage(
                 quiz = quiz,
+                showAudioHint = !reducedMotion,
                 onQuizChange = { quiz = it },
                 onSubmitCenter = { submitCenter = it },
                 onKeyHaptic = { haptics.performHapticFeedback(HapticFeedbackType.VirtualKey) }
@@ -274,11 +417,14 @@ private fun SwiftieEggContent(
         }
 
         // Eras 舞台分两段挂载：开场轴线 + 12 张卡片，然后整层卸载让位给终局；
-        // 配乐唱到 Lover 时再回来做倒滑与绽放，收在最后一帧
+        // 配乐唱到 Lover 时再回来做倒滑与绽放，收在最后一帧。
+        // FADE_OUT 也必须留着 —— 那 2998ms 淡出的主体正是绽放开的 Lover 卡片，
+        // 漏掉它就会在 T123000（淡出还没开始的那一帧）把满屏的卡片整块硬切掉
         if (phase == SwiftieSequencePhase.ERAS_INTRO ||
             phase == SwiftieSequencePhase.ERAS_CARDS ||
             phase == SwiftieSequencePhase.REWIND ||
-            phase == SwiftieSequencePhase.LOVER_BLOOM
+            phase == SwiftieSequencePhase.LOVER_BLOOM ||
+            phase == SwiftieSequencePhase.FADE_OUT
         ) {
             SwiftieErasStage(
                 clock = clock,
@@ -289,8 +435,9 @@ private fun SwiftieEggContent(
             )
         }
 
-        // 终局一直挂到最后：倒滑那 500ms 里淡出，之后 alpha 已经是 0，不再出帧
-        if (phase >= SwiftieSequencePhase.SIGNATURE && phase != SwiftieSequencePhase.DONE) {
+        // 终局挂到倒滑段末尾：交叉淡变在 T118500 走完，REWIND 到 T119500，
+        // 留 1000ms 余量。再往后 alpha 恒为 0，继续挂着只是白重录签名那两层
+        if (phase >= SwiftieSequencePhase.SIGNATURE && phase <= SwiftieSequencePhase.REWIND) {
             SwiftieFinaleStage(
                 elapsedMs = { clock.elapsedMs },
                 modifier = Modifier.graphicsLayer { alpha = finaleAlpha() }
@@ -319,16 +466,26 @@ private fun SwiftieEggContent(
     }
 }
 
-/** 题面版面（灯箱 + 键盘 + 音频提示）。状态由外部持有，本函数只负责摆位与转发回调。 */
+/**
+ * 题面版面（灯箱 + 键盘 + 音频提示）。状态由外部持有，本函数只负责摆位与转发回调。
+ *
+ * @param showAudioHint 「减少动效」路径根本不播配乐（`SwiftieMusic(enabled = false)`），
+ *   那时候还劝人戴耳机就是骗人 —— 提示与实际播放必须一致
+ */
 @Composable
 private fun SwiftieQuizStage(
     quiz: SwiftieQuizState,
+    showAudioHint: Boolean,
     onQuizChange: (SwiftieQuizState) -> Unit,
     onSubmitCenter: (Offset) -> Unit,
     onKeyHaptic: () -> Unit
 ) {
     // 无条件调用，题面在屏上就一直跟踪：用户中途插耳机或调音量，提示要自己消失
     val audioAdvice = rememberSwiftieAudioAdvice()
+    // 预留带要跟着系统字号长：两行 12sp 在 100% 下约 28dp，加上下 8dp 内边距就是 44dp，
+    // 而字号档位能把它顶到两倍。写死 dp 会让提示压在键盘末行上
+    val audioHintBand = (AUDIO_HINT_BAND_BASE * LocalDensity.current.fontScale)
+        .coerceIn(AUDIO_HINT_BAND_BASE, AUDIO_HINT_BAND_MAX)
 
     BoxWithConstraints(
         modifier = Modifier
@@ -337,11 +494,11 @@ private fun SwiftieQuizStage(
         contentAlignment = Alignment.Center
     ) {
         // 版面总高 = 灯箱(1×宽) + 间距 + 键盘(≈0.833×宽 + 13dp) ⇒ 1.833×宽 + 33dp
-        val fitByHeight = (maxHeight - AUDIO_HINT_BAND - CONTENT_GAP - 13.dp) / 1.833f
+        val fitByHeight = (maxHeight - audioHintBand - CONTENT_GAP - 13.dp) / 1.833f
         val contentWidth = minOf(maxWidth - 40.dp, CONTENT_MAX_WIDTH, fitByHeight)
 
         Column(
-            modifier = Modifier.padding(bottom = AUDIO_HINT_BAND),
+            modifier = Modifier.padding(bottom = audioHintBand),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -365,7 +522,7 @@ private fun SwiftieQuizStage(
         }
 
         // 答对之后不再提示 —— 那时已经来不及去开声音了，序列马上就要起
-        if (!quiz.solved) {
+        if (showAudioHint && !quiz.solved) {
             SwiftieAudioHint(
                 advice = audioAdvice,
                 modifier = Modifier

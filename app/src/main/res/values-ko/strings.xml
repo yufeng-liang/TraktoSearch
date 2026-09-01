@@ -2073,9 +2073,11 @@
     <string name="bg_glow_lover_inspired">Lover에서 영감을 받음</string>
     <string name="swiftie_quiz_a11y">문제: X 더하기 87은 100입니다. X는 얼마입니까? 현재 답: %1$s</string>
     <string name="swiftie_quiz_a11y_empty">아직 답하지 않음</string>
+    <string name="swiftie_quiz_a11y_hint">힌트: 그녀의 행운의 숫자입니다.</string>
     <string name="swiftie_quiz_submit">제출</string>
     <string name="swiftie_quiz_backspace">삭제</string>
     <string name="swiftie_era_card_a11y">%1$s, %2$s 발매, 총 %3$d곡</string>
+    <string name="swiftie_eras_axis_a11y">앨범 타임라인, 2006년부터 2025년까지 총 12장. 드래그하면 해당 시대로 이동합니다.</string>
     <string name="swiftie_skip">건너뛰기</string>
     <string name="swiftie_resume">계속</string>
     <string name="swiftie_audio_hint_all">소리를 켜고 이어폰을 착용하면 가장 좋습니다</string>

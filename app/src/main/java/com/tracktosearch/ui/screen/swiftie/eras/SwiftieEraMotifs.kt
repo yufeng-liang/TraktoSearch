@@ -24,8 +24,14 @@ private const val MOTIF_ALPHA = 0.20f
 /**
  * 画某个时代的视觉母题。
  *
- * @param phase 0f..1f 循环相位，由卡片按固定周期喂进来
- * @param lowRam true 时分形与网点走静态路径、点数减半（Spec §11.2）
+ * 每帧重跑一遍（卡片的 `drawBehind` 每帧失效），所以循环里的 `Path` 一律
+ * **建一个反复 `rewind()`**，而不是每次迭代 new 一个 —— Red 一帧 14 条、
+ * folklore 11 棵、Lover 7 颗，攒起来就是 96 秒的 GC 抖动。
+ *
+ * @param phase 0f..1f 循环相位，由卡片按固定周期喂进来。低端机恒为 0f（整块定格）
+ * @param lowRam true 时点阵与分形再减半（Spec §11.2）。**只有 3 个母题看这个参数** ——
+ *   低端机的省电靠卡片那边「不读时钟」把整块母题定住，比在 12 个函数里各写一条
+ *   低端分支干净得多；这里剩下的 lowRam 只是顺手把一次性的点数也压掉
  */
 fun DrawScope.drawEraMotif(
     motif: SwiftieEraMotif,
@@ -44,7 +50,7 @@ fun DrawScope.drawEraMotif(
         SwiftieEraMotif.PINE_FOG -> drawPineFog(color, phase)
         SwiftieEraMotif.BRAID_BRANCH -> drawBraidBranch(color, phase, lowRam)
         SwiftieEraMotif.STARBURST_FLAME -> drawStarburstFlame(color, phase)
-        SwiftieEraMotif.TYPEWRITER_PAPER -> drawTypewriterPaper(color, phase)
+        SwiftieEraMotif.TYPEWRITER_PAPER -> drawTypewriterPaper(phase)
         SwiftieEraMotif.SPOTLIGHT_FEATHER -> drawSpotlightFeather(color, phase)
     }
 }
@@ -98,16 +104,16 @@ private fun DrawScope.drawGoldenSwirl(color: Color, phase: Float) {
         }
     }
     // 三道长发弧线，各自相位错开，像被风甩起来
+    val path = Path()
     repeat(3) { strand ->
         val sway = sin((phase + strand * 0.25f) * TAU) * size.width * 0.05f
-        val path = Path().apply {
-            moveTo(size.width * 0.10f, size.height * (0.18f + strand * 0.08f))
-            cubicTo(
-                size.width * 0.35f + sway, size.height * (0.05f + strand * 0.10f),
-                size.width * 0.55f - sway, size.height * (0.75f - strand * 0.06f),
-                size.width * 0.92f, size.height * (0.55f + strand * 0.10f)
-            )
-        }
+        path.rewind()
+        path.moveTo(size.width * 0.10f, size.height * (0.18f + strand * 0.08f))
+        path.cubicTo(
+            size.width * 0.35f + sway, size.height * (0.05f + strand * 0.10f),
+            size.width * 0.55f - sway, size.height * (0.75f - strand * 0.06f),
+            size.width * 0.92f, size.height * (0.55f + strand * 0.10f)
+        )
         drawPath(
             path = path,
             color = color,
@@ -119,22 +125,22 @@ private fun DrawScope.drawGoldenSwirl(color: Color, phase: Float) {
 
 /** 3 · Speak Now：紫色薄纱正弦波。三层不同振幅叠出纱的层次。 */
 private fun DrawScope.drawPurpleVeil(color: Color, phase: Float) {
+    val path = Path()
     repeat(3) { layer ->
         val amplitude = size.height * (0.06f + layer * 0.03f)
         val baseline = size.height * (0.30f + layer * 0.20f)
         val shift = (phase + layer * 0.3f) * TAU
-        val path = Path().apply {
-            moveTo(0f, baseline)
-            // 48 段折线足够平滑，又不用碰贝塞尔的命名分歧
-            for (step in 1..48) {
-                val x = size.width * step / 48f
-                val y = baseline + sin(step / 48f * TAU * 1.6f + shift) * amplitude
-                lineTo(x, y)
-            }
-            lineTo(size.width, size.height)
-            lineTo(0f, size.height)
-            close()
+        path.rewind()
+        path.moveTo(0f, baseline)
+        // 48 段折线足够平滑，又不用碰贝塞尔的命名分歧
+        for (step in 1..48) {
+            val x = size.width * step / 48f
+            val y = baseline + sin(step / 48f * TAU * 1.6f + shift) * amplitude
+            path.lineTo(x, y)
         }
+        path.lineTo(size.width, size.height)
+        path.lineTo(0f, size.height)
+        path.close()
         drawPath(path = path, color = color, alpha = MOTIF_ALPHA * 0.5f)
     }
 }
@@ -144,12 +150,13 @@ private fun DrawScope.drawKnitStripes(color: Color, phase: Float) {
     val rows = 14
     val rowHeight = size.height / rows
     val stitch = size.width / 22f
+    val path = Path()
     repeat(rows) { row ->
         val y = row * rowHeight + rowHeight * 0.5f
         // 逐行反向偏移，纹路错开才像织物而不是条形码
         val offset = if (row % 2 == 0) stitch * 0.5f else 0f
         val drift = sin((phase + row * 0.08f) * TAU) * stitch * 0.15f
-        val path = Path()
+        path.rewind()
         var x = -stitch + offset + drift
         path.moveTo(x, y)
         while (x < size.width + stitch) {
@@ -263,6 +270,7 @@ private fun DrawScope.drawPinkCloudHeart(color: Color, phase: Float) {
         )
     }
     val random = Random(2019)
+    val heart = Path()
     repeat(7) {
         val x = random.nextFloat()
         val travel = ((phase + random.nextFloat()) % 1f)
@@ -270,12 +278,11 @@ private fun DrawScope.drawPinkCloudHeart(color: Color, phase: Float) {
         val side = size.minDimension * (0.03f + random.nextFloat() * 0.025f)
         translate(left = x * size.width - side / 2f, top = y * size.height - side / 2f) {
             // 与灯箱那颗心同一个两段贝塞尔轮廓，这里直接按 side 展开
-            val heart = Path().apply {
-                moveTo(side * 0.5f, side * 0.92f)
-                cubicTo(-side * 0.18f, side * 0.52f, side * 0.16f, side * 0.02f, side * 0.5f, side * 0.30f)
-                cubicTo(side * 1.18f, side * 0.02f, side * 0.84f, side * 0.52f, side * 0.5f, side * 0.92f)
-                close()
-            }
+            heart.rewind()
+            heart.moveTo(side * 0.5f, side * 0.92f)
+            heart.cubicTo(-side * 0.18f, side * 0.52f, side * 0.16f, side * 0.02f, side * 0.5f, side * 0.30f)
+            heart.cubicTo(side * 1.18f, side * 0.02f, side * 0.84f, side * 0.52f, side * 0.5f, side * 0.92f)
+            heart.close()
             drawPath(path = heart, color = color, alpha = MOTIF_ALPHA * 2.2f * (1f - travel))
         }
     }
@@ -284,17 +291,17 @@ private fun DrawScope.drawPinkCloudHeart(color: Color, phase: Float) {
 /** 8 · folklore：灰雾横带 + 松林垂直剪影。 */
 private fun DrawScope.drawPineFog(color: Color, phase: Float) {
     val random = Random(2020)
+    val pine = Path()
     // 先画树，雾压在树上才有纵深
     repeat(11) { index ->
         val x = (index + 0.5f) / 11f * size.width
         val height = size.height * (0.30f + random.nextFloat() * 0.40f)
         val halfWidth = size.width * (0.020f + random.nextFloat() * 0.020f)
-        val pine = Path().apply {
-            moveTo(x, size.height - height)
-            lineTo(x + halfWidth, size.height)
-            lineTo(x - halfWidth, size.height)
-            close()
-        }
+        pine.rewind()
+        pine.moveTo(x, size.height - height)
+        pine.lineTo(x + halfWidth, size.height)
+        pine.lineTo(x - halfWidth, size.height)
+        pine.close()
         drawPath(path = pine, color = color, alpha = MOTIF_ALPHA * 1.6f)
     }
     repeat(3) { band ->
@@ -339,8 +346,9 @@ private fun DrawScope.drawBraidBranch(color: Color, phase: Float, lowRam: Boolea
         depth = if (lowRam) 4 else 5
     )
     // 三股辫：三条相位各差 1/3 的正弦，交叠出编织感
+    val path = Path()
     repeat(3) { strand ->
-        val path = Path()
+        path.rewind()
         val baseline = size.height * 0.30f
         val amplitude = size.height * 0.055f
         path.moveTo(size.width * 0.55f, baseline)
@@ -403,9 +411,14 @@ private fun DrawScope.drawStarburstFlame(color: Color, phase: Float) {
     )
 }
 
-/** 11 · TTPD：米白纸纹 + 打字机游标。 */
-private fun DrawScope.drawTypewriterPaper(color: Color, phase: Float) {
-    // 主色是近白的 #F5F1EA，用它画线在白底上几乎看不见，所以纸纹用深灰
+/**
+ * 11 · TTPD：米白纸纹 + 打字机游标。
+ *
+ * 唯一一个不吃 `color` 的母题：TTPD 主色是近白的 `#F5F1EA`，用它在白卡上画线等于没画。
+ * 主色那层薄底由卡片自己铺。
+ */
+private fun DrawScope.drawTypewriterPaper(phase: Float) {
+    // 纸纹用深灰
     val ink = Color(0xFF4A453E)
     val lineCount = 9
     repeat(lineCount) { index ->
@@ -435,8 +448,9 @@ private fun DrawScope.drawTypewriterPaper(color: Color, phase: Float) {
         size = Size(caretWidth, caretHeight),
         alpha = MOTIF_ALPHA * 2.4f * blink
     )
-    // 主色只用来铺一层极淡的纸面底色，避免它完全缺席
-    drawRect(color = color, alpha = 0.10f)
+    // 主色的那层薄底由卡片自己铺（`SwiftieEraCard` 的 drawBehind 第一句
+    // `drawRect(era.mainColor, alpha = 0.10f)`）。这里再铺一次会把 TTPD 的
+    // 米白叠成 0.19，12 张卡片里只有它一张底色偏亮
 }
 
 /** 12 · Showgirl：橙金羽毛扇 + 聚光灯锥。 */

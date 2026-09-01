@@ -288,6 +288,28 @@ tasks.configureEach {
 dependencies {
     // sherpa-onnx：精灵语音激活的本地关键词识别（KWS）引擎，AAR 含全 ABI JNI 库
     implementation(files("libs/sherpa-onnx-1.13.6.aar"))
+    /**
+     * 把 `androidx.concurrent:concurrent-futures{,-ktx}` 抬到 1.2.0。
+     *
+     * AGP 会把 `debugAndroidTestRuntimeClasspath` 上的每个模块按 app 自己
+     * `debugRuntimeClasspath` 解析出的版本钉成 `strictly`（Gradle 把这类约束报成
+     * “from lock file”），目的是让测试 APK 与被测 APK 用同一份类路径。
+     *
+     * app 这边 `androidx.glance:1.1.1` 与 `androidx.work:work-runtime:2.11.2`
+     * 只要到 1.1.0，于是 androidTest 被钉在 strictly 1.1.0；而 androidTest 专属的
+     * `androidx.test:core:1.7.0` 依赖 `concurrent-futures-ktx:1.2.0`。
+     * strictly 1.1.0 与 1.2.0 无法调和，整个 androidTest 源集连编译都进不去。
+     *
+     * 从 app 这一侧抬版本，AGP 钉出来的就是 strictly 1.2.0，两边自然一致。
+     * 反方向（把 androidx.test:core 降到要 1.1.0 的版本）会丢测试 API，不划算。
+     *
+     * constraints 只提版本、不引入新依赖：这两个模块本来就在 app 图里。
+     */
+    constraints {
+        implementation(libs.concurrent.futures)
+        implementation(libs.concurrent.futures.ktx)
+    }
+
     // AndroidX Core
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -386,6 +408,26 @@ dependencies {
     implementation(libs.pinyin4j)
 
 implementation(libs.skydoves.colorpicker)
+
+    /**
+     * RichTap 触感 SDK（瑞声科技），vendored 二进制，96 KiB。
+     *
+     * 没有 maven 坐标 —— 官方只把它捆在 GitHub 上的 MIT 示例工程里，所以只能落到 libs/。
+     * 版本与校验和记在 `THIRD-PARTY-NOTICES.md`，升级时一并更新。
+     *
+     * **取的是 `richtap_sdk_lite.aar`（来自 RichTapBounce），不是 RichTapDynamics /
+     * RichTapAudioPlayer / RichTapVideoPlayer 里那个 `RichTap_ASDK_2.2.0_..._NETWORK_release.aar`。**
+     * 后者的 `RichTapUtils.init(Context)` 会反射调用 `com.richtap.sdk.network.RTAPIService.track()`，
+     * POST 到 `https://platform.richtap-haptics.com/richtap/sys/eventTrackingSdk/saveTrackingSdk`。
+     * 本应用有隐私政策页，不接受未声明的第三方上报。lite 版里 `com/richtap/sdk/network/`
+     * 一个类都没有（实测 0 个），那次反射调用取不到类会被 catch 掉，只留一行 Log.d。
+     *
+     * 只要 `VIBRATE`（app 已声明）。aar 自带
+     * `<uses-library android:name="richtap-api" android:required="false" />` ——
+     * `richtap-api` 是 ROM 侧共享库，没有它照样装得上，运行期用
+     * `RichTapUtils.isSupportedRichTap()` 判定，不支持就整层退到 AOSP 通路。
+     */
+    implementation(files("libs/richtap_sdk_lite.aar"))
 
     // 单元测试
     testImplementation(libs.junit)

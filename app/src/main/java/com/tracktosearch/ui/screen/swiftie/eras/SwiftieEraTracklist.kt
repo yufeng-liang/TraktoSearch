@@ -18,12 +18,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.tracktosearch.ui.screen.swiftie.rememberIsLowRamDevice
 import java.util.Locale
 
@@ -68,20 +68,30 @@ internal fun SwiftieEraTracklist(
     val stagger = if (lowRam) TRACK_STAGGER_LOW_RAM_MS else TRACK_STAGGER_MS
     val revealDoneAt = TRACK_REVEAL_START_MS + stagger * era.tracks.size
 
+    // 字号用 Dp.toSp() 折算，**不跟系统字号走**。
+    //
+    // 行容器是固定 dp 高（31 首的 TTPD 要靠固定行高才排得进卡片），字号若用裸 .sp
+    // 就会被 fontScale 放大而行高不动 —— 字号档位调到 115% 起，行盒就超过行高，
+    // 而曲目名是 Ellipsis、序号是默认的 Clip，两者都不是 Visible，
+    // Compose 会按布局框裁剪，结果是**字形被纵向切掉**。
+    // Dp.toSp() 除掉 fontScale，渲染尺寸正好等于那么多 dp。
+    // 代价是这一列不跟随系统字号 —— 它是定时动画里的固定版面，没有别的选择；
+    // 需要细看的用户走「拖播放头定格」那条路。
     // 16dp 行高换算出 12sp / 11sp，与压缩前逐像素一致；压到 12dp 就是 9sp / 8.25sp
+    val density = LocalDensity.current
     val numberWidth = rowHeight * 1.375f
-    val numberStyle = remember(textColors, rowHeight) {
+    val numberStyle = remember(textColors, rowHeight, density) {
         TextStyle(
-            fontSize = (rowHeight.value * 0.6875f).sp,
+            fontSize = with(density) { (rowHeight * 0.6875f).toSp() },
             color = textColors.number.copy(alpha = SwiftieEraContrast.NUMBER_ALPHA)
         )
     }
-    val titleStyle = remember(textColors, rowHeight) {
-        TextStyle(fontSize = (rowHeight.value * 0.75f).sp, color = textColors.body)
+    val titleStyle = remember(textColors, rowHeight, density) {
+        TextStyle(fontSize = with(density) { (rowHeight * 0.75f).toSp() }, color = textColors.body)
     }
 
     Box(
-        // 172 首念不完，也会把动画期间的焦点全占住。整块对 TalkBack 隐身，
+        // 187 首念不完，也会把动画期间的焦点全占住。整块对 TalkBack 隐身，
         // 卡片自己有一条 contentDescription
         modifier = modifier.clearAndSetSemantics { }
     ) {
@@ -105,6 +115,10 @@ internal fun SwiftieEraTracklist(
                         // 固定 Locale.US：某些地区会把 %02d 渲染成本地数字
                         text = String.format(Locale.US, "%02d", index + 1),
                         style = numberStyle,
+                        // 列宽是定死的 rowHeight×1.375，不禁止折行的话
+                        // 「01」会在放大档位折成两行、被行高裁掉下半截
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.width(numberWidth)
                     )
                     Text(

@@ -10,7 +10,7 @@ package com.tracktosearch.ui.screen.swiftie
  *
  * 配乐末尾 1:58–2:02 唱的是 Lover，所以 [REWIND_START] 与 [LOVER_BLOOM_END] 是
  * **配乐钉死的两个点**，不能挪。绽放收在 2:03，离总长只剩 2998ms，而签名 8s +
- * 手链 4.5s + 定格 5.5s 共 18s 放不下 —— 于是终局整块排在倒滑之前，
+ * 手链 4.5s + 定格 6.09s 共 18.59s 放不下 —— 于是终局整块排在倒滑之前，
  * 倒滑与绽放成为收尾：12 个时代 → 签名 → 手链 → 定格 → 飞回 Lover → 绽放 → 淡出。
  */
 object SwiftieTimeline {
