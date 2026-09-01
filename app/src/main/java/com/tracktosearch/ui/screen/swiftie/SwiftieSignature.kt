@@ -2,9 +2,11 @@ package com.tracktosearch.ui.screen.swiftie
 
 import android.content.Context
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -133,6 +135,18 @@ private const val SIGNATURE_TEXT = "Taylor Swift"
 /** 笔尖亮点半径。 */
 private val TIP_RADIUS = 3.5.dp
 
+/**
+ * 签名宽度上限。
+ *
+ * 300dp 是设计值，但**只能当上限用** —— 签名的高度由字形包围盒等比推出来，
+ * 写死 300dp 在 320dp 宽的小屏（去掉两侧 20dp 内边距只剩 280dp）会横向溢出，
+ * 而外层是 `Column` 不是 `clip`，溢出的那截要么被父级裁掉要么把落款挤歪。
+ */
+private val SIGNATURE_MAX_WIDTH = 300.dp
+
+/** 定格闪粉用的相位。挑 0.35 是箔面渐变正好偏亮的一档，静止看着不发灰。 */
+private const val SIGNATURE_STILL_PHASE = 0.35f
+
 /** 构建好的签名图形：归一到左上角为原点的轮廓 + 尺寸 + 笔画时间表。 */
 private class SignatureArt(
     val path: Path,
@@ -216,13 +230,33 @@ private fun flashAlpha(elapsedMs: Long, writeEndMs: Long): Float {
  *
  * @param elapsedInSignature 签名段起点以来的毫秒。给一个 ≥ 8000 的常量就是写完的样子，
  *   「减少动效」的静态终态正是这么用的
- * @param targetWidth 目标宽度。高度由字形包围盒决定，不用外部指定
+ * @param animated 闪粉是否要一直闪。静态终态传 false —— 那是一张停着的画面，
+ *   挂一条无限动画会把帧时钟永久唤着，用户忘了退出就一直在耗电。
+ *   传 false 之后 `time` 恒定，两个 `drawBehind` 都不再有变化的 state 读，只画一次
+ * @param widthLimit 宽度上限，默认 [SIGNATURE_MAX_WIDTH]。实际取它与可用宽度的较小值
  */
 @Composable
 fun SwiftieSignature(
     elapsedInSignature: () -> Long,
     modifier: Modifier = Modifier,
-    targetWidth: Dp = 300.dp
+    animated: Boolean = true,
+    widthLimit: Dp = SIGNATURE_MAX_WIDTH
+) {
+    BoxWithConstraints(modifier = modifier) {
+        SignatureArtwork(
+            elapsedInSignature = elapsedInSignature,
+            animated = animated,
+            // maxWidth 在宽度无约束时是 Dp.Infinity，minOf 会落到 widthLimit
+            targetWidth = minOf(maxWidth, widthLimit)
+        )
+    }
+}
+
+@Composable
+private fun SignatureArtwork(
+    elapsedInSignature: () -> Long,
+    animated: Boolean,
+    targetWidth: Dp
 ) {
     val density = LocalDensity.current
     val context = LocalContext.current
@@ -230,10 +264,14 @@ fun SwiftieSignature(
     val art = remember(context, targetWidthPx) { buildSignatureArt(context, targetWidthPx) }
     val sparkleCount = if (rememberIsLowRamDevice()) 24 else 60
     val sparkles = remember(sparkleCount) { buildSparkles(sparkleCount) }
-    val time = rememberGlitterTime()
+    val time = if (animated) {
+        rememberGlitterTime()
+    } else {
+        remember { mutableFloatStateOf(SIGNATURE_STILL_PHASE) }
+    }
 
     Box(
-        modifier = modifier.size(
+        modifier = Modifier.size(
             width = with(density) { art.width.toDp() },
             height = with(density) { art.height.toDp() }
         )

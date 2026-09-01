@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -24,6 +25,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.tracktosearch.ui.screen.swiftie.SwiftiePalette
 import com.tracktosearch.ui.screen.swiftie.rememberIsLowRamDevice
 import kotlinx.coroutines.launch
@@ -135,10 +138,36 @@ private class PlacedBead(
     val bead: SwiftieBead,
     val center: Offset,
     val size: Float,
-    val rotation: Float
+    val rotation: Float,
+    /** 投影渐变不吃倾斜，跟着布局缓存一次就够。 */
+    val shadowBrush: Brush
 )
 
 private class StrandPlan(val cord: Path, val cordWidth: Float, val beads: List<PlacedBead>)
+
+/**
+ * 珠体渐变的跨帧缓存。
+ *
+ * 珠体渐变的圆心跟着倾斜走，所以不能像投影那样只建一次；但也**不能每帧重建** ——
+ * `Brush` 按尺寸缓存原生 `Shader`，换实例就等于换 Shader，26 颗珠 × 60fps 一秒
+ * 一千五百多个。这里按量化后的倾斜键缓存：真的转到下一档才重建一批。
+ */
+private class BeadBodyBrushes(private val plans: List<StrandPlan>) {
+    private var key: Int = Int.MIN_VALUE
+    private var brushes: List<Brush> = emptyList()
+
+    fun forHighlight(highlight: Offset): List<Brush> {
+        val nextKey = highlightKey(highlight)
+        if (nextKey != key || brushes.isEmpty()) {
+            key = nextKey
+            val quantized = quantizeHighlight(highlight)
+            brushes = plans.flatMap { plan ->
+                plan.beads.map { beadBodyBrush(it.bead, it.center, it.size, quantized) }
+            }
+        }
+        return brushes
+    }
+}
 
 /**
  * 二次贝塞尔在 [t] 处的点。
@@ -158,7 +187,13 @@ private fun planStrand(canvas: Size, strand: BraceletStrand, rotationOffset: Int
     val width = canvas.width * strand.widthFraction
     val left = (canvas.width - width) / 2f
     val baseY = canvas.height * strand.yFraction
-    val sag = width * strand.sagFraction
+    // 1.02：珠子之间留极窄一线，绳子露出来才看得出是穿过去的
+    val beadSize = width / (strand.beads.size * 1.02f)
+    // 下垂量按自身宽度算，但不能垂出画布 —— 插槽高度由调用方给（见 braceletHeightFor），
+    // 万一将来有人写死一个偏小的高度，这里兜住：最低那颗珠的下缘也要留在画布内。
+    // Spacer 不 clip，垂出去的部分不是被裁掉，是画到相邻内容上面去
+    val maxSag = (canvas.height - baseY - beadSize / 2f).coerceAtLeast(0f)
+    val sag = (width * strand.sagFraction).coerceAtMost(maxSag)
     val from = Offset(left, baseY)
     val to = Offset(left + width, baseY)
     // 控制点垂 2×：二次贝塞尔在 t=0.5 处只走到控制点的一半，所以要给两倍才得到 sag
@@ -168,14 +203,14 @@ private fun planStrand(canvas: Size, strand: BraceletStrand, rotationOffset: Int
         moveTo(from.x, from.y)
         quadraticTo(control.x, control.y, to.x, to.y)
     }
-    // 1.02：珠子之间留极窄一线，绳子露出来才看得出是穿过去的
-    val beadSize = width / (strand.beads.size * 1.02f)
     val beads = strand.beads.mapIndexed { index, bead ->
+        val center = quadraticPointAt(from, control, to, (index + 0.5f) / strand.beads.size)
         PlacedBead(
             bead = bead,
-            center = quadraticPointAt(from, control, to, (index + 0.5f) / strand.beads.size),
+            center = center,
             size = beadSize,
-            rotation = BEAD_ROTATIONS[(rotationOffset + index) % BEAD_ROTATIONS.size]
+            rotation = BEAD_ROTATIONS[(rotationOffset + index) % BEAD_ROTATIONS.size],
+            shadowBrush = beadShadowBrush(center, beadSize)
         )
     }
     return StrandPlan(cord = cord, cordWidth = beadSize * 0.16f, beads = beads)
@@ -193,6 +228,18 @@ private fun swayDegrees(elapsedMs: Long): Float {
     if (t >= 1f) return 0f
     return exp(-2.4f * t) * sin(t * TAU * 2f) * SWAY_MAX_DEG
 }
+
+/**
+ * 按可用宽度算手链插槽该有多高。
+ *
+ * 下垂量是**宽度**的比例（`sagFraction`），所以插槽高度必须跟着宽度走，不能写死。
+ * 反推：最前那条宽 `0.94W`、垂 `0.16 × 0.94W = 0.150W`，基线在 `0.58H`，
+ * 最低那颗珠还要再占半径 `0.042W`，于是 `0.58H + 0.192W ≤ H`，得 `H ≥ 0.458W`。
+ * 取 0.46 —— 360dp 宽的手机算出 166dp，与原来写死的 170dp 基本一致；
+ * 平板上跟着长，不会像原来那样让最前那条垂到插槽之外、画到相邻内容上。
+ * 上下限只是防极端窄屏 / 超宽屏。
+ */
+internal fun braceletHeightFor(width: Dp): Dp = (width * 0.46f).coerceIn(140.dp, 260.dp)
 
 /**
  * 三条堆叠的友谊手链：`13 ♡ 87` / `SWIFTIE` / 一条纯彩珠（Spec §8）。
@@ -251,7 +298,12 @@ fun SwiftieBracelet(
                         rotationOffset += strand.beads.size
                     }
                 }
+                // 珠体渐变按量化倾斜缓存；尺寸变了整块 cache 会重建，缓存跟着新建
+                val bodyBrushes = BeadBodyBrushes(plans)
                 onDrawBehind {
+                    val tilt = highlight.value
+                    val bodies = bodyBrushes.forHighlight(tilt)
+                    var beadIndex = 0
                     plans.forEach { plan ->
                         // 先绳后珠：珠子压住绳子，珠间露出的那截就是穿过珠孔的绳
                         drawPath(
@@ -266,9 +318,12 @@ fun SwiftieBracelet(
                                 center = placed.center,
                                 size = placed.size,
                                 rotationDeg = placed.rotation,
-                                highlight = highlight.value,
-                                letterLayouts = letterLayouts
+                                highlight = tilt,
+                                letterLayouts = letterLayouts,
+                                shadowBrush = placed.shadowBrush,
+                                bodyBrush = bodies[beadIndex]
                             )
+                            beadIndex++
                         }
                     }
                 }

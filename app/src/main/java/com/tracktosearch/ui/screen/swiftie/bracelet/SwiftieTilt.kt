@@ -10,10 +10,14 @@ import android.os.Looper
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 
 /** 低通滤波系数。原始读数抖得厉害，直接用会让高光一直发颤。 */
 private const val TILT_SMOOTHING = 0.12f
@@ -25,6 +29,8 @@ private const val TILT_SMOOTHING = 0.12f
  * 重力方向 —— 高光该往哪偏本来就由重力决定。陀螺仪给角速度，还得自己积分，会漂。
  *
  * [enabled] 为 false 时连监听都不注册，返回恒定的 [Offset.Zero]（低端机走这条，Spec §11.2）。
+ * 息屏 / 切后台（`ON_STOP`）同样注销 —— Compose 的组合不会因为切后台而拆掉，
+ * 不看生命周期的话加速度计会在**屏幕关着的时候**继续以 50Hz 回调，纯耗电。
  *
  * 返回 [State] 而不是 `Offset`：调用方在 draw lambda 里读 `.value`，
  * 50Hz 的传感器回调就只失效绘制，不会每秒触发 50 次重组。
@@ -33,9 +39,11 @@ private const val TILT_SMOOTHING = 0.12f
 fun rememberTiltHighlight(enabled: Boolean): State<Offset> {
     val highlight = remember { mutableStateOf(Offset.Zero) }
     val context = LocalContext.current
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val started = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
 
-    DisposableEffect(context, enabled) {
-        if (!enabled) return@DisposableEffect onDispose { }
+    DisposableEffect(context, enabled, started) {
+        if (!enabled || !started) return@DisposableEffect onDispose { }
         val manager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
         val sensor = manager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         if (manager == null || sensor == null) return@DisposableEffect onDispose { }
