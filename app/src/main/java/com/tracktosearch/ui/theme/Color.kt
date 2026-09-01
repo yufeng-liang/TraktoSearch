@@ -8,14 +8,9 @@ import androidx.compose.ui.graphics.luminance
 import com.tracktosearch.R
 
 // Primary - 深红色系 (Trakt 品牌)
+// 只在拿不到壁纸取色的低版本兜底时当种子色用，见 TraktoSearchTheme。
 val Red500 = Color(0xFFED1C24)
 val Red700 = Color(0xFFC4161C)
-val Red900 = Color(0xFF8B0000)
-
-// Secondary
-val DarkGray = Color(0xFF1A1A2E)
-val MediumGray = Color(0xFF16213E)
-val LightGray = Color(0xFFE0E0E0)
 
 // 网盘官方品牌色
 val QuarkBlue = Color(0xFF1E88E5)       // 夸克 - 蓝绿色
@@ -25,29 +20,35 @@ val XunleiBlue = Color(0xFF2386EA)       // 迅雷 - 标准蓝
 val UcOrange = Color(0xFFFF6B00)         // UC网盘 - 橙色
 val Blue115 = Color(0xFF2563EB)          // 115网盘 - 蓝色
 
-// Background
-val LightBackground = Color(0xFFF0F1F3)
-val LightSurface = Color.White
-val DarkBackground = Color(0xFF0F0F1A)
-val DarkSurface = Color(0xFF1A1A2E)
-val DarkCard = Color(0xFF242442)
-
-// 莫奈/印象派主题色
-enum class MonetAccent(@StringRes val labelResId: Int, val light: Color, val dark: Color, val lightOn: Color = Color.White, val darkOn: Color = Color.White) {
-    VINTAGE_TICKET(R.string.accent_vintage_ticket, Color(0xFF9A6242), Color(0xFFC48763)),
-    WATER_LILY(R.string.accent_water_lily, Color(0xFF7B68AE), Color(0xFF9B8EC4)),
-    SUNRISE(R.string.accent_sunrise, Color(0xFFE8915A), Color(0xFFF4A460)),
-    JAPANESE_BRIDGE(R.string.accent_japanese_bridge, Color(0xFF5A8F6B), Color(0xFF7AB68A)),
-    CATHEDRAL(R.string.accent_cathedral, Color(0xFF6B7FA0), Color(0xFF8A9BB8)),
-    HAYSTACK(R.string.accent_haystack, Color(0xFFC4A94D), Color(0xFFD4B96A)),
-    RENOIR(R.string.accent_renoir, Color(0xFFD4748A), Color(0xFFE8909A)),
-    STARRY_NIGHT(R.string.accent_starry_night, Color(0xFF4A7FB5), Color(0xFF6B9FD4)),
-    POPPY(R.string.accent_poppy, Color(0xFFD94040), Color(0xFFE86060)),
-    WHEAT_FIELD(R.string.accent_wheat_field, Color(0xFFD4A030), Color(0xFFE8B84A)),
-    ROUEN_CATHEDRAL(R.string.accent_rouen_cathedral, Color(0xFF6A5AAD), Color(0xFF8A7AC4)),
-    BALLET(R.string.accent_ballet, Color(0xFFB06AA0), Color(0xFFC88AB8)),
-    WATER_LILY_GREEN(R.string.accent_water_lily_green, Color(0xFF4A9A6A), Color(0xFF6AB88A)),
-    BOAT_BREAKFAST(R.string.accent_boat_breakfast, Color(0xFF3A8AA0), Color(0xFF5AA8C0));
+/**
+ * 莫奈/印象派主题色，按 Lab 色相升序排列 —— 设置页的色块网格直接按 entries 顺序铺，
+ * 排成色环用户扫一眼就能定位，比随机顺序好找。
+ *
+ * 每项只存种子色：浅色档喂 [light]，深色档喂 [dark]，其余槽位由
+ * `monetColorScheme` 用 Material You 的 TonalPalette 推导。前景色不在这里存 ——
+ * 压在种子色上该用黑字还是白字由亮度算，见 `monetColorScheme` 的 onPrimary。
+ *
+ * **改动种子色时注意**：[VINTAGE_TICKET] 的两个值同时被 `vintageTicketColorScheme`
+ * 和桌面小组件读，是主题色的唯一真值来源，别在别处再写一遍字面量。
+ *
+ * 删项是安全的：`ThemeStorage.decodeAccentName` 对认不出的名字有兜底，
+ * 历史名字的迁移映射也在那里。[RENOIR] 不能删 ——
+ * `CloudThemeManager.commitSwiftieUnlock` 直接引用它。
+ */
+enum class MonetAccent(@StringRes val labelResId: Int, val light: Color, val dark: Color) {
+    RENOIR(R.string.accent_renoir, Color(0xFFD4748A), Color(0xFFE8909A)),                     //   7°
+    POPPY(R.string.accent_poppy, Color(0xFFD94040), Color(0xFFE86060)),                       //  31°
+    VINTAGE_TICKET(R.string.accent_vintage_ticket, Color(0xFFB85030), Color(0xFFE5906A)),      //  44°
+    SUNRISE(R.string.accent_sunrise, Color(0xFFE8915A), Color(0xFFF4A460)),                    //  57°
+    HAYSTACK(R.string.accent_haystack, Color(0xFFC4A94D), Color(0xFFD4B96A)),                  //  91°
+    GIVERNY_MOSS(R.string.accent_giverny_moss, Color(0xFF5F8440), Color(0xFF98BE70)),          // 128°
+    JAPANESE_BRIDGE(R.string.accent_japanese_bridge, Color(0xFF5A8F6B), Color(0xFF7AB68A)),    // 152°
+    VENICE_CANAL(R.string.accent_venice_canal, Color(0xFF1C8078), Color(0xFF4FB8AC)),          // 187°
+    BOAT_BREAKFAST(R.string.accent_boat_breakfast, Color(0xFF3A8AA0), Color(0xFF5AA8C0)),      // 227°
+    STARRY_NIGHT(R.string.accent_starry_night, Color(0xFF4A7FB5), Color(0xFF6B9FD4)),          // 268°
+    CATHEDRAL(R.string.accent_cathedral, Color(0xFF6A7180), Color(0xFF9DA4B4)),                // 275°
+    WATER_LILY(R.string.accent_water_lily, Color(0xFF7B68AE), Color(0xFF9B8EC4)),              // 304°
+    BALLET(R.string.accent_ballet, Color(0xFFB06AA0), Color(0xFFC88AB8));                      // 334°
 }
 
 // UI 重设计新增颜色
@@ -55,10 +56,72 @@ val CinemaBackground = Color(0xFF0F0F1A)
 val CinemaSurface = Color(0xFF1A1A2E)
 val CinemaCard = Color(0xFF242442)
 
+/**
+ * 压在 [background] 上该用黑字还是白字 —— 取对比度更高的那一个。
+ *
+ * 阈值 [WcagBlackWhiteCrossover] 是黑白两者对比度相等的那一点：
+ * 白字对比 = 1.05 / (L + 0.05)，黑字对比 = (L + 0.05) / 0.05，
+ * 两式相等解出 L = √(1.05 × 0.05) − 0.05 ≈ 0.1791。
+ *
+ * 早先这里的阈值写的是 0.5，于是黄金/橙色系主题的按钮全是白字 ——
+ * 干草堆金上白字只有 2.30:1，黑字有 9.13:1。
+ */
+internal fun onColorFor(background: Color): Color =
+    if (background.luminance() > WcagBlackWhiteCrossover) Color.Black else Color.White
+
+/** 见 [onColorFor]。黑白等对比点，不是随手取的 0.5。 */
+internal const val WcagBlackWhiteCrossover = 0.1791f
+
+// ====== 错误色（所有主题共用，不跟主题色走） ======
+// 取值来自 Material 3 基线的 Error 色板（material3 1.4.0 的 ColorLightTokens /
+// ColorDarkTokens 实际映射：Error40/100/90/10 与 Error80/20/30/90）。
+//
+// 之所以要显式写出来：生成器原先把 errorContainer 接到了 **主色** 的 TonalPalette 上，
+// 于是「确认删除」这类容器会跟着主题变成棕色或蓝色，红色警示语义丢失。
+// 错误色是语义色，不参与主题化。
+internal val ErrorLight = Color(0xFFB3261E)
+internal val OnErrorLight = Color(0xFFFFFFFF)
+internal val ErrorContainerLight = Color(0xFFF9DEDC)
+internal val OnErrorContainerLight = Color(0xFF410E0B)
+internal val ErrorDark = Color(0xFFF2B8B5)
+internal val OnErrorDark = Color(0xFF601410)
+internal val ErrorContainerDark = Color(0xFF8C1D18)
+internal val OnErrorContainerDark = Color(0xFFF9DEDC)
+
+// ====== 复古票根主题专用色（牛皮纸 + 赭红墨 + 褪色青绿副印） ======
+// 只有这一个主题整套换纸：其余主题共用中性底色，主题色只换强调色。
+// 票根的主题身份本身就是「纸」，所以底色也跟着走暖，主色才不必独自扛全部气质。
+//
+// 阶梯按 Material 3 的 surface 层级排：浅色档层级越高越暗，深色档反之。
+// 每一级都验过对比度，改任何一档前先确认相邻两级还分得开
+// （卡片压页面、输入框压卡片这两处最敏感，见 ThemeTest 的阶梯单调性测试）。
+internal val TicketPaperLightLowest = Color(0xFFFFFFFF)
+internal val TicketPaperLightSurface = Color(0xFFFFFCF6)   // 纸白，Haze 填充色
+internal val TicketPaperLightBackground = Color(0xFFF7F3EC) // 暖米，页面底
+internal val TicketPaperLightLow = Color(0xFFF4EEE2)        // 底部弹层
+internal val TicketPaperLight = Color(0xFFF1EADD)
+internal val TicketPaperLightHigh = Color(0xFFEDE5D6)       // 滚动后的顶栏
+internal val TicketPaperLightVariant = Color(0xFFEDE2D3)    // 对话框 / 卡片
+// 填充输入框和未选中 chip 吃这一级，压在 Variant 的卡片上，两级差得够多才看得出边界：
+// L* 83 对 L* 90 是 1.22，跟生成器的浅色档 tone 84 对齐。
+internal val TicketPaperLightHighest = Color(0xFFDCCDB5)
+internal val TicketPaperLightDim = Color(0xFFD1BFA1)
+internal val TicketInkLight = Color(0xFF3E2A1E)             // 正文
+internal val TicketInkLightMuted = Color(0xFF574536)        // 次要文字
+
+internal val TicketPaperDarkLowest = Color(0xFF0C0906)
+internal val TicketPaperDarkBackground = Color(0xFF141009)  // 暖黑，页面底
+internal val TicketPaperDarkLow = Color(0xFF1B150D)
+internal val TicketPaperDarkSurface = Color(0xFF211A12)     // Haze 填充色
+internal val TicketPaperDark = Color(0xFF261F15)
+internal val TicketPaperDarkHigh = Color(0xFF302619)
+internal val TicketPaperDarkHighest = Color(0xFF3A2F1F)
+internal val TicketPaperDarkBright = Color(0xFF423525)
+internal val TicketPaperDarkVariant = Color(0xFF4A382E)     // 对话框 / 卡片
+internal val TicketInkDark = Color(0xFFF7EDE3)
+internal val TicketInkDarkMuted = Color(0xFFDDCDBE)
+
 // ====== 玻璃棱镜固定色（不随主题变化） ======
-val Void = Color(0xFF0A0A14)        // 主背景，比 CinemaBackground 更深
-val Slate = Color(0xFF161628)       // 卡片/表面
-val Frost = Color(0xFF1E1E3A)       // 搜索栏玻璃底色
 // Glass 效果色（用于 Modifier.drawBehind / brush）
 // GlassHighlight = white.copy(alpha = 0.08f) — 在使用处直接写
 // GlassBorder = white.copy(alpha = 0.12f) — 在使用处直接写

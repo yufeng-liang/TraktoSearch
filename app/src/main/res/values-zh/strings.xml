@@ -513,20 +513,19 @@
     <string name="settings_accent_custom">自由调色</string>
     <string name="settings_accent_reset_default">恢复默认（跟随壁纸）</string>
     <!-- 应用色调 -->
-    <string name="accent_vintage_ticket">复古票根</string>
-    <string name="accent_water_lily">睡莲紫</string>
-    <string name="accent_sunrise">日出橙</string>
-    <string name="accent_japanese_bridge">日本桥绿</string>
-    <string name="accent_cathedral">教堂蓝灰</string>
-    <string name="accent_haystack">干草堆金</string>
     <string name="accent_renoir">雷诺阿粉</string>
-    <string name="accent_starry_night">星夜蓝</string>
     <string name="accent_poppy">虞美人红</string>
-    <string name="accent_wheat_field">麦田金黄</string>
-    <string name="accent_rouen_cathedral">鲁昂蓝紫</string>
-    <string name="accent_ballet">芭蕾粉紫</string>
-    <string name="accent_water_lily_green">睡莲绿</string>
+    <string name="accent_vintage_ticket">复古票根</string>
+    <string name="accent_sunrise">日出橙</string>
+    <string name="accent_haystack">干草堆金</string>
+    <string name="accent_giverny_moss">吉维尼苔绿</string>
+    <string name="accent_japanese_bridge">日本桥绿</string>
+    <string name="accent_venice_canal">威尼斯运河青</string>
     <string name="accent_boat_breakfast">船上午餐蓝</string>
+    <string name="accent_starry_night">星夜蓝</string>
+    <string name="accent_cathedral">教堂蓝灰</string>
+    <string name="accent_water_lily">睡莲紫</string>
+    <string name="accent_ballet">芭蕾粉紫</string>
 
     <!-- Language -->
     <string name="settings_language">语言</string>

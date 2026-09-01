@@ -14,7 +14,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -40,149 +39,228 @@ fun appSwitchColors(): SwitchColors = SwitchDefaults.colors(
     uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
 )
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Red500,
-    onPrimary = Color.White,
-    primaryContainer = Red700,
-    secondary = QuarkBlue,
-    onSecondary = Color.White,
-    background = CinemaBackground,
-    onBackground = Color.White,
-    surface = CinemaSurface,
-    onSurface = Color.White,
-    surfaceVariant = CinemaCard,
-    onSurfaceVariant = LightGray,
-    outline = Color(0xFF3A3A5A),
-    outlineVariant = Color(0xFF1E1E32),
-)
-
-private val LightColorScheme = lightColorScheme(
-    primary = Red700,
-    onPrimary = Color.White,
-    primaryContainer = Red500,
-    secondary = QuarkBlue,
-    onSecondary = Color.White,
-    background = LightBackground,
-    onBackground = DarkGray,
-    surface = LightSurface,
-    onSurface = DarkGray,
-    outline = Color(0xFFBDBDBD),
-    outlineVariant = Color(0xFFE8E8E8),
-)
-
+/**
+ * 复古票根：唯一手写而非生成的主题，因为它要整套换纸。
+ *
+ * 其余主题共用中性底色、只换强调色；票根的主题身份本身就是牛皮纸，
+ * 所以 background/surface 一起走暖，主色（赭红墨）才不必独自扛全部气质。
+ * 主色取自 [MonetAccent.VINTAGE_TICKET]，不在这里重写字面量 ——
+ * 设置页色块和桌面小组件都读那两个值，写两遍必然哪天对不上。
+ *
+ * 十一个 surface 层级槽位必须显式设满：Material 3 的基线中性色是紫调的
+ * （Lab 色相 302°-315°），漏一个就有一块冷紫补丁落在暖纸上。
+ * 填充输入框吃 surfaceContainerHighest、底部弹层吃 surfaceContainerLow、
+ * Snackbar 吃 inverseSurface，这几个都没在代码里显式指定过，全靠这里兜住。
+ */
 internal fun vintageTicketColorScheme(dark: Boolean): androidx.compose.material3.ColorScheme = if (dark) {
     darkColorScheme(
-        primary = Color(0xFFC48763),
-        onPrimary = Color(0xFF3E2518),
-        primaryContainer = Color(0xFF754832),
-        onPrimaryContainer = Color(0xFFFFDBCA),
-        secondary = Color(0xFFE5B5C1),
-        onSecondary = Color(0xFF44232D),
+        primary = MonetAccent.VINTAGE_TICKET.dark,
+        onPrimary = Color(0xFF46200F),
+        primaryContainer = Color(0xFF7A3A22),
+        onPrimaryContainer = Color(0xFFFFDBCB),
+        inversePrimary = Color(0xFFB85030),
+        // 深牛皮，不是原先那个和棕色串味的粉（#E5B5C1）
+        secondary = Color(0xFFD8B79A),
+        onSecondary = Color(0xFF3D2617),
         // 显式覆盖 secondaryContainer，避免 Material3 baseline 紫色 fallback 导致 FilterChip 选中态变紫
-        secondaryContainer = Color(0xFF754832),
-        onSecondaryContainer = Color(0xFFFFDBCA),
-        background = CinemaBackground,
-        onBackground = Color(0xFFF7EDE3),
-        // Haze 默认使用 surface 作为填充色，保持与其他主题一致。
-        surface = CinemaSurface,
-        onSurface = Color(0xFFF7EDE3),
-        surfaceVariant = Color(0xFF4A382E),
-        onSurfaceVariant = LightGray,
+        secondaryContainer = Color(0xFF6B4A32),
+        onSecondaryContainer = Color(0xFFF5DFCB),
+        // 票根上那枚褪色青绿副印。原先整个 tertiary 族没设，
+        // 基线粉（#EFB8C8）漏进了 12 处，其中包括氛围渐变背景的光斑
+        tertiary = Color(0xFF92C4B2),
+        onTertiary = Color(0xFF0B3229),
+        tertiaryContainer = Color(0xFF2E5449),
+        onTertiaryContainer = Color(0xFFADE1CE),
+        background = TicketPaperDarkBackground,
+        onBackground = TicketInkDark,
+        surface = TicketPaperDarkSurface,
+        onSurface = TicketInkDark,
+        surfaceVariant = TicketPaperDarkVariant,
+        onSurfaceVariant = TicketInkDarkMuted,
+        surfaceContainerLowest = TicketPaperDarkLowest,
+        surfaceContainerLow = TicketPaperDarkLow,
+        surfaceContainer = TicketPaperDark,
+        surfaceContainerHigh = TicketPaperDarkHigh,
+        surfaceContainerHighest = TicketPaperDarkHighest,
+        surfaceBright = TicketPaperDarkBright,
+        surfaceDim = TicketPaperDarkBackground,
+        surfaceTint = MonetAccent.VINTAGE_TICKET.dark,
+        inverseSurface = TicketInkDark,
+        inverseOnSurface = Color(0xFF3A2E24),
         outline = Color(0xFFA98A74),
-        outlineVariant = Color(0xFF685244),
+        outlineVariant = Color(0xFF5A4638),
+        scrim = Color.Black,
+        error = ErrorDark,
+        onError = OnErrorDark,
+        errorContainer = ErrorContainerDark,
+        onErrorContainer = OnErrorContainerDark,
     )
 } else {
     lightColorScheme(
-        primary = Color(0xFF9A6242),
+        primary = MonetAccent.VINTAGE_TICKET.light,
         onPrimary = Color.White,
-        primaryContainer = Color(0xFFE9E2D4),
-        onPrimaryContainer = Color(0xFF5D4638),
-        secondary = Color(0xFFD9D2C6),
+        primaryContainer = Color(0xFFF5E0CC),
+        onPrimaryContainer = Color(0xFF5C2413),
+        inversePrimary = Color(0xFFE5906A),
+        // 旧木色。原先是 #D9D2C6 配白字，对比度 1.50 —— 白字压在浅米上等于没有
+        secondary = Color(0xFF8A6A4E),
         onSecondary = Color.White,
         // 显式覆盖 secondaryContainer，避免 Material3 baseline 紫色 fallback 导致 FilterChip 选中态变紫
-        secondaryContainer = Color(0xFFE9E2D4),
-        onSecondaryContainer = Color(0xFF5D4638),
-        background = LightBackground,
-        onBackground = Color(0xFF5D4638),
-        // Haze 默认使用 surface 作为填充色，保持与其他主题一致。
-        surface = LightSurface,
-        onSurface = Color(0xFF5D4638),
-        surfaceVariant = Color(0xFFEFE9DF),
-        onSurfaceVariant = Color(0xFF49454F),
-        outline = Color(0xFFC9C0B2),
-        outlineVariant = Color(0xFFD9D2C6),
+        secondaryContainer = Color(0xFFEFE2D0),
+        onSecondaryContainer = Color(0xFF4A3524),
+        tertiary = Color(0xFF3F6B60),
+        onTertiary = Color.White,
+        tertiaryContainer = Color(0xFFD3E5DD),
+        onTertiaryContainer = Color(0xFF16302A),
+        background = TicketPaperLightBackground,
+        onBackground = TicketInkLight,
+        surface = TicketPaperLightSurface,
+        onSurface = TicketInkLight,
+        surfaceVariant = TicketPaperLightVariant,
+        onSurfaceVariant = TicketInkLightMuted,
+        surfaceContainerLowest = TicketPaperLightLowest,
+        surfaceContainerLow = TicketPaperLightLow,
+        surfaceContainer = TicketPaperLight,
+        surfaceContainerHigh = TicketPaperLightHigh,
+        surfaceContainerHighest = TicketPaperLightHighest,
+        surfaceBright = TicketPaperLightSurface,
+        surfaceDim = TicketPaperLightDim,
+        surfaceTint = MonetAccent.VINTAGE_TICKET.light,
+        inverseSurface = Color(0xFF3A2E24),
+        inverseOnSurface = Color(0xFFF7F0E6),
+        outline = Color(0xFFA08B76),
+        outlineVariant = Color(0xFFDBCDBA),
+        scrim = Color.Black,
+        error = ErrorLight,
+        onError = OnErrorLight,
+        errorContainer = ErrorContainerLight,
+        onErrorContainer = OnErrorContainerLight,
     )
 }
 
 /**
  * 根据种子色生成 Material You 标准 TonalSpot colorScheme。
- * 使用 TonalPalette 标准映射（Hct 色彩空间），替代旧的手写 alpha 合成方案。
- * 品牌背景/表面色保持项目定制值不变。
+ *
+ * primary 直接用种子色本身而不是 tone 40/80，为的是「所见即所得」——
+ * 设置页弹窗里那个色块就是实际主色。代价是 primary 的亮度不可控，
+ * 所以前景色必须按亮度算，见 [onColorFor]。
+ *
+ * 整条 surface 阶梯（11 个槽位）都从种子色相的中性色板推。**不能漏**：
+ * Material 3 的基线中性色是紫调的（Lab 色相 302°-315°），
+ * 漏设的槽位会拿到那套紫灰。这些槽位大多没人显式指定过 ——
+ * 填充输入框吃 surfaceContainerHighest（20 处）、底部弹层吃 surfaceContainerLow（16 处）、
+ * Snackbar 吃 inverseSurface（15 处）、顶栏滚动后吃 surfaceContainerHigh（13 处）。
+ *
+ * 阶梯的 tone 值对齐了改造前 background/surface 的明度（浅色 95/99，深色 5/10），
+ * 所以观感上只是中性色染上了主题色相，层级关系没动。
  */
-private fun monetColorScheme(seed: Color, dark: Boolean): androidx.compose.material3.ColorScheme {
+internal fun monetColorScheme(seed: Color, dark: Boolean): androidx.compose.material3.ColorScheme {
     val seedArgb = seed.toArgb()
+    val seedHue = com.tracktosearch.data.util.mcu.hct.Hct.fromInt(seedArgb).hue
     val tonal = com.tracktosearch.data.util.mcu.palettes.TonalPalette.fromInt(seedArgb)
-    val neutral = com.tracktosearch.data.util.mcu.palettes.TonalPalette.fromHueAndChroma(
-        com.tracktosearch.data.util.mcu.hct.Hct.fromInt(seedArgb).hue, 4.0
-    )
-    val neutralVariant = com.tracktosearch.data.util.mcu.palettes.TonalPalette.fromHueAndChroma(
-        com.tracktosearch.data.util.mcu.hct.Hct.fromInt(seedArgb).hue, 4.0
-    )
+    // 6.0 / 8.0 是 MCU TonalSpot 的标准中性彩度。原先两个都写 4.0（复制粘贴），
+    // 结果 surfaceVariant 和 surface 阶梯同彩度、分不开 —— 卡片压在页面上看不出边界。
+    val neutral = com.tracktosearch.data.util.mcu.palettes.TonalPalette
+        .fromHueAndChroma(seedHue, 6.0)
+    val neutralVariant = com.tracktosearch.data.util.mcu.palettes.TonalPalette
+        .fromHueAndChroma(seedHue, 8.0)
 
-    // primary 直接用原色种子，不再用 tone 40/80 打暗，保证所见即所得（弹窗色块 = 实际主色）
+    fun neutralTone(darkTone: Double, lightTone: Double) =
+        Color(neutral.tone(if (dark) darkTone else lightTone))
+    fun variantTone(darkTone: Double, lightTone: Double) =
+        Color(neutralVariant.tone(if (dark) darkTone else lightTone))
+    fun accentTone(darkTone: Double, lightTone: Double) =
+        Color(tonal.tone(if (dark) darkTone else lightTone))
+
     val primary = seed
-    // primary 上的前景色按亮度自适应，避免浅色（黄/橙等）上白字看不清
-    val onPrimary = if (seed.luminance() > 0.5f) Color(0xFF000000) else Color.White
+    val onPrimary = onColorFor(seed)
     // container 深色档用 tone 30，浅色档用同一 hue 的浅变体 tone 90（light 更贴近原色，dark 保持深容器）
-    val primaryContainer = Color(if (dark) tonal.tone(30.0) else tonal.tone(90.0))
-    val onPrimaryContainer = Color(if (dark) tonal.tone(90.0) else tonal.tone(10.0))
+    val primaryContainer = accentTone(30.0, 90.0)
+    val onPrimaryContainer = accentTone(90.0, 10.0)
+    val inversePrimary = accentTone(40.0, 80.0)
     // secondary 提升到同一 hue 较亮一档，与新 primary 协调（原为中性灰 tone 40，过暗）
-    val secondary = Color(if (dark) tonal.tone(70.0) else tonal.tone(45.0))
-    val onSecondary = if (secondary.luminance() > 0.5f) Color(0xFF000000) else Color.White
-    val secondaryContainer = Color(if (dark) tonal.tone(30.0) else tonal.tone(90.0))
-    val onSecondaryContainer = Color(if (dark) tonal.tone(90.0) else tonal.tone(10.0))
-    val tertiary = Color(if (dark) tonal.tone(80.0) else tonal.tone(40.0))
-    val onTertiary = Color(if (dark) tonal.tone(20.0) else tonal.tone(100.0))
-    val tertiaryContainer = Color(if (dark) tonal.tone(30.0) else tonal.tone(90.0))
-    val onTertiaryContainer = Color(if (dark) tonal.tone(90.0) else tonal.tone(10.0))
-    val error = Color(0xFFBA1A1A)
-    val onError = Color.White
-    val errorContainer = Color(if (dark) tonal.tone(30.0) else tonal.tone(90.0))
-    val onErrorContainer = Color(if (dark) tonal.tone(90.0) else tonal.tone(10.0))
-    val surfaceVar = Color(if (dark) neutralVariant.tone(30.0) else neutralVariant.tone(90.0))
-    val onSurfaceVar = Color(if (dark) neutralVariant.tone(80.0) else neutralVariant.tone(30.0))
-    val outline = Color(if (dark) neutralVariant.tone(60.0) else neutralVariant.tone(50.0))
-    val outlineVariant = Color(if (dark) neutralVariant.tone(30.0) else neutralVariant.tone(80.0))
+    val secondary = accentTone(70.0, 45.0)
+    val secondaryContainer = accentTone(30.0, 90.0)
+    val onSecondaryContainer = accentTone(90.0, 10.0)
+    val tertiary = accentTone(80.0, 40.0)
+    val onTertiary = accentTone(20.0, 100.0)
+    val tertiaryContainer = accentTone(30.0, 90.0)
+    val onTertiaryContainer = accentTone(90.0, 10.0)
+
+    val onBackground = neutralTone(90.0, 10.0)
+    val surfaceVar = variantTone(30.0, 90.0)
+    val onSurfaceVar = variantTone(80.0, 30.0)
+    val outline = variantTone(60.0, 50.0)
+    val outlineVariant = variantTone(30.0, 80.0)
+
+    // surface 阶梯：深色档层级越高越亮，浅色档反之。tone 值对齐改造前的
+    // background 95 / surface 99（浅）和 5 / 10（深），层级关系不变、只染上主题色相。
+    val background = neutralTone(5.0, 95.0)
+    val surface = neutralTone(10.0, 99.0)
+    val containerLowest = neutralTone(3.0, 100.0)
+    val containerLow = neutralTone(7.0, 94.0)
+    val container = neutralTone(12.0, 93.0)
+    val containerHigh = neutralTone(16.0, 91.0)
+    // 浅色档 containerHighest 压到 tone 84 而不是 M3 的 90：填充输入框和未选中 chip 吃这一级，
+    // 而本项目的卡片/对话框是 surfaceVariant（tone 90）。两者同 tone 时对比度只有 1.08，
+    // 输入框压在卡片上看不出边界。84 给到 1.18，surfaceDim 跟着退到 81 让出位置。
+    val containerHighest = neutralTone(21.0, 84.0)
+    val surfaceBright = neutralTone(24.0, 99.0)
+    val surfaceDim = neutralTone(5.0, 81.0)
+    val inverseSurface = neutralTone(90.0, 20.0)
+    val inverseOnSurface = neutralTone(20.0, 95.0)
 
     return if (dark) {
         darkColorScheme(
             primary = primary, onPrimary = onPrimary,
             primaryContainer = primaryContainer, onPrimaryContainer = onPrimaryContainer,
-            secondary = secondary, onSecondary = onSecondary,
+            inversePrimary = inversePrimary,
+            secondary = secondary, onSecondary = onColorFor(secondary),
             secondaryContainer = secondaryContainer, onSecondaryContainer = onSecondaryContainer,
             tertiary = tertiary, onTertiary = onTertiary,
             tertiaryContainer = tertiaryContainer, onTertiaryContainer = onTertiaryContainer,
-            error = error, onError = onError,
-            errorContainer = errorContainer, onErrorContainer = onErrorContainer,
-            background = CinemaBackground, onBackground = Color.White,
-            surface = CinemaSurface, onSurface = Color.White,
+            error = ErrorDark, onError = OnErrorDark,
+            errorContainer = ErrorContainerDark, onErrorContainer = OnErrorContainerDark,
+            background = background, onBackground = onBackground,
+            surface = surface, onSurface = onBackground,
             surfaceVariant = surfaceVar, onSurfaceVariant = onSurfaceVar,
+            surfaceContainerLowest = containerLowest,
+            surfaceContainerLow = containerLow,
+            surfaceContainer = container,
+            surfaceContainerHigh = containerHigh,
+            surfaceContainerHighest = containerHighest,
+            surfaceBright = surfaceBright,
+            surfaceDim = surfaceDim,
+            surfaceTint = primary,
+            inverseSurface = inverseSurface, inverseOnSurface = inverseOnSurface,
             outline = outline, outlineVariant = outlineVariant,
+            scrim = Color.Black,
         )
     } else {
         lightColorScheme(
             primary = primary, onPrimary = onPrimary,
             primaryContainer = primaryContainer, onPrimaryContainer = onPrimaryContainer,
-            secondary = secondary, onSecondary = onSecondary,
+            inversePrimary = inversePrimary,
+            secondary = secondary, onSecondary = onColorFor(secondary),
             secondaryContainer = secondaryContainer, onSecondaryContainer = onSecondaryContainer,
             tertiary = tertiary, onTertiary = onTertiary,
             tertiaryContainer = tertiaryContainer, onTertiaryContainer = onTertiaryContainer,
-            error = error, onError = onError,
-            errorContainer = errorContainer, onErrorContainer = onErrorContainer,
-            background = LightBackground, onBackground = DarkGray,
-            surface = LightSurface, onSurface = DarkGray,
+            error = ErrorLight, onError = OnErrorLight,
+            errorContainer = ErrorContainerLight, onErrorContainer = OnErrorContainerLight,
+            background = background, onBackground = onBackground,
+            surface = surface, onSurface = onBackground,
             surfaceVariant = surfaceVar, onSurfaceVariant = onSurfaceVar,
+            surfaceContainerLowest = containerLowest,
+            surfaceContainerLow = containerLow,
+            surfaceContainer = container,
+            surfaceContainerHigh = containerHigh,
+            surfaceContainerHighest = containerHighest,
+            surfaceBright = surfaceBright,
+            surfaceDim = surfaceDim,
+            surfaceTint = primary,
+            inverseSurface = inverseSurface, inverseOnSurface = inverseOnSurface,
             outline = outline, outlineVariant = outlineVariant,
+            scrim = Color.Black,
         )
     }
 }
@@ -212,21 +290,17 @@ fun TraktoSearchTheme(
             seed = if (darkTheme) accentColor.dark else accentColor.light,
             dark = darkTheme
         )
-        // 默认：Android 12+ 使用壁纸动态颜色
+        // 默认：Android 12+ 使用壁纸动态颜色。
+        // 不再把 background/surface 覆盖成固定的冷灰 —— 动态方案自带整条
+        // 跟壁纸同色相的 surface 阶梯，覆盖掉两级只会让它跟自己的 container 阶梯打架。
         Build.VERSION.SDK_INT >= 31 -> {
             val context = LocalContext.current
-            if (darkTheme) {
-                dynamicDarkColorScheme(context)
-            } else {
-                dynamicLightColorScheme(context).copy(
-                    background = LightBackground,
-                    surface = LightSurface
-                )
-            }
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-        // 低版本：静态配色
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+        // 低版本拿不到壁纸取色：用 Trakt 品牌红当种子走同一套生成器。
+        // 原先这里是两份手写 scheme，只设到 outline 就停了，
+        // 整条 container 阶梯落回 Material 3 的紫调基线。
+        else -> monetColorScheme(seed = if (darkTheme) Red500 else Red700, dark = darkTheme)
     }
 
     val view = LocalView.current

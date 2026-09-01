@@ -512,21 +512,20 @@
     <string name="settings_accent_dynamic">Dynamic</string>
     <string name="settings_accent_custom">Custom</string>
     <string name="settings_accent_reset_default">Reset to Default (Wallpaper)</string>
-    <!-- Accent Color Names -->
-    <string name="accent_vintage_ticket">Vintage Ticket</string>
-    <string name="accent_water_lily">Water Lily Purple</string>
-    <string name="accent_sunrise">Sunrise Orange</string>
-    <string name="accent_japanese_bridge">Japanese Bridge Green</string>
-    <string name="accent_cathedral">Cathedral Blue-Gray</string>
-    <string name="accent_haystack">Haystack Gold</string>
+    <!-- Accent Color Names, ordered by hue to match the swatch grid -->
     <string name="accent_renoir">Renoir Pink</string>
-    <string name="accent_starry_night">Starry Night Blue</string>
     <string name="accent_poppy">Poppy Red</string>
-    <string name="accent_wheat_field">Wheat Field Gold</string>
-    <string name="accent_rouen_cathedral">Rouen Cathedral Purple</string>
-    <string name="accent_ballet">Ballet Purple</string>
-    <string name="accent_water_lily_green">Water Lily Green</string>
+    <string name="accent_vintage_ticket">Vintage Ticket</string>
+    <string name="accent_sunrise">Sunrise Orange</string>
+    <string name="accent_haystack">Haystack Gold</string>
+    <string name="accent_giverny_moss">Giverny Moss</string>
+    <string name="accent_japanese_bridge">Japanese Bridge Green</string>
+    <string name="accent_venice_canal">Venice Canal Teal</string>
     <string name="accent_boat_breakfast">Boat Breakfast Blue</string>
+    <string name="accent_starry_night">Starry Night Blue</string>
+    <string name="accent_cathedral">Cathedral Blue-Gray</string>
+    <string name="accent_water_lily">Water Lily Purple</string>
+    <string name="accent_ballet">Ballet Purple</string>
 
     <!-- Language -->
     <string name="settings_language">Language</string>

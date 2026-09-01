@@ -166,12 +166,21 @@ class ThemeStorage private constructor(
         return prefs[KEY_MESH_PRESET] ?: MeshPreset.BLOOM.name
     }
 
+    /**
+     * 存的是枚举名字符串，所以删枚举项会读到认不出的名字。
+     *
+     * [RETIRED_ACCENTS] 把删掉的色调映射到色相最近的幸存者（差 2°-9°，
+     * 用户基本看不出换了），而不是一律掉回默认的复古票根 ——
+     * 从「麦田金黄」跳到棕色是能一眼看出来的，从它跳到「干草堆金」不会。
+     * 迁移是静默的，不写回存储：下次用户主动改色调时自然会覆盖掉旧值。
+     */
     private fun decodeAccentName(name: String?): MonetAccent? {
         return when (name) {
             DYNAMIC_ACCENT -> null
             null -> MonetAccent.VINTAGE_TICKET
-            else -> runCatching { MonetAccent.valueOf(name) }
-                .getOrElse { MonetAccent.VINTAGE_TICKET }
+            else -> RETIRED_ACCENTS[name]
+                ?: runCatching { MonetAccent.valueOf(name) }
+                    .getOrElse { MonetAccent.VINTAGE_TICKET }
         }
     }
 
@@ -199,5 +208,17 @@ class ThemeStorage private constructor(
         private val KEY_CUSTOM_ACCENT_ARGB = longPreferencesKey("custom_accent_argb")
         private val KEY_MESH_PRESET = stringPreferencesKey("mesh_preset")
         private val KEY_MESH_ENABLED = booleanPreferencesKey("mesh_enabled")
+
+        /**
+         * 已下线的色调 -> 色相最近的幸存者。见 [decodeAccentName]。
+         *
+         * 这三个当初是重复色：括号里是删除前后两者的 Lab 色相差，
+         * 同彩度同明度加上这个色差，肉眼分不出来，所以迁移过去不算换主题。
+         */
+        private val RETIRED_ACCENTS = mapOf(
+            "WHEAT_FIELD" to MonetAccent.HAYSTACK,             // 82° -> 91°
+            "ROUEN_CATHEDRAL" to MonetAccent.WATER_LILY,       // 302° -> 304°
+            "WATER_LILY_GREEN" to MonetAccent.JAPANESE_BRIDGE, // 154° -> 152°
+        )
     }
 }

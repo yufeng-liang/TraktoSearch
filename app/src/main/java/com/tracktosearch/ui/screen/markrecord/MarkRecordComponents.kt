@@ -61,6 +61,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.rememberShimmerBrush
+import com.tracktosearch.ui.theme.WcagBlackWhiteCrossover
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import kotlinx.coroutines.launch
@@ -143,9 +144,10 @@ fun MarkRecordItemRow(
     val isRemoved = item.currentStatus == CurrentMarkStatus.NONE
     var dominantColor by remember { mutableStateOf<Color?>(null) }
 
-    // 根据主色亮度自适应文字颜色（深色主色用白字）
+    // 压在海报主色上的文字颜色。阈值用 WCAG 的黑白等对比点（约 0.179）而不是 0.5 ——
+    // 0.5 会让中等明度的暖色拿到白字，对比度掉到 3:1 以下。
     val onColor = dominantColor?.let { c ->
-        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.92f) else Color.White
+        if (c.luminance() > WcagBlackWhiteCrossover) Color.Black.copy(alpha = 0.92f) else Color.White
     } ?: Color.White
 
     // 卡片沉浸渐变：主色 1.0 → 主色 0.7 alpha
@@ -400,7 +402,7 @@ private fun MarkRecordFilterChip(
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = MaterialTheme.colorScheme.primary,
             selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
             labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
         ),
         border = FilterChipDefaults.filterChipBorder(

@@ -269,20 +269,19 @@
     <string name="settings_accent_custom">사용자 지정</string>
     <string name="settings_accent_reset_default">기본값으로 재설정(배경화면)</string>
     <!-- 액센트 색상 -->
-    <string name="accent_vintage_ticket">레트로 티켓</string>
-    <string name="accent_water_lily">연꽃 보라</string>
-    <string name="accent_sunrise">일출 주황</string>
-    <string name="accent_japanese_bridge">일본교 녹색</string>
-    <string name="accent_cathedral">대성당 파랑 회색</string>
-    <string name="accent_haystack">건초더미 금색</string>
     <string name="accent_renoir">르누아르 분홍</string>
-    <string name="accent_starry_night">별이 빛나는 밤 파랑</string>
     <string name="accent_poppy">양귀비 빨강</string>
-    <string name="accent_wheat_field">밀밭 금색</string>
-    <string name="accent_rouen_cathedral">루앙 대성당 보라</string>
-    <string name="accent_ballet">발레 보라</string>
-    <string name="accent_water_lily_green">연꽃 녹색</string>
+    <string name="accent_vintage_ticket">레트로 티켓</string>
+    <string name="accent_sunrise">일출 주황</string>
+    <string name="accent_haystack">건초더미 금색</string>
+    <string name="accent_giverny_moss">지베르니 이끼 녹색</string>
+    <string name="accent_japanese_bridge">일본교 녹색</string>
+    <string name="accent_venice_canal">베네치아 운하 청록</string>
     <string name="accent_boat_breakfast">보트 아침 식사 파랑</string>
+    <string name="accent_starry_night">별이 빛나는 밤 파랑</string>
+    <string name="accent_cathedral">대성당 파랑 회색</string>
+    <string name="accent_water_lily">연꽃 보라</string>
+    <string name="accent_ballet">발레 보라</string>
 
     <!-- Language -->
     <string name="settings_language">언어</string>

@@ -110,6 +110,7 @@ import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.ui.theme.WcagBlackWhiteCrossover
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
@@ -800,17 +801,23 @@ private fun DiscoverFilterListItem(
         label = "filter_item_bg"
     )
 
-    // 根据主色亮度自适应文字颜色
+    // 压在海报主色上该用黑字还是白字。阈值是 WCAG 的黑白等对比点（约 0.179），
+    // 不是 0.5 —— 用 0.5 的话中等明度的暖色（金黄、橙）会拿到白字，对比度掉到 3:1 以下。
+    val darkInkOnDominant = dominantColor?.let { it.luminance() > WcagBlackWhiteCrossover }
     val onGradientColor by animateColorAsState(
-        targetValue = dominantColor?.let { c ->
-            if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.92f) else Color.White
-        } ?: MaterialTheme.colorScheme.onSurface,
+        targetValue = when (darkInkOnDominant) {
+            true -> Color.Black.copy(alpha = 0.92f)
+            false -> Color.White
+            null -> MaterialTheme.colorScheme.onSurface
+        },
         label = "filter_item_on_bg"
     )
     val onGradientVariantColor by animateColorAsState(
-        targetValue = dominantColor?.let { c ->
-            if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.78f)
-        } ?: MaterialTheme.colorScheme.onSurfaceVariant,
+        targetValue = when (darkInkOnDominant) {
+            true -> Color.Black.copy(alpha = 0.65f)
+            false -> Color.White.copy(alpha = 0.78f)
+            null -> MaterialTheme.colorScheme.onSurfaceVariant
+        },
         label = "filter_item_on_bg_variant"
     )
 

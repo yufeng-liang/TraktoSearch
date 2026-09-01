@@ -70,6 +70,7 @@ import com.tracktosearch.ui.component.AdaptiveSingleLineText
 import com.tracktosearch.ui.component.DropdownAnchorMenu
 import com.tracktosearch.ui.component.StickyHeaderChangelogContent
 import com.tracktosearch.ui.theme.appSwitchColors
+import com.tracktosearch.ui.theme.onColorFor
 import com.github.skydoves.colorpicker.compose.HsvColorPicker
 import com.github.skydoves.colorpicker.compose.rememberColorPickerController
 import com.github.skydoves.colorpicker.compose.BrightnessSlider
@@ -174,7 +175,16 @@ internal fun AccentColorDialog(
         Color(0xFF6B7FA0), Color(0xFFC4A94D), Color(0xFFD4748A),
         Color(0xFF4A7FB5), Color(0xFF7B68AE)
     )
-    val dynamicCheckTint = if (dynamicColors.map { it.luminance() }.average() > 0.5) Color.Black else Color.White
+    // 彩虹渐变上的勾选图标：没有单一底色，所以按「整条渐变里最差的那一档」定黑白 ——
+    // 取平均亮度再套阈值会被暗档拉低，结果给出白勾，压在金黄档上只有 2.30:1。
+    // 按最差档算是黑勾 4.43:1，白勾 2.30:1。
+    val dynamicCheckTint = run {
+        fun worstContrast(ink: Float) = dynamicColors.minOf { swatch ->
+            val a = swatch.luminance().coerceAtLeast(0f)
+            (maxOf(a, ink) + 0.05f) / (minOf(a, ink) + 0.05f)
+        }
+        if (worstContrast(0f) >= worstContrast(1f)) Color.Black else Color.White
+    }
 
     // 壁纸取色后的真实主色预览（Android 12+），否则回退彩虹渐变
     val context = LocalContext.current
@@ -481,15 +491,16 @@ internal fun AccentColorDialog(
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                // 色调区：壁纸取色 + 莫奈/印象派色块网格 + 自由调色（自由调色紧跟船上午餐蓝）
+                // 色调区：壁纸取色 + 按色相排序的印象派色块网格 + 自由调色（都排完再放）
                 val customMarker = Any()
                 val swatches: List<Any?> = buildList {
                     add(null) // 壁纸取色
-                    MonetAccent.entries.forEach { accent ->
-                        add(accent)
-                        if (accent == MonetAccent.BOAT_BREAKFAST) add(customMarker) // 自由调色排在船上午餐蓝后
-                    }
+                    addAll(MonetAccent.entries)
+                    add(customMarker) // 自由调色收尾，不打断色环顺序
                 }
+                // 色块要显示当前深浅色档实际会用到的那一个种子色 ——
+                // 以前一律取 .light，深色模式下点进去和看到的不是一个颜色。
+                val swatchIsDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
                 val rows = swatches.chunked(4)
                 rows.forEach { row ->
                     Row(
@@ -526,6 +537,7 @@ internal fun AccentColorDialog(
                                     .padding(vertical = 4.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
+                                val swatchColor = accent?.let { if (swatchIsDark) it.dark else it.light }
                                 Box(
                                     modifier = Modifier
                                         .size(44.dp)
@@ -533,7 +545,7 @@ internal fun AccentColorDialog(
                                         .background(
                                             brush = when {
                                                 isCustom -> androidx.compose.ui.graphics.Brush.sweepGradient(colors = dynamicColors)
-                                                accent != null -> androidx.compose.ui.graphics.SolidColor(accent.light)
+                                                swatchColor != null -> androidx.compose.ui.graphics.SolidColor(swatchColor)
                                                 dynamicPrimaryColor != null -> androidx.compose.ui.graphics.SolidColor(dynamicPrimaryColor)
                                                 else -> androidx.compose.ui.graphics.Brush.sweepGradient(colors = dynamicColors)
                                             }
@@ -549,10 +561,12 @@ internal fun AccentColorDialog(
                                         Icon(
                                             imageVector = Icons.Rounded.Check,
                                             contentDescription = null,
-                                            tint = when {
-                                                accent != null -> if (accent.light.luminance() > 0.5f) Color.Black else Color.White
-                                                else -> dynamicCheckTint
-                                            },
+                                            // 勾的颜色跟主题里 onPrimary 用同一条规则，别在这儿另写一套阈值。
+                                            // 三种底：固定色块用它自己的色，壁纸取到的真实主色用那个色，
+                                            // 剩下的彩虹渐变没有单一底色，按整条渐变的最差对比度定，见 dynamicCheckTint。
+                                            tint = swatchColor?.let { onColorFor(it) }
+                                                ?: dynamicPrimaryColor?.takeIf { !isCustom }?.let { onColorFor(it) }
+                                                ?: dynamicCheckTint,
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }

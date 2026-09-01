@@ -1194,7 +1194,7 @@ private fun DiskSearchContent(
                                             selected = source in diskState.enabledSources,
                                             border = if (source in diskState.enabledSources) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                             colors = FilterChipDefaults.filterChipColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                                                 labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 selectedContainerColor = MaterialTheme.colorScheme.primary,
                                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -1241,7 +1241,7 @@ private fun DiskSearchContent(
                                             selected = type in diskState.enabledDiskTypes,
                                             border = if (type in diskState.enabledDiskTypes) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                             colors = FilterChipDefaults.filterChipColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                                                 labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 selectedContainerColor = MaterialTheme.colorScheme.primary,
                                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimary
