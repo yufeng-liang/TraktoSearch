@@ -868,7 +868,7 @@ class AiSpriteViewModel @Inject constructor(
         val character = _uiState.value.selectedCharacter ?: return
         // 预存音频命中则立即播放，不消耗 TTS 配额；未命中按角色状态走网络链路
         bundledAuditionAudio(character)?.let { local ->
-            _audioEvents.emit(local)
+            emitAuditionAudio(local)
             return
         }
         val authorized = isAuthorized()
@@ -880,7 +880,7 @@ class AiSpriteViewModel @Inject constructor(
             AiAuditionPlaybackRoute.GUEST_TTS -> {
                 aiRepository.playGuestTts(request).fold(
                     onSuccess = { audio ->
-                        if (audio.hasPlayableSource()) _audioEvents.emit(audio)
+                        if (audio.hasPlayableSource()) emitAuditionAudio(audio)
                         else emitGuestPreviewFallback(character)
                     },
                     onFailure = { emitGuestPreviewFallback(character) }
@@ -889,7 +889,7 @@ class AiSpriteViewModel @Inject constructor(
             AiAuditionPlaybackRoute.AUTHORIZED_TTS -> {
                 aiRepository.playTts(authManager.friendId.value.orEmpty(), request).fold(
                     onSuccess = { audio ->
-                        if (audio.hasPlayableSource()) _audioEvents.emit(audio)
+                        if (audio.hasPlayableSource()) emitAuditionAudio(audio)
                         else emitGuestPreviewFallback(character)
                     },
                     onFailure = { emitGuestPreviewFallback(character) }
@@ -904,7 +904,7 @@ class AiSpriteViewModel @Inject constructor(
         val character = _uiState.value.selectedCharacter
         if (character != null) {
             bundledAuditionAudio(character)?.let { local ->
-                previewJob = viewModelScope.launch { _audioEvents.emit(local) }
+                previewJob = viewModelScope.launch { emitAuditionAudio(local) }
                 return
             }
         }
@@ -914,8 +914,26 @@ class AiSpriteViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 试听事件必须等精灵中心的收集器就位再发。
+     *
+     * [_audioEvents] 是 replay = 0 的 SharedFlow，没有订阅者时 emit 会被静默丢弃。
+     * 精灵中心的 LaunchedEffect 先调 ensureLoaded()、之后才 launch 收集器；而搜索页启动时
+     * 已经调过一次 ensureLoaded，进精灵中心走的是 initialized 分支，预存试听又不经过 350ms
+     * 防抖，emit 正好落在收集器注册之前。事件丢掉后 UI 停在 LOADING，只能干转到 8 秒兜底超时。
+     *
+     * 页面没打开时这里会一直挂着，下一次 scheduleCharacterPreview() 取消 previewJob 即释放，
+     * 也保证不会在页面打开瞬间补播上一个角色的旧试听。
+     */
+    private suspend fun emitAuditionAudio(audio: AiAudio) {
+        _audioEvents.subscriptionCount.first { it > 0 }
+        _audioEvents.emit(audio)
+    }
+
+    /** 系统语音兜底同样是试听链路的一环，收集器未就位时丢事件一样会让 UI 干转。 */
     private suspend fun emitGuestPreviewFallback(character: AiCharacter) {
         character.auditionText.takeIf { it.isNotBlank() }?.let { text ->
+            _guestPreviewFallbackEvents.subscriptionCount.first { it > 0 }
             _guestPreviewFallbackEvents.emit(text)
         }
     }

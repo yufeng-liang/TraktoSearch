@@ -287,6 +287,29 @@ class AiSpriteViewModelTest {
     }
 
     @Test
+    fun reopeningSpriteCenter_bundledAuditionReachesACollectorRegisteredAfterEnsureLoaded() = runTest {
+        val context = mockk<Context>(relaxed = true)
+        every { context.assets.open(any()) } returns ByteArrayInputStream(ByteArray(16))
+        val viewModel = viewModel(context = context)
+        coEvery { aiRepository.listCharacters() } returns Result.success(
+            listOf(com.tracktosearch.data.ai.AiCharacterCatalog.all.first { it.id == "usagi" })
+        )
+
+        // 第一次 ensureLoaded 模拟搜索页启动时那次调用：initialized 从此为 true
+        viewModel.ensureLoaded()
+        advanceUntilIdle()
+
+        // 精灵中心的真实顺序：LaunchedEffect 先调 ensureLoaded，收集器晚一拍才 launch。
+        // 预存试听不经过 350ms 防抖，事件必须等收集器就位，否则 replay = 0 的 SharedFlow
+        // 会静默丢弃，UI 停在 LOADING 干转到 8 秒兜底超时。
+        viewModel.ensureLoaded()
+        val audioEvent = async { viewModel.audioEvents.first() }
+        advanceUntilIdle()
+
+        assertThat(audioEvent.await().audioUrl).isEqualTo("file:///android_asset/ai_auditions/usagi.mp3")
+    }
+
+    @Test
     fun replaySelectedCharacter_requestsAuditionImmediately() = runTest {
         val authState = MutableStateFlow(AuthState.UNAUTHORIZED)
         val viewModel = viewModel(authState)
