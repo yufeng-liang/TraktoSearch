@@ -15,10 +15,11 @@
 
 ## 随包字体
 
-彩蛋序列（`app/src/main/java/com/tracktosearch/ui/screen/swiftie/`）使用 13 个随包字体，
-文件在 `app/src/main/res/font/`，完整许可证文本在 `app/src/main/assets/fonts/licenses/`。
-全部取自 Google Fonts，全部为 OFL-1.1 或 Apache-2.0，均允许商业使用与嵌入分发。
-下载与子集化过程记录在 `scripts/fetch-swiftie-fonts.sh`，产物已提交，正常构建不需要再跑。
+`app/src/main/res/font/` 下共 14 个字体文件：彩蛋序列用的 13 个，加上项目原有的
+`ark_pixel_12px`（见下一节）。彩蛋那 13 个的完整许可证文本在
+`app/src/main/assets/fonts/licenses/`，全部取自 Google Fonts，全部为 OFL-1.1 或
+Apache-2.0，均允许商业使用与嵌入分发。下载与子集化过程记录在
+`scripts/fetch-swiftie-fonts.sh`，产物已提交，正常构建不需要再跑。
 
 | 资源 | 上游字体 | 版权 | 许可证 |
 | --- | --- | --- | --- |
@@ -30,8 +31,8 @@
 | era_red | Bebas Neue | 2010 Dharma Type | OFL-1.1 |
 | era_1989 | Permanent Marker | 2010 Font Diner, Inc. | Apache-2.0 |
 | era_reputation | UnifrakturMaguntia | 2010 j. 'mach' wust；2009 Peter Wiegel | OFL-1.1（RFN） |
-| era_lover | Parisienne | 2012 Brian J. Bonislawsky DBA Astigmatic | OFL-1.1（RFN） |
-| era_imfell | IM Fell DW Pica Italic | 2010 Igino Marini | OFL-1.1 |
+| era_lover | Parisienne | 2012 Brian J. Bonislawsky DBA Astigmatic | OFL-1.1（RFN，见下） |
+| era_imfell | IM Fell DW Pica Italic | 2007 Igino Marini | OFL-1.1（RFN） |
 | era_midnights | Inter（定重 500 / opsz 28） | 2020 The Inter Project Authors | OFL-1.1 |
 | era_ttpd | Libre Caslon Display | 2012 The Libre Caslon Display Authors | OFL-1.1 |
 | era_showgirl | Playfair Display Italic（定重 400） | 2017 The Playfair Display Project Authors | OFL-1.1（RFN） |
@@ -40,13 +41,22 @@
 
 ### 子集化与保留字体名
 
-13 个文件都是**逐专辑激进子集化**的产物：每个只保留自己那几个字的字形（7–41 个），
-合计约 89 KiB。子集化删除了绝大多数字形，属于 OFL-1.1 定义的 **Modified Version**，
-因此第 3 条生效：Modified Version 不得沿用 Reserved Font Name。
+13 个文件都是**逐专辑激进子集化**的产物：每个只保留自己那几个字的字形
+（4–70 个，`era_1989` 最少 4 个、`swiftie_script` 最多 70 个），13 个合计
+78 764 字节 = 76.9 KiB。子集化删除了绝大多数字形，属于 OFL-1.1 定义的
+**Modified Version**，因此第 3 条生效：Modified Version 不得沿用 Reserved Font Name。
 
-上表标 **RFN** 的 5 个字体（Gochi Hand、Josefin Sans、UnifrakturMaguntia、Parisienne、
-Playfair Display）已按此改掉内部 `name` 表的家族名与 PostScript 名，改名脚本是
-`scripts/rename-swiftie-font-rfn.py`：
+判据是**入包的那份二进制**里 name ID 0 有没有 `With Reserved Font Name`，
+而不是上游许可文本 —— 两者会不一致，本项目就撞上了两个方向各一例：
+
+- `era_imfell`：随包的 `imfelldwpica-OFL.txt` 版权行没有 RFN 条款，但入包的二进制
+  （2007 年版，`fetch-swiftie-fonts.sh` 从 `fonts.googleapis.com/css2` 取得）
+  声明了 `With Reserved Font Name IM FELL DW Pica Italic`。按二进制算，要改名。
+- `era_lover`（Parisienne）：反过来，二进制里没有 RFN 条款，但仍然改了名。
+  多改无害，保持现状。
+
+上表标 **RFN** 的 6 个字体已按此改掉内部 `name` 表的家族名与 PostScript 名，
+改名脚本是 `scripts/rename-swiftie-font-rfn.py`（可带资源名只改指定的几个）：
 
 | 资源 | 改后家族名 | 改后 PostScript 名 |
 | --- | --- | --- |
@@ -55,14 +65,31 @@ Playfair Display）已按此改掉内部 `name` 表的家族名与 PostScript �
 | era_lover | Swiftie Lover | SwiftieLover-Regular |
 | era_showgirl | Swiftie Showgirl | SwiftieShowgirl-Italic |
 | era_reputation | Swiftie Reputation | SwiftieReputation-Regular |
+| era_imfell | Swiftie Fell | SwiftieFell-Italic |
 
+name ID 0 的版权声明**保持原样不改** —— OFL 要求保留它，需要改的只是家族名。
 Android 按资源 ID 加载 `res/font/*.ttf`，不看内部家族名，所以改名不影响渲染。
-无 RFN 的 8 个字体保留原家族名。两个 Apache-2.0 字体（Yellowtail、Permanent Marker）
-按第 4 条要求在此声明：**已被子集化修改**。它们随包的 `*-LICENSE.txt` 只有 Apache-2.0
-全文、不含署名行，上表的版权持有人取自字体内部 `name` 表第 0 项。
+两个 Apache-2.0 字体（Yellowtail、Permanent Marker）按第 4 条要求在此声明：
+**已被子集化修改**。它们随包的 `*-LICENSE.txt` 只有 Apache-2.0 全文、不含署名行，
+上表的版权持有人取自字体内部 `name` 表第 0 项。
 
-后续若再增删字形或换字重，改完必须同步更新本节的字形数、字重和改名表。
-新增带 RFN 的字体时，改名是硬要求，不是可选项。
+后续若再增删字形或换字重，改完必须同步更新本节的字形数、字节数、字重和改名表 ——
+统计只算彩蛋那 13 个，不要把 `ark_pixel_12px` 算进去（`fetch-swiftie-fonts.sh`
+收尾那句 `du -ch "$OUT"/*.ttf` 会把它一起算上）。
+新增字体时先读它 name ID 0：带 RFN 就必须改名，不是可选项。
+
+## 随包字体（彩蛋之外）
+
+| 资源 | 上游字体 | 版权 | 许可证 | 用途 |
+| --- | --- | --- | --- | --- |
+| ark_pixel_12px | Ark Pixel 12px Mono zh_cn | 2021 TakWolf | OFL-1.1 | 取票机式激活登录页的点阵字 |
+
+12 236 字节，130 个字形，由 `ui/theme/Type.kt` 的 `PixelFontFamily` 引用、
+用在 `ui/screen/login/ActivationLoginScreen.kt`。不是 Google Fonts 来源，
+也不属于彩蛋序列。许可证全文随包提供在
+`app/src/main/assets/fonts/licenses/arkpixel-OFL.txt`（与仓库根
+`licenses/ArkPixelFont-OFL.txt` 同一份 —— 根目录那份不进 APK）。
+name ID 0 无 RFN 条款，未改名。
 
 ## 随包音频
 

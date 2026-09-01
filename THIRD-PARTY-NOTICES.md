@@ -24,16 +24,18 @@
 
 ## 随包字体
 
-`app/src/main/res/font/` 下 13 个字体来自 Google Fonts，OFL-1.1 或 Apache-2.0，
-均允许嵌入与商业分发。逐个文件的上游名称、版权持有人、许可证、子集化范围以及
-保留字体名改名记录见 [ASSET-LICENSES.md](ASSET-LICENSES.md) 的「随包字体」一节。
+`app/src/main/res/font/` 下共 14 个字体：彩蛋序列用的 13 个来自 Google Fonts，
+外加项目原有的 `ark_pixel_12px`（Ark Pixel 12px Mono zh_cn，TakWolf，用于激活登录页）。
+全部为 OFL-1.1 或 Apache-2.0，均允许嵌入与商业分发。逐个文件的上游名称、版权持有人、
+许可证、子集化范围以及保留字体名改名记录见
+[ASSET-LICENSES.md](ASSET-LICENSES.md) 的「随包字体」两节。
 
 发布 APK 时的三条义务：
 
-- 许可证全文随包提供 —— 已放在 `app/src/main/assets/fonts/licenses/`（13 份），
-  不要在 packaging 规则里排除 `assets/fonts/`。
-- OFL-1.1 第 3 条：子集化后的字体不得沿用 Reserved Font Name。带 RFN 的 5 个字体
-  已改内部家族名，改动脚本随仓库提交。
+- 许可证全文随包提供 —— 已放在 `app/src/main/assets/fonts/licenses/`（14 份，
+  与 14 个字体一一对应），不要在 packaging 规则里排除 `assets/fonts/`。
+- OFL-1.1 第 3 条：子集化后的字体不得沿用 Reserved Font Name。判据是入包二进制的
+  name ID 0，带 RFN 的 6 个字体已改内部家族名，改动脚本随仓库提交。
 - Apache-2.0 第 4 条：需声明已修改。两个 Apache 字体（Yellowtail、Permanent Marker）
   的子集化事实已在 ASSET-LICENSES.md 中声明。
 
