@@ -199,7 +199,9 @@ class AiSpriteViewModel @Inject constructor(
     }
 
     fun ensureLoaded() {
-        restoreActivation()
+        // 恢复落盘激活角色后要播试听：恢复是异步的，竞态上可能晚于
+        // ensureLoaded 末尾那次 scheduleCharacterPreview，谁后完成谁负责触发
+        restoreActivation(previewOnRestore = true)
         if (initialized) {
             scheduleCharacterPreview()
             return
@@ -217,9 +219,10 @@ class AiSpriteViewModel @Inject constructor(
      *
      * 与 [ensureLoaded] 分开：这条路径不拉角色目录也不播试听，
      * 供详情页这类没有激活入口、但要用激活态的页面直接调用，
-     * 不会在详情页突然放出一段语音。
+     * 不会在详情页突然放出一段语音。[previewOnRestore] 供精灵中心进入时传 true：
+     * 恢复出的角色选中后 UI 会进入试听 LOADING 态，不补触发就会干转 8 秒超时。
      */
-    fun restoreActivation() {
+    fun restoreActivation(previewOnRestore: Boolean = false) {
         observeAuthState()
         if (activationRestored) return
         activationRestored = true
@@ -228,15 +231,20 @@ class AiSpriteViewModel @Inject constructor(
             if (friendId.isBlank()) return@launch
             val restored = aiRepository.readActivatedCharacterId(friendId) ?: return@launch
             if (_uiState.value.characters.none { it.id == restored }) return@launch
+            var restoredSelected = false
             _uiState.update { state ->
                 // 本次会话里已经激活过就不覆盖，避免落盘的旧值顶掉刚激活的角色
                 if (state.activatedCharacterId != null) state
-                else state.copy(
-                    activatedCharacterId = restored,
-                    selectedCharacterId = restored,
-                    activationState = AiActivationState.SUCCESS
-                )
+                else {
+                    restoredSelected = true
+                    state.copy(
+                        activatedCharacterId = restored,
+                        selectedCharacterId = restored,
+                        activationState = AiActivationState.SUCCESS
+                    )
+                }
             }
+            if (previewOnRestore && restoredSelected) scheduleCharacterPreview()
         }
     }
 
@@ -1035,8 +1043,11 @@ class AiSpriteViewModel @Inject constructor(
     }
 
     private fun errorCode(error: Throwable): String {
+        // AiApiException 直接取码；其余（IO/解析等）经 fromThrowable 归一，
+        // 不把原始 message 直通 UI——映射表查不到只会落到无信息量的兜底文案
         val aiError = error as? com.tracktosearch.data.ai.AiApiException
-        return aiError?.errorCode?.name ?: error.message?.takeIf { it.isNotBlank() } ?: "UNKNOWN"
+        return aiError?.errorCode?.name
+            ?: com.tracktosearch.data.ai.AiErrorMapper.fromThrowable(error).errorCode.name
     }
 }
 

@@ -318,6 +318,23 @@ class AiSpriteViewModelTest {
     }
 
     @Test
+    fun ensureLoaded_previewsRestoredCharacterAfterRestore() = runTest {
+        val viewModel = viewModel()
+        coEvery { aiRepository.listCharacters() } returns Result.success(
+            listOf(viewModelCharacter("usagi"))
+        )
+        coEvery { aiRepository.readActivatedCharacterId("friend-a") } returns "usagi"
+        coEvery { aiRepository.playTts("friend-a", any()) } returns Result.success(audio())
+
+        viewModel.ensureLoaded()
+        advanceUntilIdle()
+
+        // 落盘激活角色恢复后要自动试听：恢复是异步的，可能晚于 ensureLoaded
+        // 末尾那次 scheduleCharacterPreview，不补触发 UI 会停在 LOADING 干转
+        coVerify(atLeast = 1) { aiRepository.playTts("friend-a", any()) }
+    }
+
+    @Test
     fun restoreActivation_bringsBackPersistedCharacterWithoutCatalogOrPreviewRequests() = runTest {
         val viewModel = viewModel()
         coEvery { aiRepository.readActivatedCharacterId("friend-a") } returns "hachiware"
