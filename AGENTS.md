@@ -53,6 +53,7 @@ CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments
 ## 工作方式
 - 重要修改/功能性损失先说明计划再执行
 - 大任务拆可独立、范围不重叠子任务，按依赖用子智能体并行；主智能体统一审查/整合/验证/提交
+- 子代理并行期间禁止执行 Gradle（assembleDebug/test/lint 等一切 Gradle 任务）：本机可用内存撑不住多个 daemon，抢内存会让 daemon 起不来或测试 worker 被拖死并静默漏跑末尾的测试类。派子代理时在提示里明确写「不要跑 Gradle」，让它只改代码和写测试；构建与全部测试由主代理在所有子任务合并后统一跑一次
 - 修复/增功能/改 UI 验证通过后立即按实际改动提交，不合并无关功能
 - 大量删除前先本地提交一次便回滚
 - 多步任务按依赖推进：无共享写集并行，主智能体集成后最终 debug 验证
