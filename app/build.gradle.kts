@@ -277,6 +277,28 @@ tasks.configureEach {
 }
 
 dependencies {
+    /**
+     * 把 `androidx.concurrent:concurrent-futures{,-ktx}` 抬到 1.2.0。
+     *
+     * AGP 会把 `debugAndroidTestRuntimeClasspath` 上的每个模块按 app 自己
+     * `debugRuntimeClasspath` 解析出的版本钉成 `strictly`（Gradle 把这类约束报成
+     * “from lock file”），目的是让测试 APK 与被测 APK 用同一份类路径。
+     *
+     * app 这边 `androidx.glance:1.1.1` 与 `androidx.work:work-runtime:2.11.2`
+     * 只要到 1.1.0，于是 androidTest 被钉在 strictly 1.1.0；而 androidTest 专属的
+     * `androidx.test:core:1.7.0` 依赖 `concurrent-futures-ktx:1.2.0`。
+     * strictly 1.1.0 与 1.2.0 无法调和，整个 androidTest 源集连编译都进不去。
+     *
+     * 从 app 这一侧抬版本，AGP 钉出来的就是 strictly 1.2.0，两边自然一致。
+     * 反方向（把 androidx.test:core 降到要 1.1.0 的版本）会丢测试 API，不划算。
+     *
+     * constraints 只提版本、不引入新依赖：这两个模块本来就在 app 图里。
+     */
+    constraints {
+        implementation(libs.concurrent.futures)
+        implementation(libs.concurrent.futures.ktx)
+    }
+
     // AndroidX Core
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
