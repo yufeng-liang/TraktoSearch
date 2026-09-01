@@ -164,9 +164,12 @@ def main():
     td.rounded_rectangle((left, top, right, bottom), radius=16, fill=PAPER_DEEP,
                          outline=(80, 61, 50, 82), width=4)
     # 两侧检票孔。
+    # 孔必须用透明填充（不能 fill=PAPER）：系统 splash 深色档背景是 #241914，
+    # 不透明浅色孔在深色下会像实心票根、看不出打孔；透明孔在任何背景下都透出背景。
+    # 保留 outline 描边，让孔边缘在深浅两档都清晰。
     for cx in (left, right):
         td.ellipse((cx - 22, (top + bottom) // 2 - 22, cx + 22, (top + bottom) // 2 + 22),
-                   fill=PAPER, outline=(80, 61, 50, 64), width=3)
+                   fill=(0, 0, 0, 0), outline=(80, 61, 50, 64), width=3)
 
     divider_x = 940
     td.rectangle((58, 87, 911, 329), outline=(153, 99, 69, 72), width=2)
