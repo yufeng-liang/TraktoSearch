@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.swiftie.eras
 
 import androidx.compose.ui.graphics.Color
+import com.tracktosearch.ui.screen.swiftie.SwiftiePalette
 
 /**
  * 卡片文字配色的对比度校正。
@@ -8,7 +9,7 @@ import androidx.compose.ui.graphics.Color
  * Spec §6.2 原本要求「曲目名用该时代主色」，但 12 个时代主色里有 6 个是浅色
  * （`1989` 的 `#A8CDE0`、`Lover` 的 `#F7A8C4`、`Fearless` 的 `#D4AF37`……），
  * 直接印在半透明白卡上只有 1.57–2.97:1，12sp 的曲目名根本读不出来 —— 而这一段
- * 94 秒的全部意义就是让人**看清**整个历程。
+ * 96.3 秒的全部意义就是让人**看清**整个历程。
  *
  * 因此保留主色的**色相与饱和度**，只压低明度到刚好满足 WCAG AA 4.5:1。
  * `1989` 会从淡天蓝变成深天蓝，`Lover` 从淡粉变成玫红 —— 时代辨识度还在，
@@ -25,16 +26,80 @@ internal object SwiftieEraContrast {
     /** 发行日期同样是信息而非装饰，只比曲目名淡一点。 */
     const val DATE_ALPHA: Float = 0.85f
 
+    /** 白纸层的不透明度，与 `SwiftieEraCard` 的 `Color.White.copy(alpha = 0.86f)` 同步。 */
+    private const val PAPER_ALPHA = 0.86f
+
+    /** 主色薄底，与 `SwiftieEraCard` 里 `drawRect(era.mainColor, alpha = 0.10f)` 同步。 */
+    private const val TINT_ALPHA = 0.10f
+
     /**
-     * 卡片上文字实际压着的底色。
+     * 母题层在文字底下**成片覆盖**时的最大主色不透明度。
      *
-     * 叠了三层：水彩天空 → `Color.White.copy(alpha = 0.86f)` 的白纸 →
-     * `drawRect(mainColor, alpha = 0.10f)` 的主色薄底。天空取 Lover 配色里最亮的
-     * 粉白 `#FBE4EE`：底色越亮，浅色文字的对比度越差，按最坏情况算才安全。
+     * 取的是「有面积的那些层」的上限，而不是全母题的单点最大值：
+     * folklore 的松树三角（`MOTIF_ALPHA × 1.6 = 0.32`，从卡片底边长到 30–70% 高）
+     * 与 Showgirl 的羽毛（同为 0.32，9 条 `0.026 × minDimension` 宽的粗线扫过右下）
+     * 是最狠的两个，Red 的针织横纹（0.20，14 行几乎铺满）紧随其后。
+     *
+     * **不取 0.48。** 那个数来自 TTPD 的游标方块（`× 2.4`）、Lover 上浮的心
+     * （`× 2.2`，边长只有 `0.03–0.055 × minDimension`）与 reputation 的蛇形曲线
+     * （`× 1.8`，线宽 `0.014 × minDimension` ≈ 5px）—— 都是细笔画或小色块，
+     * 只会横穿一行字的几个像素。按它们算等于假设整张卡片都涂成那个不透明度，
+     * 结果是 reputation 的序号 / 日期在 85% 透明度下**怎么压都到不了 4.5:1**
+     * （极限 4.46:1），把整套压暗逼进死角，而屏幕上根本没有那么大一片深色。
+     *
+     * 真要让细笔画也不压着字，正确做法是别把它们画到曲目列底下，而不是在这里
+     * 把所有文字一起压黑。
+     *
+     * 母题**在文字底下满幅铺开**（见 `SwiftieEraCard` 的 `drawBehind`），
+     * 所以它必须进这个模型 —— 漏掉它的时候 folklore 与 Showgirl 实测只有 3.0–3.5:1。
+     *
+     * TTPD 是唯一不被这个模型覆盖的：它的纸纹与游标用硬编码的墨色 `#4A453E`
+     * 而不是主色，按主色算会偏亮。那一张不需要额外照顾 —— 它的文字本身就是
+     * `#4A453E`，对最亮档底色 12.9:1、对墨线压过的局部仍有 6:1。
+     */
+    private const val MOTIF_MAX_ALPHA = 0.32f
+
+    /**
+     * 卡片底下天空的两个极端。
+     *
+     * 天空是 `SwiftieWatercolorSky` 的六团水彩压在粉白→云粉的渐变上。卡片矩形内
+     * 最亮的是粉白 `#FBE4EE`，最暗的是薰衣草 `#C9A8DE`（圆心 `(0.78, 0.20)` 落在
+     * 卡片内）。水彩团中心只有 0.85 不透明度，这里按满不透明算，偏保守一档。
+     */
+    private val SKY_LIGHTEST = SwiftiePalette.PinkWhite
+    private val SKY_DARKEST = SwiftiePalette.Lavender
+
+    /**
+     * 卡片上文字实际压着的底色，取**四种叠法里最暗的那个**。
+     *
+     * 叠法：水彩天空 → `Color.White.copy(alpha = 0.86f)` 的白纸 →
+     * `drawRect(mainColor, alpha = 0.10f)` 的主色薄底 → 母题层。
+     * 天空取最亮 / 最暗两档，母题层取「有」与「无」两档，共四个候选。
+     *
+     * **为什么取最暗**：[readable] 只会把文字**压暗**，所以底色越暗对比度越差 ——
+     * 深色文字压在浅底上是高对比，压在深底上才是低对比。（这里原先写的是
+     * 「底色越亮对比度越差」，方向推反了，于是母题层也被漏在模型之外：
+     * folklore 的松树 0.32、Showgirl 的羽毛 0.32 铺在曲目名底下，实测把
+     * 4.5:1 拉到 3.0–3.5:1。）
+     *
+     * 母题层对浅色主色（`1989` / `Lover` / TTPD）是**提亮**，`minByOrNull` 会自动
+     * 落回不含母题的那档，所以没有任何时代因为这个改动被压得比原来更黑。
      */
     fun cardBackground(mainColor: Color): Color {
-        val paper = composite(Color.White, 0.86f, Color(0xFFFBE4EE))
-        return composite(mainColor, 0.10f, paper)
+        var darkest = Color.White
+        var darkestLuminance = Float.MAX_VALUE
+        for (sky in listOf(SKY_LIGHTEST, SKY_DARKEST)) {
+            val paper = composite(Color.White, PAPER_ALPHA, sky)
+            val tinted = composite(mainColor, TINT_ALPHA, paper)
+            for (candidate in listOf(tinted, composite(mainColor, MOTIF_MAX_ALPHA, tinted))) {
+                val candidateLuminance = luminance(candidate)
+                if (candidateLuminance < darkestLuminance) {
+                    darkestLuminance = candidateLuminance
+                    darkest = candidate
+                }
+            }
+        }
+        return darkest
     }
 
     /** [fg] 以 [alpha] 压在 [bg] 上之后的实色。 */
