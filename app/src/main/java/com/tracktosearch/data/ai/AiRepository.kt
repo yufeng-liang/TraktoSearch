@@ -57,12 +57,16 @@ object AiErrorMapper {
             "RATE_LIMITED", "TOO_MANY_REQUESTS" -> AiErrorCode.RATE_LIMITED
             "CHARACTER_UNAVAILABLE", "VOICE_NOT_READY" -> AiErrorCode.CHARACTER_UNAVAILABLE
             "ACTIVATION_REQUIRED", "INVALID_ACTIVATION" -> AiErrorCode.ACTIVATION_REQUIRED
-            "INVALID_REQUEST", "VALIDATION_ERROR" -> AiErrorCode.INVALID_REQUEST
+            "INVALID_REQUEST", "VALIDATION_ERROR", "INVALID_AUDIO", "INVALID_MODEL",
+            "INVALID_ACTION", "NOT_FOUND" -> AiErrorCode.INVALID_REQUEST
+            "SERVER", "UPSTREAM_ERROR" -> AiErrorCode.SERVER
             "EMPTY_RESPONSE", "INVALID_RESPONSE" -> AiErrorCode.INVALID_RESPONSE
             else -> when {
                 httpCode == 401 || httpCode == 403 -> AiErrorCode.UNAUTHORIZED
                 httpCode == 429 -> AiErrorCode.RATE_LIMITED
                 httpCode >= 500 -> AiErrorCode.SERVER
+                // 其余 4xx 都属于请求侧问题，落 INVALID_REQUEST 给出比 UNKNOWN 更有指导性的文案
+                httpCode >= 400 -> AiErrorCode.INVALID_REQUEST
                 else -> AiErrorCode.UNKNOWN
             }
         }
@@ -515,6 +519,9 @@ class AiRepository @Inject constructor(
             Result.failure(e)
         } catch (e: IOException) {
             Result.failure(AiErrorMapper.fromThrowable(e))
+        } catch (e: kotlinx.serialization.SerializationException) {
+            // 响应结构对不上 DTO：归为响应异常而非裸抛，给用户"内容异常"而非兜底文案
+            Result.failure(AiErrorMapper.exception("INVALID_RESPONSE", e.message ?: "INVALID_RESPONSE", 200))
         } catch (e: Exception) {
             Result.failure(e)
         }
