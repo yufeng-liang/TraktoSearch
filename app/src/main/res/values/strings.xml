@@ -22,6 +22,7 @@
     <string name="machine_status_ready">ENTER CODE</string>
     <string name="machine_status_printing">PRINTING…</string>
     <string name="machine_status_collected">COLLECTED</string>
+    <string name="machine_detail_collected">○ Ticket printed · Choose an entry option on your ticket</string>
     <string name="machine_status_invalid">BAD CODE</string>
     <string name="machine_status_used">CODE USED</string>
     <string name="machine_status_revoked">REVOKED</string>

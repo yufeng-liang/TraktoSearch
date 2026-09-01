@@ -22,6 +22,7 @@
     <string name="machine_status_ready">コード入力</string>
     <string name="machine_status_printing">印刷中…</string>
     <string name="machine_status_collected">発券完了</string>
+    <string name="machine_detail_collected">○ 発券済み · チケットで入場方法を選択</string>
     <string name="machine_status_invalid">コード不正</string>
     <string name="machine_status_used">使用済み</string>
     <string name="machine_status_revoked">取消済み</string>

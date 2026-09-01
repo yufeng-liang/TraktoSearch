@@ -22,6 +22,7 @@
     <string name="machine_status_ready">请输入取票码</string>
     <string name="machine_status_printing">正在打印…</string>
     <string name="machine_status_collected">已取票</string>
+    <string name="machine_detail_collected">○ 已出票 · 请在票上选择入场方式</string>
     <string name="machine_status_invalid">码不对</string>
     <string name="machine_status_used">码已用过</string>
     <string name="machine_status_revoked">码已作废</string>

@@ -10,9 +10,11 @@ import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,16 +23,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.HelpOutline
+import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -49,7 +51,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -63,7 +64,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.OAuthCallback
 import com.tracktosearch.R
-import com.tracktosearch.ui.component.CinemaClapperIcon
+import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
@@ -84,10 +85,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
-
-// 激活页品牌图标固定使用浅色模式配色，避免跟随深色主题改变品牌外观。
-private val ActivationClapperAccentColor = Color(0xFF9A6242)
-private val ActivationClapperPaperColor = Color.White
 
 @Composable
 fun ActivationLoginScreen(
@@ -113,7 +110,6 @@ fun ActivationLoginScreen(
     val isDarkTheme = isAppDarkTheme()
     // 整屏不映射主题，见 Color.kt 的「激活登录页固定色」段
     val loginBackground = if (isDarkTheme) LoginPaperDark else LoginPaperLight
-    val loginSecondaryTextColor = LoginSecondaryInk
     var showWhatIsTraktDialog by remember { mutableStateOf(false) }
 
     val isActivated = authState.activated
@@ -206,13 +202,13 @@ fun ActivationLoginScreen(
         isActivated -> stringResource(R.string.machine_status_collected)
         else -> stringResource(R.string.machine_status_ready)
     }
-    // 像素屏只放短状态，完整引导句子留在机器下方：屏宽装不下
-    // 「请向管理员索取新的取票码」这类话，只靠屏幕报错会丢掉「下一步该干什么」。
-    val machineHint = when {
+    // 像素屏第二行放完整引导句。它以前印在机器外面，是因为当时误以为屏宽装不下 ——
+    // 实测一行约 25 字（412dp 屏）到 17 字（360dp 屏），而最长的引导是 22 字，装得下。
+    val machineDetail = when {
         authError != null -> stringResource(authErrorString(authError))
         authState.requiresMigrationInvite -> stringResource(R.string.auth_migration_invite_hint)
-        !isActivated -> stringResource(R.string.login_activation_locked)
-        else -> null
+        isActivated -> stringResource(R.string.machine_detail_collected)
+        else -> stringResource(R.string.login_activation_locked)
     }
 
     fun launchAuthorization() {
@@ -279,132 +275,60 @@ fun ActivationLoginScreen(
                 }
             }
 
-            TextButton(
-                onClick = { showWhatIsTraktDialog = true },
-                enabled = true,
-                colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                    contentColor = LoginActionInk
-                ),
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .statusBarsPadding()
-                    .padding(end = 12.dp)
-                    .zIndex(2f),
-            ) {
-                Text(stringResource(R.string.login_what_is_trakt))
-                Spacer(modifier = Modifier.size(4.dp))
-                Icon(Icons.Rounded.HelpOutline, contentDescription = null, modifier = Modifier.size(18.dp))
-            }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .zIndex(1f)
-                    .verticalScroll(scrollState)
-                    .imePadding()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 18.dp, vertical = 28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Spacer(modifier = Modifier.statusBarsPadding().height(53.dp))
-                Box(modifier = Modifier.offset(y = 15.dp)) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CinemaClapperIcon(
-                            accentColor = ActivationClapperAccentColor,
-                            paperColor = ActivationClapperPaperColor
-                        )
-                        Spacer(modifier = Modifier.height(22.dp))
-                        Text(
-                            text = stringResource(R.string.login_title),
-                            fontSize = 34.sp,
-                            lineHeight = 41.sp,
-                            letterSpacing = (-2.04f).sp,
-                            color = LoginTitleInk,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Serif
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = stringResource(R.string.login_subtitle),
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontSize = 14.sp,
-                                lineHeight = 20.sp
-                            ),
-                            color = loginSecondaryTextColor,
-                            textAlign = TextAlign.Center
+            ActivationLoginContent(
+                machineCode = machineCode,
+                machineStatus = machineStatus,
+                machineDetail = machineDetail,
+                statusIsError = authState.error != null || pasteMissed,
+                isLoading = authState.isLoading,
+                keypadEnabled = !isActivated && !authState.isLoading,
+                submitEnabled = authState.inviteCode.length == TICKET_CODE_DIGITS &&
+                    !authState.isLoading &&
+                    !isActivated,
+                expiredMessage = if (expired) stringResource(R.string.auth_expired_message) else null,
+                loginErrorText = if (loginState == LoginState.ERROR) {
+                    // LoginViewModel 存原始异常，组合期转本地化文案
+                    errorMessage?.toUserMessage(context, R.string.login_failed)
+                        ?: stringResource(R.string.login_denied)
+                } else {
+                    null
+                },
+                codeDescription = machineCodeDescription,
+                hazeState = hazeState,
+                scene = loginGlassScene,
+                scrollState = scrollState,
+                onDigit = authViewModel::appendDigit,
+                onBackspace = authViewModel::deleteLastDigit,
+                onPaste = {
+                    // Android 12 起每次读剪贴板都会弹系统提示，所以只在用户按下粘贴键时读，
+                    // 绝不在进入页面时自动读。
+                    pasteMissed = !authViewModel.pasteTicketCode(readClipboardText(context))
+                },
+                onSubmit = { authViewModel.activate() },
+                onWhatIsTrakt = { showWhatIsTraktDialog = true },
+                modifier = Modifier.zIndex(1f),
+                ticketSlot = {
+                    val stub = authState.ticket
+                    if (stub != null) {
+                        // printProgress 在这个 lambda 里读，不在屏幕组合体里读：
+                        // 出票动画约 84 帧，在外面读会让整屏（含机壳和 12 个键）
+                        // 每帧重组一次；读在这里，失效范围收在票内。
+                        CinemaTicket(
+                            stub = stub,
+                            phase = phaseAt(printProgress.value),
+                            loginState = loginState,
+                            // 打印中三个入口不可点：票还在推出，按下去等于对着半张纸下单
+                            traktEnabled = isActivated && !isPrinting,
+                            doubanEnabled = isActivated && !isPrinting,
+                            guestEnabled = isActivated && !isPrinting,
+                            onTraktLogin = { launchAuthorization() },
+                            onCancelAuth = { loginViewModel.reset() },
+                            onDoubanLogin = onDoubanLogin,
+                            onGuestMode = onGuestMode
                         )
                     }
                 }
-
-                Spacer(modifier = Modifier.height(90.dp))
-                if (expired) {
-                    Text(
-                        text = stringResource(R.string.auth_expired_message),
-                        fontSize = 16.sp,
-                        lineHeight = 24.sp,
-                        color = loginSecondaryTextColor,
-                        textAlign = TextAlign.Center
-                    )
-                }
-                TicketMachine(
-                    code = machineCode,
-                    statusText = machineStatus,
-                    statusIsError = authState.error != null || pasteMissed,
-                    hintText = machineHint,
-                    hintIsError = authState.error != null || authState.requiresMigrationInvite,
-                    isLoading = authState.isLoading,
-                    keypadEnabled = !isActivated && !authState.isLoading,
-                    submitEnabled = authState.inviteCode.length == TICKET_CODE_DIGITS &&
-                        !authState.isLoading &&
-                        !isActivated,
-                    hazeState = hazeState,
-                    scene = loginGlassScene,
-                    onDigit = authViewModel::appendDigit,
-                    onBackspace = authViewModel::deleteLastDigit,
-                    onPaste = {
-                        // Android 12 起每次读剪贴板都会弹系统提示，所以只在用户按下粘贴键时读，
-                        // 绝不在进入页面时自动读。
-                        pasteMissed = !authViewModel.pasteTicketCode(readClipboardText(context))
-                    },
-                    onSubmit = { authViewModel.activate() },
-                    modifier = Modifier.padding(top = if (expired) 14.dp else 0.dp),
-                    codeDescription = machineCodeDescription,
-                    ticketSlot = {
-                        val stub = authState.ticket
-                        if (stub != null) {
-                            // printProgress 在这个 lambda 里读，不在屏幕组合体里读：
-                            // 出票动画约 84 帧，在外面读会让整屏（含机壳毛玻璃和 12 个键）
-                            // 每帧重组一次；读在这里，失效范围收在票内。
-                            CinemaTicket(
-                                stub = stub,
-                                phase = phaseAt(printProgress.value),
-                                loginState = loginState,
-                                // 打印中三个入口不可点：票还在推出，按下去等于对着半张纸下单
-                                traktEnabled = isActivated && !isPrinting,
-                                doubanEnabled = isActivated && !isPrinting,
-                                guestEnabled = isActivated && !isPrinting,
-                                onTraktLogin = { launchAuthorization() },
-                                onCancelAuth = { loginViewModel.reset() },
-                                onDoubanLogin = onDoubanLogin,
-                                onGuestMode = onGuestMode
-                            )
-                        }
-                    }
-                )
-
-                if (loginState == LoginState.ERROR) {
-                    // LoginViewModel 存原始异常,组合期转本地化文案
-                    Text(
-                        text = errorMessage?.toUserMessage(context, R.string.login_failed)
-                            ?: stringResource(R.string.login_denied),
-                        modifier = Modifier.padding(top = 8.dp),
-                        color = LoginErrorInk,
-                        style = MaterialTheme.typography.bodySmall,
-                        textAlign = TextAlign.Center
-                    )
-                }
-                Spacer(modifier = Modifier.height(20.dp))
-            }
+            )
         }
     }
 
@@ -423,7 +347,7 @@ fun ActivationLoginScreen(
                         CustomTabsIntent.Builder().build()
                             .launchUrl(context, Uri.parse("https://trakt.tv/auth/join"))
                     },
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    colors = ButtonDefaults.buttonColors(
                         containerColor = LoginTitleInk,
                         contentColor = LoginPaperLight
                     )
@@ -432,7 +356,7 @@ fun ActivationLoginScreen(
             dismissButton = {
                 TextButton(
                     onClick = { showWhatIsTraktDialog = false },
-                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                    colors = ButtonDefaults.textButtonColors(
                         contentColor = LoginActionInk
                     )
                 ) {
@@ -442,6 +366,134 @@ fun ActivationLoginScreen(
         )
     }
 }
+
+/**
+ * 激活页的整个竖向版式。不含背景层，也不认识 ViewModel。
+ *
+ * 抽出来是为了能在单元测试里量高度：这一屏的设计要求是「一屏放得下」，
+ * 而带 `hiltViewModel()` 默认值的 [ActivationLoginScreen] 在 Robolectric 里立不起来。
+ * 护栏见 ActivationLoginLayoutTest。
+ *
+ * @param scrollState 由调用方持有 —— 测试靠 `maxValue == 0` 判断有没有超出一屏
+ * @param expiredMessage 授权过期提示，为 null 时不占位
+ * @param loginErrorText Trakt 授权失败提示，为 null 时不占位
+ */
+@Composable
+internal fun ActivationLoginContent(
+    machineCode: String,
+    machineStatus: String,
+    machineDetail: String?,
+    statusIsError: Boolean,
+    isLoading: Boolean,
+    keypadEnabled: Boolean,
+    submitEnabled: Boolean,
+    expiredMessage: String?,
+    loginErrorText: String?,
+    codeDescription: String?,
+    hazeState: HazeState,
+    scene: GlassScene,
+    scrollState: ScrollState,
+    onDigit: (Char) -> Unit,
+    onBackspace: () -> Unit,
+    onPaste: () -> Unit,
+    onSubmit: () -> Unit,
+    onWhatIsTrakt: () -> Unit,
+    modifier: Modifier = Modifier,
+    ticketSlot: @Composable () -> Unit = {},
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .imePadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 18.dp, vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.statusBarsPadding().height(TopInset))
+        Text(
+            text = stringResource(R.string.login_title),
+            fontSize = 34.sp,
+            lineHeight = 41.sp,
+            letterSpacing = (-2.04f).sp,
+            color = LoginTitleInk,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Serif
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = stringResource(R.string.login_subtitle),
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontSize = 14.sp,
+                lineHeight = 20.sp
+            ),
+            color = LoginSecondaryInk,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(TitleToMachineGap))
+        if (expiredMessage != null) {
+            Text(
+                text = expiredMessage,
+                fontSize = 16.sp,
+                lineHeight = 24.sp,
+                color = LoginSecondaryInk,
+                textAlign = TextAlign.Center
+            )
+        }
+        TicketMachine(
+            code = machineCode,
+            statusText = machineStatus,
+            detailText = machineDetail,
+            statusIsError = statusIsError,
+            isLoading = isLoading,
+            keypadEnabled = keypadEnabled,
+            submitEnabled = submitEnabled,
+            hazeState = hazeState,
+            scene = scene,
+            onDigit = onDigit,
+            onBackspace = onBackspace,
+            onPaste = onPaste,
+            onSubmit = onSubmit,
+            modifier = Modifier.padding(top = if (expiredMessage != null) 14.dp else 0.dp),
+            codeDescription = codeDescription,
+            ticketSlot = ticketSlot
+        )
+
+        if (loginErrorText != null) {
+            Text(
+                text = loginErrorText,
+                modifier = Modifier.padding(top = 8.dp),
+                color = LoginErrorInk,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center
+            )
+        }
+
+        // 「什么是 Trakt」从右上角挪到这里。标题上提 45dp 后，右上角那个按钮会压在标题上，
+        // 而它不是主动作，不值得为它在顶部留出一整行
+        TextButton(
+            onClick = onWhatIsTrakt,
+            colors = ButtonDefaults.textButtonColors(contentColor = LoginActionInk),
+            modifier = Modifier.padding(top = 4.dp)
+        ) {
+            Text(stringResource(R.string.login_what_is_trakt))
+            Spacer(modifier = Modifier.size(4.dp))
+            Icon(
+                Icons.AutoMirrored.Rounded.HelpOutline,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(20.dp))
+    }
+}
+
+/** 顶部余量。原先是 53dp 加一块场记板图标，两者加起来吃掉近 1/4 屏。 */
+private val TopInset = 8.dp
+
+/** 标题到机器的间隙。原先 90dp，是这一屏最大的一块可回收空间。 */
+private val TitleToMachineGap = 24.dp
 
 /** 取票码位数。六格键盘只收这么多位，满位才点亮取票键。 */
 private const val TICKET_CODE_DIGITS = 6
@@ -509,7 +561,11 @@ private fun MovieBackdrop(modifier: Modifier = Modifier) {
     val motifColor = LoginActionInk.copy(alpha = 0.45f)
     val reelColor = LoginActionInk.copy(alpha = 0.24f)
     val dotColor = LoginActionInk.copy(alpha = 0.13f)
-    Box(
+    // 四个影院符号按屏高比例摆，不写死 padding：原先那套死值（top 150/194、bottom 175/132）
+    // 是照旧版式调的，版式一压缩爆米花就压在机壳右上角上了。
+    // 比例的落点原则是「避开机器」—— 机器在这一版里大约占屏高的 18% 到 73%，
+    // 符号只能待在它上下两条窄带里，横向再靠到左右边缘，才不会跟居中的标题打架。
+    BoxWithConstraints(
         modifier
             .fillMaxSize()
             .drawBehind {
@@ -525,15 +581,50 @@ private fun MovieBackdrop(modifier: Modifier = Modifier) {
                 }
             }
     ) {
-        Text(text = "🎟", modifier = Modifier.align(Alignment.TopStart).padding(top = 150.dp, start = 22.dp).rotate(-18f), fontSize = 32.sp, color = motifColor)
-        Text(text = "🍿", modifier = Modifier.align(Alignment.TopEnd).padding(top = 194.dp, end = 26.dp).rotate(16f), fontSize = 32.sp, color = motifColor)
-        Text(text = "🎞", modifier = Modifier.align(Alignment.BottomStart).padding(bottom = 175.dp, start = 25.dp).rotate(22f), fontSize = 32.sp, color = motifColor)
-        Text(text = "🎬", modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 132.dp, end = 24.dp).rotate(-14f), fontSize = 32.sp, color = motifColor)
-        Box(
+        val screenHeight = maxHeight
+        Text(
+            text = "🎟",
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(top = screenHeight * 0.060f, start = 16.dp)
+                .rotate(-18f),
+            fontSize = 32.sp,
+            color = motifColor
+        )
+        Text(
+            text = "🍿",
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 315.dp)
-                .size(105.dp)
+                .padding(top = screenHeight * 0.100f, end = 18.dp)
+                .rotate(16f),
+            fontSize = 32.sp,
+            color = motifColor
+        )
+        Text(
+            text = "🎞",
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(bottom = screenHeight * 0.100f, start = 20.dp)
+                .rotate(22f),
+            fontSize = 32.sp,
+            color = motifColor
+        )
+        Text(
+            text = "🎬",
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = screenHeight * 0.055f, end = 20.dp)
+                .rotate(-14f),
+            fontSize = 32.sp,
+            color = motifColor
+        )
+        // 胶片轮挪到下半屏：它原来在机壳右上角后面，而机壳这一版起不再半透明，
+        // 压在机器底下的东西一点都看不见
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = screenHeight * 0.135f, end = 6.dp)
+                .size(88.dp)
                 .rotate(15f)
                 .drawBehind {
                     drawCircle(

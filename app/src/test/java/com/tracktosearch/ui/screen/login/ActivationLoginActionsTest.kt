@@ -54,9 +54,8 @@ class ActivationLoginActionsTest {
                 TicketMachine(
                     code = code,
                     statusText = "READY",
+                    detailText = null,
                     statusIsError = false,
-                    hintText = null,
-                    hintIsError = false,
                     isLoading = false,
                     keypadEnabled = keypadEnabled,
                     submitEnabled = submitEnabled,
@@ -192,7 +191,7 @@ class ActivationLoginActionsTest {
 
     @Test
     fun `每个激活错误码都有对应的像素屏短状态`() {
-        // 像素屏短状态与机器下方的完整文案是两套映射，任一边漏掉一个错误码，
+        // 像素屏第一行的短状态与第二行的完整文案是两套映射，任一边漏掉一个错误码，
         // 用户就会看到「取票失败」这类兜底文案，丢掉「下一步该干什么」。
         val errorCodes = listOf(
             "MIGRATION_DEVICE_NOT_FOUND",

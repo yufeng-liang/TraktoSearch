@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -83,6 +82,18 @@ import kotlin.math.roundToInt
 /** 取票码位数。六格与读屏播报都按它算，改长度只改这里。 */
 private const val CODE_LENGTH = 6
 
+/**
+ * 像素屏窗高。两行 —— 第一行短状态、第二行完整引导 —— 加上下 6dp 内边距和 3dp 行距。
+ * 锁死而不是随内容伸缩：只有一行时也留着第二行的位置，否则整台机器会随状态跳动。
+ */
+private val DisplayHeight = 52.dp
+
+/**
+ * 键帽高度。固定值而非 `aspectRatio` —— 后者会让键在宽屏上跟着变高，
+ * 而这一屏的全部意义是「一屏放得下」，键高必须与屏宽无关。52dp 仍高于 48dp 触达线。
+ */
+private val KeyHeight = 52.dp
+
 // 机壳不用 surface 而用深金属色：取票机是台设备，玻璃层该压出金属而不是纸面的观感。
 // 浅色主题一档暖灰金属，深色主题压得更深，都带 alpha 让背景还能透上来。
 private val MachineMetalLight = Color(0xFF6E6259)
@@ -109,8 +120,10 @@ private val SlotWallColor = Color(0xFF1A1310)
  * @param code 已输入的数字串，长度 0..6，调用方保证只含数字
  * @param codeDescription 六格整体的读屏文案，为 null 时按已输入位数自动生成。
  *   已取票态屏上那串是占位符不是真码，念它没有意义，由调用方给一句实话
- * @param statusText 像素屏上那行短状态，已是最终文案
- * @param hintText 机器下方的完整引导句（像素屏装不下的长句子），为 null 时不占位
+ * @param statusText 像素屏第一行的短状态，已是最终文案
+ * @param detailText 像素屏第二行的完整引导句，为 null 时第二行留空。
+ *   这句以前印在机器外面，搬进屏里是因为屏本来就装得下 —— 一行约 25 字（412dp 屏）
+ *   到 17 字（360dp 屏），而最长的那条引导是 22 字
  * @param keypadEnabled 已取票态整块键盘置灰但保留，机器不该只剩半截
  * @param ticketSlot 出票口里的内容，票从这里长出来
  */
@@ -118,9 +131,8 @@ private val SlotWallColor = Color(0xFF1A1310)
 internal fun TicketMachine(
     code: String,
     statusText: String,
+    detailText: String?,
     statusIsError: Boolean,
-    hintText: String?,
-    hintIsError: Boolean,
     isLoading: Boolean,
     keypadEnabled: Boolean,
     submitEnabled: Boolean,
@@ -224,28 +236,47 @@ internal fun TicketMachine(
             )
 
             val displayShape = RoundedCornerShape(4.dp)
+            val displayInk = if (statusIsError) DisplayInkError else DisplayInkNormal
+            // 两行合成一个语义节点整体播报：报错时两行本来就是一句完整的话
+            // （「网络不通」+「网络连接失败，请检查网络后重试。」），分开念会变成两条互相重复的通知
+            val displaySpeech = listOfNotNull(statusText, detailText).joinToString("，")
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 10.dp)
                     // 屏内文案长短不一，不锁死高度整台机器会随状态跳动
-                    .height(34.dp)
+                    .height(DisplayHeight)
                     .clip(displayShape)
                     .background(if (isDarkTheme) DisplayWellDark else DisplayWellLight, displayShape)
                     .border(1.dp, Color.Black.copy(alpha = 0.55f), displayShape)
-                    .padding(start = 10.dp),
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                    .semantics(mergeDescendants = true) { contentDescription = displaySpeech },
                 contentAlignment = Alignment.CenterStart
             ) {
-                // 字号不能再往上加档：像素字体走 12px 网格，pixelFontSize 向下取整到网格倍数，
-                // 中文 5-6 个字在这个宽度下 4 倍才不顶右边缘
-                Text(
-                    text = statusText,
-                    fontFamily = PixelFontFamily,
-                    fontSize = pixelFontSize(16.dp),
-                    color = if (statusIsError) DisplayInkError else DisplayInkNormal,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    // 第一行是主角。字号不能再往上加档：像素字体走 12px 网格，
+                    // pixelFontSize 向下取整到网格倍数，再高一档中文会顶右边缘
+                    Text(
+                        text = statusText,
+                        fontFamily = PixelFontFamily,
+                        fontSize = pixelFontSize(16.dp),
+                        color = displayInk,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    // 第二行是注释，降一档到 12px 网格：窄屏上也能装约 23 字，
+                    // 现有最长的引导文案是 22 字。maxLines 留 1 是兜底，以后加长文案会被截断而不是把屏撑破
+                    if (detailText != null) {
+                        Text(
+                            text = detailText,
+                            fontFamily = PixelFontFamily,
+                            fontSize = pixelFontSize(12.dp),
+                            color = displayInk.copy(alpha = 0.78f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
             }
 
             // 错误时六格整体左右抖两下。key 里带 statusText 是为了同一类错误连续发生两次也能重抖
@@ -366,20 +397,6 @@ internal fun TicketMachine(
             // 票紧贴凹槽下沿，中间不留 padding，看上去是从槽里长出来的
             ticketSlot()
         }
-
-        // 完整引导句放机器外面用系统字体：像素屏只装短状态，长句子用点阵字体读不清
-        if (hintText != null) {
-            Text(
-                text = hintText,
-                modifier = Modifier.padding(top = 8.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = if (hintIsError) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
-            )
-        }
     }
 }
 
@@ -447,7 +464,7 @@ private fun RowScope.DigitKey(digit: Char, enabled: Boolean, onClick: () -> Unit
         Text(
             text = digit.toString(),
             fontFamily = PixelFontFamily,
-            fontSize = pixelFontSize(20.dp),
+            fontSize = pixelFontSize(28.dp),
             color = MaterialTheme.colorScheme.onSurface
         )
     }
@@ -496,8 +513,7 @@ private fun RowScope.MachineKey(
     Box(
         modifier = Modifier
             .weight(1f)
-            // 1.5：常见宽度下每键约 100x67dp，触达面积够，也不会在宽屏上摊成细长条
-            .aspectRatio(1.5f)
+            .height(KeyHeight)
             .scale(scale)
             // .alpha() 必须排在 .background() 之前：它只作用于链上位于其后的绘制，
             // 放在后面就只压暗内容、压不暗键帽
