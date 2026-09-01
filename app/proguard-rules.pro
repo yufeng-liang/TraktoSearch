@@ -31,3 +31,19 @@
 -keep class net.sqlcipher.** { *; }
 -keep class net.sqlcipher.database.** { *; }
 -dontwarn net.sqlcipher.**
+
+# RichTap 触感 SDK：lite 版的 proguard.txt 是 0 字节，没带 consumer 规则，只能自己写。
+# 下面这几条抄自同版本 NETWORK 构建自带的 consumer 规则，去掉了 network 那两行
+# （lite 版里没有 com.richtap.sdk.network 包）。
+#
+# 必须 keep 的理由：
+# 1. SDK 内部用 getDeclaredMethod 反射调用自己的类，混淆掉方法名就找不到；
+# 2. android.os.DynamicEffect / android.os.HapticPlayer 是 ROM 侧共享库
+#    richtap-api 的编译期桩，运行期要按原名解析到系统实现；
+# 3. com.sysrichtap.haptic 是系统实现侧的包名，桩类会引用到。
+-keep class com.apprichtap.haptic.** { *; }
+-keep class com.sysrichtap.haptic.** { *; }
+-keep class android.os.DynamicEffect { *; }
+-keep class android.os.HapticPlayer { *; }
+-dontwarn android.os.VibrationAttributes
+-dontwarn android.os.VibrationEffect$Composition

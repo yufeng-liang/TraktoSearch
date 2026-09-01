@@ -22,6 +22,38 @@
 
 依赖许可证的完整文本通常随 Gradle 缓存或发布包提供；packaging.resources.excludes 只影响 APK 中部分重复许可证文件的打包方式，不代表项目取消了第三方归属义务。
 
+## Vendored 二进制
+
+`app/libs/richtap_sdk_lite.aar`
+
+| 项 | 值 |
+| --- | --- |
+| 组件 | RichTap Android SDK（Lite），瑞声科技 AAC Technologies |
+| 用途 | 线性马达自定义波形触感：`.he` 波形、包络（振幅 + 频率曲线）、50 个预置效果 |
+| 大小 | 98 288 字节 |
+| SHA-256 | `9a942e397e8236fb67e57e4379ed3f3ac19dacc2c53a1ae957a81691be08501f` |
+| 许可证 | MIT，Copyright (c) 2022 RichTaper |
+| 取得方式 | [richtap-haptics/RichTapBounce](https://github.com/richtap-haptics/RichTapBounce) 的 `app/libs/richtap_sdk_lite.aar` |
+| 声明权限 | 仅 `android.permission.VIBRATE` |
+
+上游没有发布到 Maven，只把二进制捆在 GitHub 上的 MIT 示例工程里，因此只能 vendored
+到 `app/libs/`。MIT 许可证位于该仓库根目录，覆盖仓库内容。升级时需重新记录大小与
+SHA-256，并复核许可证文件是否变更。
+
+**必须取 Lite 版，不能取 NETWORK 版。** 同一 SDK 的
+`RichTap_ASDK_2.2.0_20250313_NETWORK_release.aar`（见 RichTapDynamics、
+RichTapAudioPlayer、RichTapVideoPlayer 三个示例工程）在 `RichTapUtils.init(Context)`
+里会反射调用 `com.richtap.sdk.network.RTAPIService.track()`，向
+`https://platform.richtap-haptics.com/richtap/sys/eventTrackingSdk/saveTrackingSdk`
+上报事件。本项目有隐私政策页，不引入未声明的第三方数据上报。Lite 版不含
+`com/richtap/sdk/network/` 包（实测 0 个类），SDK 内部那次反射取不到类会被捕获，
+只留一行 `Log.d`，功能不受影响。
+
+该 aar 自带 `<uses-library android:name="richtap-api" android:required="false" />`。
+`richtap-api` 是厂商 ROM 侧提供的共享库，缺失时应用照样安装运行；运行期以
+`RichTapUtils.isSupportedRichTap()` 判定，不支持则整层退回 AOSP 触感通路
+（`HapticFeedbackConstants` / `VibrationEffect`）。
+
 ## 随包字体
 
 `app/src/main/res/font/` 下共 14 个字体：彩蛋序列用的 13 个来自 Google Fonts，

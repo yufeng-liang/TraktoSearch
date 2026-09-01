@@ -398,6 +398,26 @@ dependencies {
 
 implementation(libs.skydoves.colorpicker)
 
+    /**
+     * RichTap 触感 SDK（瑞声科技），vendored 二进制，96 KiB。
+     *
+     * 没有 maven 坐标 —— 官方只把它捆在 GitHub 上的 MIT 示例工程里，所以只能落到 libs/。
+     * 版本与校验和记在 `THIRD-PARTY-NOTICES.md`，升级时一并更新。
+     *
+     * **取的是 `richtap_sdk_lite.aar`（来自 RichTapBounce），不是 RichTapDynamics /
+     * RichTapAudioPlayer / RichTapVideoPlayer 里那个 `RichTap_ASDK_2.2.0_..._NETWORK_release.aar`。**
+     * 后者的 `RichTapUtils.init(Context)` 会反射调用 `com.richtap.sdk.network.RTAPIService.track()`，
+     * POST 到 `https://platform.richtap-haptics.com/richtap/sys/eventTrackingSdk/saveTrackingSdk`。
+     * 本应用有隐私政策页，不接受未声明的第三方上报。lite 版里 `com/richtap/sdk/network/`
+     * 一个类都没有（实测 0 个），那次反射调用取不到类会被 catch 掉，只留一行 Log.d。
+     *
+     * 只要 `VIBRATE`（app 已声明）。aar 自带
+     * `<uses-library android:name="richtap-api" android:required="false" />` ——
+     * `richtap-api` 是 ROM 侧共享库，没有它照样装得上，运行期用
+     * `RichTapUtils.isSupportedRichTap()` 判定，不支持就整层退到 AOSP 通路。
+     */
+    implementation(files("libs/richtap_sdk_lite.aar"))
+
     // 单元测试
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
