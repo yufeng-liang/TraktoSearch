@@ -7,7 +7,6 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -51,6 +50,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
@@ -63,6 +63,9 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
@@ -96,6 +99,9 @@ import kotlinx.coroutines.withContext
 
 /** 头部海报宽度：固定 118dp（2:3 比例 → 177dp 高）。为什么不能再跟随右列见下方 Row 注释。 */
 private val HEADER_POSTER_WIDTH = 118.dp
+
+/** 海报高度，由 2:3 比例算出。右列靠它撑到同高，见右列注释。 */
+private val HEADER_POSTER_HEIGHT = HEADER_POSTER_WIDTH * 1.5f
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -304,43 +310,99 @@ internal fun DetailHeaderContent(
 
             Spacer(modifier = Modifier.width(14.dp))
 
-            // 标题/原名/元信息胶囊
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                // 标题：放开两行。原先塞在 Box(height(28.dp)) 里被迫 maxLines = 1，
-                // 《银翼杀手 2049 加长版》这类长片名直接被切掉后半段
-                Text(
-                    text = uiState.displayTitle,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = onPosterColor,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 26.sp
-                )
-
-                // 原名：有值才占位。原先固定 18dp 槽，纯中文片源（无原名）也留一条死白
-                if (uiState.originalTitle.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(2.dp))
+            // 标题/原名/元信息胶囊 + 操作按钮组。
+            //
+            // 原先按钮组排在评分卡下方整宽一行，而胶囊底边到海报底边之间约 90dp 是死白。
+            // 现在那块让给按钮组：文字块顶对齐，按钮组底边与海报底边平齐，头部整体矮一截，
+            // 演职员与预告片能上移一屏。撑高与对齐交给 [HeaderRightColumn]，那里有为什么
+            // 不能用 Spacer(weight) / Arrangement.SpaceBetween 的实测记录。
+            HeaderRightColumn(
+                minHeight = HEADER_POSTER_HEIGHT,
+                modifier = Modifier.weight(1f),
+                text = {
+                Column {
+                    // 标题：放开两行。原先塞在 Box(height(28.dp)) 里被迫 maxLines = 1，
+                    // 《银翼杀手 2049 加长版》这类长片名直接被切掉后半段
                     Text(
-                        text = stringResource(R.string.detail_original_title, uiState.originalTitle),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = onPosterVariantColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        text = uiState.displayTitle,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = onPosterColor,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 26.sp
+                    )
+
+                    // 原名：有值才占位。原先固定 18dp 槽，纯中文片源（无原名）也留一条死白
+                    if (uiState.originalTitle.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = stringResource(R.string.detail_original_title, uiState.originalTitle),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = onPosterVariantColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    // 类型/国家/日期/时长：原先是四个 18dp 固定槽竖排，同字号同颜色分不出主次，
+                    // 空字段照样占位。收成一行胶囊，FlowRow 装不下自然换行
+                    val metaChips = buildDetailMetaChips(uiState)
+                    if (metaChips.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        DetailMetaChips(chips = metaChips, contentColor = onPosterColor)
+                    }
+                }
+                },
+                actions = {
+                // 操作按钮组：想看 / 已看 / 评分。右列三等分，图标 + 文字两行。
+                // 按钮组属于 Glass overlay：置于采样源之外（LocalBackdrop=null），
+                // 避免把自身 drawBackdrop 录回头部采样源造成 RenderThread 递归。
+                CompositionLocalProvider(LocalBackdrop provides null) {
+                    ActionButtonRow(
+                        actions = listOf(
+                            ActionItem(
+                                icon = if (isMarkedWatchlist) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
+                                label = stringResource(if (isMarkedWatchlist) R.string.detail_marked_watchlist else R.string.detail_mark_watchlist),
+                                selected = isMarkedWatchlist,
+                                enabled = !isMarkingWatchlist,
+                                isLoading = isMarkingWatchlist,
+                                onClick = {
+                                    view.performHaptic(HapticType.TICK)
+                                    onToggleWatchlist()
+                                }
+                            ),
+                            ActionItem(
+                                icon = if (isMarkedWatched) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
+                                label = stringResource(if (isMarkedWatched) R.string.detail_marked_watched else R.string.detail_mark_watched),
+                                selected = isMarkedWatched,
+                                enabled = !isMarkingWatched,
+                                isLoading = isMarkingWatched,
+                                onClick = {
+                                    view.performHaptic(HapticType.TICK)
+                                    onToggleWatched()
+                                }
+                            ),
+                            ActionItem(
+                                icon = if (uiState.userRating != null && uiState.userRating > 0) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                                label = stringResource(if (uiState.userRating != null && uiState.userRating > 0) R.string.detail_rated else R.string.detail_rate),
+                                selected = uiState.userRating != null && uiState.userRating > 0,
+                                enabled = !uiState.isRating,
+                                isLoading = uiState.isRating,
+                                onClick = {
+                                    view.performHaptic(HapticType.TICK)
+                                    onShowRatingDialog()
+                                }
+                            )
+                        ),
+                        verticalPadding = 7.dp
                     )
                 }
-
-                // 类型/国家/日期/时长：原先是四个 18dp 固定槽竖排，同字号同颜色分不出主次，
-                // 空字段照样占位。收成一行胶囊，FlowRow 装不下自然换行
-                val metaChips = buildDetailMetaChips(uiState)
-                if (metaChips.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    DetailMetaChips(chips = metaChips, contentColor = onPosterColor)
                 }
-            }
+            )
         }
 
-        // 四平台评分：整宽独占一行。原先挤在海报右侧的半屏列里做 2×2 网格，
+        // 四平台评分：整宽独占一行，紧贴海报块下方。原先挤在海报右侧的半屏列里做 2×2 网格，
         // 每个平台只有约 110dp 宽，分数被压到 15sp 还得靠一层文字阴影凑对比度。
         if (
             uiState.ratings != null &&
@@ -362,51 +424,6 @@ internal fun DetailHeaderContent(
             )
         } else {
             RatingsLoadingPlaceholder(immersionColor = posterColor)
-        }
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // 操作按钮组：想看 / 已看 / 评分。整宽三等分，图标 + 文字两行恢复正常高度。
-        // 按钮组属于 Glass overlay：置于采样源之外（LocalBackdrop=null），
-        // 避免把自身 drawBackdrop 录回头部采样源造成 RenderThread 递归。
-        CompositionLocalProvider(LocalBackdrop provides null) {
-                ActionButtonRow(
-                    actions = listOf(
-                        ActionItem(
-                            icon = if (isMarkedWatchlist) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
-                            label = stringResource(if (isMarkedWatchlist) R.string.detail_marked_watchlist else R.string.detail_mark_watchlist),
-                            selected = isMarkedWatchlist,
-                            enabled = !isMarkingWatchlist,
-                            isLoading = isMarkingWatchlist,
-                            onClick = {
-                                view.performHaptic(HapticType.TICK)
-                                onToggleWatchlist()
-                            }
-                        ),
-                        ActionItem(
-                            icon = if (isMarkedWatched) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
-                            label = stringResource(if (isMarkedWatched) R.string.detail_marked_watched else R.string.detail_mark_watched),
-                            selected = isMarkedWatched,
-                            enabled = !isMarkingWatched,
-                            isLoading = isMarkingWatched,
-                            onClick = {
-                                view.performHaptic(HapticType.TICK)
-                                onToggleWatched()
-                            }
-                        ),
-                        ActionItem(
-                            icon = if (uiState.userRating != null && uiState.userRating > 0) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-                            label = stringResource(if (uiState.userRating != null && uiState.userRating > 0) R.string.detail_rated else R.string.detail_rate),
-                            selected = uiState.userRating != null && uiState.userRating > 0,
-                            enabled = !uiState.isRating,
-                            isLoading = uiState.isRating,
-                            onClick = {
-                                view.performHaptic(HapticType.TICK)
-                                onShowRatingDialog()
-                            }
-                        )
-                    ),
-                    verticalPadding = 7.dp
-                )
         }
         Spacer(modifier = Modifier.height(14.dp))
 
@@ -546,6 +563,46 @@ internal fun DetailHeaderContent(
         } // end if (contentReady)
     }
     } // end CompositionLocalProvider(LocalContentColor)
+}
+
+// ==================== 头部右列 ====================
+
+/**
+ * 头部海报右侧那一列：[text] 顶对齐，[actions] 底边对齐到 [minHeight]（传海报高度）。
+ *
+ * 两者加起来超过 [minHeight] 时按内容实高排版，[actions] 顺势下移 —— 不重叠也不裁切。
+ *
+ * 为什么不用 `Column` + `Spacer(weight)` 或 `Arrangement.SpaceBetween`：这一列的高度上限
+ * 取决于宿主。详情页把头部放在 LazyColumn 的 item 里，maxHeight 是无穷：
+ * - `SpaceBetween` 只按内容高度分配剩余空间，`heightIn(min=)` 撑出来的那截它看不见，
+ *   按钮组照旧紧跟在胶囊下方（实测顶边 127dp，而海报底边在 209dp）。
+ * - `Spacer(Modifier.weight(1f))` 反过来太贪：主轴有界时它吃满 maxHeight，
+ *   把按钮组顶到屏幕底部（实测底边 458dp）。
+ * 一个只认自己 [minHeight] 的 Layout 与宿主约束无关，两种宿主下结果一致。
+ */
+@Composable
+private fun HeaderRightColumn(
+    minHeight: Dp,
+    modifier: Modifier = Modifier,
+    text: @Composable () -> Unit,
+    actions: @Composable () -> Unit
+) {
+    Layout(
+        contents = listOf(text, actions),
+        modifier = modifier
+    ) { (textMeasurables, actionMeasurables), constraints ->
+        // 宽度沿用父级给的精确值（Row 的 weight 已定死），高度放开由内容自报
+        val childConstraints = constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity)
+        val textPlaceable = textMeasurables.first().measure(childConstraints)
+        val actionsPlaceable = actionMeasurables.first().measure(childConstraints)
+        val height = constraints.constrainHeight(
+            maxOf(minHeight.roundToPx(), textPlaceable.height + actionsPlaceable.height)
+        )
+        layout(constraints.maxWidth, height) {
+            textPlaceable.place(0, 0)
+            actionsPlaceable.place(0, height - actionsPlaceable.height)
+        }
+    }
 }
 
 // ==================== 头部元信息胶囊 ====================
