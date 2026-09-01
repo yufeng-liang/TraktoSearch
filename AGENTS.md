@@ -95,7 +95,7 @@ CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments
 - AuthManager.check() 收到 401 后刷新成功只允许重试一次 check；重试仍 401 应直接失败，禁止再次进入刷新递归，否则会 StackOverflow。
 - 单测优先保留认证/安全/缓存一致性/数据库与网络契约及用户交互；仅静态渲染、存在性、不崩溃、精确视觉参数和同一实现分支的重复空输入/CRUD 测试属于低收益，设计调整时应删除或合并，不要靠同步旧快照维持总量。
 - Robolectric 测试若不验证 Application 启动，且清单 Application 会启动 WorkManager/后台线程，使用 `@Config(application = android.app.Application::class)` 隔离；否则沙箱销毁后的残留线程可能污染下一用例。
-- Git worktree 建新分支后 local.properties 不在版本库，须手动从 F:\trae-project\local.properties 复制到 worktree 目录
+- Git worktree 建新分支后 local.properties 不在版本库。本机 `ANDROID_HOME=H:\android\Sdk` 已设，缺 local.properties 也能构建（2026-09-01 实测 worktree 内无该文件仍 assembleDebug 成功）；只有该环境变量失效时才需从 F:\trae-project\local.properties 手动复制
 - 单测跨用例污染优先查 preferencesDataStore：委托是进程单例，各用例新建 Repository 仍读同一份磁盘数据；PersistentTtlCache 落盘还有 400ms 攒批且跑在 Repository 私有 scope 上，用例结束后仍会补写。setup 清 persistentCaches、teardown 取消落盘 scope 再清一次
 - Watchlist 四类离线快照共用 `media_items` 表，主键必须包含 `(traktId, type)`：Trakt 电影/剧集 ID 分属不同命名空间，想看/已看也可能同号；只用 `traktId` 会让后写分类覆盖电影快照，冷启动列表少一项并导致后续卡片整体前移。改主键时同步加无损 Room 迁移与跨分类同号回归测试。
 - 详情页「以 TMDB 为准」类优先级改动须区分纯豆瓣条目（tmdbId=0）：无 TMDB 数据时无条件保留当前值会把豆瓣/Rexxar 结果永久挡在 UI 外
