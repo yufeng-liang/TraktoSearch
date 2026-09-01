@@ -14,6 +14,8 @@ import com.tracktosearch.data.ai.AiQuizAnswer
 import com.tracktosearch.data.ai.AiQuizQuestionType
 import com.tracktosearch.data.ai.AiQuizResult
 import com.tracktosearch.data.ai.AiTasteAnalysis
+import com.tracktosearch.data.ai.AiVoiceCapture
+import com.tracktosearch.data.ai.AiVoiceCaptureEvent
 import com.tracktosearch.data.ai.AiWatchedTitleDto
 import com.tracktosearch.data.ai.AiMediaIdsDto
 import com.tracktosearch.data.ai.AiDailyKnowledge
@@ -69,6 +71,26 @@ enum class AiActivationState {
 
 private const val WATCHED_TITLES_TTL_MS = 10 * 60 * 1000L
 
+/**
+ * 松手后继续采集的尾音宽限窗口。
+ *
+ * KWS 配的是 numTrailingBlanks = 2：关键词说完之后还要约 80–150 ms 的后续音频才会确认命中。
+ * 手指一抬就取消采集，说完名字立刻松手的用户根本给不出这段尾音，明明喊对了却收到
+ * ACTIVATION_NOT_MATCHED，还白烧一次机会——而「说完就松手」恰恰是最自然的操作。
+ * 250 ms 足够覆盖那 80–150 ms；此时用户已经停口，进来的正是 KWS 要的近似静音帧。
+ */
+private const val VOICE_HOLD_TAIL_GRACE_MS = 250L
+
+/**
+ * 按住计时步长。
+ *
+ * 按住时长必须用 delay 累加而不是只读墙钟：本 ViewModel 由 Hilt 构造，
+ * 没法额外注入一个可替换的时钟（构造参数的默认值 Dagger 不认），
+ * 而 delay 在单测里跟虚拟时间走，500 ms 下限与宽限窗口不算时长这两条才断言得出来。
+ * 50 ms 一步，对 500 ms 的下限判定精度足够。
+ */
+private const val VOICE_HOLD_CLOCK_TICK_MS = 50L
+
 data class AiSpriteUiState(
     val characters: List<AiCharacter> = AiCharacterCatalog.all,
     val selectedCharacterId: String = "usagi",
@@ -77,8 +99,10 @@ data class AiSpriteUiState(
     val nickname: String? = null,
     val activationState: AiActivationState = AiActivationState.IDLE,
     val activationAttempt: Int = 0,
-    // 文字兜底入口：语音失败或麦克风不可用后锁存为 true，换角色/撤销授权时复位
-    val textActivationOffered: Boolean = false,
+    // 平滑后的电平 0..1：只喂按住时的电平带与呼吸光环，任何判定都不看它（判定用未平滑的峰值）
+    val voiceLevel: Float = 0f,
+    // 手指是否已拖出按钮范围：只换按钮文案（松手激活 / 松手取消），不影响采集
+    val voiceCancelArmed: Boolean = false,
     val textActivationAttempt: Int = 0,
     val activationMessage: String? = null,
     val quota: com.tracktosearch.data.ai.AiQuota? = null,
@@ -130,7 +154,7 @@ class AiSpriteViewModel @Inject constructor(
     private val traktRepository: TraktRepository,
     private val overlayStorage: com.tracktosearch.data.local.AiSpriteOverlayStorage,
     private val aiTasteStorage: com.tracktosearch.data.local.AiTasteStorage,
-    private val voiceRecognizer: com.tracktosearch.data.ai.AiKwsRecognizer,
+    private val voiceCapture: AiVoiceCapture,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(
@@ -160,6 +184,31 @@ class AiSpriteViewModel @Inject constructor(
     private var activationRestored = false
     private var previewJob: Job? = null
     private var requestJob: Job? = null
+    /** 按住采集 Job：取消它才会释放麦克风与 KWS 解码锁，每条收尾路径都必须取消。 */
+    private var voiceCaptureJob: Job? = null
+    /** 松手后的尾音宽限计时 Job，见 VOICE_HOLD_TAIL_GRACE_MS。 */
+    private var voiceTailJob: Job? = null
+    /**
+     * 本次按住是否已经收尾。
+     *
+     * 一次按住只允许收尾一次，且只有活着的按住才允许改状态。命中会自行收尾进 VERIFYING
+     * 直到 SUCCESS，此时 UI 会换掉激活面板并连带取消手势协程，手势层的 finally 会补发一次
+     * onActivatePressCancel()——那次必须是空操作，否则刚激活成功的角色和问候气泡会被抹回 IDLE。
+     * 10 秒上限自行收尾后迟到的真实松手同理。初值 true 表示「当前没有按住」，
+     * 因此没按过就来的松手/取消一律无视；每次 onActivatePressStart() 重新置 false。
+     */
+    private var voiceHoldFinished = true
+    /** 按住起点（单调纳秒）：真机上以它为准。 */
+    private var voiceHoldStartedAtNanos = 0L
+    /** delay 累加出的按住时长：单测里以它为准，见 VOICE_HOLD_CLOCK_TICK_MS。 */
+    private var voiceTickedHoldMs = 0L
+    /** 松手瞬间的时长快照，非空即已进入尾音宽限窗口；宽限窗口不算进按住时长。 */
+    private var voiceReleasedHoldMs: Long? = null
+    /** 本次按住的归一化电平峰值，取未平滑值：平滑的下降斜坡会把峰值拖低，喊够响也会被判太轻。 */
+    private var voicePeakLevel = 0f
+    /** 本次按住最后一次命中的角色 ID；喊成别的角色也要带到收尾判定里，不能当没命中。 */
+    private var voiceMatchedCharacterId: String? = null
+    private var voiceCaptureUnavailable = false
     /** 请求代际用于隔离已取消请求的 finally，避免旧请求覆盖新请求的加载态。 */
     private var requestGeneration = 0L
     private var recentQuizIds = emptyList<String>()
@@ -279,6 +328,8 @@ class AiSpriteViewModel @Inject constructor(
     /** 撤销授权后丢弃当前账号的 AI 结果，但保留角色目录和游客试听能力。 */
     private fun clearPrivateStateAfterUnauthorized() {
         invalidateCurrentRequest()
+        // 正在按住时被撤销授权：麦克风必须当场还回去，不能留着录一段谁也不会用的音频
+        discardVoiceHold()
         previewJob?.cancel()
         previewJob = null
         recentQuizIds = emptyList()
@@ -291,7 +342,8 @@ class AiSpriteViewModel @Inject constructor(
                 activatedCharacterId = null,
                 activationState = AiActivationState.IDLE,
                 activationAttempt = 0,
-                textActivationOffered = false,
+                voiceLevel = 0f,
+                voiceCancelArmed = false,
                 textActivationAttempt = 0,
                 activationMessage = null,
                 quota = null,
@@ -338,15 +390,20 @@ class AiSpriteViewModel @Inject constructor(
                 errorCode = null,
                 // 换角色重置失败尝试计数，避免某角色语音激活 5 次失败后永久锁死所有角色
                 activationAttempt = 0,
-                // 文字兜底入口也跟着角色重置：新角色还没试过语音，先别急着给兜底
-                textActivationOffered = false,
+                // 文字次数同样按角色重置：两条路各 5 次，互不影响
                 textActivationAttempt = 0
             )
         }
         scheduleCharacterPreview()
     }
 
-    fun activate(context: Context) {
+    /**
+     * 按下主按钮：进 RECORDING 并开始采集，此时不计次数。
+     *
+     * 计数点从「按下」挪到「实际提交」（见 [finishVoiceHold]）：误触碰一下按钮不该烧掉
+     * 用户 5 次机会里的一次。开录前的四道闸与旧的一次性激活完全一致，一条都不放。
+     */
+    fun onActivatePressStart() {
         val state = _uiState.value
         if (!state.isAuthorized) {
             setError("AUTH_REQUIRED")
@@ -358,119 +415,260 @@ class AiSpriteViewModel @Inject constructor(
             return
         }
         if (!canRequestVoiceActivation(state.activationAttempt)) {
-            // 语音次数用满：不再录音，但把文字兜底开出来，别把用户彻底堵死
-            _uiState.update { it.copy(textActivationOffered = true, errorCode = "ACTIVATION_RETRY_LIMIT") }
+            // 语音次数用满：不再开录。文字入口已改成常驻，这里只需说明为什么按不动
+            setError("ACTIVATION_RETRY_LIMIT")
             return
         }
         if (!canActivateCharacter(character, state)) {
             setError("ACTIVATION_UNAVAILABLE")
             return
         }
-        val attempt = state.activationAttempt + 1
+        // 上一段按住的残留（尾音宽限窗口里又按下来）先整段丢掉，再开新的一段
+        discardVoiceHold()
+        voiceHoldFinished = false
+        voiceHoldStartedAtNanos = System.nanoTime()
+        voiceTickedHoldMs = 0L
+        voiceReleasedHoldMs = null
+        voicePeakLevel = 0f
+        voiceMatchedCharacterId = null
+        voiceCaptureUnavailable = false
         _uiState.update {
             it.copy(
-                activationAttempt = attempt,
                 activationState = AiActivationState.RECORDING,
                 activationMessage = null,
+                voiceLevel = 0f,
+                voiceCancelArmed = false,
                 errorCode = null
             )
         }
-        requestJob?.cancel()
-        requestJob = viewModelScope.launch {
-            val pcm = AiAudioRecorder.recordPcmOnce(context)
-            if (pcm == null) {
-                _uiState.update {
-                    it.copy(
-                        activationState = AiActivationState.FAILED,
-                        textActivationOffered = true,
-                        errorCode = "AUDIO_UNAVAILABLE"
-                    )
-                }
-                return@launch
-            }
-            _uiState.update { it.copy(activationState = AiActivationState.VERIFYING) }
-            // 本地离线关键词识别：录音不出设备，不再上传音频，服务端零 ASR 调用
-            when (val match = voiceRecognizer.recognize(pcm)) {
-                com.tracktosearch.data.ai.AiVoiceMatch.Unavailable -> {
-                    _uiState.update {
-                        it.copy(
-                            activationState = AiActivationState.FAILED,
-                            textActivationOffered = true,
-                            errorCode = "AUDIO_UNAVAILABLE"
-                        )
-                    }
-                }
-                com.tracktosearch.data.ai.AiVoiceMatch.NoMatch -> {
-                    _uiState.update {
-                        it.copy(
-                            activationState = AiActivationState.FAILED,
-                            textActivationOffered = true,
-                            errorCode = "ACTIVATION_NOT_MATCHED"
-                        )
-                    }
-                }
-                is com.tracktosearch.data.ai.AiVoiceMatch.Matched -> {
-                    if (match.characterId != character.id) {
-                        // 喊的是别的角色的名字：与服务端旧行为一致，按未匹配处理
-                        _uiState.update {
-                            it.copy(
-                                activationState = AiActivationState.FAILED,
-                                textActivationOffered = true,
-                                errorCode = "ACTIVATION_NOT_MATCHED"
-                            )
-                        }
-                        return@launch
-                    }
-                    // 本地命中后走服务端文字激活：换取角色 ACK 语音与配额记录，
-                    // spokenName 是角色标准名，服务端 matchesActivationName 必然命中
-                    aiRepository.activate(
-                        friendId = authManager.friendId.value.orEmpty(),
-                        request = AiActivateRequest(
-                            characterId = character.id,
-                            spokenName = character.activationWord,
-                            sessionId = spriteSessionId
-                        )
-                    ).onSuccess { activation ->
-                        _uiState.update {
-                            it.copy(
-                                activatedCharacterId = if (activation.activated) character.id else it.activatedCharacterId,
-                                activationState = if (activation.activated) AiActivationState.SUCCESS else AiActivationState.FAILED,
-                                activationMessage = activation.activationPhrase.takeIf { activation.activated && it.isNotBlank() },
-                                quota = activation.quota ?: it.quota,
-                                // 语音没识别出来也算"走不通"，此时才把文字入口露出来
-                                textActivationOffered = it.textActivationOffered || !activation.activated,
-                                errorCode = if (activation.activated) null else "ACTIVATION_NOT_MATCHED"
-                            )
-                        }
-                        activation.audio?.let { _audioEvents.emit(it) }
-                        if (activation.activated) {
-                            // 落盘激活态：跨进程重启和详情页这类无激活入口的页面都要认这个角色
-                            aiRepository.saveActivatedCharacterId(
-                                authManager.friendId.value.orEmpty(),
-                                character.id
-                            )
-                            loadGreeting(character.id)
-                        }
-                    }.onFailure { error ->
-                        _uiState.update {
-                            it.copy(
-                                activationState = AiActivationState.FAILED,
-                                textActivationOffered = true,
-                                errorCode = errorCode(error)
-                            )
-                        }
-                    }
-                }
+        voiceCaptureJob = viewModelScope.launch {
+            // 计时与采集同生共死：取消采集 job 会一并停掉计时，不会留个协程空转到 10 秒
+            launch { runVoiceHoldClock() }
+            try {
+                voiceCapture.capture().collect { event -> onVoiceCaptureEvent(event) }
+            } catch (e: CancellationException) {
+                // 收尾/取消都靠取消协程，取消异常必须原样往上走，不能被当成录音失败
+                throw e
+            } catch (_: Exception) {
+                // 采集实现自己已经把设备异常收敛成 Unavailable，这里只兜漏出来的那些：
+                // viewModelScope 里未捕获的异常会直接崩掉进程，一次按住不该带走整个 App
+                onVoiceCaptureEvent(AiVoiceCaptureEvent.Unavailable)
             }
         }
     }
 
-    /** 麦克风权限被拒绝或设备没有录音源：语音这条路当场判死，直接把文字入口开出来。 */
+    /**
+     * 正常松手：进尾音宽限窗口，窗口结束后按 [resolveVoiceHoldOutcome] 收尾。
+     *
+     * 没有活着的按住时是空操作（判定见 [scheduleVoiceHoldFinish]）：命中和 10 秒上限
+     * 都会自行收尾，之后迟到的这次松手不能再改一遍状态、更不能再烧一次次数。
+     */
+    fun onActivatePressEnd() {
+        scheduleVoiceHoldFinish()
+    }
+
+    /**
+     * 上滑取消：立刻停采集回 IDLE，不计次数不报错。
+     *
+     * 取消掉的按住整段作废，没有尾音要补，所以不给宽限窗口。
+     * 没有活着的按住时同样是空操作：命中自行收尾进 SUCCESS 后 UI 会换掉激活面板，
+     * 手势协程被连带取消，其 finally 会补发一次取消；那时把状态推回 IDLE
+     * 会把刚激活成功的角色和问候气泡一起抹掉。按下时被闸门挡住（次数用满等）也是同理，
+     * 手势层照样补一次取消，不能顺手把刚设的错误码清掉，那样用户就看不到按不动的原因了。
+     */
+    fun onActivatePressCancel() {
+        if (voiceHoldFinished) return
+        discardVoiceHold()
+        _uiState.update {
+            it.copy(
+                activationState = AiActivationState.IDLE,
+                voiceLevel = 0f,
+                voiceCancelArmed = false,
+                errorCode = null
+            )
+        }
+    }
+
+    /** 手指是否已拖出按钮范围：只驱动按钮文案，不动采集也不动次数。 */
+    fun onVoiceCancelArmedChanged(armed: Boolean) {
+        if (_uiState.value.voiceCancelArmed == armed) return
+        _uiState.update { it.copy(voiceCancelArmed = armed) }
+    }
+
+    /**
+     * 麦克风权限刚授予：只置提示码，绝不自动开录。
+     *
+     * 权限弹窗一消失就自己开录的话，用户刚点完「允许」手指早已离开按钮，
+     * 录进去的是一段空白，还要为此烧掉一次机会。让用户自己再按一次。
+     */
+    fun onVoicePermissionGranted() {
+        setError("AUDIO_PERMISSION_GRANTED")
+    }
+
+    /** 丢弃当前按住：停采集、停宽限计时，不写任何状态，供取消/撤销授权/开新一段复用。 */
+    private fun discardVoiceHold() {
+        voiceHoldFinished = true
+        // 泄漏的采集 job 同时占着麦克风和 KWS 解码锁：麦克风不还，下一次按住拿不到设备；
+        // 解码锁不还，之后每一次 openSession() 都会永久挂起
+        voiceCaptureJob?.cancel()
+        voiceCaptureJob = null
+        // 从宽限计时协程内部调回来时，这里取消的是它自己，没有问题：
+        // 本函数不挂起，剩下的语句照常执行到底
+        voiceTailJob?.cancel()
+        voiceTailJob = null
+        voiceReleasedHoldMs = null
+    }
+
+    /** 当前按住已持续多久：真机以单调墙钟为准，虚拟时间里以 delay 累加值为准，两者都只会低估。 */
+    private fun currentVoiceHoldMs(): Long =
+        maxOf(voiceTickedHoldMs, (System.nanoTime() - voiceHoldStartedAtNanos) / 1_000_000L)
+
+    /**
+     * 按住计时兼 10 秒上限。
+     *
+     * 计时为什么用 delay 累加见 VOICE_HOLD_CLOCK_TICK_MS。到上限走与正常松手完全相同的
+     * 收尾路径（含尾音宽限窗口）：按到 10 秒的用户通常还在说，同样得有那段尾音才确认得了命中。
+     */
+    private suspend fun runVoiceHoldClock() {
+        while (voiceTickedHoldMs < VOICE_HOLD_MAX_DURATION_MS) {
+            delay(VOICE_HOLD_CLOCK_TICK_MS)
+            voiceTickedHoldMs += VOICE_HOLD_CLOCK_TICK_MS
+        }
+        scheduleVoiceHoldFinish()
+    }
+
+    /** 采集事件落地：电平只喂显示与峰值，命中和设备不可用直接决定收尾时机。 */
+    private fun onVoiceCaptureEvent(event: AiVoiceCaptureEvent) {
+        when (event) {
+            is AiVoiceCaptureEvent.Level -> {
+                // 采集层报的是原始线性 RMS，而 VOICE_SILENCE_LEVEL / VOICE_TOO_QUIET_LEVEL
+                // 是归一化 0..1 上的阈值：直接拿 RMS 去比，正常说话（RMS 0.04 约 -28 dBFS）
+                // 会被判成「没听到声音」，用户明明喊了却被要求去检查麦克风
+                val normalized = normalizeVoiceLevel(event.level)
+                if (normalized > voicePeakLevel) voicePeakLevel = normalized
+                _uiState.update { it.copy(voiceLevel = smoothVoiceLevel(it.voiceLevel, normalized)) }
+            }
+            is AiVoiceCaptureEvent.Matched -> {
+                // 同一段按住里用户可能把名字喊两遍：流每次命中后 reset，第二遍还会再报一次。
+                // 第一遍即终局，重复那次会被 finishVoiceHold 的已收尾标记挡掉
+                voiceMatchedCharacterId = event.characterId
+                // 喊中所选角色立刻收尾不等松手；喊的是别人则继续录，
+                // 由收尾判定按电平决定落 NOT_MATCHED 还是 TOO_QUIET
+                if (event.characterId == _uiState.value.selectedCharacterId) finishVoiceHold()
+            }
+            AiVoiceCaptureEvent.Unavailable -> {
+                voiceCaptureUnavailable = true
+                finishVoiceHold()
+            }
+        }
+    }
+
+    /**
+     * 排程收尾：松手后不立刻停采集，再多收一段尾音（原因见 VOICE_HOLD_TAIL_GRACE_MS）。
+     *
+     * 时长快照在这里取：宽限窗口是我们自己多录的，不能算进按住时长，
+     * 否则 400 ms 的误触会被凑成 650 ms，绕过 500 ms 下限白烧一次机会。
+     * 已经收尾或已经在宽限窗口里都不再排程，一段按住只收尾一次。
+     */
+    private fun scheduleVoiceHoldFinish() {
+        if (voiceHoldFinished || voiceReleasedHoldMs != null) return
+        voiceReleasedHoldMs = currentVoiceHoldMs()
+        voiceTailJob = viewModelScope.launch {
+            delay(VOICE_HOLD_TAIL_GRACE_MS)
+            finishVoiceHold()
+        }
+    }
+
+    /**
+     * 一次按住的终局：算出 outcome，命中走服务端激活，其余落错误码。
+     *
+     * 命中、设备不可用、松手宽限到点、10 秒上限四条路都汇到这里，谁先到谁作数，
+     * 晚到的被 voiceHoldFinished 挡成空操作——宽限窗口里迟到的命中因此仍然算成功，
+     * 而排在它后面的那次宽限收尾不会把成功状态覆盖回失败。
+     */
+    private fun finishVoiceHold() {
+        if (voiceHoldFinished) return
+        val state = _uiState.value
+        val outcome = resolveVoiceHoldOutcome(
+            holdDurationMs = voiceReleasedHoldMs ?: currentVoiceHoldMs(),
+            peakLevel = voicePeakLevel,
+            matchedCharacterId = voiceMatchedCharacterId,
+            selectedCharacterId = state.selectedCharacterId,
+            captureUnavailable = voiceCaptureUnavailable
+        )
+        discardVoiceHold()
+        val matched = outcome == AiVoiceHoldOutcome.MATCHED
+        _uiState.update {
+            it.copy(
+                // 只有真送出去的按住才烧机会：误触和拿不到麦克风都没提交任何请求
+                activationAttempt = if (voiceHoldOutcomeCountsAsAttempt(outcome)) {
+                    it.activationAttempt + 1
+                } else {
+                    it.activationAttempt
+                },
+                activationState = when {
+                    matched -> AiActivationState.VERIFYING
+                    // 太短就是误触，别在按钮下面留一条红字，回 IDLE 当没发生过
+                    outcome == AiVoiceHoldOutcome.TOO_SHORT -> AiActivationState.IDLE
+                    else -> AiActivationState.FAILED
+                },
+                voiceLevel = 0f,
+                voiceCancelArmed = false,
+                errorCode = voiceHoldOutcomeErrorCode(outcome)
+            )
+        }
+        if (!matched) return
+        val character = state.selectedCharacter ?: return
+        requestJob?.cancel()
+        requestJob = viewModelScope.launch { submitVoiceActivation(character) }
+    }
+
+    /**
+     * 本地命中后走服务端文字激活：换取角色 ACK 语音与配额记录，
+     * spokenName 是角色标准名，服务端 matchesActivationName 必然命中。
+     */
+    private suspend fun submitVoiceActivation(character: AiCharacter) {
+        aiRepository.activate(
+            friendId = authManager.friendId.value.orEmpty(),
+            request = AiActivateRequest(
+                characterId = character.id,
+                spokenName = character.activationWord,
+                sessionId = spriteSessionId
+            )
+        ).onSuccess { activation ->
+            _uiState.update {
+                it.copy(
+                    activatedCharacterId = if (activation.activated) character.id else it.activatedCharacterId,
+                    activationState = if (activation.activated) AiActivationState.SUCCESS else AiActivationState.FAILED,
+                    activationMessage = activation.activationPhrase.takeIf { activation.activated && it.isNotBlank() },
+                    quota = activation.quota ?: it.quota,
+                    errorCode = if (activation.activated) null else "ACTIVATION_NOT_MATCHED"
+                )
+            }
+            activation.audio?.let { _audioEvents.emit(it) }
+            if (activation.activated) {
+                // 落盘激活态：跨进程重启和详情页这类无激活入口的页面都要认这个角色
+                aiRepository.saveActivatedCharacterId(
+                    authManager.friendId.value.orEmpty(),
+                    character.id
+                )
+                loadGreeting(character.id)
+            }
+        }.onFailure { error ->
+            _uiState.update {
+                it.copy(
+                    activationState = AiActivationState.FAILED,
+                    errorCode = errorCode(error)
+                )
+            }
+        }
+    }
+
+    /** 麦克风权限被拒绝或设备没有录音源：语音这条路当场判死，文字入口本来就常驻。 */
     fun onVoiceActivationUnavailable() {
         _uiState.update {
             it.copy(
                 activationState = AiActivationState.FAILED,
-                textActivationOffered = true,
                 errorCode = "AUDIO_UNAVAILABLE"
             )
         }
@@ -479,7 +677,9 @@ class AiSpriteViewModel @Inject constructor(
     /**
      * 文字兜底激活：用用户手输的角色名提交，不再直接拿角色预设名蒙过去。
      *
-     * 只在语音失败或麦克风不可用之后可用（textActivationOffered），与语音次数分开计数。
+     * 入口常驻，不再要求先让语音失败一次：图书馆、深夜、开会这些场合的用户根本开不了口，
+     * 却被逼着先故意失败一次、白烧一次语音机会才能拿到能用的入口。
+     * 与语音次数分开计数，各 5 次。
      */
     fun activateByText(spokenName: String) {
         val state = _uiState.value
@@ -868,7 +1068,7 @@ class AiSpriteViewModel @Inject constructor(
         val character = _uiState.value.selectedCharacter ?: return
         // 预存音频命中则立即播放，不消耗 TTS 配额；未命中按角色状态走网络链路
         bundledAuditionAudio(character)?.let { local ->
-            _audioEvents.emit(local)
+            emitAuditionAudio(local)
             return
         }
         val authorized = isAuthorized()
@@ -880,7 +1080,7 @@ class AiSpriteViewModel @Inject constructor(
             AiAuditionPlaybackRoute.GUEST_TTS -> {
                 aiRepository.playGuestTts(request).fold(
                     onSuccess = { audio ->
-                        if (audio.hasPlayableSource()) _audioEvents.emit(audio)
+                        if (audio.hasPlayableSource()) emitAuditionAudio(audio)
                         else emitGuestPreviewFallback(character)
                     },
                     onFailure = { emitGuestPreviewFallback(character) }
@@ -889,7 +1089,7 @@ class AiSpriteViewModel @Inject constructor(
             AiAuditionPlaybackRoute.AUTHORIZED_TTS -> {
                 aiRepository.playTts(authManager.friendId.value.orEmpty(), request).fold(
                     onSuccess = { audio ->
-                        if (audio.hasPlayableSource()) _audioEvents.emit(audio)
+                        if (audio.hasPlayableSource()) emitAuditionAudio(audio)
                         else emitGuestPreviewFallback(character)
                     },
                     onFailure = { emitGuestPreviewFallback(character) }
@@ -904,7 +1104,7 @@ class AiSpriteViewModel @Inject constructor(
         val character = _uiState.value.selectedCharacter
         if (character != null) {
             bundledAuditionAudio(character)?.let { local ->
-                previewJob = viewModelScope.launch { _audioEvents.emit(local) }
+                previewJob = viewModelScope.launch { emitAuditionAudio(local) }
                 return
             }
         }
@@ -914,8 +1114,26 @@ class AiSpriteViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 试听事件必须等精灵中心的收集器就位再发。
+     *
+     * [_audioEvents] 是 replay = 0 的 SharedFlow，没有订阅者时 emit 会被静默丢弃。
+     * 精灵中心的 LaunchedEffect 先调 ensureLoaded()、之后才 launch 收集器；而搜索页启动时
+     * 已经调过一次 ensureLoaded，进精灵中心走的是 initialized 分支，预存试听又不经过 350ms
+     * 防抖，emit 正好落在收集器注册之前。事件丢掉后 UI 停在 LOADING，只能干转到 8 秒兜底超时。
+     *
+     * 页面没打开时这里会一直挂着，下一次 scheduleCharacterPreview() 取消 previewJob 即释放，
+     * 也保证不会在页面打开瞬间补播上一个角色的旧试听。
+     */
+    private suspend fun emitAuditionAudio(audio: AiAudio) {
+        _audioEvents.subscriptionCount.first { it > 0 }
+        _audioEvents.emit(audio)
+    }
+
+    /** 系统语音兜底同样是试听链路的一环，收集器未就位时丢事件一样会让 UI 干转。 */
     private suspend fun emitGuestPreviewFallback(character: AiCharacter) {
         character.auditionText.takeIf { it.isNotBlank() }?.let { text ->
+            _guestPreviewFallbackEvents.subscriptionCount.first { it > 0 }
             _guestPreviewFallbackEvents.emit(text)
         }
     }

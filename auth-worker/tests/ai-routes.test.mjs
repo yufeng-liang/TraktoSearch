@@ -851,6 +851,41 @@ test('activation consumes one recording and returns the role confirmation', asyn
     assert.equal(json.data.voiceStatus, 'ready');
 });
 
+test('activation accepts an explicit null audio field as text activation', async () => {
+    // Android 客户端用 kotlinx.serialization 序列化请求体，默认 explicitNulls=true，
+    // 没有音频时也会带上 "audioDataUrl": null。只判 undefined 会把它当成"带了音频"，
+    // 语音（本地识别后走文字激活）和文字兜底两条路都会被判成 INVALID_AUDIO。
+    const { response, json } = await call('/api/ai/activate', {
+        method: 'POST',
+        body: {
+            characterId: 'usagi',
+            sessionId: 'activation-null-audio-session',
+            spokenName: '乌萨奇',
+            audioDataUrl: null,
+        },
+        env: createTestEnv({ AI_TEST_VOICE_DESIGN_READY: true }),
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(json.data.activated, true);
+});
+
+test('activation still rejects a malformed audio field', async () => {
+    const { response, json } = await call('/api/ai/activate', {
+        method: 'POST',
+        body: {
+            characterId: 'usagi',
+            sessionId: 'activation-bad-audio-session',
+            spokenName: '乌萨奇',
+            audioDataUrl: 'not-a-data-url',
+        },
+        env: createTestEnv({ AI_TEST_VOICE_DESIGN_READY: true }),
+    });
+
+    assert.equal(response.status, 400);
+    assert.equal(json.code, 'INVALID_AUDIO');
+});
+
 test('activation keeps the text success when confirmation audio fails', async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async () => {

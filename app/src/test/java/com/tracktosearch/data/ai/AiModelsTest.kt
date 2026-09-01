@@ -51,6 +51,34 @@ class AiModelsTest {
     }
 
     @Test
+    fun activateRequest_leavesOutTheAudioFieldWhenNothingIsUploaded() {
+        // 网关把"报文里出现 audioDataUrl"当成带了音频，显式 null 会被判成非法音频（400 INVALID_AUDIO），
+        // 语音激活（本地识别后换文字激活）与文字兜底两条路都要靠这个字段不出现才能通过。
+        val body = Json { encodeDefaults = true }
+            .encodeToJsonElement(
+                AiActivateRequest.serializer(),
+                AiActivateRequest(characterId = "usagi", spokenName = "乌萨奇", sessionId = "sprite-session")
+            )
+            .jsonObject
+
+        assertThat(body.keys).doesNotContain("audioDataUrl")
+        assertThat(body["spokenName"]?.jsonPrimitive?.content).isEqualTo("乌萨奇")
+        assertThat(body["sessionId"]?.jsonPrimitive?.content).isEqualTo("sprite-session")
+    }
+
+    @Test
+    fun activateRequest_keepsTheAudioFieldWhenAudioIsUploaded() {
+        val body = Json { encodeDefaults = true }
+            .encodeToJsonElement(
+                AiActivateRequest.serializer(),
+                AiActivateRequest(characterId = "usagi", audioDataUrl = "data:audio/wav;base64,AA==")
+            )
+            .jsonObject
+
+        assertThat(body["audioDataUrl"]?.jsonPrimitive?.content).isEqualTo("data:audio/wav;base64,AA==")
+    }
+
+    @Test
     fun ttsScenes_matchWorkerContract() {
         assertThat(AiTtsScene.entries.map { it.name }).containsExactly(
             "AUDITION", "ACTIVATION_ACK", "GREETING"

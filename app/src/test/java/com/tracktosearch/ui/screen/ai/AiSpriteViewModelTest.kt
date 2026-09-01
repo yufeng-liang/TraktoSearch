@@ -10,6 +10,8 @@ import com.tracktosearch.data.ai.AiQuizResult
 import com.tracktosearch.data.ai.AiQuota
 import com.tracktosearch.data.ai.AiRepository
 import com.tracktosearch.data.ai.AiTasteAnalysis
+import com.tracktosearch.data.ai.AiVoiceCapture
+import com.tracktosearch.data.ai.AiVoiceCaptureEvent
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
 import com.tracktosearch.data.repository.TraktRepository
@@ -18,16 +20,18 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkObject
-import io.mockk.unmockkObject
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -287,6 +291,29 @@ class AiSpriteViewModelTest {
     }
 
     @Test
+    fun reopeningSpriteCenter_bundledAuditionReachesACollectorRegisteredAfterEnsureLoaded() = runTest {
+        val context = mockk<Context>(relaxed = true)
+        every { context.assets.open(any()) } returns ByteArrayInputStream(ByteArray(16))
+        val viewModel = viewModel(context = context)
+        coEvery { aiRepository.listCharacters() } returns Result.success(
+            listOf(com.tracktosearch.data.ai.AiCharacterCatalog.all.first { it.id == "usagi" })
+        )
+
+        // 第一次 ensureLoaded 模拟搜索页启动时那次调用：initialized 从此为 true
+        viewModel.ensureLoaded()
+        advanceUntilIdle()
+
+        // 精灵中心的真实顺序：LaunchedEffect 先调 ensureLoaded，收集器晚一拍才 launch。
+        // 预存试听不经过 350ms 防抖，事件必须等收集器就位，否则 replay = 0 的 SharedFlow
+        // 会静默丢弃，UI 停在 LOADING 干转到 8 秒兜底超时。
+        viewModel.ensureLoaded()
+        val audioEvent = async { viewModel.audioEvents.first() }
+        advanceUntilIdle()
+
+        assertThat(audioEvent.await().audioUrl).isEqualTo("file:///android_asset/ai_auditions/usagi.mp3")
+    }
+
+    @Test
     fun replaySelectedCharacter_requestsAuditionImmediately() = runTest {
         val authState = MutableStateFlow(AuthState.UNAUTHORIZED)
         val viewModel = viewModel(authState)
@@ -304,106 +331,344 @@ class AiSpriteViewModelTest {
     }
 
     @Test
-    fun voiceActivation_localMatch_activatesViaTextPathWithoutAudioUpload() = runTest {
-        val recognizer = mockk<com.tracktosearch.data.ai.AiKwsRecognizer> {
-            coEvery { recognize(any()) } returns com.tracktosearch.data.ai.AiVoiceMatch.Matched("usagi")
-        }
-        val viewModel = viewModel(voiceRecognizer = recognizer)
-        viewModel.seedState {
-            it.copy(characters = listOf(viewModelCharacter("usagi")), selectedCharacterId = "usagi")
-        }
-        val requests = mutableListOf<com.tracktosearch.data.ai.AiActivateRequest>()
-        coEvery { aiRepository.activate("friend-a", capture(requests)) } returns Result.success(
-            com.tracktosearch.data.ai.AiActivation(
-                activated = true,
-                activationPhrase = "到！",
-                character = null,
-                quota = null,
-                greeting = null,
-                audio = null
-            )
+    fun voiceHoldStart_entersRecordingWithoutBurningAnAttempt() = runTest {
+        val voiceCapture = FakeVoiceCapture()
+        val viewModel = viewModel(voiceCapture = voiceCapture)
+        viewModel.seedVoiceReadyState()
+
+        viewModel.onActivatePressStart()
+        runCurrent()
+
+        assertThat(viewModel.uiState.value.activationState).isEqualTo(AiActivationState.RECORDING)
+        // 计数点已从「按下」挪到「实际提交」：误触碰一下按钮不该烧掉 5 次机会里的一次
+        assertThat(viewModel.uiState.value.activationAttempt).isEqualTo(0)
+        assertThat(voiceCapture.captureCount).isEqualTo(1)
+    }
+
+    @Test
+    fun voiceHoldCancel_returnsToIdleWithoutErrorOrAttempt() = runTest {
+        val voiceCapture = FakeVoiceCapture(listOf(AiVoiceCaptureEvent.Level(0.05f)))
+        val viewModel = viewModel(voiceCapture = voiceCapture)
+        viewModel.seedVoiceReadyState()
+
+        viewModel.onActivatePressStart()
+        runCurrent()
+        testScheduler.advanceTimeBy(600)
+        runCurrent()
+        viewModel.onActivatePressCancel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.activationState).isEqualTo(AiActivationState.IDLE)
+        assertThat(state.activationAttempt).isEqualTo(0)
+        assertThat(state.errorCode).isNull()
+        assertThat(state.voiceLevel).isEqualTo(0f)
+    }
+
+    @Test
+    fun voiceHoldReleasedTooSoon_reportsTooShortWithoutBurningAnAttempt() = runTest {
+        // 电平给到正常说话音量：太短这一档必须压过电平档，否则误触会被报成「声音太轻」
+        val voiceCapture = FakeVoiceCapture(listOf(AiVoiceCaptureEvent.Level(0.05f)))
+        val viewModel = viewModel(voiceCapture = voiceCapture)
+        viewModel.seedVoiceReadyState()
+
+        viewModel.onActivatePressStart()
+        runCurrent()
+        testScheduler.advanceTimeBy(200)
+        runCurrent()
+        viewModel.onActivatePressEnd()
+        advanceTailGrace()
+
+        val state = viewModel.uiState.value
+        assertThat(state.errorCode).isEqualTo("ACTIVATION_TOO_SHORT")
+        assertThat(state.activationAttempt).isEqualTo(0)
+        // 误触不该在按钮下面留一条红字，回 IDLE 当没发生过
+        assertThat(state.activationState).isEqualTo(AiActivationState.IDLE)
+    }
+
+    @Test
+    fun silentVoiceHold_reportsSilentAndBurnsAnAttempt() = runTest {
+        // 原始 RMS 0.003 约 -50 dBFS，归一化后是 0：安静房间的本底，等于全程没人说话
+        val voiceCapture = FakeVoiceCapture(List(3) { AiVoiceCaptureEvent.Level(0.003f) })
+        val viewModel = viewModel(voiceCapture = voiceCapture)
+        viewModel.seedVoiceReadyState()
+
+        holdAndRelease(viewModel)
+
+        val state = viewModel.uiState.value
+        assertThat(state.errorCode).isEqualTo("ACTIVATION_SILENT")
+        assertThat(state.activationState).isEqualTo(AiActivationState.FAILED)
+        // 静音要计次：否则对着被占用的麦克风可以无限重试，5 次上限形同虚设
+        assertThat(state.activationAttempt).isEqualTo(1)
+    }
+
+    @Test
+    fun quietVoiceHold_reportsTooQuietAndBurnsAnAttempt() = runTest {
+        // 原始 RMS 0.005 归一化后约 0.08：过了静音线 0.04 但没到太轻线 0.12。
+        // 这条同时是「先归一化再比阈值」的看门测试——直接拿原始 RMS 比，
+        // 0.005 < 0.04 会被误判成静音，用户被叫去检查麦克风而不是靠近一点再喊
+        val voiceCapture = FakeVoiceCapture(List(3) { AiVoiceCaptureEvent.Level(0.005f) })
+        val viewModel = viewModel(voiceCapture = voiceCapture)
+        viewModel.seedVoiceReadyState()
+
+        holdAndRelease(viewModel)
+
+        val state = viewModel.uiState.value
+        assertThat(state.errorCode).isEqualTo("ACTIVATION_TOO_QUIET")
+        assertThat(state.activationAttempt).isEqualTo(1)
+    }
+
+    @Test
+    fun audibleVoiceHoldWithoutMatch_reportsNotMatchedAndBurnsAnAttemptOnce() = runTest {
+        // 一帧 0.0075（归一化约 0.15，过了太轻线 0.12），之后全是近似静音的尾音帧。
+        // 峰值必须取未平滑值：平滑后首帧只有 0.15 × 0.6 = 0.09，
+        // 会把喊得够响的用户判成「声音太轻」，指向完全错误的下一步动作
+        val voiceCapture = FakeVoiceCapture(
+            listOf(AiVoiceCaptureEvent.Level(0.0075f)) + List(3) { AiVoiceCaptureEvent.Level(0.0001f) }
         )
-        mockkObject(AiAudioRecorder)
-        try {
-            coEvery { AiAudioRecorder.recordPcmOnce(any(), any()) } returns FloatArray(16_000)
-            viewModel.activate(mockk())
-            advanceUntilIdle()
-        } finally {
-            unmockkObject(AiAudioRecorder)
+        val viewModel = viewModel(voiceCapture = voiceCapture)
+        viewModel.seedVoiceReadyState()
+
+        holdAndRelease(viewModel)
+
+        assertThat(viewModel.uiState.value.errorCode).isEqualTo("ACTIVATION_NOT_MATCHED")
+        assertThat(viewModel.uiState.value.activationAttempt).isEqualTo(1)
+        coVerify(exactly = 0) { aiRepository.activate(any(), any()) }
+        // 宽限窗口过后收尾只发生一次，次数不会被补第二刀
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.activationAttempt).isEqualTo(1)
+    }
+
+    @Test
+    fun matchedSelectedCharacter_verifiesImmediatelyThenActivatesViaTextPath() = runTest {
+        val voiceCapture = FakeVoiceCapture(
+            listOf(AiVoiceCaptureEvent.Level(0.05f), AiVoiceCaptureEvent.Matched("usagi"))
+        )
+        val viewModel = viewModel(voiceCapture = voiceCapture)
+        viewModel.seedVoiceReadyState()
+        val requests = mutableListOf<com.tracktosearch.data.ai.AiActivateRequest>()
+        val releaseServer = CompletableDeferred<Unit>()
+        coEvery { aiRepository.activate("friend-a", capture(requests)) } coAnswers {
+            releaseServer.await()
+            Result.success(activation(audio = audio()))
         }
+        coEvery { aiRepository.getGreeting(any(), any(), any()) } returns Result.success(greeting())
+        // audioEvents 是 replay = 0 的 SharedFlow，没订阅者时 emit 会被静默丢弃
+        val ack = async { viewModel.audioEvents.first() }
+        runCurrent()
+
+        viewModel.onActivatePressStart()
+        runCurrent()
+
+        // 命中即收尾，不等松手
+        assertThat(viewModel.uiState.value.activationState).isEqualTo(AiActivationState.VERIFYING)
+        releaseServer.complete(Unit)
+        advanceUntilIdle()
 
         // 本地命中后走服务端文字激活：不上传音频、无 ASR，spokenName 用角色标准名
         assertThat(requests).hasSize(1)
         assertThat(requests.single().audioDataUrl).isNull()
         assertThat(requests.single().spokenName).isEqualTo("usagi")
+        val state = viewModel.uiState.value
+        assertThat(state.activationState).isEqualTo(AiActivationState.SUCCESS)
+        assertThat(state.activatedCharacterId).isEqualTo("usagi")
+        assertThat(state.errorCode).isNull()
+        // ACK 语音与落盘照旧
+        assertThat(ack.await()).isEqualTo(audio())
         coVerify { aiRepository.saveActivatedCharacterId("friend-a", "usagi") }
     }
 
     @Test
-    fun voiceActivation_noMatch_showsNotMatchedAndOffersTextWithoutServerCall() = runTest {
-        val viewModel = viewModel()
-        viewModel.seedState {
-            it.copy(characters = listOf(viewModelCharacter("usagi")), selectedCharacterId = "usagi")
-        }
-        mockkObject(AiAudioRecorder)
-        try {
-            coEvery { AiAudioRecorder.recordPcmOnce(any(), any()) } returns FloatArray(16_000)
-            viewModel.activate(mockk())
-            advanceUntilIdle()
-        } finally {
-            unmockkObject(AiAudioRecorder)
-        }
+    fun matchedOtherCharacter_keepsRecordingAndLandsOnNotMatched() = runTest {
+        val voiceCapture = FakeVoiceCapture(
+            listOf(AiVoiceCaptureEvent.Level(0.05f), AiVoiceCaptureEvent.Matched("hachiware"))
+        )
+        val viewModel = viewModel(voiceCapture = voiceCapture)
+        viewModel.seedVoiceReadyState()
 
-        assertThat(viewModel.uiState.value.activationState).isEqualTo(AiActivationState.FAILED)
-        assertThat(viewModel.uiState.value.errorCode).isEqualTo("ACTIVATION_NOT_MATCHED")
-        assertThat(viewModel.uiState.value.textActivationOffered).isTrue()
-        coVerify(exactly = 0) { aiRepository.activate(any(), any()) }
-    }
+        viewModel.onActivatePressStart()
+        runCurrent()
+        // 喊的是别的角色名：不提前收尾，这一次按住里用户还能补喊正确的名字
+        assertThat(viewModel.uiState.value.activationState).isEqualTo(AiActivationState.RECORDING)
 
-    @Test
-    fun voiceActivation_matchedOtherCharacter_treatedAsNotMatched() = runTest {
-        val recognizer = mockk<com.tracktosearch.data.ai.AiKwsRecognizer> {
-            coEvery { recognize(any()) } returns com.tracktosearch.data.ai.AiVoiceMatch.Matched("hachiware")
-        }
-        val viewModel = viewModel(voiceRecognizer = recognizer)
-        viewModel.seedState {
-            it.copy(characters = listOf(viewModelCharacter("usagi")), selectedCharacterId = "usagi")
-        }
-        mockkObject(AiAudioRecorder)
-        try {
-            coEvery { AiAudioRecorder.recordPcmOnce(any(), any()) } returns FloatArray(16_000)
-            viewModel.activate(mockk())
-            advanceUntilIdle()
-        } finally {
-            unmockkObject(AiAudioRecorder)
-        }
+        testScheduler.advanceTimeBy(600)
+        runCurrent()
+        viewModel.onActivatePressEnd()
+        advanceTailGrace()
 
         // 与旧服务端行为一致：喊了别的角色名按未匹配处理，只针对所选角色激活
         assertThat(viewModel.uiState.value.errorCode).isEqualTo("ACTIVATION_NOT_MATCHED")
+        assertThat(viewModel.uiState.value.activationAttempt).isEqualTo(1)
         coVerify(exactly = 0) { aiRepository.activate(any(), any()) }
     }
 
     @Test
-    fun voiceActivation_recognizerUnavailable_fallsBackToTextOffer() = runTest {
-        val recognizer = mockk<com.tracktosearch.data.ai.AiKwsRecognizer> {
-            coEvery { recognize(any()) } returns com.tracktosearch.data.ai.AiVoiceMatch.Unavailable
-        }
-        val viewModel = viewModel(voiceRecognizer = recognizer)
-        viewModel.seedState {
-            it.copy(characters = listOf(viewModelCharacter("usagi")), selectedCharacterId = "usagi")
-        }
-        mockkObject(AiAudioRecorder)
-        try {
-            coEvery { AiAudioRecorder.recordPcmOnce(any(), any()) } returns FloatArray(16_000)
-            viewModel.activate(mockk())
-            advanceUntilIdle()
-        } finally {
-            unmockkObject(AiAudioRecorder)
-        }
+    fun captureUnavailable_reportsAudioUnavailableWithoutBurningAnAttempt() = runTest {
+        val voiceCapture = FakeVoiceCapture(listOf(AiVoiceCaptureEvent.Unavailable))
+        val viewModel = viewModel(voiceCapture = voiceCapture)
+        viewModel.seedVoiceReadyState()
 
-        assertThat(viewModel.uiState.value.errorCode).isEqualTo("AUDIO_UNAVAILABLE")
-        assertThat(viewModel.uiState.value.textActivationOffered).isTrue()
+        viewModel.onActivatePressStart()
+        runCurrent()
+
+        // 拿不到麦克风/引擎当场判死，不等松手，也没提交任何请求，所以不烧机会
+        val state = viewModel.uiState.value
+        assertThat(state.errorCode).isEqualTo("AUDIO_UNAVAILABLE")
+        assertThat(state.activationState).isEqualTo(AiActivationState.FAILED)
+        assertThat(state.activationAttempt).isEqualTo(0)
         coVerify(exactly = 0) { aiRepository.activate(any(), any()) }
+    }
+
+    @Test
+    fun levelEvents_landInUiStateAsSmoothedLevel() = runTest {
+        val voiceCapture = FakeVoiceCapture(listOf(AiVoiceCaptureEvent.Level(0.05f)))
+        val viewModel = viewModel(voiceCapture = voiceCapture)
+        viewModel.seedVoiceReadyState()
+
+        viewModel.onActivatePressStart()
+        runCurrent()
+
+        // 原始 RMS 0.05 约 -26 dBFS，归一化 0.48，再按 attack 0.6 平滑一帧得 0.29；
+        // 断言不是原始值 0.05 正是重点：竖条画的必须是归一化平滑后的电平
+        assertThat(viewModel.uiState.value.voiceLevel).isWithin(0.01f).of(0.288f)
+    }
+
+    @Test
+    fun voicePermissionGranted_onlyHintsAndNeverStartsRecording() = runTest {
+        val voiceCapture = FakeVoiceCapture()
+        val viewModel = viewModel(voiceCapture = voiceCapture)
+        viewModel.seedVoiceReadyState()
+
+        viewModel.onVoicePermissionGranted()
+        advanceUntilIdle()
+
+        // 授权弹窗一消失就自动开录会录到一段空白（手指早已离开按钮）并白烧一次机会
+        assertThat(viewModel.uiState.value.errorCode).isEqualTo("AUDIO_PERMISSION_GRANTED")
+        assertThat(viewModel.uiState.value.activationState).isEqualTo(AiActivationState.IDLE)
+        assertThat(voiceCapture.captureCount).isEqualTo(0)
+    }
+
+    @Test
+    fun matchArrivingInsideTailGrace_stillActivates() = runTest {
+        // KWS 配的是 numTrailingBlanks = 2：关键词说完还要约 80-150 ms 尾音才确认命中。
+        // 「说完就松手」是最自然的操作，全靠松手后的宽限窗口这段音频才拿得到成功
+        val voiceCapture = FakeVoiceCapture(listOf(AiVoiceCaptureEvent.Level(0.05f)))
+        val viewModel = viewModel(voiceCapture = voiceCapture)
+        viewModel.seedVoiceReadyState()
+        val releaseServer = CompletableDeferred<Unit>()
+        coEvery { aiRepository.activate("friend-a", any()) } coAnswers {
+            releaseServer.await()
+            Result.success(activation())
+        }
+        coEvery { aiRepository.getGreeting(any(), any(), any()) } returns Result.success(greeting())
+
+        viewModel.onActivatePressStart()
+        runCurrent()
+        testScheduler.advanceTimeBy(600)
+        runCurrent()
+        viewModel.onActivatePressEnd()
+        // 仍在 250 ms 宽限窗口内：麦克风还在送真实音频
+        testScheduler.advanceTimeBy(100)
+        runCurrent()
+        voiceCapture.push(AiVoiceCaptureEvent.Matched("usagi"))
+        runCurrent()
+
+        assertThat(viewModel.uiState.value.activationState).isEqualTo(AiActivationState.VERIFYING)
+        releaseServer.complete(Unit)
+        advanceUntilIdle()
+
+        // 排在后面的那次宽限收尾必须是空操作，不能把成功覆盖成 ACTIVATION_NOT_MATCHED
+        val state = viewModel.uiState.value
+        assertThat(state.activationState).isEqualTo(AiActivationState.SUCCESS)
+        assertThat(state.activatedCharacterId).isEqualTo("usagi")
+        assertThat(state.errorCode).isNull()
+        coVerify(exactly = 1) { aiRepository.activate("friend-a", any()) }
+    }
+
+    @Test
+    fun tailGraceDoesNotCountTowardHoldDuration() = runTest {
+        val voiceCapture = FakeVoiceCapture(listOf(AiVoiceCaptureEvent.Level(0.05f)))
+        val viewModel = viewModel(voiceCapture = voiceCapture)
+        viewModel.seedVoiceReadyState()
+
+        viewModel.onActivatePressStart()
+        runCurrent()
+        testScheduler.advanceTimeBy(400)
+        runCurrent()
+        viewModel.onActivatePressEnd()
+        advanceTailGrace()
+
+        // 采集协程活了约 650 ms（400 + 250 宽限），但按住时长只算到松手那一刻的 400 ms：
+        // 把宽限窗口算进去，误触就能绕过 500 ms 下限白烧一次机会
+        val state = viewModel.uiState.value
+        assertThat(state.errorCode).isEqualTo("ACTIVATION_TOO_SHORT")
+        assertThat(state.activationState).isEqualTo(AiActivationState.IDLE)
+        assertThat(state.activationAttempt).isEqualTo(0)
+    }
+
+    @Test
+    fun lateCancelAfterMatchedSuccess_keepsActivatedState() = runTest {
+        val voiceCapture = FakeVoiceCapture(
+            listOf(AiVoiceCaptureEvent.Level(0.05f), AiVoiceCaptureEvent.Matched("usagi"))
+        )
+        val viewModel = viewModel(voiceCapture = voiceCapture)
+        viewModel.seedVoiceReadyState()
+        coEvery { aiRepository.activate("friend-a", any()) } returns Result.success(activation())
+        coEvery { aiRepository.getGreeting(any(), any(), any()) } returns Result.success(greeting())
+
+        viewModel.onActivatePressStart()
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.activationState).isEqualTo(AiActivationState.SUCCESS)
+
+        // 命中是手指还按着时就收尾的：SUCCESS 后 UI 换掉激活面板，手势协程被连带取消，
+        // 其 finally 会补发一次取消。那一次必须是空操作，否则刚激活的角色和问候气泡都被抹掉
+        viewModel.onActivatePressCancel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.activationState).isEqualTo(AiActivationState.SUCCESS)
+        assertThat(state.activatedCharacterId).isEqualTo("usagi")
+        assertThat(state.errorCode).isNull()
+    }
+
+    @Test
+    fun lateReleaseAfterTimeoutFinish_doesNotBurnASecondAttempt() = runTest {
+        val voiceCapture = FakeVoiceCapture(listOf(AiVoiceCaptureEvent.Level(0.05f)))
+        val viewModel = viewModel(voiceCapture = voiceCapture)
+        viewModel.seedVoiceReadyState()
+
+        viewModel.onActivatePressStart()
+        runCurrent()
+        // 10 秒上限自行收尾（同样带 250 ms 尾音宽限）
+        testScheduler.advanceTimeBy(11_000)
+        runCurrent()
+        assertThat(viewModel.uiState.value.errorCode).isEqualTo("ACTIVATION_NOT_MATCHED")
+        assertThat(viewModel.uiState.value.activationAttempt).isEqualTo(1)
+
+        // 用户到这时才真的松手：不能再收尾一遍，更不能再烧一次机会
+        viewModel.onActivatePressEnd()
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.activationAttempt).isEqualTo(1)
+    }
+
+    @Test
+    fun doublePressEnd_appliesVerdictExactlyOnce() = runTest {
+        val voiceCapture = FakeVoiceCapture(listOf(AiVoiceCaptureEvent.Level(0.05f)))
+        val viewModel = viewModel(voiceCapture = voiceCapture)
+        viewModel.seedVoiceReadyState()
+
+        viewModel.onActivatePressStart()
+        runCurrent()
+        testScheduler.advanceTimeBy(600)
+        runCurrent()
+        viewModel.onActivatePressEnd()
+        viewModel.onActivatePressEnd()
+        advanceTailGrace()
+
+        assertThat(viewModel.uiState.value.errorCode).isEqualTo("ACTIVATION_NOT_MATCHED")
+        assertThat(viewModel.uiState.value.activationAttempt).isEqualTo(1)
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.activationAttempt).isEqualTo(1)
     }
 
     @Test
@@ -481,23 +746,8 @@ class AiSpriteViewModelTest {
     @Test
     fun activationSuccessPersistsCharacterForLaterProcesses() = runTest {
         val viewModel = viewModel()
-        viewModel.seedState {
-            it.copy(
-                characters = listOf(viewModelCharacter("usagi")),
-                selectedCharacterId = "usagi",
-                textActivationOffered = true
-            )
-        }
-        coEvery { aiRepository.activate(any(), any()) } returns Result.success(
-            com.tracktosearch.data.ai.AiActivation(
-                activated = true,
-                activationPhrase = "到！",
-                character = null,
-                quota = null,
-                greeting = null,
-                audio = null
-            )
-        )
+        viewModel.seedVoiceReadyState()
+        coEvery { aiRepository.activate(any(), any()) } returns Result.success(activation())
 
         viewModel.activateByText("usagi")
         advanceUntilIdle()
@@ -533,9 +783,7 @@ class AiSpriteViewModelTest {
         context: Context = mockk(relaxed = true) {
             every { assets.open(any()) } throws FileNotFoundException("no bundled audition")
         },
-        voiceRecognizer: com.tracktosearch.data.ai.AiKwsRecognizer = mockk(relaxed = true) {
-            coEvery { recognize(any()) } returns com.tracktosearch.data.ai.AiVoiceMatch.NoMatch
-        }
+        voiceCapture: AiVoiceCapture = FakeVoiceCapture()
     ): AiSpriteViewModel {
         every { authManager.authState } returns authState
         every { authManager.nickname } returns MutableStateFlow("朋友")
@@ -544,7 +792,56 @@ class AiSpriteViewModelTest {
         // 锐评隐私守卫默认放行：已同意说明弹窗且上传开关开启
         every { aiTasteStorage.tasteConsentDecided } returns flowOf(true)
         every { aiTasteStorage.tasteUploadEnabled } returns flowOf(true)
-        return AiSpriteViewModel(aiRepository, authManager, traktRepository, overlayStorage, aiTasteStorage, voiceRecognizer, context)
+        return AiSpriteViewModel(aiRepository, authManager, traktRepository, overlayStorage, aiTasteStorage, voiceCapture, context)
+    }
+
+    /**
+     * 假采集：先按脚本发事件，之后像真实实现那样一直挂着不结束。
+     *
+     * 不自行结束是关键——真实采集是冷 Flow，收尾时机由 ViewModel 取消协程决定；
+     * 脚本发完就结束的话，「松手才收尾」的时序在测试里会退化成「流一结束就收尾」。
+     */
+    private class FakeVoiceCapture(scripted: List<AiVoiceCaptureEvent> = emptyList()) : AiVoiceCapture {
+        private val events = Channel<AiVoiceCaptureEvent>(Channel.UNLIMITED)
+
+        /** capture() 被收集过几次，用于断言「这条路径不该开录」。 */
+        var captureCount = 0
+            private set
+
+        init {
+            scripted.forEach { events.trySend(it) }
+        }
+
+        /** 按住期间补发一帧事件，例如尾音宽限窗口里迟到的命中。 */
+        fun push(event: AiVoiceCaptureEvent) {
+            events.trySend(event)
+        }
+
+        override fun capture(): Flow<AiVoiceCaptureEvent> = flow {
+            captureCount += 1
+            for (event in events) emit(event)
+        }
+    }
+
+    /** 按住语音固件：usagi 已上线且被选中，授权态由 viewModel() 给到 AUTHORIZED。 */
+    private fun AiSpriteViewModel.seedVoiceReadyState() = seedState {
+        it.copy(characters = listOf(viewModelCharacter("usagi")), selectedCharacterId = "usagi")
+    }
+
+    /** 按住 600 ms（过 500 ms 下限）后正常松手并走完尾音宽限窗口。 */
+    private fun TestScope.holdAndRelease(viewModel: AiSpriteViewModel) {
+        viewModel.onActivatePressStart()
+        runCurrent()
+        testScheduler.advanceTimeBy(600)
+        runCurrent()
+        viewModel.onActivatePressEnd()
+        advanceTailGrace()
+    }
+
+    /** 走完松手后的 250 ms 尾音宽限窗口，让收尾落地。 */
+    private fun TestScope.advanceTailGrace() {
+        testScheduler.advanceTimeBy(400)
+        runCurrent()
     }
 
     private fun viewModelCharacter(id: String) = com.tracktosearch.data.ai.AiCharacter(
@@ -562,6 +859,18 @@ class AiSpriteViewModelTest {
         durationMs = 100,
         cacheKey = null,
         transcript = "试听"
+    )
+
+    private fun activation(
+        activated: Boolean = true,
+        audio: com.tracktosearch.data.ai.AiAudio? = null
+    ) = com.tracktosearch.data.ai.AiActivation(
+        activated = activated,
+        activationPhrase = "到！",
+        character = null,
+        quota = null,
+        greeting = null,
+        audio = audio
     )
 
     @Suppress("UNCHECKED_CAST")
