@@ -18,6 +18,8 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
@@ -302,6 +304,109 @@ class AiSpriteViewModelTest {
     }
 
     @Test
+    fun voiceActivation_localMatch_activatesViaTextPathWithoutAudioUpload() = runTest {
+        val recognizer = mockk<com.tracktosearch.data.ai.AiKwsRecognizer> {
+            coEvery { recognize(any()) } returns com.tracktosearch.data.ai.AiVoiceMatch.Matched("usagi")
+        }
+        val viewModel = viewModel(voiceRecognizer = recognizer)
+        viewModel.seedState {
+            it.copy(characters = listOf(viewModelCharacter("usagi")), selectedCharacterId = "usagi")
+        }
+        val requests = mutableListOf<com.tracktosearch.data.ai.AiActivateRequest>()
+        coEvery { aiRepository.activate("friend-a", capture(requests)) } returns Result.success(
+            com.tracktosearch.data.ai.AiActivation(
+                activated = true,
+                activationPhrase = "到！",
+                character = null,
+                quota = null,
+                greeting = null,
+                audio = null
+            )
+        )
+        mockkObject(AiAudioRecorder)
+        try {
+            coEvery { AiAudioRecorder.recordPcmOnce(any(), any()) } returns FloatArray(16_000)
+            viewModel.activate(mockk())
+            advanceUntilIdle()
+        } finally {
+            unmockkObject(AiAudioRecorder)
+        }
+
+        // 本地命中后走服务端文字激活：不上传音频、无 ASR，spokenName 用角色标准名
+        assertThat(requests).hasSize(1)
+        assertThat(requests.single().audioDataUrl).isNull()
+        assertThat(requests.single().spokenName).isEqualTo("usagi")
+        coVerify { aiRepository.saveActivatedCharacterId("friend-a", "usagi") }
+    }
+
+    @Test
+    fun voiceActivation_noMatch_showsNotMatchedAndOffersTextWithoutServerCall() = runTest {
+        val viewModel = viewModel()
+        viewModel.seedState {
+            it.copy(characters = listOf(viewModelCharacter("usagi")), selectedCharacterId = "usagi")
+        }
+        mockkObject(AiAudioRecorder)
+        try {
+            coEvery { AiAudioRecorder.recordPcmOnce(any(), any()) } returns FloatArray(16_000)
+            viewModel.activate(mockk())
+            advanceUntilIdle()
+        } finally {
+            unmockkObject(AiAudioRecorder)
+        }
+
+        assertThat(viewModel.uiState.value.activationState).isEqualTo(AiActivationState.FAILED)
+        assertThat(viewModel.uiState.value.errorCode).isEqualTo("ACTIVATION_NOT_MATCHED")
+        assertThat(viewModel.uiState.value.textActivationOffered).isTrue()
+        coVerify(exactly = 0) { aiRepository.activate(any(), any()) }
+    }
+
+    @Test
+    fun voiceActivation_matchedOtherCharacter_treatedAsNotMatched() = runTest {
+        val recognizer = mockk<com.tracktosearch.data.ai.AiKwsRecognizer> {
+            coEvery { recognize(any()) } returns com.tracktosearch.data.ai.AiVoiceMatch.Matched("hachiware")
+        }
+        val viewModel = viewModel(voiceRecognizer = recognizer)
+        viewModel.seedState {
+            it.copy(characters = listOf(viewModelCharacter("usagi")), selectedCharacterId = "usagi")
+        }
+        mockkObject(AiAudioRecorder)
+        try {
+            coEvery { AiAudioRecorder.recordPcmOnce(any(), any()) } returns FloatArray(16_000)
+            viewModel.activate(mockk())
+            advanceUntilIdle()
+        } finally {
+            unmockkObject(AiAudioRecorder)
+        }
+
+        // 与旧服务端行为一致：喊了别的角色名按未匹配处理，只针对所选角色激活
+        assertThat(viewModel.uiState.value.errorCode).isEqualTo("ACTIVATION_NOT_MATCHED")
+        coVerify(exactly = 0) { aiRepository.activate(any(), any()) }
+    }
+
+    @Test
+    fun voiceActivation_recognizerUnavailable_fallsBackToTextOffer() = runTest {
+        val recognizer = mockk<com.tracktosearch.data.ai.AiKwsRecognizer> {
+            coEvery { recognize(any()) } returns com.tracktosearch.data.ai.AiVoiceMatch.Unavailable
+        }
+        val viewModel = viewModel(voiceRecognizer = recognizer)
+        viewModel.seedState {
+            it.copy(characters = listOf(viewModelCharacter("usagi")), selectedCharacterId = "usagi")
+        }
+        mockkObject(AiAudioRecorder)
+        try {
+            coEvery { AiAudioRecorder.recordPcmOnce(any(), any()) } returns FloatArray(16_000)
+            viewModel.activate(mockk())
+            advanceUntilIdle()
+        } finally {
+            unmockkObject(AiAudioRecorder)
+        }
+
+        assertThat(viewModel.uiState.value.errorCode).isEqualTo("AUDIO_UNAVAILABLE")
+        assertThat(viewModel.uiState.value.textActivationOffered).isTrue()
+        coVerify(exactly = 0) { aiRepository.activate(any(), any()) }
+    }
+
+    @Test
     fun authorizedAuditionFailure_fallsBackToSystemSpeech() = runTest {
         val viewModel = viewModel()
         coEvery { aiRepository.listCharacters() } returns Result.success(
@@ -427,6 +532,9 @@ class AiSpriteViewModelTest {
         // 默认模拟 App 未打包预存音频：assets 读取抛异常，试听走网络 TTS 链路
         context: Context = mockk(relaxed = true) {
             every { assets.open(any()) } throws FileNotFoundException("no bundled audition")
+        },
+        voiceRecognizer: com.tracktosearch.data.ai.AiKwsRecognizer = mockk(relaxed = true) {
+            coEvery { recognize(any()) } returns com.tracktosearch.data.ai.AiVoiceMatch.NoMatch
         }
     ): AiSpriteViewModel {
         every { authManager.authState } returns authState
@@ -436,7 +544,7 @@ class AiSpriteViewModelTest {
         // 锐评隐私守卫默认放行：已同意说明弹窗且上传开关开启
         every { aiTasteStorage.tasteConsentDecided } returns flowOf(true)
         every { aiTasteStorage.tasteUploadEnabled } returns flowOf(true)
-        return AiSpriteViewModel(aiRepository, authManager, traktRepository, overlayStorage, aiTasteStorage, context)
+        return AiSpriteViewModel(aiRepository, authManager, traktRepository, overlayStorage, aiTasteStorage, voiceRecognizer, context)
     }
 
     private fun viewModelCharacter(id: String) = com.tracktosearch.data.ai.AiCharacter(

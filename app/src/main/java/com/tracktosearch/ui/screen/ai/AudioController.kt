@@ -32,7 +32,7 @@ object AiAudioRecorder {
     private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
     private const val MAX_DURATION_MS = 3_000L
 
-    suspend fun recordOnce(context: Context, maxDurationMs: Long = MAX_DURATION_MS): String? =
+    suspend fun recordPcmOnce(context: Context, maxDurationMs: Long = MAX_DURATION_MS): FloatArray? =
         withContext(Dispatchers.IO) {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                 return@withContext null
@@ -80,38 +80,13 @@ object AiAudioRecorder {
 
             val pcmBytes = pcm.toByteArray()
             if (pcmBytes.isEmpty()) return@withContext null
-            val wav = ByteArrayOutputStream(pcmBytes.size + 44)
-            writeWavHeader(wav, pcmBytes.size)
-            wav.write(pcmBytes)
-            "data:audio/wav;base64," + Base64.encodeToString(wav.toByteArray(), Base64.NO_WRAP)
+            // 16bit 小端 PCM → FloatArray [-1, 1]，直接喂本地 KWS 识别
+            FloatArray(pcmBytes.size / 2) { i ->
+                val lo = pcmBytes[i * 2].toInt() and 0xff
+                val hi = pcmBytes[i * 2 + 1].toInt()
+                (((hi shl 8) or lo).toShort()) / 32768.0f
+            }
         }
-
-    private fun writeWavHeader(output: ByteArrayOutputStream, dataLength: Int) {
-        fun writeAscii(value: String) = output.write(value.toByteArray(Charsets.US_ASCII))
-        fun writeLittleEndian(value: Int) {
-            output.write(value and 0xff)
-            output.write(value shr 8 and 0xff)
-            output.write(value shr 16 and 0xff)
-            output.write(value shr 24 and 0xff)
-        }
-        fun writeLittleEndianShort(value: Int) {
-            output.write(value and 0xff)
-            output.write(value shr 8 and 0xff)
-        }
-
-        writeAscii("RIFF")
-        writeLittleEndian(36 + dataLength)
-        writeAscii("WAVEfmt ")
-        writeLittleEndian(16)
-        writeLittleEndianShort(1)
-        writeLittleEndianShort(1)
-        writeLittleEndian(SAMPLE_RATE)
-        writeLittleEndian(SAMPLE_RATE * 2)
-        writeLittleEndianShort(2)
-        writeLittleEndianShort(16)
-        writeAscii("data")
-        writeLittleEndian(dataLength)
-    }
 }
 
 private const val ANDROID_ASSET_URL_PREFIX = "file:///android_asset/"

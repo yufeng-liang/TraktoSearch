@@ -130,6 +130,7 @@ class AiSpriteViewModel @Inject constructor(
     private val traktRepository: TraktRepository,
     private val overlayStorage: com.tracktosearch.data.local.AiSpriteOverlayStorage,
     private val aiTasteStorage: com.tracktosearch.data.local.AiTasteStorage,
+    private val voiceRecognizer: com.tracktosearch.data.ai.AiKwsRecognizer,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(
@@ -376,8 +377,8 @@ class AiSpriteViewModel @Inject constructor(
         }
         requestJob?.cancel()
         requestJob = viewModelScope.launch {
-            val audioDataUrl = AiAudioRecorder.recordOnce(context)
-            if (audioDataUrl.isNullOrBlank()) {
+            val pcm = AiAudioRecorder.recordPcmOnce(context)
+            if (pcm == null) {
                 _uiState.update {
                     it.copy(
                         activationState = AiActivationState.FAILED,
@@ -388,42 +389,77 @@ class AiSpriteViewModel @Inject constructor(
                 return@launch
             }
             _uiState.update { it.copy(activationState = AiActivationState.VERIFYING) }
-            aiRepository.activate(
-                friendId = authManager.friendId.value.orEmpty(),
-                request = AiActivateRequest(
-                    characterId = character.id,
-                    audioDataUrl = audioDataUrl,
-                    spokenName = character.activationWord,
-                    sessionId = spriteSessionId
-                )
-            ).onSuccess { activation ->
-                _uiState.update {
-                    it.copy(
-                        activatedCharacterId = if (activation.activated) character.id else it.activatedCharacterId,
-                        activationState = if (activation.activated) AiActivationState.SUCCESS else AiActivationState.FAILED,
-                        activationMessage = activation.activationPhrase.takeIf { activation.activated && it.isNotBlank() },
-                        quota = activation.quota ?: it.quota,
-                        // 语音没识别出来也算"走不通"，此时才把文字入口露出来
-                        textActivationOffered = it.textActivationOffered || !activation.activated,
-                        errorCode = if (activation.activated) null else "ACTIVATION_NOT_MATCHED"
-                    )
+            // 本地离线关键词识别：录音不出设备，不再上传音频，服务端零 ASR 调用
+            when (val match = voiceRecognizer.recognize(pcm)) {
+                com.tracktosearch.data.ai.AiVoiceMatch.Unavailable -> {
+                    _uiState.update {
+                        it.copy(
+                            activationState = AiActivationState.FAILED,
+                            textActivationOffered = true,
+                            errorCode = "AUDIO_UNAVAILABLE"
+                        )
+                    }
                 }
-                activation.audio?.let { _audioEvents.emit(it) }
-                if (activation.activated) {
-                    // 落盘激活态：跨进程重启和详情页这类无激活入口的页面都要认这个角色
-                    aiRepository.saveActivatedCharacterId(
-                        authManager.friendId.value.orEmpty(),
-                        character.id
-                    )
-                    loadGreeting(character.id)
+                com.tracktosearch.data.ai.AiVoiceMatch.NoMatch -> {
+                    _uiState.update {
+                        it.copy(
+                            activationState = AiActivationState.FAILED,
+                            textActivationOffered = true,
+                            errorCode = "ACTIVATION_NOT_MATCHED"
+                        )
+                    }
                 }
-            }.onFailure { error ->
-                _uiState.update {
-                    it.copy(
-                        activationState = AiActivationState.FAILED,
-                        textActivationOffered = true,
-                        errorCode = errorCode(error)
-                    )
+                is com.tracktosearch.data.ai.AiVoiceMatch.Matched -> {
+                    if (match.characterId != character.id) {
+                        // 喊的是别的角色的名字：与服务端旧行为一致，按未匹配处理
+                        _uiState.update {
+                            it.copy(
+                                activationState = AiActivationState.FAILED,
+                                textActivationOffered = true,
+                                errorCode = "ACTIVATION_NOT_MATCHED"
+                            )
+                        }
+                        return@launch
+                    }
+                    // 本地命中后走服务端文字激活：换取角色 ACK 语音与配额记录，
+                    // spokenName 是角色标准名，服务端 matchesActivationName 必然命中
+                    aiRepository.activate(
+                        friendId = authManager.friendId.value.orEmpty(),
+                        request = AiActivateRequest(
+                            characterId = character.id,
+                            spokenName = character.activationWord,
+                            sessionId = spriteSessionId
+                        )
+                    ).onSuccess { activation ->
+                        _uiState.update {
+                            it.copy(
+                                activatedCharacterId = if (activation.activated) character.id else it.activatedCharacterId,
+                                activationState = if (activation.activated) AiActivationState.SUCCESS else AiActivationState.FAILED,
+                                activationMessage = activation.activationPhrase.takeIf { activation.activated && it.isNotBlank() },
+                                quota = activation.quota ?: it.quota,
+                                // 语音没识别出来也算"走不通"，此时才把文字入口露出来
+                                textActivationOffered = it.textActivationOffered || !activation.activated,
+                                errorCode = if (activation.activated) null else "ACTIVATION_NOT_MATCHED"
+                            )
+                        }
+                        activation.audio?.let { _audioEvents.emit(it) }
+                        if (activation.activated) {
+                            // 落盘激活态：跨进程重启和详情页这类无激活入口的页面都要认这个角色
+                            aiRepository.saveActivatedCharacterId(
+                                authManager.friendId.value.orEmpty(),
+                                character.id
+                            )
+                            loadGreeting(character.id)
+                        }
+                    }.onFailure { error ->
+                        _uiState.update {
+                            it.copy(
+                                activationState = AiActivationState.FAILED,
+                                textActivationOffered = true,
+                                errorCode = errorCode(error)
+                            )
+                        }
+                    }
                 }
             }
         }
