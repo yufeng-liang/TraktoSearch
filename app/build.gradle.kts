@@ -61,10 +61,10 @@ android {
         versionCode = 64
         versionName = "3.6.0"
 
-        // sherpa-onnx 全 ABI 太重：保留 arm64/v7a（真机）与 x86_64（模拟器），
-        // 砍掉已无设备使用的 32 位 x86
+        // sherpa-onnx 全 ABI 太重：只保留 arm64-v8a（覆盖全部主流真机），
+        // 模拟器（x86_64）与老 32 位设备不再可装
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+            abiFilters += listOf("arm64-v8a")
         }
 
         testInstrumentationRunner = "com.tracktosearch.CustomTestRunner"
