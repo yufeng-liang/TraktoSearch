@@ -61,6 +61,12 @@ android {
         versionCode = 64
         versionName = "3.6.0"
 
+        // sherpa-onnx 全 ABI 太重：保留 arm64/v7a（真机）与 x86_64（模拟器），
+        // 砍掉已无设备使用的 32 位 x86
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        }
+
         testInstrumentationRunner = "com.tracktosearch.CustomTestRunner"
 
         buildConfigField("String", "FEEDBACK_BASE_URL", "\"${properties.getProperty("feedback.base.url", "https://tracktosearch-gateway.pages.dev/gateway-api")}\"")
@@ -151,6 +157,9 @@ android {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
         resources.excludes += "/META-INF/LICENSE.md"
         resources.excludes += "/META-INF/LICENSE-notice.md"
+        // sherpa-onnx 的 .so 较大（~125MB 原始），压缩进 APK 控制分发体积；
+        // 代价是安装后解压占用与首次加载略慢，可接受
+        jniLibs.useLegacyPackaging = true
     }
 }
 
@@ -277,6 +286,8 @@ tasks.configureEach {
 }
 
 dependencies {
+    // sherpa-onnx：精灵语音激活的本地关键词识别（KWS）引擎，AAR 含全 ABI JNI 库
+    implementation(files("libs/sherpa-onnx-1.13.6.aar"))
     // AndroidX Core
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
