@@ -26,6 +26,17 @@ class SwiftieQuizStateTest {
     }
 
     @Test
+    fun canSubmit_isFalseDuringTheWrongShakeWindow() {
+        // WRONG 那 300ms 里 input 还留着答错的两位，只判长度就能对同一个错答案
+        // 再提交一次，wrongCount 白涨一格
+        val wrong = type('1', '2').submit()
+        assertThat(wrong.canSubmit).isFalse()
+        assertThat(wrong.submit().wrongCount).isEqualTo(1)
+        // clearWrong 回到 INPUT 后输入已空，自然也提交不了
+        assertThat(wrong.clearWrong().canSubmit).isFalse()
+    }
+
+    @Test
     fun submit_correctAnswerSolves() {
         val solved = type('1', '3').submit()
         assertThat(solved.phase).isEqualTo(SwiftieQuizPhase.SOLVED)

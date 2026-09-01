@@ -318,6 +318,12 @@ fun SearchScreen(
     // 彩蛋页本身挂在 MainScreen（Pager 之上），这里只读状态
     val swiftieEggVisible by cloudThemeManager.swiftieEggVisible.collectAsStateWithLifecycle()
     val swiftieQuizSolved by cloudThemeManager.swiftieQuizSolved.collectAsStateWithLifecycle()
+    // 关键词拦截**每个进程只做一次**。
+    //
+    // 用 ✕ 关掉题面不消耗解题机会（quizSolved 仍是 false），所以光靠 quizSolved
+    // 判断的话，真的想搜这个词的人再按一次回车又会被弹到题面 —— 这个关键词就永远
+    // 搜不出去。记一笔之后第二次回车正常发起搜索，与下面那句注释说的行为一致
+    var swiftieKeywordIntercepted by remember { mutableStateOf(false) }
     // 新手引导期间三个入口全部禁用（Spec §3.3）：OnboardingOverlay 是全屏遮罩，会与彩蛋页打架
     val onboardingStorage = remember { OnboardingStorage(context.applicationContext) }
     val onboardingCompleted by onboardingStorage.isCompleted.collectAsStateWithLifecycle(
@@ -853,9 +859,11 @@ fun SearchScreen(
                             interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                             if (onboardingCompleted &&
                                 !swiftieQuizSolved &&
+                                !swiftieKeywordIntercepted &&
                                 SwiftieEggController.matchesKeyword(searchQuery)
                             ) {
                                 // 不发起搜索；searchQuery 保留在框里，用户想搜再按一次（Spec §3.3）
+                                swiftieKeywordIntercepted = true
                                 cloudThemeManager.openSwiftieEgg()
                             } else if (BuildConfig.DEBUG && searchQuery.trim() == "13638719007") {
                                 onSpiderTest?.invoke()

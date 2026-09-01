@@ -115,6 +115,7 @@ class CloudThemeManager @Inject constructor(
     init {
         scope.launch {
             swiftieEggStorage.migrateLegacyNebulaUser(themeStorage.readMeshPresetSnapshot())
+            reconcileSwiftieUnlock()
         }
     }
 
@@ -205,8 +206,12 @@ class CloudThemeManager @Inject constructor(
     fun onSwiftieEggDismissed(solved: Boolean) {
         _swiftieEggVisible.value = false
         // 正常路径在 T1100 已经写过了。这里兜住提前退出的情况（「减少动效」直接给终态、
-        // 序列中途被杀等）。三个写入都幂等，重复调用没有副作用。
-        if (solved) commitSwiftieUnlock()
+        // 序列中途被杀等）。
+        //
+        // 已经 unlocked 就什么都不做：那说明接管早就完成了，没有要补的。**不能**无条件
+        // 重跑 —— 存储的两个键是幂等的，但强调色与网格预设不是，用户解锁之后自己改过
+        // 主题，重看一次纪念页再退出就会被静默改回 RENOIR + NEBULA
+        if (solved && !swiftieEggStorage.unlocked.value) commitSwiftieUnlock()
     }
 
     /**
@@ -214,12 +219,42 @@ class CloudThemeManager @Inject constructor(
      * 早于此会露出颜色跳变。不可逆，不保存解锁前旧值（Spec §9）。
      */
     fun commitSwiftieUnlock() {
-        scope.launch {
-            swiftieEggStorage.markQuizSolved()
-            swiftieEggStorage.markUnlocked()
-            themeStorage.setAccentColor(MonetAccent.RENOIR)
-            themeStorage.setMeshPreset(MeshPreset.NEBULA.name)
-            themeStorage.setMeshEnabled(true)
+        scope.launch { applySwiftieUnlock() }
+    }
+
+    /**
+     * 五个写入的实际顺序。**`markUnlocked` 必须排在 `markQuizSolved` 之前。**
+     *
+     * 这几个写入不在一个事务里，进程随时可能死在中间（用户在扩散那一帧划掉任务、
+     * DataStore 写失败）。两种中间态的代价差别很大：
+     *
+     * - 先写 `quizSolved`：用户**消耗掉了唯一一次解题机会却没拿到任何东西**，而
+     *   `resolveCloudAction` 与搜索关键词拦截都按 `quizSolved` 判断要不要再给题面 ——
+     *   于是他永远拉不起彩蛋，死局。
+     * - 先写 `unlocked`：用户拿到了星云背景，解题机会还留着。纯赚。
+     *
+     * 所以顺序是 `unlocked` → `quizSolved` → 三个主题键，越靠后的写入丢了越不痛。
+     */
+    private suspend fun applySwiftieUnlock() {
+        swiftieEggStorage.markUnlocked()
+        swiftieEggStorage.markQuizSolved()
+        themeStorage.setAccentColor(MonetAccent.RENOIR)
+        themeStorage.setMeshPreset(MeshPreset.NEBULA.name)
+        themeStorage.setMeshEnabled(true)
+    }
+
+    /**
+     * 启动时补齐上次没写完的接管。
+     *
+     * 判据是 `quizSolved && !unlocked`。按 [applySwiftieUnlock] 的顺序，这个组合
+     * **只可能**来自「写到一半进程死了」—— 正常路径写完 `unlocked` 才写 `quizSolved`。
+     * 所以这里可以放心把整套重跑一遍，包括三个主题键：这个状态下接管从未完成过，
+     * 不存在「用户解锁后自己改的主题」会被覆盖的情况。
+     */
+    private suspend fun reconcileSwiftieUnlock() {
+        swiftieEggStorage.awaitReady()
+        if (swiftieEggStorage.quizSolved.value && !swiftieEggStorage.unlocked.value) {
+            applySwiftieUnlock()
         }
     }
 

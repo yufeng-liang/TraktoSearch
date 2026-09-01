@@ -16,10 +16,16 @@ data class SwiftieQuizState(
     val wrongCount: Int = 0,
     val phase: SwiftieQuizPhase = SwiftieQuizPhase.INPUT
 ) {
-    /** 满 2 位且还没答对，提交键才点亮。 */
+    /**
+     * 满 2 位且正处在可作答态，提交键才点亮。
+     *
+     * `WRONG` 也要排除：那 300ms 里 `input` 还留着答错的两位（摇晃要看得见），
+     * 只判长度的话用户能在摇晃窗口里对**同一个错答案**再点一次提交 ——
+     * [submit] 会把 `wrongCount` 又加一次，两次真实尝试就浮出 `Her lucky number.`。
+     */
     val canSubmit: Boolean
         get() = input.length == SwiftieEggController.MAX_INPUT_LENGTH &&
-            phase != SwiftieQuizPhase.SOLVED
+            phase == SwiftieQuizPhase.INPUT
 
     val solved: Boolean get() = phase == SwiftieQuizPhase.SOLVED
 

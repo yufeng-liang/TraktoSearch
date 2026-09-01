@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +55,16 @@ class SwiftieSequenceClock {
     var userSeeked: Boolean by mutableStateOf(false)
         private set
 
+    /**
+     * 每次 [seekTo] 递增，[advance] 不动它。
+     *
+     * 配乐靠这个值判断「时钟被拨过了，播放头要跟着挪」。少了它，
+     * 「跳过」或拖播放头之后配乐还留在原处，[SwiftieTimeline] 钉死的
+     * 那两个点（1:58 起倒滑、2:03 收绽放）就全部失效。
+     */
+    var seekEpoch: Int by mutableIntStateOf(0)
+        private set
+
     val finished: Boolean get() = elapsedMs >= SwiftieTimeline.TOTAL_MS
 
     fun advance(deltaMs: Long) {
@@ -64,6 +75,7 @@ class SwiftieSequenceClock {
 
     fun seekTo(ms: Long) {
         elapsedMs = ms.coerceIn(0L, SwiftieTimeline.TOTAL_MS)
+        seekEpoch++
     }
 
     /** 拖动播放头吸附到第 [index] 张卡片的起点。 */
