@@ -15,11 +15,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
-import coil.compose.AsyncImagePainter
 import coil.request.ImageRequest
 import com.tracktosearch.data.remote.ImageDownloadProgress
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
@@ -29,26 +26,45 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * 全屏大图的渐进底图 URL：把 TMDB 尺寸段换成 w780。
  *
- * 缩略图/详情页头部本来就用 w780，点开时它已在 Coil 内存或磁盘缓存里，可以瞬时铺满，
+ * 缩略图/详情页头部本来就用 w780，点开时它已在 Coil 内存缓存里，通过
+ * [ImageRequest.Builder.placeholderMemoryCacheKey] 作为 telephoto 的原生占位图瞬时显示，
  * 避免「先空白、几秒后整张大图突然出现」。非 TMDB `/t/p/` 结构（豆瓣图、fanart 人物图）
  * 或本身就是 w780 时返回 null，不额外发请求。
  */
-private fun progressiveUnderlay(model: Any?): String? {
+internal fun progressiveUnderlay(model: Any?): String? {
     val url = model as? String ?: return null
     val swapped = TmdbImageUrls.swapSize(url, "w780")
     return swapped.takeIf { it != url }
 }
 
 /**
- * 全屏大图渐进显示 + 加载进度。
+ * 全屏大图请求：original 大图 + w780 内存缓存底图作占位。
  *
- * 三层叠加：
- * 1. 底层小尺寸缓存图（若有），立刻可见；
- * 2. 上层大图，加载完成即覆盖（同一位置、同一构图，不用 crossfade 以免与共享元素转场叠加成双重动画）；
- * 3. 加载期间的进度环——有 Content-Length 时为确定性进度（original 剧照常 2-5MB，
- *    纯 spinner 无法判断还要等多久），拿不到长度时退化为不确定 spinner。
+ * telephoto 的 Coil 集成会把占位 drawable 画在同一位置（同一 ContentScale/构图），
+ * 大图到位后原地替换，全程只有一个绘制节点——替代旧实现的两层 AsyncImage 叠加
+ * （旧方案在共享元素转场期间双层绘制、尺寸不一致，是打开卡顿的根因之一）。
  *
- * 共享元素与手势修饰符由调用方挂在 [modifier] 上（作用于整个 Box，与原来挂在单张图上等价）。
+ * 请求尺寸不指定 .size(1080)：telephoto 需要原图落盘后做子采样分块解码，
+ * 缩到 1080 会让磁盘缓存里只有缩放后的小图，放大就糊。
+ */
+internal fun fullscreenImageRequest(context: android.content.Context, model: Any, underlayUrl: String?): ImageRequest {
+    val builder = ImageRequest.Builder(context)
+    builder.data(model).crossfade(false)
+    if (underlayUrl != null) {
+        builder.placeholderMemoryCacheKey(underlayUrl)
+    }
+    return builder.build()
+}
+
+/**
+ * 全屏大图渐进显示 + 加载进度（保留旧对外签名，内部已换成 telephoto 单节点）。
+ *
+ * 1. w780 缓存底图作为占位立刻可见（若有）；
+ * 2. original 大图加载完成原地覆盖；
+ * 3. 加载期间的进度环——有 Content-Length 时为确定性进度（original 剧照常 2-5MB），
+ *    拿不到长度时退化为不确定 spinner。
+ *
+ * 共享元素与手势修饰符由调用方挂在 [modifier] 上。
  */
 @Composable
 internal fun ProgressiveFullscreenImage(
@@ -56,11 +72,10 @@ internal fun ProgressiveFullscreenImage(
     contentScale: ContentScale,
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
-    imageSizePx: Int = 1080,
+    gesturesEnabled: Boolean = true,
+    onClick: ((androidx.compose.ui.geometry.Offset) -> Unit)? = null,
 ) {
-    val context = LocalContext.current
     val underlayUrl = remember(model) { progressiveUnderlay(model) }
-    var settled by remember(model) { mutableStateOf(false) }
 
     // 只有被观察的 URL 才会被进度拦截器包装，离开时必须 unwatch，否则 map 会一直持有状态
     val progressKey = model as? String ?: ""
@@ -72,35 +87,17 @@ internal fun ProgressiveFullscreenImage(
     }
     val progress by progressFlow.collectAsStateWithLifecycle()
 
+    var settled by remember(model) { mutableStateOf(false) }
+
     Box(modifier = modifier) {
-        if (underlayUrl != null && !settled) {
-            AsyncImage(
-                model = remember(underlayUrl) {
-                    ImageRequest.Builder(context)
-                        .data(underlayUrl)
-                        .crossfade(false)
-                        .build()
-                },
-                contentDescription = null,
-                contentScale = contentScale,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-        AsyncImage(
-            model = remember(model, imageSizePx) {
-                ImageRequest.Builder(context)
-                    .data(model)
-                    .crossfade(false)
-                    .size(imageSizePx)
-                    .build()
-            },
-            contentDescription = contentDescription,
+        ZoomableFullscreenImage(
+            model = model,
             contentScale = contentScale,
+            contentDescription = contentDescription,
+            gesturesEnabled = gesturesEnabled,
+            onClick = onClick,
             modifier = Modifier.fillMaxSize(),
-            onState = { state ->
-                settled = state is AsyncImagePainter.State.Success ||
-                    state is AsyncImagePainter.State.Error
-            }
+            onDisplayedChanged = { settled = it }
         )
         if (!settled) {
             // 有底图时进度环缩小到底部，不挡住已经能看的画面；无底图时居中，替代整片空白

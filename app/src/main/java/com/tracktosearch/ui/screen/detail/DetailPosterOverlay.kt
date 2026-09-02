@@ -35,7 +35,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -50,8 +49,6 @@ import com.tracktosearch.ui.component.zoomSharedTarget
 import com.tracktosearch.ui.util.showToast
 import com.tracktosearch.ui.theme.WatchedGreen
 import kotlinx.coroutines.launch
-import net.engawapg.lib.zoomable.rememberZoomState
-import net.engawapg.lib.zoomable.zoomable
 
 // ==================== 海报大图查看 ====================
 
@@ -60,7 +57,7 @@ import net.engawapg.lib.zoomable.zoomable
  * 用 AnimatedVisibility 包裹，`sharedKeyPrefix` 非空且共享转场开启时，
  * 图片以 `sharedKeyPrefix` 作为 sharedElement key，与详情页头部海报源（zoomSharedSource）配对，
  * 实现 Telegram 风格的小图→大图缩放过渡。
- * 手势：单击退出；若已放大则单击先复位，再次单击才退出；双击切换 1x/2.5x。
+ * 手势（单击退出、双击 1x/2.5x、双指缩放）由 telephoto 统一承担。
  * 注意：本组件必须一直处于组合中（用 `visible` 控制显隐），不能包在 `if` 里。
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -86,8 +83,6 @@ internal fun PosterFullscreenOverlay(
         isSaved = queryExistingFile(context, filename, relativePath) != null
     }
 
-    val zoomState = rememberZoomState()
-
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(animationSpec = tween(200)),
@@ -96,11 +91,7 @@ internal fun PosterFullscreenOverlay(
         val animatedVisibilityScope = this
 
         BackHandler(enabled = true) {
-            if (zoomState.scale > 1f) {
-                scope.launch { zoomState.changeScale(1f, Offset.Zero) }
-            } else {
-                onDismiss()
-            }
+            onDismiss()
         }
 
         Box(
@@ -110,22 +101,16 @@ internal fun PosterFullscreenOverlay(
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = {
-                        if (zoomState.scale > 1f) {
-                            scope.launch { zoomState.changeScale(1f, Offset.Zero) }
-                        } else {
-                            onDismiss()
-                        }
-                    }
+                    onClick = onDismiss
                 ),
             contentAlignment = Alignment.Center
         ) {
-            // 海报图片（放大显示，拦截点击事件不触发外层dismiss）
+            // 海报图片（放大显示，点击事件由 zoomable 的 onClick 拦截，不触发外层 dismiss）
             ProgressiveFullscreenImage(
                 // 全屏查看用 original 原图:1080p 屏全屏显示约 1050px,
                 // w500 源图放大到 1080 解码会模糊,original(2000px+) 保证清晰;
                 // 下载大但仅在用户主动查看大图时触发。
-                // 渐进底图为 w780（详情页头部已加载过，点开即可见），大图到位后覆盖。
+                // 渐进底图 w780 走 telephoto 原生占位图机制（详情页头部已加载过，点开即可见）。
                 model = remember(posterUrl) { TmdbImageUrls.swapSize(posterUrl, "original") },
                 contentScale = ContentScale.Fit,
                 contentDescription = title,
@@ -136,27 +121,11 @@ internal fun PosterFullscreenOverlay(
                         key = sharedKeyPrefix,
                         animatedVisibilityScope = animatedVisibilityScope,
                         clipShape = RoundedCornerShape(12.dp)
-                    )
-                    // 单击退出（已放大时先复位）、双击缩放统一交给 zoomable 自带回调
-                    .zoomable(
-                        zoomState,
-                        onTap = {
-                            if (zoomState.scale > 1f) {
-                                scope.launch { zoomState.changeScale(1f, Offset.Zero) }
-                            } else {
-                                onDismiss()
-                            }
-                        },
-                        onDoubleTap = { tapOffset ->
-                            if (zoomState.scale > 1f) {
-                                // 已放大 → 还原
-                                zoomState.changeScale(1f, Offset.Zero)
-                            } else {
-                                // 未放大 → 放大到 2.5x,以双击位置为中心
-                                zoomState.changeScale(2.5f, tapOffset)
-                            }
-                        }
-                    )
+                    ),
+                // 转场动画期间锁手势，避免与共享元素转场互相打架
+                gesturesEnabled = !animatedVisibilityScope.transition.isRunning,
+                // 单击退出（已放大时 telephoto 不触发 onClick 的语义由其内部处理）
+                onClick = { onDismiss() }
             )
 
             // 顶部操作栏（在图片之上，也需要拦截点击）

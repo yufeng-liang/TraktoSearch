@@ -32,21 +32,27 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import kotlinx.coroutines.launch
-import net.engawapg.lib.zoomable.rememberZoomState
-import net.engawapg.lib.zoomable.zoomable
+import me.saket.telephoto.zoomable.EnabledZoomGestures
+import me.saket.telephoto.zoomable.ZoomSpec
+import me.saket.telephoto.zoomable.coil.ZoomableAsyncImage
+import me.saket.telephoto.zoomable.rememberZoomableImageState
+import me.saket.telephoto.zoomable.rememberZoomableState
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 
@@ -56,11 +62,13 @@ import androidx.compose.ui.semantics.semantics
  * 每页图片以 `$sharedKeyPrefix-$page` 作为 sharedElement key，
  * 与缩略图端 [zoomSharedSource] 的相同 key 配对，实现 Telegram 风格的小图→大图缩放过渡。
  *
- * 手势：单击退出；若已放大则单击先复位到初始大小，再次单击才退出；双击切换 1x/2.5x。
+ * 手势与子采样由 telephoto [ZoomableFullscreenImage] 承担：双击在 1x/2.5x 间切换，
+ * 放大后 telephoto 的 nested scroll 自动消费横向拖动、缩小时交还给 pager 翻页，
+ * 无需再手工锁 userScrollEnabled。
  *
  * 注意：本组件必须一直处于组合中（用 `visible` 控制显隐），不能包在 `if` 里，
  * 否则共享元素两侧无法在同一帧共存，转场不会发生。
- * 例外：跨窗口场景（盖在 ModalBottomSheet 之上的 Dialog）本就无法共享元素，
+ * 例外：跨窗口场景（Dialog 盖 ModalBottomSheet）本就无法共享元素，
  * 此时传 `sharedKeyPrefix = null` 并用 [enter]/[exit] 指定 scale+fade 近似动画。
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -87,24 +95,19 @@ internal fun ZoomableImageOverlay(
     ) {
         val animatedVisibilityScope = this
 
-        // pagerState / zoomState 建在 AnimatedVisibility 内容里,每次打开都是新的一份,
+        // pagerState 建在 AnimatedVisibility 内容里,每次打开都是新的一份,
         // initialPage 在首次组合就生效,打开动画的第一帧即落在目标页。
         //
-        // 原先两者建在外层常驻组合,复位靠 LaunchedEffect 里的 scrollToPage —— 那要等到
+        // 原先建在外层常驻组合,复位靠 LaunchedEffect 里的 scrollToPage —— 那要等到
         // 下一帧才跑,于是打开动画的第一帧渲染的还是上次看的那页,而且那页的 sharedElement
         // 会跟自己那张仍可见的缩略图配成一对被抬进转场 overlay。表现为在两张图之间反复
         // 开关时「打开 a 时 b 闪一下」。也顺带修掉「同一张图横滑几页后重开仍停在旧页」。
         //
         // 内容要等退出动画跑完才被丢弃,所以缩回缩略图的动画不受影响。
         val pagerState = rememberPagerState(initialPage = safeInitial, pageCount = { images.size })
-        val zoomState = rememberZoomState()
-
-        // 切页时重置缩放
-        LaunchedEffect(pagerState.currentPage) { zoomState.reset() }
 
         BackHandler(enabled = true) {
-            if (zoomState.scale > 1f) scope.launch { zoomState.changeScale(1f, Offset.Zero) }
-            else onDismiss()
+            onDismiss()
         }
 
         Box(
@@ -120,47 +123,28 @@ internal fun ZoomableImageOverlay(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = {
-                            if (zoomState.scale > 1f) scope.launch { zoomState.changeScale(1f, Offset.Zero) }
-                            else onDismiss()
-                        }
+                        onClick = onDismiss
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 HorizontalPager(
                     state = pagerState,
-                    userScrollEnabled = zoomState.scale <= 1f,
                     modifier = Modifier.fillMaxSize()
                 ) { page ->
                     val url = images.getOrNull(page) ?: return@HorizontalPager
-                    ProgressiveFullscreenImage(
+                    ZoomableFullscreenImage(
                         model = url,
                         contentScale = ContentScale.Fit,
+                        // 转场动画期间锁手势，避免手势 transform 与共享元素转场互相打架
+                        gesturesEnabled = animatedVisibilityScope.transition.isRunning.not(),
                         modifier = Modifier
                             .fillMaxSize()
                             .zoomSharedTarget(
                                 key = sharedKeyPrefix?.let { "$it-$page" },
                                 animatedVisibilityScope = animatedVisibilityScope
-                            )
-                            // 单击退出（已放大时先复位）、双击缩放都交给 zoomable 自带回调，
-                            // 避免再叠一层 detectTapGestures 与它争抢手势
-                            .zoomable(
-                                zoomState,
-                                onTap = {
-                                    if (zoomState.scale > 1f) {
-                                        scope.launch { zoomState.changeScale(1f, Offset.Zero) }
-                                    } else {
-                                        onDismiss()
-                                    }
-                                },
-                                onDoubleTap = { tapOffset ->
-                                    if (zoomState.scale > 1f) {
-                                        zoomState.changeScale(1f, Offset.Zero)
-                                    } else {
-                                        zoomState.changeScale(2.5f, tapOffset)
-                                    }
-                                }
-                            )
+                            ),
+                        // 单击退出；双击缩放交给 telephoto 默认的 cycle(1x↔max)
+                        onClick = { onDismiss() }
                     )
                 }
             }
@@ -238,4 +222,45 @@ internal fun ZoomableImageOverlay(
             }
         }
     }
+}
+
+/**
+ * 全屏大图统一入口：telephoto 缩放手势 + 子采样 + w780 渐进底图占位。
+ * 海报单图（PosterFullscreenOverlay）与多图 pager 共用，保证手势手感一致。
+ */
+@Composable
+internal fun ZoomableFullscreenImage(
+    model: Any,
+    contentScale: ContentScale,
+    modifier: Modifier = Modifier,
+    gesturesEnabled: Boolean = true,
+    onClick: ((Offset) -> Unit)? = null,
+    contentDescription: String? = null,
+    onDisplayedChanged: ((Boolean) -> Unit)? = null,
+) {
+    val context = LocalContext.current
+    val underlayUrl = remember(model) { progressiveUnderlay(model) }
+    // 双击上限 2.5x 对齐旧行为；双击由 telephoto cycle() 在 min↔max 间切换
+    val zoomableState = rememberZoomableImageState(
+        rememberZoomableState(zoomSpec = ZoomSpec(maxZoomFactor = 2.5f))
+    )
+
+    if (onDisplayedChanged != null) {
+        DisposableEffect(zoomableState) {
+            onDispose { onDisplayedChanged(false) }
+        }
+        LaunchedEffect(zoomableState) {
+            snapshotFlow { zoomableState.isImageDisplayed }.collect { onDisplayedChanged(it) }
+        }
+    }
+
+    ZoomableAsyncImage(
+        model = fullscreenImageRequest(context, model, underlayUrl),
+        contentDescription = contentDescription,
+        contentScale = contentScale,
+        state = zoomableState,
+        gestures = if (gesturesEnabled) EnabledZoomGestures.ZoomAndPan else EnabledZoomGestures.None,
+        onClick = onClick,
+        modifier = modifier
+    )
 }
