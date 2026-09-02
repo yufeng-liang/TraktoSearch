@@ -215,6 +215,16 @@ private const val BULB_SOCKET_RATIO = 1.28f
 private const val BULB_STEP_MILLIS = 650
 
 /**
+ * 验码期间头灯走过一颗灯的时长。
+ *
+ * 比进场那一遍的 [BULB_STEP_MILLIS] 快得多，因为这两处要说的事不一样：进场是氛围，
+ * 慢才像门头灯；验码是「机器在忙」，而一次验码通常不到一秒 —— 按 650ms 一颗算，
+ * 用户全程只看到头灯挪了一格，跟没动没有区别。240ms 一颗合一圈 1.44 秒，
+ * 短请求也能看出这是在转。
+ */
+private const val BULB_VERIFY_STEP_MILLIS = 240
+
+/**
  * 进场扫几遍。
  *
  * 一遍就停 —— 头灯走到最后一颗时整排都还亮着（见 [BULB_COUNT]），那一刻就是这台机器的
@@ -362,13 +372,13 @@ internal fun TicketMachine(
                 .padding(horizontal = 16.dp, vertical = ShellPaddingVertical)
         ) {
             // 顶边跑马灯。影院门头上的那串灯，是这台机器唯一的「氛围」构件；
-            // 取票有结果时它同时是结果灯：对了整排绿，错了整排红
+            // 取票有动静时它同时是状态灯：验码中一直流水，对了整排绿，错了整排红
             MarqueeBulbs(
-                signal = when {
-                    statusIsError -> BulbSignal.Failure
-                    isPrinting -> BulbSignal.Success
-                    else -> BulbSignal.Sweep
-                },
+                signal = bulbSignalFor(
+                    isLoading = isLoading,
+                    statusIsError = statusIsError,
+                    isPrinting = isPrinting
+                ),
                 isDarkTheme = isDarkTheme
             )
 
@@ -630,17 +640,19 @@ private fun pixelDisplayStyle(size: TextUnit): TextStyle = TextStyle(
 private const val DISPLAY_LINE_HEIGHT_RATIO = 1.15f
 
 /**
- * 机壳顶边的一串跑马灯，兼取票结果灯。
+ * 机壳顶边的一串跑马灯，兼取票状态灯。
  *
  * 平常不是一直在跑：进场扫 [BULB_ENTRY_SWEEPS] 遍就熄掉。这一屏的主任务是输入六位码，
  * 常驻动画会一直分走注意力。
  *
- * 有结果的时候整排变成一个结论：取票码对了整排亮绿，错了整排亮红，见 [BulbSignal]。
- * 这两档不扫动 —— 结论不该看起来还在处理。
+ * 三种情形接管这排灯，见 [BulbSignal]：验码期间一直流水（[BULB_VERIFY_STEP_MILLIS] 一颗，
+ * 比进场快），取票码对了整排亮绿，错了整排亮红。后两档不扫动 ——
+ * 结论不该看起来还在处理；反过来，还在处理的时候就该扫。
  *
  * 系统「动画时长」调成 0（开发者选项或省电模式）时跑马灯一颗不亮，
  * 但绿灯红灯照亮，只是不做升温冷却直接到位：那个开关的意思是「别给我动画」，
- * 不是「别告诉我取票成功了没有」。
+ * 不是「别告诉我取票成功了没有」。验码那一档在这种设置下也不亮 ——
+ * 它是进度指示，而取票键上的那个进度圈已经把同样的事说了。
  *
  * 相位读在 `drawBehind` 里，不是拿来算 [BULB_COUNT] 个子组合体：这样每帧只重绘不重组。
  * 灯泡的明暗模型见 [filamentHeat]，画法见 [drawBulbLight]。
@@ -678,12 +690,33 @@ private fun MarqueeBulbs(signal: BulbSignal, isDarkTheme: Boolean) {
             )
             return@LaunchedEffect
         }
-        signalHeat.animateTo(
-            targetValue = 0f,
-            animationSpec = tween(BULB_SIGNAL_FALL_MILLIS, easing = LinearEasing)
-        )
+        // 只有真的还亮着才需要等它冷下去。Animatable 到目标值也照走完整个 tween，
+        // 无条件 animateTo(0f) 会在本来就全灭的情况下白等 BULB_SIGNAL_FALL_MILLIS ——
+        // 验码那一档等不起，一次验码常常还没这么久
+        if (signalHeat.value > 0f) {
+            signalHeat.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(BULB_SIGNAL_FALL_MILLIS, easing = LinearEasing)
+            )
+        }
         shownGlow = null
         phase.snapTo(0f)
+        if (signal == BulbSignal.Verifying) {
+            // 一直流水到有结果为止。相位单调递增，不每遍回零：回零会把上一遍的尾巴
+            // 一次抹掉，两遍的接缝看得出来
+            lightingCeiling = Float.MAX_VALUE
+            var sweep = 1
+            while (true) {
+                phase.animateTo(
+                    targetValue = (BULB_COUNT * sweep).toFloat(),
+                    animationSpec = tween(
+                        durationMillis = BULB_VERIFY_STEP_MILLIS * BULB_COUNT,
+                        easing = LinearEasing
+                    )
+                )
+                sweep++
+            }
+        }
         val lit = (BULB_COUNT * BULB_ENTRY_SWEEPS).toFloat()
         lightingCeiling = lit
         phase.animateTo(
@@ -722,7 +755,7 @@ private const val BULB_ALL_OFF = -1f
  * 玻璃色按亮度在前两端之间插值。[filament] 是玻璃最里那一点白热灯丝，
  * 信号灯不给（传 null）—— 绿灯红灯是磨砂罩子里的一片色，露出一根白丝反而像坏了。
  */
-private data class BulbGlow(val ember: Color, val lit: Color, val filament: Color?)
+internal data class BulbGlow(val ember: Color, val lit: Color, val filament: Color?)
 
 /** 跑马灯的白炽档。头灯扫过去时用的就是这一档。 */
 private val ChaseGlow = BulbGlow(MachineBulbEmber, MachineBulbLit, Color.White)
@@ -730,18 +763,40 @@ private val ChaseGlow = BulbGlow(MachineBulbEmber, MachineBulbLit, Color.White)
 /**
  * 跑马灯当前该表达什么。
  *
- * 三态互斥：整排绿或整排红是一个结论，这种时候不该还有头灯在扫 ——
- * 扫动会把已经出来的结果读成「还在处理」。
+ * 四态互斥。整排绿或整排红是一个结论，这种时候不该还有头灯在扫 ——
+ * 扫动会把已经出来的结果读成「还在处理」；反过来，真的在处理的时候就该扫。
  */
-private enum class BulbSignal(val glow: BulbGlow?) {
+internal enum class BulbSignal(internal val glow: BulbGlow?) {
     /** 平常。进场扫一遍就冷掉，见 [BULB_ENTRY_SWEEPS]。 */
     Sweep(null),
+
+    /** 正在验取票码。黄灯一直流水，直到有结果为止。 */
+    Verifying(null),
 
     /** 取票码对了，整排亮绿。 */
     Success(BulbGlow(MachineBulbEmberGreen, MachineBulbLitGreen, filament = null)),
 
     /** 取票码错了（或剪贴板里没有码），整排亮红。 */
     Failure(BulbGlow(MachineBulbEmberRed, MachineBulbLitRed, filament = null)),
+}
+
+/**
+ * 三个互不排斥的界面标志映射到互斥的四档灯。
+ *
+ * [isLoading] 排在最前，因为请求回来的那一刻它转 false，同时
+ * [statusIsError] / [isPrinting] 里恰好有一个转 true —— 验码灯和结果灯的交接没有空档。
+ * 反过来把结果排在前面，上一次的红灯会盖住这一次的验码流水：
+ * 用户改完码再按取票，`error` 要等新响应回来才清，那段时间整排还红着。
+ */
+internal fun bulbSignalFor(
+    isLoading: Boolean,
+    statusIsError: Boolean,
+    isPrinting: Boolean,
+): BulbSignal = when {
+    isLoading -> BulbSignal.Verifying
+    statusIsError -> BulbSignal.Failure
+    isPrinting -> BulbSignal.Success
+    else -> BulbSignal.Sweep
 }
 
 /**
