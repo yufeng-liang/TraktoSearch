@@ -113,6 +113,7 @@ import com.tracktosearch.ui.theme.PixelFontFamily
 import com.tracktosearch.ui.theme.pixelFontSize
 import kotlin.math.exp
 import kotlin.math.floor
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
@@ -146,8 +147,13 @@ private val CodeCellHeight = 34.dp
  */
 private val ShellPaddingVertical = 12.dp
 
-/** 机壳四角螺丝的直径。再小就看不出是螺丝，再大就抢铭牌。 */
-private val ScrewSize = 7.dp
+/**
+ * 机壳四角螺丝的直径。
+ *
+ * 比灯泡小一半：两者现在同高一排，尺寸再接近的话灭灯之后整条顶边就是十个一样的暗圆点，
+ * 分不出哪个是灯哪个是螺丝。
+ */
+private val ScrewSize = 6.dp
 
 /** 螺丝到机壳左右边的距离。比横向内边距小一档，螺丝才落在「边框」那一圈里而不是压住内容。 */
 private val ScrewInsetHorizontal = 7.dp
@@ -178,7 +184,7 @@ private const val NOISE_ALPHA = 0x16
 private const val BULB_COUNT = 8
 
 /** 灯泡玻璃直径。灯座环画在它外面，所以这一颗实际占位比这个数大一圈。 */
-private val BulbSize = 10.dp
+private val BulbSize = 12.dp
 
 /** 灯座环相对玻璃半径的加宽量。灯泡要看着是拧在机壳上的，不是画在机壳上的。 */
 private const val BULB_SOCKET_RATIO = 1.28f
@@ -209,6 +215,17 @@ internal const val BULB_DECAY_BULBS = 1.6f
  * 这是「暗下去要逐渐暗」最容易破功的地方，跑得再准也毁在最后一帧。
  */
 private const val BULB_TAIL_BULBS = 6f
+
+/**
+ * 玻璃亮度的感知校正指数。
+ *
+ * 余温直接当透明度用，压在暗底上会比数值看着暗得多：装机截图上余温 0.53 的那颗
+ * 只剩两三成观感，一条本该三四颗长的尾巴看着只有一颗半。取 0.6 次幂把中段抬起来 ——
+ * 0.53 抬到 0.68、0.28 抬到 0.45、0.15 抬到 0.31，尾巴上三四颗都看得出在冷。
+ *
+ * 只校正透明度，不校正颜色：色温该跟着真实余温走，抬了颜色红档就提前出现。
+ */
+private const val BULB_ALPHA_GAMMA = 0.6f
 
 /**
  * 电影院取票机。面板上按自绘数字键盘输入 6 位取票码，按通栏「取票」键，票从底部出票口打印出来。
@@ -324,8 +341,8 @@ internal fun TicketMachine(
             // 凹槽给这行字一个可控的底，MachinePlateInk 上标的对比度才算得准。
             // 右边配一块喇叭网 —— 取票机会叫号，有网罩才像有喇叭
             //
-            // 顶距 4dp 而不是 8dp：灯泡放大到 10dp 后灯座环已经吃掉了原先那段空白，
-            // 留 8dp 会把整台机器又推高 4dp，一屏的余量不该花在这儿
+            // 顶距 4dp 而不是 8dp：灯泡放大到 12dp 后灯座环已经吃掉了原先那段空白，
+            // 留 8dp 会把整台机器再推高一截，一屏的余量不该花在这儿
             val plateShape = RoundedCornerShape(3.dp)
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
@@ -710,22 +727,22 @@ private fun DrawScope.drawBulbGlassSheen(center: Offset, radius: Float) {
  * 亮起来的那几层：外面三圈溢到机壳上的光晕，中间是随余温变色的玻璃，最里是灯丝。
  *
  * 光晕用三个同心实心圆而不是 radialGradient：渐变 Brush 每颗每帧都要新建对象，
- * 三圈叠出来的过渡在 10dp 的灯泡上已经看不出台阶。
+ * 三圈叠出来的过渡在这个尺寸的灯泡上已经看不出台阶。
  *
- * 玻璃颜色按余温在余烬色和暖白之间插值 —— 冷下去的灯丝先转橙再转红，
- * 只调透明度会像有人在拉调光旋钮。
+ * 透明度走 [BULB_ALPHA_GAMMA] 校正过的 glow，颜色仍按原始余温在余烬色和暖白之间插值 ——
+ * 冷下去的灯丝先转橙再转红，只调透明度会像有人在拉调光旋钮。
  */
 private fun DrawScope.drawBulbLight(center: Offset, radius: Float, heat: Float) {
-    val bloom = MachineBulbLit.copy(alpha = 0.16f * heat)
-    drawCircle(bloom.copy(alpha = 0.06f * heat), radius = radius * 2.4f, center = center)
-    drawCircle(bloom.copy(alpha = 0.10f * heat), radius = radius * 1.7f, center = center)
-    drawCircle(bloom, radius = radius * 1.25f, center = center)
+    val glow = heat.pow(BULB_ALPHA_GAMMA)
+    drawCircle(MachineBulbLit.copy(alpha = 0.08f * glow), radius = radius * 2.4f, center = center)
+    drawCircle(MachineBulbLit.copy(alpha = 0.13f * glow), radius = radius * 1.7f, center = center)
+    drawCircle(MachineBulbLit.copy(alpha = 0.20f * glow), radius = radius * 1.25f, center = center)
     drawCircle(
-        color = lerp(MachineBulbEmber, MachineBulbLit, heat).copy(alpha = heat),
+        color = lerp(MachineBulbEmber, MachineBulbLit, heat).copy(alpha = glow),
         radius = radius,
         center = center
     )
-    // 灯丝只在够热的时候看得见，所以用 heat 的平方：尾巴上剩的是一团红光，不是一根丝
+    // 灯丝只在够热的时候看得见，所以用原始余温的平方：尾巴上剩的是一团红光，不是一根丝
     drawCircle(
         color = Color.White.copy(alpha = heat * heat * 0.85f),
         radius = radius * 0.34f,
