@@ -73,10 +73,14 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
@@ -126,11 +130,23 @@ private val KeyHeight = 52.dp
 /** 机壳圆角。上下同值：取票机是个方箱子，圆角只是倒边。 */
 private val ShellCorner = 16.dp
 
+/**
+ * 取票码单格的高度。空着时这一格全是留白，40dp 会在屏和键盘之间留出一大块空洞，
+ * 34dp 仍装得下 24dp 档的像素数字和 20dp 的光标。
+ */
+private val CodeCellHeight = 34.dp
+
+/**
+ * 机壳内边距。纵向这一档同时决定顶边跑马灯的位置，四角螺丝的纵向圆心由它推导
+ * （见 [drawShellScrews]），所以改这里灯和螺丝会一起动，不会只动一边。
+ */
+private val ShellPaddingVertical = 12.dp
+
 /** 机壳四角螺丝的直径。再小就看不出是螺丝，再大就抢铭牌。 */
 private val ScrewSize = 7.dp
 
-/** 螺丝到机壳边的距离。和机壳内边距同量，螺丝才落在「边框」那一圈里而不是压住内容。 */
-private val ScrewInset = 7.dp
+/** 螺丝到机壳左右边的距离。比横向内边距小一档，螺丝才落在「边框」那一圈里而不是压住内容。 */
+private val ScrewInsetHorizontal = 7.dp
 
 /** 已取票态键盘的残留透明度。键盘留在面板上撑住机器的样子，但不再是可用控件。 */
 private const val GHOST_KEYPAD_ALPHA = 0.30f
@@ -271,7 +287,7 @@ internal fun TicketMachine(
                     drawShellScrews()
                 }
                 .border(1.dp, Color.Black.copy(alpha = 0.42f), shellShape)
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(horizontal = 16.dp, vertical = ShellPaddingVertical)
         ) {
             // 顶边跑马灯。影院门头上的那串灯，是这台机器唯一的「氛围」构件
             MarqueeBulbs(isPrinting = isPrinting, isDarkTheme = isDarkTheme)
@@ -335,8 +351,7 @@ internal fun TicketMachine(
                     // pixelFontSize 向下取整到网格倍数，再高一档中文会顶右边缘
                     Text(
                         text = statusText,
-                        fontFamily = PixelFontFamily,
-                        fontSize = pixelFontSize(16.dp),
+                        style = pixelDisplayStyle(pixelFontSize(16.dp)),
                         color = displayInk,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -346,8 +361,7 @@ internal fun TicketMachine(
                     if (detailText != null) {
                         Text(
                             text = detailText,
-                            fontFamily = PixelFontFamily,
-                            fontSize = pixelFontSize(12.dp),
+                            style = pixelDisplayStyle(pixelFontSize(12.dp)),
                             color = displayInk.copy(alpha = 0.78f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -449,8 +463,8 @@ internal fun TicketMachine(
                     containerColor = LoginTitleInk,
                     contentColor = LoginPaperLight,
                     // 禁用态跟着机壳走，不能再用原先那对浅灰 —— 深色档机壳上会亮成一块白条
-                    disabledContainerColor = lerp(shell, Color.Black, 0.32f),
-                    disabledContentColor = MachineCodeInk.copy(alpha = 0.45f)
+                    disabledContainerColor = lerp(shell, Color.Black, 0.22f),
+                    disabledContentColor = MachineCodeInk.copy(alpha = 0.55f)
                 )
             ) {
                 if (isLoading) {
@@ -506,6 +520,31 @@ internal fun TicketMachine(
         }
     }
 }
+
+/**
+ * 点阵屏那两行的排版。
+ *
+ * 点阵字体的 ascent/descent 留白很宽，再叠上 Compose 默认的 includeFontPadding，
+ * 一行 48px 的字实际要占掉 27dp —— 两行加起来撑破 52dp 的屏窗，装机截图上
+ * 第二行只露出上半截。这里把 font padding 关掉、行高按字号钉死、并让行高在上下均分。
+ *
+ * 行高由字号乘出来，跟 [pixelFontSize] 一样与系统字号倍率无关：
+ * 屏窗高度是锁死的，行高跟着系统字号涨会重新把它撑破。
+ */
+@Composable
+private fun pixelDisplayStyle(size: TextUnit): TextStyle = TextStyle(
+    fontFamily = PixelFontFamily,
+    fontSize = size,
+    lineHeight = size * DISPLAY_LINE_HEIGHT_RATIO,
+    platformStyle = PlatformTextStyle(includeFontPadding = false),
+    lineHeightStyle = LineHeightStyle(
+        alignment = LineHeightStyle.Alignment.Center,
+        trim = LineHeightStyle.Trim.Both
+    )
+)
+
+/** 点阵屏行高相对字号的倍率。1.15 留出一点行距，又不至于把两行顶出屏窗。 */
+private const val DISPLAY_LINE_HEIGHT_RATIO = 1.15f
 
 /**
  * 机壳顶边的一串跑马灯。
@@ -668,17 +707,23 @@ private fun DrawScope.drawShellBevel() {
     )
 }
 
-/** 四角螺丝：一个暗坑、一圈高光、一个十字槽。「这台机器是拧起来的」最省事的一笔。 */
+/**
+ * 四角螺丝：一个暗坑、一圈高光、一个十字槽。「这台机器是拧起来的」最省事的一笔。
+ *
+ * 纵向圆心跟顶边跑马灯的灯泡圆心对齐：螺丝和灯泡都是钉在机壳边框那一圈上的圆点，
+ * 两排错开几 dp 就像装歪了。所以这里不写死一个纵向 inset，而是拿内边距加半个灯泡直径算出来。
+ */
 private fun DrawScope.drawShellScrews() {
     val radius = ScrewSize.toPx() / 2f
-    val inset = ScrewInset.toPx() + radius
+    val insetX = ScrewInsetHorizontal.toPx() + radius
+    val insetY = ShellPaddingVertical.toPx() + BulbSize.toPx() / 2f
     val slot = radius * 0.55f
     val stroke = 1.dp.toPx()
     val centers = listOf(
-        Offset(inset, inset),
-        Offset(size.width - inset, inset),
-        Offset(inset, size.height - inset),
-        Offset(size.width - inset, size.height - inset),
+        Offset(insetX, insetY),
+        Offset(size.width - insetX, insetY),
+        Offset(insetX, size.height - insetY),
+        Offset(size.width - insetX, size.height - insetY),
     )
     for (center in centers) {
         drawCircle(Color.Black.copy(alpha = 0.40f), radius = radius, center = center)
@@ -717,7 +762,7 @@ private fun RowScope.CodeCell(digit: Char?, showCaret: Boolean) {
     Box(
         modifier = Modifier
             .weight(1f)
-            .height(40.dp)
+            .height(CodeCellHeight)
             .drawBehind {
                 val stroke = 2.dp.toPx()
                 drawLine(
