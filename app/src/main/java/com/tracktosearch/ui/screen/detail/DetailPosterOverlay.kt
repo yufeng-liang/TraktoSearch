@@ -4,6 +4,7 @@ import android.os.Environment
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -85,8 +86,10 @@ internal fun PosterFullscreenOverlay(
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(animationSpec = tween(200)),
-        exit = fadeOut(animationSpec = tween(200))
+        // 进入用 snap：共享元素由 spring 负责，alpha 叠 fade 会双重动画；
+        // 退出保留短 fade：缩回缩略图后遮罩平滑消失
+        enter = fadeIn(animationSpec = snap()),
+        exit = fadeOut(animationSpec = tween(120))
     ) {
         val animatedVisibilityScope = this
 

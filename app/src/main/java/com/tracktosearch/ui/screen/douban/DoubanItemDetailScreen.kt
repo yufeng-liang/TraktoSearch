@@ -162,6 +162,7 @@ import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.prefetchFullscreenImage
 import com.tracktosearch.ui.component.rememberAppPullToRefreshState
 import com.tracktosearch.ui.component.zoomSharedSource
 import com.tracktosearch.ui.screen.detail.DetailMetaChip
@@ -1354,7 +1355,11 @@ fun DoubanItemDetailScreen(
                             isLegacyFailure = uiState.isLegacyFailure,
                             detailInfo = uiState.detailInfo,
                             posterColor = uiState.posterDominantColor,
-                            onPosterClick = { showPosterFullscreen = true },
+                            onPosterClick = {
+                                // 点击即预热全屏用大图（豆瓣图无尺寸段，直接用原 URL 预热磁盘缓存）
+                                failure.posterUrl?.let { prefetchFullscreenImage(context, listOf(it)) }
+                                showPosterFullscreen = true
+                            },
                             onSubtitleClick = {
                                 subtitleInput = failure.subtitle ?: ""
                                 viewModel.showSubtitleDialog(true)

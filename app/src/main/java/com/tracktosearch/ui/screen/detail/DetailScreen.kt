@@ -100,6 +100,7 @@ import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.tracktosearch.R
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.AppErrorState
@@ -124,6 +125,7 @@ import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.prefetchFullscreenImage
 import com.tracktosearch.ui.component.rememberAppPullToRefreshState
 import com.tracktosearch.ui.component.rememberShimmer
 import com.tracktosearch.ui.screen.ai.AiSceneEvent
@@ -511,7 +513,16 @@ fun DetailScreen(
                     }
                 }
             }
-            val onPosterClick = remember { { showPosterFullscreen = true } }
+            // 点海报即预热 original 大图：转场动画只有几百毫秒，提前一拍 enqueue
+            // 让 telephoto 子采样打开时就能从磁盘读 tile，避免「先糊后突然变清」
+            val onPosterClick = remember(uiState.posterUrl) {
+                {
+                    uiState.posterUrl?.let {
+                        prefetchFullscreenImage(coilContext, listOf(TmdbImageUrls.swapSize(it, "original")))
+                    }
+                    showPosterFullscreen = true
+                }
+            }
             val onToggleSeason = remember { { season: Int -> viewModel.toggleSeason(season) } }
             val onToggleEpisodeWatched = remember { { season: Int, episode: Int, traktId: Int -> viewModel.toggleEpisodeWatched(season, episode, traktId) } }
             val onVideoClick = remember { { video: TmdbVideo -> playingVideoKey = video.key } }

@@ -106,3 +106,24 @@ private fun rememberPosterPrefetchCore(
             }
     }
 }
+
+/**
+ * 点击缩略图后、启动共享元素转场前，预热全屏查看用的大图 URL。
+ *
+ * 转场动画只持续几百毫秒，旧实现里大图这期间才发起请求，转场结束时往往还在下载，
+ * 表现为「先糊后突然变清」或进度环空转。这里提前一拍 enqueue（走同一 ImageLoader 的
+ * 磁盘缓存），telephoto 子采样直接从磁盘读 tile，打开即可见清晰图。
+ * 已在缓存时 enqueue 近乎零开销，无需自行判重。
+ */
+fun prefetchFullscreenImage(context: android.content.Context, urls: List<String?>) {
+    val loader = context.imageLoader
+    for (url in urls) {
+        if (url == null) continue
+        loader.enqueue(
+            ImageRequest.Builder(context)
+                .data(url)
+                .crossfade(false)
+                .build()
+        )
+    }
+}

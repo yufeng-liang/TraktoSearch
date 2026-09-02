@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -81,8 +82,10 @@ internal fun ZoomableImageOverlay(
     onDismiss: () -> Unit,
     onSave: ((Int) -> Unit)? = null,
     isSavedAt: (Int) -> Boolean = { false },
-    enter: EnterTransition = fadeIn(animationSpec = tween(200)),
-    exit: ExitTransition = fadeOut(animationSpec = tween(200)),
+    // 进入用 snap：共享元素位置/尺寸由 spring 负责，alpha 再叠 200ms fade 会双重动画；
+    // 退出保留短 fade：缩回缩略图后遮罩平滑消失，避免黑幕瞬间闪断
+    enter: EnterTransition = fadeIn(animationSpec = snap()),
+    exit: ExitTransition = fadeOut(animationSpec = tween(120)),
 ) {
     val scope = rememberCoroutineScope()
     val safeInitial = initialIndex.coerceIn(0, (images.size - 1).coerceAtLeast(0))
