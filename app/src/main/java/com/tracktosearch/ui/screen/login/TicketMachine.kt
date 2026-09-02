@@ -40,7 +40,9 @@ import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -85,6 +87,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.theme.MachineBulbEmber
 import com.tracktosearch.ui.theme.MachineBulbLit
 import com.tracktosearch.ui.theme.MachineBulbUnlitDark
 import com.tracktosearch.ui.theme.MachineBulbUnlitLight
@@ -108,7 +111,8 @@ import com.tracktosearch.ui.theme.LoginPaperLight
 import com.tracktosearch.ui.theme.LoginTitleInk
 import com.tracktosearch.ui.theme.PixelFontFamily
 import com.tracktosearch.ui.theme.pixelFontSize
-import kotlin.math.abs
+import kotlin.math.exp
+import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
@@ -167,20 +171,44 @@ private const val NOISE_SEED = 0x5EED
 private const val NOISE_ALPHA = 0x16
 
 // ---- 顶边跑马灯 ----
-/** 灯泡颗数。12 颗在 380dp 宽的机壳上间距约 32dp，看得出是一串灯而不是一排点。 */
-private const val BULB_COUNT = 12
+/**
+ * 灯泡颗数。8 颗在 380dp 宽的机壳上间距约 50dp —— 影院门头上的灯是稀疏的大灯泡，
+ * 挤成一排小点更像 LED 指示灯。少而大，看得出每一颗在单独明暗。
+ */
+private const val BULB_COUNT = 8
 
-/** 灯泡直径。 */
-private val BulbSize = 6.dp
+/** 灯泡玻璃直径。灯座环画在它外面，所以这一颗实际占位比这个数大一圈。 */
+private val BulbSize = 10.dp
 
-/** 跑一圈的时长。 */
-private const val BULB_LAP_MILLIS = 1_100
+/** 灯座环相对玻璃半径的加宽量。灯泡要看着是拧在机壳上的，不是画在机壳上的。 */
+private const val BULB_SOCKET_RATIO = 1.28f
 
-/** 进场跑几圈。跑完全灭 —— 这是个要专注输入六位码的屏，灯不该一直抢注意力。 */
-private const val BULB_ENTRY_LAPS = 3
+/** 跑一圈的时长。8 颗 2600ms 合每颗约 325ms，是老式门头灯那种不着急的走法。 */
+private const val BULB_LAP_MILLIS = 2_600
 
-/** 亮点的余光宽度，单位是「颗」。留一点余光跑起来才像灯带，而不是一颗孤灯在跳。 */
-private const val BULB_GLOW_SPREAD = 2.2f
+/** 进场跑几圈。跑完熄掉 —— 这是个要专注输入六位码的屏，灯不该一直抢注意力。 */
+private const val BULB_ENTRY_LAPS = 2
+
+/**
+ * 灯丝升温走完几颗的距离。头灯扫过来不是瞬间到最亮：白炽灯丝有热惯性，
+ * 亮度要爬一小段。0.3 颗合约 98ms，正好是「灯泡不硬切」看得出来的那一档。
+ */
+internal const val BULB_RISE_BULBS = 0.3f
+
+/**
+ * 灯丝降温的时间常数，单位是「颗」。亮度按 exp(-t/τ) 衰减，不是线性拉到零 ——
+ * 线性衰减会在尾巴末端突然断掉，指数衰减才是灯丝散热的样子。
+ * 1.6 颗时衰到 53%、3 颗时 15%、5 颗时 4%，尾巴拖四五颗长。
+ */
+internal const val BULB_DECAY_BULBS = 1.6f
+
+/**
+ * 进场跑完后额外空转几颗的距离，让尾巴自己冷掉。
+ *
+ * 没有这一段就得在最后一圈末尾直接熄灯，那一瞬间还亮着的四五颗会同时消失 ——
+ * 这是「暗下去要逐渐暗」最容易破功的地方，跑得再准也毁在最后一帧。
+ */
+private const val BULB_TAIL_BULBS = 6f
 
 /**
  * 电影院取票机。面板上按自绘数字键盘输入 6 位取票码，按通栏「取票」键，票从底部出票口打印出来。
@@ -295,9 +323,12 @@ internal fun TicketMachine(
             // 铭牌是压进机壳的一块凹槽加蚀刻小字。不直接印在机壳上：机壳带竖向渐变，
             // 凹槽给这行字一个可控的底，MachinePlateInk 上标的对比度才算得准。
             // 右边配一块喇叭网 —— 取票机会叫号，有网罩才像有喇叭
+            //
+            // 顶距 4dp 而不是 8dp：灯泡放大到 10dp 后灯座环已经吃掉了原先那段空白，
+            // 留 8dp 会把整台机器又推高 4dp，一屏的余量不该花在这儿
             val plateShape = RoundedCornerShape(3.dp)
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
@@ -556,7 +587,8 @@ private const val DISPLAY_LINE_HEIGHT_RATIO = 1.15f
  * 系统「动画时长」调成 0（开发者选项或省电模式）时一颗都不亮 ——
  * 那个开关的意思是「别给我动画」，不是「动画跑快点」。
  *
- * 亮点位置读在 `drawBehind` 里，不是拿来算 12 个子组合体：这样每帧只重绘不重组。
+ * 相位读在 `drawBehind` 里，不是拿来算 [BULB_COUNT] 个子组合体：这样每帧只重绘不重组。
+ * 灯泡的明暗模型见 [filamentHeat]，画法见 [drawBulbLight]。
  */
 @Composable
 private fun MarqueeBulbs(isPrinting: Boolean, isDarkTheme: Boolean) {
@@ -564,25 +596,34 @@ private fun MarqueeBulbs(isPrinting: Boolean, isDarkTheme: Boolean) {
     val animationsOn = remember(context) { animatorDurationScale(context) > 0f }
     val unlit = if (isDarkTheme) MachineBulbUnlitDark else MachineBulbUnlitLight
     val phase = remember { Animatable(BULB_ALL_OFF) }
+    // 头灯还允许点亮到哪一颗为止。相位跑过它之后不再有新灯被点亮，
+    // 还亮着的那几颗按各自的余温继续冷 —— 这就是尾巴自然熄掉的实现
+    var lightingCeiling by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(isPrinting, animationsOn) {
         if (!animationsOn) {
             phase.snapTo(BULB_ALL_OFF)
             return@LaunchedEffect
         }
+        phase.snapTo(0f)
         if (isPrinting) {
+            // 相位单调递增，不每圈回零：回零会把上一圈的尾巴一次抹掉，圈与圈的接缝看得出来
+            lightingCeiling = Float.MAX_VALUE
+            var lap = 1
             while (true) {
-                phase.snapTo(0f)
                 phase.animateTo(
-                    targetValue = BULB_COUNT.toFloat(),
+                    targetValue = (BULB_COUNT * lap).toFloat(),
                     animationSpec = tween(BULB_LAP_MILLIS, easing = LinearEasing)
                 )
+                lap++
             }
         }
-        phase.snapTo(0f)
+        val lit = (BULB_COUNT * BULB_ENTRY_LAPS).toFloat()
+        lightingCeiling = lit
         phase.animateTo(
-            targetValue = (BULB_COUNT * BULB_ENTRY_LAPS).toFloat(),
+            targetValue = lit + BULB_TAIL_BULBS,
             animationSpec = tween(
-                durationMillis = BULB_LAP_MILLIS * BULB_ENTRY_LAPS,
+                // 空转那一段和正常跑灯同速，尾巴才是按原速度一颗一颗冷下去
+                durationMillis = ((lit + BULB_TAIL_BULBS) / BULB_COUNT * BULB_LAP_MILLIS).toInt(),
                 easing = LinearEasing
             )
         )
@@ -592,29 +633,104 @@ private fun MarqueeBulbs(isPrinting: Boolean, isDarkTheme: Boolean) {
         modifier = Modifier
             .fillMaxWidth()
             .height(BulbSize)
-            .drawBehind { drawMarqueeBulbs(phase.value, unlit) }
+            .drawBehind { drawMarqueeBulbs(phase.value, lightingCeiling, unlit) }
     )
 }
 
-/** 亮点跑到这个位置就等于「全灭」：离任何一颗灯泡都远得超出 [BULB_GLOW_SPREAD]。 */
-private const val BULB_ALL_OFF = -100f
+/** 相位取这个值等于「全灭」：负数在 [drawMarqueeBulbs] 里直接走没有头灯的分支。 */
+private const val BULB_ALL_OFF = -1f
 
-private fun DrawScope.drawMarqueeBulbs(phase: Float, unlit: Color) {
+/**
+ * 画一排白炽灯泡。
+ *
+ * 每颗四层，从外到内：灯座环（暗，恒在）、玻璃壳、亮起来的光、灯丝。
+ * 灭着的灯泡也不是一个纯色圆点 —— 左上角留一点玻璃反光，不然那是个洞不是个灯泡。
+ *
+ * @param phase 头灯当前扫到的位置，单位是「颗」，单调递增；负数表示全灭
+ * @param lightingCeiling 头灯最多点亮到哪个相位。相位超过它之后不再点新灯，
+ *   已亮的按余温继续衰减，于是尾巴一颗一颗冷掉而不是集体断电
+ */
+private fun DrawScope.drawMarqueeBulbs(phase: Float, lightingCeiling: Float, unlit: Color) {
     val radius = BulbSize.toPx() / 2f
     val step = (size.width - 2 * radius) / (BULB_COUNT - 1)
-    val head = if (phase < 0f) null else phase % BULB_COUNT
+    val centerY = size.height / 2f
+    // 头灯只能停在 ceiling 上，但 phase 继续往前走 —— 两者的差就是尾巴额外冷掉的时长
+    val head = if (phase < 0f) null else minOf(phase, lightingCeiling)
     for (index in 0 until BULB_COUNT) {
-        val center = Offset(radius + step * index, size.height / 2f)
+        val center = Offset(radius + step * index, centerY)
+        drawBulbSocket(center, radius)
         drawCircle(unlit, radius = radius, center = center)
+        drawBulbGlassSheen(center, radius)
         if (head == null) continue
-        // 环形距离：亮点跑到最后一颗时第一颗要接着亮，否则每圈交界处会断一下
-        val raw = abs(head - index)
-        val distance = minOf(raw, BULB_COUNT - raw)
-        val glow = (1f - distance / BULB_GLOW_SPREAD).coerceAtLeast(0f)
-        if (glow > 0f) {
-            drawCircle(MachineBulbLit.copy(alpha = glow), radius = radius, center = center)
+        // 头灯最近一次经过这颗灯是在多少「颗」之前。用绝对相位减去最近一次经过的相位，
+        // 不取模：取模会在圈与圈的接缝上把尾巴截断
+        val lastPass = index + floor((head - index) / BULB_COUNT) * BULB_COUNT
+        if (lastPass < 0f) continue // 第一圈里头灯还没走到的灯泡，本来就没亮过
+        val heat = filamentHeat(phase - lastPass)
+        if (heat > 0.01f) {
+            drawBulbLight(center, radius, heat)
         }
     }
+}
+
+/**
+ * 灯丝在头灯经过 [elapsedBulbs] 颗之后的余温，0..1。
+ *
+ * 先线性升温到满，再指数降温。升温段远短于降温段，这个不对称就是白炽灯和 LED
+ * 在观感上的全部区别：LED 亮灭都是方波，灯丝是快亮慢灭。
+ */
+internal fun filamentHeat(elapsedBulbs: Float): Float = when {
+    elapsedBulbs < 0f -> 0f
+    elapsedBulbs < BULB_RISE_BULBS -> elapsedBulbs / BULB_RISE_BULBS
+    else -> exp(-(elapsedBulbs - BULB_RISE_BULBS) / BULB_DECAY_BULBS)
+}
+
+/** 灯座：玻璃外面一圈暗环加一道下缘高光，让灯泡看着是拧进机壳的。 */
+private fun DrawScope.drawBulbSocket(center: Offset, radius: Float) {
+    val socket = radius * BULB_SOCKET_RATIO
+    drawCircle(Color.Black.copy(alpha = 0.45f), radius = socket, center = center)
+    drawCircle(
+        color = Color.White.copy(alpha = 0.14f),
+        radius = socket,
+        center = center,
+        style = Stroke(width = 1.dp.toPx())
+    )
+}
+
+/** 玻璃反光。左上一小点白 —— 玻璃壳灭着的时候也是亮面材质。 */
+private fun DrawScope.drawBulbGlassSheen(center: Offset, radius: Float) {
+    drawCircle(
+        color = Color.White.copy(alpha = 0.20f),
+        radius = radius * 0.22f,
+        center = Offset(center.x - radius * 0.34f, center.y - radius * 0.34f)
+    )
+}
+
+/**
+ * 亮起来的那几层：外面三圈溢到机壳上的光晕，中间是随余温变色的玻璃，最里是灯丝。
+ *
+ * 光晕用三个同心实心圆而不是 radialGradient：渐变 Brush 每颗每帧都要新建对象，
+ * 三圈叠出来的过渡在 10dp 的灯泡上已经看不出台阶。
+ *
+ * 玻璃颜色按余温在余烬色和暖白之间插值 —— 冷下去的灯丝先转橙再转红，
+ * 只调透明度会像有人在拉调光旋钮。
+ */
+private fun DrawScope.drawBulbLight(center: Offset, radius: Float, heat: Float) {
+    val bloom = MachineBulbLit.copy(alpha = 0.16f * heat)
+    drawCircle(bloom.copy(alpha = 0.06f * heat), radius = radius * 2.4f, center = center)
+    drawCircle(bloom.copy(alpha = 0.10f * heat), radius = radius * 1.7f, center = center)
+    drawCircle(bloom, radius = radius * 1.25f, center = center)
+    drawCircle(
+        color = lerp(MachineBulbEmber, MachineBulbLit, heat).copy(alpha = heat),
+        radius = radius,
+        center = center
+    )
+    // 灯丝只在够热的时候看得见，所以用 heat 的平方：尾巴上剩的是一团红光，不是一根丝
+    drawCircle(
+        color = Color.White.copy(alpha = heat * heat * 0.85f),
+        radius = radius * 0.34f,
+        center = center
+    )
 }
 
 /** 喇叭网。几条横缝 —— 取票机会叫号，有网罩才像有喇叭。 */

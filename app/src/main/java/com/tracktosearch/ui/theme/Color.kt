@@ -336,8 +336,16 @@ val MachineKeyInkDark = Color(0xFFE4D6C6)
 /** 出票口内壁。比像素屏还深，看上去是机器里面的暗处。 */
 val MachineSlotWall = Color(0xFF1A1310)
 
-/** 跑马灯灯泡。亮着是暖白，灭了是机壳上的一个暗坑。灯泡不承载文字。 */
+/**
+ * 跑马灯灯泡。灯泡不承载文字，这几个色只管「像不像一颗白炽灯」。
+ *
+ * 三档而不是两档：白炽灯丝降温的时候色温跟着往下掉，先由暖白转橙，再转暗红才灭。
+ * 只在暖白和暗坑之间插值，灭下去的过程看着像有人在拉调光旋钮，不像灯丝在冷。
+ */
 val MachineBulbLit = Color(0xFFFFE9B8)
+
+/** 灯丝将冷时的余烬色。亮度低档的插值端点，不单独出现。 */
+val MachineBulbEmber = Color(0xFFE2531B)
 val MachineBulbUnlitLight = Color(0xFF5A4A3C)
 val MachineBulbUnlitDark = Color(0xFF2A211A)
 
