@@ -52,9 +52,9 @@ SKY_QUALITY = 86
 SKY_SOURCE_PROFILE = "Display P3 Gamut with sRGB Transfer"
 
 # Mean HSV saturation (0-255) the exported sky has to clear. Converted properly it
-# measures 47; the raw P3 numbers measure 39, which is the washed-out sky this guard
-# exists to catch. 44 sits between them.
-SKY_MIN_SATURATION = 44
+# measures 49; the raw P3 numbers measure 42, which is the washed-out sky this guard
+# exists to catch. 45 sits between them.
+SKY_MIN_SATURATION = 45
 
 
 def to_srgb(image: Image.Image) -> Image.Image:
@@ -63,7 +63,8 @@ def to_srgb(image: Image.Image) -> Image.Image:
     The WebP we ship carries no ICC profile, so Android reads whatever numbers are in
     it as sRGB. The master is Display P3, and the same numbers mean a **narrower**
     colour in sRGB — passing them through is what made the shipped sky read washed out
-    (sky-only mean saturation 40 against the untouched poster's 51).
+    (sky-only mean saturation 42 where the untouched poster measures 51; converting
+    lands it at 50).
 
     Converting rather than tagging the WebP keeps every shipped asset in one space: the
     glitter plate is cropped from the untagged `9x16.jpg` and `SwiftiePalette` is
@@ -130,6 +131,19 @@ PLATE_WIDTH = 640
 
 
 def sky_plate() -> None:
+    """Export the shipped sky from the painted-out master.
+
+    The master is the only source: painting the lettering out of `9x16.jpg` ourselves was
+    tried and dropped. The ink boxes cover 17.5% of the frame, and `cv2.inpaint` over a
+    hole that large pulls streaks across it; inpainting at quarter scale and upsampling
+    kills the streaks but leaves the clouds as soft blobs with none of the wisps the
+    painted master has (compared side by side at native scale). Sampling the untouched
+    poster outside the ink and the master inside it was tried too — it buys 1 point of
+    saturation (51.5 against the master's 50.5, both sky-only) and risks a seam plus
+    whatever glitter halo the dilated mask misses. Not worth it: the master aligns to the
+    poster pixel for pixel (dx=dy=0, mean |delta| 3.1 on the sky) and colour-keys clean,
+    so nothing of the lettering survives in it.
+    """
     src = Image.open(os.path.join(SRC, "sky-clean.png"))
     rgb = to_srgb(src)
     # The master carries a few thousand pixels at alpha 245-254. Flatten onto the
