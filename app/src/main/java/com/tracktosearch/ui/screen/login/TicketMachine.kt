@@ -178,22 +178,44 @@ private const val NOISE_ALPHA = 0x16
 
 // ---- 顶边跑马灯 ----
 /**
- * 灯泡颗数。8 颗在 380dp 宽的机壳上间距约 50dp —— 影院门头上的灯是稀疏的大灯泡，
- * 挤成一排小点更像 LED 指示灯。少而大，看得出每一颗在单独明暗。
+ * 灯泡颗数。
+ *
+ * 6 颗有两个理由。一是首尾两颗要离四角螺丝远一点（另见 [BulbRowInset]），
+ * 排上塞得越少每颗的余地越大。二是尾巴长度：余温衰减常数是 [BULB_DECAY_BULBS] 颗，
+ * 6 颗刚好让头灯走到最后一颗时整排都还亮着（末端也有约 13% 的余光），
+ * 那一刻整排通亮就是一遍扫完的画面。颗数再多，头灯到底时前几颗已经黑了。
  */
-private const val BULB_COUNT = 8
+private const val BULB_COUNT = 6
 
 /** 灯泡玻璃直径。灯座环画在它外面，所以这一颗实际占位比这个数大一圈。 */
 private val BulbSize = 12.dp
 
+/**
+ * 灯泡这一排相对机壳内边距再往里收的距离。
+ *
+ * 首尾两颗是钉在排两端的，不收的话它们的灯座环离四角螺丝只剩 3dp，
+ * 看着像螺丝拧在灯泡上。收这一档之后留出 7dp 空当。
+ */
+private val BulbRowInset = 6.dp
+
 /** 灯座环相对玻璃半径的加宽量。灯泡要看着是拧在机壳上的，不是画在机壳上的。 */
 private const val BULB_SOCKET_RATIO = 1.28f
 
-/** 跑一圈的时长。8 颗 2600ms 合每颗约 325ms，是老式门头灯那种不着急的走法。 */
-private const val BULB_LAP_MILLIS = 2_600
+/**
+ * 头灯走过一颗灯的时长。
+ *
+ * 按「每颗」而不是「跑一圈」定义：[BULB_COUNT] 改了也不用重算节奏，
+ * 圈长由两者相乘得出。650ms 一颗是老式门头灯那种不着急的走法。
+ */
+private const val BULB_STEP_MILLIS = 650
 
-/** 进场跑几圈。跑完熄掉 —— 这是个要专注输入六位码的屏，灯不该一直抢注意力。 */
-private const val BULB_ENTRY_LAPS = 2
+/**
+ * 进场扫几遍。
+ *
+ * 一遍就停 —— 头灯走到最后一颗时整排都还亮着（见 [BULB_COUNT]），那一刻就是这台机器的
+ * 开机画面，再扫一遍只是重复。之后整排按各自余温冷掉，见 [BULB_TAIL_BULBS]。
+ */
+private const val BULB_ENTRY_SWEEPS = 1
 
 /**
  * 灯丝升温走完几颗的距离。头灯扫过来不是瞬间到最亮：白炽灯丝有热惯性，
@@ -597,7 +619,7 @@ private const val DISPLAY_LINE_HEIGHT_RATIO = 1.15f
 /**
  * 机壳顶边的一串跑马灯。
  *
- * 不是一直在跑：进场跑 [BULB_ENTRY_LAPS] 圈就全灭，[isPrinting] 期间一直跑。
+ * 不是一直在跑：进场扫 [BULB_ENTRY_SWEEPS] 遍就熄掉，[isPrinting] 期间一直扫。
  * 这一屏的主任务是输入六位码，常驻动画会一直分走注意力；而出票那几秒是这台机器
  * 唯一该显得忙起来的时候。
  *
@@ -623,24 +645,27 @@ private fun MarqueeBulbs(isPrinting: Boolean, isDarkTheme: Boolean) {
         }
         phase.snapTo(0f)
         if (isPrinting) {
-            // 相位单调递增，不每圈回零：回零会把上一圈的尾巴一次抹掉，圈与圈的接缝看得出来
+            // 相位单调递增，不每遍回零：回零会把上一遍的尾巴一次抹掉，两遍的接缝看得出来
             lightingCeiling = Float.MAX_VALUE
-            var lap = 1
+            var sweep = 1
             while (true) {
                 phase.animateTo(
-                    targetValue = (BULB_COUNT * lap).toFloat(),
-                    animationSpec = tween(BULB_LAP_MILLIS, easing = LinearEasing)
+                    targetValue = (BULB_COUNT * sweep).toFloat(),
+                    animationSpec = tween(
+                        durationMillis = BULB_STEP_MILLIS * BULB_COUNT,
+                        easing = LinearEasing
+                    )
                 )
-                lap++
+                sweep++
             }
         }
-        val lit = (BULB_COUNT * BULB_ENTRY_LAPS).toFloat()
+        val lit = (BULB_COUNT * BULB_ENTRY_SWEEPS).toFloat()
         lightingCeiling = lit
         phase.animateTo(
             targetValue = lit + BULB_TAIL_BULBS,
             animationSpec = tween(
                 // 空转那一段和正常跑灯同速，尾巴才是按原速度一颗一颗冷下去
-                durationMillis = ((lit + BULB_TAIL_BULBS) / BULB_COUNT * BULB_LAP_MILLIS).toInt(),
+                durationMillis = ((lit + BULB_TAIL_BULBS) * BULB_STEP_MILLIS).toInt(),
                 easing = LinearEasing
             )
         )
@@ -649,6 +674,7 @@ private fun MarqueeBulbs(isPrinting: Boolean, isDarkTheme: Boolean) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(horizontal = BulbRowInset)
             .height(BulbSize)
             .drawBehind { drawMarqueeBulbs(phase.value, lightingCeiling, unlit) }
     )

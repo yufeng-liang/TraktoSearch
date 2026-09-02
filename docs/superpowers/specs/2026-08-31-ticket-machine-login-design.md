@@ -227,7 +227,7 @@ Composable 只负责把 `Animatable` 的 progress 喂进去。阶跃步数、过
 | --- | --- | --- |
 | `auth_invite_code` | 输入 6 位激活码 | 请输入 6 位取票码 |
 | `auth_activate` | 激活 | 取票 |
-| `login_activation_locked` | ○ 尚未激活 · 输入邀请码解锁观影空间 | ○ 尚未取票 · 输入取票码换取入场券 |
+| `login_activation_locked` | ○ 尚未激活 · 输入邀请码解锁观影空间 | ○ 尚未取票 · 输入取票码换票入场 |
 | `login_personal_cinema_access` | PERSONAL CINEMA ACCESS | TICKET MACHINE · PERSONAL CINEMA |
 | `auth_expired_message` | 请连接网络后重新激活访问权限。 | 请连接网络后重新取票。 |
 | `auth_migration_invite_hint` | 含「迁移邀请码」 | 迁移取票码 |
@@ -244,6 +244,12 @@ Composable 只负责把 `Animatable` 的 progress 喂进去。阶跃步数、过
 - 粘贴失败提示
 
 韩语的已知限制：`ark_pixel_12px` 不含谚文字形（`Type.kt:22` 已注明），韩语的像素屏文案会回退系统字体，机器上的韩文不呈现像素风。这是既有限制，但取票机把像素屏放到了视觉中心，会比现在更明显。结论是接受回退，不为此更换字体。
+
+> **2026-09-02 补充：字体子集必须跟着文案走。** 首版子集是为「输入 12 位激活码」一句手工裁的（129 个字形）。像素字体后来成了整台取票机的字体，此后新增的每一个字都静默回退系统字体 —— 而回退字体的字宽不在 12px 网格上，屏上看到的是两个字挤在一起，不是「少了一个字」那种显眼的错。装机截图里「请输**入**取票码」的挤压就是这么来的，「粘贴」键整个不是像素字也是同一个原因。
+>
+> 现在子集由 `scripts/subset-ark-pixel.py` 从 `machine_*` / `auth_error_*` / `auth_migration_invite_hint` / `login_activation_locked` / `login_personal_cinema_access` 这几族字符串反推字符集（336 个字形，46 KB），`PixelFontCoverageTest` 用同一套规则读 TTF 的 cmap 兜底：往显示屏加一句新文案而忘了重跑脚本，会在单测里红。
+>
+> 另有三个字上游 Ark Pixel 12px 根本没有（券 U+5238、換 U+63DB、既 U+65E2，七个变体的 cmap 完全一致，24415 个码位里都缺），所以中文的 `login_activation_locked` 末字由「换取入场券」改为「换票入场」，日文的「発券」一族改为「発行」、「入場券を引き換え」改为「チケットと引きかえ」、「既存の」改为「登録済みの」。谚文仍然全部回退，见上一段。
 
 ## 测试计划
 
