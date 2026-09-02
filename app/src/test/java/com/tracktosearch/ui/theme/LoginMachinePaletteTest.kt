@@ -112,6 +112,60 @@ class LoginMachinePaletteTest {
             .isLessThan(MachineDisplayWellLight.luminance())
     }
 
+    /**
+     * 三档灯色的余烬端都要比满亮端暗。
+     *
+     * 灯泡的玻璃色是按亮度在这两端之间插值的，端点反了的话「灯在冷下去」会画成
+     * 「灯在变亮」—— 整条尾巴和整排信号灯的升降都跟着反。
+     */
+    @Test
+    fun 每档灯色的余烬端都比满亮端暗() {
+        val pairs = listOf(
+            "白炽" to (MachineBulbEmber to MachineBulbLit),
+            "绿灯" to (MachineBulbEmberGreen to MachineBulbLitGreen),
+            "红灯" to (MachineBulbEmberRed to MachineBulbLitRed),
+        )
+        for ((name, pair) in pairs) {
+            assertWithMessage("$name 档的余烬端 ${pair.first.hex()} 不比满亮端暗")
+                .that(pair.first.luminance()).isLessThan(pair.second.luminance())
+        }
+    }
+
+    /**
+     * 绿灯得是绿的、红灯得是红的，三档还要互相分得开。
+     *
+     * 「对了亮绿、错了亮红」全靠这两个颜色区分，而它们和白炽档共用同一套画法，
+     * 只差 [MachineBulbLitGreen] / [MachineBulbLitRed] 这两个常量。
+     * 谁把其中一个调到跟琥珀色接近，反馈就没了 —— 而这在装机截图上很难一眼看出来，
+     * 因为灯泡只有 12dp。
+     */
+    @Test
+    fun 绿灯红灯和白炽档三者互相分得开() {
+        assertWithMessage("绿灯的绿通道没压过红通道").that(MachineBulbLitGreen.green)
+            .isGreaterThan(MachineBulbLitGreen.red)
+        assertWithMessage("绿灯的绿通道没压过蓝通道").that(MachineBulbLitGreen.green)
+            .isGreaterThan(MachineBulbLitGreen.blue)
+        assertWithMessage("红灯的红通道没明显压过绿通道").that(MachineBulbLitRed.red)
+            .isGreaterThan(MachineBulbLitRed.green * 1.4f)
+
+        val lits = listOf(
+            "白炽" to MachineBulbLit,
+            "绿灯" to MachineBulbLitGreen,
+            "红灯" to MachineBulbLitRed,
+        )
+        for (i in lits.indices) {
+            for (j in i + 1 until lits.size) {
+                val (leftName, left) = lits[i]
+                val (rightName, right) = lits[j]
+                val distance = kotlin.math.abs(left.red - right.red) +
+                    kotlin.math.abs(left.green - right.green) +
+                    kotlin.math.abs(left.blue - right.blue)
+                assertWithMessage("$leftName ${left.hex()} 和 $rightName ${right.hex()} 差得太近")
+                    .that(distance).isGreaterThan(0.30f)
+            }
+        }
+    }
+
     private fun Color.hex(): String = "#%02X%02X%02X".format(
         (red * 255).toInt(),
         (green * 255).toInt(),

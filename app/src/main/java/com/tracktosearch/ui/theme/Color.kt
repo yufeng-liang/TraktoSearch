@@ -349,6 +349,20 @@ val MachineBulbEmber = Color(0xFFE2531B)
 val MachineBulbUnlitLight = Color(0xFF5A4A3C)
 val MachineBulbUnlitDark = Color(0xFF2A211A)
 
+/**
+ * 取票结果反馈的两档灯色：码对了整排亮绿，码错了整排亮红。
+ *
+ * 每档两个端点，跟白炽档一样按亮度插值 —— 信号灯升温时也是先暗后亮，
+ * 只有一个颜色的话「整排亮起来」会是一次硬切。满亮端不取白：取白就不是绿灯红灯了。
+ *
+ * 颜色不是唯一的反馈通道：点阵屏同时切文案与墨色，六格还会左右抖。
+ * 这两档灯是加强，不承担「只能靠颜色分辨成功失败」。
+ */
+val MachineBulbLitGreen = Color(0xFFA9F09A)
+val MachineBulbEmberGreen = Color(0xFF1E6B2C)
+val MachineBulbLitRed = Color(0xFFFF9C86)
+val MachineBulbEmberRed = Color(0xFF8F1712)
+
 private val MonetDoubanGreenLight = Color(0xFF5E916A)
 private val MonetDoubanGreenDark = Color(0xFF78A985)
 

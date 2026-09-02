@@ -41,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -88,7 +89,11 @@ import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.MachineBulbEmber
+import com.tracktosearch.ui.theme.MachineBulbEmberGreen
+import com.tracktosearch.ui.theme.MachineBulbEmberRed
 import com.tracktosearch.ui.theme.MachineBulbLit
+import com.tracktosearch.ui.theme.MachineBulbLitGreen
+import com.tracktosearch.ui.theme.MachineBulbLitRed
 import com.tracktosearch.ui.theme.MachineBulbUnlitDark
 import com.tracktosearch.ui.theme.MachineBulbUnlitLight
 import com.tracktosearch.ui.theme.MachineCodeInk
@@ -356,8 +361,16 @@ internal fun TicketMachine(
                 .border(1.dp, Color.Black.copy(alpha = 0.42f), shellShape)
                 .padding(horizontal = 16.dp, vertical = ShellPaddingVertical)
         ) {
-            // 顶边跑马灯。影院门头上的那串灯，是这台机器唯一的「氛围」构件
-            MarqueeBulbs(isPrinting = isPrinting, isDarkTheme = isDarkTheme)
+            // 顶边跑马灯。影院门头上的那串灯，是这台机器唯一的「氛围」构件；
+            // 取票有结果时它同时是结果灯：对了整排绿，错了整排红
+            MarqueeBulbs(
+                signal = when {
+                    statusIsError -> BulbSignal.Failure
+                    isPrinting -> BulbSignal.Success
+                    else -> BulbSignal.Sweep
+                },
+                isDarkTheme = isDarkTheme
+            )
 
             // 铭牌是压进机壳的一块凹槽加蚀刻小字。不直接印在机壳上：机壳带竖向渐变，
             // 凹槽给这行字一个可控的底，MachinePlateInk 上标的对比度才算得准。
@@ -617,20 +630,23 @@ private fun pixelDisplayStyle(size: TextUnit): TextStyle = TextStyle(
 private const val DISPLAY_LINE_HEIGHT_RATIO = 1.15f
 
 /**
- * 机壳顶边的一串跑马灯。
+ * 机壳顶边的一串跑马灯，兼取票结果灯。
  *
- * 不是一直在跑：进场扫 [BULB_ENTRY_SWEEPS] 遍就熄掉，[isPrinting] 期间一直扫。
- * 这一屏的主任务是输入六位码，常驻动画会一直分走注意力；而出票那几秒是这台机器
- * 唯一该显得忙起来的时候。
+ * 平常不是一直在跑：进场扫 [BULB_ENTRY_SWEEPS] 遍就熄掉。这一屏的主任务是输入六位码，
+ * 常驻动画会一直分走注意力。
  *
- * 系统「动画时长」调成 0（开发者选项或省电模式）时一颗都不亮 ——
- * 那个开关的意思是「别给我动画」，不是「动画跑快点」。
+ * 有结果的时候整排变成一个结论：取票码对了整排亮绿，错了整排亮红，见 [BulbSignal]。
+ * 这两档不扫动 —— 结论不该看起来还在处理。
+ *
+ * 系统「动画时长」调成 0（开发者选项或省电模式）时跑马灯一颗不亮，
+ * 但绿灯红灯照亮，只是不做升温冷却直接到位：那个开关的意思是「别给我动画」，
+ * 不是「别告诉我取票成功了没有」。
  *
  * 相位读在 `drawBehind` 里，不是拿来算 [BULB_COUNT] 个子组合体：这样每帧只重绘不重组。
  * 灯泡的明暗模型见 [filamentHeat]，画法见 [drawBulbLight]。
  */
 @Composable
-private fun MarqueeBulbs(isPrinting: Boolean, isDarkTheme: Boolean) {
+private fun MarqueeBulbs(signal: BulbSignal, isDarkTheme: Boolean) {
     val context = LocalContext.current
     val animationsOn = remember(context) { animatorDurationScale(context) > 0f }
     val unlit = if (isDarkTheme) MachineBulbUnlitDark else MachineBulbUnlitLight
@@ -638,27 +654,36 @@ private fun MarqueeBulbs(isPrinting: Boolean, isDarkTheme: Boolean) {
     // 头灯还允许点亮到哪一颗为止。相位跑过它之后不再有新灯被点亮，
     // 还亮着的那几颗按各自的余温继续冷 —— 这就是尾巴自然熄掉的实现
     var lightingCeiling by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(isPrinting, animationsOn) {
+    // 整排信号灯的亮度。绿灯红灯没有「头灯」，整排是同一个亮度一起升降
+    val signalHeat = remember { Animatable(0f) }
+    // 亮度降回 0 之前不能把颜色撤掉，否则整排是瞬间消失而不是慢慢冷掉
+    var shownGlow by remember { mutableStateOf<BulbGlow?>(null) }
+    LaunchedEffect(signal, animationsOn) {
+        val glow = signal.glow
+        if (glow != null) shownGlow = glow
         if (!animationsOn) {
+            // 关掉系统动画时跑马灯一颗不亮，但绿灯红灯照亮：那是取票结果的反馈，不是装饰。
+            // 只是不做升温和冷却，直接到位
             phase.snapTo(BULB_ALL_OFF)
+            signalHeat.snapTo(if (glow == null) 0f else 1f)
+            if (glow == null) shownGlow = null
             return@LaunchedEffect
         }
-        phase.snapTo(0f)
-        if (isPrinting) {
-            // 相位单调递增，不每遍回零：回零会把上一遍的尾巴一次抹掉，两遍的接缝看得出来
-            lightingCeiling = Float.MAX_VALUE
-            var sweep = 1
-            while (true) {
-                phase.animateTo(
-                    targetValue = (BULB_COUNT * sweep).toFloat(),
-                    animationSpec = tween(
-                        durationMillis = BULB_STEP_MILLIS * BULB_COUNT,
-                        easing = LinearEasing
-                    )
-                )
-                sweep++
-            }
+        if (glow != null) {
+            // 信号灯期间不跑灯：整排是一个结论，头灯扫过去会把它读成「还在处理」
+            phase.snapTo(BULB_ALL_OFF)
+            signalHeat.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(BULB_SIGNAL_RISE_MILLIS, easing = LinearEasing)
+            )
+            return@LaunchedEffect
         }
+        signalHeat.animateTo(
+            targetValue = 0f,
+            animationSpec = tween(BULB_SIGNAL_FALL_MILLIS, easing = LinearEasing)
+        )
+        shownGlow = null
+        phase.snapTo(0f)
         val lit = (BULB_COUNT * BULB_ENTRY_SWEEPS).toFloat()
         lightingCeiling = lit
         phase.animateTo(
@@ -676,12 +701,59 @@ private fun MarqueeBulbs(isPrinting: Boolean, isDarkTheme: Boolean) {
             .fillMaxWidth()
             .padding(horizontal = BulbRowInset)
             .height(BulbSize)
-            .drawBehind { drawMarqueeBulbs(phase.value, lightingCeiling, unlit) }
+            .drawBehind {
+                drawMarqueeBulbs(
+                    phase = phase.value,
+                    lightingCeiling = lightingCeiling,
+                    unlit = unlit,
+                    signalHeat = signalHeat.value,
+                    signalGlow = shownGlow
+                )
+            }
     )
 }
 
 /** 相位取这个值等于「全灭」：负数在 [drawMarqueeBulbs] 里直接走没有头灯的分支。 */
 private const val BULB_ALL_OFF = -1f
+
+/**
+ * 一档灯色：暗时的余烬端、满亮端、灯丝色。
+ *
+ * 玻璃色按亮度在前两端之间插值。[filament] 是玻璃最里那一点白热灯丝，
+ * 信号灯不给（传 null）—— 绿灯红灯是磨砂罩子里的一片色，露出一根白丝反而像坏了。
+ */
+private data class BulbGlow(val ember: Color, val lit: Color, val filament: Color?)
+
+/** 跑马灯的白炽档。头灯扫过去时用的就是这一档。 */
+private val ChaseGlow = BulbGlow(MachineBulbEmber, MachineBulbLit, Color.White)
+
+/**
+ * 跑马灯当前该表达什么。
+ *
+ * 三态互斥：整排绿或整排红是一个结论，这种时候不该还有头灯在扫 ——
+ * 扫动会把已经出来的结果读成「还在处理」。
+ */
+private enum class BulbSignal(val glow: BulbGlow?) {
+    /** 平常。进场扫一遍就冷掉，见 [BULB_ENTRY_SWEEPS]。 */
+    Sweep(null),
+
+    /** 取票码对了，整排亮绿。 */
+    Success(BulbGlow(MachineBulbEmberGreen, MachineBulbLitGreen, filament = null)),
+
+    /** 取票码错了（或剪贴板里没有码），整排亮红。 */
+    Failure(BulbGlow(MachineBulbEmberRed, MachineBulbLitRed, filament = null)),
+}
+
+/**
+ * 整排信号灯升温的时长。
+ *
+ * 比单颗灯丝的 [BULB_RISE_BULBS]（约 98ms）慢一档：整排一起亮，太快就是一次硬切，
+ * 看不出「灯亮起来了」这个动作。
+ */
+private const val BULB_SIGNAL_RISE_MILLIS = 190
+
+/** 整排信号灯冷却的时长。远长于升温，跟单颗灯丝一样是快亮慢灭。 */
+private const val BULB_SIGNAL_FALL_MILLIS = 760
 
 /**
  * 画一排白炽灯泡。
@@ -692,18 +764,31 @@ private const val BULB_ALL_OFF = -1f
  * @param phase 头灯当前扫到的位置，单位是「颗」，单调递增；负数表示全灭
  * @param lightingCeiling 头灯最多点亮到哪个相位。相位超过它之后不再点新灯，
  *   已亮的按余温继续衰减，于是尾巴一颗一颗冷掉而不是集体断电
+ * @param signalHeat 整排信号灯的亮度 0..1。大于 0 时整排同亮，不再有头灯
+ * @param signalGlow 信号灯的那档颜色。亮度降回 0 之前不撤，否则整排是瞬间消失
  */
-private fun DrawScope.drawMarqueeBulbs(phase: Float, lightingCeiling: Float, unlit: Color) {
+private fun DrawScope.drawMarqueeBulbs(
+    phase: Float,
+    lightingCeiling: Float,
+    unlit: Color,
+    signalHeat: Float,
+    signalGlow: BulbGlow?,
+) {
     val radius = BulbSize.toPx() / 2f
     val step = (size.width - 2 * radius) / (BULB_COUNT - 1)
     val centerY = size.height / 2f
     // 头灯只能停在 ceiling 上，但 phase 继续往前走 —— 两者的差就是尾巴额外冷掉的时长
     val head = if (phase < 0f) null else minOf(phase, lightingCeiling)
+    val signalOn = signalGlow != null && signalHeat > 0.01f
     for (index in 0 until BULB_COUNT) {
         val center = Offset(radius + step * index, centerY)
         drawBulbSocket(center, radius)
         drawCircle(unlit, radius = radius, center = center)
         drawBulbGlassSheen(center, radius)
+        if (signalOn) {
+            drawBulbLight(center, radius, signalHeat, signalGlow!!)
+            continue
+        }
         if (head == null) continue
         // 头灯最近一次经过这颗灯是在多少「颗」之前。用绝对相位减去最近一次经过的相位，
         // 不取模：取模会在圈与圈的接缝上把尾巴截断
@@ -711,7 +796,7 @@ private fun DrawScope.drawMarqueeBulbs(phase: Float, lightingCeiling: Float, unl
         if (lastPass < 0f) continue // 第一圈里头灯还没走到的灯泡，本来就没亮过
         val heat = filamentHeat(phase - lastPass)
         if (heat > 0.01f) {
-            drawBulbLight(center, radius, heat)
+            drawBulbLight(center, radius, heat, ChaseGlow)
         }
     }
 }
@@ -750,30 +835,33 @@ private fun DrawScope.drawBulbGlassSheen(center: Offset, radius: Float) {
 }
 
 /**
- * 亮起来的那几层：外面三圈溢到机壳上的光晕，中间是随余温变色的玻璃，最里是灯丝。
+ * 亮起来的那几层：外面三圈溢到机壳上的光晕，中间是随亮度变色的玻璃，最里是灯丝。
  *
  * 光晕用三个同心实心圆而不是 radialGradient：渐变 Brush 每颗每帧都要新建对象，
  * 三圈叠出来的过渡在这个尺寸的灯泡上已经看不出台阶。
  *
- * 透明度走 [BULB_ALPHA_GAMMA] 校正过的 glow，颜色仍按原始余温在余烬色和暖白之间插值 ——
- * 冷下去的灯丝先转橙再转红，只调透明度会像有人在拉调光旋钮。
+ * 透明度走 [BULB_ALPHA_GAMMA] 校正过的 glow，颜色仍按原始亮度在 [BulbGlow.ember]
+ * 和 [BulbGlow.lit] 之间插值 —— 白炽档冷下去的灯丝先转橙再转红，只调透明度会像
+ * 有人在拉调光旋钮；信号灯档同理，整排绿灯升起来是先深绿后亮绿。
  */
-private fun DrawScope.drawBulbLight(center: Offset, radius: Float, heat: Float) {
-    val glow = heat.pow(BULB_ALPHA_GAMMA)
-    drawCircle(MachineBulbLit.copy(alpha = 0.08f * glow), radius = radius * 2.4f, center = center)
-    drawCircle(MachineBulbLit.copy(alpha = 0.13f * glow), radius = radius * 1.7f, center = center)
-    drawCircle(MachineBulbLit.copy(alpha = 0.20f * glow), radius = radius * 1.25f, center = center)
+private fun DrawScope.drawBulbLight(center: Offset, radius: Float, heat: Float, glow: BulbGlow) {
+    val alpha = heat.pow(BULB_ALPHA_GAMMA)
+    drawCircle(glow.lit.copy(alpha = 0.08f * alpha), radius = radius * 2.4f, center = center)
+    drawCircle(glow.lit.copy(alpha = 0.13f * alpha), radius = radius * 1.7f, center = center)
+    drawCircle(glow.lit.copy(alpha = 0.20f * alpha), radius = radius * 1.25f, center = center)
     drawCircle(
-        color = lerp(MachineBulbEmber, MachineBulbLit, heat).copy(alpha = glow),
+        color = lerp(glow.ember, glow.lit, heat).copy(alpha = alpha),
         radius = radius,
         center = center
     )
-    // 灯丝只在够热的时候看得见，所以用原始余温的平方：尾巴上剩的是一团红光，不是一根丝
-    drawCircle(
-        color = Color.White.copy(alpha = heat * heat * 0.85f),
-        radius = radius * 0.34f,
-        center = center
-    )
+    // 灯丝只在够热的时候看得见，所以用原始亮度的平方：尾巴上剩的是一团红光，不是一根丝
+    glow.filament?.let { filament ->
+        drawCircle(
+            color = filament.copy(alpha = heat * heat * 0.85f),
+            radius = radius * 0.34f,
+            center = center
+        )
+    }
 }
 
 /** 喇叭网。几条横缝 —— 取票机会叫号，有网罩才像有喇叭。 */
