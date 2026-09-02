@@ -55,7 +55,7 @@ import kotlin.math.sin
 private const val UNKNOWN = "X"
 
 /**
- * 连错 3 次后浮出的小字。
+ * 答错一次就浮出的小字。
  *
  * 刻意**不本地化** —— 它是这张印刷品的一部分，不是界面文案；而且 Honey Script 只按
  * `0123456789+=XHerluckynmb. ` 子集化过，换成中日韩会整行豆腐块。视障用户拿不到这条
@@ -66,6 +66,27 @@ private const val LUCKY_HINT = "Her lucky number."
 
 /** 提示胶囊的底色，与音频提示同一档白纱。 */
 private val LUCKY_CAPSULE = Color.White.copy(alpha = 0.62f)
+
+/**
+ * 提示的字号。
+ *
+ * 30sp 在别的字体上会显得大，Honey Script 上不会：它的小写字母 advance 只有
+ * 0.15–0.27 em（正常字体约 0.5），x-height 0.387 em（正常约 0.5），所以同一个字号读出来
+ * 比正常字体小一号还窄一半 —— `Her lucky number.` 整串只有 3.96 em，18sp 时宽 71dp，
+ * 一枚不到 100dp 的小胶囊。30sp 下是 119dp，才像海报上写的一句话。
+ */
+private val LUCKY_FONT_SIZE = 30.sp
+
+/**
+ * 胶囊下缘补的内边距，用来把字在胶囊里摆正。
+ *
+ * 这个字体的 ascent 0.920 em 比整串墨迹的最高点 0.682 em 高出 0.238 em，而 descent
+ * 0.395 em 与 `y` 的尾巴 0.392 em 几乎相等 —— 也就是行盒的空隙**全在上边**，字会贴着
+ * 胶囊下沿。补 7dp（= 0.238 em × 30sp）到下边，上下留白就一样了。
+ *
+ * 不走「压小 lineHeight」那条路：行盒一旦短于 1.315 em，`y` 的尾巴就会伸到胶囊外面。
+ */
+private val LUCKY_BASELINE_PAD = 7.dp
 
 /** 三行手写体合计的书写时长；行与行之间另有 [SCRIPT_LINE_PAUSE_MS]。 */
 const val SCRIPT_WRITE_MS: Long = 780L
@@ -230,7 +251,7 @@ internal fun SwiftiePoster(
     val context = LocalContext.current
     val emptyLabel = stringResource(R.string.swiftie_quiz_a11y_empty)
     val question = stringResource(R.string.swiftie_quiz_a11y, state.input.ifEmpty { emptyLabel })
-    // 连错 3 次浮出的 Her lucky number. 是纯视觉的，这里补一份本地化文案带给 TalkBack
+    // 答错一次就浮出的 Her lucky number. 是纯视觉的，这里补一份本地化文案带给 TalkBack
     val hint = stringResource(R.string.swiftie_quiz_a11y_hint)
     val a11y = if (state.showLuckyHint) "$question $hint" else question
 
@@ -464,7 +485,7 @@ private fun DrawScope.drawEquation(
 }
 
 /**
- * 连错 3 次后浮出的 `Her lucky number.`，一枚浅色胶囊压在键盘上方。
+ * 答错一次就浮出的 `Her lucky number.`，一枚浅色胶囊压在键盘正上方。
  *
  * 只动 alpha、位子常驻，所以它出现时不会把键盘顶下去。答对之后跟着淡出。
  */
@@ -479,7 +500,7 @@ fun SwiftieLuckyHint(visible: Boolean, modifier: Modifier = Modifier) {
         text = LUCKY_HINT,
         style = TextStyle(
             fontFamily = SwiftieFonts.Marker,
-            fontSize = 18.sp,
+            fontSize = LUCKY_FONT_SIZE,
             color = SwiftiePalette.RoyalBlue,
             textAlign = TextAlign.Center
         ),
@@ -488,6 +509,6 @@ fun SwiftieLuckyHint(visible: Boolean, modifier: Modifier = Modifier) {
         modifier = modifier
             .graphicsLayer { alpha = hintAlpha }
             .background(LUCKY_CAPSULE, CircleShape)
-            .padding(horizontal = 14.dp, vertical = 4.dp)
+            .padding(start = 18.dp, end = 18.dp, bottom = LUCKY_BASELINE_PAD)
     )
 }

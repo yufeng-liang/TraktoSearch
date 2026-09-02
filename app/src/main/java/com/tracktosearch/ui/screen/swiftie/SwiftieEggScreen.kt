@@ -76,21 +76,38 @@ private val POSTER_MAX_WIDTH = 560.dp
 /** 算式底边与键盘托盘之间至少留这么多。 */
 private val EQUATION_GAP = 16.dp
 
-/** `Her lucky number.` 的常驻预留高度。只动 alpha，浮出时不挤动键盘。 */
-private val LUCKY_BAND = 34.dp
+/**
+ * `Her lucky number.` 的常驻预留高度（系统字号 100% 时）。
+ *
+ * 胶囊高 = 30sp 的自然行高（Honey Script 的 ascent + descent = 1.315 em ⇒ 39.5dp）加
+ * 下缘补的 7dp，合 46.5dp。**恒定预留**，只动 alpha，浮出时不挤动键盘；实际用值按
+ * `fontScale` 放大，写死 dp 会让大字号档位把胶囊裁掉一截。
+ */
+private val LUCKY_BAND_BASE = 47.dp
+
+/** 预留带的上限：再大就该让算式缩，而不是继续吃版面。 */
+private val LUCKY_BAND_MAX = 96.dp
+
+/**
+ * 提示胶囊与键盘托盘之间的间距。
+ *
+ * 提示排在音频提示**下面**、紧贴键盘：它是这道题的线索，手正落在键盘上，
+ * 隔着一整条音频提示带（40dp 以上）读不到一起去。音频提示是被动劝告，退到上面。
+ */
+private val LUCKY_KEYPAD_GAP = 8.dp
 
 /** ✕ 的浅色底衬。整页都是浅色印刷品，光靠 tint 在云上会丢。 */
 private val CLOSE_BACKING = Color.White.copy(alpha = 0.62f)
 
 /**
- * 底部音频提示带的基准高度（系统字号 100% 时）。
+ * 音频提示带的基准高度（系统字号 100% 时）。这一条排在底部那一摞的**最上面**。
  *
  * 两行 12sp 约 28dp，加上提示自带的上下各 8dp 内边距共 44dp。四档译文里最长的是
  * **英文默认档**（约 276dp @12sp），窄屏上会折两行。
  *
- * **恒定预留**，不管提示当前是否显示 —— 用户中途插上耳机时提示会消失，
- * 若这块位子跟着让出来，键盘就会往下塌一截、算式也跟着重新排版跳一下。
- * 实际用值按 `fontScale` 放大，见 `SwiftieQuizStage`。
+ * **恒定预留**，不管提示当前是否显示：用户中途插上耳机时提示会消失，而
+ * `equationBottomLimit` 是拿这个常量算出来的 —— 位子跟着让出来，整条算式就会在插耳机
+ * 那一刻重新排版跳一下。实际用值按 `fontScale` 放大，见 `SwiftieQuizStage`。
  */
 private val AUDIO_HINT_BAND_BASE = 44.dp
 
@@ -599,6 +616,8 @@ private fun SwiftieQuizStage(
     // 而字号档位能把它顶到两倍。写死 dp 会让提示压在键盘末行上
     val audioHintBand = (AUDIO_HINT_BAND_BASE * LocalDensity.current.fontScale)
         .coerceIn(AUDIO_HINT_BAND_BASE, AUDIO_HINT_BAND_MAX)
+    val luckyBand = (LUCKY_BAND_BASE * LocalDensity.current.fontScale)
+        .coerceIn(LUCKY_BAND_BASE, LUCKY_BAND_MAX)
     // 键盘采海报这一层做模糊。API < 31 上 hazeBlur 不生效，键盘自己退到厚一档透明度
     val hazeState = remember { HazeState() }
 
@@ -611,8 +630,8 @@ private fun SwiftieQuizStage(
         val keypadWidth = minOf(maxWidth - 40.dp, KEYPAD_MAX_WIDTH)
         val keypadHeight = swiftieKeypadHeight(keypadWidth)
         // 底部这一摞的总高。算式底边不能越过它
-        val bottomStack =
-            LUCKY_BAND + 8.dp + audioHintBand + 10.dp + keypadHeight + 12.dp + bottomInset
+        val bottomStack = audioHintBand + 8.dp + luckyBand + LUCKY_KEYPAD_GAP +
+            keypadHeight + 12.dp + bottomInset
         val fit = swiftiePosterFit(
             screen = with(density) { Size(maxWidth.toPx(), maxHeight.toPx()) },
             equationBottomLimit = with(density) { (maxHeight - bottomStack - EQUATION_GAP).toPx() },
@@ -652,16 +671,16 @@ private fun SwiftieQuizStage(
                 },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Box(modifier = Modifier.height(LUCKY_BAND), contentAlignment = Alignment.Center) {
-                SwiftieLuckyHint(visible = quiz.showLuckyHint)
-            }
-            Spacer(modifier = Modifier.height(8.dp))
             Box(modifier = Modifier.height(audioHintBand), contentAlignment = Alignment.Center) {
                 if (showAudioHint) {
                     SwiftieAudioHint(advice = audioAdvice)
                 }
             }
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            Box(modifier = Modifier.height(luckyBand), contentAlignment = Alignment.Center) {
+                SwiftieLuckyHint(visible = quiz.showLuckyHint)
+            }
+            Spacer(modifier = Modifier.height(LUCKY_KEYPAD_GAP))
             SwiftieKeypad(
                 canSubmit = quiz.canSubmit,
                 enabled = !quiz.solved,
