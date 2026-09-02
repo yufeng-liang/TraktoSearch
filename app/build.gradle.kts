@@ -386,7 +386,6 @@ dependencies {
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
     implementation(libs.reorderable)
-    implementation(libs.zoomable)
     implementation(libs.telephoto.zoomable.image.coil)
     implementation(libs.compose.mesh.gradient)
     implementation(libs.mirage)

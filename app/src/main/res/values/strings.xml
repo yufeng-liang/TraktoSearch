@@ -1970,7 +1970,7 @@ Config:
     <string name="opensource_use_lottie">Playing JSON vector animations (loading, empty states, etc.)</string>
     <string name="opensource_use_richtext">Rendering Markdown rich text (changelog)</string>
     <string name="opensource_use_reorderable">Long-press drag-to-reorder for lists</string>
-    <string name="opensource_use_zoomable">Pinch-to-zoom and pan for posters and stills</string>
+    <string name="opensource_use_telephoto">Pinch-to-zoom with sub-sampled large images for posters and stills</string>
     <string name="opensource_use_backdrop">Screen-level sampling backdrop for the liquid glass effect</string>
     <string name="opensource_use_mesh_gradient">Mesh gradient animation fallback for background glow on Android 12 and below</string>
     <string name="opensource_use_mirage">AGSL shader animation for background glow on Android 13 and above</string>
