@@ -10,16 +10,21 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asComposePath
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.res.ResourcesCompat
@@ -260,6 +265,7 @@ private fun SignatureArtwork(
 ) {
     val density = LocalDensity.current
     val context = LocalContext.current
+    val layoutDirection = LocalLayoutDirection.current
     val targetWidthPx = with(density) { targetWidth.toPx() }
     val art = remember(context, targetWidthPx) { buildSignatureArt(context, targetWidthPx) }
     val sparkleCount = if (rememberIsLowRamDevice()) 24 else 60
@@ -280,23 +286,34 @@ private fun SignatureArtwork(
             modifier = Modifier
                 .matchParentSize()
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                .drawBehind {
-                    val elapsed = elapsedInSignature()
-                    val revealX = art.strokes.revealXAt(elapsed)
-                    if (revealX <= 0f) return@drawBehind
-                    val flash = flashAlpha(elapsed, art.strokes.writeEndMs)
-                    // 箔面只铺到揭示前沿；前沿右边还没「写」到
-                    clipRect(left = 0f, top = 0f, right = revealX, bottom = size.height) {
-                        drawGlitterBody(time, sparkles)
-                        if (flash > 0f) drawRect(color = Color.White, alpha = flash)
-                    }
-                    // 最后用字形轮廓抠形。DstIn 只保留 mask 覆盖到的像素，
-                    // 边缘比 clipPath 干净（与 Phase B 的灯箱同一套做法）
-                    drawPath(
-                        path = art.path,
-                        color = Color.White,
-                        blendMode = BlendMode.DstIn
+                .drawWithCache {
+                    // 字形先烤进一张位图当 mask，只有尺寸变化才重建。
+                    //
+                    // **不能用 `drawPath(blendMode = DstIn)` 抠形**：DstIn 要「src 没盖到
+                    // 的地方把 dst 清掉」，而 Skia 画一条路径只在路径的覆盖率范围内混合 ——
+                    // 路径外的像素覆盖率是 0，根本不参与运算，箔面于是整块留下，
+                    // 屏幕上就是一个玫红矩形而不是签名。位图 src 铺满整层、
+                    // 字形外 alpha = 0，DstIn 才真的擦得掉（与灯箱的
+                    // `SwiftieGlitterText` 同一套做法）。
+                    val mask = ImageBitmap(
+                        width = size.width.toInt().coerceAtLeast(1),
+                        height = size.height.toInt().coerceAtLeast(1)
                     )
+                    CanvasDrawScope().draw(this, layoutDirection, Canvas(mask), size) {
+                        drawPath(path = art.path, color = Color.White)
+                    }
+                    onDrawBehind {
+                        val elapsed = elapsedInSignature()
+                        val revealX = art.strokes.revealXAt(elapsed)
+                        if (revealX <= 0f) return@onDrawBehind
+                        val flash = flashAlpha(elapsed, art.strokes.writeEndMs)
+                        // 箔面只铺到揭示前沿；前沿右边还没「写」到
+                        clipRect(left = 0f, top = 0f, right = revealX, bottom = size.height) {
+                            drawGlitterBody(time, sparkles)
+                            if (flash > 0f) drawRect(color = Color.White, alpha = flash)
+                        }
+                        drawImage(image = mask, blendMode = BlendMode.DstIn)
+                    }
                 }
         )
 

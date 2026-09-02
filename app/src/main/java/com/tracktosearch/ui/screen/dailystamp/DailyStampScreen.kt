@@ -6,11 +6,15 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,6 +27,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronLeft
@@ -34,6 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,6 +61,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -66,6 +73,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
@@ -122,21 +130,25 @@ fun DailyStampScreen(
                 .navigationBarsPadding()
         ) {
             DailyStampTopBar(palette = palette, onBack = onBack)
-            // 报头压到一屏能装下六行格子；真装不下（大字号、六行月份加上更高的状态栏）
-            // 仍然能滚，只是常见情况下不必滚
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                DailyStampCalendar(
-                    state = state,
-                    palette = palette,
-                    locale = content.locale,
-                    today = content.today,
-                    cells = content.cells,
-                    openable = content.sheets.keys,
-                    onPreviousMonth = viewModel::previousMonth,
-                    onNextMonth = viewModel::nextMonth,
-                    onDayClick = { date -> viewModel.select(date) },
-                )
-                Spacer(Modifier.height(10.dp))
+            // 报头压到一屏能装下六行格子；真装不下（大字号、更高的状态栏）仍然能滚，
+            // 只是常见情况下不必滚。格子按这里量出来的余高收缩，见 DailyStampCalendar
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                val budget = maxHeight - DAILY_STAMP_CALENDAR_CHROME - 10.dp
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    DailyStampCalendar(
+                        state = state,
+                        palette = palette,
+                        locale = content.locale,
+                        today = content.today,
+                        cells = content.cells,
+                        openable = content.sheets.keys,
+                        gridHeightBudget = budget,
+                        onPreviousMonth = viewModel::previousMonth,
+                        onNextMonth = viewModel::nextMonth,
+                        onDayClick = { date -> viewModel.select(date) },
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
             }
         }
         DailyStampCardOverlay(
@@ -239,6 +251,12 @@ internal fun rememberDailyStampContent(state: DailyStampUiState): DailyStampCont
  * 「你来之前」那些格子的提示也在这里：点一下不开卡片，改把底下那行小字换成那句话。
  * 放在这一层而不是各页自己实现，是因为那行字本来就属于日历，两个入口才不会一个有
  * 提示一个没有。
+ *
+ * 网格上可以左右滑动翻月（见 [monthSwipe]），和报头那两个箭头是同一件事的两种手势。
+ *
+ * @param gridHeightBudget 网格最多能占多高。给了值格子就按它收缩，整个日历一屏装得下；
+ *   [Dp.Unspecified] 表示不限，格子只按宽度铺开。两个入口的余高不一样（独立页上面
+ *   只有一条顶栏，设置页还压着一张开关卡片），所以这个数只能由调用方各自量
  */
 @Composable
 internal fun DailyStampCalendar(
@@ -252,6 +270,7 @@ internal fun DailyStampCalendar(
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onDayClick: (LocalDate) -> Unit,
+    gridHeightBudget: Dp = Dp.Unspecified,
 ) {
     // 点了「你来之前」那种格子的那一下：底下那行字临时换成东隅那句，过一会儿换回来
     var hinted by remember { mutableStateOf<LocalDate?>(null) }
@@ -289,11 +308,18 @@ internal fun DailyStampCalendar(
             cells = cells,
             openable = openable,
             hinted = hinted,
+            heightBudget = gridHeightBudget,
             onDayClick = onDayClick,
             onUnarrivedClick = { date ->
                 hinted = date
                 hintTick++
             },
+            modifier = Modifier.monthSwipe(
+                canGoPrevious = state.canGoPrevious,
+                canGoNext = state.canGoNext,
+                onPrevious = onPreviousMonth,
+                onNext = onNextMonth,
+            ),
         )
         Spacer(Modifier.height(14.dp))
         FooterHint(
@@ -508,12 +534,67 @@ private fun WeekdayRow(
 }
 
 /**
+ * 左右滑动翻月。
+ *
+ * 用 [draggable] 而不是自己收 pointer 事件：它只认横向，纵向照样交给外面那层滚动
+ * （独立页是 `verticalScroll`，设置页是 `LazyColumn`），而且横向越过触摸阈值之后
+ * 格子上的 `clickable` 会自己取消，不会滑一下顺手翻开一张卡片。
+ *
+ * 一次手势只翻一页（[fired]）：不加这个锁的话，手指继续往同一边划，每多走
+ * 一个阈值就再翻一个月，一甩过去能跳掉半年。
+ *
+ * 翻不动的方向直接不响应（[canGoPrevious] / [canGoNext]）——箭头在那个方向是淡掉的，
+ * 手势也该是同一套规矩。
+ */
+@Composable
+private fun Modifier.monthSwipe(
+    canGoPrevious: Boolean,
+    canGoNext: Boolean,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+): Modifier {
+    val threshold = with(LocalDensity.current) { MONTH_SWIPE_THRESHOLD.toPx() }
+    val travel = remember { mutableFloatStateOf(0f) }
+    val fired = remember { mutableStateOf(false) }
+    val state = rememberDraggableState { delta ->
+        travel.floatValue += delta
+        if (fired.value) return@rememberDraggableState
+        // 往右划是往回翻：内容跟着手指往右让，露出来的是更早的日子
+        when {
+            travel.floatValue >= threshold && canGoPrevious -> {
+                fired.value = true
+                onPrevious()
+            }
+            travel.floatValue <= -threshold && canGoNext -> {
+                fired.value = true
+                onNext()
+            }
+        }
+    }
+    return this.draggable(
+        state = state,
+        orientation = Orientation.Horizontal,
+        onDragStarted = {
+            travel.floatValue = 0f
+            fired.value = false
+        },
+    )
+}
+
+/**
  * 月视图网格。
  *
  * 用 Column + Row 手排 7 列而不是 LazyVerticalGrid：一个月最多 42 格，而 lazy 网格
  * 嵌在可滚动的 Column 里必须先给死高度，反而更绕。
  *
- * 左右留 10dp、格间 4dp：海报按原比例铺开后，横向每省下的一点都直接变成海报宽度。
+ * **固定画 [MONTH_ROWS] 行**，不按当月实际占几周算。二月能排进 4 行、八月要 6 行，
+ * 按实际行数画的话两个月的日历差着整整一行（约 90dp）——翻一下月整页的高度就跳一截,
+ * 底下那行小字跟着上下弹。多出来的那一行是空格子，不画东西，只占位。
+ *
+ * 格子边长取「宽度铺开」与「[heightBudget] 装得下 6 行」里的小值：不给预算时按宽度
+ * 铺满（老行为），给了预算就横向收窄、整体居中，让整个日历一屏放得下。
+ *
+ * 左右留 10dp、格间 [GRID_GAP]：海报按原比例铺开后，横向每省下的一点都直接变成海报宽度。
  */
 @Composable
 private fun MonthGrid(
@@ -525,63 +606,83 @@ private fun MonthGrid(
     cells: Map<LocalDate, DailyStampCellUi>,
     openable: Set<LocalDate>,
     hinted: LocalDate?,
+    /** 网格能占的最大高度，见 [DailyStampCalendar] 的同名参数 */
+    heightBudget: Dp,
     onDayClick: (LocalDate) -> Unit,
     onUnarrivedClick: (LocalDate) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val leading = remember(month, locale) {
         val first = WeekFields.of(locale).firstDayOfWeek
         (month.atDay(1).dayOfWeek.value - first.value + 7) % 7
     }
     val length = month.lengthOfMonth()
-    val rows = (leading + length + 6) / 7
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
+    BoxWithConstraints(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 10.dp),
+        contentAlignment = Alignment.TopCenter,
     ) {
-        repeat(rows) { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                repeat(7) { column ->
-                    val dayOfMonth = row * 7 + column - leading + 1
-                    Box(modifier = Modifier.weight(1f)) {
-                        if (dayOfMonth in 1..length) {
-                            val date = month.atDay(dayOfMonth)
-                            val cell = cells[date]
-                            val kind = dayKind(
-                                date = date,
-                                today = today,
-                                firstUse = firstDay,
-                                stamped = cell != null,
-                            )
-                            DayCell(
-                                date = date,
-                                cell = cell,
-                                kind = kind,
-                                palette = palette,
-                                isToday = date == today,
-                                daysAhead = (date.toEpochDay() - today.toEpochDay()).toInt(),
-                                hinted = date == hinted,
-                                onClick = when {
-                                    // 你来之前那些天不开卡片，只回一句话
-                                    kind == DayKind.Unarrived -> {
-                                        { onUnarrivedClick(date) }
-                                    }
-                                    date in openable -> {
-                                        { onDayClick(date) }
-                                    }
-                                    // 台词解析不出来的那天点了也没有卡可开，索性不给点
-                                    else -> null
-                                },
-                            )
-                        } else {
-                            // 月初月末的空位只占格，不画任何东西。高度要和有内容的格子
-                            // 一致（纸的白边 + 海报 + 关键词那一行），否则首末行会矮一截。
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(TILE_INSET)
-                            ) {
-                                Spacer(Modifier.fillMaxWidth().aspectRatio(POSTER_ASPECT))
-                                Spacer(Modifier.height(KEYWORD_LINE))
+        val gaps = GRID_GAP * (7 - 1)
+        val byWidth = (maxWidth - gaps) / 7
+        // 一格的高度 = 上下白边 + 海报（宽 ÷ 2:3）+ 关键词那一行，反解出宽度
+        val byHeight = if (heightBudget.isSpecified) {
+            val row = (heightBudget - GRID_GAP * (MONTH_ROWS - 1)) / MONTH_ROWS
+            (row - TILE_INSET * 2 - KEYWORD_LINE) * POSTER_ASPECT
+        } else {
+            byWidth
+        }
+        // 下限：预算再紧也不能把格子压成看不清海报的一小块，那时宁可让整页滚起来。
+        // 外层再夹一次 byWidth —— 屏幕本来就窄到放不下 7 个下限宽的格子时，
+        // 横向溢出比格子小更糟
+        val tile = minOf(byWidth, maxOf(byHeight, TILE_MIN_WIDTH))
+        Column(
+            modifier = Modifier.width(tile * 7 + gaps),
+            verticalArrangement = Arrangement.spacedBy(GRID_GAP),
+        ) {
+            repeat(MONTH_ROWS) { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(GRID_GAP)) {
+                    repeat(7) { column ->
+                        val dayOfMonth = row * 7 + column - leading + 1
+                        Box(modifier = Modifier.width(tile)) {
+                            if (dayOfMonth in 1..length) {
+                                val date = month.atDay(dayOfMonth)
+                                val cell = cells[date]
+                                val kind = dayKind(
+                                    date = date,
+                                    today = today,
+                                    firstUse = firstDay,
+                                    stamped = cell != null,
+                                )
+                                DayCell(
+                                    date = date,
+                                    cell = cell,
+                                    kind = kind,
+                                    palette = palette,
+                                    isToday = date == today,
+                                    daysAhead = (date.toEpochDay() - today.toEpochDay()).toInt(),
+                                    hinted = date == hinted,
+                                    onClick = when {
+                                        // 你来之前那些天不开卡片，只回一句话
+                                        kind == DayKind.Unarrived -> {
+                                            { onUnarrivedClick(date) }
+                                        }
+                                        date in openable -> {
+                                            { onDayClick(date) }
+                                        }
+                                        // 台词解析不出来的那天点了也没有卡可开，索性不给点
+                                        else -> null
+                                    },
+                                )
+                            } else {
+                                // 月初月末与补出来的那一行只占格，不画任何东西。高度要和有内容的
+                                // 格子一致（纸的白边 + 海报 + 关键词那一行），否则那几行会矮一截。
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(TILE_INSET)
+                                ) {
+                                    Spacer(Modifier.fillMaxWidth().aspectRatio(POSTER_ASPECT))
+                                    Spacer(Modifier.height(KEYWORD_LINE))
+                                }
                             }
                         }
                     }
@@ -924,6 +1025,33 @@ private fun FooterHint(
 
 /** 海报的原始比例，2:3。整月是一墙小海报，比例一改就不像海报了 */
 private const val POSTER_ASPECT = 2f / 3f
+
+/**
+ * 月视图固定画几行。
+ *
+ * 6 是任何月份最多要的周数（30 天从周末起头、31 天也一样）。固定成 6 而不是按当月
+ * 实际算，是为了让**每个月的日历一样高**：按实际算的话 5 行的九月比 6 行的八月矮
+ * 整整一行，翻月时整页高度跳一截。
+ */
+private const val MONTH_ROWS = 6
+
+/** 格与格之间的缝。海报按原比例铺开后，横向每省下的一点都直接变成海报宽度 */
+private val GRID_GAP = 3.dp
+
+/** 格子边长的下限。再窄海报就只是一个色块，不如让整页滚起来 */
+private val TILE_MIN_WIDTH = 30.dp
+
+/** 横滑翻月的位移阈值。比系统触摸阈值宽出不少，免得竖着滚的时候顺手翻了月 */
+private val MONTH_SWIPE_THRESHOLD = 56.dp
+
+/**
+ * 日历除网格以外那几件东西的高度：报头 51 + 10 + 星期表头 14 + 4 + 14 + 底部小字 14。
+ *
+ * 两个入口都要用它反算网格的高度预算，所以是 `internal`。跟着 [MonthMasthead]、
+ * [WeekdayRow]、[FooterHint] 改，改了这里就该跟着改 —— 估小了网格会顶出一屏，
+ * 估大了格子白白缩一圈。
+ */
+internal val DAILY_STAMP_CALENDAR_CHROME = 107.dp
 
 /** 纸的圆角。纸片不是卡片，角不该圆到像个按钮 */
 private val TILE_RADIUS = 5.dp
