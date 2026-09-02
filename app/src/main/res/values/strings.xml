@@ -48,7 +48,10 @@
     <string name="ticket_admit_one">ADMIT ONE</string>
     <string name="ticket_hall">HALL %1$d</string>
     <string name="ticket_seat">ROW %1$d SEAT %2$d</string>
+    <string name="ticket_label_row">ROW</string>
+    <string name="ticket_label_seat">SEAT</string>
     <string name="ticket_entry_trakt">Sign in with Trakt</string>
+    <string name="ticket_entry_authorizing">Authorizing…</string>
     <string name="ticket_entry_douban">Sign in with Douban</string>
     <string name="ticket_entry_guest">Enter as guest</string>
 

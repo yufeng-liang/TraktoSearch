@@ -48,7 +48,10 @@
     <string name="ticket_admit_one">ADMIT ONE</string>
     <string name="ticket_hall">スクリーン %1$d</string>
     <string name="ticket_seat">%1$d 列 %2$d 番</string>
+    <string name="ticket_label_row">列</string>
+    <string name="ticket_label_seat">番</string>
     <string name="ticket_entry_trakt">Traktでログイン</string>
+    <string name="ticket_entry_authorizing">認証中…</string>
     <string name="ticket_entry_douban">豆瓣でログイン</string>
     <string name="ticket_entry_guest">ゲストとして入場</string>
 

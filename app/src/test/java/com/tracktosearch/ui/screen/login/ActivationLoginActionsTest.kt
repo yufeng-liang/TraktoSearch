@@ -15,6 +15,7 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import com.tracktosearch.R
 import com.tracktosearch.data.local.TicketStub
 import org.junit.Rule
@@ -68,13 +69,16 @@ class ActivationLoginActionsTest {
         }
     }
 
-    private fun setTicket(enabled: Boolean = true) {
+    private fun setTicket(
+        enabled: Boolean = true,
+        loginState: LoginState = LoginState.IDLE,
+    ) {
         composeRule.setContent {
             MaterialTheme {
                 CinemaTicket(
                     stub = ticketStub,
                     phase = TICKET_PRINT_FINAL_PHASE,
-                    loginState = LoginState.IDLE,
+                    loginState = loginState,
                     traktEnabled = enabled,
                     doubanEnabled = enabled,
                     guestEnabled = enabled,
@@ -201,6 +205,59 @@ class ActivationLoginActionsTest {
         setTicket()
         composeRule.onNodeWithText("小明").assertIsDisplayed()
         composeRule.onNodeWithText("2026-08-31").assertIsDisplayed()
+    }
+
+    @Test
+    fun `票号印在条码下面且与条码同源`() {
+        // 020712 = 2 号厅 7 排 12 座，跟 ticketBarcodeWidths 展开的是同一个串
+        setTicket()
+        composeRule
+            .onNodeWithText(ticketSerial(ticketStub), useUnmergedTree = true)
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun `条码留在撕口线以上的票根那半截`() {
+        // 真票撕开后带走的是带条码的这一截。条码掉到入口行下面就不是票根了，
+        // 而这件事在装机截图上要盯着虚线看才看得出来
+        setTicket()
+        val serialBottom = composeRule
+            .onNodeWithText(ticketSerial(ticketStub), useUnmergedTree = true)
+            .fetchSemanticsNode().boundsInRoot.bottom
+        val traktTop = composeRule
+            .onNodeWithText(context.getString(R.string.ticket_entry_trakt))
+            .fetchSemanticsNode().boundsInRoot.top
+
+        assertThat(serialBottom).isLessThan(traktTop)
+    }
+
+    @Test
+    fun `授权中的提示和取消跟 Trakt 挤在同一行`() {
+        // 取 unmerged 树：整行是 clickable，合并语义之后行文案和行尾那两样会塌成同一个节点，
+        // 量出来的永远是整行的框，「在不在同一行」也就无从判断
+        setTicket(loginState = LoginState.AUTHORIZING)
+        val label = composeRule
+            .onNodeWithText(context.getString(R.string.ticket_entry_trakt), useUnmergedTree = true)
+            .fetchSemanticsNode().boundsInRoot
+        val hint = composeRule
+            .onNodeWithText(
+                context.getString(R.string.ticket_entry_authorizing),
+                useUnmergedTree = true
+            )
+            .fetchSemanticsNode().boundsInRoot
+        val cancel = composeRule
+            .onNodeWithText(context.getString(R.string.common_cancel), useUnmergedTree = true)
+            .fetchSemanticsNode().boundsInRoot
+
+        for ((name, bounds) in listOf("提示" to hint, "取消" to cancel)) {
+            // 竖向有重叠就是同一行；早先这两样印在票面下面，重叠为零
+            assertWithMessage("$name 与行文案竖向不重叠，不在同一行")
+                .that(bounds.top).isLessThan(label.bottom)
+            assertWithMessage("$name 与行文案竖向不重叠，不在同一行")
+                .that(bounds.bottom).isGreaterThan(label.top)
+            assertWithMessage("$name 没排在行文案右边")
+                .that(bounds.left).isAtLeast(label.right)
+        }
     }
 
     @Test

@@ -12,7 +12,6 @@ class TicketPrintPhaseTest {
 
         assertThat(phase.revealFraction).isWithin(TOLERANCE).of(0f)
         assertThat(phase.rowsVisible).isEqualTo(0)
-        assertThat(phase.barcodeVisible).isFalse()
         assertThat(phase.feedStep).isEqualTo(0)
     }
 
@@ -79,12 +78,6 @@ class TicketPrintPhaseTest {
         // 票上只有三行，最后一段不能再往上加
         assertThat(at(1386).rowsVisible).isEqualTo(3)
         assertThat(phaseAt(1f).rowsVisible).isEqualTo(3)
-    }
-
-    @Test
-    fun barcode_appearsOnlyAfterTheRowsAreIn() {
-        assertThat(at(1325).barcodeVisible).isFalse()
-        assertThat(at(1375).barcodeVisible).isTrue()
     }
 
     @Test

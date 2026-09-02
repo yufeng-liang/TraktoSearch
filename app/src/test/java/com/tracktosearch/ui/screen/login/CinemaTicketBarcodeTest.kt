@@ -70,6 +70,40 @@ class CinemaTicketBarcodeTest {
         assertThat(ticketBarcodeWidths(stub(2, 9, 14))).isEqualTo(underRoot)
     }
 
+    @Test
+    fun ticketSerial_isSixDigitsOfHallRowSeat() {
+        assertThat(ticketSerial(stub(hall = 3, row = 4, seat = 4))).isEqualTo("030404")
+        assertThat(ticketSerial(stub(hall = 6, row = 12, seat = 20))).isEqualTo("061220")
+    }
+
+    @Test
+    fun ticketSerial_printsTheSameDigitsTheBarsEncode() {
+        // 号码印在条码正下方，两者必须出自同一个串：各算一次，哪天有人改了其中一处，
+        // 票面就会出现「条码是一段、数字是另一段」这种没人会去核对、但一眼看不出的错
+        for (hall in 1..6) {
+            for (row in 1..12) {
+                for (seat in 1..20) {
+                    val serial = ticketSerial(stub(hall, row, seat))
+                    val expected = serial.flatMap { char ->
+                        val digit = char.digitToInt()
+                        (0..2).map { k -> (digit + k) % 3 + 1 }
+                    }
+                    assertWithMessage("$hall 厅 $row 排 $seat 座")
+                        .that(ticketBarcodeWidths(stub(hall, row, seat))).isEqualTo(expected)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun ticketSerial_ignoresTheDeviceLocale() {
+        val underRoot = ticketSerial(stub(2, 9, 14))
+
+        Locale.setDefault(Locale.forLanguageTag("ar-EG-u-nu-arab"))
+
+        assertThat(ticketSerial(stub(2, 9, 14))).isEqualTo(underRoot)
+    }
+
     private fun stub(hall: Int, row: Int, seat: Int) = TicketStub(
         nickname = "小明",
         issuedEpochDay = 20_696L,

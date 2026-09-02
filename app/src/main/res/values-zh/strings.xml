@@ -48,7 +48,10 @@
     <string name="ticket_admit_one">ADMIT ONE</string>
     <string name="ticket_hall">%1$d 号厅</string>
     <string name="ticket_seat">%1$d 排 %2$d 座</string>
+    <string name="ticket_label_row">排</string>
+    <string name="ticket_label_seat">座</string>
     <string name="ticket_entry_trakt">Trakt 登录</string>
+    <string name="ticket_entry_authorizing">授权中…</string>
     <string name="ticket_entry_douban">豆瓣登录</string>
     <string name="ticket_entry_guest">访客进入</string>
 

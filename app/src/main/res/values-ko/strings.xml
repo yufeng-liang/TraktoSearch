@@ -48,7 +48,10 @@
     <string name="ticket_admit_one">ADMIT ONE</string>
     <string name="ticket_hall">%1$d관</string>
     <string name="ticket_seat">%1$d열 %2$d번</string>
+    <string name="ticket_label_row">열</string>
+    <string name="ticket_label_seat">번</string>
     <string name="ticket_entry_trakt">Trakt로 로그인</string>
+    <string name="ticket_entry_authorizing">인증 중…</string>
     <string name="ticket_entry_douban">더우반 로그인</string>
     <string name="ticket_entry_guest">게스트로 입장</string>
 
