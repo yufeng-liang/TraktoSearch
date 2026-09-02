@@ -1,15 +1,14 @@
-@file:OptIn(dev.chrisbanes.haze.ExperimentalHazeApi::class)
-
 package com.tracktosearch.ui.screen.login
 
+import android.graphics.Bitmap
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,6 +20,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -47,21 +47,32 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageShader
+import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,15 +80,33 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
-import com.tracktosearch.ui.component.GlassScene
-import com.tracktosearch.ui.component.GlassSurfaceRole
-import com.tracktosearch.ui.component.appVisualEffect
+import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.theme.MachineBulbLit
+import com.tracktosearch.ui.theme.MachineBulbUnlitDark
+import com.tracktosearch.ui.theme.MachineBulbUnlitLight
+import com.tracktosearch.ui.theme.MachineCodeInk
+import com.tracktosearch.ui.theme.MachineDisplayInk
+import com.tracktosearch.ui.theme.MachineDisplayInkError
+import com.tracktosearch.ui.theme.MachineDisplayWellDark
+import com.tracktosearch.ui.theme.MachineDisplayWellLight
+import com.tracktosearch.ui.theme.MachineKeyInkDark
+import com.tracktosearch.ui.theme.MachineKeyInkLight
+import com.tracktosearch.ui.theme.MachineKeycapDark
+import com.tracktosearch.ui.theme.MachineKeycapLight
+import com.tracktosearch.ui.theme.MachinePlateDark
+import com.tracktosearch.ui.theme.MachinePlateInk
+import com.tracktosearch.ui.theme.MachinePlateLight
+import com.tracktosearch.ui.theme.MachineShellDark
+import com.tracktosearch.ui.theme.MachineShellLight
+import com.tracktosearch.ui.theme.MachineShellShadeFraction
+import com.tracktosearch.ui.theme.MachineSlotWall
+import com.tracktosearch.ui.theme.LoginPaperLight
+import com.tracktosearch.ui.theme.LoginTitleInk
 import com.tracktosearch.ui.theme.PixelFontFamily
 import com.tracktosearch.ui.theme.pixelFontSize
-import dev.chrisbanes.haze.HazeInput
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.random.Random
 
 /** 取票码位数。六格与读屏播报都按它算，改长度只改这里。 */
 private const val CODE_LENGTH = 6
@@ -94,28 +123,59 @@ private val DisplayHeight = 52.dp
  */
 private val KeyHeight = 52.dp
 
-// 机壳不用 surface 而用深金属色：取票机是台设备，玻璃层该压出金属而不是纸面的观感。
-// 浅色主题一档暖灰金属，深色主题压得更深，都带 alpha 让背景还能透上来。
-private val MachineMetalLight = Color(0xFF6E6259)
-private val MachineMetalDark = Color(0xFF3A322C)
-private const val MACHINE_METAL_ALPHA = 0.45f
+/** 机壳圆角。上下同值：取票机是个方箱子，圆角只是倒边。 */
+private val ShellCorner = 16.dp
 
-// 像素屏凹槽：屏是熄灭的黑玻璃，比机壳更深一档才像嵌进去的
-private val DisplayWellLight = Color(0xFF241C16)
-private val DisplayWellDark = Color(0xFF15100C)
+/** 机壳四角螺丝的直径。再小就看不出是螺丝，再大就抢铭牌。 */
+private val ScrewSize = 7.dp
 
-// 老式点阵屏的荧光绿，报错转红
-private val DisplayInkNormal = Color(0xFF9FE870)
-private val DisplayInkError = Color(0xFFFF6B5A)
+/** 螺丝到机壳边的距离。和机壳内边距同量，螺丝才落在「边框」那一圈里而不是压住内容。 */
+private val ScrewInset = 7.dp
 
-/** 出票口内壁。比屏幕还深，看上去是机器里面的暗处。 */
-private val SlotWallColor = Color(0xFF1A1310)
+/** 已取票态键盘的残留透明度。键盘留在面板上撑住机器的样子，但不再是可用控件。 */
+private const val GHOST_KEYPAD_ALPHA = 0.30f
+
+/** 键盘整块的测试标记。已取票态整块从读屏树里摘掉，只留这个标记供测试确认它还在版式里。 */
+internal const val MACHINE_KEYPAD_TAG = "machine_keypad"
+
+// ---- 机壳砂面噪点 ----
+// 一次生成一张小位图，之后交给 shader 平铺。不用每帧 drawPoints：
+// 铺满整台机器是几千个点，而这层颗粒是静态的，没有哪一帧需要重算它。
+/** 噪点位图边长。64 够碎，平铺接缝看不出来；再大只是白占内存。 */
+private const val NOISE_TILE_PX = 64
+
+/** 固定随机种子。噪点图案每次进页面都一样，不会让人觉得「换了一台机器」。 */
+private const val NOISE_SEED = 0x5EED
+
+/** 噪点透明度。0x16 是「凑近看有颗粒、正常距离只觉得不是塑料」的那一档。 */
+private const val NOISE_ALPHA = 0x16
+
+// ---- 顶边跑马灯 ----
+/** 灯泡颗数。12 颗在 380dp 宽的机壳上间距约 32dp，看得出是一串灯而不是一排点。 */
+private const val BULB_COUNT = 12
+
+/** 灯泡直径。 */
+private val BulbSize = 6.dp
+
+/** 跑一圈的时长。 */
+private const val BULB_LAP_MILLIS = 1_100
+
+/** 进场跑几圈。跑完全灭 —— 这是个要专注输入六位码的屏，灯不该一直抢注意力。 */
+private const val BULB_ENTRY_LAPS = 3
+
+/** 亮点的余光宽度，单位是「颗」。留一点余光跑起来才像灯带，而不是一颗孤灯在跳。 */
+private const val BULB_GLOW_SPREAD = 2.2f
 
 /**
  * 电影院取票机。面板上按自绘数字键盘输入 6 位取票码，按通栏「取票」键，票从底部出票口打印出来。
  *
- * 自上而下七层：机壳、铭牌、像素屏、六格取票码、键盘、取票键、出票口。
+ * 自上而下：跑马灯灯泡、铭牌与喇叭网、像素屏、六格取票码、键盘、取票键、票卷窗与出票口。
  * 状态文案和错误判定全在调用方算好，这里只负责画机器、把按键抛回去。
+ *
+ * **机壳是自绘的，不是毛玻璃。** 原先整台机器是一层 haze，于是背景的爆米花能从机壳里
+ * 透出来 —— 取票机是台设备，不是一块玻璃。所以这个组合体不接 [HazeState]，
+ * 也不吃「玻璃/模糊」那项设置：材质就是它的身份，跟 SwiftiePalette 同理。
+ * 配色全部来自 Color.kt 的 Machine* 常量，一个 `colorScheme` 槽位都不读。
  *
  * @param code 已输入的数字串，长度 0..6，调用方保证只含数字
  * @param codeDescription 六格整体的读屏文案，为 null 时按已输入位数自动生成。
@@ -124,7 +184,9 @@ private val SlotWallColor = Color(0xFF1A1310)
  * @param detailText 像素屏第二行的完整引导句，为 null 时第二行留空。
  *   这句以前印在机器外面，搬进屏里是因为屏本来就装得下 —— 一行约 25 字（412dp 屏）
  *   到 17 字（360dp 屏），而最长的那条引导是 22 字
- * @param keypadEnabled 已取票态整块键盘置灰但保留，机器不该只剩半截
+ * @param keypadEnabled 已取票态整块键盘淡成残影并从读屏树里摘掉，但仍占着面板 ——
+ *   机器不该只剩半截
+ * @param isPrinting 出票动画进行中。跑马灯在这段时间一直跑，其余时候只在进场时跑三圈
  * @param ticketSlot 出票口里的内容，票从这里长出来
  */
 @Composable
@@ -136,26 +198,25 @@ internal fun TicketMachine(
     isLoading: Boolean,
     keypadEnabled: Boolean,
     submitEnabled: Boolean,
-    hazeState: HazeState,
-    scene: GlassScene,
     onDigit: (Char) -> Unit,
     onBackspace: () -> Unit,
     onPaste: () -> Unit,
     onSubmit: () -> Unit,
     modifier: Modifier = Modifier,
+    isPrinting: Boolean = false,
     codeDescription: String? = null,
     ticketSlot: @Composable () -> Unit = {},
 ) {
-    val accent = MaterialTheme.colorScheme.primary
-    val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val shellShape = RoundedCornerShape(14.dp)
-    val shellMetal = (if (isDarkTheme) MachineMetalDark else MachineMetalLight)
-        .copy(alpha = MACHINE_METAL_ALPHA)
-    val hazeStyle = HazeMaterials.thin(shellMetal).then {
-        blurRadius(36.dp)
-        noiseFactor(0f)
-        blurEnabled(true)
+    val isDarkTheme = isAppDarkTheme()
+    val shellShape = RoundedCornerShape(ShellCorner)
+    val shell = if (isDarkTheme) MachineShellDark else MachineShellLight
+    // 机壳最亮的一点就是 shell 本身，往下压暗、不往上提亮，见 MachineShellShadeFraction
+    val shellBrush = remember(shell) {
+        Brush.verticalGradient(
+            listOf(shell, lerp(shell, Color.Black, MachineShellShadeFraction))
+        )
     }
+    val noiseBrush = rememberMachineNoiseBrush()
     val focusRequester = remember { FocusRequester() }
     // 节点还没挂上时 requestFocus 会抛；争取不到焦点只是少了外接键盘，触屏输入照旧
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
@@ -198,45 +259,58 @@ internal fun TicketMachine(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // 落地阴影。机器要站在牛皮纸上，没有这层它是一张贴纸。
+                // clip = false：阴影本来就该落在机壳外面
+                .shadow(8.dp, shellShape, clip = false)
                 .clip(shellShape)
-                .appVisualEffect(
-                    input = HazeInput.Sources(hazeState),
-                    hazeStyle = hazeStyle,
-                    glassRole = GlassSurfaceRole.LoginSurface,
-                    glassShape = shellShape,
-                    glassTint = shellMetal,
-                    scene = scene
-                )
-                .background(Color.Transparent, shellShape)
-                .border(BorderStroke(1.dp, accent.copy(alpha = 0.30f)), shellShape)
-                // 金属折边高光：左右内缩，画满整宽会变成一条生硬的白边。
-                // 线宽居中在 y = 0 会被 clip 掉一半，下移半个线宽让 1.dp 完整可见
+                .background(shellBrush, shellShape)
+                // 铸件砂面。一层平铺噪点，压在渐变之上、折边之下
+                .background(noiseBrush, shellShape)
                 .drawBehind {
-                    val stroke = 1.dp.toPx()
-                    val inset = 14.dp.toPx()
-                    drawLine(
-                        color = Color.White.copy(alpha = 0.28f),
-                        start = Offset(inset, stroke / 2f),
-                        end = Offset(size.width - inset, stroke / 2f),
-                        strokeWidth = stroke
+                    drawShellBevel()
+                    drawShellScrews()
+                }
+                .border(1.dp, Color.Black.copy(alpha = 0.42f), shellShape)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            // 顶边跑马灯。影院门头上的那串灯，是这台机器唯一的「氛围」构件
+            MarqueeBulbs(isPrinting = isPrinting, isDarkTheme = isDarkTheme)
+
+            // 铭牌是压进机壳的一块凹槽加蚀刻小字。不直接印在机壳上：机壳带竖向渐变，
+            // 凹槽给这行字一个可控的底，MachinePlateInk 上标的对比度才算得准。
+            // 右边配一块喇叭网 —— 取票机会叫号，有网罩才像有喇叭
+            val plateShape = RoundedCornerShape(3.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(plateShape)
+                        .background(
+                            if (isDarkTheme) MachinePlateDark else MachinePlateLight,
+                            plateShape
+                        )
+                        .border(1.dp, Color.Black.copy(alpha = 0.32f), plateShape)
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.login_personal_cinema_access),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp,
+                            letterSpacing = 1.43.sp
+                        ),
+                        color = MachinePlateInk,
+                        fontWeight = FontWeight.Bold
                     )
                 }
-                .padding(horizontal = 16.dp, vertical = 14.dp)
-        ) {
-            // 机器上的金属铭牌小字，保持等宽字体，不换像素字体
-            Text(
-                text = stringResource(R.string.login_personal_cinema_access),
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 11.sp,
-                    letterSpacing = 1.43.sp
-                ),
-                color = accent,
-                fontWeight = FontWeight.Bold
-            )
+                Spacer(modifier = Modifier.width(10.dp))
+                SpeakerGrille()
+            }
 
             val displayShape = RoundedCornerShape(4.dp)
-            val displayInk = if (statusIsError) DisplayInkError else DisplayInkNormal
+            val displayInk = if (statusIsError) MachineDisplayInkError else MachineDisplayInk
             // 两行合成一个语义节点整体播报：报错时两行本来就是一句完整的话
             // （「网络不通」+「网络连接失败，请检查网络后重试。」），分开念会变成两条互相重复的通知
             val displaySpeech = listOfNotNull(statusText, detailText).joinToString("，")
@@ -247,7 +321,10 @@ internal fun TicketMachine(
                     // 屏内文案长短不一，不锁死高度整台机器会随状态跳动
                     .height(DisplayHeight)
                     .clip(displayShape)
-                    .background(if (isDarkTheme) DisplayWellDark else DisplayWellLight, displayShape)
+                    .background(
+                        if (isDarkTheme) MachineDisplayWellDark else MachineDisplayWellLight,
+                        displayShape
+                    )
                     .border(1.dp, Color.Black.copy(alpha = 0.55f), displayShape)
                     .padding(horizontal = 10.dp, vertical = 6.dp)
                     .semantics(mergeDescendants = true) { contentDescription = displaySpeech },
@@ -322,7 +399,21 @@ internal fun TicketMachine(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 14.dp),
+                    .padding(top = 14.dp)
+                    // 已取票后键盘不再是控件，只是机器的一部分：淡成残影，并整块从读屏树里摘掉。
+                    // 摘掉是因为 12 个键此时全是装饰，念一遍「1 2 3 4…」纯属噪音；
+                    // 留 testTag 是为了测试仍能确认它没被删掉 —— 机器不该只剩半截。
+                    // 0.30 而不是更低：机壳和键帽都是不透明的暖棕，再淡键盘就整块消失，
+                    // 那就等于把键盘删了
+                    .then(
+                        if (keypadEnabled) {
+                            Modifier.testTag(MACHINE_KEYPAD_TAG)
+                        } else {
+                            Modifier
+                                .alpha(GHOST_KEYPAD_ALPHA)
+                                .clearAndSetSemantics { testTag = MACHINE_KEYPAD_TAG }
+                        }
+                    ),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 listOf("123", "456", "789").forEach { rowDigits ->
@@ -352,14 +443,22 @@ internal fun TicketMachine(
                     .padding(top = 12.dp)
                     .height(48.dp),
                 shape = RoundedCornerShape(10.dp),
+                // 整台机器只有这一处上赭红：主动作值得一个强调色，
+                // 铭牌、六格、键面全走中性墨色，accent 撒得到处都是就不再是强调
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = accent,
-                    disabledContainerColor = Color(0xFFDED6CE),
-                    disabledContentColor = Color(0xFF9A9189)
+                    containerColor = LoginTitleInk,
+                    contentColor = LoginPaperLight,
+                    // 禁用态跟着机壳走，不能再用原先那对浅灰 —— 深色档机壳上会亮成一块白条
+                    disabledContainerColor = lerp(shell, Color.Black, 0.32f),
+                    disabledContentColor = MachineCodeInk.copy(alpha = 0.45f)
                 )
             ) {
                 if (isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = LoginPaperLight
+                    )
                 } else {
                     Text(
                         text = stringResource(R.string.machine_submit),
@@ -369,31 +468,39 @@ internal fun TicketMachine(
                 }
             }
 
+            // 出票口那一行：左边一个票卷窗，右边是出票缝。
+            // 缝没有按「靠右占 62%」缩窄 —— 票是全宽的，缝比票窄就不像票从这里出来
             val slotShape = RoundedCornerShape(3.dp)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 14.dp)
-                    .height(10.dp)
-                    .clip(slotShape)
-                    .background(SlotWallColor, slotShape)
-                    // 上齿边压暗、下齿边提亮，凹槽才有厚度；两条线各内移半个线宽避免被裁掉
-                    .drawBehind {
-                        val stroke = 1.dp.toPx()
-                        drawLine(
-                            color = Color.Black.copy(alpha = 0.35f),
-                            start = Offset(0f, stroke / 2f),
-                            end = Offset(size.width, stroke / 2f),
-                            strokeWidth = stroke
-                        )
-                        drawLine(
-                            color = Color.White.copy(alpha = 0.18f),
-                            start = Offset(0f, size.height - stroke / 2f),
-                            end = Offset(size.width, size.height - stroke / 2f),
-                            strokeWidth = stroke
-                        )
-                    }
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TicketRollWindow()
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(10.dp)
+                        .clip(slotShape)
+                        .background(MachineSlotWall, slotShape)
+                        // 上齿边压暗、下齿边提亮，凹槽才有厚度；两条线各内移半个线宽避免被裁掉
+                        .drawBehind {
+                            val stroke = 1.dp.toPx()
+                            drawLine(
+                                color = Color.Black.copy(alpha = 0.35f),
+                                start = Offset(0f, stroke / 2f),
+                                end = Offset(size.width, stroke / 2f),
+                                strokeWidth = stroke
+                            )
+                            drawLine(
+                                color = Color.White.copy(alpha = 0.18f),
+                                start = Offset(0f, size.height - stroke / 2f),
+                                end = Offset(size.width, size.height - stroke / 2f),
+                                strokeWidth = stroke
+                            )
+                        }
+                )
+            }
             // 票紧贴凹槽下沿，中间不留 padding，看上去是从槽里长出来的
             ticketSlot()
         }
@@ -401,15 +508,212 @@ internal fun TicketMachine(
 }
 
 /**
+ * 机壳顶边的一串跑马灯。
+ *
+ * 不是一直在跑：进场跑 [BULB_ENTRY_LAPS] 圈就全灭，[isPrinting] 期间一直跑。
+ * 这一屏的主任务是输入六位码，常驻动画会一直分走注意力；而出票那几秒是这台机器
+ * 唯一该显得忙起来的时候。
+ *
+ * 系统「动画时长」调成 0（开发者选项或省电模式）时一颗都不亮 ——
+ * 那个开关的意思是「别给我动画」，不是「动画跑快点」。
+ *
+ * 亮点位置读在 `drawBehind` 里，不是拿来算 12 个子组合体：这样每帧只重绘不重组。
+ */
+@Composable
+private fun MarqueeBulbs(isPrinting: Boolean, isDarkTheme: Boolean) {
+    val context = LocalContext.current
+    val animationsOn = remember(context) { animatorDurationScale(context) > 0f }
+    val unlit = if (isDarkTheme) MachineBulbUnlitDark else MachineBulbUnlitLight
+    val phase = remember { Animatable(BULB_ALL_OFF) }
+    LaunchedEffect(isPrinting, animationsOn) {
+        if (!animationsOn) {
+            phase.snapTo(BULB_ALL_OFF)
+            return@LaunchedEffect
+        }
+        if (isPrinting) {
+            while (true) {
+                phase.snapTo(0f)
+                phase.animateTo(
+                    targetValue = BULB_COUNT.toFloat(),
+                    animationSpec = tween(BULB_LAP_MILLIS, easing = LinearEasing)
+                )
+            }
+        }
+        phase.snapTo(0f)
+        phase.animateTo(
+            targetValue = (BULB_COUNT * BULB_ENTRY_LAPS).toFloat(),
+            animationSpec = tween(
+                durationMillis = BULB_LAP_MILLIS * BULB_ENTRY_LAPS,
+                easing = LinearEasing
+            )
+        )
+        phase.snapTo(BULB_ALL_OFF)
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(BulbSize)
+            .drawBehind { drawMarqueeBulbs(phase.value, unlit) }
+    )
+}
+
+/** 亮点跑到这个位置就等于「全灭」：离任何一颗灯泡都远得超出 [BULB_GLOW_SPREAD]。 */
+private const val BULB_ALL_OFF = -100f
+
+private fun DrawScope.drawMarqueeBulbs(phase: Float, unlit: Color) {
+    val radius = BulbSize.toPx() / 2f
+    val step = (size.width - 2 * radius) / (BULB_COUNT - 1)
+    val head = if (phase < 0f) null else phase % BULB_COUNT
+    for (index in 0 until BULB_COUNT) {
+        val center = Offset(radius + step * index, size.height / 2f)
+        drawCircle(unlit, radius = radius, center = center)
+        if (head == null) continue
+        // 环形距离：亮点跑到最后一颗时第一颗要接着亮，否则每圈交界处会断一下
+        val raw = abs(head - index)
+        val distance = minOf(raw, BULB_COUNT - raw)
+        val glow = (1f - distance / BULB_GLOW_SPREAD).coerceAtLeast(0f)
+        if (glow > 0f) {
+            drawCircle(MachineBulbLit.copy(alpha = glow), radius = radius, center = center)
+        }
+    }
+}
+
+/** 喇叭网。几条横缝 —— 取票机会叫号，有网罩才像有喇叭。 */
+@Composable
+private fun SpeakerGrille() {
+    Box(
+        modifier = Modifier
+            .size(width = 28.dp, height = 13.dp)
+            .drawBehind {
+                val slit = 1.5.dp.toPx()
+                val pitch = slit + 2.dp.toPx()
+                var y = slit / 2f
+                while (y < size.height) {
+                    drawLine(
+                        color = Color.Black.copy(alpha = 0.34f),
+                        start = Offset(0f, y),
+                        end = Offset(size.width, y),
+                        strokeWidth = slit
+                    )
+                    y += pitch
+                }
+            }
+    )
+}
+
+/** 票卷窗。透过机壳上的小圆窗看见里面那卷还没打印的票纸。 */
+@Composable
+private fun TicketRollWindow() {
+    Box(
+        modifier = Modifier
+            .size(18.dp)
+            .drawBehind {
+                val radius = size.minDimension / 2f
+                drawCircle(MachineSlotWall)
+                drawCircle(MachinePlateInk.copy(alpha = 0.72f), radius = radius * 0.62f)
+                drawCircle(MachineSlotWall, radius = radius * 0.22f)
+                drawCircle(
+                    color = Color.Black.copy(alpha = 0.55f),
+                    radius = radius - 0.5.dp.toPx(),
+                    style = Stroke(width = 1.dp.toPx())
+                )
+            }
+    )
+}
+
+/**
+ * 机壳的砂面颗粒，见 [NOISE_TILE_PX] 那一组常量的说明。
+ *
+ * 位图只生成一次，之后由 shader 平铺；不是每帧铺几千个点。
+ */
+@Composable
+private fun rememberMachineNoiseBrush(): ShaderBrush = remember {
+    val random = Random(NOISE_SEED)
+    val pixels = IntArray(NOISE_TILE_PX * NOISE_TILE_PX) {
+        val level = random.nextInt(GRAY_LEVELS)
+        (NOISE_ALPHA shl 24) or (level shl 16) or (level shl 8) or level
+    }
+    val bitmap = Bitmap.createBitmap(
+        pixels,
+        NOISE_TILE_PX,
+        NOISE_TILE_PX,
+        Bitmap.Config.ARGB_8888
+    )
+    ShaderBrush(ImageShader(bitmap.asImageBitmap(), TileMode.Repeated, TileMode.Repeated))
+}
+
+/** 8 位通道的取值个数。噪点在整个灰阶上取样，只靠 [NOISE_ALPHA] 压住强度。 */
+private const val GRAY_LEVELS = 256
+
+/**
+ * 机壳折边。上缘一道高光、下缘一道暗边，金属才有厚度。
+ *
+ * 两条线各内移半个线宽：线宽居中在 y = 0 会被 clip 掉一半，1.dp 只剩 0.5dp。
+ * 左右各内缩一个圆角的量，画满整宽会在圆角处变成一条生硬的直边。
+ */
+private fun DrawScope.drawShellBevel() {
+    val stroke = 1.dp.toPx()
+    val inset = ShellCorner.toPx()
+    drawLine(
+        color = Color.White.copy(alpha = 0.26f),
+        start = Offset(inset, stroke / 2f),
+        end = Offset(size.width - inset, stroke / 2f),
+        strokeWidth = stroke
+    )
+    drawLine(
+        color = Color.Black.copy(alpha = 0.34f),
+        start = Offset(inset, size.height - stroke / 2f),
+        end = Offset(size.width - inset, size.height - stroke / 2f),
+        strokeWidth = stroke
+    )
+}
+
+/** 四角螺丝：一个暗坑、一圈高光、一个十字槽。「这台机器是拧起来的」最省事的一笔。 */
+private fun DrawScope.drawShellScrews() {
+    val radius = ScrewSize.toPx() / 2f
+    val inset = ScrewInset.toPx() + radius
+    val slot = radius * 0.55f
+    val stroke = 1.dp.toPx()
+    val centers = listOf(
+        Offset(inset, inset),
+        Offset(size.width - inset, inset),
+        Offset(inset, size.height - inset),
+        Offset(size.width - inset, size.height - inset),
+    )
+    for (center in centers) {
+        drawCircle(Color.Black.copy(alpha = 0.40f), radius = radius, center = center)
+        drawCircle(
+            color = Color.White.copy(alpha = 0.20f),
+            radius = radius,
+            center = center,
+            style = Stroke(width = stroke)
+        )
+        drawLine(
+            color = Color.Black.copy(alpha = 0.55f),
+            start = Offset(center.x - slot, center.y),
+            end = Offset(center.x + slot, center.y),
+            strokeWidth = stroke
+        )
+        drawLine(
+            color = Color.Black.copy(alpha = 0.55f),
+            start = Offset(center.x, center.y - slot),
+            end = Offset(center.x, center.y + slot),
+            strokeWidth = stroke
+        )
+    }
+}
+
+/**
  * 取票码单格。只在底部压一道横线：画整框会变成六个输入框，取票机面板上是压印的横线。
+ *
+ * 横线用白而不是赭红：赭红压在机壳上只有 1.28:1，画上去等于没画。
  *
  * @param digit 该位已输入的数字，未输入为 null
  * @param showCaret 是否是当前输入位，闪烁光标只在这一格出现
  */
 @Composable
 private fun RowScope.CodeCell(digit: Char?, showCaret: Boolean) {
-    val accent = MaterialTheme.colorScheme.primary
-    val underline = accent.copy(alpha = if (digit != null) 0.9f else 0.55f)
+    val underline = Color.White.copy(alpha = if (digit != null) 0.85f else 0.42f)
     Box(
         modifier = Modifier
             .weight(1f)
@@ -430,9 +734,9 @@ private fun RowScope.CodeCell(digit: Char?, showCaret: Boolean) {
                 text = digit.toString(),
                 fontFamily = PixelFontFamily,
                 fontSize = pixelFontSize(24.dp),
-                color = accent
+                color = MachineCodeInk
             )
-            showCaret -> BlinkingCaret(color = accent)
+            showCaret -> BlinkingCaret(color = MachineCodeInk)
         }
     }
 }
@@ -465,7 +769,7 @@ private fun RowScope.DigitKey(digit: Char, enabled: Boolean, onClick: () -> Unit
             text = digit.toString(),
             fontFamily = PixelFontFamily,
             fontSize = pixelFontSize(28.dp),
-            color = MaterialTheme.colorScheme.onSurface
+            color = machineKeyInk()
         )
     }
 }
@@ -478,7 +782,7 @@ private fun RowScope.PasteKey(enabled: Boolean, onClick: () -> Unit) {
             text = stringResource(R.string.machine_key_paste),
             fontFamily = PixelFontFamily,
             fontSize = pixelFontSize(16.dp),
-            color = MaterialTheme.colorScheme.onSurface
+            color = machineKeyInk()
         )
     }
 }
@@ -489,11 +793,16 @@ private fun RowScope.BackspaceKey(enabled: Boolean, onClick: () -> Unit) {
         Icon(
             imageVector = Icons.AutoMirrored.Outlined.Backspace,
             contentDescription = stringResource(R.string.machine_key_backspace_desc),
-            tint = MaterialTheme.colorScheme.onSurface,
+            tint = machineKeyInk(),
             modifier = Modifier.size(22.dp)
         )
     }
 }
+
+/** 键面墨色。原先读 `colorScheme.onSurface`，于是键面颜色跟着主题走、跟机器不是一套。 */
+@Composable
+private fun machineKeyInk(): Color =
+    if (isAppDarkTheme()) MachineKeyInkDark else MachineKeyInkLight
 
 /** 机器按键键帽。方角、按下缩到 0.92、上缘一道高光，摸上去像塑料按键而不是玻璃卡片。 */
 @Composable
@@ -508,31 +817,43 @@ private fun RowScope.MachineKey(
         targetValue = if (isPressed) 0.92f else 1f,
         label = "machine_key_scale"
     )
-    val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val isDarkTheme = isAppDarkTheme()
+    val keycap = if (isDarkTheme) MachineKeycapDark else MachineKeycapLight
     val shape = RoundedCornerShape(8.dp)
     Box(
         modifier = Modifier
             .weight(1f)
             .height(KeyHeight)
             .scale(scale)
-            // .alpha() 必须排在 .background() 之前：它只作用于链上位于其后的绘制，
-            // 放在后面就只压暗内容、压不暗键帽
-            .alpha(if (enabled) 1f else 0.4f)
+            // 键帽自己不再按 enabled 压暗：整块键盘的淡出由外层那一处 alpha 统一做，
+            // 两处相乘会把键盘压到几乎看不见
             .clip(shape)
-            .background(Color.White.copy(alpha = if (isDarkTheme) 0.10f else 0.34f))
+            // 键帽是不透明塑料，不再是压在机壳上的一层白雾：
+            // 半透明键帽会把机壳的噪点透上来，键面数字读起来发脏
+            .background(keycap, shape)
             .background(
                 Brush.verticalGradient(
-                    listOf(Color.White.copy(alpha = 0.22f), Color.Transparent)
+                    listOf(Color.White.copy(alpha = 0.20f), Color.Transparent)
                 )
             )
+            // 下缘压一道暗边，键帽才有厚度
+            .drawBehind {
+                val stroke = 1.5.dp.toPx()
+                drawLine(
+                    color = Color.Black.copy(alpha = 0.28f),
+                    start = Offset(0f, size.height - stroke / 2f),
+                    end = Offset(size.width, size.height - stroke / 2f),
+                    strokeWidth = stroke
+                )
+            }
             .border(
                 width = 1.dp,
-                color = Color.White.copy(alpha = if (isDarkTheme) 0.14f else 0.42f),
+                color = Color.Black.copy(alpha = if (isDarkTheme) 0.30f else 0.18f),
                 shape = shape
             )
             .clickable(
                 interactionSource = interactionSource,
-                indication = ripple(color = MaterialTheme.colorScheme.primary),
+                indication = ripple(color = LoginTitleInk),
                 enabled = enabled,
                 onClick = onClick
             ),

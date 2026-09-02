@@ -122,7 +122,11 @@ seat = code.substring(4, 6).toInt() % 20 + 1   // 1..20 座
 
 自上而下七层。
 
-**机壳。** 圆角由现在的 20.dp 收到 14.dp，机器不该那么圆。保留 haze，`glassTint` 换成深金属色，顶边加一道 1.dp 高光线模拟金属折边。`GlassSurfaceRole` 沿用 `LoginSurface`。`glassSceneForContent` 的 `contentCount` 要重算：12 个键加 6 格加像素屏加取票键，远多于现在的 7，`contentCapacity` 给 20。
+**机壳。** ~~圆角由现在的 20.dp 收到 14.dp，机器不该那么圆。保留 haze，`glassTint` 换成深金属色，顶边加一道 1.dp 高光线模拟金属折边。`GlassSurfaceRole` 沿用 `LoginSurface`。`glassSceneForContent` 的 `contentCount` 要重算：12 个键加 6 格加像素屏加取票键，远多于现在的 7，`contentCapacity` 给 20。~~
+
+> **已被 2026-09-02 的改版取代。** 保留 haze 的方案实测不成立：机壳半透明，背景的爆米花和胶片轮会从机器里透出来 —— 取票机是台设备，不是一块玻璃。现在机壳完全自绘：竖向渐变（只往下压暗）＋上下折边＋四角螺丝＋一层平铺噪点，圆角 16.dp，落地阴影 8.dp。
+>
+> 由此这一屏不再消费毛玻璃体系：`hazeSource` / `backdropSource` / `glassSceneForContent` / `GlassSurfaceRole.LoginSurface` 全部从登录页移除，**该屏也不再跟随「玻璃/模糊」那项设置**。配色改由 Color.kt 的 `Machine*` 一族固定色提供，护栏见 `LoginMachinePaletteTest`。
 
 **铭牌。** 复用现有 `login_personal_cinema_access` 那行 monospace 小字，文案改为 `TICKET MACHINE · PERSONAL CINEMA`。
 

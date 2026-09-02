@@ -11,7 +11,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -50,7 +49,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -64,22 +68,18 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.OAuthCallback
 import com.tracktosearch.R
-import com.tracktosearch.ui.component.GlassScene
-import com.tracktosearch.ui.component.backdropSource
-import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.LoginActionInk
 import com.tracktosearch.ui.theme.LoginErrorInk
 import com.tracktosearch.ui.theme.LoginPaperDark
 import com.tracktosearch.ui.theme.LoginPaperLight
+import com.tracktosearch.ui.theme.LoginSeatSilhouette
 import com.tracktosearch.ui.theme.LoginSecondaryInk
 import com.tracktosearch.ui.theme.LoginTitleInk
 import com.tracktosearch.ui.screen.auth.AuthViewModel
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.toUserMessage
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -105,7 +105,6 @@ fun ActivationLoginScreen(
     val errorMessage by loginViewModel.errorMessage.collectAsStateWithLifecycle()
     val authState by authViewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
-    val hazeState = remember { HazeState() }
     val scrollState = rememberScrollState()
     val isDarkTheme = isAppDarkTheme()
     // 整屏不映射主题，见 Color.kt 的「激活登录页固定色」段
@@ -113,17 +112,6 @@ fun ActivationLoginScreen(
     var showWhatIsTraktDialog by remember { mutableStateOf(false) }
 
     val isActivated = authState.activated
-    val loginGlassScene = glassSceneForContent(
-        // 取票机面板上的可数元素远多于原来那张卡片：12 个键 + 6 格 + 像素屏 + 取票键。
-        contentCount = 20 + if (authState.requiresMigrationInvite) 2 else 0,
-        readabilityDemand = when {
-            authState.error != null || errorMessage != null -> 0.96f
-            isActivated -> 0.82f
-            else -> 0.88f
-        },
-        ambientColor = loginBackground,
-        contentCapacity = 20
-    )
 
     val view = LocalView.current
     val printProgress = remember { Animatable(0f) }
@@ -259,21 +247,9 @@ fun ActivationLoginScreen(
             modifier = Modifier
                 .fillMaxSize()
         ) {
-            // 独立的背景 source 容器，确保自定义绘制内容完整进入 Haze 的采样层。
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .hazeSource(state = hazeState, zIndex = 0f)
-                    .backdropSource()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(loginBackground)
-                ) {
-                    MovieBackdrop(modifier = Modifier.fillMaxSize())
-                }
-            }
+            // 背景直接铺，不再套 hazeSource / backdropSource 那两层：
+            // 这一屏唯一用毛玻璃的组件是取票机机壳，现在机壳自绘了，就没有采样层的消费者
+            MovieBackdrop(modifier = Modifier.fillMaxSize())
 
             ActivationLoginContent(
                 machineCode = machineCode,
@@ -294,8 +270,7 @@ fun ActivationLoginScreen(
                     null
                 },
                 codeDescription = machineCodeDescription,
-                hazeState = hazeState,
-                scene = loginGlassScene,
+                isPrinting = isPrinting,
                 scrollState = scrollState,
                 onDigit = authViewModel::appendDigit,
                 onBackspace = authViewModel::deleteLastDigit,
@@ -377,6 +352,7 @@ fun ActivationLoginScreen(
  * @param scrollState 由调用方持有 —— 测试靠 `maxValue == 0` 判断有没有超出一屏
  * @param expiredMessage 授权过期提示，为 null 时不占位
  * @param loginErrorText Trakt 授权失败提示，为 null 时不占位
+ * @param isPrinting 出票动画进行中，只用来决定机壳顶边跑马灯跑不跑
  */
 @Composable
 internal fun ActivationLoginContent(
@@ -390,8 +366,6 @@ internal fun ActivationLoginContent(
     expiredMessage: String?,
     loginErrorText: String?,
     codeDescription: String?,
-    hazeState: HazeState,
-    scene: GlassScene,
     scrollState: ScrollState,
     onDigit: (Char) -> Unit,
     onBackspace: () -> Unit,
@@ -399,6 +373,7 @@ internal fun ActivationLoginContent(
     onSubmit: () -> Unit,
     onWhatIsTrakt: () -> Unit,
     modifier: Modifier = Modifier,
+    isPrinting: Boolean = false,
     ticketSlot: @Composable () -> Unit = {},
 ) {
     Column(
@@ -449,13 +424,12 @@ internal fun ActivationLoginContent(
             isLoading = isLoading,
             keypadEnabled = keypadEnabled,
             submitEnabled = submitEnabled,
-            hazeState = hazeState,
-            scene = scene,
             onDigit = onDigit,
             onBackspace = onBackspace,
             onPaste = onPaste,
             onSubmit = onSubmit,
             modifier = Modifier.padding(top = if (expiredMessage != null) 14.dp else 0.dp),
+            isPrinting = isPrinting,
             codeDescription = codeDescription,
             ticketSlot = ticketSlot
         )
@@ -535,8 +509,10 @@ internal fun machineStatusString(error: String): Int = when {
 /**
  * 系统的动画时长倍率。为 0 表示用户在开发者选项或无障碍设置里关掉了动画，
  * 此时必须跳过出票推出直接进已取票态。
+ *
+ * internal 而不是 private：机壳顶边的跑马灯也要问这一句，见 TicketMachine.MarqueeBulbs。
  */
-private fun animatorDurationScale(context: Context): Float = runCatching {
+internal fun animatorDurationScale(context: Context): Float = runCatching {
     Settings.Global.getFloat(
         context.contentResolver,
         Settings.Global.ANIMATOR_DURATION_SCALE,
@@ -561,6 +537,7 @@ private fun MovieBackdrop(modifier: Modifier = Modifier) {
     val motifColor = LoginActionInk.copy(alpha = 0.45f)
     val reelColor = LoginActionInk.copy(alpha = 0.24f)
     val dotColor = LoginActionInk.copy(alpha = 0.13f)
+    val seatColor = LoginSeatSilhouette.copy(alpha = 0.30f)
     // 四个影院符号按屏高比例摆，不写死 padding：原先那套死值（top 150/194、bottom 175/132）
     // 是照旧版式调的，版式一压缩爆米花就压在机壳右上角上了。
     // 比例的落点原则是「避开机器」—— 机器在这一版里大约占屏高的 18% 到 73%，
@@ -630,26 +607,74 @@ private fun MovieBackdrop(modifier: Modifier = Modifier) {
                     drawCircle(
                         color = reelColor,
                         radius = size.minDimension / 2f - 7.dp.toPx(),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 13.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 5.dp.toPx())))
+                        style = Stroke(
+                            width = 13.dp.toPx(),
+                            pathEffect = PathEffect.dashPathEffect(
+                                floatArrayOf(2.dp.toPx(), 5.dp.toPx())
+                            )
+                        )
                     )
                 }
         )
+        // 屏底一排影院座椅剪影。原先是 10 个等宽方块，那读出来是条纹不是座位；
+        // 现在每个座位有靠背、扶手和两侧的间隙，看一眼就知道是从后排望向银幕
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .height(36.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
+                .height(SeatRowHeight),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.Bottom
         ) {
-            repeat(10) {
-                Box(
-                    modifier = Modifier
-                        .size(width = 25.dp, height = 36.dp)
-                        .background(reelColor)
-                )
+            repeat(SEAT_COUNT) {
+                CinemaSeat(color = seatColor)
             }
         }
     }
+}
+
+/** 座椅剪影一排的高度。只占屏底一条窄带，机器和按钮都在它上面。 */
+private val SeatRowHeight = 40.dp
+
+/** 座位数。7 个在 412dp 宽上每个约 50dp，靠背和扶手分得开。 */
+private const val SEAT_COUNT = 7
+
+/**
+ * 单个座椅剪影：一块圆角靠背，两侧各一条矮扶手。
+ *
+ * 画成剪影而不是描边：它在最底层，描边会跟机器的边线抢，实心色块只当影子。
+ */
+@Composable
+private fun CinemaSeat(color: Color) {
+    Box(
+        modifier = Modifier
+            .size(width = 46.dp, height = SeatRowHeight)
+            .drawBehind {
+                val armWidth = 6.dp.toPx()
+                val backTop = 8.dp.toPx()
+                val corner = 7.dp.toPx()
+                // 靠背：上圆角、下贴底
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(armWidth, backTop),
+                    size = Size(
+                        width = size.width - armWidth * 2,
+                        height = size.height - backTop
+                    ),
+                    cornerRadius = CornerRadius(corner, corner)
+                )
+                // 两侧扶手：比靠背矮一截，顶端也倒个小角
+                val armTop = size.height * 0.45f
+                listOf(0f, size.width - armWidth).forEach { x ->
+                    drawRoundRect(
+                        color = color,
+                        topLeft = Offset(x, armTop),
+                        size = Size(armWidth, size.height - armTop),
+                        cornerRadius = CornerRadius(armWidth / 2f, armWidth / 2f)
+                    )
+                }
+            }
+    )
 }
 
 internal fun authErrorString(error: String): Int = when {

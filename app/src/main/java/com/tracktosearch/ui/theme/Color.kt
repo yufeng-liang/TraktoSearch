@@ -286,6 +286,61 @@ val LoginActionInk = Color(0xFF7A4A2E)
 /** 登录失败提示。不复用 [ErrorLight]：那个红是为中性底调的，压在牛皮纸上偏冷。 */
 val LoginErrorInk = Color(0xFF96281F)
 
+/** 影院座椅剪影。压在牛皮纸底上只是一层影子，不承载文字，所以不参与对比度校验。 */
+val LoginSeatSilhouette = Color(0xFF6B5240)
+
+// ====== 取票机机壳（自绘拟物，既不走毛玻璃也不随主题色） ======
+// 原先机壳是一层 haze 毛玻璃，于是「机器」是半透明的，背景的爆米花能从机壳里透出来 ——
+// 取票机是台设备，不是一块玻璃。现在自绘：竖向渐变 + 上下折边 + 四角螺丝 + 平铺噪点。
+//
+// 明暗两档都是深金属（设备本来就深），差别只是深多少。改这两个值必须连带复核下面
+// 每一个墨色的对比度：机壳是这一屏几乎所有文字的底，护栏见 LoginMachinePaletteTest。
+val MachineShellLight = Color(0xFF7C6552)
+val MachineShellDark = Color(0xFF3B2E24)
+
+/**
+ * 机壳竖向渐变往下压暗的比例。只往下压、不往上提是刻意的：
+ * 往上提会让顶部那一带（铭牌、像素屏、六格都在那儿）变亮，压在上面的墨色对比度跟着掉。
+ * 只往下压，机壳最亮的一点就是 [MachineShellLight] 本身，下面那些对比度数字才算得准。
+ */
+const val MachineShellShadeFraction = 0.18f
+
+/** 铭牌凹槽。铭牌不直接压在机壳上：机壳有渐变，凹槽给铭牌一个可控的底。 */
+val MachinePlateLight = Color(0xFF5A4636)
+val MachinePlateDark = Color(0xFF2A2118)
+
+/** 铭牌蚀刻字。压在凹槽上 6.64:1（浅档）/ 11.8:1（深档）。 */
+val MachinePlateInk = Color(0xFFF0DCC0)
+
+/** 六格取票码的数字与光标。压在机壳上 4.97:1（浅档）/ 11.9:1（深档）。 */
+val MachineCodeInk = Color(0xFFFBF3E8)
+
+/** 像素屏凹槽。比机壳更深一档才像嵌进去的。 */
+val MachineDisplayWellLight = Color(0xFF241C16)
+val MachineDisplayWellDark = Color(0xFF15100C)
+
+/** 老式点阵屏的琥珀荧光，压在凹槽上 9.42:1。 */
+val MachineDisplayInk = Color(0xFFFFB347)
+
+/** 报错时的点阵屏红，压在凹槽上 5.99:1。 */
+val MachineDisplayInkError = Color(0xFFFF6B5A)
+
+/** 键帽面。深档不是把浅档调暗，而是另一种塑料。 */
+val MachineKeycapLight = Color(0xFFD9CBBB)
+val MachineKeycapDark = Color(0xFF4A3E33)
+
+/** 键面数字。压在键帽上 8.28:1（浅档）/ 7.27:1（深档）。 */
+val MachineKeyInkLight = Color(0xFF3A2E24)
+val MachineKeyInkDark = Color(0xFFE4D6C6)
+
+/** 出票口内壁。比像素屏还深，看上去是机器里面的暗处。 */
+val MachineSlotWall = Color(0xFF1A1310)
+
+/** 跑马灯灯泡。亮着是暖白，灭了是机壳上的一个暗坑。灯泡不承载文字。 */
+val MachineBulbLit = Color(0xFFFFE9B8)
+val MachineBulbUnlitLight = Color(0xFF5A4A3C)
+val MachineBulbUnlitDark = Color(0xFF2A211A)
+
 private val MonetDoubanGreenLight = Color(0xFF5E916A)
 private val MonetDoubanGreenDark = Color(0xFF78A985)
 

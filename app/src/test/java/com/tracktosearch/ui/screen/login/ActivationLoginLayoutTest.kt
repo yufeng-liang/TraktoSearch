@@ -4,7 +4,6 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
@@ -17,8 +16,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.R
-import com.tracktosearch.ui.component.GlassScene
-import dev.chrisbanes.haze.HazeState
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -104,8 +101,6 @@ class ActivationLoginLayoutTest {
                         expiredMessage = null,
                         loginErrorText = null,
                         codeDescription = null,
-                        hazeState = remember { HazeState() },
-                        scene = GlassScene(),
                         scrollState = scrollState,
                         onDigit = {},
                         onBackspace = {},
