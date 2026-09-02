@@ -64,7 +64,8 @@ internal fun fullscreenImageRequest(context: android.content.Context, model: Any
  * 3. 加载期间的进度环——有 Content-Length 时为确定性进度（original 剧照常 2-5MB），
  *    拿不到长度时退化为不确定 spinner。
  *
- * 共享元素与手势修饰符由调用方挂在 [modifier] 上。
+ * 共享元素与手势修饰符由调用方挂在 [modifier] 上；
+ * 关闭协议参数（[onRequestDismiss]/[backHandlerEnabled]）原样透传 [ZoomableFullscreenImage]。
  */
 @Composable
 internal fun ProgressiveFullscreenImage(
@@ -73,7 +74,8 @@ internal fun ProgressiveFullscreenImage(
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
     gesturesEnabled: Boolean = true,
-    onClick: ((androidx.compose.ui.geometry.Offset) -> Unit)? = null,
+    onRequestDismiss: (() -> Unit)? = null,
+    backHandlerEnabled: Boolean = false,
 ) {
     val underlayUrl = remember(model) { progressiveUnderlay(model) }
 
@@ -95,7 +97,8 @@ internal fun ProgressiveFullscreenImage(
             contentScale = contentScale,
             contentDescription = contentDescription,
             gesturesEnabled = gesturesEnabled,
-            onClick = onClick,
+            onRequestDismiss = onRequestDismiss,
+            backHandlerEnabled = backHandlerEnabled,
             modifier = Modifier.fillMaxSize(),
             onDisplayedChanged = { settled = it }
         )

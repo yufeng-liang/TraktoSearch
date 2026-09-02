@@ -93,10 +93,6 @@ internal fun PosterFullscreenOverlay(
     ) {
         val animatedVisibilityScope = this
 
-        BackHandler(enabled = true) {
-            onDismiss()
-        }
-
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -108,7 +104,8 @@ internal fun PosterFullscreenOverlay(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            // 海报图片（放大显示，点击事件由 zoomable 的 onClick 拦截，不触发外层 dismiss）
+            // 海报图片（放大显示，点击由 ZoomableFullscreenImage 统一接管：
+            // 放大时先复位、未放大才关闭，返回键同协议）
             ProgressiveFullscreenImage(
                 // 全屏查看用 original 原图:1080p 屏全屏显示约 1050px,
                 // w500 源图放大到 1080 解码会模糊,original(2000px+) 保证清晰;
@@ -127,8 +124,8 @@ internal fun PosterFullscreenOverlay(
                     ),
                 // 转场动画期间锁手势，避免与共享元素转场互相打架
                 gesturesEnabled = !animatedVisibilityScope.transition.isRunning,
-                // 单击退出（已放大时 telephoto 不触发 onClick 的语义由其内部处理）
-                onClick = { onDismiss() }
+                onRequestDismiss = onDismiss,
+                backHandlerEnabled = true
             )
 
             // 顶部操作栏（在图片之上，也需要拦截点击）

@@ -110,10 +110,13 @@ private fun rememberPosterPrefetchCore(
 /**
  * 点击缩略图后、启动共享元素转场前，预热全屏查看用的大图 URL。
  *
- * 转场动画只持续几百毫秒，旧实现里大图这期间才发起请求，转场结束时往往还在下载，
- * 表现为「先糊后突然变清」或进度环空转。这里提前一拍 enqueue（走同一 ImageLoader 的
- * 磁盘缓存），telephoto 子采样直接从磁盘读 tile，打开即可见清晰图。
- * 已在缓存时 enqueue 近乎零开销，无需自行判重。
+ * 已缓存（内存/磁盘命中）时 pipeline 短路，开销近零；未缓存时会立即开始下载。
+ * 注意：未缓存场景下本预热请求与全屏组件 ~1 帧后发出的正式请求是两次独立
+ * pipeline 执行（Coil 2 无 in-flight 合并），同一 URL 会并发下载两份流量；
+ * 换来的是磁盘写入与解码提前一拍，且已缓存未解码场景（二次打开）收益明显。
+ *
+ * telephoto 子采样需要原图落盘后从磁盘读 tile，预热提前完成这一步，
+ * 打开即可见清晰图，避免「先糊后突然变清」。
  */
 fun prefetchFullscreenImage(context: android.content.Context, urls: List<String?>) {
     val loader = context.imageLoader
