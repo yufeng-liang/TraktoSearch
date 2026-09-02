@@ -47,7 +47,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,8 +60,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.rememberShimmerBrush
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -380,6 +378,11 @@ private fun CurrentStatusBadge(item: MarkRecordItem) {
  * 与 Watchlist 筛选弹窗保持一致的 FilterChip。
  *
  * 触感在这里统一发：调用点一个个加会漏（原来整个弹窗都没有，而列表页其他 chip 都有）。
+ * 发哪一记看 [multiSelect]，判据是互斥性而不是叫不叫「筛选」。
+ *
+ * @param multiSelect 这个 chip 是否有自己独立的二值选中态（一组里能同时亮好几个）。
+ *   true 时本质是穿了 chip 外衣的 Checkbox，「加上」与「去掉」的方向感有意义，按新状态发 toggle；
+ *   false（默认）是一组里只能选一个的单选 / 分段控件，没有「关掉」这回事，只是把选中位挪一格，发 segmentTick。
  */
 @Composable
 private fun MarkRecordFilterChip(
@@ -387,12 +390,13 @@ private fun MarkRecordFilterChip(
     onClick: () -> Unit,
     label: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    multiSelect: Boolean = false,
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     FilterChip(
         selected = selected,
         onClick = {
-            view.performHaptic(HapticType.CLICK)
+            if (multiSelect) haptics.toggle(!selected) else haptics.segmentTick()
             onClick()
         },
         label = label,
@@ -469,14 +473,17 @@ fun FilterSheetContent(
                 onClick = {
                     selectedMediaTypes = if ("movie" in selectedMediaTypes) selectedMediaTypes - "movie" else selectedMediaTypes + "movie"
                 },
-                label = { Text(stringResource(R.string.mark_records_media_movie)) }
+                label = { Text(stringResource(R.string.mark_records_media_movie)) },
+                // 媒体类型可以同时选上电影和剧集，两个 chip 各有独立选中态
+                multiSelect = true
             )
             MarkRecordFilterChip(
                 selected = "show" in selectedMediaTypes,
                 onClick = {
                     selectedMediaTypes = if ("show" in selectedMediaTypes) selectedMediaTypes - "show" else selectedMediaTypes + "show"
                 },
-                label = { Text(stringResource(R.string.mark_records_media_show)) }
+                label = { Text(stringResource(R.string.mark_records_media_show)) },
+                multiSelect = true
             )
         }
         Spacer(Modifier.height(16.dp))

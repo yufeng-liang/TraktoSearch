@@ -40,17 +40,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import com.tracktosearch.R
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieErasStage
 import kotlinx.coroutines.delay
 
@@ -220,7 +219,9 @@ private fun SwiftieEggContent(
     // Unspecified 而不是 Zero：SwiftieDiffusion 用 isSpecified 判「键盘还没上报坐标」，
     // 给 Zero 会被当成一个真坐标，扩散就从左上角开始而不是回退到屏幕中心
     var submitCenter by remember { mutableStateOf(Offset.Unspecified) }
-    val haptics = LocalHapticFeedback.current
+    // 走应用自己的四层触感引擎，不用 Compose 的 LocalHapticFeedback：后者是第三条通道，
+    // 既走不到厂商预置效果，也不受设置页那个三档开关管 —— 用户选了「关闭」，彩蛋照样震
+    val haptics = rememberAppHaptics()
     val reducedMotion = rememberReducedMotion()
 
     val sequenceRunning = quiz.solved && !reducedMotion
@@ -306,13 +307,13 @@ private fun SwiftieEggContent(
     // 答错：Reject 触觉 + 摇晃走完后自动清空
     LaunchedEffect(quiz.wrongCount) {
         if (quiz.wrongCount == 0) return@LaunchedEffect
-        haptics.performHapticFeedback(HapticFeedbackType.Reject)
+        haptics.reject()
         delay(WRONG_SHAKE_MS)
         quiz = quiz.clearWrong()
     }
 
     LaunchedEffect(quiz.solved) {
-        if (quiz.solved) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+        if (quiz.solved) haptics.confirm()
     }
 
     // 「减少动效」不跑序列：立刻落地主题，然后给静态终态，等用户自己按 ✕
@@ -395,7 +396,10 @@ private fun SwiftieEggContent(
                 showAudioHint = !reducedMotion,
                 onQuizChange = { quiz = it },
                 onSubmitCenter = { submitCenter = it },
-                onKeyHaptic = { haptics.performHapticFeedback(HapticFeedbackType.VirtualKey) }
+                // 数字键与退格连按会很快，用最轻的一档。提交键不走这条 —— 它按下去的结果
+                // 要么答对要么答错，上面那两个 LaunchedEffect 会发 confirm() 或 reject()，
+                // 再叠一记 lightTap 就是「轻一下 + 重一下」两记挤在一起
+                onKeyHaptic = { haptics.lightTap() }
             )
         }
 

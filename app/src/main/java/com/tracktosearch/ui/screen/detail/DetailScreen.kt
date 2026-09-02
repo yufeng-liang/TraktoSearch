@@ -81,7 +81,6 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -118,14 +117,13 @@ import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
-import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
-import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.screen.ai.AiSceneEvent
 import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
 import com.tracktosearch.ui.screen.ai.AiSpriteMotion
@@ -174,7 +172,7 @@ fun DetailScreen(
     val spriteViewModel: AiSpriteViewModel = rememberSharedAiSpriteViewModel()
     val spriteState by spriteViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的推荐卡片参与共享元素转场
     var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
     var showRatingDialog by remember { mutableStateOf(false) }
@@ -599,13 +597,13 @@ fun DetailScreen(
                     ) {
                             Tab(
                                 selected = selectedTab == 0,
-                                onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 0 },
+                                onClick = { haptics.segmentTick(); selectedTab = 0 },
                                 text = { Text("${stringResource(R.string.detail_tab_resources)}(${uiState.resources.size})", maxLines = 1) }
                             )
                             if (showCommentsTab) {
                                 Tab(
                                     selected = selectedTab == 1,
-                                    onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 1 },
+                                    onClick = { haptics.segmentTick(); selectedTab = 1 },
                                     text = { Text("${stringResource(R.string.detail_tab_comments)}(${uiState.comments.size})", maxLines = 1) }
                                 )
                             }
@@ -613,7 +611,7 @@ fun DetailScreen(
                                 val recTabIndex = if (showCommentsTab) 2 else 1
                                 Tab(
                                     selected = selectedTab == recTabIndex,
-                                    onClick = { view.performHaptic(HapticType.CLICK); selectedTab = recTabIndex },
+                                    onClick = { haptics.segmentTick(); selectedTab = recTabIndex },
                                     text = { Text("${stringResource(R.string.detail_tab_recommendations)}(${uiState.recommendations.size})", maxLines = 1) }
                                 )
                             }
@@ -1022,7 +1020,6 @@ fun DetailScreen(
             ) {
                 // 豆瓣同步重试按钮（仅在 doubanSyncRetryable=true 时显示）
                 if (uiState.doubanSyncRetryable) {
-                    val view = LocalView.current
                     NeumorphicIconButton(
                         onClick = {
                             viewModel.retryDoubanSync()
@@ -1254,7 +1251,7 @@ fun DetailScreen(
                     },
                     onConfirm = { rating, comment ->
                         showRatingDialog = false
-                        view.performHaptic(HapticType.HEAVY_CLICK)
+                        haptics.tap()
                         // 不调用 dismissRatingDialog():setRatingWithComment/removeRating 内部会关闭弹窗并处理豆瓣同步
                         // 否则会先 syncDoubanMark(COLLECT) 再 syncDoubanMarkWithRating,导致两次豆瓣同步 toast
                         viewModel.confirmRatingWithComment(rating, comment)
@@ -1296,7 +1293,7 @@ private fun SearchingState(completedSources: Int, totalSources: Int) {
 
 @Composable
 private fun EmptyState(onRetry: () -> Unit) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1308,7 +1305,7 @@ private fun EmptyState(onRetry: () -> Unit) {
             icon = Icons.Rounded.Search,
             title = stringResource(R.string.detail_no_resources),
             actions = {
-                OutlinedButton(onClick = { view.performHaptic(HapticType.CLICK); onRetry() }) {
+                OutlinedButton(onClick = { haptics.tap(); onRetry() }) {
                     Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(stringResource(R.string.detail_retry))

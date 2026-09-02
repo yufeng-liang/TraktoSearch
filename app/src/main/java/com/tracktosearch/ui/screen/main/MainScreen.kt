@@ -81,7 +81,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.zIndex
 import com.tracktosearch.data.util.ConnectivityObserver
@@ -137,8 +136,7 @@ import com.tracktosearch.ui.screen.watchlist.WatchlistScreen
 import com.tracktosearch.ui.navigation.MainTabNavigator
 import com.tracktosearch.ui.navigation.NotificationNavigator
 import com.tracktosearch.ui.navigation.SearchNavigator
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.util.showToast
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -361,7 +359,7 @@ fun MainScreen(
 
     // 双击返回退出
     var lastBackTime by remember { mutableLongStateOf(0L) }
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     val pressBackAgainText = stringResource(R.string.press_back_again)
     BackHandler(enabled = true) {
         val now = System.currentTimeMillis()
@@ -779,7 +777,7 @@ fun MainScreen(
                 maxPanelOffsetPx = { navPanelMaxOffsetPx },
                 onIndexSettled = { index ->
                     if (selectedTab != index) {
-                        view.performHaptic(HapticType.CLICK)
+                        haptics.gestureEnd()
                         scope.launch { pagerState.scrollToPage(index) }
                     }
                 }
@@ -890,7 +888,7 @@ fun MainScreen(
                             interactionSource = tabInteractionSources[index],
                             onClick = {
                                 if (selectedTab != index) {
-                                    view.performHaptic(HapticType.CLICK)
+                                    haptics.segmentTick()
                                     scope.launch { pagerState.scrollToPage(index) }
                                 }
                             },

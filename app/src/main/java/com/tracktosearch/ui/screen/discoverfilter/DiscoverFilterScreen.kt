@@ -74,7 +74,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -111,8 +110,9 @@ import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.theme.appSwitchColors
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
@@ -161,7 +161,7 @@ fun DiscoverFilterScreen(
     val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     val statusBarHeight = WindowInsets.statusBars
         .asPaddingValues().calculateTopPadding()
 
@@ -435,7 +435,7 @@ fun DiscoverFilterScreen(
                 Tab(
                     selected = uiState.type == TmdbRepository.DiscoverType.MOVIE,
                     onClick = {
-                        view.performHaptic(HapticType.CLICK)
+                        haptics.segmentTick()
                         viewModel.switchType(TmdbRepository.DiscoverType.MOVIE); viewModel.search()
                     },
                     text = { Text(stringResource(R.string.discover_filter_tab_movie)) }
@@ -443,7 +443,7 @@ fun DiscoverFilterScreen(
                 Tab(
                     selected = uiState.type == TmdbRepository.DiscoverType.SHOW,
                     onClick = {
-                        view.performHaptic(HapticType.CLICK)
+                        haptics.segmentTick()
                         viewModel.switchType(TmdbRepository.DiscoverType.SHOW); viewModel.search()
                     },
                     text = { Text(stringResource(R.string.discover_filter_tab_show)) }
@@ -560,7 +560,7 @@ fun DiscoverFilterScreen(
                                 if (range.start.toInt() != localMin.toInt() ||
                                     range.endInclusive.toInt() != localMax.toInt()
                                 ) {
-                                    view.performHaptic(HapticType.TICK)
+                                    haptics.frequentTick()
                                 }
                                 localMin = range.start
                                 localMax = range.endInclusive
@@ -612,7 +612,8 @@ fun DiscoverFilterScreen(
                                     // 点完立刻生效，理由同评分滑块
                                     onClick = { viewModel.setSortBy(sort); viewModel.search() },
                                     hazeState = hazeState,
-                                    text = sortText
+                                    text = sortText,
+                                    singleSelect = true
                                 )
                             }
                         }
@@ -666,7 +667,7 @@ fun DiscoverFilterScreen(
                             Switch(
                                 checked = uiState.hideWatched,
                                 onCheckedChange = {
-                                    view.performHaptic(HapticType.CLICK)
+                                    haptics.toggle(it)
                                     viewModel.toggleHideWatched()
                                     viewModel.search()
                                 },
@@ -678,7 +679,7 @@ fun DiscoverFilterScreen(
                     // （条件没变会被 ViewModel 挡掉），只兜住「条件变了但请求没发出去」的极端情况
                     Button(
                         onClick = {
-                            view.performHaptic(HapticType.HEAVY_CLICK)
+                            haptics.tap()
                             viewModel.toggleAdvanced()  // 先收起
                             viewModel.search()
                         },
@@ -1128,6 +1129,8 @@ private fun MultiSelectDialog(
  * 文字色与背景保持高对比度，避免浅色模式下看不清。
  * 触感反馈与无障碍语义都收在这里：以前靠各调用点自己加，有的加了有的没加，
  * 读屏也念不出选中状态。
+ * [singleSelect] 区分触感语义：一组里只能选一个（排序方式）走刻度感，
+ * 能同时勾多个的（类型/地区/年代）走开关的方向感。
  * [hazeState] 参数已废弃，chip 自身不需要毛玻璃效果。
  */
 @Composable
@@ -1136,9 +1139,9 @@ private fun GlassFilterChip(
     onClick: () -> Unit,
     text: String,
     hazeState: HazeState? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    singleSelect: Boolean = false
 ) {
-    val view = LocalView.current
     val isSelected = selected
     val background = if (selected) {
         MaterialTheme.colorScheme.primary
@@ -1159,8 +1162,13 @@ private fun GlassFilterChip(
                 this.role = Role.Button
                 this.selected = isSelected
             }
-            .clickable {
-                view.performHaptic(HapticType.CLICK)
+            .hapticClickable(
+                semantic = when {
+                    singleSelect -> HapticSemantic.SEGMENT_TICK
+                    selected -> HapticSemantic.TOGGLE_OFF
+                    else -> HapticSemantic.TOGGLE_ON
+                }
+            ) {
                 onClick()
             }
             .padding(horizontal = 12.dp, vertical = 6.dp),

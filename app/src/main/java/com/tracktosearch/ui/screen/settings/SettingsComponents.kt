@@ -1,7 +1,6 @@
 package com.tracktosearch.ui.screen.settings
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -39,7 +38,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -52,9 +50,9 @@ import com.tracktosearch.ui.component.AdaptiveSingleLineText
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.theme.appSwitchColors
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import dev.chrisbanes.haze.HazeState
@@ -175,12 +173,14 @@ internal fun SettingsItemCard(
     containerColor: Color = Color.Transparent,
     iconTint: Color = MaterialTheme.colorScheme.primary
 ) {
-    val view = LocalView.current
     val isDark = isAppDarkTheme()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { view.performHaptic(HapticType.CLICK); onClick() }
+            // 行区域是本组件唯一拥有的可点面，触感只在这里发一记：本组件既做纯跳转卡片
+            // 也做开关行（trailing 挂 Switch），两者都取轻一档的 LIGHT_TAP。
+            // 调用方不要再在自己的 onClick 里补一记 —— 那样点行区域就是同一语义背靠背两下。
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() }
             .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -248,15 +248,14 @@ internal fun DataFlowCard(
     iconTintColor: Color = MaterialTheme.colorScheme.primary,
     enabled: Boolean = true
 ) {
-    val view = LocalView.current
     val isDark = isAppDarkTheme()
     // 禁用时图标/文字统一降透明度,提供视觉反馈
     val disabledAlpha = if (enabled) 1f else 0.38f
     val effectiveIconTint = iconTintColor.copy(alpha = disabledAlpha)
     Column(
         modifier = modifier
-            .clickable(enabled = enabled) {
-                view.performHaptic(HapticType.CLICK); onClick()
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, enabled = enabled) {
+                onClick()
             }
             .padding(vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -309,12 +308,11 @@ internal fun SettingsCard(
     onClick: () -> Unit,
     containerColor: Color = Color.Transparent
 ) {
-    val view = LocalView.current
     val isDark = isAppDarkTheme()
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { view.performHaptic(HapticType.CLICK); onClick() }
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() }
             .padding(vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -392,7 +390,6 @@ internal fun StatisticsCard(
     hazeState: HazeState? = null,
     onClick: () -> Unit
 ) {
-    val view = LocalView.current
     val isDark = isAppDarkTheme()
     val realBlur = listCardUsesRealBlur()
     val blurFill = if (isDark) Color.White.copy(alpha = 0.08f)
@@ -402,7 +399,7 @@ internal fun StatisticsCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clip(RoundedCornerShape(20.dp))
-            .clickable { view.performHaptic(HapticType.CLICK); onClick() },
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() },
         isDark = isDark,
         shape = RoundedCornerShape(20.dp),
         backgroundColor = if (realBlur) blurFill else solidCardFill(isDark, blurFill),

@@ -96,7 +96,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -128,7 +127,10 @@ import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.ui.haptic.HapticModeSummary
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.hapticModeSummary
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.CloudThemeManager
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
@@ -142,10 +144,8 @@ import com.tracktosearch.ui.theme.MeshPreset
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.theme.appSwitchColors
-import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
-import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -1384,7 +1384,6 @@ private fun MarkRecordsEntryCard(
     onClick: () -> Unit,
     hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
-    val view = LocalView.current
     val isDark = isAppDarkTheme()
     // BLUR 模式列表卡片不再各自开一层离屏做真模糊，改用更实的填充；GLASS 模式不变。
     val realBlur = LocalVisualEffectMode.current == VisualEffectMode.GLASS
@@ -1393,7 +1392,7 @@ private fun MarkRecordsEntryCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clip(RoundedCornerShape(20.dp))
-            .clickable { view.performHaptic(HapticType.CLICK); onClick() },
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() },
         isDark = isDark,
         shape = RoundedCornerShape(20.dp),
         backgroundColor = if (realBlur) {
@@ -1466,7 +1465,6 @@ private fun SearchSourcesEntryCard(
     onClick: () -> Unit,
     hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
-    val view = LocalView.current
     val isDark = isAppDarkTheme()
     // BLUR 模式列表卡片不再各自开一层离屏做真模糊，改用更实的填充；GLASS 模式不变。
     val realBlur = LocalVisualEffectMode.current == VisualEffectMode.GLASS
@@ -1475,7 +1473,7 @@ private fun SearchSourcesEntryCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clip(RoundedCornerShape(20.dp))
-            .clickable { view.performHaptic(HapticType.CLICK); onClick() },
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() },
         isDark = isDark,
         shape = RoundedCornerShape(20.dp),
         backgroundColor = if (realBlur) {
@@ -1548,7 +1546,6 @@ private fun PrivacyEntryCard(
     onClick: () -> Unit,
     hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
-    val view = LocalView.current
     val isDark = isAppDarkTheme()
     // BLUR 模式列表卡片不再各自开一层离屏做真模糊，改用更实的填充；GLASS 模式不变。
     val realBlur = LocalVisualEffectMode.current == VisualEffectMode.GLASS
@@ -1557,7 +1554,7 @@ private fun PrivacyEntryCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clip(RoundedCornerShape(20.dp))
-            .clickable { view.performHaptic(HapticType.CLICK); onClick() },
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() },
         isDark = isDark,
         shape = RoundedCornerShape(20.dp),
         backgroundColor = if (realBlur) {
@@ -1631,18 +1628,20 @@ private fun SharedTransitionSwitchCard(
     onToggle: (Boolean) -> Unit,
     containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     SettingsItemCard(
         icon = Icons.Rounded.Animation,
         title = stringResource(R.string.settings_shared_transition),
         subtitle = stringResource(R.string.settings_shared_transition_subtitle),
-        onClick = { view.performHaptic(HapticType.CLICK); onToggle(!enabled) },
+        // 行区域那一记归 SettingsItemCard 自己的 hapticClickable，这里不能再发 —— 否则点行就是两下
+        onClick = { onToggle(!enabled) },
         containerColor = containerColor,
         trailing = {
             Switch(
                 checked = enabled,
+                // 直接拨开关是另一个手势面（与行点一次只命中一个），按新状态发 toggle
                 onCheckedChange = { value ->
-                    view.performHaptic(HapticType.CLICK)
+                    haptics.toggle(value)
                     onToggle(value)
                 },
                 colors = appSwitchColors()
@@ -1661,22 +1660,21 @@ private fun SplashQuoteSwitchCard(
     viewModel: SettingsViewModel,
     containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     val enabled by viewModel.splashQuoteEnabled.collectAsStateWithLifecycle()
     SettingsItemCard(
         icon = Icons.Rounded.FormatQuote,
         title = stringResource(R.string.settings_splash_quote),
         subtitle = stringResource(R.string.settings_splash_quote_subtitle),
-        onClick = {
-            view.performHaptic(HapticType.CLICK)
-            viewModel.setSplashQuoteEnabled(!enabled)
-        },
+        // 行区域那一记归 SettingsItemCard 自己的 hapticClickable，这里不能再发 —— 否则点行就是两下
+        onClick = { viewModel.setSplashQuoteEnabled(!enabled) },
         containerColor = containerColor,
         trailing = {
             Switch(
                 checked = enabled,
+                // 直接拨开关是另一个手势面（与行点一次只命中一个），按新状态发 toggle
                 onCheckedChange = { value ->
-                    view.performHaptic(HapticType.CLICK)
+                    haptics.toggle(value)
                     viewModel.setSplashQuoteEnabled(value)
                 },
                 colors = appSwitchColors()
@@ -1693,9 +1691,10 @@ private fun SplashQuoteSwitchCard(
  * 副标题不是固定的说明文案，而是 [hapticModeSummary] 算出来的那一句 ——
  * 没马达或系统总开关关着时，回显「增强」是在骗人。
  *
- * 与同组的两个开关卡片不同，这里**不额外调 performHaptic**：
- * [SettingsItemCard] 自己的 clickable 已经发过一记，外面再发一次就是同一常量背靠背两下
- * （`SharedTransitionSwitchCard` 与 `SplashQuoteSwitchCard` 正是这个毛病，归 T4 一起清）。
+ * 本卡片没有 trailing 开关，也不自己发触感：
+ * [SettingsItemCard] 的 `hapticClickable` 已经发过一记，外面再发一次就是同一语义背靠背两下
+ * （`SharedTransitionSwitchCard` 与 `SplashQuoteSwitchCard` 原先正是这个毛病，已随本次迁移清掉：
+ * 行点那一记留在 [SettingsItemCard]，两张卡只在 `Switch` 的 `onCheckedChange` 上发 toggle）。
  */
 @Composable
 private fun HapticModeCard(
@@ -2051,7 +2050,7 @@ private fun NotificationItem(
         }
     }
     val isDark = isAppDarkTheme()
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -2124,7 +2123,11 @@ private fun NotificationItem(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { view.performHaptic(HapticType.CLICK); viewModel.setReleaseReminderEnabled(!releaseEnabled) }
+                        .hapticClickable(
+                            // 带勾选态的行：语义按点完之后的新状态定
+                            semantic = if (releaseEnabled) HapticSemantic.TOGGLE_OFF
+                                       else HapticSemantic.TOGGLE_ON
+                        ) { viewModel.setReleaseReminderEnabled(!releaseEnabled) }
                         .padding(horizontal = 20.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -2164,7 +2167,7 @@ private fun NotificationItem(
                     Spacer(modifier = Modifier.width(8.dp))
                     Switch(
                         checked = releaseEnabled,
-                        onCheckedChange = { view.performHaptic(HapticType.CLICK); viewModel.setReleaseReminderEnabled(it) },
+                        onCheckedChange = { haptics.toggle(it); viewModel.setReleaseReminderEnabled(it) },
                         colors = appSwitchColors()
                     )
                 }
@@ -2172,7 +2175,11 @@ private fun NotificationItem(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { view.performHaptic(HapticType.CLICK); viewModel.setNewSeasonReminderEnabled(!newSeasonEnabled) }
+                        .hapticClickable(
+                            // 带勾选态的行：语义按点完之后的新状态定
+                            semantic = if (newSeasonEnabled) HapticSemantic.TOGGLE_OFF
+                                       else HapticSemantic.TOGGLE_ON
+                        ) { viewModel.setNewSeasonReminderEnabled(!newSeasonEnabled) }
                         .padding(horizontal = 20.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -2212,7 +2219,7 @@ private fun NotificationItem(
                     Spacer(modifier = Modifier.width(8.dp))
                     Switch(
                         checked = newSeasonEnabled,
-                        onCheckedChange = { view.performHaptic(HapticType.CLICK); viewModel.setNewSeasonReminderEnabled(it) },
+                        onCheckedChange = { haptics.toggle(it); viewModel.setNewSeasonReminderEnabled(it) },
                         colors = appSwitchColors()
                     )
                 }

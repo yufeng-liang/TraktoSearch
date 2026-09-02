@@ -19,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -39,8 +38,8 @@ import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -295,7 +294,6 @@ private fun MessagesTopBar(
 }
 @Composable
 private fun MessageFilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val view = LocalView.current
     val isSelected = selected
     Surface(
         modifier = Modifier
@@ -304,8 +302,7 @@ private fun MessageFilterChip(label: String, selected: Boolean, onClick: () -> U
                 this.role = Role.Button
                 this.selected = isSelected
             }
-            .clickable {
-                view.performHaptic(HapticType.CLICK)
+            .hapticClickable(semantic = HapticSemantic.SEGMENT_TICK) {
                 onClick()
             },
         shape = RoundedCornerShape(8.dp),

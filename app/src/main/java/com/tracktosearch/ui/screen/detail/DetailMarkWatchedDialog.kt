@@ -37,15 +37,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.trakt.dto.TraktEpisode
 import com.tracktosearch.data.remote.trakt.dto.TraktSeason
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import kotlinx.coroutines.flow.MutableSharedFlow
 
 // ==================== 标记已看弹窗（电视剧季/集勾选） ====================
@@ -63,7 +63,6 @@ internal fun MarkWatchedDialog(
     onSubmit: (List<Int>) -> Unit,
     onLoadEpisodes: (Int) -> Unit
 ) {
-    val view = LocalView.current
     // 已勾选的集：季号 -> 已勾选集号集合
     val selectedEpisodes = remember {
         val initial = mutableMapOf<Int, MutableSet<Int>>()
@@ -107,6 +106,8 @@ internal fun MarkWatchedDialog(
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.detail_mark_watched_title)) },
         text = {
+            // AlertDialog 的槽是独立 subcomposition（Dialog 有自己的宿主 View），单独取一份
+            val haptics = rememberAppHaptics()
             // 第0季（特别篇）放到最后
             val sortedSeasons = remember(seasons) {
                 seasons.filter { it.number > 0 } + seasons.filter { it.number == 0 }
@@ -146,7 +147,7 @@ internal fun MarkWatchedDialog(
                                 Checkbox(
                                     checked = allSelected,
                                     onCheckedChange = { checked ->
-                                        view.performHaptic(HapticType.CLICK)
+                                        haptics.toggle(checked)
                                         // 季未展开时 episodes 可能为 null，需要先加载
                                         if (episodes[season.number] == null) {
                                             onLoadEpisodes(season.number)
@@ -214,8 +215,7 @@ internal fun MarkWatchedDialog(
                                             color = MaterialTheme.colorScheme.error,
                                             modifier = Modifier
                                                 .padding(start = 36.dp, bottom = 4.dp)
-                                                .clickable {
-                                                    view.performHaptic(HapticType.CLICK)
+                                                .hapticClickable(semantic = HapticSemantic.TAP) {
                                                     failedSeasons = failedSeasons - season.number
                                                     onLoadEpisodes(season.number)
                                                 }
@@ -240,7 +240,7 @@ internal fun MarkWatchedDialog(
                                             Checkbox(
                                                 checked = epSelected,
                                                 onCheckedChange = { checked ->
-                                                    view.performHaptic(HapticType.CLICK)
+                                                    haptics.toggle(checked)
                                                     val current = selectedEpisodes.value.toMutableMap()
                                                     val seasonSet = current[season.number]?.toMutableSet() ?: mutableSetOf()
                                                     if (checked) seasonSet.add(ep.number) else seasonSet.remove(ep.number)

@@ -150,7 +150,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -216,11 +215,10 @@ import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
 import com.tracktosearch.ui.navigation.NotificationNavigator
 import com.tracktosearch.ui.navigation.NotificationTarget
-import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
-import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.showToast
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
@@ -282,7 +280,7 @@ fun WatchlistScreen(
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { _ -> }
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的卡片参与共享元素转场，避免跨页面重复海报 key 冲突
     var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
     var activePosterSelectionKey by rememberSaveable { mutableStateOf<String?>(null) }
@@ -1338,7 +1336,7 @@ fun WatchlistScreen(
                                 selectedIndex = selectedTab,
                                 onTabSelected = { index ->
                                     collapseSearch()
-                                    view.performHaptic(HapticType.CLICK)
+                                    haptics.segmentTick()
                                     selectedTab = index
                                 }
                             )
@@ -2254,6 +2252,9 @@ private fun WatchlistFilterSheet(
                 .padding(horizontal = 16.dp, vertical = 16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
+            // 取在 sheet 内容里：ModalBottomSheet 有自己的宿主 View，
+            // 在 WatchlistFilterSheet 顶部取会捕获到页面那个 View
+            val haptics = rememberAppHaptics()
             // 类型多选(chip 按估算宽度降序排列:长块先占位,短块填缝,行数少且每行数量均衡)
             // 估算宽度 = 中文字符数 * 14dp + 24dp(chip 内边距)
             val sortedGenres = remember(availableGenres) {
@@ -2329,7 +2330,6 @@ private fun WatchlistFilterSheet(
             HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
 
             // 评分 RangeSlider(Trakt 评分 标题 + 滑动条同一行)
-            val view = LocalView.current
             // 拖动中只改本地值，松手才写进 filterState：
             // 每帧都写的话每一帧都要重新过滤+排序整个列表，还会因为 filterToken 变化重建 6 个网格状态。
             // 用 uiState 的值做 key：重置筛选后本地值要跟着回到 0-10。
@@ -2395,7 +2395,7 @@ private fun WatchlistFilterSheet(
                             val newStart = range.start.toInt()
                             val newEnd = range.endInclusive.toInt()
                             if (newStart != lastRatingStart || newEnd != lastRatingEnd) {
-                                view.performHaptic(HapticType.TICK)
+                                haptics.frequentTick()
                                 lastRatingStart = newStart
                                 lastRatingEnd = newEnd
                             }
@@ -2441,7 +2441,8 @@ private fun WatchlistFilterSheet(
                                 MarkedTimePreset.SEVEN_DAYS -> R.string.filter_time_7d
                                 MarkedTimePreset.THIRTY_DAYS -> R.string.filter_time_30d
                                 MarkedTimePreset.ALL -> R.string.filter_time_all
-                            })
+                            }),
+                            singleSelect = true
                         )
                     }
                 }
@@ -2472,7 +2473,7 @@ private fun WatchlistFilterSheet(
                     SegmentedButton(
                         selected = filterState.markedTimeOrder == SortOrder.DESC,
                         onClick = {
-                            view.performHaptic(HapticType.CLICK)
+                            haptics.segmentTick()
                             onMarkedTimeOrderChange(SortOrder.DESC)
                         },
                         shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
@@ -2491,7 +2492,7 @@ private fun WatchlistFilterSheet(
                     SegmentedButton(
                         selected = filterState.markedTimeOrder == SortOrder.ASC,
                         onClick = {
-                            view.performHaptic(HapticType.CLICK)
+                            haptics.segmentTick()
                             onMarkedTimeOrderChange(SortOrder.ASC)
                         },
                         shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
@@ -2533,14 +2534,16 @@ private fun WatchlistFilterSheet(
  *
  * 原来类型/年代/标记时间三组各自重复一遍同样的 8 行配色，触感一处都没加，
  * 点起来和页面里其他 chip 手感不一致。
+ * [singleSelect] 只影响触感语义：标记时间是互斥单选，走刻度感；类型/年代可多选，走开关的方向感。
  */
 @Composable
 private fun WatchlistFilterChip(
     selected: Boolean,
     onClick: () -> Unit,
-    label: String
+    label: String,
+    singleSelect: Boolean = false
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     FilterChip(
         selected = selected,
         border = BorderStroke(
@@ -2558,7 +2561,9 @@ private fun WatchlistFilterChip(
             selectedLabelColor = MaterialTheme.colorScheme.onPrimary
         ),
         onClick = {
-            view.performHaptic(HapticType.CLICK)
+            // 互斥单选组（标记时间）没有「取消」这回事，只是把选中位挪一格，走刻度感；
+            // 能同时勾多个的（类型/年代）才有「加上 / 去掉」的方向感
+            if (singleSelect) haptics.segmentTick() else haptics.toggle(!selected)
             onClick()
         },
         label = { Text(label) }

@@ -45,7 +45,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -61,9 +60,9 @@ import com.tracktosearch.data.remote.trakt.dto.TraktSeason
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.neumorphicOuterShadow
 import com.tracktosearch.ui.component.usesNeumorphicDecoration
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
 
 // ==================== 季/集信息 ====================
 
@@ -118,7 +117,6 @@ internal fun SeasonsSection(
     onToggleSeason: (Int) -> Unit,
     onToggleEpisodeWatched: (seasonNumber: Int, episodeNumber: Int, episodeTraktId: Int) -> Unit
 ) {
-    val view = LocalView.current
     val isDark = isAppDarkTheme()
     // 过滤掉第0季（特别篇），单独展示为"特别篇"
     val regularSeasons = seasons.filter { it.number > 0 }
@@ -153,7 +151,9 @@ internal fun SeasonsSection(
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
-                        .clickable { view.performHaptic(HapticType.TICK); showAllSeasons = !showAllSeasons }
+                        .hapticClickable(
+                            semantic = if (showAllSeasons) HapticSemantic.TOGGLE_OFF else HapticSemantic.TOGGLE_ON
+                        ) { showAllSeasons = !showAllSeasons }
                         .padding(vertical = 2.dp, horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -205,7 +205,9 @@ internal fun SeasonsSection(
                         }
                     )
                     .clip(seasonShape)
-                    .clickable { view.performHaptic(HapticType.CLICK); onToggleSeason(season.number) },
+                    .hapticClickable(
+                        semantic = if (isExpanded) HapticSemantic.TOGGLE_OFF else HapticSemantic.TOGGLE_ON
+                    ) { onToggleSeason(season.number) },
                 shape = seasonShape,
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -310,12 +312,13 @@ internal fun EpisodeRow(
     isToggling: Boolean,
     onToggleWatched: () -> Unit
 ) {
-    val view = LocalView.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(6.dp))
-            .clickable { view.performHaptic(HapticType.CLICK); onToggleWatched() }
+            .hapticClickable(
+                semantic = if (isWatched) HapticSemantic.TOGGLE_OFF else HapticSemantic.TOGGLE_ON
+            ) { onToggleWatched() }
             .padding(vertical = 4.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

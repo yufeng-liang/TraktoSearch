@@ -53,7 +53,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -65,8 +64,11 @@ import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.ui.haptic.HapticMode
 import com.tracktosearch.ui.haptic.HapticModeSummary
+import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.HapticSystemState
+import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.hapticModeSummary
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.GlassVariant
 import com.tracktosearch.ui.theme.MeshPreset
 import com.tracktosearch.ui.theme.VisualEffectMode
@@ -87,8 +89,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.foundation.layout.height
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -132,17 +132,19 @@ private fun ThemeOptionRow(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val view = LocalView.current
+    // 本行位于 AlertDialog 的 text 槽内，这里取到的就是对话框自己的宿主 View
+    val haptics = rememberAppHaptics()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { view.performHaptic(HapticType.TICK); onClick() }
+            .hapticClickable(semantic = HapticSemantic.SEGMENT_TICK) { onClick() }
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         RadioButton(
             selected = selected,
-            onClick = { view.performHaptic(HapticType.TICK); onClick() }
+            // RadioButton 是另一个手势面，行点与它一次只命中一个
+            onClick = { haptics.segmentTick(); onClick() }
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(label)
@@ -168,18 +170,21 @@ internal fun HapticModeSelectionDialog(
                 HapticModeOptionRow(
                     label = stringResource(R.string.settings_haptic_follow_system),
                     description = stringResource(R.string.settings_haptic_follow_system_desc),
+                    mode = HapticMode.FOLLOW_SYSTEM,
                     selected = currentMode == HapticMode.FOLLOW_SYSTEM,
                     onClick = { onModeSelected(HapticMode.FOLLOW_SYSTEM) }
                 )
                 HapticModeOptionRow(
                     label = stringResource(R.string.settings_haptic_off),
                     description = stringResource(R.string.settings_haptic_off_desc),
+                    mode = HapticMode.OFF,
                     selected = currentMode == HapticMode.OFF,
                     onClick = { onModeSelected(HapticMode.OFF) }
                 )
                 HapticModeOptionRow(
                     label = stringResource(R.string.settings_haptic_boost),
                     description = stringResource(R.string.settings_haptic_boost_desc),
+                    mode = HapticMode.BOOST,
                     selected = currentMode == HapticMode.BOOST,
                     onClick = { onModeSelected(HapticMode.BOOST) }
                 )
@@ -205,25 +210,34 @@ internal fun HapticModeSelectionDialog(
 /**
  * 触感档位单选行。
  *
- * 与 [ThemeOptionRow] 唯一的区别是**点这里不发触感**：选「关闭」那一下还震一记，
- * 用户会以为设置没生效；而旧的 `performHaptic` 通道读不到这个档位，做不到「选关闭就别震」。
- * 想要「选完立刻试听一下」得走新引擎（`AppHaptics` 会自己遵守档位），那是 T3 接线之后的事。
+ * 与 [ThemeOptionRow] 唯一的区别是**「关闭」那一行不发触感**：选「关闭」还震一记，
+ * 用户会以为设置没生效。另两档照常发 `segmentTick()`，等于「选完立刻试听一下」——
+ * 选「增强」当场就能感到比原来重，这是这个开关最需要的即时反馈。
+ *
+ * 为什么靠 [mode] 显式判而不是让引擎自己静默：`AppHaptics` 确实遵守档位，但档位是经 DataStore
+ * 异步落盘的，点下去那一刻新值还没到引擎，仍会按旧档位响一记。显式判掉是确定的。
  */
 @Composable
 private fun HapticModeOptionRow(
     label: String,
     description: String,
+    mode: HapticMode,
     selected: Boolean,
     onClick: () -> Unit
 ) {
+    val haptics = rememberAppHaptics()
+    val onClickWithHaptic = {
+        if (mode != HapticMode.OFF) haptics.segmentTick()
+        onClick()
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(onClick = onClickWithHaptic)
             .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        RadioButton(selected = selected, onClick = onClick)
+        RadioButton(selected = selected, onClick = onClickWithHaptic)
         Spacer(modifier = Modifier.width(8.dp))
         Column {
             Text(label)
@@ -278,7 +292,6 @@ internal fun AccentColorDialog(
     onDismiss: () -> Unit,
     dialogTitle: String? = null
 ) {
-    val view = LocalView.current
     var materialMenuExpanded by remember { mutableStateOf(false) }
     var meshMenuExpanded by remember { mutableStateOf(false) }
     var showCustomPicker by remember { mutableStateOf(false) }
@@ -414,8 +427,9 @@ internal fun AccentColorDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable {
-                            view.performHaptic(HapticType.TICK)
+                        // 这个面只可能「展开」—— 收起走 onDismissRequest 或选中某项，
+                        // 所以 toggle 的方向感在这里永远出不来，按「次级入口」给 LIGHT_TAP
+                        .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
                             materialMenuExpanded = true
                         }
                         .padding(vertical = 8.dp),
@@ -453,8 +467,8 @@ internal fun AccentColorDialog(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable {
-                                        view.performHaptic(HapticType.TICK)
+                                    // 材质是一组里选一个，走刻度感
+                                    .hapticClickable(semantic = HapticSemantic.SEGMENT_TICK) {
                                         onVisualEffectSelected(option.mode, option.variant)
                                         materialMenuExpanded = false
                                     }
@@ -490,8 +504,8 @@ internal fun AccentColorDialog(
                 Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable {
-                        view.performHaptic(HapticType.TICK)
+                    // 同上，只可能「展开」，给 LIGHT_TAP
+                    .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
                         meshMenuExpanded = true
                     }
                     .padding(vertical = 8.dp),
@@ -527,8 +541,8 @@ internal fun AccentColorDialog(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                        .clickable {
-                                            view.performHaptic(HapticType.TICK)
+                                        // 背景光晕是一组里选一个，走刻度感
+                                        .hapticClickable(semantic = HapticSemantic.SEGMENT_TICK) {
                                             onMeshSelected(option.preset)
                                             meshMenuExpanded = false
                                         }
@@ -628,8 +642,8 @@ internal fun AccentColorDialog(
                             Column(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clickable {
-                                        view.performHaptic(HapticType.TICK)
+                                    // 色板是一组里选一个（自由调色那格转开子弹窗），走刻度感
+                                    .hapticClickable(semantic = HapticSemantic.SEGMENT_TICK) {
                                         if (isCustom) {
                                             showCustomPicker = true
                                         } else {
@@ -882,17 +896,19 @@ private fun LanguageOptionRow(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val view = LocalView.current
+    // 本行位于 AlertDialog 的 text 槽内，这里取到的就是对话框自己的宿主 View
+    val haptics = rememberAppHaptics()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { view.performHaptic(HapticType.TICK); onClick() }
+            .hapticClickable(semantic = HapticSemantic.SEGMENT_TICK) { onClick() }
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         RadioButton(
             selected = selected,
-            onClick = { view.performHaptic(HapticType.TICK); onClick() }
+            // RadioButton 是另一个手势面，行点与它一次只命中一个
+            onClick = { haptics.segmentTick(); onClick() }
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(label)
@@ -1022,7 +1038,8 @@ private fun DiscoverSectionRow(
     dragHandleModifier: Modifier,
     isDragging: Boolean
 ) {
-    val view = LocalView.current
+    // 本行位于 AlertDialog 的 text 槽内，这里取到的就是对话框自己的宿主 View
+    val haptics = rememberAppHaptics()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1048,7 +1065,7 @@ private fun DiscoverSectionRow(
         )
         Switch(
             checked = visible,
-            onCheckedChange = { view.performHaptic(HapticType.CLICK); onToggle(it) },
+            onCheckedChange = { haptics.toggle(it); onToggle(it) },
             colors = appSwitchColors()
         )
     }
@@ -1082,7 +1099,6 @@ fun DetailSectionsDialog(
     onDismiss: () -> Unit
 ) {
     val sections by viewModel.detailSections.collectAsStateWithLifecycle()
-    val view = LocalView.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1091,6 +1107,8 @@ fun DetailSectionsDialog(
             Text(stringResource(R.string.settings_detail_sections))
         },
         text = {
+            // text 槽是独立 subcomposition（有自己的宿主 View），触感实例必须在槽内取
+            val haptics = rememberAppHaptics()
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1111,7 +1129,7 @@ fun DetailSectionsDialog(
                         Switch(
                             checked = section.visible,
                             onCheckedChange = {
-                                view.performHaptic(HapticType.CLICK)
+                                haptics.toggle(it)
                                 viewModel.setDetailSectionVisible(section.id, it)
                             },
                 colors = appSwitchColors()
@@ -1148,12 +1166,13 @@ internal fun DefaultTabSelectionDialog(
     onTabSelected: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val view = LocalView.current
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.settings_default_tab)) },
         text = {
+            // text 槽是独立 subcomposition（有自己的宿主 View），触感实例必须在槽内取
+            val haptics = rememberAppHaptics()
             Column {
                 listOf(
                     0 to stringResource(R.string.tab_search),
@@ -1163,13 +1182,16 @@ internal fun DefaultTabSelectionDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { view.performHaptic(HapticType.TICK); onTabSelected(tabIndex) }
+                            .hapticClickable(semantic = HapticSemantic.SEGMENT_TICK) {
+                                onTabSelected(tabIndex)
+                            }
                             .padding(vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
                             selected = currentTab == tabIndex,
-                            onClick = { view.performHaptic(HapticType.TICK); onTabSelected(tabIndex) }
+                            // RadioButton 是另一个手势面，行点与它一次只命中一个
+                            onClick = { haptics.segmentTick(); onTabSelected(tabIndex) }
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(label)

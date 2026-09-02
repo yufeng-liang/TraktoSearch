@@ -19,15 +19,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.repository.ResourceRepository
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 
 /** 网盘类型选项：常量集合，不必每次重组都 toList 一份新的（LazyRow 的 items 会跟着重新读一遍） */
 private val DISK_TYPE_OPTIONS = ResourceRepository.ALL_DISK_TYPES.toList()
@@ -44,7 +42,7 @@ internal fun FilterSection(
     showHighRelevanceOnly: Boolean = false,
     onToggleShowHighRelevanceOnly: () -> Unit = {}
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     // 固定左侧标签宽度，保证两个行的 Chip 起点对齐
     val labelWidth = 64.dp
     // 标签文字颜色跟随 LocalContentColor(由详情页根据 Tab 沉浸色自动设置)
@@ -85,7 +83,7 @@ internal fun FilterSection(
                             selectedContainerColor = MaterialTheme.colorScheme.primary,
                             selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                         ),
-                        onClick = { view.performHaptic(HapticType.TICK); onToggleSource(source) },
+                        onClick = { haptics.toggle(source !in enabledSources); onToggleSource(source) },
                         label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         modifier = Modifier.height(28.dp)
                     )
@@ -133,7 +131,7 @@ internal fun FilterSection(
                             selectedContainerColor = MaterialTheme.colorScheme.primary,
                             selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                         ),
-                        onClick = { view.performHaptic(HapticType.TICK); onToggleDiskType(type) },
+                        onClick = { haptics.toggle(type !in enabledDiskTypes); onToggleDiskType(type) },
                         label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         modifier = Modifier.height(28.dp)
                     )
@@ -163,7 +161,7 @@ internal fun FilterSection(
                         selectedContainerColor = MaterialTheme.colorScheme.primary,
                         selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                     ),
-                    onClick = { view.performHaptic(HapticType.TICK); onToggleShowHighRelevanceOnly() },
+                    onClick = { haptics.toggle(!showHighRelevanceOnly); onToggleShowHighRelevanceOnly() },
                     label = { Text(stringResource(R.string.detail_filter_high_relevance), style = MaterialTheme.typography.labelSmall, maxLines = 1) },
                     modifier = Modifier.height(28.dp)
                 )

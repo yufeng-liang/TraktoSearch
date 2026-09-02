@@ -85,7 +85,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLocale
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -108,9 +107,10 @@ import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.rememberShimmer
 import com.tracktosearch.ui.component.shimmer
-import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
-import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -856,7 +856,7 @@ private fun pieSlices(genreDistribution: Map<String, Int>): List<PieSlice> {
 /** 类型分布饼图（展开动画 + 点击交互） */
 @Composable
 private fun GenrePieChart(genreDistribution: Map<String, Int>, reveal: SectionReveal) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     val totalCount = genreDistribution.values.sum()
     if (totalCount == 0) return
 
@@ -903,7 +903,7 @@ private fun GenrePieChart(genreDistribution: Map<String, Int>, reveal: SectionRe
                                 for ((index, entry) in entries.withIndex()) {
                                     val sweep = 360f * entry.count.toFloat() / totalCount.toFloat()
                                     if (angle >= accumulated && angle < accumulated + sweep) {
-                                        view.performHaptic(HapticType.CLICK)
+                                        haptics.segmentTick()
                                         selectedIndex = if (selectedIndex == index) -1 else index
                                         break
                                     }
@@ -981,7 +981,7 @@ private fun GenrePieChart(genreDistribution: Map<String, Int>, reveal: SectionRe
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { view.performHaptic(HapticType.CLICK); selectedIndex = if (selectedIndex == index) -1 else index },
+                            .hapticClickable(semantic = HapticSemantic.SEGMENT_TICK) { selectedIndex = if (selectedIndex == index) -1 else index },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
@@ -1211,7 +1211,7 @@ private fun HeatmapChart(
     onWeekOffsetChange: (Int) -> Unit,
     reveal: SectionReveal
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     val weeks = grid.weeks
     val monthLabels = grid.monthLabels
     val canGoForward = weekOffset < 0
@@ -1322,7 +1322,7 @@ private fun HeatmapChart(
                             if (weekIdx in weeks.indices && dayIdx in 0 until 7) {
                                 val cell = weeks[weekIdx][dayIdx]
                                 if (!cell.isFuture) {
-                                    view.performHaptic(HapticType.CLICK)
+                                    haptics.segmentTick()
                                     selectedCell = cell
                                 }
                             }
@@ -1353,13 +1353,13 @@ private fun HeatmapChart(
                                 // 向左滑：看更近日期
                                 if (canGoForward) {
                                     onWeekOffsetChange(weekOffset + HEATMAP_WEEKS)
-                                    view.performHaptic(HapticType.CLICK)
+                                    haptics.gestureEnd()
                                 }
                                 triggered = true
                             } else if (totalDrag > dragThresholdPx) {
                                 // 向右滑：看更早日期
                                 onWeekOffsetChange(weekOffset - HEATMAP_WEEKS)
-                                view.performHaptic(HapticType.CLICK)
+                                haptics.gestureEnd()
                                 triggered = true
                             }
                         }

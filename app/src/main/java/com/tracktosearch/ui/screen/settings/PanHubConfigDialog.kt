@@ -15,7 +15,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.data.remote.panhub.ChannelGroup
@@ -23,9 +22,8 @@ import com.tracktosearch.data.remote.panhub.PanHubChannel
 import com.tracktosearch.data.remote.panhub.PanHubConfig
 import com.tracktosearch.data.remote.panhub.PanHubPlugin
 import com.tracktosearch.R
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.appSwitchColors
-import com.tracktosearch.ui.util.performHaptic
-import com.tracktosearch.ui.util.HapticType
 
 @Composable
 fun PanHubConfigDialog(
@@ -43,13 +41,13 @@ fun PanHubConfigDialog(
     var enabledPlugins by remember(config) { mutableStateOf(config.enabledPlugins) }
     var enabledChannels by remember(config) { mutableStateOf(config.enabledChannels) }
 
-    val view = LocalView.current
-
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.panhub_config_title)) },
         text = {
+            // text 槽是独立 subcomposition（自带宿主 View），触感实例得在槽内取
+            val haptics = rememberAppHaptics()
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -68,7 +66,7 @@ fun PanHubConfigDialog(
                     )
                     Switch(
                         checked = enabled,
-                        onCheckedChange = { view.performHaptic(HapticType.CLICK); onEnabledChange(it) },
+                        onCheckedChange = { haptics.toggle(it); onEnabledChange(it) },
                         colors = appSwitchColors()
                     )
                 }
@@ -83,7 +81,7 @@ fun PanHubConfigDialog(
                             val intVal = v.roundToInt()
                             val oldVal = concurrencyText.toIntOrNull() ?: 4
                             if (intVal != oldVal) {
-                                view.performHaptic(HapticType.TICK)
+                                haptics.frequentTick()
                             }
                             // 拖动过程只更新本地显示值；松手（onValueChangeFinished）
                             // 才回调提交，避免每个拖拽 tick 都写 DataStore 并触发收集方重组
@@ -151,7 +149,7 @@ fun PanHubConfigDialog(
                                 Switch(
                                     checked = plugin.id in enabledPlugins,
                                     onCheckedChange = { enabled ->
-                                        view.performHaptic(HapticType.CLICK)
+                                        haptics.toggle(enabled)
                                         val updated = enabledPlugins.toMutableSet()
                                         if (enabled) updated.add(plugin.id) else updated.remove(plugin.id)
                                         enabledPlugins = updated
@@ -213,7 +211,7 @@ fun PanHubConfigDialog(
                             Switch(
                                 checked = allEnabledInGroup,
                                 onCheckedChange = { allOn ->
-                                    view.performHaptic(HapticType.CLICK)
+                                    haptics.toggle(allOn)
                                     val updated = enabledChannels.toMutableSet()
                                     if (allOn) {
                                         updated.addAll(groupChannels.map { it.id })
@@ -242,7 +240,7 @@ fun PanHubConfigDialog(
                                         Switch(
                                             checked = channel.id in enabledChannels,
                                             onCheckedChange = { enabled ->
-                                                view.performHaptic(HapticType.CLICK)
+                                                haptics.toggle(enabled)
                                                 val updated = enabledChannels.toMutableSet()
                                                 if (enabled) updated.add(channel.id) else updated.remove(channel.id)
                                                 enabledChannels = updated

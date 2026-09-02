@@ -44,7 +44,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
@@ -56,8 +55,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.MultiRatings
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import java.util.Locale
 
 // ==================== 评分行 ====================
@@ -446,7 +445,6 @@ internal fun RatingDialog(
     }
     val starColor = RatingGold
     val emptyColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-    val ratingView = LocalView.current
 
     AlertDialog(
         onDismissRequest = { if (!isSubmitting) onDismiss() },
@@ -516,12 +514,12 @@ internal fun RatingDialog(
                                     modifier = Modifier
                                         .weight(1f)
                                         .fillMaxHeight()
-                                        .clickable(
+                                        .hapticClickable(
                                             interactionSource = remember { MutableInteractionSource() },
                                             indication = null,
+                                            semantic = HapticSemantic.SEGMENT_TICK,
                                             enabled = !isSubmitting,
                                             onClick = {
-                                                ratingView.performHaptic(HapticType.TICK)
                                                 selectedRating = if (selectedRating == halfValue) 0 else halfValue
                                             }
                                         )
@@ -531,12 +529,12 @@ internal fun RatingDialog(
                                     modifier = Modifier
                                         .weight(1f)
                                         .fillMaxHeight()
-                                        .clickable(
+                                        .hapticClickable(
                                             interactionSource = remember { MutableInteractionSource() },
                                             indication = null,
+                                            semantic = HapticSemantic.SEGMENT_TICK,
                                             enabled = !isSubmitting,
                                             onClick = {
-                                                ratingView.performHaptic(HapticType.TICK)
                                                 selectedRating = if (selectedRating == fullValue) 0 else fullValue
                                             }
                                         )

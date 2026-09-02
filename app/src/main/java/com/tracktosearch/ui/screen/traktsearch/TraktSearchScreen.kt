@@ -99,7 +99,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -148,11 +147,12 @@ import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.component.rememberPosterPrefetch
-import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
-import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
 import com.tracktosearch.ui.screen.ai.AiSpriteCenter
 import com.tracktosearch.ui.screen.ai.AiSpriteCenterEntryButton
@@ -208,7 +208,7 @@ fun TraktSearchScreen(
     val watchlistWatchedIds by viewModel.watchlistWatchedIds.collectAsStateWithLifecycle()
     val spriteState by spriteViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的卡片参与共享元素转场
     var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
     val focusRequester = remember { FocusRequester() }
@@ -867,7 +867,7 @@ fun TraktSearchScreen(
                         selected = uiState.selectedTab == MediaType.MOVIE,
                         onClick = {
                             interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                            view.performHaptic(HapticType.TICK)
+                            haptics.segmentTick()
                             viewModel.switchTab(MediaType.MOVIE)
                         },
                         text = {
@@ -884,7 +884,7 @@ fun TraktSearchScreen(
                         selected = uiState.selectedTab == MediaType.SHOW,
                         onClick = {
                             interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                            view.performHaptic(HapticType.CLICK)
+                            haptics.segmentTick()
                             viewModel.switchTab(MediaType.SHOW)
                         },
                         text = {
@@ -901,7 +901,7 @@ fun TraktSearchScreen(
                         selected = uiState.selectedTab == MediaType.PERSON,
                         onClick = {
                             interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                            view.performHaptic(HapticType.CLICK)
+                            haptics.segmentTick()
                             viewModel.switchTab(MediaType.PERSON)
                         },
                         text = {
@@ -918,7 +918,7 @@ fun TraktSearchScreen(
                         selected = uiState.selectedTab == MediaType.DISK,
                         onClick = {
                             interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                            view.performHaptic(HapticType.CLICK)
+                            haptics.segmentTick()
                             viewModel.switchTab(MediaType.DISK)
                         },
                         text = {
@@ -964,11 +964,11 @@ fun TraktSearchScreen(
                             interactionSource = interactionSource
                         )
                         .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), CircleShape)
-                        .clickable(
+                        .hapticClickable(
                             interactionSource = interactionSource,
                             indication = null,
+                            semantic = HapticSemantic.LIGHT_TAP,
                             onClick = {
-                                view.performHaptic(HapticType.TICK)
                                 scrollScope.launch { currentGridState.animateScrollToItem(0) }
                             }
                         ),
@@ -1044,7 +1044,7 @@ private fun DiskSearchContent(
     statusBarHeight: Dp = 0.dp,
     scene: GlassScene = GlassScene()
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     val context = LocalContext.current
 
     val filteredResources = remember(diskState.resources, diskState.enabledSources, diskState.enabledDiskTypes) {
@@ -1199,7 +1199,7 @@ private fun DiskSearchContent(
                                                 selectedContainerColor = MaterialTheme.colorScheme.primary,
                                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                                             ),
-                                            onClick = { view.performHaptic(HapticType.TICK); onToggleSource(source) },
+                                            onClick = { haptics.toggle(source !in diskState.enabledSources); onToggleSource(source) },
                                             label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                                             modifier = Modifier.height(28.dp)
                                         )
@@ -1246,7 +1246,7 @@ private fun DiskSearchContent(
                                                 selectedContainerColor = MaterialTheme.colorScheme.primary,
                                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                                             ),
-                                            onClick = { view.performHaptic(HapticType.TICK); onToggleDiskType(type) },
+                                            onClick = { haptics.toggle(type !in diskState.enabledDiskTypes); onToggleDiskType(type) },
                                             label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                                             modifier = Modifier.height(28.dp)
                                         )

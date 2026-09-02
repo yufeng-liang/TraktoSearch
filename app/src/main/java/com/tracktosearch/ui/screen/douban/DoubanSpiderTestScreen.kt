@@ -99,8 +99,6 @@ import com.tracktosearch.data.remote.douban.RatingWriteTestResult
 import com.tracktosearch.data.remote.douban.RecommendTestResult
 import com.tracktosearch.data.remote.douban.TestFetchResult
 import com.tracktosearch.data.repository.DoubanRetryManager
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.showToast
 import com.tracktosearch.ui.component.isAppDarkTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -453,7 +451,6 @@ fun DoubanSpiderTestScreen(
     val cachedItems by viewModel.cachedItems.collectAsStateWithLifecycle()
     val isDark = isAppDarkTheme()
     val context = LocalContext.current
-    val view = androidx.compose.ui.platform.LocalView.current
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showPickerDialog by remember { mutableStateOf(false) }
 
@@ -541,14 +538,14 @@ fun DoubanSpiderTestScreen(
                         Spacer(modifier = Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(
-                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.clearCookieTemporarily() },
+                                onClick = { viewModel.clearCookieTemporarily() },
                                 enabled = uiState.cookie.isNotBlank(),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                             ) {
                                 Text(stringResource(R.string.douban_spider_test_cookie_clear), style = MaterialTheme.typography.labelSmall)
                             }
                             OutlinedButton(
-                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.restoreCookie() },
+                                onClick = { viewModel.restoreCookie() },
                                 enabled = uiState.cookie.isBlank(),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                             ) {
@@ -608,7 +605,6 @@ fun DoubanSpiderTestScreen(
                             )
                             Spacer(modifier = Modifier.weight(1f))
                             IconButton(onClick = {
-                                view.performHaptic(HapticType.CLICK)
                                 viewModel.loadCachedItems()
                                 showPickerDialog = true
                             }) {
@@ -657,7 +653,6 @@ fun DoubanSpiderTestScreen(
                             Spacer(modifier = Modifier.weight(1f))
                             Button(
                                 onClick = {
-                                    view.performHaptic(HapticType.CLICK)
                                     viewModel.fetch()
                                 },
                                 enabled = !uiState.isFetching,
@@ -706,7 +701,7 @@ fun DoubanSpiderTestScreen(
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 markActions.take(2).forEach { (ep, label) ->
                                     Button(
-                                        onClick = { view.performHaptic(HapticType.CLICK); viewModel.markTest(ep) },
+                                        onClick = { viewModel.markTest(ep) },
                                         enabled = canMark,
                                         modifier = Modifier.weight(1f),
                                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
@@ -716,7 +711,7 @@ fun DoubanSpiderTestScreen(
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 markActions.takeLast(2).forEach { (ep, label) ->
                                     Button(
-                                        onClick = { view.performHaptic(HapticType.CLICK); viewModel.markTest(ep) },
+                                        onClick = { viewModel.markTest(ep) },
                                         enabled = canMark,
                                         modifier = Modifier.weight(1f),
                                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
@@ -742,7 +737,7 @@ fun DoubanSpiderTestScreen(
                                     selectedContainerColor = MaterialTheme.colorScheme.primary,
                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                                 ),
-                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateMarkRemoveMode("web_remove") },
+                                onClick = { viewModel.updateMarkRemoveMode("web_remove") },
                                 label = { Text(stringResource(R.string.douban_spider_test_mark_remove_empty)) },
                                 modifier = Modifier.height(32.dp)
                             )
@@ -756,7 +751,7 @@ fun DoubanSpiderTestScreen(
                                     selectedContainerColor = MaterialTheme.colorScheme.primary,
                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                                 ),
-                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateMarkRemoveMode("j_remove") },
+                                onClick = { viewModel.updateMarkRemoveMode("j_remove") },
                                 label = { Text(stringResource(R.string.douban_spider_test_mark_remove_naked)) },
                                 modifier = Modifier.height(32.dp)
                             )
@@ -814,7 +809,6 @@ fun DoubanSpiderTestScreen(
                                 )
                                 TextButton(
                                     onClick = {
-                                        view.performHaptic(HapticType.CLICK)
                                         val sb = buildString {
                                             appendLine("action: ${res.action}")
                                             res.candidates.forEachIndexed { i, c ->
@@ -916,7 +910,7 @@ fun DoubanSpiderTestScreen(
                                         selectedContainerColor = MaterialTheme.colorScheme.primary,
                                         selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                                     ),
-                                    onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateRatingValue(star) },
+                                    onClick = { viewModel.updateRatingValue(star) },
                                     label = { Text(label) },
                                     modifier = Modifier.height(32.dp)
                                 )
@@ -937,7 +931,7 @@ fun DoubanSpiderTestScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Spacer(modifier = Modifier.weight(1f))
                             Button(
-                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.ratingWriteTest() },
+                                onClick = { viewModel.ratingWriteTest() },
                                 enabled = uiState.isLoggedIn && uiState.ratingDoubanId.isNotBlank() && !uiState.isRatingWriting,
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
                             ) {
@@ -992,7 +986,6 @@ fun DoubanSpiderTestScreen(
                                 )
                                 TextButton(
                                     onClick = {
-                                        view.performHaptic(HapticType.CLICK)
                                         clipboard.setPrimaryClip(ClipData.newPlainText("rating", res.body))
                                         copyCtx.showToast(copiedToast)
                                     },
@@ -1039,7 +1032,7 @@ fun DoubanSpiderTestScreen(
                                     selectedContainerColor = MaterialTheme.colorScheme.primary,
                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                                 ),
-                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateRecommendType("movie") },
+                                onClick = { viewModel.updateRecommendType("movie") },
                                 label = { Text(stringResource(R.string.douban_spider_test_recommend_movie)) },
                                 modifier = Modifier.height(32.dp)
                             )
@@ -1053,13 +1046,13 @@ fun DoubanSpiderTestScreen(
                                     selectedContainerColor = MaterialTheme.colorScheme.primary,
                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                                 ),
-                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateRecommendType("tv") },
+                                onClick = { viewModel.updateRecommendType("tv") },
                                 label = { Text(stringResource(R.string.douban_spider_test_recommend_tv)) },
                                 modifier = Modifier.height(32.dp)
                             )
                             Spacer(modifier = Modifier.weight(1f))
                             Button(
-                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.recommendTest() },
+                                onClick = { viewModel.recommendTest() },
                                 enabled = uiState.isLoggedIn && !uiState.isRecommending,
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
                             ) {
@@ -1126,7 +1119,6 @@ fun DoubanSpiderTestScreen(
                                 )
                                 TextButton(
                                     onClick = {
-                                        view.performHaptic(HapticType.CLICK)
                                         clipboard.setPrimaryClip(ClipData.newPlainText("recommend", res.body))
                                         copyCtx.showToast(copiedToast)
                                     },
@@ -1191,7 +1183,7 @@ fun DoubanSpiderTestScreen(
                         ) {
                             Spacer(modifier = Modifier.weight(1f))
                             Button(
-                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.searchByImdbTest() },
+                                onClick = { viewModel.searchByImdbTest() },
                                 enabled = uiState.searchImdbId.isNotBlank() && !uiState.isSearching,
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
                             ) {
@@ -1262,7 +1254,6 @@ fun DoubanSpiderTestScreen(
                                 )
                                 TextButton(
                                     onClick = {
-                                        view.performHaptic(HapticType.CLICK)
                                         clipboard.setPrimaryClip(ClipData.newPlainText("html", res.html))
                                         copyCtx.showToast(copiedToast)
                                     },
@@ -1451,7 +1442,6 @@ fun DoubanSpiderTestScreen(
                 CachedItemsPickerDialog(
                     items = cachedItems,
                     onPick = { url ->
-                        view.performHaptic(HapticType.CLICK)
                         viewModel.updateUrl(url)
                         showPickerDialog = false
                     },

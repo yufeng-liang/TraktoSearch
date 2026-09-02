@@ -21,7 +21,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -115,7 +114,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -193,8 +191,9 @@ import com.tracktosearch.ui.component.neumorphicShadow
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.theme.ambientTextHalo
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.hapticCombinedClickable
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -268,7 +267,6 @@ fun SearchScreen(
     }
     var searchQuery by rememberSaveable { mutableStateOf(initialKeyword) }
     val context = LocalContext.current
-    val view = LocalView.current
     val focusManager = LocalFocusManager.current
     val viewedItemStorage = remember {
         EntryPointAccessors.fromApplication(context, ViewedStorageProvider::class.java).viewedItemStorage()
@@ -887,7 +885,6 @@ fun SearchScreen(
                         searchSourceType = searchSourceType,
                         onSearchSourceTypeChange = onSearchSourceTypeChange,
                         isDark = isDark,
-                        view = view,
                         hazeState = hazeState,
                         interactionSource = searchInteractionSource,
                         scene = searchGlassScene
@@ -955,7 +952,6 @@ private fun SearchBarTopNew(
     searchSourceType: SearchSourceType = SearchSourceType.DISK,
     onSearchSourceTypeChange: ((SearchSourceType) -> Unit)? = null,
     isDark: Boolean = false,
-    view: android.view.View,
     hazeState: HazeState,
     interactionSource: MutableInteractionSource,
     scene: GlassScene
@@ -1054,8 +1050,7 @@ private fun SearchBarTopNew(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable {
-                                        view.performHaptic(HapticType.TICK)
+                                    .hapticClickable(semantic = HapticSemantic.SEGMENT_TICK) {
                                         showTypeDropdown = false
                                         if (type != searchSourceType) {
                                             onSearchSourceTypeChange.invoke(type)
@@ -1104,7 +1099,7 @@ private fun SearchBarTopNew(
             trailingIcon = {
                 if (searchQuery.isEmpty()) {
                     SearchActionButton(
-                        onClick = { view.performHaptic(HapticType.CLICK); onSearch() },
+                        onClick = { onSearch() },
                         size = 44.dp,
                         iconSize = 20.dp,
                         isDark = isDark,
@@ -1129,7 +1124,7 @@ private fun SearchBarTopNew(
                             )
                         }
                         SearchActionButton(
-                            onClick = { view.performHaptic(HapticType.CLICK); onSearch() },
+                            onClick = { onSearch() },
                             size = 40.dp,
                             iconSize = 18.dp,
                             isDark = isDark,
@@ -1201,7 +1196,9 @@ private fun SearchActionButton(
                     1.0f to MaterialTheme.colorScheme.primary
                 )
             )
-            .clickable { onClick() },
+            // 触感在这里而不在调用点：GLASS 那条分支转给 GlassIconButton，它内部已经发了一记
+            // LIGHT_TAP，调用点再发就是玻璃档双震。两条分支各自发、语义一致，换外观不换手感
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() },
         contentAlignment = Alignment.Center
     ) {
         Icon(
@@ -1991,9 +1988,10 @@ private fun CloudIconWithAnimation(
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .combinedClickable(
+                    .hapticCombinedClickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null,
+                        semantic = HapticSemantic.LIGHT_TAP,
                         onClick = { cloudThemeManager.onCloudClicked(onboardingCompleted) },
                         onLongClick = onLongClick
                     )

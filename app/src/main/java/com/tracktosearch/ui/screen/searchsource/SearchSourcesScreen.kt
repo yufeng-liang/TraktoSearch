@@ -62,7 +62,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -76,10 +75,11 @@ import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.settings.PanHubConfigDialog
 import com.tracktosearch.ui.theme.appSwitchColors
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -437,7 +437,7 @@ private fun SourceCardRow(
     onClick: (() -> Unit)? = null,
     leadingAction: (@Composable () -> Unit)? = null
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -470,7 +470,7 @@ private fun SourceCardRow(
         Switch(
             checked = checked,
             onCheckedChange = {
-                view.performHaptic(HapticType.CLICK)
+                haptics.toggle(it)
                 onCheckedChange(it)
             },
             colors = appSwitchColors()
@@ -545,7 +545,6 @@ private fun CustomSourceRow(
     onShare: () -> Unit
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    val view = LocalView.current
 
     Column(
         modifier = Modifier
@@ -554,7 +553,7 @@ private fun CustomSourceRow(
             .shadow(1.dp, SOURCE_CARD_SHAPE)
             .clip(SOURCE_CARD_SHAPE)
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(onClick = { view.performHaptic(HapticType.CLICK); onEdit() })
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onEdit)
             .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -728,14 +727,13 @@ private fun AddSourceCard(
     onImport: () -> Unit
 ) {
     var showTemplateSheet by remember { mutableStateOf(false) }
-    val view = LocalView.current
 
     // 与反馈页「写新反馈」按钮统一：主色卡片 + 圆角 20 + 图标文字水平居中
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .clickable(onClick = { view.performHaptic(HapticType.CLICK); showTemplateSheet = true }),
+            .hapticClickable(semantic = HapticSemantic.TAP) { showTemplateSheet = true },
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
