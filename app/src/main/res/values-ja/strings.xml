@@ -268,6 +268,16 @@
     <string name="settings_shared_transition_subtitle">画面間で共有要素にトランジションアニメーションを適用（全画面表示時のズーム遷移も含む）。</string>
     <string name="settings_splash_quote">起動時の名セリフ</string>
     <string name="settings_splash_quote_subtitle">起動時に名作映画のセリフとポスターを表示します。画面をタップするとスキップできます。</string>
+    <string name="settings_haptic">触覚フィードバック</string>
+    <string name="settings_haptic_follow_system">システムに従う</string>
+    <string name="settings_haptic_off">オフ</string>
+    <string name="settings_haptic_boost">強め</string>
+    <string name="settings_haptic_follow_system_desc">通常の触覚フィードバック。強さはシステム設定に従います。</string>
+    <string name="settings_haptic_off_desc">イースターエッグを含め、アプリ内のすべての振動を停止します。</string>
+    <string name="settings_haptic_boost_desc">各効果を一段強いものに切り替えます。絶対的な強さはシステム設定のままです。</string>
+    <string name="settings_haptic_system_disabled">システムの触覚フィードバックがオフのため、アプリでは振動できません。</string>
+    <string name="settings_haptic_no_vibrator">この端末には振動モーターがありません。</string>
+    <string name="settings_haptic_open_system_settings">システム設定を開く</string>
     <string name="splash_quote_skip">タップでスキップ</string>
 
     <!-- 日めくり -->

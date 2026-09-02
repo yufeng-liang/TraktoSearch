@@ -23,6 +23,8 @@ import com.tracktosearch.data.remote.panhub.PanHubConfig
 import com.tracktosearch.data.remote.trakt.dto.TraktUserProfileResponse
 import com.tracktosearch.data.repository.ConsistencyCheckResult
 import com.tracktosearch.data.repository.UpdateInfo
+import com.tracktosearch.ui.haptic.HapticMode
+import com.tracktosearch.ui.haptic.HapticSystemState
 import com.tracktosearch.ui.theme.MonetAccent
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
@@ -420,6 +422,9 @@ class SettingsScreenTest {
         every { mock.detailSections } returns MutableStateFlow(emptyList())
         every { mock.changelog } returns MutableStateFlow<String?>(null)
         every { mock.isLoadingChangelog } returns MutableStateFlow(false)
+        // 触感档位与设备状态：SettingsScreen 的外观分组会读这两个，relaxed 兜不出真 Flow
+        every { mock.hapticMode } returns MutableStateFlow(HapticMode.DEFAULT)
+        every { mock.hapticSystemState } returns MutableStateFlow(HapticSystemState.OPTIMISTIC)
         // aiTasteEnabled/crashLogEnabled 开关已迁入「数据与隐私」页（PrivacyViewModel），
         // SettingsScreen 不再读取，无需 stub
         return mock

@@ -211,6 +211,18 @@ data class HapticCapabilities(
             false
         }
 
+        /**
+         * 只查「本机有没有马达」，不做整套探测。
+         *
+         * 设置页的触感卡片要用它决定副标题说不说「本机没有振动马达」。走 [probe] 会连带做
+         * 三次厂商类查找与好几次到 `VibratorService` 的 IPC，还得按 `HapticModule` 的规矩
+         * 先在后台线程预热一次；而这里只有两步：取 `Vibrator` + `hasVibrator()`。
+         *
+         * 仍然别在主线程调：`getSystemService` 与 `hasVibrator()` 都要过 binder。
+         */
+        internal fun deviceHasVibrator(context: Context): Boolean =
+            probeHasVibrator(resolveVibrator(context))
+
         /** `Vibrator.hasAmplitudeControl()`（API 26 = minSdk，无需门控）。查询失败退成 false，即锁 tier 0。 */
         private fun probeAmplitudeControl(vibrator: Vibrator?): Boolean = try {
             vibrator?.hasAmplitudeControl() == true

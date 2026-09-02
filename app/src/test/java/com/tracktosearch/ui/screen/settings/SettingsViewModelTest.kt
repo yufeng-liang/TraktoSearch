@@ -15,6 +15,7 @@ import com.tracktosearch.data.local.PanHubConfigStorage
 import com.tracktosearch.data.local.SearchSourceStorage
 import com.tracktosearch.data.local.SharedTransitionStorage
 import com.tracktosearch.data.local.ThemeStorage
+import com.tracktosearch.ui.haptic.HapticMode
 import com.tracktosearch.data.local.db.OfflineCacheManager
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.notification.NotificationScheduler
@@ -200,6 +201,10 @@ class SettingsViewModelTest {
             doubanSyncManager = doubanSyncManager,
             doubanBatchRemovalManager = doubanBatchRemovalManager,
             sharedTransitionStorage = sharedTransitionStorage,
+            // 触感档位：构造期就会读 modeState，relaxed mock 的返回值不是真 Flow，这里给真的
+            hapticStorage = mockk(relaxed = true) {
+                every { modeState } returns MutableStateFlow(HapticMode.DEFAULT)
+            },
             splashQuoteStorage = mockk(relaxed = true),
             doubanSyncedItemDao = doubanSyncedItemDao,
             sessionModeManager = sessionModeManager,

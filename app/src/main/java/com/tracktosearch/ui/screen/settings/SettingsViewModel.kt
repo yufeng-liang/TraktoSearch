@@ -20,6 +20,7 @@ import com.tracktosearch.data.local.DiscoverSectionConfig
 import com.tracktosearch.data.local.DetailSectionConfig
 import com.tracktosearch.data.local.DetailSectionStorage
 import com.tracktosearch.data.local.DiscoverSectionStorage
+import com.tracktosearch.data.local.HapticStorage
 import com.tracktosearch.data.local.NotificationStorage
 import com.tracktosearch.data.local.PanHubConfigStorage
 import com.tracktosearch.data.local.SearchSourceStorage
@@ -31,6 +32,10 @@ import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.local.db.OfflineCacheManager
 import com.tracktosearch.data.notification.NotificationScheduler
 import com.tracktosearch.data.session.SessionModeManager
+import com.tracktosearch.ui.haptic.HapticCapabilities
+import com.tracktosearch.ui.haptic.HapticMode
+import com.tracktosearch.ui.haptic.HapticSystemState
+import com.tracktosearch.ui.haptic.systemHapticFeedbackEnabled
 import com.tracktosearch.ui.theme.GlassVariant
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
@@ -133,6 +138,7 @@ class SettingsViewModel @Inject constructor(
     private val doubanSyncManager: DoubanSyncManager,
     private val doubanBatchRemovalManager: DoubanBatchRemovalManager,
     private val sharedTransitionStorage: SharedTransitionStorage,
+    private val hapticStorage: HapticStorage,
     private val splashQuoteStorage: com.tracktosearch.data.local.SplashQuoteStorage,
     private val doubanSyncedItemDao: DoubanSyncedItemDao,
     private val sessionModeManager: SessionModeManager,
@@ -156,6 +162,19 @@ class SettingsViewModel @Inject constructor(
 
     /** 开屏台词开关：Storage 启动时已预加载磁盘首值，直接暴露不会有默认值跳变 */
     val splashQuoteEnabled: StateFlow<Boolean> = splashQuoteStorage.enabledState
+
+    /** 触感三档（跟随系统 / 关闭 / 增强）：同样已在启动时预加载，无默认值跳变 */
+    val hapticMode: StateFlow<HapticMode> = hapticStorage.modeState
+
+    private val _hapticSystemState = MutableStateFlow(HapticSystemState.OPTIMISTIC)
+
+    /**
+     * 触感的设备侧前提：系统总开关 + 有无马达。
+     *
+     * 与 [hapticMode] 分开是因为这两项不是应用状态而是环境状态，应用改不了、也不该缓存过夜 ——
+     * 用户随时可能切到系统设置里把触感关掉再回来。重读时机见 [refreshHapticSystemState]。
+     */
+    val hapticSystemState: StateFlow<HapticSystemState> = _hapticSystemState.asStateFlow()
 
     // 主页面背景彩色弥散光晕
     val meshPreset: StateFlow<String> = themeStorage.meshPreset
@@ -253,6 +272,31 @@ class SettingsViewModel @Inject constructor(
 
     fun setSplashQuoteEnabled(enabled: Boolean) {
         viewModelScope.launch { splashQuoteStorage.setEnabled(enabled) }
+    }
+
+    /** 写触感档位。落盘同时 Storage 会同步更新 modeState，引擎与设置页一起生效 */
+    fun setHapticMode(mode: HapticMode) {
+        viewModelScope.launch { hapticStorage.setMode(mode) }
+    }
+
+    /**
+     * 重读系统总开关与有无马达。设置页进入时与每次回到前台各调一次。
+     *
+     * 挂在 resume 而不是只读一次：用户看到「系统已关闭触感」这句话之后，多半就会去系统设置
+     * 把它打开再切回来 —— 那正是这句话必须消失的时刻。
+     *
+     * 两次读都过 binder，所以丢到 IO；读失败时 [systemHapticFeedbackEnabled] 与
+     * `deviceHasVibrator` 各自兜底（按可用 / 无马达算），这里不再补 try。
+     */
+    fun refreshHapticSystemState() {
+        viewModelScope.launch {
+            _hapticSystemState.value = withContext(Dispatchers.IO) {
+                HapticSystemState(
+                    systemHapticEnabled = systemHapticFeedbackEnabled(context),
+                    hasVibrator = HapticCapabilities.deviceHasVibrator(context),
+                )
+            }
+        }
     }
 
     fun setMeshPreset(preset: String) {

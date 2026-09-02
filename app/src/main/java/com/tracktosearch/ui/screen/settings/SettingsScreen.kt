@@ -63,6 +63,7 @@ import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.SyncAlt
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.Verified
+import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -118,6 +119,7 @@ import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.hasListScrolled
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.R
@@ -125,6 +127,8 @@ import com.tracktosearch.data.local.CooldownStatus
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
+import com.tracktosearch.ui.haptic.HapticModeSummary
+import com.tracktosearch.ui.haptic.hapticModeSummary
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.CloudThemeManager
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
@@ -369,6 +373,7 @@ fun SettingsScreen(
     var showAccentColorDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showDefaultTabDialog by remember { mutableStateOf(false) }
+    var showHapticDialog by remember { mutableStateOf(false) }
     var showChangelogDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showDoubanLogoutDialog by remember { mutableStateOf(false) }
@@ -398,6 +403,25 @@ fun SettingsScreen(
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(intent)
+    }
+
+    // 触感：系统总开关与有无马达在每次回到前台重读 —— 用户看到「系统已关闭触感」
+    // 大概就会去系统设置打开再切回来，那正是这句提示该消失的时刻。
+    LifecycleResumeEffect(Unit) {
+        viewModel.refreshHapticSystemState()
+        onPauseOrDispose { }
+    }
+
+    // 跳系统「声音与振动」页。ACTION_SOUND_SETTINGS 是 API 1 的公开常量，
+    // 但个别 ROM 拆过这个页面，拿不到就静默放弃 —— 提示文案本身已经把原因说清楚了，
+    // 弹一句「打不开」只是再添一层噪音。
+    val openSystemSoundSettings: () -> Unit = {
+        runCatching {
+            context.startActivity(
+                Intent(android.provider.Settings.ACTION_SOUND_SETTINGS)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }
     }
 
     val showUpdateDialog by viewModel.showUpdateDialog.collectAsStateWithLifecycle()
@@ -586,7 +610,8 @@ fun SettingsScreen(
                     onThemeClick = { showThemeDialog = true },
                     onAccentColorClick = { showAccentColorDialog = true },
                     onLanguageClick = { showLanguageDialog = true },
-                    onDefaultTabClick = { showDefaultTabDialog = true }
+                    onDefaultTabClick = { showDefaultTabDialog = true },
+                    onHapticClick = { showHapticDialog = true }
                 )
             }
 
@@ -914,6 +939,22 @@ fun SettingsScreen(
                 showDefaultTabDialog = false
             },
             onDismiss = { showDefaultTabDialog = false }
+        )
+    }
+
+    // 触感档位对话框：档位来自 DataStore，设备限制来自 resume 时重读的系统状态
+    if (showHapticDialog) {
+        val currentHapticMode by viewModel.hapticMode.collectAsStateWithLifecycle()
+        val hapticSystemState by viewModel.hapticSystemState.collectAsStateWithLifecycle()
+        HapticModeSelectionDialog(
+            currentMode = currentHapticMode,
+            systemState = hapticSystemState,
+            onModeSelected = {
+                viewModel.setHapticMode(it)
+                showHapticDialog = false
+            },
+            onOpenSystemSettings = openSystemSoundSettings,
+            onDismiss = { showHapticDialog = false }
         )
     }
 
@@ -1645,6 +1686,45 @@ private fun SplashQuoteSwitchCard(
 }
 
 /**
+ * 触感反馈档位卡片（外观分组下，独占一行）。
+ *
+ * 档位与设备状态都在本函数内部收集：切换只重组本卡片。
+ *
+ * 副标题不是固定的说明文案，而是 [hapticModeSummary] 算出来的那一句 ——
+ * 没马达或系统总开关关着时，回显「增强」是在骗人。
+ *
+ * 与同组的两个开关卡片不同，这里**不额外调 performHaptic**：
+ * [SettingsItemCard] 自己的 clickable 已经发过一记，外面再发一次就是同一常量背靠背两下
+ * （`SharedTransitionSwitchCard` 与 `SplashQuoteSwitchCard` 正是这个毛病，归 T4 一起清）。
+ */
+@Composable
+private fun HapticModeCard(
+    viewModel: SettingsViewModel,
+    onClick: () -> Unit,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
+) {
+    val mode by viewModel.hapticMode.collectAsStateWithLifecycle()
+    val systemState by viewModel.hapticSystemState.collectAsStateWithLifecycle()
+    SettingsItemCard(
+        icon = Icons.Rounded.Vibration,
+        title = stringResource(R.string.settings_haptic),
+        subtitle = hapticSummaryText(hapticModeSummary(mode, systemState)),
+        onClick = onClick,
+        containerColor = containerColor
+    )
+}
+
+/** 触感副标题：五种互斥情况各一句，映射本身穷举、不写 else */
+@Composable
+private fun hapticSummaryText(summary: HapticModeSummary): String = when (summary) {
+    HapticModeSummary.NO_VIBRATOR -> stringResource(R.string.settings_haptic_no_vibrator)
+    HapticModeSummary.SYSTEM_DISABLED -> stringResource(R.string.settings_haptic_system_disabled)
+    HapticModeSummary.FOLLOW_SYSTEM -> stringResource(R.string.settings_haptic_follow_system)
+    HapticModeSummary.OFF -> stringResource(R.string.settings_haptic_off)
+    HapticModeSummary.BOOST -> stringResource(R.string.settings_haptic_boost)
+}
+
+/**
  * 外观分组 item：主题/语言/默认标签页的当前值在本函数内部收集，
  * 值变化（或顶层任意重组）只影响本 item，不波及 LazyColumn 其他 item。
  * 顶层仍保留同名收集供主题/语言/默认页三个对话框使用（低频变化，双收集无碍）。
@@ -1657,7 +1737,8 @@ private fun AppearanceGroupItem(
     onThemeClick: () -> Unit,
     onAccentColorClick: () -> Unit,
     onLanguageClick: () -> Unit,
-    onDefaultTabClick: () -> Unit
+    onDefaultTabClick: () -> Unit,
+    onHapticClick: () -> Unit
 ) {
     val currentTheme by viewModel.themeMode.collectAsStateWithLifecycle()
     val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
@@ -1737,6 +1818,12 @@ private fun AppearanceGroupItem(
         // 开屏每日台词开关(默认开启):关闭后系统场记板结束直接进主页
         SplashQuoteSwitchCard(
             viewModel = viewModel,
+            containerColor = Color.Transparent
+        )
+        // 触感反馈三档(默认跟随系统):点开选档位，副标题回显当前档或环境限制
+        HapticModeCard(
+            viewModel = viewModel,
+            onClick = onHapticClick,
             containerColor = Color.Transparent
         )
     }

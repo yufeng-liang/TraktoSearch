@@ -63,6 +63,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
+import com.tracktosearch.ui.haptic.HapticMode
+import com.tracktosearch.ui.haptic.HapticModeSummary
+import com.tracktosearch.ui.haptic.HapticSystemState
+import com.tracktosearch.ui.haptic.hapticModeSummary
 import com.tracktosearch.ui.theme.GlassVariant
 import com.tracktosearch.ui.theme.MeshPreset
 import com.tracktosearch.ui.theme.VisualEffectMode
@@ -142,6 +146,117 @@ private fun ThemeOptionRow(
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(label)
+    }
+}
+
+/** 触感三档选择对话框：跟随系统 / 关闭 / 增强 */
+@Composable
+internal fun HapticModeSelectionDialog(
+    currentMode: HapticMode,
+    systemState: HapticSystemState,
+    onModeSelected: (HapticMode) -> Unit,
+    onOpenSystemSettings: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        title = { Text(stringResource(R.string.settings_haptic)) },
+        text = {
+            // 三行都带一句说明，加上底部可能出现的限制提示，小屏放不下，给一条竖向滚动
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                HapticModeOptionRow(
+                    label = stringResource(R.string.settings_haptic_follow_system),
+                    description = stringResource(R.string.settings_haptic_follow_system_desc),
+                    selected = currentMode == HapticMode.FOLLOW_SYSTEM,
+                    onClick = { onModeSelected(HapticMode.FOLLOW_SYSTEM) }
+                )
+                HapticModeOptionRow(
+                    label = stringResource(R.string.settings_haptic_off),
+                    description = stringResource(R.string.settings_haptic_off_desc),
+                    selected = currentMode == HapticMode.OFF,
+                    onClick = { onModeSelected(HapticMode.OFF) }
+                )
+                HapticModeOptionRow(
+                    label = stringResource(R.string.settings_haptic_boost),
+                    description = stringResource(R.string.settings_haptic_boost_desc),
+                    selected = currentMode == HapticMode.BOOST,
+                    onClick = { onModeSelected(HapticMode.BOOST) }
+                )
+                // 限制提示复用 hapticModeSummary 的判定，不在这里重写一遍优先级：
+                // 「没马达」压过「用户自己关了」压过「系统总开关关了」那三条顺序有单测钉着
+                when (hapticModeSummary(currentMode, systemState)) {
+                    HapticModeSummary.NO_VIBRATOR -> HapticLimitNotice(
+                        text = stringResource(R.string.settings_haptic_no_vibrator)
+                    )
+                    HapticModeSummary.SYSTEM_DISABLED -> HapticLimitNotice(
+                        text = stringResource(R.string.settings_haptic_system_disabled),
+                        actionLabel = stringResource(R.string.settings_haptic_open_system_settings),
+                        onAction = onOpenSystemSettings
+                    )
+                    else -> Unit
+                }
+            }
+        },
+        confirmButton = {}
+    )
+}
+
+/**
+ * 触感档位单选行。
+ *
+ * 与 [ThemeOptionRow] 唯一的区别是**点这里不发触感**：选「关闭」那一下还震一记，
+ * 用户会以为设置没生效；而旧的 `performHaptic` 通道读不到这个档位，做不到「选关闭就别震」。
+ * 想要「选完立刻试听一下」得走新引擎（`AppHaptics` 会自己遵守档位），那是 T3 接线之后的事。
+ */
+@Composable
+private fun HapticModeOptionRow(
+    label: String,
+    description: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Spacer(modifier = Modifier.width(8.dp))
+        Column {
+            Text(label)
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/**
+ * 档位之外的环境限制提示：没马达、或系统总开关关着。
+ *
+ * 摆出来是因为这两种情况下用户选的档位一点效果都没有 —— 不说，就只能看成应用坏了。
+ * [onAction] 只在能引导用户去解决时给（系统开关关着可以去系统设置打开；没马达无解）。
+ */
+@Composable
+private fun HapticLimitNotice(
+    text: String,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null
+) {
+    Column(modifier = Modifier.padding(top = 8.dp)) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error
+        )
+        if (actionLabel != null && onAction != null) {
+            TextButton(onClick = onAction) { Text(actionLabel) }
+        }
     }
 }
 
