@@ -5,8 +5,6 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -52,6 +50,9 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.util.PosterColorExtractor
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.hapticCombinedClickable
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -205,16 +206,18 @@ fun MovieCard(
             .scale(scale)
             .then(
                 if (onLongClick != null) {
-                    Modifier.combinedClickable(
+                    Modifier.hapticCombinedClickable(
                         interactionSource = interactionSource,
                         indication = null,
+                        semantic = HapticSemantic.LIGHT_TAP,
                         onClick = wrappedOnClick,
                         onLongClick = onLongClick
                     )
                 } else {
-                    Modifier.clickable(
+                    Modifier.hapticClickable(
                         interactionSource = interactionSource,
                         indication = null,
+                        semantic = HapticSemantic.LIGHT_TAP,
                         onClick = wrappedOnClick
                     )
                 }

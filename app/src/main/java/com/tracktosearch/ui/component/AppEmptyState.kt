@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 
 /**
  * 全 App 统一的空态，视觉沿用「我的」页四种空态（WatchlistScreen）的既有排版：
@@ -37,6 +38,7 @@ fun AppEmptyState(
     primaryActionLabel: String? = null,
     onPrimaryAction: (() -> Unit)? = null
 ) {
+    val haptics = rememberAppHaptics()
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -68,7 +70,12 @@ fun AppEmptyState(
         }
         if (primaryActionLabel != null && onPrimaryAction != null) {
             Spacer(modifier = Modifier.height(12.dp))
-            TextButton(onClick = onPrimaryAction) {
+            TextButton(
+                onClick = {
+                    haptics.tap()
+                    onPrimaryAction()
+                }
+            ) {
                 Text(primaryActionLabel)
             }
         }

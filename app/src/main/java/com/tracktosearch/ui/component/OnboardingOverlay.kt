@@ -45,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import kotlin.math.roundToInt
 
 /** 气泡高度还没量到时的兜底值：仅用于首帧定位，量到真实高度后立即换掉。 */
@@ -71,6 +72,7 @@ fun OnboardingOverlay(
 ) {
     var currentStep by remember { mutableIntStateOf(0) }
     val totalSteps = targetRects.size
+    val haptics = rememberAppHaptics()
 
     // 完成回调用 LaunchedEffect 包裹,避免在组合体内直接调用副作用(每次重组都触发)
     if (currentStep >= totalSteps) {
@@ -221,6 +223,7 @@ fun OnboardingOverlay(
                     if (currentStep > 0) {
                         TextButton(
                             onClick = {
+                                haptics.lightTap()
                                 currentStep--
                                 onStepChanged(currentStep)
                             },
@@ -231,7 +234,10 @@ fun OnboardingOverlay(
                         Spacer(modifier = Modifier.width(4.dp))
                     }
                     OutlinedButton(
-                        onClick = onSkip,
+                        onClick = {
+                            haptics.lightTap()
+                            onSkip()
+                        },
                         contentPadding = ButtonDefaults.ContentPadding
                     ) {
                         Text(stringResource(R.string.onboarding_skip))
@@ -239,6 +245,7 @@ fun OnboardingOverlay(
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = {
+                            haptics.tap()
                             currentStep++
                             onStepChanged(currentStep)
                         },

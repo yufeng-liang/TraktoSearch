@@ -34,14 +34,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeSourceSelection
@@ -169,11 +167,12 @@ private fun ScrollToTopButtonContent(
     sourceSelection: HazeSourceSelection,
     scene: GlassScene
 ) {
-    val view = LocalView.current
     val arrowTint = MaterialTheme.colorScheme.primary
     // 整颗回顶按钮此前没有无障碍标签：图标是 Canvas 画的箭头，读屏只能读出「按钮」
     val backToTopDescription = stringResource(R.string.cd_back_to_top)
-    val onClickWithHaptic = { view.performHaptic(HapticType.TICK); onClick() }
+    val haptics = rememberAppHaptics()
+    // 下面两条渲染分支互斥，共用这一份包装，一次点击只发一记
+    val onClickWithHaptic = { haptics.lightTap(); onClick() }
     val interactionSource = remember { MutableInteractionSource() }
     if (hazeState != null) {
         val resolvedHazeStyle = resolveScrollToTopHazeStyle(

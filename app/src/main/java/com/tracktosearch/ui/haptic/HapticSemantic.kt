@@ -12,8 +12,10 @@ package com.tracktosearch.ui.haptic
  * `docs/superpowers/plans/2026-09-01-haptics-overhaul.md` 的「语义词表」一节。
  * 本文件只定义语义与轻重次序，刻意不含任何平台常量，因此可以纯 JVM 单测。
  *
- * 长按刻意不入表：`combinedClickable` 在回调 `onLongClick` 之前已自行发过一次 `LongPress`，
- * 业务代码再补一记就是同一常量背靠背两次。
+ * 长按没有单独一档：[DRAG_START]（「抓住了」）就是它的语义，长按进入拖动本来也是同一件事。
+ * 长按那一记由 `Modifier.hapticCombinedClickable` 发，它固定传 `hapticFeedbackEnabled = false`
+ * 关掉 `combinedClickable` 内建的那记 `LongPress` —— 不关就是同一常量背靠背两次，
+ * 而且内建那记是硬编码常量，走不到厂商预置效果，也不受三档开关管。
  */
 enum class HapticSemantic {
     /** 普通按钮、可点卡片。实心的一击，通用点击里最重的一档。 */

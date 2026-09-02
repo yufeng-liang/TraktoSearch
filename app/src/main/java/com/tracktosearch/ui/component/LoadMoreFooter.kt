@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import kotlinx.coroutines.delay
 
 enum class LoadMoreFooterState { Loading, Error, Complete, Hidden }
@@ -39,6 +40,7 @@ fun LoadMoreFooter(
     modifier: Modifier = Modifier
 ) {
     val isInspectionMode = LocalInspectionMode.current
+    val haptics = rememberAppHaptics()
     var visible by remember { mutableStateOf(true) }
     LaunchedEffect(state) {
         visible = state != LoadMoreFooterState.Hidden
@@ -67,7 +69,12 @@ fun LoadMoreFooter(
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(stringResource(R.string.common_load_more_loading), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                LoadMoreFooterState.Error -> TextButton(onClick = onRetry) {
+                LoadMoreFooterState.Error -> TextButton(
+                    onClick = {
+                        haptics.tap()
+                        onRetry()
+                    }
+                ) {
                     Text(
                         text = stringResource(R.string.common_load_more_failed),
                         color = MaterialTheme.colorScheme.error

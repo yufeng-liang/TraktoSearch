@@ -55,9 +55,9 @@ import kotlinx.coroutines.flow.StateFlow
  * 本类刻意不自己包一层懒初始化：那只会把阻塞从「启动时的某个后台线程」挪到
  * 「用户第一次点按钮的主线程」，更糟。
  *
- * 构造期还顺手做两件事。一是调一次 [systemHapticEnabled] 把 `Settings` 的进程内缓存填上；
- * 二是给 backend 焐热 —— 对每层调一次 `isAvailable()`，MIUI 与 OPlus 两层靠这一下把逐 ID
- * 探测甩上它们自己的线程，不焐热的话第一次点击会掉到下一层去。
+ * 构造期还顺手做两件事，按代码里的实际先后：先给 backend 焐热 —— 对每层调一次
+ * `isAvailable()`，MIUI 与 OPlus 两层靠这一下把逐 ID 探测甩上它们自己的线程，不焐热的话
+ * 第一次点击会掉到下一层去；再调一次 [systemHapticEnabled] 把 `Settings` 的进程内缓存填上。
  *
  * 焐热**不是无条件**的：构造期挑可用层的那个 `when` 有两条短路分支，各自跳过一部分。
  * 这是有意的 —— 焐热本身只是省资源的优化，在发不出细腻触感的机器上焐 tier 1 以上毫无意义。
@@ -194,8 +194,13 @@ class AppHaptics(
      * 调用方（彩蛋编排、以后的 `Modifier` 扩展）。
      *
      * 降级规则：某一层 `supports()` 为 true 但 `perform()` 返 false 时**继续往下降级**，
-     * 不是就此放弃 —— 厂商层排队被拒、tier 0 撞上 View 的触感开关都属这一类。
+     * 不是就此放弃 —— 厂商层的单线程队列被拒、tier 1 的 `Vibrator` 中途失效都属这一类。
      * 整条链都没接下就整次调用无声，只留一行 [onMiss]，不抛异常。
+     *
+     * **View 的触感开关不在降级之列**，它在下面第 3 行就把整次调用挡掉了：那道开关是用户设置，
+     * 不是某一层的能力问题，绕开它去试厂商层就等于无视用户。所以
+     * `AospConstantsBackend.perform` 里那句同样的 `isHapticFeedbackEnabled` 判定，
+     * 经本方法进来时永远为真 —— 它挡的是有人绕过本类直接驱动 tier 0 的情况（单测就是这么做的）。
      *
      * @param view tier 0 靠它走 `View.performHapticFeedback`，其余层忽略。
      *   传 null 等于把 tier 0 摘掉，而转子马达机型只剩 tier 0 —— 那种机器上传 null

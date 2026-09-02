@@ -32,6 +32,7 @@ import com.tracktosearch.data.util.CrashLogUploader
 import com.tracktosearch.data.util.CrashPromptDecision
 import com.tracktosearch.data.util.UploadState
 import com.tracktosearch.data.util.UploadToastPolicy
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.util.showToast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -64,6 +65,7 @@ fun CrashReportDialogHost(
     var lastUploadState by remember { mutableStateOf<UploadState?>(null) }
     val uploadState by crashLogUploader.uploadState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
+    val haptics = rememberAppHaptics()
 
     // 启动决策：读崩溃计数与授权状态（一次性）
     LaunchedEffect(Unit) {
@@ -126,6 +128,7 @@ fun CrashReportDialogHost(
             text = { Text(stringResource(R.string.crash_auth_dialog_message)) },
             confirmButton = {
                 TextButton(onClick = {
+                    haptics.tap()
                     // 乐观切换上传中，避免关闭后再弹的闪烁空窗
                     dialogKind = DialogKind.Uploading
                     scope.launch {
@@ -136,6 +139,7 @@ fun CrashReportDialogHost(
             },
             dismissButton = {
                 TextButton(onClick = {
+                    haptics.lightTap()
                     dialogVisible = false
                     scope.launch {
                         crashLogStorage.setPrompted(true)
@@ -177,11 +181,15 @@ fun CrashReportDialogHost(
             },
             confirmButton = {
                 TextButton(onClick = {
+                    haptics.tap()
                     scope.launch { crashLogUploader.uploadPendingLogs() }
                 }) { Text(stringResource(R.string.crash_upload_retry)) }
             },
             dismissButton = {
-                TextButton(onClick = { dialogVisible = false }) {
+                TextButton(onClick = {
+                    haptics.lightTap()
+                    dialogVisible = false
+                }) {
                     Text(stringResource(R.string.crash_dialog_cancel))
                 }
             },

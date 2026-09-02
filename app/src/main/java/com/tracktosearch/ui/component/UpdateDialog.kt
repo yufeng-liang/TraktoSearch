@@ -69,6 +69,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.repository.UpdateInfo
 import com.tracktosearch.data.util.ApkDownloader
 import com.tracktosearch.data.util.ApkInstaller
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.util.toUserMessage
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -497,8 +498,12 @@ private fun DownloadProgressContent(state: DownloadState.Downloading) {
 /** 主按钮：48dp 高、14dp 圆角 */
 @Composable
 private fun PrimaryButton(text: String, onClick: () -> Unit) {
+    val haptics = rememberAppHaptics()
     Button(
-        onClick = onClick,
+        onClick = {
+            haptics.tap()
+            onClick()
+        },
         modifier = Modifier
             .fillMaxWidth()
             .height(48.dp),
@@ -515,8 +520,12 @@ private fun PrimaryButton(text: String, onClick: () -> Unit) {
 /** 次按钮：44dp 高、14dp 圆角，弱于主按钮形成层次 */
 @Composable
 private fun SecondaryButton(text: String, onClick: () -> Unit) {
+    val haptics = rememberAppHaptics()
     OutlinedButton(
-        onClick = onClick,
+        onClick = {
+            haptics.lightTap()
+            onClick()
+        },
         modifier = Modifier
             .fillMaxWidth()
             .height(44.dp),

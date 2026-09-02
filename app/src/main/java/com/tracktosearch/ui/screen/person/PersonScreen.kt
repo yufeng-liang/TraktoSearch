@@ -45,7 +45,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -73,9 +72,7 @@ import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.zoomSharedSource
-import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.ToastEffect
-import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
@@ -125,7 +122,6 @@ fun PersonScreen(
         ).count { it },
         loadingItemWeight = 4
     )
-    val view = LocalView.current
     // 全部作品展开状态
     var showAllMovies by rememberSaveable { mutableStateOf(false) }
     var showAllTvShows by rememberSaveable { mutableStateOf(false) }
@@ -445,7 +441,6 @@ fun PersonScreen(
                     val personIsDark = isAppDarkTheme()
                     NeumorphicIconButton(
                         onClick = {
-                            view.performHaptic(HapticType.TICK)
                             onBack()
                         },
                         isDark = personIsDark,

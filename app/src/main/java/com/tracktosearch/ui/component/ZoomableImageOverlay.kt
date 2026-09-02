@@ -44,6 +44,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import kotlinx.coroutines.launch
 import net.engawapg.lib.zoomable.rememberZoomState
 import net.engawapg.lib.zoomable.zoomable
@@ -77,6 +80,7 @@ internal fun ZoomableImageOverlay(
     exit: ExitTransition = fadeOut(animationSpec = tween(200)),
 ) {
     val scope = rememberCoroutineScope()
+    val haptics = rememberAppHaptics()
     val safeInitial = initialIndex.coerceIn(0, (images.size - 1).coerceAtLeast(0))
     val pagerState = rememberPagerState(initialPage = safeInitial, pageCount = { images.size })
     val zoomState = rememberZoomState()
@@ -117,9 +121,10 @@ internal fun ZoomableImageOverlay(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clickable(
+                    .hapticClickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
+                        semantic = HapticSemantic.LIGHT_TAP,
                         onClick = {
                             if (zoomState.scale > 1f) scope.launch { zoomState.changeScale(1f, Offset.Zero) }
                             else onDismiss()
@@ -147,6 +152,9 @@ internal fun ZoomableImageOverlay(
                             .zoomable(
                                 zoomState,
                                 onTap = {
+                                    // 与外层「点背景退出」那个面同一记 LIGHT_TAP：两处行为完全一样
+                                    // （已放大先复位，否则退出），落点不同却手感不同才是怪的
+                                    haptics.lightTap()
                                     if (zoomState.scale > 1f) {
                                         scope.launch { zoomState.changeScale(1f, Offset.Zero) }
                                     } else {
@@ -179,7 +187,10 @@ internal fun ZoomableImageOverlay(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onDismiss) {
+                IconButton(onClick = {
+                    haptics.lightTap()
+                    onDismiss()
+                }) {
                     Box(
                         modifier = Modifier
                             .size(40.dp)
@@ -216,7 +227,10 @@ internal fun ZoomableImageOverlay(
                         if (saved) R.string.cd_saved else R.string.cd_save
                     )
                     IconButton(
-                        onClick = { onSave(idx) },
+                        onClick = {
+                            haptics.tap()
+                            onSave(idx)
+                        },
                         modifier = Modifier.semantics { contentDescription = saveDescription }
                     ) {
                         Box(

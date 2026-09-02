@@ -2,8 +2,6 @@ package com.tracktosearch.ui.component
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.size
@@ -20,6 +18,8 @@ import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.LottieConstants
 import com.airbnb.lottie.compose.animateLottieCompositionAsState
 import com.airbnb.lottie.compose.rememberLottieComposition
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticCombinedClickable
 
 /**
  * 白云彩蛋组件 — 替换搜索页的静态白云图标
@@ -68,10 +68,12 @@ fun CloudEasterEgg(
         isPlaying = isCurrentTab
     )
 
-    @OptIn(ExperimentalFoundationApi::class)
-    fun Modifier.cloudGesture(): Modifier = combinedClickable(
+    // hapticCombinedClickable 是 @Composable，局部 fun 装不下（局部 fun 不能标 @Composable），
+    // 所以改成在 composable 体内直接算好的 Modifier 值
+    val cloudGesture = Modifier.hapticCombinedClickable(
         interactionSource = interactionSource,
         indication = null,
+        semantic = HapticSemantic.LIGHT_TAP,
         onClick = onCloudClicked,
         onLongClick = onLongClick
     )
@@ -82,6 +84,6 @@ fun CloudEasterEgg(
         modifier = modifier
             .size(size)
             .scale(scale)
-            .cloudGesture()
+            .then(cloudGesture)
     )
 }

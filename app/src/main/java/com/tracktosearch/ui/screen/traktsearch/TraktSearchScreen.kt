@@ -1263,7 +1263,6 @@ private fun DiskSearchContent(
                             index = index,
                             onClick = { onItemClick(item) },
                             onLongClick = {
-                                view.performHaptic(HapticType.HEAVY_CLICK)
                                 copyResourceLink(context, item)
                             }
                         )

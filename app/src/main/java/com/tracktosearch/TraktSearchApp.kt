@@ -20,6 +20,7 @@ import com.tracktosearch.data.remote.ImageDownloadProgress
 import com.tracktosearch.data.util.DnsCache
 import com.tracktosearch.data.util.StartupTrace
 import com.tracktosearch.data.worker.SplashPosterScheduler
+import com.tracktosearch.ui.haptic.AppHaptics
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -48,6 +49,9 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     @Inject lateinit var appDatabaseProvider: Provider<AppDatabase>
     // 惰性 Provider：注入本身不触发 EncryptedSharedPreferences 初始化，仅在使用时才解析
     @Inject lateinit var doubanAuthStorageProvider: Provider<DoubanAuthStorage>
+    // 惰性 Provider：解析它会跑完 HapticCapabilities.probe（getSystemService、到 VibratorService
+    // 的 IPC、三次类查找）与五个 backend 的构造，全是阻塞调用，详见 HapticModule 的类注释
+    @Inject lateinit var appHapticsProvider: Provider<AppHaptics>
 
     // CrashLogUploader 已改为 Hilt 单例：走网关 /api/crash-logs 代理，客户端不持有上报密钥。
 
@@ -90,6 +94,16 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
                     // 预热失败不影响启动：后续主线程首次访问数据库时仍会按需创建
                     StartupTrace.mark("application.db_warmup.failed", "err=${e.javaClass.simpleName}")
                 } finally {
+                    // 触感引擎预热：排在数据库之后。数据库在 AppNavigation 组合期就要用上，是关键路径；
+                    // 触感最早也要等开屏台词层可点时才用得到，晚几十毫秒无所谓。
+                    // 不预热的后果是第一次点击时在主线程上跑完整套探测，是卡顿而不是错误
+                    // （ComposeHaptics 会兜住），所以这里也只捕获不重试。
+                    try {
+                        appHapticsProvider.get()
+                        StartupTrace.mark("application.haptic_warmup.done")
+                    } catch (e: Exception) {
+                        StartupTrace.mark("application.haptic_warmup.failed", "err=${e.javaClass.simpleName}")
+                    }
                     dbWarmupExecutor.shutdown()
                 }
             }

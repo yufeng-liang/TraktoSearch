@@ -697,7 +697,6 @@ fun DetailScreen(
                                         openResourceLink(context, item)
                                     },
                                     onLongClick = {
-                                        view.performHaptic(HapticType.HEAVY_CLICK)
                                         copyResourceLink(context, item)
                                     },
                                     index = index
@@ -990,7 +989,7 @@ fun DetailScreen(
             CompositionLocalProvider(LocalBackdrop provides null) {
             // 返回按钮：与详情页其他操作统一使用拟态玻璃，并保留真实 Haze 背景采样。
             NeumorphicIconButton(
-                onClick = { view.performHaptic(HapticType.TICK); onBack(uiState.watchlistChanged, uiState.watchedChanged) },
+                onClick = { onBack(uiState.watchlistChanged, uiState.watchedChanged) },
                 isDark = detailIsDark,
                 modifier = Modifier
                     .statusBarsPadding()
@@ -1026,7 +1025,6 @@ fun DetailScreen(
                     val view = LocalView.current
                     NeumorphicIconButton(
                         onClick = {
-                            view.performHaptic(HapticType.CLICK)
                             viewModel.retryDoubanSync()
                         },
                         isDark = detailIsDark,

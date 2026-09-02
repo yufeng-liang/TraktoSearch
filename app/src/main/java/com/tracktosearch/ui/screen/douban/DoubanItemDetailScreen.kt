@@ -1410,11 +1410,9 @@ fun DoubanItemDetailScreen(
                                             sourceName = uiState.customSourceNames[item.source],
                                             isViewed = false,
                                             onClick = {
-                                                view.performHaptic(HapticType.CLICK)
                                                 openResourceLink(context, item)
                                             },
                                             onLongClick = {
-                                                view.performHaptic(HapticType.HEAVY_CLICK)
                                                 copyResourceLink(context, item)
                                             },
                                             index = index
@@ -1518,7 +1516,7 @@ fun DoubanItemDetailScreen(
             CompositionLocalProvider(LocalBackdrop provides null) {
             // 返回按钮：使用与正常详情页一致的拟态玻璃和 ultraThin Haze。
             NeumorphicIconButton(
-                onClick = { view.performHaptic(HapticType.TICK); handleBack() },
+                onClick = { handleBack() },
                 isDark = isDarkTheme,
                 modifier = Modifier
                     .statusBarsPadding()
@@ -1568,7 +1566,7 @@ fun DoubanItemDetailScreen(
                     menuWidth = markMenuWidth,
                     anchor = {
                         NeumorphicIconButton(
-                            onClick = { view.performHaptic(HapticType.CLICK); showMarkMenu = true },
+                            onClick = { showMarkMenu = true },
                             isDark = isDarkTheme,
                             hazeState = hazeState,
                             hazeStyle = dev.chrisbanes.haze.blur.materials.HazeMaterials.ultraThin(),
@@ -1699,7 +1697,6 @@ fun DoubanItemDetailScreen(
                 val shareDoubanRatingLabel = stringResource(R.string.share_douban_rating)
                 NeumorphicIconButton(
                     onClick = {
-                        view.performHaptic(HapticType.TICK)
                         val f = uiState.failure
                         if (f != null) {
                             val shareText = buildString {

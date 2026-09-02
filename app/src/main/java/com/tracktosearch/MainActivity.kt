@@ -32,6 +32,8 @@ import com.tracktosearch.data.remote.trakt.TraktConnectionState
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.StartupTrace
 import com.tracktosearch.ui.component.CrashReportDialogHost
+import com.tracktosearch.ui.haptic.AppHaptics
+import com.tracktosearch.ui.haptic.LocalAppHaptics
 import com.tracktosearch.ui.navigation.AppNavigation
 import com.tracktosearch.ui.navigation.NotificationNavigator
 import com.tracktosearch.ui.navigation.NotificationTarget
@@ -49,6 +51,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import javax.inject.Inject
+import javax.inject.Provider
 
 // OAuth 回调结果在 MainActivity 与 LoginViewModel 之间共享
 // 使用 StateFlow 替代轮询，避免 LoginScreen 每 300ms 检查
@@ -148,6 +151,12 @@ class MainActivity : AppCompatActivity() {
     // AppNavigation 通过其 StateFlow 派生 isLoggedIn / isDoubanMode 等 UI 状态
     @Inject
     lateinit var sessionModeManager: SessionModeManager
+
+    // 触感引擎的惰性入口，往组合树里 provide 用（见 setContent 里的 LocalAppHaptics）。
+    // 必须是 Provider：直接注入 AppHaptics 会把整套能力探测同步跑在 Activity 的注入点上，
+    // 那正是主线程。真正的 get() 由 TraktSearchApp 的启动预热在后台线程先做掉。
+    @Inject
+    lateinit var appHapticsProvider: Provider<AppHaptics>
 
     // 提供滚动到顶部能力
     private val scrollToTopProvider = ScrollToTopProvider()
@@ -362,7 +371,14 @@ class MainActivity : AppCompatActivity() {
                 visualEffectMode = visualEffectMode,
                 glassVariant = glassVariant
             ) {
-                CompositionLocalProvider(LocalScrollToTopProvider provides scrollToTopProvider) {
+                CompositionLocalProvider(
+                    LocalScrollToTopProvider provides scrollToTopProvider,
+                    // 递 Provider 而不是 AppHaptics 实例：解析它是阻塞的，交给
+                    // TraktSearchApp 的启动预热在后台线程做掉。位置必须在这里而不是
+                    // AppNavigation 内部 —— CrashReportDialogHost 与 SplashQuoteOverlay
+                    // 是 AppNavigation 的兄弟节点，也要能读到。
+                    LocalAppHaptics provides appHapticsProvider,
+                ) {
                 // Splash 完成后展示主导航
                 if (isReady) {
                     var currentDestination by remember { mutableStateOf(startDest) }

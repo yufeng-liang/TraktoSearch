@@ -424,7 +424,6 @@ internal fun DetailHeaderContent(
                             enabled = !isMarkingWatchlist,
                             isLoading = isMarkingWatchlist,
                             onClick = {
-                                view.performHaptic(HapticType.TICK)
                                 onToggleWatchlist()
                             }
                         ),
@@ -435,7 +434,6 @@ internal fun DetailHeaderContent(
                             enabled = !isMarkingWatched,
                             isLoading = isMarkingWatched,
                             onClick = {
-                                view.performHaptic(HapticType.TICK)
                                 onToggleWatched()
                             }
                         ),
@@ -446,7 +444,6 @@ internal fun DetailHeaderContent(
                             enabled = !uiState.isRating,
                             isLoading = uiState.isRating,
                             onClick = {
-                                view.performHaptic(HapticType.TICK)
                                 onShowRatingDialog()
                             }
                         )
