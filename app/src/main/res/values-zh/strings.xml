@@ -20,6 +20,8 @@
 
     <!-- Ticket Machine -->
     <string name="machine_status_ready">请输入取票码</string>
+    <string name="machine_status_verifying">正在核对…</string>
+    <string name="machine_detail_verifying">○ 正在核对取票码 · 请稍候</string>
     <string name="machine_status_printing">正在打印…</string>
     <string name="machine_status_collected">已取票</string>
     <string name="machine_detail_collected">○ 已出票 · 请在票上选择入场方式</string>

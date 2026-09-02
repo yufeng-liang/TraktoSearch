@@ -20,6 +20,8 @@
 
     <!-- Ticket Machine -->
     <string name="machine_status_ready">ENTER CODE</string>
+    <string name="machine_status_verifying">CHECKING…</string>
+    <string name="machine_detail_verifying">○ Checking your ticket code · One moment</string>
     <string name="machine_status_printing">PRINTING…</string>
     <string name="machine_status_collected">COLLECTED</string>
     <string name="machine_detail_collected">○ Ticket printed · Choose an entry option on your ticket</string>

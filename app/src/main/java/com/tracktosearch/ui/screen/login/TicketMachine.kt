@@ -284,7 +284,8 @@ private const val BULB_ALPHA_GAMMA = 0.6f
  *   到 17 字（360dp 屏），而最长的那条引导是 22 字
  * @param keypadEnabled 已取票态整块键盘淡成残影并从读屏树里摘掉，但仍占着面板 ——
  *   机器不该只剩半截
- * @param isPrinting 出票动画进行中。跑马灯在这段时间一直跑，其余时候只在进场时跑三圈
+ * @param phase 机器此刻处于哪一档，见 [MachinePhase]。屏上墨色、六格抖动、取票键上的进度圈、
+ *   顶边那排灯全从它派生：原先是三个互不排斥的布尔各自判一遍，加一档状态很容易只改到其中一处
  * @param ticketSlot 出票口里的内容，票从这里长出来
  */
 @Composable
@@ -292,8 +293,7 @@ internal fun TicketMachine(
     code: String,
     statusText: String,
     detailText: String?,
-    statusIsError: Boolean,
-    isLoading: Boolean,
+    phase: MachinePhase,
     keypadEnabled: Boolean,
     submitEnabled: Boolean,
     onDigit: (Char) -> Unit,
@@ -301,7 +301,6 @@ internal fun TicketMachine(
     onPaste: () -> Unit,
     onSubmit: () -> Unit,
     modifier: Modifier = Modifier,
-    isPrinting: Boolean = false,
     codeDescription: String? = null,
     ticketSlot: @Composable () -> Unit = {},
 ) {
@@ -334,7 +333,7 @@ internal fun TicketMachine(
                         true
                     }
                     event.key == Key.Enter || event.key == Key.NumPadEnter -> {
-                        if (submitEnabled && !isLoading) {
+                        if (submitEnabled && phase != MachinePhase.Verifying) {
                             onSubmit()
                             true
                         } else {
@@ -373,14 +372,7 @@ internal fun TicketMachine(
         ) {
             // 顶边跑马灯。影院门头上的那串灯，是这台机器唯一的「氛围」构件；
             // 取票有动静时它同时是状态灯：验码中一直流水，对了整排绿，错了整排红
-            MarqueeBulbs(
-                signal = bulbSignalFor(
-                    isLoading = isLoading,
-                    statusIsError = statusIsError,
-                    isPrinting = isPrinting
-                ),
-                isDarkTheme = isDarkTheme
-            )
+            MarqueeBulbs(signal = bulbSignalFor(phase), isDarkTheme = isDarkTheme)
 
             // 铭牌是压进机壳的一块凹槽加蚀刻小字。不直接印在机壳上：机壳带竖向渐变，
             // 凹槽给这行字一个可控的底，MachinePlateInk 上标的对比度才算得准。
@@ -419,7 +411,11 @@ internal fun TicketMachine(
             }
 
             val displayShape = RoundedCornerShape(4.dp)
-            val displayInk = if (statusIsError) MachineDisplayInkError else MachineDisplayInk
+            val displayInk = if (phase == MachinePhase.Failed) {
+                MachineDisplayInkError
+            } else {
+                MachineDisplayInk
+            }
             // 两行合成一个语义节点整体播报：报错时两行本来就是一句完整的话
             // （「网络不通」+「网络连接失败，请检查网络后重试。」），分开念会变成两条互相重复的通知
             val displaySpeech = listOfNotNull(statusText, detailText).joinToString("，")
@@ -465,8 +461,8 @@ internal fun TicketMachine(
 
             // 错误时六格整体左右抖两下。key 里带 statusText 是为了同一类错误连续发生两次也能重抖
             val shake = remember { Animatable(0f) }
-            LaunchedEffect(statusIsError, statusText) {
-                if (statusIsError) {
+            LaunchedEffect(phase, statusText) {
+                if (phase == MachinePhase.Failed) {
                     listOf(-6f, 6f, -4f, 4f, 0f).forEach { target ->
                         shake.animateTo(target, tween(durationMillis = 45))
                     }
@@ -544,7 +540,7 @@ internal fun TicketMachine(
             }
             Button(
                 onClick = onSubmit,
-                enabled = submitEnabled && !isLoading,
+                enabled = submitEnabled && phase != MachinePhase.Verifying,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 12.dp)
@@ -560,7 +556,7 @@ internal fun TicketMachine(
                     disabledContentColor = MachineCodeInk.copy(alpha = 0.55f)
                 )
             ) {
-                if (isLoading) {
+                if (phase == MachinePhase.Verifying) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
                         strokeWidth = 2.dp,
@@ -781,22 +777,47 @@ internal enum class BulbSignal(internal val glow: BulbGlow?) {
 }
 
 /**
- * 三个互不排斥的界面标志映射到互斥的四档灯。
+ * 取票机此刻处于哪一档。
  *
- * [isLoading] 排在最前，因为请求回来的那一刻它转 false，同时
- * [statusIsError] / [isPrinting] 里恰好有一个转 true —— 验码灯和结果灯的交接没有空档。
- * 反过来把结果排在前面，上一次的红灯会盖住这一次的验码流水：
- * 用户改完码再按取票，`error` 要等新响应回来才清，那段时间整排还红着。
+ * 存在的理由是这一屏有四个消费者要说同一件事：像素屏第一行、第二行、屏上墨色（连带六格抖动）、
+ * 顶边那排灯。四个入参（验码中、有错、正在打印、已取票）互不排斥，四档互斥，
+ * 所以谁盖过谁本身就是设计的一部分 —— 而它们原先各写一遍 `when`，
+ * 加一档状态只改其中一处，就会出现「屏上说正在核对、灯却红着」这种自相矛盾的画面。
  */
-internal fun bulbSignalFor(
+internal enum class MachinePhase { Verifying, Failed, Printing, Collected, Ready }
+
+/**
+ * [isLoading] 排在最前，因为请求回来的那一刻它转 false，同时
+ * [hasError] / [isPrinting] 里恰好有一个转 true —— 验码和结果的交接没有空档。
+ *
+ * 反过来把结果排在前面，上一次的结论会盖住这一次的验码：粘贴失败那个标志不随新请求
+ * 清掉（`AuthViewModel.activate()` 只清 `error`），用户粘贴失败后手输六位再按取票，
+ * 屏上会一直红着「剪贴板没码」，看不出机器已经在验。
+ */
+internal fun machinePhaseOf(
     isLoading: Boolean,
-    statusIsError: Boolean,
+    hasError: Boolean,
     isPrinting: Boolean,
-): BulbSignal = when {
-    isLoading -> BulbSignal.Verifying
-    statusIsError -> BulbSignal.Failure
-    isPrinting -> BulbSignal.Success
-    else -> BulbSignal.Sweep
+    isCollected: Boolean,
+): MachinePhase = when {
+    isLoading -> MachinePhase.Verifying
+    hasError -> MachinePhase.Failed
+    isPrinting -> MachinePhase.Printing
+    isCollected -> MachinePhase.Collected
+    else -> MachinePhase.Ready
+}
+
+/**
+ * 每一档配哪种灯。
+ *
+ * 已取票和平常同归进场那一遍：票已经静态停在出票口了，灯再喊一次是重复
+ * —— 而这一屏的主任务是输入六位码，常驻动画一直分走注意力。
+ */
+internal fun bulbSignalFor(phase: MachinePhase): BulbSignal = when (phase) {
+    MachinePhase.Verifying -> BulbSignal.Verifying
+    MachinePhase.Failed -> BulbSignal.Failure
+    MachinePhase.Printing -> BulbSignal.Success
+    MachinePhase.Collected, MachinePhase.Ready -> BulbSignal.Sweep
 }
 
 /**

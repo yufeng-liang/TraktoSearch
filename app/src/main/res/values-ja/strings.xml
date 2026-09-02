@@ -20,6 +20,8 @@
 
     <!-- Ticket Machine -->
     <string name="machine_status_ready">コード入力</string>
+    <string name="machine_status_verifying">確認中…</string>
+    <string name="machine_detail_verifying">○ コードを確認中 · 少々お待ちください</string>
     <string name="machine_status_printing">印刷中…</string>
     <string name="machine_status_collected">発行完了</string>
     <string name="machine_detail_collected">○ 発行済み · チケットで入場方法を選択</string>

@@ -183,16 +183,33 @@ fun ActivationLoginScreen(
     } else {
         null
     }
-    val machineStatus = when {
-        authError != null -> stringResource(machineStatusString(authError))
-        pasteMissed -> stringResource(R.string.machine_status_clipboard_empty)
-        isPrinting -> stringResource(R.string.machine_status_printing)
-        isActivated -> stringResource(R.string.machine_status_collected)
-        else -> stringResource(R.string.machine_status_ready)
+    // 屏上两行、屏上墨色、六格抖动、顶边那排灯全从这一个档位派生，见 machinePhaseOf：
+    // 原先各判一遍，加一档状态很容易只改到其中一处，屏上说正在核对、灯却还红着
+    val machinePhase = machinePhaseOf(
+        isLoading = authState.isLoading,
+        hasError = authError != null || pasteMissed,
+        isPrinting = isPrinting,
+        isCollected = isActivated,
+    )
+    val machineStatus = when (machinePhase) {
+        MachinePhase.Verifying -> stringResource(R.string.machine_status_verifying)
+        // 报错档有两个来源：服务端返回的错误码，和粘贴时剪贴板里抽不出六位数字
+        MachinePhase.Failed -> if (authError != null) {
+            stringResource(machineStatusString(authError))
+        } else {
+            stringResource(R.string.machine_status_clipboard_empty)
+        }
+        MachinePhase.Printing -> stringResource(R.string.machine_status_printing)
+        MachinePhase.Collected -> stringResource(R.string.machine_status_collected)
+        MachinePhase.Ready -> stringResource(R.string.machine_status_ready)
     }
     // 像素屏第二行放完整引导句。它以前印在机器外面，是因为当时误以为屏宽装不下 ——
     // 实测一行约 25 字（412dp 屏）到 17 字（360dp 屏），而最长的引导是 22 字，装得下。
+    //
+    // 这条链不能照抄第一行的 when(phase)：粘贴失败只有短状态没有长文案（第二行仍留着引导句），
+    // 迁移提示也不占一个档位，它是叠在待输入态上的一句话
     val machineDetail = when {
+        machinePhase == MachinePhase.Verifying -> stringResource(R.string.machine_detail_verifying)
         authError != null -> stringResource(authErrorString(authError))
         authState.requiresMigrationInvite -> stringResource(R.string.auth_migration_invite_hint)
         isActivated -> stringResource(R.string.machine_detail_collected)
@@ -255,8 +272,7 @@ fun ActivationLoginScreen(
                 machineCode = machineCode,
                 machineStatus = machineStatus,
                 machineDetail = machineDetail,
-                statusIsError = authState.error != null || pasteMissed,
-                isLoading = authState.isLoading,
+                machinePhase = machinePhase,
                 keypadEnabled = !isActivated && !authState.isLoading,
                 submitEnabled = authState.inviteCode.length == TICKET_CODE_DIGITS &&
                     !authState.isLoading &&
@@ -270,7 +286,6 @@ fun ActivationLoginScreen(
                     null
                 },
                 codeDescription = machineCodeDescription,
-                isPrinting = isPrinting,
                 scrollState = scrollState,
                 onDigit = authViewModel::appendDigit,
                 onBackspace = authViewModel::deleteLastDigit,
@@ -352,15 +367,14 @@ fun ActivationLoginScreen(
  * @param scrollState 由调用方持有 —— 测试靠 `maxValue == 0` 判断有没有超出一屏
  * @param expiredMessage 授权过期提示，为 null 时不占位
  * @param loginErrorText Trakt 授权失败提示，为 null 时不占位
- * @param isPrinting 出票动画进行中，只用来决定机壳顶边跑马灯跑不跑
+ * @param machinePhase 机器此刻处于哪一档，原样转给 [TicketMachine]
  */
 @Composable
 internal fun ActivationLoginContent(
     machineCode: String,
     machineStatus: String,
     machineDetail: String?,
-    statusIsError: Boolean,
-    isLoading: Boolean,
+    machinePhase: MachinePhase,
     keypadEnabled: Boolean,
     submitEnabled: Boolean,
     expiredMessage: String?,
@@ -373,7 +387,6 @@ internal fun ActivationLoginContent(
     onSubmit: () -> Unit,
     onWhatIsTrakt: () -> Unit,
     modifier: Modifier = Modifier,
-    isPrinting: Boolean = false,
     ticketSlot: @Composable () -> Unit = {},
 ) {
     Column(
@@ -420,8 +433,7 @@ internal fun ActivationLoginContent(
             code = machineCode,
             statusText = machineStatus,
             detailText = machineDetail,
-            statusIsError = statusIsError,
-            isLoading = isLoading,
+            phase = machinePhase,
             keypadEnabled = keypadEnabled,
             submitEnabled = submitEnabled,
             onDigit = onDigit,
@@ -429,7 +441,6 @@ internal fun ActivationLoginContent(
             onPaste = onPaste,
             onSubmit = onSubmit,
             modifier = Modifier.padding(top = if (expiredMessage != null) 14.dp else 0.dp),
-            isPrinting = isPrinting,
             codeDescription = codeDescription,
             ticketSlot = ticketSlot
         )

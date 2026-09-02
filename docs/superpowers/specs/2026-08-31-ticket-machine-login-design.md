@@ -116,6 +116,12 @@ seat = code.substring(4, 6).toInt() % 20 + 1   // 1..20 座
 
 错误不是第四态，而是叠在 `IDLE` 上的一层：像素屏切红字短状态，6 格左右抖两下后清空，机器下方那行显示完整文案。迁移取票码提示（`requiresMigrationInvite`）同样留在 `IDLE`，不占像素屏，与错误文案共用机器下方的文字区域。
 
+> **2026-09-02 补充：验码是一个独立档位，档位判定收成一个纯函数。** 按下取票键到响应回来这一段原先没有任何档位对应 —— 屏上还写着「请输入取票码」，而六格已经填满、键盘已经禁用，取票键上只有一个进度圈在转。现在补一档 `Verifying`：屏上两行换成「正在核对…」／「○ 正在核对取票码 · 请稍候」，顶边跑马灯持续流水黄灯（240ms 一颗，进场那一遍是 650ms）。
+>
+> 与此同时把档位判定从四处各写一遍的 `when` 收成 `machinePhaseOf(isLoading, hasError, isPrinting, isCollected)`，返回 `MachinePhase`（`Verifying` / `Failed` / `Printing` / `Collected` / `Ready`）。像素屏两行、屏上墨色（连带六格抖动）、取票键上的进度圈、跑马灯四个消费者全从它派生，`TicketMachine` 的 `statusIsError` / `isLoading` / `isPrinting` 三个参数也合成这一个。
+>
+> 收拢的理由是一次真实的自相矛盾：`AuthViewModel.activate()` 只清 `error`，不清 `pasteMissed`。粘贴失败后手输六位再按取票，「有错」和「在验码」同时为真 —— 四处各判一遍，就会出现屏上说正在核对、灯却红着、六格还在抖。`Verifying` 排在最前是因为请求回来的那一刻 `isLoading` 转 false，同时 `hasError` / `isPrinting` 里恰好有一个转 true，两档交接没有空档。护栏见 `MachinePhaseTest`。
+
 ## 组件设计
 
 ### 取票机面板
@@ -239,6 +245,7 @@ Composable 只负责把 `Animatable` 的 progress 喂进去。阶跃步数、过
 
 - 像素屏短状态，对应 `authErrorString` 每一个分支，一条不漏
 - `正在打印…`、`已取票`
+- `正在核对…` 与第二行的 `○ 正在核对取票码 · 请稍候`（见下方 2026-09-02 的验码档补充）
 - 票面标签：`ADMIT ONE`、厅、排、座
 - 键盘无障碍描述十二条（数字 0-9、粘贴、退格）
 - 粘贴失败提示
@@ -247,7 +254,7 @@ Composable 只负责把 `Animatable` 的 progress 喂进去。阶跃步数、过
 
 > **2026-09-02 补充：字体子集必须跟着文案走。** 首版子集是为「输入 12 位激活码」一句手工裁的（129 个字形）。像素字体后来成了整台取票机的字体，此后新增的每一个字都静默回退系统字体 —— 而回退字体的字宽不在 12px 网格上，屏上看到的是两个字挤在一起，不是「少了一个字」那种显眼的错。装机截图里「请输**入**取票码」的挤压就是这么来的，「粘贴」键整个不是像素字也是同一个原因。
 >
-> 现在子集由 `scripts/subset-ark-pixel.py` 从 `machine_*` / `auth_error_*` / `auth_migration_invite_hint` / `login_activation_locked` / `login_personal_cinema_access` 这几族字符串反推字符集（336 个字形，46 KB），`PixelFontCoverageTest` 用同一套规则读 TTF 的 cmap 兜底：往显示屏加一句新文案而忘了重跑脚本，会在单测里红。
+> 现在子集由 `scripts/subset-ark-pixel.py` 从 `machine_*` / `auth_error_*` / `auth_migration_invite_hint` / `login_activation_locked` / `login_personal_cinema_access` 这几族字符串反推字符集（337 个字形，46 KB），`PixelFontCoverageTest` 用同一套规则读 TTF 的 cmap 兜底：往显示屏加一句新文案而忘了重跑脚本，会在单测里红。
 >
 > 另有三个字上游 Ark Pixel 12px 根本没有（券 U+5238、換 U+63DB、既 U+65E2，七个变体的 cmap 完全一致，24415 个码位里都缺），所以中文的 `login_activation_locked` 末字由「换取入场券」改为「换票入场」，日文的「発券」一族改为「発行」、「入場券を引き換え」改为「チケットと引きかえ」、「既存の」改为「登録済みの」。谚文仍然全部回退，见上一段。
 

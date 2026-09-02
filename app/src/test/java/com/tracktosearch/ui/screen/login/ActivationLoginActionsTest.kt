@@ -42,6 +42,7 @@ class ActivationLoginActionsTest {
 
     private fun setMachine(
         code: String,
+        phase: MachinePhase = MachinePhase.Ready,
         submitEnabled: Boolean = code.length == 6,
         keypadEnabled: Boolean = true,
         codeDescription: String? = null,
@@ -54,8 +55,7 @@ class ActivationLoginActionsTest {
                     code = code,
                     statusText = "READY",
                     detailText = null,
-                    statusIsError = false,
-                    isLoading = false,
+                    phase = phase,
                     keypadEnabled = keypadEnabled,
                     submitEnabled = submitEnabled,
                     onDigit = onDigit,
@@ -201,6 +201,16 @@ class ActivationLoginActionsTest {
         setTicket()
         composeRule.onNodeWithText("小明").assertIsDisplayed()
         composeRule.onNodeWithText("2026-08-31").assertIsDisplayed()
+    }
+
+    @Test
+    fun `验码期间取票键换成进度圈`() {
+        // 跑马灯在这一档是无限流水，autoAdvance 会一直等它结束。这里只看首帧的静态结果
+        composeRule.mainClock.autoAdvance = false
+        setMachine(code = "492013", phase = MachinePhase.Verifying)
+        // 键面文字还在就说明这一档没接进去
+        composeRule.onAllNodesWithText(context.getString(R.string.machine_submit))
+            .assertCountEquals(0)
     }
 
     @Test

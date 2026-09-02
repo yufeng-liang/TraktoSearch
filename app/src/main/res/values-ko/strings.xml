@@ -20,6 +20,8 @@
 
     <!-- Ticket Machine -->
     <string name="machine_status_ready">코드 입력</string>
+    <string name="machine_status_verifying">확인 중…</string>
+    <string name="machine_detail_verifying">○ 티켓 코드 확인 중 · 잠시만 기다려 주세요</string>
     <string name="machine_status_printing">인쇄 중…</string>
     <string name="machine_status_collected">발권 완료</string>
     <string name="machine_detail_collected">○ 발권 완료 · 티켓에서 입장 방식을 선택</string>
