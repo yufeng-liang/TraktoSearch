@@ -7,10 +7,11 @@ Run from the repository root:
 
 Inputs (committed under docs/previews/swiftie-poster/):
 
-  sky-clean.png  1600x2848  the poster sky with all lettering painted out.
-                            Lossless master; the only source for the shipped sky.
-  9x16.jpg       2160x3840  the untouched poster. Source for two things:
-                            the royal-blue script outlines and the glitter grain.
+  sky-clean.png  1600x2848  the poster sky with all lettering painted out. Lossless
+                            master, tagged "Display P3 Gamut with sRGB Transfer";
+                            the only source for the shipped sky.
+  9x16.jpg       2160x3840  the untouched poster, no colour profile. Source for two
+                            things: the royal-blue script outlines and the glitter grain.
 
 Outputs:
 
@@ -23,12 +24,13 @@ Requires: pillow, numpy, opencv-python.
 
 from __future__ import annotations
 
+import io
 import os
 import sys
 
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageCms
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "docs", "previews", "swiftie-poster")
@@ -44,6 +46,50 @@ KOTLIN = os.path.join(
 # shipping more pixels than this just spends bitrate on blur.
 SKY_WIDTH = 1200
 SKY_QUALITY = 86
+
+# The profile the sky master is expected to carry. Anything else stops the run — see
+# [to_srgb] for why the numbers have to be converted rather than passed through.
+SKY_SOURCE_PROFILE = "Display P3 Gamut with sRGB Transfer"
+
+# Mean HSV saturation (0-255) the exported sky has to clear. Converted properly it
+# measures 47; the raw P3 numbers measure 39, which is the washed-out sky this guard
+# exists to catch. 44 sits between them.
+SKY_MIN_SATURATION = 44
+
+
+def to_srgb(image: Image.Image) -> Image.Image:
+    """Return [image] with sRGB *numbers*, converting from its embedded profile.
+
+    The WebP we ship carries no ICC profile, so Android reads whatever numbers are in
+    it as sRGB. The master is Display P3, and the same numbers mean a **narrower**
+    colour in sRGB — passing them through is what made the shipped sky read washed out
+    (sky-only mean saturation 40 against the untouched poster's 51).
+
+    Converting rather than tagging the WebP keeps every shipped asset in one space: the
+    glitter plate is cropped from the untagged `9x16.jpg` and `SwiftiePalette` is
+    hand-written sRGB, so a lone P3 asset would be the only thing on screen depending
+    on the device's colour management to look right.
+
+    ~7% of pixels clip the red channel on the way. Those are the near-white pinks along
+    the top of the frame, where there is no chroma detail left to lose; the pink gradient
+    itself stays smooth (checked against the master side by side).
+    """
+    rgb = image.convert("RGB")
+    icc = image.info.get("icc_profile")
+    if not icc:
+        return rgb
+    profile = ImageCms.ImageCmsProfile(io.BytesIO(icc))
+    name = ImageCms.getProfileDescription(profile).strip()
+    if name.startswith("sRGB"):
+        return rgb
+    if name != SKY_SOURCE_PROFILE:
+        sys.exit(
+            f"unexpected colour profile {name!r} on the source image — check what it is "
+            f"before converting; the shipped WebP is untagged and read as sRGB"
+        )
+    return ImageCms.profileToProfile(
+        rgb, profile, ImageCms.createProfile("sRGB"), outputMode="RGB"
+    )
 
 # ---------------------------------------------------------------- glitter
 
@@ -85,20 +131,34 @@ PLATE_WIDTH = 640
 
 def sky_plate() -> None:
     src = Image.open(os.path.join(SRC, "sky-clean.png"))
+    rgb = to_srgb(src)
     # The master carries a few thousand pixels at alpha 245-254. Flatten onto the
     # image's own edge colour rather than white so nothing lightens at the border.
-    flat = Image.new("RGB", src.size, tuple(np.asarray(src)[:, :, :3].reshape(-1, 3).mean(0).astype(int)))
-    flat.paste(src.convert("RGB"), mask=src.getchannel("A"))
+    mean = tuple(np.asarray(rgb).reshape(-1, 3).mean(0).astype(int))
+    flat = Image.new("RGB", src.size, mean)
+    flat.paste(rgb, mask=src.getchannel("A"))
     height = round(src.size[1] * SKY_WIDTH / src.size[0])
     out = os.path.join(RES, "drawable-nodpi", "swiftie_poster_sky.webp")
-    flat.resize((SKY_WIDTH, height), Image.LANCZOS).save(
-        out, "WEBP", quality=SKY_QUALITY, method=6
+    resized = flat.resize((SKY_WIDTH, height), Image.LANCZOS)
+    resized.save(out, "WEBP", quality=SKY_QUALITY, method=6)
+
+    saturation = cv2.cvtColor(np.asarray(resized), cv2.COLOR_RGB2HSV_FULL)[:, :, 1].mean()
+    if saturation < SKY_MIN_SATURATION:
+        sys.exit(
+            f"sky mean saturation {saturation:.0f} is below {SKY_MIN_SATURATION} — "
+            f"the Display P3 → sRGB conversion did not happen"
+        )
+    print(
+        f"sky      {SKY_WIDTH}x{height} q{SKY_QUALITY} sat {saturation:.0f}"
+        f"  {os.path.getsize(out):,} B"
     )
-    print(f"sky      {SKY_WIDTH}x{height} q{SKY_QUALITY}  {os.path.getsize(out):,} B")
 
 
 def poster() -> np.ndarray:
-    return np.asarray(Image.open(os.path.join(SRC, "9x16.jpg")).convert("RGB"))
+    # No profile on this one today, so to_srgb is a pass-through — it is here so that a
+    # re-supplied, tagged poster stops the run instead of silently pushing the glitter
+    # and the traced script into the wrong colour space.
+    return np.asarray(to_srgb(Image.open(os.path.join(SRC, "9x16.jpg"))))
 
 
 def masks(poster_rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
