@@ -159,9 +159,10 @@ Opus 解码自 Android 5.0 起支持、Ogg 容器同期可用，本项目 `minSd
   它是代码文件，但内容是这张海报的衍生物，与上面两张图同一授权状态。
 
 重新生成这三份产物的脚本是 `scripts/build-swiftie-poster-assets.py`，输入是
-`docs/previews/swiftie-poster/` 下的原图 `9x16.jpg` 与天空底版 `sky-clean.png`。
-两者都不进 APK，也**不随仓库分发**（`.gitignore` 忽略整个 `docs/`），所以要重跑脚本
-得先从需求方另取这两份原图。
+`docs/previews/swiftie-poster/` 下的原图 `9x16.jpg`（1 609 629 字节）与天空底版
+`sky-clean.png`（1600×2848，3 572 559 字节）。两者都**不进 APK**，但为了脚本可重跑
+而破例入库 —— `.gitignore` 第 55 行忽略整个 `docs/`，这两份是 `git add -f` 强制加进
+来的。所以仓库里除了上面三份产物，还留着它们的**原始来源图**，同一授权状态。
 
 按本文件末尾「变更要求」一节的标准，公开发布前应取得书面许可，或把这一屏换成自制
 图形。彩蛋整体是可选功能，移除这三份产物不影响 App 主流程。
