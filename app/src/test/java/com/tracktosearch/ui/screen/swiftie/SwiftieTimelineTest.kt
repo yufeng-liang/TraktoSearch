@@ -8,16 +8,27 @@ class SwiftieTimelineTest {
     @Test
     fun segmentsSumToExactlyTheSoundtrackLength() {
         // swiftie_theme.ogg（Opus）的容器时长是 125.997979s，差一毫秒都算错开
+        assertThat(SwiftieTimeline.MUSIC_MS).isEqualTo(125_998L)
         assertThat(SwiftieTimeline.FADE_OUT_START + SwiftieTimeline.FADE_OUT_MS)
             .isEqualTo(SwiftieTimeline.TOTAL_MS)
-        assertThat(SwiftieTimeline.TOTAL_MS).isEqualTo(125_998L)
+        // 配乐在前奏第一帧就起播，账本只占音轨扣掉前奏之后的那一段。
+        // 两者相加必须正好还原音轨长度 —— 序列最后一帧与音乐收尾同时到
+        assertThat(SwiftieTimeline.PREROLL_MS + SwiftieTimeline.TOTAL_MS)
+            .isEqualTo(SwiftieTimeline.MUSIC_MS)
+        assertThat(SwiftieTimeline.PREROLL_MS).isEqualTo(1_500L)
+        assertThat(SwiftieTimeline.TOTAL_MS).isEqualTo(124_498L)
     }
 
     @Test
     fun theTwoAudioPinsAreExactlyWhereTheTrackSingsLover() {
-        // 配乐 1:58–2:02 唱 Lover。这两个数字由实测配乐钉死，改动必须先改配乐
-        assertThat(SwiftieTimeline.REWIND_START).isEqualTo(118_000L)
-        assertThat(SwiftieTimeline.LOVER_BLOOM_END).isEqualTo(123_000L)
+        // 配乐 1:58–2:02 唱 Lover。这两个常量存的是**时钟**值，加回前奏才是音轨时间戳；
+        // 下面两条就是「那句 Lover 压在绽放上」的全部保证，改前奏时长会先撞在这里
+        assertThat(SwiftieTimeline.REWIND_START + SwiftieTimeline.PREROLL_MS)
+            .isEqualTo(118_000L)
+        assertThat(SwiftieTimeline.LOVER_BLOOM_END + SwiftieTimeline.PREROLL_MS)
+            .isEqualTo(123_000L)
+        assertThat(SwiftieTimeline.REWIND_START).isEqualTo(116_500L)
+        assertThat(SwiftieTimeline.LOVER_BLOOM_END).isEqualTo(121_500L)
         assertThat(SwiftieTimeline.LOVER_BLOOM_START + SwiftieTimeline.LOVER_BLOOM_MS)
             .isEqualTo(SwiftieTimeline.LOVER_BLOOM_END)
     }
@@ -31,13 +42,13 @@ class SwiftieTimelineTest {
         assertThat(SwiftieTimeline.SIGNATURE_START).isEqualTo(99_410L)
         assertThat(SwiftieTimeline.BRACELET_START).isEqualTo(107_410L)
         assertThat(SwiftieTimeline.FINAL_HOLD_START).isEqualTo(111_910L)
-        assertThat(SwiftieTimeline.LOVER_BLOOM_START).isEqualTo(119_500L)
-        assertThat(SwiftieTimeline.FADE_OUT_START).isEqualTo(123_000L)
+        assertThat(SwiftieTimeline.LOVER_BLOOM_START).isEqualTo(118_000L)
+        assertThat(SwiftieTimeline.FADE_OUT_START).isEqualTo(121_500L)
     }
 
     @Test
     fun finaleRunsBeforeTheRewindSoLoverLandsOnTheClosingBars() {
-        // 绽放收在 2:03，之后只剩 2998ms —— 18s 的终局塞不进去，只能排在倒滑之前
+        // 绽放收在音轨 2:03，之后只剩 2998ms —— 17s 的终局塞不进去，只能排在倒滑之前
         assertThat(SwiftieTimeline.SIGNATURE_START).isLessThan(SwiftieTimeline.REWIND_START)
         assertThat(SwiftieTimeline.FINAL_HOLD_START).isLessThan(SwiftieTimeline.REWIND_START)
         assertThat(SwiftieTimeline.FADE_OUT_MS).isEqualTo(2_998L)
@@ -45,8 +56,9 @@ class SwiftieTimelineTest {
 
     @Test
     fun finalHoldAbsorbsTheSlackAndNeverGoesNegative() {
-        // 唯一的弹性段：曲目数一改，误差全落在这里，不许把 Lover 绽放挤出配乐
-        assertThat(SwiftieTimeline.FINAL_HOLD_MS).isEqualTo(6_090L)
+        // 唯一的弹性段：曲目数一改、前奏一长，误差全落在这里，
+        // 不许把 Lover 绽放挤出配乐
+        assertThat(SwiftieTimeline.FINAL_HOLD_MS).isEqualTo(4_590L)
         assertThat(SwiftieTimeline.FINAL_HOLD_MS).isGreaterThan(0L)
         assertThat(SwiftieTimeline.FINAL_HOLD_START + SwiftieTimeline.FINAL_HOLD_MS)
             .isEqualTo(SwiftieTimeline.REWIND_START)

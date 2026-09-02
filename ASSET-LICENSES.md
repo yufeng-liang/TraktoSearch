@@ -115,9 +115,11 @@ name ID 0 无 RFN 条款，未改名。
 | --- | --- | --- | --- | --- |
 | app/src/main/res/raw/swiftie_theme.ogg | The Eras Tour Intro(2.0 official).mp3 | 125.998 s | Ogg Opus，128 kbps VBR，48 kHz 立体声 | 1.93 MiB |
 
-霉粉彩蛋的配乐，由需求方提供并指定随包分发。彩蛋序列的时长账本
-（`SwiftieTimeline.TOTAL_MS`）从这个文件的实际长度倒推，两者必须一致：换音轨
-必须同步改账本，否则 Lover 绽放会与配乐错开。
+霉粉彩蛋的配乐，由需求方提供并指定随包分发。彩蛋序列的时长账本从这个文件的实际长度
+倒推：`SwiftieTimeline.MUSIC_MS` 就是它，换音轨必须同步改这个值。配乐从答对那一帧
+起播，比序列时钟早一个前奏（`PREROLL_MS` = 1500 ms，键盘退场 + 算式归位 + 手写体
+写出来），所以账本总长 `TOTAL_MS` = 音轨长度 − 前奏，序列最后一帧与音轨末尾同时到。
+这三个值任何一个单独改动都会让 Lover 绽放与配乐错开，`SwiftieTimelineTest` 守着。
 
 源文件是 320 kbps MP3（126.067 s，4.81 MiB），已转码为 Opus 128 kbps VBR
 （`ffmpeg -c:a libopus -b:a 128k -vbr on -application audio`），体积降 60%。

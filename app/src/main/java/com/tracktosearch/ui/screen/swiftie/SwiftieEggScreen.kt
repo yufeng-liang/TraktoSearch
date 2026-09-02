@@ -101,14 +101,14 @@ private val AUDIO_HINT_BAND_MAX = 96.dp
 private const val WRONG_SHAKE_MS = 300L
 
 /**
- * 答对之后、序列时钟起跑之前的前奏。
+ * 答对之后、序列时钟起跑之前的前奏 —— 键盘退场、算式走回原图的位置、手写体写出来。
  *
- * 这 1500ms **不在 [SwiftieTimeline] 的账本里**：配乐与后面每一段动画的对位都是按
- * `TOTAL_MS = 125_998` 排的，往里插一段就会把整条序列往后推、和配乐错开。所以时钟在
- * 这段里根本还没起跑 —— 键盘退场、算式走回原图的位置、手写体写出来，全都发生在 T0
- * 之前。顺带也给 `SwiftieMeshPreheat` 多 1500ms 去编译 AGSL。
+ * **取账本里的那一个，本文件不自己定值**：配乐从前奏第一帧就起播（见
+ * `SwiftieEggContent` 的 `musicPositionMs`），所以这个值同时决定音轨领先时钟多少，
+ * 而 [SwiftieTimeline] 钉死的那两个点正是按它折算的。两处写成两个数就等于把
+ * Lover 绽放挪开配乐。
  */
-private const val PREROLL_MS = 1500L
+private const val PREROLL_MS = SwiftieTimeline.PREROLL_MS
 
 /** 键盘下滑淡出：T+0 起 500ms。它先腾地方，算式才有处可去。 */
 private const val PREROLL_KEYPAD_MS = 500f
@@ -270,33 +270,9 @@ private fun SwiftieEggContent(
     val haptics = LocalHapticFeedback.current
     val reducedMotion = rememberReducedMotion()
 
-    /**
-     * 前奏进度（ms）。答对之后线性推到 [PREROLL_MS]，序列时钟这段时间里一动不动。
-     */
-    val preroll = remember { Animatable(0f) }
-    var prerollDone by remember { mutableStateOf(false) }
-    LaunchedEffect(quiz.solved, reducedMotion) {
-        if (!quiz.solved || reducedMotion) return@LaunchedEffect
-        preroll.animateTo(
-            targetValue = PREROLL_MS.toFloat(),
-            animationSpec = tween(durationMillis = PREROLL_MS.toInt(), easing = LinearEasing)
-        )
-        prerollDone = true
-    }
-    // 只在 draw 阶段被读：没答对是 0，减少动效直接给终值（那条路径不放动画）
-    val prerollMs: () -> Float = {
-        when {
-            !quiz.solved -> 0f
-            reducedMotion -> PREROLL_MS.toFloat()
-            else -> preroll.value
-        }
-    }
-
-    val sequenceRunning = quiz.solved && !reducedMotion && prerollDone
-    val clock = rememberSwiftieSequenceClock(running = sequenceRunning)
-
     // 暂停有三个来源，必须分开记：按住松手就恢复，拖动定格要点「继续」，
-    // 焦点被抢走要等焦点回来 —— 混成一个布尔值就会互相清掉
+    // 焦点被抢走要等焦点回来 —— 混成一个布尔值就会互相清掉。
+    // 声明在前奏之前：前奏也要认这个闸（见下面 preroll 的注释）
     var holdPaused by remember { mutableStateOf(false) }
     var seekFrozen by remember { mutableStateOf(false) }
     var focusPaused by remember { mutableStateOf(false) }
@@ -310,7 +286,50 @@ private fun SwiftieEggContent(
      */
     var audioGivenUp by remember { mutableStateOf(false) }
     val framePaused = holdPaused || seekFrozen || focusPaused
+
+    /**
+     * 前奏进度（ms）。答对之后线性推到 [PREROLL_MS]，序列时钟这段时间里一动不动。
+     *
+     * **跟着 [framePaused] 一起停**：配乐从前奏第一帧就在放，画面不停就会让音轨落在
+     * 算式后面，而整条账本的对位前提正是「音轨领先时钟正好 PREROLL_MS」。恢复时按剩余
+     * 时长重新起一段，所以停多久都不丢进度、也不用去 seek 播放头。
+     */
+    val preroll = remember { Animatable(0f) }
+    var prerollDone by remember { mutableStateOf(false) }
+    LaunchedEffect(quiz.solved, reducedMotion, framePaused) {
+        if (!quiz.solved || reducedMotion || framePaused) return@LaunchedEffect
+        val remaining = (PREROLL_MS - preroll.value).toInt()
+        if (remaining > 0) {
+            preroll.animateTo(
+                targetValue = PREROLL_MS.toFloat(),
+                animationSpec = tween(durationMillis = remaining, easing = LinearEasing)
+            )
+        }
+        prerollDone = true
+    }
+    // 只在 draw 阶段被读：没答对是 0，减少动效直接给终值（那条路径不放动画）
+    val prerollMs: () -> Float = {
+        when {
+            !quiz.solved -> 0f
+            reducedMotion -> PREROLL_MS.toFloat()
+            else -> preroll.value
+        }
+    }
+
+    val sequenceRunning = quiz.solved && !reducedMotion && prerollDone
+    // 配乐比时钟早起跑一个前奏，所以它不等 prerollDone —— 答对那一帧就要有声音
+    val musicRunning = quiz.solved && !reducedMotion
+    val clock = rememberSwiftieSequenceClock(running = sequenceRunning)
     LaunchedEffect(framePaused) { clock.paused = framePaused }
+
+    /**
+     * 配乐该在的播放位置 = 前奏进度 + 时钟。
+     *
+     * 前奏走完后 `prerollMs()` 定在 [PREROLL_MS] 不再变、时钟接着从 0 走，两段拼起来
+     * 正好是连续的音轨位置，最后一帧落在 [SwiftieTimeline.MUSIC_MS]。息屏回来重建播放器
+     * 与响应「跳过」/ 拖播放头都按它对位，所以配乐钉死的那两个点在任何路径上都对得住。
+     */
+    val musicPositionMs: () -> Long = { prerollMs().toLong() + clock.elapsedMs }
 
     /**
      * 重看纪念页时**不再落主题**。
@@ -404,10 +423,11 @@ private fun SwiftieEggContent(
     }
 
     SwiftieMusic(
-        enabled = sequenceRunning && !audioGivenUp,
+        enabled = musicRunning && !audioGivenUp,
         paused = framePaused,
-        // 时钟是唯一时间来源：重建播放器与响应「跳过」/ 拖播放头都按它对位
-        positionMs = { clock.elapsedMs },
+        // 唯一的时间来源仍然是时钟，只是配乐领先它一个前奏：重建播放器与响应
+        // 「跳过」/ 拖播放头都按 musicPositionMs 对位
+        positionMs = musicPositionMs,
         seekEpoch = clock.seekEpoch,
         onFocusChange = { focus ->
             when (focus) {
@@ -444,7 +464,7 @@ private fun SwiftieEggContent(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            // T123000–125998：整层淡出，露出已经在运动的星云背景（Spec §5）。
+            // T121500–124498：整层淡出，露出已经在运动的星云背景（Spec §5）。
             // 必须插在 background 之前 —— 写在之后只淡出子内容、底色仍然挡着星云
             .graphicsLayer {
                 alpha = 1f - ((clock.elapsedMs - SwiftieTimeline.FADE_OUT_START).toFloat() /
