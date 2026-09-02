@@ -62,8 +62,26 @@ internal object SwiftiePosterInk {
         bottom = EQUATION_BOTTOM
     )
 
+    /**
+     * 闪粉贴板在原图里的范围：比 [EQUATION] 四周各多 24 个原图像素的出血。
+     *
+     * **必须与 `scripts/build-swiftie-poster-assets.py` 的 `PLATE_BOX` + `PLATE_MARGIN`
+     * 一致。** 贴板是按这个框从原图裁出来的，这里再按同一个框贴回去；两边不一致就等于把
+     * 闪粉整体挪出了字形。出血本身是给拟合误差留的余量 —— 我们的字形是同一套字体拟合同
+     * 一批实测框，但吻合到百分之几，不是逐像素。
+     */
+    val GLITTER_PLATE = Box(
+        left = EQUATION.left - PLATE_MARGIN / SOURCE_WIDTH,
+        top = EQUATION.top - PLATE_MARGIN / SOURCE_HEIGHT,
+        right = EQUATION.right + PLATE_MARGIN / SOURCE_WIDTH,
+        bottom = EQUATION.bottom + PLATE_MARGIN / SOURCE_HEIGHT
+    )
+
     /** 探路字号。先按它取一次轮廓，再把包围盒缩放到目标框。 */
     private const val PROBE_TEXT_SIZE = 200f
+
+    /** 闪粉贴板的出血，单位是原图像素。见 [GLITTER_PLATE]。 */
+    private const val PLATE_MARGIN = 24f
 
     private fun paint(context: Context): Paint = Paint().apply {
         isAntiAlias = true

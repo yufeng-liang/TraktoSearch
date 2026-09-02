@@ -52,6 +52,36 @@ SKY_QUALITY = 86
 # the hand-rolled gradient had. Drawn with TileMode.Mirror so no seam work is needed.
 GLITTER_QUALITY = 92
 
+# Mean HSV saturation (0-255) the exported glitter has to clear. Glitter measures ~128,
+# the pink clouds ~80. 100 separates them with room on both sides.
+GLITTER_MIN_SATURATION = 100
+
+# A white sparkle inside a stroke tops out around 900 px; the counter of a `0` in
+# `100` is roughly 80x200 = 16 000. 3000 sits between them with an order of magnitude
+# of room on the side that matters.
+GLITTER_HOLE_MAX_AREA = 3000
+
+# The glitter plate's box, as fractions of the source image. Union of the five ink
+# boxes measured for SwiftiePosterInk: ANSWER.left..HUNDRED.right horizontally, and
+# ANSWER.top..HUNDRED.bottom vertically, with PLUS.left as the true left edge.
+# **Must stay in step with SwiftiePosterInk.EQUATION** — the app maps the plate onto
+# exactly that box, so a mismatch slides the glitter off the glyphs.
+PLATE_BOX = (0.24815, 0.43099, 0.73009, 0.88958)
+
+# Bleed, in source pixels. The app's glyphs are the same font fitted to the same boxes,
+# but the fit is within a few percent, not exact; the margin keeps a glyph that lands
+# slightly outside the measured box on real texture.
+PLATE_MARGIN = 24
+
+# TELEA radius for filling the sky inside the box. Only the first few pixels next to a
+# stroke ever get sampled, so a bigger radius buys nothing but time.
+PLATE_INPAINT_RADIUS = 8
+
+# Exported width. The equation spans 0.482 of the poster, so on a 1540 px wide poster
+# (560dp at 2.75x, the widest the layout allows) it covers ~742 px. 640 is a mild
+# undersample that no one can see in a speckle texture, and it keeps the WebP small.
+PLATE_WIDTH = 640
+
 
 def sky_plate() -> None:
     src = Image.open(os.path.join(SRC, "sky-clean.png"))
@@ -79,8 +109,14 @@ def masks(poster_rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     the sky around #7BB7DC (r=123, g=183).
 
     The glitter key runs on HSV saturation, not on r-g: soft sky pink (#F8ACD0) sits
-    at S=0.31 while the glitter core (#DB578A) is at S=0.60+. A 25 px close then fills
-    the white specks that sit inside the strokes.
+    at S=0.31 while the glitter core (#DB578A) is at S=0.60+.
+
+    The white sparkles inside the strokes then have to be filled, or the glitter mask
+    is riddled with holes and no usable square fits inside it. **Not with a big
+    morphological close** — that was the original approach and it also closed the
+    counters of the two `0`s, so the largest inscribed square landed on lavender sky
+    and every digit came out banded. [fill_holes] fills by component area instead:
+    a sparkle is a few hundred pixels, a counter is tens of thousands.
     """
     hsv = cv2.cvtColor(poster_rgb, cv2.COLOR_RGB2HSV_FULL).astype(np.int16)
     sat = hsv[:, :, 1]
@@ -98,7 +134,7 @@ def masks(poster_rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
         return cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_CLOSE, kernel).astype(bool)
 
-    return close(blue, 9), close(pink, 25)
+    return close(blue, 9), fill_holes(close(pink, 3), GLITTER_HOLE_MAX_AREA)
 
 
 def drop_specks(mask: np.ndarray, min_area: int) -> np.ndarray:
@@ -110,18 +146,67 @@ def drop_specks(mask: np.ndarray, min_area: int) -> np.ndarray:
     return keep
 
 
-def glitter_tile(poster_rgb: np.ndarray, pink: np.ndarray) -> None:
-    """Crop the largest square that fits entirely inside the glitter strokes."""
-    solid = drop_specks(pink, 4000).astype(np.uint8)
-    distance = cv2.distanceTransform(solid, cv2.DIST_C, 5)
-    half = int(distance.max())
-    y, x = np.unravel_index(distance.argmax(), distance.shape)
-    patch = poster_rgb[y - half : y + half, x - half : x + half]
+def fill_holes(mask: np.ndarray, max_area: int) -> np.ndarray:
+    """Turn every background blob smaller than [max_area] into foreground.
+
+    Area-based, not morphological, so it cannot close a glyph counter no matter how
+    narrow the counter is — the only thing that decides is how many pixels the blob
+    has. Blobs touching the image border are background by construction and can never
+    be under the threshold anyway (the sky is most of the frame).
+    """
+    count, labels, stats, _ = cv2.connectedComponentsWithStats((~mask).astype(np.uint8), 8)
+    filled = mask.copy()
+    for i in range(1, count):
+        if stats[i][4] < max_area:
+            filled |= labels == i
+    return filled
+
+
+def glitter_plate(poster_rgb: np.ndarray, pink: np.ndarray) -> None:
+    """Export the equation's whole glitter area as ONE non-repeating texture.
+
+    This replaces the old "crop the largest square inside a stroke and mirror-tile it"
+    approach, which could not be made to work. Two dead ends, both visible on device:
+
+    - the crop landed on lavender sky, because the mask used to find it had been
+      morphologically closed and the closing had filled the counters of the `0`s;
+    - with that fixed the square is only 42 px of a 2160 px wide source, and any tile
+      that small mirror-tiled across a 500 px digit reads as wallpaper, not glitter.
+
+    So nothing is tiled. The exported plate covers the union of the five ink boxes, and
+    the app maps it onto exactly that box in its own layout — the glyphs are the same
+    font fitted to the same measured boxes, so each digit samples the glitter that was
+    printed inside that very digit. Large-scale colour variation (the `100` runs
+    brighter at its foot) comes along for free, and there is no repeat to see.
+
+    Every non-glitter pixel inside the box is inpainted with neighbouring glitter, so
+    the answer slot — where `X` or a two-digit answer crosses gaps that were sky in the
+    original `13` — still lands on glitter rather than on a lavender sliver.
+    """
+    x0 = int(PLATE_BOX[0] * poster_rgb.shape[1]) - PLATE_MARGIN
+    y0 = int(PLATE_BOX[1] * poster_rgb.shape[0]) - PLATE_MARGIN
+    x1 = int(PLATE_BOX[2] * poster_rgb.shape[1]) + PLATE_MARGIN
+    y1 = int(PLATE_BOX[3] * poster_rgb.shape[0]) + PLATE_MARGIN
+    crop = poster_rgb[y0:y1, x0:x1]
+    holes = (~pink[y0:y1, x0:x1]).astype(np.uint8)
+    filled = cv2.inpaint(crop, holes, PLATE_INPAINT_RADIUS, cv2.INPAINT_TELEA)
+
+    saturation = cv2.cvtColor(filled, cv2.COLOR_RGB2HSV_FULL)[:, :, 1].mean()
+    if saturation < GLITTER_MIN_SATURATION:
+        sys.exit(
+            f"glitter plate mean saturation {saturation:.0f} is below "
+            f"{GLITTER_MIN_SATURATION} — the inpaint pulled in sky"
+        )
+
+    height = round(filled.shape[0] * PLATE_WIDTH / filled.shape[1])
     out = os.path.join(RES, "drawable-nodpi", "swiftie_glitter.webp")
-    Image.fromarray(patch).save(out, "WEBP", quality=GLITTER_QUALITY, method=6)
+    Image.fromarray(filled).resize((PLATE_WIDTH, height), Image.LANCZOS).save(
+        out, "WEBP", quality=GLITTER_QUALITY, method=6
+    )
     print(
-        f"glitter  {patch.shape[1]}x{patch.shape[0]} q{GLITTER_QUALITY} "
-        f"from ({x},{y})  {os.path.getsize(out):,} B"
+        f"glitter  {PLATE_WIDTH}x{height} q{GLITTER_QUALITY} "
+        f"from ({x0},{y0})-({x1},{y1}) holes {holes.mean():.0%} "
+        f"sat {saturation:.0f}  {os.path.getsize(out):,} B"
     )
 
 
@@ -281,5 +366,5 @@ if __name__ == "__main__":
     sky_plate()
     rgb = poster()
     blue_mask, pink_mask = masks(rgb)
-    glitter_tile(rgb, pink_mask)
+    glitter_plate(rgb, pink_mask)
     write_script_kotlin(blue_mask, KOTLIN)

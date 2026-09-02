@@ -245,7 +245,7 @@ internal fun SwiftiePoster(
             if (state.phase != SwiftieQuizPhase.WRONG) addPath(slotPath)
         }
     }
-    val glitter = rememberGlitterBrush(fit.size.height)
+    val glitter = rememberGlitterBrush(fit.size)
     val time = rememberGlitterTime()
     val twinkleCount = if (rememberIsLowRamDevice()) TWINKLE_COUNT_LOW_RAM else TWINKLE_COUNT
     val twinkles = remember(twinkleCount) { buildSparkles(twinkleCount) }

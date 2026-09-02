@@ -1,6 +1,6 @@
 package com.tracktosearch.ui.screen.swiftie
 
-import android.graphics.Bitmap
+import android.graphics.Matrix
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -19,12 +19,9 @@ import androidx.compose.ui.graphics.ImageShader
 import androidx.compose.ui.graphics.Shader
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TileMode
-import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.res.imageResource
 import com.tracktosearch.R
-import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -101,39 +98,42 @@ internal fun rememberGlitterTime(): State<Float> {
     )
 }
 
-/** 贴图在原图（2160×3840）里的采样边长，用来把它缩回屏幕上应有的颗粒大小。 */
-private const val GLITTER_SOURCE_HEIGHT = 3840f
-
 /**
- * 真闪粉的画刷：`swiftie_glitter.webp` 镜像平铺。
+ * 真闪粉的画刷：`swiftie_glitter.webp` **按位置贴上去，不平铺**。
  *
- * 贴图是从原海报 `100` 的笔画里挖出来的 100×100 正方形（那是笔画里能容下的最大内切
- * 正方形），所以颜色和颗粒不是调出来的，是原图本身 —— 实测亮度跨 46–232，正是这个
- * 跨度让它读起来像闪粉，而不是一块粉色。
+ * 贴板是原海报上整条算式那一块（640×1064，含四周出血），非glitter 的像素已经用邻近的
+ * 闪粉补过。这里把它按 [SwiftiePosterInk.GLITTER_PLATE] 映射回算式在海报里的位置 ——
+ * 我们的字形和原图是同一套字体、拟合的是同一批实测包围盒，所以**每个数字取到的正是
+ * 当初印在这个数字里的闪粉**，连「`100` 的下缘更亮」这种大尺度变化都对得上。
  *
- * **贴图在这里就按目标尺寸缩好，不靠 shader 的 local matrix 缩** ——
- * shader 每帧缩小采样等于每帧对随机颗粒做点采样，颗粒会闪烁跳动；
- * 一次性 `createScaledBitmap` 走双线性，之后每帧都是 1:1 取样。
+ * 之前试过两版平铺，都在真机上翻车，记下来免得再走一遍：
  *
- * `TileMode.Mirror` 省掉了做无缝贴图这件事：镜像接缝在随机颗粒上看不出来。
+ * 1. 「取笔画里最大的内切正方形再镜像平铺」：找正方形用的掩膜做过 25px 闭运算，把两个
+ *    `0` 的字腔一起填上了，于是最大内切正方形落在**天空**上 —— 每个数字上都横着几道
+ *    淡紫竖带。
+ * 2. 改成按连通域面积填洞（字腔再窄也填不上）之后正方形只有 42px。42px 的贴图镜像平铺
+ *    到 500px 宽的数字上，读出来是壁纸花纹，不是闪粉。
  *
- * @param posterHeightPx 海报在屏幕上的实际高度（px）。贴图按 `它 / 3840` 缩，
- *   于是屏幕上的颗粒和原图里的颗粒是同一个视觉大小
+ * 贴板没有重复，所以这两个问题都不存在；`TileMode.Clamp` 保证轻微超出的字形取到边缘那
+ * 圈补过的闪粉，而不是透明。
  */
 @Composable
-internal fun rememberGlitterBrush(posterHeightPx: Float): Brush {
-    val source = ImageBitmap.imageResource(R.drawable.swiftie_glitter)
-    return remember(source, posterHeightPx) {
-        val scale = (posterHeightPx / GLITTER_SOURCE_HEIGHT).coerceIn(0.15f, 1f)
-        val side = (source.width * scale).roundToInt().coerceAtLeast(8)
-        val tile = if (side == source.width) {
-            source
-        } else {
-            Bitmap.createScaledBitmap(source.asAndroidBitmap(), side, side, true).asImageBitmap()
+internal fun rememberGlitterBrush(poster: Size): Brush {
+    val plate = ImageBitmap.imageResource(R.drawable.swiftie_glitter)
+    return remember(plate, poster) {
+        val box = SwiftiePosterInk.GLITTER_PLATE
+        val matrix = Matrix().apply {
+            setScale(
+                box.width * poster.width / plate.width,
+                box.height * poster.height / plate.height
+            )
+            postTranslate(box.left * poster.width, box.top * poster.height)
         }
         object : ShaderBrush() {
             override fun createShader(size: Size): Shader =
-                ImageShader(tile, TileMode.Mirror, TileMode.Mirror)
+                ImageShader(plate, TileMode.Clamp, TileMode.Clamp).apply {
+                    setLocalMatrix(matrix)
+                }
         }
     }
 }
