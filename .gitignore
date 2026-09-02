@@ -108,3 +108,6 @@ verification-artifacts/
 
 # backdrop 源码参考克隆(玻璃引擎迁移用,不入库)
 /.backdrop-ref/
+
+# Claude 会话的临时日志与草稿，不入库
+.scratch/
