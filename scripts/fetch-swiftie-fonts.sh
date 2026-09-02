@@ -11,13 +11,19 @@ gf() { curl -sL "https://github.com/google/fonts/raw/main/$1" -o "$TMP/$2"; }
 
 # 静态字体（直接下载）
 gf ofl/pacifico/Pacifico-Regular.ttf pacifico.ttf
-gf ofl/gochihand/GochiHand-Regular.ttf gochi.ttf
 gf ofl/greatvibes/GreatVibes-Regular.ttf greatvibes.ttf
 gf ofl/bebasneue/BebasNeue-Regular.ttf bebas.ttf
 gf apache/permanentmarker/PermanentMarker-Regular.ttf marker.ttf
 gf ofl/unifrakturmaguntia/UnifrakturMaguntia-Book.ttf unifraktur.ttf
 gf ofl/parisienne/Parisienne-Regular.ttf parisienne.ttf
 gf ofl/librecaslondisplay/LibreCaslonDisplay-Regular.ttf caslon.ttf
+
+# Honey Script SemiBold 不在 Google Fonts 上，来自 dafont（标「100% Free」，
+# 二进制 fsType=0 允许嵌入，无随附许可证文本 —— 详见
+# app/src/main/assets/fonts/licenses/honeyscript-NOTICE.txt）。
+# 它是原海报「13 + 87 = 100」用的字体，逐字对得上。
+curl -sSL -A "Mozilla/5.0" "https://dl.dafont.com/dl/?f=honey_script" -o "$TMP/honey.zip"
+unzip -p "$TMP/honey.zip" HoneyScript-SemiBold.ttf > "$TMP/honey.ttf"
 
 resolve_css() { curl -s -A "Mozilla/4.0" "https://fonts.googleapis.com/css2?family=$1" \
   | grep -o "https://[^)]*\.ttf" | head -1; }
@@ -40,8 +46,10 @@ sub() { # sub <src> <dest-name> <text>
     --output-file="$OUT/$2.ttf"
 }
 
-sub pacifico    swiftie_script      'CongratsFover!TaylorSwiftHerlucknumb. '
-sub gochi       swiftie_marker      '0123456789+=X? '
+# swiftie_script 只留签名那两个词 —— 「Congrats on Forever!」已改成描原图的矢量
+# （见 SwiftieCongratsPath.kt），提示行改用 Honey Script
+sub pacifico    swiftie_script      'TaylorSwift '
+sub honey       swiftie_honey       '0123456789+=XHerluckynmb. '
 sub greatvibes  era_taylor_swift    'Taylor Swift'
 sub josefin     era_fearless        'Fearless'
 sub yellowtail  era_speak_now       'Speak Now'
@@ -54,8 +62,9 @@ sub inter       era_midnights       'Midnights'
 sub caslon      era_ttpd            'The Tortured Poets Department'
 sub playfair    era_showgirl        'The Life of a Showgirl'
 
-# 授权文本随字体一起入仓。-f 让 404 直接失败，否则 GitHub 的错误页会被当成授权文本写进仓库
-for f in pacifico gochihand greatvibes bebasneue unifrakturmaguntia parisienne \
+# 授权文本随字体一起入仓。-f 让 404 直接失败，否则 GitHub 的错误页会被当成授权文本写进仓库。
+# Honey Script 不在这个循环里 —— 它没有许可证文本，随包的是手写的 honeyscript-NOTICE.txt
+for f in pacifico greatvibes bebasneue unifrakturmaguntia parisienne \
          librecaslondisplay imfelldwpica josefinsans inter playfairdisplay; do
   curl -sfL "https://github.com/google/fonts/raw/main/ofl/$f/OFL.txt" -o "$LIC/$f-OFL.txt"
 done
@@ -65,7 +74,8 @@ for f in permanentmarker yellowtail; do
     -o "$LIC/$f-LICENSE.txt"
 done
 
-# 子集化是 OFL 定义的 Modified Version，带 Reserved Font Name 的 5 个字体必须改内部家族名
+# 子集化是 OFL 定义的 Modified Version，带 Reserved Font Name 的 5 个字体必须改内部家族名。
+# Pacifico 与 Honey Script 的 name[0] 都没有 RFN 条款，不在名单里
 python scripts/rename-swiftie-font-rfn.py
 
 du -ch "$OUT"/*.ttf | tail -1

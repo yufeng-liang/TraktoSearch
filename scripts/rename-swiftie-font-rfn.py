@@ -20,7 +20,6 @@ from fontTools.ttLib import TTFont
 
 # 资源名 -> (新家族名, 新 PostScript 名)
 RENAMES = {
-    "swiftie_marker": ("Swiftie Marker", "SwiftieMarker-Regular"),
     "era_fearless": ("Swiftie Fearless", "SwiftieFearless-Regular"),
     "era_lover": ("Swiftie Lover", "SwiftieLover-Regular"),
     "era_showgirl": ("Swiftie Showgirl", "SwiftieShowgirl-Italic"),

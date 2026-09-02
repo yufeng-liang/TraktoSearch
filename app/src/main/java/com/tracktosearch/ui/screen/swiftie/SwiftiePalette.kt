@@ -32,9 +32,20 @@ object SwiftiePalette {
 }
 
 object SwiftieFonts {
-    /** 灯箱标题与签名：Pacifico，粗圆花体 */
+    /**
+     * 落款签名：Pacifico，粗圆花体。只子集化了 `Taylor Swift` 那几个字形。
+     *
+     * 出题页那句「Congrats on Forever!」**不用它** —— 那是从原图描出来的矢量
+     * （见 [SwiftieCongratsPath]），原作者用的 Filmotype LaCrosse 是商业字体、
+     * 字体文件不能随包。
+     */
     val Script = FontFamily(Font(R.font.swiftie_script))
 
-    /** 算式与输入数字：Gochi Hand，粗手绘马克笔 */
-    val Marker = FontFamily(Font(R.font.swiftie_marker))
+    /**
+     * 算式、键盘数字、`Her lucky number.`：Honey Script SemiBold。
+     *
+     * 这就是原海报「13 + 87 = 100」用的字体，连那个卷曲的加号都对得上。
+     * 键盘也用它，是为了让按下去的那个字形和海报上长出来的那个字形是同一个。
+     */
+    val Marker = FontFamily(Font(R.font.swiftie_honey))
 }

@@ -15,16 +15,19 @@
 
 ## 随包字体
 
-`app/src/main/res/font/` 下共 14 个字体文件：彩蛋序列用的 13 个，加上项目原有的
-`ark_pixel_12px`（见下一节）。彩蛋那 13 个的完整许可证文本在
-`app/src/main/assets/fonts/licenses/`，全部取自 Google Fonts，全部为 OFL-1.1 或
-Apache-2.0，均允许商业使用与嵌入分发。下载与子集化过程记录在
+`app/src/main/res/font/` 下共 16 个字体文件：彩蛋序列用的 13 个、项目原有的
+`ark_pixel_12px`（见下一节），以及两个印章字体（`hanwang_lisu_seal`、
+`unyetgul_seal`）——**后两个的来源与许可证本清单尚未记录**，公开发布前需要补齐。
+
+彩蛋那 13 个的许可证文本在 `app/src/main/assets/fonts/licenses/`。其中 12 个取自
+Google Fonts，为 OFL-1.1 或 Apache-2.0，均允许商业使用与嵌入分发；**`swiftie_honey`
+是例外**，见下表与其后的说明。下载与子集化过程记录在
 `scripts/fetch-swiftie-fonts.sh`，产物已提交，正常构建不需要再跑。
 
 | 资源 | 上游字体 | 版权 | 许可证 |
 | --- | --- | --- | --- |
 | swiftie_script | Pacifico | 2018 The Pacifico Project Authors | OFL-1.1 |
-| swiftie_marker | Gochi Hand | 2011 Juan Pablo del Peral | OFL-1.1（RFN） |
+| swiftie_honey | Honey Script SemiBold | Typographer Mediengestaltung | 未核实（见下） |
 | era_taylor_swift | Great Vibes | 2015 The Great Vibes Pro Project Authors | OFL-1.1 |
 | era_fearless | Josefin Sans（定重 600） | 2010 The Josefin Sans Project Authors | OFL-1.1（RFN） |
 | era_speak_now | Yellowtail | 2011 Brian J. Bonislawsky DBA Astigmatic (AOETI) | Apache-2.0 |
@@ -39,12 +42,25 @@ Apache-2.0，均允许商业使用与嵌入分发。下载与子集化过程记�
 
 `era_imfell` 同时服务 folklore 与 evermore 两个时代，因此 13 个文件对应 12 个时代。
 
+### Honey Script SemiBold 的授权状态：未核实
+
+它是出题页那张海报上「13 + 87 = 100」的原字体，从 dafont 取得
+（`dl.dafont.com/dl/?f=honey_script`）。dafont 的条目页标注 **100% Free**，
+而字体内部 name ID 0 写的是 `All rights reserved`、厂商是
+`Typographer Mediengestaltung`；**没有随字体分发任何许可证文本**，两处说法互相矛盾。
+`OS/2.fsType = 0`（Installable Embedding），即字体自身允许嵌入分发。
+
+已按此实情记录在 `app/src/main/assets/fonts/licenses/honeyscript-NOTICE.txt` ——
+那是一份**说明**，不是许可证，因为没有许可证可放。需求方在知悉该风险后指示使用。
+按本文件末尾「变更要求」一节的标准，公开发布前应取得书面许可，或换成许可证明确的
+手写体字体。
+
 ### 子集化与保留字体名
 
 13 个文件都是**逐专辑激进子集化**的产物：每个只保留自己那几个字的字形
-（4–70 个，`era_1989` 最少 4 个、`swiftie_script` 最多 70 个），13 个合计
-78 764 字节 = 76.9 KiB。子集化删除了绝大多数字形，属于 OFL-1.1 定义的
-**Modified Version**，因此第 3 条生效：Modified Version 不得沿用 Reserved Font Name。
+（4–41 个，`era_1989` 最少 4 个），13 个合计 74 292 字节 = 72.6 KiB。
+子集化删除了绝大多数字形，属于 OFL-1.1 定义的 **Modified Version**，
+因此第 3 条生效：Modified Version 不得沿用 Reserved Font Name。
 
 判据是**入包的那份二进制**里 name ID 0 有没有 `With Reserved Font Name`，
 而不是上游许可文本 —— 两者会不一致，本项目就撞上了两个方向各一例：
@@ -55,17 +71,19 @@ Apache-2.0，均允许商业使用与嵌入分发。下载与子集化过程记�
 - `era_lover`（Parisienne）：反过来，二进制里没有 RFN 条款，但仍然改了名。
   多改无害，保持现状。
 
-上表标 **RFN** 的 6 个字体已按此改掉内部 `name` 表的家族名与 PostScript 名，
+上表标 **RFN** 的 5 个字体已按此改掉内部 `name` 表的家族名与 PostScript 名，
 改名脚本是 `scripts/rename-swiftie-font-rfn.py`（可带资源名只改指定的几个）：
 
 | 资源 | 改后家族名 | 改后 PostScript 名 |
 | --- | --- | --- |
-| swiftie_marker | Swiftie Marker | SwiftieMarker-Regular |
 | era_fearless | Swiftie Fearless | SwiftieFearless-Regular |
 | era_lover | Swiftie Lover | SwiftieLover-Regular |
 | era_showgirl | Swiftie Showgirl | SwiftieShowgirl-Italic |
 | era_reputation | Swiftie Reputation | SwiftieReputation-Regular |
 | era_imfell | Swiftie Fell | SwiftieFell-Italic |
+
+`swiftie_honey` 不在改名表里：它的 name ID 0 没有 RFN 条款（写的是
+`All rights reserved`，那不是 OFL 的保留字体名机制）。
 
 name ID 0 的版权声明**保持原样不改** —— OFL 要求保留它，需要改的只是家族名。
 Android 按资源 ID 加载 `res/font/*.ttf`，不看内部家族名，所以改名不影响渲染。
@@ -74,8 +92,8 @@ Android 按资源 ID 加载 `res/font/*.ttf`，不看内部家族名，所以改
 上表的版权持有人取自字体内部 `name` 表第 0 项。
 
 后续若再增删字形或换字重，改完必须同步更新本节的字形数、字节数、字重和改名表 ——
-统计只算彩蛋那 13 个，不要把 `ark_pixel_12px` 算进去（`fetch-swiftie-fonts.sh`
-收尾那句 `du -ch "$OUT"/*.ttf` 会把它一起算上）。
+统计只算彩蛋那 13 个，不要把 `ark_pixel_12px` 与两个印章字体算进去
+（`fetch-swiftie-fonts.sh` 收尾那句 `du -ch "$OUT"/*.ttf` 会把它们一起算上）。
 新增字体时先读它 name ID 0：带 RFN 就必须改名，不是可选项。
 
 ## 随包字体（彩蛋之外）
@@ -117,6 +135,36 @@ Opus 解码自 Android 5.0 起支持、Ogg 容器同期可用，本项目 `minSd
 应进入公开 APK 或官网发布包 —— 公开发布前应取得书面许可、替换为自制或已授权
 音轨，或改为不随包（彩蛋走静默路径，代码已支持：`SwiftieMusic` 抢不到音频焦点
 或处于静音档时只播动画）。
+
+## 随包图片（霉粉彩蛋出题页海报）
+
+| 路径 | 内容 | 尺寸 | 格式 | 大小 |
+| --- | --- | --- | --- | --- |
+| app/src/main/res/drawable-nodpi/swiftie_poster_sky.webp | 抹去全部文字后的天空底版 | 1200×2136 | WebP 有损 q86 | 41 850 字节 |
+| app/src/main/res/drawable-nodpi/swiftie_glitter.webp | 闪粉贴图（从 `100` 笔画里挖出的内切正方形） | 100×100 | WebP 有损 q92 | 5 368 字节 |
+
+**两张都是第三方海报的衍生物，授权状态由需求方声明。** 出题页复刻的是一张
+「13 + 87 = 100 / Congrats on Forever!」的闪粉海报（Taylor Swift × Travis Kelce 主题，
+13 与 87 分别是两人的号码）。需求方提供了原图并声明已获授权。本项目未独立核实。
+
+三份衍生物：
+
+- 天空底版：需求方提供的、已由其抹去文字的 PNG（1600×2848），本项目只做了缩放与
+  WebP 转码。
+- 闪粉贴图：从原图 `100` 的笔画内部裁出的 100×100 区域，用作算式与答案槽的填充画刷。
+  颜色和颗粒因此不是调出来的，是原图本身（实测亮度跨 46–232）。
+- `app/src/main/java/com/tracktosearch/ui/screen/swiftie/SwiftieCongratsPath.kt`：
+  「Congrats on Forever!」那三行手写体的**矢量描摹**（909 个点，三条路径）。原作者说
+  用的是 Filmotype LaCrosse —— 商业字体，字体文件不能随包，所以改成从原图描轮廓。
+  它是代码文件，但内容是这张海报的衍生物，与上面两张图同一授权状态。
+
+重新生成这三份产物的脚本是 `scripts/build-swiftie-poster-assets.py`，输入是
+`docs/previews/swiftie-poster/` 下的原图 `9x16.jpg` 与天空底版 `sky-clean.png`。
+两者都不进 APK，也**不随仓库分发**（`.gitignore` 忽略整个 `docs/`），所以要重跑脚本
+得先从需求方另取这两份原图。
+
+按本文件末尾「变更要求」一节的标准，公开发布前应取得书面许可，或把这一屏换成自制
+图形。彩蛋整体是可选功能，移除这三份产物不影响 App 主流程。
 
 ## 第三方 Logo、图标和动画
 

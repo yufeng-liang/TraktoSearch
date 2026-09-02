@@ -4,13 +4,15 @@ import android.content.pm.ActivityInfo
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -20,8 +22,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Icon
@@ -39,6 +43,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEvent
@@ -52,13 +58,29 @@ import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import com.tracktosearch.R
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieErasStage
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.delay
 
-/** 灯箱与键盘的共同最大宽度（Spec §2.3：平板与折叠屏展开态 480dp 居中）。 */
-private val CONTENT_MAX_WIDTH = 480.dp
+/** 键盘的最大宽度（Spec §2.3：平板与折叠屏展开态居中，不跟着屏宽长）。 */
+private val KEYPAD_MAX_WIDTH = 480.dp
 
-/** 灯箱与键盘之间的间距。 */
-private val CONTENT_GAP = 20.dp
+/**
+ * 海报版式的最大宽度。
+ *
+ * 天空是位图、照样铺满全屏（`ContentScale.Crop`），受这个上限约束的只有**排字用的
+ * 那张海报**：平板上算式与手写体不跟着屏宽长，否则一条算式横跨 900dp。
+ */
+private val POSTER_MAX_WIDTH = 560.dp
+
+/** 算式底边与键盘托盘之间至少留这么多。 */
+private val EQUATION_GAP = 16.dp
+
+/** `Her lucky number.` 的常驻预留高度。只动 alpha，浮出时不挤动键盘。 */
+private val LUCKY_BAND = 34.dp
+
+/** ✕ 的浅色底衬。整页都是浅色印刷品，光靠 tint 在云上会丢。 */
+private val CLOSE_BACKING = Color.White.copy(alpha = 0.62f)
 
 /**
  * 底部音频提示带的基准高度（系统字号 100% 时）。
@@ -67,16 +89,39 @@ private val CONTENT_GAP = 20.dp
  * **英文默认档**（约 276dp @12sp），窄屏上会折两行。
  *
  * **恒定预留**，不管提示当前是否显示 —— 用户中途插上耳机时提示会消失，
- * 若这块位子跟着让出来，灯箱就会在题面上重新排版跳一下。
+ * 若这块位子跟着让出来，键盘就会往下塌一截、算式也跟着重新排版跳一下。
  * 实际用值按 `fontScale` 放大，见 `SwiftieQuizStage`。
  */
 private val AUDIO_HINT_BAND_BASE = 44.dp
 
-/** 预留带的上限：再大就该让灯箱缩，而不是继续吃版面。 */
+/** 预留带的上限：再大就该让算式缩，而不是继续吃版面。 */
 private val AUDIO_HINT_BAND_MAX = 96.dp
 
-/** 答错摇晃时长，与 [SwiftieBillboard] 的 keyframes 对齐。 */
+/** 答错摇晃时长，与 [SwiftiePoster] 的 keyframes 对齐。 */
 private const val WRONG_SHAKE_MS = 300L
+
+/**
+ * 答对之后、序列时钟起跑之前的前奏。
+ *
+ * 这 1500ms **不在 [SwiftieTimeline] 的账本里**：配乐与后面每一段动画的对位都是按
+ * `TOTAL_MS = 125_998` 排的，往里插一段就会把整条序列往后推、和配乐错开。所以时钟在
+ * 这段里根本还没起跑 —— 键盘退场、算式走回原图的位置、手写体写出来，全都发生在 T0
+ * 之前。顺带也给 `SwiftieMeshPreheat` 多 1500ms 去编译 AGSL。
+ */
+private const val PREROLL_MS = 1500L
+
+/** 键盘下滑淡出：T+0 起 500ms。它先腾地方，算式才有处可去。 */
+private const val PREROLL_KEYPAD_MS = 500f
+
+/** 算式归位：T+250 起 600ms。和键盘退场重叠 250ms，两段读成一个动作。 */
+private const val PREROLL_SETTLE_AT = 250f
+private const val PREROLL_SETTLE_MS = 600f
+
+/** 手写体落笔：T+550，写完正好落在 1450（[SCRIPT_TOTAL_MS] = 900）。 */
+private const val PREROLL_SCRIPT_AT = 550f
+
+/** 「减少动效」下把写完的整幅海报停这么久，再切静态终态。 */
+private const val REDUCED_HOLD_MS = 1200L
 
 /**
  * 终局交还给 Lover 收尾的交叉淡变窗口。
@@ -87,7 +132,7 @@ private const val WRONG_SHAKE_MS = 300L
 private const val FINALE_HANDOFF_MS = 500f
 
 /**
- * 霉粉彩蛋全屏页：1:1 灯箱复刻 + 自绘数字键盘，答对后驱动整条 120s 序列。
+ * 霉粉彩蛋全屏页：整屏海报复刻 + 浮在上面的自绘键盘，答对后驱动整条 120s 序列。
  *
  * @param onDismiss solved = true 表示答对通关；false 表示用户主动关闭（不消耗解题机会）
  * @param onCommitUnlock 主题接管回调，由内容体在扩散铺满全屏那一帧调用
@@ -171,11 +216,13 @@ private fun Modifier.consumeStrayTouches(): Modifier = pointerInput(Unit) {
 }
 
 /**
- * 序列与静态终态期间强制**深色**系统栏图标。
+ * 整页强制**深色**系统栏图标。
  *
- * 那两段的底是满屏水彩天空（粉白 / 淡蓝 / 薰衣草，相对亮度 0.46–0.86）。深色模式下
- * `Theme.kt` 把状态栏图标设成浅色，白图标压在这张浅底上只有 1.2–2:1，时间和电量看不见。
- * 灯箱阶段不需要 —— 那时四周仍是 `surface`，浅色图标是对的。
+ * 从题面第一帧起底就是浅色的：出题页是整屏闪粉海报（天空是粉蓝渐变），序列与静态终态
+ * 是满屏水彩天空（相对亮度 0.46–0.86）。深色模式下 `Theme.kt` 把状态栏图标设成浅色，
+ * 白图标压在这些浅底上只有 1.2–2:1，时间和电量看不见。
+ *
+ * 以前只在答对之后开 —— 那时题面四周还是 `surface`。海报铺满全屏之后这个前提就没了。
  */
 @Composable
 private fun DarkSystemBarIconsWhile(active: Boolean) {
@@ -223,7 +270,29 @@ private fun SwiftieEggContent(
     val haptics = LocalHapticFeedback.current
     val reducedMotion = rememberReducedMotion()
 
-    val sequenceRunning = quiz.solved && !reducedMotion
+    /**
+     * 前奏进度（ms）。答对之后线性推到 [PREROLL_MS]，序列时钟这段时间里一动不动。
+     */
+    val preroll = remember { Animatable(0f) }
+    var prerollDone by remember { mutableStateOf(false) }
+    LaunchedEffect(quiz.solved, reducedMotion) {
+        if (!quiz.solved || reducedMotion) return@LaunchedEffect
+        preroll.animateTo(
+            targetValue = PREROLL_MS.toFloat(),
+            animationSpec = tween(durationMillis = PREROLL_MS.toInt(), easing = LinearEasing)
+        )
+        prerollDone = true
+    }
+    // 只在 draw 阶段被读：没答对是 0，减少动效直接给终值（那条路径不放动画）
+    val prerollMs: () -> Float = {
+        when {
+            !quiz.solved -> 0f
+            reducedMotion -> PREROLL_MS.toFloat()
+            else -> preroll.value
+        }
+    }
+
+    val sequenceRunning = quiz.solved && !reducedMotion && prerollDone
     val clock = rememberSwiftieSequenceClock(running = sequenceRunning)
 
     // 暂停有三个来源，必须分开记：按住松手就恢复，拖动定格要点「继续」，
@@ -256,8 +325,8 @@ private fun SwiftieEggContent(
     // 息屏会把 Activity 推进 ON_STOP，帧时钟随之停摆，整段序列烂在中途
     KeepScreenOnWhile(sequenceRunning)
 
-    // 答对之后底是满屏浅色水彩天空，深色模式的浅色状态栏图标会看不见
-    DarkSystemBarIconsWhile(quiz.solved)
+    // 整页从第一帧起就是浅底（海报 + 水彩天空），深色模式的浅色状态栏图标会看不见
+    DarkSystemBarIconsWhile(true)
 
     // 每帧变化的量只在 draw lambda 里读；组合里只读这些「翻转一次」的派生量
     val phase by remember { derivedStateOf { swiftiePhaseAt(clock.elapsedMs) } }
@@ -315,10 +384,14 @@ private fun SwiftieEggContent(
         if (quiz.solved) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
     }
 
-    // 「减少动效」不跑序列：立刻落地主题，然后给静态终态，等用户自己按 ✕
+    // 「减少动效」不跑序列：立刻落地主题，把写完的海报停 1200ms 让人看完，再给静态终态
     val staticFinale = quiz.solved && reducedMotion
+    var staticHoldDone by remember { mutableStateOf(false) }
     LaunchedEffect(staticFinale) {
-        if (staticFinale) commitUnlock()
+        if (!staticFinale) return@LaunchedEffect
+        commitUnlock()
+        delay(REDUCED_HOLD_MS)
+        staticHoldDone = true
     }
 
     // T1100 那一帧提交三写入。derivedStateOf 保证只翻转一次，所以只会调一次
@@ -389,12 +462,16 @@ private fun SwiftieEggContent(
             SwiftieMeshPreheat(motionActive = meshMotionActive)
         }
 
-        if (quizMounted && !staticFinale) {
+        // 出题页要一直挂到序列接手：前奏那 1500ms 里键盘退场、算式归位、手写体写出来，
+        // 全都发生在这一层上。减少动效路径没有序列，所以挂到静态终态接手为止
+        if (quizMounted && !staticHoldDone) {
             SwiftieQuizStage(
                 quiz = quiz,
                 showAudioHint = !reducedMotion,
+                prerollMs = prerollMs,
                 onQuizChange = { quiz = it },
-                onSubmitCenter = { submitCenter = it },
+                // 答对之后冻住：键盘正在下滑退场，再收它上报的坐标会把扩散原点拖出屏幕
+                onSubmitCenter = { if (!quiz.solved) submitCenter = it },
                 onKeyHaptic = { haptics.performHapticFeedback(HapticFeedbackType.VirtualKey) }
             )
         }
@@ -444,7 +521,7 @@ private fun SwiftieEggContent(
             )
         }
 
-        if (staticFinale) {
+        if (staticFinale && staticHoldDone) {
             SwiftieStaticFinale()
         }
 
@@ -457,25 +534,41 @@ private fun SwiftieEggContent(
                 .windowInsetsPadding(WindowInsets.safeDrawing)
                 .padding(8.dp)
         ) {
-            Icon(
-                imageVector = Icons.Rounded.Close,
-                contentDescription = stringResource(R.string.common_close),
-                tint = MaterialTheme.colorScheme.onSurface
-            )
+            // 整页都是浅色印刷品，光靠 tint 会在云上丢掉这个按钮
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(CLOSE_BACKING, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = stringResource(R.string.common_close),
+                    tint = SwiftiePalette.RoyalBlue,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }
 
 /**
- * 题面版面（灯箱 + 键盘 + 音频提示）。状态由外部持有，本函数只负责摆位与转发回调。
+ * 出题页：整屏海报 + 浮在上面的玻璃键盘。
+ *
+ * 版面是**反着算**的：先按宽度推出键盘托盘有多高（键帽是 `aspectRatio(1.6f)`），加上
+ * 两条提示带与安全区，得到「算式底边最低能到哪儿」，再交给 [swiftiePosterFit] 解出
+ * 出题态要把算式抬多高、要不要缩。写死一个 `0.33H` 那种比例，在 640dp 高的屏上会把
+ * 算式顶出画面。
  *
  * @param showAudioHint 「减少动效」路径根本不播配乐（`SwiftieMusic(enabled = false)`），
  *   那时候还劝人戴耳机就是骗人 —— 提示与实际播放必须一致
+ * @param prerollMs 前奏进度（ms）。只在 draw 阶段读，组合期一次都不失效
  */
 @Composable
 private fun SwiftieQuizStage(
     quiz: SwiftieQuizState,
     showAudioHint: Boolean,
+    prerollMs: () -> Float,
     onQuizChange: (SwiftieQuizState) -> Unit,
     onSubmitCenter: (Offset) -> Unit,
     onKeyHaptic: () -> Unit
@@ -486,27 +579,73 @@ private fun SwiftieQuizStage(
     // 而字号档位能把它顶到两倍。写死 dp 会让提示压在键盘末行上
     val audioHintBand = (AUDIO_HINT_BAND_BASE * LocalDensity.current.fontScale)
         .coerceIn(AUDIO_HINT_BAND_BASE, AUDIO_HINT_BAND_MAX)
+    // 键盘采海报这一层做模糊。API < 31 上 hazeBlur 不生效，键盘自己退到厚一档透明度
+    val hazeState = remember { HazeState() }
 
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing),
-        contentAlignment = Alignment.Center
-    ) {
-        // 版面总高 = 灯箱(1×宽) + 间距 + 键盘(≈0.833×宽 + 13dp) ⇒ 1.833×宽 + 33dp
-        val fitByHeight = (maxHeight - audioHintBand - CONTENT_GAP - 13.dp) / 1.833f
-        val contentWidth = minOf(maxWidth - 40.dp, CONTENT_MAX_WIDTH, fitByHeight)
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val density = LocalDensity.current
+        val insets = WindowInsets.safeDrawing
+        val topInset = with(density) { insets.getTop(density).toDp() }
+        val bottomInset = with(density) { insets.getBottom(density).toDp() }
+
+        val keypadWidth = minOf(maxWidth - 40.dp, KEYPAD_MAX_WIDTH)
+        val keypadHeight = swiftieKeypadHeight(keypadWidth)
+        // 底部这一摞的总高。算式底边不能越过它
+        val bottomStack =
+            LUCKY_BAND + 8.dp + audioHintBand + 10.dp + keypadHeight + 12.dp + bottomInset
+        val fit = swiftiePosterFit(
+            screen = with(density) { Size(maxWidth.toPx(), maxHeight.toPx()) },
+            equationBottomLimit = with(density) { (maxHeight - bottomStack - EQUATION_GAP).toPx() },
+            // 顶边给状态栏与 ✕ 让位：✕ 是 36dp 底衬 + 8dp 内边距
+            equationTopLimit = with(density) { (topInset + 52.dp).toPx() },
+            maxTextWidth = with(density) { POSTER_MAX_WIDTH.toPx() }
+        )
+
+        // 三个 lambda 全部只在 draw 阶段求值
+        val settle: () -> Float = {
+            FastOutSlowInEasing.transform(
+                ((prerollMs() - PREROLL_SETTLE_AT) / PREROLL_SETTLE_MS).coerceIn(0f, 1f)
+            )
+        }
+        // 负数表示还没落笔，drawScript 会直接返回
+        val scriptRevealMs: () -> Long = { (prerollMs() - PREROLL_SCRIPT_AT).toLong() }
+
+        SwiftiePoster(
+            state = quiz,
+            fit = fit,
+            settle = settle,
+            scriptRevealMs = scriptRevealMs,
+            modifier = Modifier.hazeSource(state = hazeState)
+        )
 
         Column(
-            modifier = Modifier.padding(bottom = audioHintBand),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(bottom = 12.dp)
+                // 答对后整摞下滑出画并淡掉 —— 腾出来的正是算式归位要占的地方。
+                // 两条提示不单独退场，跟着这一层走，否则会在同一瞬间硬切消失
+                .graphicsLayer {
+                    val exit = (prerollMs() / PREROLL_KEYPAD_MS).coerceIn(0f, 1f)
+                    translationY = exit * (size.height + 24.dp.toPx())
+                    alpha = 1f - exit
+                },
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            SwiftieBillboard(state = quiz, modifier = Modifier.width(contentWidth))
-            Spacer(modifier = Modifier.height(CONTENT_GAP))
+            Box(modifier = Modifier.height(LUCKY_BAND), contentAlignment = Alignment.Center) {
+                SwiftieLuckyHint(visible = quiz.showLuckyHint)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Box(modifier = Modifier.height(audioHintBand), contentAlignment = Alignment.Center) {
+                if (showAudioHint) {
+                    SwiftieAudioHint(advice = audioAdvice)
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
             SwiftieKeypad(
                 canSubmit = quiz.canSubmit,
                 enabled = !quiz.solved,
+                hazeState = hazeState,
                 onDigit = { digit ->
                     onKeyHaptic()
                     onQuizChange(quiz.append(digit))
@@ -517,17 +656,7 @@ private fun SwiftieQuizStage(
                 },
                 onSubmit = { onQuizChange(quiz.submit()) },
                 onSubmitCenter = onSubmitCenter,
-                modifier = Modifier.width(contentWidth)
-            )
-        }
-
-        // 答对之后不再提示 —— 那时已经来不及去开声音了，序列马上就要起
-        if (showAudioHint && !quiz.solved) {
-            SwiftieAudioHint(
-                advice = audioAdvice,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 20.dp, vertical = 8.dp)
+                modifier = Modifier.width(keypadWidth)
             )
         }
     }
