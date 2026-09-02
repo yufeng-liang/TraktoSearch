@@ -2078,6 +2078,8 @@
     <string name="swiftie_quiz_backspace">삭제</string>
     <string name="swiftie_era_card_a11y">%1$s, %2$s 발매, 총 %3$d곡</string>
     <string name="swiftie_eras_axis_a11y">앨범 타임라인, 2006년부터 2025년까지 총 12장. 드래그하면 해당 시대로 이동합니다.</string>
+    <string name="swiftie_finale_a11y">Taylor Swift의 글리터 사인. 그 아래 우정 팔찌 세 개: 13 하트 87, SWIFTIE, %1$s. 팔찌 아래에는 \'당신과 Taylor, 언제까지나 함께\'라고 적혀 있습니다.</string>
+    <string name="swiftie_finale_a11y_plain">Taylor Swift의 글리터 사인. 그 아래 우정 팔찌 두 개: 13 하트 87, SWIFTIE. 팔찌 아래에는 \'당신과 Taylor, 언제까지나 함께\'라고 적혀 있습니다.</string>
     <string name="swiftie_skip">건너뛰기</string>
     <string name="swiftie_resume">계속</string>
     <string name="swiftie_audio_hint_all">소리를 켜고 이어폰을 착용하면 가장 좋습니다</string>

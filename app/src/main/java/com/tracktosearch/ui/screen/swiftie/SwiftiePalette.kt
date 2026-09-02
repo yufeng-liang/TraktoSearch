@@ -33,7 +33,11 @@ object SwiftiePalette {
 
 object SwiftieFonts {
     /**
-     * 落款签名：Pacifico，粗圆花体。只子集化了 `Taylor Swift` 那几个字形。
+     * 落款签名：Pacifico，粗圆花体。只子集化了 `Taylor Swift` 与那句
+     * [FINALE_TAGLINE] 用到的字形 —— 拿它排别的字（比如用户昵称）会得到豆腐块。
+     *
+     * 重新子集化之后如果字形轮廓有变，必须重跑 `scripts/build-swiftie-signature-path.py`：
+     * [SwiftieSignaturePath] 的中线是按这份轮廓量出来的。
      *
      * 出题页那句「Congrats on Forever!」**不用它** —— 那是从原图描出来的矢量
      * （见 [SwiftieCongratsPath]），原作者用的 Filmotype LaCrosse 是商业字体、

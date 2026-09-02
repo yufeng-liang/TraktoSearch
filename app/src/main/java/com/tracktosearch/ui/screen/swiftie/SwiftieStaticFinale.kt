@@ -20,7 +20,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.tracktosearch.ui.screen.swiftie.bracelet.BRACELET_SETTLED_MS
 import com.tracktosearch.ui.screen.swiftie.bracelet.SwiftieBracelet
 import com.tracktosearch.ui.screen.swiftie.bracelet.braceletHeightFor
@@ -44,11 +43,13 @@ private fun staticElapsedFor(era: SwiftieEra, index: Int): Long =
 /**
  * 「减少动效」下的静态终态（Spec §11.1）。
  *
- * 一次性把签名、落款、手链、12 个时代全铺出来，用户自己滚动看。没有任何时序，
+ * 一次性把签名、手链、文案、12 个时代全铺出来，用户自己滚动看。没有任何时序，
  * 也没有配乐。
+ *
+ * @param nickname 串在最前那条手链上的昵称，null 时只挂两条
  */
 @Composable
-fun SwiftieStaticFinale(modifier: Modifier = Modifier) {
+fun SwiftieStaticFinale(nickname: String?, modifier: Modifier = Modifier) {
     Box(modifier = modifier.fillMaxSize()) {
         SwiftieWatercolorSky(modifier = Modifier.fillMaxSize())
 
@@ -61,26 +62,32 @@ fun SwiftieStaticFinale(modifier: Modifier = Modifier) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            // animated = false：这是一张停着的画面，闪粉挂无限动画会把帧时钟永久唤着
-            SwiftieSignature(
-                elapsedInSignature = { SIGNATURE_DONE_MS },
-                animated = false
-            )
-
-            SwiftieMarkerText(
-                text = SIGNATURE_CAPTION,
-                fontSize = 14.sp,
-                color = SwiftiePalette.RoyalBlue
-            )
-
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                SwiftieBracelet(
-                    elapsedInBracelet = { BRACELET_SETTLED_MS },
-                    interactive = false,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(braceletHeightFor(maxWidth))
+            // 签名、手链、文案合读成一句；时代卡片各有自己的 a11y 文案，不能一起并进来
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(finaleSemantics(nickname))
+            ) {
+                // animated = false：这是一张停着的画面，闪粉挂无限动画会把帧时钟永久唤着
+                SwiftieSignature(
+                    elapsedInSignature = { SIGNATURE_DONE_MS },
+                    animated = false
                 )
+
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    SwiftieBracelet(
+                        elapsedInBracelet = { BRACELET_SETTLED_MS },
+                        interactive = false,
+                        nickname = nickname,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(braceletHeightFor(maxWidth))
+                    )
+                }
+
+                SwiftieTagline(modifier = Modifier.fillMaxWidth())
             }
 
             Spacer(modifier = Modifier.height(4.dp))

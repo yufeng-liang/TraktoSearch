@@ -56,6 +56,8 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieErasStage
 import dev.chrisbanes.haze.HazeState
@@ -280,6 +282,10 @@ private fun SwiftieEggContent(
     onCommitUnlock: () -> Unit,
     replay: Boolean
 ) {
+    // 只为了纪念页手链上那颗昵称珠。在这里取而不是在 MainScreen 传进来：
+    // 彩蛋是自成一体的一屏，调用方不该为了它多认识一个仓库
+    val nicknameViewModel: SwiftieNicknameViewModel = hiltViewModel()
+    val nickname by nicknameViewModel.nickname.collectAsStateWithLifecycle()
     var quiz by remember { mutableStateOf(SwiftieQuizState()) }
     // Unspecified 而不是 Zero：SwiftieDiffusion 用 isSpecified 判「键盘还没上报坐标」，
     // 给 Zero 会被当成一个真坐标，扩散就从左上角开始而不是回退到屏幕中心
@@ -554,12 +560,13 @@ private fun SwiftieEggContent(
         if (phase >= SwiftieSequencePhase.SIGNATURE && phase <= SwiftieSequencePhase.REWIND) {
             SwiftieFinaleStage(
                 elapsedMs = { clock.elapsedMs },
+                nickname = nickname,
                 modifier = Modifier.graphicsLayer { alpha = finaleAlpha() }
             )
         }
 
         if (staticFinale && staticHoldDone) {
-            SwiftieStaticFinale()
+            SwiftieStaticFinale(nickname = nickname)
         }
 
         // T1100 之前按 ✕ 算放弃（不消耗解题机会），之后算已通关。

@@ -40,15 +40,20 @@ python -m fontTools.varLib.instancer "$TMP/josefin-var.ttf"  wght=600 -o "$TMP/j
 python -m fontTools.varLib.instancer "$TMP/inter-var.ttf"     wght=500 opsz=28 -o "$TMP/inter.ttf"
 python -m fontTools.varLib.instancer "$TMP/playfair-var.ttf"  wght=400 -o "$TMP/playfair.ttf"
 
-sub() { # sub <src> <dest-name> <text>
-  python -m fontTools.subset "$TMP/$1.ttf" \
-    --text="$3" --layout-features='*' --no-hinting --desubroutinize \
-    --output-file="$OUT/$2.ttf"
+sub() { # sub <src> <dest-name> <text> [extra fontTools.subset args...]
+  local src="$1" dest="$2" text="$3"
+  shift 3
+  python -m fontTools.subset "$TMP/$src.ttf" \
+    --text="$text" --layout-features='*' --no-hinting --desubroutinize \
+    "$@" --output-file="$OUT/$dest.ttf"
 }
 
-# swiftie_script 只留签名那两个词 —— 「Congrats on Forever!」已改成描原图的矢量
-# （见 SwiftieCongratsPath.kt），提示行改用 Honey Script
-sub pacifico    swiftie_script      'TaylorSwift '
+# swiftie_script 留签名那两个词，加上纪念页最下面那句 You & Taylor — forever & always.
+# （FINALE_TAGLINE）。破折号是 U+2014，不在 --text 里写，免得脚本文件的编码影响产物。
+# 改了这一行的字符集就要重跑 scripts/build-swiftie-signature-path.py —— 签名的中线是按
+# 这份轮廓量出来的。「Congrats on Forever!」已改成描原图的矢量（见 SwiftieCongratsPath.kt），
+# 提示行改用 Honey Script
+sub pacifico    swiftie_script      'TaylorSwift You&forever always.' --unicodes=U+2014
 sub honey       swiftie_honey       '0123456789+=XHerluckynmb. '
 sub greatvibes  era_taylor_swift    'Taylor Swift'
 sub josefin     era_fearless        'Fearless'

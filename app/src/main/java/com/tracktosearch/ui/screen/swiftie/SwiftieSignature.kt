@@ -9,9 +9,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
@@ -20,7 +19,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
-import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -30,196 +29,337 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.res.ResourcesCompat
 import com.tracktosearch.R
 import kotlin.math.PI
-import kotlin.math.max
+import kotlin.math.hypot
 import kotlin.math.sin
 
-/** 11 段书写合计占用。 */
+/** 十二笔书写合计占用。 */
 const val SIGNATURE_WRITE_MS: Long = 6_800L
 
-/** 段间落笔停顿。10 个间隙共 500ms。 */
-const val SIGNATURE_PAUSE_MS: Long = 50L
+/**
+ * 抬笔停顿合计占用，按 [SwiftieSignaturePath.PAUSE_WEIGHT] 分给 11 个间隙。
+ *
+ * 是**总量**而不是每个间隙的时长：补 `i` 上那一点之前要停久一点、换词之前也要停，
+ * 每个间隙不一样长，但合计锁死，签名段的账本才不会被笔数一改就崩。
+ */
+const val SIGNATURE_PAUSE_TOTAL_MS: Long = 500L
 
 /** 写完之后整字通体闪一次。 */
 const val SIGNATURE_FLASH_MS: Long = 700L
 
-/**
- * 一个字形在签名路径里的位置。
- *
- * @param fromX 该字形左边界（已归一到路径包围盒左上角为原点）
- * @param toX 下一个字形的左边界；末位取路径右边界
- * @param tipY 该字形竖向中心，笔尖亮点跟着它走
- */
-internal class SignatureGlyph(val fromX: Float, val toX: Float, val tipY: Float)
-
-/** 一段笔画：[startMs]..[endMs] 之间把揭示前沿从 [fromX] 推到 [toX]。 */
-internal class SignatureStroke(
-    val fromX: Float,
-    val toX: Float,
-    val fromTipY: Float,
-    val toTipY: Float,
-    val startMs: Long,
-    val endMs: Long
-)
+/** 一笔的时间窗口：[startMs] 落笔，[endMs] 收笔，之后是抬笔停顿。 */
+internal class SignatureWindow(val startMs: Long, val endMs: Long)
 
 /**
- * 按字形宽度分配书写时间。
+ * 把书写与停顿两份预算按权重分给每一笔。
  *
- * 宽字形写得久、窄字形写得快 —— 笔速恒定才像手写；平均分配会让 `l` 一闪而过、
- * `T` 慢得像卡住。取整误差全部由最后一段吸收，所以整表总长严格等于
- * `writeMs + pauseMs × (n - 1)`。
+ * 两份分开算，所以「哪一笔写多久」和「哪个间隙停多久」互不影响。取整误差各自由最后一份
+ * 吸收：书写给末笔，停顿给最后一个真有停顿的间隙（末笔之后不停）。于是末笔收笔时刻严格
+ * 等于 `writeMs + pauseMs`，加上 [SIGNATURE_FLASH_MS] 正好是账本给签名段的
+ * [SwiftieTimeline.SIGNATURE_MS]。
  */
-internal fun buildSignatureStrokes(
-    glyphs: List<SignatureGlyph>,
+internal fun buildSignatureWindows(
+    writeWeights: FloatArray,
+    pauseWeights: FloatArray,
     writeMs: Long,
     pauseMs: Long
-): List<SignatureStroke> {
-    if (glyphs.isEmpty()) return emptyList()
-    // coerceAtLeast(1f)：零宽字形会让下面除出 NaN
-    val widths = glyphs.map { (it.toX - it.fromX).coerceAtLeast(1f) }
-    val totalWidth = widths.sum()
+): List<SignatureWindow> {
+    if (writeWeights.isEmpty()) return emptyList()
+    val writeTotal = writeWeights.sum().toDouble().coerceAtLeast(1e-6)
+    val pauseTotal = pauseWeights.sum().toDouble()
+    // 只有一笔时没有间隙，下面的除法也就不会碰到 0
+    val lastPause = pauseWeights.indexOfLast { it > 0f }
     var cursor = 0L
-    var spent = 0L
-    return glyphs.mapIndexed { index, glyph ->
-        val duration = if (index == glyphs.lastIndex) {
-            writeMs - spent
+    var writeSpent = 0L
+    var pauseSpent = 0L
+    return List(writeWeights.size) { index ->
+        val write = if (index == writeWeights.lastIndex) {
+            writeMs - writeSpent
         } else {
-            (writeMs * widths[index] / totalWidth).toLong()
+            (writeMs * writeWeights[index] / writeTotal).toLong()
         }
-        spent += duration
+        writeSpent += write
+        val pause = when {
+            lastPause < 0 -> 0L
+            index == lastPause -> pauseMs - pauseSpent
+            else -> (pauseMs * pauseWeights[index] / pauseTotal).toLong()
+        }
+        pauseSpent += pause
         val start = cursor
-        val end = start + duration
-        cursor = end + pauseMs
-        SignatureStroke(
-            fromX = glyph.fromX,
-            toX = glyph.toX,
-            // 笔尖从上一个字形的高度过渡到这一个，段间不会突然跳一格
-            fromTipY = glyphs[(index - 1).coerceAtLeast(0)].tipY,
-            toTipY = glyph.tipY,
-            startMs = start,
-            endMs = end
-        )
+        cursor = start + write + pause
+        SignatureWindow(startMs = start, endMs = start + write)
     }
-}
-
-/** [elapsedMs] 时刻揭示前沿的横坐标。 */
-internal fun List<SignatureStroke>.revealXAt(elapsedMs: Long): Float {
-    if (isEmpty()) return 0f
-    forEach { stroke ->
-        if (elapsedMs < stroke.startMs) return stroke.fromX
-        if (elapsedMs <= stroke.endMs) {
-            val span = (stroke.endMs - stroke.startMs).coerceAtLeast(1L)
-            // 线性推进：书写速度在一个字形内恒定，收尾不减速
-            val p = (elapsedMs - stroke.startMs).toFloat() / span
-            return stroke.fromX + (stroke.toX - stroke.fromX) * p
-        }
-    }
-    return last().toX
-}
-
-/** [elapsedMs] 时刻笔尖亮点的纵坐标。 */
-internal fun List<SignatureStroke>.tipYAt(elapsedMs: Long): Float {
-    if (isEmpty()) return 0f
-    forEach { stroke ->
-        if (elapsedMs < stroke.startMs) return stroke.fromTipY
-        if (elapsedMs <= stroke.endMs) {
-            val span = (stroke.endMs - stroke.startMs).coerceAtLeast(1L)
-            val p = (elapsedMs - stroke.startMs).toFloat() / span
-            return stroke.fromTipY + (stroke.toTipY - stroke.fromTipY) * p
-        }
-    }
-    return last().toTipY
 }
 
 /** 书写全部结束的时刻。收尾闪光从这里起算。 */
-internal val List<SignatureStroke>.writeEndMs: Long
+internal val List<SignatureWindow>.writeEndMs: Long
     get() = if (isEmpty()) 0L else last().endMs
 
-/** 签名文字。**永不翻译**，也不做任何本地化替换。 */
-private const val SIGNATURE_TEXT = "Taylor Swift"
-
-/** 笔尖亮点半径。 */
-private val TIP_RADIUS = 3.5.dp
+/** 探路字号。100px 只是个够大的整数，用来量出「一个 em 值多少像素」。 */
+private const val PROBE_TEXT_SIZE = 100f
 
 /**
  * 签名宽度上限。
  *
  * 300dp 是设计值，但**只能当上限用** —— 签名的高度由字形包围盒等比推出来，
  * 写死 300dp 在 320dp 宽的小屏（去掉两侧 20dp 内边距只剩 280dp）会横向溢出，
- * 而外层是 `Column` 不是 `clip`，溢出的那截要么被父级裁掉要么把落款挤歪。
+ * 而外层是 `Column` 不是 `clip`，溢出的那截要么被父级裁掉要么把下面的东西挤歪。
  */
 private val SIGNATURE_MAX_WIDTH = 300.dp
 
 /** 定格闪粉用的相位。挑 0.35 是箔面渐变正好偏亮的一档，静止看着不发灰。 */
 private const val SIGNATURE_STILL_PHASE = 0.35f
 
-/** 构建好的签名图形：归一到左上角为原点的轮廓 + 尺寸 + 笔画时间表。 */
-private class SignatureArt(
-    val path: Path,
-    val width: Float,
-    val height: Float,
-    val strokes: List<SignatureStroke>
-)
+/**
+ * 一笔的笔心中线，已经按字号缩放、按笔位平移到画布坐标。
+ *
+ * @param halfWidth 每个点上的半宽
+ * @param t 每个点的累计时间比例，离线烤好（曲率大处慢、回描段快）
+ */
+private class SignatureStroke(
+    val x: FloatArray,
+    val y: FloatArray,
+    val halfWidth: FloatArray,
+    val t: FloatArray,
+    val window: SignatureWindow
+) {
+
+    /**
+     * 把「写到 [progress] 为止」的墨迹追加到 [into]。
+     *
+     * 一段一段铺矩形（两端各按自己的半宽），再在每个点上盖一个圆盘。圆盘就是圆角接头：
+     * 少了它，急转弯的外侧会缺一个楔形。铺出字形之外没关系，字形 mask 会裁掉。
+     */
+    fun appendTo(into: Path, progress: Float) {
+        var head = 0
+        while (head + 1 < t.size && t[head + 1] <= progress) head++
+        for (index in 0 until head) {
+            quad(
+                into,
+                x[index], y[index], halfWidth[index],
+                x[index + 1], y[index + 1], halfWidth[index + 1]
+            )
+            disc(into, x[index], y[index], halfWidth[index])
+        }
+        disc(into, x[head], y[head], halfWidth[head])
+        if (head + 1 >= t.size) return
+        // 段内插值出笔尖：只按整点走的话，笔迹会一格一格跳
+        val span = t[head + 1] - t[head]
+        val fraction = if (span > 1e-6f) ((progress - t[head]) / span).coerceIn(0f, 1f) else 0f
+        if (fraction <= 0f) return
+        val tipX = x[head] + (x[head + 1] - x[head]) * fraction
+        val tipY = y[head] + (y[head + 1] - y[head]) * fraction
+        val tipWidth = halfWidth[head] + (halfWidth[head + 1] - halfWidth[head]) * fraction
+        quad(into, x[head], y[head], halfWidth[head], tipX, tipY, tipWidth)
+        disc(into, tipX, tipY, tipWidth)
+    }
+}
 
 /**
- * 量字形、取轮廓、算时间表。**只在字号变化时跑一次**（`remember` 缓存）。
+ * 一段变宽的矩形。
  *
- * 两次 `getTextPath`：第一次按 100px 探路以求出达到 [targetWidthPx] 需要的字号，
- * 第二次才是真正要用的轮廓。`Pacifico` 的花体会伸出字符宽度之外，所以宽高一律取
+ * 法向量取这一段自己的方向 —— 用相邻两段的平均法向在急转处会退化。拐角由 [disc] 补。
+ */
+private fun quad(
+    into: Path,
+    fromX: Float, fromY: Float, fromWidth: Float,
+    toX: Float, toY: Float, toWidth: Float
+) {
+    val dx = toX - fromX
+    val dy = toY - fromY
+    val length = hypot(dx, dy)
+    if (length < 1e-4f) return
+    val nx = -dy / length
+    val ny = dx / length
+    into.moveTo(fromX - nx * fromWidth, fromY - ny * fromWidth)
+    into.lineTo(toX - nx * toWidth, toY - ny * toWidth)
+    into.lineTo(toX + nx * toWidth, toY + ny * toWidth)
+    into.lineTo(fromX + nx * fromWidth, fromY + ny * fromWidth)
+    into.close()
+}
+
+/**
+ * 一个圆盘。
+ *
+ * 用两段正角弧拼，绕向（顺时针）与 [quad] 一致：默认的 NonZero 填充下，反绕向的形状会把
+ * 重叠处抵消成空洞，而这条带子处处重叠 —— `addOval` 是逆时针的，不能用。
+ */
+private fun disc(into: Path, centerX: Float, centerY: Float, radius: Float) {
+    if (radius <= 0f) return
+    val box = Rect(centerX - radius, centerY - radius, centerX + radius, centerY + radius)
+    into.arcTo(box, 0f, 180f, forceMoveTo = true)
+    into.arcTo(box, 180f, 180f, forceMoveTo = false)
+    into.close()
+}
+
+/**
+ * 构建好的签名图形：字形轮廓（当 mask）+ 尺寸 + 十二笔的中线与时间窗口。
+ *
+ * 揭示区域分**两块**给出来（[settledInk] / [freshInk]），要分别裁：字形轮廓的绕向由字体
+ * 决定，与 [quad]/[disc] 那套顺时针铺片相反，合进同一条路径之后 NonZero 填充会把两者
+ * 重叠的地方抵消成空洞 —— 花体的字母是连笔的，真的会重叠，接笔处就会缺一块。各自绕向
+ * 一致，各自裁一次，就没有这个问题。
+ *
+ * @param finishedGlyph 每一笔写完时该并入的**整字轮廓**；该字形还有笔没写完就是 null
+ *   （`i` 的主体等着补点）
+ */
+private class SignatureArt(
+    val outline: Path,
+    val width: Float,
+    val height: Float,
+    private val strokes: List<SignatureStroke>,
+    private val finishedGlyph: List<Path?>
+) {
+
+    val writeEndMs: Long = strokes.map { it.window }.writeEndMs
+
+    /** 已经整字写完的部分。跨帧留着，只在写完一个字时追加。 */
+    private val done = Path()
+    private var cached = 0
+
+    /** [freshInk] 每帧复用，省掉一次分配。调用方只读，不留存。 */
+    private val scratch = Path()
+
+    /**
+     * 已经**整字**写完的墨；null 表示一个字都还没写完。
+     *
+     * 整字写完就换成字形轮廓：几条曲线代替上百个铺片，每帧的裁剪路径小一个数量级。
+     * 覆盖率是 100%（生成脚本自检不过就不出表），两者画出来是同一块墨。
+     */
+    fun settledInk(elapsedMs: Long): Path? {
+        val whole = wholeGlyphStrokes(elapsedMs)
+        // 时间倒回（静态终态传的是常量，重组也可能换时钟）：缓存作废重建
+        if (cached > whole) {
+            done.reset()
+            cached = 0
+        }
+        while (cached < whole) {
+            finishedGlyph[cached]?.let { done.addPath(it) }
+            cached++
+        }
+        return if (cached == 0) null else done
+    }
+
+    /** 正在写的那笔，外加写完了但整字还没写完的那几笔。null 表示还没落笔。 */
+    fun freshInk(elapsedMs: Long): Path? {
+        val finished = finishedStrokes(elapsedMs)
+        var any = false
+        scratch.reset()
+        for (index in wholeGlyphStrokes(elapsedMs) until finished) {
+            strokes[index].appendTo(scratch, 1f)
+            any = true
+        }
+        val active = strokes.getOrNull(finished)
+        if (active != null && elapsedMs >= active.window.startMs) {
+            val span = (active.window.endMs - active.window.startMs).coerceAtLeast(1L)
+            active.appendTo(scratch, (elapsedMs - active.window.startMs).toFloat() / span)
+            any = true
+        }
+        return if (any) scratch else null
+    }
+
+    private fun finishedStrokes(elapsedMs: Long): Int {
+        var count = 0
+        while (count < strokes.size && elapsedMs >= strokes[count].window.endMs) count++
+        return count
+    }
+
+    /** 前多少笔属于「已经整字写完」的字形。 */
+    private fun wholeGlyphStrokes(elapsedMs: Long): Int {
+        var whole = 0
+        for (index in 0 until finishedStrokes(elapsedMs)) {
+            if (finishedGlyph[index] != null) whole = index + 1
+        }
+        return whole
+    }
+}
+
+/**
+ * 逐字形取轮廓，按笔位摆好。返回值按 [text] 的下标索引，空格是 null。
+ *
+ * **不用 `getTextPath(text, 0, length, …)` 一次取整串**：[SwiftieSignaturePath] 的点表是
+ * 逐字形量出来的，而这个字体带 GPOS `kern`，整串取到的轮廓与「逐字形 + `measureText`
+ * 笔位」摆出来的会差出零点几个像素。差这么一点，mask 边上就会留一条永远揭示不到的细线。
+ * 让 mask 和笔迹用同一套笔位，两边就严格对齐。
+ */
+private fun glyphOutlines(
+    paint: android.graphics.Paint,
+    text: String
+): List<android.graphics.Path?> = text.mapIndexed { index, char ->
+    if (char.isWhitespace()) {
+        null
+    } else {
+        android.graphics.Path().also {
+            paint.getTextPath(text, index, index + 1, paint.measureText(text, 0, index), 0f, it)
+        }
+    }
+}
+
+private fun union(paths: List<android.graphics.Path?>): android.graphics.Path =
+    android.graphics.Path().apply { paths.forEach { it?.let(::addPath) } }
+
+/**
+ * 量字形、摆中线、算时间表。**只在字号变化时跑一次**（`remember` 缓存）。
+ *
+ * 两轮 [glyphOutlines]：第一轮按 [PROBE_TEXT_SIZE] 探路，求出达到 [targetWidthPx] 需要的
+ * 字号；第二轮才是真正要用的轮廓。`Pacifico` 的花体会伸出字符宽度之外，所以宽高一律取
  * **路径包围盒**而不是 `measureText`。
  */
 private fun buildSignatureArt(context: Context, targetWidthPx: Float): SignatureArt {
     val paint = android.graphics.Paint().apply {
         isAntiAlias = true
         typeface = ResourcesCompat.getFont(context, R.font.swiftie_script)
-        textSize = 100f
+        textSize = PROBE_TEXT_SIZE
     }
-    val probe = android.graphics.Path()
-    paint.getTextPath(SIGNATURE_TEXT, 0, SIGNATURE_TEXT.length, 0f, 0f, probe)
+    val text = SwiftieSignaturePath.TEXT
     val probeBounds = android.graphics.RectF()
-    probe.computeBounds(probeBounds, true)
-    paint.textSize = 100f * targetWidthPx / probeBounds.width().coerceAtLeast(1f)
+    union(glyphOutlines(paint, text)).computeBounds(probeBounds, true)
+    paint.textSize = PROBE_TEXT_SIZE * targetWidthPx / probeBounds.width().coerceAtLeast(1f)
 
-    val full = android.graphics.Path()
-    paint.getTextPath(SIGNATURE_TEXT, 0, SIGNATURE_TEXT.length, 0f, 0f, full)
+    val glyphs = glyphOutlines(paint, text)
+    val outline = union(glyphs)
     val bounds = android.graphics.RectF()
-    full.computeBounds(bounds, true)
+    outline.computeBounds(bounds, true)
     // 平移到包围盒左上角为原点；下面所有坐标都在这个空间里
-    full.offset(-bounds.left, -bounds.top)
+    outline.offset(-bounds.left, -bounds.top)
+    glyphs.forEach { it?.offset(-bounds.left, -bounds.top) }
 
-    val glyphPath = android.graphics.Path()
-    val glyphBounds = android.graphics.RectF()
-    val glyphs = SIGNATURE_TEXT.indices
-        // 空格不是一段笔画。11 段：Taylor 六段 + Swift 五段
-        .filter { !SIGNATURE_TEXT[it].isWhitespace() }
-        .map { index ->
-            glyphPath.reset()
-            paint.getTextPath(SIGNATURE_TEXT, index, index + 1, 0f, 0f, glyphPath)
-            glyphPath.computeBounds(glyphBounds, true)
-            SignatureGlyph(
-                fromX = paint.measureText(SIGNATURE_TEXT, 0, index) - bounds.left,
-                toX = paint.measureText(SIGNATURE_TEXT, 0, index + 1) - bounds.left,
-                tipY = (glyphBounds.top + glyphBounds.bottom) / 2f - bounds.top
-            )
-        }
-        .toMutableList()
-
-    // 末笔的字符前进量可能短于花体实际伸出的右边界，不补齐会留一小截永远不揭示
-    val last = glyphs.last()
-    glyphs[glyphs.lastIndex] = SignatureGlyph(
-        fromX = last.fromX,
-        toX = max(last.toX, bounds.width()),
-        tipY = last.tipY
+    val size = paint.textSize
+    val pens = FloatArray(text.length) { paint.measureText(text, 0, it) - bounds.left }
+    val windows = buildSignatureWindows(
+        writeWeights = SwiftieSignaturePath.WRITE_WEIGHT,
+        pauseWeights = SwiftieSignaturePath.PAUSE_WEIGHT,
+        writeMs = SIGNATURE_WRITE_MS,
+        pauseMs = SIGNATURE_PAUSE_TOTAL_MS
     )
+    val stride = SwiftieSignaturePath.STRIDE
+    val index = SwiftieSignaturePath.GLYPH_INDEX
+    val strokes = SwiftieSignaturePath.POINTS.mapIndexed { order, points ->
+        val count = points.size / stride
+        val penX = pens[index[order]]
+        SignatureStroke(
+            // 点表是 em 单位、y 向下、基线为 0、原点在该字形的落笔处
+            x = FloatArray(count) { penX + points[it * stride] * size },
+            y = FloatArray(count) { -bounds.top + points[it * stride + 1] * size },
+            halfWidth = FloatArray(count) { points[it * stride + 2] * size },
+            t = FloatArray(count) { points[it * stride + 3] },
+            window = windows[order]
+        )
+    }
+    // 同一个字形的最后一笔才认「整字写完」
+    val finishedGlyph = index.mapIndexed { order, glyph ->
+        if (order + 1 < index.size && index[order + 1] == glyph) {
+            null
+        } else {
+            glyphs[glyph]?.asComposePath()
+        }
+    }
 
     return SignatureArt(
-        path = full.asComposePath(),
+        outline = outline.asComposePath(),
         width = bounds.width(),
         height = bounds.height(),
-        strokes = buildSignatureStrokes(
-            glyphs = glyphs,
-            writeMs = SIGNATURE_WRITE_MS,
-            pauseMs = SIGNATURE_PAUSE_MS
-        )
+        strokes = strokes,
+        finishedGlyph = finishedGlyph
     )
 }
 
@@ -231,13 +371,16 @@ private fun flashAlpha(elapsedMs: Long, writeEndMs: Long): Float {
 }
 
 /**
- * 逐段揭示的闪粉签名（Spec §7）。
+ * 一笔一笔写出来的闪粉签名（Spec §7）。
+ *
+ * 笔顺、笔速、每一点的笔宽都在 [SwiftieSignaturePath] 里，由离线脚本从字形骨架生成。
+ * 这里只负责把那些中线摆到画布上、按时间铺开。
  *
  * @param elapsedInSignature 签名段起点以来的毫秒。给一个 ≥ 8000 的常量就是写完的样子，
  *   「减少动效」的静态终态正是这么用的
  * @param animated 闪粉是否要一直闪。静态终态传 false —— 那是一张停着的画面，
  *   挂一条无限动画会把帧时钟永久唤着，用户忘了退出就一直在耗电。
- *   传 false 之后 `time` 恒定，两个 `drawBehind` 都不再有变化的 state 读，只画一次
+ *   传 false 之后 `time` 恒定，`drawBehind` 里不再有变化的 state 读，只画一次
  * @param widthLimit 宽度上限，默认 [SIGNATURE_MAX_WIDTH]。实际取它与可用宽度的较小值
  */
 @Composable
@@ -300,37 +443,29 @@ private fun SignatureArtwork(
                         height = size.height.toInt().coerceAtLeast(1)
                     )
                     CanvasDrawScope().draw(this, layoutDirection, Canvas(mask), size) {
-                        drawPath(path = art.path, color = Color.White)
+                        drawPath(path = art.outline, color = Color.White)
                     }
                     onDrawBehind {
                         val elapsed = elapsedInSignature()
-                        val revealX = art.strokes.revealXAt(elapsed)
-                        if (revealX <= 0f) return@onDrawBehind
-                        val flash = flashAlpha(elapsed, art.strokes.writeEndMs)
-                        // 箔面只铺到揭示前沿；前沿右边还没「写」到
-                        clipRect(left = 0f, top = 0f, right = revealX, bottom = size.height) {
+                        if (elapsed >= art.writeEndMs) {
+                            // 写完了：整字都是墨，形状交给 mask。这时再拿几百个铺片
+                            // 裁一遍，画出来是同一块东西
                             drawGlitterBody(time, sparkles)
+                            val flash = flashAlpha(elapsed, art.writeEndMs)
                             if (flash > 0f) drawRect(color = Color.White, alpha = flash)
+                        } else {
+                            // 箔面只铺在已经写出来的墨上。两块分别裁（见 SignatureArt）：
+                            // 重叠处画了两遍，而箔面底色不透明，画两遍是同一块 ——
+                            // 只有闪点会在那条极窄的接笔带上稍亮一点
+                            art.settledInk(elapsed)?.let {
+                                clipPath(it) { drawGlitterBody(time, sparkles) }
+                            }
+                            art.freshInk(elapsed)?.let {
+                                clipPath(it) { drawGlitterBody(time, sparkles) }
+                            }
                         }
                         drawImage(image = mask, blendMode = BlendMode.DstIn)
                     }
-                }
-        )
-
-        Spacer(
-            modifier = Modifier
-                .matchParentSize()
-                .drawBehind {
-                    val elapsed = elapsedInSignature()
-                    if (elapsed > art.strokes.writeEndMs) return@drawBehind
-                    val center = Offset(
-                        x = art.strokes.revealXAt(elapsed),
-                        y = art.strokes.tipYAt(elapsed)
-                    )
-                    val radius = TIP_RADIUS.toPx()
-                    // 外圈柔光 + 内圈实心：一颗看得出在走的笔尖
-                    drawCircle(color = Color.White, radius = radius * 2.6f, center = center, alpha = 0.28f)
-                    drawCircle(color = Color.White, radius = radius, center = center, alpha = 0.95f)
                 }
         )
     }
