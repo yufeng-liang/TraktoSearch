@@ -141,7 +141,7 @@ Opus 解码自 Android 5.0 起支持、Ogg 容器同期可用，本项目 `minSd
 | 路径 | 内容 | 尺寸 | 格式 | 大小 |
 | --- | --- | --- | --- | --- |
 | app/src/main/res/drawable-nodpi/swiftie_poster_sky.webp | 抹去全部文字后的天空底版 | 1200×2136 | WebP 有损 q86 | 41 850 字节 |
-| app/src/main/res/drawable-nodpi/swiftie_glitter.webp | 闪粉贴图（从 `100` 笔画里挖出的内切正方形） | 100×100 | WebP 有损 q92 | 5 368 字节 |
+| app/src/main/res/drawable-nodpi/swiftie_glitter.webp | 闪粉贴板（整条算式那一块，非闪粉像素已补） | 640×1064 | WebP 有损 q92 | 102 030 字节 |
 
 **两张都是第三方海报的衍生物，授权状态由需求方声明。** 出题页复刻的是一张
 「13 + 87 = 100 / Congrats on Forever!」的闪粉海报（Taylor Swift × Travis Kelce 主题，
@@ -151,8 +151,10 @@ Opus 解码自 Android 5.0 起支持、Ogg 容器同期可用，本项目 `minSd
 
 - 天空底版：需求方提供的、已由其抹去文字的 PNG（1600×2848），本项目只做了缩放与
   WebP 转码。
-- 闪粉贴图：从原图 `100` 的笔画内部裁出的 100×100 区域，用作算式与答案槽的填充画刷。
-  颜色和颗粒因此不是调出来的，是原图本身（实测亮度跨 46–232）。
+- 闪粉贴板：原图上整条算式那一块（`13 + 87 = 100` 的并集包围盒，四周各多 24 个原图
+  像素的出血），框内非闪粉的像素用邻近闪粉补掉，缩到 640 宽。它**不是平铺贴图** ——
+  app 按同一个实测框把它贴回算式的位置，所以每个数字取到的就是当初印在这个数字里的
+  闪粉。颜色和颗粒因此不是调出来的，是原图本身（实测亮度跨 46–232）。
 - `app/src/main/java/com/tracktosearch/ui/screen/swiftie/SwiftieCongratsPath.kt`：
   「Congrats on Forever!」那三行手写体的**矢量描摹**（909 个点，三条路径）。原作者说
   用的是 Filmotype LaCrosse —— 商业字体，字体文件不能随包，所以改成从原图描轮廓。
