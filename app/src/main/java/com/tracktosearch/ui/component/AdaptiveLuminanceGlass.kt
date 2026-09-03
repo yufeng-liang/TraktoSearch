@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.component
 
 import android.graphics.Bitmap
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -77,6 +78,7 @@ class GlassLuminanceProbe internal constructor(internal val layer: GraphicsLayer
  * 两级停采：STARTED 以下（切后台/息屏）整个停；[LocalAmbientMotionActive] 为 false（没人操作、
  * 背景动效也已冻结）时挂起等下一次交互——此时屏幕内容不会变，读回纯属白烧。
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun rememberGlassLuminanceProbe(): GlassLuminanceProbe {
     val layer = rememberGraphicsLayer()
@@ -85,9 +87,11 @@ internal fun rememberGlassLuminanceProbe(): GlassLuminanceProbe {
     val started = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
     val motionActive = LocalAmbientMotionActive.current
     val isCurrentTab = LocalIsCurrentTab.current
-    val navigationTransitionRunning = LocalAnimatedVisibilityScope.current?.transition?.let { transition ->
-        transition.currentState != transition.targetState
-    } == true
+    // 共享元素的边界动画可能比 AnimatedVisibility 的进出场更长，只看后者的端点差异会提前
+    // 判定转场结束。两个信号取或：任一还在跑就算转场中；两个 scope 都拿不到时退回 false，
+    // 与没有转场时的行为一致。
+    val navigationTransitionRunning = LocalSharedTransitionScope.current?.isTransitionActive == true ||
+        LocalAnimatedVisibilityScope.current?.transition?.isRunning == true
     LaunchedEffect(probe, started, motionActive, isCurrentTab, navigationTransitionRunning) {
         // GPU->CPU 读回只服务当前稳定页面。隐藏 Pager 页和导航转场窗口中的探针
         // 没有用户可见收益，且会与列表恢复、共享元素和图片上传争用帧预算。
