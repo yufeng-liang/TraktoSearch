@@ -4,11 +4,13 @@ import android.content.Context
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -18,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -89,6 +92,9 @@ private val HEADPHONE_TYPES: Set<Int> = buildSet {
  */
 private const val AUDIO_POLL_MS = 700L
 
+/** 提示胶囊的底色。海报是浅色印刷品，白纱压一层就够宝蓝立住。 */
+private val HINT_CAPSULE = Color.White.copy(alpha = 0.62f)
+
 private fun AudioManager.hasHeadphones(): Boolean = runCatching {
     getDevices(AudioManager.GET_DEVICES_OUTPUTS).any { it.type in HEADPHONE_TYPES }
 }.getOrDefault(false)
@@ -143,9 +149,9 @@ internal fun rememberSwiftieAudioAdvice(): SwiftieAudioAdvice {
  * 插上耳机就立刻消失是更明确的反馈，而退场动画期间 advice 已经是 NONE、
  * 没有对应文案可读。
  *
- * 用色走 `onSurfaceVariant` 而**不是** [SwiftiePalette] ——
- * 这一行落在题面的 `surface` 底上（水彩天空只在灯箱那一块里），
- * 皇家蓝在深色模式下就是深蓝压深底，读不出来。
+ * 底是整屏闪粉海报，所以它自带一枚浅色胶囊，用色也跟着走 [SwiftiePalette.RoyalBlue]
+ * ——「跟随主题」在这里是错的：深色模式的 `onSurfaceVariant` 是浅灰，压在粉蓝天空上
+ * 读不出来，而胶囊本身把底压白之后宝蓝有 7:1 以上。
  */
 @Composable
 internal fun SwiftieAudioHint(
@@ -158,12 +164,15 @@ internal fun SwiftieAudioHint(
         SwiftieAudioAdvice.VOLUME -> R.string.swiftie_audio_hint_volume
         SwiftieAudioAdvice.VOLUME_AND_HEADPHONES -> R.string.swiftie_audio_hint_all
     }
-    val tint = MaterialTheme.colorScheme.onSurfaceVariant
+    val tint = SwiftiePalette.RoyalBlue
     Row(
         // liveRegion：这一行是**状态播报**而不是静态标签。用户插上耳机、调大音量，
         // 文案会换或整块消失，TalkBack 要跟着念出来，否则视障用户只能听到一次初始值。
         // Polite 而非 Assertive —— 它不该打断正在念的题目
-        modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        modifier = modifier
+            .semantics { liveRegion = LiveRegionMode.Polite }
+            .background(HINT_CAPSULE, CircleShape)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

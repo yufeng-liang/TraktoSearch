@@ -47,6 +47,23 @@ private const val AUTO_RESUME_MS: Long = 3_000L
 /** Lover 绽放的放大倍率。1.5 配上上移，视觉上就铺满了。 */
 private const val BLOOM_SCALE: Float = 0.5f
 
+/**
+ * 「跳过」那一行占的高度。
+ *
+ * 它**排在轴下面的常规流里**，不是浮在 `BottomEnd` —— 浮着的时候按钮
+ * （TextButton 最小 40dp + 4dp 外边距）正好压在轴下面那行年份上，右边的
+ * 「2025」和「跳过」两个字叠在一起。给它一行自己的高度，年份就落在按钮上方。
+ */
+private val SKIP_ROW_HEIGHT = 44.dp
+
+/**
+ * 「继续」离底边的距离：跳过那一行 + 年份 + 轴本身，再留 8dp。
+ *
+ * 写成加法而不是一个常量，是因为它要的语义是「停在轴上方」—— 上面几个数字
+ * 任何一个改了，这里必须跟着走，否则它会掉进轴里，而那一段轴是可拖的。
+ */
+private val RESUME_BOTTOM_PADDING = SKIP_ROW_HEIGHT + 16.dp + 48.dp + 8.dp
+
 /** 当前该显示第几张卡片。倒滑与绽放期间钉在 Lover。 */
 private fun activeEraIndexAt(elapsedMs: Long): Int =
     SwiftieTimeline.eraIndexAt(elapsedMs) ?: if (elapsedMs < SwiftieTimeline.ERAS_CARDS_START) {
@@ -129,6 +146,17 @@ fun SwiftieErasStage(
         derivedStateOf { clock.elapsedMs < SwiftieTimeline.ERAS_CARDS_END }
     }
 
+    // alpha = 0 的按钮照样点得到（graphicsLayer 只改绘制、不改命中区域），
+    // 所以淡入没走完之前必须同时 enabled = false。
+    // 收尾的倒滑与绽放期间也一并关掉：那时终局已经放完，跳过没有意义，
+    // 而 skipToFinalHold 会把时钟倒拨回去，Lover 就与配乐错开了
+    val skipVisible by remember {
+        derivedStateOf {
+            clock.elapsedMs < SwiftieTimeline.SIGNATURE_START &&
+                (replay || clock.elapsedMs >= SKIP_FADE_IN_AT_MS)
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
         Column(modifier = Modifier.fillMaxSize()) {
             BoxWithConstraints(
@@ -187,7 +215,38 @@ fun SwiftieErasStage(
                 modifier = Modifier.graphicsLayer { alpha = 1f - bloomProgress() }
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            // 「跳过」占住轴下面这一行。高度写死，按钮淡出时这一行也不塌 ——
+            // 塌下去整根轴会往下挪 44dp，收尾那几秒看着像画面沉了一下
+            Box(
+                modifier = Modifier.fillMaxWidth().height(SKIP_ROW_HEIGHT),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                TextButton(
+                    onClick = {
+                        clock.skipToFinalHold()
+                        onFrozenChange(false)
+                    },
+                    enabled = skipVisible,
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .graphicsLayer {
+                            // 重看时立刻可用；首次要等到 T3000 才淡入
+                            alpha = when {
+                                clock.elapsedMs >= SwiftieTimeline.SIGNATURE_START -> 0f
+                                replay -> 1f
+                                else ->
+                                    ((clock.elapsedMs - SKIP_FADE_IN_AT_MS) / SKIP_FADE_MS)
+                                        .coerceIn(0f, 1f)
+                            }
+                        }
+                ) {
+                    Text(
+                        text = stringResource(R.string.swiftie_skip),
+                        color = SwiftiePalette.RoyalBlue.copy(alpha = 0.75f),
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+            }
         }
 
         if (frozen) {
@@ -195,7 +254,7 @@ fun SwiftieErasStage(
                 onClick = { onFrozenChange(false) },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 78.dp)
+                    .padding(bottom = RESUME_BOTTOM_PADDING)
             ) {
                 Text(
                     text = stringResource(R.string.swiftie_resume),
@@ -203,43 +262,6 @@ fun SwiftieErasStage(
                     style = MaterialTheme.typography.labelLarge
                 )
             }
-        }
-
-        // alpha = 0 的按钮照样点得到（graphicsLayer 只改绘制、不改命中区域），
-        // 所以淡入没走完之前必须同时 enabled = false。
-        // 收尾的倒滑与绽放期间也一并关掉：那时终局已经放完，跳过没有意义，
-        // 而 skipToFinalHold 会把时钟倒拨回去，Lover 就与配乐错开了
-        val skipVisible by remember {
-            derivedStateOf {
-                clock.elapsedMs < SwiftieTimeline.SIGNATURE_START &&
-                    (replay || clock.elapsedMs >= SKIP_FADE_IN_AT_MS)
-            }
-        }
-        TextButton(
-            onClick = {
-                clock.skipToFinalHold()
-                onFrozenChange(false)
-            },
-            enabled = skipVisible,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 8.dp, bottom = 4.dp)
-                .graphicsLayer {
-                    // 重看时立刻可用；首次要等到 T3000 才淡入
-                    alpha = when {
-                        clock.elapsedMs >= SwiftieTimeline.SIGNATURE_START -> 0f
-                        replay -> 1f
-                        else ->
-                            ((clock.elapsedMs - SKIP_FADE_IN_AT_MS) / SKIP_FADE_MS)
-                                .coerceIn(0f, 1f)
-                    }
-                }
-        ) {
-            Text(
-                text = stringResource(R.string.swiftie_skip),
-                color = SwiftiePalette.RoyalBlue.copy(alpha = 0.75f),
-                style = MaterialTheme.typography.labelMedium
-            )
         }
     }
 }

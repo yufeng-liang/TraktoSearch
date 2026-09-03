@@ -1,7 +1,7 @@
 package com.tracktosearch.ui.screen.splashquote
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -43,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.ui.screen.dailystamp.DAILY_STAMP_CALENDAR_CHROME
 import com.tracktosearch.ui.screen.dailystamp.DailyStampCalendar
 import com.tracktosearch.ui.screen.dailystamp.DailyStampCardOverlay
 import com.tracktosearch.ui.screen.dailystamp.DailyStampViewModel
@@ -102,12 +104,22 @@ fun SplashQuoteScreen(
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
             val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            // contentWindowInsets 关掉之后列表铺到导航栏底下，底部内边距得自己把它让出来
+            val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            val topPadding = 64.dp + statusBarHeight
+            val bottomPadding = navBarHeight + 12.dp
+            // 日历那一段的高度预算：整屏减去上下内边距、上面那张开关卡片、分组卡片自己的
+            // 壳，以及日历除网格以外的报头 / 表头 / 底部小字。算出来交给日历，格子按它收窄，
+            // 这一页于是和独立日签页一样一屏就能看完（那一屏的预算在 DailyStampScreen 里量）
+            val gridBudget = maxHeight - topPadding - bottomPadding -
+                SWITCH_GROUP_HEIGHT - SETTINGS_GROUP_CHROME -
+                DAILY_STAMP_CALENDAR_CHROME - CALENDAR_TAIL_SPACER
             // 卡片升起时把这一屏推到景深之外，和独立日签页同一套（见 dailyStampCardBlur）：
             // 两屏点开的是同一张卡，一边模糊一边不模糊会显得是两个功能。列表和吸顶栏是
             // 兄弟节点，各挂一份；浮层不挂，它是浮在景深之上的那一层。
@@ -119,8 +131,8 @@ fun SplashQuoteScreen(
                     .dailyStampCardBlur(active = cardOpen)
                     .hazeSource(state = hazeState),
                 contentPadding = PaddingValues(
-                    top = 64.dp + statusBarHeight,
-                    bottom = 80.dp
+                    top = topPadding,
+                    bottom = bottomPadding
                 )
             ) {
                 item(key = "splash_switch") {
@@ -159,11 +171,12 @@ fun SplashQuoteScreen(
                             today = content.today,
                             cells = content.cells,
                             openable = content.sheets.keys,
+                            gridHeightBudget = gridBudget,
                             onPreviousMonth = viewModel::previousMonth,
                             onNextMonth = viewModel::nextMonth,
                             onDayClick = { date -> viewModel.select(date) },
                         )
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(CALENDAR_TAIL_SPACER))
                     }
                 }
             }
@@ -221,3 +234,18 @@ fun SplashQuoteScreen(
         }
     }
 }
+
+/**
+ * 「开屏每日台词」那张分组卡片占的高度：分组壳 52 + 一条设置项 60。
+ *
+ * 用来反算日历的高度预算（见上面的 `gridBudget`）。真去测量它要 `SubcomposeLayout`，
+ * 而这一页的第一段永远只有一个开关项，估一个常量够用 —— 估偏了只是格子大一点或
+ * 小一点，不会错版。
+ */
+private val SWITCH_GROUP_HEIGHT = 112.dp
+
+/** `SettingsGroupCard` 自己的壳：上下 8 + 标题 27 + 内层上下 4 */
+private val SETTINGS_GROUP_CHROME = 52.dp
+
+/** 日历末尾那一小段留白，也算进预算里 */
+private val CALENDAR_TAIL_SPACER = 6.dp

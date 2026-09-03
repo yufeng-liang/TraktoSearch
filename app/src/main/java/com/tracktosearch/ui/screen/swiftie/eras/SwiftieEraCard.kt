@@ -54,15 +54,15 @@ private const val MOTIF_CYCLE_MS: Long = 3_600L
 /** 卡片圆角。 */
 private val CARD_SHAPE = RoundedCornerShape(20.dp)
 
-/** 曲目行的理想行高。18 行只有 288dp，绝大多数屏幕都用这个值。 */
-private val TRACK_ROW_HEIGHT_MAX = 16.dp
+/** 曲目行的理想行高。18 行只有 324dp，绝大多数屏幕都用这个值。 */
+private val TRACK_ROW_HEIGHT_MAX = 18.dp
 
 /**
  * 行高下限。
  *
  * 这里**不能**用「宁可让卡片顶出插槽也不再压」的策略：卡片带 `.clip(CARD_SHAPE)`，
  * 顶出去的行不是露在外面，是被剪掉、静默消失。所以下限压到 9dp ——
- * 31 首的 TTPD 至少要 `118 + 31×9 = 397dp` 插槽，比任何在售机型的可用高度都低。
+ * 31 首的 TTPD 至少要 `136 + 31×9 = 415dp` 插槽，比任何在售机型的可用高度都低。
  * 代价是小屏上这张卡的字确实小（约 6.8dp），但总比丢掉最后几首好。
  */
 private val TRACK_ROW_HEIGHT_MIN = 9.dp
@@ -73,8 +73,14 @@ private val TRACK_ROW_HEIGHT_MIN = 9.dp
  * 这是个 dp 常量，所以标题与日期的字号也必须是 dp 折算的（见 [titleFontSizeFor]
  * 与调用处的 `toSp()`）—— 否则系统字号一放大，实际 chrome 就超过这个预算，
  * 曲目列被挤出卡片、被 clip 静默吃掉尾部几行。
+ *
+ * 136dp = 上下内边距 32 + 两处间距 12 + 日期一行 16 + 标题最多 76。标题那一档按
+ * 「32dp 字号折两行」算，是 12 个专辑名里最坏的情况（40dp 那一档全是 8 个字符以内的
+ * 短名，在任何在售机型上都排得下一行）。字号调大就要跟着改这里 —— 估小了曲目列会被
+ * 挤出卡片，而卡片带 clip，挤出去的行是**静默消失**，不是露在外面。
  */
-private val CARD_CHROME_HEIGHT = 118.dp
+private val CARD_CHROME_HEIGHT = 136.dp
+
 
 /**
  * 按插槽剩余高度定行高。
@@ -142,25 +148,30 @@ fun SwiftieEraCard(
                     pivotFractionY = 1f
                 )
             }
-            .shadow(elevation = 10.dp, shape = CARD_SHAPE, clip = false)
+            .shadow(elevation = 14.dp, shape = CARD_SHAPE, clip = false)
             .clip(CARD_SHAPE)
             // 半透明白纸压在水彩天空上；主色只染一层薄底
             .background(Color.White.copy(alpha = 0.86f))
             .drawBehind {
                 drawRect(color = era.mainColor, alpha = 0.10f)
+                // 低端机整块母题定格（Spec §11.2）。关键是这条分支**根本不读时钟** ——
+                // 只要读了 elapsedInCard()，这个 drawBehind 就会每帧失效，
+                // 母题里那一堆 Path / Brush 也就每帧重建一次
+                val phase = if (lowRam) {
+                    0f
+                } else {
+                    (elapsedInCard().mod(MOTIF_CYCLE_MS)).toFloat() / MOTIF_CYCLE_MS
+                }
                 drawEraMotif(
                     motif = era.motif,
                     color = era.mainColor,
-                    // 低端机整块母题定格（Spec §11.2）。关键是这条分支**根本不读时钟** ——
-                    // 只要读了 elapsedInCard()，这个 drawBehind 就会每帧失效，
-                    // 母题里那一堆 Path / Brush 也就每帧重建一次
-                    phase = if (lowRam) {
-                        0f
-                    } else {
-                        (elapsedInCard().mod(MOTIF_CYCLE_MS)).toFloat() / MOTIF_CYCLE_MS
-                    },
+                    phase = phase,
                     lowRam = lowRam
                 )
+                // 母题之上再压一层光与颗粒。放在母题后面是因为它要的是「打在场景上的光」，
+                // 画在母题下面就只是又一层底色。**只用白 / 亮色**：卡片上的文字是深色，
+                // 提亮底色只会让对比度更好，压暗才会把 SwiftieEraContrast 那套模型顶穿
+                drawEraAtmosphere(phase = phase, lowRam = lowRam)
             }
             // 卡片整体一条 contentDescription；曲目列自己对 TalkBack 隐身（Spec §6.2）。
             // mergeDescendants 是必须的 —— 少了它，下面的专辑名与日期两个 Text
@@ -187,7 +198,7 @@ fun SwiftieEraCard(
             Text(
                 text = era.releaseDate,
                 style = TextStyle(
-                    fontSize = with(density) { 11.dp.toSp() },
+                    fontSize = with(density) { 12.5.dp.toSp() },
                     color = textColors.date.copy(alpha = SwiftieEraContrast.DATE_ALPHA)
                 )
             )
@@ -213,7 +224,7 @@ fun SwiftieEraCard(
  * 而且这 12 个名字是固定的常量，档位一次调好就永远对。
  */
 private fun titleFontSizeFor(name: String) = when {
-    name.length <= 8 -> 34.dp     // Red · 1989 · Lover · folklore · evermore · Fearless
-    name.length <= 14 -> 27.dp    // Speak Now · Midnights · reputation · Taylor Swift
-    else -> 18.dp                 // The Tortured Poets Department · The Life of a Showgirl
+    name.length <= 8 -> 40.dp     // Red · 1989 · Lover · folklore · evermore · Fearless
+    name.length <= 14 -> 32.dp    // Speak Now · Midnights · reputation · Taylor Swift
+    else -> 22.dp                 // The Tortured Poets Department · The Life of a Showgirl
 }

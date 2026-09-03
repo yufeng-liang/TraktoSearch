@@ -2078,6 +2078,8 @@
     <string name="swiftie_quiz_backspace">削除</string>
     <string name="swiftie_era_card_a11y">%1$s、%2$s リリース、全 %3$d 曲</string>
     <string name="swiftie_eras_axis_a11y">アルバムのタイムライン、2006 年から 2025 年、全 12 作品。ドラッグでその時代へ移動できます。</string>
+    <string name="swiftie_finale_a11y">Taylor Swift のグリッターのサイン。その下にフレンドシップブレスレットが 3 本：13 ハート 87、SWIFTIE、%1$s。さらにその下に「Taylor と私、いつまでも一緒に」と書かれています。</string>
+    <string name="swiftie_finale_a11y_plain">Taylor Swift のグリッターのサイン。その下にフレンドシップブレスレットが 2 本：13 ハート 87、SWIFTIE。さらにその下に「Taylor と私、いつまでも一緒に」と書かれています。</string>
     <string name="swiftie_skip">スキップ</string>
     <string name="swiftie_resume">再開</string>
     <string name="swiftie_audio_hint_all">音量をオンにしてイヤホン着用で最高の体験に</string>

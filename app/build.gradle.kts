@@ -128,6 +128,21 @@ android {
             matchingFallbacks += listOf("release")
             isDebuggable = false
         }
+        // 只为单独装一份看彩蛋而存在：包名带 .eggpreview 后缀，和设备上那份 com.tracktosearch
+        // 并存，不覆盖、不清数据。
+        //
+        // initWith(debug) 而不是 release：这是个看观感的包，要的是能装能跑，不是产物形态
+        // 保真；而且 debug 签名与已装那份一致，两份并存时不会互相干扰。
+        //
+        // 两个 provider 的 authorities 在清单里都写成 ${applicationId}.xxx，会跟着后缀一起
+        // 变，所以不会撞 INSTALL_FAILED_CONFLICTING_PROVIDER。
+        create("eggPreview") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".eggpreview"
+            versionNameSuffix = "-egg"
+            // 只声明了 debug/release 两种变体的依赖模块回退到 debug
+            matchingFallbacks += listOf("debug")
+        }
     }
 
     compileOptions {

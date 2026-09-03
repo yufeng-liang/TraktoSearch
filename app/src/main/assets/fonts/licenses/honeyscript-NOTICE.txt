@@ -1,0 +1,49 @@
+Honey Script SemiBold
+=====================
+
+Bundled as: app/src/main/res/font/swiftie_honey.ttf
+            (subset to "0123456789+=XHerluckynmb. ", 5,916 B)
+
+Used for the glitter equation and the "Her lucky number." hint on the Swiftie
+easter-egg quiz screen. Chosen because it is the typeface the original poster used
+for "13 + 87 = 100" — rendering that string with this font reproduces the poster's
+digits glyph for glyph.
+
+Provenance
+----------
+
+Downloaded from https://www.dafont.com/honey-script.font (dl.dafont.com/dl/?f=honey_script),
+which lists the family under its "100% Free" category. The archive ships two weights
+(Light, SemiBold) and contains no licence file.
+
+The font's own metadata records:
+
+    name[0]  Copyright (c) Typographer Mediengestaltung, 2000. All rights reserved.
+             Digitized and hinted by Dieter Steffmann, Kreuztal.
+    name[1]  Honey Script
+    name[2]  SemiBold
+    name[5]  001.000
+    OS/2 fsType = 0   (Installable Embedding — the most permissive embedding
+                       permission a font can declare)
+
+Licence status — read this before reusing
+-----------------------------------------
+
+This is the only bundled font in this project whose licence basis is not a formal
+licence text. The other easter-egg fonts ship OFL 1.1 or Apache-2.0 files alongside
+them; this one does not.
+
+What we are relying on:
+
+  1. `fsType = 0`, the machine-readable embedding permission the rights holder set
+     in the binary, which explicitly allows embedding in documents and applications.
+  2. dafont's "100% Free" classification, under which the family has been
+     distributed for roughly two decades.
+
+What is unresolved: the embedded notice says "All rights reserved", and the original
+rights holder is Typographer Mediengestaltung rather than Dieter Steffmann, who
+digitised it. No written grant from either party was obtained.
+
+Reserved Font Name does not apply — the notice carries no RFN clause — so the subset
+keeps the original family name and is not run through
+`scripts/rename-swiftie-font-rfn.py`.
