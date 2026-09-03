@@ -206,23 +206,23 @@ class ThemeStorage private constructor(
         _meshEnabled.value = enabled
     }
 
-    /**
-     * 把 app 内主题模式应用到系统 uiMode，让系统 Splash（starting window）在冷启动时
-     * 按 app 自己的深浅设置选资源，而不是只看系统夜间模式。
-     *
-     * dark/light 会覆盖 app 进程的 uiMode（API 31+ 由 AppCompat 走
-     * UiModeManager.setApplicationNightMode），system 则恢复跟随系统。
-     */
-    fun applyThemeModeToSystem(mode: String) {
-        val appCompatMode = when (mode) {
-            MODE_DARK -> AppCompatDelegate.MODE_NIGHT_YES
-            MODE_LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
-            else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
-        }
-        AppCompatDelegate.setDefaultNightMode(appCompatMode)
-    }
-
     companion object {
+        /**
+         * 把 app 内主题模式应用到系统 uiMode，让系统 Splash（starting window）在冷启动时
+         * 按 app 自己的深浅设置选资源，而不是只看系统夜间模式。
+         *
+         * dark/light 会覆盖 app 进程的 uiMode（API 31+ 由 AppCompat 走
+         * UiModeManager.setApplicationNightMode），system 则恢复跟随系统。
+         */
+        fun applyThemeModeToSystem(mode: String) {
+            val appCompatMode = when (mode) {
+                MODE_DARK -> AppCompatDelegate.MODE_NIGHT_YES
+                MODE_LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+                else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+            }
+            AppCompatDelegate.setDefaultNightMode(appCompatMode)
+        }
+
         const val MODE_SYSTEM = "system"
         const val MODE_DARK = "dark"
         const val MODE_LIGHT = "light"
