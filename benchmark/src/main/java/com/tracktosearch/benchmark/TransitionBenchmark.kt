@@ -27,8 +27,8 @@ import org.junit.runner.RunWith
  * 滚一遍空列表仍是有意义的观测；但转场如果根本没发生，就不会产生任何坏帧，指标反而漂亮，
  * 结论会被彻底带反。这种情况必须让整轮用例失败，而不是给出一个假的好数字。
  *
- * 选择器统一用 `By.res(TARGET_PACKAGE, tag)`（匹配 `com.tracktosearch:id/<testTag>`），天然带包名限定：
- * 万一中途退到了桌面，断言直接失败，不会像 `By.desc("设置")` 那样误点到桌面上的系统设置图标。
+ * 选择器统一用 `By.res(tag).pkg(TARGET_PACKAGE)`，带包名限定：万一中途退到了桌面，断言直接失败，
+ * 不会像 `By.desc("设置")` 那样误点到桌面上的系统设置图标。
  * 这些断言同时充当等待，开屏引言（SplashQuoteOverlay）会在等待期间自然结束，不需要额外补点击或
  * sleep 去关它。
  *
@@ -157,16 +157,18 @@ class TransitionBenchmark {
     /**
      * 等 testTag 为 [tag] 的节点出现并返回它，等不到就抛。
      *
-     * `By.res(TARGET_PACKAGE, tag)` 用的是两参形态，匹配 `com.tracktosearch:id/<tag>` ——
-     * Compose 的 testTag 就是这么映射到无障碍节点 resource-id 的。
+     * 用单参的 `By.res(tag)`：Compose 的 `testTagsAsResourceId` 把 testTag 原样写进无障碍节点的
+     * resource-id，不加包名前缀（实机 uiautomator dump 里就是 `resource-id="poster_card"`），
+     * 所以两参的 `By.res(pkg, id)` 会去匹配 `com.tracktosearch:id/poster_card` 而永远落空。
+     * 包名限定由链上的 `.pkg()` 补，作用等价。
      */
     private fun UiDevice.awaitTag(tag: String, timeoutMs: Long = UI_TIMEOUT_MS): UiObject2 =
-        wait(Until.findObject(By.res(TARGET_PACKAGE, tag)), timeoutMs)
+        wait(Until.findObject(By.res(tag).pkg(TARGET_PACKAGE)), timeoutMs)
             ?: error("未找到节点 $tag：设备可能停在激活页/引导页，或该页面依赖的登录态缺失")
 
     /** 等 testTag 为 [tag] 的节点消失，[timeoutMs] 内还在就抛。 */
     private fun UiDevice.awaitTagGone(tag: String, timeoutMs: Long = UI_TIMEOUT_MS) {
-        val gone = wait(Until.gone(By.res(TARGET_PACKAGE, tag)), timeoutMs)
+        val gone = wait(Until.gone(By.res(tag).pkg(TARGET_PACKAGE)), timeoutMs)
         if (gone != true) {
             error("节点 $tag 在 ${timeoutMs}ms 内没有消失：关闭动作没生效，这次采样测的不是完整往返")
         }
