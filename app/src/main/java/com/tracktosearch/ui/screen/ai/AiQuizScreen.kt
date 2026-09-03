@@ -31,6 +31,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -110,6 +111,7 @@ fun AiQuizScreen(
             )
             QuizPhase.PREVIEW -> QuizPreviewScreen(
                 movies = state.quizPreviewMovies,
+                localizedTitles = state.quizPreviewLocalizedTitles,
                 replacementCount = state.quizReplacementCount,
                 replaceAvailable = state.quizReplaceAvailable,
                 isLoading = state.isLoading,
@@ -117,7 +119,11 @@ fun AiQuizScreen(
                 onStart = viewModel::startQuiz,
                 onRedrawAll = viewModel::redrawAllQuizPreview
             )
-            QuizPhase.UNAVAILABLE -> QuizUnavailable()
+            QuizPhase.UNAVAILABLE -> if (state.isLoading) {
+                QuizLoadingPlaceholder()
+            } else {
+                QuizUnavailable()
+            }
             QuizPhase.QUESTIONS -> QuizQuestionScreen(
                 state = state,
                 viewModel = viewModel,
@@ -138,7 +144,14 @@ private fun QuizQuestionScreen(
     val answer = state.quizAnswers[question.id]
     val progress = quizProgress(questionIndex + 1, quiz.questions.size)
     val unanswered = unansweredQuizCount(quiz, state.quizAnswers)
-    var unansweredConfirmVisible by remember { mutableStateOf(false) }
+    var unansweredConfirmVisible by remember(quiz.quizId, question.id) { mutableStateOf(false) }
+
+    LaunchedEffect(unanswered, state.isLoading) {
+        if (unanswered == 0 || state.isLoading) {
+            // 题目已补齐、提交或刷新开始后，不能继续显示上一状态的确认框。
+            unansweredConfirmVisible = false
+        }
+    }
 
     // 自动跳题是加速路径不是替换：仅单选题从无到有选中时触发，
     // 600ms 展示选中态（判分在服务端，本地没有对错反馈）后切下一题；手动「下一题」仍保留。
@@ -171,7 +184,10 @@ private fun QuizQuestionScreen(
             }
             if (quiz.mediaTitles.isNotEmpty()) {
                 Text(
-                    stringResource(R.string.ai_quiz_spoiler, quiz.mediaTitles.joinToString("、")),
+                    stringResource(
+                        R.string.ai_quiz_spoiler,
+                        quiz.mediaTitles.joinToString(stringResource(R.string.ai_quiz_media_separator))
+                    ),
                     modifier = Modifier.padding(top = 6.dp),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.error
@@ -243,7 +259,7 @@ private fun QuizQuestionScreen(
         item { Spacer(Modifier.height(8.dp)) }
     }
 
-    if (unansweredConfirmVisible) {
+    if (unansweredConfirmVisible && unanswered > 0 && !state.isLoading) {
         AlertDialog(
             onDismissRequest = { unansweredConfirmVisible = false },
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -269,6 +285,7 @@ private fun QuizQuestionScreen(
 @Composable
 private fun QuizPreviewScreen(
     movies: List<AiWatchedTitleDto>,
+    localizedTitles: Map<String, String>,
     replacementCount: Int,
     replaceAvailable: Boolean,
     isLoading: Boolean,
@@ -277,7 +294,11 @@ private fun QuizPreviewScreen(
     onRedrawAll: () -> Unit
 ) {
     if (movies.isEmpty()) {
-        QuizUnavailable()
+        if (isLoading) {
+            QuizLoadingPlaceholder()
+        } else {
+            QuizUnavailable()
+        }
         return
     }
     LazyColumn(
@@ -298,7 +319,7 @@ private fun QuizPreviewScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        itemsIndexed(movies, key = { _, movie -> "${movie.mediaType}:${movie.mediaId}" }) { index, movie ->
+        itemsIndexed(movies, key = { _, movie -> quizMediaKey(movie.mediaType, movie.mediaId) }) { index, movie ->
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
@@ -320,7 +341,11 @@ private fun QuizPreviewScreen(
                         }
                     }
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(movie.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = localizedQuizPreviewTitle(movie, localizedTitles),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
                         movie.year?.let {
                             Text(it.toString(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -378,6 +403,21 @@ private fun QuizPreviewScreen(
         }
     }
 }
+
+/**
+ * 预览列表只替换展示标题；传给 Worker 的仍是 [AiWatchedTitleDto.title] 原始值。
+ * 类型参与 key，避免电影和剧集使用相同 ID 时互相覆盖本地化标题。
+ */
+private fun localizedQuizPreviewTitle(
+    movie: AiWatchedTitleDto,
+    localizedTitles: Map<String, String>
+): String = localizedTitles[quizMediaKey(movie.mediaType, movie.mediaId)]
+    ?.takeIf { it.isNotBlank() }
+    // 兼容旧状态中仍以原始 mediaType 保存的标题映射。
+    ?: localizedTitles["${movie.mediaType}:${movie.mediaId}"]
+        ?.takeIf { it.isNotBlank() }
+    ?: movie.title
+
 
 @Composable
 private fun QuizQuestionCard(
@@ -497,6 +537,7 @@ private fun QuizResultScreen(
     // quizId 变化（新一轮）时旧值失效自动重置
     var feedbackName by rememberSaveable(result.quizId) { mutableStateOf<String?>(feedbackDifficulty?.name) }
     val feedbackSelected = AiQuizDifficulty.fromName(feedbackName)
+    val answerSeparator = stringResource(R.string.ai_quiz_media_separator)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -585,11 +626,11 @@ private fun QuizResultScreen(
             val answer = answers[item.questionId]
             val selectedLabels = if (question != null) quizAnswerLabels(question, answer) else emptyList()
             val userAnswerText = when {
-                selectedLabels.isNotEmpty() -> selectedLabels.joinToString("、")
+                selectedLabels.isNotEmpty() -> selectedLabels.joinToString(answerSeparator)
                 !answer?.textAnswer.isNullOrBlank() -> answer.textAnswer.trim()
                 else -> null
             }
-            val correctAnswerText = quizCorrectAnswerText(question, item)
+            val correctAnswerText = quizCorrectAnswerText(question, item, answerSeparator)
                 ?: userAnswerText?.takeIf { item.correct }
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -739,6 +780,22 @@ private fun FeedbackOption(
             modifier = modifier
         ) {
             Text(label, maxLines = 1, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+@Composable
+private fun QuizLoadingPlaceholder() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            CircularProgressIndicator()
+            Text(
+                text = stringResource(R.string.ai_feature_loading),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

@@ -22,13 +22,17 @@ import com.tracktosearch.data.ai.AiDailyKnowledge
 import com.tracktosearch.data.ai.AiRepository
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
+import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
+import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.util.ConnectivityObserver
+import com.tracktosearch.di.DispatcherModule
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -41,12 +45,17 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
 import java.util.UUID
 import javax.inject.Inject
+import javax.inject.Named
+
+internal const val AI_OFFLINE_ERROR_CODE = "OFFLINE"
 
 enum class AiFeature {
     GREETING,
@@ -96,6 +105,7 @@ data class AiSpriteUiState(
     val selectedCharacterId: String = "usagi",
     val activatedCharacterId: String? = null,
     val authState: AuthState = AuthState.UNAUTHORIZED,
+    val networkStatus: ConnectivityObserver.NetworkStatus = ConnectivityObserver.NetworkStatus.ONLINE,
     val nickname: String? = null,
     val activationState: AiActivationState = AiActivationState.IDLE,
     val activationAttempt: Int = 0,
@@ -115,6 +125,7 @@ data class AiSpriteUiState(
     val tasteRevision: Long = 0L,
     val quiz: AiQuiz? = null,
     val quizPreviewMovies: List<AiWatchedTitleDto> = emptyList(),
+    val quizPreviewLocalizedTitles: Map<String, String> = emptyMap(),
     val quizReplacementCount: Int = 0,
     // 「换一部」是否还有没用过的候选：已看正好 7 部时候选会被用光，按钮必须跟着禁用
     val quizReplaceAvailable: Boolean = false,
@@ -140,6 +151,13 @@ data class AiSpriteUiState(
     val isAuthorized: Boolean
         get() = authState == AuthState.AUTHORIZED || authState == AuthState.OFFLINE
 
+    /** 只有实时授权态才能访问 AI 网关；OFFLINE 仅代表本地缓存仍可浏览。 */
+    val hasLiveAiAuthorization: Boolean
+        get() = authState == AuthState.AUTHORIZED
+
+    val isAiAvailable: Boolean
+        get() = hasLiveAiAuthorization && networkStatus == ConnectivityObserver.NetworkStatus.ONLINE
+
     val selectedCharacter: AiCharacter?
         get() = characters.firstOrNull { it.id == selectedCharacterId }
 
@@ -152,6 +170,10 @@ class AiSpriteViewModel @Inject constructor(
     private val aiRepository: AiRepository,
     private val authManager: AuthManager,
     private val traktRepository: TraktRepository,
+    private val tmdbRepository: TmdbRepository,
+    private val connectivityObserver: ConnectivityObserver,
+    private val languageStorage: LanguageStorage,
+    @Named(DispatcherModule.IO_DISPATCHER) private val ioDispatcher: CoroutineDispatcher,
     private val overlayStorage: com.tracktosearch.data.local.AiSpriteOverlayStorage,
     private val aiTasteStorage: com.tracktosearch.data.local.AiTasteStorage,
     private val voiceCapture: AiVoiceCapture,
@@ -160,6 +182,7 @@ class AiSpriteViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(
         AiSpriteUiState(
             authState = authManager.authState.value,
+            networkStatus = connectivityObserver.status.value,
             nickname = authManager.nickname.value
         )
     )
@@ -213,6 +236,15 @@ class AiSpriteViewModel @Inject constructor(
     private var requestGeneration = 0L
     private var recentQuizIds = emptyList<String>()
     private var quizCandidates = emptyList<AiWatchedTitleDto>()
+    /** 当前问答预览的 TMDB 本地化标题补全任务；替换预览时取消旧任务，避免旧结果覆盖新列表。 */
+    private var quizLocalizationJob: Job? = null
+    /** 授权变化时取消本地私有状态恢复，避免迟到结果复活旧账号数据。 */
+    private var activationRestoreJob: Job? = null
+    private var quizHistoryJob: Job? = null
+    private var privateStateGeneration = 0L
+    /** 锐评隐私守卫任务；关闭功能页或切换功能时必须取消。 */
+    private var tasteGuardJob: Job? = null
+    private var tasteGuardGeneration = 0L
     /** 已看列表短期缓存（时间戳 to 列表），避免每次进功能页都全量重拉 Trakt 历史。 */
     private var watchedTitlesCache: Pair<Long, List<AiWatchedTitleDto>>? = null
     // 一次精灵中心会话共用一个会话 ID，让服务端会话配额按一次打开的精灵中心计算。
@@ -220,6 +252,133 @@ class AiSpriteViewModel @Inject constructor(
     // ViewModel 现在挂在 Activity 作用域跨页面共享，不能再按实例生成——否则整个 App
     // 生命周期只有一个会话，会话配额到重启才重置。改由 onSpriteCenterOpened() 轮换。
     private var spriteSessionId = newSpriteSessionId()
+
+    init {
+        observeConnectivityState()
+    }
+
+    /**
+     * AI 请求必须同时满足授权和实时在线；AuthState.OFFLINE 只代表本地缓存可用，
+     * 不能把它当成可以访问网关的状态。网络切换时主动取消正在进行的请求，避免离线
+     * 等待超时后再弹一个与实际原因不符的服务器错误。
+     */
+    private fun observeConnectivityState() {
+        viewModelScope.launch {
+            var previous = _uiState.value.networkStatus
+            connectivityObserver.status.collect { status ->
+                _uiState.update { it.copy(networkStatus = status) }
+                when {
+                    status == ConnectivityObserver.NetworkStatus.OFFLINE -> {
+                        enterOfflineState()
+                    }
+                    previous == ConnectivityObserver.NetworkStatus.OFFLINE &&
+                        status == ConnectivityObserver.NetworkStatus.ONLINE -> {
+                        _uiState.update { state ->
+                            if (state.errorCode == AI_OFFLINE_ERROR_CODE) {
+                                state.copy(errorCode = null)
+                            } else {
+                                state
+                            }
+                        }
+                        // 目录请求也不能在离线时发出；恢复网络后补一次即可。
+                        if (initialized) {
+                            launch { loadCharacters() }
+                        }
+                    }
+                }
+                previous = status
+            }
+        }
+    }
+
+    private fun enterOfflineState() {
+        invalidateCurrentRequest()
+        discardVoiceHold()
+        previewJob?.cancel()
+        previewJob = null
+        _uiState.update { state ->
+            state.copy(
+                isLoading = false,
+                loadingFeature = null,
+                activationState = if (
+                    state.activationState == AiActivationState.RECORDING ||
+                    state.activationState == AiActivationState.VERIFYING
+                ) {
+                    AiActivationState.IDLE
+                } else {
+                    state.activationState
+                },
+                voiceLevel = 0f,
+                voiceCancelArmed = false,
+                // 隐私守卫弹窗也是模态层，断网后必须一起收起，否则会遮住功能页的离线文案。
+                showTasteConsent = false,
+                showTasteDisabled = false,
+                errorCode = AI_OFFLINE_ERROR_CODE
+            )
+        }
+    }
+
+    private fun isNetworkAvailable(): Boolean =
+        // 请求回调不能依赖 collect 尚未同步完成的 uiState 快照，直接读取实时网络源。
+        connectivityObserver.status.value == ConnectivityObserver.NetworkStatus.ONLINE
+
+    private fun requireNetworkForAi(): Boolean {
+        if (isNetworkAvailable()) return true
+        setError(AI_OFFLINE_ERROR_CODE)
+        return false
+    }
+
+    /** 受保护的 AI 请求只接受实时 AUTHORIZED；OFFLINE 仅可继续浏览本地缓存。 */
+    private fun hasLiveAiSession(): Boolean =
+        authManager.authState.value == AuthState.AUTHORIZED &&
+            !authManager.friendId.value.isNullOrBlank()
+
+    /** 网络状态优先：真正离线时必须展示离线文案，而不是误报需要重新授权。 */
+    private fun requireAiAccess(): Boolean {
+        if (!requireNetworkForAi()) return false
+        if (hasLiveAiSession()) return true
+        setError("AUTH_REQUIRED")
+        return false
+    }
+
+    /**
+     * AI 请求在每次挂起返回后都要重新过闸：取消 Job 不保证非协作式实现立即停止，
+     * 迟到回调必须同时满足「仍是当前请求、实时在线、授权仍有效」才能写回状态。
+     */
+    private fun canContinueAiRequest(requestId: Long): Boolean {
+        if (requestGeneration != requestId) return false
+        if (!isNetworkAvailable()) {
+            setRequestError(requestId, AI_OFFLINE_ERROR_CODE)
+            return false
+        }
+        if (!hasLiveAiSession()) {
+            setRequestError(requestId, "AUTH_REQUIRED")
+            return false
+        }
+        return true
+    }
+
+    /** 只允许当前请求写 UI，旧请求的迟到回调直接丢弃。 */
+    private fun updateIfCurrentRequest(
+        requestId: Long,
+        transform: (AiSpriteUiState) -> AiSpriteUiState
+    ) {
+        _uiState.update { state ->
+            if (requestGeneration == requestId) transform(state) else state
+        }
+    }
+
+    /** 错误回调统一先判实时网络，避免离线时把 SERVER/NETWORK 送进 Overlay。 */
+    private fun requestErrorCode(error: Throwable): String =
+        if (!isNetworkAvailable()) AI_OFFLINE_ERROR_CODE else errorCode(error)
+
+    private fun setRequestError(requestId: Long, code: String) {
+        updateIfCurrentRequest(requestId) { state ->
+            state.copy(
+                errorCode = if (!isNetworkAvailable()) AI_OFFLINE_ERROR_CODE else code
+            )
+        }
+    }
 
     private fun newSpriteSessionId(): String = "sprite-${UUID.randomUUID()}"
 
@@ -276,10 +435,13 @@ class AiSpriteViewModel @Inject constructor(
         observeAuthState()
         if (activationRestored) return
         activationRestored = true
-        viewModelScope.launch {
+        activationRestoreJob?.cancel()
+        val generation = privateStateGeneration
+        activationRestoreJob = viewModelScope.launch {
             val friendId = authManager.friendId.value.orEmpty()
             if (friendId.isBlank()) return@launch
             val restored = aiRepository.readActivatedCharacterId(friendId) ?: return@launch
+            if (!canReadPrivateState(friendId, generation)) return@launch
             if (_uiState.value.characters.none { it.id == restored }) return@launch
             var restoredSelected = false
             _uiState.update { state ->
@@ -294,7 +456,9 @@ class AiSpriteViewModel @Inject constructor(
                     )
                 }
             }
-            if (previewOnRestore && restoredSelected) scheduleCharacterPreview()
+            if (previewOnRestore && restoredSelected && canReadPrivateState(friendId, generation)) {
+                scheduleCharacterPreview()
+            }
         }
     }
 
@@ -303,10 +467,15 @@ class AiSpriteViewModel @Inject constructor(
         authObserved = true
         viewModelScope.launch {
             launch {
-                var previousAuthState = authManager.authState.value
+                var previousAuthState: AuthState? = null
                 authManager.authState.collect { authState ->
-                    if (previousAuthState != AuthState.UNAUTHORIZED && authState == AuthState.UNAUTHORIZED) {
+                    if (authState == AuthState.UNAUTHORIZED && previousAuthState != AuthState.UNAUTHORIZED) {
                         clearPrivateStateAfterUnauthorized()
+                    } else if (
+                        previousAuthState == AuthState.AUTHORIZED &&
+                        authState != AuthState.AUTHORIZED
+                    ) {
+                        cancelAiWorkForAuthLoss()
                     }
                     previousAuthState = authState
                     _uiState.update {
@@ -325,15 +494,53 @@ class AiSpriteViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 授权从实时有效态变为离线/失效时，停止所有需要 Bearer 的工作。
+     * OFFLINE 仍可浏览本地缓存，但不能继续把旧请求的结果写进当前页面。
+     */
+    private fun cancelAiWorkForAuthLoss() {
+        invalidateCurrentRequest()
+        cancelPrivateStateLoads()
+        cancelTasteGuard()
+        discardVoiceHold()
+        previewJob?.cancel()
+        previewJob = null
+        _uiState.update { state ->
+            state.copy(
+                isLoading = false,
+                loadingFeature = null,
+                activationState = if (
+                    state.activationState == AiActivationState.RECORDING ||
+                    state.activationState == AiActivationState.VERIFYING
+                ) {
+                    AiActivationState.IDLE
+                } else {
+                    state.activationState
+                },
+                voiceLevel = 0f,
+                voiceCancelArmed = false,
+                errorCode = when {
+                    !isNetworkAvailable() -> AI_OFFLINE_ERROR_CODE
+                    state.activeFeature != null -> "AUTH_REQUIRED"
+                    else -> null
+                }
+            )
+        }
+    }
+
     /** 撤销授权后丢弃当前账号的 AI 结果，但保留角色目录和游客试听能力。 */
     private fun clearPrivateStateAfterUnauthorized() {
         invalidateCurrentRequest()
+        cancelPrivateStateLoads()
+        cancelTasteGuard()
         // 正在按住时被撤销授权：麦克风必须当场还回去，不能留着录一段谁也不会用的音频
         discardVoiceHold()
         previewJob?.cancel()
         previewJob = null
         recentQuizIds = emptyList()
         quizCandidates = emptyList()
+        quizLocalizationJob?.cancel()
+        quizLocalizationJob = null
         watchedTitlesCache = null
         // 重新登录后要能再从落盘值恢复，所以放开这道闸
         activationRestored = false
@@ -355,6 +562,7 @@ class AiSpriteViewModel @Inject constructor(
                 tasteRevision = 0L,
                 quiz = null,
                 quizPreviewMovies = emptyList(),
+                quizPreviewLocalizedTitles = emptyMap(),
                 quizReplacementCount = 0,
                 quizReplaceAvailable = false,
                 quizStarted = false,
@@ -371,12 +579,31 @@ class AiSpriteViewModel @Inject constructor(
         }
     }
 
-    private suspend fun loadQuizHistory() {
-        val friendId = authManager.friendId.value.orEmpty()
-        if (friendId.isBlank()) return
-        aiRepository.readQuizHistory(friendId)?.let { history ->
-            _uiState.update { it.copy(quizHistory = history) }
+    private fun loadQuizHistory() {
+        quizHistoryJob?.cancel()
+        val generation = privateStateGeneration
+        quizHistoryJob = viewModelScope.launch {
+            val friendId = authManager.friendId.value.orEmpty()
+            if (friendId.isBlank()) return@launch
+            val history = aiRepository.readQuizHistory(friendId) ?: return@launch
+            if (canReadPrivateState(friendId, generation)) {
+                _uiState.update { it.copy(quizHistory = history) }
+            }
         }
+    }
+
+    private fun canReadPrivateState(friendId: String, generation: Long): Boolean =
+        generation == privateStateGeneration &&
+            authManager.friendId.value == friendId &&
+            (authManager.authState.value == AuthState.AUTHORIZED ||
+                authManager.authState.value == AuthState.OFFLINE)
+
+    private fun cancelPrivateStateLoads() {
+        privateStateGeneration += 1L
+        activationRestoreJob?.cancel()
+        activationRestoreJob = null
+        quizHistoryJob?.cancel()
+        quizHistoryJob = null
     }
 
     fun selectCharacter(characterId: String) {
@@ -405,10 +632,7 @@ class AiSpriteViewModel @Inject constructor(
      */
     fun onActivatePressStart() {
         val state = _uiState.value
-        if (!state.isAuthorized) {
-            setError("AUTH_REQUIRED")
-            return
-        }
+        if (!requireAiAccess()) return
         val character = state.selectedCharacter ?: return
         if (!character.isAvailable) {
             setError("CHARACTER_UNAVAILABLE")
@@ -588,6 +812,18 @@ class AiSpriteViewModel @Inject constructor(
      */
     private fun finishVoiceHold() {
         if (voiceHoldFinished) return
+        if (!isNetworkAvailable()) {
+            discardVoiceHold()
+            _uiState.update {
+                it.copy(
+                    activationState = AiActivationState.IDLE,
+                    voiceLevel = 0f,
+                    voiceCancelArmed = false,
+                    errorCode = AI_OFFLINE_ERROR_CODE
+                )
+            }
+            return
+        }
         val state = _uiState.value
         val outcome = resolveVoiceHoldOutcome(
             holdDurationMs = voiceReleasedHoldMs ?: currentVoiceHoldMs(),
@@ -619,24 +855,31 @@ class AiSpriteViewModel @Inject constructor(
         }
         if (!matched) return
         val character = state.selectedCharacter ?: return
-        requestJob?.cancel()
-        requestJob = viewModelScope.launch { submitVoiceActivation(character) }
+        val requestId = beginRequest()
+        requestJob = viewModelScope.launch { submitVoiceActivation(character, requestId) }
     }
 
     /**
      * 本地命中后走服务端文字激活：换取角色 ACK 语音与配额记录，
      * spokenName 是角色标准名，服务端 matchesActivationName 必然命中。
+     *
+     * 激活请求也纳入请求代际：断网/切页后即使旧协程迟到返回，也不能把 OFFLINE
+     * 状态覆盖成 SERVER，更不能把已关闭页面的结果写回当前精灵中心。
      */
-    private suspend fun submitVoiceActivation(character: AiCharacter) {
-        aiRepository.activate(
+    private suspend fun submitVoiceActivation(character: AiCharacter, requestId: Long) {
+        if (!canContinueAiRequest(requestId)) return
+        val result = aiRepository.activate(
             friendId = authManager.friendId.value.orEmpty(),
             request = AiActivateRequest(
                 characterId = character.id,
                 spokenName = character.activationWord,
                 sessionId = spriteSessionId
             )
-        ).onSuccess { activation ->
-            _uiState.update {
+        )
+        if (!canContinueAiRequest(requestId)) return
+        result.onSuccess { activation ->
+            if (!canContinueAiRequest(requestId)) return@onSuccess
+            updateIfCurrentRequest(requestId) {
                 it.copy(
                     activatedCharacterId = if (activation.activated) character.id else it.activatedCharacterId,
                     activationState = if (activation.activated) AiActivationState.SUCCESS else AiActivationState.FAILED,
@@ -645,20 +888,23 @@ class AiSpriteViewModel @Inject constructor(
                     errorCode = if (activation.activated) null else "ACTIVATION_NOT_MATCHED"
                 )
             }
-            activation.audio?.let { _audioEvents.emit(it) }
-            if (activation.activated) {
+            activation.audio?.let { audio ->
+                if (canContinueAiRequest(requestId)) _audioEvents.emit(audio)
+            }
+            if (activation.activated && requestGeneration == requestId) {
                 // 落盘激活态：跨进程重启和详情页这类无激活入口的页面都要认这个角色
                 aiRepository.saveActivatedCharacterId(
                     authManager.friendId.value.orEmpty(),
                     character.id
                 )
-                loadGreeting(character.id)
+                if (requestGeneration == requestId) loadGreeting(character.id)
             }
         }.onFailure { error ->
-            _uiState.update {
+            if (requestGeneration != requestId) return@onFailure
+            updateIfCurrentRequest(requestId) {
                 it.copy(
                     activationState = AiActivationState.FAILED,
-                    errorCode = errorCode(error)
+                    errorCode = requestErrorCode(error)
                 )
             }
         }
@@ -669,7 +915,11 @@ class AiSpriteViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 activationState = AiActivationState.FAILED,
-                errorCode = "AUDIO_UNAVAILABLE"
+                errorCode = if (!isNetworkAvailable()) {
+                    AI_OFFLINE_ERROR_CODE
+                } else {
+                    "AUDIO_UNAVAILABLE"
+                }
             )
         }
     }
@@ -679,14 +929,11 @@ class AiSpriteViewModel @Inject constructor(
      *
      * 入口常驻，不再要求先让语音失败一次：图书馆、深夜、开会这些场合的用户根本开不了口，
      * 却被逼着先故意失败一次、白烧一次语音机会才能拿到能用的入口。
-     * 与语音次数分开计数，各 5 次。
+     * 与语音次数分开计数，各 5 次；请求代际防止迟到结果覆盖离线态。
      */
     fun activateByText(spokenName: String) {
         val state = _uiState.value
-        if (!state.isAuthorized) {
-            setError("AUTH_REQUIRED")
-            return
-        }
+        if (!requireAiAccess()) return
         val character = state.selectedCharacter ?: return
         if (!character.isAvailable) {
             setError("CHARACTER_UNAVAILABLE")
@@ -706,24 +953,29 @@ class AiSpriteViewModel @Inject constructor(
             return
         }
         val attempt = state.textActivationAttempt + 1
-        requestJob?.cancel()
+        val requestId = beginRequest()
         requestJob = viewModelScope.launch {
-            _uiState.update {
+            if (!canContinueAiRequest(requestId)) return@launch
+            updateIfCurrentRequest(requestId) {
                 it.copy(
                     textActivationAttempt = attempt,
                     activationState = AiActivationState.VERIFYING,
                     errorCode = null
                 )
             }
-            aiRepository.activate(
+            if (requestGeneration != requestId) return@launch
+            val result = aiRepository.activate(
                 authManager.friendId.value.orEmpty(),
                 AiActivateRequest(
                     characterId = character.id,
                     spokenName = typedName,
                     sessionId = spriteSessionId
                 )
-            ).onSuccess { activation ->
-                _uiState.update {
+            )
+            if (!canContinueAiRequest(requestId)) return@launch
+            result.onSuccess { activation ->
+                if (!canContinueAiRequest(requestId)) return@onSuccess
+                updateIfCurrentRequest(requestId) {
                     it.copy(
                         activatedCharacterId = if (activation.activated) character.id else it.activatedCharacterId,
                         activationState = if (activation.activated) AiActivationState.SUCCESS else AiActivationState.FAILED,
@@ -732,29 +984,42 @@ class AiSpriteViewModel @Inject constructor(
                         errorCode = if (activation.activated) null else "ACTIVATION_NOT_MATCHED"
                     )
                 }
-                activation.audio?.let { _audioEvents.emit(it) }
-                if (activation.activated) {
+                activation.audio?.let { audio ->
+                    if (canContinueAiRequest(requestId)) _audioEvents.emit(audio)
+                }
+                if (activation.activated && requestGeneration == requestId) {
                     // 落盘激活态：跨进程重启和详情页这类无激活入口的页面都要认这个角色
                     aiRepository.saveActivatedCharacterId(
                         authManager.friendId.value.orEmpty(),
                         character.id
                     )
-                    loadGreeting(character.id)
+                    if (requestGeneration == requestId) loadGreeting(character.id)
                 }
             }.onFailure { error ->
-                _uiState.update { it.copy(activationState = AiActivationState.FAILED, errorCode = errorCode(error)) }
+                if (requestGeneration != requestId) return@onFailure
+                updateIfCurrentRequest(requestId) {
+                    it.copy(
+                        activationState = AiActivationState.FAILED,
+                        errorCode = requestErrorCode(error)
+                    )
+                }
             }
         }
     }
 
     fun openFeature(feature: AiFeature) {
-        // 「锐评我的看单」先过隐私守卫：首次点击弹说明弹窗（同意才上传），
-        // 开关被关闭则弹「去设置」引导；两条路径都不进入功能页、不加载数据
-        if (feature == AiFeature.TASTE) {
-            viewModelScope.launch { guardThenLoadTaste(forceRefresh = false) }
+        cancelTasteGuard()
+        _uiState.update { it.copy(activeFeature = feature, errorCode = null) }
+        // 「锐评我的看单」先过隐私守卫：首次点击弹说明（同意才上传）；离线时直接
+        // 留在功能页展示不可用文案，不能再发请求后弹服务器错误遮罩。
+        if (!isNetworkAvailable()) {
+            setError(AI_OFFLINE_ERROR_CODE)
             return
         }
-        _uiState.update { it.copy(activeFeature = feature, errorCode = null) }
+        if (feature == AiFeature.TASTE) {
+            launchTasteGuard(forceRefresh = false)
+            return
+        }
         when (feature) {
             AiFeature.GREETING -> loadGreeting(_uiState.value.activatedCharacterId ?: _uiState.value.selectedCharacterId)
             // 已在上方 TASTE 守卫分支处理
@@ -771,25 +1036,56 @@ class AiSpriteViewModel @Inject constructor(
      * 2. 已决定但上传开关已关闭 → 弹「去设置」引导，不进入功能页；
      * 3. 否则进入功能页并按原逻辑加载数据（缓存/截断逻辑不动）。
      */
-    private suspend fun guardThenLoadTaste(forceRefresh: Boolean) {
-        when {
-            !aiTasteStorage.tasteConsentDecided.first() ->
-                _uiState.update { it.copy(showTasteConsent = true, errorCode = null) }
-            !aiTasteStorage.tasteUploadEnabled.first() ->
-                _uiState.update { it.copy(showTasteDisabled = true, errorCode = null) }
-            else -> {
-                _uiState.update { it.copy(activeFeature = AiFeature.TASTE, errorCode = null) }
-                loadTaste(forceRefresh)
-            }
+    private suspend fun guardThenLoadTaste(forceRefresh: Boolean, guardGeneration: Long) {
+        // DataStore 读取可能挂起；每次恢复后都重新确认页面、授权和网络仍然有效。
+        if (!requireAiAccess() || !isTasteGuardCurrent(guardGeneration)) return
+        val consentDecided = aiTasteStorage.tasteConsentDecided.first()
+        if (!isTasteGuardCurrent(guardGeneration)) return
+        if (!consentDecided) {
+            _uiState.update { it.copy(showTasteConsent = true, errorCode = null) }
+            return
         }
+        val uploadEnabled = aiTasteStorage.tasteUploadEnabled.first()
+        if (!isTasteGuardCurrent(guardGeneration)) return
+        if (!uploadEnabled) {
+            _uiState.update { it.copy(showTasteDisabled = true, errorCode = null) }
+            return
+        }
+        if (!isTasteGuardCurrent(guardGeneration)) return
+        _uiState.update { it.copy(activeFeature = AiFeature.TASTE, errorCode = null) }
+        loadTaste(forceRefresh)
+    }
+
+    private fun launchTasteGuard(forceRefresh: Boolean) {
+        cancelTasteGuard()
+        val guardGeneration = tasteGuardGeneration
+        tasteGuardJob = viewModelScope.launch {
+            guardThenLoadTaste(forceRefresh, guardGeneration)
+        }
+    }
+
+    private fun isTasteGuardCurrent(guardGeneration: Long): Boolean =
+        guardGeneration == tasteGuardGeneration &&
+            _uiState.value.activeFeature == AiFeature.TASTE &&
+            isNetworkAvailable() &&
+            hasLiveAiSession()
+
+    private fun cancelTasteGuard() {
+        tasteGuardGeneration += 1L
+        tasteGuardJob?.cancel()
+        tasteGuardJob = null
     }
 
     /** 首次说明弹窗点击「同意并继续」：记录已决定，进入功能页并立即加载。 */
     fun onTasteConsentAgreed() {
-        viewModelScope.launch {
+        cancelTasteGuard()
+        val guardGeneration = tasteGuardGeneration
+        tasteGuardJob = viewModelScope.launch {
+            if (!isTasteGuardCurrent(guardGeneration)) return@launch
             aiTasteStorage.setConsentDecided(true)
+            if (!isTasteGuardCurrent(guardGeneration)) return@launch
             _uiState.update { it.copy(showTasteConsent = false) }
-            guardThenLoadTaste(forceRefresh = false)
+            guardThenLoadTaste(forceRefresh = false, guardGeneration = guardGeneration)
         }
     }
 
@@ -804,6 +1100,7 @@ class AiSpriteViewModel @Inject constructor(
     }
 
     fun closeFeature() {
+        cancelTasteGuard()
         invalidateCurrentRequest()
         _uiState.update {
             it.copy(
@@ -835,7 +1132,7 @@ class AiSpriteViewModel @Inject constructor(
                 forceRefresh = true
             )
             // 锐评刷新同样过隐私守卫：功能页打开期间开关可能已在设置里被关闭
-            AiFeature.TASTE -> viewModelScope.launch { guardThenLoadTaste(forceRefresh = true) }
+            AiFeature.TASTE -> launchTasteGuard(forceRefresh = true)
             AiFeature.QUIZ -> replayQuiz()
             AiFeature.DAILY -> loadDaily(forceRefresh = true)
             null -> Unit
@@ -882,15 +1179,23 @@ class AiSpriteViewModel @Inject constructor(
     fun submitQuiz() {
         val state = _uiState.value
         val quiz = state.quiz?.takeIf { state.quizStarted } ?: return
-        beginRequest()
+        if (!requireAiAccess()) return
+        val requestId = beginRequest()
         requestJob = viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorCode = null) }
+            // 网络状态在入口检查后、协程真正调度前可能已经变化；避免旧协程把离线态改回加载态。
+            if (!canContinueAiRequest(requestId)) return@launch
+            updateIfCurrentRequest(requestId) { it.copy(isLoading = true, errorCode = null) }
+            if (requestGeneration != requestId) return@launch
             aiRepository.submitQuiz(
                 authManager.friendId.value.orEmpty(),
                 quiz.quizId,
                 state.quizAnswers.values.toList()
             ).onSuccess { result ->
-                _uiState.update {
+                if (!canContinueAiRequest(requestId)) {
+                    updateIfCurrentRequest(requestId) { it.copy(isLoading = false) }
+                    return@onSuccess
+                }
+                updateIfCurrentRequest(requestId) {
                     it.copy(
                         isLoading = false,
                         quizResult = result,
@@ -900,19 +1205,32 @@ class AiSpriteViewModel @Inject constructor(
                 }
                 // 保存最近/最高成绩与错题（离线可浏览闯关历史）
                 val friendId = authManager.friendId.value.orEmpty()
-                if (friendId.isNotBlank()) {
+                if (friendId.isNotBlank() && requestGeneration == requestId) {
                     aiRepository.saveQuizHistory(friendId, result)
-                    aiRepository.readQuizHistory(friendId)?.let { history ->
-                        _uiState.update { it.copy(quizHistory = history) }
+                    if (requestGeneration == requestId) {
+                        aiRepository.readQuizHistory(friendId)?.let { history ->
+                            if (requestGeneration == requestId) {
+                                updateIfCurrentRequest(requestId) { it.copy(quizHistory = history) }
+                            }
+                        }
                     }
                 }
             }.onFailure { error ->
-                _uiState.update { it.copy(isLoading = false, errorCode = errorCode(error)) }
+                if (requestGeneration != requestId) return@onFailure
+                updateIfCurrentRequest(requestId) {
+                    it.copy(
+                        isLoading = false,
+                        // 网络先于取消回调落地时，离线优先于 Overlay 服务器错误。
+                        errorCode = requestErrorCode(error)
+                    )
+                }
             }
         }
     }
 
     fun replayQuiz() {
+        quizLocalizationJob?.cancel()
+        quizLocalizationJob = null
         _uiState.update {
             it.copy(
                 quiz = null,
@@ -923,6 +1241,7 @@ class AiSpriteViewModel @Inject constructor(
                 quizReplacementCount = 0,
                 quizReplaceAvailable = false,
                 quizPreviewMovies = emptyList(),
+                quizPreviewLocalizedTitles = emptyMap(),
                 quizFeedbackDifficulty = null,
                 quizFeedbackState = AiQuizFeedbackState.NOT_SUBMITTED
             )
@@ -938,6 +1257,7 @@ class AiSpriteViewModel @Inject constructor(
     fun submitQuizDifficultyFeedback(difficulty: com.tracktosearch.data.ai.AiQuizDifficulty) {
         val state = _uiState.value
         if (state.quizFeedbackState == AiQuizFeedbackState.SUBMITTED) return
+        if (!isNetworkAvailable()) return
         val quizId = state.quizResult?.quizId ?: state.quiz?.quizId ?: return
         _uiState.update {
             it.copy(
@@ -966,10 +1286,14 @@ class AiSpriteViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 quizPreviewMovies = preview,
+                quizPreviewLocalizedTitles = it.quizPreviewLocalizedTitles.filterKeys { key ->
+                    preview.any { movie -> quizPreviewTitleKey(movie) == key }
+                },
                 quizReplacementCount = 0,
                 quizReplaceAvailable = canReplaceQuizPreview(preview, quizCandidates, 0)
             )
         }
+        refreshQuizPreviewLocalizedTitles(preview)
     }
 
     fun startQuiz() {
@@ -994,15 +1318,25 @@ class AiSpriteViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     quizPreviewMovies = next,
+                    quizPreviewLocalizedTitles = it.quizPreviewLocalizedTitles.filterKeys { key ->
+                        next.any { movie -> quizPreviewTitleKey(movie) == key }
+                    },
                     quizReplacementCount = nextReplacementCount,
                     quizReplaceAvailable = canReplaceQuizPreview(next, quizCandidates, nextReplacementCount)
                 )
             }
+            refreshQuizPreviewLocalizedTitles(next)
         }
     }
 
     fun clearError() {
-        _uiState.update { it.copy(errorCode = null) }
+        _uiState.update {
+            if (!isNetworkAvailable()) {
+                it.copy(errorCode = AI_OFFLINE_ERROR_CODE)
+            } else {
+                it.copy(errorCode = null)
+            }
+        }
     }
 
     /** 手动重播当前角色的试听，供试听文案旁的播放按钮使用。 */
@@ -1038,12 +1372,31 @@ class AiSpriteViewModel @Inject constructor(
     }
 
     private suspend fun loadCharacters() {
+        if (!isNetworkAvailable()) {
+            setError(AI_OFFLINE_ERROR_CODE)
+            return
+        }
         aiRepository.listCharacters().fold(
             onSuccess = { remote ->
                 val remoteById = remote.associateBy { it.id }
                 _uiState.update { state ->
                     state.copy(
-                        characters = state.characters.map { local -> remoteById[local.id] ?: local },
+                        // 远端主要负责可用态；文本字段为空时保留本地目录，避免试听区域只剩空矩形。
+                        characters = state.characters.map { local ->
+                            remoteById[local.id]?.let { remoteCharacter ->
+                                local.copy(
+                                    name = remoteCharacter.name.takeIf { it.isNotBlank() } ?: local.name,
+                                    activationWord = remoteCharacter.activationWord
+                                        .takeIf { it.isNotBlank() } ?: local.activationWord,
+                                    aliases = remoteCharacter.aliases.takeIf { it.isNotEmpty() } ?: local.aliases,
+                                    isAvailable = remoteCharacter.isAvailable,
+                                    personalityPrompt = remoteCharacter.personalityPrompt
+                                        .takeIf { it.isNotBlank() } ?: local.personalityPrompt,
+                                    auditionText = remoteCharacter.auditionText
+                                        .takeIf { it.isNotBlank() } ?: local.auditionText
+                                )
+                            } ?: local
+                        },
                         charactersLoadFailed = false
                     )
                 }
@@ -1066,12 +1419,17 @@ class AiSpriteViewModel @Inject constructor(
     /** 试听请求挂在本预览 Job 内执行：取消 previewJob 会一并取消 TTS，避免快速切换角色时旧请求后完成、播放上一个角色的声音。 */
     private suspend fun previewSelectedCharacter() {
         val character = _uiState.value.selectedCharacter ?: return
+        // 离线时只走系统 TTS，不向网关发请求；在线且未激活的访客仍可使用免费 MiMo TTS。
+        if (!isNetworkAvailable()) {
+            emitGuestPreviewFallback(character)
+            return
+        }
         // 预存音频命中则立即播放，不消耗 TTS 配额；未命中按角色状态走网络链路
         bundledAuditionAudio(character)?.let { local ->
             emitAuditionAudio(local)
             return
         }
-        val authorized = isAuthorized()
+        val authorized = hasLiveAiSession()
         val request = buildAuditionTtsRequest(character, spriteSessionId)
         when (auditionPlaybackRoute(authorized, character.isAvailable)) {
             AiAuditionPlaybackRoute.SYSTEM_TTS -> {
@@ -1142,26 +1500,33 @@ class AiSpriteViewModel @Inject constructor(
         !audioDataUrl.isNullOrBlank() || !audioUrl.isNullOrBlank()
 
     private fun loadGreeting(characterId: String, forceRefresh: Boolean = false) {
-        runFeature(AiFeature.GREETING) {
+        runFeature(AiFeature.GREETING) { requestId ->
             aiRepository.getGreeting(authManager.friendId.value.orEmpty(), characterId, forceRefresh)
                 .onSuccess { greeting ->
-                    _uiState.update { it.copy(greeting = greeting, quota = greeting.quota ?: it.quota) }
-                    greeting.audio?.let { _audioEvents.emit(it) }
+                    if (!canContinueAiRequest(requestId)) return@onSuccess
+                    updateIfCurrentRequest(requestId) {
+                        it.copy(greeting = greeting, quota = greeting.quota ?: it.quota)
+                    }
+                    greeting.audio?.let { audio ->
+                        if (canContinueAiRequest(requestId)) _audioEvents.emit(audio)
+                    }
                 }
                 .getOrElse { throw it }
         }
     }
 
     private fun loadTaste(forceRefresh: Boolean = false) {
-        runFeature(AiFeature.TASTE) {
+        runFeature(AiFeature.TASTE) { requestId ->
             val watched = watchedTitles()
             if (watched.isEmpty()) throw IllegalStateException("WATCHED_LIST_EMPTY")
+            if (!canContinueAiRequest(requestId)) return@runFeature
             aiRepository.getTaste(
                 authManager.friendId.value.orEmpty(),
                 com.tracktosearch.data.ai.AiTasteRequest(watched = watched, forceRefresh = forceRefresh),
                 forceRefresh
             ).onSuccess { taste ->
-                _uiState.update {
+                if (!canContinueAiRequest(requestId)) return@onSuccess
+                updateIfCurrentRequest(requestId) {
                     it.copy(
                         taste = taste,
                         tasteRevision = it.tasteRevision + 1L,
@@ -1174,12 +1539,15 @@ class AiSpriteViewModel @Inject constructor(
     }
 
     private fun prepareQuizPreview() {
-        runFeature(AiFeature.QUIZ) {
+        runFeature(AiFeature.QUIZ) { requestId ->
             val watched = watchedTitles()
             if (watched.size < 7) throw IllegalStateException("NOT_ENOUGH_MOVIES")
-            quizCandidates = watched
+            if (!canContinueAiRequest(requestId)) return@runFeature
             val preview = selectQuizPreview(watched)
-            _uiState.update {
+            val localizedTitles = resolveQuizPreviewLocalizedTitles(preview)
+            if (!canContinueAiRequest(requestId)) return@runFeature
+            quizCandidates = watched
+            updateIfCurrentRequest(requestId) {
                 it.copy(
                     quiz = null,
                     quizResult = null,
@@ -1187,6 +1555,7 @@ class AiSpriteViewModel @Inject constructor(
                     quizIndex = 0,
                     quizAnswers = emptyMap(),
                     quizPreviewMovies = preview,
+                    quizPreviewLocalizedTitles = localizedTitles,
                     quizReplacementCount = 0,
                     quizReplaceAvailable = canReplaceQuizPreview(preview, watched, 0)
                 )
@@ -1194,9 +1563,70 @@ class AiSpriteViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 为当前最多 7 部预览影视补齐 TMDB 当前语言标题。
+     * 先 peek 内存缓存，只有未命中才请求详情；单项失败不影响其他标题，也不改变发给 AI 的原始标题。
+     */
+    private suspend fun resolveQuizPreviewLocalizedTitles(
+        movies: List<AiWatchedTitleDto>
+    ): Map<String, String> {
+        if (!isNetworkAvailable()) return emptyMap()
+        val languageAtStart = languageStorage.language.value
+        // 使用可注入调度器，测试可继续受 runTest 虚拟时钟控制，避免异步任务污染后续用例。
+        val resolved = withContext(ioDispatcher) {
+            supervisorScope {
+                movies.map { movie ->
+                    async {
+                        val tmdbId = movie.mediaIds.tmdbId?.takeIf { it > 0 }
+                            ?: return@async null
+                        try {
+                            val isShow = movie.mediaType.equals("show", ignoreCase = true) ||
+                                movie.mediaType.equals("tv", ignoreCase = true)
+                            val localizedTitle = if (isShow) {
+                                (tmdbRepository.peekTvEnrichment(tmdbId, movie.title, movie.year)
+                                    ?: tmdbRepository.enrichTv(tmdbId, movie.title, movie.year)).chineseTitle
+                            } else {
+                                (tmdbRepository.peekMovieEnrichment(tmdbId, movie.title, movie.year)
+                                    ?: tmdbRepository.enrichMovie(tmdbId, movie.title, movie.year)).chineseTitle
+                            }
+                            val localized = localizedTitle.trim()
+                                .takeIf { it.isNotBlank() && !it.equals(movie.title.trim(), ignoreCase = true) }
+                            localized?.let { quizPreviewTitleKey(movie) to it }
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (_: Exception) {
+                            null
+                        }
+                    }
+                }.awaitAll().filterNotNull().toMap()
+            }
+        }
+        // 语言在并发补全期间切换时，丢弃混合语言结果；下一次进入页面会按新语言重新补全。
+        return if (languageStorage.language.value == languageAtStart) resolved else emptyMap()
+    }
+
+    private fun refreshQuizPreviewLocalizedTitles(movies: List<AiWatchedTitleDto>) {
+        quizLocalizationJob?.cancel()
+        if (movies.isEmpty()) {
+            _uiState.update { it.copy(quizPreviewLocalizedTitles = emptyMap()) }
+            quizLocalizationJob = null
+            return
+        }
+        quizLocalizationJob = viewModelScope.launch {
+            val localizedTitles = resolveQuizPreviewLocalizedTitles(movies)
+            if (_uiState.value.quizPreviewMovies == movies) {
+                _uiState.update { it.copy(quizPreviewLocalizedTitles = localizedTitles) }
+            }
+        }
+    }
+
+    private fun quizPreviewTitleKey(movie: AiWatchedTitleDto): String =
+        quizMediaKey(movie.mediaType, movie.mediaId)
+
     private fun loadQuiz(watched: List<AiWatchedTitleDto>, forceRefresh: Boolean) {
-        runFeature(AiFeature.QUIZ) {
+        runFeature(AiFeature.QUIZ) { requestId ->
             if (watched.size < 7) throw IllegalStateException("NOT_ENOUGH_MOVIES")
+            if (!canContinueAiRequest(requestId)) return@runFeature
             aiRepository.getQuiz(
                 authManager.friendId.value.orEmpty(),
                 com.tracktosearch.data.ai.AiQuizRequest(
@@ -1207,8 +1637,9 @@ class AiSpriteViewModel @Inject constructor(
                 ),
                 forceRefresh
             ).onSuccess { quiz ->
+                if (!canContinueAiRequest(requestId)) return@onSuccess
                 recentQuizIds = (listOf(quiz.quizId) + recentQuizIds).take(3)
-                _uiState.update {
+                updateIfCurrentRequest(requestId) {
                     it.copy(
                         quiz = quiz,
                         quizStarted = true,
@@ -1223,10 +1654,11 @@ class AiSpriteViewModel @Inject constructor(
     }
 
     private fun loadDaily(forceRefresh: Boolean = false) {
-        runFeature(AiFeature.DAILY) {
+        runFeature(AiFeature.DAILY) { requestId ->
             aiRepository.getDailyKnowledge(authManager.friendId.value.orEmpty(), forceRefresh)
                 .onSuccess { daily ->
-                    _uiState.update {
+                    if (!canContinueAiRequest(requestId)) return@onSuccess
+                    updateIfCurrentRequest(requestId) {
                         it.copy(dailyKnowledge = daily, quota = daily.quota ?: it.quota)
                     }
                 }
@@ -1234,26 +1666,27 @@ class AiSpriteViewModel @Inject constructor(
         }
     }
 
-    private fun runFeature(feature: AiFeature, block: suspend () -> Unit) {
-        if (!isAuthorized()) {
-            setError("AUTH_REQUIRED")
-            return
-        }
+    private fun runFeature(feature: AiFeature, block: suspend (Long) -> Unit) {
+        if (!requireAiAccess()) return
         val requestId = beginRequest()
         requestJob = viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, loadingFeature = feature, errorCode = null) }
             try {
-                block()
+                if (!canContinueAiRequest(requestId)) return@launch
+                updateIfCurrentRequest(requestId) {
+                    it.copy(isLoading = true, loadingFeature = feature, errorCode = null)
+                }
+                if (requestGeneration != requestId) return@launch
+                block(requestId)
             } catch (e: CancellationException) {
                 // 新请求（切换功能/提交/激活）取消旧请求时，不能走 onFailure 画假错误或翻转状态
                 throw e
             } catch (e: Exception) {
                 if (requestGeneration == requestId) {
-                    _uiState.update { it.copy(errorCode = errorCode(e)) }
+                    setRequestError(requestId, requestErrorCode(e))
                 }
             } finally {
-                if (requestGeneration == requestId) {
-                    _uiState.update { it.copy(isLoading = false, loadingFeature = null) }
+                updateIfCurrentRequest(requestId) {
+                    it.copy(isLoading = false, loadingFeature = null)
                 }
             }
         }
@@ -1276,7 +1709,7 @@ class AiSpriteViewModel @Inject constructor(
         watchedTitlesCache?.let { cached ->
             if (System.currentTimeMillis() - cached.first < WATCHED_TITLES_TTL_MS) return cached.second
         }
-        val loaded = withContext(Dispatchers.IO) {
+        val loaded = withContext(ioDispatcher) {
             val results = listOf(
                 async { traktRepository.getAllMovieHistory(extended = "full") },
                 async { traktRepository.getAllShowHistory(extended = "full") }
@@ -1289,11 +1722,11 @@ class AiSpriteViewModel @Inject constructor(
         return loaded
     }
 
-    private fun isAuthorized(): Boolean =
-        _uiState.value.isAuthorized && !authManager.friendId.value.isNullOrBlank()
-
     private fun setError(code: String) {
-        _uiState.update { it.copy(errorCode = code) }
+        _uiState.update { state ->
+            // 所有入口错误都遵守离线优先，避免晚到的本地/授权回调重新显示 Overlay。
+            state.copy(errorCode = if (!isNetworkAvailable()) AI_OFFLINE_ERROR_CODE else code)
+        }
     }
 
     private fun errorCode(error: Throwable): String {

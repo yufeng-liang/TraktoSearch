@@ -1740,6 +1740,7 @@ Config:
     <string name="ai_taste_recommendations">Three picks for you</string>
     <string name="ai_taste_details">Open details</string>
     <string name="ai_quiz_spoiler">This round contains spoilers for: %1$s</string>
+    <string name="ai_quiz_media_separator">, </string>
     <string name="ai_quiz_start">Start this round</string>
     <string name="ai_quiz_need_more_movies">A quiz round needs at least 7 watched titles</string>
     <string name="ai_quiz_preview_title">Choose this round’s films</string>

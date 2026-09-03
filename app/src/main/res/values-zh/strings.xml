@@ -1732,6 +1732,7 @@
     <string name="ai_taste_recommendations">给你的三部推荐</string>
     <string name="ai_taste_details">打开详情</string>
     <string name="ai_quiz_spoiler">本轮会涉及：%1$s，包含剧透</string>
+    <string name="ai_quiz_media_separator">、</string>
     <string name="ai_quiz_start">开始本轮闯关</string>
     <string name="ai_quiz_need_more_movies">开始闯关至少需要 7 部已看影视</string>
     <string name="ai_quiz_preview_title">先挑选本轮影视</string>

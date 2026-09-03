@@ -9,13 +9,20 @@ import com.tracktosearch.data.ai.AiQuizHistory
 import com.tracktosearch.data.ai.AiQuizResult
 import com.tracktosearch.data.ai.AiQuota
 import com.tracktosearch.data.ai.AiRepository
+import com.tracktosearch.data.ai.AiQuizRequest
 import com.tracktosearch.data.ai.AiTasteAnalysis
 import com.tracktosearch.data.ai.AiVoiceCapture
 import com.tracktosearch.data.ai.AiVoiceCaptureEvent
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
+import com.tracktosearch.data.local.LanguageStorage
+import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.remote.trakt.dto.TraktIds
+import com.tracktosearch.data.remote.trakt.dto.TraktMovie
+import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
 import com.tracktosearch.test.MainDispatcherRule
+import com.tracktosearch.data.util.ConnectivityObserver
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -31,6 +38,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -49,6 +57,9 @@ class AiSpriteViewModelTest {
     private val aiRepository = mockk<AiRepository>(relaxed = true)
     private val authManager = mockk<AuthManager>()
     private val traktRepository = mockk<TraktRepository>(relaxed = true)
+    private val tmdbRepository = mockk<TmdbRepository>(relaxed = true)
+    private val connectivityObserver = mockk<ConnectivityObserver>()
+    private val languageStorage = mockk<LanguageStorage>()
     private val overlayStorage = mockk<com.tracktosearch.data.local.AiSpriteOverlayStorage>(relaxed = true)
     private val aiTasteStorage = mockk<com.tracktosearch.data.local.AiTasteStorage>()
 
@@ -85,6 +96,41 @@ class AiSpriteViewModelTest {
 
         assertThat(viewModel.uiState.value.dailyKnowledge).isEqualTo(daily)
         assertThat(viewModel.uiState.value.quota).isEqualTo(expectedQuota)
+    }
+
+    @Test
+    fun offlineAiFeatures_showInlineUnavailableStateWithoutStartingNetworkRequests() = runTest {
+        val viewModel = viewModel(
+            networkStatus = MutableStateFlow(ConnectivityObserver.NetworkStatus.OFFLINE)
+        )
+
+        listOf(AiFeature.GREETING, AiFeature.TASTE, AiFeature.QUIZ, AiFeature.DAILY)
+            .forEach(viewModel::openFeature)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.activeFeature).isEqualTo(AiFeature.DAILY)
+        assertThat(viewModel.uiState.value.errorCode).isEqualTo(AI_OFFLINE_ERROR_CODE)
+        assertThat(viewModel.uiState.value.isLoading).isFalse()
+        coVerify(exactly = 0) { aiRepository.getGreeting(any(), any(), any()) }
+        coVerify(exactly = 0) { aiRepository.getTaste(any(), any(), any()) }
+        coVerify(exactly = 0) { aiRepository.getQuiz(any(), any(), any()) }
+        coVerify(exactly = 0) { aiRepository.getDailyKnowledge(any(), any()) }
+        coVerify(exactly = 0) { traktRepository.getAllMovieHistory(any(), any()) }
+        coVerify(exactly = 0) { traktRepository.getAllShowHistory(any(), any()) }
+    }
+
+    @Test
+    fun authOfflineState_doesNotUseNetworkEvenWhenConnectivityIsOnline() = runTest {
+        val viewModel = viewModel(
+            authState = MutableStateFlow(AuthState.OFFLINE),
+            networkStatus = MutableStateFlow(ConnectivityObserver.NetworkStatus.ONLINE)
+        )
+
+        viewModel.openFeature(AiFeature.DAILY)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.errorCode).isEqualTo("AUTH_REQUIRED")
+        coVerify(exactly = 0) { aiRepository.getDailyKnowledge(any(), any()) }
     }
 
     @Test
@@ -175,6 +221,31 @@ class AiSpriteViewModelTest {
     }
 
     @Test
+    fun featureGuardFailure_clearsStaleLoadingState() = runTest {
+        val authState = MutableStateFlow(AuthState.AUTHORIZED)
+        val requestStarted = CompletableDeferred<Unit>()
+        val viewModel = viewModel(authState)
+        coEvery { aiRepository.getGreeting("friend-a", "usagi", false) } coAnswers {
+            requestStarted.complete(Unit)
+            awaitCancellation()
+        }
+
+        viewModel.openFeature(AiFeature.GREETING)
+        runCurrent()
+        assertThat(requestStarted.isCompleted).isTrue()
+        assertThat(viewModel.uiState.value.isLoading).isTrue()
+
+        // 新请求已换代，但真正执行 guard 前授权失效；不能留下旧请求的 loading。
+        viewModel.openFeature(AiFeature.DAILY)
+        authState.value = AuthState.UNAUTHORIZED
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.isLoading).isFalse()
+        assertThat(viewModel.uiState.value.loadingFeature).isNull()
+        assertThat(viewModel.uiState.value.errorCode).isEqualTo("AUTH_REQUIRED")
+    }
+
+    @Test
     fun unauthorized_clearsPrivateAiStateAndCancelsActiveFeatureRequest() = runTest {
         val authState = MutableStateFlow(AuthState.AUTHORIZED)
         val requestStarted = CompletableDeferred<Unit>()
@@ -228,6 +299,37 @@ class AiSpriteViewModelTest {
         assertThat(state.activationState).isEqualTo(AiActivationState.IDLE)
         assertThat(state.activationMessage).isNull()
         assertThat(state.selectedCharacterId).isEqualTo("usagi")
+    }
+
+    @Test
+    fun unauthorizedAlreadyActiveBeforeObserverStartup_clearsPrivateAiState() = runTest {
+        val authState = MutableStateFlow(AuthState.AUTHORIZED)
+        val viewModel = viewModel(authState)
+        viewModel.seedState {
+            it.copy(
+                activatedCharacterId = "usagi",
+                activeFeature = AiFeature.DAILY,
+                greeting = greeting(),
+                taste = AiTasteAnalysis("吐槽", "画像", emptyList(), emptyList()),
+                quiz = quiz(),
+                quizResult = quizResult(quota()),
+                dailyKnowledge = dailyKnowledge(quota())
+            )
+        }
+
+        // 授权在监听启动前失效：首个 StateFlow 值也必须触发私有状态清理。
+        authState.value = AuthState.UNAUTHORIZED
+        viewModel.restoreActivation()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.activatedCharacterId).isNull()
+        assertThat(state.activeFeature).isNull()
+        assertThat(state.greeting).isNull()
+        assertThat(state.taste).isNull()
+        assertThat(state.quiz).isNull()
+        assertThat(state.quizResult).isNull()
+        assertThat(state.dailyKnowledge).isNull()
     }
 
     @Test
@@ -672,6 +774,34 @@ class AiSpriteViewModelTest {
     }
 
     @Test
+    fun lateActivationResult_cannotReplaceOfflineState() = runTest {
+        val networkStatus = MutableStateFlow(ConnectivityObserver.NetworkStatus.ONLINE)
+        val result = CompletableDeferred<Result<com.tracktosearch.data.ai.AiActivation>>()
+        val viewModel = viewModel(networkStatus = networkStatus)
+        viewModel.seedVoiceReadyState()
+        coEvery { aiRepository.activate("friend-a", any()) } coAnswers {
+            withContext(NonCancellable) { result.await() }
+        }
+
+        viewModel.activateByText("usagi")
+        runCurrent()
+        assertThat(viewModel.uiState.value.activationState).isEqualTo(AiActivationState.VERIFYING)
+
+        networkStatus.value = ConnectivityObserver.NetworkStatus.OFFLINE
+        runCurrent()
+        assertThat(viewModel.uiState.value.networkStatus)
+            .isEqualTo(ConnectivityObserver.NetworkStatus.OFFLINE)
+        assertThat(viewModel.uiState.value.errorCode).isEqualTo(AI_OFFLINE_ERROR_CODE)
+
+        result.complete(Result.success(activation()))
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.activatedCharacterId).isNull()
+        assertThat(viewModel.uiState.value.activationState).isEqualTo(AiActivationState.IDLE)
+        assertThat(viewModel.uiState.value.errorCode).isEqualTo(AI_OFFLINE_ERROR_CODE)
+    }
+
+    @Test
     fun authorizedAuditionFailure_fallsBackToSystemSpeech() = runTest {
         val viewModel = viewModel()
         coEvery { aiRepository.listCharacters() } returns Result.success(
@@ -756,6 +886,109 @@ class AiSpriteViewModelTest {
     }
 
     @Test
+    fun quizPreview_usesLocalizedTitlesButSubmitsOriginalTitlesToAi() = runTest {
+        val watched = (0 until 7).map { index ->
+            TraktWatchlistMovieItem(
+                watched_at = "2024-01-${"%02d".format(index + 1)}T00:00:00Z",
+                movie = TraktMovie(
+                    title = "Original $index",
+                    year = 2024,
+                    ids = TraktIds(trakt = index + 1, tmdb = 100 + index),
+                    genres = listOf("drama")
+                )
+            )
+        }
+        val networkStatus = MutableStateFlow(ConnectivityObserver.NetworkStatus.ONLINE)
+        val localizedRequests = mutableListOf<Int>()
+        val quizRequests = mutableListOf<AiQuizRequest>()
+        val viewModel = viewModel(
+            networkStatus = networkStatus,
+            language = MutableStateFlow(LanguageStorage.LANGUAGE_CHINESE)
+        )
+        coEvery { traktRepository.getAllMovieHistory(extended = "full") } returns Result.success(watched)
+        coEvery { traktRepository.getAllShowHistory(extended = "full") } returns Result.success(emptyList())
+        every { tmdbRepository.peekMovieEnrichment(any(), any(), any()) } returns null
+        coEvery { tmdbRepository.enrichMovie(any(), any(), any()) } coAnswers {
+            localizedRequests += firstArg<Int>()
+            TmdbRepository.MovieEnrichment(
+                posterUrl = null,
+                chineseTitle = "本地化标题-${firstArg<Int>()}",
+                originalTitle = secondArg<String>(),
+                overview = "",
+                genres = "",
+                year = 2024,
+                rating = 0.0
+            )
+        }
+
+        viewModel.openFeature(AiFeature.QUIZ)
+        advanceUntilIdle()
+
+        val previewState = viewModel.uiState.value
+        assertThat(previewState.quizPreviewMovies).hasSize(7)
+        assertThat(previewState.quizPreviewLocalizedTitles).hasSize(7)
+        assertThat(localizedRequests).hasSize(7)
+        assertThat(previewState.quizPreviewLocalizedTitles.values)
+            .containsExactlyElementsIn(localizedRequests.map { "本地化标题-$it" })
+
+        coEvery { aiRepository.getQuiz("friend-a", capture(quizRequests), false) } returns Result.success(quiz())
+        viewModel.startQuiz()
+        advanceUntilIdle()
+
+        assertThat(quizRequests).hasSize(1)
+        assertThat(quizRequests.single().watched.map { it.title })
+            .containsExactlyElementsIn(watched.map { it.movie.title })
+        assertThat(quizRequests.single().watched.map { it.title })
+            .containsNoneIn(previewState.quizPreviewLocalizedTitles.values)
+    }
+
+    @Test
+    fun quizPreview_keepsSuccessfulLocalizedTitlesWhenOneTmdbRequestFails() = runTest {
+        val watched = (0 until 7).map { index ->
+            TraktWatchlistMovieItem(
+                watched_at = "2024-02-${"%02d".format(index + 1)}T00:00:00Z",
+                movie = TraktMovie(
+                    title = "Original $index",
+                    year = 2024,
+                    ids = TraktIds(trakt = index + 1, tmdb = 200 + index),
+                    genres = listOf("drama")
+                )
+            )
+        }
+        val failedTmdbId = 203
+        val viewModel = viewModel(
+            language = MutableStateFlow(LanguageStorage.LANGUAGE_CHINESE)
+        )
+        coEvery { traktRepository.getAllMovieHistory(extended = "full") } returns Result.success(watched)
+        coEvery { traktRepository.getAllShowHistory(extended = "full") } returns Result.success(emptyList())
+        every { tmdbRepository.peekMovieEnrichment(any(), any(), any()) } returns null
+        coEvery { tmdbRepository.enrichMovie(any(), any(), any()) } coAnswers {
+            val tmdbId = firstArg<Int>()
+            if (tmdbId == failedTmdbId) throw RuntimeException("TMDB unavailable")
+            TmdbRepository.MovieEnrichment(
+                posterUrl = null,
+                chineseTitle = "本地化标题-$tmdbId",
+                originalTitle = secondArg<String>(),
+                overview = "",
+                genres = "",
+                year = 2024,
+                rating = 0.0
+            )
+        }
+
+        viewModel.openFeature(AiFeature.QUIZ)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.quizPreviewMovies).hasSize(7)
+        assertThat(state.quizPreviewLocalizedTitles).containsKey(quizMediaKey("movie", "1"))
+        assertThat(state.quizPreviewLocalizedTitles).doesNotContainKey(quizMediaKey("movie", "4"))
+        assertThat(state.quizPreviewLocalizedTitles).hasSize(6)
+        assertThat(state.quizPreviewMovies.single { it.mediaIds.tmdbId == failedTmdbId }.title)
+            .isEqualTo("Original 3")
+    }
+
+    @Test
     fun openingSpriteCenterRotatesSessionIdSoSessionQuotaResetsPerOpen() = runTest {
         val viewModel = viewModel()
         viewModel.seedState {
@@ -777,22 +1010,39 @@ class AiSpriteViewModelTest {
         assertThat(requests.map { it.sessionId.startsWith("sprite-") }).containsExactly(true, true)
     }
 
-    private fun viewModel(
+    private fun TestScope.viewModel(
         authState: MutableStateFlow<AuthState> = MutableStateFlow(AuthState.AUTHORIZED),
-        // 默认模拟 App 未打包预存音频：assets 读取抛异常，试听走网络 TTS 链路
+        networkStatus: MutableStateFlow<ConnectivityObserver.NetworkStatus> =
+            MutableStateFlow(ConnectivityObserver.NetworkStatus.ONLINE),
+        language: MutableStateFlow<String> = MutableStateFlow(LanguageStorage.LANGUAGE_SYSTEM),
+        // 榛樿妯℃嫙 App 鏈墦鍖呴瀛橀煶棰戯細assets 璇诲彇鎶涘紓甯革紝璇曞惉璧扮綉缁?TTS 閾捐矾
         context: Context = mockk(relaxed = true) {
             every { assets.open(any()) } throws FileNotFoundException("no bundled audition")
         },
         voiceCapture: AiVoiceCapture = FakeVoiceCapture()
     ): AiSpriteViewModel {
         every { authManager.authState } returns authState
-        every { authManager.nickname } returns MutableStateFlow("朋友")
+        every { authManager.nickname } returns MutableStateFlow("鏈嬪弸")
         every { authManager.friendId } returns MutableStateFlow("friend-a")
+        every { connectivityObserver.status } returns networkStatus
+        every { languageStorage.language } returns language
         coEvery { aiRepository.listCharacters() } returns Result.success(emptyList())
-        // 锐评隐私守卫默认放行：已同意说明弹窗且上传开关开启
+        // 閿愯瘎闅愮瀹堝崼榛樿鏀捐锛氬凡鍚屾剰璇存槑寮圭獥涓斾笂浼犲紑鍏冲紑鍚?
         every { aiTasteStorage.tasteConsentDecided } returns flowOf(true)
         every { aiTasteStorage.tasteUploadEnabled } returns flowOf(true)
-        return AiSpriteViewModel(aiRepository, authManager, traktRepository, overlayStorage, aiTasteStorage, voiceCapture, context)
+        return AiSpriteViewModel(
+            aiRepository,
+            authManager,
+            traktRepository,
+            tmdbRepository,
+            connectivityObserver,
+            languageStorage,
+            StandardTestDispatcher(testScheduler),
+            overlayStorage,
+            aiTasteStorage,
+            voiceCapture,
+            context
+        )
     }
 
     /**
