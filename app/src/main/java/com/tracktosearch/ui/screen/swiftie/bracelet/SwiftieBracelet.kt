@@ -27,6 +27,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.swiftie.SwiftiePalette
 import com.tracktosearch.ui.screen.swiftie.rememberIsLowRamDevice
 import kotlinx.coroutines.launch
@@ -37,17 +38,27 @@ import kotlin.random.Random
 
 private const val TAU = 2f * PI.toFloat()
 
-/** 弹性落下。 */
-private const val DROP_MS: Long = 900L
+/**
+ * 弹性落下。
+ *
+ * `internal` 而不是 `private`：`SwiftieHapticScore` 要把三记落地触感摊在这段时长上，
+ * 而设计文档的硬约束是「彩蛋所有时刻从时间线常量取，不得写死毫秒数」。
+ */
+internal const val BRACELET_DROP_MS: Long = 900L
 
-/** 左右晃两下收住。 */
-private const val SWAY_MS: Long = 1_700L
+/** 左右晃两下收住。同上，触感的余震包络要跟着它走，所以是 `internal`。 */
+internal const val BRACELET_SWAY_MS: Long = 1_700L
 
 /** 入场走完的时刻。静态终态直接喂这个值就是收住的样子。 */
-internal const val BRACELET_SETTLED_MS: Long = DROP_MS + SWAY_MS
+internal const val BRACELET_SETTLED_MS: Long = BRACELET_DROP_MS + BRACELET_SWAY_MS
 
-/** 晃动幅度上限。再大就不像手链落下，像钟摆了。 */
-private const val SWAY_MAX_DEG = 7f
+/**
+ * 晃动幅度上限。再大就不像手链落下，像钟摆了。
+ *
+ * `internal`：触感的余震包络拿它把摆角归一到 0f..1f 的振幅。
+ */
+internal const val BRACELET_SWAY_MAX_DEG = 7f
+
 
 /** 手指拖动的跟随比例。0.65 是「弹性绳」的手感：跟手但拽不走。 */
 private const val DRAG_FOLLOW = 0.65f
@@ -218,16 +229,22 @@ private fun planStrand(canvas: Size, strand: BraceletStrand, rotationOffset: Int
 
 /** 落下进度：1f 在画面之上，0f 落到位。`EaseOutBack` 会冲过 0 再收回，就是弹性绳的软着陆。 */
 private fun dropFraction(elapsedMs: Long): Float {
-    val p = (elapsedMs.toFloat() / DROP_MS).coerceIn(0f, 1f)
+    val p = (elapsedMs.toFloat() / BRACELET_DROP_MS).coerceIn(0f, 1f)
     return 1f - EaseOutBack.transform(p)
 }
 
-/** 落地后左右晃两下：指数衰减 × 两个周期，t=1 时正好归零，接得上后面的静止。 */
-private fun swayDegrees(elapsedMs: Long): Float {
-    val t = (elapsedMs - DROP_MS).coerceAtLeast(0L).toFloat() / SWAY_MS
+/**
+ * 落地后左右晃两下：指数衰减 × 两个周期，t=1 时正好归零，接得上后面的静止。
+ *
+ * `internal` 且带 `bracelet` 前缀：`SwiftieHapticScore` 的余震包络直接量这条曲线，
+ * 不另抄一份 —— 两条曲线一旦分家，手上的余震就会和眼里的摆动错开。
+ */
+internal fun braceletSwayDegrees(elapsedMs: Long): Float {
+    val t = (elapsedMs - BRACELET_DROP_MS).coerceAtLeast(0L).toFloat() / BRACELET_SWAY_MS
     if (t >= 1f) return 0f
-    return exp(-2.4f * t) * sin(t * TAU * 2f) * SWAY_MAX_DEG
+    return exp(-2.4f * t) * sin(t * TAU * 2f) * BRACELET_SWAY_MAX_DEG
 }
+
 
 /**
  * 按可用宽度算手链插槽该有多高。
@@ -262,19 +279,46 @@ fun SwiftieBracelet(
     val dragOffset = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
     val scope = rememberCoroutineScope()
 
+    // 手链是彩蛋里唯一一处该走 ComposeHaptics 的地方：`frequentTick()` 自带的 40ms 闸门
+    // 正是设计文档给「逐珠划过」这一行标的「节流 ≥40 ms」。序列上那些按乐句排好的
+    // 密集 tick 走的是另一条路（Provider<AppHaptics>，见 SwiftieHapticConductor），
+    // 被这道闸吞掉就不成谱子了
+    val haptics = rememberAppHaptics()
+
     val dragModifier = if (interactive) {
         Modifier.pointerInput(Unit) {
+            // 手指自上一记以来走过的距离。够一颗珠子的间距就再来一记
+            var travelPx = 0f
+            // 松手回弹**落定**才一记 gestureEnd()：animateTo 挂到弹簧收住才返回。
+            // 期间再次拖动会让 snapTo 掐掉这次动画，协程带着 CancellationException 结束，
+            // 那一记自然不发 —— 手还在屏幕上，谈不上「落定」
+            val settle: () -> Unit = {
+                scope.launch {
+                    dragOffset.animateTo(Offset.Zero, REBOUND)
+                    haptics.gestureEnd()
+                }
+            }
             detectDragGestures(
-                onDragEnd = { scope.launch { dragOffset.animateTo(Offset.Zero, REBOUND) } },
-                onDragCancel = { scope.launch { dragOffset.animateTo(Offset.Zero, REBOUND) } }
+                onDragStart = { travelPx = 0f },
+                onDragEnd = settle,
+                onDragCancel = settle
             ) { change, dragAmount ->
                 change.consume()
+                val pitchPx = braceletBeadPitchPx(size.width.toFloat())
+                travelPx += dragAmount.getDistance()
+                if (travelPx >= pitchPx) {
+                    // 取余而不是减一个间距：一帧里走过三颗珠子只该响一记，
+                    // 剩下两颗的欠账不许攒到下一帧去补
+                    travelPx %= pitchPx
+                    haptics.frequentTick()
+                }
                 scope.launch { dragOffset.snapTo(dragOffset.value + dragAmount * DRAG_FOLLOW) }
             }
         }
     } else {
         Modifier
     }
+
 
     Spacer(
         modifier = modifier
@@ -286,7 +330,7 @@ fun SwiftieBracelet(
                 // 1.6×自身高度：起点在画面之外，落下来才有下坠感
                 translationY = dropFraction(elapsed) * size.height * -1.6f + dragOffset.value.y
                 translationX = dragOffset.value.x
-                rotationZ = swayDegrees(elapsed)
+                rotationZ = braceletSwayDegrees(elapsed)
                 // 吊在上缘晃，不是绕自己中心转
                 transformOrigin = TransformOrigin(pivotFractionX = 0.5f, pivotFractionY = 0f)
                 alpha = (elapsed / 200f).coerceIn(0f, 1f)
@@ -336,3 +380,19 @@ private val REBOUND = spring<Offset>(
     dampingRatio = 0.35f,
     stiffness = Spring.StiffnessLow
 )
+
+/**
+ * 最前那条手链上相邻两颗珠子的中心间距，像素。「逐珠划过」的触感按它计数。
+ *
+ * 取最前那条（`STRANDS` 的末位，也就是画得最后、压在最上面的 `13 ♡ 87`）：
+ * 它最宽、珠子最大，手指真正划到的就是它。间距 = 该条宽度 ÷ 珠数，与 `planStrand`
+ * 里珠心落在 `(index + 0.5) / size` 的排法一致。
+ *
+ * 从画布宽度算而不是写死 dp：平板上珠子更大，一记之间本来就该走更远。
+ * 夹到至少 1px 防零宽画布把它除成 0 或无穷。
+ */
+private fun braceletBeadPitchPx(canvasWidthPx: Float): Float {
+    val strand = STRANDS.last()
+    return (canvasWidthPx * strand.widthFraction / strand.beads.size).coerceAtLeast(1f)
+}
+

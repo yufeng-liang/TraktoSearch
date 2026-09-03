@@ -132,6 +132,18 @@ internal val List<SignatureStroke>.writeEndMs: Long
 /** 签名文字。**永不翻译**，也不做任何本地化替换。 */
 private const val SIGNATURE_TEXT = "Taylor Swift"
 
+/**
+ * 笔画段数：空格不算一段，所以是 11（Taylor 六段 + Swift 五段）。
+ *
+ * 从 [SIGNATURE_TEXT] 数出来而不是写死 11，与 [buildSignatureArt] 里那句
+ * `filter { !isWhitespace() }` 同一个判据。`SwiftieHapticScore` 要用它排签名段的
+ * 触感包络（11 段落笔 + 10 个 [SIGNATURE_PAUSE_MS] 间隙），所以是 `internal`。
+ *
+ * 必须声明在 [SIGNATURE_TEXT] **之后** —— 顶层属性按声明顺序初始化。
+ */
+internal val SIGNATURE_STROKE_COUNT: Int = SIGNATURE_TEXT.count { !it.isWhitespace() }
+
+
 /** 笔尖亮点半径。 */
 private val TIP_RADIUS = 3.5.dp
 

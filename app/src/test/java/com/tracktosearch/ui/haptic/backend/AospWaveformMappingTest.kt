@@ -9,13 +9,12 @@ import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import com.tracktosearch.ui.haptic.HapticCapabilities
 import com.tracktosearch.ui.haptic.HapticSemantic
-import io.mockk.Runs
 import io.mockk.every
-import io.mockk.just
 import io.mockk.mockk
 import io.mockk.unmockkAll
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -490,6 +489,14 @@ class AospWaveformEnvelopeGuardTest {
     /** 派发到单线程 Executor 的那一次 `vibrate` 真的到了没有。 */
     private val dispatched = CountDownLatch(1)
 
+    /**
+     * `Vibrator.cancel()` 被下发了几次。
+     *
+     * 用计数而不是 `verify`：`cancel()` 把活儿投到 executor 上，主线程这边立刻返回，
+     * `verify` 会在任务还没跑到时判假 —— 那是个时序假阴性，不是真的没停。
+     */
+    private val cancelCount = AtomicInteger(0)
+
     private lateinit var backend: AospWaveformBackend
 
     @Before
@@ -499,7 +506,7 @@ class AospWaveformEnvelopeGuardTest {
         every { vibrator.vibrate(any<VibrationEffect>(), any<VibrationAttributes>()) } answers {
             dispatched.countDown()
         }
-        every { vibrator.cancel() } just Runs
+        every { vibrator.cancel() } answers { cancelCount.incrementAndGet() }
         backend = AospWaveformBackend(context, linearMotor())
     }
 
@@ -596,6 +603,72 @@ class AospWaveformEnvelopeGuardTest {
     }
 
     /**
+     * `cancel()` 存在的全部理由：`playEnvelope` 把一整段波形交给 `VibratorService` 之后就
+     * 再没有抓手，彩蛋最长的一段是签名的 7300 ms。用户按 ✕ 退出、按住暂停、或者息屏时，
+     * 屏幕上什么都没了而手里还在震完剩下的几秒。
+     *
+     * 三条断言分别钉三种写错的方式：不下发（停不掉）、顺手置 `disabled`（这一层从此哑掉，
+     * 而它是非 RichTap 机型上唯一能画波形的一层）、顺手 shutdown executor
+     * （下一段包络再也起不来，且 `execute` 会抛 `RejectedExecutionException`）。
+     */
+    @Test
+    fun `cancel 真的停掉在播的波形，但不禁用本层也不关掉 executor`() {
+        assertThat(backend.playEnvelope(intArrayOf(20, 40), floatArrayOf(0.3f, 0.6f))).isTrue()
+        assertWithMessage("包络本身没派发出去，后面关于 cancel 的断言就说明不了任何事")
+            .that(dispatched.await(DISPATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS))
+            .isTrue()
+
+        backend.cancel()
+
+        assertWithMessage(
+            "$DISPATCH_TIMEOUT_SECONDS 秒内没等到 Vibrator.cancel()：" +
+                "退出彩蛋之后那段包络会自己播完",
+        )
+            .that(awaitCancelAtLeast(1))
+            .isTrue()
+        assertWithMessage("cancel 不该把整层禁掉 —— 它的意思是「现在安静」，不是「这层坏了」")
+            .that(backend.isAvailable())
+            .isTrue()
+        assertWithMessage("cancel 不该 shutdown executor：停完之后本层还要继续用")
+            .that(backend.playEnvelope(intArrayOf(20), floatArrayOf(0.5f)))
+            .isTrue()
+    }
+
+    /**
+     * `release()` 之后再调 `cancel()` 不许抛。
+     *
+     * 这不是洁癖：`quietDown` 挂在退出 / 息屏路径上，而 `release()` 也在同一条路径上，
+     * 两者的先后由宿主生命周期决定。`release()` 已经 shutdown 了 executor，此时若 `cancel()`
+     * 还往里 `execute`，抛出来的 `RejectedExecutionException` 正好落在用户离开彩蛋的那一刻。
+     */
+    @Test
+    fun `release 之后 cancel 是安全的空操作`() {
+        backend.release()
+        assertWithMessage("release 自己那次 cancel 也要真的到，否则本用例的前提不成立")
+            .that(awaitCancelAtLeast(1))
+            .isTrue()
+        val afterRelease = cancelCount.get()
+
+        backend.cancel()
+        backend.cancel()
+
+        assertWithMessage("release 之后不该再往下发 cancel —— executor 已经关了")
+            .that(cancelCount.get())
+            .isEqualTo(afterRelease)
+        assertThat(backend.isAvailable()).isFalse()
+    }
+
+    /** 轮询等 `cancel` 计数到位。`cancel()` 是异步投递，主线程直接读会假阴性。 */
+    private fun awaitCancelAtLeast(target: Int): Boolean {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(DISPATCH_TIMEOUT_SECONDS)
+        while (System.nanoTime() < deadline) {
+            if (cancelCount.get() >= target) return true
+            Thread.sleep(POLL_INTERVAL_MS)
+        }
+        return cancelCount.get() >= target
+    }
+
+    /**
      * 目标机形态：有马达、有振幅控制，但一个 primitive 都不支持、也没有 AOSP 包络。
      *
      * 于是包络必然落在 `createWaveform` 的振幅台阶上，正是小米 14 Pro 上真正会走的那条子通路。
@@ -615,5 +688,8 @@ class AospWaveformEnvelopeGuardTest {
     private companion object {
         /** 等派发的上限。单线程 Executor 上就一个任务，正常远快于此，超时即代表那一步抛了 */
         const val DISPATCH_TIMEOUT_SECONDS = 5L
+
+        /** 轮询 `cancel` 计数的间隔。取小值：正常情况下第一轮就到了 */
+        const val POLL_INTERVAL_MS = 10L
     }
 }

@@ -256,7 +256,13 @@ class AppHaptics(
      * `SwiftieMusic` 的三条闸门（`paused`、`ON_STOP`、`AUDIOFOCUS_LOSS`）时得停得下来，
      * 所以门面这边留一个出口，免得调用方绕过门面直接去摸某个具体 backend。
      *
-     * 实际能停掉多少取决于注入的 [quietDown]，默认什么都不做。
+     * 实际能停掉多少取决于注入的 [quietDown]，默认什么都不做。生产装配（`HapticModule`）
+     * 把 tier 3 与 tier 1 两层的停止一起包进去：`RichTapBackend.stop()` 在从未 init 成功的
+     * 机型上会直接返回，那时真正在播的是 tier 1 那段波形，得靠
+     * `AospWaveformBackend.cancel()` 才停得住。
+     *
+     * **刻意不看三态开关，也不看系统总开关。** 「停」永远该生效 —— 用户把档位拨到
+     * [HapticMode.OFF] 的那一刻，正在播的那段更应该立刻断掉，而不是等它播完。
      */
     fun stopOngoing() {
         if (released) return

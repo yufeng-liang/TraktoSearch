@@ -205,6 +205,32 @@ class AospWaveformBackend(
     }
 
     /**
+     * 停掉正在播的震动，但**不** shutdown executor —— 本层随后还要继续用。
+     *
+     * 存在的理由：`playEnvelope` 排出去的是一整段波形（彩蛋最长的一段 7300 ms），
+     * `Vibrator.vibrate` 把它交给 `VibratorService` 后立刻返回，之后本层再没有任何
+     * 抓手能把它叫停。用户按 ✕ 退出、按住暂停、或者息屏时，屏幕上什么都没了而手里
+     * 还在震完剩下的几秒 —— 那不是"细腻"，是坏掉。
+     *
+     * 这个方法**刻意不放进 [HapticBackend] 契约**，与 `RichTapBackend.stop()` 同一形状：
+     * 只有真能画连续波形的那两层需要停止通道，tier 2 的预置效果与 tier 0 的常量都是几十
+     * 毫秒的一次性事件，给它们加 cancel 只会让契约多一个所有实现都空着的成员。
+     * 引擎侧由 `HapticModule` 把这两个一起包进 `AppHaptics` 的 `quietDown`。
+     *
+     * `Vibrator.cancel()` 取消的是**本应用**当前的震动，不只是本层排出去的那一段 ——
+     * 这正是要的：调进来的时候意思就是"现在全部安静"。
+     *
+     * 幂等，且 release 之后调是空操作。`runCatching` 兜住是因为它可能落在
+     * `release()` 与本方法竞态的窗口里被 `RejectedExecutionException` 打到,
+     * 而"停一下"失败不该把整层禁死 —— 所以这里不走 [dispatch]（那条路会置 [disabled]）。
+     */
+    fun cancel() {
+        val target = vibrator ?: return
+        if (released || disabled) return
+        runCatching { executor.execute { runCatching { target.cancel() } } }
+    }
+
+    /**
      * 把一次播放投到单线程 `Executor` 上。
      *
      * 返回 true = 已排进队列。任务里再查一次 [released] 与 [disabled]：排队期间可能已经

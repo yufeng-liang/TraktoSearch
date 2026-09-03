@@ -35,7 +35,9 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -48,10 +50,14 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import com.tracktosearch.R
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieErasStage
 import kotlinx.coroutines.delay
+
 
 /** 灯箱与键盘的共同最大宽度（Spec §2.3：平板与折叠屏展开态 480dp 居中）。 */
 private val CONTENT_MAX_WIDTH = 480.dp
@@ -243,6 +249,46 @@ private fun SwiftieEggContent(
     var audioGivenUp by remember { mutableStateOf(false) }
     val framePaused = holdPaused || seekFrozen || focusPaused
     LaunchedEffect(framePaused) { clock.paused = framePaused }
+
+    // ---- 序列触感编排（设计文档「彩蛋编排」）----
+    //
+    // 走 Provider<AppHaptics> 而不是上面那个 rememberAppHaptics()：编排要 playEnvelope
+    // 与 stopOngoing，而且谱子里按乐句排好的密集 tick 不能被 ComposeHaptics 那道
+    // 40ms 节流吞掉。题面那三记（键盘 / 答对 / 答错）仍走 ComposeHaptics —— 它们是
+    // 交互反馈，节流对它们是对的
+    val conductor = rememberSwiftieHapticConductor(reducedMotion)
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+
+    // 三条闸门与 SwiftieMusic 同源：按住暂停 / 拖轴定格 / 焦点临时丢失都汇进 framePaused，
+    // ON_STOP（息屏、切后台）看生命周期，AUDIOFOCUS_LOSS 看 audioGivenUp。
+    // 序列没在跑（题面阶段、静态终态）时整条静音
+    val hapticsMuted = !sequenceRunning ||
+        framePaused ||
+        audioGivenUp ||
+        !lifecycleState.isAtLeast(Lifecycle.State.STARTED)
+    val mutedNow = rememberUpdatedState(hapticsMuted)
+
+    LaunchedEffect(conductor, clock) {
+        // snapshotFlow 而不是再挂一条 withFrameMillis：帧时钟上已经有时钟自己那条循环，
+        // 两条 withFrameMillis 的先后不保证，触感会稳定落后一帧。
+        // 值没变就不发射 —— 暂停时 elapsedMs 不动，这里一次都不跑
+        snapshotFlow { clock.elapsedMs }.collect { elapsed ->
+            conductor.onFrame(
+                elapsedMs = elapsed,
+                seekEpoch = clock.seekEpoch,
+                muted = mutedNow.value
+            )
+        }
+    }
+
+    // 闸门关上、以及整页销毁（用户在包络播放中途按 ✕）时把在飞的波形停掉。
+    // tier 3 与 tier 1 都有停止通道，所以这两处真的停得住，见 conductor.stopOngoing 的说明。
+    // 加 sequenceRunning 这道条件是为了不在挂载那一帧白调一次 —— 那时什么都还没响
+    LaunchedEffect(hapticsMuted, sequenceRunning) {
+        if (sequenceRunning && hapticsMuted) conductor.stopOngoing()
+    }
+    DisposableEffect(conductor) { onDispose { conductor.stopOngoing() } }
+
 
     /**
      * 重看纪念页时**不再落主题**。

@@ -124,9 +124,15 @@ object HapticModule {
      * `stop()` 才是真的停：播放器 stop 加一次 `Vibrator.cancel()`。
      *
      * 因为它内部走 `Vibrator.cancel()`，连 tier 1 正在播的振幅波形也一起停掉 ——
-     * 但前提是 RichTap 这层已经 init 过。RichTap 不可用的机型上 tier 1 那段包络没有停止通道
-     * （`HapticBackend` 契约没有 cancel 成员），最长会多播完一段（彩蛋最长 3500 ms）。
-     * T6 若要严格跟住 `SwiftieMusic` 的三条闸门，得给 tier 1 补一条停止通道，那是改契约的活。
+     * 但前提是 RichTap 这层已经 init 过（`stop()` 开头就有一道「从未 init 成功过就直接
+     * 返回」的闸）。所以 RichTap 不可用的机型上光靠它是停不住的，`quietDown` 还得带上
+     * `AospWaveformBackend.cancel()`：彩蛋最长的一段包络是签名的 7300 ms，用户按 ✕ 退出
+     * 之后手里还震七秒不叫「细腻」，叫坏掉。
+     *
+     * 两个 `cancel` 都不在 `HapticBackend` 契约里，是刻意的：只有真能画连续波形的
+     * tier 3 与 tier 1 需要停止通道，tier 2 的预置效果与 tier 0 的常量都是几十毫秒的
+     * 一次性事件，给它们加成员只会让契约多一个所有实现都空着的方法。**把两层的停止
+     * 拼在一起是引擎侧的活，就拼在这里** —— 调用方只认识 `AppHaptics.stopOngoing()`。
      */
     @Provides
     @Singleton
@@ -147,7 +153,12 @@ object HapticModule {
         modeState = hapticStorage.modeState,
         systemHapticEnabled = { systemHapticFeedbackEnabled(context) },
         // 包成 lambda 而不是写 richTap::stop：stop() 返回 Boolean，
-        // 而这里要的是 () -> Unit，lambda 才会把返回值丢掉
-        quietDown = { richTap.stop() },
+        // 而这里要的是 () -> Unit，lambda 才会把返回值丢掉。
+        // 两层都调、不短路：richTap.stop() 在从未 init 成功的机型上直接返回，
+        // 那时候真正在播的是 tier 1 那段包络，得靠 waveform.cancel() 才停得住
+        quietDown = {
+            richTap.stop()
+            waveform.cancel()
+        },
     )
 }
