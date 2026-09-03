@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -413,7 +414,8 @@ internal fun StatisticsCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clip(RoundedCornerShape(20.dp))
-            .clickable { view.performHaptic(HapticType.CLICK); onClick() },
+            .clickable { view.performHaptic(HapticType.CLICK); onClick() }
+            .testTag("settings_statistics_card"),
         isDark = isDark,
         shape = RoundedCornerShape(20.dp),
         backgroundColor = if (realBlur) blurFill else solidCardFill(isDark, blurFill),

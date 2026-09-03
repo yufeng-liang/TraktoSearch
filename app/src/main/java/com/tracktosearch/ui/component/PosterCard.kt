@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -158,6 +159,9 @@ fun PosterCard(
                         Modifier
                     }
                 )
+                // 宏基准用 By.res("poster_card") 定位海报卡片：卡片的 contentDescription 是
+                // 运行时片名，没有固定串可匹配。语义标签不影响布局与绘制。
+                .testTag("poster_card")
         ) {
             AsyncImage(
                 model = model,

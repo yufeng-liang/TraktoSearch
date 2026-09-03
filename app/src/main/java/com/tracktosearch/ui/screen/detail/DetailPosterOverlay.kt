@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
@@ -107,7 +108,8 @@ internal fun PosterFullscreenOverlay(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = resetOrDismiss
-                ),
+                )
+                .testTag("poster_fullscreen_overlay"),
             contentAlignment = Alignment.Center
         ) {
             // 海报图片（放大显示，点击由 ProgressiveFullscreenImage 统一接管：

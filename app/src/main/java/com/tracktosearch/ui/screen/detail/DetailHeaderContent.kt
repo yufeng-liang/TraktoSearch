@@ -55,6 +55,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -180,6 +181,7 @@ internal fun DetailHeaderContent(
                     modifier = Modifier
                         .fillMaxSize()
                         .then(if (uiState.posterUrl != null) Modifier.clickable { onPosterClick() } else Modifier)
+                        .testTag("detail_header_poster")
                 ) {
                     if (uiState.posterUrl != null) {
                         var posterScale by remember { mutableFloatStateOf(1f) }

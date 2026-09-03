@@ -34,9 +34,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import android.content.ClipboardManager
@@ -341,7 +344,7 @@ class AuthStateHolder @Inject constructor(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalComposeUiApi::class)
 @Composable
 fun AppNavigation(
     startDestination: String,
@@ -608,7 +611,11 @@ fun AppNavigation(
         }
     }
 
-    SharedTransitionLayout {
+    // 语义根开一次 testTagsAsResourceId：它把 Modifier.testTag 的值写进无障碍树的 resource-id，
+    // UiAutomator 宏基准才能用 By.res() 定位 Compose 节点。不开的话整棵树的 resource-id 都是空串，
+    // 只能靠 contentDescription 与文案定位，那些值跟着语言和数据变，基准用例会不稳。
+    // 挂在这里而不是 Activity 根：需要被定位的节点全都在 NavHost 之内，且这一层只加语义、不动布局。
+    SharedTransitionLayout(modifier = Modifier.semantics { testTagsAsResourceId = true }) {
         CompositionLocalProvider(
             LocalSharedTransitionScope provides this@SharedTransitionLayout,
             com.tracktosearch.ui.component.LocalSharedTransitionEnabled provides sharedTransitionEnabled
@@ -1316,18 +1323,22 @@ fun AppNavigation(
                 // 豆瓣爬取测试页仅在 DEBUG 构建注册,避免 release 暴露调试入口
                 if (BuildConfig.DEBUG) {
                     composable(Routes.DOUBAN_SPIDER_TEST) {
-                        DoubanSpiderTestScreen(
-                            onBack = { navController.popBackStack() }
-                        )
+                        CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                            DoubanSpiderTestScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
                     }
                 }
 
                 // 玻璃引擎试点页(对比 haze / backdrop)仅在 DEBUG 构建注册
                 if (BuildConfig.DEBUG) {
                     composable(Routes.GLASS_PILOT) {
-                        GlassEnginePilotScreen(
-                            onBack = { navController.popBackStack() }
-                        )
+                        CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                            GlassEnginePilotScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
                     }
                 }
 
@@ -1441,10 +1452,12 @@ fun AppNavigation(
                     )
                 ) { backStackEntry ->
                     val recordId = backStackEntry.arguments?.getString("recordId") ?: return@composable
-                    CrashLogDetailScreen(
-                        recordId = recordId,
-                        onBack = { navController.popBackStack() }
-                    )
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        CrashLogDetailScreen(
+                            recordId = recordId,
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
                 }
                 composable(
                     route = Routes.FEEDBACK_DETAIL,
@@ -1472,19 +1485,21 @@ fun AppNavigation(
                     }
                 }
                 composable(Routes.MESSAGES) { backStackEntry ->
-                    val mainBackStackEntry = remember(backStackEntry) {
-                        navController.getBackStackEntry(Routes.MAIN)
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        val mainBackStackEntry = remember(backStackEntry) {
+                            navController.getBackStackEntry(Routes.MAIN)
+                        }
+                        val sharedViewModel: FeedbackViewModel = hiltViewModel(
+                            mainBackStackEntry
+                        )
+                        MessagesScreen(
+                            onBack = { navController.popBackStack() },
+                            onMessageClick = { feedbackId, replyId ->
+                                navController.navigate(Routes.feedbackDetailRoute(feedbackId, replyId))
+                            },
+                            viewModel = sharedViewModel
+                        )
                     }
-                    val sharedViewModel: FeedbackViewModel = hiltViewModel(
-                        mainBackStackEntry
-                    )
-                    MessagesScreen(
-                        onBack = { navController.popBackStack() },
-                        onMessageClick = { feedbackId, replyId ->
-                            navController.navigate(Routes.feedbackDetailRoute(feedbackId, replyId))
-                        },
-                        viewModel = sharedViewModel
-                    )
                 }
             }
 
