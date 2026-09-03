@@ -35,10 +35,15 @@ import com.tracktosearch.ui.screen.swiftie.bracelet.braceletHeightFor
  * （子集化的 Pacifico）也只有这一句和 `Taylor Swift` 的字母，换成中日韩会整行豆腐块。
  * 读屏用户拿不到它，所以另有一份本地化的 `R.string.swiftie_finale_a11y`。
  */
-internal const val FINALE_TAGLINE = "You & Taylor — forever & always."
+internal const val FINALE_TAGLINE = "Taylor & Me — forever & always."
 
-/** [FINALE_TAGLINE] 在 `swiftie_script` 里的宽度（em），字号按可用宽度反推。 */
-private const val TAGLINE_EM = 14.65f
+/**
+ * [FINALE_TAGLINE] 在 `swiftie_script` 里的宽度（em），字号按可用宽度反推。
+ *
+ * 是**排版后**的宽度：这份子集保留了 GPOS `kern`，字距会收，量 advance 之和会偏大。
+ * 改这句话就要重量一次（`scripts/fetch-swiftie-fonts.sh` 那行子集字符集也要同步）。
+ */
+private const val TAGLINE_EM = 14.53f
 
 /** 字号上限，**dp 当量**（见 [SwiftieTagline] 里为什么不是 sp）。 */
 private val TAGLINE_MAX_SIZE = 18.dp

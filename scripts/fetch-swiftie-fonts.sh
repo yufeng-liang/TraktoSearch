@@ -48,12 +48,12 @@ sub() { # sub <src> <dest-name> <text> [extra fontTools.subset args...]
     "$@" --output-file="$OUT/$dest.ttf"
 }
 
-# swiftie_script 留签名那两个词，加上纪念页最下面那句 You & Taylor — forever & always.
+# swiftie_script 留签名那两个词，加上纪念页最下面那句 Taylor & Me — forever & always.
 # （FINALE_TAGLINE）。破折号是 U+2014，不在 --text 里写，免得脚本文件的编码影响产物。
 # 改了这一行的字符集就要重跑 scripts/build-swiftie-signature-path.py —— 签名的中线是按
 # 这份轮廓量出来的。「Congrats on Forever!」已改成描原图的矢量（见 SwiftieCongratsPath.kt），
 # 提示行改用 Honey Script
-sub pacifico    swiftie_script      'TaylorSwift You&forever always.' --unicodes=U+2014
+sub pacifico    swiftie_script      'TaylorSwift Me&forever always.' --unicodes=U+2014
 sub honey       swiftie_honey       '0123456789+=XHerluckynmb. '
 sub greatvibes  era_taylor_swift    'Taylor Swift'
 sub josefin     era_fearless        'Fearless'

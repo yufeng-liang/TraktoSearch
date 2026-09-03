@@ -2073,8 +2073,8 @@ Config:
     <string name="swiftie_quiz_backspace">Delete</string>
     <string name="swiftie_era_card_a11y">%1$s, released %2$s, %3$d tracks</string>
     <string name="swiftie_eras_axis_a11y">Album timeline, 2006 to 2025, twelve albums. Drag to jump to an era.</string>
-    <string name="swiftie_finale_a11y">Taylor Swift\'s glitter signature, with three friendship bracelets below it: 13 heart 87, SWIFTIE, and %1$s. Written underneath: you and Taylor, forever and always.</string>
-    <string name="swiftie_finale_a11y_plain">Taylor Swift\'s glitter signature, with two friendship bracelets below it: 13 heart 87, and SWIFTIE. Written underneath: you and Taylor, forever and always.</string>
+    <string name="swiftie_finale_a11y">Taylor Swift\'s glitter signature, with three friendship bracelets below it: 13 heart 87, SWIFTIE, and %1$s. Written underneath: Taylor and me, forever and always.</string>
+    <string name="swiftie_finale_a11y_plain">Taylor Swift\'s glitter signature, with two friendship bracelets below it: 13 heart 87, and SWIFTIE. Written underneath: Taylor and me, forever and always.</string>
     <string name="swiftie_skip">Skip</string>
     <string name="swiftie_resume">Resume</string>
     <string name="swiftie_audio_hint_all">Sound on and headphones for the best experience</string>

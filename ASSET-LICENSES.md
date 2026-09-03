@@ -42,8 +42,8 @@ Google Fonts，为 OFL-1.1 或 Apache-2.0，均允许商业使用与嵌入分发
 
 `era_imfell` 同时服务 folklore 与 evermore 两个时代，因此 13 个文件对应 12 个时代。
 
-`swiftie_script` 覆盖 `Taylor Swift` 与纪念页那句 `You & Taylor — forever & always.`，
-共 20 个码点。它比别的字体多一层耦合：签名动画的笔心中线
+`swiftie_script` 覆盖 `Taylor Swift` 与纪念页那句 `Taylor & Me — forever & always.`，
+共 19 个码点。它比别的字体多一层耦合：签名动画的笔心中线
 （`SwiftieSignaturePath.kt`）是用脚本从**这份二进制**的字形骨架量出来的，所以重新
 子集化并且轮廓有变化时，必须重跑 `scripts/build-swiftie-signature-path.py`。
 
@@ -63,8 +63,8 @@ Google Fonts，为 OFL-1.1 或 Apache-2.0，均允许商业使用与嵌入分发
 ### 子集化与保留字体名
 
 13 个文件都是**逐专辑激进子集化**的产物：每个只保留自己那几个字的字形
-（4–54 个，`era_1989` 最少 4 个、`swiftie_script` 最多 54 个），13 个合计 76 932 字节
-= 75.1 KiB。子集化删除了绝大多数字形，属于 OFL-1.1 定义的 **Modified Version**，
+（4–52 个，`era_1989` 最少 4 个、`swiftie_script` 最多 52 个），13 个合计 76 696 字节
+= 74.9 KiB。子集化删除了绝大多数字形，属于 OFL-1.1 定义的 **Modified Version**，
 因此第 3 条生效：Modified Version 不得沿用 Reserved Font Name。
 
 判据是**入包的那份二进制**里 name ID 0 有没有 `With Reserved Font Name`，
