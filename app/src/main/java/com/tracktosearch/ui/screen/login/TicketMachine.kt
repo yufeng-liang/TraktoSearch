@@ -88,6 +88,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tracktosearch.BuildConfig
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.MachineBulbEmber
@@ -130,6 +131,9 @@ private const val CODE_LENGTH = 6
 /**
  * 像素屏窗高。两行 —— 第一行短状态、第二行完整引导 —— 各贴一边，中间是空当。
  * 锁死而不是随内容伸缩：只有一行时也留着第二行的位置，否则整台机器会随状态跳动。
+ *
+ * 两行各升一档字号后占掉 18.7 + 15.0dp，加上下各 4dp 内边距共 41.7dp，48dp 仍装得下，
+ * 中间还剩 6dp 空当。再升一档就撑破了 —— 屏窗高度是这两个字号的硬上限。
  */
 private val DisplayHeight = 48.dp
 
@@ -414,7 +418,9 @@ internal fun TicketMachine(
                         .padding(horizontal = 8.dp, vertical = 3.dp)
                 ) {
                     Text(
-                        text = stringResource(R.string.login_personal_cinema_access),
+                        // 铭牌上刻的是型号：真机的铭牌印的是机型和版本，不是一句宣传语。
+                        // 这里直接取 App 版本号，装机截图里就能看出跑的是哪一版
+                        text = stringResource(R.string.machine_plate, BuildConfig.VERSION_NAME),
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontFamily = FontFamily.Monospace,
                             fontSize = 11.sp,
@@ -463,21 +469,21 @@ internal fun TicketMachine(
                         Arrangement.SpaceBetween
                     }
                 ) {
-                    // 第一行是主角。字号不能再往上加档：像素字体走 12px 网格，
-                    // pixelFontSize 向下取整到网格倍数，再高一档中文会顶右边缘
+                    // 第一行是主角。16.dp 跨不过 12px 网格的下一档，17.dp 才跨得过去
+                    // （见 pixelFontSize：目标 dp 折成 px 后向下取整到 12 的倍数）
                     Text(
                         text = statusText,
-                        style = pixelDisplayStyle(pixelFontSize(16.dp)),
+                        style = pixelDisplayStyle(pixelFontSize(17.dp)),
                         color = displayInk,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    // 第二行是注释，降一档到 12px 网格：窄屏上也能装约 23 字，
-                    // 现有最长的引导文案是 22 字。maxLines 留 1 是兜底，以后加长文案会被截断而不是把屏撑破
+                    // 第二行是注释，跟着上一档：中文最长的引导是 22 字，基准机上算下来
+                    // 286dp，屏窗净宽 302dp，仍装得下。日英韩本来就更长、本来就省略号收尾
                     if (detailText != null) {
                         Text(
                             text = detailText,
-                            style = pixelDisplayStyle(pixelFontSize(12.dp)),
+                            style = pixelDisplayStyle(pixelFontSize(14.dp)),
                             color = displayInk.copy(alpha = 0.78f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis

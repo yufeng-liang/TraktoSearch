@@ -63,7 +63,6 @@ KEY_PATTERNS = [
     re.compile(r"^auth_error_"),
     re.compile(r"^auth_migration_invite_hint$"),
     re.compile(r"^login_activation_locked$"),
-    re.compile(r"^login_personal_cinema_access$"),
 ]
 
 # Kept regardless of what the strings happen to use today: the six code cells and the

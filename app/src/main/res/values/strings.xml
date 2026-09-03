@@ -232,7 +232,7 @@
     <string name="login_douban_import">Or import from Douban</string>
     <string name="login_douban">Login with Douban</string>
     <string name="login_activation_locked">○ No ticket yet · Enter a ticket code to redeem your admission pass</string>
-    <string name="login_personal_cinema_access">TICKET MACHINE · PERSONAL CINEMA</string>
+    <string name="machine_plate">TICKET MACHINE · V%1$s</string>
     <string name="douban_import_require_trakt_title">Login to Trakt required</string>
     <string name="douban_import_require_trakt_desc">Importing Douban marks requires logging into Trakt first, marks will sync to your Trakt watchlist/watched list. Login to Trakt now?</string>
     <string name="douban_import_require_trakt_login">Login Trakt</string>

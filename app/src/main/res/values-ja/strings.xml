@@ -519,7 +519,7 @@
     <string name="login_success">ログイン成功、読み込み中…</string>
     <string name="login_sync_hint">ログイン後、Traktのウォッチリストが同期されます</string>
     <string name="login_activation_locked">○ 未発行 · コードを入力してチケットと引きかえ</string>
-    <string name="login_personal_cinema_access">TICKET MACHINE · PERSONAL CINEMA</string>
+    <string name="machine_plate">TICKET MACHINE · V%1$s</string>
 
     <!-- Ratings -->
 

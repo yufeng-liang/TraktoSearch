@@ -93,7 +93,6 @@ class PixelFontCoverageTest {
             Regex("^auth_error_.*"),
             Regex("^auth_migration_invite_hint$"),
             Regex("^login_activation_locked$"),
-            Regex("^login_personal_cinema_access$"),
         )
 
         /**

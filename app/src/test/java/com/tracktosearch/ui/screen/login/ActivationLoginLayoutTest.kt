@@ -30,7 +30,8 @@ private const val VIEWPORT_TAG = "activation_login_viewport"
  *
  * 取票机把像素屏、六格、12 个键、取票键和出票口串成一列，任一处高度往上长一点，
  * 取票键就被顶到折线以下 —— 用户进来第一眼只看到键盘，不滚一下不知道输完码按哪里。
- * 这里不比像素，只守三条：基准机上输入态整屏不滚动、出票态整屏也不滚动、小屏上取票键仍落在首屏内。
+ * 这里不比像素，只守四条：基准机上输入态整屏不滚动、出票态整屏也不滚动、矮屏缩放后出票态
+ * 仍不滚动、小屏上取票键仍落在首屏内。
  *
  * 两个用例各自用 @Config 把 Robolectric 的窗口调成目标机型，让窗口与容器同尺寸：
  * assertIsDisplayed 判的是节点有没有落在窗口和滚动视口里，窗口比容器矮的话，
@@ -87,6 +88,27 @@ class ActivationLoginLayoutTest {
         // ticketSlot 默认是空的，票高涨一点、机器高涨一点都不会让它变红
         val scrollState = ScrollState(0)
         setActivationContent(scrollState, width = 412.dp, height = 915.dp, printed = true)
+
+        composeRule.runOnIdle { assertThat(scrollState.maxValue).isEqualTo(0) }
+    }
+
+    @Test
+    fun `矮屏按比例缩，高屏不放大`() {
+        // 上界是这条规则的一半：屏更高时机器不该跟着长大
+        assertThat(loginContentScale(1200.dp)).isEqualTo(1f)
+        assertThat(loginContentScale(792.dp)).isEqualTo(1f)
+        // 792 的九成，缩到九成
+        assertThat(loginContentScale(712.8.dp)).isWithin(0.001f).of(0.9f)
+        // 异常小的窗口（分屏、折叠屏内屏的一半）触到下界，剩下的交给滚动
+        assertThat(loginContentScale(396.dp)).isEqualTo(0.7f)
+    }
+
+    @Test
+    @Config(qualifiers = "zh-w360dp-h640dp")
+    fun `矮屏上出票之后也不需要滚动`() {
+        // 640dp 是这一屏见得到的最矮的一档（老 16 : 9 小屏）。整屏按 0.81 缩，仍不滚动
+        val scrollState = ScrollState(0)
+        setActivationContent(scrollState, width = 360.dp, height = 640.dp, printed = true)
 
         composeRule.runOnIdle { assertThat(scrollState.maxValue).isEqualTo(0) }
     }

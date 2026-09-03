@@ -25,6 +25,9 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -38,6 +41,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,11 +60,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -382,6 +389,8 @@ fun ActivationLoginScreen(
  * 而带 `hiltViewModel()` 默认值的 [ActivationLoginScreen] 在 Robolectric 里立不起来。
  * 护栏见 ActivationLoginLayoutTest。
  *
+ * 比基准机矮的屏整屏按比例缩，见 [loginContentScale]。
+ *
  * @param scrollState 由调用方持有 —— 测试靠 `maxValue == 0` 判断有没有超出一屏
  * @param expiredMessage 授权过期提示，为 null 时不占位
  * @param loginErrorText Trakt 授权失败提示，为 null 时不占位
@@ -407,8 +416,93 @@ internal fun ActivationLoginContent(
     modifier: Modifier = Modifier,
     ticketSlot: @Composable () -> Unit = {},
 ) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val density = LocalDensity.current
+        // 系统栏那部分高度不参与缩放：它是物理的一段，缩内容也缩不掉它，
+        // 所以先扣掉再算比例。IME 不算在内 —— 弹键盘时整台机器不该跟着缩一次
+        val systemBarsHeight = with(density) {
+            val insets = WindowInsets.statusBars.getTop(this) +
+                WindowInsets.navigationBars.getBottom(this)
+            insets.toDp()
+        }
+        val scale = loginContentScale(available = maxHeight - systemBarsHeight)
+        // 缩放走 density 而不是 graphicsLayer：后者只改绘制，版面仍按原尺寸测量，
+        // 滚动条照旧存在，缩完还得自己算平移。改 density 则整棵子树按小一号的 dp
+        // 重新测量 —— dp、sp、触达区、圆角、笔画宽度一起等比缩小，一处都不会漏。
+        // fontScale 原样传下去：用户调大的系统字号不该被这里悄悄抵消掉
+        CompositionLocalProvider(
+            LocalDensity provides Density(density.density * scale, density.fontScale)
+        ) {
+            ActivationLoginLayout(
+                machineCode = machineCode,
+                machineStatus = machineStatus,
+                machineDetail = machineDetail,
+                machinePhase = machinePhase,
+                keypadEnabled = keypadEnabled,
+                submitEnabled = submitEnabled,
+                expiredMessage = expiredMessage,
+                loginErrorText = loginErrorText,
+                codeDescription = codeDescription,
+                scrollState = scrollState,
+                onDigit = onDigit,
+                onBackspace = onBackspace,
+                onPaste = onPaste,
+                onSubmit = onSubmit,
+                onWhatIsTrakt = onWhatIsTrakt,
+                ticketSlot = ticketSlot,
+            )
+        }
+    }
+}
+
+/**
+ * 整屏缩放比例：矮屏按比例缩，高屏不放大。
+ *
+ * 上界钉在 1f 是这条规则的一半 —— 屏更高时机器不该跟着长大。那点余量给不了新信息，
+ * 只会让一台取票机变成一件巨物，票面 11sp 的小字也不会因为屏高就该变成 13sp。
+ *
+ * 下界 [LOGIN_MIN_CONTENT_SCALE] 兜的是异常小的窗口（分屏、折叠屏内屏的一半）：
+ * 缩到那以下键帽会小到按不准，那种情况下宁可让它滚动，也不交一屏按不动的界面。
+ *
+ * @param available 扣掉系统栏之后这一屏真正能用的高度
+ */
+internal fun loginContentScale(available: Dp): Float =
+    (available / LoginContentBaselineHeight).coerceIn(LOGIN_MIN_CONTENT_SCALE, 1f)
+
+/**
+ * 版式在基准机上占掉的高度（不含系统栏）。
+ *
+ * 792dp 是实测值 779dp 加约 13dp 余量：标题 41 + 间隙 20 + 机器 451 + 票 178 +
+ * 「什么是 Trakt」44 + 页面上下内边距 40。余量留给别的语言 —— 日韩文案更长，
+ * 像素屏第二行和票面三行都可能比中文高一档。基准机 390×866dp 上算出来的比例是
+ * 1.02，取 1f，也就是这台机器上的版面与实测那一版逐 dp 相同。
+ */
+private val LoginContentBaselineHeight = 792.dp
+
+/** 缩放下界。再小键帽就按不准了，那种窗口宁可滚动。 */
+private const val LOGIN_MIN_CONTENT_SCALE = 0.7f
+
+@Composable
+private fun ActivationLoginLayout(
+    machineCode: String,
+    machineStatus: String,
+    machineDetail: String?,
+    machinePhase: MachinePhase,
+    keypadEnabled: Boolean,
+    submitEnabled: Boolean,
+    expiredMessage: String?,
+    loginErrorText: String?,
+    codeDescription: String?,
+    scrollState: ScrollState,
+    onDigit: (Char) -> Unit,
+    onBackspace: () -> Unit,
+    onPaste: () -> Unit,
+    onSubmit: () -> Unit,
+    onWhatIsTrakt: () -> Unit,
+    ticketSlot: @Composable () -> Unit,
+) {
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
             .imePadding()

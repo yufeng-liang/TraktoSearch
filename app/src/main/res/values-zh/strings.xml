@@ -232,7 +232,7 @@
     <string name="login_douban_import">或从豆瓣导入标记</string>
     <string name="login_douban">豆瓣登录</string>
     <string name="login_activation_locked">○ 尚未取票 · 输入取票码换票入场</string>
-    <string name="login_personal_cinema_access">TICKET MACHINE · PERSONAL CINEMA</string>
+    <string name="machine_plate">TICKET MACHINE · V%1$s</string>
     <string name="douban_import_require_trakt_title">需要先登录 Trakt 账号</string>
     <string name="douban_import_require_trakt_desc">从豆瓣导入标记需要先登录 Trakt 账号，标记会同步到你的 Trakt 想看/已看列表。是否现在登录 Trakt？</string>
     <string name="douban_import_require_trakt_login">登录 Trakt</string>
