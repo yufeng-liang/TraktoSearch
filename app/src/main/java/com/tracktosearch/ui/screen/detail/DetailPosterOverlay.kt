@@ -45,6 +45,8 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.ui.component.ProgressiveFullscreenImage
 import com.tracktosearch.ui.component.queryExistingFile
+import com.tracktosearch.ui.component.rememberFullscreenZoomableImageState
+import com.tracktosearch.ui.component.rememberResetOrDismiss
 import com.tracktosearch.ui.component.savePosterToGallery
 import com.tracktosearch.ui.component.zoomSharedTarget
 import com.tracktosearch.ui.util.showToast
@@ -92,6 +94,10 @@ internal fun PosterFullscreenOverlay(
         exit = fadeOut(animationSpec = tween(120))
     ) {
         val animatedVisibilityScope = this
+        // 状态提到这里：黑边单击也要走「放大时先复位」的同一份协议，
+        // 否则放大后点到海报以外的黑底会直接把查看器关掉
+        val imageState = rememberFullscreenZoomableImageState()
+        val resetOrDismiss = rememberResetOrDismiss(imageState, onDismiss)
 
         Box(
             modifier = Modifier
@@ -100,20 +106,21 @@ internal fun PosterFullscreenOverlay(
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = onDismiss
+                    onClick = resetOrDismiss
                 ),
             contentAlignment = Alignment.Center
         ) {
-            // 海报图片（放大显示，点击由 ZoomableFullscreenImage 统一接管：
+            // 海报图片（放大显示，点击由 ProgressiveFullscreenImage 统一接管：
             // 放大时先复位、未放大才关闭，返回键同协议）
             ProgressiveFullscreenImage(
                 // 全屏查看用 original 原图:1080p 屏全屏显示约 1050px,
                 // w500 源图放大到 1080 解码会模糊,original(2000px+) 保证清晰;
                 // 下载大但仅在用户主动查看大图时触发。
-                // 渐进底图 w780 走 telephoto 原生占位图机制（详情页头部已加载过，点开即可见）。
+                // 渐进底图走 telephoto 原生占位图机制（详情页头部的 w780 已加载过，点开即可见）。
                 model = remember(posterUrl) { TmdbImageUrls.swapSize(posterUrl, "original") },
                 contentScale = ContentScale.Fit,
                 contentDescription = title,
+                state = imageState,
                 modifier = Modifier
                     .fillMaxWidth(0.85f)
                     .aspectRatio(2f / 3f)

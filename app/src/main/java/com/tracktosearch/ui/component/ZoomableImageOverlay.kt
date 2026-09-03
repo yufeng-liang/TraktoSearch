@@ -33,12 +33,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -46,17 +44,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import kotlinx.coroutines.launch
+import me.saket.telephoto.zoomable.DoubleClickToZoomListener
+import me.saket.telephoto.zoomable.DynamicZoomSpec
 import me.saket.telephoto.zoomable.EnabledZoomGestures
+import me.saket.telephoto.zoomable.ZoomLimit
 import me.saket.telephoto.zoomable.ZoomSpec
 import me.saket.telephoto.zoomable.ZoomableImageState
 import me.saket.telephoto.zoomable.coil.ZoomableAsyncImage
 import me.saket.telephoto.zoomable.rememberZoomableImageState
 import me.saket.telephoto.zoomable.rememberZoomableState
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 
 /**
  * 通用全屏图片查看 overlay：黑底 + 横滑翻页 + 双击/双指缩放 + 可选保存。
@@ -64,9 +65,8 @@ import androidx.compose.ui.semantics.semantics
  * 每页图片以 `$sharedKeyPrefix-$page` 作为 sharedElement key，
  * 与缩略图端 [zoomSharedSource] 的相同 key 配对，实现 Telegram 风格的小图→大图缩放过渡。
  *
- * 手势与子采样由 telephoto [ZoomableFullscreenImage] 承担：双击在 1x/2.5x 间切换，
- * 放大后 telephoto 的 nested scroll 自动消费横向拖动、缩小时交还给 pager 翻页，
- * 无需再手工锁 userScrollEnabled。
+ * 手势、子采样与加载进度由 [ProgressiveFullscreenImage] 承担：双击在 1x 与动态上限之间循环，
+ * 放大后 telephoto 的 nested scroll 自动消费横向拖动、缩小时交还给 pager 翻页。
  *
  * 注意：本组件必须一直处于组合中（用 `visible` 控制显隐），不能包在 `if` 里，
  * 否则共享元素两侧无法在同一帧共存，转场不会发生。
@@ -88,7 +88,6 @@ internal fun ZoomableImageOverlay(
     enter: EnterTransition = fadeIn(animationSpec = snap()),
     exit: ExitTransition = fadeOut(animationSpec = tween(120)),
 ) {
-    val scope = rememberCoroutineScope()
     val safeInitial = initialIndex.coerceIn(0, (images.size - 1).coerceAtLeast(0))
     val closeDesc = stringResource(R.string.detail_close)
 
@@ -110,47 +109,42 @@ internal fun ZoomableImageOverlay(
         // 内容要等退出动画跑完才被丢弃,所以缩回缩略图的动画不受影响。
         val pagerState = rememberPagerState(initialPage = safeInitial, pageCount = { images.size })
 
+        // 转场动画期间同时锁缩放手势和翻页：telephoto 只在放大后才用 nested scroll 接管横向拖动，
+        // 手势被禁时它不消费，pager 仍能被滑走，把共享元素配对的目标页换掉。
+        val transitionRunning = animatedVisibilityScope.transition.isRunning
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.92f))
                 .statusBarsPadding()
         ) {
-            // 图片区：点背景退出（放大时先复位，由 ZoomableFullscreenImage 统一处理）
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onDismiss
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                HorizontalPager(
-                    state = pagerState,
-                    modifier = Modifier.fillMaxSize()
-                ) { page ->
-                    val url = images.getOrNull(page) ?: return@HorizontalPager
-                    ZoomableFullscreenImage(
-                        model = url,
-                        contentScale = ContentScale.Fit,
-                        // 转场动画期间锁手势，避免手势 transform 与共享元素转场互相打架
-                        gesturesEnabled = animatedVisibilityScope.transition.isRunning.not(),
-                        onRequestDismiss = onDismiss,
-                        // 每页各自接管返回键：仅当前页组合，不会重复注册
-                        backHandlerEnabled = true,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .zoomSharedTarget(
-                                key = sharedKeyPrefix?.let { "$it-$page" },
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                    )
-                }
+            // 图片区：单击退出（放大时先复位）与返回键都由 ProgressiveFullscreenImage 统一处理。
+            // 这里不再套一层全屏 clickable —— 图片节点本身就 fillMaxSize 且始终消费单击，
+            // 那层永远收不到事件，只会给 TalkBack 多挂一个全屏可点节点。
+            HorizontalPager(
+                state = pagerState,
+                userScrollEnabled = !transitionRunning,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val url = images.getOrNull(page) ?: return@HorizontalPager
+                ProgressiveFullscreenImage(
+                    model = url,
+                    contentScale = ContentScale.Fit,
+                    contentDescription = stringResource(R.string.cd_image_page, page + 1, images.size),
+                    gesturesEnabled = !transitionRunning,
+                    onRequestDismiss = onDismiss,
+                    // 每页各自接管返回键：仅当前页组合，不会重复注册
+                    backHandlerEnabled = true,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zoomSharedTarget(
+                            key = sharedKeyPrefix?.let { "$it-$page" },
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
+                )
             }
-
-            // 顶部操作栏
+            // 顶部操作栏（在图片之上，必须自己吃掉单击，否则空白处的点击会穿到下面的图片节点触发退出）
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -224,66 +218,90 @@ internal fun ZoomableImageOverlay(
         }
     }
 }
+/**
+ * 全屏大图的缩放规格：上限交给 telephoto 的 [DynamicZoomSpec.recommend] 按实际图片尺寸算。
+ *
+ * 固定 2.5x 是「相对 fit 之后」的倍率：4K 剧照 fit 到 1080p 屏时 base 缩放约 0.28，
+ * 2.5x 只到原图的 0.7 倍，永远看不到原生像素——白下 original，也白换子采样。
+ * recommend 会把上限抬到至少能 1:1 看到原生像素，小图仍保底这里给的 2.5x。
+ * 同时换掉已废弃的 `ZoomSpec(maxZoomFactor = ...)` 构造函数。
+ */
+private val FULLSCREEN_ZOOM_SPEC: DynamicZoomSpec =
+    DynamicZoomSpec.recommend(ZoomSpec(maximum = ZoomLimit(factor = 2.5f)))
+
+/** 全屏大图统一的 telephoto 状态，保证各入口手感与缩放上限一致。 */
+@Composable
+internal fun rememberFullscreenZoomableImageState(): ZoomableImageState =
+    rememberZoomableImageState(rememberZoomableState(FULLSCREEN_ZOOM_SPEC))
 
 /**
- * 全屏大图统一入口：telephoto 缩放手势 + 子采样 + w780 渐进底图占位。
+ * 「放大时先复位、未放大才关闭」的防误触协议收口。
+ *
+ * 图片本体的单击、返回键，以及 [ContentScale.Fit] 留出的黑边区域的单击都要走这里；
+ * 黑边直接接 onDismiss 会让放大状态下点到边上就整个关掉。
+ */
+@Composable
+internal fun rememberResetOrDismiss(
+    state: ZoomableImageState,
+    onDismiss: (() -> Unit)?,
+): () -> Unit {
+    val scope = rememberCoroutineScope()
+    val currentOnDismiss by rememberUpdatedState(onDismiss)
+    return remember(state, scope) {
+        {
+            val zoomed = state.zoomableState.zoomFraction?.let { it > 0f } == true
+            if (zoomed) scope.launch { state.zoomableState.resetZoom() } else currentOnDismiss?.invoke()
+        }
+    }
+}
+
+/**
+ * 全屏大图统一入口：telephoto 缩放手势 + 子采样 + 内存缓存小图渐进底图。
  * 海报单图（PosterFullscreenOverlay）与多图 pager 共用，保证手势手感一致。
  *
- * 关闭协议：[onRequestDismiss] 触发时若已放大（zoomFraction > 0）先复位到初始大小，
- * 未放大才真正回调关闭，恢复「放大时单击/返回先复位」的防误触语义。
- * [backHandlerEnabled] 为 true 时由本组件接管返回键（多图 pager 下每页一个，
- * 非当前页不组合故不冲突）。双击缩放交给 telephoto 默认 cycle()（1x↔最大倍率）。
+ * 关闭协议见 [rememberResetOrDismiss]。[backHandlerEnabled] 为 true 时由本组件接管返回键
+ * （多图 pager 下每页一个，非当前页不组合故不冲突）。
  */
 @Composable
 internal fun ZoomableFullscreenImage(
     model: Any,
     contentScale: ContentScale,
     modifier: Modifier = Modifier,
-    state: ZoomableImageState = rememberZoomableImageState(
-        rememberZoomableState(zoomSpec = ZoomSpec(maxZoomFactor = 2.5f))
-    ),
+    state: ZoomableImageState = rememberFullscreenZoomableImageState(),
     gesturesEnabled: Boolean = true,
     onRequestDismiss: (() -> Unit)? = null,
     backHandlerEnabled: Boolean = false,
     contentDescription: String? = null,
-    onDisplayedChanged: ((Boolean) -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val underlayUrl = remember(model) { progressiveUnderlay(model) }
-
-    fun resetOrDismiss() {
-        val zoomed = state.zoomableState.zoomFraction.let { it != null && it > 0f }
-        if (zoomed) scope.launch { state.zoomableState.resetZoom() }
-        else onRequestDismiss?.invoke()
+    val resetOrDismiss = rememberResetOrDismiss(state, onRequestDismiss)
+    // ImageRequest 有 equals，重建不会触发重新加载，但每次重组都新建一份纯属浪费
+    val request = remember(context, model) {
+        fullscreenImageRequest(context, model, progressiveUnderlay(context, model))
     }
 
     if (backHandlerEnabled && onRequestDismiss != null) {
         BackHandler { resetOrDismiss() }
     }
 
-    if (onDisplayedChanged != null) {
-        DisposableEffect(state) {
-            onDispose { onDisplayedChanged(false) }
-        }
-        LaunchedEffect(state) {
-            snapshotFlow { state.isImageDisplayed }.collect { onDisplayedChanged(it) }
-        }
+    val hasDismiss = onRequestDismiss != null
+    val tapHandler: ((Offset) -> Unit)? = remember(resetOrDismiss, hasDismiss) {
+        if (hasDismiss) { { _: Offset -> resetOrDismiss() } } else null
     }
-
-    val tapHandler: ((Offset) -> Unit)? = if (onRequestDismiss != null) {
-        { _ -> resetOrDismiss() }
-    } else {
-        null
+    // 转场期间双击也要锁：gestures 只管缩放/平移，单击与双击走的是另一个手势节点，
+    // 不受它影响。把双击上限压到 1x 等于让双击什么都不做。
+    val doubleClick = remember(gesturesEnabled) {
+        if (gesturesEnabled) DoubleClickToZoomListener.cycle() else DoubleClickToZoomListener.cycle(1f)
     }
 
     ZoomableAsyncImage(
-        model = fullscreenImageRequest(context, model, underlayUrl),
+        model = request,
         contentDescription = contentDescription,
         contentScale = contentScale,
         state = state,
         gestures = if (gesturesEnabled) EnabledZoomGestures.ZoomAndPan else EnabledZoomGestures.None,
         onClick = tapHandler,
+        onDoubleClick = doubleClick,
         modifier = modifier
     )
 }

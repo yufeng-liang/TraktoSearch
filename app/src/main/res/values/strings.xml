@@ -1215,6 +1215,7 @@ Config:
     <string name="cd_watched">Watched</string>
     <string name="cd_saved">Saved</string>
     <string name="cd_save">Save</string>
+    <string name="cd_image_page">Image %1$d of %2$d</string>
     <string name="cd_edit">Edit</string>
     <string name="cd_delete">Delete</string>
     <string name="cd_back_to_top">Back to top</string>

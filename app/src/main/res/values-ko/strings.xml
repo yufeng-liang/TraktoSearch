@@ -1113,6 +1113,7 @@
     <string name="cd_watched">시청함</string>
     <string name="cd_saved">저장됨</string>
     <string name="cd_save">저장</string>
+    <string name="cd_image_page">이미지 %1$d / %2$d</string>
     <string name="cd_edit">편집</string>
     <string name="cd_delete">삭제</string>
     <string name="cd_back_to_top">맨 위로</string>

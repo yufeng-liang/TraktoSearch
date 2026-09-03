@@ -254,8 +254,8 @@ fun PersonScreen(
                                                     imageUrl = url,
                                                     title = uiState.person?.name ?: personName,
                                                     onClick = {
-                                                        // 点击即预热全屏用原图，转场打开时命中磁盘缓存
-                                                        prefetchFullscreenImage(context, listOf(url))
+                                                        // 点击即预热全屏用的 original 原图，转场打开时命中磁盘缓存
+                                                        prefetchFullscreenImage(context, listOf(TmdbImageUrls.swapSize(url, "original")))
                                                         personImageFullscreenKey = "person-row-$personId"
                                                         selectedPersonImageIndex = index
                                                     },
@@ -522,8 +522,11 @@ fun PersonScreen(
                         onImageClick = { index ->
                             // 面板保持打开：源侧改用 caller-managed visibility 后不再需要关面板来
                             // 让出 target，返回时可直接回到网格原位
-                            // 点击即预热全屏用原图，转场打开时命中磁盘缓存
-                            prefetchFullscreenImage(context, listOf(uiState.personImages.getOrNull(index)))
+                            // 点击即预热全屏用的 original 原图，转场打开时命中磁盘缓存
+                            prefetchFullscreenImage(
+                                context,
+                                listOf(uiState.personImages.getOrNull(index)?.let { TmdbImageUrls.swapSize(it, "original") })
+                            )
                             personImageFullscreenKey = "person-grid-$personId"
                             selectedPersonImageIndex = index
                         },

@@ -1113,6 +1113,7 @@
     <string name="cd_watched">視聴済み</string>
     <string name="cd_saved">保存済み</string>
     <string name="cd_save">保存</string>
+    <string name="cd_image_page">%2$d 枚中 %1$d 枚目の画像</string>
     <string name="cd_edit">編集</string>
     <string name="cd_delete">削除</string>
     <string name="cd_back_to_top">トップに戻る</string>

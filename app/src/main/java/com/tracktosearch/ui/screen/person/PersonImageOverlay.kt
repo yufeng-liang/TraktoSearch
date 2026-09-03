@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.ui.component.ZoomableImageOverlay
 import com.tracktosearch.ui.component.queryExistingFile
 import com.tracktosearch.ui.component.savePosterToGallery
@@ -70,6 +71,11 @@ internal fun PersonImagePagerOverlay(
     val scope = rememberCoroutineScope()
     val savedImages = remember { mutableStateOf<Set<Int>>(emptySet()) }
 
+    // 全屏改用 original：telephoto 从磁盘子采样分块解码，配合动态缩放上限能放到原生像素，
+    // 而 h632（高 632px）在 1080p 屏上稍微放大就糊，等于白搭子采样。
+    // 缩略图与网格仍用 h632，只有用户主动看大图时才下原图。
+    val fullSizeImages = remember(images) { images.map { TmdbImageUrls.swapSize(it, "original") } }
+
     // 已保存检查（按 initialIndex 一次性检查；键住 visible+initialIndex，
     // 每次打开查看器时重新检查对应页，关闭时不查询）
     LaunchedEffect(visible, initialIndex) {
@@ -86,7 +92,7 @@ internal fun PersonImagePagerOverlay(
 
     ZoomableImageOverlay(
         visible = visible,
-        images = images,
+        images = fullSizeImages,
         initialIndex = initialIndex,
         sharedKeyPrefix = sharedKeyPrefix,
         onDismiss = onDismiss,
@@ -94,7 +100,8 @@ internal fun PersonImagePagerOverlay(
             if (idx in savedImages.value) {
                 context.showToast(alreadySavedToast)
             } else {
-                savePosterToGallery(context, scope, images[idx], "person_$idx") {
+                // 存与屏幕显示一致的原图，所见即所得
+                savePosterToGallery(context, scope, fullSizeImages[idx], "person_$idx") {
                     savedImages.value += idx
                 }
             }
