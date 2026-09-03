@@ -20,8 +20,11 @@
 
     <!-- Ticket Machine -->
     <string name="machine_status_ready">코드 입력</string>
+    <string name="machine_status_verifying">확인 중…</string>
+    <string name="machine_detail_verifying">○ 티켓 코드 확인 중 · 잠시만 기다려 주세요</string>
     <string name="machine_status_printing">인쇄 중…</string>
     <string name="machine_status_collected">발권 완료</string>
+    <string name="machine_detail_collected">○ 발권 완료 · 티켓에서 입장 방식을 선택</string>
     <string name="machine_status_invalid">코드 오류</string>
     <string name="machine_status_used">사용됨</string>
     <string name="machine_status_revoked">취소됨</string>
@@ -42,10 +45,11 @@
     <string name="machine_code_collected">발권 번호 사용 완료, 티켓 출력됨</string>
 
     <!-- Ticket -->
-    <string name="ticket_admit_one">ADMIT ONE</string>
     <string name="ticket_hall">%1$d관</string>
     <string name="ticket_seat">%1$d열 %2$d번</string>
+    <string name="ticket_serial_no">NO. %1$s</string>
     <string name="ticket_entry_trakt">Trakt로 로그인</string>
+    <string name="ticket_entry_authorizing">인증 중…</string>
     <string name="ticket_entry_douban">더우반 로그인</string>
     <string name="ticket_entry_guest">게스트로 입장</string>
 
@@ -515,7 +519,7 @@
     <string name="login_success">로그인 성공, 로딩 중…</string>
     <string name="login_sync_hint">로그인 후 Trakt 관심목록이 동기화됩니다</string>
     <string name="login_activation_locked">○ 미발권 · 티켓 코드를 입력해 입장권으로 교환</string>
-    <string name="login_personal_cinema_access">TICKET MACHINE · PERSONAL CINEMA</string>
+    <string name="machine_plate">TICKET MACHINE · V%1$s</string>
 
     <!-- Ratings -->
 

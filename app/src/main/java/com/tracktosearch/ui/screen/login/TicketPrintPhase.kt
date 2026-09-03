@@ -11,8 +11,6 @@ data class PrintPhase(
     val overshootDp: Float,
     /** 票面上已淡入的入口行数，0..3。 */
     val rowsVisible: Int,
-    /** 条码是否已画出。 */
-    val barcodeVisible: Boolean,
     /**
      * 走纸步序号，0 表示纸头还在探出、尚未开始步进。
      *
@@ -22,12 +20,11 @@ data class PrintPhase(
     val feedStep: Int,
 )
 
-// 四段边界一律由毫秒除总时长算出，改 TICKET_PRINT_DURATION_MS 时时序自动跟着走，
+// 三段边界一律由毫秒除总时长算出，改 TICKET_PRINT_DURATION_MS 时时序自动跟着走，
 // 不用回来逐个改小数
 private const val PHASE_A_END = 120f / TICKET_PRINT_DURATION_MS
 private const val PHASE_B_END = 1100f / TICKET_PRINT_DURATION_MS
 private const val PHASE_C_END = 1250f / TICKET_PRINT_DURATION_MS
-private const val BARCODE_START = 1350f / TICKET_PRINT_DURATION_MS
 
 /** 票头先探出的一小截：纸从出票口露头，之后才开始走纸 */
 private const val HEAD_REVEAL = 0.03f
@@ -46,7 +43,7 @@ private const val TICKET_ROWS = 3
 
 /** 系统关闭动画（ANIMATOR_DURATION_SCALE == 0）时直接用终态，跳过整段推出。 */
 val TICKET_PRINT_FINAL_PHASE: PrintPhase =
-    PrintPhase(1f, 0f, TICKET_ROWS, true, PHASE_B_STEPS)
+    PrintPhase(1f, 0f, TICKET_ROWS, PHASE_B_STEPS)
 
 /**
  * 归一化进度对应的出票形态。
@@ -65,7 +62,6 @@ fun phaseAt(progress: Float): PrintPhase {
             revealFraction = HEAD_REVEAL * (clamped / PHASE_A_END),
             overshootDp = 0f,
             rowsVisible = 0,
-            barcodeVisible = false,
             feedStep = 0,
         )
         // 阶段 B：步进走纸，段内保持常量，跨段才跳一级
@@ -80,7 +76,6 @@ fun phaseAt(progress: Float): PrintPhase {
                     .coerceAtMost(1f),
                 overshootDp = 0f,
                 rowsVisible = 0,
-                barcodeVisible = false,
                 feedStep = step + 1,
             )
         }
@@ -91,11 +86,10 @@ fun phaseAt(progress: Float): PrintPhase {
                 revealFraction = 1f,
                 overshootDp = OVERSHOOT_DP * (1f - settled),
                 rowsVisible = 0,
-                barcodeVisible = false,
                 feedStep = PHASE_B_STEPS,
             )
         }
-        // 阶段 D：票停稳后再逐行印字，最后压条码
+        // 阶段 D：票停稳后逐行印出三个入口
         else -> {
             val elapsedMs = (clamped - PHASE_C_END) * TICKET_PRINT_DURATION_MS
             PrintPhase(
@@ -103,7 +97,6 @@ fun phaseAt(progress: Float): PrintPhase {
                 overshootDp = 0f,
                 rowsVisible = (1 + (elapsedMs / ROW_FADE_INTERVAL_MS).toInt())
                     .coerceIn(1, TICKET_ROWS),
-                barcodeVisible = clamped >= BARCODE_START,
                 feedStep = PHASE_B_STEPS,
             )
         }

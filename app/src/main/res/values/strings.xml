@@ -20,8 +20,11 @@
 
     <!-- Ticket Machine -->
     <string name="machine_status_ready">ENTER CODE</string>
+    <string name="machine_status_verifying">CHECKING…</string>
+    <string name="machine_detail_verifying">○ Checking your ticket code · One moment</string>
     <string name="machine_status_printing">PRINTING…</string>
     <string name="machine_status_collected">COLLECTED</string>
+    <string name="machine_detail_collected">○ Ticket printed · Choose an entry option on your ticket</string>
     <string name="machine_status_invalid">BAD CODE</string>
     <string name="machine_status_used">CODE USED</string>
     <string name="machine_status_revoked">REVOKED</string>
@@ -42,10 +45,11 @@
     <string name="machine_code_collected">Ticket code used, ticket collected</string>
 
     <!-- Ticket -->
-    <string name="ticket_admit_one">ADMIT ONE</string>
     <string name="ticket_hall">HALL %1$d</string>
     <string name="ticket_seat">ROW %1$d SEAT %2$d</string>
+    <string name="ticket_serial_no">NO. %1$s</string>
     <string name="ticket_entry_trakt">Sign in with Trakt</string>
+    <string name="ticket_entry_authorizing">Authorizing…</string>
     <string name="ticket_entry_douban">Sign in with Douban</string>
     <string name="ticket_entry_guest">Enter as guest</string>
 
@@ -228,7 +232,7 @@
     <string name="login_douban_import">Or import from Douban</string>
     <string name="login_douban">Login with Douban</string>
     <string name="login_activation_locked">○ No ticket yet · Enter a ticket code to redeem your admission pass</string>
-    <string name="login_personal_cinema_access">TICKET MACHINE · PERSONAL CINEMA</string>
+    <string name="machine_plate">TICKET MACHINE · V%1$s</string>
     <string name="douban_import_require_trakt_title">Login to Trakt required</string>
     <string name="douban_import_require_trakt_desc">Importing Douban marks requires logging into Trakt first, marks will sync to your Trakt watchlist/watched list. Login to Trakt now?</string>
     <string name="douban_import_require_trakt_login">Login Trakt</string>

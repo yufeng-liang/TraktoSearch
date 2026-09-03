@@ -1,14 +1,15 @@
 package com.tracktosearch.ui.screen.login
 
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.remember
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -16,8 +17,6 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.R
 import com.tracktosearch.data.local.TicketStub
-import com.tracktosearch.ui.component.GlassScene
-import dev.chrisbanes.haze.HazeState
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -43,6 +42,7 @@ class ActivationLoginActionsTest {
 
     private fun setMachine(
         code: String,
+        phase: MachinePhase = MachinePhase.Ready,
         submitEnabled: Boolean = code.length == 6,
         keypadEnabled: Boolean = true,
         codeDescription: String? = null,
@@ -54,14 +54,10 @@ class ActivationLoginActionsTest {
                 TicketMachine(
                     code = code,
                     statusText = "READY",
-                    statusIsError = false,
-                    hintText = null,
-                    hintIsError = false,
-                    isLoading = false,
+                    detailText = null,
+                    phase = phase,
                     keypadEnabled = keypadEnabled,
                     submitEnabled = submitEnabled,
-                    hazeState = remember { HazeState() },
-                    scene = GlassScene(),
                     onDigit = onDigit,
                     onBackspace = {},
                     onPaste = {},
@@ -72,18 +68,22 @@ class ActivationLoginActionsTest {
         }
     }
 
-    private fun setTicket(enabled: Boolean = true) {
+    private fun setTicket(
+        enabled: Boolean = true,
+        loginState: LoginState = LoginState.IDLE,
+        doubanBusy: Boolean = false,
+    ) {
         composeRule.setContent {
             MaterialTheme {
                 CinemaTicket(
                     stub = ticketStub,
                     phase = TICKET_PRINT_FINAL_PHASE,
-                    loginState = LoginState.IDLE,
+                    loginState = loginState,
+                    doubanBusy = doubanBusy,
                     traktEnabled = enabled,
                     doubanEnabled = enabled,
                     guestEnabled = enabled,
                     onTraktLogin = {},
-                    onCancelAuth = {},
                     onDoubanLogin = {},
                     onGuestMode = {},
                 )
@@ -123,13 +123,30 @@ class ActivationLoginActionsTest {
     }
 
     @Test
-    fun `已取票态键盘置灰但不移除`() {
-        // 机器不该只剩半截：键盘整块留在面板上，只是不可按
+    fun `已取票态键盘淡成残影但仍占着面板`() {
+        // 机器不该只剩半截：键盘整块留在面板上，只是不再是控件。
+        // 淡出后它对读屏是纯噪音（念一遍「1 2 3 4…」没有任何用），所以整块被
+        // clearAndSetSemantics 摘掉 —— 这条验的就是「摘掉了，但没删掉」
         setMachine(code = "******", keypadEnabled = false, submitEnabled = false)
-        composeRule.onNodeWithText("7").assertIsDisplayed()
+        composeRule.onNodeWithTag(MACHINE_KEYPAD_TAG).assertExists()
+        composeRule.onAllNodesWithText("7").assertCountEquals(0)
         composeRule
             .onNodeWithText(context.getString(R.string.machine_submit))
             .assertIsNotEnabled()
+    }
+
+    @Test
+    fun `输入态键盘每个键都在读屏树里`() {
+        // 自绘键盘拿不到系统输入法白送的播报，可用状态下 12 个键必须自己可寻址
+        setMachine(code = "")
+        for (digit in "0123456789") {
+            composeRule.onNodeWithText(digit.toString()).assertExists()
+        }
+        composeRule
+            .onNodeWithContentDescription(
+                context.getString(R.string.machine_key_backspace_desc)
+            )
+            .assertExists()
     }
 
     @Test
@@ -191,8 +208,76 @@ class ActivationLoginActionsTest {
     }
 
     @Test
+    fun `票号印在二维码下面且与二维码同源`() {
+        // 020712 = 2 号厅 7 排 12 座，跟 ticketQrModules 散列的是同一个串
+        setTicket()
+        composeRule
+            .onNodeWithText(
+                context.getString(R.string.ticket_serial_no, ticketSerial(ticketStub)),
+                useUnmergedTree = true
+            )
+            .assertExists()
+    }
+
+    @Test
+    fun `二维码留在撕口线左边的票根那半截`() {
+        // 真票撕开后带走的是带码的这一截。横排之后票根是左半，码跑到入口那半
+        // 就不是票根了，而这件事在装机截图上要盯着打孔线看才看得出来
+        setTicket()
+        val serialRight = composeRule
+            .onNodeWithText(
+                context.getString(R.string.ticket_serial_no, ticketSerial(ticketStub)),
+                useUnmergedTree = true
+            )
+            .fetchSemanticsNode().boundsInRoot.right
+        val traktLeft = composeRule
+            .onNodeWithText(context.getString(R.string.ticket_entry_trakt))
+            .fetchSemanticsNode().boundsInRoot.left
+
+        assertThat(serialRight).isLessThan(traktLeft)
+    }
+
+    @Test
+    fun `授权中的时候 Trakt 那行文案就地换成授权中`() {
+        // 提示不再印在票面别处，也不再有取消：那一行自己说自己在等浏览器。
+        // 取消入口去掉之后的兜底在 TraktAuthCancelGuard 与 onAuthLaunchFailed 两处
+        setTicket(loginState = LoginState.AUTHORIZING)
+        composeRule
+            .onNodeWithText(context.getString(R.string.ticket_entry_authorizing))
+            .assertExists()
+        composeRule
+            .onAllNodesWithText(context.getString(R.string.ticket_entry_trakt))
+            .assertCountEquals(0)
+        composeRule
+            .onAllNodesWithText(context.getString(R.string.common_cancel))
+            .assertCountEquals(0)
+    }
+
+    @Test
+    fun `豆瓣那行的授权中只挂在豆瓣自己身上`() {
+        // 豆瓣没有 loginState，进行态是本页本地标记喂进来的；喂错了会让两行一起变授权中
+        setTicket(doubanBusy = true)
+        composeRule
+            .onNodeWithText(context.getString(R.string.ticket_entry_trakt))
+            .assertExists()
+        composeRule
+            .onAllNodesWithText(context.getString(R.string.ticket_entry_douban))
+            .assertCountEquals(0)
+    }
+
+    @Test
+    fun `验码期间取票键换成进度圈`() {
+        // 跑马灯在这一档是无限流水，autoAdvance 会一直等它结束。这里只看首帧的静态结果
+        composeRule.mainClock.autoAdvance = false
+        setMachine(code = "492013", phase = MachinePhase.Verifying)
+        // 键面文字还在就说明这一档没接进去
+        composeRule.onAllNodesWithText(context.getString(R.string.machine_submit))
+            .assertCountEquals(0)
+    }
+
+    @Test
     fun `每个激活错误码都有对应的像素屏短状态`() {
-        // 像素屏短状态与机器下方的完整文案是两套映射，任一边漏掉一个错误码，
+        // 像素屏第一行的短状态与第二行的完整文案是两套映射，任一边漏掉一个错误码，
         // 用户就会看到「取票失败」这类兜底文案，丢掉「下一步该干什么」。
         val errorCodes = listOf(
             "MIGRATION_DEVICE_NOT_FOUND",
