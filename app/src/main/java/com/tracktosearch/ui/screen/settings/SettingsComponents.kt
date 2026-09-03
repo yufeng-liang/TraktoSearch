@@ -1,7 +1,9 @@
 package com.tracktosearch.ui.screen.settings
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -299,6 +301,7 @@ internal fun DataFlowCard(
  * - subtitleColor：小字颜色（merge 模式下整个合并文本使用此颜色）
  */
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 internal fun SettingsCard(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
@@ -308,6 +311,7 @@ internal fun SettingsCard(
     iconTintColor: Color = MaterialTheme.colorScheme.primary,
     loadingIcon: Boolean = false,
     subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
     containerColor: Color = Color.Transparent
 ) {
@@ -316,7 +320,12 @@ internal fun SettingsCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { view.performHaptic(HapticType.CLICK); onClick() }
+            .combinedClickable(
+                onClick = { view.performHaptic(HapticType.CLICK); onClick() },
+                onLongClick = onLongClick?.let { longClick ->
+                    { view.performHaptic(HapticType.CLICK); longClick() }
+                }
+            )
             .padding(vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp)

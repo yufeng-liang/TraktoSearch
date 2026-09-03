@@ -85,7 +85,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -387,15 +386,13 @@ fun SettingsScreen(
     val currentMeshEnabled by viewModel.meshEnabled.collectAsStateWithLifecycle()
     // 霉粉彩蛋解锁位：未解锁时背景光晕列表里整项不出现「星云」
     val swiftieUnlocked by viewModel.swiftieUnlocked.collectAsStateWithLifecycle()
-    // 关于页版本号连点 3 次拉起彩蛋题面：题面显隐挂在 CloudThemeManager 上
+    // 关于页长按版本号拉起霉粉彩蛋题面：题面显隐挂在 CloudThemeManager 上
     val cloudThemeManager = remember {
         EntryPointAccessors.fromApplication(
             context.applicationContext,
             SettingsCloudThemeProvider::class.java
         ).cloudThemeManager()
     }
-    var versionTapCount by remember { mutableIntStateOf(0) }
-    var lastVersionTapAt by remember { mutableLongStateOf(0L) }
 
     val openUrl: (String) -> Unit = { url ->
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
@@ -786,22 +783,12 @@ fun SettingsScreen(
                     hazeState = settingsHazeState,
                     isCheckingUpdate = isCheckingUpdate,
                     onVersionClick = {
-                        // 版本号连点 3 次（每两下间隔 1.5s 内）拉起霉粉彩蛋题面，超时归零。
-                        //
-                        // 「检查更新」只在**一串连点的第一下**发起：原来 1、2 下都发，
-                        // 于是奔着彩蛋去的人会连打两次更新接口、进度条闪两回。
-                        // 第一下照发是为了不牺牲主功能 —— 只想查更新的人点一下就有反应，
-                        // 不必为了彩蛋把它推迟 1.5s
-                        val now = System.currentTimeMillis()
-                        versionTapCount = if (now - lastVersionTapAt > 1500) 1 else versionTapCount + 1
-                        lastVersionTapAt = now
-                        when {
-                            versionTapCount >= 3 -> {
-                                versionTapCount = 0
-                                cloudThemeManager.openSwiftieEgg()
-                            }
-                            versionTapCount == 1 -> viewModel.checkUpdate()
-                        }
+                        // 单击版本号只查更新；彩蛋入口改为长按触发，不再连点。
+                        viewModel.checkUpdate()
+                    },
+                    // 长按版本号拉起霉粉彩蛋题面，与检查更新互不干扰。
+                    onVersionLongClick = {
+                        cloudThemeManager.openSwiftieEgg()
                     },
                     onChangelogClick = {
                         viewModel.loadChangelog()
@@ -1902,6 +1889,7 @@ private fun AboutGroupItem(
     hazeState: HazeState?,
     isCheckingUpdate: Boolean,
     onVersionClick: () -> Unit,
+    onVersionLongClick: () -> Unit,
     onChangelogClick: () -> Unit,
     onHelpClick: () -> Unit,
     onOpenSourceClick: () -> Unit,
@@ -1918,6 +1906,7 @@ private fun AboutGroupItem(
             latestVersion = latestVersion,
             isCheckingUpdate = isCheckingUpdate,
             onVersionClick = onVersionClick,
+            onVersionLongClick = onVersionLongClick,
             onChangelogClick = onChangelogClick,
             onHelpClick = onHelpClick,
             onOpenSourceClick = onOpenSourceClick,
@@ -2179,6 +2168,7 @@ private fun AboutItem(
     latestVersion: String?,
     isCheckingUpdate: Boolean,
     onVersionClick: () -> Unit,
+    onVersionLongClick: () -> Unit,
     onChangelogClick: () -> Unit,
     onHelpClick: () -> Unit,
     onOpenSourceClick: () -> Unit,
@@ -2204,6 +2194,7 @@ private fun AboutItem(
             loadingIcon = isCheckingUpdate,
             subtitleColor = versionSubtitleColor,
             onClick = onVersionClick,
+            onLongClick = onVersionLongClick,
             containerColor = containerColor
         )
         SettingsCard(
