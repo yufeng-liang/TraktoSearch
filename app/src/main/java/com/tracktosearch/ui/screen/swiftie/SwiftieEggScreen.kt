@@ -33,6 +33,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -51,6 +52,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import com.tracktosearch.R
+import com.tracktosearch.ui.screen.swiftie.eras.SwiftieEraBackdropLayer
+import com.tracktosearch.ui.screen.swiftie.eras.SwiftieEraParticleLayer
+import com.tracktosearch.ui.screen.swiftie.eras.SwiftieEraStage
+import com.tracktosearch.ui.screen.swiftie.eras.SwiftieErasData
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieErasStage
 import kotlinx.coroutines.delay
 
@@ -79,6 +84,20 @@ private val AUDIO_HINT_BAND_MAX = 96.dp
 private const val WRONG_SHAKE_MS = 300L
 
 /**
+ * 浮出控件无操作后自动收起的时长。
+ *
+ * 3.5s 而不是 3s：这一组是「暂停 / 跳过」两个选项，要读完两个标签再决定，
+ * 比单个按钮多半秒才不会刚看清就没了。暂停态下这个计时**不启动**（见调用处）。
+ */
+private const val CONTROLS_AUTO_HIDE_MS = 3_500L
+
+/**
+ * 「跳过」在 T3000 之后才进这组控件 —— 前 3 秒先让惊喜落地，别一上来就劝人走。
+ * 重看纪念页时立刻可用。
+ */
+private const val SKIP_OFFERED_AT_MS = 3_000L
+
+/**
  * 终局交还给 Lover 收尾的交叉淡变窗口。
  *
  * 配乐 1:58 唱到 Lover，此时签名与手链已经放完，两层在这 500ms 里对调（见
@@ -92,6 +111,10 @@ private const val FINALE_HANDOFF_MS = 500f
  * @param onDismiss solved = true 表示答对通关；false 表示用户主动关闭（不消耗解题机会）
  * @param onCommitUnlock 主题接管回调，由内容体在扩散铺满全屏那一帧调用
  * @param replay 已解锁后重看纪念页：「跳过」立即可用，不再等 3s 淡入（Spec §3.3）
+ * @param previewStartMs 仅 `eggpreview` 变体用：非 null 就跳过题面直接进序列，
+ *   并把时钟拨到这一刻。截图迭代要能直接看第 9 张卡片或雪景球的第 4 拍，
+ *   而不是每次从头等 60 秒
+ * @param previewPaused 仅 `eggpreview` 变体用：时钟停住，截到的是稳定的一帧
  * @param modifier 调用方用它给整页设 `zIndex` —— 全屏彩蛋必须压在离线横幅之上
  */
 @Composable
@@ -100,6 +123,8 @@ fun SwiftieEggScreen(
     onDismiss: (solved: Boolean) -> Unit,
     onCommitUnlock: () -> Unit,
     replay: Boolean = false,
+    previewStartMs: Long? = null,
+    previewPaused: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     BackHandler(enabled = visible) { onDismiss(false) }
@@ -115,7 +140,9 @@ fun SwiftieEggScreen(
         SwiftieEggContent(
             onDismiss = onDismiss,
             onCommitUnlock = onCommitUnlock,
-            replay = replay
+            replay = replay,
+            previewStartMs = previewStartMs,
+            previewPaused = previewPaused
         )
     }
 }
@@ -171,14 +198,99 @@ private fun Modifier.consumeStrayTouches(): Modifier = pointerInput(Unit) {
 }
 
 /**
- * 序列与静态终态期间强制**深色**系统栏图标。
+ * 换张交叉淡变的时长。
  *
- * 那两段的底是满屏水彩天空（粉白 / 淡蓝 / 薰衣草，相对亮度 0.46–0.86）。深色模式下
- * `Theme.kt` 把状态栏图标设成浅色，白图标压在这张浅底上只有 1.2–2:1，时间和电量看不见。
- * 灯箱阶段不需要 —— 那时四周仍是 `surface`，浅色图标是对的。
+ * 刻意等于「卡片回落 400ms + 段间停顿 100ms」—— 那 500ms 里旧卡片正在收、新卡片还没长出，
+ * 背景换色藏在这个窗口里就看不见接缝。**总时长一毫秒不动**，配乐钉死的两个点不受影响
+ * （`SwiftieTimelineTest` 守着账本）。
+ */
+private const val BACKDROP_CROSSFADE_MS: Float = 500f
+
+/** 背景 L1 大主体的循环相位周期。与卡片母题的 3.6s 同步，两层的呼吸不会各走各的。 */
+private const val BACKDROP_CYCLE_MS: Long = 3_600L
+
+/**
+ * L2 飘落物的行程相位周期。
+ *
+ * **刻意不跟 L1 共用 3.6s。** 那 3.6s 是「呼吸」的节奏（灯在明暗、雾在起伏），
+ * 而这一层要的是「一片叶子从画外飘到画外」的行程 —— 3.6s 走完全屏是被吹风机吹，
+ * 而且每 3.6s 全部飘落物一起归零重掷，整层会有一次可见的集体跳动。
+ *
+ * 12s 也让两层的合拍周期变成 36s，长过任何一张卡片的停留，所以看不出「又对上了」。
+ * `SwiftieEraParticles` 按整数倍关系设计了每个个体的速度档，周期改了它仍然无缝，
+ * 但改到 11–14s 之外它的翻面与扑翼频率就会失真。
+ */
+private const val PARTICLE_CYCLE_MS: Long = 12_000L
+
+/** 终局那一环的自转周期。30s 一圈，18.6s 的段落只转过 0.6 圈，慢到读作呼吸。 */
+private const val FINALE_RING_CYCLE_MS: Long = 30_000L
+
+/** 落在哪一张卡片上。卡片段之外夹到首张 / Lover。 */
+private fun eraSlotAt(elapsedMs: Long): Int =
+    SwiftieTimeline.eraIndexAt(elapsedMs) ?: if (elapsedMs < SwiftieTimeline.ERAS_CARDS_START) {
+        0
+    } else {
+        SwiftieErasData.LOVER_INDEX
+    }
+
+/**
+ * 换张交叉淡变进度。0f = 还没开始换，1f = 已经全是新的那张。
+ *
+ * 最后一张（Showgirl）不参与 —— 它后面接的是终局那一环，不是第 13 张专辑。
+ */
+private fun backdropCrossfadeAt(elapsedMs: Long): Float {
+    val index = SwiftieTimeline.eraIndexAt(elapsedMs) ?: return 0f
+    if (index == SwiftieTimeline.ERA_TRACK_COUNTS.lastIndex) return 0f
+    val end = SwiftieTimeline.eraStartMs(index) +
+        SwiftieTimeline.cardDurationMs(index, SwiftieTimeline.ERA_TRACK_COUNTS[index])
+    val from = end - BACKDROP_CROSSFADE_MS.toLong()
+    return ((elapsedMs - from).toFloat() / BACKDROP_CROSSFADE_MS).coerceIn(0f, 1f)
+}
+
+/**
+ * 当前该用哪一档系统栏图标 —— `null` 表示底是浅色（水彩天空或终局那一环），两处都用深色图标。
+ *
+ * 图标在**交叉淡变的中点**翻，不是在卡片边界翻：那一刻两层各 50%，
+ * 从 1989 的淡蓝换到 reputation 的纯黑时底色正好是中灰，两种图标都还勉强可读，
+ * 翻转最不显眼。
+ */
+private fun barStageAt(elapsedMs: Long): SwiftieEraStage? = when {
+    elapsedMs < SwiftieTimeline.ERAS_INTRO_START -> null
+    elapsedMs < SwiftieTimeline.ERAS_CARDS_END -> {
+        val slot = eraSlotAt(elapsedMs)
+        val advanced = if (backdropCrossfadeAt(elapsedMs) >= 0.5f) slot + 1 else slot
+        SwiftieErasData.STAGE[advanced.coerceAtMost(SwiftieErasData.STAGE.lastIndex)]
+    }
+    elapsedMs < SwiftieTimeline.REWIND_START -> null
+    else -> SwiftieErasData.STAGE[SwiftieErasData.LOVER_INDEX]
+}
+
+/**
+ * 序列与静态终态期间按当前专辑的底色定系统栏图标明暗。
+ *
+ * 这里原来写死「深色图标」—— 那时底是一张固定的浅色水彩天空。背景重构之后每张专辑
+ * 自己一套三档底色：12 张里 reputation（`#111111`）与 Midnights（`#1B2A5B`）**顶部就是深色**，
+ * 深色图标压在上面根本看不见；而末档底色是深色的有 10 张，导航栏必须独立判。
+ *
+ * 两个布尔量都**手填在 `SwiftieErasData.STAGE` 里，不算相对亮度** —— 算出来的值会在
+ * 换张那 500ms 的交叉淡变里来回跨过阈值，图标就一路闪。
+ *
+ * 必须是 SideEffect，不能只在下面的 DisposableEffect 里写一次。
+ *
+ * Compose 的 apply 阶段先派发 RememberObserver（DisposableEffect / LaunchedEffect）
+ * 再跑 SideEffect，而 `Theme.kt` 正是在 SideEffect 里按 darkTheme 设这两个值 ——
+ * 写在 DisposableEffect 里必然被它盖掉。SideEffect 之间按组合顺序执行，彩蛋是主题的
+ * 子树，所以同一帧里我们后写、我们赢。
+ *
+ * @param darkStatusBarIcons 状态栏图标用深色（顶部底色是浅的）
+ * @param darkNavBarIcons 导航栏图标用深色（底部底色是浅的）
  */
 @Composable
-private fun DarkSystemBarIconsWhile(active: Boolean) {
+private fun DynamicSystemBarIconsWhile(
+    active: Boolean,
+    darkStatusBarIcons: Boolean,
+    darkNavBarIcons: Boolean
+) {
     val view = LocalView.current
     val window = LocalActivity.current?.window
     if (view.isInEditMode || window == null) return
@@ -193,19 +305,12 @@ private fun DarkSystemBarIconsWhile(active: Boolean) {
         }
     }
 
-    // 必须是 SideEffect，不能只在上面的 DisposableEffect 里写一次。
-    //
-    // Compose 的 apply 阶段先派发 RememberObserver（DisposableEffect / LaunchedEffect）
-    // 再跑 SideEffect，而 `Theme.kt` 正是在 SideEffect 里按 darkTheme 设这两个值 ——
-    // 写在 DisposableEffect 里必然被它盖掉。SideEffect 之间按组合顺序执行，彩蛋是主题的
-    // 子树，所以同一帧里我们后写、我们赢。
-    //
-    // 唯一的缝：T1100 落主题那一下若只重组了主题、没重组彩蛋，图标会错几秒 ——
-    // 序列的 phase 每几秒翻一次，彩蛋跟着重组就自己纠回来了
     if (active) {
         SideEffect {
-            controller.isAppearanceLightStatusBars = true
-            controller.isAppearanceLightNavigationBars = true
+            // 平台命名是反的：isAppearanceLight*Bars = true 表示「浅色外观」，
+            // 也就是**深色图标**。这里的参数名按图标本身命名，映射就是恒等
+            controller.isAppearanceLightStatusBars = darkStatusBarIcons
+            controller.isAppearanceLightNavigationBars = darkNavBarIcons
         }
     }
 }
@@ -214,21 +319,35 @@ private fun DarkSystemBarIconsWhile(active: Boolean) {
 private fun SwiftieEggContent(
     onDismiss: (solved: Boolean) -> Unit,
     onCommitUnlock: () -> Unit,
-    replay: Boolean
+    replay: Boolean,
+    previewStartMs: Long?,
+    previewPaused: Boolean
 ) {
-    var quiz by remember { mutableStateOf(SwiftieQuizState()) }
+    // 预览变体直接给已解答态 —— 截图迭代不该每次都先答一遍 X + 87 = 100
+    var quiz by remember {
+        mutableStateOf(
+            if (previewStartMs != null) {
+                SwiftieQuizState(phase = SwiftieQuizPhase.SOLVED)
+            } else {
+                SwiftieQuizState()
+            }
+        )
+    }
     // Unspecified 而不是 Zero：SwiftieDiffusion 用 isSpecified 判「键盘还没上报坐标」，
     // 给 Zero 会被当成一个真坐标，扩散就从左上角开始而不是回退到屏幕中心
     var submitCenter by remember { mutableStateOf(Offset.Unspecified) }
     val haptics = LocalHapticFeedback.current
     val reducedMotion = rememberReducedMotion()
+    // 背景三层要按它降档：L0/L1 静态、L2 粒子减半但仍动。
+    // 整块定格看起来像卡死，留一层飘落物就还活着
+    val lowRam = rememberIsLowRamDevice()
 
     val sequenceRunning = quiz.solved && !reducedMotion
     val clock = rememberSwiftieSequenceClock(running = sequenceRunning)
 
-    // 暂停有三个来源，必须分开记：按住松手就恢复，拖动定格要点「继续」，
-    // 焦点被抢走要等焦点回来 —— 混成一个布尔值就会互相清掉
-    var holdPaused by remember { mutableStateOf(false) }
+    // 暂停有四个来源，必须分开记：点按钮暂停要再点一次才走，拖动定格要点「继续」，
+    // 焦点被抢走要等焦点回来，预览定格从头到尾不动 —— 混成一个布尔值就会互相清掉
+    var userPaused by remember { mutableStateOf(false) }
     var seekFrozen by remember { mutableStateOf(false) }
     var focusPaused by remember { mutableStateOf(false) }
 
@@ -237,11 +356,34 @@ private fun SwiftieEggContent(
      *
      * 永久丢失（`AUDIOFOCUS_LOSS`）按系统契约不保证再补发 `GAIN`，
      * 继续挂在 [focusPaused] 上等于把整条序列永久钉在暂停态 ——
-     * 「继续」只清 [seekFrozen]、按住暂停只翻 [holdPaused]，两者都解不开它。
+     * 「继续」只清 [userPaused] 与 [seekFrozen]，解不开它。
      */
     var audioGivenUp by remember { mutableStateOf(false) }
-    val framePaused = holdPaused || seekFrozen || focusPaused
+    val framePaused = userPaused || seekFrozen || focusPaused || previewPaused
     LaunchedEffect(framePaused) { clock.paused = framePaused }
+
+    /**
+     * 浮出控件的可见性与它的保活计数。
+     *
+     * 需求方明确去掉了「点一下就暂停」和「按住暂停」：现在点屏幕只是**把控件叫出来**，
+     * 序列继续放，用户选了按钮才动作。[controlsTick] 每次触摸自增，用来重置自动收起的计时 ——
+     * 少了它，`LaunchedEffect(controlsVisible)` 在已经可见时再点一下不会重新计时。
+     */
+    var controlsVisible by remember { mutableStateOf(false) }
+    var controlsTick by remember { mutableIntStateOf(0) }
+
+    // 预览变体：进来就把时钟拨到指定时刻。seekTo 会递增 seekEpoch，
+    // 配乐（如果在放）跟着挪，不会和画面错开
+    LaunchedEffect(previewStartMs) {
+        if (previewStartMs != null) clock.seekTo(previewStartMs)
+    }
+
+    // 无操作 3.5s 自动收起。**暂停态不收** —— 藏掉唯一的出口等于把人困在定格里
+    LaunchedEffect(controlsVisible, controlsTick, framePaused) {
+        if (!controlsVisible || framePaused) return@LaunchedEffect
+        delay(CONTROLS_AUTO_HIDE_MS)
+        controlsVisible = false
+    }
 
     /**
      * 重看纪念页时**不再落主题**。
@@ -255,9 +397,6 @@ private fun SwiftieEggContent(
     // 126s 零触摸，不按住就会撞上系统息屏超时（默认 30s）——
     // 息屏会把 Activity 推进 ON_STOP，帧时钟随之停摆，整段序列烂在中途
     KeepScreenOnWhile(sequenceRunning)
-
-    // 答对之后底是满屏浅色水彩天空，深色模式的浅色状态栏图标会看不见
-    DarkSystemBarIconsWhile(quiz.solved)
 
     // 每帧变化的量只在 draw lambda 里读；组合里只读这些「翻转一次」的派生量
     val phase by remember { derivedStateOf { swiftiePhaseAt(clock.elapsedMs) } }
@@ -286,6 +425,91 @@ private fun SwiftieEggContent(
         }
     }
     val meshMotionActive: () -> Boolean = { meshMotionOn }
+
+    /**
+     * 系统栏图标那两档。翻在交叉淡变中点，整段一共翻不到 20 次。
+     *
+     * 走 `derivedStateOf` 是必须的：直接把 `barStageAt(clock.elapsedMs)` 写进组合体
+     * 等于每帧重组整个彩蛋子树。
+     */
+    val barStage by remember { derivedStateOf { barStageAt(clock.elapsedMs) } }
+
+    /** 背景三层从扩散那一刻挂上，一直留到最后一帧 —— 终局那 18.6s Eras 舞台会卸载，背景不能跟着走。 */
+    val backdropMounted by remember {
+        derivedStateOf { clock.elapsedMs >= SwiftieTimeline.DIFFUSION_START }
+    }
+
+    /** 「跳过」是否进这组控件。收尾 8s 只留暂停：跳过会倒拨时钟，Lover 与配乐当场错开。 */
+    val skipOffered by remember {
+        derivedStateOf {
+            clock.elapsedMs < SwiftieTimeline.SIGNATURE_START &&
+                (replay || clock.elapsedMs >= SKIP_OFFERED_AT_MS)
+        }
+    }
+
+    // 换张交叉淡变的三个入参。全是 lambda：只在 draw 阶段读，每帧只失效绘制
+    val backdropOutgoing: () -> Int = { eraSlotAt(clock.elapsedMs) }
+    val backdropIncoming: () -> Int = {
+        val slot = eraSlotAt(clock.elapsedMs)
+        if (backdropCrossfadeAt(clock.elapsedMs) > 0f) {
+            (slot + 1).coerceAtMost(SwiftieErasData.STAGE.lastIndex)
+        } else {
+            slot
+        }
+    }
+    val backdropCrossfade: () -> Float = { backdropCrossfadeAt(clock.elapsedMs) }
+    val backdropPhase: () -> Float = {
+        clock.elapsedMs.mod(BACKDROP_CYCLE_MS).toFloat() / BACKDROP_CYCLE_MS
+    }
+    val particlePhase: () -> Float = {
+        clock.elapsedMs.mod(PARTICLE_CYCLE_MS).toFloat() / PARTICLE_CYCLE_MS
+    }
+
+    /**
+     * 专辑背景的不透明度：intro 里自水彩天空之上淡入，终局那 18.6s 让位给环，倒滑时换回来。
+     *
+     * 换回来的窗口刻意也用 [BACKDROP_CROSSFADE_MS] —— 倒滑总共 1500ms，
+     * 500ms 换完还剩 1000ms 看播放头飞回 Lover。
+     */
+    val albumBackdropAlpha: () -> Float = {
+        val elapsed = clock.elapsedMs
+        when {
+            elapsed < SwiftieTimeline.ERAS_INTRO_START -> 0f
+            elapsed < SwiftieTimeline.ERAS_CARDS_START ->
+                ((elapsed - SwiftieTimeline.ERAS_INTRO_START).toFloat() /
+                    SwiftieTimeline.ERAS_INTRO_MS).coerceIn(0f, 1f)
+            elapsed < SwiftieTimeline.ERAS_CARDS_END -> 1f
+            elapsed < SwiftieTimeline.REWIND_START ->
+                1f - ((elapsed - SwiftieTimeline.ERAS_CARDS_END).toFloat() /
+                    BACKDROP_CROSSFADE_MS).coerceIn(0f, 1f)
+            else -> ((elapsed - SwiftieTimeline.REWIND_START).toFloat() /
+                BACKDROP_CROSSFADE_MS).coerceIn(0f, 1f)
+        }
+    }
+
+    /** 终局那一环：签名段起淡入，倒滑段起淡出。与 [albumBackdropAlpha] 互补。 */
+    val finaleRingAlpha: () -> Float = {
+        val elapsed = clock.elapsedMs
+        when {
+            elapsed < SwiftieTimeline.ERAS_CARDS_END -> 0f
+            elapsed < SwiftieTimeline.REWIND_START ->
+                ((elapsed - SwiftieTimeline.ERAS_CARDS_END).toFloat() /
+                    BACKDROP_CROSSFADE_MS).coerceIn(0f, 1f)
+            else -> 1f - ((elapsed - SwiftieTimeline.REWIND_START).toFloat() /
+                BACKDROP_CROSSFADE_MS).coerceIn(0f, 1f)
+        }
+    }
+    val finaleRingPhase: () -> Float = {
+        clock.elapsedMs.mod(FINALE_RING_CYCLE_MS).toFloat() / FINALE_RING_CYCLE_MS
+    }
+
+    // 答对之后底是逐张换色的专辑背景：浅底要深色图标，reputation 与 Midnights 要浅色图标。
+    // barStage 为 null 表示底是水彩天空或终局那一环，两处都用深色
+    DynamicSystemBarIconsWhile(
+        active = quiz.solved,
+        darkStatusBarIcons = barStage?.darkStatusBarIcons ?: true,
+        darkNavBarIcons = barStage?.darkBottomInk ?: true
+    )
 
     // T118000 起 500ms 交叉淡变：签名与手链化开，轴与 Lover 卡片浮回来。
     // 两个 lambda 都只在 draw 阶段读时钟，所以每帧只失效绘制、不重组
@@ -350,18 +574,25 @@ private fun SwiftieEggContent(
         }
     )
 
-    // 按住屏幕任意处暂停，松手继续（Spec §6.1）。走 Initial pass 不消费事件，
-    // 所以 ✕ 与「跳过」照样点得到
-    val pauseGesture = if (sequenceRunning) {
+    /**
+     * 点屏幕任意处**把控件叫出来**（不再是「点一下就暂停」，也不再有「按住暂停」）。
+     *
+     * 走 Initial pass 且**不消费**事件，两个后果都是要的：
+     * 1. ✕、控件本身、时间轴照样点得到 —— 它们在更深的子节点上，Main pass 上先于本节点收到
+     * 2. 拖时间轴也会顺带把控件叫出来。轴的 `awaitFirstDown` 在 Main pass 上，
+     *    我们在 Initial pass 上先看到那一下，所以「拖动定格 → 控件带着『继续』浮出」
+     *    不需要再从轴那边回调一次
+     */
+    val revealGesture = if (sequenceRunning) {
         Modifier.pointerInput(Unit) {
             awaitEachGesture {
                 awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                holdPaused = true
+                controlsVisible = true
+                controlsTick++
                 var event: PointerEvent
                 do {
                     event = awaitPointerEvent(PointerEventPass.Initial)
                 } while (event.changes.any { it.pressed })
-                holdPaused = false
             }
         }
     } else {
@@ -378,7 +609,7 @@ private fun SwiftieEggContent(
                     SwiftieTimeline.FADE_OUT_MS).coerceIn(0f, 1f)
             }
             .background(MaterialTheme.colorScheme.surface)
-            .then(pauseGesture)
+            .then(revealGesture)
             // 全屏页必须自己吞掉落在空白处的触摸，否则会穿到下层 MainScreen 的
             // 悬浮底栏上去 —— 题面阶段点键盘下缘那条带就能把 Pager 切到别的 Tab
             .consumeStrayTouches()
@@ -416,10 +647,45 @@ private fun SwiftieEggContent(
             )
         }
 
+        // 页面背景三层，压在水彩天空之上、所有内容之下。
+        //
+        // **必须挂在这一层而不是 SwiftieErasStage 里** —— 终局那 18.6s（签名 / 手链 / 定格）
+        // Eras 舞台整层卸载，背景却要一直在；放进去就会在 T99410 那一帧整屏闪回水彩天空。
+        if (backdropMounted && !staticFinale) {
+            SwiftieEraBackdropLayer(
+                outgoing = backdropOutgoing,
+                incoming = backdropIncoming,
+                crossfade = backdropCrossfade,
+                phase = backdropPhase,
+                lowRam = lowRam,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = albumBackdropAlpha() }
+            )
+            // 终局那一环：12 张主色化开，语义上是「12 个时代汇成这一个签名」
+            SwiftieFinaleBackdrop(
+                progress = finaleRingAlpha,
+                phase = finaleRingPhase,
+                modifier = Modifier.fillMaxSize()
+            )
+            // L2 飘落物压在大主体之上、卡片之下。Speak Now 与 reputation 两张刻意没有粒子。
+            // 相位走自己那份 12s（见 PARTICLE_CYCLE_MS），不跟 L1 的呼吸同拍
+            SwiftieEraParticleLayer(
+                outgoing = backdropOutgoing,
+                incoming = backdropIncoming,
+                crossfade = backdropCrossfade,
+                phase = particlePhase,
+                lowRam = lowRam,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = albumBackdropAlpha() }
+            )
+        }
+
         // Eras 舞台分两段挂载：开场轴线 + 12 张卡片，然后整层卸载让位给终局；
-        // 配乐唱到 Lover 时再回来做倒滑与绽放，收在最后一帧。
-        // FADE_OUT 也必须留着 —— 那 2998ms 淡出的主体正是绽放开的 Lover 卡片，
-        // 漏掉它就会在 T123000（淡出还没开始的那一帧）把满屏的卡片整块硬切掉
+        // 配乐唱到 Lover 时再回来做倒滑与雪景球，收在最后一帧。
+        // FADE_OUT 也必须留着 —— 那 2998ms 淡出的主体正是那只雪景球，
+        // 漏掉它就会在 T123000（淡出还没开始的那一帧）把满屏的球整块硬切掉
         if (phase == SwiftieSequencePhase.ERAS_INTRO ||
             phase == SwiftieSequencePhase.ERAS_CARDS ||
             phase == SwiftieSequencePhase.REWIND ||
@@ -430,7 +696,6 @@ private fun SwiftieEggContent(
                 clock = clock,
                 frozen = seekFrozen,
                 onFrozenChange = { seekFrozen = it },
-                replay = replay,
                 modifier = Modifier.graphicsLayer { alpha = erasAlpha() }
             )
         }
@@ -446,6 +711,38 @@ private fun SwiftieEggContent(
 
         if (staticFinale) {
             SwiftieStaticFinale()
+        }
+
+        // 暂停 / 跳过合并成这一组浮出控件。点屏幕叫出来，无操作 3.5s 收起，暂停态转常驻。
+        //
+        // 「继续」要**同时**清掉 userPaused 与 seekFrozen：拖过播放头之后两者都可能为真，
+        // 只清一个的话按下去画面不动，读起来就是按钮坏了。focusPaused 不清 ——
+        // 那是别的应用占着音频焦点，用户在本页按什么都不该抢回来
+        if (sequenceRunning) {
+            SwiftieSequenceControls(
+                visible = controlsVisible,
+                paused = framePaused,
+                skipEnabled = skipOffered,
+                onTogglePause = {
+                    if (framePaused) {
+                        userPaused = false
+                        seekFrozen = false
+                    } else {
+                        userPaused = true
+                    }
+                    controlsTick++
+                },
+                onSkip = {
+                    clock.skipToFinalHold()
+                    userPaused = false
+                    seekFrozen = false
+                    controlsVisible = false
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(bottom = 92.dp)
+            )
         }
 
         // T1100 之前按 ✕ 算放弃（不消耗解题机会），之后算已通关。

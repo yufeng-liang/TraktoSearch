@@ -2079,6 +2079,7 @@
     <string name="swiftie_era_card_a11y">%1$s、%2$s リリース、全 %3$d 曲</string>
     <string name="swiftie_eras_axis_a11y">アルバムのタイムライン、2006 年から 2025 年、全 12 作品。ドラッグでその時代へ移動できます。</string>
     <string name="swiftie_skip">スキップ</string>
+    <string name="swiftie_pause">一時停止</string>
     <string name="swiftie_resume">再開</string>
     <string name="swiftie_audio_hint_all">音量をオンにしてイヤホン着用で最高の体験に</string>
     <string name="swiftie_audio_hint_volume">音量をオンにすると最高の体験に</string>

@@ -1,7 +1,6 @@
 package com.tracktosearch.ui.screen.swiftie.eras
 
 import androidx.compose.animation.core.EaseInOutCubic
-import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -14,9 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -29,23 +25,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.tracktosearch.R
-import com.tracktosearch.ui.screen.swiftie.SwiftiePalette
+import com.tracktosearch.ui.screen.swiftie.SwiftieLoverSnowGlobe
 import com.tracktosearch.ui.screen.swiftie.SwiftieSequenceClock
 import com.tracktosearch.ui.screen.swiftie.SwiftieTimeline
 import kotlinx.coroutines.delay
 
-/** 「跳过」在 T3000 淡入 —— 前 3 秒先让惊喜落地，别一上来就劝人走（Spec §6.1）。 */
-private const val SKIP_FADE_IN_AT_MS: Long = 3_000L
-private const val SKIP_FADE_MS: Float = 600f
-
 /** 首次拖动播放头后，3s 无操作自动续播。 */
 private const val AUTO_RESUME_MS: Long = 3_000L
 
-/** Lover 绽放的放大倍率。1.5 配上上移，视觉上就铺满了。 */
-private const val BLOOM_SCALE: Float = 0.5f
+/**
+ * 玻璃球成型的时长。轴在这一段里让位 —— 球一旦成型它就是画面唯一的主体。
+ *
+ * 与 `SwiftieSnowGlobe` 里那一拍必须同长；两边都从 [SwiftieTimeline] 起算，
+ * 所以改账本不会让它们错开。
+ */
+private const val GLOBE_FORM_MS: Float = 900f
 
 /** 当前该显示第几张卡片。倒滑与绽放期间钉在 Lover。 */
 private fun activeEraIndexAt(elapsedMs: Long): Int =
@@ -56,24 +51,25 @@ private fun activeEraIndexAt(elapsedMs: Long): Int =
     }
 
 /**
- * Eras 回顾段的驱动层：轴 + 当前卡片 + 跳过 / 继续。
+ * Eras 回顾段的驱动层：当前卡片 + 轴 + Lover 收尾的雪景球。
  *
  * 挂载区间是 `ERAS_INTRO`..`ERAS_CARDS` 与 `REWIND`..`FADE_OUT` 两段 ——
  * 中间的终局（签名 / 手链 / 定格）期间整层卸载，配乐唱到 Lover 时再回来做收尾，
- * 一直留到最后那 2998ms 的淡出（要淡的主体正是绽放开的 Lover 卡片）。
- * 所以内部有两处要判：终局之后「跳过」关掉（`skipVisible`），
- * 轴也不再收触摸（`axisInteractive`）。
+ * 一直留到最后那 2998ms 的淡出。
  *
- * @param frozen 拖过播放头之后的定格状态，由 `SwiftieEggScreen` 持有 ——
- *   它要和「按住暂停」或起来一起喂给 `clock.paused`
- * @param replay 从「关于」页重看：「跳过」立刻可用，不等 3s
+ * **页面背景不在这里** —— L0/L1/L2 三层是页面级的，由 `SwiftieEggScreen` 挂在本层之下，
+ * 因为终局那 18.6s 本层是卸载的，而背景必须一直在。
+ *
+ * **按钮也不在这里** —— 暂停 / 跳过合并成一组浮出控件，由 `SwiftieEggScreen` 持有
+ * （它才是收全屏触摸的那一层）。本层只在拖动播放头时把 `frozen` 翻真。
+ *
+ * @param frozen 拖过播放头之后的定格状态，由 `SwiftieEggScreen` 持有
  */
 @Composable
 fun SwiftieErasStage(
     clock: SwiftieSequenceClock,
     frozen: Boolean,
     onFrozenChange: (Boolean) -> Unit,
-    replay: Boolean,
     modifier: Modifier = Modifier
 ) {
     // 每帧变的量只在 draw lambda 里读；组合里只读这一个「翻转 12 次」的派生量
@@ -116,17 +112,39 @@ fun SwiftieErasStage(
         }
     }
 
-    val bloomProgress: () -> Float = {
-        EaseOutCubic.transform(
-            ((clock.elapsedMs - SwiftieTimeline.LOVER_BLOOM_START).toFloat() /
-                SwiftieTimeline.LOVER_BLOOM_MS).coerceIn(0f, 1f)
-        )
+    /**
+     * 卷收进度：18 行曲目自下而上逐行收起，只留专辑名 + 日期 + 第 3 首 + 爱心。
+     *
+     * **刻意线性**，不加缓动 —— 卡片内部按它折算每一行的错开时刻（70ms/行 × 18 = 1260ms），
+     * 缓动会让最后几行挤在一起收完，读起来不像卷纸像抽断。
+     */
+    val collapseProgress: () -> Float = {
+        ((clock.elapsedMs - SwiftieTimeline.REWIND_START).toFloat() /
+            SwiftieTimeline.REWIND_MS).coerceIn(0f, 1f)
+    }
+
+    /** 玻璃球成型进度。轴按它让位。 */
+    val globeForm: () -> Float = {
+        ((clock.elapsedMs - SwiftieTimeline.LOVER_BLOOM_START).toFloat() / GLOBE_FORM_MS)
+            .coerceIn(0f, 1f)
     }
 
     // 卡片段之外不收触摸：重挂载之后（倒滑 / 绽放 / 淡出）碰一下就会把时钟
     // 倒拨回卡片段，而那三段正是配乐钉死的收尾
     val axisInteractive by remember {
         derivedStateOf { clock.elapsedMs < SwiftieTimeline.ERAS_CARDS_END }
+    }
+
+    /**
+     * 球是否已经接手。
+     *
+     * 切换点选在 [SwiftieTimeline.LOVER_BLOOM_START] 而不是 `REWIND_START`，是为了不跳位：
+     * 卡片在倒滑那 1500ms 里一边卷收一边从插槽底部平移到插槽正中，走到这一刻
+     * 正好是「110dp 高、居中」；球这时才长出来，包住的是一个位置和尺寸都已经对齐的东西。
+     * 若在 REWIND_START 就换成居中的球，Lover 那张 406dp 的整卡会当场跳 111dp。
+     */
+    val globeMounted by remember {
+        derivedStateOf { clock.elapsedMs >= SwiftieTimeline.LOVER_BLOOM_START }
     }
 
     Box(modifier = modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
@@ -136,34 +154,53 @@ fun SwiftieErasStage(
                     .weight(1f)
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
-                contentAlignment = Alignment.BottomCenter
+                contentAlignment = if (globeMounted) Alignment.Center else Alignment.BottomCenter
             ) {
                 // 卡片自己按这个高度折算曲目行高：31 首的 TTPD Anthology 在小屏上要压行
                 val slotHeight = maxHeight
                 // key 换值就重挂：新卡片的 elapsedInCard 从 0 起算，
                 // 上一张此时 scaleY 已经收到 0，看不到硬切
-                key(activeIndex) {
-                    SwiftieEraCard(
-                        era = era,
-                        elapsedInCard = {
-                            if (clock.elapsedMs >= SwiftieTimeline.REWIND_START) {
-                                holdCapMs
-                            } else {
-                                clock.elapsedMs - SwiftieTimeline.eraStartMs(activeIndex)
-                            }
-                        },
-                        durationMs = cardDurationMs,
-                        originFractionX = swiftieEraCenterFraction(activeIndex),
-                        slotHeight = slotHeight,
-                        modifier = Modifier
+                val card: @Composable (Modifier) -> Unit = { cardModifier ->
+                    key(activeIndex) {
+                        SwiftieEraCard(
+                            era = era,
+                            eraIndex = activeIndex,
+                            elapsedInCard = {
+                                if (clock.elapsedMs >= SwiftieTimeline.REWIND_START) {
+                                    holdCapMs
+                                } else {
+                                    clock.elapsedMs - SwiftieTimeline.eraStartMs(activeIndex)
+                                }
+                            },
+                            durationMs = cardDurationMs,
+                            originFractionX = swiftieEraCenterFraction(activeIndex),
+                            slotHeight = slotHeight,
+                            collapseProgress = collapseProgress,
+                            modifier = cardModifier
+                        )
+                    }
+                }
+
+                if (globeMounted) {
+                    SwiftieLoverSnowGlobe(
+                        elapsedMs = { clock.elapsedMs },
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        // 球内的小卡已经卷收完毕，恒为 1f
+                        card(Modifier.fillMaxWidth().widthIn(max = 480.dp))
+                    }
+                } else {
+                    card(
+                        Modifier
                             .fillMaxWidth()
                             .widthIn(max = 480.dp)
-                            // Lover 绽放：放大 + 上移，铺开整屏交给 Phase E 接手
+                            // 卷收的同时从插槽底部升到插槽正中，好让球在 LOVER_BLOOM_START
+                            // 那一帧原地长出来。缓动用 EaseInOutCubic：线性升会在起停两端
+                            // 各有一次可见的速度突变
                             .graphicsLayer {
-                                val p = bloomProgress()
-                                scaleX = 1f + BLOOM_SCALE * p
-                                scaleY = 1f + BLOOM_SCALE * p
-                                translationY = -p * size.height * 0.22f
+                                val p = EaseInOutCubic.transform(collapseProgress())
+                                if (p <= 0f) return@graphicsLayer
+                                translationY = -((slotHeight.toPx() - size.height) / 2f) * p
                             }
                     )
                 }
@@ -174,6 +211,7 @@ fun SwiftieErasStage(
             SwiftieErasAxis(
                 introProgress = introProgress,
                 playheadFraction = playheadFraction,
+                activeIndex = { activeEraIndexAt(clock.elapsedMs) },
                 interactive = axisInteractive,
                 onSeekToEra = { index, gestureStart ->
                     // 「首次」只能在手势的第一个事件上判：seekToEra 会把 userSeeked 置真，
@@ -183,63 +221,11 @@ fun SwiftieErasStage(
                     seekTick++
                     onFrozenChange(true)
                 },
-                // 绽放时轴让位
-                modifier = Modifier.graphicsLayer { alpha = 1f - bloomProgress() }
+                // 球成型时轴让位
+                modifier = Modifier.graphicsLayer { alpha = 1f - globeForm() }
             )
 
             Spacer(modifier = Modifier.height(24.dp))
-        }
-
-        if (frozen) {
-            TextButton(
-                onClick = { onFrozenChange(false) },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 78.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.swiftie_resume),
-                    color = SwiftiePalette.RoyalBlue,
-                    style = MaterialTheme.typography.labelLarge
-                )
-            }
-        }
-
-        // alpha = 0 的按钮照样点得到（graphicsLayer 只改绘制、不改命中区域），
-        // 所以淡入没走完之前必须同时 enabled = false。
-        // 收尾的倒滑与绽放期间也一并关掉：那时终局已经放完，跳过没有意义，
-        // 而 skipToFinalHold 会把时钟倒拨回去，Lover 就与配乐错开了
-        val skipVisible by remember {
-            derivedStateOf {
-                clock.elapsedMs < SwiftieTimeline.SIGNATURE_START &&
-                    (replay || clock.elapsedMs >= SKIP_FADE_IN_AT_MS)
-            }
-        }
-        TextButton(
-            onClick = {
-                clock.skipToFinalHold()
-                onFrozenChange(false)
-            },
-            enabled = skipVisible,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 8.dp, bottom = 4.dp)
-                .graphicsLayer {
-                    // 重看时立刻可用；首次要等到 T3000 才淡入
-                    alpha = when {
-                        clock.elapsedMs >= SwiftieTimeline.SIGNATURE_START -> 0f
-                        replay -> 1f
-                        else ->
-                            ((clock.elapsedMs - SKIP_FADE_IN_AT_MS) / SKIP_FADE_MS)
-                                .coerceIn(0f, 1f)
-                    }
-                }
-        ) {
-            Text(
-                text = stringResource(R.string.swiftie_skip),
-                color = SwiftiePalette.RoyalBlue.copy(alpha = 0.75f),
-                style = MaterialTheme.typography.labelMedium
-            )
         }
     }
 }

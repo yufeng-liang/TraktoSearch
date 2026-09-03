@@ -83,4 +83,33 @@ class SwiftieErasDataTest {
         assertThat(CARD_GROW_MS + CARD_HOLD_MS + CARD_RECEDE_MS + CARD_GAP_MS)
             .isEqualTo(SwiftieTimeline.CARD_BASE_MS)
     }
+
+    @Test
+    fun everyEraHasOneStage() {
+        // STAGE 与 ALL 按下标一一对应，全靠这条守 —— 中间插一张专辑而漏改 STAGE，
+        // 后 11 张的背景就整体错位一格，而屏幕上只是「颜色怪怪的」
+        assertThat(SwiftieErasData.STAGE).hasSize(SwiftieErasData.ALL.size)
+        assertThat(SwiftieErasData.STAGE.map { it.backdrop }.toSet()).hasSize(12)
+    }
+
+    @Test
+    fun everyStageGivesThreeGradientStopsFromLightToDark() {
+        SwiftieErasData.STAGE.forEach { stage ->
+            // L0 是 verticalGradient(top, mid, bottom)，少一个 stop 就渐变不出来
+            assertThat(stage.backdropColors).hasSize(3)
+        }
+    }
+
+    @Test
+    fun onlyTwoErasGoWithoutParticles() {
+        // Speak Now 的舞台与 reputation 的黑白报纸刻意不给飘落物：
+        // 12 张全有反而变成同一套「东西在飘」，那正是廉价感的来源
+        val without = SwiftieErasData.STAGE.withIndex()
+            .filter { it.value.particle == null }
+            .map { it.index }
+        assertThat(without).containsExactly(2, 5)
+        // 剩下 10 张各用一种，没有两张共用
+        assertThat(SwiftieErasData.STAGE.mapNotNull { it.particle }.toSet()).hasSize(10)
+        assertThat(SwiftieEraParticle.entries).hasSize(10)
+    }
 }

@@ -89,22 +89,27 @@ private fun trackRowHeight(slotHeight: Dp, trackCount: Int): Dp {
 }
 
 /**
- * 一个时代的卡片：从轴上长出 → 停留（曲目逐行点亮 + 扫光）→ 回落。
+ * 一个时代的卡片：从轴上长出 → 停留（曲目逐行点亮）→ 回落。
  *
  * 卡片**不随深色模式反色** —— 它是「图」，配色由 [SwiftieEra] 固定（Spec §2.3）。
  *
+ * @param eraIndex 这是第几张。只往下传给曲目列判「哪一行要描金」，卡片自己不用
  * @param elapsedInCard 这张卡片起点以来的毫秒
  * @param durationMs 这张卡片分到的总时长，取自 `SwiftieTimeline.cardDurationMs`
  * @param originFractionX 对应色带在轴上的中心比例，用作缩放轴心
  * @param slotHeight 卡片可用的最大高度，由 `SwiftieErasStage` 量出来。曲目行高按它折算
+ * @param collapseProgress 序列末尾的卷收：0f = 完整卡片；1f = 只剩专辑名 + 日期 +
+ *   描金那一行。**在布局 / 绘制阶段读**，不进组合
  */
 @Composable
 fun SwiftieEraCard(
     era: SwiftieEra,
+    eraIndex: Int,
     elapsedInCard: () -> Long,
     durationMs: Long,
     originFractionX: Float,
     slotHeight: Dp,
+    collapseProgress: () -> Float = { 0f },
     modifier: Modifier = Modifier
 ) {
     val lowRam = rememberIsLowRamDevice()
@@ -113,6 +118,13 @@ fun SwiftieEraCard(
     // 浅色时代主色印在白卡上读不出来，这里取压暗到 AA 的那一组（见 SwiftieEraContrast）
     val textColors = remember(era) { SwiftieEraTextColors(era) }
     val rowHeight = trackRowHeight(slotHeight, era.tracks.size)
+    // 曲目列的 stagger 必须与 `SwiftieEraTracklist` 用的同一个值 —— 让位窗口是按
+    // 「第几行正在点亮」算的，两边错开一档，压下去的就是隔壁那一行
+    val stagger = if (lowRam) TRACK_STAGGER_LOW_RAM_MS else TRACK_STAGGER_MS
+    // era.tracks 是常量列表，「哪几行算长歌名」在组合阶段算一次，draw 阶段只查表
+    val longTitles = remember(era) {
+        BooleanArray(era.tracks.size) { era.tracks[it].length > LONG_TITLE_CHARS }
+    }
     val description = stringResource(
         R.string.swiftie_era_card_a11y,
         era.name,
@@ -148,19 +160,29 @@ fun SwiftieEraCard(
             .background(Color.White.copy(alpha = 0.86f))
             .drawBehind {
                 drawRect(color = era.mainColor, alpha = 0.10f)
-                drawEraMotif(
-                    motif = era.motif,
-                    color = era.mainColor,
-                    // 低端机整块母题定格（Spec §11.2）。关键是这条分支**根本不读时钟** ——
-                    // 只要读了 elapsedInCard()，这个 drawBehind 就会每帧失效，
-                    // 母题里那一堆 Path / Brush 也就每帧重建一次
-                    phase = if (lowRam) {
-                        0f
-                    } else {
-                        (elapsedInCard().mod(MOTIF_CYCLE_MS)).toFloat() / MOTIF_CYCLE_MS
-                    },
-                    lowRam = lowRam
-                )
+                // 低端机整块母题定格（Spec §11.2）。关键是这条分支**根本不读时钟** ——
+                // 只要读了 elapsedInCard()，这个 drawBehind 就会每帧失效，
+                // 母题里那一堆 Path / Brush 也就每帧重建一次。让位系数同理定在 1f，
+                // 读一下就把整块定格的意义抹掉了
+                if (lowRam) {
+                    drawEraMotif(
+                        motif = era.motif,
+                        color = era.mainColor,
+                        phase = 0f,
+                        lowRam = true,
+                        columnFade = 1f
+                    )
+                } else {
+                    val elapsed = elapsedInCard()
+                    drawEraMotif(
+                        motif = era.motif,
+                        color = era.mainColor,
+                        phase = (elapsed.mod(MOTIF_CYCLE_MS)).toFloat() / MOTIF_CYCLE_MS,
+                        lowRam = false,
+                        // 长歌名会横穿右侧那一列，那几行点亮时道具让位（见 columnFadeAt）
+                        columnFade = columnFadeAt(elapsed, longTitles, stagger)
+                    )
+                }
             }
             // 卡片整体一条 contentDescription；曲目列自己对 TalkBack 隐身（Spec §6.2）。
             // mergeDescendants 是必须的 —— 少了它，下面的专辑名与日期两个 Text
@@ -194,13 +216,59 @@ fun SwiftieEraCard(
             Spacer(modifier = Modifier.height(10.dp))
             SwiftieEraTracklist(
                 era = era,
+                eraIndex = eraIndex,
                 textColors = textColors,
                 rowHeight = rowHeight,
                 elapsedInCard = elapsedInCard,
+                collapseProgress = collapseProgress,
                 modifier = Modifier.fillMaxWidth()
             )
         }
     }
+}
+
+/**
+ * 算「长歌名」的字符数门槛。
+ *
+ * 28 字以上的曲目名在这个字号下会一路排到卡片右缘，压在道具那一列上。
+ * 最长的几个：`Miss Americana & The Heartbreak Prince`（Lover 第 7 首）、
+ * `We Are Never Ever Getting Back Together`（Red）、
+ * `Chloe or Sam or Sophia or Marcus`（TTPD）。
+ */
+private const val LONG_TITLE_CHARS = 28
+
+/** 让位的进出斜坡。 */
+private const val COLUMN_YIELD_RAMP_MS = 150f
+
+/** 让位按住的时长。 */
+private const val COLUMN_YIELD_HOLD_MS = 420f
+
+/**
+ * 右侧道具列的让位系数：长歌名那一行点亮前后把道具压到 [COLUMN_FADE_MIN]。
+ *
+ * 窗口是「该行点亮时刻 − 150ms 起、按住 420ms、再 150ms 抬回来」，
+ * 而不是只在那一行的 130ms 行距里压一下 —— 那样读起来是道具闪了一下。
+ *
+ * 只回看 5 行：整个窗口 720ms，130ms 一行，`720 ÷ 130 ≈ 5.5`，
+ * 所以**定长循环**就够，不用每帧扫 31 行。低端机不走这里（母题整块定格）。
+ */
+private fun columnFadeAt(elapsed: Long, longTitles: BooleanArray, stagger: Long): Float {
+    val cursor = ((elapsed - TRACK_REVEAL_START_MS) / stagger).toInt()
+    var strongest = 0f
+    for (index in (cursor - 5)..(cursor + 1)) {
+        if (index < 0 || index >= longTitles.size || !longTitles[index]) continue
+        val since = (elapsed - (TRACK_REVEAL_START_MS + stagger * index)).toFloat()
+        val envelope = when {
+            since < -COLUMN_YIELD_RAMP_MS -> 0f
+            since < 0f -> 1f + since / COLUMN_YIELD_RAMP_MS
+            since < COLUMN_YIELD_HOLD_MS -> 1f
+            since < COLUMN_YIELD_HOLD_MS + COLUMN_YIELD_RAMP_MS ->
+                1f - (since - COLUMN_YIELD_HOLD_MS) / COLUMN_YIELD_RAMP_MS
+            else -> 0f
+        }
+        if (envelope > strongest) strongest = envelope
+    }
+    return 1f - (1f - COLUMN_FADE_MIN) * strongest
 }
 
 /**

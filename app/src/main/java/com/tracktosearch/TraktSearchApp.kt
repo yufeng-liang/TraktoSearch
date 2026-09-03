@@ -74,8 +74,11 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
             // UiModeManager.setApplicationNightMode），否则冷启动的系统 Splash 只会跟随
             // 系统夜间模式，忽略 app 内的深色设置。DataStore 首值一般几十毫秒内读完。
             StartupTrace.mark("application.theme_mode.apply.start")
-            runBlocking { themeStorage.readThemeModeSnapshot() }
-                .let { ThemeStorage.applyThemeModeToSystem(it) }
+            // applyThemeModeToSystem 是实例方法（ThemeStorage.kt:216），不在 companion 里，
+            // 所以只能通过注入进来的这个实例调用
+            themeStorage.applyThemeModeToSystem(
+                runBlocking { themeStorage.readThemeModeSnapshot() }
+            )
             StartupTrace.mark("application.theme_mode.apply.done")
             // 数据库与豆瓣凭据存储预热：SQLCipher 的 loadLibs 与 Keystore 密钥解密在 MainActivity 主线程 Hilt 注入
             // （TraktRepository → MarkActionRecordDao → AppDatabase）时固定消耗 200ms-1s；

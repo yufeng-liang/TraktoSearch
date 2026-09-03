@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  eggpreview 构建类型专用清单：装完点图标直接进彩蛋，桌面上只留一个图标。
+
+  Application 仍是 main 里那份 @HiltAndroidApp 的 TraktSearchApp（清单合并保留），
+  刻意不去替换它：换成裸 Application 虽然能省掉启动时那次 DataStore/SQLCipher 预热，
+  但会让 MainActivity（@AndroidEntryPoint，本变体里仍然声明着）一旦被拉起就崩，
+  给一个调试包留这种暗坑不值得。预览页自己一个注入点都不碰。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 连 application 的名字一起换掉，否则设置 → 应用列表里两个包同名，卸载时容易卸错 -->
+    <application
+        android:label="@string/egg_preview_label"
+        tools:replace="android:label">
+
+        <!--
+          不显式给 android:theme，继承 application 的 Theme.TraktoSearch
+          （AppCompat.DayNight.NoActionBar + 透明系统栏），正好是全屏彩蛋要的形状。
+          不能跟着 MainActivity 用 Theme.App.Starting —— 那是启动页主题，
+          预览包不该在每次截图前先放一遍场记板。
+        -->
+        <activity
+            android:name="com.tracktosearch.eggpreview.SwiftieEggPreviewActivity"
+            android:exported="true"
+            android:label="@string/egg_preview_label"
+            android:screenOrientation="portrait"
+            tools:ignore="DiscouragedApi,LockedOrientationActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          抹掉 MainActivity 的全部 intent-filter。
+
+          需求方要的是「点图标直接进彩蛋」，两个图标就得每次挑一下、还会点错。
+          用 removeAll 而不是 remove：remove 要按 key 精确匹配，而 intent-filter 的 key
+          是由它的 action/category/data 子元素拼出来的，把整段 LAUNCHER filter 抄一遍
+          才能匹配上 —— 抄出来的那份哪天与 main 里的分了叉，合并会静默失配、
+          桌面上又冒出两个图标。
+
+          代价是 Trakt OAuth 回调那条 VIEW filter 也一起没了：本变体不登录、
+          不走授权流程，没人会用到它。MainActivity 本身仍然声明着（只是失去入口），
+          所以清单里别的 activity/service/receiver 都不受影响。
+        -->
+        <activity android:name="com.tracktosearch.MainActivity">
+            <intent-filter tools:node="removeAll" />
+        </activity>
+    </application>
+</manifest>

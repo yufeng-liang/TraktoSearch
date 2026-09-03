@@ -2079,6 +2079,7 @@
     <string name="swiftie_era_card_a11y">%1$s, %2$s 발매, 총 %3$d곡</string>
     <string name="swiftie_eras_axis_a11y">앨범 타임라인, 2006년부터 2025년까지 총 12장. 드래그하면 해당 시대로 이동합니다.</string>
     <string name="swiftie_skip">건너뛰기</string>
+    <string name="swiftie_pause">일시정지</string>
     <string name="swiftie_resume">계속</string>
     <string name="swiftie_audio_hint_all">소리를 켜고 이어폰을 착용하면 가장 좋습니다</string>
     <string name="swiftie_audio_hint_volume">소리를 켜면 가장 좋습니다</string>

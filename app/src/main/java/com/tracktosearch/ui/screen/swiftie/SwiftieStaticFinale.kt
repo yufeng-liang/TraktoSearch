@@ -88,6 +88,7 @@ fun SwiftieStaticFinale(modifier: Modifier = Modifier) {
             SwiftieErasData.ALL.forEachIndexed { index, era ->
                 SwiftieEraCard(
                     era = era,
+                    eraIndex = index,
                     elapsedInCard = { staticElapsedFor(era, index) },
                     durationMs = SwiftieTimeline.cardDurationMs(index, era.tracks.size),
                     // 静态列表里没有色带，从卡片自己中间长出即可

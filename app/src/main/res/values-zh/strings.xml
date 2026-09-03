@@ -2067,6 +2067,7 @@
     <string name="swiftie_era_card_a11y">%1$s，发行于 %2$s，共 %3$d 首</string>
     <string name="swiftie_eras_axis_a11y">专辑时间轴，2006 到 2025，共 12 张专辑。拖动可跳到某个时代。</string>
     <string name="swiftie_skip">跳过</string>
+    <string name="swiftie_pause">暂停</string>
     <string name="swiftie_resume">继续</string>
     <string name="swiftie_audio_hint_all">打开声音并戴上耳机，体验最佳</string>
     <string name="swiftie_audio_hint_volume">打开声音，体验最佳</string>
