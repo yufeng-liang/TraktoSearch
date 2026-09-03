@@ -1105,6 +1105,46 @@ test('quiz submission inherits the session that created the cached quiz', async 
     assert.equal(submitted.json.quota.sessionUsed, 2);
 });
 
+test('quiz submit and feedback read legacy v1 quiz caches after the text cache version bump', async () => {
+    const kv = createMapKv();
+    const env = createTestEnv({ KV: kv });
+    const started = await call('/api/ai/quiz', {
+        method: 'POST',
+        body: {
+            action: 'quiz',
+            sessionId: 'legacy-quiz-compat-session',
+            quizId: 'legacy-quiz-compat',
+            movies: movies(),
+        },
+        env,
+    });
+
+    assert.equal(started.response.status, 200);
+    const currentKey = 'ai:v2:quiz:friend-1:legacy-quiz-compat';
+    const legacyKey = 'ai:v1:quiz:friend-1:legacy-quiz-compat';
+    const cached = env.AI_TEST_CACHE.get(currentKey);
+    assert.ok(cached, 'new quiz responses must be written under the v2 cache key');
+    env.AI_TEST_CACHE.delete(currentKey);
+    env.AI_TEST_CACHE.set(legacyKey, cached);
+
+    const submitted = await call('/api/ai/quiz/submit', {
+        method: 'POST',
+        body: { action: 'quiz.submit', quizId: 'legacy-quiz-compat', answers: {} },
+        env,
+    });
+    const feedback = await call('/api/ai/quiz/feedback', {
+        method: 'POST',
+        body: { action: 'quiz.feedback', quizId: 'legacy-quiz-compat', difficulty: 'just_right' },
+        env,
+    });
+
+    assert.equal(submitted.response.status, 200);
+    assert.equal(submitted.json.data.totalQuestions, 13);
+    assert.equal(feedback.response.status, 200);
+    assert.equal(feedback.json.data.success, true);
+    assert.equal(kv.store.has('ai:v1:quiz-difficulty:friend-1'), true);
+});
+
 test('production path fails closed when the MiMo secret is absent', async () => {
     await assert.rejects(
         () => callMimoJson({ AI_TEST_MODE: false }, 'mimo-v2.5', []),

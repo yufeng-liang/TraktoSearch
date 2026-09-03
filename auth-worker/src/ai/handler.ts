@@ -53,6 +53,11 @@ const QUIZ_DIFFICULTY_TTL_SECONDS = 90 * 24 * 60 * 60;
 const QUIZ_DIFFICULTY_HARD_HINT = '用户反馈近期题目偏难：本轮以主流影片的主线情节为主，减少冷门细节题，让题目更容易被答对。';
 const QUIZ_DIFFICULTY_EASY_HINT = '用户反馈近期题目偏简单：本轮适当增加需要细看才能记住的情节细节题，保持挑战性。';
 
+// Agnes 成为主文本模型后递增文本缓存代次，主动隔离旧 MiMo 与旧确定性兜底结果。
+// 旧 quiz 只在 submit/feedback 生命周期中通过兼容双读保留，不参与普通文本缓存命中。
+const AI_TEXT_CACHE_VERSION = 'v2';
+const LEGACY_AI_CACHE_VERSION = 'v1';
+
 export interface AiEnvironment extends MimoEnvironment, AiStoreEnvironment, AgnesEnvironment {
     AI_VOICE_SAMPLES?: R2Bucket;
     AI_AUDIO_CACHE?: R2Bucket;
@@ -128,6 +133,17 @@ interface DailyResponse {
     sourceUrl: string | null;
     publishedAt: number;
     characterLine: string | null;
+}
+
+interface LlmJsonResult {
+    payload: unknown;
+    provider: 'mimo' | 'agnes';
+    model: string;
+}
+
+interface LlmRequestContext {
+    route: 'greeting' | 'taste' | 'quiz' | 'daily';
+    requestId: string;
 }
 
 export async function handleAiApi(
@@ -301,7 +317,13 @@ async function handleGreeting(
     const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5', 'agnes-2.5-flash');
     const forceRefresh = readOptionalBoolean(body, 'forceRefresh');
     const includeAudio = readOptionalBoolean(body, 'includeAudio');
-    const cacheKey = `ai:v1:greeting:${payload.sub}:${character.id}:${includeAudio ? 'audio' : 'text'}`;
+    const cacheKey = aiCacheKey(
+        AI_TEXT_CACHE_VERSION,
+        'greeting',
+        payload.sub,
+        character.id,
+        includeAudio ? 'audio' : 'text',
+    );
     if (!forceRefresh) {
         const cached = await readAiCache(env, cacheKey);
         if (cached) {
@@ -321,8 +343,21 @@ async function handleGreeting(
 
     const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
     const nickname = await getFriendNickname(env, payload.sub);
-    const upstream = await callLlmJson(env, provider, model, greetingMessages(character, nickname), {}, fallbackModel);
-    const generated = upstream ? normalizeGreeting(parseAssistantJson<unknown>(upstream)) : fallbackGreeting(character, nickname);
+    const upstream = await callLlmJson(
+        env,
+        provider,
+        model,
+        greetingMessages(character, nickname),
+        {},
+        fallbackModel,
+        { route: 'greeting', requestId },
+    );
+    const generated = parseTextResultOrFallback(
+        upstream,
+        value => normalizeGreeting(parseAssistantJson<unknown>(value)),
+        () => fallbackGreeting(character, nickname),
+        { route: 'greeting', requestId },
+    );
     const spokenText = injectCatchphrase(character, generated.greeting);
     const audio = includeAudio
         ? await synthesizeOptionalAudio(env, character, spokenText, 'GREETING', audioOrigin)
@@ -358,7 +393,12 @@ async function handleTaste(
     const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5-pro', 'agnes-2.5-flash');
     const movies = readMovies(body);
     const forceRefresh = readOptionalBoolean(body, 'forceRefresh');
-    const cacheKey = `ai:v1:taste:${payload.sub}:${await cacheKeyDigest(JSON.stringify(movies))}`;
+    const cacheKey = aiCacheKey(
+        AI_TEXT_CACHE_VERSION,
+        'taste',
+        payload.sub,
+        await cacheKeyDigest(JSON.stringify(movies)),
+    );
     if (!forceRefresh) {
         const cached = await readAiCache(env, cacheKey);
         if (cached) return successResponse(cached, requestId);
@@ -366,10 +406,21 @@ async function handleTaste(
 
     const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
     const nickname = await getFriendNickname(env, payload.sub);
-    const upstream = await callLlmJson(env, provider, model, tasteMessages(nickname, movies), {}, fallbackModel);
-    const response = upstream
-        ? normalizeTaste(parseAssistantJson<unknown>(upstream), nickname, movies)
-        : fallbackTaste(nickname, movies);
+    const upstream = await callLlmJson(
+        env,
+        provider,
+        model,
+        tasteMessages(nickname, movies),
+        {},
+        fallbackModel,
+        { route: 'taste', requestId },
+    );
+    const response = parseTextResultOrFallback(
+        upstream,
+        value => normalizeTaste(parseAssistantJson<unknown>(value), nickname, movies),
+        () => fallbackTaste(nickname, movies),
+        { route: 'taste', requestId },
+    );
     await writeAiCache(env, cacheKey, response, 7 * 24 * 60 * 60, payload.sub, 'taste');
     return successResponse(response, requestId, publicQuota(quota));
 }
@@ -390,7 +441,7 @@ async function handleQuiz(
     // 客户端指定 quizId 且缓存中存在时直接复用（支持重玩/防重）；未指定则每次生成新测验
     if (body.quizId !== undefined) {
         const quizId = readOpaqueId(body.quizId, 'quizId');
-        const cached = await readAiCache(env, `ai:v1:quiz:${payload.sub}:${quizId}`);
+        const cached = await readAiCache(env, quizCacheKey(AI_TEXT_CACHE_VERSION, payload.sub, quizId));
         if (cached) {
             const cachedQuiz = parseQuizCache(cached);
             return successResponse(publicQuiz(cachedQuiz), requestId);
@@ -406,9 +457,20 @@ async function handleQuiz(
     const requestedQuizId = body.quizId === undefined ? null : readOpaqueId(body.quizId, 'quizId');
     // 出题前读取难度反馈滑窗：用户连续反馈偏难/偏简单时调整本轮出题风格
     const difficultyHint = await readQuizDifficultyHint(env, payload.sub);
-    const cacheData = await generateQuiz(env, provider, model, fallbackModel, selectedMovies, requestedQuizId, sessionId, nickname, difficultyHint);
+    const cacheData = await generateQuiz(
+        env,
+        provider,
+        model,
+        fallbackModel,
+        selectedMovies,
+        requestedQuizId,
+        sessionId,
+        nickname,
+        difficultyHint,
+        requestId,
+    );
     if (cacheData) {
-        const cacheKey = `ai:v1:quiz:${payload.sub}:${cacheData.quizId}`;
+        const cacheKey = quizCacheKey(AI_TEXT_CACHE_VERSION, payload.sub, cacheData.quizId);
         await writeAiCache(env, cacheKey, cacheData, 24 * 60 * 60, payload.sub, 'quiz');
         return successResponse(publicQuiz(cacheData), requestId, publicQuota(quota));
     }
@@ -420,7 +482,7 @@ async function handleQuiz(
         movies: selectedMovies,
         questions: fallbackQuizQuestions(selectedMovies),
     };
-    const fallbackKey = `ai:v1:quiz:${payload.sub}:${fallbackId}`;
+    const fallbackKey = quizCacheKey(AI_TEXT_CACHE_VERSION, payload.sub, fallbackId);
     await writeAiCache(env, fallbackKey, fallbackData, 24 * 60 * 60, payload.sub, 'quiz');
     return successResponse(publicQuiz(fallbackData), requestId, publicQuota(quota));
 }
@@ -439,14 +501,15 @@ async function generateQuiz(
     sessionId: string,
     nickname: string,
     difficultyHint: string | null,
+    requestId: string,
 ): Promise<QuizCacheData | null> {
     const upstream = await callLlmJson(env, provider, model, quizMessages(nickname, selectedMovies, difficultyHint), {
         // 13 题（含选项/解析）JSON 超过默认 1024 输出 token，给足上限避免截断后解析失败
         maxCompletionTokens: 4000,
-    }, fallbackModel);
+    }, fallbackModel, { route: 'quiz', requestId });
     if (!upstream) return null;
     try {
-        const questions = normalizeQuiz(parseAssistantJson<unknown>(upstream), selectedMovies);
+        const questions = normalizeQuiz(parseAssistantJson<unknown>(upstream.payload), selectedMovies);
         return { quizId: requestedQuizId ?? crypto.randomUUID(), sessionId, movies: selectedMovies, questions };
     } catch (error) {
         if (error instanceof AppError && error.statusCode === 502) return null;
@@ -463,8 +526,7 @@ async function handleQuizSubmit(
     if (body.model !== undefined) validateMimoModel(body.model);
     const quizId = readOpaqueId(body.quizId, 'quizId');
     const answers = readAnswers(body.answers);
-    const cacheKey = `ai:v1:quiz:${payload.sub}:${quizId}`;
-    const cached = await readAiCache(env, cacheKey);
+    const cached = await readQuizCacheCompat(env, payload.sub, quizId);
     if (!cached) throw new AppError('QUIZ_NOT_FOUND', 'Quiz session was not found', 404);
     const quiz = parseQuizCache(cached);
     const result = scoreQuiz(quiz, answers);
@@ -521,7 +583,7 @@ async function handleQuizFeedback(
 ): Promise<Response> {
     const quizId = readOpaqueId(body.quizId, 'quizId');
     const difficulty = readQuizDifficulty(body.difficulty);
-    if (!(await readAiCache(env, `ai:v1:quiz:${payload.sub}:${quizId}`))) {
+    if (!(await readQuizCacheCompat(env, payload.sub, quizId))) {
         throw new AppError('QUIZ_NOT_FOUND', 'Quiz session was not found', 404);
     }
     const record = await readQuizDifficultyRecord(env, payload.sub);
@@ -600,15 +662,28 @@ async function handleDaily(
     const forceRefresh = readOptionalBoolean(body, 'forceRefresh');
     // 每日冷知识按东八区自然日切换，避免国内用户在 UTC 日期边界前拿到“明天”的缓存
     const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
-    const cacheKey = `ai:v1:daily:${payload.sub}:${day}`;
+    const cacheKey = aiCacheKey(AI_TEXT_CACHE_VERSION, 'daily', payload.sub, day);
     if (!forceRefresh) {
         const cached = await readAiCache(env, cacheKey);
         if (cached) return successResponse(cached, requestId);
     }
 
     const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
-    const upstream = await callLlmJson(env, provider, model, dailyMessages(day), {}, fallbackModel);
-    const response = upstream ? normalizeDaily(parseAssistantJson<unknown>(upstream), day) : fallbackDaily(day);
+    const upstream = await callLlmJson(
+        env,
+        provider,
+        model,
+        dailyMessages(day),
+        {},
+        fallbackModel,
+        { route: 'daily', requestId },
+    );
+    const response = parseTextResultOrFallback(
+        upstream,
+        value => normalizeDaily(parseAssistantJson<unknown>(value), day),
+        () => fallbackDaily(day),
+        { route: 'daily', requestId },
+    );
     if (response.sourceUrl && !(await isDailySourceReachable(response.sourceUrl))) {
         response.sourceUrl = null;
     }
@@ -1233,7 +1308,8 @@ async function readAvoidedMediaIds(
         .filter((value): value is string => typeof value === 'string' && /^[A-Za-z0-9._:-]{1,96}$/.test(value))
         .slice(0, 3);
     for (const quizId of ids) {
-        const cached = await readAiCache(env, `ai:v1:quiz:${friendId}:${quizId}`);
+        // 最近局的 quiz 可能由旧客户端生成，读取时保留 v1 兼容；这里只用于去重，不直接返回旧文本结果。
+        const cached = await readQuizCacheCompat(env, friendId, quizId);
         if (!cached) continue;
         try {
             const quiz = parseQuizCache(cached);
@@ -1280,6 +1356,28 @@ interface ResolvedTextModel {
     fallbackModel: string;
 }
 
+function aiCacheKey(version: string, kind: string, ...parts: string[]): string {
+    return `ai:${version}:${kind}:${parts.join(':')}`;
+}
+
+function quizCacheKey(version: string, friendId: string, quizId: string): string {
+    return aiCacheKey(version, 'quiz', friendId, quizId);
+}
+
+/**
+ * 新版本 quiz 优先；找不到时读取旧 v1 缓存，兼容已经展示给旧客户端的题包。
+ * 仅 submit/feedback 与避免重复选题使用该双读，greeting/taste/daily 不回读旧文本缓存。
+ */
+async function readQuizCacheCompat(
+    env: AiEnvironment,
+    friendId: string,
+    quizId: string,
+): Promise<unknown | null> {
+    const current = await readAiCache(env, quizCacheKey(AI_TEXT_CACHE_VERSION, friendId, quizId));
+    if (current !== null) return current;
+    return readAiCache(env, quizCacheKey(LEGACY_AI_CACHE_VERSION, friendId, quizId));
+}
+
 // 解析文本生成模型与供应商：
 // - 显式 model 优先（agnes-2.5-flash 走 Agnes，mimo-* 走 MiMo）
 // - 未指定时取 AI_DEFAULT_PROVIDER；仅显式 mimo 选择 MiMo，其余情况默认 Agnes
@@ -1313,12 +1411,13 @@ async function callLlmJson(
     messages: MimoMessage[],
     options: Record<string, unknown>,
     fallbackModel: string,
-): Promise<unknown | null> {
+    context: LlmRequestContext,
+): Promise<LlmJsonResult | null> {
     const order: Array<'mimo' | 'agnes'> = provider === 'agnes' ? ['agnes'] : ['mimo', 'agnes'];
     let lastError: unknown = null;
     for (const p of order) {
+        const m = p === provider ? model : (p === 'agnes' ? 'agnes-2.5-flash' : fallbackModel);
         try {
-            const m = p === provider ? model : (p === 'agnes' ? 'agnes-2.5-flash' : fallbackModel);
             const result = p === 'agnes'
                 ? await callAgnesJson(env, m, messages as unknown as AgnesMessage[], options)
                 : await callMimoJson(env, m as MimoModel, messages, options);
@@ -1327,16 +1426,55 @@ async function callLlmJson(
                 if (p === provider) return null;
                 throw new AppError('AI_UPSTREAM_ERROR', 'Fallback AI provider unavailable', 502);
             }
-            return result;
+            return { payload: result, provider: p, model: m };
         } catch (error) {
             // 模型非法属于请求错误，不回退，直接上抛。
             if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
+            logAiDiagnostic('upstream_failure', context, p, m, error);
             // Agnes 文本余额/上游不可用时不能消耗 MiMo 文本额度，交给各业务的确定性 fallback。
             if (provider === 'agnes') return null;
             lastError = error;
         }
     }
     throw lastError ?? new AppError('AI_UPSTREAM_ERROR', 'All AI providers failed', 502);
+}
+
+function parseTextResultOrFallback<T>(
+    result: LlmJsonResult | null,
+    parse: (payload: unknown) => T,
+    fallback: () => T,
+    context: LlmRequestContext,
+): T {
+    if (result === null) return fallback();
+    try {
+        return parse(result.payload);
+    } catch (error) {
+        // Agnes 文档/服务端可能返回 200 但内容不是可解析的业务 JSON；不能把这种供应商输出直接变成 502。
+        // 显式旧 MiMo 主路径仍保留原有结构校验行为；若其失败后实际由 Agnes 返回，则同样使用兜底。
+        if (result.provider !== 'agnes') throw error;
+        logAiDiagnostic('invalid_output', context, result.provider, result.model, error);
+        return fallback();
+    }
+}
+
+function logAiDiagnostic(
+    event: 'upstream_failure' | 'invalid_output',
+    context: LlmRequestContext,
+    provider: 'mimo' | 'agnes',
+    model: string,
+    error: unknown,
+): void {
+    const appError = error instanceof AppError ? error : null;
+    // 只记录路由、供应商、固定模型、请求 ID 和稳定错误码/状态；禁止记录 key、prompt、影视列表或上游正文。
+    console.warn('[AI_DIAGNOSTIC]', JSON.stringify({
+        event,
+        route: context.route,
+        requestId: context.requestId,
+        provider,
+        model,
+        errorCode: appError?.code ?? 'UNKNOWN',
+        status: appError?.statusCode ?? null,
+    }));
 }
 
 function readSessionId(body: Record<string, unknown>): string {

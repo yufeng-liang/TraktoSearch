@@ -227,6 +227,7 @@ test('taste, quiz, and daily route to Agnes as the default text provider', async
 test('Agnes text upstream failure uses deterministic fallbacks without calling MiMo text', async () => {
     const originalFetch = globalThis.fetch;
     const calls = [];
+    let mimoTextRequests = 0;
     globalThis.fetch = async (input, init = {}) => {
         const url = String(input);
         calls.push(url);
@@ -234,6 +235,7 @@ test('Agnes text upstream failure uses deterministic fallbacks without calling M
             return new Response('Agnes temporarily unavailable', { status: 503 });
         }
         if (url.startsWith('https://api.xiaomimimo.com/')) {
+            mimoTextRequests += 1;
             throw new Error('Agnes failure must not spend MiMo text balance');
         }
         // daily 还会额外用 HEAD 检查来源链接。
@@ -263,12 +265,142 @@ test('Agnes text upstream failure uses deterministic fallbacks without calling M
         for (const [path, body] of paths) {
             const { response } = await call(path, {
                 body,
-                env: createTestEnv({ AI_DEFAULT_PROVIDER: 'agnes', AGNES_API_KEYS: AGNES_KEYS }),
+                env: createTestEnv({
+                    AI_DEFAULT_PROVIDER: 'agnes',
+                    AGNES_API_KEYS: AGNES_KEYS,
+                    // 即使配置了 MiMo key，也必须证明 Agnes 主路径不会发出 MiMo 文本请求。
+                    MIMO_API_KEY: 'sentinel-mimo-text-key',
+                }),
             });
             assert.equal(response.status, 200, `${path} should use its deterministic fallback`);
         }
         assert.ok(calls.some(url => url === 'https://apihub.agnes-ai.com/v1/chat/completions'));
+        assert.equal(mimoTextRequests, 0);
         assert.equal(calls.some(url => url.startsWith('https://api.xiaomimimo.com/')), false);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('Agnes HTTP 200 with invalid JSON or structure uses deterministic route fallbacks', async () => {
+    const originalFetch = globalThis.fetch;
+    const requests = [];
+    let mimoTextRequests = 0;
+    globalThis.fetch = async (input, init = {}) => {
+        const url = String(input);
+        if (url.startsWith('https://api.xiaomimimo.com/')) {
+            mimoTextRequests += 1;
+            throw new Error('Agnes invalid output must not call MiMo text');
+        }
+        if (url === 'https://apihub.agnes-ai.com/v1/chat/completions') {
+            const requestBody = JSON.parse(init.body);
+            const systemPrompt = String(requestBody.messages?.[0]?.content ?? '');
+            const route = systemPrompt.includes('影视品味分析助手')
+                ? 'taste'
+                : systemPrompt.includes('每日影视冷知识编辑')
+                    ? 'daily'
+                    : 'greeting';
+            requests.push(route);
+            const content = route === 'greeting'
+                ? '{not-json'
+                : route === 'taste'
+                    ? JSON.stringify({
+                        roast: '片单很有方向。',
+                        taste: ['偏爱复杂人物'],
+                        recommendations: [],
+                    })
+                    : JSON.stringify({ title: '只有标题' });
+            return new Response(JSON.stringify({
+                choices: [{ message: { content } }],
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        // daily fallback 会核验其固定来源链接；这里只让 HEAD 成功，不提供任何额外上游响应。
+        return new Response(null, { status: 204 });
+    };
+
+    try {
+        const env = createTestEnv({
+            AI_DEFAULT_PROVIDER: 'agnes',
+            AGNES_API_KEYS: AGNES_KEYS,
+            MIMO_API_KEY: 'sentinel-mimo-text-key',
+        });
+        const greeting = await call('/api/ai/greeting', {
+            body: { characterId: 'usagi', sessionId: 'agnes-invalid-greeting', forceRefresh: true },
+            env,
+        });
+        const taste = await call('/api/ai/taste', {
+            body: { sessionId: 'agnes-invalid-taste', watched: agnesWatchedMovies(), forceRefresh: true },
+            env,
+        });
+        const daily = await call('/api/ai/daily', {
+            body: { sessionId: 'agnes-invalid-daily', forceRefresh: true },
+            env,
+        });
+
+        assert.equal(greeting.response.status, 200);
+        assert.equal(greeting.json.data.comment, '很适合当一名会发现细节的观众。');
+        assert.equal(taste.response.status, 200);
+        assert.deepEqual(taste.json.data.recommendations, []);
+        assert.equal(daily.response.status, 200);
+        assert.equal(daily.json.data.title, '电影的第一声“Action”');
+        assert.deepEqual(requests, ['greeting', 'taste', 'daily']);
+        assert.equal(mimoTextRequests, 0);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('Agnes text caches use a new version and ignore legacy MiMo or fallback greeting data', async () => {
+    const originalFetch = globalThis.fetch;
+    let agnesRequests = 0;
+    globalThis.fetch = async (input, init = {}) => {
+        const url = String(input);
+        if (url.startsWith('https://api.xiaomimimo.com/')) {
+            throw new Error('legacy cache test must not call MiMo text');
+        }
+        assert.equal(url, 'https://apihub.agnes-ai.com/v1/chat/completions');
+        agnesRequests += 1;
+        return new Response(JSON.stringify({
+            choices: [{ message: { content: JSON.stringify({
+                greeting: 'Agnes 新问候',
+                nicknameMeaning: '新的模型结果',
+                comment: '不应命中旧缓存。',
+            }) } }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+
+    try {
+        const env = createTestEnv({
+            AI_DEFAULT_PROVIDER: 'agnes',
+            AGNES_API_KEYS: AGNES_KEYS,
+            MIMO_API_KEY: 'sentinel-mimo-text-key',
+        });
+        const legacyKey = 'ai:v1:greeting:friend-1:usagi:text';
+        env.AI_TEST_CACHE.set(legacyKey, {
+            payload: {
+                characterId: 'usagi',
+                characterName: '乌萨奇',
+                nickname: '小明',
+                greeting: '旧 MiMo/旧 fallback 结果',
+                spokenText: '旧 MiMo/旧 fallback 结果',
+                nicknameMeaning: '旧结果',
+                comment: '旧缓存不应返回',
+                text: '旧缓存不应返回',
+                audio: null,
+            },
+            expiresAt: Math.floor(Date.now() / 1000) + 3600,
+        });
+
+        const result = await call('/api/ai/greeting', {
+            body: { characterId: 'usagi', sessionId: 'agnes-cache-version' },
+            env,
+        });
+
+        assert.equal(result.response.status, 200);
+        assert.equal(result.json.data.greeting, 'Agnes 新问候');
+        assert.equal(agnesRequests, 1);
+        assert.equal(env.AI_TEST_CACHE.has(legacyKey), true);
+        assert.ok([...env.AI_TEST_CACHE.keys()].some(key => key.startsWith('ai:v2:greeting:')));
     } finally {
         globalThis.fetch = originalFetch;
     }
