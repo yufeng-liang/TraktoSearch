@@ -57,19 +57,6 @@ val LocalActivePosterSelectionKey = compositionLocalOf<String?> { null }
 val LocalActivePosterSelectionKeySetter = compositionLocalOf<(String) -> Unit> { {} }
 
 /**
- * 当前被全屏查看器打开的共享元素 key(形如 "backdrop-zoom-123-4"),未打开时为 null。
- *
- * 缩略图侧据此把自己置为「不可见」,保证同一 key 下同时只有一个 target。
- * 必须如此:缩略图侧挂的是 NavHost 目的地的 AnimatedVisibilityScope,停在该页面期间恒为
- * EnterExitState.Visible,若全屏侧打开时两侧 target 同时为 true,
- * SharedTransitionStateMachine 会取「先注册」的缩略图作为目标边界提供者,
- * 打开时边界从全屏动到缩略图(方向反了),观感上等于没有缩放动画。
- *
- * 由 [zoomSharedSource] 读取,各页面在顶层用 CompositionLocalProvider 提供。
- */
-val LocalFullscreenSharedKey = compositionLocalOf<String?> { null }
-
-/**
  * 当前 Composable 子树是否处于"用户可见的当前 tab"。
  * 用于 HorizontalPager 等多页面常驻场景，避免非当前 tab 的同 tmdbId 海报参与 sharedElement 匹配。
  * 默认 true：非 MainScreen 的页面（如 Detail、TraktListDetail 等独立路由）都是当前可见页。

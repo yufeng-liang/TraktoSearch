@@ -55,8 +55,6 @@ import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalIsCurrentTab
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppErrorVariant
@@ -69,6 +67,8 @@ import com.tracktosearch.ui.component.YearBadge
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.posterSharedKey
 
 /** 通用电影卡片（复用豆瓣卡片样式） */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -88,7 +88,6 @@ internal fun MovieCard(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     // 当前活跃海报 tmdbId(-1=都不启用 / 具体值=只有匹配的启用)
     val activePosterTmdbId = LocalActivePosterTmdbId.current
@@ -130,24 +129,15 @@ internal fun MovieCard(
             .width(105.dp)
             .scale(scale)
     ) {
-        // 当 enableShared 且两个 scope 可用时，给海报 Box 加 sharedElement 修饰（与详情页海报配对）
-        val posterBoxModifier = if (enableShared && sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-            with(sharedTransitionScope) {
-                Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(2f / 3f)
-                    .sharedElement(
-                        rememberSharedContentState(key = "poster-$tmdbId"),
-                        animatedVisibilityScope = animatedVisibilityScope
-                    )
-                    .clip(posterShape)
-            }
-        } else {
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(2f / 3f)
-                .clip(posterShape)
-        }
+        // 海报 Box 与详情页头图配对
+        val posterBoxModifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(2f / 3f)
+            .appSharedBounds(
+                key = if (enableShared) posterSharedKey(tmdbId) else null,
+                animatedVisibilityScope = animatedVisibilityScope,
+            )
+            .clip(posterShape)
         AppVisualSurface(
             kind = VisualSurfaceKind.Content,
             modifier = posterBoxModifier.clickable(

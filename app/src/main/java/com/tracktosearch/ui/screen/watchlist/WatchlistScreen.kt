@@ -192,8 +192,6 @@ import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.LocalIsCurrentTab
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.ScrollToTopButton
@@ -222,6 +220,9 @@ import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.showToast
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.posterSharedKey
+import com.tracktosearch.ui.component.SharedCorner
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
@@ -1962,7 +1963,6 @@ private fun WatchlistPosterCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val activePosterTmdbId = LocalActivePosterTmdbId.current
     val activePosterSelectionKey = LocalActivePosterSelectionKey.current
@@ -1985,18 +1985,12 @@ private fun WatchlistPosterCard(
         }
     }
 
-    val posterModifier = if (enableShared && sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-        with(sharedTransitionScope) {
-            Modifier
-                .sharedElement(
-                    rememberSharedContentState(key = "poster-${item.tmdbId}"),
-                    animatedVisibilityScope = animatedVisibilityScope
-                )
-                .clip(RoundedCornerShape(14.dp))
-        }
-    } else {
-        Modifier
-    }
+    val posterModifier = Modifier
+        .appSharedBounds(
+            key = if (enableShared) posterSharedKey(item.tmdbId) else null,
+            animatedVisibilityScope = animatedVisibilityScope,
+            corner = SharedCorner.uniform(14.dp),
+        )
 
     Column {
         Box {

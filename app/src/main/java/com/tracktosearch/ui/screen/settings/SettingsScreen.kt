@@ -119,7 +119,6 @@ import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
@@ -143,6 +142,8 @@ import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.StatisticsEntryKey
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -250,7 +251,6 @@ fun SettingsScreen(
     // 进设置页时已稳定,避免 SettingsViewModel 延迟构造导致的初始 false→true 跳变)
     val sharedTransitionEnabled = LocalSharedTransitionEnabled.current
     // 共享元素转场 scope（帮助与说明入口 → 帮助页标题栏配对）
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
     // 豆瓣登录态:「重新同步豆瓣」点击前预检,未登录弹确认框引导登录
@@ -550,14 +550,10 @@ fun SettingsScreen(
             // 豆瓣独立模式: StatisticsViewModel 支持基于豆瓣本地同步数据的统计，与 Trakt 统计同等可用
             if (isLoggedIn && (isDoubanMode || isTraktConnected)) {
                 item(key = "statistics_entry") {
-                    val statisticsEntryModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && sharedTransitionEnabled) {
-                        with(sharedTransitionScope) {
-                            Modifier.sharedBounds(
-                                sharedContentState = rememberSharedContentState(key = "settings-statistics-entry"),
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                        }
-                    } else { Modifier }
+                    val statisticsEntryModifier = Modifier.appSharedBounds(
+                        key = StatisticsEntryKey,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                    )
                     StatisticsCard(
                         modifier = statisticsEntryModifier,
                         hazeState = settingsHazeState,

@@ -129,7 +129,7 @@ internal fun PosterFullscreenOverlay(
                     .zoomSharedTarget(
                         key = sharedKeyPrefix,
                         animatedVisibilityScope = animatedVisibilityScope,
-                        clipShape = RoundedCornerShape(12.dp)
+                        clipRadius = 12.dp
                     ),
                 // 转场动画期间锁手势，避免与共享元素转场互相打架
                 gesturesEnabled = !animatedVisibilityScope.transition.isRunning,

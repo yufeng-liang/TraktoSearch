@@ -92,7 +92,6 @@ fun MovieCard(
      */
     posterShimmer: ShimmerState? = null
 ) {
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     // 当前活跃海报 tmdbId(-1=都不启用 / 具体值=只有匹配的启用)
     val activePosterTmdbId = LocalActivePosterTmdbId.current
@@ -234,25 +233,15 @@ fun MovieCard(
             } else {
                 Modifier
             }
-            val imageModifier = if (enableShared && sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-                with(sharedTransitionScope) {
-                    Modifier
-                        .sharedElement(
-                            rememberSharedContentState(key = "poster-$tmdbId"),
-                            animatedVisibilityScope = animatedVisibilityScope
-                        )
-                        .fillMaxWidth()
-                        .aspectRatio(2f / 3f)
-                        .clip(posterShape)
-                        .then(placeholderModifier)
-                }
-            } else {
-                Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(2f / 3f)
-                    .clip(posterShape)
-                    .then(placeholderModifier)
-            }
+            val imageModifier = Modifier
+                .appSharedBounds(
+                    key = if (enableShared) posterSharedKey(tmdbId) else null,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                )
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(posterShape)
+                .then(placeholderModifier)
 
             Box {
                 AsyncImage(

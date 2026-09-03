@@ -61,9 +61,9 @@ import com.tracktosearch.data.remote.tmdb.dto.TmdbCast
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCrew
 import com.tracktosearch.data.util.PersonAvatarColorStore
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.personAvatarSharedKey
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.launch
 
@@ -167,7 +167,6 @@ internal fun CastCard(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -202,18 +201,12 @@ internal fun CastCard(
                 .height(95.dp)
         ) {
             if (profileUrl != null) {
-                val imageModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-                    with(sharedTransitionScope) {
-                        Modifier
-                            .sharedElement(
-                                rememberSharedContentState(key = "person-avatar-$personId"),
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                            .fillMaxSize()
-                    }
-                } else {
-                    Modifier.fillMaxSize()
-                }
+                val imageModifier = Modifier
+                    .appSharedBounds(
+                        key = personAvatarSharedKey(personId),
+                        animatedVisibilityScope = animatedVisibilityScope,
+                    )
+                    .fillMaxSize()
                 SubcomposeAsyncImage(
                     model = remember(profileUrl) {
                         ImageRequest.Builder(context)

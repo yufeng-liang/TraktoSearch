@@ -57,7 +57,8 @@ import com.tracktosearch.R
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.ui.component.GlassScene
-import com.tracktosearch.ui.component.LocalFullscreenSharedKey
+import com.tracktosearch.ui.component.LocalFullscreenSharedElement
+import com.tracktosearch.ui.component.fullscreenSharedElementKey
 import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.rememberPosterPrefetch
@@ -147,7 +148,9 @@ fun PersonScreen(
         val fullscreenSharedKey = personImageFullscreenKey
             ?.takeIf { selectedPersonImageIndex >= 0 }
             ?.let { "$it-$selectedPersonImageIndex" }
-        CompositionLocalProvider(LocalFullscreenSharedKey provides fullscreenSharedKey) {
+        CompositionLocalProvider(
+            LocalFullscreenSharedElement provides fullscreenSharedElementKey(fullscreenSharedKey)
+        ) {
         Box(modifier = Modifier
             .fillMaxSize()
             .padding(padding)
@@ -536,7 +539,7 @@ fun PersonScreen(
                 }
             }
         }
-        } // CompositionLocalProvider(LocalFullscreenSharedKey)
+        } // CompositionLocalProvider(LocalFullscreenSharedElement)
     }
 }
 

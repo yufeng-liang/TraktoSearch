@@ -115,7 +115,8 @@ import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalBackdrop
-import com.tracktosearch.ui.component.LocalFullscreenSharedKey
+import com.tracktosearch.ui.component.LocalFullscreenSharedElement
+import com.tracktosearch.ui.component.fullscreenSharedElementKey
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.NeumorphicIconButton
@@ -487,7 +488,9 @@ fun DetailScreen(
                     "backdrop-zoom-$tmdbId-$selectedBackdropIndex"
                 else -> null
             }
-            CompositionLocalProvider(LocalFullscreenSharedKey provides fullscreenSharedKey) {
+            CompositionLocalProvider(
+                LocalFullscreenSharedElement provides fullscreenSharedElementKey(fullscreenSharedKey)
+            ) {
 
             // 状态栏条：与顶栏同色同步淡入，让顶栏在视觉上延伸到状态栏底下。
             // 原先这里铺的是掺了海报色的沉浸实色，且不吸顶时才透明——顶栏、Tab 栏、
@@ -1004,7 +1007,7 @@ fun DetailScreen(
                 } // end if (contentReady)
                 }
             } // CompositionLocalProvider
-            } // CompositionLocalProvider(LocalFullscreenSharedKey)
+            } // CompositionLocalProvider(LocalFullscreenSharedElement)
             } // hazeSource Box 结束：采样源只包住状态栏底色 + 滚动内容
 
             // 悬浮控件与全屏覆盖层必须与 hazeSource 保持兄弟关系。

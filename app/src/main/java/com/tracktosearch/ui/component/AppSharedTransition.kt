@@ -75,13 +75,62 @@ data class SharedKey(
  * 只在此处声明跨页面配对用到的公共值；某个屏幕私有的多列表细分值就近声明在该屏幕文件里。
  */
 object SharedOrigin {
+    /**
+     * 尚未按来源细分的配对。
+     *
+     * 海报、人物头像这两族的目标侧（详情页、人物页）可以从任意列表进入，要让 origin 真正区分来源，
+     * 目标侧必须能读到「我是从哪来的」，也就是导航参数里得带上 origin。在那一步落地之前，
+     * 这两族两端都用本值，配对行为与细分之前完全一致。
+     */
+    const val ANY = "any"
+
     const val WATCHLIST = "watchlist"
     const val DETAIL = "detail"
+    const val DISCOVER = "discover"
     const val SETTINGS = "settings"
     const val STATISTICS = "statistics"
     const val TRAKT_LIST = "trakt-list"
     const val DISCOVER_FILTER = "discover-filter"
+
+    /**
+     * 全屏图片查看器的缩略图/全屏配对。
+     *
+     * 这一族不需要 origin 消歧：同一时刻只可能开着一个查看器，由 [LocalFullscreenSharedElement]
+     * 指定哪一侧是 target，且调用点的字符串 id 里已经带了页面与索引。
+     */
+    const val FULLSCREEN_VIEWER = "fullscreen-viewer"
 }
+
+/**
+ * 影视海报配对键：列表卡片的海报与详情页头图。
+ *
+ * tmdbId 非正数时返回 null，即不参与转场。占位数据和只有豆瓣 id 的条目都会落在这里，
+ * 若让它们共用 `poster-0` 这个键，同屏多个占位项会互相配对，转场会飞向一个随机条目。
+ */
+fun posterSharedKey(tmdbId: Int, origin: String = SharedOrigin.ANY): SharedKey? =
+    if (tmdbId <= 0) null else SharedKey("poster-$tmdbId", origin, SharedElementType.Image)
+
+/** 人物头像配对键：演职员卡片与人物页头像。 */
+fun personAvatarSharedKey(personId: Int, origin: String = SharedOrigin.ANY): SharedKey? =
+    if (personId <= 0) null else SharedKey("person-avatar-$personId", origin, SharedElementType.Image)
+
+/** 社区列表配对键：发现页列表卡片与列表详情页标题栏。 */
+fun traktListSharedKey(listId: Int): SharedKey? =
+    if (listId <= 0) null else SharedKey("trakt-list-$listId", SharedOrigin.DISCOVER, SharedElementType.Bounds)
+
+/** 发现页筛选入口卡片与筛选页根容器。 */
+val DiscoverFilterCardKey = SharedKey("filter-entry-card", SharedOrigin.DISCOVER, SharedElementType.Bounds)
+
+/**
+ * 发现页右上角筛选图标与筛选页「返回箭头 + 标题」。
+ *
+ * 类型是 Bounds 而不是 Icon：两端画的不是同一张图（一个图标 对 一整行「箭头 + 标题」），
+ * 需要交叉淡入把内容差异盖掉。
+ */
+val DiscoverFilterIconKey = SharedKey("filter-entry-icon", SharedOrigin.DISCOVER, SharedElementType.Bounds)
+
+/** 设置页观看统计入口卡片与统计页。 */
+val StatisticsEntryKey = SharedKey("statistics-entry", SharedOrigin.SETTINGS, SharedElementType.Bounds)
 
 /**
  * 转场期间的圆角。
@@ -130,6 +179,25 @@ internal val AppSharedEnter: EnterTransition = fadeIn(AppFadeSpec)
 internal val AppSharedExit: ExitTransition = fadeOut(AppFadeSpec)
 
 /**
+ * 按部件类型决定默认进出动画。
+ *
+ * [SharedElementType.Image] 与 [SharedElementType.Icon] 两端画的是同一张图，交叉淡入会在
+ * 重叠期把两份半透明内容叠出一次可见的发白，所以不淡；其余类型两端内容不同，需要淡过去。
+ *
+ * 这也是这里一律用 sharedBounds 而不是 sharedElement 的代价与补偿：sharedElement 天生不淡，
+ * 但同时锁死了 RemeasureToBounds；sharedBounds 给了 resizeMode，进出动画就得自己关掉。
+ */
+private fun SharedElementType.defaultEnter(): EnterTransition = when (this) {
+    SharedElementType.Image, SharedElementType.Icon -> EnterTransition.None
+    else -> AppSharedEnter
+}
+
+private fun SharedElementType.defaultExit(): ExitTransition = when (this) {
+    SharedElementType.Image, SharedElementType.Icon -> ExitTransition.None
+    else -> AppSharedExit
+}
+
+/**
  * 按部件类型推导 resizeMode。
  *
  * 一律优先 scaleToBounds：它只在 lookahead 尺寸上量一次，之后靠 graphicsLayer 缩放，
@@ -170,6 +238,8 @@ private val AppCornerSpec: FiniteAnimationSpec<Dp> = spring(
  *   的场合必须显式传自己的作用域，否则配对到的是页面进出而不是查看器开合。
  * @param corner 转场期间的圆角，null 表示不接管裁剪、沿用父级。
  * @param resizeMode 默认按 [SharedKey.type] 推导，只有配对两端宽高比不同时才需要覆盖。
+ * @param enter 默认按 [SharedKey.type] 推导，同图配对不淡入。
+ * @param exit 默认按 [SharedKey.type] 推导，同图配对不淡出。
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -178,8 +248,8 @@ internal fun Modifier.appSharedBounds(
     animatedVisibilityScope: AnimatedVisibilityScope? = LocalAnimatedVisibilityScope.current,
     corner: SharedCorner? = null,
     resizeMode: SharedTransitionScope.ResizeMode? = null,
-    enter: EnterTransition = AppSharedEnter,
-    exit: ExitTransition = AppSharedExit,
+    enter: EnterTransition? = null,
+    exit: ExitTransition? = null,
 ): Modifier {
     val scope = LocalSharedTransitionScope.current
     if (key == null || scope == null || animatedVisibilityScope == null ||
@@ -202,14 +272,16 @@ internal fun Modifier.appSharedBounds(
         RoundedCornerShape(radius)
     }
     val mode = resizeMode ?: key.type.defaultResizeMode()
+    val enterSpec = enter ?: key.type.defaultEnter()
+    val exitSpec = exit ?: key.type.defaultExit()
     return with(scope) {
         val state = rememberSharedContentState(key = key)
         val bounds = if (shape == null) {
             this@appSharedBounds.sharedBounds(
                 state,
                 animatedVisibilityScope = animatedVisibilityScope,
-                enter = enter,
-                exit = exit,
+                enter = enterSpec,
+                exit = exitSpec,
                 boundsTransform = AppBoundsTransform,
                 resizeMode = mode,
             )
@@ -217,8 +289,8 @@ internal fun Modifier.appSharedBounds(
             this@appSharedBounds.sharedBounds(
                 state,
                 animatedVisibilityScope = animatedVisibilityScope,
-                enter = enter,
-                exit = exit,
+                enter = enterSpec,
+                exit = exitSpec,
                 boundsTransform = AppBoundsTransform,
                 resizeMode = mode,
                 clipInOverlayDuringTransition = OverlayClip(shape),

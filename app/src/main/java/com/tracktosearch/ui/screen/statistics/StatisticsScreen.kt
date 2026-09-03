@@ -101,8 +101,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.hasListScrolled
@@ -112,6 +110,8 @@ import com.tracktosearch.ui.component.shimmer
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.StatisticsEntryKey
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -136,7 +136,6 @@ fun StatisticsScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showInfoDialog by remember { mutableStateOf(false) }
     // 共享元素转场 scope(与设置页观看统计卡片配对)
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
     LaunchedEffect(Unit) {
@@ -447,15 +446,11 @@ fun StatisticsScreen(
             }
             }
             // Haze模糊渐变TopAppBar（含状态栏）
-            // 「标题+返回箭头」整体与设置页观看统计入口配对（sharedBounds）
-            val headerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-                with(sharedTransitionScope) {
-                    Modifier.sharedBounds(
-                        sharedContentState = rememberSharedContentState(key = "settings-statistics-entry"),
-                        animatedVisibilityScope = animatedVisibilityScope
-                    )
-                }
-            } else { Modifier }
+            // 「标题+返回箭头」整体与设置页观看统计入口配对
+            val headerModifier = Modifier.appSharedBounds(
+                key = StatisticsEntryKey,
+                animatedVisibilityScope = animatedVisibilityScope,
+            )
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

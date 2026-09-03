@@ -51,7 +51,8 @@ import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.data.remote.feedback.FeedbackDetail
 import com.tracktosearch.data.remote.feedback.FeedbackReply
 import com.tracktosearch.data.remote.feedback.screenshotUrl
-import com.tracktosearch.ui.component.LocalFullscreenSharedKey
+import com.tracktosearch.ui.component.LocalFullscreenSharedElement
+import com.tracktosearch.ui.component.fullscreenSharedElementKey
 import com.tracktosearch.ui.component.ZoomableImageOverlay
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
@@ -164,7 +165,9 @@ fun FeedbackDetailScreen(
             "fb-compose-${replyFullscreenIndex!!.coerceIn(0, replyScreenshots.size - 1)}"
         else -> null
     }
-    CompositionLocalProvider(LocalFullscreenSharedKey provides fullscreenSharedKey) {
+    CompositionLocalProvider(
+        LocalFullscreenSharedElement provides fullscreenSharedElementKey(fullscreenSharedKey)
+    ) {
 
     Scaffold(
         contentWindowInsets = feedbackDetailScaffoldContentWindowInsets(),
@@ -343,7 +346,7 @@ fun FeedbackDetailScreen(
         sharedKeyPrefix = "fb-compose",
         onDismiss = { replyFullscreenIndex = null }
     )
-    } // CompositionLocalProvider(LocalFullscreenSharedKey)
+    } // CompositionLocalProvider(LocalFullscreenSharedElement)
 }
 
 /** 详情页顶栏：与消息页同一套 haze 贴顶写法，内容从下面穿过去。 */

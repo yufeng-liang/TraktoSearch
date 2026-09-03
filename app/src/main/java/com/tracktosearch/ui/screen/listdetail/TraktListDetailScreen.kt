@@ -61,8 +61,6 @@ import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.glassSceneForContent
@@ -74,6 +72,8 @@ import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.traktListSharedKey
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -114,7 +114,6 @@ fun TraktListDetailScreen(
     // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的卡片参与共享元素转场
     var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
     // 共享元素转场 scope（标题栏整体与发现页社区列表卡片配对）
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
     BackHandler(enabled = true) { onBack() }
@@ -176,15 +175,11 @@ fun TraktListDetailScreen(
                             }
                         }
 
-                        // Haze 模糊标题栏（与发现页社区列表卡片配对 sharedBounds 转场）
-                        val loadingHeaderModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && uiState.listId > 0 && LocalSharedTransitionEnabled.current) {
-                            with(sharedTransitionScope) {
-                                Modifier.sharedBounds(
-                                    sharedContentState = rememberSharedContentState(key = "trakt-list-card-${uiState.listId}"),
-                                    animatedVisibilityScope = animatedVisibilityScope
-                                )
-                            }
-                        } else { Modifier }
+                        // Haze 模糊标题栏（与发现页社区列表卡片配对）
+                        val loadingHeaderModifier = Modifier.appSharedBounds(
+                            key = traktListSharedKey(uiState.listId),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                        )
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -299,15 +294,11 @@ fun TraktListDetailScreen(
                         scene = listGlassScene
                     )
 
-                    // Haze 模糊标题栏（与发现页社区列表卡片配对 sharedBounds 转场）
-                    val headerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && uiState.listId > 0 && LocalSharedTransitionEnabled.current) {
-                        with(sharedTransitionScope) {
-                            Modifier.sharedBounds(
-                                sharedContentState = rememberSharedContentState(key = "trakt-list-card-${uiState.listId}"),
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                        }
-                    } else { Modifier }
+                    // Haze 模糊标题栏（与发现页社区列表卡片配对）
+                    val headerModifier = Modifier.appSharedBounds(
+                        key = traktListSharedKey(uiState.listId),
+                        animatedVisibilityScope = animatedVisibilityScope,
+                    )
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()

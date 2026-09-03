@@ -98,8 +98,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.glassSceneForContent
@@ -114,6 +112,10 @@ import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.util.ToastEffect
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.traktListSharedKey
+import com.tracktosearch.ui.component.DiscoverFilterCardKey
+import com.tracktosearch.ui.component.DiscoverFilterIconKey
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -141,7 +143,6 @@ fun DiscoverScreen(
     val watchlistWatchedIds by viewModel.watchlistWatchedIds.collectAsStateWithLifecycle()
     val context = LocalContext.current
     // 共享元素转场 scope（用于底部入口卡片和右上角筛选图标与影视筛选页配对）
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     // 记录进入影视筛选页的入口来源（"card"=底部卡片 / "icon"=右上角图标），返回时据此决定哪个入口参与转场
     var activeFilterEntry by rememberSaveable { mutableStateOf<String?>(null) }
@@ -730,15 +731,11 @@ fun DiscoverScreen(
                                     } else {
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             uiState.trendingLists.take(5).forEachIndexed { index, listResponse ->
-                                                // 社区列表卡片与详情页标题栏整体配对（sharedBounds 转场）
-                                                val listCardModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-                                                    with(sharedTransitionScope) {
-                                                        Modifier.sharedBounds(
-                                                            sharedContentState = rememberSharedContentState(key = "trakt-list-card-${listResponse.list.ids.trakt}"),
-                                                            animatedVisibilityScope = animatedVisibilityScope
-                                                        )
-                                                    }
-                                                } else { Modifier }
+                                                // 社区列表卡片与详情页标题栏整体配对
+                                                val listCardModifier = Modifier.appSharedBounds(
+                                                    key = traktListSharedKey(listResponse.list.ids.trakt),
+                                                    animatedVisibilityScope = animatedVisibilityScope,
+                                                )
                                                 val interactionSource = remember { MutableInteractionSource() }
                                                 val isPressed by interactionSource.collectIsPressedAsState()
                                                 val cardScale by animateFloatAsState(
@@ -802,19 +799,13 @@ fun DiscoverScreen(
                         targetValue = if (isPressed) 0.97f else 1f,
                         label = "discover_filter_entry_scale"
                     )
-                    // 当从底部卡片进入筛选页时（activeFilterEntry == "card"），给卡片加 sharedElement 与筛选页根容器配对
-                    val cardModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && activeFilterEntry == "card" && LocalSharedTransitionEnabled.current) {
-                        with(sharedTransitionScope) {
-                            Modifier
-                                .fillMaxWidth()
-                                .sharedElement(
-                                    rememberSharedContentState(key = "discover-filter-entry-card"),
-                                    animatedVisibilityScope = animatedVisibilityScope
-                                )
-                        }
-                    } else {
-                        Modifier.fillMaxWidth()
-                    }
+                    // 从底部卡片进入筛选页时（activeFilterEntry == "card"），本卡片与筛选页根容器配对
+                    val cardModifier = Modifier
+                        .fillMaxWidth()
+                        .appSharedBounds(
+                            key = DiscoverFilterCardKey.takeIf { activeFilterEntry == "card" },
+                            animatedVisibilityScope = animatedVisibilityScope,
+                        )
                     val shape = RoundedCornerShape(20.dp)
                     // 浅玫瑰紫渐变（与「去豆瓣登录」卡片样式统一，仅渐变配色不同）
                     val gradient = remember { DiscoverRoseGradient.toBrush() }
@@ -901,17 +892,11 @@ fun DiscoverScreen(
                         // 圆形操作按钮在 Glass 下使用轻量光学层，在 Blur 下沿用拟态按钮。
                         CompositionLocalProvider(LocalBackdrop provides discoverContentBackdrop) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                        // 当从右上角图标进入筛选页时（activeFilterEntry == "icon"），给图标加 sharedElement 与筛选页返回箭头配对
-                        val iconModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && activeFilterEntry == "icon" && LocalSharedTransitionEnabled.current) {
-                            with(sharedTransitionScope) {
-                                Modifier.sharedElement(
-                                    rememberSharedContentState(key = "discover-filter-entry-icon"),
-                                    animatedVisibilityScope = animatedVisibilityScope
-                                )
-                            }
-                        } else {
-                            Modifier
-                        }
+                        // 从右上角图标进入筛选页时（activeFilterEntry == "icon"），本图标与筛选页返回箭头配对
+                        val iconModifier = Modifier.appSharedBounds(
+                            key = DiscoverFilterIconKey.takeIf { activeFilterEntry == "icon" },
+                            animatedVisibilityScope = animatedVisibilityScope,
+                        )
                         AppIconButton(
                             onClick = {
                                 activeFilterEntry = "icon"
