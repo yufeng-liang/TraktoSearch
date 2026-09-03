@@ -70,6 +70,8 @@ fun aiErrorMessageRes(errorCode: String?): Int = when (errorCode) {
     "AUDIO_PERMISSION_GRANTED" -> R.string.ai_error_audio_permission_granted
     "NOT_ENOUGH_MOVIES" -> R.string.ai_error_not_enough_movies
     "WATCHED_LIST_EMPTY" -> R.string.ai_error_watched_list_empty
+    // 离线是功能页的内联状态，不应显示成泛化的服务器错误或遮罩弹窗
+    "OFFLINE" -> R.string.ai_feature_unavailable
     "CHARACTERS_LOAD_FAILED" -> R.string.ai_error_characters_failed
     // AiErrorCode.name
     "UNAUTHORIZED" -> R.string.ai_error_unauthorized
@@ -98,6 +100,7 @@ fun aiErrorIsRetryable(errorCode: String?): Boolean = when (errorCode) {
     "QUOTA_EXCEEDED",
     "NOT_ENOUGH_MOVIES",
     "WATCHED_LIST_EMPTY",
+    "OFFLINE",
     "CHARACTER_UNAVAILABLE",
     "ACTIVATION_UNAVAILABLE",
     "ACTIVATION_RETRY_LIMIT",
@@ -349,7 +352,7 @@ fun shouldTriggerIdle(
 
 fun canActivateCharacter(character: AiCharacter, state: AiSpriteUiState): Boolean =
     character.isAvailable &&
-        state.isAuthorized &&
+        state.isAiAvailable &&
         state.activatedCharacterId != character.id &&
         state.activationState != AiActivationState.RECORDING &&
         state.activationState != AiActivationState.VERIFYING &&
@@ -377,7 +380,7 @@ fun shouldShowTextActivation(state: AiSpriteUiState): Boolean =
  */
 fun canActivateCharacterByText(character: AiCharacter, state: AiSpriteUiState): Boolean =
     character.isAvailable &&
-        state.isAuthorized &&
+        state.isAiAvailable &&
         canRequestTextActivation(state.textActivationAttempt) &&
         state.activatedCharacterId != character.id &&
         state.activationState != AiActivationState.RECORDING &&
@@ -436,7 +439,24 @@ fun canReplaceQuizPreview(
 fun remainingQuizReplacements(replacementCount: Int): Int =
     (MAX_QUIZ_REPLACEMENTS - replacementCount).coerceAtLeast(0)
 
-private fun AiWatchedTitleDto.key(): String = "$mediaType:$mediaId"
+/**
+ * 问答候选的媒体类型规范化。
+ *
+ * Trakt 当前返回 show，但旧缓存/兼容调用可能使用 tv；两者属于同一类媒体，
+ * 必须共用 key，否则预览列表会出现重复项，或者本地化标题互相覆盖。
+ */
+internal fun normalizeQuizMediaType(mediaType: String): String =
+    if (mediaType.equals("show", ignoreCase = true) || mediaType.equals("tv", ignoreCase = true)) {
+        "show"
+    } else {
+        mediaType.trim().lowercase()
+    }
+
+/** 统一供候选去重、Compose item key 和本地化标题映射使用。 */
+internal fun quizMediaKey(mediaType: String, mediaId: String): String =
+    "${normalizeQuizMediaType(mediaType)}:$mediaId"
+
+internal fun AiWatchedTitleDto.key(): String = quizMediaKey(mediaType, mediaId)
 
 fun selectQuizPreview(
     candidates: List<AiWatchedTitleDto>,
@@ -503,12 +523,13 @@ fun quizAnswerLabels(
 
 fun quizCorrectAnswerText(
     question: AiQuizQuestion?,
-    result: AiQuizQuestionResult
+    result: AiQuizQuestionResult,
+    separator: String = "、"
 ): String? {
     val optionLabels = result.correctOptionIds.mapNotNull { correctId ->
         question?.options?.firstOrNull { it.id == correctId }?.text
     }
-    return optionLabels.joinToString("、").takeIf { it.isNotBlank() }
+    return optionLabels.joinToString(separator).takeIf { it.isNotBlank() }
         ?: result.correctAnswer?.trim()?.takeIf { it.isNotBlank() }
 }
 

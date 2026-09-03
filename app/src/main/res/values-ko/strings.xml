@@ -1750,6 +1750,7 @@
     <string name="ai_taste_recommendations">당신을 위한 세 작품</string>
     <string name="ai_taste_details">상세 열기</string>
     <string name="ai_quiz_spoiler">이번 라운드: %1$s (스포일러 포함)</string>
+    <string name="ai_quiz_media_separator">, </string>
     <string name="ai_quiz_start">라운드 시작</string>
     <string name="ai_quiz_need_more_movies">퀴즈를 시작하려면 시청 완료 7편 이상이 필요합니다</string>
     <string name="ai_quiz_preview_title">이번 라운드 작품 고르기</string>

@@ -1750,6 +1750,7 @@
     <string name="ai_taste_recommendations">あなたへの3作品</string>
     <string name="ai_taste_details">詳細を開く</string>
     <string name="ai_quiz_spoiler">対象作品：%1$s（ネタバレあり）</string>
+    <string name="ai_quiz_media_separator">、</string>
     <string name="ai_quiz_start">ラウンドを開始</string>
     <string name="ai_quiz_need_more_movies">クイズを始めるには視聴済みが 7 本以上必要です</string>
     <string name="ai_quiz_preview_title">今回の作品を選ぶ</string>

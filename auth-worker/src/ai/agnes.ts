@@ -22,6 +22,7 @@ export interface AgnesEnvironment {
 export interface AgnesOptions extends Record<string, unknown> {
     maxCompletionTokens?: number;
     temperature?: number;
+    // Agnes 文档未确认 response_format；默认由提示词约束 JSON，仅显式开启时发送以保留兼容性。
     responseFormat?: boolean;
 }
 
@@ -53,7 +54,9 @@ export async function callAgnesJson(
         temperature: options.temperature ?? 0.7,
         stream: false,
     };
-    if (options.responseFormat !== false) {
+    // Agnes 2.5 Flash 文档列出的请求参数不包含 response_format。
+    // 默认依赖提示词要求合法 JSON，避免因未确认的参数导致整个文本请求失败。
+    if (options.responseFormat === true) {
         body.response_format = { type: 'json_object' };
     }
     return callAgnesPayload(env, body);
