@@ -24,6 +24,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import retrofit2.Response
 import java.io.IOException
+import java.util.Locale
 import okhttp3.ResponseBody.Companion.toResponseBody
 
 /**
@@ -267,15 +268,18 @@ class TmdbRepositoryTest {
     fun enrichMovie_title为空_走alternative_titles() = runTest {
         val detail = testMovieDetail.copy(title = "")
         val altTitles = TmdbAlternativeTitlesResponse(
-            titles = listOf(TmdbAlternativeTitle(iso_3166_1 = "CN", title = "中文译名", type = ""))
+            titles = listOf(
+                TmdbAlternativeTitle(iso_3166_1 = "US", title = "English Title", type = ""),
+                TmdbAlternativeTitle(iso_3166_1 = "CN", title = "中文译名", type = "")
+            )
         )
-        coEvery { tmdbApiService.getMovieDetail(100, any()) } returns Response.success(detail)
-        coEvery { tmdbApiService.getMovieAlternativeTitles(100, any()) } returns Response.success(altTitles)
+        coEvery { tmdbApiService.getMovieDetail(100, "zh-CN") } returns Response.success(detail)
+        coEvery { tmdbApiService.getMovieAlternativeTitles(100, "CN") } returns Response.success(altTitles)
 
         val result = repository.enrichMovie(tmdbId = 100, originalTitle = "Original", year = 2024)
 
         assertThat(result.chineseTitle).isEqualTo("中文译名")
-        coVerify(exactly = 1) { tmdbApiService.getMovieAlternativeTitles(100, any()) }
+        coVerify(exactly = 1) { tmdbApiService.getMovieAlternativeTitles(100, "CN") }
     }
 
     @Test
@@ -312,6 +316,40 @@ class TmdbRepositoryTest {
 
 
 
+
+    @Test
+    fun peekMovieEnrichment_详情标题为空_同步读取已缓存本地化备用标题() = runTest {
+        val detailCache = getCache<TmdbMovieDetail?>("movieDetailCache")
+        val altCache = getCache<TmdbAlternativeTitlesResponse>("movieAltTitlesCache")
+        detailCache.put("100_zh-CN", testMovieDetail.copy(title = ""))
+        altCache.put(
+            "100_zh-CN",
+            TmdbAlternativeTitlesResponse(
+                titles = listOf(
+                    TmdbAlternativeTitle(iso_3166_1 = "US", title = "English Title"),
+                    TmdbAlternativeTitle(iso_3166_1 = "CN", title = "缓存中文标题")
+                )
+            )
+        )
+
+        val result = repository.peekMovieEnrichment(100, "Original", 2024)
+
+        assertThat(result?.chineseTitle).isEqualTo("缓存中文标题")
+        coVerify(exactly = 0) { tmdbApiService.getMovieDetail(any(), any()) }
+        coVerify(exactly = 0) { tmdbApiService.getMovieAlternativeTitles(any(), any()) }
+    }
+
+    @Test
+    fun peekMovieEnrichment_详情标题为空且没有同步本地化标题_返回null() = runTest {
+        val detailCache = getCache<TmdbMovieDetail?>("movieDetailCache")
+        detailCache.put("100_zh-CN", testMovieDetail.copy(title = ""))
+
+        val result = repository.peekMovieEnrichment(100, "Original", 2024)
+
+        assertThat(result).isNull()
+        coVerify(exactly = 0) { tmdbApiService.getMovieDetail(any(), any()) }
+        coVerify(exactly = 0) { tmdbApiService.getMovieAlternativeTitles(any(), any()) }
+    }
 
     // ==================== enrichTv 三层缓存链路 ====================
 
@@ -403,17 +441,66 @@ class TmdbRepositoryTest {
     fun enrichTv_name为空_走alternative_titles() = runTest {
         val detail = testTvDetail.copy(name = "")
         val altTitles = TmdbAlternativeTitlesResponse(
-            titles = listOf(TmdbAlternativeTitle(iso_3166_1 = "CN", title = "中文剧名", type = ""))
+            titles = listOf(
+                TmdbAlternativeTitle(iso_3166_1 = "US", title = "English Show", type = ""),
+                TmdbAlternativeTitle(iso_3166_1 = "CN", title = "中文剧名", type = "")
+            )
         )
-        coEvery { tmdbApiService.getTvDetail(200, any()) } returns Response.success(detail)
-        coEvery { tmdbApiService.getTvAlternativeTitles(200, any()) } returns Response.success(altTitles)
+        coEvery { tmdbApiService.getTvDetail(200, "zh-CN") } returns Response.success(detail)
+        coEvery { tmdbApiService.getTvAlternativeTitles(200, "CN") } returns Response.success(altTitles)
 
         val result = repository.enrichTv(tmdbId = 200, originalName = "Original", year = 2024)
 
         assertThat(result.chineseTitle).isEqualTo("中文剧名")
+        coVerify(exactly = 1) { tmdbApiService.getTvAlternativeTitles(200, "CN") }
     }
 
 
+
+    @Test
+    fun peekTvEnrichment_英文详情名称为空_同步读取US备用标题() = runTest {
+        val language = kotlinx.coroutines.flow.MutableStateFlow(LanguageStorage.LANGUAGE_ENGLISH)
+        coEvery { languageStorage.language } returns language
+        val detailCache = getCache<TmdbTvDetail?>("tvDetailCache")
+        val altCache = getCache<TmdbAlternativeTitlesResponse>("tvAltTitlesCache")
+        detailCache.put("200_en-US", testTvDetail.copy(name = ""))
+        altCache.put(
+            "200_en-US",
+            TmdbAlternativeTitlesResponse(
+                titles = listOf(
+                    TmdbAlternativeTitle(iso_3166_1 = "CN", title = "中文剧名"),
+                    TmdbAlternativeTitle(iso_3166_1 = "US", title = "Cached English Show")
+                )
+            )
+        )
+
+        val result = repository.peekTvEnrichment(200, "Original", 2024)
+
+        assertThat(result?.chineseTitle).isEqualTo("Cached English Show")
+        coVerify(exactly = 0) { tmdbApiService.getTvDetail(any(), any()) }
+        coVerify(exactly = 0) { tmdbApiService.getTvAlternativeTitles(any(), any()) }
+    }
+
+    @Test
+    fun enrichTv_name为空_英文按US筛选备用标题并传入请求参数() = runTest {
+        val language = kotlinx.coroutines.flow.MutableStateFlow(LanguageStorage.LANGUAGE_ENGLISH)
+        coEvery { languageStorage.language } returns language
+        val detail = testTvDetail.copy(name = "")
+        val altTitles = TmdbAlternativeTitlesResponse(
+            titles = listOf(
+                TmdbAlternativeTitle(iso_3166_1 = "CN", title = "中文剧名"),
+                TmdbAlternativeTitle(iso_3166_1 = "US", title = "English Show")
+            )
+        )
+        coEvery { tmdbApiService.getTvDetail(200, "en-US") } returns Response.success(detail)
+        coEvery { tmdbApiService.getTvAlternativeTitles(200, "US") } returns Response.success(altTitles)
+
+        val result = repository.enrichTv(200, "Original", 2024)
+
+        assertThat(result.chineseTitle).isEqualTo("English Show")
+        coVerify(exactly = 1) { tmdbApiService.getTvDetail(200, "en-US") }
+        coVerify(exactly = 1) { tmdbApiService.getTvAlternativeTitles(200, "US") }
+    }
 
     // ==================== 语言切换 ====================
 
@@ -458,6 +545,33 @@ class TmdbRepositoryTest {
         assertThat(result.chineseTitle).isEqualTo("English Title")
         coVerify(exactly = 1) { tmdbApiService.getMovieDetail(100, "zh-CN") }
         coVerify(exactly = 1) { tmdbApiService.getMovieDetail(100, "en-US") }
+    }
+
+    @Test
+    fun enrichMovie_system语言跟随系统Locale请求语言国家并筛选备用标题() = runTest {
+        val previousLocale = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale("en", "GB"))
+            val language = kotlinx.coroutines.flow.MutableStateFlow(LanguageStorage.LANGUAGE_SYSTEM)
+            coEvery { languageStorage.language } returns language
+            val detail = testMovieDetail.copy(title = "")
+            val altTitles = TmdbAlternativeTitlesResponse(
+                titles = listOf(
+                    TmdbAlternativeTitle(iso_3166_1 = "US", title = "US Title"),
+                    TmdbAlternativeTitle(iso_3166_1 = "GB", title = "British Title")
+                )
+            )
+            coEvery { tmdbApiService.getMovieDetail(100, "en-GB") } returns Response.success(detail)
+            coEvery { tmdbApiService.getMovieAlternativeTitles(100, "GB") } returns Response.success(altTitles)
+
+            val result = repository.enrichMovie(100, "Original", 2024)
+
+            assertThat(result.chineseTitle).isEqualTo("British Title")
+            coVerify(exactly = 1) { tmdbApiService.getMovieDetail(100, "en-GB") }
+            coVerify(exactly = 1) { tmdbApiService.getMovieAlternativeTitles(100, "GB") }
+        } finally {
+            Locale.setDefault(previousLocale)
+        }
     }
 
     // ==================== getMovieDetail / getTvDetail ====================

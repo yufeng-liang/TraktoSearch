@@ -50,25 +50,62 @@ class TmdbRepository @Inject constructor(
         private const val DISCOVER_VOTE_COUNT_MIN_SORT = 200
     }
 
+    private data class TmdbLocale(
+        val language: String,
+        val country: String
+    )
+
     /**
-     * 根据当前语言设置返回 TMDB API 的 language 参数。
+     * 根据当前应用/系统语言统一生成 TMDB 的 language 与 alternative_titles country。
      *
-     * language 是 StateFlow，读 value 与 first() 语义相同（都取当前值、不等待），
-     * 所以这里不需要挂起：非 suspend 让 [langKey] 也能同步调用，
-     * 详情页得以在组合期同步 peek 内存缓存（见 [peekMovieEnrichment]）。
+     * 两个参数和缓存 key 都从同一个映射得到，避免详情请求与备用标题筛选使用不同地区。
+     * 读取 StateFlow.value 保持同步，供 [langKey] 和同步 peek 使用；system 模式则读取当前
+     * 系统 Locale，不在这里挂起或发起网络请求。
      */
-    private fun getTmdbLanguage(): String {
-        val lang = languageStorage.language.value
-        return when (lang) {
-            LanguageStorage.LANGUAGE_CHINESE -> "zh-CN"
-            LanguageStorage.LANGUAGE_ENGLISH -> "en-US"
-            LanguageStorage.LANGUAGE_JAPANESE -> "ja-JP"
-            LanguageStorage.LANGUAGE_KOREAN -> "ko-KR"
-            else -> "zh-CN" // 默认中文
+    private fun getTmdbLocale(): TmdbLocale {
+        return when (languageStorage.language.value.trim().lowercase(Locale.ROOT)) {
+            LanguageStorage.LANGUAGE_CHINESE -> TmdbLocale("zh-CN", "CN")
+            LanguageStorage.LANGUAGE_ENGLISH -> TmdbLocale("en-US", "US")
+            LanguageStorage.LANGUAGE_JAPANESE -> TmdbLocale("ja-JP", "JP")
+            LanguageStorage.LANGUAGE_KOREAN -> TmdbLocale("ko-KR", "KR")
+            LanguageStorage.LANGUAGE_SYSTEM -> getSystemTmdbLocale()
+            else -> TmdbLocale("zh-CN", "CN") // 保留未知配置的历史中文回退
         }
     }
 
-    /** 构造带语言后缀的缓存 key，避免切换语言后命中旧语言缓存 */
+    /** 将系统 Locale 转为 TMDB 使用的 language-country 与 alternative_titles country。 */
+    private fun getSystemTmdbLocale(): TmdbLocale {
+        val systemLocale = Locale.getDefault()
+        val language = systemLocale.language.trim().lowercase(Locale.ROOT)
+        if (language.isEmpty()) return TmdbLocale("zh-CN", "CN")
+
+        val country = systemLocale.country.trim().uppercase(Locale.ROOT)
+            .ifEmpty { defaultCountryForLanguage(language) }
+        val tmdbLanguage = if (country.isEmpty()) language else "$language-$country"
+        return TmdbLocale(tmdbLanguage, country)
+    }
+
+    /** 无国家码的系统 Locale 使用常见语言的默认地区；有国家码时始终优先使用系统值。 */
+    private fun defaultCountryForLanguage(language: String): String = when (language) {
+        "zh" -> "CN"
+        "en" -> "US"
+        "ja" -> "JP"
+        "ko" -> "KR"
+        "fr" -> "FR"
+        "de" -> "DE"
+        "es" -> "ES"
+        "it" -> "IT"
+        "pt" -> "BR"
+        "ru" -> "RU"
+        "ar" -> "SA"
+        "th" -> "TH"
+        "vi" -> "VN"
+        else -> ""
+    }
+
+    private fun getTmdbLanguage(): String = getTmdbLocale().language
+
+    /** 构造带语言后缀的缓存 key，避免切换语言后命中旧语言缓存；格式保持兼容。 */
     private fun langKey(id: Any): String = "${id}_${getTmdbLanguage()}"
 
     /**
@@ -82,17 +119,8 @@ class TmdbRepository @Inject constructor(
      */
     private fun getTmdbImageLanguage(): String = "${getTmdbLanguage()},null"
 
-    /** 根据当前语言设置返回 TMDB alternative_titles 的 country 参数 */
-    private fun getTmdbCountry(): String {
-        val lang = languageStorage.language.value
-        return when (lang) {
-            LanguageStorage.LANGUAGE_CHINESE -> "CN"
-            LanguageStorage.LANGUAGE_ENGLISH -> "US"
-            LanguageStorage.LANGUAGE_JAPANESE -> "JP"
-            LanguageStorage.LANGUAGE_KOREAN -> "KR"
-            else -> "CN"
-        }
-    }
+    /** 返回与当前 TMDB Locale 对应的 alternative_titles country。 */
+    private fun getTmdbCountry(): String = getTmdbLocale().country
 
     /** 人物作品分页结果 */
     data class PersonCreditsPage<T>(
@@ -120,7 +148,7 @@ class TmdbRepository @Inject constructor(
     private val personDetailCache = persistentTtlCache<TmdbPerson?>(
         TTL_PERSON, 500, persistentDataStore, json, "person_detail_v1", persistentScope
     )
-    // 别名（alternative_titles）持久化缓存：中文译名等不变字段，跨 App 重启复用，
+    // 别名（alternative_titles）持久化缓存：各语言本地化标题等不变字段，跨 App 重启复用，
     // 避免每个 watchlist 条目每次启动都重新请求 alternative_titles 接口
     private val movieAltTitlesCache = persistentTtlCache<TmdbAlternativeTitlesResponse>(
         TTL_DETAIL, 1000, persistentDataStore, json, "movie_alt_titles_v1", persistentScope
@@ -259,16 +287,23 @@ class TmdbRepository @Inject constructor(
      *
      * 不挂起、不读盘、不发网络：详情页用它在首帧就填好海报与标题，
      * 避免「先空白再弹入」以及共享元素转场找不到落点。
-     * 中文标题优先用详情自带的本地化 title，其次别名缓存，最后退回调用方标题。
+     * 本地化标题优先用详情字段，其次读取已加载的备用标题缓存；没有可靠标题时返回 null，
+     * 让调用方继续走挂起的 enrich 补全路径，而不是把原始标题误当成本地化结果。
      */
     fun peekMovieEnrichment(tmdbId: Int, originalTitle: String, year: Int? = null): MovieEnrichment? {
         if (tmdbId <= 0) return null
         val key = langKey(tmdbId)
         val detail = movieDetailCache.get(key) ?: return null
-        val chineseTitle = detail.title.takeIf { it.isNotEmpty() }
-            ?: movieTitleCache.get(key)
-            ?: originalTitle
-        return buildMovieEnrichment(detail, chineseTitle, year)
+        val country = getTmdbCountry()
+        val localizedTitle = detail.title.trim().takeIf { it.isNotEmpty() }
+            ?: movieAltTitlesCache.get(key)?.let { findLocalizedAlternativeTitle(it, country) }
+            ?: movieTitleCache.get(key)?.trim()?.takeIf { cachedTitle ->
+                cachedTitle.isNotEmpty() &&
+                    !cachedTitle.equals(originalTitle.trim(), ignoreCase = true) &&
+                    !cachedTitle.equals(detail.original_title.trim(), ignoreCase = true)
+            }
+            ?: return null
+        return buildMovieEnrichment(detail, localizedTitle, year)
     }
 
     suspend fun enrichMovie(tmdbId: Int, originalTitle: String, year: Int?): MovieEnrichment {
@@ -337,10 +372,16 @@ class TmdbRepository @Inject constructor(
         if (tmdbId <= 0) return null
         val key = langKey(tmdbId)
         val detail = tvDetailCache.get(key) ?: return null
-        val chineseTitle = detail.name.takeIf { it.isNotEmpty() }
-            ?: tvTitleCache.get(key)
-            ?: originalName
-        return buildTvEnrichment(detail, chineseTitle, year)
+        val country = getTmdbCountry()
+        val localizedTitle = detail.name.trim().takeIf { it.isNotEmpty() }
+            ?: tvAltTitlesCache.get(key)?.let { findLocalizedAlternativeTitle(it, country) }
+            ?: tvTitleCache.get(key)?.trim()?.takeIf { cachedTitle ->
+                cachedTitle.isNotEmpty() &&
+                    !cachedTitle.equals(originalName.trim(), ignoreCase = true) &&
+                    !cachedTitle.equals(detail.original_name.trim(), ignoreCase = true)
+            }
+            ?: return null
+        return buildTvEnrichment(detail, localizedTitle, year)
     }
 
     suspend fun enrichTv(tmdbId: Int, originalName: String, year: Int?): TvEnrichment {
@@ -381,33 +422,41 @@ class TmdbRepository @Inject constructor(
         }
     }
 
+    /** 从 alternative_titles 响应中取当前地区的非空本地化标题。 */
+    private fun findLocalizedAlternativeTitle(
+        response: TmdbAlternativeTitlesResponse,
+        country: String
+    ): String? {
+        val normalizedCountry = country.trim().uppercase(Locale.ROOT)
+        if (normalizedCountry.isEmpty()) return null
+        return response.titles.firstOrNull { alternativeTitle ->
+            alternativeTitle.iso_3166_1.trim().equals(normalizedCountry, ignoreCase = true) &&
+                alternativeTitle.title.isNotBlank()
+        }?.title?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
     private suspend fun resolveMovieChineseTitle(tmdbId: Int, originalTitle: String, detail: TmdbMovieDetail): String {
-        // TMDB 已按当前 language(zh-CN)本地化 title 字段,非空就直接用
-        // (原 != original_title 判断对中国本土影视失效:title 和 original_title 都是中文,相等被误判为未本地化)
-        if (detail.title.isNotEmpty()) {
-            return detail.title
+        // TMDB 已按当前 language 本地化 title 字段，非空就直接用。
+        if (detail.title.isNotBlank()) {
+            return detail.title.trim()
         }
-        // 别名持久化缓存:中文译名等不变字段,跨 App 重启复用
+        // 别名持久化缓存：按当前 country 取对应地区标题，跨 App 重启复用。
         val altKey = langKey(tmdbId)
+        val country = getTmdbCountry()
         movieAltTitlesCache.get(altKey)?.let { cached ->
-            val cnTitle = cached.titles.firstOrNull { it.iso_3166_1 == "CN" && it.title.isNotEmpty() }?.title
-            return cnTitle ?: originalTitle
+            return findLocalizedAlternativeTitle(cached, country) ?: originalTitle
         }
-        // 缓存未命中时等待磁盘加载完成,避免 loadFromDisk 未完成时误判
+        // 缓存未命中时等待磁盘加载完成，避免 loadFromDisk 未完成时误判。
         movieAltTitlesCache.awaitLoaded()
         movieAltTitlesCache.get(altKey)?.let { cached ->
-            val cnTitle = cached.titles.firstOrNull { it.iso_3166_1 == "CN" && it.title.isNotEmpty() }?.title
-            return cnTitle ?: originalTitle
+            return findLocalizedAlternativeTitle(cached, country) ?: originalTitle
         }
         return try {
-            val altResponse = tmdbApiService.getMovieAlternativeTitles(tmdbId, country = getTmdbCountry())
+            val altResponse = tmdbApiService.getMovieAlternativeTitles(tmdbId, country = country)
             if (altResponse.isSuccessful) {
                 val body = altResponse.body()
                 if (body != null) movieAltTitlesCache.put(altKey, body)
-                val cnTitle = body?.titles?.firstOrNull {
-                    it.iso_3166_1 == "CN" && it.title.isNotEmpty()
-                }?.title
-                cnTitle ?: originalTitle
+                findLocalizedAlternativeTitle(body ?: TmdbAlternativeTitlesResponse(), country) ?: originalTitle
             } else originalTitle
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
             originalTitle
@@ -415,31 +464,27 @@ class TmdbRepository @Inject constructor(
     }
 
     private suspend fun resolveTvChineseTitle(tmdbId: Int, originalName: String, detail: TmdbTvDetail): String {
-        // TMDB 已按当前 language(zh-CN)本地化 name 字段,非空就直接用(原因同上)
-        if (detail.name.isNotEmpty()) {
-            return detail.name
+        // TMDB 已按当前 language 本地化 name 字段，非空就直接用。
+        if (detail.name.isNotBlank()) {
+            return detail.name.trim()
         }
-        // 别名持久化缓存:中文译名等不变字段,跨 App 重启复用
+        // 别名持久化缓存：按当前 country 取对应地区标题，跨 App 重启复用。
         val altKey = langKey(tmdbId)
+        val country = getTmdbCountry()
         tvAltTitlesCache.get(altKey)?.let { cached ->
-            val cnTitle = cached.titles.firstOrNull { it.iso_3166_1 == "CN" && it.title.isNotEmpty() }?.title
-            return cnTitle ?: originalName
+            return findLocalizedAlternativeTitle(cached, country) ?: originalName
         }
-        // 缓存未命中时等待磁盘加载完成,避免 loadFromDisk 未完成时误判
+        // 缓存未命中时等待磁盘加载完成，避免 loadFromDisk 未完成时误判。
         tvAltTitlesCache.awaitLoaded()
         tvAltTitlesCache.get(altKey)?.let { cached ->
-            val cnTitle = cached.titles.firstOrNull { it.iso_3166_1 == "CN" && it.title.isNotEmpty() }?.title
-            return cnTitle ?: originalName
+            return findLocalizedAlternativeTitle(cached, country) ?: originalName
         }
         return try {
-            val altResponse = tmdbApiService.getTvAlternativeTitles(tmdbId, country = getTmdbCountry())
+            val altResponse = tmdbApiService.getTvAlternativeTitles(tmdbId, country = country)
             if (altResponse.isSuccessful) {
                 val body = altResponse.body()
                 if (body != null) tvAltTitlesCache.put(altKey, body)
-                val cnTitle = body?.titles?.firstOrNull {
-                    it.iso_3166_1 == "CN" && it.title.isNotEmpty()
-                }?.title
-                cnTitle ?: originalName
+                findLocalizedAlternativeTitle(body ?: TmdbAlternativeTitlesResponse(), country) ?: originalName
             } else originalName
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
             originalName
