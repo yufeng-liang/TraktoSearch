@@ -182,7 +182,7 @@ internal object SplashQuoteTiming {
     const val SEAL_AT_MS = 1250L
     const val SKIP_AT_MS = 1400L
     /** 当天第一次看这条台词的停留时长 */
-    const val STAY_FIRST_MS = 5000L
+    const val STAY_FIRST_MS = 8000L
     /** 同一天再进 App 的停留时长 */
     const val STAY_REPEAT_MS = 3000L
     const val EXIT_MS = 400L
