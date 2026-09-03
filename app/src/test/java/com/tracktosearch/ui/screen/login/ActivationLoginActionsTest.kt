@@ -15,7 +15,6 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
-import com.google.common.truth.Truth.assertWithMessage
 import com.tracktosearch.R
 import com.tracktosearch.data.local.TicketStub
 import org.junit.Rule
@@ -72,6 +71,7 @@ class ActivationLoginActionsTest {
     private fun setTicket(
         enabled: Boolean = true,
         loginState: LoginState = LoginState.IDLE,
+        doubanBusy: Boolean = false,
     ) {
         composeRule.setContent {
             MaterialTheme {
@@ -79,11 +79,11 @@ class ActivationLoginActionsTest {
                     stub = ticketStub,
                     phase = TICKET_PRINT_FINAL_PHASE,
                     loginState = loginState,
+                    doubanBusy = doubanBusy,
                     traktEnabled = enabled,
                     doubanEnabled = enabled,
                     guestEnabled = enabled,
                     onTraktLogin = {},
-                    onCancelAuth = {},
                     onDoubanLogin = {},
                     onGuestMode = {},
                 )
@@ -208,56 +208,61 @@ class ActivationLoginActionsTest {
     }
 
     @Test
-    fun `票号印在条码下面且与条码同源`() {
-        // 020712 = 2 号厅 7 排 12 座，跟 ticketBarcodeWidths 展开的是同一个串
+    fun `票号印在二维码下面且与二维码同源`() {
+        // 020712 = 2 号厅 7 排 12 座，跟 ticketQrModules 散列的是同一个串
         setTicket()
         composeRule
-            .onNodeWithText(ticketSerial(ticketStub), useUnmergedTree = true)
-            .assertIsDisplayed()
-    }
-
-    @Test
-    fun `条码留在撕口线以上的票根那半截`() {
-        // 真票撕开后带走的是带条码的这一截。条码掉到入口行下面就不是票根了，
-        // 而这件事在装机截图上要盯着虚线看才看得出来
-        setTicket()
-        val serialBottom = composeRule
-            .onNodeWithText(ticketSerial(ticketStub), useUnmergedTree = true)
-            .fetchSemanticsNode().boundsInRoot.bottom
-        val traktTop = composeRule
-            .onNodeWithText(context.getString(R.string.ticket_entry_trakt))
-            .fetchSemanticsNode().boundsInRoot.top
-
-        assertThat(serialBottom).isLessThan(traktTop)
-    }
-
-    @Test
-    fun `授权中的提示和取消跟 Trakt 挤在同一行`() {
-        // 取 unmerged 树：整行是 clickable，合并语义之后行文案和行尾那两样会塌成同一个节点，
-        // 量出来的永远是整行的框，「在不在同一行」也就无从判断
-        setTicket(loginState = LoginState.AUTHORIZING)
-        val label = composeRule
-            .onNodeWithText(context.getString(R.string.ticket_entry_trakt), useUnmergedTree = true)
-            .fetchSemanticsNode().boundsInRoot
-        val hint = composeRule
             .onNodeWithText(
-                context.getString(R.string.ticket_entry_authorizing),
+                context.getString(R.string.ticket_serial_no, ticketSerial(ticketStub)),
                 useUnmergedTree = true
             )
-            .fetchSemanticsNode().boundsInRoot
-        val cancel = composeRule
-            .onNodeWithText(context.getString(R.string.common_cancel), useUnmergedTree = true)
-            .fetchSemanticsNode().boundsInRoot
+            .assertExists()
+    }
 
-        for ((name, bounds) in listOf("提示" to hint, "取消" to cancel)) {
-            // 竖向有重叠就是同一行；早先这两样印在票面下面，重叠为零
-            assertWithMessage("$name 与行文案竖向不重叠，不在同一行")
-                .that(bounds.top).isLessThan(label.bottom)
-            assertWithMessage("$name 与行文案竖向不重叠，不在同一行")
-                .that(bounds.bottom).isGreaterThan(label.top)
-            assertWithMessage("$name 没排在行文案右边")
-                .that(bounds.left).isAtLeast(label.right)
-        }
+    @Test
+    fun `二维码留在撕口线左边的票根那半截`() {
+        // 真票撕开后带走的是带码的这一截。横排之后票根是左半，码跑到入口那半
+        // 就不是票根了，而这件事在装机截图上要盯着打孔线看才看得出来
+        setTicket()
+        val serialRight = composeRule
+            .onNodeWithText(
+                context.getString(R.string.ticket_serial_no, ticketSerial(ticketStub)),
+                useUnmergedTree = true
+            )
+            .fetchSemanticsNode().boundsInRoot.right
+        val traktLeft = composeRule
+            .onNodeWithText(context.getString(R.string.ticket_entry_trakt))
+            .fetchSemanticsNode().boundsInRoot.left
+
+        assertThat(serialRight).isLessThan(traktLeft)
+    }
+
+    @Test
+    fun `授权中的时候 Trakt 那行文案就地换成授权中`() {
+        // 提示不再印在票面别处，也不再有取消：那一行自己说自己在等浏览器。
+        // 取消入口去掉之后的兜底在 TraktAuthCancelGuard 与 onAuthLaunchFailed 两处
+        setTicket(loginState = LoginState.AUTHORIZING)
+        composeRule
+            .onNodeWithText(context.getString(R.string.ticket_entry_authorizing))
+            .assertExists()
+        composeRule
+            .onAllNodesWithText(context.getString(R.string.ticket_entry_trakt))
+            .assertCountEquals(0)
+        composeRule
+            .onAllNodesWithText(context.getString(R.string.common_cancel))
+            .assertCountEquals(0)
+    }
+
+    @Test
+    fun `豆瓣那行的授权中只挂在豆瓣自己身上`() {
+        // 豆瓣没有 loginState，进行态是本页本地标记喂进来的；喂错了会让两行一起变授权中
+        setTicket(doubanBusy = true)
+        composeRule
+            .onNodeWithText(context.getString(R.string.ticket_entry_trakt))
+            .assertExists()
+        composeRule
+            .onAllNodesWithText(context.getString(R.string.ticket_entry_douban))
+            .assertCountEquals(0)
     }
 
     @Test

@@ -119,7 +119,17 @@ fun ActivationLoginScreen(
     // 粘贴没抽到 6 位数字时的一次性提示。只占像素屏，不进 AuthUiState——
     // 它不是一次激活失败，下一次按键就该消失。
     var pasteMissed by remember { mutableStateOf(false) }
+    // 豆瓣那行的进行态。豆瓣登录是导航走开，没有 loginState 可用，只能本地记一笔：
+    // 正常路径下返回本页时 composition 重建，这个标记自己就没了；异常路径（点了但导航
+    // 没发生）靠下面那个超时兜底，不然票上那行会一直停在「授权中…」
+    var doubanBusy by remember { mutableStateOf(false) }
     var observedActivated by remember { mutableStateOf(isActivated) }
+
+    LaunchedEffect(doubanBusy) {
+        if (!doubanBusy) return@LaunchedEffect
+        delay(DOUBAN_BUSY_TIMEOUT_MS)
+        doubanBusy = false
+    }
 
     LaunchedEffect(isActivated) {
         when {
@@ -220,7 +230,12 @@ fun ActivationLoginScreen(
         scope.launch {
             loginViewModel.startAuthorization()
             loginViewModel.getAuthorizationUrl()?.let { authUrl ->
-                CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(authUrl))
+                // 浏览器起不来（设备上没有浏览器、被安全软件拦下）时不会有 ON_STOP，
+                // TraktAuthCancelGuard 整条兜底路径都走不到，而票上那行已经没有取消入口，
+                // 于是会永久停在「授权中…」。这里自己复位，是那个入口留下的唯一一个洞
+                runCatching {
+                    CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(authUrl))
+                }.onFailure { loginViewModel.onAuthLaunchFailed(it) }
             }
         }
     }
@@ -307,13 +322,16 @@ fun ActivationLoginScreen(
                             stub = stub,
                             phase = phaseAt(printProgress.value),
                             loginState = loginState,
+                            doubanBusy = doubanBusy,
                             // 打印中三个入口不可点：票还在推出，按下去等于对着半张纸下单
                             traktEnabled = isActivated && !isPrinting,
                             doubanEnabled = isActivated && !isPrinting,
                             guestEnabled = isActivated && !isPrinting,
                             onTraktLogin = { launchAuthorization() },
-                            onCancelAuth = { loginViewModel.reset() },
-                            onDoubanLogin = onDoubanLogin,
+                            onDoubanLogin = {
+                                doubanBusy = true
+                                onDoubanLogin()
+                            },
                             onGuestMode = onGuestMode
                         )
                     }
@@ -395,7 +413,7 @@ internal fun ActivationLoginContent(
             .verticalScroll(scrollState)
             .imePadding()
             .navigationBarsPadding()
-            .padding(horizontal = 18.dp, vertical = 28.dp),
+            .padding(horizontal = 18.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.statusBarsPadding().height(TopInset))
@@ -408,16 +426,9 @@ internal fun ActivationLoginContent(
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Serif
         )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = stringResource(R.string.login_subtitle),
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontSize = 14.sp,
-                lineHeight = 20.sp
-            ),
-            color = LoginSecondaryInk,
-            textAlign = TextAlign.Center
-        )
+        // 副标题撤掉：出票之后这一屏要装下标题、整台机器和一张 178dp 的票，
+        // 而这句 slogan 连行距占 27dp，是首屏里唯一一处纯装饰的高度。
+        // 它仍留在 LoginScreen 上，那一屏没有取票机要养
 
         Spacer(modifier = Modifier.height(TitleToMachineGap))
         if (expiredMessage != null) {
@@ -470,15 +481,14 @@ internal fun ActivationLoginContent(
                 modifier = Modifier.size(18.dp)
             )
         }
-        Spacer(modifier = Modifier.height(20.dp))
     }
 }
 
 /** 顶部余量。原先是 53dp 加一块场记板图标，两者加起来吃掉近 1/4 屏。 */
-private val TopInset = 8.dp
+private val TopInset = 4.dp
 
 /** 标题到机器的间隙。原先 90dp，是这一屏最大的一块可回收空间。 */
-private val TitleToMachineGap = 24.dp
+private val TitleToMachineGap = 20.dp
 
 /** 取票码位数。六格键盘只收这么多位，满位才点亮取票键。 */
 private const val TICKET_CODE_DIGITS = 6
@@ -493,6 +503,14 @@ private const val COLLECTED_CODE_MASK = "******"
 
 /** 报错后清空六格前的等待时长：够六格抖完（5 段 × 45ms），抖动中清空看不出发生了什么。 */
 private const val TICKET_ERROR_CLEAR_DELAY_MS = 320L
+
+/**
+ * 豆瓣那行「授权中…」的超时。
+ *
+ * 正常路径根本用不到它：点下去就导航走了，回到本页时状态已经重置。它兜的是导航没发生
+ * 那一档——5 秒是「慢设备上导航确实还没完成」和「用户开始觉得这行卡住了」之间的那一档。
+ */
+private const val DOUBAN_BUSY_TIMEOUT_MS = 5_000L
 
 /**
  * 像素屏上的短状态。分支与 authErrorString 一一对应：屏宽只够放几个字，

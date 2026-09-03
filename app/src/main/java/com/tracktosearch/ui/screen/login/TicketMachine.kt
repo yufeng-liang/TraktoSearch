@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -126,16 +128,32 @@ import kotlin.random.Random
 private const val CODE_LENGTH = 6
 
 /**
- * 像素屏窗高。两行 —— 第一行短状态、第二行完整引导 —— 加上下 6dp 内边距和 3dp 行距。
+ * 像素屏窗高。两行 —— 第一行短状态、第二行完整引导 —— 各贴一边，中间是空当。
  * 锁死而不是随内容伸缩：只有一行时也留着第二行的位置，否则整台机器会随状态跳动。
  */
-private val DisplayHeight = 52.dp
+private val DisplayHeight = 48.dp
+
+/** 屏窗内边距。两行分贴上下边框，这个值就是第一行到上边框、第二行到下边框的距离。 */
+private val DisplayInnerPadding = 4.dp
 
 /**
- * 键帽高度。固定值而非 `aspectRatio` —— 后者会让键在宽屏上跟着变高，
- * 而这一屏的全部意义是「一屏放得下」，键高必须与屏宽无关。52dp 仍高于 48dp 触达线。
+ * 机壳内部各段之间的间隙：屏、六格、键盘、取票键、出票口五段共用这一个值。
+ *
+ * 8dp 而不是 10dp：出票之后这一屏要多容一张 178dp 的票，五段各让 2dp 出来
+ * 就是 10dp。再往下压，屏和六格会挤成一块，机器看着不像分区的面板。
  */
-private val KeyHeight = 52.dp
+private val MachineSectionGap = 8.dp
+
+/**
+ * 键帽的视觉高度。固定值而非 `aspectRatio` —— 后者会让键在宽屏上跟着变高，
+ * 而这一屏的全部意义是「一屏放得下」，键高必须与屏宽无关。
+ *
+ * 这个数低于 48dp 触达线是故意的：可点区域由 [MachineKey] 最外层那圈 3dp 纵向内边距补齐，
+ * 44 + 3 + 3 = 50dp，仍在 48dp 触达线之上，画背景边框的内层只有 44dp。行距也一并由那圈
+ * 内边距给（所以键盘那个 Column 走 `spacedBy(0.dp)`）。缩的是键帽的视觉块头，
+ * 不是手指能按到的范围。
+ */
+private val KeyHeight = 44.dp
 
 /** 机壳圆角。上下同值：取票机是个方箱子，圆角只是倒边。 */
 private val ShellCorner = 16.dp
@@ -422,7 +440,7 @@ internal fun TicketMachine(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 10.dp)
+                    .padding(top = MachineSectionGap)
                     // 屏内文案长短不一，不锁死高度整台机器会随状态跳动
                     .height(DisplayHeight)
                     .clip(displayShape)
@@ -431,11 +449,20 @@ internal fun TicketMachine(
                         displayShape
                     )
                     .border(1.dp, Color.Black.copy(alpha = 0.55f), displayShape)
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                    .padding(horizontal = 10.dp, vertical = DisplayInnerPadding)
                     .semantics(mergeDescendants = true) { contentDescription = displaySpeech },
                 contentAlignment = Alignment.CenterStart
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                // 两行贴着上下边框分开站，中间的空当留给屏窗自己 —— 挤在正中间时
+                // 屏窗上下各剩一条空黑边，看着像屏没点满
+                Column(
+                    modifier = Modifier.fillMaxHeight(),
+                    verticalArrangement = if (detailText == null) {
+                        Arrangement.Center
+                    } else {
+                        Arrangement.SpaceBetween
+                    }
+                ) {
                     // 第一行是主角。字号不能再往上加档：像素字体走 12px 网格，
                     // pixelFontSize 向下取整到网格倍数，再高一档中文会顶右边缘
                     Text(
@@ -481,7 +508,7 @@ internal fun TicketMachine(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 12.dp)
+                    .padding(top = MachineSectionGap)
                     .offset { IntOffset(shake.value.roundToInt(), 0) }
                     .semantics(mergeDescendants = true) {
                         contentDescription = progressDescription
@@ -502,7 +529,7 @@ internal fun TicketMachine(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 14.dp)
+                    .padding(top = MachineSectionGap)
                     // 已取票后键盘不再是控件，只是机器的一部分：淡成残影，并整块从读屏树里摘掉。
                     // 摘掉是因为 12 个键此时全是装饰，念一遍「1 2 3 4…」纯属噪音；
                     // 留 testTag 是为了测试仍能确认它没被删掉 —— 机器不该只剩半截。
@@ -517,7 +544,9 @@ internal fun TicketMachine(
                                 .clearAndSetSemantics { testTag = MACHINE_KEYPAD_TAG }
                         }
                     ),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                // 行距不在这里给：每个键最外层各带一圈 3dp 纵向内边距，相邻两行合出 6dp 视觉间距，
+                // 同时把 44dp 的键帽撑回 50dp 可点区域。这里再叠间距等于把那圈算两遍
+                verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
                 listOf("123", "456", "789").forEach { rowDigits ->
                     Row(
@@ -543,7 +572,7 @@ internal fun TicketMachine(
                 enabled = submitEnabled && phase != MachinePhase.Verifying,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 12.dp)
+                    .padding(top = MachineSectionGap)
                     .height(48.dp),
                 shape = RoundedCornerShape(10.dp),
                 // 整台机器只有这一处上赭红：主动作值得一个强调色，
@@ -575,7 +604,7 @@ internal fun TicketMachine(
             // 缝没有按「靠右占 62%」缩窄 —— 票是全宽的，缝比票窄就不像票从这里出来
             val slotShape = RoundedCornerShape(3.dp)
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = MachineSectionGap),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TicketRollWindow()
@@ -614,7 +643,7 @@ internal fun TicketMachine(
  * 点阵屏那两行的排版。
  *
  * 点阵字体的 ascent/descent 留白很宽，再叠上 Compose 默认的 includeFontPadding，
- * 一行 48px 的字实际要占掉 27dp —— 两行加起来撑破 52dp 的屏窗，装机截图上
+ * 一行 48px 的字实际要占掉 27dp —— 两行加起来撑破 48dp 的屏窗，装机截图上
  * 第二行只露出上半截。这里把 font padding 关掉、行高按字号钉死、并让行高在上下均分。
  *
  * 行高由字号乘出来，跟 [pixelFontSize] 一样与系统字号倍率无关：
@@ -1172,7 +1201,16 @@ private fun RowScope.BackspaceKey(enabled: Boolean, onClick: () -> Unit) {
 private fun machineKeyInk(): Color =
     if (isAppDarkTheme()) MachineKeyInkDark else MachineKeyInkLight
 
-/** 机器按键键帽。方角、按下缩到 0.92、上缘一道高光，摸上去像塑料按键而不是玻璃卡片。 */
+/**
+ * 机器按键键帽。方角、按下缩到 0.92、上缘一道高光，摸上去像塑料按键而不是玻璃卡片。
+ *
+ * 拆成两层 Box 是为了把「看着多大」和「能按到多大」分开：外层只带一圈 3dp 纵向内边距并接手势，
+ * 内层画 [KeyHeight] 高的键帽。手势排在内边距之前，落在两键之间那 6dp 空当里的手指也算按到键，
+ * 触达面积仍是 52dp —— 键帽压到 46dp 是为了省一屏的高度，能按到的范围不该跟着缩。
+ *
+ * 涟漪反过来留在内层（`Modifier.indication`）：挂到外层它会变成一块盖住空当的直角色块，
+ * 而键帽是圆角的，涟漪得跟着圆角裁、也跟着按下的缩放一起缩。
+ */
 @Composable
 private fun RowScope.MachineKey(
     enabled: Boolean,
@@ -1191,43 +1229,51 @@ private fun RowScope.MachineKey(
     Box(
         modifier = Modifier
             .weight(1f)
-            .height(KeyHeight)
-            .scale(scale)
-            // 键帽自己不再按 enabled 压暗：整块键盘的淡出由外层那一处 alpha 统一做，
-            // 两处相乘会把键盘压到几乎看不见
-            .clip(shape)
-            // 键帽是不透明塑料，不再是压在机壳上的一层白雾：
-            // 半透明键帽会把机壳的噪点透上来，键面数字读起来发脏
-            .background(keycap, shape)
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color.White.copy(alpha = 0.20f), Color.Transparent)
-                )
-            )
-            // 下缘压一道暗边，键帽才有厚度
-            .drawBehind {
-                val stroke = 1.5.dp.toPx()
-                drawLine(
-                    color = Color.Black.copy(alpha = 0.28f),
-                    start = Offset(0f, size.height - stroke / 2f),
-                    end = Offset(size.width, size.height - stroke / 2f),
-                    strokeWidth = stroke
-                )
-            }
-            .border(
-                width = 1.dp,
-                color = Color.Black.copy(alpha = if (isDarkTheme) 0.30f else 0.18f),
-                shape = shape
-            )
+            // clickable 必须排在 padding 前面：排到后面这圈内边距就落在手势区外头，触达面积白加
             .clickable(
                 interactionSource = interactionSource,
-                indication = ripple(color = LoginTitleInk),
+                indication = null,
                 enabled = enabled,
                 onClick = onClick
-            ),
-        contentAlignment = Alignment.Center
+            )
+            .padding(vertical = 3.dp)
     ) {
-        content()
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(KeyHeight)
+                .scale(scale)
+                // 键帽自己不再按 enabled 压暗：整块键盘的淡出由外层那一处 alpha 统一做，
+                // 两处相乘会把键盘压到几乎看不见
+                .clip(shape)
+                // 键帽是不透明塑料，不再是压在机壳上的一层白雾：
+                // 半透明键帽会把机壳的噪点透上来，键面数字读起来发脏
+                .background(keycap, shape)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.White.copy(alpha = 0.20f), Color.Transparent)
+                    )
+                )
+                // 下缘压一道暗边，键帽才有厚度
+                .drawBehind {
+                    val stroke = 1.5.dp.toPx()
+                    drawLine(
+                        color = Color.Black.copy(alpha = 0.28f),
+                        start = Offset(0f, size.height - stroke / 2f),
+                        end = Offset(size.width, size.height - stroke / 2f),
+                        strokeWidth = stroke
+                    )
+                }
+                .border(
+                    width = 1.dp,
+                    color = Color.Black.copy(alpha = if (isDarkTheme) 0.30f else 0.18f),
+                    shape = shape
+                )
+                .indication(interactionSource, ripple(color = LoginTitleInk)),
+            contentAlignment = Alignment.Center
+        ) {
+            content()
+        }
     }
 }
 

@@ -16,6 +16,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.R
+import com.tracktosearch.data.local.TicketStub
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -29,7 +30,7 @@ private const val VIEWPORT_TAG = "activation_login_viewport"
  *
  * 取票机把像素屏、六格、12 个键、取票键和出票口串成一列，任一处高度往上长一点，
  * 取票键就被顶到折线以下 —— 用户进来第一眼只看到键盘，不滚一下不知道输完码按哪里。
- * 这里不比像素，只守两条：基准机上整屏不滚动，小屏上取票键仍落在首屏内。
+ * 这里不比像素，只守三条：基准机上输入态整屏不滚动、出票态整屏也不滚动、小屏上取票键仍落在首屏内。
  *
  * 两个用例各自用 @Config 把 Robolectric 的窗口调成目标机型，让窗口与容器同尺寸：
  * assertIsDisplayed 判的是节点有没有落在窗口和滚动视口里，窗口比容器矮的话，
@@ -37,7 +38,7 @@ private const val VIEWPORT_TAG = "activation_login_viewport"
  *
  * 两处口径需要知道：Robolectric 报的系统栏 inset 是 0，量出来的是满 915dp / 780dp 的
  * 可用高度，真机上还要扣掉状态栏和导航栏，所以这条线是底线而不是余量；
- * 锁 zh 是因为首屏高度预算按中文文案算过（副标题中文一行，英文要折两行），
+ * 锁 zh 是因为首屏高度预算按中文文案算过（像素屏第二行、票面三行入口都是中文一行），
  * 默认 en 量的是另一套排版，失败也怪不到这次改版头上。
  */
 @RunWith(AndroidJUnit4::class)
@@ -79,8 +80,24 @@ class ActivationLoginLayoutTest {
         assertThat(submitBottom).isAtMost(viewportBottom)
     }
 
-    /** 未激活、六格为空的输入态：用户刚进页面看到的就是这一屏，也是最高的一屏。 */
-    private fun setActivationContent(scrollState: ScrollState, width: Dp, height: Dp) {
+    @Test
+    @Config(qualifiers = "zh-w412dp-h915dp")
+    fun `出票之后基准机上整屏也不需要滚动`() {
+        // 出票态才是最高的一屏：机器下面多挂一张 178dp 的票。上面那条用例看不到它 ——
+        // ticketSlot 默认是空的，票高涨一点、机器高涨一点都不会让它变红
+        val scrollState = ScrollState(0)
+        setActivationContent(scrollState, width = 412.dp, height = 915.dp, printed = true)
+
+        composeRule.runOnIdle { assertThat(scrollState.maxValue).isEqualTo(0) }
+    }
+
+    /** 未激活、六格为空的输入态：用户刚进页面看到的就是这一屏。 */
+    private fun setActivationContent(
+        scrollState: ScrollState,
+        width: Dp,
+        height: Dp,
+        printed: Boolean = false,
+    ) {
         val status = context.getString(R.string.machine_status_ready)
         val detail = context.getString(R.string.login_activation_locked)
         composeRule.setContent {
@@ -106,6 +123,28 @@ class ActivationLoginLayoutTest {
                         onPaste = {},
                         onSubmit = {},
                         onWhatIsTrakt = {},
+                        ticketSlot = {
+                            if (printed) {
+                                CinemaTicket(
+                                    stub = TicketStub(
+                                        nickname = "小明",
+                                        issuedEpochDay = 20_696L,
+                                        hall = 2,
+                                        row = 7,
+                                        seat = 12,
+                                    ),
+                                    phase = TICKET_PRINT_FINAL_PHASE,
+                                    loginState = LoginState.IDLE,
+                                    doubanBusy = false,
+                                    traktEnabled = true,
+                                    doubanEnabled = true,
+                                    guestEnabled = true,
+                                    onTraktLogin = {},
+                                    onDoubanLogin = {},
+                                    onGuestMode = {},
+                                )
+                            }
+                        },
                     )
                 }
             }

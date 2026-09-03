@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.login
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -10,13 +11,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -36,8 +38,12 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageShader
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
+import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.luminance
@@ -61,6 +67,7 @@ import java.time.LocalDate
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.random.Random
 
 // 票是纸，不是玻璃：这里是对全站毛玻璃体系的一次有意偏离，不用 haze / appVisualEffect。
 // 糊上毛玻璃之后票会退化成一张普通卡片，失去实物感；票面那些 11.sp 的小字透出背景后
@@ -85,47 +92,98 @@ private val TicketShadowOffset = 2.dp
 
 private val TicketCornerRadius = 6.dp
 
-/** 票根撕口：半圆半径，圆心落在垂直中线偏上（距顶 38%），上面那截就是票根。 */
+/**
+ * 票高。定高而不是随内容伸缩：票分左右两半，两半的内容互不相干，
+ * 谁高谁矮取决于昵称长短和语言，跟着内容走会让同一台机器出的票时高时矮。
+ * 176dp 是两半各自的净需求取大的那个 —— 左票根四行文字 80 加二维码块 67 加上下内边距 20，
+ * 右半三行入口 120 加两道细线加上下内边距 20，都落在 176 以内。
+ */
+private val TicketHeight = 176.dp
+
+/**
+ * 左右两半的宽度权重。
+ *
+ * 左票根拿 52%：右半只有三行入口，最长那行连 logo 带箭头也就 106dp，再宽出去就是一片
+ * 空白 —— 与其在右边想办法填，不如把线往右挪，让票根多印东西（座位那行就是这么从右半
+ * 搬过来的，二维码也是靠这点宽度才排得下）。真影票的票根也不窄，撕开后带走的那截本来
+ * 就印着完整的场次信息。
+ */
+private const val TICKET_STUB_WEIGHT = 0.52f
+private const val TICKET_BODY_WEIGHT = 0.48f
+
+/** 两半之间的内边距。票面上的字不能贴着撕口线，也不能贴着纸边。 */
+private val TicketHalfPadding = 12.dp
+
+/**
+ * 撕口：一条竖打孔线把票分成左票根和右主票，线的上下两端各挖掉一个半圆。
+ *
+ * [TICKET_TEAR_X_FRACTION] 只是打孔线还没量到时的兜底位置，量到之后一律用实测值。
+ */
 private val TicketNotchRadius = 7.dp
-private const val TICKET_NOTCH_CENTER_FRACTION = 0.38f
+private const val TICKET_TEAR_X_FRACTION = 0.52f
 
-/** 底边锯齿：半径 3.dp 的圆按 8.dp 间距咬在底边线上，咬出撕纸口。 */
-private val TicketToothRadius = 3.dp
-private val TicketToothSpacing = 8.dp
+/** 入口行的最小高度。行高实际由剩余高度均分而来，这个数只是分不到时的下限。 */
+private val TicketEntryRowHeight = 40.dp
 
-/** 入口行高。44.dp 低于 48.dp 的常规最小触达，是票面版面的取舍。 */
-private val TicketEntryRowHeight = 44.dp
+/** 行与行之间那条细线。真票的入场须知就是印成一栏栏的表格，线比空白更像印刷品。 */
+private val TicketHairlineAlpha = 0.16f
 
 /** 按下时整行压深一档，模拟纸被按住；不用 ripple，涟漪是玻璃和塑料的语言。 */
 private val TicketPressedOverlay = Color.Black.copy(alpha = 0.07f)
 
-/** 入口行行首的箭头。 */
+/** 入口行行尾的箭头。横排之后行宽紧张，箭头从行首挪到行尾，省下行首那 24dp。 */
 private const val TICKET_ENTRY_CHEVRON = "›"
 
+/** 访客那行的人形剪影墨色。比正文淡一点点，图形的视觉重量本来就比同高的字重。 */
+private const val TICKET_GUEST_GLYPH_ALPHA = 0.88f
+
 /**
- * 条码：高 30.dp，横向铺满票宽。
+ * 票面文字的行高倍数。
  *
- * 铺满而不是按 dp 排死：真票的条码是横跨票根的一整条，早先按 1..3dp 排出来只有约 53dp 宽，
- * 缩在票根左下角像一枚印章而不是条码。宽度由 [ticketBarcodeWidths] 的相对比例摊到可用宽度上，
- * 所以同一张票在任何屏宽下都是同一段条码、同样的疏密。
+ * 印在纸上的字行距是紧的，而主题的 bodyLarge 给的是 24.sp 固定行高 —— 那是给正文
+ * 段落用的，套到票上 8sp 的抬头身上就是一行 24dp 的空白盒子。1.35 倍留得下中日韩
+ * 字形的上下伸出部分，再紧一档汉字的下缘会被行高裁掉。
  */
-private val TicketBarcodeHeight = 30.dp
-private val TicketBarcodeGap = 1.5.dp
+private const val TICKET_TEXT_LINE_HEIGHT_RATIO = 1.35f
 
-/** 条码下面那行号码的字距。等宽体再拉开一点才像印在条码下面的那串数字。 */
-private val TicketSerialLetterSpacing = 3.sp
+/**
+ * 票根二维码：印在左票根下端的方码。
+ *
+ * 边长 52dp、21 格 —— 21×21 是 QR 版本 1 的真实规格，格子换成任何别的数目，
+ * 三个定位角的比例就不再是真二维码的样子。模块边取整到整像素，热敏打印压出来的是
+ * 硬边；落在半像素上会被抗锯齿糊成一片灰，凑近看不像印的。
+ */
+private val TicketQrSize = 52.dp
 
-/** `ADMIT ONE` 反白牌的圆角与内边距。真票这几个字通常是压在一块实底上反白印的。 */
-private val TicketBadgeCorner = 2.dp
-private val TicketBadgePaddingHorizontal = 6.dp
-private val TicketBadgePaddingVertical = 2.dp
+/** 二维码墨色。整块用同一个值：二维码是要给机器读的，深浅不匀看着像脏了不像油墨不匀。 */
+private const val TICKET_QR_INK_ALPHA = 0.9f
 
-/** 撕口线上的打孔点：半径与间距。真票那条线是一排孔，不是一条虚线。 */
+/** 票号印在二维码正下方，这是那行字的字距。 */
+private val TicketSerialLetterSpacing = 1.sp
+
+/** 撕口线上的打孔点：半径、间距与那一栏的宽度。真票那条线是一排孔，不是一条虚线。 */
 private val TicketPerforationDotRadius = 1.dp
 private val TicketPerforationDotSpacing = 6.dp
+private val TicketPerforationWidth = 12.dp
 
 /** 撕口线还没量到时的兜底位置，只在首帧用一次。 */
 private const val TEAR_LINE_UNKNOWN = -1f
+
+// ---- 纸纹 ----
+// 画法与机壳砂面同源（见 TicketMachine.kt 的 rememberMachineNoiseBrush）：一次生成
+// 一张小位图交给 shader 平铺，不每帧 drawPoints。纸纹比金属砂面弱得多，只提供
+// 「这是纸不是塑料」那一点点不均匀。
+/** 纸纹位图边长。 */
+private const val PAPER_NOISE_TILE_PX = 64
+
+/** 固定随机种子。每次进页面纸纹一样，不会让人觉得换了一张纸。 */
+private const val PAPER_NOISE_SEED = 0x7A9E
+
+/** 纸纹透明度。0x0B 大约是机壳砂面的一半：纸面上的小字不能被颗粒吃掉。 */
+private const val PAPER_NOISE_ALPHA = 0x0B
+
+/** 8 位通道的取值个数。 */
+private const val PAPER_GRAY_LEVELS = 256
 
 /**
  * 只有「未激活 → 已激活」那一次跳变才播打印动画。
@@ -138,24 +196,78 @@ internal fun shouldPlayTicketPrint(
     currentActivated: Boolean,
 ): Boolean = !previousActivated && currentActivated
 
-/**
- * 条码宽度序列，由票根的厅/排/座派生。
- *
- * 取票码本身不落盘，所以条码不能直接从码算；用座位三元组拼出一个 6 位数字串再展开，
- * 同一张票每次渲染得到同一段条码，不同票之间又互不相同。
- */
-internal fun ticketBarcodeWidths(stub: TicketStub): List<Int> =
-    ticketSerial(stub).flatMap { char ->
-        val digit = char.digitToIntOrNull() ?: 0
-        (0..2).map { k -> (digit + k) % 3 + 1 }
-    }
+/** 二维码边长（模块数）。21 是 QR 版本 1 的规格。 */
+internal const val TICKET_QR_MODULE_COUNT = 21
+
+/** 定位角边长（模块数）。三个角各 7×7，外加一圈 1 模块宽的分隔白边。 */
+private const val TICKET_QR_FINDER_SIZE = 7
+
+/** FNV-1a 的两个常数。取一个成熟的字符串散列，图案才不会随口编出规律来。 */
+private const val FNV_OFFSET_BASIS = -0x7EE3623B
+private const val FNV_PRIME = 0x01000193
 
 /**
- * 票号：厅/排/座各补两位拼成的 6 位数字串，同时是条码下面印的那串数字。
+ * 二维码模块阵列，由票号派生。行优先，长度恒为 21×21。
+ *
+ * **这不是一张能扫的二维码**，是一张长得像二维码的印刷图案：三个定位角、两条时序线
+ * 按真规格摆放，其余模块由票号散列出来。票根上真正能被读的信息是下面印的票号 ——
+ * 取票码本身不落盘，App 也没有扫码入场这个功能，编一段能扫出内容的码反而是承诺了
+ * 一个不存在的动作。
+ *
+ * 同一张票每次渲染得到同一张图（票号一样，散列一样），不同票之间互不相同。
+ * 票号是 [ticketSerial] 出来的 ASCII 数字串，所以这里不受设备语言影响。
+ */
+internal fun ticketQrModules(serial: String): List<Boolean> {
+    val n = TICKET_QR_MODULE_COUNT
+    val modules = MutableList(n * n) { false }
+    val reserved = MutableList(n * n) { false }
+
+    fun put(x: Int, y: Int, on: Boolean) {
+        modules[y * n + x] = on
+        reserved[y * n + x] = true
+    }
+
+    // 三个定位角：外环实、第二环空、中心 3×3 实。第四个角空着 —— 真二维码就只有三个
+    val finderOrigins = listOf(
+        0 to 0,
+        n - TICKET_QR_FINDER_SIZE to 0,
+        0 to n - TICKET_QR_FINDER_SIZE
+    )
+    for ((originX, originY) in finderOrigins) {
+        // 连同外面那圈分隔白边一起占位，散列出来的模块不会贴到定位角上
+        for (dy in -1..TICKET_QR_FINDER_SIZE) {
+            for (dx in -1..TICKET_QR_FINDER_SIZE) {
+                val x = originX + dx
+                val y = originY + dy
+                if (x !in 0 until n || y !in 0 until n) continue
+                val ring = maxOf(abs(dx - 3), abs(dy - 3))
+                put(x, y, ring <= 1 || ring == 3)
+            }
+        }
+    }
+
+    // 时序线：第 6 行与第 6 列，奇偶交替。它是解码器找模块网格的标尺
+    for (i in TICKET_QR_FINDER_SIZE + 1 until n - TICKET_QR_FINDER_SIZE - 1) {
+        put(i, 6, i % 2 == 0)
+        put(6, i, i % 2 == 0)
+    }
+
+    // 其余模块按票号散列填充。FNV-1a 起手，之后每格再滚一次，取一位
+    var state = serial.fold(FNV_OFFSET_BASIS) { acc, char -> (acc xor char.code) * FNV_PRIME }
+    for (index in modules.indices) {
+        if (reserved[index]) continue
+        state = (state xor (state shl 13)) * FNV_PRIME
+        modules[index] = (state ushr 17) and 1 == 1
+    }
+    return modules
+}
+
+/**
+ * 票号：厅/排/座各补两位拼成的 6 位数字串，同时是二维码下面印的那串数字。
  *
  * format 显式给 [Locale.ROOT]：默认 locale 在阿拉伯语等环境下会把 %02d 输出成
  * 另一套数字字形（٠٢），后面按字符取数就不再是这里想要的那三段，印在票上也不再是
- * 条码对应的号码。理由同 [formatIssuedDate] 不走 DateTimeFormatter。
+ * 二维码对应的号码。理由同 [formatIssuedDate] 不走 DateTimeFormatter。
  */
 internal fun ticketSerial(stub: TicketStub): String =
     "%02d%02d%02d".format(Locale.ROOT, stub.hall, stub.row, stub.seat)
@@ -190,11 +302,11 @@ internal fun CinemaTicket(
     stub: TicketStub,
     phase: PrintPhase,
     loginState: LoginState,
+    doubanBusy: Boolean,
     traktEnabled: Boolean,
     doubanEnabled: Boolean,
     guestEnabled: Boolean,
     onTraktLogin: () -> Unit,
-    onCancelAuth: () -> Unit,
     onDoubanLogin: () -> Unit,
     onGuestMode: () -> Unit,
     modifier: Modifier = Modifier,
@@ -202,13 +314,16 @@ internal fun CinemaTicket(
     // 主题判断方式与 ActivationLoginScreen 里的取色保持一致
     val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val paperColor = if (isDarkTheme) PrintedTicketPaperOnDark else PrintedTicketPaperOnLight
-    val seatText = stringResource(R.string.ticket_seat, stub.row, stub.seat)
+    val noiseBrush = rememberPaperNoiseBrush()
+    // 座位信息印在右半主票上：真票撕开后凭主票入场找座，票根上只留身份与条码
+    val seatLine = stringResource(R.string.ticket_hall, stub.hall) +
+        " · " + stringResource(R.string.ticket_seat, stub.row, stub.seat)
     // 浏览器授权中和换 token 中都不能再点第二次登录，两个平台入口共用这一个判断
     val authBusy = loginState == LoginState.AUTHORIZING || loginState == LoginState.CONNECTING
-    // 撕口线的实际位置：左右两个半圆缺口要正好落在这条打孔线上，否则「沿孔撕开」这件事
+    // 撕口线的实际位置：上下两个半圆缺口要正好落在这条竖打孔线上，否则「沿孔撕开」这件事
     // 在画面上是两回事 —— 孔在一处，缺口在另一处。写死一个百分比看着也能对上，
-    // 但昵称为空、换语言、以后加一行，内容一变就错开，而错开几 dp 说不清哪里怪
-    var tearLineY by remember { mutableFloatStateOf(TEAR_LINE_UNKNOWN) }
+    // 但左右两半的权重一改、以后换字号，内容一变就错开，而错开几 dp 说不清哪里怪
+    var tearLineX by remember { mutableFloatStateOf(TEAR_LINE_UNKNOWN) }
 
     Box(
         modifier = modifier
@@ -226,182 +341,176 @@ internal fun CinemaTicket(
                 }
             }
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(TicketHeight + TicketShadowOffset)
                 .offset(y = phase.overshootDp.dp)
                 // 给自绘投影留一条落地空间：裁切正好停在票的下沿，不留这 2.dp
                 // 投影会被整条切掉，票看起来就是直接印在机壳上而不是搭在机壳上
                 .padding(bottom = TicketShadowOffset)
-                .drawBehind { drawTicketPaper(paperColor = paperColor, tearLineY = tearLineY) }
-                .padding(horizontal = 16.dp, vertical = 14.dp)
+                .drawBehind {
+                    drawTicketPaper(
+                        paperColor = paperColor,
+                        noiseBrush = noiseBrush,
+                        tearLineX = tearLineX
+                    )
+                }
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                AdmitOneBadge(paperColor = paperColor)
-                TicketText(
-                    text = stringResource(R.string.ticket_hall, stub.hall),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.2.sp,
-                    alpha = 0.75f
-                )
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            // 昵称空白时整行省掉：静默恢复路径拿不到昵称，那种情况下票上不该留一行空白，
-            // 也不该印一个「未命名」之类的占位词冒充用户名
-            if (stub.nickname.isNotBlank()) {
-                TicketText(
-                    text = stub.nickname,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1
-                )
-            }
-            TicketText(text = formatIssuedDate(stub.issuedEpochDay), fontSize = 13.sp)
-            Spacer(modifier = Modifier.height(10.dp))
-            // 排和座改成「小字标签 + 大字数字」两格并排，跟真票一样：早先是一行
-            // 「4 排 4 座」，信息一样但读起来是一句话，不是票面上那种一眼扫到的字段
-            Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                TicketStat(
-                    label = stringResource(R.string.ticket_label_row),
-                    value = stub.row.toString()
-                )
-                TicketStat(
-                    label = stringResource(R.string.ticket_label_seat),
-                    value = stub.seat.toString()
-                )
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            // 条码在撕口线以上，也就是留在票根那一半 —— 真票撕开后带走的正是这一截
-            TicketBarcode(stub = stub, seatDescription = seatText)
+            // 内边距挂在两半自己身上，不挂在画纸那个节点上：打孔栏要量出自己在纸面
+            // 坐标系里的横向位置，而 positionInParent 量的是父节点内容框 —— 纸面节点
+            // 一带内边距，量出来就比实际位置偏左一整个内边距，缺口于是浮在孔线旁边
+            TicketStubHalf(
+                stub = stub,
+                seatLine = seatLine,
+                modifier = Modifier.weight(TICKET_STUB_WEIGHT)
+            )
             TicketPerforation(
                 modifier = Modifier.onGloballyPositioned { coords ->
-                    val centerY = coords.positionInParent().y + coords.size.height / 2f
+                    val centerX = coords.positionInParent().x + coords.size.width / 2f
                     // 只在真的挪了位置时回写：这个回调每次布局都跑一遍，
                     // 无条件赋值等于每帧碰一次 state
-                    if (abs(centerY - tearLineY) > 0.5f) tearLineY = centerY
+                    if (abs(centerX - tearLineX) > 0.5f) tearLineX = centerX
                 }
             )
-
-            TicketEntryRow(
-                text = if (loginState == LoginState.ERROR) {
-                    stringResource(R.string.login_retry)
-                } else {
-                    stringResource(R.string.ticket_entry_trakt)
-                },
-                enabled = traktEnabled && !authBusy,
-                visible = phase.rowsVisible > 0,
-                onClick = onTraktLogin,
-                leading = {
-                    TraktLogo(
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                },
-                trailing = { TraktRowStatus(loginState = loginState, onCancelAuth = onCancelAuth) }
-            )
-            TicketEntryRow(
-                text = stringResource(R.string.ticket_entry_douban),
-                enabled = doubanEnabled && !authBusy,
-                visible = phase.rowsVisible > 1,
-                onClick = onDoubanLogin,
-                leading = {
-                    DoubanLogo(
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            )
-            TicketEntryRow(
-                text = stringResource(R.string.ticket_entry_guest),
-                enabled = guestEnabled,
-                visible = phase.rowsVisible > 2,
-                onClick = onGuestMode
-            )
+            Column(
+                modifier = Modifier
+                    .weight(TICKET_BODY_WEIGHT)
+                    .fillMaxHeight()
+                    .padding(end = TicketHalfPadding, top = 10.dp, bottom = 10.dp)
+            ) {
+                // 三行入口把整半张票的高度均分，中间两道细线。座位那行搬到票根去了，
+                // 右下角那行英文条例也撤了：这半张票只回答「怎么进场」，一行不多印
+                TicketEntryRow(
+                    text = when {
+                        authBusy -> stringResource(R.string.ticket_entry_authorizing)
+                        loginState == LoginState.ERROR -> stringResource(R.string.login_retry)
+                        else -> stringResource(R.string.ticket_entry_trakt)
+                    },
+                    enabled = traktEnabled && !authBusy && !doubanBusy,
+                    visible = phase.rowsVisible > 0,
+                    busy = authBusy,
+                    onClick = onTraktLogin,
+                    modifier = Modifier.weight(1f),
+                    leading = {
+                        TraktLogo(
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                )
+                TicketRowHairline()
+                TicketEntryRow(
+                    text = if (doubanBusy) {
+                        stringResource(R.string.ticket_entry_authorizing)
+                    } else {
+                        stringResource(R.string.ticket_entry_douban)
+                    },
+                    enabled = doubanEnabled && !authBusy && !doubanBusy,
+                    visible = phase.rowsVisible > 1,
+                    busy = doubanBusy,
+                    onClick = onDoubanLogin,
+                    modifier = Modifier.weight(1f),
+                    leading = {
+                        DoubanLogo(
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                )
+                TicketRowHairline()
+                TicketEntryRow(
+                    text = stringResource(R.string.ticket_entry_guest),
+                    enabled = guestEnabled && !authBusy && !doubanBusy,
+                    visible = phase.rowsVisible > 2,
+                    busy = false,
+                    onClick = onGuestMode,
+                    modifier = Modifier.weight(1f),
+                    leading = { TicketGuestGlyph(modifier = Modifier.size(16.dp)) }
+                )
+            }
         }
     }
 }
 
 /**
- * Trakt 那行行尾的进行态。
+ * 左票根：身份那一半，撕开之后带走的就是这截。
  *
- * 都压在同一行里，不再往票面下面追加一段文字和一个 TextButton：那两样会把票撑高一截，
- * 而且「等待授权」明明是这一行的状态，印在别处就得先让用户自己对应回来。
+ * 自上而下是签发方、昵称、日期、座位，最下面贴着二维码和票号，中间的空当由
+ * [Arrangement.SpaceBetween] 撑开 —— 真票的码就是压在票根最下端的。
  *
- * - `CONNECTING`（正在换 token）：一个转圈。行文案留着，用户刚点下去，得知道点的是哪一行
- * - `AUTHORIZING`（浏览器里授权中）：短提示加一个取消。CustomTabs 里按返回取消不产生回调，
- *   没有这个取消入口，Trakt 行会被这个状态永久锁在禁用态
+ * 整块合成一个语义节点：这半张票是印刷内容不是控件，逐个念「小明」「2026-08-31」
+ * 「2 号厅 · 7 排 12 座」「NO. 020712」会变成四条互不相干的播报。
  */
 @Composable
-private fun TraktRowStatus(
-    loginState: LoginState,
-    onCancelAuth: () -> Unit,
+private fun TicketStubHalf(
+    stub: TicketStub,
+    seatLine: String,
     modifier: Modifier = Modifier,
 ) {
-    when (loginState) {
-        LoginState.CONNECTING -> CircularProgressIndicator(
-            modifier = modifier.size(16.dp),
-            strokeWidth = 2.dp,
-            color = PrintedTicketInk
-        )
-        LoginState.AUTHORIZING -> Row(
-            modifier = modifier,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TicketText(
-                text = stringResource(R.string.ticket_entry_authorizing),
-                fontSize = 10.sp,
-                alpha = 0.6f,
-                maxLines = 1
-            )
-            // 取消不做成按钮：票上贴按钮毁纸质感。靠字重跟旁边的提示分开，
-            // 触达面积由这一圈 padding 撑到与行等高
-            TicketText(
-                text = stringResource(R.string.common_cancel),
-                modifier = Modifier
-                    .clickable(onClick = onCancelAuth)
-                    .padding(horizontal = 8.dp, vertical = 12.dp),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1
-            )
-        }
-        else -> Unit
-    }
-}
-
-/** 票面字段：小字标签压在大字数字上面，真票上的排/座就是这么排的。 */
-@Composable
-private fun TicketStat(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
-        TicketText(text = label, fontSize = 9.sp, letterSpacing = 1.4.sp, alpha = 0.55f)
-        TicketText(text = value, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-    }
-}
-
-/** `ADMIT ONE` 反白牌：实底上印纸色的字，真票这几个字通常就是这么压出来的。 */
-@Composable
-private fun AdmitOneBadge(paperColor: Color, modifier: Modifier = Modifier) {
-    Text(
-        text = stringResource(R.string.ticket_admit_one),
+    val issuedDate = formatIssuedDate(stub.issuedEpochDay)
+    val serial = remember(stub.hall, stub.row, stub.seat) { ticketSerial(stub) }
+    val stubSpeech = listOf(
+        stub.nickname.takeIf { it.isNotBlank() },
+        issuedDate,
+        seatLine,
+        serial
+    ).filterNotNull().joinToString(" · ")
+    Column(
         modifier = modifier
-            .background(PrintedTicketInk, RoundedCornerShape(TicketBadgeCorner))
-            .padding(
-                horizontal = TicketBadgePaddingHorizontal,
-                vertical = TicketBadgePaddingVertical
-            ),
-        color = paperColor,
-        fontSize = 10.sp,
-        fontWeight = FontWeight.Bold,
-        fontFamily = FontFamily.Monospace,
-        letterSpacing = 1.4.sp,
-        maxLines = 1
+            .fillMaxHeight()
+            .padding(start = TicketHalfPadding, top = 10.dp, bottom = 10.dp)
+            .semantics(mergeDescendants = true) { contentDescription = stubSpeech },
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column {
+            // 签发方。`ADMIT ONE` 撤掉之后这里空着，而票根上方本来就该印是谁出的票；
+            // 这不是编造的影院名，就是发这张票的 App 自己
+            TicketText(
+                text = stringResource(R.string.app_name).uppercase(Locale.ROOT),
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.2.sp,
+                alpha = 0.55f,
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            // 昵称空白时整行省掉：静默恢复路径拿不到昵称，那种情况下票上不该留一行空白，
+            // 也不该印一个「未命名」之类的占位词冒充用户名
+            if (stub.nickname.isNotBlank()) {
+                TicketText(
+                    text = stub.nickname,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+            }
+            TicketText(text = issuedDate, fontSize = 11.sp, alpha = 0.8f, maxLines = 1)
+            Spacer(modifier = Modifier.height(2.dp))
+            TicketText(text = seatLine, fontSize = 11.sp, alpha = 0.8f, maxLines = 1)
+        }
+        TicketQrCode(serial = serial)
+    }
+}
+
+/** 行与行之间那条细线。真票的入场须知就是印成一栏栏的表格，线比空白更像印刷品。 */
+@Composable
+private fun TicketRowHairline() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .drawBehind {
+                drawRect(color = PrintedTicketInk.copy(alpha = TicketHairlineAlpha))
+            }
     )
 }
+
+
+
+
+
+
 
 /**
  * 票面上的一行登录入口。
@@ -410,28 +519,32 @@ private fun AdmitOneBadge(paperColor: Color, modifier: Modifier = Modifier) {
  *
  * [visible] 用 alpha 控制而不是条件渲染 —— 三行必须始终占位，否则逐行淡入的过程中
  * 票高会变，露出比例跟着乱跳。不可见时同时断掉点击，避免打印动画途中误触。
+ *
+ * [busy] 时行尾那个 `›` 换成一个转圈。行文案此时已经由调用方换成「授权中…」，
+ * 但静态文字看不出还在动 —— 转圈是「在等浏览器」和「卡住了」之间唯一的区别。
  */
 @Composable
 private fun TicketEntryRow(
     text: String,
     enabled: Boolean,
     visible: Boolean,
+    busy: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     leading: (@Composable () -> Unit)? = null,
-    trailing: (@Composable () -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val rowAlpha = when {
         !visible -> 0f
-        enabled -> 1f
+        enabled || busy -> 1f
         else -> 0.38f
     }
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(TicketEntryRowHeight)
+            // 高度由外面那个 Column 的权重给，这里只留一个下限：拿不到权重时行还得能按
+            .heightIn(min = TicketEntryRowHeight)
             .alpha(rowAlpha)
             .clickable(
                 interactionSource = interactionSource,
@@ -442,98 +555,128 @@ private fun TicketEntryRow(
             .background(if (pressed) TicketPressedOverlay else Color.Transparent),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        TicketText(text = TICKET_ENTRY_CHEVRON, fontSize = 14.sp, alpha = 0.6f)
-        Spacer(modifier = Modifier.width(10.dp))
         if (leading != null) {
             leading()
             Spacer(modifier = Modifier.width(8.dp))
         }
-        TicketText(text = text, fontSize = 14.sp, maxLines = 1)
-        if (trailing != null) {
-            Spacer(modifier = Modifier.weight(1f))
-            trailing()
+        TicketText(text = text, fontSize = 13.sp, maxLines = 1)
+        Spacer(modifier = Modifier.weight(1f))
+        // 行尾：进行态是转圈，其余时候是箭头。箭头在行尾而不是行首 ——
+        // 横排票右半只有 200dp 出头，行首那个箭头连带间距白占 24dp
+        if (busy) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(12.dp),
+                strokeWidth = 1.5.dp,
+                color = PrintedTicketInk.copy(alpha = 0.7f)
+            )
+        } else {
+            TicketText(text = TICKET_ENTRY_CHEVRON, fontSize = 14.sp, alpha = 0.5f)
         }
     }
 }
 
 /**
- * 撕口线：一排打孔点，不是一条虚线。
+ * 撕口线：一列打孔点，不是一条虚线。
  *
- * 真票的这条线是冲出来的孔，两端接到左右那对半圆缺口上。虚线画法看着相近，
- * 但孔是圆的、有间距、每个孔中心都在同一条线上 —— 放到 16.dp 的行高里差别很明显。
+ * 真票的这条线是冲出来的孔，两端接到上下那对半圆缺口上。虚线画法看着相近，
+ * 但孔是圆的、有间距、每个孔中心都在同一条线上 —— 凑近看差别很明显。
  *
- * 首尾各留半个间距，孔不会正好压在票的左右边线上（那两处是纸边，冲不出整孔）。
+ * 首尾各留半个间距，孔不会正好压在票的上下边线上（那两处是纸边，冲不出整孔）。
  */
 @Composable
 private fun TicketPerforation(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 10.dp)
-            .height(TicketPerforationDotRadius * 2)
+            .fillMaxHeight()
+            .width(TicketPerforationWidth)
             .drawBehind {
                 val radius = TicketPerforationDotRadius.toPx()
                 val spacing = TicketPerforationDotSpacing.toPx()
-                val centerY = size.height / 2f
-                var x = spacing / 2f
-                while (x <= size.width) {
+                val centerX = size.width / 2f
+                var y = spacing / 2f
+                while (y <= size.height) {
                     drawCircle(
                         color = PrintedTicketInk.copy(alpha = 0.42f),
                         radius = radius,
-                        center = Offset(x, centerY)
+                        center = Offset(centerX, y)
                     )
-                    x += spacing
+                    y += spacing
                 }
             }
     )
 }
 
 /**
- * 票根条码：铺满票宽的一整条竖条，下面印同一串票号。
+ * 票根二维码：一张 21×21 的方码，正下方印同一串票号。
  *
- * 整块只给一个语义节点，读屏播的是座位：条码本身不携带用户可用的信息，
- * 念「一段条码」不如念「几排几座」，所以复用座位那句现成文案，不为此新增字符串键。
- * 号码同样不单独播报 —— 它是条码的可读版本，念两遍等于同一件事说两次。
+ * 模块边取整到整像素：热敏打印压出来的是硬边，落在半像素上会被抗锯齿糊成灰边，
+ * 21 格糊过去整块就是一团灰。整块同一个墨色 —— 二维码是给机器读的东西，
+ * 深浅不匀看着像纸脏了，不像油墨不匀（横条码那时的按位调墨在这里反而失真）。
  *
- * 竖条位置取整到整像素：热敏打印压出来的是硬边，落在半像素上会被抗锯齿糊成灰边，
- * 一整条 18 根糊过去就不像印的了。
+ * 票号横着印在码下面，不再竖排：撕口线右移之后票根宽了，竖排票号那套
+ * `requiredWidth` + `rotate(-90f)` 的绕法没有必要了，横排也更像真票。
  */
 @Composable
-private fun TicketBarcode(
-    stub: TicketStub,
-    seatDescription: String,
+private fun TicketQrCode(
+    serial: String,
     modifier: Modifier = Modifier,
 ) {
-    val widths = remember(stub.hall, stub.row, stub.seat) { ticketBarcodeWidths(stub) }
-    val serial = remember(stub.hall, stub.row, stub.seat) { ticketSerial(stub) }
-    Column(modifier = modifier.semantics { contentDescription = seatDescription }) {
-        Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(TicketBarcodeHeight)
-        ) {
-            val gap = TicketBarcodeGap.toPx()
-            val unit = (size.width - gap * (widths.size - 1)) / widths.sum()
-            var x = 0f
-            widths.forEach { level ->
-                val barWidth = unit * level
-                val left = x.roundToInt().toFloat()
-                val right = (x + barWidth).roundToInt().toFloat()
+    val modules = remember(serial) { ticketQrModules(serial) }
+    Column(modifier = modifier) {
+        Canvas(modifier = Modifier.size(TicketQrSize)) {
+            val ink = PrintedTicketInk.copy(alpha = TICKET_QR_INK_ALPHA)
+            val step = size.width / TICKET_QR_MODULE_COUNT
+            modules.forEachIndexed { index, on ->
+                if (!on) return@forEachIndexed
+                val column = index % TICKET_QR_MODULE_COUNT
+                val row = index / TICKET_QR_MODULE_COUNT
+                val left = (column * step).roundToInt().toFloat()
+                val top = (row * step).roundToInt().toFloat()
+                val right = ((column + 1) * step).roundToInt().toFloat()
+                val bottom = ((row + 1) * step).roundToInt().toFloat()
                 drawRect(
-                    color = PrintedTicketInk,
-                    topLeft = Offset(left, 0f),
-                    size = Size(right - left, size.height)
+                    color = ink,
+                    topLeft = Offset(left, top),
+                    size = Size(right - left, bottom - top)
                 )
-                x += barWidth + gap
             }
         }
         Spacer(modifier = Modifier.height(3.dp))
         TicketText(
-            text = serial,
-            fontSize = 9.sp,
+            text = stringResource(R.string.ticket_serial_no, serial),
+            fontSize = 8.sp,
             letterSpacing = TicketSerialLetterSpacing,
             alpha = 0.7f,
             maxLines = 1
+        )
+    }
+}
+
+/**
+ * 访客那行行首的人形剪影。
+ *
+ * 不用 Material 的 Person 图标：同一栏另外两行摆的是平台 logo，中间夹一个线框图标
+ * 会像贴上去的 UI 元件。这里用票面墨色实心画，头是一个圆，肩是半个椭圆 ——
+ * 和旁边的字同一支笔印出来的。
+ */
+@Composable
+private fun TicketGuestGlyph(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val ink = PrintedTicketInk.copy(alpha = TICKET_GUEST_GLYPH_ALPHA)
+        drawCircle(
+            color = ink,
+            radius = size.minDimension * 0.19f,
+            center = Offset(size.width / 2f, size.height * 0.30f)
+        )
+        // 肩：椭圆的上半段。sweep 180° 且不连圆心，填出来正好是一个圆顶，
+        // 椭圆下缘落在图标底边之外，可见的那半截恰好铺到底
+        drawArc(
+            color = ink,
+            startAngle = 180f,
+            sweepAngle = 180f,
+            useCenter = false,
+            topLeft = Offset(size.width * 0.14f, size.height * 0.56f),
+            size = Size(size.width * 0.72f, size.height * 0.88f)
         )
     }
 }
@@ -563,33 +706,42 @@ private fun TicketText(
         fontWeight = fontWeight,
         fontFamily = FontFamily.Monospace,
         letterSpacing = letterSpacing,
+        // 行高必须跟着字号算：主题的 bodyLarge 带着 24.sp 行高，而 Text 只被换掉了字号，
+        // 于是票上 8sp 的抬头和 11sp 的日期各占 24dp 高 —— 左票根四行文字加二维码
+        // 因此超出票高 34dp，票号被挤到纸外面裁掉。装机截图上只看得出「票号没了」
+        lineHeight = fontSize * TICKET_TEXT_LINE_HEIGHT_RATIO,
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis
     )
 }
 
 /**
- * 画票：投影在下，纸面在上，两者共用同一条票形 Path。
+ * 画票：投影在下，纸面在上，纸纹压在纸面上，三层共用同一条票形 Path。
  *
- * 票形是「圆角矩形减掉一串圆」—— 左右各一个撕口半圆，底边一排锯齿圆，
+ * 票形是「圆角矩形减掉一串圆」—— 竖撕口线的上下两端各一个半圆，
  * 用 [PathOperation.Difference] 真挖掉，而不是拿背景色的实心圆盖在纸面上。
- * 盖圆那种做法更短，但它要求票背后正好是页面底色；票实际是画在取票机机壳
- * （深金属 + 毛玻璃）上的，页面底色跟纸色只差两个色阶，缺口会整个看不见。
- * 挖洞跟背后是什么无关，机壳、页面底色、以后换别的容器都能照样透出来。
+ * 盖圆那种做法更短，但它要求票背后正好是页面底色；票实际是画在取票机机壳上的，
+ * 页面底色跟纸色只差两个色阶，缺口会整个看不见。挖洞跟背后是什么无关。
  *
  * 投影用的是同一条挖过洞的 Path，所以缺口处的影子也跟着缺，撕口才像真撕出来的。
+ * 纸纹也走同一条 Path，颗粒不会溢到缺口外面去。
  *
- * @param tearLineY 撕口半圆的圆心高度，由打孔线实测得来；[TEAR_LINE_UNKNOWN] 时退回按比例取
+ * @param tearLineX 撕口半圆的圆心横坐标，由打孔栏实测得来；[TEAR_LINE_UNKNOWN] 时退回按比例取
  */
-private fun DrawScope.drawTicketPaper(paperColor: Color, tearLineY: Float) {
-    val ticket = buildTicketPath(tearLineY)
+private fun DrawScope.drawTicketPaper(
+    paperColor: Color,
+    noiseBrush: ShaderBrush,
+    tearLineX: Float,
+) {
+    val ticket = buildTicketPath(tearLineX)
     translate(top = TicketShadowOffset.toPx()) {
         drawPath(path = ticket, color = TicketShadowColor)
     }
     drawPath(path = ticket, color = paperColor)
+    drawPath(path = ticket, brush = noiseBrush)
 }
 
-private fun DrawScope.buildTicketPath(tearLineY: Float): Path {
+private fun DrawScope.buildTicketPath(tearLineX: Float): Path {
     val width = size.width
     val height = size.height
     val corner = TicketCornerRadius.toPx()
@@ -604,23 +756,38 @@ private fun DrawScope.buildTicketPath(tearLineY: Float): Path {
             )
         )
     }
-    val notchCenterY = if (tearLineY > 0f) {
-        tearLineY.coerceIn(0f, height)
+    val notchCenterX = if (tearLineX > 0f) {
+        tearLineX.coerceIn(0f, width)
     } else {
-        height * TICKET_NOTCH_CENTER_FRACTION
+        width * TICKET_TEAR_X_FRACTION
     }
     val notchRadius = TicketNotchRadius.toPx()
-    val toothRadius = TicketToothRadius.toPx()
-    val toothStep = TicketToothSpacing.toPx()
     val cutouts = Path().apply {
-        // 撕口整圆落在票的左右边线上，挖完各剩半个
-        addOval(Rect(center = Offset(0f, notchCenterY), radius = notchRadius))
-        addOval(Rect(center = Offset(width, notchCenterY), radius = notchRadius))
-        var toothX = 0f
-        while (toothX <= width) {
-            addOval(Rect(center = Offset(toothX, height), radius = toothRadius))
-            toothX += toothStep
-        }
+        // 撕口整圆落在票的上下边线上，挖完各剩半个
+        addOval(Rect(center = Offset(notchCenterX, 0f), radius = notchRadius))
+        addOval(Rect(center = Offset(notchCenterX, height), radius = notchRadius))
     }
     return Path().apply { op(body, cutouts, PathOperation.Difference) }
+}
+
+/**
+ * 纸纹：一张 64×64 的噪点位图交给 shader 平铺。
+ *
+ * 与机壳砂面同一套画法（[rememberMachineNoiseBrush]），只是透明度低一半 ——
+ * 纸面上还压着 8sp 的条例小字和票号，颗粒再重一档就开始吃字。
+ */
+@Composable
+private fun rememberPaperNoiseBrush(): ShaderBrush = remember {
+    val random = Random(PAPER_NOISE_SEED)
+    val pixels = IntArray(PAPER_NOISE_TILE_PX * PAPER_NOISE_TILE_PX) {
+        val level = random.nextInt(PAPER_GRAY_LEVELS)
+        (PAPER_NOISE_ALPHA shl 24) or (level shl 16) or (level shl 8) or level
+    }
+    val bitmap = Bitmap.createBitmap(
+        pixels,
+        PAPER_NOISE_TILE_PX,
+        PAPER_NOISE_TILE_PX,
+        Bitmap.Config.ARGB_8888
+    )
+    ShaderBrush(ImageShader(bitmap.asImageBitmap(), TileMode.Repeated, TileMode.Repeated))
 }
