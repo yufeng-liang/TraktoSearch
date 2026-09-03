@@ -57,7 +57,7 @@ export interface AiEnvironment extends MimoEnvironment, AiStoreEnvironment, Agne
     AI_VOICE_SAMPLES?: R2Bucket;
     AI_AUDIO_CACHE?: R2Bucket;
     AUDIO_PUBLIC_BASE_URL?: string;
-    // 文本生成默认供应商：agnes 或 mimo。为空时回退到 mimo。
+    // 文本生成默认供应商：未配置或配置异常时使用 Agnes；显式 mimo 请求/配置保留兼容行为。
     AI_DEFAULT_PROVIDER?: string;
     [key: string]: unknown;
 }
@@ -1276,13 +1276,13 @@ function assertAction(body: Record<string, unknown>, expected: string | string[]
 interface ResolvedTextModel {
     provider: 'mimo' | 'agnes';
     model: string;
-    // 主供应商上游失败时回退到另一种供应商所用的默认模型。
+    // 仅兼容 MiMo 主路径上游失败时尝试 Agnes 的默认模型；Agnes 路径失败由业务确定性兜底。
     fallbackModel: string;
 }
 
 // 解析文本生成模型与供应商：
 // - 显式 model 优先（agnes-2.5-flash 走 Agnes，mimo-* 走 MiMo）
-// - 未指定时取 AI_DEFAULT_PROVIDER（默认 mimo），Agnes 默认模型为 agnes-2.5-flash
+// - 未指定时取 AI_DEFAULT_PROVIDER；仅显式 mimo 选择 MiMo，其余情况默认 Agnes
 function resolveTextModel(
     body: Record<string, unknown>,
     env: AiEnvironment,
@@ -1296,13 +1296,16 @@ function resolveTextModel(
         }
         return { provider: 'mimo', model: validateMimoModel(requested), fallbackModel: agnesDefault };
     }
-    const useAgnes = typeof env.AI_DEFAULT_PROVIDER === 'string' && env.AI_DEFAULT_PROVIDER === 'agnes';
-    return useAgnes
-        ? { provider: 'agnes', model: agnesDefault, fallbackModel: mimoDefault }
-        : { provider: 'mimo', model: mimoDefault, fallbackModel: agnesDefault };
+    // 配置缺失、空白或拼写错误都不能静默切到没有余额的 MiMo 文本模型。
+    const configuredProvider = typeof env.AI_DEFAULT_PROVIDER === 'string'
+        ? env.AI_DEFAULT_PROVIDER.trim().toLowerCase()
+        : '';
+    return configuredProvider === 'mimo'
+        ? { provider: 'mimo', model: mimoDefault, fallbackModel: agnesDefault }
+        : { provider: 'agnes', model: agnesDefault, fallbackModel: mimoDefault };
 }
 
-// 统一文本生成入口：调用主供应商，上游确定性错误时回退到另一种供应商一次。
+// 统一文本生成入口：Agnes 失败交给业务确定性 fallback；显式/兼容 MiMo 路径仍可回退 Agnes 一次。
 async function callLlmJson(
     env: AiEnvironment,
     provider: 'mimo' | 'agnes',
@@ -1311,7 +1314,7 @@ async function callLlmJson(
     options: Record<string, unknown>,
     fallbackModel: string,
 ): Promise<unknown | null> {
-    const order: Array<'mimo' | 'agnes'> = provider === 'agnes' ? ['agnes', 'mimo'] : ['mimo', 'agnes'];
+    const order: Array<'mimo' | 'agnes'> = provider === 'agnes' ? ['agnes'] : ['mimo', 'agnes'];
     let lastError: unknown = null;
     for (const p of order) {
         try {
@@ -1328,6 +1331,8 @@ async function callLlmJson(
         } catch (error) {
             // 模型非法属于请求错误，不回退，直接上抛。
             if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
+            // Agnes 文本余额/上游不可用时不能消耗 MiMo 文本额度，交给各业务的确定性 fallback。
+            if (provider === 'agnes') return null;
             lastError = error;
         }
     }
