@@ -74,7 +74,6 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
 import com.tracktosearch.ui.component.ZoomableImageOverlay
-import com.tracktosearch.ui.component.prefetchFullscreenImage
 import com.tracktosearch.ui.component.queryExistingFile
 import com.tracktosearch.ui.component.savePosterToGallery
 import com.tracktosearch.ui.component.zoomSharedSource
@@ -92,7 +91,6 @@ internal fun VideosAndImagesSection(
     onShowAll: () -> Unit = {},
     sharedKeyPrefix: String? = null
 ) {
-    val context = LocalContext.current
     val totalCount = videos.size + backdrops.size
     Column(modifier = Modifier.padding(bottom = 12.dp)) {
         DetailSectionHeader(
@@ -111,11 +109,7 @@ internal fun VideosAndImagesSection(
             ) { index, backdropUrl ->
                 BackdropCard(
                     backdropUrl = backdropUrl,
-                    onClick = {
-                        // 点击即预热 original 大图，转场打开时子采样直接命中磁盘缓存
-                        prefetchFullscreenImage(context, listOf(backdropUrl.replace("/w780/", "/original/")))
-                        onBackdropClick(index)
-                    },
+                    onClick = { onBackdropClick(index) },
                     sharedKeyPrefix = sharedKeyPrefix,
                     index = index
                 )

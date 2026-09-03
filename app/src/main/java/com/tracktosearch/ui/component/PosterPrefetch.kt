@@ -10,7 +10,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalContext
 import coil.imageLoader
-import coil.request.CachePolicy
 import coil.request.ImageRequest
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -105,38 +104,5 @@ private fun rememberPosterPrefetchCore(
                 }
                 prefetchedUpTo = end - 1
             }
-    }
-}
-
-/**
- * 点击缩略图后、启动共享元素转场前，预热全屏查看用的大图 URL。
- *
- * telephoto 子采样需要原图落盘后从磁盘读 tile，预热提前完成这一步，
- * 打开即可见清晰图，避免「先糊后突然变清」。
- *
- * 已落盘的直接跳过：省掉一次 pipeline 与一次整图解码（预热请求的唯一目的就是把文件写进磁盘缓存）。
- * 未落盘时才 enqueue，此时本预热请求与全屏组件约 1 帧后发出的正式请求是两次独立 pipeline
- * 执行（Coil 2 无飞行中合并），同一 URL 会并发下载两份流量；换来的是磁盘写入提前一拍。
- *
- * 预热请求刻意压到 1px 解码 + 完全绕开内存缓存：磁盘缓存存的是原始响应字节，与解码尺寸无关，
- * 子采样照样能读到完整原图；而不限尺寸解码 original 剧照会产生数十 MB 位图并挤掉海报缓存。
- * 上面已按磁盘缓存判过 continue，内存缓存这一层读也没有意义（读命中反而可能跳过落盘）。
- */
-@OptIn(coil.annotation.ExperimentalCoilApi::class) // DiskCache.openSnapshot 仍是实验 API
-fun prefetchFullscreenImage(context: android.content.Context, urls: List<String?>) {
-    val loader = context.imageLoader
-    val diskCache = loader.diskCache
-    for (url in urls) {
-        if (url == null) continue
-        // diskCacheKey 未自定义时 Coil 2 直接用 URL 作 key
-        if (diskCache?.openSnapshot(url)?.use { true } == true) continue
-        loader.enqueue(
-            ImageRequest.Builder(context)
-                .data(url)
-                .crossfade(false)
-                .size(1)
-                .memoryCachePolicy(CachePolicy.DISABLED)
-                .build()
-        )
     }
 }
