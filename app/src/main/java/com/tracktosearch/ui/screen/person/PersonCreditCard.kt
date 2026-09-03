@@ -1,7 +1,6 @@
 package com.tracktosearch.ui.screen.person
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +31,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 
 @Composable
 internal fun CreditCard(
@@ -46,9 +47,12 @@ internal fun CreditCard(
     Column(
         modifier = Modifier
             .width(100.dp)
-            .clickable(
+            // 网格里的作品卡进详情，按列表项给轻一档。本卡是本包自绘的，
+            // 不走 MovieCard / PosterCard，所以触感得自己发
+            .hapticClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                semantic = HapticSemantic.LIGHT_TAP,
                 enabled = !isResolving,
                 onClick = onClick
             ),

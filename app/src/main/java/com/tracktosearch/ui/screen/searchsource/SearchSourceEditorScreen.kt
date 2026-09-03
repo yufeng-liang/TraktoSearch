@@ -3,7 +3,6 @@ package com.tracktosearch.ui.screen.searchsource
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -64,6 +63,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -293,12 +295,21 @@ fun SearchSourceEditorScreen(
             title = { Text(stringResource(R.string.search_sources_title)) },
             text = { Text(stringResource(R.string.import_duplicate_warning)) },
             confirmButton = {
-                TextButton(onClick = { showConflictDialog = false; viewModel.save(); onSaved() }) {
+                // 每个槽是独立 subcomposition（自己的宿主 View），单独取一份
+                val confirmHaptics = rememberAppHaptics()
+                TextButton(onClick = {
+                    confirmHaptics.tap()
+                    showConflictDialog = false; viewModel.save(); onSaved()
+                }) {
                     Text(stringResource(R.string.import_confirm))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showConflictDialog = false }) { Text(stringResource(android.R.string.cancel)) }
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = {
+                    dismissHaptics.lightTap()
+                    showConflictDialog = false
+                }) { Text(stringResource(android.R.string.cancel)) }
             }
         )
     }
@@ -403,7 +414,10 @@ private fun StepIndicator(
                             else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                         }
                     )
-                    .clickable { onStepClick(stepNumber) }
+                    // 三格步骤条是分段控件，一组里只能停在一格上，走刻度感
+                    .hapticClickable(semantic = HapticSemantic.SEGMENT_TICK) {
+                        onStepClick(stepNumber)
+                    }
                     .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
@@ -453,6 +467,7 @@ private fun StepBasic(
     onPickTemplate: () -> Unit,
     onPasteBaseUrl: () -> Unit
 ) {
+    val haptics = rememberAppHaptics()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -461,7 +476,11 @@ private fun StepBasic(
     ) {
         // 模板入口放在最上面：多数人要加的源就在模板里，先给这条捷径再谈手填
         Card(
-            onClick = onPickTemplate,
+            // 带右箭头的跳转入口，不是本页的提交动作，按次级入口给 LIGHT_TAP
+            onClick = {
+                haptics.lightTap()
+                onPickTemplate()
+            },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(
@@ -538,7 +557,10 @@ private fun StepBasic(
             monospace = true
         )
         OutlinedButton(
-            onClick = onPasteBaseUrl,
+            onClick = {
+                haptics.tap()
+                onPasteBaseUrl()
+            },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp)
         ) {
@@ -560,6 +582,8 @@ private fun StepAutoProbe(
     onStartProbe: () -> Unit,
     onManual: () -> Unit
 ) {
+    // 本步四个按钮都是带文字的操作按钮，同给 tap，共用一份实例
+    val haptics = rememberAppHaptics()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -574,7 +598,10 @@ private fun StepAutoProbe(
         when (probeState) {
             is SearchSourceEditorViewModel.ProbeUiState.Idle -> {
                 Button(
-                    onClick = onStartProbe,
+                    onClick = {
+                        haptics.tap()
+                        onStartProbe()
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp)
                 ) {
@@ -605,7 +632,10 @@ private fun StepAutoProbe(
             is SearchSourceEditorViewModel.ProbeUiState.Found -> {
                 ProbeResultCard(state = probeState)
                 OutlinedButton(
-                    onClick = onManual,
+                    onClick = {
+                        haptics.tap()
+                        onManual()
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp)
                 ) { Text(stringResource(R.string.editor_probe_manual)) }
@@ -617,7 +647,10 @@ private fun StepAutoProbe(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     OutlinedButton(
-                        onClick = onStartProbe,
+                        onClick = {
+                            haptics.tap()
+                            onStartProbe()
+                        },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(14.dp)
                     ) {
@@ -630,7 +663,10 @@ private fun StepAutoProbe(
                         Text(stringResource(R.string.editor_probe_retry))
                     }
                     Button(
-                        onClick = onManual,
+                        onClick = {
+                            haptics.tap()
+                            onManual()
+                        },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(14.dp)
                     ) { Text(stringResource(R.string.editor_probe_manual)) }
@@ -744,6 +780,7 @@ private fun StepConfirm(
     onImportRename: (String) -> Unit,
     onPasteBaseUrl: () -> Unit
 ) {
+    val haptics = rememberAppHaptics()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -832,7 +869,13 @@ private fun StepConfirm(
             expanded = expandedGroup == EditorGroup.BASIC,
             onToggle = { onGroupToggle(EditorGroup.BASIC) },
             baseUrlTrailingIcon = {
-                IconButton(onClick = onPasteBaseUrl) {
+                // 输入框尾部的图标按钮，比步骤 1 那个整宽文字按钮轻一档
+                IconButton(
+                    onClick = {
+                        haptics.lightTap()
+                        onPasteBaseUrl()
+                    }
+                ) {
                     Icon(
                         imageVector = Icons.Rounded.ContentPaste,
                         contentDescription = stringResource(R.string.editor_paste_url),
@@ -877,6 +920,9 @@ private fun EditorBottomBar(
     onSave: () -> Unit,
     canSave: Boolean
 ) {
+    // 上一步/下一步/测试/保存都是带文字的操作按钮，同给 tap；
+    // 「保存成功」那一记 confirm 归另一个任务在 ViewModel 侧接，这里只发点击
+    val haptics = rememberAppHaptics()
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -909,27 +955,39 @@ private fun EditorBottomBar(
         ) {
             if (step > 1) {
                 OutlinedButton(
-                    onClick = onPrev,
+                    onClick = {
+                        haptics.tap()
+                        onPrev()
+                    },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp)
                 ) { Text(stringResource(R.string.editor_prev)) }
             }
             when (step) {
                 1 -> Button(
-                    onClick = onNext,
+                    onClick = {
+                        haptics.tap()
+                        onNext()
+                    },
                     enabled = canNext,
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp)
                 ) { Text(stringResource(R.string.editor_next)) }
                 2 -> Button(
-                    onClick = onNext,
+                    onClick = {
+                        haptics.tap()
+                        onNext()
+                    },
                     enabled = canNext,
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp)
                 ) { Text(stringResource(R.string.editor_next_confirm)) }
                 else -> {
                     OutlinedButton(
-                        onClick = onTest,
+                        onClick = {
+                            haptics.tap()
+                            onTest()
+                        },
                         enabled = !isTesting,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(14.dp)
@@ -944,7 +1002,10 @@ private fun EditorBottomBar(
                         }
                     }
                     Button(
-                        onClick = onSave,
+                        onClick = {
+                            haptics.tap()
+                            onSave()
+                        },
                         enabled = canSave,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(14.dp)

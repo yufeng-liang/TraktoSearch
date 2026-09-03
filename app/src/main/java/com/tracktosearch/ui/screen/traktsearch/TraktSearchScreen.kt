@@ -641,7 +641,10 @@ fun TraktSearchScreen(
                                     } else Modifier,
                                     onClick = {
                                         interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                                        // 触感放进守卫里：没有 tmdbId 的人物点了什么也不会发生，
+                                        // 那种情况不该震（PersonSearchCard 用 Card(onClick=)，拦不到 Modifier）
                                         if (item.tmdbId > 0) {
+                                            haptics.lightTap()
                                             onPersonClick(item.tmdbId, item.title, item.posterUrl ?: "", item.avatarColor)
                                         }
                                     }
@@ -826,6 +829,7 @@ fun TraktSearchScreen(
                                     }
                                     if (searchQuery.isNotEmpty()) {
                                         IconButton(onClick = {
+                                            haptics.lightTap()
                                             interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                                             searchQuery = ""
                                         }, modifier = Modifier.size(28.dp)) {

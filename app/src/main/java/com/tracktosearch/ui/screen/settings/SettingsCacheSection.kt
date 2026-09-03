@@ -2,7 +2,6 @@ package com.tracktosearch.ui.screen.settings
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,6 +41,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 
@@ -60,6 +62,7 @@ fun CacheManagementItem(
     containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
+    val haptics = rememberAppHaptics()
 
     // 卡片样式：独占一行的圆角卡片
     Surface(
@@ -77,7 +80,11 @@ fun CacheManagementItem(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { expanded = !expanded }
+                    // 展开 / 收起：语义按点完之后的新状态定，和通知分组那两行同一写法
+                    .hapticClickable(
+                        semantic = if (expanded) HapticSemantic.TOGGLE_OFF
+                                   else HapticSemantic.TOGGLE_ON
+                    ) { expanded = !expanded }
                     .semantics { contentDescription = toggleDescription }
                     .padding(horizontal = 6.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -155,7 +162,7 @@ fun CacheManagementItem(
                         horizontalArrangement = Arrangement.End
                     ) {
                         Button(
-                            onClick = onClearAll,
+                            onClick = { haptics.tap(); onClearAll() },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.error,
                                 contentColor = MaterialTheme.colorScheme.onError
@@ -179,6 +186,7 @@ private fun CacheCategoryRow(
     sizeBytes: Long,
     onClear: () -> Unit
 ) {
+    val haptics = rememberAppHaptics()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -211,7 +219,7 @@ private fun CacheCategoryRow(
             modifier = Modifier.padding(end = 8.dp)
         )
         OutlinedButton(
-            onClick = onClear,
+            onClick = { haptics.tap(); onClear() },
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp)
         ) {
             Text(stringResource(R.string.settings_cache_clear))

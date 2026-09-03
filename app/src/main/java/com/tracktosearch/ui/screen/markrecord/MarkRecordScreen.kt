@@ -104,6 +104,7 @@ import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.navigation.DetailSeedStore
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
@@ -152,6 +153,7 @@ fun MarkRecordScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val traktConnected by sessionViewModel.traktConnected.collectAsStateWithLifecycle()
     val isDark = isAppDarkTheme()
+    val haptics = rememberAppHaptics()
     val hazeState = remember { HazeState() }
     val hazeStyle = HazeMaterials.thin()
     val listState = rememberLazyGridState()
@@ -400,6 +402,7 @@ fun MarkRecordScreen(
                         actions = {
                             if (filteredEmpty) {
                                 TextButton(onClick = {
+                                    haptics.tap()
                                     collapseSearch()
                                     viewModel.updateSearchQuery("")
                                     viewModel.updateFilter(emptySet(), DatePreset.ALL, null, uiState.sortAscending)
@@ -536,7 +539,10 @@ fun MarkRecordScreen(
                                                 }
                                                 if (uiState.searchQuery.isNotEmpty()) {
                                                     IconButton(
-                                                        onClick = { viewModel.updateSearchQuery("") },
+                                                        onClick = {
+                                                            haptics.lightTap()
+                                                            viewModel.updateSearchQuery("")
+                                                        },
                                                         modifier = Modifier.size(28.dp)
                                                     ) {
                                                         Icon(
@@ -602,6 +608,7 @@ fun MarkRecordScreen(
                     Tab(
                         selected = uiState.currentTab == tab,
                         onClick = {
+                            haptics.segmentTick()
                             collapseSearch()
                             viewModel.switchTab(tab)
                         },

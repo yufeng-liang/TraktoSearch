@@ -14,6 +14,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiCharacter
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 
 /**
  * 标题栏上的精灵中心入口。
@@ -32,8 +33,14 @@ fun AiSpriteCenterEntryButton(
     modifier: Modifier = Modifier
 ) {
     val description = stringResource(R.string.ai_sprite_open_center)
+    // 标题栏图标按钮，按「次级入口」给轻一档；上游 SearchScreen / TraktSearchScreen 的
+    // onClick 里没有触感，这一记必须由本组件自己发，否则这两个入口整条路都是哑的
+    val haptics = rememberAppHaptics()
     IconButton(
-        onClick = onClick,
+        onClick = {
+            haptics.lightTap()
+            onClick()
+        },
         modifier = modifier.semantics { contentDescription = description }
     ) {
         if (activatedCharacter != null) {

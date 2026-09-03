@@ -1,6 +1,5 @@
 package com.tracktosearch.ui.screen.detail
 
-import androidx.compose.foundation.clickable
 import com.tracktosearch.ui.theme.RatingGold
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -45,6 +44,9 @@ import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 
 // ==================== 单条评论 ====================
 
@@ -78,6 +80,7 @@ internal fun OwnCommentComposer(
     scene: GlassScene = GlassScene()
 ) {
     var comment by remember(initialComment) { mutableStateOf(initialComment) }
+    val haptics = rememberAppHaptics()
     val isDark = isAppDarkTheme()
     NeumorphicFrostedSurface(
         modifier = Modifier
@@ -109,12 +112,15 @@ internal fun OwnCommentComposer(
                     modifier = Modifier.weight(1f)
                 )
                 if (isEditing) {
-                    TextButton(onClick = onCancelEdit, enabled = !isSaving) {
+                    TextButton(
+                        onClick = { haptics.lightTap(); onCancelEdit() },
+                        enabled = !isSaving
+                    ) {
                         Text(stringResource(R.string.detail_own_comment_cancel))
                     }
                 }
                 Button(
-                    onClick = { onSubmit(comment) },
+                    onClick = { haptics.tap(); onSubmit(comment) },
                     enabled = comment.isNotBlank() && !isSaving
                 ) {
                     if (isSaving) {
@@ -162,6 +168,7 @@ internal fun OwnCommentCard(
     scene: GlassScene = GlassScene()
 ) {
     val isDark = isAppDarkTheme()
+    val haptics = rememberAppHaptics()
     val retryTargetName = when {
         OwnCommentTarget.TRAKT in retryTargets && OwnCommentTarget.DOUBAN in retryTargets ->
             stringResource(R.string.detail_own_comment_targets_trakt_douban)
@@ -199,7 +206,7 @@ internal fun OwnCommentCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                IconButton(onClick = onEdit, enabled = !isSaving) {
+                IconButton(onClick = { haptics.lightTap(); onEdit() }, enabled = !isSaving) {
                     Icon(
                         imageVector = Icons.Rounded.Edit,
                         contentDescription = stringResource(R.string.detail_own_comment_edit),
@@ -211,7 +218,7 @@ internal fun OwnCommentCard(
             ExpandableText(text = comment)
             if (retryTargets.isNotEmpty()) {
                 TextButton(
-                    onClick = onRetry,
+                    onClick = { haptics.tap(); onRetry() },
                     enabled = !isSaving,
                     modifier = Modifier.align(Alignment.End)
                 ) {
@@ -239,6 +246,7 @@ internal fun CommentItem(
 ) {
     var showOriginal by remember(comment.id) { mutableStateOf(false) }
     var spoilerRevealed by remember { mutableStateOf(false) }
+    val haptics = rememberAppHaptics()
 
     val displayText = if (showOriginal) comment.comment else (translatedText ?: comment.comment)
     val isDark = isAppDarkTheme()
@@ -305,9 +313,10 @@ internal fun CommentItem(
                             text = stringResource(R.string.detail_translate),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.clickable(
+                            modifier = Modifier.hapticClickable(
                                 interactionSource = remember { MutableInteractionSource() },
-                                indication = null
+                                indication = null,
+                                semantic = HapticSemantic.LIGHT_TAP
                             ) { onTranslate(comment.id) }
                         )
                     } else if (isThisTranslating) {
@@ -332,7 +341,7 @@ internal fun CommentItem(
             // 剧透遮罩
             if (comment.spoiler && !spoilerRevealed) {
                 Surface(
-                    onClick = { spoilerRevealed = true },
+                    onClick = { haptics.toggleOn(); spoilerRevealed = true },
                     modifier = Modifier
                         .fillMaxWidth(),
                     shape = RoundedCornerShape(6.dp),
@@ -361,9 +370,11 @@ internal fun CommentItem(
                             text = if (showOriginal) stringResource(R.string.detail_translated) else stringResource(R.string.detail_original),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.clickable(
+                            modifier = Modifier.hapticClickable(
                                 interactionSource = remember { MutableInteractionSource() },
-                                indication = null
+                                indication = null,
+                                // 原文/译文互斥，只能选一个 → 不是开关而是「把选中位挪一格」
+                                semantic = HapticSemantic.SEGMENT_TICK
                             ) { showOriginal = !showOriginal }
                         )
                     }

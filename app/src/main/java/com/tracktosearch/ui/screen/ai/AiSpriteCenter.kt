@@ -14,7 +14,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -87,6 +86,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiCharacter
 import com.tracktosearch.data.ai.AiQuizQuestionType
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -225,12 +227,21 @@ fun AiSpriteCenter(
             title = { Text(stringResource(R.string.ai_taste_consent_title)) },
             text = { Text(stringResource(R.string.ai_taste_consent_message)) },
             confirmButton = {
-                TextButton(onClick = viewModel::onTasteConsentAgreed) {
+                // AlertDialog 的槽是独立 subcomposition（Dialog 有自己的宿主 View），单独取一份
+                val confirmHaptics = rememberAppHaptics()
+                TextButton(onClick = {
+                    confirmHaptics.tap()
+                    viewModel.onTasteConsentAgreed()
+                }) {
                     Text(stringResource(R.string.ai_taste_consent_agree))
                 }
             },
             dismissButton = {
-                TextButton(onClick = viewModel::onTasteConsentDismissed) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = {
+                    dismissHaptics.lightTap()
+                    viewModel.onTasteConsentDismissed()
+                }) {
                     Text(stringResource(R.string.ai_taste_consent_decline))
                 }
             }
@@ -250,7 +261,11 @@ fun AiSpriteCenter(
                 )
             },
             confirmButton = {
+                // 同上，槽内单独取一份。跳的是本应用自己的设置页签（MainTabNavigator），
+                // 不是系统设置，所以不属于「离开本应用」那条静默规则
+                val confirmHaptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    confirmHaptics.tap()
                     // 先收弹窗再跳转：弹窗标志挂在共享 ViewModel 上，离开页面前必须清掉
                     viewModel.onTasteDisabledDismiss()
                     onOpenSettings()
@@ -259,7 +274,11 @@ fun AiSpriteCenter(
                 }
             },
             dismissButton = {
-                TextButton(onClick = viewModel::onTasteDisabledDismiss) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = {
+                    dismissHaptics.lightTap()
+                    viewModel.onTasteDisabledDismiss()
+                }) {
                     Text(stringResource(R.string.common_cancel))
                 }
             }
@@ -285,6 +304,7 @@ private fun SpriteCenterHome(
 ) {
     val character = state.selectedCharacter ?: state.characters.first()
     val scrollState = rememberScrollState()
+    val haptics = rememberAppHaptics()
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.background,
@@ -305,7 +325,12 @@ private fun SpriteCenterHome(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onDismiss) {
+                    // 关的是盖在搜索页之上的这层面板，不弹导航栈，按「对话框的关闭」给轻一记；
+                    // 上面那个 BackHandler 与系统返回手势照旧静默（同 onDismissRequest 的处理）
+                    IconButton(onClick = {
+                        haptics.lightTap()
+                        onDismiss()
+                    }) {
                         Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.ai_sprite_close))
                     }
                 },
@@ -377,7 +402,10 @@ private fun SpriteCenterHome(
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.bodyMedium
                         )
-                        TextButton(onClick = onReloadCharacters) {
+                        TextButton(onClick = {
+                            haptics.tap()
+                            onReloadCharacters()
+                        }) {
                             Text(stringResource(R.string.ai_sprite_characters_retry))
                         }
                     }
@@ -427,6 +455,7 @@ private fun SpriteCenterHome(
 
 @Composable
 private fun GuestHintCard(onNavigateToLogin: () -> Unit) {
+    val haptics = rememberAppHaptics()
     Surface(
         modifier = Modifier.padding(horizontal = 16.dp),
         shape = RoundedCornerShape(20.dp),
@@ -441,7 +470,10 @@ private fun GuestHintCard(onNavigateToLogin: () -> Unit) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(stringResource(R.string.ai_sprite_guest_hint), style = MaterialTheme.typography.bodyMedium)
                 TextButton(
-                    onClick = onNavigateToLogin,
+                    onClick = {
+                        haptics.tap()
+                        onNavigateToLogin()
+                    },
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                 ) {
                     Text(stringResource(R.string.ai_sprite_login))
@@ -505,6 +537,7 @@ private fun GreetingSummaryCard(
     onOpenGreeting: () -> Unit,
     onPlayAudio: (com.tracktosearch.data.ai.AiAudio) -> Unit
 ) {
+    val haptics = rememberAppHaptics()
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -516,7 +549,10 @@ private fun GreetingSummaryCard(
             fontWeight = FontWeight.Bold
         )
         state.greeting?.audio?.let { audio ->
-            IconButton(onClick = { onPlayAudio(audio) }) {
+            IconButton(onClick = {
+                haptics.lightTap()
+                onPlayAudio(audio)
+            }) {
                 Icon(Icons.Rounded.VolumeUp, contentDescription = stringResource(R.string.ai_audio_play))
             }
         }
@@ -527,7 +563,8 @@ private fun GreetingSummaryCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(18.dp))
-                .clickable(onClick = onOpenGreeting),
+                // 卡片整块进「昵称欢迎」功能页，按列表项进详情给轻一档
+                .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onOpenGreeting),
             shape = RoundedCornerShape(18.dp),
             color = MaterialTheme.colorScheme.surfaceVariant
         ) {
@@ -564,6 +601,7 @@ private fun CharacterStage(
         isAuthorized = state.isAuthorized
     )
     val transition = rememberInfiniteTransition(label = "sprite_bob")
+    val haptics = rememberAppHaptics()
     val bob by transition.animateFloat(
         initialValue = 0.97f,
         targetValue = 1.03f,
@@ -626,7 +664,11 @@ private fun CharacterStage(
                             AuditionPlaybackState.IDLE -> stringResource(R.string.ai_audio_play)
                         }
                         IconButton(
-                            onClick = onReplayAudition,
+                            onClick = {
+                                // 试听要等 TTS 回来（还有 LOADING 态），这一记是「点到了」的即时回执
+                                haptics.lightTap()
+                                onReplayAudition()
+                            },
                             enabled = auditionPlaybackState != AuditionPlaybackState.LOADING,
                             modifier = Modifier
                                 .size(32.dp)
@@ -665,7 +707,13 @@ private fun CharacterStage(
                         textAlign = TextAlign.Center
                     )
                     state.greeting?.audio?.takeIf { showActivatedContent }?.let { audio ->
-                        IconButton(onClick = { onPlayAudio(audio) }, modifier = Modifier.size(32.dp)) {
+                        IconButton(
+                            onClick = {
+                                haptics.lightTap()
+                                onPlayAudio(audio)
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
                             Icon(Icons.Rounded.VolumeUp, contentDescription = stringResource(R.string.ai_audio_play), modifier = Modifier.size(18.dp))
                         }
                     }
@@ -680,8 +728,13 @@ private fun CharacterChoice(character: AiCharacter, selected: Boolean, onClick: 
     val preparingLabel = stringResource(R.string.ai_sprite_preparing)
     // 选中态之前只靠底色和抬升表达，读屏读不出选了谁；补 selected 语义与单选 role
     val choiceDescription = if (character.isAvailable) character.name else "${character.name}, $preparingLabel"
+    // selectedCharacterId 是单值赋值、一组里只能选一个（role 也是 RadioButton）→ segmentTick
+    val haptics = rememberAppHaptics()
     Surface(
-        onClick = onClick,
+        onClick = {
+            haptics.segmentTick()
+            onClick()
+        },
         modifier = Modifier
             .size(width = 88.dp, height = 112.dp)
             .semantics {
@@ -721,6 +774,7 @@ private fun ActivationPanel(
     val voiceAvailable = canRequestVoiceActivation(state.activationAttempt)
     val showTextActivation = shouldShowTextActivation(state)
     val blockedReasonRes = activationBlockedReasonRes(character, state)
+    val haptics = rememberAppHaptics()
 
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         val activationText = when (state.activationState) {
@@ -742,7 +796,11 @@ private fun ActivationPanel(
         )
         Spacer(Modifier.height(10.dp))
         Button(
-            onClick = onActivate,
+            onClick = {
+                // 本页主操作。可能顺带弹系统权限框，但那盖在本应用之上、没离开任务栈，照主操作给 tap
+                haptics.tap()
+                onActivate()
+            },
             enabled = canActivateCharacter(character, state),
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -774,6 +832,7 @@ private fun ActivationPanel(
                 Spacer(Modifier.height(6.dp))
                 OutlinedButton(
                     onClick = {
+                        haptics.tap()
                         onClearError()
                         textDialogVisible = true
                     },
@@ -847,12 +906,21 @@ private fun TextActivationDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(input) }, enabled = valid) {
+            // AlertDialog 的槽是独立 subcomposition（Dialog 有自己的宿主 View），单独取一份
+            val confirmHaptics = rememberAppHaptics()
+            TextButton(onClick = {
+                confirmHaptics.tap()
+                onConfirm(input)
+            }, enabled = valid) {
                 Text(stringResource(R.string.ai_sprite_text_fallback_confirm))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            val dismissHaptics = rememberAppHaptics()
+            TextButton(onClick = {
+                dismissHaptics.lightTap()
+                onDismiss()
+            }) {
                 Text(stringResource(R.string.common_cancel))
             }
         }
@@ -879,7 +947,8 @@ private fun FeatureList(state: AiSpriteUiState, onOpenFeature: (AiFeature) -> Un
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onOpenFeature(feature) },
+                    // 四个功能行，进各自的功能页，按列表项给轻一档
+                    .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onOpenFeature(feature) },
                 shape = RoundedCornerShape(18.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant
             ) {

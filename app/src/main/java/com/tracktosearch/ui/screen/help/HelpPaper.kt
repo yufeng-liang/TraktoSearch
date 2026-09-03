@@ -2,7 +2,6 @@ package com.tracktosearch.ui.screen.help
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -41,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 
 /**
  * 帮助页的说明书色板。
@@ -202,9 +203,11 @@ internal fun HelpSectionHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(
+            .hapticClickable(
                 interactionSource = interactionSource,
                 indication = null,
+                // 展开/收起按「展开后的状态」发：expanded 是点击前的状态，点完取反
+                semantic = if (expanded) HapticSemantic.TOGGLE_OFF else HapticSemantic.TOGGLE_ON,
                 onClick = onToggle,
             )
             .padding(vertical = 14.dp),

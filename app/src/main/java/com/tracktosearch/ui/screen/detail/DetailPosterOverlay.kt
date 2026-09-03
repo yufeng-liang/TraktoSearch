@@ -47,6 +47,9 @@ import com.tracktosearch.ui.component.ProgressiveFullscreenImage
 import com.tracktosearch.ui.component.queryExistingFile
 import com.tracktosearch.ui.component.savePosterToGallery
 import com.tracktosearch.ui.component.zoomSharedTarget
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.util.showToast
 import kotlinx.coroutines.launch
 import net.engawapg.lib.zoomable.rememberZoomState
@@ -74,6 +77,8 @@ internal fun PosterFullscreenOverlay(
     val context = LocalContext.current
     val savedToAlbumToast = stringResource(R.string.gallery_saved_to_album)
     val scope = rememberCoroutineScope()
+    // AnimatedVisibility 的内容不是独立窗口，宿主 View 与本函数一致，取一份共用即可
+    val haptics = rememberAppHaptics()
     var isSaved by remember { mutableStateOf<Boolean?>(null) } // null=未检查, true=已保存, false=未保存
 
     // 进入时检查是否已保存（仅打开大图时查询，避免每次进详情页都跑 MediaStore 查询）
@@ -106,9 +111,10 @@ internal fun PosterFullscreenOverlay(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.92f))
-                .clickable(
+                .hapticClickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
+                    semantic = HapticSemantic.LIGHT_TAP,
                     onClick = {
                         if (zoomState.scale > 1f) {
                             scope.launch { zoomState.changeScale(1f, Offset.Zero) }
@@ -140,6 +146,9 @@ internal fun PosterFullscreenOverlay(
                     .zoomable(
                         zoomState,
                         onTap = {
+                            // 与外层「点背景退出」那个面同一记 LIGHT_TAP：两处行为一样，
+                            // 落点不同却手感不同才是怪的
+                            haptics.lightTap()
                             if (zoomState.scale > 1f) {
                                 scope.launch { zoomState.changeScale(1f, Offset.Zero) }
                             } else {
@@ -174,7 +183,7 @@ internal fun PosterFullscreenOverlay(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // 关闭按钮（半透明黑色背景）
-                IconButton(onClick = onDismiss) {
+                IconButton(onClick = { haptics.lightTap(); onDismiss() }) {
                     Box(
                         modifier = Modifier
                             .size(40.dp)
@@ -200,6 +209,7 @@ internal fun PosterFullscreenOverlay(
 
                 // 保存按钮（已保存时显示勾选图标，半透明黑色背景）
                 IconButton(onClick = {
+                    haptics.tap()
                     if (isSaved == true) {
                         context.showToast(savedToAlbumToast)
                     } else {

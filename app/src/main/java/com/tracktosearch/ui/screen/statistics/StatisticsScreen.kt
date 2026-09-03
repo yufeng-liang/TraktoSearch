@@ -134,6 +134,7 @@ fun StatisticsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showInfoDialog by remember { mutableStateOf(false) }
+    val haptics = rememberAppHaptics()
     // 共享元素转场 scope(与设置页观看统计卡片配对)
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
@@ -485,7 +486,10 @@ fun StatisticsScreen(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 IconButton(
-                    onClick = { showInfoDialog = true },
+                    onClick = {
+                        haptics.lightTap()
+                        showInfoDialog = true
+                    },
                     modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
@@ -497,7 +501,10 @@ fun StatisticsScreen(
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 IconButton(
-                    onClick = onShare,
+                    onClick = {
+                        haptics.lightTap()
+                        onShare()
+                    },
                     enabled = shareEnabled,
                     modifier = Modifier.size(40.dp)
                 ) {
@@ -584,7 +591,15 @@ private fun StatisticsInfoDialog(onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            // 对话框有自己的宿主 View，按 ComposeHaptics 的约定在这一层重新取一份。
+            // 这一记是本弹窗唯一的主按钮（标着「确定」），即使它只是关掉弹窗也按主按钮给 tap
+            val dialogHaptics = rememberAppHaptics()
+            TextButton(
+                onClick = {
+                    dialogHaptics.tap()
+                    onDismiss()
+                }
+            ) {
                 Text(stringResource(android.R.string.ok))
             }
         }
@@ -1283,7 +1298,11 @@ private fun HeatmapChart(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(
-                onClick = { onWeekOffsetChange(weekOffset - HEATMAP_WEEKS) },
+                onClick = {
+                    // 横滑翻周发的是 gestureEnd，箭头是同一个动作的按钮路径，按图标按钮给一记轻的
+                    haptics.lightTap()
+                    onWeekOffsetChange(weekOffset - HEATMAP_WEEKS)
+                },
                 modifier = Modifier.size(32.dp)
             ) {
                 Text("←", fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1294,7 +1313,10 @@ private fun HeatmapChart(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             IconButton(
-                onClick = { onWeekOffsetChange(weekOffset + HEATMAP_WEEKS) },
+                onClick = {
+                    haptics.lightTap()
+                    onWeekOffsetChange(weekOffset + HEATMAP_WEEKS)
+                },
                 modifier = Modifier.size(32.dp),
                 enabled = canGoForward
             ) {

@@ -6,7 +6,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,6 +60,9 @@ import coil.request.ImageRequest
 import coil.size.Scale
 import com.tracktosearch.R
 import com.tracktosearch.data.local.SplashQuote
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.splash.SplashPalette
 import com.tracktosearch.ui.screen.splash.grainBrush
 import androidx.compose.ui.graphics.luminance
@@ -347,7 +349,15 @@ private fun MonthArrow(
     palette: SplashPalette,
     onClick: () -> Unit,
 ) {
-    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(34.dp)) {
+    val haptics = rememberAppHaptics()
+    IconButton(
+        onClick = {
+            haptics.lightTap()
+            onClick()
+        },
+        enabled = enabled,
+        modifier = Modifier.size(34.dp),
+    ) {
         Icon(
             imageVector = icon,
             contentDescription = description,
@@ -499,9 +509,10 @@ private fun DayCell(
             .border(if (isToday) 1.2.dp else 0.7.dp, borderColor, RoundedCornerShape(5.dp))
             .then(
                 if (cell?.openable == true) {
-                    Modifier.clickable(
+                    Modifier.hapticClickable(
                         interactionSource = interactionSource,
                         indication = null,
+                        semantic = HapticSemantic.LIGHT_TAP,
                         onClick = onClick,
                     )
                 } else {

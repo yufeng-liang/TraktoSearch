@@ -1,6 +1,5 @@
 package com.tracktosearch.ui.screen.detail
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -131,7 +130,9 @@ internal fun MarkWatchedDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
-                            .clickable { toggleSeasonExpand(season.number) },
+                            .hapticClickable(
+                                semantic = if (isExpanded) HapticSemantic.TOGGLE_OFF else HapticSemantic.TOGGLE_ON
+                            ) { toggleSeasonExpand(season.number) },
                         shape = RoundedCornerShape(10.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
@@ -264,6 +265,8 @@ internal fun MarkWatchedDialog(
             }
         },
         confirmButton = {
+            // confirmButton 与 text 是各自独立的 subcomposition，各取一份
+            val confirmHaptics = rememberAppHaptics()
             // 所有已勾选季的集列表均已加载完成后才允许确认，避免未加载季的勾选被静默丢弃
             val confirmEnabled = selectedEpisodes.value.entries.all { (seasonNum, epNums) ->
                 epNums.isEmpty() || episodes[seasonNum] != null
@@ -271,6 +274,7 @@ internal fun MarkWatchedDialog(
             TextButton(
                 enabled = confirmEnabled,
                 onClick = {
+                    confirmHaptics.tap()
                     // 收集所有已勾选集的 trakt ID；已看过的集仅预勾展示，提交时排除避免 Trakt history 重复
                     val selectedIds = mutableListOf<Int>()
                     selectedEpisodes.value.forEach { (seasonNum, epNums) ->
@@ -295,7 +299,8 @@ internal fun MarkWatchedDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            val dismissHaptics = rememberAppHaptics()
+            TextButton(onClick = { dismissHaptics.lightTap(); onDismiss() }) {
                 Text(stringResource(R.string.common_cancel))
             }
         }

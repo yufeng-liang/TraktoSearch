@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.ShareCodec
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 
 /** 分享配置弹层：编码文本 + 复制 + 系统分享面板 */
 @Composable
@@ -57,9 +58,12 @@ fun ShareSourceDialog(
             }
         },
         confirmButton = {
+            // 槽是独立 subcomposition（自己的宿主 View），单独取一份
+            val haptics = rememberAppHaptics()
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(
                     onClick = {
+                        haptics.tap()
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         clipboard.setPrimaryClip(ClipData.newPlainText("source-config", text))
                         // 这里保留 Toast：复制后弹层不关，Snackbar 由下层 Scaffold 承载会被弹层窗口盖住看不见
@@ -69,6 +73,9 @@ fun ShareSourceDialog(
                 ) { Text(stringResource(R.string.share_copy)) }
                 Button(
                     onClick = {
+                        // 系统分享面板是盖在本应用之上的系统 UI，这一下没有离开任务栈（真正跳出去
+                        // 是用户在面板里再选一个应用），按弹层主操作给 tap
+                        haptics.tap()
                         val sendIntent = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
                             putExtra(Intent.EXTRA_TEXT, text)
@@ -113,6 +120,8 @@ fun ImportSourceDialog(
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.editor_title_import)) },
         text = {
+            // text 槽也是独立 subcomposition，单独取一份
+            val bodyHaptics = rememberAppHaptics()
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = pasteText,
@@ -128,6 +137,8 @@ fun ImportSourceDialog(
                 TextButton(onClick = {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()?.let { it ->
+                        // 触感放在 let 里面：剪贴板为空时这一下什么也没做，不该震
+                        bodyHaptics.tap()
                         pasteText = it
                         val decoded = ShareCodec.decode(it.trim())
                         if (decoded == null) {
@@ -167,9 +178,11 @@ fun ImportSourceDialog(
             }
         },
         confirmButton = {
+            val confirmHaptics = rememberAppHaptics()
             TextButton(
                 enabled = preview != null,
                 onClick = {
+                    confirmHaptics.tap()
                     preview?.let { source ->
                         val finalName = editableName.trim().ifBlank { source.name }
                         onConfirm(if (finalName != source.name) source.copy(name = finalName) else source)
@@ -177,7 +190,13 @@ fun ImportSourceDialog(
                 }
             ) { Text(stringResource(R.string.import_confirm)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) } }
+        dismissButton = {
+            val dismissHaptics = rememberAppHaptics()
+            TextButton(onClick = {
+                dismissHaptics.lightTap()
+                onDismiss()
+            }) { Text(stringResource(android.R.string.cancel)) }
+        }
     )
 }
 

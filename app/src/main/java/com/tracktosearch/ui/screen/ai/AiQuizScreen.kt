@@ -9,7 +9,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -65,6 +64,9 @@ import com.tracktosearch.data.ai.AiQuizQuestion
 import com.tracktosearch.data.ai.AiQuizQuestionType
 import com.tracktosearch.data.ai.AiQuizResult
 import com.tracktosearch.data.ai.AiWatchedTitleDto
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import kotlinx.coroutines.delay
 
 /** 单选题选中后展示选中态的时长，之后自动进入下一题。 */
@@ -139,6 +141,7 @@ private fun QuizQuestionScreen(
     val progress = quizProgress(questionIndex + 1, quiz.questions.size)
     val unanswered = unansweredQuizCount(quiz, state.quizAnswers)
     var unansweredConfirmVisible by remember { mutableStateOf(false) }
+    val haptics = rememberAppHaptics()
 
     // 自动跳题是加速路径不是替换：仅单选题从无到有选中时触发，
     // 600ms 展示选中态（判分在服务端，本地没有对错反馈）后切下一题；手动「下一题」仍保留。
@@ -213,7 +216,10 @@ private fun QuizQuestionScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 OutlinedButton(
-                    onClick = viewModel::previousQuestion,
+                    onClick = {
+                        haptics.tap()
+                        viewModel.previousQuestion()
+                    },
                     enabled = questionIndex > 0,
                     modifier = Modifier.weight(1f)
                 ) {
@@ -222,6 +228,7 @@ private fun QuizQuestionScreen(
                 if (questionIndex == quiz.questions.lastIndex) {
                     Button(
                         onClick = {
+                            haptics.tap()
                             // 有漏题先提醒：未作答直接算 0 分，提交后没有回头路
                             if (unanswered > 0) unansweredConfirmVisible = true else viewModel.submitQuiz()
                         },
@@ -232,7 +239,10 @@ private fun QuizQuestionScreen(
                     }
                 } else {
                     Button(
-                        onClick = viewModel::nextQuestion,
+                        onClick = {
+                            haptics.tap()
+                            viewModel.nextQuestion()
+                        },
                         modifier = Modifier.weight(1f)
                     ) {
                         Text(stringResource(R.string.ai_quiz_next))
@@ -250,7 +260,10 @@ private fun QuizQuestionScreen(
             title = { Text(stringResource(R.string.ai_quiz_unanswered_title)) },
             text = { Text(stringResource(R.string.ai_quiz_unanswered_message, unanswered)) },
             confirmButton = {
+                // AlertDialog 的槽是独立 subcomposition（Dialog 有自己的宿主 View），单独取一份
+                val confirmHaptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    confirmHaptics.tap()
                     unansweredConfirmVisible = false
                     viewModel.submitQuiz()
                 }) {
@@ -258,7 +271,11 @@ private fun QuizQuestionScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { unansweredConfirmVisible = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = {
+                    dismissHaptics.lightTap()
+                    unansweredConfirmVisible = false
+                }) {
                     Text(stringResource(R.string.common_cancel))
                 }
             }
@@ -280,6 +297,7 @@ private fun QuizPreviewScreen(
         QuizUnavailable()
         return
     }
+    val haptics = rememberAppHaptics()
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -326,7 +344,11 @@ private fun QuizPreviewScreen(
                         }
                     }
                     OutlinedButton(
-                        onClick = { onReplace(index) },
+                        onClick = {
+                            // 7 行里每行一个，成片出现的行内操作按列表项那档给轻一记
+                            haptics.lightTap()
+                            onReplace(index)
+                        },
                         // 候选被用光（已看正好 7 部）时必须禁用，否则是个点了没反应的死按钮
                         enabled = replaceAvailable && !isLoading
                     ) {
@@ -359,7 +381,10 @@ private fun QuizPreviewScreen(
                     )
                 }
                 Button(
-                    onClick = onStart,
+                    onClick = {
+                        haptics.tap()
+                        onStart()
+                    },
                     enabled = movies.size == 7 && !isLoading,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -367,7 +392,10 @@ private fun QuizPreviewScreen(
                 }
                 // 「全部重抽」是次级操作：OutlinedButton 不抢主按钮视觉；非破坏性（还没作答），无需二次确认
                 OutlinedButton(
-                    onClick = onRedrawAll,
+                    onClick = {
+                        haptics.tap()
+                        onRedrawAll()
+                    },
                     // 与「换一部」共用可用性判断：没有未用候选时重抽必然原样返回，禁用免得变死按钮
                     enabled = replaceAvailable && !isLoading,
                     modifier = Modifier.fillMaxWidth()
@@ -466,18 +494,40 @@ private fun ChoiceRow(
     multiple: Boolean,
     onClick: () -> Unit
 ) {
+    // 多选题的 state 是 selectedOptionIds 的加减，「加上 / 去掉」的方向感有意义 → toggle；
+    // 单选题只是把选中位挪一格，没有「取消」这回事 → segmentTick
+    val rowSemantic = when {
+        !multiple -> HapticSemantic.SEGMENT_TICK
+        selected -> HapticSemantic.TOGGLE_OFF
+        else -> HapticSemantic.TOGGLE_ON
+    }
+    // 勾选框 / 单选钮自己消费点击，命中它们时父行的 clickable 不会跟着触发，
+    // 所以两边各发一记不会双震；反过来只给父行会漏掉「正好点在钮上」这条路
+    val haptics = rememberAppHaptics()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .hapticClickable(semantic = rowSemantic, onClick = onClick)
             .padding(vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         if (multiple) {
-            Checkbox(checked = selected, onCheckedChange = { onClick() })
+            Checkbox(
+                checked = selected,
+                onCheckedChange = { checked ->
+                    haptics.toggle(checked)
+                    onClick()
+                }
+            )
         } else {
-            RadioButton(selected = selected, onClick = onClick)
+            RadioButton(
+                selected = selected,
+                onClick = {
+                    haptics.segmentTick()
+                    onClick()
+                }
+            )
         }
         Text(text, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
     }
@@ -497,6 +547,7 @@ private fun QuizResultScreen(
     // quizId 变化（新一轮）时旧值失效自动重置
     var feedbackName by rememberSaveable(result.quizId) { mutableStateOf<String?>(feedbackDifficulty?.name) }
     val feedbackSelected = AiQuizDifficulty.fromName(feedbackName)
+    val haptics = rememberAppHaptics()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -651,7 +702,13 @@ private fun QuizResultScreen(
             }
         }
         item {
-            Button(onClick = onReplay, modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = {
+                    haptics.tap()
+                    onReplay()
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Text(stringResource(R.string.ai_quiz_replay))
             }
         }
@@ -732,8 +789,13 @@ private fun FeedbackOption(
             Text(label, maxLines = 1, textAlign = TextAlign.Center)
         }
     } else {
+        // 三档难度只能选一个，是单选而不是多选 → segmentTick
+        val haptics = rememberAppHaptics()
         OutlinedButton(
-            onClick = { onSelect(difficulty) },
+            onClick = {
+                haptics.segmentTick()
+                onSelect(difficulty)
+            },
             // 已反馈后其余选项禁用，防重复提交
             enabled = !answered,
             modifier = modifier

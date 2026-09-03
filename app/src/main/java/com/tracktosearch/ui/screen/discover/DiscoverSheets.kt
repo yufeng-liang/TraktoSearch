@@ -1,6 +1,5 @@
 package com.tracktosearch.ui.screen.discover
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -71,6 +70,9 @@ import com.tracktosearch.ui.component.YearBadge
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 
 /** Sheet 内影视卡片：海报 + 下方标题/副标题 */
 @Composable
@@ -97,9 +99,11 @@ private fun SheetMediaCard(
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
                 .scale(cardScale)
-                .clickable(
+                .hapticClickable(
                     interactionSource = interactionSource,
                     indication = null,
+                    // 弹窗网格里成片出现的媒体卡片，与共享 MovieCard/PosterCard 同档
+                    semantic = HapticSemantic.LIGHT_TAP,
                     onClick = onClick
                 ),
             shape = posterShape,
@@ -193,6 +197,9 @@ internal fun TmdbAllSheet(
     DiscoverModalBottomSheet(
         onDismissRequest = onDismiss
     ) {
+        // ModalBottomSheet 的内容是独立 subcomposition（自己的宿主 View），
+        // 必须在这一层取，不能复用调用页那一份
+        val sheetHaptics = rememberAppHaptics()
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier
@@ -222,7 +229,11 @@ internal fun TmdbAllSheet(
                             }
                         )
                     }
-                    IconButton(onClick = onDismiss) {
+                    // 只给这个可见的关闭按钮发；点遮罩/侧滑关闭走 onDismissRequest，按约定静默
+                    IconButton(onClick = {
+                        sheetHaptics.lightTap()
+                        onDismiss()
+                    }) {
                         Icon(
                             imageVector = Icons.Rounded.Close,
                             contentDescription = stringResource(R.string.common_close)
@@ -298,6 +309,8 @@ internal fun TraktMovieAllSheet(
     DiscoverModalBottomSheet(
         onDismissRequest = onDismiss
     ) {
+        // Sheet 内容有自己的宿主 View，单独取一份
+        val sheetHaptics = rememberAppHaptics()
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier
@@ -311,7 +324,10 @@ internal fun TraktMovieAllSheet(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                IconButton(onClick = onDismiss) {
+                IconButton(onClick = {
+                    sheetHaptics.lightTap()
+                    onDismiss()
+                }) {
                     Icon(
                         imageVector = Icons.Rounded.Close,
                         contentDescription = stringResource(R.string.common_close)
@@ -368,6 +384,8 @@ internal fun TraktShowAllSheet(
     DiscoverModalBottomSheet(
         onDismissRequest = onDismiss
     ) {
+        // Sheet 内容有自己的宿主 View，单独取一份
+        val sheetHaptics = rememberAppHaptics()
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier
@@ -381,7 +399,10 @@ internal fun TraktShowAllSheet(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                IconButton(onClick = onDismiss) {
+                IconButton(onClick = {
+                    sheetHaptics.lightTap()
+                    onDismiss()
+                }) {
                     Icon(
                         imageVector = Icons.Rounded.Close,
                         contentDescription = stringResource(R.string.common_close)
@@ -426,6 +447,8 @@ internal fun TraktAnticipatedAllSheet(
     DiscoverModalBottomSheet(
         onDismissRequest = onDismiss
     ) {
+        // Sheet 内容有自己的宿主 View，单独取一份
+        val sheetHaptics = rememberAppHaptics()
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier
@@ -439,7 +462,10 @@ internal fun TraktAnticipatedAllSheet(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                IconButton(onClick = onDismiss) {
+                IconButton(onClick = {
+                    sheetHaptics.lightTap()
+                    onDismiss()
+                }) {
                     Icon(
                         imageVector = Icons.Rounded.Close,
                         contentDescription = stringResource(R.string.common_close)
@@ -492,6 +518,8 @@ internal fun TrendingListsAllSheet(
     DiscoverModalBottomSheet(
         onDismissRequest = onDismiss
     ) {
+        // Sheet 内容有自己的宿主 View，单独取一份
+        val sheetHaptics = rememberAppHaptics()
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -503,7 +531,10 @@ internal fun TrendingListsAllSheet(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                IconButton(onClick = onDismiss) {
+                IconButton(onClick = {
+                    sheetHaptics.lightTap()
+                    onDismiss()
+                }) {
                     Icon(
                         imageVector = Icons.Rounded.Close,
                         contentDescription = stringResource(R.string.common_close)
@@ -527,9 +558,11 @@ internal fun TrendingListsAllSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .scale(cardScale)
-                            .clickable(
+                            .hapticClickable(
                                 interactionSource = interactionSource,
                                 indication = null,
+                                // 列表项进详情
+                                semantic = HapticSemantic.LIGHT_TAP,
                                 onClick = { onListClick(listResponse.list.ids.trakt, listResponse.list.name) }
                             ),
                         shape = RoundedCornerShape(18.dp),

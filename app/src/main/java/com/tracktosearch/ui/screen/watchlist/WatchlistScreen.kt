@@ -215,6 +215,8 @@ import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
 import com.tracktosearch.ui.navigation.NotificationNavigator
 import com.tracktosearch.ui.navigation.NotificationTarget
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
@@ -836,33 +838,57 @@ fun WatchlistScreen(
                                     Spacer(modifier = Modifier.height(12.dp))
                                     when (emptyState) {
                                         WatchlistEmptyState.NO_ACCOUNTS -> {
-                                            TextButton(onClick = onTraktLogin) {
+                                            // 走 CustomTabs 开授权页，但**不按外跳静默处理**：
+                                            // 判据是回不回来 —— 授权完拿着 code 通过 deep link
+                                            // 回到本应用，浏览器只是这条流程的管道。而且它和
+                                            // 下面那颗豆瓣登录是并排的同款 TextButton，
+                                            // 用户看不出哪颗会跳浏览器，手感不同会被当成 bug
+                                            TextButton(onClick = {
+                                                haptics.tap()
+                                                onTraktLogin()
+                                            }) {
                                                 Text(stringResource(R.string.watchlist_empty_login_trakt))
                                             }
-                                            TextButton(onClick = onNavigateToDoubanLogin) {
+                                            TextButton(onClick = {
+                                                haptics.tap()
+                                                onNavigateToDoubanLogin()
+                                            }) {
                                                 Text(stringResource(R.string.watchlist_empty_login_douban))
                                             }
-                                            TextButton(onClick = onDiscoverClick) {
+                                            TextButton(onClick = {
+                                                haptics.tap()
+                                                onDiscoverClick()
+                                            }) {
                                                 Text(stringResource(R.string.watchlist_empty_go_discover))
                                             }
                                         }
                                         WatchlistEmptyState.TRAKT_ONLY -> {
-                                            TextButton(onClick = onNavigateToDoubanLogin) {
+                                            TextButton(onClick = {
+                                                haptics.tap()
+                                                onNavigateToDoubanLogin()
+                                            }) {
                                                 Text(stringResource(R.string.watchlist_empty_login_douban))
                                             }
-                                            TextButton(onClick = onDiscoverClick) {
+                                            TextButton(onClick = {
+                                                haptics.tap()
+                                                onDiscoverClick()
+                                            }) {
                                                 Text(stringResource(R.string.watchlist_empty_go_discover))
                                             }
                                         }
                                         WatchlistEmptyState.DOUBAN_NOT_IMPORTED -> {
                                             TextButton(onClick = {
+                                                haptics.tap()
                                                 if (isDoubanLoggedIn) showSyncModePicker = true else onNavigateToDoubanLogin()
                                             }) {
                                                 Text(stringResource(R.string.watchlist_empty_start_douban_import))
                                             }
                                         }
                                         WatchlistEmptyState.IMPORTED_EMPTY -> {
-                                            TextButton(onClick = onDiscoverClick) {
+                                            TextButton(onClick = {
+                                                haptics.tap()
+                                                onDiscoverClick()
+                                            }) {
                                                 Text(stringResource(R.string.watchlist_empty_go_discover))
                                             }
                                         }
@@ -1087,7 +1113,10 @@ fun WatchlistScreen(
                                                 // 登录后仍保留这条比设置页更浅的入口。
                                                 if (canOpenWatchStatistics(isTraktConnected, isDoubanMode)) {
                                                     IconButton(
-                                                        onClick = onStatisticsClick,
+                                                        onClick = {
+                                                            haptics.lightTap()
+                                                            onStatisticsClick()
+                                                        },
                                                         modifier = Modifier
                                                             .padding(start = 4.dp)
                                                             .size(32.dp)
@@ -1103,7 +1132,10 @@ fun WatchlistScreen(
                                                 // 日签入口：紧挨着统计。两个都是「回看自己」的入口，
                                                 // 放一起才不用分别去记在哪。
                                                 IconButton(
-                                                    onClick = onDailyStampClick,
+                                                    onClick = {
+                                                        haptics.lightTap()
+                                                        onDailyStampClick()
+                                                    },
                                                     modifier = Modifier.size(32.dp)
                                                 ) {
                                                     Icon(
@@ -1222,7 +1254,13 @@ fun WatchlistScreen(
                                                                         innerTextField()
                                                                     }
                                                                     if (searchQuery.isNotEmpty()) {
-                                                                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(28.dp)) {
+                                                                        IconButton(
+                                                                            onClick = {
+                                                                                haptics.lightTap()
+                                                                                searchQuery = ""
+                                                                            },
+                                                                            modifier = Modifier.size(28.dp)
+                                                                        ) {
                                                                             Icon(
                                                                                 Icons.Rounded.Close,
                                                                                 contentDescription = stringResource(R.string.content_desc_clear),
@@ -1290,6 +1328,8 @@ fun WatchlistScreen(
                                             selectedIndex = selectedMode,
                                             onTabSelected = {
                                                 collapseSearch()
+                                                // 想看/已看是互斥单选，与下面的分类 Tab 同一档刻度感
+                                                haptics.segmentTick()
                                                 selectedMode = it
                                             },
                                             hazeState = hazeState,
@@ -1357,7 +1397,7 @@ fun WatchlistScreen(
                                 NeumorphicFrostedSurface(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable {
+                                        .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
                                             when (syncProgress.bannerClickAction()) {
                                                 DoubanSyncBannerAction.SHOW_PROGRESS,
                                                 DoubanSyncBannerAction.SHOW_RESULT -> showSyncDialog = true
@@ -1522,7 +1562,7 @@ fun WatchlistScreen(
                                 NeumorphicFrostedSurface(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable { showConsistencyDialog = true },
+                                        .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { showConsistencyDialog = true },
                                     isDark = isDark,
                                     shape = RoundedCornerShape(12.dp),
                                     backgroundColor = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)
@@ -1634,6 +1674,8 @@ fun WatchlistScreen(
                                         .clickable {
                                             // 完成态点击无操作（横幅 5 秒后自动消失）
                                             if (removalProgress.isRunning && !removalProgress.isCancelling) {
+                                                // 触感留在守卫里：完成态点下去什么也不做，不该震
+                                                haptics.lightTap()
                                                 viewModel.cancelBatchRemoval()
                                             }
                                         },
@@ -1750,6 +1792,7 @@ fun WatchlistScreen(
                                     Row {
                                         Button(
                                             onClick = {
+                                                haptics.tap()
                                                 isRemoving = true
                                                 // 豆瓣模式无 traktId 条目也需正确移除,改用 selectionKey 匹配出完整 MediaUiItem
                                                 val selectedItemsList = currentItems.filter { it.selectionKey in selectedItems.keys }
@@ -1799,7 +1842,11 @@ fun WatchlistScreen(
                                             }
                                         }
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        OutlinedButton(onClick = { isMultiSelectMode = false; isRemoving = false }) {
+                                        OutlinedButton(onClick = {
+                                            haptics.lightTap()
+                                            isMultiSelectMode = false
+                                            isRemoving = false
+                                        }) {
                                             Text(stringResource(R.string.common_cancel))
                                         }
                                     }
@@ -2401,7 +2448,10 @@ private fun WatchlistFilterSheet(
                             }
                             localRatingRange = range
                         },
-                        onValueChangeFinished = { onRatingRangeChange(localRatingRange) },
+                        onValueChangeFinished = {
+                            haptics.gestureEnd()
+                            onRatingRangeChange(localRatingRange)
+                        },
                         valueRange = 0f..10f,
                         steps = 9,  // 步长 1（0,1,2,...,10）
                         modifier = Modifier.fillMaxWidth()
@@ -2518,10 +2568,16 @@ private fun WatchlistFilterSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                TextButton(onClick = onReset) {
+                TextButton(onClick = {
+                    haptics.tap()
+                    onReset()
+                }) {
                     Text(stringResource(R.string.filter_reset))
                 }
-                Button(onClick = onApply) {
+                Button(onClick = {
+                    haptics.tap()
+                    onApply()
+                }) {
                     Text(stringResource(R.string.filter_apply))
                 }
             }

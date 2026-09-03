@@ -2,7 +2,6 @@ package com.tracktosearch.ui.screen.markrecord
 
 import android.content.Context
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -60,6 +59,8 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.rememberShimmerBrush
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -162,7 +163,7 @@ fun MarkRecordItemRow(
             .clip(RoundedCornerShape(16.dp))
             .then(if (isRemoved) Modifier.alpha(0.55f) else Modifier)
             .background(backgroundBrush)
-            .clickable(onClick = onClick)
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onClick)
             .padding(horizontal = 6.dp, vertical = 6.dp)
     ) {
         Row(
@@ -452,6 +453,8 @@ fun FilterSheetContent(
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showEndDatePicker by remember { mutableStateOf(false) }
     val dateFormatter = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
+    // 本内容整块在 ModalBottomSheet 里，sheet 有自己的宿主 View，在这一层取
+    val haptics = rememberAppHaptics()
 
     Column(
         modifier = Modifier
@@ -515,7 +518,10 @@ fun FilterSheetContent(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedButton(
-                    onClick = { showStartDatePicker = true },
+                    onClick = {
+                        haptics.tap()
+                        showStartDatePicker = true
+                    },
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
@@ -524,7 +530,10 @@ fun FilterSheetContent(
                     )
                 }
                 OutlinedButton(
-                    onClick = { showEndDatePicker = true },
+                    onClick = {
+                        haptics.tap()
+                        showEndDatePicker = true
+                    },
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
@@ -559,10 +568,14 @@ fun FilterSheetContent(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            TextButton(onClick = onReset) {
+            TextButton(onClick = {
+                haptics.tap()
+                onReset()
+            }) {
                 Text(stringResource(R.string.mark_records_reset))
             }
             Button(onClick = {
+                haptics.tap()
                 val custom = selectedPreset == DatePreset.CUSTOM
                 // 两端都挑了却挑反了就换回来，省得筛出空列表让用户以为没数据
                 val start = selectedStart
@@ -595,15 +608,22 @@ fun FilterSheetContent(
         DatePickerDialog(
             onDismissRequest = { showStartDatePicker = false },
             confirmButton = {
+                // 对话框有自己的宿主 View，每个槽各取一份
+                val confirmHaptics = rememberAppHaptics()
                 TextButton(
                     onClick = {
+                        confirmHaptics.tap()
                         pickerState.selectedDateMillis?.let { millis -> selectedStart = millis }
                         showStartDatePicker = false
                     }
                 ) { Text(stringResource(android.R.string.ok)) }
             },
             dismissButton = {
-                TextButton(onClick = { showStartDatePicker = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = {
+                    dismissHaptics.lightTap()
+                    showStartDatePicker = false
+                }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -617,15 +637,21 @@ fun FilterSheetContent(
         DatePickerDialog(
             onDismissRequest = { showEndDatePicker = false },
             confirmButton = {
+                val confirmHaptics = rememberAppHaptics()
                 TextButton(
                     onClick = {
+                        confirmHaptics.tap()
                         pickerState.selectedDateMillis?.let { millis -> selectedEnd = millis }
                         showEndDatePicker = false
                     }
                 ) { Text(stringResource(android.R.string.ok)) }
             },
             dismissButton = {
-                TextButton(onClick = { showEndDatePicker = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = {
+                    dismissHaptics.lightTap()
+                    showEndDatePicker = false
+                }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }

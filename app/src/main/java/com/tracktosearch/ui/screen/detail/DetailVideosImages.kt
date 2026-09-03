@@ -77,6 +77,9 @@ import com.tracktosearch.ui.component.ZoomableImageOverlay
 import com.tracktosearch.ui.component.queryExistingFile
 import com.tracktosearch.ui.component.savePosterToGallery
 import com.tracktosearch.ui.component.zoomSharedSource
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.util.showToast
 import kotlinx.coroutines.launch
 
@@ -110,7 +113,10 @@ internal fun VideosAndImagesSection(
                 text = stringResource(R.string.detail_videos_all, totalCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable(onClick = onShowAll)
+                modifier = Modifier.hapticClickable(
+                    semantic = HapticSemantic.LIGHT_TAP,
+                    onClick = onShowAll
+                )
             )
         }
         LazyRow(
@@ -170,7 +176,7 @@ internal fun VideoCard(
             .width(240.dp)
             .height(135.dp)
             .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onClick)
     ) {
         SubcomposeAsyncImage(
             model = thumbnailUrl,
@@ -271,7 +277,7 @@ internal fun BackdropCard(
             .width(240.dp)
             .height(135.dp)
             .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onClick)
     ) {
         // sharedKeyPrefix 非空且共享转场开启时,与全屏端 "$sharedKeyPrefix-$page" 配对,实现缩放转场。
         // 用 caller-managed visibility(zoomSharedSource):全屏端打开本 key 时缩略图侧置不可见,
@@ -349,6 +355,8 @@ internal fun FullVideosImagesSheet(
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
         dragHandle = null
     ) {
+        // ModalBottomSheet 的内容是独立 subcomposition（有自己的宿主 View），单独取一份
+        val sheetHaptics = rememberAppHaptics()
         Column(modifier = Modifier.fillMaxWidth()) {
             // 标题栏
             Row(
@@ -363,7 +371,7 @@ internal fun FullVideosImagesSheet(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                IconButton(onClick = onDismiss) {
+                IconButton(onClick = { sheetHaptics.lightTap(); onDismiss() }) {
                     Icon(
                         imageVector = Icons.Rounded.Close,
                         contentDescription = stringResource(R.string.common_close)
@@ -381,7 +389,10 @@ internal fun FullVideosImagesSheet(
                     if (hasBackdrops) {
                         Tab(
                             selected = selectedTabIndex == 0,
-                            onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
+                            onClick = {
+                                sheetHaptics.segmentTick()
+                                scope.launch { pagerState.animateScrollToPage(0) }
+                            },
                             text = { Text(stringResource(R.string.detail_videos_backdrops_section, backdrops.size)) }
                         )
                     }
@@ -389,7 +400,10 @@ internal fun FullVideosImagesSheet(
                         val videoTabIndex = if (hasBackdrops) 1 else 0
                         Tab(
                             selected = selectedTabIndex == videoTabIndex,
-                            onClick = { scope.launch { pagerState.animateScrollToPage(videoTabIndex) } },
+                            onClick = {
+                                sheetHaptics.segmentTick()
+                                scope.launch { pagerState.animateScrollToPage(videoTabIndex) }
+                            },
                             text = { Text(stringResource(R.string.detail_videos_trailers_section, videos.size)) }
                         )
                     }
@@ -452,7 +466,7 @@ internal fun FullVideoItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onClick)
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -519,7 +533,7 @@ internal fun FullBackdropItem(
             .fillMaxWidth()
             .height(120.dp)
             .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onClick)
     ) {
         ProgressiveBackdrop(
             backdropUrl = backdropUrl,
@@ -538,6 +552,7 @@ internal fun YouTubePlayerOverlay(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val haptics = rememberAppHaptics()
     val thumbnailUrl = "https://img.youtube.com/vi/$videoKey/hqdefault.jpg"
     val watchUrl = "https://www.youtube.com/watch?v=$videoKey"
 
@@ -548,9 +563,10 @@ internal fun YouTubePlayerOverlay(
             .fillMaxSize()
             .background(Color.Black)
             .statusBarsPadding()
-            .clickable(
+            .hapticClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                semantic = HapticSemantic.LIGHT_TAP,
                 onClick = onDismiss
             ),
         contentAlignment = Alignment.Center
@@ -609,7 +625,10 @@ internal fun YouTubePlayerOverlay(
                     modifier = Modifier
                         .size(72.dp)
                         .background(Color.Black.copy(alpha = 0.6f), CircleShape)
-                        .clickable {
+                        // 这层浮层就是为了「看这条预告」而开的，播放与下面那颗「在浏览器中打开」
+                        // 是同一个动作的两个落点，都是本浮层的主按钮 → 按显著度给 tap()，
+                        // 不按外跳静默（否则整层唯一会震的是关闭 ×，主次颠倒）
+                        .hapticClickable(semantic = HapticSemantic.TAP) {
                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(watchUrl))
                             context.startActivity(intent)
                         },
@@ -642,6 +661,7 @@ internal fun YouTubePlayerOverlay(
 
             // 在浏览器中打开按钮
             FilledTonalButton(onClick = {
+                haptics.tap()
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(watchUrl))
                 context.startActivity(intent)
             }) {
@@ -653,7 +673,7 @@ internal fun YouTubePlayerOverlay(
 
         // 关闭按钮
         IconButton(
-            onClick = onDismiss,
+            onClick = { haptics.lightTap(); onDismiss() },
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(16.dp)

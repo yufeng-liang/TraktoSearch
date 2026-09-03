@@ -6,7 +6,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -378,7 +377,10 @@ internal fun CollectionSection(
                     modifier = Modifier
                         .width(80.dp)
                         .clip(RoundedCornerShape(6.dp))
-                        .clickable(enabled = !isCurrent) { onMovieClick(part.id, part.title) },
+                        .hapticClickable(
+                            semantic = HapticSemantic.LIGHT_TAP,
+                            enabled = !isCurrent
+                        ) { onMovieClick(part.id, part.title) },
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Surface(

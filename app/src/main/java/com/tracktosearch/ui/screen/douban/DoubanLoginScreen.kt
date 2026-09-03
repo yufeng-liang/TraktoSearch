@@ -57,6 +57,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.repository.DoubanSyncManager
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -133,6 +134,7 @@ fun DoubanLoginScreen(
 ) {
     val context = LocalContext.current
     val loginSuccess by viewModel.loginSuccess.collectAsStateWithLifecycle()
+    val haptics = rememberAppHaptics()
 
     // WebView 主框架加载失败时的兜底文案(预解析,避免在 WebViewClient 回调内硬编码中文)
     val loadFailedText = stringResource(R.string.douban_login_load_failed)
@@ -205,7 +207,10 @@ fun DoubanLoginScreen(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 TextButton(
-                    onClick = { privacyExpanded = !privacyExpanded },
+                    onClick = {
+                        haptics.toggle(!privacyExpanded)
+                        privacyExpanded = !privacyExpanded
+                    },
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 0.dp, vertical = 0.dp)
                 ) {
                     Icon(
@@ -354,6 +359,7 @@ fun DoubanLoginScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         TextButton(
                             onClick = {
+                                haptics.tap()
                                 // 重新加载当前页；onPageStarted 会把状态切回 loading
                                 webViewRef?.reload()
                             }

@@ -2,7 +2,6 @@ package com.tracktosearch.ui.screen.detail
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -64,6 +63,9 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.launch
 
@@ -108,7 +110,10 @@ internal fun CrewSection(
                 text = stringResource(R.string.detail_cast_all),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable(onClick = onShowAll)
+                modifier = Modifier.hapticClickable(
+                    semantic = HapticSemantic.LIGHT_TAP,
+                    onClick = onShowAll
+                )
             )
         }
 
@@ -201,9 +206,10 @@ internal fun CastCard(
         modifier = Modifier
             .width(68.dp)
             .scale(scale)
-            .clickable(
+            .hapticClickable(
                 interactionSource = interactionSource,
                 indication = null,
+                semantic = HapticSemantic.LIGHT_TAP,
                 onClick = onClick
             ),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -328,6 +334,8 @@ internal fun FullCastCrewSheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) {
+        // ModalBottomSheet 的内容是独立 subcomposition（有自己的宿主 View），单独取一份
+        val sheetHaptics = rememberAppHaptics()
         Column(modifier = Modifier.fillMaxWidth()) {
             // 标题栏
             Row(
@@ -342,7 +350,7 @@ internal fun FullCastCrewSheet(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                TextButton(onClick = onDismiss) {
+                TextButton(onClick = { sheetHaptics.lightTap(); onDismiss() }) {
                     Text(stringResource(R.string.detail_cast_close))
                 }
             }
@@ -447,6 +455,8 @@ internal fun FullCastItem(
     val context = LocalContext.current
     var extractedColor by remember { mutableStateOf<Color?>(null) }
     val scope = rememberCoroutineScope()
+    // 头像 Surface 与整行都可点、且都走同一个 onClick：内层 Surface 会消费点击，两者不会同时发
+    val haptics = rememberAppHaptics()
     val posterColorExtractor = remember {
         EntryPointAccessors.fromApplication(
             context.applicationContext,
@@ -456,15 +466,16 @@ internal fun FullCastItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(
+            .hapticClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                semantic = HapticSemantic.LIGHT_TAP,
                 onClick = onClick
             ),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Surface(
-            onClick = onClick,
+            onClick = { haptics.lightTap(); onClick() },
             shape = RoundedCornerShape(6.dp),
             color = MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier.size(width = 72.dp, height = 100.dp)

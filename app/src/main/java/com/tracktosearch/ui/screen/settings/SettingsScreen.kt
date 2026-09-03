@@ -625,7 +625,8 @@ fun SettingsScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable(onClick = onGlassPilot)
+                                // 与其他分组入口行同档：次级入口取轻一档
+                                .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onGlassPilot() }
                                 .padding(horizontal = 14.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -983,9 +984,13 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
+                // 对话框每个按钮槽都是独立 subcomposition（自带宿主 View），触感实例逐槽取，
+                // 不能复用 SettingsScreen 外层的 —— 本文件下面每个对话框都照这条写
+                val haptics = rememberAppHaptics()
                 val traktLogoutDone = stringResource(R.string.settings_logout_button)
                 val reloginLabel = stringResource(R.string.settings_account_reconnect)
                 TextButton(onClick = {
+                    haptics.tap()
                     showLogoutDialog = false
                     viewModel.clearUserProfile()
                     onLogout()
@@ -1004,7 +1009,8 @@ fun SettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showLogoutDialog = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = { dismissHaptics.lightTap(); showLogoutDialog = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -1032,9 +1038,11 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
+                    val haptics = rememberAppHaptics()
                     val doubanLogoutDone = stringResource(R.string.settings_douban_logout_done)
                     val doubanSyncRelogin = stringResource(R.string.douban_sync_relogin)
                     TextButton(onClick = {
+                        haptics.tap()
                         showDoubanLogoutDialog = false
                         viewModel.clearDoubanCredentials()
                         scope.launch {
@@ -1052,7 +1060,8 @@ fun SettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDoubanLogoutDialog = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = { dismissHaptics.lightTap(); showDoubanLogoutDialog = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -1076,7 +1085,9 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
+                val haptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    haptics.tap()
                     showClearCacheDialog = false
                     viewModel.clearCache()
                 }) {
@@ -1084,7 +1095,8 @@ fun SettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showClearCacheDialog = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = { dismissHaptics.lightTap(); showClearCacheDialog = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -1126,7 +1138,9 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
+                val haptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    haptics.tap()
                     val cat = pendingClearCategory
                     showClearCategoryDialog = false
                     pendingClearCategory = null
@@ -1136,7 +1150,9 @@ fun SettingsScreen(
                 }
             },
             dismissButton = {
+                val dismissHaptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    dismissHaptics.lightTap()
                     showClearCategoryDialog = false
                     pendingClearCategory = null
                 }) {
@@ -1204,7 +1220,9 @@ fun SettingsScreen(
             title = { Text(stringResource(R.string.cooldown_guidance_title)) },
             text = { Text(stringResource(R.string.cooldown_guidance_message)) },
             confirmButton = {
+                val haptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    haptics.tap()
                     val mode = pendingCooldownMode
                     showCooldownGuidance = false
                     pendingCooldownMode = null
@@ -1218,7 +1236,10 @@ fun SettingsScreen(
                 }) { Text(stringResource(R.string.cooldown_force_sync)) }
             },
             dismissButton = {
+                // 「跳过」在这个对话框里就是「稍后」，取轻一档
+                val dismissHaptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    dismissHaptics.lightTap()
                     showCooldownGuidance = false
                     pendingCooldownMode = null
                 }) { Text(stringResource(R.string.cooldown_skip)) }
@@ -1272,12 +1293,14 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { startConfirmedConsistencyCheck() }) {
+                val haptics = rememberAppHaptics()
+                TextButton(onClick = { haptics.tap(); startConfirmedConsistencyCheck() }) {
                     Text(stringResource(R.string.consistency_check_confirm_button))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showConsistencyConfirm = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = { dismissHaptics.lightTap(); showConsistencyConfirm = false }) {
                     Text(stringResource(R.string.douban_retry_cancel))
                 }
             }
@@ -1318,13 +1341,16 @@ fun SettingsScreen(
             title = { Text(stringResource(R.string.settings_douban_not_logged_in_title)) },
             text = { Text(stringResource(R.string.settings_douban_not_logged_in_message)) },
             confirmButton = {
+                val haptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    haptics.tap()
                     showDoubanLoginPrompt = false
                     onNavigateToDoubanLogin()
                 }) { Text(stringResource(R.string.settings_douban_not_logged_in_login)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDoubanLoginPrompt = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = { dismissHaptics.lightTap(); showDoubanLoginPrompt = false }) {
                     Text(stringResource(R.string.common_cancel))
                 }
             }
@@ -1338,13 +1364,16 @@ fun SettingsScreen(
             title = { Text(stringResource(R.string.consistency_check_trakt_required_title)) },
             text = { Text(stringResource(R.string.consistency_check_trakt_required_message)) },
             confirmButton = {
+                val haptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    haptics.tap()
                     showTraktLoginPrompt = false
                     onTraktLogin()
                 }) { Text(stringResource(R.string.consistency_check_trakt_required_login)) }
             },
             dismissButton = {
-                TextButton(onClick = { showTraktLoginPrompt = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = { dismissHaptics.lightTap(); showTraktLoginPrompt = false }) {
                     Text(stringResource(R.string.common_cancel))
                 }
             }
@@ -1368,7 +1397,8 @@ fun SettingsScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = { consistencyCheckBlocker = null }) {
+                val haptics = rememberAppHaptics()
+                TextButton(onClick = { haptics.tap(); consistencyCheckBlocker = null }) {
                     Text(stringResource(R.string.common_confirm))
                 }
             }
@@ -2055,7 +2085,11 @@ private fun NotificationItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable {
+                .hapticClickable(
+                    // 带勾选态的行：语义按点完之后的新状态定，与下面两行提醒开关同一写法
+                    semantic = if (notificationEnabled) HapticSemantic.TOGGLE_OFF
+                               else HapticSemantic.TOGGLE_ON
+                ) {
                     if (notificationEnabled) {
                         viewModel.setNotificationEnabled(false)
                     } else {
@@ -2104,7 +2138,9 @@ private fun NotificationItem(
             Spacer(modifier = Modifier.width(8.dp))
             Switch(
                 checked = notificationEnabled,
+                // 直接拨开关是另一个手势面（与行点一次只命中一个），按新状态发 toggle
                 onCheckedChange = { enabled ->
+                    haptics.toggle(enabled)
                     if (enabled) {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
@@ -2366,6 +2402,7 @@ private fun ImageTrafficSectionItem(
     containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     val stats by viewModel.imageTraffic.collectAsStateWithLifecycle()
+    val haptics = rememberAppHaptics()
     // 重置是破坏性动作（计数归零不可恢复），原来点了就执行，既无确认也无反馈
     var showResetConfirm by remember { mutableStateOf(false) }
     Surface(
@@ -2403,7 +2440,7 @@ private fun ImageTrafficSectionItem(
                 )
             }
             OutlinedButton(
-                onClick = { showResetConfirm = true },
+                onClick = { haptics.tap(); showResetConfirm = true },
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp)
             ) {
                 Text(stringResource(R.string.settings_image_traffic_clear))
@@ -2424,7 +2461,9 @@ private fun ImageTrafficSectionItem(
                 )
             },
             confirmButton = {
+                val confirmHaptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    confirmHaptics.tap()
                     showResetConfirm = false
                     viewModel.clearImageTraffic()
                 }) {
@@ -2432,7 +2471,8 @@ private fun ImageTrafficSectionItem(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showResetConfirm = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = { dismissHaptics.lightTap(); showResetConfirm = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }

@@ -5,7 +5,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -39,6 +38,9 @@ import com.tracktosearch.R
 import com.tracktosearch.ui.component.LocalFullscreenSharedKey
 import com.tracktosearch.ui.component.ZoomableImageOverlay
 import com.tracktosearch.ui.component.zoomSharedSource
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -53,6 +55,7 @@ fun NewFeedbackScreen(
 ) {
     val submitState by viewModel.submitState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val haptics = rememberAppHaptics()
 
     var selectedType by remember { mutableStateOf<String?>(null) }
     var content by remember { mutableStateOf("") }
@@ -201,6 +204,7 @@ fun NewFeedbackScreen(
             // 提交按钮
             Button(
                 onClick = {
+                    haptics.tap()
                     if (selectedType != null && content.length >= 5) {
                         viewModel.submit(
                             type = selectedType!!,
@@ -265,6 +269,7 @@ private fun ScreenshotRow(
     onReorder: (Int, Int) -> Unit
 ) {
     val context = LocalContext.current
+    val haptics = rememberAppHaptics()
     val lazyListState = rememberLazyListState()
     val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
         onReorder(from.index, to.index)
@@ -283,10 +288,14 @@ private fun ScreenshotRow(
                 Box(
                     // 长按触发拖动；库会自动通过 graphicsLayer 平移被拖项跟随手指。
                     // longPressDraggableHandle 是 ReorderableCollectionItemScope 内 Modifier 的扩展。
+                    // 起手与落定成对发：库本身一记触感都不发（3.1.0 里没有 performHapticFeedback），
+                    // 只发起手会让「抓起来有感、放下去没感」；换格中间不发，一趟拖过五张会连成一串。
                     Modifier
                         .size(80.dp)
                         .longPressDraggableHandle(
-                            enabled = enabled && screenshots.size >= 2
+                            enabled = enabled && screenshots.size >= 2,
+                            onDragStarted = { haptics.dragStart() },
+                            onDragStopped = { haptics.gestureEnd() }
                         )
                         // 拖动时抬起阴影 + 轻微放大，强化"被抓住"反馈
                         .graphicsLayer {
@@ -296,7 +305,10 @@ private fun ScreenshotRow(
                         }
                         .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable(enabled = enabled) { onImageClick(index) },
+                        .hapticClickable(
+                            semantic = HapticSemantic.LIGHT_TAP,
+                            enabled = enabled
+                        ) { onImageClick(index) },
                     contentAlignment = Alignment.Center
                 ) {
                     AsyncImage(
@@ -322,7 +334,9 @@ private fun ScreenshotRow(
                                 .padding(2.dp)
                                 .size(20.dp)
                                 .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
-                                .clickable { onRemoveClick(index) },
+                                .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
+                                    onRemoveClick(index)
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -342,7 +356,7 @@ private fun ScreenshotRow(
                     Modifier
                         .size(80.dp)
                         .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
-                        .clickable { onAddClick() },
+                        .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onAddClick() },
                     contentAlignment = Alignment.Center
                 ) {
                     Text("+", fontSize = 24.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -362,7 +376,8 @@ private fun FeedbackTypeChip(
     onClick: () -> Unit
 ) {
     Surface(
-        modifier = modifier.clickable { onClick() },
+        // 四个类型互斥（selectedType 是单值赋值，不是集合加减），按单选给 SEGMENT_TICK
+        modifier = modifier.hapticClickable(semantic = HapticSemantic.SEGMENT_TICK) { onClick() },
         shape = RoundedCornerShape(8.dp),
         color = if (selected) color.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface,
         tonalElevation = if (selected) 0.dp else 1.dp,

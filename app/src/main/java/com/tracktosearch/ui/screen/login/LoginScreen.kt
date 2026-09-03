@@ -52,6 +52,7 @@ import com.tracktosearch.OAuthCallback
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.trakt.TraktAuthManager
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -193,6 +194,7 @@ fun LoginScreen(
     val loginState by viewModel.loginState.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
+    val haptics = rememberAppHaptics()
 
     // 浏览器授权取消守卫：CustomTabs 按返回取消无回调，宽限后仍在 AUTHORIZING 则重置 IDLE
     TraktAuthCancelGuard(
@@ -264,7 +266,10 @@ fun LoginScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             // 右上角「什么是 Trakt」入口
             TextButton(
-                onClick = { showWhatIsTraktDialog = true },
+                onClick = {
+                    haptics.lightTap()
+                    showWhatIsTraktDialog = true
+                },
                 modifier = Modifier.align(Alignment.TopEnd)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -316,7 +321,10 @@ fun LoginScreen(
             when (loginState) {
                 LoginState.IDLE, LoginState.AUTHORIZING -> {
                     Button(
+                        // OAuth 授权走 CustomTabs 但拿着 code 通过 deep link 回到本应用，不算外跳；
+                        // 这是本屏的主 CTA，给 tap。触感在 onClick 首行发，不等协程
                         onClick = {
+                            haptics.tap()
                             scope.launch {
                                 viewModel.startAuthorization()
                                 viewModel.getAuthorizationUrl()?.let { authUrl ->
@@ -348,7 +356,10 @@ fun LoginScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
                         )
-                        TextButton(onClick = { viewModel.reset() }) {
+                        TextButton(onClick = {
+                            haptics.lightTap()
+                            viewModel.reset()
+                        }) {
                             Text(stringResource(R.string.common_cancel))
                         }
                     }
@@ -391,7 +402,11 @@ fun LoginScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
-                            onClick = { viewModel.reset() },
+                            // 只把状态复位回 IDLE，不外跳，按「重试」给 tap
+                            onClick = {
+                                haptics.tap()
+                                viewModel.reset()
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(56.dp),
@@ -437,6 +452,8 @@ fun LoginScreen(
 
                 TextButton(
                     onClick = {
+                        // 换一条登录路径的次级入口，不外跳（跳的是应用内豆瓣登录页）
+                        haptics.lightTap()
                         // 前置预检:已登录 Trakt → 直接跳豆瓣登录页
                         // 未登录 → 弹引导对话框,确认后启动 Trakt OAuth 流程
                         scope.launch {
@@ -458,7 +475,10 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 TextButton(
-                    onClick = onGuestMode,
+                    onClick = {
+                        haptics.lightTap()
+                        onGuestMode()
+                    },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
@@ -479,7 +499,11 @@ fun LoginScreen(
             title = { Text(stringResource(R.string.douban_import_require_trakt_title)) },
             text = { Text(stringResource(R.string.douban_import_require_trakt_desc)) },
             confirmButton = {
+                // OAuth 走 CustomTabs 但回得来（拿 code 经 deep link 返回），不算外跳；
+                // 槽是独立 subcomposition（自己的宿主 View），单独取一份
+                val confirmHaptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    confirmHaptics.tap()
                     showDoubanImportRequireLoginDialog = false
                     // 标记 OAuth 成功后自动跳豆瓣登录页
                     pendingDoubanImportAfterLogin = true
@@ -496,7 +520,12 @@ fun LoginScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDoubanImportRequireLoginDialog = false }) {
+                // 槽是独立 subcomposition（自己的宿主 View），单独取一份
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = {
+                    dismissHaptics.lightTap()
+                    showDoubanImportRequireLoginDialog = false
+                }) {
                     Text(stringResource(R.string.douban_import_require_trakt_cancel))
                 }
             }
@@ -527,6 +556,8 @@ fun LoginScreen(
                 )
             },
             confirmButton = {
+                // 不发触感：CustomTabs 只是打开 trakt.tv 注册页去看，回不回来不确定，属真的离开本应用。
+                // 与上面登录按钮的区别在「回不回来」，不是「有没有用 CustomTabs」
                 Button(onClick = {
                     showWhatIsTraktDialog = false
                     val registerUrl = "https://trakt.tv/auth/join"
@@ -537,7 +568,11 @@ fun LoginScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showWhatIsTraktDialog = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = {
+                    dismissHaptics.lightTap()
+                    showWhatIsTraktDialog = false
+                }) {
                     Text(stringResource(R.string.login_what_is_trakt_close))
                 }
             }

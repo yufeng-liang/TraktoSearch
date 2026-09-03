@@ -107,6 +107,8 @@ import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.VisualSurfaceKind
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.screen.search.DoubanHotAllSheet
 import com.tracktosearch.ui.screen.search.DoubanHotCategorySection
 import com.tracktosearch.ui.screen.settings.DiscoverSectionsDialog
@@ -586,7 +588,8 @@ fun DiscoverScreen(
                                             val actionColor = MaterialTheme.colorScheme.primary
                                             Row(
                                                 modifier = Modifier
-                                                    .clickable { showPopularAll = true }
+                                                    // 自绘的「查看全部」，不是共享 SectionHeader 那个
+                                                    .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { showPopularAll = true }
                                                     .padding(horizontal = 4.dp, vertical = 2.dp),
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -802,9 +805,11 @@ fun DiscoverScreen(
                                                         modifier = Modifier
                                                             .fillMaxWidth()
                                                             .scale(cardScale)
-                                                            .clickable(
+                                                            .hapticClickable(
                                                                 interactionSource = interactionSource,
                                                                 indication = null,
+                                                                // 列表项进详情
+                                                                semantic = HapticSemantic.LIGHT_TAP,
                                                                 onClick = { onListClick(listResponse.list.ids.trakt, listResponse.list.name) }
                                                             ),
                                                         shape = RoundedCornerShape(18.dp),
@@ -883,9 +888,11 @@ fun DiscoverScreen(
                         kind = VisualSurfaceKind.Content,
                         modifier = cardModifier
                             .scale(cardScale)
-                            .clickable(
+                            .hapticClickable(
                                 interactionSource = interactionSource,
-                                indication = null
+                                indication = null,
+                                // 整页底部的全宽 CTA，文案加粗，按带文字的主操作给
+                                semantic = HapticSemantic.TAP
                             ) {
                                 activeFilterEntry = "card"
                                 onFilterDiscoverClick()
@@ -1239,9 +1246,11 @@ private fun CategoryHeroCard(
             .width(160.dp)
             .height(75.dp)
             .scale(scale)
-            .clickable(
+            .hapticClickable(
                 interactionSource = interactionSource,
                 indication = null,
+                // 顶部一排分类快捷入口，点下去等于该栏目的「查看全部」
+                semantic = HapticSemantic.LIGHT_TAP,
                 onClick = onClick
             ),
         shape = shape,

@@ -3,7 +3,6 @@ package com.tracktosearch.ui.screen.detail
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
@@ -85,6 +84,8 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.zoomSharedSource
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -177,7 +178,11 @@ internal fun DetailHeaderContent(
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(if (uiState.posterUrl != null) Modifier.clickable { onPosterClick() } else Modifier)
+                        .then(
+                            if (uiState.posterUrl != null) {
+                                Modifier.hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onPosterClick() }
+                            } else Modifier
+                        )
                 ) {
                     if (uiState.posterUrl != null) {
                         var posterScale by remember { mutableFloatStateOf(1f) }
@@ -710,9 +715,10 @@ internal fun ExpandableText(
     // 仅溢出（或已展开）时才可点击；未溢出文本不响应点击、不显示按钮
     val canToggle = hasOverflow || expanded
     val toggleModifier = if (canToggle) {
-        Modifier.clickable(
+        Modifier.hapticClickable(
             interactionSource = remember { MutableInteractionSource() },
-            indication = null
+            indication = null,
+            semantic = if (expanded) HapticSemantic.TOGGLE_OFF else HapticSemantic.TOGGLE_ON
         ) { expanded = !expanded }
     } else Modifier
 

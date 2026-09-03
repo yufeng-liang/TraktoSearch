@@ -710,7 +710,9 @@ internal fun AccentColorDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            // confirmButton 槽是独立 subcomposition（自带宿主 View），不能复用 text 槽里那些
+            val haptics = rememberAppHaptics()
+            TextButton(onClick = { haptics.tap(); onDismiss() }) {
                 Text(stringResource(R.string.common_done))
             }
         }
@@ -769,6 +771,8 @@ internal fun CustomAccentDialog(
             )
         },
         text = {
+            // text 槽自带宿主 View，「恢复默认」那一记要在槽内取实例
+            val haptics = rememberAppHaptics()
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -814,13 +818,24 @@ internal fun CustomAccentDialog(
                         Text("Button", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
                     }
                 }
-                TextButton(onClick = { onResetDefault(); onDismiss() }, modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = { haptics.tap(); onResetDefault(); onDismiss() }, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.settings_accent_reset_default), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         },
-        confirmButton = { Button(onClick = { onColorSelected(selectedColor.toArgb().toLong()); onDismiss() }) { Text("确定") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+        confirmButton = {
+            // 每个槽各取一份，理由同 text 槽
+            val confirmHaptics = rememberAppHaptics()
+            Button(onClick = {
+                confirmHaptics.tap()
+                onColorSelected(selectedColor.toArgb().toLong())
+                onDismiss()
+            }) { Text("确定") }
+        },
+        dismissButton = {
+            val dismissHaptics = rememberAppHaptics()
+            TextButton(onClick = { dismissHaptics.lightTap(); onDismiss() }) { Text("取消") }
+        }
     )
 }
 
@@ -957,7 +972,9 @@ fun ChangelogDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            // confirmButton 槽自带宿主 View
+            val haptics = rememberAppHaptics()
+            TextButton(onClick = { haptics.tap(); onDismiss() }) {
                 Text(stringResource(android.R.string.ok))
             }
         }
@@ -1000,6 +1017,8 @@ fun DiscoverSectionsDialog(
             }
         },
         text = {
+            // text 槽自带宿主 View；把手那一记在槽内取实例（DiscoverSectionRow 里那份是它自己的）
+            val haptics = rememberAppHaptics()
             LazyColumn(
                 state = lazyListState,
                 modifier = Modifier
@@ -1015,7 +1034,17 @@ fun DiscoverSectionsDialog(
                             name = getSectionDisplayName(section.id),
                             visible = section.visible,
                             onToggle = { viewModel.setSectionVisible(section.id, it) },
-                            dragHandleModifier = Modifier.draggableHandle(),
+                            // sh.calvin.reorderable 3.1.0 自己不发任何触感（整个 aar 里没有
+                            // performHapticFeedback / HapticFeedbackType 的引用，LongPress 探测器
+                            // 走的是 Compose 的 detectDragGesturesAfterLongPress —— 那条路没有内建
+                            // 长按触感，与 combinedClickable 不同），所以起手与落定两记都要自己补。
+                            //
+                            // 拖动过程中每换一格**不发**：一趟拖过十几个栏目会连出十几记，
+                            // 起手与放手这一对才是「抓住了 / 放稳了」。
+                            dragHandleModifier = Modifier.draggableHandle(
+                                onDragStarted = { haptics.dragStart() },
+                                onDragStopped = { haptics.gestureEnd() }
+                            ),
                             isDragging = isDragging
                         )
                     }
@@ -1023,7 +1052,8 @@ fun DiscoverSectionsDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            val confirmHaptics = rememberAppHaptics()
+            TextButton(onClick = { confirmHaptics.tap(); onDismiss() }) {
                 Text(stringResource(android.R.string.ok))
             }
         }
@@ -1139,7 +1169,9 @@ fun DetailSectionsDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            // 与 text 槽里那份分开取：两个槽各有自己的宿主 View
+            val confirmHaptics = rememberAppHaptics()
+            TextButton(onClick = { confirmHaptics.tap(); onDismiss() }) {
                 Text(stringResource(android.R.string.ok))
             }
         }

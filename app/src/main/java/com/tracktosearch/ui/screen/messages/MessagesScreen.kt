@@ -40,6 +40,7 @@ import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -72,6 +73,8 @@ fun MessagesScreen(
     val visibleItems = remember(successState?.items) {
         successState?.items?.filter { it.author_role == "developer" }.orEmpty()
     }
+    // 空态里的「全部」与底部「加载更多」两处 Material 按钮共用；LazyColumn 的 item 不换宿主 View
+    val haptics = rememberAppHaptics()
 
     LaunchedEffect(Unit) { viewModel.loadMessages(refresh = true) }
     // 换筛选后内容整批换掉，滚动位置留在原处会停在半空。
@@ -170,8 +173,11 @@ fun MessagesScreen(
                                         icon = Icons.Rounded.Inbox,
                                         actions = {
                                             if (filter == FeedbackViewModel.MessageFilter.UNREAD) {
+                                                // EmptyStateCard 是纯容器，actions 槽自己发；
+                                                // 这一下等于把筛选挪回「全部」，与筛选 chip 同一种状态变化，走刻度感
                                                 TextButton(
                                                     onClick = {
+                                                        haptics.segmentTick()
                                                         viewModel.setMessagesFilter(
                                                             FeedbackViewModel.MessageFilter.ALL
                                                         )
@@ -201,7 +207,10 @@ fun MessagesScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         TextButton(
-                                            onClick = { viewModel.loadMessages(refresh = false) }
+                                            onClick = {
+                                                haptics.lightTap()
+                                                viewModel.loadMessages(refresh = false)
+                                            }
                                         ) {
                                             Text(stringResource(R.string.feedback_load_more))
                                         }
@@ -235,6 +244,7 @@ private fun MessagesTopBar(
     onBack: () -> Unit,
     onMarkAllRead: () -> Unit
 ) {
+    val haptics = rememberAppHaptics()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -265,7 +275,13 @@ private fun MessagesTopBar(
                     }
                 },
                 actions = {
-                    TextButton(onClick = onMarkAllRead) {
+                    // 一次把所有未读清掉，有实际后果，按带文字的主操作给 tap
+                    TextButton(
+                        onClick = {
+                            haptics.tap()
+                            onMarkAllRead()
+                        }
+                    ) {
                         Icon(
                             Icons.Rounded.DoneAll,
                             contentDescription = null,
@@ -326,7 +342,7 @@ private fun MessageItemRow(
     val typeColor = when (item.type) { "FEATURE" -> Color(0xFF34D399); "BUG" -> Color(0xFFFB7185); "UX" -> Color(0xFFFBBF24); else -> Color(0xFF9CA3AF) }
     val hasScreenshot = item.screenshots.isNotEmpty()
 
-    Row(modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (item.is_unread) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else Color.Transparent).clickable { onClick() }.padding(horizontal = 8.dp, vertical = 10.dp).alpha(if (item.is_unread) 1f else 0.6f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Row(modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (item.is_unread) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else Color.Transparent).hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() }.padding(horizontal = 8.dp, vertical = 10.dp).alpha(if (item.is_unread) 1f else 0.6f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box {
             Box(Modifier.size(36.dp).clip(CircleShape).background(avatarColor), contentAlignment = Alignment.Center) { Text(avatarLabel, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
             if (item.is_unread) {

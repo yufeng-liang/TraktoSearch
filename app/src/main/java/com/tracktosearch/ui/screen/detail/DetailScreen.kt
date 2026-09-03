@@ -11,7 +11,6 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -117,6 +116,8 @@ import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
@@ -237,6 +238,9 @@ fun DetailScreen(
                 duration = SnackbarDuration.Short
             )
             if (result == SnackbarResult.ActionPerformed) {
+                // Material 自己渲染 action 按钮、拿不到 onClick=，ActionPerformed 分支是唯一的钩子。
+                // performAction() 在点击当帧就 resume 这条协程，不用等 Snackbar 退场动画
+                haptics.tap()
                 // 撤销就是再调一次同一个 toggle：两个 toggle 都是幂等的状态翻转
                 when (event.kind) {
                     DetailMarkKind.WATCHLIST -> viewModel.toggleWatchlist()
@@ -645,7 +649,10 @@ fun DetailScreen(
                                     .alpha(contentAlpha)
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 4.dp)
-                                    .clickable { viewModel.toggleShowHighRelevanceOnly() },
+                                    // 这块提示只在「仅显示高相关」开着时出现，点它必然是关掉
+                                    .hapticClickable(semantic = HapticSemantic.TOGGLE_OFF) {
+                                        viewModel.toggleShowHighRelevanceOnly()
+                                    },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
@@ -734,7 +741,7 @@ fun DetailScreen(
                                 horizontalArrangement = Arrangement.End
                             ) {
                                 Surface(
-                                    onClick = { viewModel.translateComments() },
+                                    onClick = { haptics.tap(); viewModel.translateComments() },
                                     enabled = !uiState.isTranslating,
                                     shape = RoundedCornerShape(16.dp),
                                     color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -1211,7 +1218,10 @@ fun DetailScreen(
                     title = { Text(stringResource(R.string.detail_login_required_title)) },
                     text = { Text(stringResource(R.string.detail_login_required_message)) },
                     confirmButton = {
+                        // AlertDialog 的每个槽是独立 subcomposition，各取一份
+                        val confirmHaptics = rememberAppHaptics()
                         TextButton(onClick = {
+                            confirmHaptics.tap()
                             dismissLoginPrompt()
                             onNavigateToLogin()
                         }) {
@@ -1219,7 +1229,8 @@ fun DetailScreen(
                         }
                     },
                     dismissButton = {
-                        TextButton(onClick = dismissLoginPrompt) {
+                        val dismissHaptics = rememberAppHaptics()
+                        TextButton(onClick = { dismissHaptics.lightTap(); dismissLoginPrompt() }) {
                             // 用应用内资源而非 android.R.string.cancel（平台串随系统语言变化）
                             Text(stringResource(R.string.common_cancel))
                         }
@@ -1251,7 +1262,8 @@ fun DetailScreen(
                     },
                     onConfirm = { rating, comment ->
                         showRatingDialog = false
-                        haptics.tap()
+                        // 触感由 RatingDialog 里「确定」按钮自己发（弹窗有自己的宿主 View），
+                        // 这里不再补一记，否则同一次点击两震
                         // 不调用 dismissRatingDialog():setRatingWithComment/removeRating 内部会关闭弹窗并处理豆瓣同步
                         // 否则会先 syncDoubanMark(COLLECT) 再 syncDoubanMarkWithRating,导致两次豆瓣同步 toast
                         viewModel.confirmRatingWithComment(rating, comment)

@@ -10,7 +10,6 @@ import androidx.compose.animation.core.repeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -50,6 +49,9 @@ import com.tracktosearch.data.remote.feedback.screenshotUrl
 import com.tracktosearch.ui.component.LocalFullscreenSharedKey
 import com.tracktosearch.ui.component.ZoomableImageOverlay
 import com.tracktosearch.ui.component.zoomSharedSource
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 
 private const val MAX_REPLY_SCREENSHOTS = 5
 
@@ -71,6 +73,7 @@ fun FeedbackDetailScreen(
     val replyState by viewModel.replyState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val listState = rememberLazyListState()
+    val haptics = rememberAppHaptics()
 
     var fullscreenUrls by remember { mutableStateOf<List<String>>(emptyList()) }
     var fullscreenIndex by remember { mutableStateOf<Int?>(null) }
@@ -154,7 +157,12 @@ fun FeedbackDetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onNewFeedback) {
+                    IconButton(
+                        onClick = {
+                            haptics.lightTap()
+                            onNewFeedback()
+                        }
+                    ) {
                         Icon(
                             imageVector = Icons.Rounded.Add,
                             contentDescription = stringResource(R.string.feedback_new)
@@ -317,7 +325,7 @@ private fun OriginalFeedbackCard(feedback: com.tracktosearch.data.remote.feedbac
                                 .height(160.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(MaterialTheme.colorScheme.surface)
-                                .clickable {
+                                .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
                                     onScreenshotClick(screenshots.map(::screenshotUrl), index)
                                 },
                             contentAlignment = Alignment.Center
@@ -455,7 +463,7 @@ private fun ConversationBubble(reply: FeedbackReply, sharedKeyPrefix: String? = 
                                         // 与全屏端 "$sharedKeyPrefix-$page" 配对；caller-managed visibility
                                         // 保证同一 key 同时只有一侧是 target
                                         .zoomSharedSource(key = sharedKeyPrefix?.let { "$it-$index" })
-                                        .clickable {
+                                        .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
                                             onScreenshotClick(screenshots.map(::screenshotUrl), index)
                                         }
                                 )
@@ -494,6 +502,7 @@ private fun ConversationBubble(reply: FeedbackReply, sharedKeyPrefix: String? = 
 @Composable
 private fun ReplyBar(text: String, onTextChange: (String) -> Unit, screenshots: List<Pair<ByteArray, String>>, sharedKeyPrefix: String? = null, enabled: Boolean, onAddScreenshot: () -> Unit, onRemoveScreenshot: (Int) -> Unit, onScreenshotClick: (Int) -> Unit, onSend: () -> Unit, isSending: Boolean, replyState: FeedbackViewModel.ReplyState) {
     val context = LocalContext.current
+    val haptics = rememberAppHaptics()
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -513,7 +522,9 @@ private fun ReplyBar(text: String, onTextChange: (String) -> Unit, screenshots: 
                                 .size(64.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .clickable { onScreenshotClick(index) }
+                                .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
+                                    onScreenshotClick(index)
+                                }
                         ) {
                             AsyncImage(
                                 model = remember(bytes) {
@@ -529,7 +540,10 @@ private fun ReplyBar(text: String, onTextChange: (String) -> Unit, screenshots: 
                             )
                             if (enabled) {
                                 IconButton(
-                                    onClick = { onRemoveScreenshot(index) },
+                                    onClick = {
+                                        haptics.lightTap()
+                                        onRemoveScreenshot(index)
+                                    },
                                     modifier = Modifier.align(Alignment.TopEnd)
                                 ) {
                                     Icon(
@@ -555,7 +569,12 @@ private fun ReplyBar(text: String, onTextChange: (String) -> Unit, screenshots: 
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 if (enabled && screenshots.size < MAX_REPLY_SCREENSHOTS) {
-                    IconButton(onClick = onAddScreenshot) {
+                    IconButton(
+                        onClick = {
+                            haptics.lightTap()
+                            onAddScreenshot()
+                        }
+                    ) {
                         Icon(
                             imageVector = Icons.Rounded.Add,
                             contentDescription = stringResource(R.string.feedback_screenshots)
@@ -576,7 +595,10 @@ private fun ReplyBar(text: String, onTextChange: (String) -> Unit, screenshots: 
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
                 )
                 FilledIconButton(
-                    onClick = onSend,
+                    onClick = {
+                        haptics.tap()
+                        onSend()
+                    },
                     enabled = enabled && text.isNotBlank(),
                     modifier = Modifier.size(48.dp)
                 ) {

@@ -88,6 +88,7 @@ import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
@@ -459,6 +460,7 @@ private fun HelpPaperTopBar(
     onSearchBoundsChanged: (Rect) -> Unit,
 ) {
     val topBarInteractionSource = remember { MutableInteractionSource() }
+    val haptics = rememberAppHaptics()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -528,7 +530,10 @@ private fun HelpPaperTopBar(
                             )
                         } else {
                             IconButton(
-                                onClick = onExpandSearch,
+                                onClick = {
+                                    haptics.lightTap()
+                                    onExpandSearch()
+                                },
                                 modifier = Modifier
                                     .size(42.dp)
                                     .background(paper.palette.cream, CircleShape)
@@ -589,6 +594,7 @@ private fun HelpSearchField(
     onSearchAction: () -> Unit,
 ) {
     val seal = paper.palette.seal
+    val haptics = rememberAppHaptics()
     val selectionColors = remember(seal) {
         TextSelectionColors(handleColor = seal, backgroundColor = seal.copy(alpha = 0.22f))
     }
@@ -645,7 +651,10 @@ private fun HelpSearchField(
                     }
                     if (query.isNotEmpty()) {
                         IconButton(
-                            onClick = { onQueryChange("") },
+                            onClick = {
+                                haptics.lightTap()
+                                onQueryChange("")
+                            },
                             modifier = Modifier.size(28.dp),
                         ) {
                             Icon(

@@ -8,7 +8,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -49,6 +48,9 @@ import com.tracktosearch.ui.component.ZoomableImageOverlay
 import com.tracktosearch.ui.component.queryExistingFile
 import com.tracktosearch.ui.component.savePosterToGallery
 import com.tracktosearch.ui.component.zoomSharedSource
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.util.showToast
 
 // ==================== 人物图片大图查看 ====================
@@ -129,6 +131,7 @@ internal fun AllPersonImagesPanel(
         // 全屏查看器在 PersonScreen 中排在本面板之后组合，其 BackHandler 注册更晚、优先级更高，
         // 所以查看器打开时返回键先关查看器，再按一次才关面板。
         BackHandler(enabled = true) { onDismiss() }
+        val haptics = rememberAppHaptics()
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -147,7 +150,11 @@ internal fun AllPersonImagesPanel(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                IconButton(onClick = onDismiss) {
+                // 面板的「关闭」按取消档给轻一记；上面那个 BackHandler 与返回手势照旧静默
+                IconButton(onClick = {
+                    haptics.lightTap()
+                    onDismiss()
+                }) {
                     Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.common_close))
                 }
             }
@@ -176,7 +183,8 @@ internal fun AllPersonImagesPanel(
                             // caller-managed visibility：查看器打开本 key 时网格项置不可见，
                             // 面板本身可以保持打开，返回即回到网格原位
                             .zoomSharedSource(key = "person-grid-$personId-$index")
-                            .clickable { onImageClick(index) }
+                            // 网格项进全屏查看器，按列表项给轻一档
+                            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onImageClick(index) }
                     )
                 }
             }

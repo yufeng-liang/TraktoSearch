@@ -83,6 +83,7 @@ import com.tracktosearch.ui.component.appVisualEffect
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.PixelFontFamily
 import com.tracktosearch.ui.theme.monetDoubanGreen
 import com.tracktosearch.ui.theme.pixelFontSize
@@ -115,6 +116,7 @@ fun ActivationLoginScreen(
     val errorMessage by loginViewModel.errorMessage.collectAsStateWithLifecycle()
     val authState by authViewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
+    val haptics = rememberAppHaptics()
     val hazeState = remember { HazeState() }
     val scrollState = rememberScrollState()
     val isDarkTheme = isAppDarkTheme()
@@ -209,7 +211,10 @@ fun ActivationLoginScreen(
             }
 
             TextButton(
-                onClick = { showWhatIsTraktDialog = true },
+                onClick = {
+                    haptics.lightTap()
+                    showWhatIsTraktDialog = true
+                },
                 enabled = true,
                 colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
                     contentColor = if (isDarkTheme) Color(0xFF6B4632) else MaterialTheme.colorScheme.primary
@@ -333,13 +338,20 @@ fun ActivationLoginScreen(
             title = { Text(stringResource(R.string.login_what_is_trakt_title)) },
             text = { Text(stringResource(R.string.login_what_is_trakt_desc)) },
             confirmButton = {
+                // 不发触感：CustomTabs 只是打开 trakt.tv 注册页去看，属真的离开本应用。
+                // 与上面登录按钮的区别在「回不回来」，不是「有没有用 CustomTabs」
                 Button(onClick = {
                     showWhatIsTraktDialog = false
                     CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse("https://trakt.tv/auth/join"))
                 }) { Text(stringResource(R.string.login_what_is_trakt_register)) }
             },
             dismissButton = {
-                TextButton(onClick = { showWhatIsTraktDialog = false }) {
+                // 槽是独立 subcomposition（自己的宿主 View），单独取一份
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = {
+                    dismissHaptics.lightTap()
+                    showWhatIsTraktDialog = false
+                }) {
                     Text(stringResource(R.string.login_what_is_trakt_close))
                 }
             }
@@ -364,11 +376,16 @@ internal fun ActivationSecondaryActions(
     val doubanHazeStyle = HazeMaterials.thin(
         doubanGreen.copy(alpha = if (doubanEnabled) 0.72f else 0.24f)
     )
+    val haptics = rememberAppHaptics()
     Column(
         modifier = modifier.padding(start = 18.dp, top = 8.dp, end = 18.dp)
     ) {
         Button(
-            onClick = onDoubanLogin,
+            // 跳的是应用内的豆瓣登录页，不是外部浏览器；整宽主色按钮，按主操作给 tap
+            onClick = {
+                haptics.tap()
+                onDoubanLogin()
+            },
             enabled = doubanEnabled,
             modifier = Modifier
                 .fillMaxWidth()
@@ -406,7 +423,10 @@ internal fun ActivationSecondaryActions(
             }
         }
         TextButton(
-            onClick = onGuestMode,
+            onClick = {
+                haptics.lightTap()
+                onGuestMode()
+            },
             enabled = guestEnabled,
             colors = ButtonDefaults.textButtonColors(
                 contentColor = guestContentColor,
@@ -434,6 +454,7 @@ private fun ActivationCard(
 ) {
     val shape = RoundedCornerShape(20.dp)
     val accent = MaterialTheme.colorScheme.primary
+    val haptics = rememberAppHaptics()
     val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val inputFillColor = if (isDarkTheme) {
         Color.Black.copy(alpha = 0.72f)
@@ -562,7 +583,11 @@ private fun ActivationCard(
                 }
             )
             Button(
-                onClick = authViewModel::activate,
+                // 应用内提交激活码，是本卡片的主操作；成功/失败那一记归另一个任务在 VM 侧接
+                onClick = {
+                    haptics.tap()
+                    authViewModel.activate()
+                },
                 enabled = canActivate,
                 modifier = Modifier
                     .padding(start = 8.dp)
@@ -597,7 +622,12 @@ private fun ActivationCard(
             disabledContentColor = Color(0xFF9A9189)
         )
         Button(
-            onClick = onLoginClick,
+            // OAuth 授权走 CustomTabs 但拿着 code 通过 deep link 回到本应用，不算外跳；
+            // 这是本屏的主 CTA（ERROR 态显示「重试」也是同一条路），给 tap
+            onClick = {
+                haptics.tap()
+                onLoginClick()
+            },
             enabled = canUseActions && loginState != LoginState.AUTHORIZING && loginState != LoginState.CONNECTING,
             modifier = Modifier
                 .fillMaxWidth()
@@ -622,7 +652,10 @@ private fun ActivationCard(
                 textAlign = TextAlign.Center
             )
             TextButton(
-                onClick = onCancelAuth,
+                onClick = {
+                    haptics.lightTap()
+                    onCancelAuth()
+                },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(stringResource(R.string.common_cancel))

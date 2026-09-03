@@ -38,6 +38,8 @@ import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -108,7 +110,9 @@ fun FeedbackScreen(
             // 顶部「写新反馈」按钮
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth().clickable { onNewFeedback() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .hapticClickable(semantic = HapticSemantic.TAP) { onNewFeedback() },
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -288,7 +292,9 @@ private fun FeedbackCard(item: com.tracktosearch.data.remote.feedback.FeedbackLi
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        modifier = Modifier
+            .fillMaxWidth()
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
@@ -366,7 +372,9 @@ private fun CrashLogRecordCard(
     val monthsAgo = stringResource(R.string.feedback_time_months_ago)
 
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        modifier = Modifier
+            .fillMaxWidth()
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)

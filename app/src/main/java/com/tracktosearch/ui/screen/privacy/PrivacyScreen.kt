@@ -822,7 +822,11 @@ private fun PrivacyFlowOption(
         color = if (selected) primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.48f),
         shape = RoundedCornerShape(12.dp),
         border = BorderStroke(1.dp, if (selected) primary.copy(alpha = 0.32f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.10f)),
-        modifier = modifier.clickable(onClick = onClick)
+        // 五个数据流选项互斥（selectedIndex 是单值赋值），只是把选中位挪一格，走刻度感
+        modifier = modifier.hapticClickable(
+            semantic = HapticSemantic.SEGMENT_TICK,
+            onClick = onClick
+        )
     ) {
         Text(
             text = flow.title,
@@ -883,7 +887,14 @@ private fun PrivacyStatementContent() {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { techExpanded = !techExpanded }
+                // 展开/收起按「展开后的状态」给方向感
+                .hapticClickable(
+                    semantic = if (techExpanded) {
+                        HapticSemantic.TOGGLE_OFF
+                    } else {
+                        HapticSemantic.TOGGLE_ON
+                    }
+                ) { techExpanded = !techExpanded }
                 .padding(vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

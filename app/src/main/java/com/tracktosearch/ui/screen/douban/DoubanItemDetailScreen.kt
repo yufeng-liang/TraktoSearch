@@ -1387,7 +1387,10 @@ fun DoubanItemDetailScreen(
                                                     .alpha(contentAlpha)
                                                     .fillMaxWidth()
                                                     .padding(horizontal = 16.dp, vertical = 4.dp)
-                                                    .clickable { viewModel.toggleShowHighRelevanceOnly() }
+                                                    // 这块提示只在「仅显示高相关」开着时出现，点它必然是关掉
+                                                    .hapticClickable(semantic = HapticSemantic.TOGGLE_OFF) {
+                                                        viewModel.toggleShowHighRelevanceOnly()
+                                                    }
                                             ) {
                                                 Text(
                                                     text = stringResource(
@@ -1773,7 +1776,10 @@ fun DoubanItemDetailScreen(
                     )
                 },
                 confirmButton = {
+                    // AlertDialog 的槽是独立 subcomposition，单独取一份
+                    val confirmHaptics = rememberAppHaptics()
                     TextButton(onClick = {
+                        confirmHaptics.tap()
                         viewModel.updateSubtitle(failure.doubanId, subtitleInput)
                         viewModel.showSubtitleDialog(false)
                     }) {
@@ -1781,7 +1787,8 @@ fun DoubanItemDetailScreen(
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { viewModel.showSubtitleDialog(false) }) {
+                    val dismissHaptics = rememberAppHaptics()
+                    TextButton(onClick = { dismissHaptics.lightTap(); viewModel.showSubtitleDialog(false) }) {
                         Text(stringResource(R.string.douban_retry_cancel))
                     }
                 }
@@ -1797,8 +1804,10 @@ fun DoubanItemDetailScreen(
             title = { Text(stringResource(R.string.douban_writeback_remove_confirm_title)) },
             text = { Text(stringResource(R.string.douban_writeback_remove_confirm_text)) },
             confirmButton = {
+                val confirmHaptics = rememberAppHaptics()
                 TextButton(
                     onClick = {
+                        confirmHaptics.tap()
                         showRemoveConfirm = false
                         viewModel.removeMark()
                     }
@@ -1807,7 +1816,8 @@ fun DoubanItemDetailScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showRemoveConfirm = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = { dismissHaptics.lightTap(); showRemoveConfirm = false }) {
                     Text(stringResource(R.string.douban_retry_cancel))
                 }
             }
@@ -1821,6 +1831,8 @@ fun DoubanItemDetailScreen(
             onDismissRequest = { webviewUrl = null },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
+            // Dialog 的内容是独立 subcomposition（有自己的宿主 View），单独取一份
+            val webviewHaptics = rememberAppHaptics()
             Column(modifier = Modifier.fillMaxSize()) {
                 TopAppBar(
                     title = {
@@ -1831,7 +1843,10 @@ fun DoubanItemDetailScreen(
                         )
                     },
                     navigationIcon = {
-                        IconButton(onClick = { webviewUrl = null }) {
+                        // 这个 ← 收的是盖在详情页上的一层全屏浮层，不弹导航栈，
+                        // 按「对话框的关闭」给 lightTap()；同一个 Dialog 的
+                        // onDismissRequest（系统返回手势）仍然静默
+                        IconButton(onClick = { webviewHaptics.lightTap(); webviewUrl = null }) {
                             Icon(
                                 Icons.AutoMirrored.Rounded.ArrowBack,
                                 contentDescription = stringResource(R.string.detail_back)
@@ -2000,7 +2015,11 @@ private fun DoubanItemHeader(
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier
                     .size(width = 120.dp, height = 180.dp)
-                    .then(if (failure.posterUrl != null) Modifier.clickable { onPosterClick() } else Modifier)
+                    .then(
+                        if (failure.posterUrl != null) {
+                            Modifier.hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onPosterClick() }
+                        } else Modifier
+                    )
             ) {
                 if (failure.posterUrl != null) {
                     val context = LocalContext.current
@@ -2077,7 +2096,7 @@ private fun DoubanItemHeader(
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onSubtitleClick() }
+                        .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onSubtitleClick() }
                 ) {
                     Text(
                         text = displaySubtitle
@@ -2282,6 +2301,7 @@ private fun DoubanSearchKeywordBar(
     searchWithSubtitle: Boolean,
     onToggleSearchWithSubtitle: () -> Unit
 ) {
+    val haptics = rememberAppHaptics()
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
         Text(
             text = if (failure.subtitle != null && searchWithSubtitle)
@@ -2309,7 +2329,10 @@ private fun DoubanSearchKeywordBar(
                 )
                 Switch(
                     checked = searchWithSubtitle,
-                    onCheckedChange = { onToggleSearchWithSubtitle() }
+                    onCheckedChange = { checked ->
+                        haptics.toggle(checked)
+                        onToggleSearchWithSubtitle()
+                    }
                 )
             }
         }
@@ -3059,7 +3082,7 @@ private fun MetaRow(label: String, value: String, copyable: Boolean = false) {
         modifier = Modifier
             .fillMaxWidth()
             .then(
-                if (copyable) Modifier.clickable {
+                if (copyable) Modifier.hapticClickable(semantic = HapticSemantic.TAP) {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
                     context.showToast(copiedToast)

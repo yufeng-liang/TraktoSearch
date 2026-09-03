@@ -269,14 +269,21 @@ fun SearchSourcesScreen(
             title = { Text(stringResource(R.string.search_sources_title)) },
             text = { Text(stringResource(R.string.import_duplicate_warning)) },
             confirmButton = {
+                // 每个槽是独立 subcomposition（自己的宿主 View），单独取一份
+                val confirmHaptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    confirmHaptics.tap()
                     pendingImport = null
                     viewModel.importSource(source, overwrite = true)
                     scope.launch { snackbarHostState.showSnackbar(importSuccessMessage) }
                 }) { Text(stringResource(R.string.import_confirm)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingImport = null }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = {
+                    dismissHaptics.lightTap()
+                    pendingImport = null
+                }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -369,6 +376,7 @@ private fun BuiltinSourcesSection(
     onZresoChange: (Boolean) -> Unit,
     onOpenPanHubConfig: () -> Unit
 ) {
+    val haptics = rememberAppHaptics()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -389,7 +397,14 @@ private fun BuiltinSourcesSection(
             onCheckedChange = onPanhubChange,
             onClick = onOpenPanHubConfig,
             leadingAction = {
-                IconButton(onClick = onOpenPanHubConfig) {
+                // 齿轮和整行点的是同一个动作，行那侧已给 LIGHT_TAP，这里对齐；
+                // 内层 IconButton 自己消费点击，不会连带发行那一记
+                IconButton(
+                    onClick = {
+                        haptics.lightTap()
+                        onOpenPanHubConfig()
+                    }
+                ) {
                     Icon(
                         imageVector = Icons.Rounded.Settings,
                         contentDescription = stringResource(R.string.settings_panhub_config),
@@ -444,7 +459,13 @@ private fun SourceCardRow(
             .shadow(1.dp, SOURCE_CARD_SHAPE)
             .clip(SOURCE_CARD_SHAPE)
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .then(
+                if (onClick != null) {
+                    Modifier.hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onClick)
+                } else {
+                    Modifier
+                }
+            )
             .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -495,8 +516,15 @@ private fun EmptyCustomSourceCard(
         description = stringResource(R.string.search_sources_empty_hint),
         icon = Icons.Rounded.Language,
         actions = {
+            // EmptyStateCard 是纯容器，actions 槽里的按钮要自己发；两个都是带文字的 CTA，同给 TAP
+            val actionHaptics = rememberAppHaptics()
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { showTemplateSheet = true }) {
+                TextButton(
+                    onClick = {
+                        actionHaptics.tap()
+                        showTemplateSheet = true
+                    }
+                ) {
                     Icon(
                         imageVector = Icons.Rounded.Add,
                         contentDescription = null,
@@ -505,7 +533,12 @@ private fun EmptyCustomSourceCard(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(stringResource(R.string.settings_add_source))
                 }
-                TextButton(onClick = onImport) {
+                TextButton(
+                    onClick = {
+                        actionHaptics.tap()
+                        onImport()
+                    }
+                ) {
                     Icon(
                         imageVector = Icons.Rounded.FileDownload,
                         contentDescription = null,
@@ -545,6 +578,7 @@ private fun CustomSourceRow(
     onShare: () -> Unit
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    val haptics = rememberAppHaptics()
 
     Column(
         modifier = Modifier
@@ -580,7 +614,11 @@ private fun CustomSourceRow(
             }
             Switch(
                 checked = source.enabled,
-                onCheckedChange = onEnabledChange,
+                // 与紧挨在上方的内置源开关（SourceCardRow）同一种控件、同一屏，手感必须一致
+                onCheckedChange = {
+                    haptics.toggle(it)
+                    onEnabledChange(it)
+                },
                 colors = appSwitchColors()
             )
         }
@@ -639,7 +677,10 @@ private fun CustomSourceRow(
                 )
             },
             confirmButton = {
+                // 每个槽是独立 subcomposition（自己的宿主 View），单独取一份
+                val confirmHaptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    confirmHaptics.tap()
                     showDeleteConfirm = false
                     onDelete()
                 }) {
@@ -647,7 +688,11 @@ private fun CustomSourceRow(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = {
+                    dismissHaptics.lightTap()
+                    showDeleteConfirm = false
+                }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -706,8 +751,14 @@ private fun SourceActionIcon(
     enabled: Boolean = true,
     tint: Color = MaterialTheme.colorScheme.onSurfaceVariant
 ) {
+    // 测试/编辑/分享/删除四个都走这里，一处给完保证同一行四个图标手感一致。
+    // 删除那个点下去会弹确认框，但按钮身份就是图标按钮，弹窗那记归另一个任务
+    val haptics = rememberAppHaptics()
     IconButton(
-        onClick = onClick,
+        onClick = {
+            haptics.lightTap()
+            onClick()
+        },
         enabled = enabled,
         modifier = Modifier.size(32.dp)
     ) {

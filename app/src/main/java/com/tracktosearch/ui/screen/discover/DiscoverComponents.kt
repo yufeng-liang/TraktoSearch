@@ -4,7 +4,6 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -67,6 +66,8 @@ import com.tracktosearch.ui.component.RatingBadge
 import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.YearBadge
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 
@@ -150,10 +151,12 @@ internal fun MovieCard(
         }
         AppVisualSurface(
             kind = VisualSurfaceKind.Content,
-            modifier = posterBoxModifier.clickable(
+            modifier = posterBoxModifier.hapticClickable(
                 enabled = !isResolving,
                 interactionSource = interactionSource,
                 indication = null,
+                // 一屏里横滑几十张的媒体卡片，与共享的 ui/component/MovieCard、PosterCard 同档
+                semantic = HapticSemantic.LIGHT_TAP,
                 onClick = {
                     // 点击时记录当前海报为活跃状态,并获取新 token,确保只有这个卡片参与转场
                     if (tmdbId > 0) {

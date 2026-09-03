@@ -62,6 +62,9 @@ import androidx.core.net.toUri
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.DesignToken
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
@@ -297,7 +300,7 @@ private fun OssLibraryCard(lib: OssLibrary, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 4.dp)
-            .clickable(onClick = onClick)
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onClick)
     ) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
             Text(
@@ -370,7 +373,12 @@ private fun OssLibraryDialog(lib: OssLibrary, onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
+            // confirmButton 槽是独立 subcomposition（自带宿主 View），触感实例得在槽内取。
+            // 外跳 GitHub 仍给 tap()：弹窗主按钮的档位由显著度决定，压过「外跳静默」那条 ——
+            // 否则这个弹窗里唯一会震的会是「取消」，主次颠倒
+            val confirmHaptics = rememberAppHaptics()
             TextButton(onClick = {
+                confirmHaptics.tap()
                 CustomTabsIntent.Builder().build()
                     .launchUrl(context, lib.repoUrl.toUri())
             }) {
@@ -378,7 +386,12 @@ private fun OssLibraryDialog(lib: OssLibrary, onDismiss: () -> Unit) {
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            // dismissButton 槽是独立 subcomposition（自带宿主 View），触感实例得在槽内取
+            val dismissHaptics = rememberAppHaptics()
+            TextButton(onClick = {
+                dismissHaptics.lightTap()
+                onDismiss()
+            }) {
                 Text(stringResource(R.string.common_cancel))
             }
         }

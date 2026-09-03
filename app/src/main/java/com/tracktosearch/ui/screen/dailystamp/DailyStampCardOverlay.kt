@@ -80,6 +80,9 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.SaveToAlbumResult
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.splash.QuoteSeal
 import com.tracktosearch.ui.screen.splash.SplashPalette
 import com.tracktosearch.ui.util.showToast
@@ -175,6 +178,7 @@ private fun CardStack(
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
     val scope = rememberCoroutineScope()
+    val haptics = rememberAppHaptics()
     val graphicsLayer = rememberGraphicsLayer()
     val dragX = remember { Animatable(0f) }
     var busy by remember { mutableStateOf(false) }
@@ -201,6 +205,8 @@ private fun CardStack(
                     detectHorizontalDragGestures(
                         onDragEnd = {
                             val target = neighbour(card.date, openableDates, dragX.value)
+                            // 只有真的翻到相邻那天才发：位移不够、已经到头时松手什么也没发生
+                            if (target != null) haptics.gestureEnd()
                             scope.launch {
                                 if (target != null) onSelect(target)
                                 dragX.animateTo(0f, tween(220, easing = CardEasing))
@@ -345,9 +351,10 @@ private fun CardPoster(
             .size(width = 122.dp, height = 183.dp)
             .clip(RoundedCornerShape(6.dp))
             .background(palette.cream)
-            .clickable(
+            .hapticClickable(
                 interactionSource = interactionSource,
                 indication = null,
+                semantic = HapticSemantic.LIGHT_TAP,
                 onClick = onClick,
             )
             .padding(5.dp)
@@ -422,9 +429,10 @@ private fun CardSource(
         text = text,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(
+            .hapticClickable(
                 interactionSource = interactionSource,
                 indication = null,
+                semantic = HapticSemantic.LIGHT_TAP,
                 onClick = onClick,
             ),
         color = palette.inkSoft,
@@ -493,9 +501,10 @@ private fun ActionPill(
         modifier = Modifier
             .clip(RoundedCornerShape(50))
             .background(palette.sheet.copy(alpha = 0.86f))
-            .clickable(
+            .hapticClickable(
                 interactionSource = interactionSource,
                 indication = null,
+                semantic = HapticSemantic.TAP,
                 enabled = enabled,
                 onClick = onClick,
             )

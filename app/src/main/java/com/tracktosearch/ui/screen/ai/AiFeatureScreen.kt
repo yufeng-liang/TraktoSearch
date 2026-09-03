@@ -4,7 +4,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -71,6 +70,9 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppErrorVariant
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.data.ai.AiAudio
 import com.tracktosearch.data.ai.AiDailyKnowledge
 import com.tracktosearch.data.ai.AiGreeting
@@ -106,6 +108,7 @@ fun AiFeatureScreen(
     var discardQuizConfirmVisible by remember(feature) { mutableStateOf(false) }
     // 答题进行中点刷新等于放弃这一轮：必须先确认，不能手滑就把 13 题作答清空
     val refreshNeedsConfirm = feature == AiFeature.QUIZ && hasQuizInProgress(state)
+    val haptics = rememberAppHaptics()
 
     LaunchedEffect(feature, sceneRevision, sceneEvent) {
         if (sceneEvent == null) {
@@ -156,6 +159,9 @@ fun AiFeatureScreen(
                     }
                     IconButton(
                         onClick = {
+                            // 图标按钮给轻一档。点下去可能是弹确认框、可能是直接刷新，
+                            // 语义只按「它是个刷新图标按钮」给，不跟着后续弹窗变
+                            haptics.lightTap()
                             if (refreshNeedsConfirm) discardQuizConfirmVisible = true else onRefresh()
                         },
                         enabled = !state.isLoading
@@ -215,7 +221,11 @@ fun AiFeatureScreen(
                             Text(stringResource(R.string.ai_feature_loading), style = MaterialTheme.typography.labelMedium)
                             // LLM 生成耗时不定，允许中途放弃：取消是静默操作，不弹错误不打扰
                             TextButton(
-                                onClick = viewModel::cancelActiveFeatureRequest,
+                                onClick = {
+                                    // 「取消」按取消档给轻一记
+                                    haptics.lightTap()
+                                    viewModel.cancelActiveFeatureRequest()
+                                },
                                 modifier = Modifier.height(24.dp),
                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)
                             ) {
@@ -251,7 +261,10 @@ fun AiFeatureScreen(
                     )
                 },
                 confirmButton = {
+                    // AlertDialog 的槽是独立 subcomposition（Dialog 有自己的宿主 View），单独取一份
+                    val confirmHaptics = rememberAppHaptics()
                     TextButton(onClick = {
+                        confirmHaptics.tap()
                         discardQuizConfirmVisible = false
                         onRefresh()
                     }) {
@@ -259,7 +272,11 @@ fun AiFeatureScreen(
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { discardQuizConfirmVisible = false }) {
+                    val dismissHaptics = rememberAppHaptics()
+                    TextButton(onClick = {
+                        dismissHaptics.lightTap()
+                        discardQuizConfirmVisible = false
+                    }) {
                         Text(stringResource(R.string.common_cancel))
                     }
                 }
@@ -290,6 +307,7 @@ private fun GreetingFeature(greeting: AiGreeting?, onPlayAudio: (AiAudio) -> Uni
         FeatureUnavailable()
         return
     }
+    val haptics = rememberAppHaptics()
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
@@ -353,7 +371,11 @@ private fun GreetingFeature(greeting: AiGreeting?, onPlayAudio: (AiAudio) -> Uni
                     ) {
                         Icon(Icons.Rounded.VolumeUp, contentDescription = null)
                         Text(stringResource(R.string.ai_audio_play), modifier = Modifier.weight(1f))
-                        IconButton(onClick = { onPlayAudio(audio) }) {
+                        IconButton(onClick = {
+                            // TTS 要等一会儿才出声，这一记轻触感是「点到了」的即时回执
+                            haptics.lightTap()
+                            onPlayAudio(audio)
+                        }) {
                             Icon(Icons.Rounded.VolumeUp, contentDescription = stringResource(R.string.ai_audio_play))
                         }
                     }
@@ -518,7 +540,17 @@ private fun RecommendationCard(recommendation: AiRecommendation, onOpen: () -> U
                 translationY = (1f - revealProgress) * 6.dp.toPx()
             }
             .clip(RoundedCornerShape(13.dp))
-            .then(if (hasMediaId) Modifier.clickable(onClick = onOpen) else Modifier),
+            // 列表项进详情，给轻一档。没有 mediaId 的卡片本来就不挂 clickable，也就没有触感
+            .then(
+                if (hasMediaId) {
+                    Modifier.hapticClickable(
+                        semantic = HapticSemantic.LIGHT_TAP,
+                        onClick = onOpen
+                    )
+                } else {
+                    Modifier
+                }
+            ),
         shape = RoundedCornerShape(13.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
         tonalElevation = 1.dp

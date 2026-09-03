@@ -43,6 +43,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CrashLogRecord
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -60,6 +61,7 @@ fun CrashLogDetailScreen(
     // remember(recordId) 使 recordId 变化时自动重置，避免切到另一条记录时误用旧加载态
     var loaded by remember(recordId) { mutableStateOf(false) }
     LaunchedEffect(record) { if (record != null) loaded = true }
+    val haptics = rememberAppHaptics()
 
     Scaffold(
         topBar = {
@@ -128,7 +130,10 @@ fun CrashLogDetailScreen(
                     item {
                         // 上传中禁用：记录刷新为 UPLOADING 后按钮通常随即隐藏，enabled 兜底防重复触发
                         Button(
-                            onClick = { viewModel.uploadNow() },
+                            onClick = {
+                                haptics.tap()
+                                viewModel.uploadNow()
+                            },
                             enabled = current.status != CrashLogRecord.Status.UPLOADING,
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(stringResource(R.string.crash_detail_upload_now)) }
