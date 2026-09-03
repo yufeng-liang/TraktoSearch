@@ -88,15 +88,12 @@ import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
 import com.tracktosearch.ui.component.TopBarBackdropSourcePadding
-import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.rememberAppPullToRefreshState
 import com.tracktosearch.ui.component.AppPullToRefreshIndicator
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import com.tracktosearch.ui.component.LocalActivePosterClickToken
-import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.EmptyStateCard
@@ -116,6 +113,7 @@ import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.traktListSharedKey
 import com.tracktosearch.ui.component.DiscoverFilterCardKey
 import com.tracktosearch.ui.component.DiscoverFilterIconKey
+import com.tracktosearch.ui.component.SharedOrigin
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -146,10 +144,6 @@ fun DiscoverScreen(
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     // 记录进入影视筛选页的入口来源（"card"=底部卡片 / "icon"=右上角图标），返回时据此决定哪个入口参与转场
     var activeFilterEntry by rememberSaveable { mutableStateOf<String?>(null) }
-    // 当前活跃的海报 tmdbId(-1=初始无活跃 / 具体值=被点击的海报),确保同页面多栏目相同海报只有被点击的参与转场
-    var activePosterTmdbId by rememberSaveable { mutableStateOf(-1) }
-    // 每次点击递增的 token,用于精确匹配被点击的卡片实例(避免同 tmdbId 海报跨栏目飘错)
-    var activeClickToken by rememberSaveable { mutableStateOf(0) }
 
     ToastEffect(viewModel.toastEvent)
     // 延迟加载 Trakt 栏目，避免与首屏豆瓣/TMDB 竞争网络带宽
@@ -315,15 +309,6 @@ fun DiscoverScreen(
         loadingCount = discoverLoadingCount,
         loadingItemWeight = 4
     )
-    CompositionLocalProvider(
-        LocalActivePosterTmdbId provides activePosterTmdbId,
-        LocalActivePosterClickSetter provides { id ->
-            activePosterTmdbId = id
-            activeClickToken += 1
-            activeClickToken  // 返回新 token 给调用方保存
-        },
-        LocalActivePosterClickToken provides activeClickToken
-    ) {
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = Color.Transparent
@@ -460,6 +445,7 @@ fun DiscoverScreen(
                         DiscoverSectionStorage.SECTION_ID_DOUBAN_RECOMMEND -> {
                             item(key = config.id) {
                                 DoubanRecommendSection(
+                                        posterOrigin = discoverSectionOrigin(config.id),
                                     state = uiState.doubanRecommendState,
                                     resolvingItemId = uiState.resolvingRecommendItemId,
                                     onItemClick = { item ->
@@ -557,6 +543,7 @@ fun DiscoverScreen(
                                         }
                                     }
                                     TmdbMovieSection(
+                                            posterOrigin = discoverSectionOrigin(config.id),
                                         title = "",
                                         movies = uiState.tmdbPopularMovies,
                                         isLoading = uiState.isLoadingPopular,
@@ -579,6 +566,7 @@ fun DiscoverScreen(
                         "tmdb-upcoming" -> {
                             item(key = "tmdb_upcoming") {
                                 TmdbMovieSection(
+                                        posterOrigin = discoverSectionOrigin(config.id),
                                     title = stringResource(R.string.discover_upcoming),
                                     movies = uiState.tmdbUpcomingMovies,
                                     isLoading = uiState.isLoadingUpcoming,
@@ -599,6 +587,7 @@ fun DiscoverScreen(
                         "trakt-recommendations" -> {
                             item(key = "trakt_recommendations") {
                                 TraktRecommendationSection(
+                                        posterOrigin = discoverSectionOrigin(config.id),
                                     title = stringResource(R.string.discover_recommended),
                                     movies = uiState.traktRecommendations,
                                     isLoading = uiState.isLoadingRecommendations,
@@ -621,6 +610,7 @@ fun DiscoverScreen(
                         "trakt-trending-movies" -> {
                             item(key = "trakt_trending_movies") {
                                 TraktTrendingMovieSection(
+                                        posterOrigin = discoverSectionOrigin(config.id),
                                     items = uiState.traktTrendingMovies,
                                     isLoading = uiState.isLoadingTrakt,
                                     resolvingItemId = uiState.resolvingTmdbId,
@@ -641,6 +631,7 @@ fun DiscoverScreen(
                         "trakt-trending-shows" -> {
                             item(key = "trakt_trending_shows") {
                                 TraktTrendingShowSection(
+                                        posterOrigin = discoverSectionOrigin(config.id),
                                     items = uiState.traktTrendingShows,
                                     isLoading = uiState.isLoadingTrakt,
                                     resolvingItemId = uiState.resolvingTmdbId,
@@ -661,6 +652,7 @@ fun DiscoverScreen(
                         "trakt-anticipated" -> {
                             item(key = "trakt_anticipated") {
                                 TraktAnticipatedSection(
+                                        posterOrigin = discoverSectionOrigin(config.id),
                                     anticipatedMovies = uiState.traktAnticipatedMovies,
                                     anticipatedShows = uiState.traktAnticipatedShows,
                                     isLoading = uiState.isLoadingTrakt,
@@ -687,6 +679,7 @@ fun DiscoverScreen(
                         "trakt-show-recommendations" -> {
                             item(key = "trakt_show_recommendations") {
                                 TraktShowRecommendationSection(
+                                        posterOrigin = discoverSectionOrigin(config.id),
                                     items = uiState.traktShowRecommendations,
                                     isLoading = uiState.isLoadingTrakt,
                                     resolvingItemId = uiState.resolvingTmdbId,
@@ -933,7 +926,6 @@ fun DiscoverScreen(
         }
     }
     }
-} // CompositionLocalProvider
 
     // 豆瓣热榜全量弹窗
     showDoubanAllDialog?.let { catId ->

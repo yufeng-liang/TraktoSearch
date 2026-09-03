@@ -57,9 +57,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.data.repository.MediaType
-import com.tracktosearch.ui.component.LocalActivePosterClickSetter
-import com.tracktosearch.ui.component.LocalActivePosterClickToken
-import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
@@ -74,6 +71,7 @@ import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.traktListSharedKey
+import com.tracktosearch.ui.component.SharedOrigin
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -111,8 +109,6 @@ fun TraktListDetailScreen(
         loadingItemWeight = 4
     )
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的卡片参与共享元素转场
-    var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
     // 共享元素转场 scope（标题栏整体与发现页社区列表卡片配对）
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
@@ -137,18 +133,6 @@ fun TraktListDetailScreen(
     // 骨架屏与未到位的海报共享一条 shimmer 动画：一屏九到十几个方块各跑一条会白烧一帧的时间
     val shimmer = rememberShimmer()
 
-    // 点击 token,确保只有被点击的卡片参与转场
-    var activeClickToken by remember { mutableStateOf(0) }
-
-    CompositionLocalProvider(
-        LocalActivePosterTmdbId provides activePosterTmdbId,
-        LocalActivePosterClickSetter provides { id ->
-            activePosterTmdbId = id
-            activeClickToken += 1
-            activeClickToken
-        },
-        LocalActivePosterClickToken provides activeClickToken
-    ) {
     Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) { padding ->
         Box(
             modifier = Modifier
@@ -257,6 +241,7 @@ fun TraktListDetailScreen(
                                 // posterUrl 已是完整 URL（ViewModel 统一），不要再拼尺寸前缀
                                 posterUrl = item.posterUrl,
                                 tmdbId = item.tmdbId,
+                                origin = SharedOrigin.of(SharedOrigin.TRAKT_LIST, uiState.listId.toString()),
                                 isInWatchlist = isInWatchlist,
                                 isWatched = isWatched,
                                 posterShimmer = shimmer,
@@ -349,7 +334,6 @@ fun TraktListDetailScreen(
                 }
             }
         }
-    }
     }
 }
 

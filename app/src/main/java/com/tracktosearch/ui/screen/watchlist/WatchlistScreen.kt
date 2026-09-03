@@ -184,11 +184,6 @@ import com.tracktosearch.ui.component.CinemaClapperIcon
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
-import com.tracktosearch.ui.component.LocalActivePosterClickSetter
-import com.tracktosearch.ui.component.LocalActivePosterClickToken
-import com.tracktosearch.ui.component.LocalActivePosterSelectionKey
-import com.tracktosearch.ui.component.LocalActivePosterSelectionKeySetter
-import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.LocalIsCurrentTab
@@ -223,6 +218,8 @@ import com.tracktosearch.ui.util.showToast
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.posterSharedKey
 import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.SharedOrigin
+import com.tracktosearch.ui.navigation.DetailSeedStore
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
@@ -282,9 +279,6 @@ fun WatchlistScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { _ -> }
     val view = LocalView.current
-    // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的卡片参与共享元素转场，避免跨页面重复海报 key 冲突
-    var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
-    var activePosterSelectionKey by rememberSaveable { mutableStateOf<String?>(null) }
     // 用外置浏览器打开 Trakt，共享外置浏览器登录态（内置 WebView 有独立 CookieJar 不共享）
     val openTraktExternal: () -> Unit = {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://trakt.tv/watchlist")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -690,1263 +684,1248 @@ fun WatchlistScreen(
         }
     }
 
-    // 点击 token,确保只有被点击的卡片参与转场
-    var activeClickToken by rememberSaveable { mutableStateOf(0) }
+    Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = Color.Transparent
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .onGloballyPositioned { rootPositionInRoot = it.positionInRoot() }
+                .pointerInput(isSearchExpanded) {
+                    if (!isSearchExpanded) return@pointerInput
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val up = waitForUpOrCancellation()
+                        if (up != null && currentSearchBoundsInRootLocal?.contains(down.position) != true) {
+                            collapseSearch()
+                        }
+                    }
+                }
+                .padding(paddingValues)
+        ) {
+            val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
-    CompositionLocalProvider(
-        LocalActivePosterTmdbId provides activePosterTmdbId,
-        LocalActivePosterSelectionKey provides activePosterSelectionKey,
-        LocalActivePosterSelectionKeySetter provides { key -> activePosterSelectionKey = key },
-        LocalActivePosterClickSetter provides { id ->
-            activePosterTmdbId = id
-            activeClickToken += 1
-            activeClickToken
-        },
-        LocalActivePosterClickToken provides activeClickToken
-    ) {
-        Scaffold(
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            containerColor = Color.Transparent
-        ) { paddingValues ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .onGloballyPositioned { rootPositionInRoot = it.positionInRoot() }
-                    .pointerInput(isSearchExpanded) {
-                        if (!isSearchExpanded) return@pointerInput
-                        awaitEachGesture {
-                            val down = awaitFirstDown(requireUnconsumed = false)
-                            val up = waitForUpOrCancellation()
-                            if (up != null && currentSearchBoundsInRootLocal?.contains(down.position) != true) {
-                                collapseSearch()
-                            }
-                        }
-                    }
-                    .padding(paddingValues)
-            ) {
-                val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    
-                // 下拉刷新指示器：锚在列表内容顶部，位移/透明度/进度只在绘制阶段读取，
-                // 下拉过程不产生重组。
-                AppPullToRefreshIndicator(
-                    state = pullToRefreshState,
-                    contentTop = statusBarHeight + 122.dp
-                )
-    
-                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                    // Backdrop source 向左右各扩展一个 blur 半径，补足顶栏边缘采样区域。
-                    Box(
-                        modifier = Modifier
-                            .requiredWidth(maxWidth + TopBarBackdropSourcePadding * 2)
-                            .fillMaxHeight()
-                            // 只有 Glass 模式的顶栏才采样这一层；BLUR 模式走 hazeSource，
-                            // 这份全屏离屏录制写了没人读，每帧纯浪费。
-                            // 滚动时也保持录制：顶栏要持续看到滚动中的内容，不能降级成半透明。
-                            .then(
-                                if (isWatchlistGlassActive) {
-                                    Modifier.layerBackdrop(watchlistContentBackdrop)
-                                } else {
-                                    Modifier
-                                }
-                            )
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = TopBarBackdropSourcePadding)
-                        ) {
-                            // 空列表引导 UI
-                            if (currentItems.isEmpty() && !isCurrentLoading) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(horizontal = 32.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                        NeumorphicFrostedSurface(
-                            modifier = Modifier.fillMaxWidth(),
-                            isDark = isDark,
-                            shape = RoundedCornerShape(24.dp),
-                            backgroundColor = if (isDark) GlassFillDarkSubtle else Color.White.copy(alpha = 0.45f),
-                            borderColor = if (isDark) GlassBorderDark else Color.White.copy(alpha = 0.65f),
-                            elevation = 4.dp,
-                            blurRadius = 16.dp,
-                            hazeState = hazeState,
-                            hazeStyle = HazeMaterials.thin()
-                        ) {
-                            if (currentError != null) {
-                                // 加载失败态：以前这里和「列表本来就是空的」共用同一套空态引导，
-                                // 断网时用户只看到一个空列表，既没有原因也没有出路。
-                                AppErrorState(
-                                    message = currentError,
-                                    onRetry = retryCurrent,
-                                    modifier = Modifier.padding(vertical = 32.dp)
-                                )
-                            } else {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 24.dp, vertical = 32.dp)
-                            ) {
-                                CinemaClapperIcon()
-                                Spacer(modifier = Modifier.height(16.dp))
-                                if (searchQuery.isNotEmpty()) {
-                                    // 搜索无结果：只显示贴切文案，不显示引导链接
-                                    Text(
-                                        text = stringResource(R.string.watchlist_search_no_result, searchQuery),
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = TextAlign.Center
-                                    )
-                                } else {
-                                    Text(
-                                        text = if (selectedMode == 0)
-                                            stringResource(R.string.watchlist_empty_title)
-                                        else
-                                            stringResource(R.string.watched_empty_title),
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = TextAlign.Center
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = when (emptyState) {
-                                            WatchlistEmptyState.NO_ACCOUNTS -> stringResource(
-                                                if (selectedMode == 0) R.string.watchlist_empty_no_accounts
-                                                else R.string.watched_empty_no_accounts
-                                            )
-                                            WatchlistEmptyState.TRAKT_ONLY -> stringResource(
-                                                if (selectedMode == 0) R.string.watchlist_empty_trakt_only
-                                                else R.string.watched_empty_trakt_only
-                                            )
-                                            WatchlistEmptyState.DOUBAN_NOT_IMPORTED -> stringResource(
-                                                if (selectedMode == 0) R.string.watchlist_empty_douban_not_imported
-                                                else R.string.watched_empty_douban_not_imported
-                                            )
-                                            WatchlistEmptyState.IMPORTED_EMPTY -> stringResource(
-                                                if (selectedMode == 0) R.string.watchlist_empty_imported_empty
-                                                else R.string.watched_empty_imported_empty
-                                            )
-                                        },
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = TextAlign.Center
-                                    )
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    when (emptyState) {
-                                        WatchlistEmptyState.NO_ACCOUNTS -> {
-                                            TextButton(onClick = onTraktLogin) {
-                                                Text(stringResource(R.string.watchlist_empty_login_trakt))
-                                            }
-                                            TextButton(onClick = onNavigateToDoubanLogin) {
-                                                Text(stringResource(R.string.watchlist_empty_login_douban))
-                                            }
-                                            TextButton(onClick = onDiscoverClick) {
-                                                Text(stringResource(R.string.watchlist_empty_go_discover))
-                                            }
-                                        }
-                                        WatchlistEmptyState.TRAKT_ONLY -> {
-                                            TextButton(onClick = onNavigateToDoubanLogin) {
-                                                Text(stringResource(R.string.watchlist_empty_login_douban))
-                                            }
-                                            TextButton(onClick = onDiscoverClick) {
-                                                Text(stringResource(R.string.watchlist_empty_go_discover))
-                                            }
-                                        }
-                                        WatchlistEmptyState.DOUBAN_NOT_IMPORTED -> {
-                                            TextButton(onClick = {
-                                                if (isDoubanLoggedIn) showSyncModePicker = true else onNavigateToDoubanLogin()
-                                            }) {
-                                                Text(stringResource(R.string.watchlist_empty_start_douban_import))
-                                            }
-                                        }
-                                        WatchlistEmptyState.IMPORTED_EMPTY -> {
-                                            TextButton(onClick = onDiscoverClick) {
-                                                Text(stringResource(R.string.watchlist_empty_go_discover))
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            }
-                        }
-                                }
-                            } else {
-                            LazyVerticalGrid(
-                    state = currentGridState,
-                    columns = GridCells.Fixed(3),
-                    contentPadding = PaddingValues(
-                        start = 8.dp,
-                        end = 8.dp,
-                        top = 122.dp + statusBarHeight,
-                        bottom = 80.dp
-                    ),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .hazeSource(state = hazeState)
-                        // 内容已由外层 watchlistContentBackdrop 统一录制；不要在 LazyGrid
-                        // 上再次注册同一个 source，否则每次滚动会产生重复的整页离屏录制。
-                        .nestedScroll(pullToRefreshState.connection)
-                        .graphicsLayer { translationY = pullToRefreshState.offset.floatValue }
-                    ) {
-                        // 根据 selectedMode 和 selectedTab 渲染对应列表
-                        val items = currentItems
-                        items(items.size, key = { items[it].selectionKey }, contentType = { "media_card" }) { index ->
-                            val item = items[index]
-                            val isSelected = selectedItems[item.selectionKey] == true
-                            val isResolving = isRemoving && isSelected
-                            Box(
-                                modifier = if (isWatchlistGlassMode) {
-                                    // Glass 模式滚动时已有 Backdrop 离屏采样，逐卡 EMPHASIS
-                                    // 会把所有可见卡片再次变成持续重绘源；保留 Blur 模式动效。
-                                    Modifier
-                                } else {
-                                    Modifier.cardEnter(
-                                        item.selectionKey.hashCode().toLong(),
-                                        index,
-                                        enterMode,
-                                        animatedIds
-                                    )
-                                }
-                            ) {
-                                WatchlistPosterCard(
-                                    item = item,
-                                    isSelected = isSelected,
-                                    isResolving = isResolving,
-                                    isMultiSelectMode = isMultiSelectMode,
-                                    onClick = {
-                                        if (isMultiSelectMode) {
-                                            if (isSelected) selectedItems.remove(item.selectionKey)
-                                            else selectedItems[item.selectionKey] = true
-                                            if (selectedItems.isEmpty()) isMultiSelectMode = false
-                                        } else {
-                                            val inWatchlist = selectedMode == 0
-                                            val isWatched = selectedMode == 1
-                                            if (onMediaItemClick != null) {
-                                                onMediaItemClick(item, inWatchlist, isWatched)
-                                            } else {
-                                                // 兼容旧调用方；OTHER 不应因所在 tab 被误判为剧集。
-                                                when (item.mediaType) {
-                                                    // 进入详情传入中文展示名 displayTitle，避免初始标题为英文原名闪烁
-                                                    WatchlistMediaType.SHOW -> onShowClick(
-                                                        item.traktId,
-                                                        item.tmdbId,
-                                                        item.displayTitle,
-                                                        item.imdbId,
-                                                        item.traktRating,
-                                                        inWatchlist,
-                                                        isWatched
-                                                    )
-                                                    WatchlistMediaType.MOVIE,
-                                                    WatchlistMediaType.OTHER -> onMovieClick(
-                                                        item.traktId,
-                                                        item.tmdbId,
-                                                        item.displayTitle,
-                                                        item.imdbId,
-                                                        item.traktRating,
-                                                        inWatchlist,
-                                                        isWatched
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    },
-                                    onLongClick = {
-                                        if (!isMultiSelectMode) {
-                                            isMultiSelectMode = true
-                                        }
-                                        selectedItems[item.selectionKey] = true
-                                    }
-                                )
-                            }
-                        }
-                        // footer 只在列表非空时发出。
-                        //
-                        // 无条件发出时，列表还在加载、currentItems 仍为空的那一帧（此时空状态分支
-                        // 不生效，它要求 currentItems.isEmpty() && !isCurrentLoading），
-                        // footer 是整个网格里唯一的 item，Lazy 网格的 key 锚点就落在
-                        // "load_more_footer" 上。数据到达后这个 key 的索引从 0 变成 items.size，
-                        // 网格按 key 把锚点找回首个可见位置，firstVisibleItemIndex 被带到列表末尾
-                        // —— 首次进入「我的」页看到列表停在底部就是这么来的。
-                        //
-                        // 空列表时它本来也只渲染 Hidden 态：Complete 要求 items.isNotEmpty()，
-                        // Loading/Error 都只发生在已有数据之后，所以去掉不改变任何可见行为。
-                        if (items.isNotEmpty()) {
-                            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }, key = "load_more_footer") {
-                                LoadMoreFooter(
-                                    state = when {
-                                        currentIsLoadingMore -> LoadMoreFooterState.Loading
-                                        currentLoadError -> LoadMoreFooterState.Error
-                                        currentSupportsPaging && !currentHasMore -> LoadMoreFooterState.Complete
-                                        else -> LoadMoreFooterState.Hidden
-                                    },
-                                    onRetry = {
-                                        when (selectedTab) {
-                                            0 -> viewModel.loadMoreMovies()
-                                            1 -> viewModel.loadMoreShows()
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                        }
-                    }
-                            }
-                        }
-                    }
-                }
-    
-                // 回顶按钮采样本页 content backdrop（含影视网格），折射正后方海报而非页面粉色渐变。
-                CompositionLocalProvider(
-                    LocalBackdrop provides if (isWatchlistGlassActive) watchlistContentBackdrop else null
-                ) {
-                ScrollToTopButton(
-                    gridState = currentGridState,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(bottom = 100.dp, end = 16.dp),
-                    hazeState = hazeState,
-                    scene = watchlistGlassScene
-                )
-                }
-    
-                // 顶栏内玻璃控件统一采本页 content backdrop（光晕底垫+影视网格），与那条 hazeTopBar 一致：
-                // 滚动时折射正后方海报、静止时折射页面渐变，而不是页面粉色 mesh。
-                CompositionLocalProvider(
-                    LocalBackdrop provides if (isWatchlistGlassActive) watchlistContentBackdrop else null
-                ) {
-                // Haze 模糊覆盖层 - 搜索框 + 胶囊切换 + PrimaryTabRow 或 多选操作栏
+            // 下拉刷新指示器：锚在列表内容顶部，位移/透明度/进度只在绘制阶段读取，
+            // 下拉过程不产生重组。
+            AppPullToRefreshIndicator(
+                state = pullToRefreshState,
+                contentTop = statusBarHeight + 122.dp
+            )
+
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                // Backdrop source 向左右各扩展一个 blur 半径，补足顶栏边缘采样区域。
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .hazeTopBar(
-                            state = hazeState,
-                            style = hazeStyle,
-                            blurRadius = TopBarBackdropBlurRadius,
-                            isContentUnderTopBar = hasContentUnderTopBar &&
-                                (!isWatchlistGlassMode || !isNavigationTransitionRunning),
-                            // 与 layerBackdrop 门控保持一致：BLUR 模式没录这一层，就不该再传。
-                            backdropOverride = if (isWatchlistGlassActive) watchlistContentBackdrop else null,
-                            scene = watchlistGlassScene
+                        .requiredWidth(maxWidth + TopBarBackdropSourcePadding * 2)
+                        .fillMaxHeight()
+                        // 只有 Glass 模式的顶栏才采样这一层；BLUR 模式走 hazeSource，
+                        // 这份全屏离屏录制写了没人读，每帧纯浪费。
+                        // 滚动时也保持录制：顶栏要持续看到滚动中的内容，不能降级成半透明。
+                        .then(
+                            if (isWatchlistGlassActive) {
+                                Modifier.layerBackdrop(watchlistContentBackdrop)
+                            } else {
+                                Modifier
+                            }
                         )
                 ) {
-                    // 搜索框 + Tab 栏（非多选模式时显示）
-                    AnimatedVisibility(
-                        visible = !isMultiSelectMode,
-                        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-                        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
-                        modifier = Modifier.fillMaxWidth()
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = TopBarBackdropSourcePadding)
                     ) {
-                        Column {
-                            // 毛玻璃吸顶标题栏（继承外层 Blur，不重复叠加避免变白）
+                        // 空列表引导 UI
+                        if (currentItems.isEmpty() && !isCurrentLoading) {
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    // 点击回顶：无涟漪（标题区是整块覆盖层，点击回顶属于导航语义，不显示波纹）
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        if (isSearchExpanded) {
-                                            collapseSearch()
+                                    .fillMaxSize()
+                                    .padding(horizontal = 32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                    NeumorphicFrostedSurface(
+                        modifier = Modifier.fillMaxWidth(),
+                        isDark = isDark,
+                        shape = RoundedCornerShape(24.dp),
+                        backgroundColor = if (isDark) GlassFillDarkSubtle else Color.White.copy(alpha = 0.45f),
+                        borderColor = if (isDark) GlassBorderDark else Color.White.copy(alpha = 0.65f),
+                        elevation = 4.dp,
+                        blurRadius = 16.dp,
+                        hazeState = hazeState,
+                        hazeStyle = HazeMaterials.thin()
+                    ) {
+                        if (currentError != null) {
+                            // 加载失败态：以前这里和「列表本来就是空的」共用同一套空态引导，
+                            // 断网时用户只看到一个空列表，既没有原因也没有出路。
+                            AppErrorState(
+                                message = currentError,
+                                onRetry = retryCurrent,
+                                modifier = Modifier.padding(vertical = 32.dp)
+                            )
+                        } else {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp, vertical = 32.dp)
+                        ) {
+                            CinemaClapperIcon()
+                            Spacer(modifier = Modifier.height(16.dp))
+                            if (searchQuery.isNotEmpty()) {
+                                // 搜索无结果：只显示贴切文案，不显示引导链接
+                                Text(
+                                    text = stringResource(R.string.watchlist_search_no_result, searchQuery),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            } else {
+                                Text(
+                                    text = if (selectedMode == 0)
+                                        stringResource(R.string.watchlist_empty_title)
+                                    else
+                                        stringResource(R.string.watched_empty_title),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = when (emptyState) {
+                                        WatchlistEmptyState.NO_ACCOUNTS -> stringResource(
+                                            if (selectedMode == 0) R.string.watchlist_empty_no_accounts
+                                            else R.string.watched_empty_no_accounts
+                                        )
+                                        WatchlistEmptyState.TRAKT_ONLY -> stringResource(
+                                            if (selectedMode == 0) R.string.watchlist_empty_trakt_only
+                                            else R.string.watched_empty_trakt_only
+                                        )
+                                        WatchlistEmptyState.DOUBAN_NOT_IMPORTED -> stringResource(
+                                            if (selectedMode == 0) R.string.watchlist_empty_douban_not_imported
+                                            else R.string.watched_empty_douban_not_imported
+                                        )
+                                        WatchlistEmptyState.IMPORTED_EMPTY -> stringResource(
+                                            if (selectedMode == 0) R.string.watchlist_empty_imported_empty
+                                            else R.string.watched_empty_imported_empty
+                                        )
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                when (emptyState) {
+                                    WatchlistEmptyState.NO_ACCOUNTS -> {
+                                        TextButton(onClick = onTraktLogin) {
+                                            Text(stringResource(R.string.watchlist_empty_login_trakt))
+                                        }
+                                        TextButton(onClick = onNavigateToDoubanLogin) {
+                                            Text(stringResource(R.string.watchlist_empty_login_douban))
+                                        }
+                                        TextButton(onClick = onDiscoverClick) {
+                                            Text(stringResource(R.string.watchlist_empty_go_discover))
+                                        }
+                                    }
+                                    WatchlistEmptyState.TRAKT_ONLY -> {
+                                        TextButton(onClick = onNavigateToDoubanLogin) {
+                                            Text(stringResource(R.string.watchlist_empty_login_douban))
+                                        }
+                                        TextButton(onClick = onDiscoverClick) {
+                                            Text(stringResource(R.string.watchlist_empty_go_discover))
+                                        }
+                                    }
+                                    WatchlistEmptyState.DOUBAN_NOT_IMPORTED -> {
+                                        TextButton(onClick = {
+                                            if (isDoubanLoggedIn) showSyncModePicker = true else onNavigateToDoubanLogin()
+                                        }) {
+                                            Text(stringResource(R.string.watchlist_empty_start_douban_import))
+                                        }
+                                    }
+                                    WatchlistEmptyState.IMPORTED_EMPTY -> {
+                                        TextButton(onClick = onDiscoverClick) {
+                                            Text(stringResource(R.string.watchlist_empty_go_discover))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        }
+                    }
+                            }
+                        } else {
+                        LazyVerticalGrid(
+                state = currentGridState,
+                columns = GridCells.Fixed(3),
+                contentPadding = PaddingValues(
+                    start = 8.dp,
+                    end = 8.dp,
+                    top = 122.dp + statusBarHeight,
+                    bottom = 80.dp
+                ),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState)
+                    // 内容已由外层 watchlistContentBackdrop 统一录制；不要在 LazyGrid
+                    // 上再次注册同一个 source，否则每次滚动会产生重复的整页离屏录制。
+                    .nestedScroll(pullToRefreshState.connection)
+                    .graphicsLayer { translationY = pullToRefreshState.offset.floatValue }
+                ) {
+                    // 根据 selectedMode 和 selectedTab 渲染对应列表
+                    val items = currentItems
+                    items(items.size, key = { items[it].selectionKey }, contentType = { "media_card" }) { index ->
+                        val item = items[index]
+                        val isSelected = selectedItems[item.selectionKey] == true
+                        val isResolving = isRemoving && isSelected
+                        Box(
+                            modifier = if (isWatchlistGlassMode) {
+                                // Glass 模式滚动时已有 Backdrop 离屏采样，逐卡 EMPHASIS
+                                // 会把所有可见卡片再次变成持续重绘源；保留 Blur 模式动效。
+                                Modifier
+                            } else {
+                                Modifier.cardEnter(
+                                    item.selectionKey.hashCode().toLong(),
+                                    index,
+                                    enterMode,
+                                    animatedIds
+                                )
+                            }
+                        ) {
+                            WatchlistPosterCard(
+                                item = item,
+                                isSelected = isSelected,
+                                isResolving = isResolving,
+                                isMultiSelectMode = isMultiSelectMode,
+                                onClick = {
+                                    if (isMultiSelectMode) {
+                                        if (isSelected) selectedItems.remove(item.selectionKey)
+                                        else selectedItems[item.selectionKey] = true
+                                        if (selectedItems.isEmpty()) isMultiSelectMode = false
+                                    } else {
+                                        val inWatchlist = selectedMode == 0
+                                        val isWatched = selectedMode == 1
+                                        if (onMediaItemClick != null) {
+                                            onMediaItemClick(item, inWatchlist, isWatched)
                                         } else {
-                                            gridCoroutineScope.launch {
-                                                currentGridState.animateScrollToItem(0)
+                                            // 兼容旧调用方；OTHER 不应因所在 tab 被误判为剧集。
+                                            when (item.mediaType) {
+                                                // 进入详情传入中文展示名 displayTitle，避免初始标题为英文原名闪烁
+                                                WatchlistMediaType.SHOW -> onShowClick(
+                                                    item.traktId,
+                                                    item.tmdbId,
+                                                    item.displayTitle,
+                                                    item.imdbId,
+                                                    item.traktRating,
+                                                    inWatchlist,
+                                                    isWatched
+                                                )
+                                                WatchlistMediaType.MOVIE,
+                                                WatchlistMediaType.OTHER -> onMovieClick(
+                                                    item.traktId,
+                                                    item.tmdbId,
+                                                    item.displayTitle,
+                                                    item.imdbId,
+                                                    item.traktRating,
+                                                    inWatchlist,
+                                                    isWatched
+                                                )
                                             }
                                         }
                                     }
-                            ) {
-                                Column {
-                                    Spacer(modifier = Modifier.statusBarsPadding())
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp)
-                                            .height(42.dp)
+                                },
+                                onLongClick = {
+                                    if (!isMultiSelectMode) {
+                                        isMultiSelectMode = true
+                                    }
+                                    selectedItems[item.selectionKey] = true
+                                }
+                            )
+                        }
+                    }
+                    // footer 只在列表非空时发出。
+                    //
+                    // 无条件发出时，列表还在加载、currentItems 仍为空的那一帧（此时空状态分支
+                    // 不生效，它要求 currentItems.isEmpty() && !isCurrentLoading），
+                    // footer 是整个网格里唯一的 item，Lazy 网格的 key 锚点就落在
+                    // "load_more_footer" 上。数据到达后这个 key 的索引从 0 变成 items.size，
+                    // 网格按 key 把锚点找回首个可见位置，firstVisibleItemIndex 被带到列表末尾
+                    // —— 首次进入「我的」页看到列表停在底部就是这么来的。
+                    //
+                    // 空列表时它本来也只渲染 Hidden 态：Complete 要求 items.isNotEmpty()，
+                    // Loading/Error 都只发生在已有数据之后，所以去掉不改变任何可见行为。
+                    if (items.isNotEmpty()) {
+                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }, key = "load_more_footer") {
+                            LoadMoreFooter(
+                                state = when {
+                                    currentIsLoadingMore -> LoadMoreFooterState.Loading
+                                    currentLoadError -> LoadMoreFooterState.Error
+                                    currentSupportsPaging && !currentHasMore -> LoadMoreFooterState.Complete
+                                    else -> LoadMoreFooterState.Hidden
+                                },
+                                onRetry = {
+                                    when (selectedTab) {
+                                        0 -> viewModel.loadMoreMovies()
+                                        1 -> viewModel.loadMoreShows()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+                        }
+                    }
+                }
+            }
+
+            // 回顶按钮采样本页 content backdrop（含影视网格），折射正后方海报而非页面粉色渐变。
+            CompositionLocalProvider(
+                LocalBackdrop provides if (isWatchlistGlassActive) watchlistContentBackdrop else null
+            ) {
+            ScrollToTopButton(
+                gridState = currentGridState,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 100.dp, end = 16.dp),
+                hazeState = hazeState,
+                scene = watchlistGlassScene
+            )
+            }
+
+            // 顶栏内玻璃控件统一采本页 content backdrop（光晕底垫+影视网格），与那条 hazeTopBar 一致：
+            // 滚动时折射正后方海报、静止时折射页面渐变，而不是页面粉色 mesh。
+            CompositionLocalProvider(
+                LocalBackdrop provides if (isWatchlistGlassActive) watchlistContentBackdrop else null
+            ) {
+            // Haze 模糊覆盖层 - 搜索框 + 胶囊切换 + PrimaryTabRow 或 多选操作栏
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .hazeTopBar(
+                        state = hazeState,
+                        style = hazeStyle,
+                        blurRadius = TopBarBackdropBlurRadius,
+                        isContentUnderTopBar = hasContentUnderTopBar &&
+                            (!isWatchlistGlassMode || !isNavigationTransitionRunning),
+                        // 与 layerBackdrop 门控保持一致：BLUR 模式没录这一层，就不该再传。
+                        backdropOverride = if (isWatchlistGlassActive) watchlistContentBackdrop else null,
+                        scene = watchlistGlassScene
+                    )
+            ) {
+                // 搜索框 + Tab 栏（非多选模式时显示）
+                AnimatedVisibility(
+                    visible = !isMultiSelectMode,
+                    enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column {
+                        // 毛玻璃吸顶标题栏（继承外层 Blur，不重复叠加避免变白）
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                // 点击回顶：无涟漪（标题区是整块覆盖层，点击回顶属于导航语义，不显示波纹）
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    if (isSearchExpanded) {
+                                        collapseSearch()
+                                    } else {
+                                        gridCoroutineScope.launch {
+                                            currentGridState.animateScrollToItem(0)
+                                        }
+                                    }
+                                }
+                        ) {
+                            Column {
+                                Spacer(modifier = Modifier.statusBarsPadding())
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp)
+                                        .height(42.dp)
+                                ) {
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = !isSearchExpanded,
+                                        enter = fadeIn(animationSpec = tween(240)),
+                                        exit = fadeOut(animationSpec = tween(240)),
+                                        modifier = Modifier.align(Alignment.CenterStart)
                                     ) {
-                                        androidx.compose.animation.AnimatedVisibility(
-                                            visible = !isSearchExpanded,
-                                            enter = fadeIn(animationSpec = tween(240)),
-                                            exit = fadeOut(animationSpec = tween(240)),
-                                            modifier = Modifier.align(Alignment.CenterStart)
-                                        ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(
-                                                    text = stringResource(R.string.tab_me),
-                                                    fontSize = 28.sp,
-                                                    fontWeight = FontWeight.ExtraBold,
-                                                    letterSpacing = (-0.5).sp,
-                                                    color = MaterialTheme.colorScheme.onSurface
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = stringResource(R.string.tab_me),
+                                                fontSize = 28.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                letterSpacing = (-0.5).sp,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            // 日签入口：「回看自己」的入口。
+                                            IconButton(
+                                                onClick = onDailyStampClick,
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.CalendarMonth,
+                                                    contentDescription = stringResource(R.string.daily_stamp_title),
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(19.dp)
                                                 )
-                                                // 日签入口：「回看自己」的入口。
-                                                IconButton(
-                                                    onClick = onDailyStampClick,
-                                                    modifier = Modifier.size(32.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Rounded.CalendarMonth,
-                                                        contentDescription = stringResource(R.string.daily_stamp_title),
-                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.size(19.dp)
-                                                    )
-                                                }
                                             }
                                         }
-                                    val searchHintColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
-                                    val searchPlaceholder = if (searchQuery.isBlank()) {
-                                        when (selectedMode) {
-                                            0 -> stringResource(R.string.watchlist_search_watchlist)
-                                            else -> stringResource(R.string.watchlist_search_history)
-                                        }
-                                    } else stringResource(R.string.search_placeholder_watchlist)
-                                    Row(
+                                    }
+                                val searchHintColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                                val searchPlaceholder = if (searchQuery.isBlank()) {
+                                    when (selectedMode) {
+                                        0 -> stringResource(R.string.watchlist_search_watchlist)
+                                        else -> stringResource(R.string.watchlist_search_history)
+                                    }
+                                } else stringResource(R.string.search_placeholder_watchlist)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(42.dp)
+                                        .zIndex(if (isSearchExpanded) 1f else 0f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.End
+                                ) {
+                                    BoxWithConstraints(
                                         modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(42.dp)
-                                            .zIndex(if (isSearchExpanded) 1f else 0f),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.End
+                                            .weight(1f)
+                                            .height(42.dp),
+                                        contentAlignment = Alignment.CenterEnd
                                     ) {
-                                        BoxWithConstraints(
+                                        val searchWidth by animateDpAsState(
+                                            targetValue = if (isSearchExpanded) maxWidth else 42.dp,
+                                            animationSpec = tween(durationMillis = 240),
+                                            label = "watchlist_search_width"
+                                        )
+                                        Box(
                                             modifier = Modifier
-                                                .weight(1f)
-                                                .height(42.dp),
-                                            contentAlignment = Alignment.CenterEnd
+                                                .width(searchWidth)
+                                                .fillMaxHeight()
+                                                .onGloballyPositioned { coordinates ->
+                                                    searchBoundsInRoot = coordinates.boundsInRoot()
+                                                }
                                         ) {
-                                            val searchWidth by animateDpAsState(
-                                                targetValue = if (isSearchExpanded) maxWidth else 42.dp,
-                                                animationSpec = tween(durationMillis = 240),
-                                                label = "watchlist_search_width"
-                                            )
-                                            Box(
-                                                modifier = Modifier
-                                                    .width(searchWidth)
-                                                    .fillMaxHeight()
-                                                    .onGloballyPositioned { coordinates ->
-                                                        searchBoundsInRoot = coordinates.boundsInRoot()
-                                                    }
-                                            ) {
-                                                if (isSearchExpanded) {
-                                                    NeumorphicFrostedSurface(
-                                                        modifier = Modifier.fillMaxSize(),
-                                                        isDark = isDark,
-                                                        shape = RoundedCornerShape(21.dp),
-                                                        glassRole = GlassSurfaceRole.SearchField,
-                                                        interactionSource = searchInteractionSource,
-                                                        backgroundColor = if (isDark) GlassFillDark else Color.White.copy(alpha = 0.55f),
-                                                        borderColor = if (isDark) GlassBorderDark else Color.White.copy(alpha = 0.75f),
-                                                        elevation = 4.dp,
-                                                        blurRadius = 16.dp,
-                                                        hazeState = hazeState,
-                                                        hazeStyle = HazeMaterials.thin(),
-                                                        scene = watchlistGlassScene
-                                                    ) {
-                                                        BasicTextField(
-                                                            value = searchQuery,
-                                                            onValueChange = { searchQuery = it },
-                                                            singleLine = true,
-                                                            textStyle = TextStyle(
-                                                                color = MaterialTheme.colorScheme.onSurface,
-                                                                fontSize = 14.sp
-                                                            ),
-                                                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                                             modifier = Modifier
-                                                                 .fillMaxSize()
-                                                                 .focusRequester(focusRequester)
-                                                                 .testTag("watchlist_search_input")
-                                                                 .padding(horizontal = 12.dp),
-                                                             interactionSource = searchInteractionSource,
-                                                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                                            keyboardActions = KeyboardActions(
-                                                                onSearch = {
-                                                                    focusManager.clearFocus()
-                                                                    if (searchQuery.isNotBlank() && selectedMode == 0) {
-                                                                        val noResults = when (selectedTab) {
-                                                                            0 -> filteredMovies.items.isEmpty()
-                                                                            1 -> filteredShows.items.isEmpty()
-                                                                            else -> filteredOthers.items.isEmpty()
-                                                                        }
-                                                                        if (noResults && selectedTab != 2) {
-                                                                            onTraktSearch(if (selectedTab == 0) "movie" else "show", searchQuery)
-                                                                        }
+                                            if (isSearchExpanded) {
+                                                NeumorphicFrostedSurface(
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    isDark = isDark,
+                                                    shape = RoundedCornerShape(21.dp),
+                                                    glassRole = GlassSurfaceRole.SearchField,
+                                                    interactionSource = searchInteractionSource,
+                                                    backgroundColor = if (isDark) GlassFillDark else Color.White.copy(alpha = 0.55f),
+                                                    borderColor = if (isDark) GlassBorderDark else Color.White.copy(alpha = 0.75f),
+                                                    elevation = 4.dp,
+                                                    blurRadius = 16.dp,
+                                                    hazeState = hazeState,
+                                                    hazeStyle = HazeMaterials.thin(),
+                                                    scene = watchlistGlassScene
+                                                ) {
+                                                    BasicTextField(
+                                                        value = searchQuery,
+                                                        onValueChange = { searchQuery = it },
+                                                        singleLine = true,
+                                                        textStyle = TextStyle(
+                                                            color = MaterialTheme.colorScheme.onSurface,
+                                                            fontSize = 14.sp
+                                                        ),
+                                                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                                         modifier = Modifier
+                                                             .fillMaxSize()
+                                                             .focusRequester(focusRequester)
+                                                             .testTag("watchlist_search_input")
+                                                             .padding(horizontal = 12.dp),
+                                                         interactionSource = searchInteractionSource,
+                                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                                        keyboardActions = KeyboardActions(
+                                                            onSearch = {
+                                                                focusManager.clearFocus()
+                                                                if (searchQuery.isNotBlank() && selectedMode == 0) {
+                                                                    val noResults = when (selectedTab) {
+                                                                        0 -> filteredMovies.items.isEmpty()
+                                                                        1 -> filteredShows.items.isEmpty()
+                                                                        else -> filteredOthers.items.isEmpty()
                                                                     }
-                                                                }
-                                                            ),
-                                                            decorationBox = { innerTextField ->
-                                                                Row(
-                                                                    verticalAlignment = Alignment.CenterVertically,
-                                                                    modifier = Modifier.fillMaxSize()
-                                                                ) {
-                                                                    Icon(
-                                                                        imageVector = Icons.Rounded.Search,
-                                                                        contentDescription = null,
-                                                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                                                        modifier = Modifier.size(20.dp)
-                                                                    )
-                                                                    Box(
-                                                                        modifier = Modifier
-                                                                            .weight(1f)
-                                                                            .padding(horizontal = 8.dp),
-                                                                        contentAlignment = Alignment.CenterStart
-                                                                    ) {
-                                                                        if (searchQuery.isEmpty()) {
-                                                                            Text(
-                                                                                text = searchPlaceholder,
-                                                                                color = searchHintColor,
-                                                                                fontSize = 14.sp
-                                                                            )
-                                                                        }
-                                                                        innerTextField()
-                                                                    }
-                                                                    if (searchQuery.isNotEmpty()) {
-                                                                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(28.dp)) {
-                                                                            Icon(
-                                                                                Icons.Rounded.Close,
-                                                                                contentDescription = stringResource(R.string.content_desc_clear),
-                                                                                modifier = Modifier.size(18.dp),
-                                                                                tint = if (isDark) Color.White.copy(alpha = 0.72f) else Color(0xFF546E7A)
-                                                                            )
-                                                                        }
+                                                                    if (noResults && selectedTab != 2) {
+                                                                        onTraktSearch(if (selectedTab == 0) "movie" else "show", searchQuery)
                                                                     }
                                                                 }
                                                             }
-                                                        )
-                                                    }
-                                                } else {
-                                                    AppIconButton(
-                                                        onClick = { isSearchExpanded = true },
-                                                        isDark = isDark,
-                                                        lightBorderAlpha = 0.35f,
-                                                        hazeState = hazeState,
-                                                        scene = watchlistGlassScene
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Rounded.Search,
-                                                            contentDescription = stringResource(R.string.watchlist_search),
-                                                            // 有关键词时保持主色（激活语义优先），否则跟随玻璃自适应
-                                                            tint = if (searchQuery.isNotBlank()) {
-                                                                MaterialTheme.colorScheme.primary
-                                                            } else {
-                                                                LocalContentColor.current
-                                                            },
-                                                            modifier = Modifier.size(22.dp)
-                                                        )
-                                                    }
+                                                        ),
+                                                        decorationBox = { innerTextField ->
+                                                            Row(
+                                                                verticalAlignment = Alignment.CenterVertically,
+                                                                modifier = Modifier.fillMaxSize()
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = Icons.Rounded.Search,
+                                                                    contentDescription = null,
+                                                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                                                    modifier = Modifier.size(20.dp)
+                                                                )
+                                                                Box(
+                                                                    modifier = Modifier
+                                                                        .weight(1f)
+                                                                        .padding(horizontal = 8.dp),
+                                                                    contentAlignment = Alignment.CenterStart
+                                                                ) {
+                                                                    if (searchQuery.isEmpty()) {
+                                                                        Text(
+                                                                            text = searchPlaceholder,
+                                                                            color = searchHintColor,
+                                                                            fontSize = 14.sp
+                                                                        )
+                                                                    }
+                                                                    innerTextField()
+                                                                }
+                                                                if (searchQuery.isNotEmpty()) {
+                                                                    IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(28.dp)) {
+                                                                        Icon(
+                                                                            Icons.Rounded.Close,
+                                                                            contentDescription = stringResource(R.string.content_desc_clear),
+                                                                            modifier = Modifier.size(18.dp),
+                                                                            tint = if (isDark) Color.White.copy(alpha = 0.72f) else Color(0xFF546E7A)
+                                                                        )
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    )
+                                                }
+                                            } else {
+                                                AppIconButton(
+                                                    onClick = { isSearchExpanded = true },
+                                                    isDark = isDark,
+                                                    lightBorderAlpha = 0.35f,
+                                                    hazeState = hazeState,
+                                                    scene = watchlistGlassScene
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.Search,
+                                                        contentDescription = stringResource(R.string.watchlist_search),
+                                                        // 有关键词时保持主色（激活语义优先），否则跟随玻璃自适应
+                                                        tint = if (searchQuery.isNotBlank()) {
+                                                            MaterialTheme.colorScheme.primary
+                                                        } else {
+                                                            LocalContentColor.current
+                                                        },
+                                                        modifier = Modifier.size(22.dp)
+                                                    )
                                                 }
                                             }
                                         }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        AppIconButton(
-                                            onClick = {
-                                                collapseSearch()
-                                                showFilterSheet = true
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    AppIconButton(
+                                        onClick = {
+                                            collapseSearch()
+                                            showFilterSheet = true
+                                        },
+                                        isDark = isDark,
+                                        lightBorderAlpha = 0.35f,
+                                        hazeState = hazeState,
+                                        scene = watchlistGlassScene
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Tune,
+                                            contentDescription = stringResource(R.string.filter_title),
+                                            // 筛选生效时保持主色，未生效才跟随玻璃自适应
+                                            tint = if (hasActiveFilters) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                LocalContentColor.current
                                             },
-                                            isDark = isDark,
-                                            lightBorderAlpha = 0.35f,
-                                            hazeState = hazeState,
-                                            scene = watchlistGlassScene
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Tune,
-                                                contentDescription = stringResource(R.string.filter_title),
-                                                // 筛选生效时保持主色，未生效才跟随玻璃自适应
-                                                tint = if (hasActiveFilters) {
-                                                    MaterialTheme.colorScheme.primary
-                                                } else {
-                                                    LocalContentColor.current
-                                                },
-                                                modifier = Modifier.size(22.dp)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        WatchlistModeSelector(
-                                            tabs = listOf(
-                                                stringResource(R.string.watchlist_mode_watchlist),
-                                                stringResource(R.string.watchlist_mode_watched)
-                                            ),
-                                            selectedIndex = selectedMode,
-                                            onTabSelected = {
-                                                collapseSearch()
-                                                selectedMode = it
-                                            },
-                                            hazeState = hazeState,
-                                            scene = watchlistGlassScene,
+                                            modifier = Modifier.size(22.dp)
                                         )
                                     }
-                                    }
-                                }
-                            }
-    
-                            // 分类 Tab：名称与数量徽标使用 Watchlist 专用组件
-                            val hasLocalFilter = searchQuery.isNotBlank() || hasActiveFilters
-                            val movieCount = if (selectedMode == 1 || isDoubanMode || hasLocalFilter) {
-                                if (selectedMode == 1) filteredHistoryMovies.items.size else filteredMovies.items.size
-                            } else {
-                                uiState.movieTotalCount ?: if (uiState.moviesLoaded) filteredMovies.items.size else 0
-                            }
-                            val showCount = if (selectedMode == 1 || isDoubanMode || hasLocalFilter) {
-                                if (selectedMode == 1) filteredHistoryShows.items.size else filteredShows.items.size
-                            } else {
-                                uiState.showTotalCount ?: if (uiState.showsLoaded) filteredShows.items.size else 0
-                            }
-                            val otherCount = if (selectedMode == 1 || isDoubanMode || hasLocalFilter) {
-                                if (selectedMode == 1) filteredHistoryOthers.items.size else filteredOthers.items.size
-                            } else {
-                                uiState.otherTotalCount ?: if (uiState.othersLoaded) filteredOthers.items.size else 0
-                            }
-                            WatchlistCategoryTabs(
-                                modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 2.dp),
-                                tabs = listOf(
-                                    WatchlistCategoryTab(
-                                        label = stringResource(R.string.watchlist_tab_movies),
-                                        count = movieCount
-                                    ),
-                                    WatchlistCategoryTab(
-                                        label = stringResource(R.string.watchlist_tab_shows),
-                                        count = showCount
-                                    ),
-                                    WatchlistCategoryTab(
-                                        label = stringResource(R.string.detail_disk_type_other),
-                                        count = otherCount
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    WatchlistModeSelector(
+                                        tabs = listOf(
+                                            stringResource(R.string.watchlist_mode_watchlist),
+                                            stringResource(R.string.watchlist_mode_watched)
+                                        ),
+                                        selectedIndex = selectedMode,
+                                        onTabSelected = {
+                                            collapseSearch()
+                                            selectedMode = it
+                                        },
+                                        hazeState = hazeState,
+                                        scene = watchlistGlassScene,
                                     )
-                                ),
-                                selectedIndex = selectedTab,
-                                onTabSelected = { index ->
-                                    collapseSearch()
-                                    view.performHaptic(HapticType.CLICK)
-                                    selectedTab = index
                                 }
-                            )
-    
-                            // 豆瓣同步进度横幅（同步进行中或刚完成 5 秒内显示）
-                            val syncProgress = uiState.doubanSyncProgress
-                            if (syncProgress != null && uiState.doubanSyncBannerVisible) {
-                                // 同步进行中时图标无限旋转动画
-                                val spinTransition = rememberInfiniteTransition(label = "sync_spin")
-                                val spinRotation by spinTransition.animateFloat(
-                                    initialValue = 0f,
-                                    targetValue = 360f,
-                                    animationSpec = infiniteRepeatable(
-                                        animation = tween(durationMillis = 1000, easing = LinearEasing)
-                                    ),
-                                    label = "sync_rotation"
-                                )
-                                NeumorphicFrostedSurface(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            when (syncProgress.bannerClickAction()) {
-                                                DoubanSyncBannerAction.SHOW_PROGRESS,
-                                                DoubanSyncBannerAction.SHOW_RESULT -> showSyncDialog = true
-                                                DoubanSyncBannerAction.NAVIGATE_TO_DOUBAN_LOGIN -> {
-                                                    viewModel.clearDoubanSyncResult()
-                                                    onNavigateToDoubanLogin()
-                                                }
-                                                DoubanSyncBannerAction.NAVIGATE_TO_TRAKT_LOGIN -> {
-                                                    viewModel.clearDoubanSyncResult()
-                                                    onTraktLogin()
-                                                }
-                                            }
-                                        },
-                                    isDark = isDark,
-                                    shape = RoundedCornerShape(12.dp),
-                                    backgroundColor = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)
-                                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
-                                    borderColor = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.error.copy(alpha = 0.20f)
-                                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
-                                    elevation = 2.dp,
-                                    blurRadius = 12.dp,
-                                    hazeState = hazeState,
-                                    hazeStyle = HazeMaterials.thin()
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = if (syncProgress.isRunning) Icons.Rounded.Sync else Icons.Rounded.CheckCircle,
-                                            contentDescription = null,
-                                            tint = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
-                                                else MaterialTheme.colorScheme.onPrimary,
-                                            modifier = Modifier
-                                                .size(18.dp)
-                                                .then(
-                                                    if (syncProgress.isRunning) Modifier.graphicsLayer { rotationZ = -spinRotation }
-                                                    else Modifier
-                                                )
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            val stageLabel = stringResource(syncProgress.stage.labelRes())
-                                            val targetLabel = when (syncProgress.subStage) {
-                                                DoubanSyncSubStage.FETCHING_WISH_LIST ->
-                                                    stringResource(R.string.douban_sync_preview_status_wish)
-                                                DoubanSyncSubStage.FETCHING_COLLECT_LIST ->
-                                                    stringResource(R.string.douban_sync_preview_status_collect)
-                                                else -> null
-                                            }
-                                            val subStageLabel = syncProgress.bannerSubStageRes()
-                                                ?.let { stringResource(it) }
-                                            val hasLiveCountProgress = syncProgress.hasLiveCountProgress()
-                                            Text(
-                                                text = if (syncProgress.cookieExpired) {
-                                                    stringResource(R.string.douban_sync_cookie_expired_banner)
-                                                } else if (
-                                                    syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.LOGIN_REQUIRED &&
-                                                    syncProgress.loginTarget == DoubanSyncLoginTarget.DOUBAN
-                                                ) {
-                                                    stringResource(R.string.douban_sync_douban_login_required_banner)
-                                                } else if (
-                                                    syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.LOGIN_REQUIRED &&
-                                                    syncProgress.loginTarget == DoubanSyncLoginTarget.TRAKT
-                                                ) {
-                                                    stringResource(R.string.douban_sync_trakt_login_required_banner)
-                                                } else if (syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.FAILED) {
-                                                    stringResource(R.string.douban_sync_stage_failed)
-                                                } else if (syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.CANCELLING) {
-                                                    if (syncProgress.pendingItemCount > 0) {
-                                                        stringResource(
-                                                            R.string.douban_sync_cancelled_with_pending,
-                                                            syncProgress.pendingItemCount
-                                                        )
-                                                    } else stringResource(R.string.douban_sync_cancelled_banner)
-                                                } else if (syncProgress.isComplete) {
-                                                    if (syncProgress.failedCount > 0) {
-                                                        stringResource(
-                                                            R.string.douban_sync_complete_with_failures_banner,
-                                                            syncProgress.successCount,
-                                                            syncProgress.failedCount
-                                                        )
-                                                    } else {
-                                                        stringResource(
-                                                            R.string.douban_sync_complete_banner,
-                                                            syncProgress.successCount
-                                                        )
-                                                    }
-                                                } else if (hasLiveCountProgress && targetLabel != null) {
-                                                    stringResource(
-                                                        R.string.douban_sync_notification_progress_format,
-                                                        stageLabel,
-                                                        targetLabel,
-                                                        syncProgress.current,
-                                                        syncProgress.total
-                                                    )
-                                                } else if (hasLiveCountProgress && subStageLabel != null) {
-                                                    stringResource(
-                                                        R.string.douban_sync_notification_progress_format,
-                                                        stageLabel,
-                                                        subStageLabel,
-                                                        syncProgress.current,
-                                                        syncProgress.total
-                                                    )
-                                                } else if (hasLiveCountProgress) {
-                                                    stringResource(
-                                                        R.string.douban_sync_progress_format,
-                                                        stageLabel,
-                                                        syncProgress.current,
-                                                        syncProgress.total
-                                                    )
-                                                } else if (subStageLabel != null) {
-                                                    stringResource(
-                                                        R.string.douban_sync_notification_stage_format,
-                                                        stageLabel,
-                                                        subStageLabel
-                                                    )
-                                                } else {
-                                                    stageLabel
-                                                },
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
-                                                    else MaterialTheme.colorScheme.onPrimary
-                                            )
-                                            if (hasLiveCountProgress) {
-                                                Spacer(modifier = Modifier.height(4.dp))
-                                                LinearProgressIndicator(
-                                                    progress = { (syncProgress.current.toFloat() / syncProgress.total).coerceIn(0f, 1f) },
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-                                            } else if (syncProgress.isRunning) {
-                                                Spacer(modifier = Modifier.height(4.dp))
-                                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                                            }
-                                        }
-                                        if (syncProgress.cookieExpired) {
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(
-                                                text = stringResource(R.string.douban_sync_relogin),
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = MaterialTheme.colorScheme.onErrorContainer
-                                            )
-                                        }
-                                    }
                                 }
                             }
-    
-                            // 状态一致性检查进度横幅（检查进行中或刚完成 5 秒内显示）
-                            val checkProgress = uiState.consistencyCheckProgress
-                            if (checkProgress != null) {
-                                val checkSpinTransition = rememberInfiniteTransition(label = "check_spin")
-                                val checkSpinRotation by checkSpinTransition.animateFloat(
-                                    initialValue = 0f,
-                                    targetValue = 360f,
-                                    animationSpec = infiniteRepeatable(
-                                        animation = tween(durationMillis = 1000, easing = LinearEasing)
-                                    ),
-                                    label = "check_rotation"
-                                )
-                                NeumorphicFrostedSurface(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { showConsistencyDialog = true },
-                                    isDark = isDark,
-                                    shape = RoundedCornerShape(12.dp),
-                                    backgroundColor = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)
-                                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
-                                    borderColor = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.error.copy(alpha = 0.20f)
-                                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
-                                    elevation = 2.dp,
-                                    blurRadius = 12.dp,
-                                    hazeState = hazeState,
-                                    hazeStyle = HazeMaterials.thin()
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = if (checkProgress.isRunning) Icons.Rounded.Sync
-                                                else Icons.Rounded.CheckCircle,
-                                            contentDescription = null,
-                                            tint = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
-                                                else MaterialTheme.colorScheme.onPrimary,
-                                            modifier = Modifier
-                                                .size(18.dp)
-                                                .then(
-                                                    if (checkProgress.isRunning) Modifier.graphicsLayer { rotationZ = -checkSpinRotation }
-                                                    else Modifier
-                                                )
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            val checkPhase = checkProgress.phase.ifBlank {
-                                                stringResource(R.string.consistency_check_phase_preparing)
-                                            }
-                                            val checkSubPhase = checkProgress.subPhase.takeIf {
-                                                it.isNotBlank() && !checkPhase.contains(it)
-                                            }
-                                            Text(
-                                                text = if (checkProgress.cookieExpired) {
-                                                    stringResource(R.string.douban_sync_cookie_expired_banner)
-                                                } else if (checkProgress.isComplete) {
-                                                    stringResource(R.string.consistency_check_complete_banner)
-                                                } else if (checkProgress.total > 0 && checkSubPhase != null) {
-                                                    stringResource(
-                                                        R.string.consistency_check_notification_progress_with_subphase,
-                                                        checkPhase,
-                                                        checkSubPhase,
-                                                        checkProgress.current,
-                                                        checkProgress.total
-                                                    )
-                                                } else if (checkProgress.total > 0) {
-                                                    stringResource(
-                                                        R.string.consistency_check_notification_progress,
-                                                        checkPhase,
-                                                        checkProgress.current,
-                                                        checkProgress.total
-                                                    )
-                                                } else if (checkSubPhase != null) {
-                                                    stringResource(
-                                                        R.string.consistency_check_notification_stage_with_subphase,
-                                                        checkPhase,
-                                                        checkSubPhase
-                                                    )
-                                                } else {
-                                                    checkPhase
-                                                },
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
-                                                    else MaterialTheme.colorScheme.onPrimary
-                                            )
-                                            if (checkProgress.isRunning && checkProgress.total > 0) {
-                                                Spacer(modifier = Modifier.height(4.dp))
-                                                LinearProgressIndicator(
-                                                    progress = { (checkProgress.current.toFloat() / checkProgress.total).coerceIn(0f, 1f) },
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // 豆瓣标记批量移除进度横幅（移除进行中或刚完成 5 秒内显示）
-                            val removalProgress = uiState.batchRemovalProgress
-                            if (removalProgress != null) {
-                                val removalSpinTransition = rememberInfiniteTransition(label = "removal_spin")
-                                val removalSpinRotation by removalSpinTransition.animateFloat(
-                                    initialValue = 0f,
-                                    targetValue = 360f,
-                                    animationSpec = infiniteRepeatable(
-                                        animation = tween(durationMillis = 1000, easing = LinearEasing)
-                                    ),
-                                    label = "removal_rotation"
-                                )
-                                val removalBackground = if (removalProgress.isCancelling) {
-                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
-                                } else {
-                                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
-                                }
-                                val removalBorder = if (removalProgress.isCancelling) {
-                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.20f)
-                                } else {
-                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.20f)
-                                }
-                                NeumorphicFrostedSurface(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            // 完成态点击无操作（横幅 5 秒后自动消失）
-                                            if (removalProgress.isRunning && !removalProgress.isCancelling) {
-                                                viewModel.cancelBatchRemoval()
-                                            }
-                                        },
-                                    isDark = isDark,
-                                    shape = RoundedCornerShape(12.dp),
-                                    backgroundColor = removalBackground,
-                                    borderColor = removalBorder,
-                                    elevation = 2.dp,
-                                    blurRadius = 12.dp,
-                                    hazeState = hazeState,
-                                    hazeStyle = HazeMaterials.thin()
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = if (removalProgress.isRunning) Icons.Rounded.Delete
-                                            else Icons.Rounded.CheckCircle,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            modifier = Modifier
-                                                .size(18.dp)
-                                                .then(
-                                                    if (removalProgress.isRunning) Modifier.graphicsLayer { rotationZ = removalSpinRotation }
-                                                    else Modifier
-                                                )
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            // phase 是 enum,映射到本地化字符串避免直接显示 enum 名违反 i18n
-                                            val removalPhaseText = when (removalProgress.phase) {
-                                                BatchRemovalPhase.REMOVING -> stringResource(R.string.batch_removal_phase_removing)
-                                                BatchRemovalPhase.CANCELLING -> stringResource(R.string.batch_removal_phase_cancelling)
-                                                BatchRemovalPhase.DONE -> stringResource(R.string.batch_removal_phase_done)
-                                                BatchRemovalPhase.CANCELLED -> stringResource(R.string.batch_removal_phase_cancelled)
-                                            }
-                                            Text(
-                                                text = if (removalProgress.isComplete) {
-                                                    stringResource(
-                                                        R.string.douban_batch_removal_complete,
-                                                        removalProgress.successCount,
-                                                        removalProgress.failCount + removalProgress.skipCount
-                                                    )
-                                                } else if (removalProgress.isCancelling) {
-                                                    stringResource(R.string.douban_batch_removal_cancelling)
-                                                } else if (removalProgress.total > 0) {
-                                                    "$removalPhaseText (${removalProgress.current}/${removalProgress.total})"
-                                                } else {
-                                                    removalPhaseText
-                                                },
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                                            )
-                                            if (removalProgress.isRunning && removalProgress.total > 0) {
-                                                Spacer(modifier = Modifier.height(4.dp))
-                                                LinearProgressIndicator(
-                                                    progress = { (removalProgress.current.toFloat() / removalProgress.total).coerceIn(0f, 1f) },
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-                                            }
-                                        }
-                                        if (removalProgress.isRunning && !removalProgress.isCancelling) {
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(
-                                                text = stringResource(R.string.douban_batch_removal_cancel),
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            // TMDB 不可用提示(可关闭,数据刷新后自动恢复)
                         }
-                    }
-    
-                    // 多选操作栏（多选模式时显示）
-                    AnimatedVisibility(
-                        visible = isMultiSelectMode,
-                        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-                        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column {
-                            Spacer(modifier = Modifier.statusBarsPadding())
-                            Box(
+
+                        // 分类 Tab：名称与数量徽标使用 Watchlist 专用组件
+                        val hasLocalFilter = searchQuery.isNotBlank() || hasActiveFilters
+                        val movieCount = if (selectedMode == 1 || isDoubanMode || hasLocalFilter) {
+                            if (selectedMode == 1) filteredHistoryMovies.items.size else filteredMovies.items.size
+                        } else {
+                            uiState.movieTotalCount ?: if (uiState.moviesLoaded) filteredMovies.items.size else 0
+                        }
+                        val showCount = if (selectedMode == 1 || isDoubanMode || hasLocalFilter) {
+                            if (selectedMode == 1) filteredHistoryShows.items.size else filteredShows.items.size
+                        } else {
+                            uiState.showTotalCount ?: if (uiState.showsLoaded) filteredShows.items.size else 0
+                        }
+                        val otherCount = if (selectedMode == 1 || isDoubanMode || hasLocalFilter) {
+                            if (selectedMode == 1) filteredHistoryOthers.items.size else filteredOthers.items.size
+                        } else {
+                            uiState.otherTotalCount ?: if (uiState.othersLoaded) filteredOthers.items.size else 0
+                        }
+                        WatchlistCategoryTabs(
+                            modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 2.dp),
+                            tabs = listOf(
+                                WatchlistCategoryTab(
+                                    label = stringResource(R.string.watchlist_tab_movies),
+                                    count = movieCount
+                                ),
+                                WatchlistCategoryTab(
+                                    label = stringResource(R.string.watchlist_tab_shows),
+                                    count = showCount
+                                ),
+                                WatchlistCategoryTab(
+                                    label = stringResource(R.string.detail_disk_type_other),
+                                    count = otherCount
+                                )
+                            ),
+                            selectedIndex = selectedTab,
+                            onTabSelected = { index ->
+                                collapseSearch()
+                                view.performHaptic(HapticType.CLICK)
+                                selectedTab = index
+                            }
+                        )
+
+                        // 豆瓣同步进度横幅（同步进行中或刚完成 5 秒内显示）
+                        val syncProgress = uiState.doubanSyncProgress
+                        if (syncProgress != null && uiState.doubanSyncBannerVisible) {
+                            // 同步进行中时图标无限旋转动画
+                            val spinTransition = rememberInfiniteTransition(label = "sync_spin")
+                            val spinRotation by spinTransition.animateFloat(
+                                initialValue = 0f,
+                                targetValue = 360f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(durationMillis = 1000, easing = LinearEasing)
+                                ),
+                                label = "sync_rotation"
+                            )
+                            NeumorphicFrostedSurface(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .clickable {
+                                        when (syncProgress.bannerClickAction()) {
+                                            DoubanSyncBannerAction.SHOW_PROGRESS,
+                                            DoubanSyncBannerAction.SHOW_RESULT -> showSyncDialog = true
+                                            DoubanSyncBannerAction.NAVIGATE_TO_DOUBAN_LOGIN -> {
+                                                viewModel.clearDoubanSyncResult()
+                                                onNavigateToDoubanLogin()
+                                            }
+                                            DoubanSyncBannerAction.NAVIGATE_TO_TRAKT_LOGIN -> {
+                                                viewModel.clearDoubanSyncResult()
+                                                onTraktLogin()
+                                            }
+                                        }
+                                    },
+                                isDark = isDark,
+                                shape = RoundedCornerShape(12.dp),
+                                backgroundColor = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)
+                                    else MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                borderColor = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.error.copy(alpha = 0.20f)
+                                    else MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
+                                elevation = 2.dp,
+                                blurRadius = 12.dp,
+                                hazeState = hazeState,
+                                hazeStyle = HazeMaterials.thin()
                             ) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable(enabled = false, onClick = {})
-                                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    IconButton(onClick = { isMultiSelectMode = false }) {
-                                        Icon(
-                                            Icons.AutoMirrored.Rounded.ArrowBack,
-                                            contentDescription = stringResource(R.string.common_cancel),
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                    Text(
-                                        text = stringResource(R.string.watchlist_selected_count, selectedItems.size),
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Row {
-                                        Button(
-                                            onClick = {
-                                                isRemoving = true
-                                                // 豆瓣模式无 traktId 条目也需正确移除,改用 selectionKey 匹配出完整 MediaUiItem
-                                                val selectedItemsList = currentItems.filter { it.selectionKey in selectedItems.keys }
-                                                val type = when (selectedTab) {
-                                                    0 -> WatchlistMediaType.MOVIE
-                                                    1 -> WatchlistMediaType.SHOW
-                                                    else -> WatchlistMediaType.OTHER
-                                                }
-                                                tabScope.launch {
-                                                    val hasFailure = if (selectedMode == 0) {
-                                                        viewModel.batchRemoveFromWatchlist(selectedItemsList, type)
-                                                    } else {
-                                                        viewModel.batchRemoveFromHistory(selectedItemsList, type)
-                                                    }
-                                                    // 豆瓣批量移除在 Application scope 后台运行，启动前台服务显示通知栏进度
-                                                    if (viewModel.isBatchRemovalRunning()) {
-                                                        com.tracktosearch.service.DoubanBatchRemovalService.start(context)
-                                                    }
-                                                    // 等待批量操作完成后才关闭多选栏，避免提前关闭导致用户以为已处理但实际仍在进行
-                                                    isMultiSelectMode = false
-                                                    isRemoving = false
-                                                    // 部分条目移除失败时提示用户（成功的项已更新 UI 并启动豆瓣移除）
-                                                    if (hasFailure) {
-                                                        context.showToast(
-                                                            batchRemovePartialFailedMessage,
-                                                            Toast.LENGTH_LONG
-                                                        )
-                                                    }
-                                                }
-                                            },
-                                            enabled = !isRemoving,
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.error
+                                    Icon(
+                                        imageVector = if (syncProgress.isRunning) Icons.Rounded.Sync else Icons.Rounded.CheckCircle,
+                                        contentDescription = null,
+                                        tint = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
+                                            else MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .then(
+                                                if (syncProgress.isRunning) Modifier.graphicsLayer { rotationZ = -spinRotation }
+                                                else Modifier
                                             )
-                                        ) {
-                                            if (isRemoving) {
-                                                CircularProgressIndicator(
-                                                    modifier = Modifier.size(18.dp),
-                                                    strokeWidth = 2.dp,
-                                                    color = MaterialTheme.colorScheme.onError
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        val stageLabel = stringResource(syncProgress.stage.labelRes())
+                                        val targetLabel = when (syncProgress.subStage) {
+                                            DoubanSyncSubStage.FETCHING_WISH_LIST ->
+                                                stringResource(R.string.douban_sync_preview_status_wish)
+                                            DoubanSyncSubStage.FETCHING_COLLECT_LIST ->
+                                                stringResource(R.string.douban_sync_preview_status_collect)
+                                            else -> null
+                                        }
+                                        val subStageLabel = syncProgress.bannerSubStageRes()
+                                            ?.let { stringResource(it) }
+                                        val hasLiveCountProgress = syncProgress.hasLiveCountProgress()
+                                        Text(
+                                            text = if (syncProgress.cookieExpired) {
+                                                stringResource(R.string.douban_sync_cookie_expired_banner)
+                                            } else if (
+                                                syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.LOGIN_REQUIRED &&
+                                                syncProgress.loginTarget == DoubanSyncLoginTarget.DOUBAN
+                                            ) {
+                                                stringResource(R.string.douban_sync_douban_login_required_banner)
+                                            } else if (
+                                                syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.LOGIN_REQUIRED &&
+                                                syncProgress.loginTarget == DoubanSyncLoginTarget.TRAKT
+                                            ) {
+                                                stringResource(R.string.douban_sync_trakt_login_required_banner)
+                                            } else if (syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.FAILED) {
+                                                stringResource(R.string.douban_sync_stage_failed)
+                                            } else if (syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.CANCELLING) {
+                                                if (syncProgress.pendingItemCount > 0) {
+                                                    stringResource(
+                                                        R.string.douban_sync_cancelled_with_pending,
+                                                        syncProgress.pendingItemCount
+                                                    )
+                                                } else stringResource(R.string.douban_sync_cancelled_banner)
+                                            } else if (syncProgress.isComplete) {
+                                                if (syncProgress.failedCount > 0) {
+                                                    stringResource(
+                                                        R.string.douban_sync_complete_with_failures_banner,
+                                                        syncProgress.successCount,
+                                                        syncProgress.failedCount
+                                                    )
+                                                } else {
+                                                    stringResource(
+                                                        R.string.douban_sync_complete_banner,
+                                                        syncProgress.successCount
+                                                    )
+                                                }
+                                            } else if (hasLiveCountProgress && targetLabel != null) {
+                                                stringResource(
+                                                    R.string.douban_sync_notification_progress_format,
+                                                    stageLabel,
+                                                    targetLabel,
+                                                    syncProgress.current,
+                                                    syncProgress.total
+                                                )
+                                            } else if (hasLiveCountProgress && subStageLabel != null) {
+                                                stringResource(
+                                                    R.string.douban_sync_notification_progress_format,
+                                                    stageLabel,
+                                                    subStageLabel,
+                                                    syncProgress.current,
+                                                    syncProgress.total
+                                                )
+                                            } else if (hasLiveCountProgress) {
+                                                stringResource(
+                                                    R.string.douban_sync_progress_format,
+                                                    stageLabel,
+                                                    syncProgress.current,
+                                                    syncProgress.total
+                                                )
+                                            } else if (subStageLabel != null) {
+                                                stringResource(
+                                                    R.string.douban_sync_notification_stage_format,
+                                                    stageLabel,
+                                                    subStageLabel
                                                 )
                                             } else {
-                                                Text(
-                                                    if (selectedMode == 0) stringResource(R.string.watchlist_remove_watchlist)
-                                                    else stringResource(R.string.watchlist_remove_history)
-                                                )
-                                            }
+                                                stageLabel
+                                            },
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
+                                                else MaterialTheme.colorScheme.onPrimary
+                                        )
+                                        if (hasLiveCountProgress) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            LinearProgressIndicator(
+                                                progress = { (syncProgress.current.toFloat() / syncProgress.total).coerceIn(0f, 1f) },
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        } else if (syncProgress.isRunning) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                                         }
+                                    }
+                                    if (syncProgress.cookieExpired) {
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        OutlinedButton(onClick = { isMultiSelectMode = false; isRemoving = false }) {
-                                            Text(stringResource(R.string.common_cancel))
+                                        Text(
+                                            text = stringResource(R.string.douban_sync_relogin),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onErrorContainer
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // 状态一致性检查进度横幅（检查进行中或刚完成 5 秒内显示）
+                        val checkProgress = uiState.consistencyCheckProgress
+                        if (checkProgress != null) {
+                            val checkSpinTransition = rememberInfiniteTransition(label = "check_spin")
+                            val checkSpinRotation by checkSpinTransition.animateFloat(
+                                initialValue = 0f,
+                                targetValue = 360f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(durationMillis = 1000, easing = LinearEasing)
+                                ),
+                                label = "check_rotation"
+                            )
+                            NeumorphicFrostedSurface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showConsistencyDialog = true },
+                                isDark = isDark,
+                                shape = RoundedCornerShape(12.dp),
+                                backgroundColor = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)
+                                    else MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                borderColor = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.error.copy(alpha = 0.20f)
+                                    else MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
+                                elevation = 2.dp,
+                                blurRadius = 12.dp,
+                                hazeState = hazeState,
+                                hazeStyle = HazeMaterials.thin()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (checkProgress.isRunning) Icons.Rounded.Sync
+                                            else Icons.Rounded.CheckCircle,
+                                        contentDescription = null,
+                                        tint = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
+                                            else MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .then(
+                                                if (checkProgress.isRunning) Modifier.graphicsLayer { rotationZ = -checkSpinRotation }
+                                                else Modifier
+                                            )
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        val checkPhase = checkProgress.phase.ifBlank {
+                                            stringResource(R.string.consistency_check_phase_preparing)
                                         }
+                                        val checkSubPhase = checkProgress.subPhase.takeIf {
+                                            it.isNotBlank() && !checkPhase.contains(it)
+                                        }
+                                        Text(
+                                            text = if (checkProgress.cookieExpired) {
+                                                stringResource(R.string.douban_sync_cookie_expired_banner)
+                                            } else if (checkProgress.isComplete) {
+                                                stringResource(R.string.consistency_check_complete_banner)
+                                            } else if (checkProgress.total > 0 && checkSubPhase != null) {
+                                                stringResource(
+                                                    R.string.consistency_check_notification_progress_with_subphase,
+                                                    checkPhase,
+                                                    checkSubPhase,
+                                                    checkProgress.current,
+                                                    checkProgress.total
+                                                )
+                                            } else if (checkProgress.total > 0) {
+                                                stringResource(
+                                                    R.string.consistency_check_notification_progress,
+                                                    checkPhase,
+                                                    checkProgress.current,
+                                                    checkProgress.total
+                                                )
+                                            } else if (checkSubPhase != null) {
+                                                stringResource(
+                                                    R.string.consistency_check_notification_stage_with_subphase,
+                                                    checkPhase,
+                                                    checkSubPhase
+                                                )
+                                            } else {
+                                                checkPhase
+                                            },
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
+                                                else MaterialTheme.colorScheme.onPrimary
+                                        )
+                                        if (checkProgress.isRunning && checkProgress.total > 0) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            LinearProgressIndicator(
+                                                progress = { (checkProgress.current.toFloat() / checkProgress.total).coerceIn(0f, 1f) },
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 豆瓣标记批量移除进度横幅（移除进行中或刚完成 5 秒内显示）
+                        val removalProgress = uiState.batchRemovalProgress
+                        if (removalProgress != null) {
+                            val removalSpinTransition = rememberInfiniteTransition(label = "removal_spin")
+                            val removalSpinRotation by removalSpinTransition.animateFloat(
+                                initialValue = 0f,
+                                targetValue = 360f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(durationMillis = 1000, easing = LinearEasing)
+                                ),
+                                label = "removal_rotation"
+                            )
+                            val removalBackground = if (removalProgress.isCancelling) {
+                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+                            } else {
+                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
+                            }
+                            val removalBorder = if (removalProgress.isCancelling) {
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.20f)
+                            } else {
+                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.20f)
+                            }
+                            NeumorphicFrostedSurface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        // 完成态点击无操作（横幅 5 秒后自动消失）
+                                        if (removalProgress.isRunning && !removalProgress.isCancelling) {
+                                            viewModel.cancelBatchRemoval()
+                                        }
+                                    },
+                                isDark = isDark,
+                                shape = RoundedCornerShape(12.dp),
+                                backgroundColor = removalBackground,
+                                borderColor = removalBorder,
+                                elevation = 2.dp,
+                                blurRadius = 12.dp,
+                                hazeState = hazeState,
+                                hazeStyle = HazeMaterials.thin()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (removalProgress.isRunning) Icons.Rounded.Delete
+                                        else Icons.Rounded.CheckCircle,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .then(
+                                                if (removalProgress.isRunning) Modifier.graphicsLayer { rotationZ = removalSpinRotation }
+                                                else Modifier
+                                            )
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        // phase 是 enum,映射到本地化字符串避免直接显示 enum 名违反 i18n
+                                        val removalPhaseText = when (removalProgress.phase) {
+                                            BatchRemovalPhase.REMOVING -> stringResource(R.string.batch_removal_phase_removing)
+                                            BatchRemovalPhase.CANCELLING -> stringResource(R.string.batch_removal_phase_cancelling)
+                                            BatchRemovalPhase.DONE -> stringResource(R.string.batch_removal_phase_done)
+                                            BatchRemovalPhase.CANCELLED -> stringResource(R.string.batch_removal_phase_cancelled)
+                                        }
+                                        Text(
+                                            text = if (removalProgress.isComplete) {
+                                                stringResource(
+                                                    R.string.douban_batch_removal_complete,
+                                                    removalProgress.successCount,
+                                                    removalProgress.failCount + removalProgress.skipCount
+                                                )
+                                            } else if (removalProgress.isCancelling) {
+                                                stringResource(R.string.douban_batch_removal_cancelling)
+                                            } else if (removalProgress.total > 0) {
+                                                "$removalPhaseText (${removalProgress.current}/${removalProgress.total})"
+                                            } else {
+                                                removalPhaseText
+                                            },
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                        if (removalProgress.isRunning && removalProgress.total > 0) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            LinearProgressIndicator(
+                                                progress = { (removalProgress.current.toFloat() / removalProgress.total).coerceIn(0f, 1f) },
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                    }
+                                    if (removalProgress.isRunning && !removalProgress.isCancelling) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = stringResource(R.string.douban_batch_removal_cancel),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // TMDB 不可用提示(可关闭,数据刷新后自动恢复)
+                    }
+                }
+
+                // 多选操作栏（多选模式时显示）
+                AnimatedVisibility(
+                    visible = isMultiSelectMode,
+                    enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column {
+                        Spacer(modifier = Modifier.statusBarsPadding())
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = false, onClick = {})
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                IconButton(onClick = { isMultiSelectMode = false }) {
+                                    Icon(
+                                        Icons.AutoMirrored.Rounded.ArrowBack,
+                                        contentDescription = stringResource(R.string.common_cancel),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                Text(
+                                    text = stringResource(R.string.watchlist_selected_count, selectedItems.size),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Row {
+                                    Button(
+                                        onClick = {
+                                            isRemoving = true
+                                            // 豆瓣模式无 traktId 条目也需正确移除,改用 selectionKey 匹配出完整 MediaUiItem
+                                            val selectedItemsList = currentItems.filter { it.selectionKey in selectedItems.keys }
+                                            val type = when (selectedTab) {
+                                                0 -> WatchlistMediaType.MOVIE
+                                                1 -> WatchlistMediaType.SHOW
+                                                else -> WatchlistMediaType.OTHER
+                                            }
+                                            tabScope.launch {
+                                                val hasFailure = if (selectedMode == 0) {
+                                                    viewModel.batchRemoveFromWatchlist(selectedItemsList, type)
+                                                } else {
+                                                    viewModel.batchRemoveFromHistory(selectedItemsList, type)
+                                                }
+                                                // 豆瓣批量移除在 Application scope 后台运行，启动前台服务显示通知栏进度
+                                                if (viewModel.isBatchRemovalRunning()) {
+                                                    com.tracktosearch.service.DoubanBatchRemovalService.start(context)
+                                                }
+                                                // 等待批量操作完成后才关闭多选栏，避免提前关闭导致用户以为已处理但实际仍在进行
+                                                isMultiSelectMode = false
+                                                isRemoving = false
+                                                // 部分条目移除失败时提示用户（成功的项已更新 UI 并启动豆瓣移除）
+                                                if (hasFailure) {
+                                                    context.showToast(
+                                                        batchRemovePartialFailedMessage,
+                                                        Toast.LENGTH_LONG
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        enabled = !isRemoving,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.error
+                                        )
+                                    ) {
+                                        if (isRemoving) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(18.dp),
+                                                strokeWidth = 2.dp,
+                                                color = MaterialTheme.colorScheme.onError
+                                            )
+                                        } else {
+                                            Text(
+                                                if (selectedMode == 0) stringResource(R.string.watchlist_remove_watchlist)
+                                                else stringResource(R.string.watchlist_remove_history)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    OutlinedButton(onClick = { isMultiSelectMode = false; isRemoving = false }) {
+                                        Text(stringResource(R.string.common_cancel))
                                     }
                                 }
                             }
                         }
                     }
                 }
-    
-                } // CompositionLocalProvider(LocalBackdrop) 顶栏结束
-
-                // 骨架屏：首次加载且列表为空时显示（避免 TMDB 富化过程中部分卡片已显示但骨架仍叠加）
-                val isLoading = if (selectedMode == 0) {
-                    when (selectedTab) {
-                        0 -> uiState.isLoadingMovies && !uiState.moviesLoaded && uiState.movies.isEmpty()
-                        1 -> uiState.isLoadingShows && !uiState.showsLoaded && uiState.shows.isEmpty()
-                        else -> uiState.isLoadingOthers && !uiState.othersLoaded && uiState.others.isEmpty()
-                    }
-                } else {
-                    when (selectedTab) {
-                        0 -> uiState.isLoadingHistoryMovies && !uiState.historyMoviesLoaded && uiState.historyMovies.isEmpty()
-                        1 -> uiState.isLoadingHistoryShows && !uiState.historyShowsLoaded && uiState.historyShows.isEmpty()
-                        else -> uiState.isLoadingHistoryOthers && !uiState.historyOthersLoaded && uiState.historyOthers.isEmpty()
-                    }
-                }
-                if (isLoading) {
-                    WatchlistSkeletonGrid(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(top = 124.dp + statusBarHeight)
-                            // 骨架屏也跟着下拉偏移：刷新中指示器停在内容上方的空隙里，
-                            // 骨架屏若不一起下移就会被指示器压住
-                            .graphicsLayer { translationY = pullToRefreshState.offset.floatValue }
-                    )
-                }
-            }
-    
-            // 豆瓣同步进度弹窗（点击横幅重新打开）
-            if (showSyncDialog) {
-                DoubanSyncDialog(
-                    onDismiss = {
-                        // 同步运行中不允许通过点击外部关闭（需点「转后台」或「取消」）
-                        val p = uiState.doubanSyncProgress
-                        if (p == null || !p.isRunning) {
-                            showSyncDialog = false
-                            viewModel.clearDoubanSyncResult()
-                        }
-                    },
-                                    onBackground = {
-                        // 「转后台」:仅隐藏弹窗,同步在 Application scope 继续运行,横幅会继续显示进度
-                                        showSyncDialog = false
-                                    },
-                                    onBackgroundUnavailable = {
-                                        context.showToast(
-                                            context.getString(R.string.douban_sync_background_unavailable),
-                                            Toast.LENGTH_LONG
-                                        )
-                                    },
-                                    onRelogin = {
-                                        showSyncDialog = false
-                                        viewModel.clearDoubanSyncResult()
-                                        onNavigateToDoubanLogin()
-                                    },
-                                    onTraktLogin = {
-                                        showSyncDialog = false
-                                        viewModel.clearDoubanSyncResult()
-                                        onTraktLogin()
-                                    },
-                                    onViewFailures = {
-                                        context.showToast(
-                                            context.getString(R.string.douban_sync_view_failures),
-                                            Toast.LENGTH_SHORT
-                                        )
-                                    },
-                                    onRetry = {
-                                        if (!viewModel.retryLatestDoubanFailures()) {
-                                            context.showToast(
-                                                context.getString(R.string.douban_retry_no_failures),
-                                                Toast.LENGTH_SHORT
-                                            )
-                                        }
-                                    },
-                    onViewConflicts = { showConsistencyDialog = true }
-                )
-            }
-    
-            // 状态一致性检查进度弹窗（点击横幅重新打开）
-            if (showConsistencyDialog) {
-                com.tracktosearch.ui.screen.settings.ConsistencyCheckDialog(
-                    onDismiss = {
-                        val p = uiState.consistencyCheckProgress
-                        if (p == null || !p.isRunning) {
-                            showConsistencyDialog = false
-                            // 用户主动关闭结果弹窗 → 清除横幅与进度（结果常驻，手动关闭而非自动消失）
-                            viewModel.clearConsistencyCheckResult()
-                        }
-                    },
-                    onBackground = { showConsistencyDialog = false },
-                    onLogin = {
-                        showConsistencyDialog = false
-                        onNavigateToDoubanLogin()
-                    },
-                    onBackgroundUnavailable = {
-                        context.showToast(
-                            context.getString(R.string.douban_sync_background_unavailable),
-                            Toast.LENGTH_LONG
-                        )
-                    }
-                )
             }
 
-            // 首次同步引导弹窗（已登录豆瓣但从未同步过时自动弹出）
-            if (showFirstSyncGuide && !isDoubanSyncRunning) {
-                DoubanFirstSyncGuideDialog(
-                    isDoubanOnly = isDoubanMode,
-                    onDismiss = { showFirstSyncGuide = false },
-                    onStartImport = {
-                        showFirstSyncGuide = false
-                        showSyncModePicker = true
-                    }
-                )
+            } // CompositionLocalProvider(LocalBackdrop) 顶栏结束
+
+            // 骨架屏：首次加载且列表为空时显示（避免 TMDB 富化过程中部分卡片已显示但骨架仍叠加）
+            val isLoading = if (selectedMode == 0) {
+                when (selectedTab) {
+                    0 -> uiState.isLoadingMovies && !uiState.moviesLoaded && uiState.movies.isEmpty()
+                    1 -> uiState.isLoadingShows && !uiState.showsLoaded && uiState.shows.isEmpty()
+                    else -> uiState.isLoadingOthers && !uiState.othersLoaded && uiState.others.isEmpty()
+                }
+            } else {
+                when (selectedTab) {
+                    0 -> uiState.isLoadingHistoryMovies && !uiState.historyMoviesLoaded && uiState.historyMovies.isEmpty()
+                    1 -> uiState.isLoadingHistoryShows && !uiState.historyShowsLoaded && uiState.historyShows.isEmpty()
+                    else -> uiState.isLoadingHistoryOthers && !uiState.historyOthersLoaded && uiState.historyOthers.isEmpty()
+                }
             }
-    
-            // 同步模式选择弹窗（引导弹窗确认后弹出）
-            if (showSyncModePicker) {
-                DoubanSyncModePickerDialog(
-                    syncedCount = 0,
-                    cooldownStatus = null,
-                    neverSynced = true,
-                    isDoubanOnly = isDoubanMode,
-                    onDismiss = { showSyncModePicker = false },
-                    onModeSelected = { mode ->
-                        showSyncModePicker = false
-                        // Android 13+ 首次发起同步时请求通知权限（已授予则跳过）；
-                        // 系统永久拒绝时 launcher 静默返回，不会反复打扰
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                            ContextCompat.checkSelfPermission(
-                                context, Manifest.permission.POST_NOTIFICATIONS
-                            ) != PackageManager.PERMISSION_GRANTED
-                        ) {
-                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        }
-                        viewModel.startDoubanSync(mode)
-                        // 立即显示进度弹窗，让用户看到同步过程
-                        showSyncDialog = true
-                    }
-                )
-            }
-    
-            // 筛选 ModalBottomSheet
-            if (showFilterSheet) {
-                WatchlistFilterSheet(
-                    filterState = filterState,
-                    availableGenres = availableGenres,
-                    decadeOptions = viewModel.decadeOptions.collectAsStateWithLifecycle().value,
-                    onGenresChange = viewModel::updateSelectedGenres,
-                    onDecadeToggle = viewModel::toggleDecade,
-                    onMarkedTimePresetChange = viewModel::updateMarkedTimePreset,
-                    onMarkedTimeOrderChange = viewModel::updateMarkedTimeOrder,
-                    onRatingRangeChange = viewModel::updateRatingRange,
-                    onReset = viewModel::resetFilters,
-                    onApply = { showFilterSheet = false }
+            if (isLoading) {
+                WatchlistSkeletonGrid(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = 124.dp + statusBarHeight)
+                        // 骨架屏也跟着下拉偏移：刷新中指示器停在内容上方的空隙里，
+                        // 骨架屏若不一起下移就会被指示器压住
+                        .graphicsLayer { translationY = pullToRefreshState.offset.floatValue }
                 )
             }
         }
-    } // CompositionLocalProvider
+
+        // 豆瓣同步进度弹窗（点击横幅重新打开）
+        if (showSyncDialog) {
+            DoubanSyncDialog(
+                onDismiss = {
+                    // 同步运行中不允许通过点击外部关闭（需点「转后台」或「取消」）
+                    val p = uiState.doubanSyncProgress
+                    if (p == null || !p.isRunning) {
+                        showSyncDialog = false
+                        viewModel.clearDoubanSyncResult()
+                    }
+                },
+                                onBackground = {
+                    // 「转后台」:仅隐藏弹窗,同步在 Application scope 继续运行,横幅会继续显示进度
+                                    showSyncDialog = false
+                                },
+                                onBackgroundUnavailable = {
+                                    context.showToast(
+                                        context.getString(R.string.douban_sync_background_unavailable),
+                                        Toast.LENGTH_LONG
+                                    )
+                                },
+                                onRelogin = {
+                                    showSyncDialog = false
+                                    viewModel.clearDoubanSyncResult()
+                                    onNavigateToDoubanLogin()
+                                },
+                                onTraktLogin = {
+                                    showSyncDialog = false
+                                    viewModel.clearDoubanSyncResult()
+                                    onTraktLogin()
+                                },
+                                onViewFailures = {
+                                    context.showToast(
+                                        context.getString(R.string.douban_sync_view_failures),
+                                        Toast.LENGTH_SHORT
+                                    )
+                                },
+                                onRetry = {
+                                    if (!viewModel.retryLatestDoubanFailures()) {
+                                        context.showToast(
+                                            context.getString(R.string.douban_retry_no_failures),
+                                            Toast.LENGTH_SHORT
+                                        )
+                                    }
+                                },
+                onViewConflicts = { showConsistencyDialog = true }
+            )
+        }
+
+        // 状态一致性检查进度弹窗（点击横幅重新打开）
+        if (showConsistencyDialog) {
+            com.tracktosearch.ui.screen.settings.ConsistencyCheckDialog(
+                onDismiss = {
+                    val p = uiState.consistencyCheckProgress
+                    if (p == null || !p.isRunning) {
+                        showConsistencyDialog = false
+                        // 用户主动关闭结果弹窗 → 清除横幅与进度（结果常驻，手动关闭而非自动消失）
+                        viewModel.clearConsistencyCheckResult()
+                    }
+                },
+                onBackground = { showConsistencyDialog = false },
+                onLogin = {
+                    showConsistencyDialog = false
+                    onNavigateToDoubanLogin()
+                },
+                onBackgroundUnavailable = {
+                    context.showToast(
+                        context.getString(R.string.douban_sync_background_unavailable),
+                        Toast.LENGTH_LONG
+                    )
+                }
+            )
+        }
+
+        // 首次同步引导弹窗（已登录豆瓣但从未同步过时自动弹出）
+        if (showFirstSyncGuide && !isDoubanSyncRunning) {
+            DoubanFirstSyncGuideDialog(
+                isDoubanOnly = isDoubanMode,
+                onDismiss = { showFirstSyncGuide = false },
+                onStartImport = {
+                    showFirstSyncGuide = false
+                    showSyncModePicker = true
+                }
+            )
+        }
+
+        // 同步模式选择弹窗（引导弹窗确认后弹出）
+        if (showSyncModePicker) {
+            DoubanSyncModePickerDialog(
+                syncedCount = 0,
+                cooldownStatus = null,
+                neverSynced = true,
+                isDoubanOnly = isDoubanMode,
+                onDismiss = { showSyncModePicker = false },
+                onModeSelected = { mode ->
+                    showSyncModePicker = false
+                    // Android 13+ 首次发起同步时请求通知权限（已授予则跳过）；
+                    // 系统永久拒绝时 launcher 静默返回，不会反复打扰
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        ContextCompat.checkSelfPermission(
+                            context, Manifest.permission.POST_NOTIFICATIONS
+                        ) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                    viewModel.startDoubanSync(mode)
+                    // 立即显示进度弹窗，让用户看到同步过程
+                    showSyncDialog = true
+                }
+            )
+        }
+
+        // 筛选 ModalBottomSheet
+        if (showFilterSheet) {
+            WatchlistFilterSheet(
+                filterState = filterState,
+                availableGenres = availableGenres,
+                decadeOptions = viewModel.decadeOptions.collectAsStateWithLifecycle().value,
+                onGenresChange = viewModel::updateSelectedGenres,
+                onDecadeToggle = viewModel::toggleDecade,
+                onMarkedTimePresetChange = viewModel::updateMarkedTimePreset,
+                onMarkedTimeOrderChange = viewModel::updateMarkedTimeOrder,
+                onRatingRangeChange = viewModel::updateRatingRange,
+                onReset = viewModel::resetFilters,
+                onApply = { showFilterSheet = false }
+            )
+        }
+    }
 }
 
 /**
@@ -1964,22 +1943,19 @@ private fun WatchlistPosterCard(
     onLongClick: () -> Unit
 ) {
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-    val activePosterTmdbId = LocalActivePosterTmdbId.current
-    val activePosterSelectionKey = LocalActivePosterSelectionKey.current
-    val setActivePosterSelectionKey = LocalActivePosterSelectionKeySetter.current
-    val setActivePosterTmdbId = LocalActivePosterClickSetter.current
-    val activeClickToken = LocalActivePosterClickToken.current
-    // 只有被点击激活的当前页海报才启用共享元素转场，避免同 tmdbId 卡片误匹配
-    val enableShared = item.tmdbId > 0
-            && item.tmdbId == activePosterTmdbId
-            && item.selectionKey == activePosterSelectionKey
-            && activeClickToken != 0
+    // 只有被点过的卡片才挂共享元素修饰符；origin 里带上 selectionKey，
+    // 追踪页允许同 tmdbId 的重复条目，只靠 tmdbId 分不出点的是哪一格。
+    var clicked by remember { mutableStateOf(false) }
+    val origin = remember(item.selectionKey) {
+        SharedOrigin.of(SharedOrigin.WATCHLIST, item.selectionKey)
+    }
 
-    val wrappedOnClick = remember(onClick, item.tmdbId, isMultiSelectMode) {
+    val wrappedOnClick = remember(onClick, item.tmdbId, isMultiSelectMode, origin) {
         {
             if (!isMultiSelectMode && item.tmdbId > 0) {
-                setActivePosterSelectionKey(item.selectionKey)
-                setActivePosterTmdbId(item.tmdbId)
+                clicked = true
+                // 追踪页的海报详情页大多能 peek 到，这里只为把来源交给详情页拼出同一个 key
+                DetailSeedStore.remember(item.tmdbId, origin = origin)
             }
             onClick()
         }
@@ -1987,7 +1963,7 @@ private fun WatchlistPosterCard(
 
     val posterModifier = Modifier
         .appSharedBounds(
-            key = if (enableShared) posterSharedKey(item.tmdbId) else null,
+            key = if (clicked) posterSharedKey(item.tmdbId, origin) else null,
             animatedVisibilityScope = animatedVisibilityScope,
             corner = SharedCorner.uniform(14.dp),
         )

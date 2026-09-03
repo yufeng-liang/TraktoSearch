@@ -120,6 +120,7 @@ import com.tracktosearch.ui.component.DiscoverFilterCardKey
 import com.tracktosearch.ui.component.DiscoverFilterIconKey
 import com.tracktosearch.ui.component.posterSharedKey
 import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.SharedOrigin
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
@@ -300,7 +301,8 @@ fun DiscoverFilterScreen(
                                     item.id,
                                     item.poster_path?.let { TmdbImageUrls.W342 + it },
                                     (item.release_date.ifBlank { item.first_air_date.orEmpty() })
-                                        .take(4).toIntOrNull()
+                                        .take(4).toIntOrNull(),
+                                    origin = SharedOrigin.DISCOVER_FILTER
                                 )
                                 if (uiState.type == TmdbRepository.DiscoverType.MOVIE) {
                                     onMovieClick(item.id, title)
@@ -808,12 +810,13 @@ private fun DiscoverFilterListItem(
         label = "filter_item_on_bg_variant"
     )
 
-    // 海报与详情页头图配对
+    // 海报与详情页头图配对；只有被点过的那一行才挂修饰符
+    var clicked by remember { mutableStateOf(false) }
     val posterModifier = Modifier
         .width(80.dp)
         .height(120.dp)
         .appSharedBounds(
-            key = posterSharedKey(item.id),
+            key = if (clicked) posterSharedKey(item.id, SharedOrigin.DISCOVER_FILTER) else null,
             animatedVisibilityScope = animatedVisibilityScope,
             corner = SharedCorner.uniform(8.dp),
         )
@@ -842,7 +845,10 @@ private fun DiscoverFilterListItem(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = onClick
+                onClick = {
+                    clicked = true
+                    onClick()
+                }
             )
             .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)

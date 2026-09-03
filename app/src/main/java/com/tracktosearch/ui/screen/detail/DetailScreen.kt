@@ -110,9 +110,6 @@ import com.tracktosearch.ui.component.DetailTopBarIcon
 import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
-import com.tracktosearch.ui.component.LocalActivePosterClickSetter
-import com.tracktosearch.ui.component.LocalActivePosterClickToken
-import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.LocalFullscreenSharedElement
@@ -144,6 +141,7 @@ import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.component.SharedOrigin
 import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -183,8 +181,6 @@ fun DetailScreen(
     val spriteState by spriteViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val view = LocalView.current
-    // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的推荐卡片参与共享元素转场
-    var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
     var showRatingDialog by remember { mutableStateOf(false) }
     var detailHeaderBounds by remember { mutableStateOf<Rect?>(null) }
     var showWatchlistScene by remember { mutableStateOf(false) }
@@ -416,8 +412,6 @@ fun DetailScreen(
     } == true
     val contentReadyForTransition = contentReady && !isNavigationTransitionRunning
 
-    // 点击 token,确保只有被点击的卡片参与转场(避免同 tmdbId 海报跨栏目飘错)
-    var activeClickToken by remember { mutableStateOf(0) }
 
     // 顶栏与吸顶 Tab 栏共用一条实色底（取色见 DetailVisuals.detailBarColor）。
     // 提到 Scaffold 之外算：状态栏条、吸顶栏、标题淡入三处要用同一份 isPinned。
@@ -436,15 +430,6 @@ fun DetailScreen(
         label = "detailTopBarTitleAlpha"
     )
 
-    CompositionLocalProvider(
-        LocalActivePosterTmdbId provides activePosterTmdbId,
-        LocalActivePosterClickSetter provides { id ->
-            activePosterTmdbId = id
-            activeClickToken += 1
-            activeClickToken
-        },
-        LocalActivePosterClickToken provides activeClickToken
-    ) {
     Scaffold(
         modifier = Modifier.testTag("detail_screen"),
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
@@ -983,6 +968,7 @@ fun DetailScreen(
                                                 genres = item.genres,
                                                 posterUrl = item.posterUrl,
                                                 tmdbId = item.tmdbId,
+                                                origin = SharedOrigin.of(SharedOrigin.DETAIL, tmdbId.toString()),
                                                 onClick = {
                                                     if (mediaType == MediaType.MOVIE) {
                                                         onMovieClick(item.traktId, item.tmdbId, item.displayTitle.ifEmpty { item.title }, item.imdbId, item.traktRating)
@@ -1006,7 +992,6 @@ fun DetailScreen(
                 }
                 } // end if (contentReady)
                 }
-            } // CompositionLocalProvider
             } // CompositionLocalProvider(LocalFullscreenSharedElement)
             } // hazeSource Box 结束：采样源只包住状态栏底色 + 滚动内容
 

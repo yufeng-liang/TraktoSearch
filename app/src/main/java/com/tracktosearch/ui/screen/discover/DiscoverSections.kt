@@ -71,6 +71,7 @@ import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.theme.GlassFillDark
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
+import com.tracktosearch.ui.component.SharedOrigin
 import java.util.Locale
 
 // LazyRow 内容类型常量：Compose 依据 contentType 复用滚动复用池中的 item 布局，减少重组与重新测量
@@ -85,6 +86,8 @@ internal fun TmdbMovieSection(
     error: String?,
     resolvingItemId: Int?,
     watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
+    /** 本栏目的 origin，见 discoverSectionOrigin；决定海报与详情页的配对。 */
+    posterOrigin: String,
     onItemClick: (TmdbSearchResult) -> Unit,
     onRetry: () -> Unit,
     onViewAll: () -> Unit,
@@ -147,6 +150,7 @@ internal fun TmdbMovieSection(
                                 isInWatchlist = watchlistWatchedIds?.isInWatchlist(null, movie.id, MediaType.MOVIE) == true,
                                 isWatched = watchlistWatchedIds?.isWatched(null, movie.id, MediaType.MOVIE) == true,
                                 tmdbId = movie.id,
+                                origin = posterOrigin,
                                 onClick = { onItemClick(movie) }
                             )
                         }
@@ -166,6 +170,8 @@ internal fun TraktRecommendationSection(
     resolvingItemId: Int?,
     isLoggedIn: Boolean = true,
     watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
+    /** 本栏目的 origin，见 discoverSectionOrigin；决定海报与详情页的配对。 */
+    posterOrigin: String,
     onItemClick: (TraktMovie) -> Unit,
     onRetry: () -> Unit,
     onViewAll: () -> Unit,
@@ -218,6 +224,7 @@ internal fun TraktRecommendationSection(
                                 isInWatchlist = watchlistWatchedIds?.isInWatchlist(movie.ids.trakt, movie.ids.tmdb, MediaType.MOVIE) == true,
                                 isWatched = watchlistWatchedIds?.isWatched(movie.ids.trakt, movie.ids.tmdb, MediaType.MOVIE) == true,
                                 tmdbId = movie.ids.tmdb,
+                                origin = posterOrigin,
                                 onClick = { onItemClick(movie) }
                             )
                         }
@@ -237,6 +244,8 @@ internal fun TraktTrendingMovieSection(
     totalCount: Int,
     watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
     error: String? = null,
+    /** 本栏目的 origin，见 discoverSectionOrigin；决定海报与详情页的配对。 */
+    posterOrigin: String,
     onItemClick: (TraktMovie) -> Unit,
     onViewAll: () -> Unit,
     onRetry: () -> Unit = {}
@@ -281,6 +290,7 @@ internal fun TraktTrendingMovieSection(
                                 isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
                                 isWatched = watchlistWatchedIds?.isWatched(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
                                 tmdbId = item.movie.ids.tmdb,
+                                origin = posterOrigin,
                                 onClick = { onItemClick(item.movie) }
                             )
                         }
@@ -300,6 +310,8 @@ internal fun TraktTrendingShowSection(
     totalCount: Int,
     watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
     error: String? = null,
+    /** 本栏目的 origin，见 discoverSectionOrigin；决定海报与详情页的配对。 */
+    posterOrigin: String,
     onItemClick: (TraktShow) -> Unit,
     onViewAll: () -> Unit,
     onRetry: () -> Unit = {}
@@ -344,6 +356,7 @@ internal fun TraktTrendingShowSection(
                                 isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
                                 isWatched = watchlistWatchedIds?.isWatched(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
                                 tmdbId = item.show.ids.tmdb,
+                                origin = posterOrigin,
                                 onClick = { onItemClick(item.show) }
                             )
                         }
@@ -364,6 +377,8 @@ internal fun TraktAnticipatedSection(
     totalCount: Int,
     watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
     error: String? = null,
+    /** 本栏目的 origin，见 discoverSectionOrigin；决定海报与详情页的配对。 */
+    posterOrigin: String,
     onMovieClick: (TraktMovie) -> Unit,
     onShowClick: (TraktShow) -> Unit,
     onViewAll: () -> Unit,
@@ -410,6 +425,7 @@ internal fun TraktAnticipatedSection(
                                 isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
                                 isWatched = watchlistWatchedIds?.isWatched(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
                                 tmdbId = item.movie.ids.tmdb,
+                                origin = SharedOrigin.of(posterOrigin, "movie"),
                                 onClick = { onMovieClick(item.movie) }
                             )
                         }
@@ -426,6 +442,7 @@ internal fun TraktAnticipatedSection(
                                 isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
                                 isWatched = watchlistWatchedIds?.isWatched(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
                                 tmdbId = item.show.ids.tmdb,
+                                origin = SharedOrigin.of(posterOrigin, "show"),
                                 onClick = { onShowClick(item.show) }
                             )
                         }
@@ -446,6 +463,8 @@ internal fun TraktShowRecommendationSection(
     isLoggedIn: Boolean = true,
     watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
     error: String? = null,
+    /** 本栏目的 origin，见 discoverSectionOrigin；决定海报与详情页的配对。 */
+    posterOrigin: String,
     onItemClick: (TraktShow) -> Unit,
     onViewAll: () -> Unit,
     onRetry: () -> Unit = {},
@@ -496,6 +515,7 @@ internal fun TraktShowRecommendationSection(
                                 isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
                                 isWatched = watchlistWatchedIds?.isWatched(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
                                 tmdbId = item.show.ids.tmdb,
+                                origin = posterOrigin,
                                 onClick = { onItemClick(item.show) }
                             )
                         }
@@ -634,6 +654,8 @@ private fun DoubanLoginGuideCard(promptText: String, onLoginClick: () -> Unit) {
 internal fun DoubanRecommendSection(
     state: DoubanRecommendState,
     resolvingItemId: String?,
+    /** 本栏目的 origin，见 discoverSectionOrigin；决定海报与详情页的配对。 */
+    posterOrigin: String,
     onItemClick: (DoubanRecommendItem) -> Unit,
     onRetry: () -> Unit,
     onLoginClick: () -> Unit,
@@ -743,6 +765,7 @@ internal fun DoubanRecommendSection(
                                     isWatched = false,
                                     tmdbId = 0,
                                     isDoubanRating = true,
+                                    origin = posterOrigin,
                                     onClick = { onItemClick(item) }
                                 )
                             }

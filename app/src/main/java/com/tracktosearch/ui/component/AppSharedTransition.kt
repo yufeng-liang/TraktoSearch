@@ -76,17 +76,17 @@ data class SharedKey(
  */
 object SharedOrigin {
     /**
-     * 尚未按来源细分的配对。
+     * 不参与来源区分的配对。
      *
-     * 海报、人物头像这两族的目标侧（详情页、人物页）可以从任意列表进入，要让 origin 真正区分来源，
-     * 目标侧必须能读到「我是从哪来的」，也就是导航参数里得带上 origin。在那一步落地之前，
-     * 这两族两端都用本值，配对行为与细分之前完全一致。
+     * 用于走不到「列表卡片点进详情」这条路的入口：通知点击、AI 推荐、深链等。这些入口没有
+     * 可配对的源侧海报，目标侧拿到本值也就等于不配对，正是想要的结果。
      */
     const val ANY = "any"
 
     const val WATCHLIST = "watchlist"
     const val DETAIL = "detail"
     const val DISCOVER = "discover"
+    const val SEARCH = "search"
     const val SETTINGS = "settings"
     const val STATISTICS = "statistics"
     const val TRAKT_LIST = "trakt-list"
@@ -99,6 +99,14 @@ object SharedOrigin {
      * 指定哪一侧是 target，且调用点的字符串 id 里已经带了页面与索引。
      */
     const val FULLSCREEN_VIEWER = "fullscreen-viewer"
+
+    /**
+     * 同一屏里有多个可能撞 id 的列表时，用列表自己的 id 再分一层。
+     *
+     * 发现页各栏目共用一套卡片，同一部片子出现在「热门」和「为你推荐」两栏是常态；
+     * 追踪页则可能有同 tmdbId 的重复条目，这时 [slot] 传该条目的 selectionKey。
+     */
+    fun of(base: String, slot: String): String = "$base:$slot"
 }
 
 /**

@@ -88,6 +88,8 @@ import com.tracktosearch.ui.component.zoomSharedSource
 import com.tracktosearch.ui.theme.onColorFor
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.component.SharedOrigin
+import com.tracktosearch.ui.navigation.DetailSeedStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -184,8 +186,13 @@ internal fun DetailHeaderContent(
                 ) {
                     if (uiState.posterUrl != null) {
                         var posterScale by remember { mutableFloatStateOf(1f) }
+                        // 来源侧点击时把 origin 记进了 DetailSeedStore，这里读回来拼出同一个 key。
+                        // remember 锁在 tmdbId 上：转场进行中若被别处覆写，key 变了会当场断掉配对。
+                        val posterOrigin = remember(tmdbId) {
+                            DetailSeedStore.peek(tmdbId)?.origin ?: SharedOrigin.ANY
+                        }
                         val posterModifier = Modifier
-                            .appSharedBounds(key = posterSharedKey(tmdbId))
+                            .appSharedBounds(key = posterSharedKey(tmdbId, posterOrigin))
                             .fillMaxSize()
                         // 用 Box 承载全屏查看转场的共享元素；AsyncImage 上保留导航用 sharedElement
                         // （双 key 嵌套是文档支持的组合模式）。
