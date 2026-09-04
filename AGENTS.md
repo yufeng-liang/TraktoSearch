@@ -112,6 +112,8 @@ CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments
 - 开屏每日台词可能先在登录页后台准备、进入主页后才真正显示；`SplashQuoteLoader` 只能组装画面和计算首看档位，禁止提前写“已展示”。首次序列进度、当天已看标记和日签签到统一放在 `SplashQuoteOverlay.onSplashQuoteShown`，否则用户在激活页退出或 OAuth 期间进程被回收会吞掉首次体验。
 - 访客模式不是独立授权态，而是“网关已激活 + Trakt 未连接 + 豆瓣未登录”的派生会话；勿再用单独 GuestModeStorage 决定启动路由，否则网关撤销/过期后会绕过激活页。激活成功页必须停留让用户选择 Trakt、豆瓣或访客，网关 EXPIRED 也不能自动拉起 Trakt OAuth
 - App 内平台登录提示必须携带明确目标（Trakt/豆瓣），不能只存 `showLoginPrompt` 布尔值；Trakt 确认按钮直调导航层 OAuth Custom Tab，豆瓣确认按钮直进 `DoubanLoginScreen`，`Routes.LOGIN` 仅用于网关未激活/失效，不得作为平台登录兜底
+- 删掉一层 `CompositionLocalProvider` 包裹时，删掉的 `{` 与 `}` 必须是同一对：开括号在页面上游（如 `Scaffold` 之前）、闭括号却顺手删了内层某个 provider 的那一个，全文件花括号仍然平衡、Kotlin 照样编译，但从那处起整棵树往里深了一层。DetailScreen 就这样把悬浮按钮、Snackbar 和全屏查看器全塞进了 `hazeSource` 的 Box，而注释还写着「hazeSource Box 结束」。改完用花括号计数核验块的真实闭合行，别信缩进和收尾注释——两者都不参与编译
+- haze 2.0.0-beta02 起 `hazeEffect` 采到的源里若有一个正处于自己的 `drawContent()`（即 effect 画在 source 子树内），直接 `IllegalArgumentException: Modifier.hazeEffect nodes cannot draw an ancestor Modifier.hazeSource`，旧版本只是静默丢源不模糊。`HazeSourceSelection.Behind` 靠 `findNearestAncestor` 找同 state 的祖先源再留 zIndex 更小的，能自动排除；显式传 `HazeSourceSelection.All` 的调用点（详情页/豆瓣详情页的悬浮按钮）没有这层保护，一旦被嵌进源子树就是必崩。R8 包的堆栈无用，用 debug 包取未混淆栈：`HazeSourceNode.draw` → `drawContentSafely` → …… → `HazeEffectNode.draw` 之间的 `LayoutNode.draw$ui` 数就是两者相隔的层数
 
 ## Git 规范
 - commit 须 Conventional Commits：<type>(<scope>): <中文描述>
@@ -135,7 +137,8 @@ CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments
 - Gradle installDebug 设备筛选可能因 ADB 返 API 属性异常跳过；先用 adb -s <serial> shell getprop ro.build.version.release 和 ro.build.version.sdk 记实际值
 - Gradle 提示 minSdkVersion 不兼容仍用 adb -s <serial> install -r <apk> 事实核验；曾 Gradle 报 API 21 但 ADB 直装返 Success 不一致
 - 安装成功须续 exec am start、UI 树检查、screencap 后 adb pull 截图、logcat -b crash，不能凭安装成功宣称功能过。系统属性与用户描述不一致保留命令输出报差异
-- 装 debug/benchmark 包报 INSTALL_FAILED_UPDATE_INCOMPATIBLE 先查签名不一致，勿当成「残留包没清干净」：本机设了 ANDROID_SDK_HOME=H:\Android_SDK\.android，AGP 用该目录下的 debug.keystore 签名，而机上已装的应用是 Android Studio 用 C:\Users\15778\.android\debug.keystore 签的，两把不是同一把。benchmark 构建同样受影响（initWith(release) 后把 signingConfig 指回 debug）
+- 装 debug/benchmark 包报 INSTALL_FAILED_UPDATE_INCOMPATIBLE 先查签名不一致，勿当成「残留包没清干净」：本机设了 ANDROID_SDK_HOME=H:\Android_SDK\.android，AGP 在其后再拼一层 .android/debug.keystore，实际用的是 H:\Android_SDK\.android\.android\debug.keystore（该目录名本身以 .android 结尾，所以路径是双层，别照 ANDROID_SDK_HOME 直接拼一层去找，找不到不等于没用它）；而机上已装的应用是 Android Studio 用 C:\Users\15778\.android\debug.keystore 签的，两把不是同一把。benchmark 构建同样受影响（initWith(release) 后把 signingConfig 指回 debug）
+- macrobenchmark 的 test APK 不需要与被测应用同签名：pm list instrumentation 显示它 target 的是自己（com.tracktosearch.benchmark），instrumentation 的同签名限制只对「作用于别的包」成立。benchmark/build.gradle.kts 里那条「必须与被测应用同签名」的注释是错的，别照它去重签 test APK
 - 签名不一致禁止用卸载重装解决：会连带清掉网关激活态、Trakt/豆瓣登录和想看已看本地数据。正确做法是用 Studio 那把 keystore 重签后原地 install -r，apksigner sign --ks C:\Users\15778\.android\debug.keystore --ks-pass pass:android（debug keystore 的公开默认口令，非本项目凭证）--ks-key-alias androiddebugkey
 - 核对两边证书：apksigner verify --print-certs <apk> 看 APK 实际证书 SHA-256，keytool -list -v -keystore <path> 看 keystore 指纹，二者一致才可原地覆盖安装
 

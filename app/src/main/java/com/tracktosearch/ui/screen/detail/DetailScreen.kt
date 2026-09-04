@@ -996,6 +996,7 @@ fun DetailScreen(
                 }
                 } // end if (contentReady)
                 }
+            } // CompositionLocalProvider(LocalContentColor)
             } // CompositionLocalProvider(LocalFullscreenSharedElement)
             } // hazeSource Box 结束：采样源只包住状态栏底色 + 滚动内容
 
@@ -1307,7 +1308,6 @@ fun DetailScreen(
                 )
             }
         }
-    }
     }
 }
 
