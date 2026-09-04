@@ -165,8 +165,24 @@ object Routes {
     // section 是可选参数：不带参数导航用 helpRoute()，功能页跳对应段用 helpRoute(HelpSections.X)
     const val HELP = "help?section={section}"
     const val OPEN_SOURCE = "openSource"
-    const val LIST_DETAIL = "listDetail/{listId}/{listName}"
-    const val DISCOVER_FILTER = "discoverFilter"
+    /**
+     * 榜单详情页。
+     *
+     * morph 表示这次进入是否有可配对的源侧卡片：发现页「社区热门列表」那几张卡片会做容器变形，
+     * 而「查看全部」弹窗里的同名条目在 ModalBottomSheet 自己的窗口里，配不上共享元素。
+     * 带进路由是因为两条路的来源 route 都是 main，导航层只能靠这个参数区分要不要叠页面淡入。
+     * 用路径段而不是 query：转场 lambda 里要靠它做判断，路径段一定会被解析出来。
+     */
+    const val LIST_DETAIL = "listDetail/{listId}/{listName}/{morph}"
+
+    /**
+     * 影视筛选页。
+     *
+     * entry 是入口标识：`card` 表示从发现页底部的入口卡片进来，那条路要做容器变形；`icon` 是右上角
+     * 漏斗图标，它与筛选页顶栏没有共同内容，不参与配对。带进路由是因为导航层要据此决定叠不叠
+     * 页面级淡入淡出，而这件事只有 NavHost 能做，页面内部的状态它读不到。
+     */
+    const val DISCOVER_FILTER = "discoverFilter/{entry}"
     const val DOUBAN_LOGIN = "doubanLogin"
     const val DOUBAN_ITEM_DETAIL = "doubanItemDetail/{doubanId}"
     const val DOUBAN_SPIDER_TEST = "doubanSpiderTest"
@@ -184,6 +200,30 @@ object Routes {
     /** 每日台词：开屏台词开关 + 日签日历，设置页外观分组的二级页 */
     const val SPLASH_QUOTE = "splashQuote"
 
+    /**
+     * 走「卡片长成整页」容器变形的目的地，按 route 的首个路径段登记。
+     *
+     * 这些页面自己用共享边界完成进出，NavHost 不该再给对面那一页叠页面级淡入淡出。两层淡化叠在
+     * 一起时两页同时半透明：返回那一下，正在收缩的整页与刚淡入的列表页互相穿透，看起来像列表
+     * 卡片里残留了上一页的内容。进入方向同理，只是被不透明的目标页盖住了才没露出来。
+     *
+     * 存路径段而不是完整 route 模式串：带参数的 route 一改参数（多一段路径、多一个 query）
+     * 集合就悄悄失配，而失配的表现只是转场观感退回去，编译和运行都不报错。
+     */
+    val ContainerMorphRouteIds = setOf(
+        "statistics",
+        "markRecords",
+        "searchSources",
+        "listDetail",
+        "discoverFilter",
+        "feedbackDetail",
+        "crashLogDetail",
+    )
+
+    /** 取 route 的首个路径段，用于与 [ContainerMorphRouteIds] 比对。 */
+    fun routeId(route: String?): String? =
+        route?.substringBefore('?')?.substringBefore('/')?.takeIf { it.isNotBlank() }
+
     fun helpRoute(section: String? = null): String =
         if (section == null) "help" else "help?section=$section"
 
@@ -197,10 +237,16 @@ object Routes {
 
     fun doubanItemDetailRoute(doubanId: String): String = "doubanItemDetail/$doubanId"
 
-    fun listDetailRoute(listId: Int, listName: String): String {
-        val encodedName = java.net.URLEncoder.encode(listName, "UTF-8")
-        return "listDetail/$listId/$encodedName"
+    /** morph 见 [LIST_DETAIL]：只有发现页那几张列表卡片点进来时为 true。 */
+    fun listDetailRoute(listId: Int, listName: String, morph: Boolean = false): String {
+        // 空名要占住路径段，否则拼出 `listDetail/1//true`，连续斜杠匹配不上任何 destination。
+        // 与 searchSourceEditorRoute 同一处理：空白填一个空格，编码后是 `+`。
+        val encodedName = java.net.URLEncoder.encode(listName.ifBlank { " " }, "UTF-8")
+        return "listDetail/$listId/$encodedName/$morph"
     }
+
+    /** entry 见 [DISCOVER_FILTER]，取 `card` 或 `icon`。 */
+    fun discoverFilterRoute(entry: String): String = "discoverFilter/$entry"
 
     fun traktSearchRoute(type: String, query: String): String {
         val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
@@ -639,8 +685,23 @@ fun AppNavigation(
                 // 海报回缩由 SharedTransitionLayout 独立接管，不依赖页面 fade 时长。
                 // 共享元素(海报)由 SharedTransitionLayout 独立接管，不依赖 NavHost 的 slide。
                 enterTransition = { fadeIn(animationSpec = tween(220)) },
-                exitTransition = { fadeOut(animationSpec = tween(220)) },
-                popEnterTransition = { fadeIn(animationSpec = tween(120)) },
+                // 去容器变形页时不给来源页叠淡出：目标页第一帧就不透明地盖住它，这层全屏 alpha
+                // 白画一遍。返回方向见下面的 popEnterTransition，那一侧是真的会看出问题。
+                exitTransition = {
+                    if (sharedTransitionEnabled &&
+                        Routes.routeId(targetState.destination.route) in Routes.ContainerMorphRouteIds
+                    ) ExitTransition.None
+                    else fadeOut(animationSpec = tween(220))
+                },
+                // 从容器变形页返回时不给目标页叠淡入：整页收回成卡片的动画由 SharedTransitionLayout
+                // 接管，目标页应当立即完整可见。再叠 120ms 淡入就是两层半透明相叠，收缩中的整页
+                // 与列表页互相穿透，观感上像列表卡片里残留着上一页的内容。
+                popEnterTransition = {
+                    if (sharedTransitionEnabled &&
+                        Routes.routeId(initialState.destination.route) in Routes.ContainerMorphRouteIds
+                    ) EnterTransition.None
+                    else fadeIn(animationSpec = tween(120))
+                },
                 popExitTransition = { fadeOut(animationSpec = tween(120)) },
                 // 默认 SizeTransform 用 StiffnessMediumLow 弹簧，尺寸动画要 2~3 秒才判停，
                 // 转场状态在 fade 结束后仍长时间 running，期间每帧重录含 Mesh 的背景层，
@@ -885,8 +946,8 @@ fun AppNavigation(
                             onPersonClick = { tmdbId, name, profileUrl, avatarColor ->
                                 navController.navigate(Routes.personRoute(tmdbId, name, profileUrl ?: ""))
                             },
-                            onListClick = { listId, listName ->
-                                navController.navigate(Routes.listDetailRoute(listId, listName))
+                            onListClick = { listId, listName, morph ->
+                                navController.navigate(Routes.listDetailRoute(listId, listName, morph))
                             },
                             onLogout = {
                                 // Trakt 退出登录：只清除 Trakt 连接状态，不清除网关激活令牌，
@@ -901,8 +962,8 @@ fun AppNavigation(
                             onOpenSourceClick = {
                                 navController.navigate(Routes.OPEN_SOURCE)
                             },
-                            onFilterDiscoverClick = {
-                                navController.navigate(Routes.DISCOVER_FILTER)
+                            onFilterDiscoverClick = { entry ->
+                                navController.navigate(Routes.discoverFilterRoute(entry))
                             },
                             onDoubanResync = {
                                 // 不再导航到 DoubanLoginScreen
@@ -1090,18 +1151,29 @@ fun AppNavigation(
                     route = Routes.LIST_DETAIL,
                     arguments = listOf(
                         navArgument("listId") { type = NavType.IntType },
-                        navArgument("listName") { type = NavType.StringType; defaultValue = "" }
+                        navArgument("listName") { type = NavType.StringType; defaultValue = "" },
+                        // morph 是路径段，路由拼出来时一定带值；defaultValue 只是解析失败时的兜底，
+                        // 按「无源侧卡片」处理，退回常规淡入，好过毫无动画地直接出现
+                        navArgument("morph") { type = NavType.BoolType; defaultValue = false }
                     ),
-                    // 同 Routes.STATISTICS：卡片长成整页的容器变形已经把页面显示出来了，不再叠 NavHost 淡入。
-                    // 共享转场被关掉时返回 null，落回 NavHost 的全局淡入，否则这个页面会毫无动画地直接出现。
-                    enterTransition = { if (sharedTransitionEnabled) EnterTransition.None else null },
-                    popExitTransition = { if (sharedTransitionEnabled) ExitTransition.None else null }
+                    // 只有发现页列表卡片那条路做容器变形（morph == true，见 Routes.LIST_DETAIL）：
+                    // 卡片长成整页已经把页面显示出来了，再叠 NavHost 淡入就是同一页淡两次。
+                    // 「查看全部」弹窗那条路配不上共享元素，必须保留常规淡入。
+                    enterTransition = {
+                        if (sharedTransitionEnabled &&
+                            targetState.arguments?.getBoolean("morph") == true
+                        ) EnterTransition.None else null
+                    },
+                    // 返回同理：收回成卡片时整页若还跟着淡出，收缩中的页面会半透明地透出发现页
+                    popExitTransition = {
+                        if (sharedTransitionEnabled &&
+                            initialState.arguments?.getBoolean("morph") == true
+                        ) ExitTransition.None else null
+                    }
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
-                        val listId = backStackEntry.arguments?.getInt("listId") ?: 0
-                        val listName = java.net.URLDecoder.decode(
-                            backStackEntry.arguments?.getString("listName") ?: "", "UTF-8"
-                        )
+                        // listId 与 listName 由 TraktListDetailViewModel 自己从 SavedStateHandle 取，
+                        // 这里不再重复读一遍。
                         TraktListDetailScreen(
                             onBack = {
                                 backStackEntry.propagateMarkChangesTo(navController.previousBackStackEntry)
@@ -1264,7 +1336,28 @@ fun AppNavigation(
                     }
                 }
 
-                composable(Routes.DISCOVER_FILTER) { backStackEntry ->
+                composable(
+                    route = Routes.DISCOVER_FILTER,
+                    arguments = listOf(
+                        // entry 是路径段，路由拼出来时一定带值；defaultValue 只是解析失败时的兜底，
+                        // 按「不配对」处理，退回常规淡入，好过毫无动画地直接出现
+                        navArgument("entry") { type = NavType.StringType; defaultValue = "icon" }
+                    ),
+                    // 只有底部入口卡片那条路做容器变形（entry == "card"，见 Routes.DISCOVER_FILTER）：
+                    // 卡片长成整页已经把页面显示出来了，再叠 NavHost 淡入就是同一页淡两次。
+                    // 漏斗图标入口不配对，必须保留常规淡入，否则页面会毫无动画地直接出现。
+                    enterTransition = {
+                        if (sharedTransitionEnabled &&
+                            targetState.arguments?.getString("entry") == "card"
+                        ) EnterTransition.None else null
+                    },
+                    // 返回同理：收回成卡片时整页若还跟着淡出，收缩中的页面会半透明地透出发现页
+                    popExitTransition = {
+                        if (sharedTransitionEnabled &&
+                            initialState.arguments?.getString("entry") == "card"
+                        ) ExitTransition.None else null
+                    }
+                ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         DiscoverFilterScreen(
                             onBack = {
@@ -1494,7 +1587,20 @@ fun AppNavigation(
                     arguments = listOf(
                         navArgument("feedbackId") { type = NavType.StringType },
                         navArgument("replyId") { type = NavType.StringType; defaultValue = "" }
-                    )
+                    ),
+                    // 只有从反馈页那张卡片进来才是容器变形，那条路不再叠 NavHost 淡入。
+                    // 消息页也通向这个详情页，那条路没有可配对的源侧卡片，必须保留常规淡入。
+                    enterTransition = {
+                        if (sharedTransitionEnabled &&
+                            initialState.destination.route == Routes.FEEDBACK
+                        ) EnterTransition.None else null
+                    },
+                    // 返回同理：收回成卡片时整页若还跟着淡出，收缩中的页面会半透明地透出反馈页
+                    popExitTransition = {
+                        if (sharedTransitionEnabled &&
+                            targetState.destination.route == Routes.FEEDBACK
+                        ) ExitTransition.None else null
+                    }
                 ) { backStackEntry ->
                     val feedbackId = backStackEntry.arguments?.getString("feedbackId") ?: return@composable
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {

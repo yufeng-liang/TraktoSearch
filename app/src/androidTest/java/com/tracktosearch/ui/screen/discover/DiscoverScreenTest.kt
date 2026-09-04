@@ -292,9 +292,11 @@ class DiscoverScreenTest {
             DiscoverScreen(
                 onMovieClick = { _, _, _, _, _, _, _ -> },
                 onShowClick = { _, _, _, _, _, _, _ -> },
-                onListClick = { id, name ->
+                onListClick = { id, name, morph ->
                     assertThat(id).isEqualTo(listId)
                     assertThat(name).isEqualTo(listName)
+                    // 页面里的列表卡片有可配对的源侧卡片，走容器变形
+                    assertThat(morph).isTrue()
                     listClicked = true
                 },
                 viewModel = createMockDiscoverViewModel(

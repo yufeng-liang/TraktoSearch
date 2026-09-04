@@ -211,11 +211,13 @@ fun MainScreen(
     onMarkRecordsClick: () -> Unit = {},
     onTraktSearch: (type: String, query: String) -> Unit,
     onPersonClick: (tmdbId: Int, name: String, profileUrl: String?, avatarColor: Color?) -> Unit = { _, _, _, _ -> },
-    onListClick: (listId: Int, listName: String) -> Unit = { _, _ -> },
+    /** morph 见 DiscoverScreen 的同名回调：透传本次点击有无可配对的源侧卡片。 */
+    onListClick: (listId: Int, listName: String, morph: Boolean) -> Unit = { _, _, _ -> },
     onLogout: () -> Unit,
     onHelpClick: () -> Unit,
     onOpenSourceClick: () -> Unit,
-    onFilterDiscoverClick: () -> Unit = {},
+    /** 参数是入口标识（"card" / "icon"），透传给 DiscoverScreen 的同名回调。 */
+    onFilterDiscoverClick: (entry: String) -> Unit = {},
     onDoubanResync: () -> Unit = {},
     onNavigateToDoubanLogin: () -> Unit = {},
     onSpiderTest: () -> Unit = {},

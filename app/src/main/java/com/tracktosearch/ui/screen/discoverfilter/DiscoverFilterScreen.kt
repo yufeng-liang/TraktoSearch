@@ -255,6 +255,10 @@ fun DiscoverFilterScreen(
                 // 跟着容器一起缩放绘制。逐帧重测的代价由内容侧的 appSkipToLookaheadSize 挡掉。
                 resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
             )
+            // 页面底色挪进共享节点内侧：容器变形靠裁剪揭示，容器里必须是不透明的，
+            // 否则变形期这一片能直接看到下面那一页 —— 打开的瞬间发现页内容会叠在本页上。
+            // 底色跟着动画边界一起长大，且被上面那层圆角动画裁剪，落定后与原来逐像素相同。
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // ========== 列表内容 ==========
         LazyColumn(

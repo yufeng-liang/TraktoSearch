@@ -132,8 +132,10 @@ import kotlinx.coroutines.launch
 fun DiscoverScreen(
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
-    onListClick: (listId: Int, listName: String) -> Unit = { _, _ -> },
-    onFilterDiscoverClick: () -> Unit = {},
+    /** morph 表示本次点击有无可配对的源侧卡片：页面里的列表卡片传 true，「查看全部」弹窗传 false。 */
+    onListClick: (listId: Int, listName: String, morph: Boolean) -> Unit = { _, _, _ -> },
+    /** 参数是入口标识（"card" / "icon"）：只有卡片入口与筛选页做容器变形，导航层据此决定要不要叠页面淡入。 */
+    onFilterDiscoverClick: (entry: String) -> Unit = {},
     onDoubanLoginClick: () -> Unit = {},
     onTraktLoginClick: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -727,9 +729,9 @@ fun DiscoverScreen(
                                     } else {
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             uiState.trendingLists.take(5).forEachIndexed { index, listResponse ->
-                                                // 社区列表卡片放大成整个列表详情页；圆角在 18dp 与 0 之间插值
+                                                // 社区列表卡片放大成整个列表详情页；圆角在 20dp 与 0 之间插值
                                                 // 目标侧走 RemeasureToBounds，动画边界一路长到整页；
-                                                // 本侧按落定尺寸布局，否则淡出的那 200ms 里内容会被拉散
+                                                // 本侧按落定尺寸布局，否则变形期里内容会被拉散
                                                 val listCardModifier = Modifier
                                                     .appSharedBounds(
                                                         key = traktListSharedKey(listResponse.list.ids.trakt),
@@ -737,52 +739,15 @@ fun DiscoverScreen(
                                                         corner = SharedCorner.uniform(TraktListCardCorner),
                                                     )
                                                     .appSkipToLookaheadSize()
-                                                val interactionSource = remember { MutableInteractionSource() }
-                                                val isPressed by interactionSource.collectIsPressedAsState()
-                                                val cardScale by animateFloatAsState(
-                                                    targetValue = if (isPressed) 0.98f else 1f,
-                                                    label = "trakt_list_card_scale_${index}"
+                                                TrendingListCard(
+                                                    title = listResponse.list.name,
+                                                    meta = stringResource(R.string.discover_list_meta, listResponse.list.item_count, listResponse.list.user?.username ?: "", listResponse.like_count),
+                                                    onClick = { onListClick(listResponse.list.ids.trakt, listResponse.list.name, true) },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .then(listCardModifier)
+                                                        .fadeSlideIn(index)
                                                 )
-                                                Box(modifier = Modifier.fillMaxWidth().then(listCardModifier).fadeSlideIn(index)) {
-                                                    AppVisualSurface(
-                                                        kind = VisualSurfaceKind.Glass,
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .scale(cardScale)
-                                                            .clickable(
-                                                                interactionSource = interactionSource,
-                                                                indication = null,
-                                                                onClick = { onListClick(listResponse.list.ids.trakt, listResponse.list.name) }
-                                                            ),
-                                                        shape = RoundedCornerShape(TraktListCardCorner),
-                                                        role = GlassSurfaceRole.Card,
-                                                        interactionSource = interactionSource,
-                                                        scene = discoverGlassScene,
-                                                        backgroundColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
-                                                        borderColor = if (isDark) MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.9f)
-                                                    ) {
-                                                        Row(
-                                                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                                            verticalAlignment = Alignment.CenterVertically
-                                                        ) {
-                                                            Column(modifier = Modifier.weight(1f)) {
-                                                                Text(
-                                                                    text = listResponse.list.name,
-                                                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                                    maxLines = 1,
-                                                                    overflow = TextOverflow.Ellipsis
-                                                                )
-                                                                Text(
-                                                                    text = stringResource(R.string.discover_list_meta, listResponse.list.item_count, listResponse.list.user?.username ?: "", listResponse.like_count),
-                                                                    style = MaterialTheme.typography.bodySmall,
-                                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                                )
-                                                            }
-                                                        }
-                                                    }
-                                                }
                                             }
 
                                         }
@@ -822,7 +787,7 @@ fun DiscoverScreen(
                                 indication = null
                             ) {
                                 activeFilterEntry = "card"
-                                onFilterDiscoverClick()
+                                onFilterDiscoverClick("card")
                             },
                         shape = shape,
                         backgroundColor = Color.Transparent,
@@ -902,7 +867,7 @@ fun DiscoverScreen(
                         AppIconButton(
                             onClick = {
                                 activeFilterEntry = "icon"
-                                onFilterDiscoverClick()
+                                onFilterDiscoverClick("icon")
                             },
                             modifier = Modifier,
                             isDark = isDark,
@@ -1110,7 +1075,8 @@ fun DiscoverScreen(
             lists = uiState.trendingLists,
             onListClick = { listId, listName ->
                 showTrendingListsAll = false
-                onListClick(listId, listName)
+                // 弹窗在 ModalBottomSheet 自己的窗口里，配不上共享元素：走常规页面转场
+                onListClick(listId, listName, false)
             },
             onDismiss = { showTrendingListsAll = false }
         )

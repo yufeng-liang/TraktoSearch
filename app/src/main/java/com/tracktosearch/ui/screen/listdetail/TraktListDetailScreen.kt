@@ -37,6 +37,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -67,6 +68,7 @@ import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.component.rememberShimmer
 import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
@@ -115,6 +117,16 @@ fun TraktListDetailScreen(
         loadingItemWeight = 4
     )
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // 顶栏与设置页三个子页面同一套行为：未滚动时完全透明，内容滚到顶栏下面才显出玻璃底。
+    // 转场期一律按「未滚动」处理，容器变形每帧背景都在变，实时模糊在这段时间只是白烧 GPU。
+    val hasContentUnderTopBar by remember {
+        derivedStateOf {
+            hasListScrolled(
+                firstVisibleItemIndex = gridState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffsetPx = gridState.firstVisibleItemScrollOffset
+            )
+        }
+    }
     // 共享元素转场 scope（标题栏整体与发现页社区列表卡片配对）
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
@@ -190,7 +202,7 @@ fun TraktListDetailScreen(
 
                         // Haze 模糊标题栏：不参与配对，但从第一帧就在 —— 与网格一样按落定尺寸布局，
                         // 跟着容器裁剪逐渐露出；延迟入场会让顶栏位置先空着，落位时再整片闪出来。
-                        // 转场期仍停 haze 采样
+                        // 骨架阶段列表还没滚过，顶栏按透明处理，与真实内容态的未滚动状态一致
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -199,7 +211,7 @@ fun TraktListDetailScreen(
                                     state = hazeState,
                                     style = hazeStyle,
                                     blurRadius = TopBarBackdropBlurRadius,
-                                    isContentUnderTopBar = if (transitionActive) false else null,
+                                    isContentUnderTopBar = false,
                                     scene = listGlassScene
                                 )
                                 .clickable(enabled = false, onClick = {})
@@ -310,7 +322,7 @@ fun TraktListDetailScreen(
 
                     // Haze 模糊标题栏：不参与配对，但从第一帧就在 —— 与网格一样按落定尺寸布局，
                     // 跟着容器裁剪逐渐露出；延迟入场会让顶栏位置先空着，落位时再整片闪出来。
-                    // 转场期仍停 haze 采样
+                    // 未滚动时透明、滚动后显玻璃底，转场期仍停 haze 采样
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -319,7 +331,7 @@ fun TraktListDetailScreen(
                                 state = hazeState,
                                 style = hazeStyle,
                                 blurRadius = TopBarBackdropBlurRadius,
-                                isContentUnderTopBar = if (transitionActive) false else null,
+                                isContentUnderTopBar = hasContentUnderTopBar && !transitionActive,
                                 scene = listGlassScene
                             )
                             .clickable(enabled = false, onClick = {})

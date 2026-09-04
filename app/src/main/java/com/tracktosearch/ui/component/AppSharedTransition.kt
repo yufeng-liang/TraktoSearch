@@ -129,8 +129,12 @@ fun personAvatarSharedKey(personId: Int, origin: String = SharedOrigin.ANY): Sha
 fun traktListSharedKey(listId: Int): SharedKey? =
     if (listId <= 0) null else SharedKey("trakt-list-$listId", SharedOrigin.DISCOVER, SharedElementType.Bounds)
 
-/** 发现页社区列表卡片的圆角；与 [SettingsEntryCardCorner] 同理，两端必须取同一个数。 */
-val TraktListCardCorner = 18.dp
+/**
+ * 发现页社区列表卡片的圆角；与 [SettingsEntryCardCorner] 同理，两端必须取同一个数。
+ *
+ * 20dp 是与搜索源页内置源卡片、统计页卡片对齐后的统一列表卡片规格。
+ */
+val TraktListCardCorner = 20.dp
 
 /** 发现页筛选入口卡片与筛选页根容器。 */
 val DiscoverFilterCardKey = SharedKey("filter-entry-card", SharedOrigin.DISCOVER, SharedElementType.Bounds)
@@ -223,18 +227,25 @@ internal val AppSharedExit: ExitTransition = fadeOut(AppFadeSpec)
  * 按部件类型决定默认进出动画。
  *
  * [SharedElementType.Image] 与 [SharedElementType.Icon] 两端画的是同一张图，交叉淡入会在
- * 重叠期把两份半透明内容叠出一次可见的发白，所以不淡；其余类型两端内容不同，需要淡过去。
+ * 重叠期把两份半透明内容叠出一次可见的发白，所以不淡。
+ *
+ * [SharedElementType.Bounds] 是整块容器（卡片放大成整页），同样不能淡：这类容器覆盖了半屏到
+ * 整屏，淡入淡出期间它是半透明的，对面那一页就会整片透进来 —— 进入标记记录页的那一瞬能看到
+ * 设置页的文字压在海报上，返回时能看到列表内容压在设置页卡片上。容器变形的正确揭示方式是
+ * 边界裁剪：容器边界从卡片长到整页，内容始终不透明，被边界一点点放出来。
+ *
+ * 其余类型（Title、Background）两端内容不同且面积小，需要淡过去。
  *
  * 这也是这里一律用 sharedBounds 而不是 sharedElement 的代价与补偿：sharedElement 天生不淡，
  * 但同时锁死了 RemeasureToBounds；sharedBounds 给了 resizeMode，进出动画就得自己关掉。
  */
 private fun SharedElementType.defaultEnter(): EnterTransition = when (this) {
-    SharedElementType.Image, SharedElementType.Icon -> EnterTransition.None
+    SharedElementType.Image, SharedElementType.Icon, SharedElementType.Bounds -> EnterTransition.None
     else -> AppSharedEnter
 }
 
 private fun SharedElementType.defaultExit(): ExitTransition = when (this) {
-    SharedElementType.Image, SharedElementType.Icon -> ExitTransition.None
+    SharedElementType.Image, SharedElementType.Icon, SharedElementType.Bounds -> ExitTransition.None
     else -> AppSharedExit
 }
 
