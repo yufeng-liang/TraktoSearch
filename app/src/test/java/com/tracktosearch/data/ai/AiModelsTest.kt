@@ -168,6 +168,153 @@ class AiModelsTest {
         assertThat(quiz.isThirteenQuestionStructure).isFalse()
     }
 
+    @Test
+    fun structuredFields_mapToDomainAndLegacyFieldsStillFallback() {
+        val greeting = AiGreetingDto(
+            nickname = "片单旅人",
+            nameSignals = listOf(AiNameSignalDto(text = "旅人", interpretation = "带有漫游感")),
+            nicknameSignature = "把故事带在身上的人"
+        ).toDomain()
+        val taste = AiTasteDto(
+            taste = listOf("克制叙事"),
+            profileSentence = "偏爱留白与余韵",
+            evidence = listOf(
+                AiTasteEvidenceDto(
+                    title = "电影 A",
+                    signal = "偏好关系张力",
+                    inference = "更在意人物之间未说出口的情绪",
+                    confidence = "high"
+                )
+            )
+        ).toDomain()
+
+        assertThat(greeting.nameSignals.single().text).isEqualTo("旅人")
+        assertThat(greeting.nicknameSignature).isEqualTo("把故事带在身上的人")
+        assertThat(taste.profileKeywords).containsExactly("克制叙事")
+        assertThat(taste.profileSentence).isEqualTo("偏爱留白与余韵")
+        assertThat(taste.evidence.single().title).isEqualTo("电影 A")
+        assertThat(taste.evidence.single().confidence).isEqualTo("high")
+    }
+
+    @Test
+    fun dailyMetadata_defaultsSafelyAndMapsStructuredFields() {
+        val daily = AiDailyKnowledgeDto(
+            id = "daily-1",
+            relatedMediaTitle = "电影 A",
+            containsSpoiler = true
+        ).toDomain()
+
+        assertThat(daily.relatedMediaTitle).isEqualTo("电影 A")
+        assertThat(daily.containsSpoiler).isTrue()
+        assertThat(AiDailyKnowledgeDto(id = "legacy").toDomain().relatedMediaTitle).isNull()
+    }
+
+    @Test
+    fun watchedTitle_keepsOptionalTmdbEvidenceAndLegacyPayloadDefaults() {
+        val legacy = Json.decodeFromString(
+            AiWatchedTitleDto.serializer(),
+            """{"mediaId":"1","mediaType":"movie","title":"旧电影"}"""
+        )
+        assertThat(legacy.overview).isEmpty()
+        assertThat(legacy.originalTitle).isEmpty()
+        assertThat(legacy.runtime).isNull()
+        assertThat(legacy.country).isEmpty()
+        val legacyBody = Json { encodeDefaults = true }
+            .encodeToJsonElement(AiWatchedTitleDto.serializer(), legacy)
+            .jsonObject
+        assertThat(legacyBody.keys).containsNoneOf("overview", "originalTitle", "runtime", "country")
+
+        val enriched = AiWatchedTitleDto(
+            mediaId = "tmdb:1",
+            mediaType = "movie",
+            title = "旧电影",
+            overview = "一段可靠的剧情简介",
+            originalTitle = "Original Movie",
+            runtime = 128,
+            country = "美国"
+        )
+        val body = Json { encodeDefaults = true }
+            .encodeToJsonElement(AiWatchedTitleDto.serializer(), enriched)
+            .jsonObject
+        assertThat(body["overview"]?.jsonPrimitive?.content).isEqualTo("一段可靠的剧情简介")
+        assertThat(body["originalTitle"]?.jsonPrimitive?.content).isEqualTo("Original Movie")
+        assertThat(body["runtime"]?.jsonPrimitive?.content).isEqualTo("128")
+        assertThat(body["country"]?.jsonPrimitive?.content).isEqualTo("美国")
+    }
+
+    @Test
+    fun quizQuestionMetadata_mapsCrossDisciplinaryLearningFields() {
+        val quiz = AiQuizDto(
+            quizId = "quiz-learning",
+            questions = listOf(
+                AiQuizQuestionDto(
+                    id = "q1",
+                    type = "single",
+                    prompt = "题目",
+                    subject = "社会学",
+                    concept = "社会规范",
+                    learningTakeaway = "群体规范会影响个人选择",
+                    evidenceUsed = "《电影 A》的群体冲突；TMDB 剧情简介"
+                )
+            )
+        ).toDomainOrNull()!!
+
+        val question = quiz.questions.single()
+        assertThat(question.subject).isEqualTo("社会学")
+        assertThat(question.concept).isEqualTo("社会规范")
+        assertThat(question.learningTakeaway).isEqualTo("群体规范会影响个人选择")
+        assertThat(question.evidenceUsed).isEqualTo("《电影 A》的群体冲突；TMDB 剧情简介")
+    }
+
+    @Test
+    fun quizQuestionMetadata_mapsStructuredFieldsAndRetainsLegacyFields() {
+        val quiz = AiQuizDto(
+            quizId = "quiz-structured",
+            questions = listOf(
+                AiQuizQuestionDto(
+                    id = "q1",
+                    type = "single",
+                    prompt = "题目",
+                    mediaTitle = "旧字段片名",
+                    sourceTitle = "明确依据片名",
+                    difficulty = "hard",
+                    knowledgePoint = "人物动机",
+                    answerRationale = "正确选项对应关键转折",
+                    distractorRationale = "其他选项混淆了时间线"
+                )
+            )
+        ).toDomainOrNull()!!
+
+        val question = quiz.questions.single()
+        assertThat(question.mediaTitle).isEqualTo("旧字段片名")
+        assertThat(question.sourceTitle).isEqualTo("明确依据片名")
+        assertThat(question.difficulty).isEqualTo("hard")
+        assertThat(question.knowledgePoint).isEqualTo("人物动机")
+        assertThat(question.answerRationale).isEqualTo("正确选项对应关键转折")
+        assertThat(question.distractorRationale).isEqualTo("其他选项混淆了时间线")
+    }
+
+    @Test
+    fun quizQuestionMetadata_usesLegacyMediaAndExplanationAsFallbacks() {
+        val quiz = AiQuizDto(
+            quizId = "quiz-compat",
+            questions = listOf(
+                AiQuizQuestionDto(
+                    id = "q1",
+                    type = "single",
+                    prompt = "题目",
+                    mediaTitle = "旧字段片名",
+                    explanation = "旧字段解析"
+                )
+            )
+        ).toDomainOrNull()!!
+
+        val question = quiz.questions.single()
+        assertThat(question.difficulty).isEqualTo("medium")
+        assertThat(question.sourceTitle).isEqualTo("旧字段片名")
+        assertThat(question.answerRationale).isEqualTo("旧字段解析")
+    }
+
     private fun question(id: String, type: AiQuizQuestionType) = AiQuizQuestion(
         id = id,
         type = type,

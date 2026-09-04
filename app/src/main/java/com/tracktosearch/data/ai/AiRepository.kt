@@ -413,20 +413,22 @@ class AiRepository @Inject constructor(
 
     suspend fun getDailyKnowledge(
         friendId: String,
-        forceRefresh: Boolean = false
+        forceRefresh: Boolean = false,
+        watched: List<AiWatchedTitleDto> = emptyList()
     ): Result<AiDailyKnowledge> {
         val sessionId = sessionIdFor(friendId)
         return cachedRequest(
             friendId = friendId,
             feature = AiCacheFeature.DAILY_KNOWLEDGE,
             forceRefresh = forceRefresh,
-            suffix = currentCacheDate(),
+            suffix = currentCacheDate() + if (watched.isEmpty()) "" else ":" + watchedDigest(watched),
             serializer = AiDailyKnowledge.serializer()
         ) {
             val payload = api.getDailyKnowledge(
                 AiDailyRequest(
                     sessionId = sessionId,
-                    forceRefresh = forceRefresh
+                    forceRefresh = forceRefresh,
+                    watched = watched.take(MAX_WATCHED_ITEMS)
                 )
             ).requirePayload()
             payload.data.toDomain(payload.quota)
@@ -458,6 +460,16 @@ class AiRepository @Inject constructor(
 
     suspend fun clearActivatedCharacterId(friendId: String) {
         runCatching { storage.remove(friendId, AiCacheFeature.ACTIVATION) }
+    }
+
+    /** 昵称变化后清除当前精灵的旧点评，避免昵称原文与解析结果错配。 */
+    suspend fun clearGreetingCache(friendId: String, characterId: String) {
+        val normalizedFriendId = friendId.trim()
+        val normalizedCharacterId = characterId.trim()
+        if (normalizedFriendId.isEmpty() || normalizedCharacterId.isEmpty()) return
+        runCatching {
+            storage.remove(normalizedFriendId, AiCacheFeature.GREETING, normalizedCharacterId)
+        }
     }
 
     /** 保存闯关历史：合并更新最高分，保留最近一次结果。 */

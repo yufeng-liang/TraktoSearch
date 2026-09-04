@@ -89,6 +89,18 @@ data class AiGreetingRequest(
 )
 
 @Serializable
+data class AiNameSignalDto(
+    val text: String = "",
+    val interpretation: String = ""
+)
+
+@Serializable
+data class AiNameSignal(
+    val text: String = "",
+    val interpretation: String = ""
+)
+
+@Serializable
 data class AiGreetingDto(
     val nickname: String = "",
     val greeting: String = "",
@@ -96,7 +108,9 @@ data class AiGreetingDto(
     val nicknameMeaning: String = "",
     val comment: String = "",
     val audio: AiAudioDto? = null,
-    val quota: AiQuotaDto? = null
+    val quota: AiQuotaDto? = null,
+    val nameSignals: List<AiNameSignalDto> = emptyList(),
+    val nicknameSignature: String = ""
 )
 
 @Serializable
@@ -107,10 +121,13 @@ data class AiGreeting(
     val nicknameMeaning: String,
     val comment: String,
     val audio: AiAudio?,
-    val quota: AiQuota? = null
+    val quota: AiQuota? = null,
+    val nameSignals: List<AiNameSignal> = emptyList(),
+    val nicknameSignature: String = ""
 )
 
 @Serializable
+@OptIn(ExperimentalSerializationApi::class)
 data class AiWatchedTitleDto(
     val mediaId: String,
     val mediaType: String,
@@ -120,7 +137,17 @@ data class AiWatchedTitleDto(
     val publicRating: Double? = null,
     val userRating: Double? = null,
     val watchedAt: String? = null,
-    val mediaIds: AiMediaIdsDto = AiMediaIdsDto()
+    val mediaIds: AiMediaIdsDto = AiMediaIdsDto(),
+    // 仅在答题请求中按需补齐；默认值保证旧客户端/旧 Worker 仍可互通。
+    // NEVER 让 taste/daily 仍保持原有请求体，不发送空的新增字段。
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val overview: String = "",
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val originalTitle: String = "",
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val runtime: Int? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val country: String = ""
 )
 
 @Serializable
@@ -155,6 +182,22 @@ data class AiRecommendationDto(
 )
 
 @Serializable
+data class AiTasteEvidenceDto(
+    val title: String = "",
+    val signal: String = "",
+    val inference: String = "",
+    val confidence: String = ""
+)
+
+@Serializable
+data class AiTasteEvidence(
+    val title: String = "",
+    val signal: String = "",
+    val inference: String = "",
+    val confidence: String = ""
+)
+
+@Serializable
 data class AiTasteDto(
     val nickname: String = "",
     val roast: String = "",
@@ -162,7 +205,10 @@ data class AiTasteDto(
     val tasteProfile: String = "",
     val highlights: List<String> = emptyList(),
     val recommendations: List<AiRecommendationDto> = emptyList(),
-    val quota: AiQuotaDto? = null
+    val quota: AiQuotaDto? = null,
+    val profileKeywords: List<String> = emptyList(),
+    val profileSentence: String = "",
+    val evidence: List<AiTasteEvidenceDto> = emptyList()
 )
 
 @Serializable
@@ -174,7 +220,11 @@ data class AiWatchedTitle(
     val genres: List<String>,
     val publicRating: Double?,
     val userRating: Double?,
-    val watchedAt: String?
+    val watchedAt: String?,
+    val overview: String = "",
+    val originalTitle: String = "",
+    val runtime: Int? = null,
+    val country: String = ""
 )
 
 @Serializable
@@ -198,7 +248,10 @@ data class AiTasteAnalysis(
     val tasteProfile: String,
     val highlights: List<String>,
     val recommendations: List<AiRecommendation>,
-    val quota: AiQuota? = null
+    val quota: AiQuota? = null,
+    val profileKeywords: List<String> = emptyList(),
+    val profileSentence: String = "",
+    val evidence: List<AiTasteEvidence> = emptyList()
 )
 
 @Serializable
@@ -223,7 +276,20 @@ data class AiQuizQuestion(
     val options: List<AiQuizOption> = emptyList(),
     val mediaTitle: String? = null,
     val quote: String? = null,
-    val maxScore: Int = 0
+    val maxScore: Int = 0,
+    val difficulty: String = "medium",
+    val knowledgePoint: String = "",
+    val sourceTitle: String? = null,
+    val answerRationale: String = "",
+    val distractorRationale: String = "",
+    val explanation: String? = null,
+    val correctOptionIds: List<String> = emptyList(),
+    // 跨学科学习字段：服务端缺失时保持空值，客户端仍可展示旧题。
+    val subject: String = "",
+    val concept: String = "",
+    val learningTakeaway: String = "",
+    // Worker 返回一段可读的证据说明，而不是数组；保持 Android/Worker JSON 契约一致。
+    val evidenceUsed: String = ""
 )
 
 @Serializable
@@ -255,7 +321,17 @@ data class AiQuizQuestionDto(
     val quote: String? = null,
     val maxScore: Int = 0,
     val explanation: String? = null,
-    val correctOptionIds: List<String> = emptyList()
+    val correctOptionIds: List<String> = emptyList(),
+    val difficulty: String = "medium",
+    val knowledgePoint: String = "",
+    val sourceTitle: String? = null,
+    val answerRationale: String = "",
+    val distractorRationale: String = "",
+    // Worker 新题字段，均有默认值以兼容历史缓存和旧响应。
+    val subject: String = "",
+    val concept: String = "",
+    val learningTakeaway: String = "",
+    val evidenceUsed: String = ""
 )
 
 @Serializable
@@ -304,7 +380,13 @@ data class AiQuizQuestionResultDto(
     val explanation: String = "",
     val correctOptionIds: List<String> = emptyList(),
     /** Worker 对简答题返回文本，对多选题返回字符串数组。 */
-    val correctAnswer: JsonElement? = null
+    val correctAnswer: JsonElement? = null,
+    val answerRationale: String = "",
+    val distractorRationale: String = "",
+    val subject: String = "",
+    val concept: String = "",
+    val learningTakeaway: String = "",
+    val evidenceUsed: String = ""
 )
 
 @Serializable
@@ -314,7 +396,13 @@ data class AiQuizQuestionResult(
     val correct: Boolean,
     val explanation: String,
     val correctOptionIds: List<String> = emptyList(),
-    val correctAnswer: String? = null
+    val correctAnswer: String? = null,
+    val answerRationale: String = "",
+    val distractorRationale: String = "",
+    val subject: String = "",
+    val concept: String = "",
+    val learningTakeaway: String = "",
+    val evidenceUsed: String = ""
 )
 
 @Serializable
@@ -387,13 +475,16 @@ data class AiDailyKnowledgeDto(
     val sourceUrl: String = "",
     val publishedAt: Long? = null,
     val characterLine: String? = null,
-    val quota: AiQuotaDto? = null
+    val quota: AiQuotaDto? = null,
+    val relatedMediaTitle: String? = null,
+    val containsSpoiler: Boolean = false
 )
 
 @Serializable
 data class AiDailyRequest(
     val sessionId: String = "daily",
-    val forceRefresh: Boolean = false
+    val forceRefresh: Boolean = false,
+    val watched: List<AiWatchedTitleDto> = emptyList()
 )
 
 @Serializable
@@ -406,7 +497,9 @@ data class AiDailyKnowledge(
     val sourceUrl: String,
     val publishedAt: Long?,
     val characterLine: String?,
-    val quota: AiQuota? = null
+    val quota: AiQuota? = null,
+    val relatedMediaTitle: String? = null,
+    val containsSpoiler: Boolean = false
 )
 
 @Serializable
@@ -471,7 +564,9 @@ fun AiGreetingDto.toDomain(outerQuota: AiQuotaDto? = null): AiGreeting {
         nicknameMeaning = nicknameMeaning,
         comment = comment,
         audio = audio?.toDomain(effectiveQuota),
-        quota = effectiveQuota?.toDomain()
+        quota = effectiveQuota?.toDomain(),
+        nameSignals = nameSignals.map { AiNameSignal(it.text, it.interpretation) },
+        nicknameSignature = nicknameSignature
     )
 }
 
@@ -498,7 +593,17 @@ fun AiTasteDto.toDomain(outerQuota: AiQuotaDto? = null): AiTasteAnalysis {
                 reason = recommendation.reason
             )
         },
-        quota = effectiveQuota?.toDomain()
+        quota = effectiveQuota?.toDomain(),
+        profileKeywords = profileKeywords.ifEmpty { taste },
+        profileSentence = profileSentence.ifBlank { tasteProfile.ifBlank { taste.joinToString("、") } },
+        evidence = evidence.map {
+            AiTasteEvidence(
+                title = it.title,
+                signal = it.signal,
+                inference = it.inference,
+                confidence = it.confidence
+            )
+        }
     )
 }
 
@@ -516,9 +621,21 @@ fun AiQuizDto.toDomainOrNull(outerQuota: AiQuotaDto? = null): AiQuiz? {
             type = type,
             prompt = question.prompt,
             options = question.options,
-            mediaTitle = question.mediaTitle,
+            mediaTitle = question.mediaTitle?.takeIf { it.isNotBlank() }
+                ?: question.sourceTitle?.takeIf { it.isNotBlank() },
             quote = question.quote,
-            maxScore = question.maxScore
+            maxScore = question.maxScore,
+            difficulty = question.difficulty.ifBlank { "medium" },
+            knowledgePoint = question.knowledgePoint,
+            sourceTitle = question.sourceTitle?.takeIf { it.isNotBlank() } ?: question.mediaTitle,
+            answerRationale = question.answerRationale.ifBlank { question.explanation.orEmpty() },
+            distractorRationale = question.distractorRationale,
+            explanation = question.explanation,
+            correctOptionIds = question.correctOptionIds,
+            subject = question.subject,
+            concept = question.concept,
+            learningTakeaway = question.learningTakeaway,
+            evidenceUsed = question.evidenceUsed
         )
     }
     return AiQuiz(
@@ -547,7 +664,13 @@ fun AiQuizResultDto.toDomain(outerQuota: AiQuotaDto? = null): AiQuizResult = AiQ
             correct = it.correct,
             explanation = it.explanation,
             correctOptionIds = it.correctOptionIds.ifEmpty { it.correctAnswer.toOptionIds() },
-            correctAnswer = it.correctAnswer.toAnswerText()
+            correctAnswer = it.correctAnswer.toAnswerText(),
+            answerRationale = it.answerRationale,
+            distractorRationale = it.distractorRationale,
+            subject = it.subject,
+            concept = it.concept,
+            learningTakeaway = it.learningTakeaway,
+            evidenceUsed = it.evidenceUsed
         )
     },
     quota = (outerQuota ?: quota)?.toDomain()
@@ -562,7 +685,9 @@ fun AiDailyKnowledgeDto.toDomain(outerQuota: AiQuotaDto? = null): AiDailyKnowled
     sourceUrl = sourceUrl,
     publishedAt = publishedAt,
     characterLine = characterLine,
-    quota = (outerQuota ?: quota)?.toDomain()
+    quota = (outerQuota ?: quota)?.toDomain(),
+    relatedMediaTitle = relatedMediaTitle,
+    containsSpoiler = containsSpoiler
 )
 
 fun AiActivationDto.toDomain(outerQuota: AiQuotaDto? = null): AiActivation {

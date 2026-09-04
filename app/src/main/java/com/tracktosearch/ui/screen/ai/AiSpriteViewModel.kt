@@ -79,6 +79,7 @@ enum class AiActivationState {
 }
 
 private const val WATCHED_TITLES_TTL_MS = 10 * 60 * 1000L
+private const val QUIZ_PREVIEW_SIZE = 7
 
 /**
  * 松手后继续采集的尾音宽限窗口。
@@ -238,6 +239,9 @@ class AiSpriteViewModel @Inject constructor(
     private var quizCandidates = emptyList<AiWatchedTitleDto>()
     /** 当前问答预览的 TMDB 本地化标题补全任务；替换预览时取消旧任务，避免旧结果覆盖新列表。 */
     private var quizLocalizationJob: Job? = null
+    /** 开始答题构造请求时复用预览阶段的富化结果。 */
+    private var quizPreviewEnrichmentLanguage: String? = null
+    private var quizPreviewEnrichments = emptyMap<String, QuizPreviewEnrichment>()
     /** 授权变化时取消本地私有状态恢复，避免迟到结果复活旧账号数据。 */
     private var activationRestoreJob: Job? = null
     private var quizHistoryJob: Job? = null
@@ -487,8 +491,29 @@ class AiSpriteViewModel @Inject constructor(
                 }
             }
             launch {
+                var previousNickname: String? = null
                 authManager.nickname.collect { nickname ->
-                    _uiState.update { it.copy(nickname = nickname) }
+                    val changed = previousNickname != null && previousNickname != nickname
+                    previousNickname = nickname
+                    val current = _uiState.value
+                    val characterId = current.activatedCharacterId?.takeIf { it.isNotBlank() }
+                    val shouldReloadGreeting = changed &&
+                        current.activeFeature == AiFeature.GREETING &&
+                        characterId != null
+                    if (changed && characterId != null) {
+                        aiRepository.clearGreetingCache(
+                            friendId = authManager.friendId.value.orEmpty(),
+                            characterId = characterId
+                        )
+                    }
+                    _uiState.update {
+                        it.copy(
+                            nickname = nickname,
+                            // 旧昵称点评不能继续与新昵称并排展示；在线时立即重新生成。
+                            greeting = if (changed) null else it.greeting
+                        )
+                    }
+                    if (shouldReloadGreeting) loadGreeting(characterId)
                 }
             }
         }
@@ -1564,46 +1589,123 @@ class AiSpriteViewModel @Inject constructor(
     }
 
     /**
-     * 为当前最多 7 部预览影视补齐 TMDB 当前语言标题。
-     * 先 peek 内存缓存，只有未命中才请求详情；单项失败不影响其他标题，也不改变发给 AI 的原始标题。
+     * 为最多 7 部预览影视补齐安全的 TMDB 依据字段。
+     * 始终先 peek；详情富化只限定在本轮预览，并由 startQuiz 复用。
      */
+    private suspend fun enrichQuizPreviewMovies(
+        movies: List<AiWatchedTitleDto>
+    ): List<AiWatchedTitleDto> {
+        val preview = movies.take(QUIZ_PREVIEW_SIZE)
+        val languageAtStart = languageStorage.language.value
+        if (quizPreviewEnrichmentLanguage != languageAtStart) {
+            quizPreviewEnrichmentLanguage = languageAtStart
+            quizPreviewEnrichments = emptyMap()
+        }
+
+        val missing = preview.filter { movie ->
+            !quizPreviewEnrichments.containsKey(quizPreviewTitleKey(movie))
+        }
+        if (missing.isNotEmpty()) {
+            val networkAvailableAtStart = isNetworkAvailable()
+            val resolved = withContext(ioDispatcher) {
+                supervisorScope {
+                    missing.map { movie ->
+                        async {
+                            quizPreviewTitleKey(movie) to enrichQuizMovie(movie, networkAvailableAtStart)
+                        }
+                    }.awaitAll().toMap()
+                }
+            }
+            if (languageStorage.language.value == languageAtStart) {
+                quizPreviewEnrichments = quizPreviewEnrichments + resolved
+            } else {
+                // 不保留两种语言混杂的富化结果。
+                quizPreviewEnrichmentLanguage = null
+                quizPreviewEnrichments = emptyMap()
+            }
+        }
+        return preview.map { movie ->
+            quizPreviewEnrichments[quizPreviewTitleKey(movie)]?.watched ?: movie
+        }
+    }
+
+    private suspend fun enrichQuizMovie(
+        movie: AiWatchedTitleDto,
+        networkAvailableAtStart: Boolean
+    ): QuizPreviewEnrichment {
+        val tmdbId = movie.mediaIds.tmdbId?.takeIf { it > 0 }
+            ?: return QuizPreviewEnrichment(movie, null)
+        return try {
+            val isShow = movie.mediaType.equals("show", ignoreCase = true) ||
+                movie.mediaType.equals("tv", ignoreCase = true)
+            if (isShow) {
+                val enrichment = tmdbRepository.peekTvEnrichment(tmdbId, movie.title, movie.year)
+                    ?: if (networkAvailableAtStart) tmdbRepository.enrichTv(tmdbId, movie.title, movie.year) else null
+                    ?: return QuizPreviewEnrichment(movie, null)
+                val localizedTitle = enrichment.chineseTitle.trim()
+                    .takeIf { it.isNotBlank() && !it.equals(movie.title.trim(), ignoreCase = true) }
+                val enrichedMovie = movie.copy(
+                    // 保持 Trakt 标题不变；新增字段只作为 Worker 的补充事实依据。
+                    overview = enrichment.overview.trim().ifBlank { movie.overview },
+                    originalTitle = enrichment.originalTitle.trim().ifBlank { movie.originalTitle },
+                    runtime = enrichment.episodeRunTime ?: movie.runtime,
+                    country = enrichment.country.trim().ifBlank { movie.country },
+                    genres = movie.genres.ifEmpty {
+                        enrichment.genres.split(" · ").map(String::trim).filter(String::isNotBlank)
+                    },
+                    mediaIds = movie.mediaIds.copy(
+                        imdbId = movie.mediaIds.imdbId ?: enrichment.imdbId
+                    )
+                )
+                QuizPreviewEnrichment(enrichedMovie, localizedTitle)
+            } else {
+                val enrichment = tmdbRepository.peekMovieEnrichment(tmdbId, movie.title, movie.year)
+                    ?: if (networkAvailableAtStart) tmdbRepository.enrichMovie(tmdbId, movie.title, movie.year) else null
+                    ?: return QuizPreviewEnrichment(movie, null)
+                val localizedTitle = enrichment.chineseTitle.trim()
+                    .takeIf { it.isNotBlank() && !it.equals(movie.title.trim(), ignoreCase = true) }
+                val enrichedMovie = movie.copy(
+                    // 保持 Trakt 标题不变；新增字段只作为 Worker 的补充事实依据。
+                    overview = enrichment.overview.trim().ifBlank { movie.overview },
+                    originalTitle = enrichment.originalTitle.trim().ifBlank { movie.originalTitle },
+                    runtime = enrichment.runtime ?: movie.runtime,
+                    country = enrichment.country.trim().ifBlank { movie.country },
+                    genres = movie.genres.ifEmpty {
+                        enrichment.genres.split(" · ").map(String::trim).filter(String::isNotBlank)
+                    },
+                    mediaIds = movie.mediaIds.copy(
+                        imdbId = movie.mediaIds.imdbId ?: enrichment.imdbId
+                    )
+                )
+                QuizPreviewEnrichment(enrichedMovie, localizedTitle)
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            // 详情缺失不能阻断答题，也不能凭空制造依据。
+            QuizPreviewEnrichment(movie, null)
+        }
+    }
+
     private suspend fun resolveQuizPreviewLocalizedTitles(
         movies: List<AiWatchedTitleDto>
     ): Map<String, String> {
-        if (!isNetworkAvailable()) return emptyMap()
-        val languageAtStart = languageStorage.language.value
-        // 使用可注入调度器，测试可继续受 runTest 虚拟时钟控制，避免异步任务污染后续用例。
-        val resolved = withContext(ioDispatcher) {
-            supervisorScope {
-                movies.map { movie ->
-                    async {
-                        val tmdbId = movie.mediaIds.tmdbId?.takeIf { it > 0 }
-                            ?: return@async null
-                        try {
-                            val isShow = movie.mediaType.equals("show", ignoreCase = true) ||
-                                movie.mediaType.equals("tv", ignoreCase = true)
-                            val localizedTitle = if (isShow) {
-                                (tmdbRepository.peekTvEnrichment(tmdbId, movie.title, movie.year)
-                                    ?: tmdbRepository.enrichTv(tmdbId, movie.title, movie.year)).chineseTitle
-                            } else {
-                                (tmdbRepository.peekMovieEnrichment(tmdbId, movie.title, movie.year)
-                                    ?: tmdbRepository.enrichMovie(tmdbId, movie.title, movie.year)).chineseTitle
-                            }
-                            val localized = localizedTitle.trim()
-                                .takeIf { it.isNotBlank() && !it.equals(movie.title.trim(), ignoreCase = true) }
-                            localized?.let { quizPreviewTitleKey(movie) to it }
-                        } catch (error: CancellationException) {
-                            throw error
-                        } catch (_: Exception) {
-                            null
-                        }
-                    }
-                }.awaitAll().filterNotNull().toMap()
-            }
+        enrichQuizPreviewMovies(movies)
+        return if (languageStorage.language.value == quizPreviewEnrichmentLanguage) {
+            movies.take(QUIZ_PREVIEW_SIZE).mapNotNull { movie ->
+                quizPreviewEnrichments[quizPreviewTitleKey(movie)]?.localizedTitle?.let {
+                    quizPreviewTitleKey(movie) to it
+                }
+            }.toMap()
+        } else {
+            emptyMap()
         }
-        // 语言在并发补全期间切换时，丢弃混合语言结果；下一次进入页面会按新语言重新补全。
-        return if (languageStorage.language.value == languageAtStart) resolved else emptyMap()
     }
+
+    private data class QuizPreviewEnrichment(
+        val watched: AiWatchedTitleDto,
+        val localizedTitle: String?
+    )
 
     private fun refreshQuizPreviewLocalizedTitles(movies: List<AiWatchedTitleDto>) {
         quizLocalizationJob?.cancel()
@@ -1627,10 +1729,12 @@ class AiSpriteViewModel @Inject constructor(
         runFeature(AiFeature.QUIZ) { requestId ->
             if (watched.size < 7) throw IllegalStateException("NOT_ENOUGH_MOVIES")
             if (!canContinueAiRequest(requestId)) return@runFeature
+            val enrichedWatched = enrichQuizPreviewMovies(watched)
+            if (!canContinueAiRequest(requestId)) return@runFeature
             aiRepository.getQuiz(
                 authManager.friendId.value.orEmpty(),
                 com.tracktosearch.data.ai.AiQuizRequest(
-                    watched = watched,
+                    watched = enrichedWatched,
                     excludedQuizIds = recentQuizIds,
                     questionCount = 13,
                     sessionId = spriteSessionId
@@ -1655,7 +1759,11 @@ class AiSpriteViewModel @Inject constructor(
 
     private fun loadDaily(forceRefresh: Boolean = false) {
         runFeature(AiFeature.DAILY) { requestId ->
-            aiRepository.getDailyKnowledge(authManager.friendId.value.orEmpty(), forceRefresh)
+            aiRepository.getDailyKnowledge(
+                friendId = authManager.friendId.value.orEmpty(),
+                watched = watchedTitles(),
+                forceRefresh = forceRefresh
+            )
                 .onSuccess { daily ->
                     if (!canContinueAiRequest(requestId)) return@onSuccess
                     updateIfCurrentRequest(requestId) {

@@ -2,7 +2,6 @@ package com.tracktosearch.ui.screen.ai
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,9 +18,9 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,12 +28,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.VolumeUp
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -75,7 +75,9 @@ import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.data.ai.AiAudio
 import com.tracktosearch.data.ai.AiDailyKnowledge
 import com.tracktosearch.data.ai.AiGreeting
+import com.tracktosearch.data.ai.AiNameSignal
 import com.tracktosearch.data.ai.AiRecommendation
+import com.tracktosearch.data.ai.AiTasteEvidence
 import com.tracktosearch.data.ai.AiTasteAnalysis
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -114,15 +116,21 @@ fun AiFeatureScreen(
     // 只把真正有可渲染字段的对象视为旧内容；空 DTO 仍应显示加载占位，而不是空矩形。
     val hasFeatureContent = when (feature) {
         AiFeature.GREETING -> state.greeting?.let {
-            it.greeting.isNotBlank() ||
+            it.nickname.isNotBlank() ||
+                it.greeting.isNotBlank() ||
                 it.spokenText.isNotBlank() ||
                 it.nicknameMeaning.isNotBlank() ||
                 it.comment.isNotBlank() ||
+                it.nameSignals.isNotEmpty() ||
+                it.nicknameSignature.isNotBlank() ||
                 it.audio != null
         } == true
         AiFeature.TASTE -> state.taste?.let {
             it.roast.isNotBlank() ||
                 it.tasteProfile.isNotBlank() ||
+                it.profileSentence.isNotBlank() ||
+                it.profileKeywords.isNotEmpty() ||
+                it.evidence.isNotEmpty() ||
                 it.highlights.isNotEmpty() ||
                 it.recommendations.isNotEmpty()
         } == true
@@ -136,6 +144,7 @@ fun AiFeatureScreen(
                 it.fact.isNotBlank() ||
                 it.explanation.isNotBlank() ||
                 it.characterLine.orEmpty().isNotBlank() ||
+                it.relatedMediaTitle.orEmpty().isNotBlank() ||
                 it.sourceName.isNotBlank()
         } == true
     }
@@ -242,7 +251,7 @@ fun AiFeatureScreen(
                         .fillMaxSize()
                         .padding(top = if (showLoadingBanner) 52.dp else 0.dp)
                 ) {
-                    if (offlineUi) {
+                    if (offlineUi && !hasFeatureContent) {
                         FeatureUnavailable()
                     } else if (showLoadingPlaceholder) {
                         FeatureLoadingPlaceholder(onCancel = viewModel::cancelActiveFeatureRequest)
@@ -250,21 +259,26 @@ fun AiFeatureScreen(
                         // 没有请求、错误或离线状态时保持空白，避免把取消/尚未开始误报为离线。
                         Spacer(Modifier.fillMaxSize())
                     } else {
-                        when (feature) {
-                            AiFeature.GREETING -> GreetingFeature(greeting = state.greeting, onPlayAudio = onPlayAudio)
-                            AiFeature.TASTE -> TasteFeature(
-                                taste = state.taste,
-                                onMovieClick = onMovieClick,
-                                onShowClick = onShowClick,
-                                onRecommendationClick = onRecommendationClick,
-                                onHeaderAnchorBoundsChanged = { featureAnchorBounds = it }
-                            )
-                            AiFeature.QUIZ -> AiQuizScreen(
-                                state = state,
-                                viewModel = viewModel,
-                                onResultAnchorBoundsChanged = { featureAnchorBounds = it }
-                            )
-                            AiFeature.DAILY -> DailyFeature(daily = state.dailyKnowledge)
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            if (offlineUi) OfflineCachedBanner()
+                            Box(modifier = Modifier.weight(1f)) {
+                                when (feature) {
+                                    AiFeature.GREETING -> GreetingFeature(greeting = state.greeting, onPlayAudio = onPlayAudio)
+                                    AiFeature.TASTE -> TasteFeature(
+                                        taste = state.taste,
+                                        onMovieClick = onMovieClick,
+                                        onShowClick = onShowClick,
+                                        onRecommendationClick = onRecommendationClick,
+                                        onHeaderAnchorBoundsChanged = { featureAnchorBounds = it }
+                                    )
+                                    AiFeature.QUIZ -> AiQuizScreen(
+                                        state = state,
+                                        viewModel = viewModel,
+                                        onResultAnchorBoundsChanged = { featureAnchorBounds = it }
+                                    )
+                                    AiFeature.DAILY -> DailyFeature(daily = state.dailyKnowledge)
+                                }
+                            }
                         }
                     }
                 }
@@ -373,14 +387,18 @@ private fun GreetingFeature(greeting: AiGreeting?, onPlayAudio: (AiAudio) -> Uni
         FeatureUnavailable()
         return
     }
-    // greeting 为空时优先用服务端的 spokenText，两个字段都空则不画空卡片。
+    // 增强字段存在时先展示昵称原文和可追溯线索；旧响应仍沿用寓意/评断两段文案。
     val greetingText = greeting.greeting.ifBlank { greeting.spokenText }.trim()
+    val nickname = greeting.nickname.trim()
+    val hasStructuredReading = greeting.nameSignals.any {
+        it.text.isNotBlank() || it.interpretation.isNotBlank()
+    } || greeting.nicknameSignature.isNotBlank()
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        if (greetingText.isNotBlank()) {
+        if (greetingText.isNotBlank() || nickname.isNotBlank()) {
             item {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -400,15 +418,38 @@ private fun GreetingFeature(greeting: AiGreeting?, onPlayAudio: (AiAudio) -> Uni
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                        Spacer(Modifier.height(14.dp))
-                        TypewriterText(
-                            text = greetingText,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.ExtraBold
-                        )
+                        if (nickname.isNotBlank()) {
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                text = nickname,
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                        if (greetingText.isNotBlank()) {
+                            Spacer(Modifier.height(10.dp))
+                            TypewriterText(
+                                text = greetingText,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
             }
+        }
+        if (hasStructuredReading) {
+            item {
+                Text(
+                    text = stringResource(R.string.ai_feature_language_inference_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        if (greeting.nameSignals.isNotEmpty()) {
+            item { NameSignalsSection(greeting.nameSignals) }
         }
         item {
             MeaningSection(
@@ -427,6 +468,12 @@ private fun GreetingFeature(greeting: AiGreeting?, onPlayAudio: (AiAudio) -> Uni
             )
         }
         item {
+            MeaningSection(
+                title = stringResource(R.string.ai_feature_nickname_signature),
+                text = greeting.nicknameSignature
+            )
+        }
+        item {
             greeting.audio?.let { audio ->
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -441,7 +488,6 @@ private fun GreetingFeature(greeting: AiGreeting?, onPlayAudio: (AiAudio) -> Uni
                         Icon(Icons.Rounded.VolumeUp, contentDescription = null)
                         Text(
                             text = stringResource(R.string.ai_audio_play),
-                            // 保留播放按钮的固定槽位，长本地化文案只截断，不把试听操作挤没。
                             modifier = Modifier.weight(1f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -449,6 +495,43 @@ private fun GreetingFeature(greeting: AiGreeting?, onPlayAudio: (AiAudio) -> Uni
                         IconButton(onClick = { onPlayAudio(audio) }) {
                             Icon(Icons.Rounded.VolumeUp, contentDescription = stringResource(R.string.ai_audio_play))
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NameSignalsSection(signals: List<AiNameSignal>) {
+    val visibleSignals = signals.filter { it.text.isNotBlank() || it.interpretation.isNotBlank() }
+    if (visibleSignals.isEmpty()) return
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                stringResource(R.string.ai_feature_name_signals),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            visibleSignals.forEach { signal ->
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (signal.text.isNotBlank()) {
+                        Text(
+                            signal.text,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    if (signal.interpretation.isNotBlank()) {
+                        Text(
+                            signal.interpretation,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
@@ -500,6 +583,12 @@ private fun TasteFeature(
         FeatureUnavailable()
         return
     }
+    var roastExpanded by remember(taste.roast) { mutableStateOf(false) }
+    val profileSentence = taste.profileSentence.ifBlank { taste.tasteProfile }
+    val keywords = taste.profileKeywords.ifEmpty { taste.highlights.take(5) }
+    val visibleEvidence = taste.evidence.filter {
+        it.title.isNotBlank() || it.signal.isNotBlank() || it.inference.isNotBlank() || it.confidence.isNotBlank()
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
@@ -512,24 +601,44 @@ private fun TasteFeature(
                 onBoundsChanged = onHeaderAnchorBoundsChanged
             )
         }
-        item {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.tertiaryContainer
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(stringResource(R.string.ai_taste_roast), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onTertiaryContainer)
-                    Spacer(Modifier.height(8.dp))
-                    TypewriterText(text = taste.roast, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+        if (profileSentence.isNotBlank()) {
+            item {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    tonalElevation = 2.dp
+                ) {
+                    Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            stringResource(R.string.ai_taste_profile),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            profileSentence,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
                 }
             }
         }
-        item {
-            MeaningSection(
-                title = stringResource(R.string.ai_taste_profile),
-                text = taste.tasteProfile
-            )
+        if (keywords.isNotEmpty()) {
+            item { TasteKeywordsSection(keywords) }
+        }
+        if (visibleEvidence.isNotEmpty()) {
+            item {
+                Text(
+                    stringResource(R.string.ai_taste_evidence),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            itemsIndexed(visibleEvidence, key = { index, evidence -> "${evidence.title}_$index" }) { _, evidence ->
+                TasteEvidenceCard(evidence)
+            }
         }
         if (taste.highlights.isNotEmpty()) {
             item {
@@ -541,10 +650,48 @@ private fun TasteFeature(
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(stringResource(R.string.ai_taste_highlights), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                         taste.highlights.forEach { highlight ->
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
-                                Icon(Icons.Rounded.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                                Text(highlight, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                            if (highlight.isNotBlank()) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+                                    Icon(Icons.Rounded.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                                    Text(highlight, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                                }
                             }
+                        }
+                    }
+                }
+            }
+        }
+        if (taste.roast.isNotBlank()) {
+            item {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .clickable { roastExpanded = !roastExpanded },
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                stringResource(R.string.ai_taste_roast),
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                            Icon(
+                                imageVector = if (roastExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                        if (roastExpanded) {
+                            Text(
+                                taste.roast,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
                         }
                     }
                 }
@@ -587,6 +734,78 @@ private fun TasteFeature(
             }
         }
         item { Spacer(Modifier.height(8.dp)) }
+    }
+}
+
+@Composable
+private fun TasteKeywordsSection(keywords: List<String>) {
+    val visibleKeywords = keywords.map(String::trim).filter(String::isNotBlank).distinct()
+    if (visibleKeywords.isEmpty()) return
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                stringResource(R.string.ai_taste_profile_keywords),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(visibleKeywords, key = { it }) { keyword ->
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Text(
+                            keyword,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TasteEvidenceCard(evidence: AiTasteEvidence) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (evidence.title.isNotBlank()) {
+                Text(
+                    evidence.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            if (evidence.signal.isNotBlank()) {
+                Text(
+                    stringResource(R.string.ai_taste_evidence_signal_format, evidence.signal),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            if (evidence.inference.isNotBlank()) {
+                Text(
+                    stringResource(R.string.ai_taste_evidence_inference_format, evidence.inference),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            if (evidence.confidence.isNotBlank()) {
+                Text(
+                    stringResource(R.string.ai_taste_evidence_confidence_format, evidence.confidence),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 
@@ -645,7 +864,7 @@ private fun RecommendationCard(recommendation: AiRecommendation, onOpen: () -> U
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(recommendation.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                recommendation.year?.let { Text("(${it})", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                recommendation.year?.let { year -> Text(stringResource(R.string.ai_taste_recommendation_year_format, year), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 Text(recommendation.reason, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 // 不可点的卡片要说明原因，否则用户以为卡片坏了一直戳
                 if (!hasMediaId) {
@@ -669,6 +888,18 @@ private fun DailyFeature(daily: AiDailyKnowledge?) {
         FeatureUnavailable()
         return
     }
+    val relatedTitle = daily.relatedMediaTitle?.trim().orEmpty()
+    val source = daily.sourceName.trim().takeIf { it.isNotBlank() }
+        ?: daily.sourceUrl.trim().takeIf { it.isNotBlank() }
+    val sourceAndDate = listOfNotNull(
+        source?.let {
+            stringResource(R.string.ai_daily_source_format, it)
+        },
+        daily.publishedAt?.let { publishedAt ->
+            stringResource(R.string.ai_daily_published_at_format, formatDailyPublishedAt(publishedAt))
+        }
+    ).joinToString(stringResource(R.string.ai_daily_metadata_separator))
+    val hasSpoilerMarker = daily.containsSpoiler
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
@@ -681,9 +912,37 @@ private fun DailyFeature(daily: AiDailyKnowledge?) {
                 color = MaterialTheme.colorScheme.secondaryContainer
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
-                    Text(stringResource(R.string.ai_daily_title), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        stringResource(R.string.ai_daily_title),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                     Spacer(Modifier.height(10.dp))
                     Text(daily.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                    if (relatedTitle.isNotBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            stringResource(R.string.ai_daily_related_media_format, relatedTitle),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+        }
+        if (hasSpoilerMarker) {
+            item {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.errorContainer
+                ) {
+                    Text(
+                        stringResource(R.string.ai_daily_spoiler_warning),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
                 }
             }
         }
@@ -704,22 +963,45 @@ private fun DailyFeature(daily: AiDailyKnowledge?) {
         }
         if (!daily.characterLine.isNullOrBlank()) {
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
-                    Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Text(daily.characterLine.orEmpty(), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Text(
+                            daily.characterLine.orEmpty(),
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
         }
-        if (daily.sourceName.isNotBlank()) {
+        if (sourceAndDate.isNotBlank()) {
             item {
                 Text(
-                    text = stringResource(R.string.ai_daily_source_format, daily.sourceName),
+                    sourceAndDate,
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
     }
+}
+
+private fun formatDailyPublishedAt(timestamp: Long): String {
+    // 后端历史数据有毫秒时间戳；同时兼容少量旧数据使用秒时间戳的情况。
+    val millis = if (timestamp in 1L..10_000_000_000L) timestamp * 1000 else timestamp
+    return java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(millis))
 }
 
 @Composable
@@ -755,6 +1037,24 @@ private fun FeatureLoadingPlaceholder(onCancel: () -> Unit) {
                 Text(stringResource(R.string.ai_feature_cancel))
             }
         }
+    }
+}
+
+@Composable
+private fun OfflineCachedBanner() {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer
+    ) {
+        Text(
+            text = stringResource(R.string.ai_feature_offline_cached_status),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSecondaryContainer
+        )
     }
 }
 

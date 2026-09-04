@@ -913,11 +913,14 @@ class AiSpriteViewModelTest {
             TmdbRepository.MovieEnrichment(
                 posterUrl = null,
                 chineseTitle = "本地化标题-${firstArg<Int>()}",
-                originalTitle = secondArg<String>(),
-                overview = "",
-                genres = "",
+                originalTitle = "Original TMDB ${firstArg<Int>()}",
+                overview = "TMDB 可靠剧情简介 ${firstArg<Int>()}",
+                genres = "drama · history",
                 year = 2024,
-                rating = 0.0
+                rating = 0.0,
+                runtime = 128,
+                country = "美国",
+                imdbId = "tt${firstArg<Int>()}"
             )
         }
 
@@ -940,6 +943,15 @@ class AiSpriteViewModelTest {
             .containsExactlyElementsIn(watched.map { it.movie.title })
         assertThat(quizRequests.single().watched.map { it.title })
             .containsNoneIn(previewState.quizPreviewLocalizedTitles.values)
+        val watched100 = quizRequests.single().watched.single {
+            it.mediaIds.tmdbId == 100
+        }
+        assertThat(watched100.overview).isEqualTo("TMDB 可靠剧情简介 100")
+        assertThat(watched100.originalTitle).isEqualTo("Original TMDB 100")
+        assertThat(watched100.runtime).isEqualTo(128)
+        assertThat(watched100.country).isEqualTo("美国")
+        assertThat(watched100.mediaIds.imdbId).isEqualTo("tt100")
+        assertThat(watched100.genres).containsExactly("drama")
     }
 
     @Test

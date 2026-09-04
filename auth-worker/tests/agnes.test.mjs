@@ -338,7 +338,7 @@ test('Agnes HTTP 200 with invalid JSON or structure uses deterministic route fal
         });
 
         assert.equal(greeting.response.status, 200);
-        assert.equal(greeting.json.data.comment, '很适合当一名会发现细节的观众。');
+        assert.equal(greeting.json.data.comment, '真正能让人记住你的，还是你挑片时留下的细节。');
         assert.equal(taste.response.status, 200);
         assert.deepEqual(taste.json.data.recommendations, []);
         assert.equal(daily.response.status, 200);
