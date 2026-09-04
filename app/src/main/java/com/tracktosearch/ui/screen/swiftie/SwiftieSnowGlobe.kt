@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -98,12 +99,17 @@ private val PRELUDE_START: Long = FORM_START - PRELUDE_MS
 // 一切几何都按直径 D 或半径 R 折算，没有一个绝对 dp。改直径不用重排任何一条线。
 
 /**
- * 直径上限。屏宽 360dp 减去调用方两侧各 20dp 的 padding = 320dp。
+ * 直径上限。
  *
  * 旧的"绽放"是把 Lover 卡片 `graphicsLayer` 放大 1.5 倍，卡片左沿被推出屏幕、
  * 标题的 L 和日期的 2 被切掉。这里换成先量再算：**任何东西都不靠放大变大**。
+ *
+ * 372dp 而不是原来的 320dp：320 是按 360dp 窄屏减两侧 20dp padding 推出来的，
+ * 但那一档在 523dp 宽的机子上让整只球只占屏宽的六成，球以下小半屏是空的 ——
+ * 这是全场最后一帧，不该收着。窄屏不受影响：`minOf(maxWidth, …)` 仍会先夹到 maxWidth。
+ * 同时 [HOUSE_FIT] 把摆件收到 0.82，所以房子的绝对尺寸没变，多出来的是球内那圈空气。
  */
-private val BALL_MAX_DIAMETER = 320.dp
+private val BALL_MAX_DIAMETER = 372.dp
 
 /**
  * 球内留给小卡的宽度。
@@ -135,6 +141,23 @@ private const val CARD_TURN_DEG = 12f
 
 /** 转体的相机距离。默认 8 在 224dp 宽的卡上透视太狠，梯形变形会盖过转体本身。 */
 private const val CARD_CAMERA_DISTANCE = 14f
+
+/**
+ * 小卡让位后的尺寸。
+ *
+ * 0.56 与 [CARD_SETTLE_DROP] 是一起量出来的：这一对让小卡的**下缘刚好压在球的内底**、
+ * 上缘落在拱门下沿以下，于是屋顶、阁楼圆窗、拱门、一楼两扇亮窗全部露得出来 ——
+ * 房子的暖光是这只球的主角，被一块牌子盖住就白画了。
+ *
+ * 再小一点 `2019-08-23` 那行就糊了（它已经只剩约 24px 高），再大一点上缘就切进门里。
+ */
+private const val CARD_SETTLE_SCALE = 0.56f
+
+/** 让位缩放的轴心：底边中点。缩小本身就把卡往下带，见调用处的注释。 */
+private val CARD_SETTLE_ORIGIN = TransformOrigin(0.5f, 1f)
+
+/** 让位时额外下压的量，按小卡自己的高度算。与 [CARD_SETTLE_SCALE] 配对，别单改一个。 */
+private const val CARD_SETTLE_DROP = 0.50f
 
 /** 球自转的相机距离。球是圆的，透视强一点反而更有体积。 */
 private const val GLOBE_CAMERA_DISTANCE = 10f
@@ -361,7 +384,7 @@ half4 main(float2 coord) {
  * |---|---|---|
  * | [SwiftieTimeline.REWIND_START] | 1500 | 卷收期：只有 [content] 在自己变矮；末 200ms 浮出引子光弧 |
  * | [FORM_START] | [FORM_MS] | 小卡转体 0→−12°→0；玻璃自球心成型；底座自下升起 |
- * | [SNOW_START] | [SNOW_MS] | 金箔雪开洒；Lover House 后景淡入 |
+ * | [SNOW_START] | [SNOW_MS] | 金箔雪开洒；Lover House 后景淡入；小卡缩到 0.66 沉进球下半 |
  * | [HEART_START] | [HEART_MS] | 心自球心升起：描边 → 自下灌满 → 呼吸一次 + 光晕 |
  * | [SEAL_START] | [SEAL_MS] | `7·3` 描金小印落在底座上；球起 ±6° 极慢自转 |
  * | [SwiftieTimeline.FADE_OUT_START] | 2998 | 整只球淡出并缓慢上浮，金箔雪落到最后一帧 |
@@ -372,8 +395,9 @@ half4 main(float2 coord) {
  * @param elapsedMs 序列的绝对已用毫秒，内部按 [SwiftieTimeline] 的常量自己分拍
  * @param content 球内那张卡片。**卷收由调用方负责**（`SwiftieEraCard` 里那 18 行曲目
  *   自下而上收起，只留专辑名 + 日期 + 第 3 首 + 爱心），本函数收到的就是一个已经或
- *   正在变矮的 Composable，尺寸约 320×110dp；这里只按 [INNER_WIDTH_RATIO] 把它收进圆内，
- *   **不做任何缩放**
+ *   正在变矮的 Composable，尺寸约 320×110dp；这里按 [INNER_WIDTH_RATIO] 把它收进圆内，
+ *   并在房子淡入那一拍缩到 [CARD_SETTLE_SCALE] 沉到球的下半（见 [cardSettleProgress]）——
+ *   **除此之外不做任何缩放**
  */
 @Composable
 fun SwiftieLoverSnowGlobe(
@@ -477,6 +501,17 @@ private fun GlobeInterior(
                     // 转体是真透视变换（rotationY + cameraDistance），不是 scaleX 假装的
                     cameraDistance = CARD_CAMERA_DISTANCE
                     rotationY = cardTurnDeg(elapsed)
+                    // 房子淡入时小卡缩到 0.66 并沉到球的下半 —— 见 cardSettleProgress。
+                    // 缩放的轴心放在**底边中点**：这样缩小本身就把整张卡往下带，
+                    // 不必再算一个与卡片高度耦合的 translationY（那个高度在卷收期还在变）
+                    val settle = cardSettleProgress(elapsed)
+                    val shrink = 1f - settle * (1f - CARD_SETTLE_SCALE)
+                    transformOrigin = CARD_SETTLE_ORIGIN
+                    scaleX = shrink
+                    scaleY = shrink
+                    // 再往下压小半张：轴心只把卡收到「略低于球心」，
+                    // 而屋顶的坡面一直铺到球心下面一点
+                    translationY = settle * size.height * CARD_SETTLE_DROP
                 },
             content = content
         )
@@ -553,6 +588,19 @@ private fun houseAlpha(elapsed: Long): Float =
  */
 private fun cardTurnDeg(elapsed: Long): Float =
     -CARD_TURN_DEG * sin(PI.toFloat() * span(elapsed, FORM_START, FORM_MS))
+
+/**
+ * 小卡「让位」的进度：与房子淡入**同一拍**（[SNOW_START] 起 [SNOW_MS]）。
+ *
+ * 球成型那一拍小卡还是主角（它刚从整页的卡片转过来，观众的眼睛跟着它）；
+ * 房子一淡入，主角就换成球本身了 —— 小卡这时若还是原尺寸压在球心，
+ * 屋顶、烟囱、阁楼窗全被它盖住，读出来是「一张卡片糊在气泡上」，
+ * 而这一段的整个用意是那只**纪念品**。
+ *
+ * EaseOutCubic 与球成型同一条缓动：两件事一前一后发生，用同一条曲线才像同一只手做的。
+ */
+private fun cardSettleProgress(elapsed: Long): Float =
+    EaseOutCubic.transform(span(elapsed, SNOW_START, SNOW_MS))
 
 /** 极慢自转：±6°、周期 8s，只摆不整圈。 */
 private fun swingDeg(elapsed: Long, lowRam: Boolean): Float {
@@ -864,8 +912,28 @@ private fun trianglePath(
  * u / v 是"占半径的比例"，球心为原点、v 向下。房子刻意比卡片宽（−0.78..0.80，卡片 ±0.70），
  * 左右两侧各露出一条墙，纵深才不是靠猜的。
  */
+/**
+ * 摆件占球半径的比例。
+ *
+ * 1.0（原值）时房子横跨 1.78r —— 球宽的 89%，屋檐左角与玻璃只剩 0.08r 的空隙，
+ * 截图上读作「一栈房子塞进了气泡」。真的雪景球里摆件占七成宽，四周留着空气，
+ * 那圈空气正是「这是个玻璃罩着的小世界」的全部说服力。
+ *
+ * 0.82 之后房子横跨 1.46r（73%），屋檐左角落在 0.75r 上。球的直径同时从 320dp
+ * 提到 [BALL_MAX_DIAMETER] 的 372dp，所以房子的**绝对**大小几乎没变
+ * （285dp → 271dp），换来的纯粹是四周那圈空气。
+ */
+private const val HOUSE_FIT = 0.82f
+
 private class LoverHouseParts(size: Size) {
-    val r = size.minDimension / 2f
+    /** 玻璃球半径。只有裁剪用它 —— 雪地要一直铺到玻璃边上。 */
+    val ballR = size.minDimension / 2f
+
+    /**
+     * 摆件的作图半径。房子、栅栏、雪堆的**位置与尺寸一律按它算**，
+     * 所以改 [HOUSE_FIT] 一处就是整个摆件等比缩放。
+     */
+    val r = ballR * HOUSE_FIT
     private val cx = size.width / 2f
     private val cy = size.height / 2f
 
@@ -873,7 +941,7 @@ private class LoverHouseParts(size: Size) {
     fun y(v: Float) = cy + v * r
 
     /** 球内裁剪。雪地、栅栏、墙角都要被玻璃切掉，否则会画到球外面去。 */
-    val clip = Path().apply { addOval(Rect(cx - r, cy - r, cx + r, cy + r)) }
+    val clip = Path().apply { addOval(Rect(cx - ballR, cy - ballR, cx + ballR, cy + ballR)) }
 
     val roof = trianglePath(x(-0.92f), y(-0.02f), x(-0.31f), y(-0.58f), x(0.30f), y(-0.02f))
 
@@ -1124,6 +1192,11 @@ private fun DrawScope.drawLitWindow(
 /**
  * 前院栅栏。横档先画、竖条后画（真栅栏的档是钉在背面的），尖顶让它不是一排火柴。
  * 两端由球的裁剪自然切断 —— 这正是"东西摆在球底、地面往上翻"该有的样子。
+ *
+ * 竖条 0.052 宽、步距 0.074（缝 0.022 ≈ 条宽的 0.42）。原先步距 0.115 时缝比条还宽，
+ * 而横档是画在竖条**背面**的，只在缝里露出来 —— 缝 + 横档正好凑成 "E"／"F" 的字形，
+ * 截图上那一排读作一行小字。缝收窄到条宽的四成、横档再压到 0.55 透明度之后，
+ * 露出来的是横档的**影子**而不是横档本身，一排就读作栅栏了。真的尖桩篱缝隙也比桩窄。
  */
 private fun DrawScope.drawFence(parts: LoverHouseParts) {
     val r = parts.r
@@ -1133,10 +1206,11 @@ private fun DrawScope.drawFence(parts: LoverHouseParts) {
         drawRect(
             color = SNOW_SHADE,
             topLeft = Offset(parts.x(-0.92f), parts.y(v)),
-            size = Size(1.84f * r, 0.022f * r)
+            size = Size(1.84f * r, 0.022f * r),
+            alpha = 0.55f
         )
     }
-    val pickWidth = 0.048f
+    val pickWidth = 0.052f
     var u = -0.88f
     while (u <= 0.88f) {
         val left = parts.x(u)
@@ -1157,7 +1231,7 @@ private fun DrawScope.drawFence(parts: LoverHouseParts) {
             end = Offset(right - r * 0.006f, bottom),
             strokeWidth = r * 0.010f
         )
-        u += 0.115f
+        u += 0.074f
     }
 }
 

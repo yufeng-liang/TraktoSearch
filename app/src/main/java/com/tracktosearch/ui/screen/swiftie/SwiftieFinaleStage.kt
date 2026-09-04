@@ -27,7 +27,7 @@ internal const val SIGNATURE_CAPTION = "13 + 87 = 100"
 private const val CAPTION_FADE_MS: Float = 800f
 
 /**
- * 终局：签名 + 落款 + 手链（Spec §5 的 T99410–118000、§7、§8）。
+ * 终局：签名 + 落款 + 手链（Spec §5 的 T100810–118000、§7、§8）。
  *
  * 排在倒滑之前 —— 配乐末尾那句 Lover 要留给绽放（见 `SwiftieTimeline` 的类注释）。
  *

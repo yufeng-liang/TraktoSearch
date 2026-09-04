@@ -30,6 +30,14 @@ private const val TAU = 2f * PI.toFloat()
 /** 萤火虫虫体。黄绿冷光不在 Taylor Swift 的青绿色阶里 —— 用主色画萤火虫读作一滴水。 */
 private val FIREFLY_BODY = Color(0xFF2E3A22)
 
+/**
+ * 萤火虫尾部的实心亮核。
+ *
+ * 与光晕内圈同一档奶白（`#FFFBD6`）：光晕是它周围的空气，这一点才是「灯」本身。
+ * 只有半透明光晕时，压在门廊那片绿上读出来是几粒尘埃。
+ */
+private val FIREFLY_CORE = Color(0xFFFFFBD6)
+
 /** 枫叶背面。Red 那三档里没有橙黄，而正反同色的叶子翻面时根本看不出在翻。 */
 private val LEAF_BACK = Color(0xFFE8912A)
 
@@ -353,15 +361,23 @@ private fun DrawScope.drawFireflies(
         // 光晕圆心压在虫体下方，才读作「屁股在亮」而不是「整只在发光」
         withTransform({
             translate(cx, cy + r * 1.05f)
-            scale(r * 3.4f, r * 3.4f, Offset.Zero)
+            scale(r * 4.2f, r * 4.2f, Offset.Zero)
         }) {
-            drawCircle(brush = glow, radius = 1f, center = Offset.Zero, alpha = a * 0.62f * breath)
+            drawCircle(brush = glow, radius = 1f, center = Offset.Zero, alpha = a * 0.85f * breath)
         }
         drawOval(
             color = body,
             topLeft = Offset(cx - r * 0.42f, cy - r * 0.95f),
             size = Size(r * 0.84f, r * 1.9f),
             alpha = a * 0.85f
+        )
+        // 尾部那点实心亮核。只有半透明光晕的话，压在门廊那片绿上读出来是几粒尘埃
+        // ——「一闪一闪的亮点」才是萤火虫，而光晕只是它周围的空气
+        drawCircle(
+            color = FIREFLY_CORE,
+            radius = r * 0.52f,
+            center = Offset(cx, cy + r * 0.82f),
+            alpha = a * (0.35f + 0.65f * breath)
         )
     }
 }
@@ -429,11 +445,17 @@ private fun DrawScope.drawGoldFlakes(
     }
 }
 
-/** 枫叶第 `lobe` 瓣（0..4）的方向，弧度，y 向下。相邻两瓣差 35°。 */
-private fun mapleTipAngle(lobe: Int): Float = (-160f + lobe * 35f) * PI.toFloat() / 180f
+/**
+ * 枫叶第 `lobe` 瓣（0..4）的方向，弧度，y 向下。相邻两瓣差 35°。
+ *
+ * 与 [mapleInto]、[mapleTipRadius] 一起给 `SwiftieEraBackdrop` 的 Red 背景共用 ——
+ * 那一张的主体是搭在枯枝上的几片大枫叶，**必须与飘落的这些是同一片叶子**，
+ * 各画一套的话同一屏上会出现两种枫叶。
+ */
+internal fun mapleTipAngle(lobe: Int): Float = (-160f + lobe * 35f) * PI.toFloat() / 180f
 
 /** 中间那瓣最长、两侧渐短。五瓣等长就成了海星。 */
-private fun mapleTipRadius(half: Float, lobe: Int): Float =
+internal fun mapleTipRadius(half: Float, lobe: Int): Float =
     half * (0.62f + 0.38f * sin(lobe / 4f * PI.toFloat()))
 
 /**
@@ -442,7 +464,7 @@ private fun mapleTipRadius(half: Float, lobe: Int): Float =
  * 每一瓣的长度**各自**抖一次（不是整片一起缩放）：完全对称的枫叶一看就是画出来的，
  * 而且这样每一趟的轮廓都不一样。
  */
-private fun mapleInto(path: Path, half: Float, seed: Int, round: Int) {
+internal fun mapleInto(path: Path, half: Float, seed: Int, round: Int) {
     val baseY = half * 0.55f
     path.rewind()
     path.moveTo(0f, baseY)

@@ -108,7 +108,10 @@ class SwiftieEggPreviewActivity : ComponentActivity() {
         }
         val era = intent.longExtraOrNull(EXTRA_ERA)?.toInt() ?: return null
         val index = era.coerceIn(0, SwiftieTimeline.ERA_TRACK_COUNTS.lastIndex)
-        return (SwiftieTimeline.eraStartMs(index) + ERA_SETTLE_MS)
+        // TTPD 段头那 1400ms 是打字机独奏（卡片还没出纸），落点要把它加回去，
+        // 不然这一张截出来是「机器 + 半张纸」，和其余 11 张不是同一个时刻
+        val preroll = if (index == SwiftieTimeline.TTPD_INDEX) SwiftieTimeline.TTPD_PREROLL_MS else 0L
+        return (SwiftieTimeline.eraStartMs(index) + preroll + ERA_SETTLE_MS)
             .coerceAtMost(SwiftieTimeline.TOTAL_MS)
     }
 
@@ -127,9 +130,14 @@ class SwiftieEggPreviewActivity : ComponentActivity() {
          * era 落点的偏移量。
          *
          * 卡片起点那一帧屏幕上什么都还没有：长出动画要 400ms，曲目再按 130ms/行 逐条点亮。
-         * 正落在起点上截出来是一张空卡，加这一段让卡片已经成形、前几首歌已经亮起。
+         * 正落在起点上截出来是一张空卡。
+         *
+         * 2600ms 而不是更小的值：曲目是逐行点亮的，800ms 时只有三四行亮着，
+         * 截出来永远看不到「曲目列排满」的样子（第一轮 12 张截图全是「第 4 行开始淡掉」，
+         * 差点当成 bug 去查）。最短的卡片（首专 11 首）也有 `5900 + 11×130 = 7330ms`，
+         * 2600ms 落在每一张的中段。
          */
-        const val ERA_SETTLE_MS = 800L
+        const val ERA_SETTLE_MS = 2600L
     }
 }
 

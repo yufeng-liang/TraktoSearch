@@ -24,7 +24,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.ui.screen.swiftie.SwiftieLoverSnowGlobe
 import com.tracktosearch.ui.screen.swiftie.SwiftieSequenceClock
@@ -64,18 +67,30 @@ private fun activeEraIndexAt(elapsedMs: Long): Int =
  * （它才是收全屏触摸的那一层）。本层只在拖动播放头时把 `frozen` 翻真。
  *
  * @param frozen 拖过播放头之后的定格状态，由 `SwiftieEggScreen` 持有
+ * @param onCardBoundsChange **只有 TTPD 那一张**会回报：卡片在根坐标里的边框（px）。
+ *   背景那台打字机按它把出纸口坐到纸的上缘、把立纸对齐纸宽 —— 31 首的卡片高度按屏高
+ *   派生、宽度在平板上封顶 480dp，写死比例换台设备机器就会浮在纸上方或比纸宽出一截
  */
 @Composable
 fun SwiftieErasStage(
     clock: SwiftieSequenceClock,
     frozen: Boolean,
     onFrozenChange: (Boolean) -> Unit,
+    onCardBoundsChange: (Rect) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // 每帧变的量只在 draw lambda 里读；组合里只读这一个「翻转 12 次」的派生量
     val activeIndex by remember { derivedStateOf { activeEraIndexAt(clock.elapsedMs) } }
     val era = SwiftieErasData.ALL[activeIndex]
-    val cardDurationMs = SwiftieTimeline.cardDurationMs(activeIndex, era.tracks.size)
+    // TTPD 段头 1400ms 是打字机独奏，卡片的内部时钟整体后移这么多；
+    // 卡片自己的总时长因此要把前摇减掉，回落点才仍落在段末 500ms 处
+    val prerollMs = if (activeIndex == SwiftieTimeline.TTPD_INDEX) {
+        SwiftieTimeline.TTPD_PREROLL_MS
+    } else {
+        0L
+    }
+    val cardDurationMs =
+        SwiftieTimeline.cardDurationMs(activeIndex, era.tracks.size) - prerollMs
     // 倒滑与绽放期间把 Lover 钉在停留末帧，不许它回落
     val holdCapMs = cardDurationMs - CARD_RECEDE_MS - CARD_GAP_MS - 1L
 
@@ -162,21 +177,36 @@ fun SwiftieErasStage(
                 // 上一张此时 scaleY 已经收到 0，看不到硬切
                 val card: @Composable (Modifier) -> Unit = { cardModifier ->
                     key(activeIndex) {
+                        val elapsedInCard: () -> Long = {
+                            if (clock.elapsedMs >= SwiftieTimeline.REWIND_START) {
+                                holdCapMs
+                            } else {
+                                clock.elapsedMs -
+                                    SwiftieTimeline.eraStartMs(activeIndex) - prerollMs
+                            }
+                        }
                         SwiftieEraCard(
                             era = era,
                             eraIndex = activeIndex,
-                            elapsedInCard = {
-                                if (clock.elapsedMs >= SwiftieTimeline.REWIND_START) {
-                                    holdCapMs
-                                } else {
-                                    clock.elapsedMs - SwiftieTimeline.eraStartMs(activeIndex)
-                                }
-                            },
+                            elapsedInCard = elapsedInCard,
                             durationMs = cardDurationMs,
                             originFractionX = swiftieEraCenterFraction(activeIndex),
                             slotHeight = slotHeight,
                             collapseProgress = collapseProgress,
-                            modifier = cardModifier
+                            // 出纸只在 TTPD：前摇里 elapsedInCard 是负的，进度钳到 0f，
+                            // 这张卡片连投影都不画
+                            feedProgress = if (prerollMs == 0L) {
+                                null
+                            } else {
+                                { elapsedInCard().toFloat() / CARD_FEED_MS }
+                            },
+                            modifier = if (prerollMs == 0L) {
+                                cardModifier
+                            } else {
+                                cardModifier.onGloballyPositioned {
+                                    onCardBoundsChange(it.boundsInRoot())
+                                }
+                            }
                         )
                     }
                 }

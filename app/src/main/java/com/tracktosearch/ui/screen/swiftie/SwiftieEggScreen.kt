@@ -40,6 +40,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEvent
@@ -461,6 +463,34 @@ private fun SwiftieEggContent(
     val backdropPhase: () -> Float = {
         clock.elapsedMs.mod(BACKDROP_CYCLE_MS).toFloat() / BACKDROP_CYCLE_MS
     }
+
+    /**
+     * 本段已过多少毫秒。**只有 TTPD 那台打字机用** —— 它的敲字、滑架步进与出纸
+     * 必须与卡片对上拍，而 [backdropPhase] 是一条 3.6s 的循环锯齿，问不出「第几拍」。
+     *
+     * 卡片段之外（intro / 终局 / 倒滑）返回 -1：打字机走待机态，不敲不出纸。
+     * 换张交叉淡变那 500ms 里 TTPD 是 `incoming`，此时它自己的段还没开始，
+     * 这个值是负的，同样落在待机态上 —— 正是要的效果，纸不能早出。
+     */
+    val backdropEraElapsed: () -> Long = {
+        val index = SwiftieTimeline.eraIndexAt(clock.elapsedMs)
+        if (index == null) {
+            -1L
+        } else {
+            clock.elapsedMs - SwiftieTimeline.eraStartMs(index)
+        }
+    }
+
+    /**
+     * TTPD 卡片在根坐标里的边框（px）。[Rect.Zero] = 还没量到，打字机用兜底比例。
+     *
+     * 要边框而不只是上缘：滚筒上那截立纸必须与纸同宽 —— 平板上卡片封顶 480dp 居中，
+     * 只按屏宽画的立纸会比出来的纸宽出一大截。
+     *
+     * 只在 draw lambda 里读，所以写它不会引起重组 —— 但**必须**是 snapshot state，
+     * 普通 var 写完那一帧背景不会重画。
+     */
+    var ttpdCardBounds by remember { mutableStateOf(Rect.Zero) }
     val particlePhase: () -> Float = {
         clock.elapsedMs.mod(PARTICLE_CYCLE_MS).toFloat() / PARTICLE_CYCLE_MS
     }
@@ -650,13 +680,15 @@ private fun SwiftieEggContent(
         // 页面背景三层，压在水彩天空之上、所有内容之下。
         //
         // **必须挂在这一层而不是 SwiftieErasStage 里** —— 终局那 18.6s（签名 / 手链 / 定格）
-        // Eras 舞台整层卸载，背景却要一直在；放进去就会在 T99410 那一帧整屏闪回水彩天空。
+        // Eras 舞台整层卸载，背景却要一直在；放进去就会在 T100810 那一帧整屏闪回水彩天空。
         if (backdropMounted && !staticFinale) {
             SwiftieEraBackdropLayer(
                 outgoing = backdropOutgoing,
                 incoming = backdropIncoming,
                 crossfade = backdropCrossfade,
                 phase = backdropPhase,
+                eraElapsedMs = backdropEraElapsed,
+                cardBounds = { ttpdCardBounds },
                 lowRam = lowRam,
                 modifier = Modifier
                     .fillMaxSize()
@@ -696,6 +728,7 @@ private fun SwiftieEggContent(
                 clock = clock,
                 frozen = seekFrozen,
                 onFrozenChange = { seekFrozen = it },
+                onCardBoundsChange = { ttpdCardBounds = it },
                 modifier = Modifier.graphicsLayer { alpha = erasAlpha() }
             )
         }
@@ -747,6 +780,22 @@ private fun SwiftieEggContent(
 
         // T1100 之前按 ✕ 算放弃（不消耗解题机会），之后算已通关。
         // 静态路径里时钟从不推进，themeCommitted 永远是 false，所以要或上 staticFinale
+        //
+        // 图标色跟着**专辑背景**走，两档都写死颜色。
+        //
+        // 不能用 colorScheme.onSurface：那是跟着 app / 系统深色设置走的量，而这一页整屏
+        // 都被专辑背景铺满，主题的表面色一寸都没露出来。第七轮两批截图正好跨过了系统
+        // 深色主题的定时切换点（20:55 那批 vs 21:12 那批）：同一个 Red（顶部 #FBE3E3 浅粉），
+        // 前一批 ✕ 量到 (24,28,31)，后一批量到 (224,227,230) —— 深色主题一开，
+        // onSurface 翻成近白，10 张浅顶专辑的 ✕ 全部白底白字。
+        //
+        // 复用状态栏图标的那个极性量 —— ✕ 就贴在状态栏下面，两者判断的是同一片底色：
+        // reputation（顶部 #3A3A3A）与 Midnights（#2A3A6B）这两张深顶的用白，其余用深墨
+        val closeTint = if (barStage?.darkStatusBarIcons != false) {
+            Color(0xFF1F1B18)
+        } else {
+            Color.White
+        }
         IconButton(
             onClick = { onDismiss(themeCommitted || staticFinale) },
             modifier = Modifier
@@ -757,7 +806,7 @@ private fun SwiftieEggContent(
             Icon(
                 imageVector = Icons.Rounded.Close,
                 contentDescription = stringResource(R.string.common_close),
-                tint = MaterialTheme.colorScheme.onSurface
+                tint = closeTint
             )
         }
     }

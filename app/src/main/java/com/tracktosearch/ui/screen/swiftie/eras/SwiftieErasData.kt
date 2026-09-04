@@ -23,8 +23,15 @@ enum class SwiftieEraMotif {
     POLAROID,
     /** 6 · reputation：盘绕的黑鳞蛇 + 蛇戒 */
     COILED_SNAKE,
-    /** 7 · Lover：Lover House 小屋侧影（屋顶 + 亮灯窗）+ 一只蝴蝶 */
-    LOVER_HOUSE,
+    /**
+     * 7 · Lover：两只互锁的彩纸环（*Paper Rings*）+ 一只蝴蝶。
+     *
+     * 原来这里是 Lover House 小屋。**背景那一层已经有一栋大屋**（`PASTEL_RAINBOW_HOUSE`：
+     * 彩虹 + 小屋），终局的雪景球里还有第三栋 —— 同一件道具同屏画两遍，正是用户对 Red
+     * 那条围巾提过的问题（「不和卡片的围巾重复」）。屋子留在背景（面积大、又是雪景球那一幕
+     * 的伏笔），卡片换成 Lover 第 8 首的纸环：小、好认、且这一张里别处没有。
+     */
+    PAPER_RINGS,
     /** 8 · folklore：开衫挂在木椅背上 + 松枝 */
     CARDIGAN_CHAIR,
     /** 9 · evermore：三股辫 + 橙棕格纹布角 */
@@ -310,7 +317,7 @@ object SwiftieErasData {
         mainColor = Color(0xFFF7A8C4),
         textColor = Color(0xFFF7A8C4),
         fontResId = R.font.era_lover,
-        motif = SwiftieEraMotif.LOVER_HOUSE,
+        motif = SwiftieEraMotif.PAPER_RINGS,
         tracks = listOf(
             "I Forgot That You Existed",
             "Cruel Summer",

@@ -13,11 +13,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Matrix
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
@@ -35,6 +38,7 @@ import com.tracktosearch.R
 import com.tracktosearch.ui.screen.swiftie.SwiftiePalette
 import com.tracktosearch.ui.screen.swiftie.SwiftieTimeline
 import com.tracktosearch.ui.screen.swiftie.unitHeartPath
+import kotlin.math.round
 
 /**
  * 13 个边界比例：色带 `i` 占 `[SWIFTIE_ERA_EDGES[i], SWIFTIE_ERA_EDGES[i + 1]]`。
@@ -73,8 +77,8 @@ fun swiftiePlayheadFraction(elapsedMs: Long): Float =
     ((elapsedMs - SwiftieTimeline.ERAS_CARDS_START).toFloat() / SwiftieTimeline.ERAS_CARDS_MS)
         .coerceIn(0f, 1f)
 
-/** 色带 12 + 间距 5 + 轴线 + 刻度 6 + 播放头旋钮 = 38dp 的图形高度。 */
-private val AXIS_VISUAL_HEIGHT = 38.dp
+/** 色带 12 + 间距 5 + 轴线 + 刻度 12 + 播放头旋钮 12 = 41dp 的图形高度。 */
+private val AXIS_VISUAL_HEIGHT = 41.dp
 
 /**
  * 轴的实际高度 —— 也就是它的**触控目标**。
@@ -86,16 +90,24 @@ private val AXIS_VISUAL_HEIGHT = 38.dp
 private val AXIS_TOUCH_HEIGHT = 48.dp
 
 private val RIBBON_HEIGHT = 12.dp
-private val TICK_HEIGHT = 6.dp
+
+/**
+ * 刻度长度。
+ *
+ * 12dp 而不是原来的 6dp：TS1-12 标签现在落在**两条刻度之间**（原来单独一行摆在刻度
+ * 下面，读起来是「轴」和「一排标签」两件事），刻度得够长才框得住标签。
+ */
+private val TICK_HEIGHT = 12.dp
 private val AXIS_SIDE_PADDING = 20.dp
 
 /**
- * TS1-12 标签行的定高。
+ * 轴下面那行的定高 —— 现在只放**两端的年份**。
  *
- * 这一行原本是两端的 `2006` / `2025` —— 那是装饰性重复信息（轴本身与 12 张卡片都带
- * 日期）、对读屏也隐身，所以整块让位给 12 个 TS 标签。**12dp 略低于原先那行 11sp
- * 的行盒**，所以版面净增为负、卡片插槽只会变大不会缩；定高同时保证字号档位调不动
- * 这一行的高度。
+ * TS1-12 标签搬进了刻度之间（见 [TICK_HEIGHT]），这一行腾出来给首末两张专辑的年份：
+ * 左端起点下面是 TS1 的年份、右端终点下面是 TS12 的年份，一眼就知道这条轴横跨多少年。
+ * 年份取自 `releaseDate.take(4)`，不另写常量 —— 数据改了年份跟着改。
+ *
+ * 定高保证字号档位调不动这一行的高度（整段是定时动画里的固定版面）。
  */
 private val AXIS_LABEL_HEIGHT = 12.dp
 
@@ -211,11 +223,25 @@ fun SwiftieErasAxis(
         List(SwiftieErasData.ALL.size) { index -> measurer.measure("TS${index + 1}", style) }
     }
 
+    // 两端的年份：左端是 TS1 的、右端是 TS12 的，取 releaseDate 前 4 位。
+    // 与 TS 标签同一个字号 —— 它们同属「轴的刻度说明」，两种字号会读作两套信息
+    val yearLabels = remember(measurer, density) {
+        val style = TextStyle(fontSize = with(density) { AXIS_LABEL_FONT_SIZE.toSp() })
+        listOf(
+            measurer.measure(SwiftieErasData.ALL.first().releaseDate.take(4), style),
+            measurer.measure(SwiftieErasData.ALL.last().releaseDate.take(4), style)
+        )
+    }
+
     // 12 张底色各一套标签墨色，走到哪张算哪张（见 swiftieLabelInk）。
     // readable / readableOnDark 是 24 步 HSL 二分，一套 12 个标签要上千次 Math.pow，
     // 放进每帧的 draw lambda 会直接吃掉绘制预算。缓存故意是普通数组而不是 state：
     // draw 阶段写它不该触发任何失效
     val labelInk = remember { arrayOfNulls<List<Color>>(SwiftieErasData.STAGE.size) }
+
+    // 整条色带的圆角轮廓（12 段连成一条的裁剪区，见 draw 里那段注释）。
+    // 尺寸只有 draw 阶段才知道，所以这里只借一个对象出去，每帧 rewind 重填
+    val barPath = remember { Path() }
 
     // 心形用共用的 unitHeartPath()，在这里一次性放大到 5dp。若改成 draw 里套一层
     // scale()，键线宽度会跟着一起放大 5 倍
@@ -297,7 +323,6 @@ fun SwiftieErasAxis(
             val lineY = top + ribbonHeight + 5.dp.toPx()
             val tickBottom = lineY + TICK_HEIGHT.toPx()
             val knobY = tickBottom + 7.dp.toPx()
-            val gap = 2.dp.toPx()
             val corner = CornerRadius(ribbonHeight / 2f)
 
             // 第一拍：轴线自中点向两端铺开
@@ -310,7 +335,9 @@ fun SwiftieErasAxis(
                 alpha = 0.55f
             )
 
-            // 第二拍：刻度淡入（13 条，含两端）
+            // 第二拍：刻度与 TS1-12 标签一起淡入。刻度 13 条（含两端），
+            // 标签落在**相邻两条刻度正中间** —— 一把尺子上的数字就该在两条刻线之间，
+            // 而不是另起一行摆在尺子下面（上一版如此，读作轴与标签两件东西）
             if (tickPhase > 0f) {
                 SWIFTIE_ERA_EDGES.forEach { edge ->
                     val x = edge * size.width
@@ -322,31 +349,73 @@ fun SwiftieErasAxis(
                         alpha = 0.40f * tickPhase
                     )
                 }
+                val head = playheadFraction().coerceIn(0f, 1f)
+                val stageIndex = activeIndex().coerceIn(0, SwiftieErasData.STAGE.lastIndex)
+                val labelColors = labelInk[stageIndex]
+                    ?: swiftieLabelInk(stageIndex).also { labelInk[stageIndex] = it }
+                val bandCenterY = (lineY + tickBottom) / 2f
+                labels.forEachIndexed { era, layout ->
+                    drawText(
+                        textLayoutResult = layout,
+                        // 播放头扫过这一格的起点就换成该专辑主色 —— 标签自己就是进度指示，
+                        // 所以不必再画第二套指示器
+                        color = if (head >= SWIFTIE_ERA_EDGES[era]) {
+                            labelColors[era]
+                        } else {
+                            DESATURATED
+                        },
+                        topLeft = Offset(
+                            x = swiftieEraCenterFraction(era) * size.width -
+                                layout.size.width / 2f,
+                            y = bandCenterY - layout.size.height / 2f
+                        ),
+                        alpha = tickPhase
+                    )
+                }
             }
 
             // 第三拍：色带升上来。先整条灰化，再把走过的部分覆一层饱和色
             if (ribbonPhase > 0f) {
                 val rise = ribbonTop + (1f - ribbonPhase) * 4.dp.toPx()
-                SWIFTIE_ERA_EDGES.zipWithNext().forEach { (from, to) ->
-                    drawRoundRect(
-                        color = DESATURATED,
-                        topLeft = Offset(from * size.width + gap / 2f, rise),
-                        size = Size((to - from) * size.width - gap, ribbonHeight),
-                        cornerRadius = corner,
-                        alpha = 0.55f * ribbonPhase
+                // **12 段连成一条**：只有 TS1 的左端与 TS12 的右端是圆角，中间的接缝全部打通。
+                // 逐段 `drawRoundRect` 做不到 —— 它四角同时圆，每段都圆就是 12 颗独立的胶囊
+                // （上一版就是这样，读作一排药片而不是一条时间轴）。
+                // 所以先把整条的圆角轮廓当裁剪区，再往里画 12 个**直角**矩形：
+                // 外两端被轮廓切成圆角、内部接缝是直的
+                barPath.rewind()
+                barPath.addRoundRect(
+                    RoundRect(
+                        left = 0f,
+                        top = rise,
+                        right = size.width,
+                        bottom = rise + ribbonHeight,
+                        cornerRadius = corner
                     )
-                }
-                // 一个 clipRect 就够：当前段会被切成半亮，读起来正是「正在放这一段」
+                )
                 val head = playheadFraction().coerceIn(0f, 1f) * size.width
-                clipRect(left = 0f, top = 0f, right = head, bottom = size.height) {
-                    SWIFTIE_ERA_EDGES.zipWithNext().forEachIndexed { index, (from, to) ->
-                        drawRoundRect(
-                            color = SwiftieErasData.ALL[index].mainColor,
-                            topLeft = Offset(from * size.width + gap / 2f, rise),
-                            size = Size((to - from) * size.width - gap, ribbonHeight),
-                            cornerRadius = corner,
-                            alpha = ribbonPhase
+                clipPath(barPath) {
+                    // 段边界取整到整像素：相邻两块共一条整数边才不会在接缝处抗锯齿出
+                    // 一道亮线（12 段连起来之后那道线会横穿整条轴）
+                    SWIFTIE_ERA_EDGES.zipWithNext().forEach { (from, to) ->
+                        val x0 = round(from * size.width)
+                        drawRect(
+                            color = DESATURATED,
+                            topLeft = Offset(x0, rise),
+                            size = Size(round(to * size.width) - x0, ribbonHeight),
+                            alpha = 0.55f * ribbonPhase
                         )
+                    }
+                    // 一个 clipRect 就够：当前段会被切成半亮，读起来正是「正在放这一段」
+                    clipRect(left = 0f, top = 0f, right = head, bottom = size.height) {
+                        SWIFTIE_ERA_EDGES.zipWithNext().forEachIndexed { index, (from, to) ->
+                            val x0 = round(from * size.width)
+                            drawRect(
+                                color = SwiftieErasData.ALL[index].mainColor,
+                                topLeft = Offset(x0, rise),
+                                size = Size(round(to * size.width) - x0, ribbonHeight),
+                                alpha = ribbonPhase
+                            )
+                        }
                     }
                 }
 
@@ -394,36 +463,46 @@ fun SwiftieErasAxis(
             }
         }
 
-        // TS1-12 标签行，跟着刻度那一拍淡入。写的是专辑序号，
-        // **不是 `3/12` 那种进度数字**（Spec §6.1 不许出现进度计数）
+        // 轴下面这一行现在只放两端的年份：左端起点是首专的年份、右端终点是 TS12 的，
+        // 一眼看出这条轴横跨的年数。TS1-12 标签已经搬进刻度之间（见上面那块 Canvas）。
+        // 跟着刻度那一拍淡入
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(AXIS_LABEL_HEIGHT)
-                // 与上面那块 Canvas 同一个 20dp 侧边距，标签才能与色带中心对得上
+                // 与上面那块 Canvas 同一个 20dp 侧边距，年份才对得上轴的两端
                 .padding(horizontal = AXIS_SIDE_PADDING)
                 .graphicsLayer {
                     alpha = ((introProgress() - 0.35f) / 0.35f).coerceIn(0f, 1f)
                 }
-                // 整块对 TalkBack 隐身：12 个标签各自可停靠会让读屏在轴上停 12 次，
+                // 整块对 TalkBack 隐身：年份是给看得见的人的刻度说明，
                 // 而卡片本身已经播报「专辑名，发行于 X，共 N 首」
                 .clearAndSetSemantics { }
         ) {
             val head = playheadFraction().coerceIn(0f, 1f)
             val index = activeIndex().coerceIn(0, SwiftieErasData.STAGE.lastIndex)
             val ink = labelInk[index] ?: swiftieLabelInk(index).also { labelInk[index] = it }
-            labels.forEachIndexed { era, layout ->
-                drawText(
-                    textLayoutResult = layout,
-                    // 播放头扫过这一格的起点就换成该专辑主色 —— 标签自己就是进度指示，
-                    // 所以不必再画第二套指示器
-                    color = if (head >= SWIFTIE_ERA_EDGES[era]) ink[era] else DESATURATED,
-                    topLeft = Offset(
-                        x = swiftieEraCenterFraction(era) * size.width - layout.size.width / 2f,
-                        y = (size.height - layout.size.height) / 2f
-                    )
+            val first = yearLabels[0]
+            val last = yearLabels[1]
+            // 各自**以轴端点为中心**：一半落进 20dp 侧边距里，那块地方本来是空的。
+            // 左对齐到 0 会把年份推进第一格里，看着像是在标 TS1 而不是标起点
+            drawText(
+                textLayoutResult = first,
+                color = ink.first(),
+                topLeft = Offset(
+                    x = -first.size.width / 2f,
+                    y = (size.height - first.size.height) / 2f
                 )
-            }
+            )
+            drawText(
+                textLayoutResult = last,
+                // 终点年份走到最后才上色，和 TS 标签同一条规则
+                color = if (head >= 1f) ink.last() else DESATURATED,
+                topLeft = Offset(
+                    x = size.width - last.size.width / 2f,
+                    y = (size.height - last.size.height) / 2f
+                )
+            )
         }
     }
 }
