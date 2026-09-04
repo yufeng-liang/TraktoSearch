@@ -11,7 +11,6 @@ import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateDp
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -23,9 +22,7 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -244,10 +241,15 @@ private fun SharedElementType.defaultExit(): ExitTransition = when (this) {
 /**
  * 按部件类型推导 resizeMode。
  *
- * 一律优先 scaleToBounds：它只在 lookahead 尺寸上量一次，之后靠 graphicsLayer 缩放，
- * 而 RemeasureToBounds 会用逐帧的 `Constraints.fixed` 重新测量子树。后者对内部含有
- * 派生自尺寸的状态的组件（分块解码的图片、按视口生成的网格）是灾难，一次转场里能触发
- * 几十次重新计算。只有两端宽高比差得多、裁切会露馅时才值得付这个代价，那种场合在调用点显式覆盖。
+ * 默认一律 scaleToBounds：它只在 lookahead 尺寸上量一次，之后靠 graphicsLayer 缩放，
+ * 而 RemeasureToBounds 会用逐帧的 `Constraints.fixed` 重新测量子树。后者对内部含有派生自尺寸的
+ * 状态的组件（分块解码的图片、按视口生成的网格）是灾难，一次转场里能触发几十次重新计算。
+ *
+ * 例外是「卡片放大成整页」这一类容器变形：scaleToBounds 会把内容跟着容器一起缩放绘制，一行标题
+ * 先被压扁再弹开。那种场合在调用点显式传 `RemeasureToBounds`，并给容器里的内容挂
+ * [appSkipToLookaheadSize] —— 容器自己逐帧按动画尺寸重新测量，内容按落定尺寸布局一次，于是内容
+ * 全程保持最终的位置与字号，只是被容器边界裁剪着逐渐露出，也就是 Material container transform
+ * 的揭示效果。目前统计页是这条路的试点，其余整页入口仍走默认值。
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 private fun SharedElementType.defaultResizeMode(): SharedTransitionScope.ResizeMode = when (this) {
@@ -360,8 +362,10 @@ internal fun isAppSharedTransitionActive(): Boolean {
 /**
  * 让子树按 lookahead（落定后）的尺寸布局，转场期只在绘制上缩放。
  *
- * 整页参与容器变形时，页面里的 LazyColumn 如果跟着容器逐帧变宽，就会逐帧重新决定「哪些项可见、
- * 每项多宽」，一次转场里做几十遍。挂在共享边界节点内侧的内容上，可以把这份重新测量省掉。
+ * 容器变形的必需搭档：容器侧用 RemeasureToBounds 逐帧按动画尺寸重新测量，内容侧挂上这个修饰符
+ * 就只按落定尺寸布局一次，全程保持最终的位置与字号，被容器边界裁剪着逐渐露出。少了它，页面里的
+ * LazyColumn 会跟着容器逐帧变宽，一次转场里重复决定「哪些项可见、每项多宽」几十遍，文字也会跟着
+ * 重排。必须挂在共享边界节点的内侧。
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -381,43 +385,6 @@ private val AppChromeEnter: EnterTransition =
  * 返回时容器要收回成一张卡片，顶栏若还跟着一起缩，用户会看到标题和按钮被压扁。
  */
 private val AppChromeExit: ExitTransition = fadeOut(tween(durationMillis = 20))
-
-/** 页面内容揭示与 chrome 同节奏，两者必须同时出现，否则顶栏会先悬空一段。 */
-private val AppContentRevealEnter: FiniteAnimationSpec<Float> =
-    tween(durationMillis = 180, delayMillis = 250, easing = LinearOutSlowInEasing)
-
-private val AppContentRevealExit: FiniteAnimationSpec<Float> = tween(durationMillis = 20)
-
-/**
- * 整页容器变形时的内容揭示：容器变形期间完全不绘制内容，容器落位后再淡入。
- *
- * 这是 Material container transform 的标准做法 —— 容器变形期间内容淡入淡出，而不是跟着容器一起
- * 缩放，后者会让文字先被压扁再弹开。
- *
- * 同时这是整页容器变形唯一能大幅省下的成本：共享元素在转场期被抬进 overlay 绘制，实现上是每帧
- * `layer.record { drawContent() }`，页面内容就是这份记录的全部体积（统计页里 13×7 热力图网格和
- * 词云都在其中）。`scaleToBounds` 和 [appSkipToLookaheadSize] 省的是重新测量，省不掉这份记录。
- *
- * 注意必须真的跳过 `drawContent()`：只把图层 alpha 归零只是让合成时不显示，绘制命令照旧要记录
- * 一遍，省不掉的正是要省的那一份。
- *
- * alpha 与「是否绘制」都在绘制阶段读动画值，整页不会因为这个动画而重组。
- */
-@Composable
-internal fun Modifier.appSharedContentReveal(
-    animatedVisibilityScope: AnimatedVisibilityScope? = LocalAnimatedVisibilityScope.current,
-): Modifier {
-    if (animatedVisibilityScope == null || !LocalSharedTransitionEnabled.current) return this
-    val revealAlpha = animatedVisibilityScope.transition.animateFloat(
-        transitionSpec = {
-            if (targetState == EnterExitState.Visible) AppContentRevealEnter else AppContentRevealExit
-        },
-        label = "sharedContentReveal",
-    ) { state -> if (state == EnterExitState.Visible) 1f else 0f }
-    return this
-        .graphicsLayer { alpha = revealAlpha.value }
-        .drawWithContent { if (revealAlpha.value > 0f) drawContent() }
-}
 
 /**
  * 页面 chrome（顶栏、悬浮按钮）的进出动画：容器变形结束后才入场，返回时先行退场。

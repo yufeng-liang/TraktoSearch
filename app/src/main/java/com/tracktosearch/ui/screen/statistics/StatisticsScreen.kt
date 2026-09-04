@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.statistics
 import android.content.ClipData
 import android.content.Intent
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -115,8 +116,6 @@ import com.tracktosearch.ui.component.StatisticsEntryKey
 import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.SettingsEntryCardCorner
 import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
-import com.tracktosearch.ui.component.appSharedChrome
-import com.tracktosearch.ui.component.appSharedContentReveal
 import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.isAppSharedTransitionActive
 import dev.chrisbanes.haze.HazeState
@@ -256,6 +255,10 @@ fun StatisticsScreen(
                     key = StatisticsEntryKey,
                     animatedVisibilityScope = animatedVisibilityScope,
                     corner = SharedCorner.flattenFrom(SettingsEntryCardCorner),
+                    // 容器变形要的是「内容不变形、被裁剪逐渐露出」，所以这里不能用默认的
+                    // scaleToBounds：那会把顶栏和列表跟着容器一起缩放绘制，一行标题先被压扁再弹开。
+                    // 逐帧重新测量的代价由内容侧的 appSkipToLookaheadSize 挡掉，只有容器自己重测。
+                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
                 )
                 // 页面底色挪进共享节点内侧，并把 Scaffold 的容器色置透明。
                 // 否则 Scaffold 会在共享节点之外先铺满一整屏不透明底色，转场第一帧整屏就已经是本页的背景，
@@ -325,12 +328,9 @@ fun StatisticsScreen(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
-                        // 整页参与容器变形时按落定尺寸布局：否则列表会跟着容器逐帧变宽，
-                        // 一次转场里重复决定「哪些项可见、每项多宽」几十遍
+                        // 容器变形的必需搭档：容器逐帧按动画尺寸重新测量，列表按落定尺寸布局一次，
+                        // 于是内容全程保持最终位置与字号，被容器边界裁剪着逐渐露出。
                         .appSkipToLookaheadSize()
-                        // 容器变形期间整页内容不绘制，容器落位后再淡入。放在 hazeSource 外侧：
-                        // 顶栏采样的是本列表的绘制结果，跳过绘制的那段本来也没有内容可采。
-                        .appSharedContentReveal(animatedVisibilityScope)
                         .hazeSource(state = statsHazeState)
                         .backdropSource(),
                     contentPadding = PaddingValues(
@@ -478,11 +478,13 @@ fun StatisticsScreen(
             }
             // Haze模糊渐变TopAppBar（含状态栏）
             // 顶栏不参与配对：来源侧那张卡片上没有对应的标题栏，硬配对会把一行标题从卡片尺寸拉过来。
-            // 改为容器基本落位后再淡入；转场期间同时让 haze 停采样，避免每帧背景都在变时还做实时模糊。
+            // 但它必须从第一帧就在，否则容器长大的那段时间整屏只有一块底色，落位时内容再整片闪出来。
+            // 与列表一样按落定尺寸布局，跟着容器裁剪逐渐露出；转场期间让 haze 停采样，
+            // 避免每帧背景都在变时还做实时模糊。
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .appSharedChrome(animatedVisibilityScope)
+                    .appSkipToLookaheadSize()
                     .hazeTopBar(
                         state = statsHazeState,
                         style = statsHazeStyle,

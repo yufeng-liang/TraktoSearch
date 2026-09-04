@@ -143,6 +143,7 @@ import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.StatisticsEntryKey
 import com.tracktosearch.ui.component.MarkRecordsEntryKey
 import com.tracktosearch.ui.component.SearchSourcesEntryKey
@@ -554,11 +555,15 @@ fun SettingsScreen(
             // 豆瓣独立模式: StatisticsViewModel 支持基于豆瓣本地同步数据的统计，与 Trakt 统计同等可用
             if (isLoggedIn && (isDoubanMode || isTraktConnected)) {
                 item(key = "statistics_entry") {
-                    val statisticsEntryModifier = Modifier.appSharedBounds(
-                        key = StatisticsEntryKey,
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        corner = SharedCorner.uniform(SettingsEntryCardCorner),
-                    )
+                    val statisticsEntryModifier = Modifier
+                        .appSharedBounds(
+                            key = StatisticsEntryKey,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            corner = SharedCorner.uniform(SettingsEntryCardCorner),
+                        )
+                        // 目标侧走 RemeasureToBounds，动画边界会一路长到整页，本侧内容若跟着重测
+                        // 就会在淡出的那 200ms 里被拉散。按自己的落定尺寸布局，被裁剪着淡出即可。
+                        .appSkipToLookaheadSize()
                     StatisticsCard(
                         modifier = statisticsEntryModifier,
                         hazeState = settingsHazeState,
