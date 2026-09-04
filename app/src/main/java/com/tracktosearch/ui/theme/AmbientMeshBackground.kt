@@ -104,11 +104,14 @@ fun AmbientMeshBackground(
         0f
     }
     // 关闭动效时，默认底色既更灰一点又轻微掺入主题主色，避免纯灰白/黑蓝显得单调。
-    // 浅色主题掺入更明显（10%），深色主题收敛（8%），同时保证正文对比度。
+    // 掺入比例只影响四个主 Tab 的页面底（本组件只被 PageBackground 用、只挂在 MainScreen 上），
+    // 子页面的底色仍是纯 colorScheme.background。
+    // 浅色 6%、深色 5%：原来是 10%/8%，页面底被主色压得偏暖偏深，
+    // 压在上面的 surfaceVariant 卡片（tone 90）与它的对比度只剩 1.02，卡片和背景融成一片。
     val baseBackground = if (enabled) {
         colorScheme.background
     } else {
-        lerp(colorScheme.background, colorScheme.primary, if (isDark) 0.08f else 0.10f)
+        lerp(colorScheme.background, colorScheme.primary, if (isDark) 0.05f else 0.06f)
     }
 
     Box(modifier = modifier.fillMaxSize().background(baseBackground)) {
