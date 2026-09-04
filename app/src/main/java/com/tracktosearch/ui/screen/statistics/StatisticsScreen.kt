@@ -116,6 +116,7 @@ import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.SettingsEntryCardCorner
 import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
 import com.tracktosearch.ui.component.appSharedChrome
+import com.tracktosearch.ui.component.appSharedContentReveal
 import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.isAppSharedTransitionActive
 import dev.chrisbanes.haze.HazeState
@@ -327,6 +328,9 @@ fun StatisticsScreen(
                         // 整页参与容器变形时按落定尺寸布局：否则列表会跟着容器逐帧变宽，
                         // 一次转场里重复决定「哪些项可见、每项多宽」几十遍
                         .appSkipToLookaheadSize()
+                        // 容器变形期间整页内容不绘制，容器落位后再淡入。放在 hazeSource 外侧：
+                        // 顶栏采样的是本列表的绘制结果，跳过绘制的那段本来也没有内容可采。
+                        .appSharedContentReveal(animatedVisibilityScope)
                         .hazeSource(state = statsHazeState)
                         .backdropSource(),
                     contentPadding = PaddingValues(

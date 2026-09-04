@@ -11,6 +11,7 @@ import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -22,7 +23,9 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -378,6 +381,43 @@ private val AppChromeEnter: EnterTransition =
  * 返回时容器要收回成一张卡片，顶栏若还跟着一起缩，用户会看到标题和按钮被压扁。
  */
 private val AppChromeExit: ExitTransition = fadeOut(tween(durationMillis = 20))
+
+/** 页面内容揭示与 chrome 同节奏，两者必须同时出现，否则顶栏会先悬空一段。 */
+private val AppContentRevealEnter: FiniteAnimationSpec<Float> =
+    tween(durationMillis = 180, delayMillis = 250, easing = LinearOutSlowInEasing)
+
+private val AppContentRevealExit: FiniteAnimationSpec<Float> = tween(durationMillis = 20)
+
+/**
+ * 整页容器变形时的内容揭示：容器变形期间完全不绘制内容，容器落位后再淡入。
+ *
+ * 这是 Material container transform 的标准做法 —— 容器变形期间内容淡入淡出，而不是跟着容器一起
+ * 缩放，后者会让文字先被压扁再弹开。
+ *
+ * 同时这是整页容器变形唯一能大幅省下的成本：共享元素在转场期被抬进 overlay 绘制，实现上是每帧
+ * `layer.record { drawContent() }`，页面内容就是这份记录的全部体积（统计页里 13×7 热力图网格和
+ * 词云都在其中）。`scaleToBounds` 和 [appSkipToLookaheadSize] 省的是重新测量，省不掉这份记录。
+ *
+ * 注意必须真的跳过 `drawContent()`：只把图层 alpha 归零只是让合成时不显示，绘制命令照旧要记录
+ * 一遍，省不掉的正是要省的那一份。
+ *
+ * alpha 与「是否绘制」都在绘制阶段读动画值，整页不会因为这个动画而重组。
+ */
+@Composable
+internal fun Modifier.appSharedContentReveal(
+    animatedVisibilityScope: AnimatedVisibilityScope? = LocalAnimatedVisibilityScope.current,
+): Modifier {
+    if (animatedVisibilityScope == null || !LocalSharedTransitionEnabled.current) return this
+    val revealAlpha = animatedVisibilityScope.transition.animateFloat(
+        transitionSpec = {
+            if (targetState == EnterExitState.Visible) AppContentRevealEnter else AppContentRevealExit
+        },
+        label = "sharedContentReveal",
+    ) { state -> if (state == EnterExitState.Visible) 1f else 0f }
+    return this
+        .graphicsLayer { alpha = revealAlpha.value }
+        .drawWithContent { if (revealAlpha.value > 0f) drawContent() }
+}
 
 /**
  * 页面 chrome（顶栏、悬浮按钮）的进出动画：容器变形结束后才入场，返回时先行退场。
