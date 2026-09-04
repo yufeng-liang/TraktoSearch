@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.crashlog
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,9 +9,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -50,12 +53,14 @@ import com.tracktosearch.ui.component.FeedbackListCardCorner
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.appSharedBounds
-import com.tracktosearch.ui.component.appSharedChrome
 import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.crashLogCardSharedKey
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+/** M3 small TopAppBar 的固定高度。顶栏改为叠放在内容之上后，列表要自己避让这一段。 */
+private val TopAppBarHeight = 64.dp
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -74,35 +79,18 @@ fun CrashLogDetailScreen(
     LaunchedEffect(record) { if (record != null) loaded = true }
 
     Scaffold(
-        topBar = {
-            // 顶栏不参与配对，改为容器基本落位后再淡入：这块顶栏是不透明的，
-            // 若从第一帧就实心压在正在放大的卡片上方，观感上等于卡片被一条色带切了一刀。
-            Box(modifier = Modifier.appSharedChrome(animatedVisibilityScope)) {
-                TopAppBar(
-                    title = { Text(stringResource(R.string.crash_detail_title), fontWeight = FontWeight.ExtraBold) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                Icons.AutoMirrored.Rounded.ArrowBack,
-                                contentDescription = stringResource(R.string.content_desc_back)
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
-                )
-            }
-        },
         // 容器色置透明、底色改由下面那个共享节点自己画，理由见该处注释。
         // contentColor 显式写成 onBackground：Scaffold 默认取 contentColorFor(containerColor)，
         // 而 contentColorFor(Transparent) 是 Unspecified，会让整页文字颜色退回外层 LocalContentColor。
         containerColor = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onBackground,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
-    ) { padding ->
+    ) { _ ->
         val current = record
+        val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         // 与反馈页崩溃日志卡片配对的是整页容器。加载中、记录不存在、正常三个分支之间没有公共父节点，
-        // 这里补一个只负责承载共享边界的 Box；各分支自己的 padding 是 Scaffold 给的顶栏避让，
-        // 属于内容而不属于容器，因此仍留在分支内部，不上移到 Box 上。
+        // 这里补一个只负责承载共享边界的 Box。顶栏也放在这个 Box 里（不再走 Scaffold 的 topBar 槽）：
+        // 顶栏必须跟着容器一起被裁剪，否则容器还是一张小卡片时屏幕顶部就已经压着一条实心色带。
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -110,6 +98,9 @@ fun CrashLogDetailScreen(
                     key = crashLogCardSharedKey(recordId),
                     animatedVisibilityScope = animatedVisibilityScope,
                     corner = SharedCorner.flattenFrom(FeedbackListCardCorner),
+                    // 容器变形要的是「内容不变形、被裁剪逐渐露出」，默认的 scaleToBounds 会把内容
+                    // 跟着容器一起缩放绘制。逐帧重测的代价由内容侧的 appSkipToLookaheadSize 挡掉。
+                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
                 )
                 // 页面底色挪进共享节点内侧，并把 Scaffold 的容器色置透明。
                 // 否则 Scaffold 会在共享节点之外先铺满一整屏不透明底色，转场第一帧整屏就已经是本页的背景，
@@ -121,11 +112,11 @@ fun CrashLogDetailScreen(
                 current == null -> {
                     // 加载态与不存在区分：Store 异步加载完成前显示加载中，加载完成后仍为 null 才是记录不存在
                     if (!loaded) {
-                        Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator()
                         }
                     } else {
-                        Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text(stringResource(R.string.crash_detail_not_found), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
@@ -133,11 +124,16 @@ fun CrashLogDetailScreen(
                 else -> LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
-                        // 整页参与容器变形时按落定尺寸布局：否则列表会跟着容器逐帧变宽，
-                        // 一次转场里重复决定「哪些项可见、每项多宽」几十遍
-                        .appSkipToLookaheadSize()
-                        .padding(padding),
-                    contentPadding = PaddingValues(16.dp),
+                        // 容器变形的必需搭档：容器逐帧按动画尺寸重新测量，列表按落定尺寸布局一次，
+                        // 于是内容全程保持最终位置与字号，被容器边界裁剪着逐渐露出。
+                        .appSkipToLookaheadSize(),
+                    // 顶栏改为叠在本列表之上，避让高度自己算：TopAppBar 64dp + 状态栏
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 16.dp + TopAppBarHeight + statusBarHeight,
+                        bottom = 16.dp
+                    ),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     item { InfoCard(current) }
@@ -177,6 +173,24 @@ fun CrashLogDetailScreen(
                         }
                     }
                 }
+            }
+
+            // 顶栏不参与配对，但从第一帧就在：跟着容器一起被裁剪逐渐露出，而不是等落位再淡入。
+            // 不放进 Scaffold 的 topBar 槽，就是为了让它落在共享容器内侧 —— 否则容器还是一张小卡片
+            // 的时候，屏幕顶部就已经压着一条与卡片无关的实心色带。
+            Box(modifier = Modifier.appSkipToLookaheadSize()) {
+                TopAppBar(
+                    title = { Text(stringResource(R.string.crash_detail_title), fontWeight = FontWeight.ExtraBold) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = stringResource(R.string.content_desc_back)
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+                )
             }
         }
     }
