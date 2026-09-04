@@ -114,6 +114,9 @@ CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments
 - App 内平台登录提示必须携带明确目标（Trakt/豆瓣），不能只存 `showLoginPrompt` 布尔值；Trakt 确认按钮直调导航层 OAuth Custom Tab，豆瓣确认按钮直进 `DoubanLoginScreen`，`Routes.LOGIN` 仅用于网关未激活/失效，不得作为平台登录兜底
 - 删掉一层 `CompositionLocalProvider` 包裹时，删掉的 `{` 与 `}` 必须是同一对：开括号在页面上游（如 `Scaffold` 之前）、闭括号却顺手删了内层某个 provider 的那一个，全文件花括号仍然平衡、Kotlin 照样编译，但从那处起整棵树往里深了一层。DetailScreen 就这样把悬浮按钮、Snackbar 和全屏查看器全塞进了 `hazeSource` 的 Box，而注释还写着「hazeSource Box 结束」。改完用花括号计数核验块的真实闭合行，别信缩进和收尾注释——两者都不参与编译
 - haze 2.0.0-beta02 起 `hazeEffect` 采到的源里若有一个正处于自己的 `drawContent()`（即 effect 画在 source 子树内），直接 `IllegalArgumentException: Modifier.hazeEffect nodes cannot draw an ancestor Modifier.hazeSource`，旧版本只是静默丢源不模糊。`HazeSourceSelection.Behind` 靠 `findNearestAncestor` 找同 state 的祖先源再留 zIndex 更小的，能自动排除；显式传 `HazeSourceSelection.All` 的调用点（详情页/豆瓣详情页的悬浮按钮）没有这层保护，一旦被嵌进源子树就是必崩。R8 包的堆栈无用，用 debug 包取未混淆栈：`HazeSourceNode.draw` → `drawContentSafely` → …… → `HazeEffectNode.draw` 之间的 `LayoutNode.draw$ui` 数就是两者相隔的层数
+- macrobenchmark 前后对比之前先核实基线与被测构建之间只有本次改动：本仓库出现过并行会话的 fast-forward merge（`886cf78b`，改详情页头部 210 行 + ViewModel 109 行），四条转场用例里三条经过详情页，数据直接不可归因。跑 `git log --oneline <基线>..HEAD` 和 `git diff --stat <基线> HEAD` 确认改动范围，并记下被测 APK 的构建时刻与 merge 时刻的先后
+- Compose 共享元素「整页容器变形」的成本是转场期每帧 `layer.record { drawContent() }` 再 `drawLayer`：整页绘制命令逐帧重记，而静止页面根本不 record、只由 GPU 合成。页面里有热力图网格、词云这类内容时这一项就是转场期 CPU 帧耗时的主因，`scaleToBounds` / `skipToLookaheadSize` 都省不掉它（那两个省的是测量，不是绘制）。`sharedBounds(renderInOverlayDuringTransition = false)` 能省掉 record，但整页配对不能用：pop 时目标页画在上面，正在收缩的来源页被完全盖住，收缩动画看不见
+- 别把「在组合阶段读动画值」当成默认要修的性能问题，先量：把 `animateDp` 从组合阶段推到绘制阶段（自定义读 State 的 `Shape` + `graphicsLayer {}` block）在本项目实测反而更差（统计页转场 frameDurationCpuMs P90 22.1→23.6 ms），因为整页 body 的子项全 skippable、重组本身很便宜，而 `graphicsLayer {}` 的 block 每帧触发的放置阶段失效比那次重组更贵
 
 ## Git 规范
 - commit 须 Conventional Commits：<type>(<scope>): <中文描述>
