@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.searchsource
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -79,7 +80,6 @@ import com.tracktosearch.ui.component.SearchSourcesEntryKey
 import com.tracktosearch.ui.component.SettingsEntryCardCorner
 import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.appSharedBounds
-import com.tracktosearch.ui.component.appSharedChrome
 import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.hasListScrolled
@@ -162,6 +162,9 @@ fun SearchSourcesScreen(
                     key = SearchSourcesEntryKey,
                     animatedVisibilityScope = animatedVisibilityScope,
                     corner = SharedCorner.flattenFrom(SettingsEntryCardCorner),
+                    // 容器变形要的是「内容不变形、被裁剪逐渐露出」，默认的 scaleToBounds 会把内容
+                    // 跟着容器一起缩放绘制。逐帧重测的代价由内容侧的 appSkipToLookaheadSize 挡掉。
+                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
                 )
                 // 页面底色挪进共享节点内侧，并把 Scaffold 的容器色置透明。
                 // 否则 Scaffold 会在共享节点之外先铺满一整屏不透明底色，转场第一帧整屏就已经是本页的背景，
@@ -252,8 +255,9 @@ fun SearchSourcesScreen(
                 onBack = onBack,
                 onImport = { showImportDialog = true },
                 // 顶栏不参与配对：来源侧那张卡片上没有对应的标题栏，硬配对会把一行标题从卡片尺寸拉过来。
-                // 改为容器基本落位后再淡入。
-                modifier = Modifier.appSharedChrome(animatedVisibilityScope),
+                // 但它必须从第一帧就在，与内容一样按落定尺寸布局，跟着容器裁剪逐渐露出；
+                // 延迟入场会让容器长大的那段时间顶栏位置空着，落位时再整片闪出来。
+                modifier = Modifier.appSkipToLookaheadSize(),
                 onHelpClick = onHelpClick
             )
         }

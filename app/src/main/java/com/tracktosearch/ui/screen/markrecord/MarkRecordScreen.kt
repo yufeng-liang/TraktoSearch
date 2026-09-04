@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.markrecord
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -112,7 +113,6 @@ import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.SettingsEntryCardCorner
 import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.appSharedBounds
-import com.tracktosearch.ui.component.appSharedChrome
 import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.glassSceneForContent
@@ -290,6 +290,9 @@ fun MarkRecordScreen(
                 key = MarkRecordsEntryKey,
                 animatedVisibilityScope = animatedVisibilityScope,
                 corner = SharedCorner.flattenFrom(SettingsEntryCardCorner),
+                // 容器变形要的是「内容不变形、被裁剪逐渐露出」，默认的 scaleToBounds 会把内容
+                // 跟着容器一起缩放绘制。逐帧重测的代价由内容侧的 appSkipToLookaheadSize 挡掉。
+                resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
             )
             .onGloballyPositioned { rootPositionInRoot = it.positionInRoot() }
             .pointerInput(searchExpanded) {
@@ -446,11 +449,12 @@ fun MarkRecordScreen(
 
         // ========== 吸顶栏（Blur + 半透明背景） ==========
         // 顶栏不参与配对：来源侧那张卡片上没有对应的标题栏，硬配对会把一行标题从卡片尺寸拉过来。
-        // 改为容器基本落位后再淡入；转场期间同时让 haze 停采样，避免每帧背景都在变时还做实时模糊。
+        // 但它必须从第一帧就在，与网格一样按落定尺寸布局，跟着容器裁剪逐渐露出；延迟入场会让容器
+        // 长大的那段时间顶栏位置空着，落位时再整片闪出来。转场期间仍让 haze 停采样。
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .appSharedChrome(animatedVisibilityScope)
+                .appSkipToLookaheadSize()
                 .hazeTopBar(
                     state = hazeState,
                     style = hazeStyle,

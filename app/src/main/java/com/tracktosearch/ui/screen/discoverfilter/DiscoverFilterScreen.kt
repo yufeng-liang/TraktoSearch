@@ -118,13 +118,13 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.DiscoverFilterCardKey
 import com.tracktosearch.ui.component.DiscoverFilterCardCorner
-import com.tracktosearch.ui.component.appSharedChrome
 import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.isAppSharedTransitionActive
 import com.tracktosearch.ui.component.posterSharedKey
 import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.SharedOrigin
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -251,6 +251,9 @@ fun DiscoverFilterScreen(
                 key = DiscoverFilterCardKey,
                 animatedVisibilityScope = animatedVisibilityScope,
                 corner = SharedCorner.flattenFrom(DiscoverFilterCardCorner),
+                // 容器变形要的是「内容不变形、被裁剪逐渐露出」，默认的 scaleToBounds 会把内容
+                // 跟着容器一起缩放绘制。逐帧重测的代价由内容侧的 appSkipToLookaheadSize 挡掉。
+                resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
             )
     ) {
         // ========== 列表内容 ==========
@@ -364,8 +367,9 @@ fun DiscoverFilterScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                // 顶栏不参与配对：容器基本落位后再淡入；转场期停 haze 采样
-                .appSharedChrome(animatedVisibilityScope)
+                // 顶栏不参与配对，但从第一帧就在：与列表一样按落定尺寸布局，跟着容器裁剪逐渐露出。
+                // 延迟入场会让容器长大的那段时间顶栏位置空着，落位时再整片闪出来。转场期停 haze 采样
+                .appSkipToLookaheadSize()
                 .hazeTopBar(
                     state = hazeState,
                     style = hazeStyle,

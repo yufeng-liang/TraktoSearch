@@ -387,31 +387,15 @@ private val AppChromeEnter: EnterTransition =
 private val AppChromeExit: ExitTransition = fadeOut(tween(durationMillis = 20))
 
 /**
- * 页面 chrome（顶栏、悬浮按钮）的进出动画：容器变形结束后才入场，返回时先行退场。
- *
- * 整页参与容器变形时，顶栏不该也是共享元素的一部分：它在来源侧那张卡片上根本没有对应物，
- * 硬配对的结果是一行标题从卡片尺寸拉伸过来。让它退出配对、改为延迟入场的浮层，
- * 观感上就是「卡片先长成页面，页面再把自己的顶栏放上来」。
- */
-@Composable
-internal fun Modifier.appSharedChrome(
-    animatedVisibilityScope: AnimatedVisibilityScope? = LocalAnimatedVisibilityScope.current,
-): Modifier {
-    if (animatedVisibilityScope == null || !LocalSharedTransitionEnabled.current) return this
-    return with(animatedVisibilityScope) {
-        this@appSharedChrome.animateEnterExit(enter = AppChromeEnter, exit = AppChromeExit)
-    }
-}
-
-/**
- * 与 [appSharedChrome] 同样的延迟入场，但额外把自己抬进共享转场的 overlay 层。
+ * 延迟入场的 chrome，并把自己抬进共享转场的 overlay 层。
  *
  * 用于覆盖在共享元素之上的 chrome，例如全屏图片查看器的关闭按钮和页码。转场期间被配对的元素
  * 是画在 SharedTransitionScope 的 overlay 里的，普通兄弟节点无论 zIndex 多高都在它下面；
  * 于是「图片飞到一半时关闭按钮被图片盖住」。[zIndexInOverlay] 取 1 即排在被配对元素之上。
  *
- * 页面级 chrome（统计页、榜单页的顶栏）不需要这一层：那里的共享元素是整页容器，顶栏本来就是
- * 它的子节点，跟着一起被抬进 overlay，层序天然正确。
+ * 页面级 chrome（统计页、榜单页的顶栏）不走这条路：整页容器变形时顶栏是容器的子节点，改为与
+ * 内容一样挂 [appSkipToLookaheadSize]，从第一帧就在最终位置上、跟着容器裁剪逐渐露出。延迟入场
+ * 会让容器长大的那段时间顶栏位置空着，落位时再整片闪出来。
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable

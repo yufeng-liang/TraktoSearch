@@ -43,6 +43,7 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.ShimmerState
 import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.crashLogCardSharedKey
 import com.tracktosearch.ui.component.feedbackCardSharedKey
 import com.tracktosearch.ui.component.hasListScrolled
@@ -174,11 +175,15 @@ fun FeedbackScreen(
                             record = record,
                             timeLabels = timeLabels,
                             onClick = { onCrashLogClick(record.id) },
-                            modifier = Modifier.appSharedBounds(
-                                key = crashLogCardSharedKey(record.id),
-                                animatedVisibilityScope = animatedVisibilityScope,
-                                corner = SharedCorner.uniform(FeedbackListCardCorner),
-                            )
+                            // 目标侧走 RemeasureToBounds，动画边界会一路长到整页，本侧内容若跟着
+                            // 重测就会在淡出的那 200ms 里被拉散。按自己的落定尺寸布局，被裁剪着淡出即可。
+                            modifier = Modifier
+                                .appSharedBounds(
+                                    key = crashLogCardSharedKey(record.id),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    corner = SharedCorner.uniform(FeedbackListCardCorner),
+                                )
+                                .appSkipToLookaheadSize()
                         )
                     }
                 }
@@ -227,11 +232,14 @@ fun FeedbackScreen(
                                     hasUnreadReply = item.id in unreadFeedbackIds,
                                     timeLabels = timeLabels,
                                     onClick = { onFeedbackClick(item.id) },
-                                    modifier = Modifier.appSharedBounds(
-                                        key = feedbackCardSharedKey(item.id),
-                                        animatedVisibilityScope = animatedVisibilityScope,
-                                        corner = SharedCorner.uniform(FeedbackListCardCorner),
-                                    )
+                                    // 同上：本侧按落定尺寸布局，不跟着长到整页的动画边界重测。
+                                    modifier = Modifier
+                                        .appSharedBounds(
+                                            key = feedbackCardSharedKey(item.id),
+                                            animatedVisibilityScope = animatedVisibilityScope,
+                                            corner = SharedCorner.uniform(FeedbackListCardCorner),
+                                        )
+                                        .appSkipToLookaheadSize()
                                 )
                             }
                             if (state.hasMore) {

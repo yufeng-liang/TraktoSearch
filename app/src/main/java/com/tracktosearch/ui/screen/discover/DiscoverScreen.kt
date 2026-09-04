@@ -110,6 +110,7 @@ import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.traktListSharedKey
 import com.tracktosearch.ui.component.DiscoverFilterCardKey
 import com.tracktosearch.ui.component.DiscoverFilterCardCorner
@@ -727,11 +728,15 @@ fun DiscoverScreen(
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             uiState.trendingLists.take(5).forEachIndexed { index, listResponse ->
                                                 // 社区列表卡片放大成整个列表详情页；圆角在 18dp 与 0 之间插值
-                                                val listCardModifier = Modifier.appSharedBounds(
-                                                    key = traktListSharedKey(listResponse.list.ids.trakt),
-                                                    animatedVisibilityScope = animatedVisibilityScope,
-                                                    corner = SharedCorner.uniform(TraktListCardCorner),
-                                                )
+                                                // 目标侧走 RemeasureToBounds，动画边界一路长到整页；
+                                                // 本侧按落定尺寸布局，否则淡出的那 200ms 里内容会被拉散
+                                                val listCardModifier = Modifier
+                                                    .appSharedBounds(
+                                                        key = traktListSharedKey(listResponse.list.ids.trakt),
+                                                        animatedVisibilityScope = animatedVisibilityScope,
+                                                        corner = SharedCorner.uniform(TraktListCardCorner),
+                                                    )
+                                                    .appSkipToLookaheadSize()
                                                 val interactionSource = remember { MutableInteractionSource() }
                                                 val isPressed by interactionSource.collectIsPressedAsState()
                                                 val cardScale by animateFloatAsState(
@@ -803,6 +808,8 @@ fun DiscoverScreen(
                             animatedVisibilityScope = animatedVisibilityScope,
                             corner = SharedCorner.uniform(DiscoverFilterCardCorner),
                         )
+                        // 同上：本侧按落定尺寸布局，不跟着长到整页的动画边界重测
+                        .appSkipToLookaheadSize()
                     val shape = RoundedCornerShape(DiscoverFilterCardCorner)
                     // 浅玫瑰紫渐变（与「去豆瓣登录」卡片样式统一，仅渐变配色不同）
                     val gradient = remember { DiscoverRoseGradient.toBrush() }

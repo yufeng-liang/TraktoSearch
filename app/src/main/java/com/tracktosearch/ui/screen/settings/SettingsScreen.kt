@@ -576,11 +576,14 @@ fun SettingsScreen(
             // 豆瓣独立模式: 标记记录页读取 Trakt history,无 trakt token,隐藏
             if (isLoggedIn && !isDoubanMode) {
                 item(key = "mark_records_entry") {
-                    val markRecordsEntryModifier = Modifier.appSharedBounds(
-                        key = MarkRecordsEntryKey,
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        corner = SharedCorner.uniform(SettingsEntryCardCorner),
-                    )
+                    val markRecordsEntryModifier = Modifier
+                        .appSharedBounds(
+                            key = MarkRecordsEntryKey,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            corner = SharedCorner.uniform(SettingsEntryCardCorner),
+                        )
+                        // 同统计入口：本侧按落定尺寸布局，不跟着长到整页的动画边界重测
+                        .appSkipToLookaheadSize()
                     MarkRecordsEntryCard(
                         modifier = markRecordsEntryModifier,
                         onClick = onMarkRecordsClick,
@@ -635,11 +638,14 @@ fun SettingsScreen(
 
             // 搜索源（独立管理页入口，与标记记录入口卡片同构）
             item(key = "search_sources_entry") {
-                val searchSourcesEntryModifier = Modifier.appSharedBounds(
-                    key = SearchSourcesEntryKey,
-                    animatedVisibilityScope = animatedVisibilityScope,
-                    corner = SharedCorner.uniform(SettingsEntryCardCorner),
-                )
+                val searchSourcesEntryModifier = Modifier
+                    .appSharedBounds(
+                        key = SearchSourcesEntryKey,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        corner = SharedCorner.uniform(SettingsEntryCardCorner),
+                    )
+                    // 同统计入口：本侧按落定尺寸布局，不跟着长到整页的动画边界重测
+                    .appSkipToLookaheadSize()
                 SearchSourcesEntryCard(
                     modifier = searchSourcesEntryModifier,
                     onClick = onSearchSourcesClick,
