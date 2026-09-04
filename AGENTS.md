@@ -117,6 +117,9 @@ CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments
 - macrobenchmark 前后对比之前先核实基线与被测构建之间只有本次改动：本仓库出现过并行会话的 fast-forward merge（`886cf78b`，改详情页头部 210 行 + ViewModel 109 行），四条转场用例里三条经过详情页，数据直接不可归因。跑 `git log --oneline <基线>..HEAD` 和 `git diff --stat <基线> HEAD` 确认改动范围，并记下被测 APK 的构建时刻与 merge 时刻的先后
 - Compose 共享元素「整页容器变形」的成本是转场期每帧 `layer.record { drawContent() }` 再 `drawLayer`：整页绘制命令逐帧重记，而静止页面根本不 record、只由 GPU 合成。页面里有热力图网格、词云这类内容时这一项就是转场期 CPU 帧耗时的主因，`scaleToBounds` / `skipToLookaheadSize` 都省不掉它（那两个省的是测量，不是绘制）。`sharedBounds(renderInOverlayDuringTransition = false)` 能省掉 record，但整页配对不能用：pop 时目标页画在上面，正在收缩的来源页被完全盖住，收缩动画看不见
 - 别把「在组合阶段读动画值」当成默认要修的性能问题，先量：把 `animateDp` 从组合阶段推到绘制阶段（自定义读 State 的 `Shape` + `graphicsLayer {}` block）在本项目实测反而更差（统计页转场 frameDurationCpuMs P90 22.1→23.6 ms），因为整页 body 的子项全 skippable、重组本身很便宜，而 `graphicsLayer {}` 的 block 每帧触发的放置阶段失效比那次重组更贵
+- 整页容器变形的共享节点内侧必须自己铺一层不透明底色（`.appSharedBounds(...).background(colorScheme.background)`，并把该页 Scaffold 的 `containerColor` 置透明）。少了这一层，变形期那块区域就直接看到对面那一页：打开标记记录页的瞬间设置页的「外观」「搜索源」整块叠在本页上。底色只能挂在共享节点内侧，挂外侧会先铺满一整屏，「卡片长成页面」退化成「页面已经在了，只是内容从一个小矩形里长出来」。七个整页入口曾漏掉标记记录页和发现筛选页两处，排查时逐个 grep `corner = SharedCorner.flattenFrom` 后面有没有 `.background(`
+- 整页容器变形不能带 `fadeIn`/`fadeOut`：容器覆盖半屏到整屏，淡的那段时间它整片半透明，两页互相穿透。`SharedElementType.Bounds` 的默认进出动画因此是 `None`，揭示完全交给边界裁剪 + 圆角动画。代价是旧页内容在收缩结束时硬切消失，而不是 Material 规范里的容器内交叉溶解 —— 交叉溶解在两页内容差异大时看着像脏叠影，本项目选了硬切
+- git bash 里 `adb pull /sdcard/x.png` 会被 msys 路径转换改成 `C:/Program Files/Git/sdcard/x.png` 而报 `failed to stat remote object`；写成 `//sdcard/x.png` 或加 `MSYS_NO_PATHCONV=1`。`adb shell '...'` 单引号里的设备路径不受影响，所以「screencap 成功、pull 失败」是正常现象，不是设备没生成文件
 
 ## Git 规范
 - commit 须 Conventional Commits：<type>(<scope>): <中文描述>
