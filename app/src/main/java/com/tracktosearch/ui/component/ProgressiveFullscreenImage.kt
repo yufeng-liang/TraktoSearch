@@ -1,7 +1,10 @@
 package com.tracktosearch.ui.component
 
 import android.content.Context
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -13,6 +16,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -82,6 +87,65 @@ internal fun fullscreenImageRequest(context: Context, model: Any, underlayUrl: S
 }
 
 /**
+ * 转场期顶替 telephoto 的静态底图：直接把内存缓存里那张已解码位图画出来。
+ *
+ * 不能用 AsyncImage —— 它至少要等一帧才拿到图，而那一帧正是共享元素落在缩略图位置的第一帧，
+ * 缩略图此时已被置为不可见，于是会闪一下空白。从 [MemoryCache] 直接取位图是同步的，
+ * 首帧就有内容。取不到（缓存里没有同图的小尺寸段）时返回 null，调用方据此退回直接挂 telephoto。
+ */
+@Composable
+private fun rememberUnderlayPainter(model: Any): BitmapPainter? {
+    val context = LocalContext.current
+    return remember(context, model) {
+        val key = progressiveUnderlay(context, model)
+        val bitmap = key?.let { context.imageLoader.memoryCache?.get(MemoryCache.Key(it))?.bitmap }
+        bitmap?.let { BitmapPainter(it.asImageBitmap()) }
+    }
+}
+
+/**
+ * 加载进度环。
+ *
+ * 单独拆成一个 composable 是为了把三个高频 State 读取（下载进度、telephoto 的两个显示标志）
+ * 关在这个叶子作用域里。原先它们直接读在 [ProgressiveFullscreenImage] 的函数体内，
+ * 于是每来一个进度包就要重组整个 Box —— 里面装着 telephoto，而进度包在大图下载期间每几十毫秒一个。
+ *
+ * @param visible 为 false 时整体不画。转场期延迟挂载 telephoto 那一程要传 false：
+ *   那时 telephoto 还没挂上，[ZoomableImageState.isImageDisplayed] 恒为 false，
+ *   不关掉就会在飞行中的图片上叠一个转圈。
+ */
+@Composable
+private fun BoxScope.FullscreenImageProgressRing(
+    state: ZoomableImageState,
+    progressFlow: StateFlow<Float>,
+    visible: Boolean,
+) {
+    if (!visible || state.isImageDisplayed) return
+    val progress by progressFlow.collectAsStateWithLifecycle()
+    // 有底图时进度环缩小到底部，不挡住已经能看的画面；无底图时居中，替代整片空白
+    val ringModifier = if (state.isPlaceholderDisplayed) {
+        Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp).size(26.dp)
+    } else {
+        Modifier.align(Alignment.Center).size(44.dp)
+    }
+    if (progress > 0f) {
+        CircularProgressIndicator(
+            progress = { progress },
+            modifier = ringModifier,
+            color = Color.White,
+            trackColor = Color.White.copy(alpha = 0.25f),
+            strokeWidth = 3.dp
+        )
+    } else {
+        CircularProgressIndicator(
+            modifier = ringModifier,
+            color = Color.White.copy(alpha = 0.85f),
+            strokeWidth = 3.dp
+        )
+    }
+}
+
+/**
  * 全屏大图渐进显示 + 加载进度。
  *
  * 1. 内存缓存里的小尺寸底图作为占位立刻可见（若有）；
@@ -95,6 +159,12 @@ internal fun fullscreenImageRequest(context: Context, model: Any, underlayUrl: S
  *
  * 共享元素与手势修饰符由调用方挂在 [modifier] 上；
  * 关闭协议参数（[onRequestDismiss]/[backHandlerEnabled]）原样透传 [ZoomableFullscreenImage]。
+ *
+ * @param deferZoomable 转场进行中时先不挂 telephoto，改画一张内存缓存里的静态底图。
+ *   telephoto 的子采样分块是按视口尺寸算的，共享元素转场期间视口每帧都在变，
+ *   一次打开动画能触发几十轮重新分块解码，正是「点开大图卡一下」的主因。
+ *   只在打开这一程传 true，且缓存里真有底图时才生效；没有底图时按原路挂 telephoto，
+ *   否则转场期会是一片空白，比卡顿更糟。
  */
 @Composable
 internal fun ProgressiveFullscreenImage(
@@ -104,6 +174,7 @@ internal fun ProgressiveFullscreenImage(
     contentDescription: String? = null,
     state: ZoomableImageState = rememberFullscreenZoomableImageState(),
     gesturesEnabled: Boolean = true,
+    deferZoomable: Boolean = false,
     onRequestDismiss: (() -> Unit)? = null,
     backHandlerEnabled: Boolean = false,
 ) {
@@ -115,41 +186,39 @@ internal fun ProgressiveFullscreenImage(
     DisposableEffect(progressKey) {
         onDispose { if (progressKey.isNotEmpty()) ImageDownloadProgress.unwatch(progressKey) }
     }
-    val progress by progressFlow.collectAsStateWithLifecycle()
+
+    val underlayPainter = rememberUnderlayPainter(model)
+    val deferred = deferZoomable && underlayPainter != null
 
     Box(modifier = modifier) {
-        ZoomableFullscreenImage(
-            model = model,
-            contentScale = contentScale,
-            contentDescription = contentDescription,
-            state = state,
-            gesturesEnabled = gesturesEnabled,
-            onRequestDismiss = onRequestDismiss,
-            backHandlerEnabled = backHandlerEnabled,
-            modifier = Modifier.fillMaxSize()
-        )
-        if (!state.isImageDisplayed) {
-            // 有底图时进度环缩小到底部，不挡住已经能看的画面；无底图时居中，替代整片空白
-            val ringModifier = if (state.isPlaceholderDisplayed) {
-                Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp).size(26.dp)
-            } else {
-                Modifier.align(Alignment.Center).size(44.dp)
+        if (deferred && underlayPainter != null) {
+            // telephoto 未挂载的这一程它自己的返回键也没挂，这里补一个：
+            // 转场期缩放必然在原位，reset 与 dismiss 等价，直接 dismiss。
+            if (backHandlerEnabled && onRequestDismiss != null) {
+                BackHandler { onRequestDismiss() }
             }
-            if (progress > 0f) {
-                CircularProgressIndicator(
-                    progress = { progress },
-                    modifier = ringModifier,
-                    color = Color.White,
-                    trackColor = Color.White.copy(alpha = 0.25f),
-                    strokeWidth = 3.dp
-                )
-            } else {
-                CircularProgressIndicator(
-                    modifier = ringModifier,
-                    color = Color.White.copy(alpha = 0.85f),
-                    strokeWidth = 3.dp
-                )
-            }
+            Image(
+                painter = underlayPainter,
+                contentDescription = contentDescription,
+                contentScale = contentScale,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            ZoomableFullscreenImage(
+                model = model,
+                contentScale = contentScale,
+                contentDescription = contentDescription,
+                state = state,
+                gesturesEnabled = gesturesEnabled,
+                onRequestDismiss = onRequestDismiss,
+                backHandlerEnabled = backHandlerEnabled,
+                modifier = Modifier.fillMaxSize()
+            )
         }
+        FullscreenImageProgressRing(
+            state = state,
+            progressFlow = progressFlow,
+            visible = !deferred
+        )
     }
 }

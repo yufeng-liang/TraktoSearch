@@ -62,6 +62,7 @@ import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.component.SettingsEntryCardCorner
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 
@@ -410,14 +411,17 @@ internal fun StatisticsCard(
     val blurFill = if (isDark) GlassFillDarkSubtle
                    else Color.White.copy(alpha = 0.70f)
     NeumorphicFrostedSurface(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(20.dp))
+            // 调用方的修饰符挂在外边距之内：容器变形要量的是卡片可见的那块圆角面，
+            // 挂在 padding 之外量到的是整行宽度，转场起始矩形会比用户看到的卡片宽出两侧留白。
+            .then(modifier)
+            .clip(RoundedCornerShape(SettingsEntryCardCorner))
             .clickable { view.performHaptic(HapticType.CLICK); onClick() }
             .testTag("settings_statistics_card"),
         isDark = isDark,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(SettingsEntryCardCorner),
         backgroundColor = if (realBlur) blurFill else solidCardFill(isDark, blurFill),
         borderColor = if (isDark) GlassBorderDarkSubtle
                       else Color(0xFFE0E5EC).copy(alpha = 0.9f),

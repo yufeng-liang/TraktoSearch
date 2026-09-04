@@ -8,9 +8,11 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -91,6 +93,7 @@ object SharedOrigin {
     const val STATISTICS = "statistics"
     const val TRAKT_LIST = "trakt-list"
     const val DISCOVER_FILTER = "discover-filter"
+    const val FEEDBACK = "feedback"
 
     /**
      * 全屏图片查看器的缩略图/全屏配对。
@@ -126,19 +129,49 @@ fun personAvatarSharedKey(personId: Int, origin: String = SharedOrigin.ANY): Sha
 fun traktListSharedKey(listId: Int): SharedKey? =
     if (listId <= 0) null else SharedKey("trakt-list-$listId", SharedOrigin.DISCOVER, SharedElementType.Bounds)
 
+/** 发现页社区列表卡片的圆角；与 [SettingsEntryCardCorner] 同理，两端必须取同一个数。 */
+val TraktListCardCorner = 18.dp
+
 /** 发现页筛选入口卡片与筛选页根容器。 */
 val DiscoverFilterCardKey = SharedKey("filter-entry-card", SharedOrigin.DISCOVER, SharedElementType.Bounds)
 
-/**
- * 发现页右上角筛选图标与筛选页「返回箭头 + 标题」。
- *
- * 类型是 Bounds 而不是 Icon：两端画的不是同一张图（一个图标 对 一整行「箭头 + 标题」），
- * 需要交叉淡入把内容差异盖掉。
- */
-val DiscoverFilterIconKey = SharedKey("filter-entry-icon", SharedOrigin.DISCOVER, SharedElementType.Bounds)
+/** 发现页筛选入口卡片的圆角；与 [SettingsEntryCardCorner] 同理，两端必须取同一个数。 */
+val DiscoverFilterCardCorner = 20.dp
 
 /** 设置页观看统计入口卡片与统计页。 */
 val StatisticsEntryKey = SharedKey("statistics-entry", SharedOrigin.SETTINGS, SharedElementType.Bounds)
+
+/** 设置页标记记录入口卡片与标记记录页。 */
+val MarkRecordsEntryKey = SharedKey("mark-records-entry", SharedOrigin.SETTINGS, SharedElementType.Bounds)
+
+/** 设置页搜索源入口卡片与搜索源页。 */
+val SearchSourcesEntryKey = SharedKey("search-sources-entry", SharedOrigin.SETTINGS, SharedElementType.Bounds)
+
+/**
+ * 反馈列表卡片与反馈详情页。
+ *
+ * id 必须带上具体那一条：同一屏还有消息列表也通向这个详情页，两条路的源侧不同，
+ * 只有点中的那张卡片该参与配对。
+ */
+fun feedbackCardSharedKey(feedbackId: String): SharedKey? =
+    if (feedbackId.isBlank()) null
+    else SharedKey("feedback-$feedbackId", SharedOrigin.FEEDBACK, SharedElementType.Bounds)
+
+/** 崩溃日志卡片与崩溃日志详情页。id 是日志文件名。 */
+fun crashLogCardSharedKey(recordId: String): SharedKey? =
+    if (recordId.isBlank()) null
+    else SharedKey("crash-log-$recordId", SharedOrigin.FEEDBACK, SharedElementType.Bounds)
+
+/** 反馈页两种列表卡片的圆角；两端必须取同一个数，见 [SettingsEntryCardCorner]。 */
+val FeedbackListCardCorner = 16.dp
+
+/**
+ * 设置页入口卡片的圆角。
+ *
+ * 容器变形的两端要拿同一个数：卡片侧的稳定态是它，页面侧的对端值也是它，中间才插得平。
+ * 写死在这里而不是各自 hardcode，是因为两处对不上时看到的不是编译错误，而是落地那一帧圆角跳一下。
+ */
+val SettingsEntryCardCorner = 20.dp
 
 /**
  * 转场期间的圆角。
@@ -305,6 +338,89 @@ internal fun Modifier.appSharedBounds(
             )
         }
         if (shape == null) bounds else bounds.clip(shape)
+    }
+}
+
+/**
+ * 当前是否有共享元素转场在进行。
+ *
+ * 用来让转场期的高开销效果暂时让位：haze 实时采样、Backdrop 快照这类东西每帧都要重新取一遍背景，
+ * 而容器变形恰好是每帧背景都在变的时刻，两件事叠在一起正是掉帧最集中的地方。
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+internal fun isAppSharedTransitionActive(): Boolean {
+    val scope = LocalSharedTransitionScope.current ?: return false
+    return LocalSharedTransitionEnabled.current && scope.isTransitionActive
+}
+
+/**
+ * 让子树按 lookahead（落定后）的尺寸布局，转场期只在绘制上缩放。
+ *
+ * 整页参与容器变形时，页面里的 LazyColumn 如果跟着容器逐帧变宽，就会逐帧重新决定「哪些项可见、
+ * 每项多宽」，一次转场里做几十遍。挂在共享边界节点内侧的内容上，可以把这份重新测量省掉。
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+internal fun Modifier.appSkipToLookaheadSize(): Modifier {
+    val scope = LocalSharedTransitionScope.current
+    if (scope == null || !LocalSharedTransitionEnabled.current) return this
+    return with(scope) { this@appSkipToLookaheadSize.skipToLookaheadSize() }
+}
+
+/** chrome 入场：等容器基本落位再淡入。 */
+private val AppChromeEnter: EnterTransition =
+    fadeIn(tween(durationMillis = 180, delayMillis = 250, easing = LinearOutSlowInEasing))
+
+/**
+ * chrome 退场：几乎立即消失。
+ *
+ * 返回时容器要收回成一张卡片，顶栏若还跟着一起缩，用户会看到标题和按钮被压扁。
+ */
+private val AppChromeExit: ExitTransition = fadeOut(tween(durationMillis = 20))
+
+/**
+ * 页面 chrome（顶栏、悬浮按钮）的进出动画：容器变形结束后才入场，返回时先行退场。
+ *
+ * 整页参与容器变形时，顶栏不该也是共享元素的一部分：它在来源侧那张卡片上根本没有对应物，
+ * 硬配对的结果是一行标题从卡片尺寸拉伸过来。让它退出配对、改为延迟入场的浮层，
+ * 观感上就是「卡片先长成页面，页面再把自己的顶栏放上来」。
+ */
+@Composable
+internal fun Modifier.appSharedChrome(
+    animatedVisibilityScope: AnimatedVisibilityScope? = LocalAnimatedVisibilityScope.current,
+): Modifier {
+    if (animatedVisibilityScope == null || !LocalSharedTransitionEnabled.current) return this
+    return with(animatedVisibilityScope) {
+        this@appSharedChrome.animateEnterExit(enter = AppChromeEnter, exit = AppChromeExit)
+    }
+}
+
+/**
+ * 与 [appSharedChrome] 同样的延迟入场，但额外把自己抬进共享转场的 overlay 层。
+ *
+ * 用于覆盖在共享元素之上的 chrome，例如全屏图片查看器的关闭按钮和页码。转场期间被配对的元素
+ * 是画在 SharedTransitionScope 的 overlay 里的，普通兄弟节点无论 zIndex 多高都在它下面；
+ * 于是「图片飞到一半时关闭按钮被图片盖住」。[zIndexInOverlay] 取 1 即排在被配对元素之上。
+ *
+ * 页面级 chrome（统计页、榜单页的顶栏）不需要这一层：那里的共享元素是整页容器，顶栏本来就是
+ * 它的子节点，跟着一起被抬进 overlay，层序天然正确。
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+internal fun Modifier.appSharedOverlayChrome(
+    animatedVisibilityScope: AnimatedVisibilityScope? = LocalAnimatedVisibilityScope.current,
+): Modifier {
+    val scope = LocalSharedTransitionScope.current
+    if (animatedVisibilityScope == null || scope == null || !LocalSharedTransitionEnabled.current) {
+        return this
+    }
+    return with(scope) {
+        with(animatedVisibilityScope) {
+            this@appSharedOverlayChrome
+                .animateEnterExit(enter = AppChromeEnter, exit = AppChromeExit)
+        // 位置参数就是 zIndexInOverlay；被配对元素的默认值是 0，取 1 即排在它之上。
+        }.renderInSharedTransitionScopeOverlay(1f)
     }
 }
 

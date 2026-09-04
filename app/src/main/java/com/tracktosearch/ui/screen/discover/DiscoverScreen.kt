@@ -112,8 +112,10 @@ import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.traktListSharedKey
 import com.tracktosearch.ui.component.DiscoverFilterCardKey
-import com.tracktosearch.ui.component.DiscoverFilterIconKey
+import com.tracktosearch.ui.component.DiscoverFilterCardCorner
 import com.tracktosearch.ui.component.SharedOrigin
+import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.TraktListCardCorner
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -724,10 +726,11 @@ fun DiscoverScreen(
                                     } else {
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             uiState.trendingLists.take(5).forEachIndexed { index, listResponse ->
-                                                // 社区列表卡片与详情页标题栏整体配对
+                                                // 社区列表卡片放大成整个列表详情页；圆角在 18dp 与 0 之间插值
                                                 val listCardModifier = Modifier.appSharedBounds(
                                                     key = traktListSharedKey(listResponse.list.ids.trakt),
                                                     animatedVisibilityScope = animatedVisibilityScope,
+                                                    corner = SharedCorner.uniform(TraktListCardCorner),
                                                 )
                                                 val interactionSource = remember { MutableInteractionSource() }
                                                 val isPressed by interactionSource.collectIsPressedAsState()
@@ -746,7 +749,7 @@ fun DiscoverScreen(
                                                                 indication = null,
                                                                 onClick = { onListClick(listResponse.list.ids.trakt, listResponse.list.name) }
                                                             ),
-                                                        shape = RoundedCornerShape(18.dp),
+                                                        shape = RoundedCornerShape(TraktListCardCorner),
                                                         role = GlassSurfaceRole.Card,
                                                         interactionSource = interactionSource,
                                                         scene = discoverGlassScene,
@@ -798,8 +801,9 @@ fun DiscoverScreen(
                         .appSharedBounds(
                             key = DiscoverFilterCardKey.takeIf { activeFilterEntry == "card" },
                             animatedVisibilityScope = animatedVisibilityScope,
+                            corner = SharedCorner.uniform(DiscoverFilterCardCorner),
                         )
-                    val shape = RoundedCornerShape(20.dp)
+                    val shape = RoundedCornerShape(DiscoverFilterCardCorner)
                     // 浅玫瑰紫渐变（与「去豆瓣登录」卡片样式统一，仅渐变配色不同）
                     val gradient = remember { DiscoverRoseGradient.toBrush() }
                     AppVisualSurface(
@@ -885,17 +889,15 @@ fun DiscoverScreen(
                         // 圆形操作按钮在 Glass 下使用轻量光学层，在 Blur 下沿用拟态按钮。
                         CompositionLocalProvider(LocalBackdrop provides discoverContentBackdrop) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                        // 从右上角图标进入筛选页时（activeFilterEntry == "icon"），本图标与筛选页返回箭头配对
-                        val iconModifier = Modifier.appSharedBounds(
-                            key = DiscoverFilterIconKey.takeIf { activeFilterEntry == "icon" },
-                            animatedVisibilityScope = animatedVisibilityScope,
-                        )
+                        // 右上角筛选图标不再参与共享元素转场：它与筛选页那一行「返回箭头 + 标题」
+                        // 没有共同内容，配对出来的效果是一个圆图标拉伸成一整行，不如让页面按常规过渡进出。
+                        // 底部入口卡片（activeFilterEntry == "card"）仍然是容器变形。
                         AppIconButton(
                             onClick = {
                                 activeFilterEntry = "icon"
                                 onFilterDiscoverClick()
                             },
-                            modifier = iconModifier,
+                            modifier = Modifier,
                             isDark = isDark,
                             hazeState = discoverHazeState,
                             role = GlassSurfaceRole.CircularControl,

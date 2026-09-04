@@ -50,6 +50,8 @@ import com.tracktosearch.ui.component.rememberFullscreenZoomableImageState
 import com.tracktosearch.ui.component.rememberResetOrDismiss
 import com.tracktosearch.ui.component.savePosterToGallery
 import com.tracktosearch.ui.component.zoomSharedTarget
+import com.tracktosearch.ui.component.zoomTransitionPhase
+import com.tracktosearch.ui.component.appSharedOverlayChrome
 import com.tracktosearch.ui.util.showToast
 import com.tracktosearch.ui.theme.WatchedGreen
 import kotlinx.coroutines.launch
@@ -99,6 +101,9 @@ internal fun PosterFullscreenOverlay(
         // 否则放大后点到海报以外的黑底会直接把查看器关掉
         val imageState = rememberFullscreenZoomableImageState()
         val resetOrDismiss = rememberResetOrDismiss(imageState, onDismiss)
+        // 开合阶段判定见 zoomTransitionPhase：本组件的 enter 是 snap，
+        // 只看 AnimatedVisibility 的 transition.isRunning 会在第二帧就判定转场结束。
+        val phase = zoomTransitionPhase(animatedVisibilityScope)
 
         Box(
             modifier = Modifier
@@ -130,19 +135,24 @@ internal fun PosterFullscreenOverlay(
                         key = sharedKeyPrefix,
                         animatedVisibilityScope = animatedVisibilityScope,
                         clipRadius = 12.dp
+                        // thumbnailCrop 用默认 Crop：两端都是 2:3，海报本身也是 2:3，
+                        // Crop 与 Fit 在这里等价，取 Crop 换来只量一次的 scaleToBounds。
                     ),
                 // 转场动画期间锁手势，避免与共享元素转场互相打架
-                gesturesEnabled = !animatedVisibilityScope.transition.isRunning,
+                gesturesEnabled = !phase.running,
+                deferZoomable = phase.opening,
                 onRequestDismiss = onDismiss,
                 backHandlerEnabled = true
             )
 
             // 顶部操作栏（在图片之上，也需要拦截点击）
             // 原 Haze 毛玻璃已移除以降低持续渲染开销，改用半透明黑色背景
+            // 不参与配对：等海报基本落位再淡入，并抬进转场 overlay，否则会被飞行中的海报盖住
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)
+                    .appSharedOverlayChrome(animatedVisibilityScope)
                     .padding(horizontal = 16.dp, vertical = 48.dp)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },

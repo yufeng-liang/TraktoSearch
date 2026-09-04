@@ -1,5 +1,7 @@
 package com.tracktosearch.ui.navigation
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SizeTransform
@@ -1089,7 +1091,11 @@ fun AppNavigation(
                     arguments = listOf(
                         navArgument("listId") { type = NavType.IntType },
                         navArgument("listName") { type = NavType.StringType; defaultValue = "" }
-                    )
+                    ),
+                    // 同 Routes.STATISTICS：卡片长成整页的容器变形已经把页面显示出来了，不再叠 NavHost 淡入。
+                    // 共享转场被关掉时返回 null，落回 NavHost 的全局淡入，否则这个页面会毫无动画地直接出现。
+                    enterTransition = { if (sharedTransitionEnabled) EnterTransition.None else null },
+                    popExitTransition = { if (sharedTransitionEnabled) ExitTransition.None else null }
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         val listId = backStackEntry.arguments?.getInt("listId") ?: 0
@@ -1111,7 +1117,14 @@ fun AppNavigation(
                     }
                 }
 
-                composable(Routes.STATISTICS) {
+                composable(
+                    route = Routes.STATISTICS,
+                    // 容器变形自带进出：卡片长成整页的过程已经把页面「显示」出来了，
+                    // NavHost 再叠一层淡入等于同一个页面淡两次，落地时能看出一层灰。
+                    // 共享转场被关掉时返回 null，落回 NavHost 的全局淡入。
+                    enterTransition = { if (sharedTransitionEnabled) EnterTransition.None else null },
+                    popExitTransition = { if (sharedTransitionEnabled) ExitTransition.None else null }
+                ) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         StatisticsScreen(
                             onBack = { navController.popBackStack() }
@@ -1342,7 +1355,13 @@ fun AppNavigation(
                     }
                 }
 
-                composable(Routes.MARK_RECORDS) { backStackEntry ->
+                composable(
+                    route = Routes.MARK_RECORDS,
+                    // 同 Routes.STATISTICS：卡片长成整页的容器变形已经把页面显示出来了，不再叠 NavHost 淡入。
+                    // 共享转场被关掉时返回 null，落回 NavHost 的全局淡入，否则这个页面会毫无动画地直接出现。
+                    enterTransition = { if (sharedTransitionEnabled) EnterTransition.None else null },
+                    popExitTransition = { if (sharedTransitionEnabled) ExitTransition.None else null }
+                ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         MarkRecordScreen(
                             onBack = {
@@ -1359,7 +1378,13 @@ fun AppNavigation(
                     }
                 }
 
-                composable(Routes.SEARCH_SOURCES) {
+                composable(
+                    route = Routes.SEARCH_SOURCES,
+                    // 同 Routes.STATISTICS：卡片长成整页的容器变形已经把页面显示出来了，不再叠 NavHost 淡入。
+                    // 共享转场被关掉时返回 null，落回 NavHost 的全局淡入，否则这个页面会毫无动画地直接出现。
+                    enterTransition = { if (sharedTransitionEnabled) EnterTransition.None else null },
+                    popExitTransition = { if (sharedTransitionEnabled) ExitTransition.None else null }
+                ) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         SearchSourcesScreen(
                             onBack = { navController.popBackStack() },
@@ -1449,7 +1474,12 @@ fun AppNavigation(
                     route = Routes.CRASH_LOG_DETAIL,
                     arguments = listOf(
                         navArgument("recordId") { type = NavType.StringType }
-                    )
+                    ),
+                    // 同 Routes.STATISTICS：卡片长成整页的容器变形已经把页面显示出来了，不再叠 NavHost 淡入。
+                    // 这个页面只有反馈页崩溃日志卡片一个入口，去掉淡入不会让别的入口失去动画。
+                    // 共享转场被关掉时返回 null，落回 NavHost 的全局淡入。
+                    enterTransition = { if (sharedTransitionEnabled) EnterTransition.None else null },
+                    popExitTransition = { if (sharedTransitionEnabled) ExitTransition.None else null }
                 ) { backStackEntry ->
                     val recordId = backStackEntry.arguments?.getString("recordId") ?: return@composable
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {

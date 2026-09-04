@@ -216,6 +216,7 @@ import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.showToast
 import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.isAppSharedTransitionActive
 import com.tracktosearch.ui.component.posterSharedKey
 import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.SharedOrigin
@@ -437,9 +438,12 @@ fun WatchlistScreen(
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     // 只读取转场端点状态；isRunning 会在动画每一帧变化，直接读取会让整张网格每帧重组。
     // 端点状态仅在转场开始/结束时变化，足够控制 Backdrop 的启停。
-    val isNavigationTransitionRunning = animatedVisibilityScope?.transition?.let { transition ->
-        transition.currentState != transition.targetState
-    } == true
+    // 共享元素的边界动画（海报飞向详情页）比 AnimatedVisibility 的淡入淡出更长，只看后者会在
+    // 海报还在飞的时候提前恢复采样，正是掉帧最集中的那段。两个信号取或。
+    val isNavigationTransitionRunning = isAppSharedTransitionActive() ||
+        animatedVisibilityScope?.transition?.let { transition ->
+            transition.currentState != transition.targetState
+        } == true
     val isWatchlistGlassActive = isWatchlistGlassMode && !isNavigationTransitionRunning
     val watchlistContentBackdrop = rememberLayerBackdrop(
         onDraw = remember(watchlistBackdropBackground, ambientBackdropLayer) {

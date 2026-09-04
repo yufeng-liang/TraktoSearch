@@ -112,6 +112,12 @@ import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.StatisticsEntryKey
+import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.SettingsEntryCardCorner
+import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
+import com.tracktosearch.ui.component.appSharedChrome
+import com.tracktosearch.ui.component.appSkipToLookaheadSize
+import com.tracktosearch.ui.component.isAppSharedTransitionActive
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -231,12 +237,30 @@ fun StatisticsScreen(
     Scaffold(
         modifier = Modifier.testTag("statistics_screen"),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        // 容器色置透明、底色改由下面那个共享节点自己画，理由见该处注释。
+        // contentColor 显式写成 onBackground：Scaffold 默认取 contentColorFor(containerColor)，
+        // 而 contentColorFor(Transparent) 是 Unspecified，会让整页文字颜色退回外层 LocalContentColor。
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
+        // 与设置页观看统计入口卡片配对的是整页，而不是顶栏：卡片放大成页面、返回时收回成卡片。
+        // 卡片侧圆角 SettingsEntryCardCorner，页面侧是 0，转场期间在两者之间插值。
+        val transitionActive = isAppSharedTransitionActive()
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .appSharedBounds(
+                    key = StatisticsEntryKey,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    corner = SharedCorner.flattenFrom(SettingsEntryCardCorner),
+                )
+                // 页面底色挪进共享节点内侧，并把 Scaffold 的容器色置透明。
+                // 否则 Scaffold 会在共享节点之外先铺满一整屏不透明底色，转场第一帧整屏就已经是本页的背景，
+                // 「卡片长成页面」退化成「页面已经在了，只是内容从一个小矩形里长出来」。
+                // 挪进来之后底色跟着动画边界一起长大，且被上面那层圆角动画裁剪，落定后与原来逐像素相同。
+                .background(MaterialTheme.colorScheme.background)
         ) {
             val listState = rememberLazyListState()
             val hasContentUnderTopBar by remember {
@@ -300,6 +324,9 @@ fun StatisticsScreen(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
+                        // 整页参与容器变形时按落定尺寸布局：否则列表会跟着容器逐帧变宽，
+                        // 一次转场里重复决定「哪些项可见、每项多宽」几十遍
+                        .appSkipToLookaheadSize()
                         .hazeSource(state = statsHazeState)
                         .backdropSource(),
                     contentPadding = PaddingValues(
@@ -446,20 +473,17 @@ fun StatisticsScreen(
             }
             }
             // Haze模糊渐变TopAppBar（含状态栏）
-            // 「标题+返回箭头」整体与设置页观看统计入口配对
-            val headerModifier = Modifier.appSharedBounds(
-                key = StatisticsEntryKey,
-                animatedVisibilityScope = animatedVisibilityScope,
-            )
+            // 顶栏不参与配对：来源侧那张卡片上没有对应的标题栏，硬配对会把一行标题从卡片尺寸拉过来。
+            // 改为容器基本落位后再淡入；转场期间同时让 haze 停采样，避免每帧背景都在变时还做实时模糊。
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(headerModifier)
+                    .appSharedChrome(animatedVisibilityScope)
                     .hazeTopBar(
                         state = statsHazeState,
                         style = statsHazeStyle,
-                        blurRadius = 24.dp,
-                        isContentUnderTopBar = hasContentUnderTopBar,
+                        blurRadius = TopBarBackdropBlurRadius,
+                        isContentUnderTopBar = hasContentUnderTopBar && !transitionActive,
                         scene = statisticsGlassScene
                     )
                     .clickable(enabled = false, onClick = {})

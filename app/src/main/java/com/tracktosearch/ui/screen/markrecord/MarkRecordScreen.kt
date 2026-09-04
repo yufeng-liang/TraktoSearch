@@ -2,6 +2,7 @@ package com.tracktosearch.ui.screen.markrecord
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -103,14 +104,22 @@ import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.MarkRecordsEntryKey
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.SettingsEntryCardCorner
+import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.appSharedChrome
+import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.isAppSharedTransitionActive
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.navigation.DetailSeedStore
 import com.tracktosearch.ui.theme.GlassBorderDark
@@ -142,7 +151,7 @@ class MarkRecordSessionViewModel @Inject constructor(
     val traktConnected: StateFlow<Boolean> = sessionModeManager.traktConnected
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun MarkRecordScreen(
     onBack: () -> Unit,
@@ -154,6 +163,9 @@ fun MarkRecordScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val traktConnected by sessionViewModel.traktConnected.collectAsStateWithLifecycle()
     val isDark = isAppDarkTheme()
+    // 共享元素转场 scope（与设置页标记记录入口卡片配对）。本页没有 Scaffold，作用域自己从
+    // CompositionLocal 取，与 StatisticsScreen 的取法一致。
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val hazeState = remember { HazeState() }
     val hazeStyle = HazeMaterials.thin()
     val listState = rememberLazyGridState()
@@ -268,9 +280,17 @@ fun MarkRecordScreen(
         }
     }
 
+    // 与设置页标记记录入口卡片配对的是整页，而不是顶栏：卡片放大成页面、返回时收回成卡片。
+    // 卡片侧圆角 SettingsEntryCardCorner，页面侧是 0，转场期间在两者之间插值。
+    val transitionActive = isAppSharedTransitionActive()
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .appSharedBounds(
+                key = MarkRecordsEntryKey,
+                animatedVisibilityScope = animatedVisibilityScope,
+                corner = SharedCorner.flattenFrom(SettingsEntryCardCorner),
+            )
             .onGloballyPositioned { rootPositionInRoot = it.positionInRoot() }
             .pointerInput(searchExpanded) {
                 if (!searchExpanded) return@pointerInput
@@ -289,6 +309,9 @@ fun MarkRecordScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                // 整页参与容器变形时按落定尺寸布局：否则网格会跟着容器逐帧变宽，
+                // 一次转场里重复决定「哪些项可见、每项多宽」几十遍
+                .appSkipToLookaheadSize()
                 .hazeSource(state = hazeState)
                 .backdropContentSource(),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -332,8 +355,14 @@ fun MarkRecordScreen(
                             posterColorExtractor = viewModel.posterColorExtractor,
                             onClick = {
                                 val onClick = if (item.mediaType == "movie") onMovieClick else onShowClick
-                                // 标记记录卡片已有海报与年份，交给详情页做首帧种子
-                                DetailSeedStore.remember(item.tmdbId, item.posterUrl, item.year)
+                                // 标记记录卡片已有海报与年份，交给详情页做首帧种子；
+                                // origin 让详情页拼出与本行海报相同的共享元素 key
+                                DetailSeedStore.remember(
+                                    item.tmdbId,
+                                    item.posterUrl,
+                                    item.year,
+                                    origin = markRecordOrigin(item)
+                                )
                                 onClick(
                                     item.traktId, item.tmdbId,
                                     item.displayTitle.ifBlank { item.title },
@@ -416,14 +445,17 @@ fun MarkRecordScreen(
         }
 
         // ========== 吸顶栏（Blur + 半透明背景） ==========
+        // 顶栏不参与配对：来源侧那张卡片上没有对应的标题栏，硬配对会把一行标题从卡片尺寸拉过来。
+        // 改为容器基本落位后再淡入；转场期间同时让 haze 停采样，避免每帧背景都在变时还做实时模糊。
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .appSharedChrome(animatedVisibilityScope)
                 .hazeTopBar(
                     state = hazeState,
                     style = hazeStyle,
                     blurRadius = 24.dp,
-                    isContentUnderTopBar = hasContentUnderTopBar,
+                    isContentUnderTopBar = if (transitionActive) false else hasContentUnderTopBar,
                     scene = markRecordGlassScene
                 )
                 // 拦截点击：顶栏覆盖可滚动网格，不消费会让点击穿透到下方列表项

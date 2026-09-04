@@ -43,6 +43,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -83,6 +84,9 @@ internal fun ZoomableImageOverlay(
     onDismiss: () -> Unit,
     onSave: ((Int) -> Unit)? = null,
     isSavedAt: (Int) -> Boolean = { false },
+    // 缩略图侧的裁剪方式，决定本侧的 resizeMode，见 ZoomThumbnailCrop。默认 Crop：
+    // 除反馈截图（Fit 缩略图）之外，各入口的缩略图都是 ContentScale.Crop。
+    thumbnailCrop: ZoomThumbnailCrop = ZoomThumbnailCrop.Crop,
     // 进入用 snap：共享元素位置/尺寸由 spring 负责，alpha 再叠 200ms fade 会双重动画；
     // 退出保留短 fade：缩回缩略图后遮罩平滑消失，避免黑幕瞬间闪断
     enter: EnterTransition = fadeIn(animationSpec = snap()),
@@ -111,20 +115,27 @@ internal fun ZoomableImageOverlay(
 
         // 转场动画期间同时锁缩放手势和翻页：telephoto 只在放大后才用 nested scroll 接管横向拖动，
         // 手势被禁时它不消费，pager 仍能被滑走，把共享元素配对的目标页换掉。
-        val transitionRunning = animatedVisibilityScope.transition.isRunning
+        // 判定见 zoomTransitionPhase —— 本组件的 enter 是 snap，只看 AnimatedVisibility 的
+        // transition.isRunning 会在第二帧就解锁。
+        val phase = zoomTransitionPhase(animatedVisibilityScope)
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.92f))
                 .statusBarsPadding()
+                // 基准用这个 tag 断言查看器开了、又真的关掉了：本节点随 AnimatedVisibility 进出，
+                // 退出动画播完才被移除，正好是「一次往返」的两个端点。
+                // 本组件是通用件，剧照、人物图、反馈截图几处入口共用这一个 tag；
+                // 详情页上只有剧照查看器走这里，不会歧义。
+                .testTag("zoomable_image_overlay")
         ) {
             // 图片区：单击退出（放大时先复位）与返回键都由 ProgressiveFullscreenImage 统一处理。
             // 这里不再套一层全屏 clickable —— 图片节点本身就 fillMaxSize 且始终消费单击，
             // 那层永远收不到事件，只会给 TalkBack 多挂一个全屏可点节点。
             HorizontalPager(
                 state = pagerState,
-                userScrollEnabled = !transitionRunning,
+                userScrollEnabled = !phase.running,
                 modifier = Modifier.fillMaxSize()
             ) { page ->
                 val url = images.getOrNull(page) ?: return@HorizontalPager
@@ -132,7 +143,8 @@ internal fun ZoomableImageOverlay(
                     model = url,
                     contentScale = ContentScale.Fit,
                     contentDescription = stringResource(R.string.cd_image_page, page + 1, images.size),
-                    gesturesEnabled = !transitionRunning,
+                    gesturesEnabled = !phase.running,
+                    deferZoomable = phase.opening,
                     onRequestDismiss = onDismiss,
                     // 每页各自接管返回键：仅当前页组合，不会重复注册
                     backHandlerEnabled = true,
@@ -140,15 +152,19 @@ internal fun ZoomableImageOverlay(
                         .fillMaxSize()
                         .zoomSharedTarget(
                             key = sharedKeyPrefix?.let { "$it-$page" },
-                            animatedVisibilityScope = animatedVisibilityScope
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            thumbnailCrop = thumbnailCrop
                         )
                 )
             }
             // 顶部操作栏（在图片之上，必须自己吃掉单击，否则空白处的点击会穿到下面的图片节点触发退出）
+            // 不参与配对：缩略图那一侧没有对应物。改为等图片基本落位再淡入，并抬进转场 overlay ——
+            // 转场期图片是画在 overlay 里的，普通兄弟节点会被它整块盖住。
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)
+                    .appSharedOverlayChrome(animatedVisibilityScope)
                     .padding(horizontal = 8.dp, vertical = 8.dp)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },

@@ -111,6 +111,7 @@ import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.isAppSharedTransitionActive
 import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.LocalFullscreenSharedElement
 import com.tracktosearch.ui.component.fullscreenSharedElementKey
@@ -407,9 +408,12 @@ fun DetailScreen(
     // 非首屏内容与 Haze source，避免正文、图片和模糊采样与共享海报叠加到同一帧。
     // 不读取 isRunning：它随动画每帧变化，会让详情正文整棵树反复重组。
     // 端点状态只在转场开始/结束时变化，足以控制首屏内容和 Haze source。
-    val isNavigationTransitionRunning = LocalAnimatedVisibilityScope.current?.transition?.let { transition ->
-        transition.currentState != transition.targetState
-    } == true
+    // 共享海报的边界动画比页面淡入更长，只看页面转场端点会在海报还在飞的时候放开正文与
+    // Haze 采样。两个信号取或，任一还在跑就继续冻结。
+    val isNavigationTransitionRunning = isAppSharedTransitionActive() ||
+        LocalAnimatedVisibilityScope.current?.transition?.let { transition ->
+            transition.currentState != transition.targetState
+        } == true
     val contentReadyForTransition = contentReady && !isNavigationTransitionRunning
 
 

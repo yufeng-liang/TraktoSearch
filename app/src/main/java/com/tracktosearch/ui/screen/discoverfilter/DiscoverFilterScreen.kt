@@ -117,7 +117,10 @@ import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.DiscoverFilterCardKey
-import com.tracktosearch.ui.component.DiscoverFilterIconKey
+import com.tracktosearch.ui.component.DiscoverFilterCardCorner
+import com.tracktosearch.ui.component.appSharedChrome
+import com.tracktosearch.ui.component.appSkipToLookaheadSize
+import com.tracktosearch.ui.component.isAppSharedTransitionActive
 import com.tracktosearch.ui.component.posterSharedKey
 import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.SharedOrigin
@@ -238,12 +241,16 @@ fun DiscoverFilterScreen(
         viewModel.collapseAdvanced()
     }
 
+    // 与底部入口卡片配对的是整页：卡片放大成页面、返回时收回成卡片。
+    // 从顶部圆形筛选图标进来时源侧不配对，本侧只剩淡入，与其他页面一致。
+    val transitionActive = isAppSharedTransitionActive()
     Box(
         modifier = Modifier
             .fillMaxSize()
             .appSharedBounds(
                 key = DiscoverFilterCardKey,
                 animatedVisibilityScope = animatedVisibilityScope,
+                corner = SharedCorner.flattenFrom(DiscoverFilterCardCorner),
             )
     ) {
         // ========== 列表内容 ==========
@@ -251,6 +258,7 @@ fun DiscoverFilterScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                .appSkipToLookaheadSize()
                 .hazeSource(state = hazeState)
                 .backdropContentSource(),
             contentPadding = PaddingValues(
@@ -356,10 +364,13 @@ fun DiscoverFilterScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // 顶栏不参与配对：容器基本落位后再淡入；转场期停 haze 采样
+                .appSharedChrome(animatedVisibilityScope)
                 .hazeTopBar(
                     state = hazeState,
                     style = hazeStyle,
                     blurRadius = 24.dp,
+                    isContentUnderTopBar = if (transitionActive) false else null,
                     scene = discoverFilterGlassScene
                 )
                 // 拦截点击：顶栏覆盖可滚动列表，不消费会让点击穿透到下方列表项
@@ -373,13 +384,10 @@ fun DiscoverFilterScreen(
                     .padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 1.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 「返回箭头 + 标题」作为整体与发现页右上角筛选图标配对
-                val headerModifier = Modifier.appSharedBounds(
-                    key = DiscoverFilterIconKey,
-                    animatedVisibilityScope = animatedVisibilityScope,
-                )
+                // 「返回箭头 + 标题」不参与配对：发现页那一侧是个圆形筛选图标，两端没有共同内容。
+                // 与整页配对的是 DiscoverFilterCardKey（底部入口卡片那条路）。
                 Row(
-                    modifier = headerModifier.weight(1f),
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onBack) {

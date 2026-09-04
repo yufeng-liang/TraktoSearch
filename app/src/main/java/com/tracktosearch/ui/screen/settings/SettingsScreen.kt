@@ -144,6 +144,10 @@ import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.StatisticsEntryKey
+import com.tracktosearch.ui.component.MarkRecordsEntryKey
+import com.tracktosearch.ui.component.SearchSourcesEntryKey
+import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.SettingsEntryCardCorner
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -553,6 +557,7 @@ fun SettingsScreen(
                     val statisticsEntryModifier = Modifier.appSharedBounds(
                         key = StatisticsEntryKey,
                         animatedVisibilityScope = animatedVisibilityScope,
+                        corner = SharedCorner.uniform(SettingsEntryCardCorner),
                     )
                     StatisticsCard(
                         modifier = statisticsEntryModifier,
@@ -566,10 +571,16 @@ fun SettingsScreen(
             // 豆瓣独立模式: 标记记录页读取 Trakt history,无 trakt token,隐藏
             if (isLoggedIn && !isDoubanMode) {
                 item(key = "mark_records_entry") {
+                    val markRecordsEntryModifier = Modifier.appSharedBounds(
+                        key = MarkRecordsEntryKey,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        corner = SharedCorner.uniform(SettingsEntryCardCorner),
+                    )
                     MarkRecordsEntryCard(
-                    onClick = onMarkRecordsClick,
-                    hazeState = settingsHazeState
-                )
+                        modifier = markRecordsEntryModifier,
+                        onClick = onMarkRecordsClick,
+                        hazeState = settingsHazeState
+                    )
                 }
             }
 
@@ -619,7 +630,13 @@ fun SettingsScreen(
 
             // 搜索源（独立管理页入口，与标记记录入口卡片同构）
             item(key = "search_sources_entry") {
+                val searchSourcesEntryModifier = Modifier.appSharedBounds(
+                    key = SearchSourcesEntryKey,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    corner = SharedCorner.uniform(SettingsEntryCardCorner),
+                )
                 SearchSourcesEntryCard(
+                    modifier = searchSourcesEntryModifier,
                     onClick = onSearchSourcesClick,
                     hazeState = settingsHazeState
                 )
@@ -1328,6 +1345,7 @@ fun SettingsScreen(
 @Composable
 private fun MarkRecordsEntryCard(
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
     val view = LocalView.current
@@ -1338,10 +1356,13 @@ private fun MarkRecordsEntryCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(20.dp))
+            // 调用方的修饰符挂在外边距之内：容器变形要量的是卡片可见的那块圆角面，
+            // 挂在 padding 之外量到的是整行宽度，转场起始矩形会比用户看到的卡片宽出两侧留白。
+            .then(modifier)
+            .clip(RoundedCornerShape(SettingsEntryCardCorner))
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
         isDark = isDark,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(SettingsEntryCardCorner),
         backgroundColor = if (realBlur) {
             if (isDark) GlassFillDarkSubtle else Color.White.copy(alpha = 0.70f)
         } else {
@@ -1410,6 +1431,7 @@ private fun MarkRecordsEntryCard(
 @Composable
 private fun SearchSourcesEntryCard(
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
     val view = LocalView.current
@@ -1420,10 +1442,13 @@ private fun SearchSourcesEntryCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(20.dp))
+            // 调用方的修饰符挂在外边距之内：容器变形要量的是卡片可见的那块圆角面，
+            // 挂在 padding 之外量到的是整行宽度，转场起始矩形会比用户看到的卡片宽出两侧留白。
+            .then(modifier)
+            .clip(RoundedCornerShape(SettingsEntryCardCorner))
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
         isDark = isDark,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(SettingsEntryCardCorner),
         backgroundColor = if (realBlur) {
             if (isDark) GlassFillDarkSubtle else Color.White.copy(alpha = 0.70f)
         } else {

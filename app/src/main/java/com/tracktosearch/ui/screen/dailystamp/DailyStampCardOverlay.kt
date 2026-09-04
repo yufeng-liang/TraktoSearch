@@ -8,6 +8,7 @@ import android.graphics.Picture
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -111,6 +112,11 @@ import coil.request.ImageRequest
 import coil.size.Scale
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.SaveToAlbumResult
+import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.SharedOrigin
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.posterSharedKey
+import com.tracktosearch.ui.navigation.DetailSeedStore
 import com.tracktosearch.ui.screen.splash.QuoteSeal
 import com.tracktosearch.ui.screen.splash.SplashPalette
 import com.tracktosearch.ui.screen.splash.grainBrush
@@ -124,6 +130,22 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.random.Random
+
+/**
+ * 日签卡片的 origin 基名。
+ *
+ * [SharedOrigin] 只收跨页面配对用到的公共值，某个屏幕私有的细分值就近声明在该屏幕文件里。
+ */
+private const val DAILY_STAMP_ORIGIN_BASE = "daily-stamp"
+
+/**
+ * 某一天卡片的 origin。
+ *
+ * 一排卡片一天一张，槽位就取那一天：台词库可以把同一部片子排在不同的日子，
+ * 只靠 tmdbId 分不出点开的是哪一张卡。
+ */
+private fun dailyStampOrigin(date: LocalDate): String =
+    SharedOrigin.of(DAILY_STAMP_ORIGIN_BASE, date.toString())
 
 /**
  * 日签卡片浮层。
@@ -274,7 +296,12 @@ private fun CardCarousel(
         label = "dailyStampActionAlpha",
     )
     val onDetail = {
-        line?.card?.let { onQuoteClick(it.tmdbId, it.mediaType, it.title, it.year, it.posterUrl) }
+        line?.card?.let {
+            // 卡片海报来自台词库自带的地址，进不了 TMDB 详情缓存，详情页 peek 会落空，
+            // 连同 origin 一起交给它：海报当首帧种子，origin 用来拼出与卡面海报相同的 key
+            DetailSeedStore.remember(it.tmdbId, it.posterUrl, it.year, origin = dailyStampOrigin(it.date))
+            onQuoteClick(it.tmdbId, it.mediaType, it.title, it.year, it.posterUrl)
+        }
         Unit
     }
     /** 落款带（图标 + 应用名）只出现在导出图上，屏幕上的卡片没有它，见 [StampBrand] */
@@ -602,6 +629,7 @@ private fun TicketHeader(tick: String, serial: String, palette: SplashPalette) {
  * 卡纸内侧还有一条发丝线：没有它海报是贴在卡纸上的另一张纸，有了它才像陷进卡纸
  * 开出来的窗里。
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun CardPoster(
     card: DailyStampCardUi,
@@ -616,6 +644,9 @@ private fun CardPoster(
     // 都能把海报和卡纸分开，不必为此另兑颜色
     val hairline = palette.ink.copy(alpha = if (palette.isDark) 0.34f else 0.22f)
     val interactionSource = remember { MutableInteractionSource() }
+    // 只有被点过的那一张卡才挂共享元素修饰符：一排三张都挂的话，翻页时白付两份
+    // SharedContentState 与布局节点的开销
+    var clicked by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val posterRequest = remember(card.poster, context) {
         ImageRequest.Builder(context)
@@ -627,12 +658,21 @@ private fun CardPoster(
     Box(
         modifier = Modifier
             .size(width = 122.dp, height = 183.dp)
+            // 开窗连卡纸一起与详情页头图配对：配对两端都是 2:3，卡纸那 5dp 一起放大不露馅
+            .appSharedBounds(
+                key = if (clicked) posterSharedKey(card.tmdbId, dailyStampOrigin(card.date)) else null,
+                corner = SharedCorner.uniform(6.dp),
+            )
             .clip(RoundedCornerShape(6.dp))
             .background(palette.cream)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = onClick,
+                onClick = {
+                    // 先登记本张卡参与转场，再走进详情页
+                    clicked = true
+                    onClick()
+                },
             )
             .padding(5.dp)
     ) {
