@@ -3,35 +3,50 @@ package com.tracktosearch.ui.screen.swiftie
 /**
  * 彩蛋序列的时长账本。**所有**时间都从这里取，没有任何段落自己写死毫秒数。
  *
- * 总长由需求方自备的配乐倒推（实测 125.998s = [TOTAL_MS]），因此各段相加必须正好
- * [TOTAL_MS]。`SwiftieTimelineTest` 会守着这条不变式。
+ * 时钟的 T0 **不是配乐的第一帧**：答对之后先走 [PREROLL_MS] 的前奏（键盘退场、算式走回
+ * 原图里的位置、手写体写出来），而配乐在前奏第一帧就起播，所以音轨永远领先时钟
+ * [PREROLL_MS]。账本总长因此是 [MUSIC_MS] 减掉这一段，各段相加必须正好 [TOTAL_MS]。
+ * `SwiftieTimelineTest` 守着这两条不变式。
  *
  * ## 为什么终局排在倒滑之前
  *
  * 配乐末尾 1:58–2:02 唱的是 Lover，所以 [REWIND_START] 与 [LOVER_BLOOM_END] 是
- * **配乐钉死的两个点**，不能挪。绽放收在 2:03，离总长只剩 2998ms，而签名 8s +
- * 手链 4.5s + 定格 6.09s 共 18.59s 放不下 —— 于是终局整块排在倒滑之前，
- * 倒滑与绽放成为收尾：12 个时代 → 签名 → 手链 → 定格 → 飞回 Lover → 绽放 → 淡出。
+ * **配乐钉死的两个点**，不能挪（两者都已折算掉前奏，见各自的注释）。绽放收在音轨 2:03，
+ * 其后只剩 2998ms，而签名 8s + 手链 4.5s + 定格 4.59s 共 17.09s 放不下 —— 于是终局整块
+ * 排在倒滑之前，倒滑与绽放成为收尾：
+ * 12 个时代 → 签名 → 手链 → 定格 → 飞回 Lover → 绽放 → 淡出。
  */
 object SwiftieTimeline {
 
     /**
-     * 配乐总长。
+     * 配乐文件的实际长度。
      *
      * `swiftie_theme.ogg`（Opus）的容器时长 125.997979s，取到毫秒。
      * 需求方口述的「2 分 05 秒」实测是 2:06 —— 源 MP3 为 126.067s，
      * 转 Opus 后被预跳裁掉 69ms。**换音轨必须同步改这个值**，
      * 否则 Lover 绽放会与配乐错开（`SwiftieTimelineTest` 守着）。
      */
-    const val TOTAL_MS: Long = 125_998L
+    const val MUSIC_MS: Long = 125_998L
+
+    /**
+     * 前奏：答对之后、序列时钟起跑之前的那一段。
+     *
+     * 配乐**在前奏第一帧就起播**，所以这个值同时就是「音轨领先时钟多少」——
+     * 下面两个配乐钉死的点都按它折算过，改前奏时长等于改整条序列的对位。
+     * 前奏内部怎么分配（键盘下滑 / 算式归位 / 手写体落笔）见 `SwiftieEggScreen`。
+     */
+    const val PREROLL_MS: Long = 1_500L
+
+    /** 账本总长：音轨长度减去前奏已经放掉的那一截，所以最后一帧与音轨末尾同时到。 */
+    const val TOTAL_MS: Long = MUSIC_MS - PREROLL_MS
 
     // ---- 配乐钉死的两个点（Spec §5，实测自备配乐）----
 
-    /** 配乐 1:58 起唱 Lover：播放头从这一刻开始倒滑。 */
-    const val REWIND_START: Long = 118_000L
+    /** 音轨 1:58 起唱 Lover，折算成时钟 116500：播放头从这一刻开始倒滑。 */
+    const val REWIND_START: Long = 118_000L - PREROLL_MS
 
-    /** 2:03 绽放收束，其后只留淡出。 */
-    const val LOVER_BLOOM_END: Long = 123_000L
+    /** 音轨 2:03 绽放收束（时钟 121500），其后只留淡出。 */
+    const val LOVER_BLOOM_END: Long = 123_000L - PREROLL_MS
 
     // ---- Eras 卡片 ----
 
@@ -66,7 +81,13 @@ object SwiftieTimeline {
 
     // ---- 段落边界（毫秒，相对 T0 = 提交命中）----
 
-    /** T0–400：`X` → 闪粉 `13`，下行淡出，同帧挂载 mesh 付掉着色器编译。 */
+    /**
+     * T0–400：写完的整幅海报再停一拍，然后才起扩散。
+     *
+     * 名字沿用「SOLVE」，但答对那一刻的动作（`X` → 闪粉 `13`、键盘退场、算式归位、
+     * 手写体写出来）全在前奏里做完了 —— 时钟起跑时海报已经是原图的样子。
+     * mesh 也早在前奏第一帧就挂上了，着色器编译付在那 1500ms 里。
+     */
     const val SOLVE_MS: Long = 400L
 
     /** T400–1100：圆形扩张吞屏。 */
@@ -97,7 +118,7 @@ object SwiftieTimeline {
     const val BRACELET_MS: Long = 4_500L
 
     /**
-     * T111910–118000：定格合影，留出截图时间。
+     * T111910–116500：定格合影，留出截图时间。
      *
      * 这一段是账本里唯一的**弹性段**：前面各段都由内容决定长度，
      * 后面各段由配乐钉死，误差全落在这里。改曲目数只会让定格变长变短，
@@ -106,14 +127,14 @@ object SwiftieTimeline {
     val FINAL_HOLD_START: Long = BRACELET_START + BRACELET_MS
     val FINAL_HOLD_MS: Long = REWIND_START - FINAL_HOLD_START
 
-    /** T118000–119500：播放头倒滑回第 7 段。 */
+    /** T116500–118000：播放头倒滑回第 7 段。 */
     const val REWIND_MS: Long = 1_500L
 
-    /** T119500–123000：Lover 段亮起放大铺满，压着配乐里那句 Lover。 */
+    /** T118000–121500：Lover 段亮起放大铺满，压着配乐里那句 Lover。 */
     val LOVER_BLOOM_START: Long = REWIND_START + REWIND_MS
     val LOVER_BLOOM_MS: Long = LOVER_BLOOM_END - LOVER_BLOOM_START
 
-    /** T123000–125998：整层淡出，露出已经在运动的星云背景。 */
+    /** T121500–124498：整层淡出，露出已经在运动的星云背景。 */
     val FADE_OUT_START: Long = LOVER_BLOOM_END
     val FADE_OUT_MS: Long = TOTAL_MS - FADE_OUT_START
 

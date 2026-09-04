@@ -127,12 +127,7 @@ import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
-import com.tracktosearch.ui.component.LocalActivePosterClickSetter
-import com.tracktosearch.ui.component.LocalActivePosterClickToken
-import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
@@ -171,6 +166,9 @@ import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.personAvatarSharedKey
+import com.tracktosearch.ui.component.SharedOrigin
 import dagger.hilt.android.EntryPointAccessors
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazePerformanceMode
@@ -211,8 +209,6 @@ fun TraktSearchScreen(
     val spriteState by spriteViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val view = LocalView.current
-    // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的卡片参与共享元素转场
-    var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
     val focusRequester = remember { FocusRequester() }
     val coroutineScope = rememberCoroutineScope()
     val hazeState = remember { HazeState() }
@@ -454,18 +450,6 @@ fun TraktSearchScreen(
     }
 
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    // 点击 token,确保只有被点击的卡片参与转场
-    var activeClickToken by remember { mutableStateOf(0) }
-
-    CompositionLocalProvider(
-        LocalActivePosterTmdbId provides activePosterTmdbId,
-        LocalActivePosterClickSetter provides { id ->
-            activePosterTmdbId = id
-            activeClickToken += 1
-            activeClickToken
-        },
-        LocalActivePosterClickToken provides activeClickToken
-    ) {
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
@@ -685,6 +669,7 @@ fun TraktSearchScreen(
                                     genres = item.genres,
                                     posterUrl = item.posterUrl,
                                     tmdbId = item.tmdbId,
+                                    origin = SharedOrigin.of(SharedOrigin.SEARCH, uiState.selectedTab.name),
                                     isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.traktId, item.tmdbId, uiState.selectedTab) == true,
                                     isWatched = watchlistWatchedIds?.isWatched(item.traktId, item.tmdbId, uiState.selectedTab) == true,
                                     modifier = if (index == 0) {
@@ -1031,7 +1016,6 @@ fun TraktSearchScreen(
             )
         }
     }
-    } // CompositionLocalProvider
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -1305,7 +1289,6 @@ private fun PersonSearchCard(
             PosterColorExtractorProvider::class.java
         ).posterColorExtractor()
     }
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     Card(
         onClick = onClick,
@@ -1324,19 +1307,13 @@ private fun PersonSearchCard(
                 contentAlignment = Alignment.Center
             ) {
                 if (profileUrl != null) {
-                    // 启用 sharedElement 转场:key 与 PersonHeaderContent 一致("person-avatar-$personId")
-                    val imageModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-                        with(sharedTransitionScope) {
-                            Modifier
-                                .sharedElement(
-                                    rememberSharedContentState(key = "person-avatar-$personId"),
-                                    animatedVisibilityScope = animatedVisibilityScope
-                                )
-                                .fillMaxSize()
-                        }
-                    } else {
-                        Modifier.fillMaxSize()
-                    }
+                    // 与 PersonHeaderContent 配对
+                    val imageModifier = Modifier
+                        .appSharedBounds(
+                            key = personAvatarSharedKey(personId),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                        )
+                        .fillMaxSize()
                     SubcomposeAsyncImage(
                         model = remember(profileUrl) {
                             ImageRequest.Builder(context)

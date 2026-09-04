@@ -86,6 +86,44 @@ class AiModelsTest {
     }
 
     @Test
+    fun characterDto_usesPreviewTextWhenLegacyAuditionTextIsMissing() {
+        val character = AiCharacterDto(
+            id = "usagi",
+            name = "乌萨奇",
+            activationWord = "乌萨奇",
+            isAvailable = true,
+            previewText = "服务端试听文案"
+        ).toDomain()
+
+        assertThat(character.auditionText).isEqualTo("服务端试听文案")
+    }
+
+    @Test
+    fun characterDto_fallsBackToCatalogAuditionTextWhenBothRemoteFieldsAreMissing() {
+        val character = AiCharacterDto(
+            id = "usagi",
+            name = "乌萨奇",
+            activationWord = "乌萨奇",
+            isAvailable = true
+        ).toDomain()
+
+        assertThat(character.auditionText)
+            .isEqualTo(AiCharacterCatalog.all.single { it.id == "usagi" }.auditionText)
+    }
+
+    @Test
+    fun characterDto_keepsAuditionTextEmptyWhenUnknownCharacterHasNoRemoteText() {
+        val character = AiCharacterDto(
+            id = "unknown",
+            name = "未知角色",
+            activationWord = "未知角色",
+            isAvailable = true
+        ).toDomain()
+
+        assertThat(character.auditionText).isEmpty()
+    }
+
+    @Test
     fun characterCatalog_containsAllSevenCharactersInStableOrder() {
         val characters = AiCharacterCatalog.all
 

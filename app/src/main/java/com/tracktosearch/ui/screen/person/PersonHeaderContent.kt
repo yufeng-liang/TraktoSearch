@@ -45,10 +45,10 @@ import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.SocialMediaIcon
 import com.tracktosearch.ui.screen.detail.ExpandableText
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.personAvatarSharedKey
 
 private data class AgeInfo(val age: Int, val isDeceased: Boolean)
 
@@ -86,7 +86,6 @@ internal fun PersonHeaderContent(
 ) {
     val skeletonColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     val context = LocalContext.current
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
     // 沉浸背景实际是「头像主色按 PersonImmersiveTintAlpha 叠在页面底色上」再向 background 过渡。
@@ -204,18 +203,12 @@ internal fun PersonHeaderContent(
                 .height(210.dp)
         ) {
             if (profileUrl != null) {
-                val imageModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-                    with(sharedTransitionScope) {
-                        Modifier
-                            .sharedElement(
-                                rememberSharedContentState(key = "person-avatar-$personId"),
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                            .fillMaxSize()
-                    }
-                } else {
-                    Modifier.fillMaxSize()
-                }
+                val imageModifier = Modifier
+                    .appSharedBounds(
+                        key = personAvatarSharedKey(personId),
+                        animatedVisibilityScope = animatedVisibilityScope,
+                    )
+                    .fillMaxSize()
                 SubcomposeAsyncImage(
                     model = remember(profileUrl) {
                         ImageRequest.Builder(context)

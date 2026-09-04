@@ -24,7 +24,9 @@ data class AiCharacterDto(
     val aliases: List<String> = emptyList(),
     @SerialName("available") val isAvailable: Boolean = false,
     val personalityPrompt: String = "",
-    val auditionText: String = ""
+    val auditionText: String = "",
+    // 兼容服务端角色目录使用 previewText 的旧/新版本。
+    val previewText: String = ""
 )
 
 @Serializable
@@ -88,5 +90,9 @@ fun AiCharacterDto.toDomain(): AiCharacter = AiCharacter(
     aliases = aliases,
     isAvailable = isAvailable,
     personalityPrompt = personalityPrompt,
-    auditionText = auditionText
+    // 服务端可能只返回 previewText，也可能两个试听字段都为空；最后回退到本地目录，
+    // 避免角色卡片拿到空文案后只渲染出试听文字的占位矩形。
+    auditionText = auditionText.takeIf { it.isNotBlank() }
+        ?: previewText.takeIf { it.isNotBlank() }
+        ?: AiCharacterCatalog.all.firstOrNull { it.id == id }?.auditionText.orEmpty()
 )

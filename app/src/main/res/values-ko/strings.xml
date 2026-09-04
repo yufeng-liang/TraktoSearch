@@ -20,8 +20,11 @@
 
     <!-- Ticket Machine -->
     <string name="machine_status_ready">코드 입력</string>
+    <string name="machine_status_verifying">확인 중…</string>
+    <string name="machine_detail_verifying">○ 티켓 코드 확인 중 · 잠시만 기다려 주세요</string>
     <string name="machine_status_printing">인쇄 중…</string>
     <string name="machine_status_collected">발권 완료</string>
+    <string name="machine_detail_collected">○ 발권 완료 · 티켓에서 입장 방식을 선택</string>
     <string name="machine_status_invalid">코드 오류</string>
     <string name="machine_status_used">사용됨</string>
     <string name="machine_status_revoked">취소됨</string>
@@ -42,10 +45,11 @@
     <string name="machine_code_collected">발권 번호 사용 완료, 티켓 출력됨</string>
 
     <!-- Ticket -->
-    <string name="ticket_admit_one">ADMIT ONE</string>
     <string name="ticket_hall">%1$d관</string>
     <string name="ticket_seat">%1$d열 %2$d번</string>
+    <string name="ticket_serial_no">NO. %1$s</string>
     <string name="ticket_entry_trakt">Trakt로 로그인</string>
+    <string name="ticket_entry_authorizing">인증 중…</string>
     <string name="ticket_entry_douban">더우반 로그인</string>
     <string name="ticket_entry_guest">게스트로 입장</string>
 
@@ -515,7 +519,7 @@
     <string name="login_success">로그인 성공, 로딩 중…</string>
     <string name="login_sync_hint">로그인 후 Trakt 관심목록이 동기화됩니다</string>
     <string name="login_activation_locked">○ 미발권 · 티켓 코드를 입력해 입장권으로 교환</string>
-    <string name="login_personal_cinema_access">TICKET MACHINE · PERSONAL CINEMA</string>
+    <string name="machine_plate">TICKET MACHINE · V%1$s</string>
 
     <!-- Ratings -->
 
@@ -1113,6 +1117,7 @@
     <string name="cd_watched">시청함</string>
     <string name="cd_saved">저장됨</string>
     <string name="cd_save">저장</string>
+    <string name="cd_image_page">이미지 %1$d / %2$d</string>
     <string name="cd_edit">편집</string>
     <string name="cd_delete">삭제</string>
     <string name="cd_back_to_top">맨 위로</string>
@@ -1745,6 +1750,7 @@
     <string name="ai_taste_recommendations">당신을 위한 세 작품</string>
     <string name="ai_taste_details">상세 열기</string>
     <string name="ai_quiz_spoiler">이번 라운드: %1$s (스포일러 포함)</string>
+    <string name="ai_quiz_media_separator">, </string>
     <string name="ai_quiz_start">라운드 시작</string>
     <string name="ai_quiz_need_more_movies">퀴즈를 시작하려면 시청 완료 7편 이상이 필요합니다</string>
     <string name="ai_quiz_preview_title">이번 라운드 작품 고르기</string>
@@ -1975,7 +1981,7 @@
     <string name="opensource_use_lottie">JSON 벡터 애니메이션 재생(로딩, 빈 상태 등)</string>
     <string name="opensource_use_richtext">Markdown 리치 텍스트 렌더링(업데이트 로그)</string>
     <string name="opensource_use_reorderable">목록 길게 눌러 드래그 정렬</string>
-    <string name="opensource_use_zoomable">포스터와 스틸 사진의 핀치 줌 및 드래그</string>
+    <string name="opensource_use_telephoto">포스터와 스틸 사진의 핀치 줌, 대형 이미지 서브샘플링</string>
     <string name="opensource_use_backdrop">리퀴드 글래스 효과의 화면 단위 샘플링 배경</string>
     <string name="opensource_use_mesh_gradient">Android 12 이하 배경 글로우 대체 구현(메시 그라데이션 애니메이션)</string>
     <string name="opensource_use_mirage">Android 13 이상 배경 글로우 구현(AGSL 셰이더 애니메이션)</string>
@@ -2078,6 +2084,8 @@
     <string name="swiftie_quiz_backspace">삭제</string>
     <string name="swiftie_era_card_a11y">%1$s, %2$s 발매, 총 %3$d곡</string>
     <string name="swiftie_eras_axis_a11y">앨범 타임라인, 2006년부터 2025년까지 총 12장. 드래그하면 해당 시대로 이동합니다.</string>
+    <string name="swiftie_finale_a11y">Taylor Swift의 글리터 사인. 그 아래 우정 팔찌 세 개: 13 하트 87, SWIFTIE, %1$s. 팔찌 아래에는 \'Taylor와 나, 언제까지나 함께\'라고 적혀 있습니다.</string>
+    <string name="swiftie_finale_a11y_plain">Taylor Swift의 글리터 사인. 그 아래 우정 팔찌 두 개: 13 하트 87, SWIFTIE. 팔찌 아래에는 \'Taylor와 나, 언제까지나 함께\'라고 적혀 있습니다.</string>
     <string name="swiftie_skip">건너뛰기</string>
     <string name="swiftie_resume">계속</string>
     <string name="swiftie_audio_hint_all">소리를 켜고 이어폰을 착용하면 가장 좋습니다</string>

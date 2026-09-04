@@ -154,7 +154,8 @@ import com.tracktosearch.ui.component.DetailTopBarIcon
 import com.tracktosearch.ui.component.DropdownAnchorMenu
 import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.LocalBackdrop
-import com.tracktosearch.ui.component.LocalFullscreenSharedKey
+import com.tracktosearch.ui.component.LocalFullscreenSharedElement
+import com.tracktosearch.ui.component.fullscreenSharedElementKey
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
 import com.tracktosearch.ui.component.ResourceItemCard
@@ -1247,8 +1248,9 @@ fun DoubanItemDetailScreen(
         // 海报全屏查看打开时，把该 key 广播给海报源，让源侧置不可见，
         // 保证同一 key 同时只有一侧是 target（否则缩放转场方向会反）
         CompositionLocalProvider(
-            LocalFullscreenSharedKey provides
+            LocalFullscreenSharedElement provides fullscreenSharedElementKey(
                 if (showPosterFullscreen) "douban-poster-zoom-bounds-$doubanId" else null
+            )
         ) {
         Box(
             modifier = Modifier
@@ -1880,7 +1882,7 @@ fun DoubanItemDetailScreen(
                 )
             }
         }
-        } // CompositionLocalProvider(LocalFullscreenSharedKey)
+        } // CompositionLocalProvider(LocalFullscreenSharedElement)
     }
 
     // 子标题编辑弹窗
@@ -2160,7 +2162,7 @@ private fun DoubanItemHeader(
                             .fillMaxSize()
                             .zoomSharedSource(
                                 key = "douban-poster-zoom-bounds-$doubanId",
-                                clipShape = RoundedCornerShape(8.dp)
+                                clipRadius = 8.dp
                             )
                     )
                 } else {

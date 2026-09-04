@@ -656,66 +656,71 @@ private fun CharacterStage(
                     }
                 }
             }
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 28.dp, vertical = 18.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+            val auditionText = if (showActivatedContent && state.activationState == AiActivationState.SUCCESS) {
+                state.greeting?.greeting ?: state.activationMessage.orEmpty()
+            } else {
+                character.auditionText
+            }
+            if (auditionText.isNotBlank()) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 28.dp, vertical = 18.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
                 ) {
-                    if (!showActivatedContent) {
-                        val auditionContentDescription = when (auditionPlaybackState) {
-                            AuditionPlaybackState.LOADING -> stringResource(R.string.ai_audio_loading)
-                            AuditionPlaybackState.PLAYING -> stringResource(R.string.ai_audio_playing)
-                            AuditionPlaybackState.IDLE -> stringResource(R.string.ai_audio_play)
-                        }
-                        IconButton(
-                            onClick = onReplayAudition,
-                            enabled = auditionPlaybackState != AuditionPlaybackState.LOADING,
-                            modifier = Modifier
-                                .size(32.dp)
-                                .semantics {
-                                    contentDescription = auditionContentDescription
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (!showActivatedContent) {
+                            val auditionContentDescription = when (auditionPlaybackState) {
+                                AuditionPlaybackState.LOADING -> stringResource(R.string.ai_audio_loading)
+                                AuditionPlaybackState.PLAYING -> stringResource(R.string.ai_audio_playing)
+                                AuditionPlaybackState.IDLE -> stringResource(R.string.ai_audio_play)
+                            }
+                            IconButton(
+                                onClick = onReplayAudition,
+                                enabled = auditionPlaybackState != AuditionPlaybackState.LOADING,
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .semantics {
+                                        contentDescription = auditionContentDescription
+                                    }
+                            ) {
+                                when (auditionPlaybackState) {
+                                    AuditionPlaybackState.LOADING -> CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    AuditionPlaybackState.PLAYING -> Icon(
+                                        Icons.Rounded.GraphicEq,
+                                        contentDescription = stringResource(R.string.ai_audio_playing),
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    AuditionPlaybackState.IDLE -> Icon(
+                                        Icons.Rounded.VolumeUp,
+                                        contentDescription = stringResource(R.string.ai_audio_play),
+                                        modifier = Modifier.size(18.dp)
+                                    )
                                 }
-                        ) {
-                            when (auditionPlaybackState) {
-                                AuditionPlaybackState.LOADING -> CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    strokeWidth = 2.dp
-                                )
-                                AuditionPlaybackState.PLAYING -> Icon(
-                                    Icons.Rounded.GraphicEq,
-                                    contentDescription = stringResource(R.string.ai_audio_playing),
-                                    modifier = Modifier.size(18.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                AuditionPlaybackState.IDLE -> Icon(
-                                    Icons.Rounded.VolumeUp,
-                                    contentDescription = stringResource(R.string.ai_audio_play),
-                                    modifier = Modifier.size(18.dp)
-                                )
                             }
                         }
-                    }
-                    Text(
-                        text = if (showActivatedContent && state.activationState == AiActivationState.SUCCESS) {
-                            state.greeting?.greeting ?: state.activationMessage.orEmpty()
-                        } else character.auditionText,
-                        // 必须给 weight：Row 里非 weight 子项按顺序吃满剩余宽度，
-                        // 长文案会把后面那个播放按钮挤成 0 宽看不见
-                        modifier = Modifier.weight(1f, fill = false),
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 2,
-                        textAlign = TextAlign.Center
-                    )
-                    state.greeting?.audio?.takeIf { showActivatedContent }?.let { audio ->
-                        IconButton(onClick = { onPlayAudio(audio) }, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Rounded.VolumeUp, contentDescription = stringResource(R.string.ai_audio_play), modifier = Modifier.size(18.dp))
+                        Text(
+                            text = auditionText,
+                            // 必须给 weight：Row 里非 weight 子项按顺序吃满剩余宽度，
+                            // 长文案会把后面那个播放按钮挤成 0 宽看不见
+                            modifier = Modifier.weight(1f, fill = false),
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 2,
+                            textAlign = TextAlign.Center
+                        )
+                        state.greeting?.audio?.takeIf { showActivatedContent }?.let { audio ->
+                            IconButton(onClick = { onPlayAudio(audio) }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Rounded.VolumeUp, contentDescription = stringResource(R.string.ai_audio_play), modifier = Modifier.size(18.dp))
+                            }
                         }
                     }
                 }

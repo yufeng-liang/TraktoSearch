@@ -20,8 +20,11 @@
 
     <!-- Ticket Machine -->
     <string name="machine_status_ready">请输入取票码</string>
+    <string name="machine_status_verifying">正在核对…</string>
+    <string name="machine_detail_verifying">○ 正在核对取票码 · 请稍候</string>
     <string name="machine_status_printing">正在打印…</string>
     <string name="machine_status_collected">已取票</string>
+    <string name="machine_detail_collected">○ 已出票 · 请在票上选择入场方式</string>
     <string name="machine_status_invalid">码不对</string>
     <string name="machine_status_used">码已用过</string>
     <string name="machine_status_revoked">码已作废</string>
@@ -42,12 +45,13 @@
     <string name="machine_code_collected">取票码已使用，票已取出</string>
 
     <!-- Ticket -->
-    <string name="ticket_admit_one">ADMIT ONE</string>
     <string name="ticket_hall">%1$d 号厅</string>
     <string name="ticket_seat">%1$d 排 %2$d 座</string>
+    <string name="ticket_serial_no">NO. %1$s</string>
     <string name="ticket_entry_trakt">Trakt 登录</string>
+    <string name="ticket_entry_authorizing">授权中…</string>
     <string name="ticket_entry_douban">豆瓣登录</string>
-    <string name="ticket_entry_guest">访客进入</string>
+    <string name="ticket_entry_guest">以访客进入</string>
 
     <!-- Main Screen -->
     <string name="tab_search">搜索</string>
@@ -227,8 +231,8 @@
     <string name="login_guest">以访客身份进入</string>
     <string name="login_douban_import">或从豆瓣导入标记</string>
     <string name="login_douban">豆瓣登录</string>
-    <string name="login_activation_locked">○ 尚未取票 · 输入取票码换取入场券</string>
-    <string name="login_personal_cinema_access">TICKET MACHINE · PERSONAL CINEMA</string>
+    <string name="login_activation_locked">○ 尚未取票 · 输入取票码换票入场</string>
+    <string name="machine_plate">TICKET MACHINE · V%1$s</string>
     <string name="douban_import_require_trakt_title">需要先登录 Trakt 账号</string>
     <string name="douban_import_require_trakt_desc">从豆瓣导入标记需要先登录 Trakt 账号，标记会同步到你的 Trakt 想看/已看列表。是否现在登录 Trakt？</string>
     <string name="douban_import_require_trakt_login">登录 Trakt</string>
@@ -1208,6 +1212,7 @@
     <string name="cd_watched">已看</string>
     <string name="cd_saved">已保存</string>
     <string name="cd_save">保存</string>
+    <string name="cd_image_page">第 %1$d 张图片，共 %2$d 张</string>
     <string name="cd_edit">编辑</string>
     <string name="cd_delete">删除</string>
     <string name="cd_back_to_top">返回顶部</string>
@@ -1732,6 +1737,7 @@
     <string name="ai_taste_recommendations">给你的三部推荐</string>
     <string name="ai_taste_details">打开详情</string>
     <string name="ai_quiz_spoiler">本轮会涉及：%1$s，包含剧透</string>
+    <string name="ai_quiz_media_separator">、</string>
     <string name="ai_quiz_start">开始本轮闯关</string>
     <string name="ai_quiz_need_more_movies">开始闯关至少需要 7 部已看影视</string>
     <string name="ai_quiz_preview_title">先挑选本轮影视</string>
@@ -1963,7 +1969,7 @@
     <string name="opensource_use_lottie">播放 JSON 矢量动画（加载、空状态等动效）</string>
     <string name="opensource_use_richtext">渲染 Markdown 富文本（版本更新日志）</string>
     <string name="opensource_use_reorderable">列表长按拖拽排序</string>
-    <string name="opensource_use_zoomable">海报与剧照的双指缩放和拖动查看</string>
+    <string name="opensource_use_telephoto">海报与剧照的双指缩放，大图子采样加载</string>
     <string name="opensource_use_backdrop">液态玻璃效果的屏幕级采样背板</string>
     <string name="opensource_use_mesh_gradient">Android 12 及以下背景光晕的网格渐变动画回退实现</string>
     <string name="opensource_use_mirage">Android 13 及以上背景光晕的 AGSL 着色器动画实现</string>
@@ -2066,6 +2072,8 @@
     <string name="swiftie_quiz_backspace">删除</string>
     <string name="swiftie_era_card_a11y">%1$s，发行于 %2$s，共 %3$d 首</string>
     <string name="swiftie_eras_axis_a11y">专辑时间轴，2006 到 2025，共 12 张专辑。拖动可跳到某个时代。</string>
+    <string name="swiftie_finale_a11y">Taylor Swift 的闪粉签名，下面挂着三条友谊手链：13 爱心 87、SWIFTIE、%1$s。手链下面写着：Taylor 和我，永远相伴。</string>
+    <string name="swiftie_finale_a11y_plain">Taylor Swift 的闪粉签名，下面挂着两条友谊手链：13 爱心 87、SWIFTIE。手链下面写着：Taylor 和我，永远相伴。</string>
     <string name="swiftie_skip">跳过</string>
     <string name="swiftie_resume">继续</string>
     <string name="swiftie_audio_hint_all">打开声音并戴上耳机，体验最佳</string>

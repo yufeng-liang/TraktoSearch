@@ -1,7 +1,9 @@
 package com.tracktosearch.ui.screen.settings
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -40,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -59,6 +62,7 @@ import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.component.SettingsEntryCardCorner
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 
@@ -299,6 +303,7 @@ internal fun DataFlowCard(
  * - subtitleColor：小字颜色（merge 模式下整个合并文本使用此颜色）
  */
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 internal fun SettingsCard(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
@@ -308,6 +313,7 @@ internal fun SettingsCard(
     iconTintColor: Color = MaterialTheme.colorScheme.primary,
     loadingIcon: Boolean = false,
     subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
     containerColor: Color = Color.Transparent
 ) {
@@ -316,7 +322,12 @@ internal fun SettingsCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { view.performHaptic(HapticType.CLICK); onClick() }
+            .combinedClickable(
+                onClick = { view.performHaptic(HapticType.CLICK); onClick() },
+                onLongClick = onLongClick?.let { longClick ->
+                    { view.performHaptic(HapticType.CLICK); longClick() }
+                }
+            )
             .padding(vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -400,13 +411,17 @@ internal fun StatisticsCard(
     val blurFill = if (isDark) GlassFillDarkSubtle
                    else Color.White.copy(alpha = 0.70f)
     NeumorphicFrostedSurface(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .clickable { view.performHaptic(HapticType.CLICK); onClick() },
+            // 调用方的修饰符挂在外边距之内：容器变形要量的是卡片可见的那块圆角面，
+            // 挂在 padding 之外量到的是整行宽度，转场起始矩形会比用户看到的卡片宽出两侧留白。
+            .then(modifier)
+            .clip(RoundedCornerShape(SettingsEntryCardCorner))
+            .clickable { view.performHaptic(HapticType.CLICK); onClick() }
+            .testTag("settings_statistics_card"),
         isDark = isDark,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(SettingsEntryCardCorner),
         backgroundColor = if (realBlur) blurFill else solidCardFill(isDark, blurFill),
         borderColor = if (isDark) GlassBorderDarkSubtle
                       else Color(0xFFE0E5EC).copy(alpha = 0.9f),

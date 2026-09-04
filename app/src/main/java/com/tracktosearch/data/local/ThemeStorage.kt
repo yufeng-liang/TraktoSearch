@@ -1,6 +1,7 @@
 package com.tracktosearch.data.local
 
 import android.content.Context
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -92,12 +93,21 @@ class ThemeStorage private constructor(
         }
     }
 
+    /** 冷启动同步读取已持久化的主题模式（等待 DataStore 首值加载完成）。 */
+    suspend fun readThemeModeSnapshot(): String {
+        initializationComplete.await()
+        return _themeMode.value
+    }
+
     suspend fun setThemeMode(mode: String) {
         initializationComplete.await()
         dataStore.edit { prefs ->
             prefs[KEY_THEME_MODE] = mode
         }
         _themeMode.value = mode
+        // App 内主题模式联动系统 uiMode（API 31+ 内部走 UiModeManager.setApplicationNightMode），
+        // 让下次冷启动时系统 Splash 直接按 app 设置选择 values/values-night 资源。
+        applyThemeModeToSystem(mode)
     }
 
     suspend fun setAccentColor(accent: MonetAccent?) {
@@ -197,6 +207,22 @@ class ThemeStorage private constructor(
     }
 
     companion object {
+        /**
+         * 把 app 内主题模式应用到系统 uiMode，让系统 Splash（starting window）在冷启动时
+         * 按 app 自己的深浅设置选资源，而不是只看系统夜间模式。
+         *
+         * dark/light 会覆盖 app 进程的 uiMode（API 31+ 由 AppCompat 走
+         * UiModeManager.setApplicationNightMode），system 则恢复跟随系统。
+         */
+        fun applyThemeModeToSystem(mode: String) {
+            val appCompatMode = when (mode) {
+                MODE_DARK -> AppCompatDelegate.MODE_NIGHT_YES
+                MODE_LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+                else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+            }
+            AppCompatDelegate.setDefaultNightMode(appCompatMode)
+        }
+
         const val MODE_SYSTEM = "system"
         const val MODE_DARK = "dark"
         const val MODE_LIGHT = "light"

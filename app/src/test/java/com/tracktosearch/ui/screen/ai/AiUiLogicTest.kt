@@ -43,6 +43,7 @@ class AiUiLogicTest {
             .isEqualTo(R.string.ai_error_audio_permission_granted)
         assertThat(aiErrorMessageRes("UNAUTHORIZED")).isEqualTo(R.string.ai_error_unauthorized)
         assertThat(aiErrorMessageRes("NETWORK")).isEqualTo(R.string.ai_error_network)
+        assertThat(aiErrorMessageRes("OFFLINE")).isEqualTo(R.string.ai_feature_unavailable)
         assertThat(aiErrorMessageRes("CHARACTERS_LOAD_FAILED")).isEqualTo(R.string.ai_error_characters_failed)
         // 未识别的码仍回退到通用文案
         assertThat(aiErrorMessageRes("SOMETHING_NEW")).isEqualTo(R.string.ai_error)
@@ -55,6 +56,7 @@ class AiUiLogicTest {
         assertThat(aiErrorIsRetryable("QUOTA_EXCEEDED")).isFalse()
         assertThat(aiErrorIsRetryable("UNAUTHORIZED")).isFalse()
         assertThat(aiErrorIsRetryable("WATCHED_LIST_EMPTY")).isFalse()
+        assertThat(aiErrorIsRetryable("OFFLINE")).isFalse()
         assertThat(aiErrorIsRetryable("NETWORK")).isTrue()
         assertThat(aiErrorIsRetryable("SERVER")).isTrue()
         assertThat(aiErrorIsRetryable(null)).isTrue()
@@ -134,6 +136,21 @@ class AiUiLogicTest {
         assertThat(canReplaceQuizPreview(seven, nine, replacementCount = 2)).isFalse()
         assertThat(remainingQuizReplacements(0)).isEqualTo(2)
         assertThat(remainingQuizReplacements(3)).isEqualTo(0)
+    }
+
+    @Test
+    fun quizMediaKeyTreatsShowAndTvAsTheSameMediaType() {
+        assertThat(quizMediaKey("show", "42")).isEqualTo("show:42")
+        assertThat(quizMediaKey("tv", "42")).isEqualTo("show:42")
+
+        val candidates = listOf(
+            com.tracktosearch.data.ai.AiWatchedTitleDto("42", "show", "剧集"),
+            com.tracktosearch.data.ai.AiWatchedTitleDto("42", "tv", "旧类型别名"),
+            com.tracktosearch.data.ai.AiWatchedTitleDto("43", "movie", "电影")
+        )
+        assertThat(selectQuizPreview(candidates, kotlin.random.Random(7))).hasSize(2)
+        assertThat(selectQuizPreview(candidates, kotlin.random.Random(7)).map { it.mediaId })
+            .containsExactly("42", "43")
     }
 
     @Test

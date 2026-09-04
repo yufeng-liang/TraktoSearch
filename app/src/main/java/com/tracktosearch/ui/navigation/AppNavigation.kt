@@ -1,5 +1,7 @@
 package com.tracktosearch.ui.navigation
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SizeTransform
@@ -34,9 +36,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import android.content.ClipboardManager
@@ -341,7 +346,7 @@ class AuthStateHolder @Inject constructor(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalComposeUiApi::class)
 @Composable
 fun AppNavigation(
     startDestination: String,
@@ -608,7 +613,11 @@ fun AppNavigation(
         }
     }
 
-    SharedTransitionLayout {
+    // 语义根开一次 testTagsAsResourceId：它把 Modifier.testTag 的值写进无障碍树的 resource-id，
+    // UiAutomator 宏基准才能用 By.res() 定位 Compose 节点。不开的话整棵树的 resource-id 都是空串，
+    // 只能靠 contentDescription 与文案定位，那些值跟着语言和数据变，基准用例会不稳。
+    // 挂在这里而不是 Activity 根：需要被定位的节点全都在 NavHost 之内，且这一层只加语义、不动布局。
+    SharedTransitionLayout(modifier = Modifier.semantics { testTagsAsResourceId = true }) {
         CompositionLocalProvider(
             LocalSharedTransitionScope provides this@SharedTransitionLayout,
             com.tracktosearch.ui.component.LocalSharedTransitionEnabled provides sharedTransitionEnabled
@@ -1082,7 +1091,11 @@ fun AppNavigation(
                     arguments = listOf(
                         navArgument("listId") { type = NavType.IntType },
                         navArgument("listName") { type = NavType.StringType; defaultValue = "" }
-                    )
+                    ),
+                    // 同 Routes.STATISTICS：卡片长成整页的容器变形已经把页面显示出来了，不再叠 NavHost 淡入。
+                    // 共享转场被关掉时返回 null，落回 NavHost 的全局淡入，否则这个页面会毫无动画地直接出现。
+                    enterTransition = { if (sharedTransitionEnabled) EnterTransition.None else null },
+                    popExitTransition = { if (sharedTransitionEnabled) ExitTransition.None else null }
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         val listId = backStackEntry.arguments?.getInt("listId") ?: 0
@@ -1104,7 +1117,14 @@ fun AppNavigation(
                     }
                 }
 
-                composable(Routes.STATISTICS) {
+                composable(
+                    route = Routes.STATISTICS,
+                    // 容器变形自带进出：卡片长成整页的过程已经把页面「显示」出来了，
+                    // NavHost 再叠一层淡入等于同一个页面淡两次，落地时能看出一层灰。
+                    // 共享转场被关掉时返回 null，落回 NavHost 的全局淡入。
+                    enterTransition = { if (sharedTransitionEnabled) EnterTransition.None else null },
+                    popExitTransition = { if (sharedTransitionEnabled) ExitTransition.None else null }
+                ) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         StatisticsScreen(
                             onBack = { navController.popBackStack() }
@@ -1316,22 +1336,32 @@ fun AppNavigation(
                 // 豆瓣爬取测试页仅在 DEBUG 构建注册,避免 release 暴露调试入口
                 if (BuildConfig.DEBUG) {
                     composable(Routes.DOUBAN_SPIDER_TEST) {
-                        DoubanSpiderTestScreen(
-                            onBack = { navController.popBackStack() }
-                        )
+                        CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                            DoubanSpiderTestScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
                     }
                 }
 
                 // 玻璃引擎试点页(对比 haze / backdrop)仅在 DEBUG 构建注册
                 if (BuildConfig.DEBUG) {
                     composable(Routes.GLASS_PILOT) {
-                        GlassEnginePilotScreen(
-                            onBack = { navController.popBackStack() }
-                        )
+                        CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                            GlassEnginePilotScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
                     }
                 }
 
-                composable(Routes.MARK_RECORDS) { backStackEntry ->
+                composable(
+                    route = Routes.MARK_RECORDS,
+                    // 同 Routes.STATISTICS：卡片长成整页的容器变形已经把页面显示出来了，不再叠 NavHost 淡入。
+                    // 共享转场被关掉时返回 null，落回 NavHost 的全局淡入，否则这个页面会毫无动画地直接出现。
+                    enterTransition = { if (sharedTransitionEnabled) EnterTransition.None else null },
+                    popExitTransition = { if (sharedTransitionEnabled) ExitTransition.None else null }
+                ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         MarkRecordScreen(
                             onBack = {
@@ -1348,7 +1378,13 @@ fun AppNavigation(
                     }
                 }
 
-                composable(Routes.SEARCH_SOURCES) {
+                composable(
+                    route = Routes.SEARCH_SOURCES,
+                    // 同 Routes.STATISTICS：卡片长成整页的容器变形已经把页面显示出来了，不再叠 NavHost 淡入。
+                    // 共享转场被关掉时返回 null，落回 NavHost 的全局淡入，否则这个页面会毫无动画地直接出现。
+                    enterTransition = { if (sharedTransitionEnabled) EnterTransition.None else null },
+                    popExitTransition = { if (sharedTransitionEnabled) ExitTransition.None else null }
+                ) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         SearchSourcesScreen(
                             onBack = { navController.popBackStack() },
@@ -1438,13 +1474,20 @@ fun AppNavigation(
                     route = Routes.CRASH_LOG_DETAIL,
                     arguments = listOf(
                         navArgument("recordId") { type = NavType.StringType }
-                    )
+                    ),
+                    // 同 Routes.STATISTICS：卡片长成整页的容器变形已经把页面显示出来了，不再叠 NavHost 淡入。
+                    // 这个页面只有反馈页崩溃日志卡片一个入口，去掉淡入不会让别的入口失去动画。
+                    // 共享转场被关掉时返回 null，落回 NavHost 的全局淡入。
+                    enterTransition = { if (sharedTransitionEnabled) EnterTransition.None else null },
+                    popExitTransition = { if (sharedTransitionEnabled) ExitTransition.None else null }
                 ) { backStackEntry ->
                     val recordId = backStackEntry.arguments?.getString("recordId") ?: return@composable
-                    CrashLogDetailScreen(
-                        recordId = recordId,
-                        onBack = { navController.popBackStack() }
-                    )
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        CrashLogDetailScreen(
+                            recordId = recordId,
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
                 }
                 composable(
                     route = Routes.FEEDBACK_DETAIL,
@@ -1472,19 +1515,21 @@ fun AppNavigation(
                     }
                 }
                 composable(Routes.MESSAGES) { backStackEntry ->
-                    val mainBackStackEntry = remember(backStackEntry) {
-                        navController.getBackStackEntry(Routes.MAIN)
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        val mainBackStackEntry = remember(backStackEntry) {
+                            navController.getBackStackEntry(Routes.MAIN)
+                        }
+                        val sharedViewModel: FeedbackViewModel = hiltViewModel(
+                            mainBackStackEntry
+                        )
+                        MessagesScreen(
+                            onBack = { navController.popBackStack() },
+                            onMessageClick = { feedbackId, replyId ->
+                                navController.navigate(Routes.feedbackDetailRoute(feedbackId, replyId))
+                            },
+                            viewModel = sharedViewModel
+                        )
                     }
-                    val sharedViewModel: FeedbackViewModel = hiltViewModel(
-                        mainBackStackEntry
-                    )
-                    MessagesScreen(
-                        onBack = { navController.popBackStack() },
-                        onMessageClick = { feedbackId, replyId ->
-                            navController.navigate(Routes.feedbackDetailRoute(feedbackId, replyId))
-                        },
-                        viewModel = sharedViewModel
-                    )
                 }
             }
 

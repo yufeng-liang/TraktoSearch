@@ -39,7 +39,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
-import com.tracktosearch.ui.component.LocalFullscreenSharedKey
+import com.tracktosearch.ui.component.LocalFullscreenSharedElement
+import com.tracktosearch.ui.component.fullscreenSharedElementKey
 import com.tracktosearch.ui.component.ZoomableImageOverlay
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.zoomSharedSource
@@ -128,7 +129,9 @@ fun NewFeedbackScreen(
     val fullscreenSharedKey = fullscreenIndex
         ?.takeIf { screenshots.isNotEmpty() }
         ?.let { "fb-new-${it.coerceIn(0, screenshots.size - 1)}" }
-    CompositionLocalProvider(LocalFullscreenSharedKey provides fullscreenSharedKey) {
+    CompositionLocalProvider(
+        LocalFullscreenSharedElement provides fullscreenSharedElementKey(fullscreenSharedKey)
+    ) {
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -318,7 +321,7 @@ fun NewFeedbackScreen(
         sharedKeyPrefix = "fb-new",
         onDismiss = { fullscreenIndex = null }
     )
-    } // CompositionLocalProvider(LocalFullscreenSharedKey)
+    } // CompositionLocalProvider(LocalFullscreenSharedElement)
 }
 
 /** 小标题：类型 / 截图两段共用。 */

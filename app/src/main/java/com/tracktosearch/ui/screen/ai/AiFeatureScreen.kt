@@ -69,6 +69,7 @@ import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
+import com.tracktosearch.data.util.ConnectivityObserver
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.data.ai.AiAudio
@@ -106,9 +107,63 @@ fun AiFeatureScreen(
     var discardQuizConfirmVisible by remember(feature) { mutableStateOf(false) }
     // 答题进行中点刷新等于放弃这一轮：必须先确认，不能手滑就把 13 题作答清空
     val refreshNeedsConfirm = feature == AiFeature.QUIZ && hasQuizInProgress(state)
+    // OFFLINE 错误码可能先于 ConnectivityObserver 到达，UI 统一按不可用态处理，避免
+    // 加载条、确认框或场景动画在离线说明上方短暂闪现。
+    val offlineUi = state.networkStatus == ConnectivityObserver.NetworkStatus.OFFLINE ||
+        state.errorCode == AI_OFFLINE_ERROR_CODE
+    // 只把真正有可渲染字段的对象视为旧内容；空 DTO 仍应显示加载占位，而不是空矩形。
+    val hasFeatureContent = when (feature) {
+        AiFeature.GREETING -> state.greeting?.let {
+            it.greeting.isNotBlank() ||
+                it.spokenText.isNotBlank() ||
+                it.nicknameMeaning.isNotBlank() ||
+                it.comment.isNotBlank() ||
+                it.audio != null
+        } == true
+        AiFeature.TASTE -> state.taste?.let {
+            it.roast.isNotBlank() ||
+                it.tasteProfile.isNotBlank() ||
+                it.highlights.isNotEmpty() ||
+                it.recommendations.isNotEmpty()
+        } == true
+        AiFeature.QUIZ -> when {
+            state.quizResult != null -> true
+            !state.quizStarted -> state.quizPreviewMovies.isNotEmpty()
+            else -> state.quiz?.questions?.isNotEmpty() == true
+        }
+        AiFeature.DAILY -> state.dailyKnowledge?.let {
+            it.title.isNotBlank() ||
+                it.fact.isNotBlank() ||
+                it.explanation.isNotBlank() ||
+                it.characterLine.orEmpty().isNotBlank() ||
+                it.sourceName.isNotBlank()
+        } == true
+    }
+    // 首次请求还没有内容时显示专用加载态，不把“离线不可用”误当成加载结果。
+    val showLoadingPlaceholder = state.isLoading &&
+        !offlineUi &&
+        state.errorCode == null &&
+        !hasFeatureContent
+    val showLoadingBanner = state.isLoading &&
+        !offlineUi &&
+        state.errorCode == null &&
+        hasFeatureContent
+    // 场景图是成功反馈，任何加载/错误/离线状态都不能让它盖住内容或错误 Overlay。
+    val sceneBlocked = state.isLoading || state.errorCode != null || offlineUi
+    val canShowRefreshConfirm = refreshNeedsConfirm &&
+        !offlineUi &&
+        !state.isLoading
 
-    LaunchedEffect(feature, sceneRevision, sceneEvent) {
-        if (sceneEvent == null) {
+    LaunchedEffect(canShowRefreshConfirm) {
+        if (!canShowRefreshConfirm) {
+            // 答题已重置、开始请求或断网时，收起上一轮留下的确认框状态。
+            discardQuizConfirmVisible = false
+        }
+    }
+
+    LaunchedEffect(feature, sceneRevision, sceneEvent, sceneBlocked) {
+        if (sceneEvent == null || sceneBlocked) {
+            // 被阻塞时不标记 revision，网络恢复且请求结束后仍可按新结果正常播放一次。
             showFeatureScene = false
             return@LaunchedEffect
         }
@@ -158,7 +213,7 @@ fun AiFeatureScreen(
                         onClick = {
                             if (refreshNeedsConfirm) discardQuizConfirmVisible = true else onRefresh()
                         },
-                        enabled = !state.isLoading
+                        enabled = !state.isLoading && !offlineUi
                     ) {
                         Icon(
                             Icons.Rounded.Refresh,
@@ -180,24 +235,41 @@ fun AiFeatureScreen(
                     .imePadding()
                     .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
             ) {
-                when (feature) {
-                    AiFeature.GREETING -> GreetingFeature(greeting = state.greeting, onPlayAudio = onPlayAudio)
-                    AiFeature.TASTE -> TasteFeature(
-                        taste = state.taste,
-                        onMovieClick = onMovieClick,
-                        onShowClick = onShowClick,
-                        onRecommendationClick = onRecommendationClick,
-                        onHeaderAnchorBoundsChanged = { featureAnchorBounds = it }
-                    )
-                    AiFeature.QUIZ -> AiQuizScreen(
-                        state = state,
-                        viewModel = viewModel,
-                        onResultAnchorBoundsChanged = { featureAnchorBounds = it }
-                    )
-                    AiFeature.DAILY -> DailyFeature(daily = state.dailyKnowledge)
+                // 离线是功能页自己的占位状态，不使用 Overlay 错误卡片；否则遮罩会把这句文案盖住。
+                // 有内容刷新时给加载条预留高度，避免它压住首段标题或试听入口。
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = if (showLoadingBanner) 52.dp else 0.dp)
+                ) {
+                    if (offlineUi) {
+                        FeatureUnavailable()
+                    } else if (showLoadingPlaceholder) {
+                        FeatureLoadingPlaceholder(onCancel = viewModel::cancelActiveFeatureRequest)
+                    } else if (!hasFeatureContent) {
+                        // 没有请求、错误或离线状态时保持空白，避免把取消/尚未开始误报为离线。
+                        Spacer(Modifier.fillMaxSize())
+                    } else {
+                        when (feature) {
+                            AiFeature.GREETING -> GreetingFeature(greeting = state.greeting, onPlayAudio = onPlayAudio)
+                            AiFeature.TASTE -> TasteFeature(
+                                taste = state.taste,
+                                onMovieClick = onMovieClick,
+                                onShowClick = onShowClick,
+                                onRecommendationClick = onRecommendationClick,
+                                onHeaderAnchorBoundsChanged = { featureAnchorBounds = it }
+                            )
+                            AiFeature.QUIZ -> AiQuizScreen(
+                                state = state,
+                                viewModel = viewModel,
+                                onResultAnchorBoundsChanged = { featureAnchorBounds = it }
+                            )
+                            AiFeature.DAILY -> DailyFeature(daily = state.dailyKnowledge)
+                        }
+                    }
                 }
 
-                if (state.isLoading) {
+                if (showLoadingBanner) {
                     Surface(
                         modifier = Modifier
                             .align(Alignment.TopCenter)
@@ -212,7 +284,12 @@ fun AiFeatureScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            Text(stringResource(R.string.ai_feature_loading), style = MaterialTheme.typography.labelMedium)
+                            Text(
+                                text = stringResource(R.string.ai_feature_loading),
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                             // LLM 生成耗时不定，允许中途放弃：取消是静默操作，不弹错误不打扰
                             TextButton(
                                 onClick = viewModel::cancelActiveFeatureRequest,
@@ -221,14 +298,16 @@ fun AiFeatureScreen(
                             ) {
                                 Text(
                                     text = stringResource(R.string.ai_feature_cancel),
-                                    style = MaterialTheme.typography.labelMedium
+                                    style = MaterialTheme.typography.labelMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
                     }
                 }
 
-                if (state.errorCode != null) {
+                if (!offlineUi && state.errorCode != null) {
                     FeatureError(
                         errorCode = state.errorCode,
                         onRetry = onRefresh
@@ -237,7 +316,7 @@ fun AiFeatureScreen(
             }
         }
 
-        if (discardQuizConfirmVisible) {
+        if (discardQuizConfirmVisible && canShowRefreshConfirm) {
             AlertDialog(
                 onDismissRequest = { discardQuizConfirmVisible = false },
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -266,21 +345,25 @@ fun AiFeatureScreen(
             )
         }
 
-        AiSpriteMotion(
-            characterId = state.activatedCharacterId.orEmpty(),
-            anchor = sceneEvent?.let { sceneArtFor(it).anchor } ?: AiSpriteAnchor.AiFeatureHeader,
-            anchorBounds = featureAnchorBounds,
-            visible = showFeatureScene &&
-                featureAnchorBounds != null &&
-                sceneEvent != null &&
-                state.activatedCharacterId?.let { automaticSpriteArt(it) != null } == true,
-            onClick = {},
-            onFinished = { showFeatureScene = false },
-            modifier = Modifier.zIndex(5f),
-            sceneRes = sceneEvent?.let { sceneArtFor(it).drawableRes },
-            // 功能页内的场景图只是庆祝插画，不要变成一块盖在内容上的可点区域
-            interactive = false
-        )
+        // 仅把 visible 设为 false 仍会先播放退场帧；错误 Overlay 出现时直接移除场景层，
+        // 防止高 zIndex 的庆祝插画在退场期间短暂压住错误文案。
+        if (!sceneBlocked) {
+            AiSpriteMotion(
+                characterId = state.activatedCharacterId.orEmpty(),
+                anchor = sceneEvent?.let { sceneArtFor(it).anchor } ?: AiSpriteAnchor.AiFeatureHeader,
+                anchorBounds = featureAnchorBounds,
+                visible = showFeatureScene &&
+                    featureAnchorBounds != null &&
+                    sceneEvent != null &&
+                    state.activatedCharacterId?.let { automaticSpriteArt(it) != null } == true,
+                onClick = {},
+                onFinished = { showFeatureScene = false },
+                modifier = Modifier.zIndex(5f),
+                sceneRes = sceneEvent?.let { sceneArtFor(it).drawableRes },
+                // 功能页内的场景图只是庆祝插画，不要变成一块盖在内容上的可点区域
+                interactive = false
+            )
+        }
     }
 }
 
@@ -290,36 +373,40 @@ private fun GreetingFeature(greeting: AiGreeting?, onPlayAudio: (AiAudio) -> Uni
         FeatureUnavailable()
         return
     }
+    // greeting 为空时优先用服务端的 spokenText，两个字段都空则不画空卡片。
+    val greetingText = greeting.greeting.ifBlank { greeting.spokenText }.trim()
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
-                tonalElevation = 2.dp
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(Icons.Rounded.AutoAwesome, contentDescription = null)
-                        Text(
-                            text = stringResource(R.string.ai_feature_nickname),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+        if (greetingText.isNotBlank()) {
+            item {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    tonalElevation = 2.dp
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(Icons.Rounded.AutoAwesome, contentDescription = null)
+                            Text(
+                                text = stringResource(R.string.ai_feature_nickname),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(Modifier.height(14.dp))
+                        TypewriterText(
+                            text = greetingText,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.ExtraBold
                         )
                     }
-                    Spacer(Modifier.height(14.dp))
-                    TypewriterText(
-                        text = greeting.greeting,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.ExtraBold
-                    )
                 }
             }
         }
@@ -352,7 +439,13 @@ private fun GreetingFeature(greeting: AiGreeting?, onPlayAudio: (AiAudio) -> Uni
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Icon(Icons.Rounded.VolumeUp, contentDescription = null)
-                        Text(stringResource(R.string.ai_audio_play), modifier = Modifier.weight(1f))
+                        Text(
+                            text = stringResource(R.string.ai_audio_play),
+                            // 保留播放按钮的固定槽位，长本地化文案只截断，不把试听操作挤没。
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                         IconButton(onClick = { onPlayAudio(audio) }) {
                             Icon(Icons.Rounded.VolumeUp, contentDescription = stringResource(R.string.ai_audio_play))
                         }
@@ -370,6 +463,10 @@ private fun MeaningSection(
     reveal: AiTextReveal = AiTextReveal.NONE,
     revealDelayMillis: Long = 0L
 ) {
+    if (text.isBlank()) {
+        // 空字段不渲染只有底色的空卡片，避免被误认为文字加载失败或只剩矩形占位。
+        return
+    }
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
@@ -642,6 +739,26 @@ private fun SectionTitle(
 }
 
 @Composable
+private fun FeatureLoadingPlaceholder(onCancel: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            CircularProgressIndicator()
+            Text(
+                text = stringResource(R.string.ai_feature_loading),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            // 首次加载也保留取消入口，避免没有旧内容时用户只能等待请求结束。
+            TextButton(onClick = onCancel) {
+                Text(stringResource(R.string.ai_feature_cancel))
+            }
+        }
+    }
+}
+
+@Composable
 private fun FeatureUnavailable() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
@@ -656,9 +773,10 @@ private fun FeatureUnavailable() {
 /**
  * 错误态。
  *
- * 三条既有行为由共享的 [AppErrorState]（Overlay 形态）承接，输出不变：
+ * 在线错误由共享的 [AppErrorState]（Overlay 形态）承接，输出不变：
  * 按错误码给出具体原因（片单不够 / 配额用完 / 授权失效…）而非一律「精灵正在休息」；
  * 带遮罩挡住底层列表，不让底下照样能滚能点；重试解决不了的错误不给重试按钮，免得白点还烧请求。
+ * 离线状态在调用方提前渲染 [FeatureUnavailable]，不进入这里，确保底层文案可见。
  */
 @Composable
 private fun FeatureError(errorCode: String, onRetry: () -> Unit) {

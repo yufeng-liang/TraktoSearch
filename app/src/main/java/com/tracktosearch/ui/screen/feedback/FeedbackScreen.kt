@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.feedback
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -36,8 +37,14 @@ import com.tracktosearch.R
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppPullToRefreshIndicator
 import com.tracktosearch.ui.component.EmptyStateCard
+import com.tracktosearch.ui.component.FeedbackListCardCorner
 import com.tracktosearch.ui.component.LoadMoreFooter
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.ShimmerState
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.crashLogCardSharedKey
+import com.tracktosearch.ui.component.feedbackCardSharedKey
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
@@ -52,7 +59,7 @@ import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun FeedbackScreen(
     onBack: () -> Unit,
@@ -61,6 +68,9 @@ fun FeedbackScreen(
     onCrashLogClick: (String) -> Unit,
     viewModel: FeedbackViewModel = hiltViewModel()
 ) {
+    // 共享元素转场作用域：两种列表卡片分别与反馈详情页、崩溃日志详情页配对。
+    // 取在 composable 顶层，列表每一项直接复用同一个实例，不在 items lambda 里逐项重新读取。
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val listState by viewModel.listState.collectAsStateWithLifecycle()
     val crashLogRecords by viewModel.crashLogRecords.collectAsStateWithLifecycle()
     // 未读回复由主界面进场时拉过一次，这里只读不再请求（VM 挂在 MAIN 返回栈上，是同一实例）
@@ -163,7 +173,12 @@ fun FeedbackScreen(
                         CrashLogRecordCard(
                             record = record,
                             timeLabels = timeLabels,
-                            onClick = { onCrashLogClick(record.id) }
+                            onClick = { onCrashLogClick(record.id) },
+                            modifier = Modifier.appSharedBounds(
+                                key = crashLogCardSharedKey(record.id),
+                                animatedVisibilityScope = animatedVisibilityScope,
+                                corner = SharedCorner.uniform(FeedbackListCardCorner),
+                            )
                         )
                     }
                 }
@@ -211,7 +226,12 @@ fun FeedbackScreen(
                                     item = item,
                                     hasUnreadReply = item.id in unreadFeedbackIds,
                                     timeLabels = timeLabels,
-                                    onClick = { onFeedbackClick(item.id) }
+                                    onClick = { onFeedbackClick(item.id) },
+                                    modifier = Modifier.appSharedBounds(
+                                        key = feedbackCardSharedKey(item.id),
+                                        animatedVisibilityScope = animatedVisibilityScope,
+                                        corner = SharedCorner.uniform(FeedbackListCardCorner),
+                                    )
                                 )
                             }
                             if (state.hasMore) {
@@ -344,18 +364,22 @@ private fun FeedbackCard(
     item: com.tracktosearch.data.remote.feedback.FeedbackListItem,
     hasUnreadReply: Boolean,
     timeLabels: FeedbackTimeLabels,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val view = LocalView.current
     val screenshotCount = remember(item.screenshots) { parseScreenshots(item.screenshots).size }
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            // 调用方的修饰符挂在卡片本体上：容器变形要量的是这张卡片可见的那块圆角面，
+            // 列表的项间距由 LazyColumn 负责，这里没有外边距需要跳过。
+            .then(modifier)
             .clickable {
                 view.performHaptic(HapticType.CLICK)
                 onClick()
             },
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(FeedbackListCardCorner),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
@@ -452,7 +476,8 @@ private fun FeedbackCardSkeleton(shimmer: ShimmerState) {
 private fun CrashLogRecordCard(
     record: com.tracktosearch.data.local.CrashLogRecord,
     timeLabels: FeedbackTimeLabels,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val view = LocalView.current
     val (statusRes, statusColor) = when (record.status) {
@@ -475,11 +500,13 @@ private fun CrashLogRecordCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            // 与 FeedbackCard 同理：修饰符挂在卡片本体上，量到的才是用户看到的那块圆角面。
+            .then(modifier)
             .clickable {
                 view.performHaptic(HapticType.CLICK)
                 onClick()
             },
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(FeedbackListCardCorner),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {

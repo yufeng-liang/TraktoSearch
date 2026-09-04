@@ -56,6 +56,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -84,14 +85,15 @@ import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.backdropContentSource
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.posterSharedKey
 import com.tracktosearch.ui.component.rememberShimmer
 import com.tracktosearch.ui.component.zoomSharedSource
 import com.tracktosearch.ui.theme.onColorFor
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.component.SharedOrigin
+import com.tracktosearch.ui.navigation.DetailSeedStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -187,23 +189,18 @@ internal fun DetailHeaderContent(
                     modifier = Modifier
                         .fillMaxSize()
                         .then(if (uiState.posterUrl != null) Modifier.clickable { onPosterClick() } else Modifier)
+                        .testTag("detail_header_poster")
                 ) {
                     if (uiState.posterUrl != null) {
                         var posterScale by remember { mutableFloatStateOf(1f) }
-                        val sharedTransitionScope = LocalSharedTransitionScope.current
-                        val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-                        val posterModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-                            with(sharedTransitionScope) {
-                                Modifier
-                                    .sharedElement(
-                                        rememberSharedContentState(key = "poster-$tmdbId"),
-                                        animatedVisibilityScope = animatedVisibilityScope
-                                    )
-                                    .fillMaxSize()
-                            }
-                        } else {
-                            Modifier.fillMaxSize()
+                        // 来源侧点击时把 origin 记进了 DetailSeedStore，这里读回来拼出同一个 key。
+                        // remember 锁在 tmdbId 上：转场进行中若被别处覆写，key 变了会当场断掉配对。
+                        val posterOrigin = remember(tmdbId) {
+                            DetailSeedStore.peek(tmdbId)?.origin ?: SharedOrigin.ANY
                         }
+                        val posterModifier = Modifier
+                            .appSharedBounds(key = posterSharedKey(tmdbId, posterOrigin))
+                            .fillMaxSize()
                         // 用 Box 承载全屏查看转场的共享元素；AsyncImage 上保留导航用 sharedElement
                         // （双 key 嵌套是文档支持的组合模式）。
                         // 全屏查看这一侧用 caller-managed visibility：全屏 overlay 打开该 key 时
@@ -213,7 +210,7 @@ internal fun DetailHeaderContent(
                                 .fillMaxSize()
                                 .zoomSharedSource(
                                     key = "poster-zoom-bounds-$tmdbId",
-                                    clipShape = RoundedCornerShape(8.dp)
+                                    clipRadius = 8.dp
                                 )
                         ) {
                             SubcomposeAsyncImage(

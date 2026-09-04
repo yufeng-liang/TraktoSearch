@@ -84,6 +84,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -109,12 +110,11 @@ import com.tracktosearch.ui.component.DetailTopBarIcon
 import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
-import com.tracktosearch.ui.component.LocalActivePosterClickSetter
-import com.tracktosearch.ui.component.LocalActivePosterClickToken
-import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.isAppSharedTransitionActive
 import com.tracktosearch.ui.component.LocalBackdrop
-import com.tracktosearch.ui.component.LocalFullscreenSharedKey
+import com.tracktosearch.ui.component.LocalFullscreenSharedElement
+import com.tracktosearch.ui.component.fullscreenSharedElementKey
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.NeumorphicIconButton
@@ -142,6 +142,7 @@ import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.component.SharedOrigin
 import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -181,8 +182,6 @@ fun DetailScreen(
     val spriteState by spriteViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val view = LocalView.current
-    // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的推荐卡片参与共享元素转场
-    var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
     var showRatingDialog by remember { mutableStateOf(false) }
     var detailHeaderBounds by remember { mutableStateOf<Rect?>(null) }
     var showWatchlistScene by remember { mutableStateOf(false) }
@@ -409,13 +408,14 @@ fun DetailScreen(
     // 非首屏内容与 Haze source，避免正文、图片和模糊采样与共享海报叠加到同一帧。
     // 不读取 isRunning：它随动画每帧变化，会让详情正文整棵树反复重组。
     // 端点状态只在转场开始/结束时变化，足以控制首屏内容和 Haze source。
-    val isNavigationTransitionRunning = LocalAnimatedVisibilityScope.current?.transition?.let { transition ->
-        transition.currentState != transition.targetState
-    } == true
+    // 共享海报的边界动画比页面淡入更长，只看页面转场端点会在海报还在飞的时候放开正文与
+    // Haze 采样。两个信号取或，任一还在跑就继续冻结。
+    val isNavigationTransitionRunning = isAppSharedTransitionActive() ||
+        LocalAnimatedVisibilityScope.current?.transition?.let { transition ->
+            transition.currentState != transition.targetState
+        } == true
     val contentReadyForTransition = contentReady && !isNavigationTransitionRunning
 
-    // 点击 token,确保只有被点击的卡片参与转场(避免同 tmdbId 海报跨栏目飘错)
-    var activeClickToken by remember { mutableStateOf(0) }
 
     // 顶栏与吸顶 Tab 栏共用一条实色底（取色见 DetailVisuals.detailBarColor）。
     // 提到 Scaffold 之外算：状态栏条、吸顶栏、标题淡入三处要用同一份 isPinned。
@@ -434,16 +434,10 @@ fun DetailScreen(
         label = "detailTopBarTitleAlpha"
     )
 
-    CompositionLocalProvider(
-        LocalActivePosterTmdbId provides activePosterTmdbId,
-        LocalActivePosterClickSetter provides { id ->
-            activePosterTmdbId = id
-            activeClickToken += 1
-            activeClickToken
-        },
-        LocalActivePosterClickToken provides activeClickToken
-    ) {
-    Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) { padding ->
+    Scaffold(
+        modifier = Modifier.testTag("detail_screen"),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+    ) { padding ->
         Box(modifier = Modifier
             .fillMaxSize()
             .padding(padding)
@@ -483,7 +477,9 @@ fun DetailScreen(
                     "backdrop-zoom-$tmdbId-$selectedBackdropIndex"
                 else -> null
             }
-            CompositionLocalProvider(LocalFullscreenSharedKey provides fullscreenSharedKey) {
+            CompositionLocalProvider(
+                LocalFullscreenSharedElement provides fullscreenSharedElementKey(fullscreenSharedKey)
+            ) {
 
             // 状态栏条：与顶栏同色同步淡入，让顶栏在视觉上延伸到状态栏底下。
             // 原先这里铺的是掺了海报色的沉浸实色，且不吸顶时才透明——顶栏、Tab 栏、
@@ -976,6 +972,7 @@ fun DetailScreen(
                                                 genres = item.genres,
                                                 posterUrl = item.posterUrl,
                                                 tmdbId = item.tmdbId,
+                                                origin = SharedOrigin.of(SharedOrigin.DETAIL, tmdbId.toString()),
                                                 onClick = {
                                                     if (mediaType == MediaType.MOVIE) {
                                                         onMovieClick(item.traktId, item.tmdbId, item.displayTitle.ifEmpty { item.title }, item.imdbId, item.traktRating)
@@ -999,8 +996,7 @@ fun DetailScreen(
                 }
                 } // end if (contentReady)
                 }
-            } // CompositionLocalProvider
-            } // CompositionLocalProvider(LocalFullscreenSharedKey)
+            } // CompositionLocalProvider(LocalFullscreenSharedElement)
             } // hazeSource Box 结束：采样源只包住状态栏底色 + 滚动内容
 
             // 悬浮控件与全屏覆盖层必须与 hazeSource 保持兄弟关系。

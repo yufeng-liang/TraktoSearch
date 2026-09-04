@@ -115,8 +115,15 @@ import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.DiscoverFilterCardKey
+import com.tracktosearch.ui.component.DiscoverFilterCardCorner
+import com.tracktosearch.ui.component.appSharedChrome
+import com.tracktosearch.ui.component.appSkipToLookaheadSize
+import com.tracktosearch.ui.component.isAppSharedTransitionActive
+import com.tracktosearch.ui.component.posterSharedKey
+import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.SharedOrigin
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
@@ -160,7 +167,6 @@ fun DiscoverFilterScreen(
     )
     // rememberSaveable + Saver：进入详情页返回后恢复原滚动位置，不再回到顶部
     val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val view = LocalView.current
     val statusBarHeight = WindowInsets.statusBars
@@ -235,20 +241,16 @@ fun DiscoverFilterScreen(
         viewModel.collapseAdvanced()
     }
 
+    // 与底部入口卡片配对的是整页：卡片放大成页面、返回时收回成卡片。
+    // 从顶部圆形筛选图标进来时源侧不配对，本侧只剩淡入，与其他页面一致。
+    val transitionActive = isAppSharedTransitionActive()
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .then(
-                if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-                    with(sharedTransitionScope) {
-                        Modifier.sharedBounds(
-                            sharedContentState = rememberSharedContentState(key = "discover-filter-entry-card"),
-                            animatedVisibilityScope = animatedVisibilityScope
-                        )
-                    }
-                } else {
-                    Modifier
-                }
+            .appSharedBounds(
+                key = DiscoverFilterCardKey,
+                animatedVisibilityScope = animatedVisibilityScope,
+                corner = SharedCorner.flattenFrom(DiscoverFilterCardCorner),
             )
     ) {
         // ========== 列表内容 ==========
@@ -256,6 +258,7 @@ fun DiscoverFilterScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                .appSkipToLookaheadSize()
                 .hazeSource(state = hazeState)
                 .backdropContentSource(),
             contentPadding = PaddingValues(
@@ -306,7 +309,8 @@ fun DiscoverFilterScreen(
                                     item.id,
                                     item.poster_path?.let { TmdbImageUrls.W342 + it },
                                     (item.release_date.ifBlank { item.first_air_date.orEmpty() })
-                                        .take(4).toIntOrNull()
+                                        .take(4).toIntOrNull(),
+                                    origin = SharedOrigin.DISCOVER_FILTER
                                 )
                                 if (uiState.type == TmdbRepository.DiscoverType.MOVIE) {
                                     onMovieClick(item.id, title)
@@ -360,10 +364,13 @@ fun DiscoverFilterScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // 顶栏不参与配对：容器基本落位后再淡入；转场期停 haze 采样
+                .appSharedChrome(animatedVisibilityScope)
                 .hazeTopBar(
                     state = hazeState,
                     style = hazeStyle,
                     blurRadius = 24.dp,
+                    isContentUnderTopBar = if (transitionActive) false else null,
                     scene = discoverFilterGlassScene
                 )
                 // 拦截点击：顶栏覆盖可滚动列表，不消费会让点击穿透到下方列表项
@@ -377,19 +384,10 @@ fun DiscoverFilterScreen(
                     .padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 1.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 「返回箭头 + 标题」作为整体与发现页右上角筛选图标配对（sharedBounds）
-                val headerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-                    with(sharedTransitionScope) {
-                        Modifier.sharedBounds(
-                            sharedContentState = rememberSharedContentState(key = "discover-filter-entry-icon"),
-                            animatedVisibilityScope = animatedVisibilityScope
-                        )
-                    }
-                } else {
-                    Modifier
-                }
+                // 「返回箭头 + 标题」不参与配对：发现页那一侧是个圆形筛选图标，两端没有共同内容。
+                // 与整页配对的是 DiscoverFilterCardKey（底部入口卡片那条路）。
                 Row(
-                    modifier = headerModifier.weight(1f),
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onBack) {
@@ -771,7 +769,6 @@ private fun DiscoverFilterListItem(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val title = if (item.title.isNotBlank()) item.title else (item.name ?: "")
     val year = if (isMovie) {
@@ -821,24 +818,17 @@ private fun DiscoverFilterListItem(
         label = "filter_item_on_bg_variant"
     )
 
-    // 海报 modifier：当两个 scope 可用时加 sharedElement（与详情页海报配对）
-    val posterModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-        with(sharedTransitionScope) {
-            Modifier
-                .width(80.dp)
-                .height(120.dp)
-                .sharedElement(
-                    rememberSharedContentState(key = "poster-${item.id}"),
-                    animatedVisibilityScope = animatedVisibilityScope
-                )
-                .clip(RoundedCornerShape(8.dp))
-        }
-    } else {
-        Modifier
-            .width(80.dp)
-            .height(120.dp)
-            .clip(RoundedCornerShape(8.dp))
-    }
+    // 海报与详情页头图配对；只有被点过的那一行才挂修饰符
+    var clicked by remember { mutableStateOf(false) }
+    val posterModifier = Modifier
+        .width(80.dp)
+        .height(120.dp)
+        .appSharedBounds(
+            key = if (clicked) posterSharedKey(item.id, SharedOrigin.DISCOVER_FILTER) else null,
+            animatedVisibilityScope = animatedVisibilityScope,
+            corner = SharedCorner.uniform(8.dp),
+        )
+        .clip(RoundedCornerShape(8.dp))
 
     val backgroundBrush = Brush.horizontalGradient(
         colors = listOf(
@@ -863,7 +853,10 @@ private fun DiscoverFilterListItem(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = onClick
+                onClick = {
+                    clicked = true
+                    onClick()
+                }
             )
             .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)

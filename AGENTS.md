@@ -135,6 +135,9 @@ CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments
 - Gradle installDebug 设备筛选可能因 ADB 返 API 属性异常跳过；先用 adb -s <serial> shell getprop ro.build.version.release 和 ro.build.version.sdk 记实际值
 - Gradle 提示 minSdkVersion 不兼容仍用 adb -s <serial> install -r <apk> 事实核验；曾 Gradle 报 API 21 但 ADB 直装返 Success 不一致
 - 安装成功须续 exec am start、UI 树检查、screencap 后 adb pull 截图、logcat -b crash，不能凭安装成功宣称功能过。系统属性与用户描述不一致保留命令输出报差异
+- 装 debug/benchmark 包报 INSTALL_FAILED_UPDATE_INCOMPATIBLE 先查签名不一致，勿当成「残留包没清干净」：本机设了 ANDROID_SDK_HOME=H:\Android_SDK\.android，AGP 用该目录下的 debug.keystore 签名，而机上已装的应用是 Android Studio 用 C:\Users\15778\.android\debug.keystore 签的，两把不是同一把。benchmark 构建同样受影响（initWith(release) 后把 signingConfig 指回 debug）
+- 签名不一致禁止用卸载重装解决：会连带清掉网关激活态、Trakt/豆瓣登录和想看已看本地数据。正确做法是用 Studio 那把 keystore 重签后原地 install -r，apksigner sign --ks C:\Users\15778\.android\debug.keystore --ks-pass pass:android（debug keystore 的公开默认口令，非本项目凭证）--ks-key-alias androiddebugkey
+- 核对两边证书：apksigner verify --print-certs <apk> 看 APK 实际证书 SHA-256，keytool -list -v -keystore <path> 看 keystore 指纹，二者一致才可原地覆盖安装
 
 ## Android 开屏截图验收经验
 - 开屏视觉验收须记设备实际分辨率/密度/API/安装结果/主 Activity/启动进程/UI 树/logcat -b crash；构建成功≠真机视觉过

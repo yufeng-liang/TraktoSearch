@@ -64,11 +64,13 @@ private class SwiftieMusicHolder {
  * 不管它就会在后台把整首放完，回到前台时音画永久错开，而
  * [SwiftieTimeline] 整套账本的前提正是「1:58 那句 Lover 压在绽放上」。
  * 所以这里在 `ON_STOP` 就 stop + release + 放弃焦点（Spec §5.1 明文要求），
- * 回到前台重建并 seek 到时钟当前位置。
+ * 回到前台重建并 seek 回 [positionMs] 给出的位置。
  *
  * @param enabled 整段是否该有声音。「减少动效」路径与永久丢失焦点后传 false
  * @param paused 与 [SwiftieSequenceClock.paused] 联动
- * @param positionMs 时钟当前位置。重建播放器与响应 seek 时用它对位
+ * @param positionMs 配乐**应该**处在的播放位置。注意它不等于时钟值 —— 配乐在前奏第一帧
+ *   就起播，比序列时钟早 [SwiftieTimeline.PREROLL_MS]，折算由调用方做（见
+ *   `SwiftieEggScreen` 的 `musicPositionMs`）。重建播放器与响应 seek 时按它对位
  * @param seekEpoch [SwiftieSequenceClock.seekEpoch]，变了就说明时钟被拨过、需要重新对位
  * @param onFocusChange 焦点变化。三种结局必须分开处理，见 [SwiftieAudioFocus]
  */
@@ -125,7 +127,9 @@ internal fun SwiftieMusic(
             createSwiftiePlayer(context, attributes, holder) { player ->
                 holder.prepared = true
                 runCatching {
-                    // 重建时从时钟当前位置接上（息屏回来那一下就靠这个对位）
+                    // 从「配乐此刻应该在的位置」接上：答对那一帧建的播放器要等
+                    // prepareAsync 回来，这次 seek 把准备耗掉的那点时间补回去；
+                    // 息屏回来那一下也靠它对位
                     val from = latestPosition()
                     if (from > 0L) player.seekTo(from.toInt())
                     if (!latestPaused) player.start()

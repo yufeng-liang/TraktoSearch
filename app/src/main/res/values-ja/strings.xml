@@ -10,7 +10,7 @@
     <string name="auth_error_invite_revoked">このチケットコードは取り消されています。管理者に連絡してください。</string>
     <string name="auth_error_invite_expired">チケットコードの有効期限が切れています。</string>
     <string name="auth_error_device_limit">デバイス上限に達しました。</string>
-    <string name="auth_error_migration_device_not_found">移行には既存の登録デバイスが必要です。</string>
+    <string name="auth_error_migration_device_not_found">移行には登録済みのデバイスが必要です。</string>
     <string name="auth_error_migration_device_mismatch">このデバイスは別の友達に属しています。</string>
     <string name="auth_error_device_already_bound">このデバイスはすでに登録されています。</string>
     <string name="auth_error_friend_disabled">このアクセスは無効化されています。</string>
@@ -20,8 +20,11 @@
 
     <!-- Ticket Machine -->
     <string name="machine_status_ready">コード入力</string>
+    <string name="machine_status_verifying">確認中…</string>
+    <string name="machine_detail_verifying">○ コードを確認中 · 少々お待ちください</string>
     <string name="machine_status_printing">印刷中…</string>
-    <string name="machine_status_collected">発券完了</string>
+    <string name="machine_status_collected">発行完了</string>
+    <string name="machine_detail_collected">○ 発行済み · チケットで入場方法を選択</string>
     <string name="machine_status_invalid">コード不正</string>
     <string name="machine_status_used">使用済み</string>
     <string name="machine_status_revoked">取消済み</string>
@@ -33,19 +36,20 @@
     <string name="machine_status_friend_disabled">無効化</string>
     <string name="machine_status_rate_limited">少々お待ち</string>
     <string name="machine_status_network">通信不能</string>
-    <string name="machine_status_failed">発券失敗</string>
+    <string name="machine_status_failed">発行失敗</string>
     <string name="machine_status_clipboard_empty">コードなし</string>
     <string name="machine_key_paste">貼り付け</string>
     <string name="machine_key_backspace_desc">バックスペース</string>
-    <string name="machine_submit">発券</string>
+    <string name="machine_submit">発行</string>
     <string name="machine_code_progress">チケットコード %1$s、残り %2$d 桁</string>
-    <string name="machine_code_collected">受け取り番号は使用済み、発券完了</string>
+    <string name="machine_code_collected">受け取り番号は使用済み、発行完了</string>
 
     <!-- Ticket -->
-    <string name="ticket_admit_one">ADMIT ONE</string>
     <string name="ticket_hall">スクリーン %1$d</string>
     <string name="ticket_seat">%1$d 列 %2$d 番</string>
+    <string name="ticket_serial_no">NO. %1$s</string>
     <string name="ticket_entry_trakt">Traktでログイン</string>
+    <string name="ticket_entry_authorizing">認証中…</string>
     <string name="ticket_entry_douban">豆瓣でログイン</string>
     <string name="ticket_entry_guest">ゲストとして入場</string>
 
@@ -514,8 +518,8 @@
     <string name="login_denied">認証が拒否されました</string>
     <string name="login_success">ログイン成功、読み込み中…</string>
     <string name="login_sync_hint">ログイン後、Traktのウォッチリストが同期されます</string>
-    <string name="login_activation_locked">○ 未発券 · コードを入力して入場券を引き換え</string>
-    <string name="login_personal_cinema_access">TICKET MACHINE · PERSONAL CINEMA</string>
+    <string name="login_activation_locked">○ 未発行 · コードを入力してチケットと引きかえ</string>
+    <string name="machine_plate">TICKET MACHINE · V%1$s</string>
 
     <!-- Ratings -->
 
@@ -1113,6 +1117,7 @@
     <string name="cd_watched">視聴済み</string>
     <string name="cd_saved">保存済み</string>
     <string name="cd_save">保存</string>
+    <string name="cd_image_page">%2$d 枚中 %1$d 枚目の画像</string>
     <string name="cd_edit">編集</string>
     <string name="cd_delete">削除</string>
     <string name="cd_back_to_top">トップに戻る</string>
@@ -1745,6 +1750,7 @@
     <string name="ai_taste_recommendations">あなたへの3作品</string>
     <string name="ai_taste_details">詳細を開く</string>
     <string name="ai_quiz_spoiler">対象作品：%1$s（ネタバレあり）</string>
+    <string name="ai_quiz_media_separator">、</string>
     <string name="ai_quiz_start">ラウンドを開始</string>
     <string name="ai_quiz_need_more_movies">クイズを始めるには視聴済みが 7 本以上必要です</string>
     <string name="ai_quiz_preview_title">今回の作品を選ぶ</string>
@@ -1975,7 +1981,7 @@
     <string name="opensource_use_lottie">JSON ベクターアニメーションの再生（ロード中・空状態など）</string>
     <string name="opensource_use_richtext">Markdown リッチテキストの描画（更新履歴）</string>
     <string name="opensource_use_reorderable">リストの長押しドラッグ並べ替え</string>
-    <string name="opensource_use_zoomable">ポスター・シーンのピンチズームとドラッグ</string>
+    <string name="opensource_use_telephoto">ポスター・シーンのピンチズームと大画像のサブサンプリング</string>
     <string name="opensource_use_backdrop">リキッドガラス効果のための画面単位サンプリング基盤</string>
     <string name="opensource_use_mesh_gradient">Android 12 以下での背景グロー代替（メッシュグラデーションアニメーション）</string>
     <string name="opensource_use_mirage">Android 13 以上の背景グロー（AGSL シェーダーアニメーション）</string>
@@ -2078,6 +2084,8 @@
     <string name="swiftie_quiz_backspace">削除</string>
     <string name="swiftie_era_card_a11y">%1$s、%2$s リリース、全 %3$d 曲</string>
     <string name="swiftie_eras_axis_a11y">アルバムのタイムライン、2006 年から 2025 年、全 12 作品。ドラッグでその時代へ移動できます。</string>
+    <string name="swiftie_finale_a11y">Taylor Swift のグリッターのサイン。その下にフレンドシップブレスレットが 3 本：13 ハート 87、SWIFTIE、%1$s。さらにその下に「Taylor と私、いつまでも一緒に」と書かれています。</string>
+    <string name="swiftie_finale_a11y_plain">Taylor Swift のグリッターのサイン。その下にフレンドシップブレスレットが 2 本：13 ハート 87、SWIFTIE。さらにその下に「Taylor と私、いつまでも一緒に」と書かれています。</string>
     <string name="swiftie_skip">スキップ</string>
     <string name="swiftie_resume">再開</string>
     <string name="swiftie_audio_hint_all">音量をオンにしてイヤホン着用で最高の体験に</string>

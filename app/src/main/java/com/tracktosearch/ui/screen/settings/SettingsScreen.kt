@@ -85,7 +85,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -120,7 +119,6 @@ import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
@@ -144,6 +142,12 @@ import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.StatisticsEntryKey
+import com.tracktosearch.ui.component.MarkRecordsEntryKey
+import com.tracktosearch.ui.component.SearchSourcesEntryKey
+import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.SettingsEntryCardCorner
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -251,7 +255,6 @@ fun SettingsScreen(
     // 进设置页时已稳定,避免 SettingsViewModel 延迟构造导致的初始 false→true 跳变)
     val sharedTransitionEnabled = LocalSharedTransitionEnabled.current
     // 共享元素转场 scope（帮助与说明入口 → 帮助页标题栏配对）
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
     // 豆瓣登录态:「重新同步豆瓣」点击前预检,未登录弹确认框引导登录
@@ -387,15 +390,13 @@ fun SettingsScreen(
     val currentMeshEnabled by viewModel.meshEnabled.collectAsStateWithLifecycle()
     // 霉粉彩蛋解锁位：未解锁时背景光晕列表里整项不出现「星云」
     val swiftieUnlocked by viewModel.swiftieUnlocked.collectAsStateWithLifecycle()
-    // 关于页版本号连点 3 次拉起彩蛋题面：题面显隐挂在 CloudThemeManager 上
+    // 关于页长按版本号拉起霉粉彩蛋题面：题面显隐挂在 CloudThemeManager 上
     val cloudThemeManager = remember {
         EntryPointAccessors.fromApplication(
             context.applicationContext,
             SettingsCloudThemeProvider::class.java
         ).cloudThemeManager()
     }
-    var versionTapCount by remember { mutableIntStateOf(0) }
-    var lastVersionTapAt by remember { mutableLongStateOf(0L) }
 
     val openUrl: (String) -> Unit = { url ->
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
@@ -553,14 +554,11 @@ fun SettingsScreen(
             // 豆瓣独立模式: StatisticsViewModel 支持基于豆瓣本地同步数据的统计，与 Trakt 统计同等可用
             if (isLoggedIn && (isDoubanMode || isTraktConnected)) {
                 item(key = "statistics_entry") {
-                    val statisticsEntryModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && sharedTransitionEnabled) {
-                        with(sharedTransitionScope) {
-                            Modifier.sharedBounds(
-                                sharedContentState = rememberSharedContentState(key = "settings-statistics-entry"),
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                        }
-                    } else { Modifier }
+                    val statisticsEntryModifier = Modifier.appSharedBounds(
+                        key = StatisticsEntryKey,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        corner = SharedCorner.uniform(SettingsEntryCardCorner),
+                    )
                     StatisticsCard(
                         modifier = statisticsEntryModifier,
                         hazeState = settingsHazeState,
@@ -573,10 +571,16 @@ fun SettingsScreen(
             // 豆瓣独立模式: 标记记录页读取 Trakt history,无 trakt token,隐藏
             if (isLoggedIn && !isDoubanMode) {
                 item(key = "mark_records_entry") {
+                    val markRecordsEntryModifier = Modifier.appSharedBounds(
+                        key = MarkRecordsEntryKey,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        corner = SharedCorner.uniform(SettingsEntryCardCorner),
+                    )
                     MarkRecordsEntryCard(
-                    onClick = onMarkRecordsClick,
-                    hazeState = settingsHazeState
-                )
+                        modifier = markRecordsEntryModifier,
+                        onClick = onMarkRecordsClick,
+                        hazeState = settingsHazeState
+                    )
                 }
             }
 
@@ -626,7 +630,13 @@ fun SettingsScreen(
 
             // 搜索源（独立管理页入口，与标记记录入口卡片同构）
             item(key = "search_sources_entry") {
+                val searchSourcesEntryModifier = Modifier.appSharedBounds(
+                    key = SearchSourcesEntryKey,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    corner = SharedCorner.uniform(SettingsEntryCardCorner),
+                )
                 SearchSourcesEntryCard(
+                    modifier = searchSourcesEntryModifier,
                     onClick = onSearchSourcesClick,
                     hazeState = settingsHazeState
                 )
@@ -786,22 +796,12 @@ fun SettingsScreen(
                     hazeState = settingsHazeState,
                     isCheckingUpdate = isCheckingUpdate,
                     onVersionClick = {
-                        // 版本号连点 3 次（每两下间隔 1.5s 内）拉起霉粉彩蛋题面，超时归零。
-                        //
-                        // 「检查更新」只在**一串连点的第一下**发起：原来 1、2 下都发，
-                        // 于是奔着彩蛋去的人会连打两次更新接口、进度条闪两回。
-                        // 第一下照发是为了不牺牲主功能 —— 只想查更新的人点一下就有反应，
-                        // 不必为了彩蛋把它推迟 1.5s
-                        val now = System.currentTimeMillis()
-                        versionTapCount = if (now - lastVersionTapAt > 1500) 1 else versionTapCount + 1
-                        lastVersionTapAt = now
-                        when {
-                            versionTapCount >= 3 -> {
-                                versionTapCount = 0
-                                cloudThemeManager.openSwiftieEgg()
-                            }
-                            versionTapCount == 1 -> viewModel.checkUpdate()
-                        }
+                        // 单击版本号只查更新；彩蛋入口改为长按触发，不再连点。
+                        viewModel.checkUpdate()
+                    },
+                    // 长按版本号拉起霉粉彩蛋题面，与检查更新互不干扰。
+                    onVersionLongClick = {
+                        cloudThemeManager.openSwiftieEgg()
                     },
                     onChangelogClick = {
                         viewModel.loadChangelog()
@@ -1345,6 +1345,7 @@ fun SettingsScreen(
 @Composable
 private fun MarkRecordsEntryCard(
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
     val view = LocalView.current
@@ -1355,10 +1356,13 @@ private fun MarkRecordsEntryCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(20.dp))
+            // 调用方的修饰符挂在外边距之内：容器变形要量的是卡片可见的那块圆角面，
+            // 挂在 padding 之外量到的是整行宽度，转场起始矩形会比用户看到的卡片宽出两侧留白。
+            .then(modifier)
+            .clip(RoundedCornerShape(SettingsEntryCardCorner))
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
         isDark = isDark,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(SettingsEntryCardCorner),
         backgroundColor = if (realBlur) {
             if (isDark) GlassFillDarkSubtle else Color.White.copy(alpha = 0.70f)
         } else {
@@ -1427,6 +1431,7 @@ private fun MarkRecordsEntryCard(
 @Composable
 private fun SearchSourcesEntryCard(
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
     val view = LocalView.current
@@ -1437,10 +1442,13 @@ private fun SearchSourcesEntryCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(20.dp))
+            // 调用方的修饰符挂在外边距之内：容器变形要量的是卡片可见的那块圆角面，
+            // 挂在 padding 之外量到的是整行宽度，转场起始矩形会比用户看到的卡片宽出两侧留白。
+            .then(modifier)
+            .clip(RoundedCornerShape(SettingsEntryCardCorner))
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
         isDark = isDark,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(SettingsEntryCardCorner),
         backgroundColor = if (realBlur) {
             if (isDark) GlassFillDarkSubtle else Color.White.copy(alpha = 0.70f)
         } else {
@@ -1902,6 +1910,7 @@ private fun AboutGroupItem(
     hazeState: HazeState?,
     isCheckingUpdate: Boolean,
     onVersionClick: () -> Unit,
+    onVersionLongClick: () -> Unit,
     onChangelogClick: () -> Unit,
     onHelpClick: () -> Unit,
     onOpenSourceClick: () -> Unit,
@@ -1918,6 +1927,7 @@ private fun AboutGroupItem(
             latestVersion = latestVersion,
             isCheckingUpdate = isCheckingUpdate,
             onVersionClick = onVersionClick,
+            onVersionLongClick = onVersionLongClick,
             onChangelogClick = onChangelogClick,
             onHelpClick = onHelpClick,
             onOpenSourceClick = onOpenSourceClick,
@@ -2179,6 +2189,7 @@ private fun AboutItem(
     latestVersion: String?,
     isCheckingUpdate: Boolean,
     onVersionClick: () -> Unit,
+    onVersionLongClick: () -> Unit,
     onChangelogClick: () -> Unit,
     onHelpClick: () -> Unit,
     onOpenSourceClick: () -> Unit,
@@ -2204,6 +2215,7 @@ private fun AboutItem(
             loadingIcon = isCheckingUpdate,
             subtitleColor = versionSubtitleColor,
             onClick = onVersionClick,
+            onLongClick = onVersionLongClick,
             containerColor = containerColor
         )
         SettingsCard(

@@ -9,7 +9,7 @@ enum class SwiftieQuizPhase { INPUT, WRONG, SOLVED }
  * 全部判定都在这里，Composable 只负责画和转发按键 —— 这样答案校验与提交条件能纯单测覆盖
  * （Spec §13.1）。
  *
- * @param wrongCount 累计答错次数，**永不重置**：连错 3 次的提示出现后不再收回。
+ * @param wrongCount 累计答错次数，**永不重置**：提示浮出后不再收回。
  */
 data class SwiftieQuizState(
     val input: String = "",
@@ -21,7 +21,7 @@ data class SwiftieQuizState(
      *
      * `WRONG` 也要排除：那 300ms 里 `input` 还留着答错的两位（摇晃要看得见），
      * 只判长度的话用户能在摇晃窗口里对**同一个错答案**再点一次提交 ——
-     * [submit] 会把 `wrongCount` 又加一次，两次真实尝试就浮出 `Her lucky number.`。
+     * [submit] 会把 `wrongCount` 又加一次，一次真实尝试记成两次。
      */
     val canSubmit: Boolean
         get() = input.length == SwiftieEggController.MAX_INPUT_LENGTH &&
@@ -29,7 +29,7 @@ data class SwiftieQuizState(
 
     val solved: Boolean get() = phase == SwiftieQuizPhase.SOLVED
 
-    /** 连错 [WRONG_HINT_THRESHOLD] 次后才浮出 `Her lucky number.` */
+    /** 答错 [WRONG_HINT_THRESHOLD] 次后浮出 `Her lucky number.`，之后不再收回。 */
     val showLuckyHint: Boolean get() = wrongCount >= WRONG_HINT_THRESHOLD
 
     fun append(digit: Char): SwiftieQuizState = when {
@@ -61,6 +61,7 @@ data class SwiftieQuizState(
         else this
 
     companion object {
-        const val WRONG_HINT_THRESHOLD: Int = 3
+        /** 答错一次就给提示：这道题只有一个答案，卡住的人不需要试三遍才配拿到线索。 */
+        const val WRONG_HINT_THRESHOLD: Int = 1
     }
 }
