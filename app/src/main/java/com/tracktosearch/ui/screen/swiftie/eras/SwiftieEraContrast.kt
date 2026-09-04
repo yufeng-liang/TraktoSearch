@@ -163,6 +163,39 @@ internal object SwiftieEraContrast {
     /** 24 次二分把明度定位到 1/16777216，远细于 8bit 通道能表达的精度。 */
     private const val HSL_BISECTION_STEPS = 24
 
+    /**
+     * 把 [color] **提亮**到「以 [alpha] 压在 [background] 上后对比度 ≥ [target]」。
+     *
+     * [readable] 只会压暗 —— 那是给半透明白卡片用的。轴线、播放头旋钮与 TS1-12 标签
+     * 落在**页面背景的下缘**上，而 12 张舞台里末档底色是深色的占 10 张
+     * （reputation 直接是纯黑）。在那些底色上压暗等于让标签彻底消失，
+     * 所以这里朝 `1f` 方向二分明度。
+     *
+     * 无饱和度的主色（reputation 的 `#111111`）会提成浅灰 —— 那正是这张专辑的
+     * 报纸黑白气质，不算丢辨识度。
+     */
+    fun readableOnDark(
+        color: Color,
+        background: Color,
+        target: Float = AA_SMALL,
+        alpha: Float = 1f
+    ): Color {
+        if (contrastRatio(composite(color, alpha, background), background) >= target) return color
+        val (hue, saturation, lightness) = toHsl(color)
+        var lo = lightness
+        var hi = 1f
+        repeat(HSL_BISECTION_STEPS) {
+            val mid = (lo + hi) / 2f
+            val candidate = fromHsl(hue, saturation, mid)
+            if (contrastRatio(composite(candidate, alpha, background), background) >= target) {
+                hi = mid
+            } else {
+                lo = mid
+            }
+        }
+        return fromHsl(hue, saturation, hi)
+    }
+
     private data class Hsl(val hue: Float, val saturation: Float, val lightness: Float)
 
     private fun toHsl(color: Color): Hsl {

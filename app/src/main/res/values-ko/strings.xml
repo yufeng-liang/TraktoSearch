@@ -2087,6 +2087,7 @@
     <string name="swiftie_finale_a11y">Taylor Swift의 글리터 사인. 그 아래 우정 팔찌 세 개: 13 하트 87, SWIFTIE, %1$s. 팔찌 아래에는 \'Taylor와 나, 언제까지나 함께\'라고 적혀 있습니다.</string>
     <string name="swiftie_finale_a11y_plain">Taylor Swift의 글리터 사인. 그 아래 우정 팔찌 두 개: 13 하트 87, SWIFTIE. 팔찌 아래에는 \'Taylor와 나, 언제까지나 함께\'라고 적혀 있습니다.</string>
     <string name="swiftie_skip">건너뛰기</string>
+    <string name="swiftie_pause">일시정지</string>
     <string name="swiftie_resume">계속</string>
     <string name="swiftie_audio_hint_all">소리를 켜고 이어폰을 착용하면 가장 좋습니다</string>
     <string name="swiftie_audio_hint_volume">소리를 켜면 가장 좋습니다</string>

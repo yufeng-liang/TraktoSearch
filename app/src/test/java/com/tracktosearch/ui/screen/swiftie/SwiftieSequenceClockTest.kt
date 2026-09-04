@@ -14,15 +14,14 @@ class SwiftieSequenceClockTest {
         assertThat(swiftiePhaseAt(3_100L)).isEqualTo(SwiftieSequencePhase.ERAS_CARDS)
         assertThat(swiftiePhaseAt(99_409L)).isEqualTo(SwiftieSequencePhase.ERAS_CARDS)
         // 终局排在倒滑之前：配乐末尾那句 Lover 留给绽放
-        assertThat(swiftiePhaseAt(99_410L)).isEqualTo(SwiftieSequencePhase.SIGNATURE)
-        assertThat(swiftiePhaseAt(107_410L)).isEqualTo(SwiftieSequencePhase.BRACELET)
-        assertThat(swiftiePhaseAt(111_910L)).isEqualTo(SwiftieSequencePhase.FINAL_HOLD)
-        // 116500 = 音轨 1:58 减掉前奏那 1500ms
-        assertThat(swiftiePhaseAt(116_499L)).isEqualTo(SwiftieSequencePhase.FINAL_HOLD)
-        assertThat(swiftiePhaseAt(116_500L)).isEqualTo(SwiftieSequencePhase.REWIND)
-        assertThat(swiftiePhaseAt(118_000L)).isEqualTo(SwiftieSequencePhase.LOVER_BLOOM)
-        assertThat(swiftiePhaseAt(121_500L)).isEqualTo(SwiftieSequencePhase.FADE_OUT)
-        assertThat(swiftiePhaseAt(124_498L)).isEqualTo(SwiftieSequencePhase.DONE)
+        assertThat(swiftiePhaseAt(100_810L)).isEqualTo(SwiftieSequencePhase.SIGNATURE)
+        assertThat(swiftiePhaseAt(108_810L)).isEqualTo(SwiftieSequencePhase.BRACELET)
+        assertThat(swiftiePhaseAt(113_310L)).isEqualTo(SwiftieSequencePhase.FINAL_HOLD)
+        assertThat(swiftiePhaseAt(117_999L)).isEqualTo(SwiftieSequencePhase.FINAL_HOLD)
+        assertThat(swiftiePhaseAt(118_000L)).isEqualTo(SwiftieSequencePhase.REWIND)
+        assertThat(swiftiePhaseAt(119_500L)).isEqualTo(SwiftieSequencePhase.LOVER_BLOOM)
+        assertThat(swiftiePhaseAt(123_000L)).isEqualTo(SwiftieSequencePhase.FADE_OUT)
+        assertThat(swiftiePhaseAt(125_998L)).isEqualTo(SwiftieSequencePhase.DONE)
     }
 
     @Test

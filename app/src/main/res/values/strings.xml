@@ -2082,6 +2082,7 @@ Config:
     <string name="swiftie_finale_a11y">Taylor Swift\'s glitter signature, with three friendship bracelets below it: 13 heart 87, SWIFTIE, and %1$s. Written underneath: Taylor and me, forever and always.</string>
     <string name="swiftie_finale_a11y_plain">Taylor Swift\'s glitter signature, with two friendship bracelets below it: 13 heart 87, and SWIFTIE. Written underneath: Taylor and me, forever and always.</string>
     <string name="swiftie_skip">Skip</string>
+    <string name="swiftie_pause">Pause</string>
     <string name="swiftie_resume">Resume</string>
     <string name="swiftie_audio_hint_all">Sound on and headphones for the best experience</string>
     <string name="swiftie_audio_hint_volume">Turn the sound on for the best experience</string>

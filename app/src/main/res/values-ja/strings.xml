@@ -2087,6 +2087,7 @@
     <string name="swiftie_finale_a11y">Taylor Swift のグリッターのサイン。その下にフレンドシップブレスレットが 3 本：13 ハート 87、SWIFTIE、%1$s。さらにその下に「Taylor と私、いつまでも一緒に」と書かれています。</string>
     <string name="swiftie_finale_a11y_plain">Taylor Swift のグリッターのサイン。その下にフレンドシップブレスレットが 2 本：13 ハート 87、SWIFTIE。さらにその下に「Taylor と私、いつまでも一緒に」と書かれています。</string>
     <string name="swiftie_skip">スキップ</string>
+    <string name="swiftie_pause">一時停止</string>
     <string name="swiftie_resume">再開</string>
     <string name="swiftie_audio_hint_all">音量をオンにしてイヤホン着用で最高の体験に</string>
     <string name="swiftie_audio_hint_volume">音量をオンにすると最高の体験に</string>
