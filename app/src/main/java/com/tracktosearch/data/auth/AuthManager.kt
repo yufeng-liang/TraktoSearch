@@ -130,6 +130,9 @@ class AuthManager @Inject constructor(
                 nextCheckAt = body.nextCheckAt
                 lastOnlineAt = now
                 _authState.value = AuthState.AUTHORIZED
+                // 取票成功那一刻票面就要印昵称，此时每日 check 还没跑；
+                // 空串不写入，避免覆盖掉上一次校验拿到的旧昵称。
+                body.nickname.takeIf { it.isNotBlank() }?.let { _nickname.value = it }
                 Result.success(body)
             } else {
                 response.failureWith("Activate failed: ${response.code()}")

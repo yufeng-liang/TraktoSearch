@@ -109,14 +109,22 @@ import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.ui.theme.WcagBlackWhiteCrossover
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.DiscoverFilterCardKey
+import com.tracktosearch.ui.component.DiscoverFilterCardCorner
+import com.tracktosearch.ui.component.appSkipToLookaheadSize
+import com.tracktosearch.ui.component.isAppSharedTransitionActive
+import com.tracktosearch.ui.component.posterSharedKey
+import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.SharedOrigin
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -159,7 +167,6 @@ fun DiscoverFilterScreen(
     )
     // rememberSaveable + Saver：进入详情页返回后恢复原滚动位置，不再回到顶部
     val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val haptics = rememberAppHaptics()
     val statusBarHeight = WindowInsets.statusBars
@@ -234,27 +241,31 @@ fun DiscoverFilterScreen(
         viewModel.collapseAdvanced()
     }
 
+    // 与底部入口卡片配对的是整页：卡片放大成页面、返回时收回成卡片。
+    // 从顶部圆形筛选图标进来时源侧不配对，本侧只剩淡入，与其他页面一致。
+    val transitionActive = isAppSharedTransitionActive()
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .then(
-                if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-                    with(sharedTransitionScope) {
-                        Modifier.sharedBounds(
-                            sharedContentState = rememberSharedContentState(key = "discover-filter-entry-card"),
-                            animatedVisibilityScope = animatedVisibilityScope
-                        )
-                    }
-                } else {
-                    Modifier
-                }
+            .appSharedBounds(
+                key = DiscoverFilterCardKey,
+                animatedVisibilityScope = animatedVisibilityScope,
+                corner = SharedCorner.flattenFrom(DiscoverFilterCardCorner),
+                // 容器变形要的是「内容不变形、被裁剪逐渐露出」，默认的 scaleToBounds 会把内容
+                // 跟着容器一起缩放绘制。逐帧重测的代价由内容侧的 appSkipToLookaheadSize 挡掉。
+                resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
             )
+            // 页面底色挪进共享节点内侧：容器变形靠裁剪揭示，容器里必须是不透明的，
+            // 否则变形期这一片能直接看到下面那一页 —— 打开的瞬间发现页内容会叠在本页上。
+            // 底色跟着动画边界一起长大，且被上面那层圆角动画裁剪，落定后与原来逐像素相同。
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // ========== 列表内容 ==========
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                .appSkipToLookaheadSize()
                 .hazeSource(state = hazeState)
                 .backdropContentSource(),
             contentPadding = PaddingValues(
@@ -305,7 +316,8 @@ fun DiscoverFilterScreen(
                                     item.id,
                                     item.poster_path?.let { TmdbImageUrls.W342 + it },
                                     (item.release_date.ifBlank { item.first_air_date.orEmpty() })
-                                        .take(4).toIntOrNull()
+                                        .take(4).toIntOrNull(),
+                                    origin = SharedOrigin.DISCOVER_FILTER
                                 )
                                 if (uiState.type == TmdbRepository.DiscoverType.MOVIE) {
                                     onMovieClick(item.id, title)
@@ -359,10 +371,14 @@ fun DiscoverFilterScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // 顶栏不参与配对，但从第一帧就在：与列表一样按落定尺寸布局，跟着容器裁剪逐渐露出。
+                // 延迟入场会让容器长大的那段时间顶栏位置空着，落位时再整片闪出来。转场期停 haze 采样
+                .appSkipToLookaheadSize()
                 .hazeTopBar(
                     state = hazeState,
                     style = hazeStyle,
                     blurRadius = 24.dp,
+                    isContentUnderTopBar = if (transitionActive) false else null,
                     scene = discoverFilterGlassScene
                 )
                 // 拦截点击：顶栏覆盖可滚动列表，不消费会让点击穿透到下方列表项
@@ -376,19 +392,10 @@ fun DiscoverFilterScreen(
                     .padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 1.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 「返回箭头 + 标题」作为整体与发现页右上角筛选图标配对（sharedBounds）
-                val headerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-                    with(sharedTransitionScope) {
-                        Modifier.sharedBounds(
-                            sharedContentState = rememberSharedContentState(key = "discover-filter-entry-icon"),
-                            animatedVisibilityScope = animatedVisibilityScope
-                        )
-                    }
-                } else {
-                    Modifier
-                }
+                // 「返回箭头 + 标题」不参与配对：发现页那一侧是个圆形筛选图标，两端没有共同内容。
+                // 与整页配对的是 DiscoverFilterCardKey（底部入口卡片那条路）。
                 Row(
-                    modifier = headerModifier.weight(1f),
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onBack) {
@@ -783,7 +790,6 @@ private fun DiscoverFilterListItem(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val title = if (item.title.isNotBlank()) item.title else (item.name ?: "")
     val year = if (isMovie) {
@@ -813,38 +819,37 @@ private fun DiscoverFilterListItem(
         label = "filter_item_bg"
     )
 
-    // 根据主色亮度自适应文字颜色
+    // 压在海报主色上该用黑字还是白字。阈值是 WCAG 的黑白等对比点（约 0.179），
+    // 不是 0.5 —— 用 0.5 的话中等明度的暖色（金黄、橙）会拿到白字，对比度掉到 3:1 以下。
+    val darkInkOnDominant = dominantColor?.let { it.luminance() > WcagBlackWhiteCrossover }
     val onGradientColor by animateColorAsState(
-        targetValue = dominantColor?.let { c ->
-            if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.92f) else Color.White
-        } ?: MaterialTheme.colorScheme.onSurface,
+        targetValue = when (darkInkOnDominant) {
+            true -> Color.Black.copy(alpha = 0.92f)
+            false -> Color.White
+            null -> MaterialTheme.colorScheme.onSurface
+        },
         label = "filter_item_on_bg"
     )
     val onGradientVariantColor by animateColorAsState(
-        targetValue = dominantColor?.let { c ->
-            if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.78f)
-        } ?: MaterialTheme.colorScheme.onSurfaceVariant,
+        targetValue = when (darkInkOnDominant) {
+            true -> Color.Black.copy(alpha = 0.65f)
+            false -> Color.White.copy(alpha = 0.78f)
+            null -> MaterialTheme.colorScheme.onSurfaceVariant
+        },
         label = "filter_item_on_bg_variant"
     )
 
-    // 海报 modifier：当两个 scope 可用时加 sharedElement（与详情页海报配对）
-    val posterModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-        with(sharedTransitionScope) {
-            Modifier
-                .width(80.dp)
-                .height(120.dp)
-                .sharedElement(
-                    rememberSharedContentState(key = "poster-${item.id}"),
-                    animatedVisibilityScope = animatedVisibilityScope
-                )
-                .clip(RoundedCornerShape(8.dp))
-        }
-    } else {
-        Modifier
-            .width(80.dp)
-            .height(120.dp)
-            .clip(RoundedCornerShape(8.dp))
-    }
+    // 海报与详情页头图配对；只有被点过的那一行才挂修饰符
+    var clicked by remember { mutableStateOf(false) }
+    val posterModifier = Modifier
+        .width(80.dp)
+        .height(120.dp)
+        .appSharedBounds(
+            key = if (clicked) posterSharedKey(item.id, SharedOrigin.DISCOVER_FILTER) else null,
+            animatedVisibilityScope = animatedVisibilityScope,
+            corner = SharedCorner.uniform(8.dp),
+        )
+        .clip(RoundedCornerShape(8.dp))
 
     val backgroundBrush = Brush.horizontalGradient(
         colors = listOf(
@@ -871,7 +876,10 @@ private fun DiscoverFilterListItem(
                 indication = null,
                 // 结果列表项进详情
                 semantic = HapticSemantic.LIGHT_TAP,
-                onClick = onClick
+                onClick = {
+                    clicked = true
+                    onClick()
+                }
             )
             .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)

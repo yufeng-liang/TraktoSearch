@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -38,12 +37,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.ui.component.ZoomableImageOverlay
 import com.tracktosearch.ui.component.queryExistingFile
 import com.tracktosearch.ui.component.savePosterToGallery
@@ -72,6 +73,11 @@ internal fun PersonImagePagerOverlay(
     val scope = rememberCoroutineScope()
     val savedImages = remember { mutableStateOf<Set<Int>>(emptySet()) }
 
+    // 全屏改用 original：telephoto 从磁盘子采样分块解码，配合动态缩放上限能放到原生像素，
+    // 而 h632（高 632px）在 1080p 屏上稍微放大就糊，等于白搭子采样。
+    // 缩略图与网格仍用 h632，只有用户主动看大图时才下原图。
+    val fullSizeImages = remember(images) { images.map { TmdbImageUrls.swapSize(it, "original") } }
+
     // 已保存检查（按 initialIndex 一次性检查；键住 visible+initialIndex，
     // 每次打开查看器时重新检查对应页，关闭时不查询）
     LaunchedEffect(visible, initialIndex) {
@@ -88,7 +94,7 @@ internal fun PersonImagePagerOverlay(
 
     ZoomableImageOverlay(
         visible = visible,
-        images = images,
+        images = fullSizeImages,
         initialIndex = initialIndex,
         sharedKeyPrefix = sharedKeyPrefix,
         onDismiss = onDismiss,
@@ -96,7 +102,8 @@ internal fun PersonImagePagerOverlay(
             if (idx in savedImages.value) {
                 context.showToast(alreadySavedToast)
             } else {
-                savePosterToGallery(context, scope, images[idx], "person_$idx") {
+                // 存与屏幕显示一致的原图，所见即所得
+                savePosterToGallery(context, scope, fullSizeImages[idx], "person_$idx") {
                     savedImages.value += idx
                 }
             }
@@ -137,6 +144,7 @@ internal fun AllPersonImagesPanel(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .statusBarsPadding()
+                .testTag("person_images_panel")
         ) {
             Row(
                 modifier = Modifier
@@ -160,7 +168,9 @@ internal fun AllPersonImagesPanel(
             }
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
-                modifier = Modifier.fillMaxHeight(0.8f),
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("person_images_grid"),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)

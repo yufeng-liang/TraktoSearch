@@ -14,6 +14,7 @@ import com.tracktosearch.di.NetworkModule
 import com.tracktosearch.data.auth.AuthCheckScheduler
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.ImageTrafficStorage
+import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.local.db.AppDatabase
 import com.tracktosearch.data.notification.NotificationScheduler
 import com.tracktosearch.data.remote.ImageDownloadProgress
@@ -26,6 +27,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import okhttp3.Dispatcher
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -45,6 +47,7 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     @Inject lateinit var splashPosterScheduler: SplashPosterScheduler
     @Inject lateinit var crashLogUploader: com.tracktosearch.data.util.CrashLogUploader
     @Inject lateinit var imageTrafficStorage: ImageTrafficStorage
+    @Inject lateinit var themeStorage: ThemeStorage
     // 惰性 Provider：注入本身不触发数据库创建，仅在使用时才解析 @Singleton 实例
     @Inject lateinit var appDatabaseProvider: Provider<AppDatabase>
     // 惰性 Provider：注入本身不触发 EncryptedSharedPreferences 初始化，仅在使用时才解析
@@ -70,6 +73,17 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
         if (isMainProcess()) {
             StartupTrace.markProcessStart()
             StartupTrace.mark("application.onCreate.enter")
+            // 系统 Splash 在 Application.onCreate 完成前就渲染，必须在这里同步读取 app 主题设置
+            // 并联动系统 uiMode（AppCompatDelegate.setDefaultNightMode，API 31+ 内部走
+            // UiModeManager.setApplicationNightMode），否则冷启动的系统 Splash 只会跟随
+            // 系统夜间模式，忽略 app 内的深色设置。DataStore 首值一般几十毫秒内读完。
+            StartupTrace.mark("application.theme_mode.apply.start")
+            // 主题模式应用在 ThemeStorage 的 companion 中，初始化阶段直接调用静态入口
+            // 即可，避免把 DataStore 实例误当成扩展方法接收者。
+            ThemeStorage.applyThemeModeToSystem(
+                runBlocking { themeStorage.readThemeModeSnapshot() }
+            )
+            StartupTrace.mark("application.theme_mode.apply.done")
             // 数据库与豆瓣凭据存储预热：SQLCipher 的 loadLibs 与 Keystore 密钥解密在 MainActivity 主线程 Hilt 注入
             // （TraktRepository → MarkActionRecordDao → AppDatabase）时固定消耗 200ms-1s；
             // DoubanAuthStorage 首次初始化同样同步读 EncryptedSharedPreferences（MasterKey 走 Keystore），

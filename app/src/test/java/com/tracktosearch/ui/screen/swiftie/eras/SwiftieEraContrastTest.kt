@@ -2,6 +2,7 @@ package com.tracktosearch.ui.screen.swiftie.eras
 
 import androidx.compose.ui.graphics.Color
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import org.junit.Test
 
 /**
@@ -90,6 +91,47 @@ class SwiftieEraContrastTest {
             if (SwiftieEraContrast.luminance(era.textColor) > 0.05f) {
                 assertThat(SwiftieEraContrast.luminance(body)).isGreaterThan(0.01f)
             }
+        }
+    }
+
+    @Test
+    fun brighteningOnlyEverGoesUp() {
+        // readableOnDark 的方向不能反：轴上那些字压在深底上，往下压等于消失
+        SwiftieErasData.ALL.forEach { era ->
+            val lifted = SwiftieEraContrast.readableOnDark(era.mainColor, Color.Black)
+            assertThat(SwiftieEraContrast.luminance(lifted))
+                .isAtLeast(SwiftieEraContrast.luminance(era.mainColor))
+        }
+    }
+
+    @Test
+    fun brighteningLeavesAlreadyReadableColorsAlone() {
+        // 已达标就原样返回，不许「顺手再提亮一点」—— 那会让浅色主色在深底上一律发白
+        val lover = SwiftieErasData.ALL[SwiftieErasData.LOVER_INDEX]
+        assertThat(SwiftieEraContrast.readableOnDark(lover.mainColor, Color.Black))
+            .isEqualTo(lover.mainColor)
+    }
+
+    /**
+     * 轴线、播放头与 TS1-12 标签压在**页面背景的下缘**上，配色由
+     * [SwiftieEraStage.darkBottomInk] 二选一。这一条同时守两件事：
+     * 校正函数本身，以及 `STAGE` 里那 12 个手填的极性 —— 填反了会让二分朝着
+     * 底色自己的方向走，怎么分都到不了 4.5:1，这里当场红。
+     */
+    @Test
+    fun axisInkMeetsAaOnEveryBackdropBottom() {
+        SwiftieErasData.ALL.forEachIndexed { index, era ->
+            val stage = SwiftieErasData.STAGE[index]
+            val bottom = stage.backdropColors.last()
+            val ink = if (stage.darkBottomInk) {
+                SwiftieEraContrast.readable(era.mainColor, bottom)
+            } else {
+                SwiftieEraContrast.readableOnDark(era.mainColor, bottom)
+            }
+            // 带上专辑名：只报一个比值的话，12 张里到底哪一张红了还得自己二分去找
+            assertWithMessage("${era.name} 的轴墨压在末档 ${bottom.value.toString(16)} 上")
+                .that(SwiftieEraContrast.contrastRatio(ink, bottom))
+                .isAtLeast(SwiftieEraContrast.AA_SMALL)
         }
     }
 }

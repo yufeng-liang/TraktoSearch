@@ -62,6 +62,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -96,29 +97,11 @@ internal fun VideosAndImagesSection(
 ) {
     val totalCount = videos.size + backdrops.size
     Column(modifier = Modifier.padding(bottom = 12.dp)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 2.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.detail_videos_section),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = stringResource(R.string.detail_videos_all, totalCount),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.hapticClickable(
-                    semantic = HapticSemantic.LIGHT_TAP,
-                    onClick = onShowAll
-                )
-            )
-        }
+        DetailSectionHeader(
+            title = stringResource(R.string.detail_videos_section),
+            actionText = stringResource(R.string.detail_videos_all, totalCount),
+            onActionClick = onShowAll
+        )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(horizontal = 0.dp)
@@ -278,6 +261,9 @@ internal fun BackdropCard(
             .height(135.dp)
             .clip(RoundedCornerShape(8.dp))
             .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onClick)
+            // 只给首张挂 tag：LazyRow 里每张都挂，By.res 匹配到的就是当时排在最前的任意一张，
+            // 基准点开的是哪张、配对的是哪个 key 都不确定。首张在栏目里位置固定，可重复。
+            .then(if (index == 0) Modifier.testTag("detail_backdrop_card") else Modifier)
     ) {
         // sharedKeyPrefix 非空且共享转场开启时,与全屏端 "$sharedKeyPrefix-$page" 配对,实现缩放转场。
         // 用 caller-managed visibility(zoomSharedSource):全屏端打开本 key 时缩略图侧置不可见,

@@ -1,5 +1,7 @@
 package com.tracktosearch.ui.screen.searchsource
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -72,9 +74,16 @@ import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.EmptyStateCard
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.SearchSourcesEntryKey
+import com.tracktosearch.ui.component.SettingsEntryCardCorner
+import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.isAppSharedTransitionActive
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
@@ -89,6 +98,7 @@ import kotlinx.coroutines.launch
  * 搜索源管理页：内置搜索源启停、PanHub 配置入口、自定义搜索源列表与增删改测试。
  * 替换原设置页内嵌的 SearchSourcesItem，成为唯一入口。
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun SearchSourcesScreen(
     onBack: () -> Unit,
@@ -100,6 +110,8 @@ fun SearchSourcesScreen(
 ) {
     val hazeState = remember { HazeState() }
     val listState = rememberLazyListState()
+    // 共享元素转场 scope（与设置页搜索源入口卡片配对）
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val hasContentUnderTopBar by remember {
         derivedStateOf {
             hasListScrolled(
@@ -126,7 +138,11 @@ fun SearchSourcesScreen(
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = MaterialTheme.colorScheme.background,
+        // 容器色置透明、底色改由下面那个共享节点自己画，理由见该处注释。
+        // contentColor 显式写成 onBackground：Scaffold 默认取 contentColorFor(containerColor)，
+        // 而 contentColorFor(Transparent) 是 Unspecified，会让整页文字颜色退回外层 LocalContentColor。
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         snackbarHost = {
             SnackbarHost(
                 hostState = snackbarHostState,
@@ -137,11 +153,32 @@ fun SearchSourcesScreen(
             )
         }
     ) { _ ->
-        Box(modifier = Modifier.fillMaxSize()) {
+        // 与设置页搜索源入口卡片配对的是整页，而不是顶栏：卡片放大成页面、返回时收回成卡片。
+        // 卡片侧圆角 SettingsEntryCardCorner，页面侧是 0，转场期间在两者之间插值。
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .appSharedBounds(
+                    key = SearchSourcesEntryKey,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    corner = SharedCorner.flattenFrom(SettingsEntryCardCorner),
+                    // 容器变形要的是「内容不变形、被裁剪逐渐露出」，默认的 scaleToBounds 会把内容
+                    // 跟着容器一起缩放绘制。逐帧重测的代价由内容侧的 appSkipToLookaheadSize 挡掉。
+                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+                )
+                // 页面底色挪进共享节点内侧，并把 Scaffold 的容器色置透明。
+                // 否则 Scaffold 会在共享节点之外先铺满一整屏不透明底色，转场第一帧整屏就已经是本页的背景，
+                // 「卡片长成页面」退化成「页面已经在了，只是内容从一个小矩形里长出来」。
+                // 挪进来之后底色跟着动画边界一起长大，且被上面那层圆角动画裁剪，落定后与原来逐像素相同。
+                .background(MaterialTheme.colorScheme.background)
+        ) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier
                     .fillMaxSize()
+                    // 整页参与容器变形时按落定尺寸布局：否则列表会跟着容器逐帧变宽，
+                    // 一次转场里重复决定「哪些项可见、每项多宽」几十遍
+                    .appSkipToLookaheadSize()
                     .hazeSource(hazeState),
                 contentPadding = PaddingValues(
                     start = 0.dp,
@@ -217,6 +254,10 @@ fun SearchSourcesScreen(
                 isContentUnderTopBar = hasContentUnderTopBar,
                 onBack = onBack,
                 onImport = { showImportDialog = true },
+                // 顶栏不参与配对：来源侧那张卡片上没有对应的标题栏，硬配对会把一行标题从卡片尺寸拉过来。
+                // 但它必须从第一帧就在，与内容一样按落定尺寸布局，跟着容器裁剪逐渐露出；
+                // 延迟入场会让容器长大的那段时间顶栏位置空着，落位时再整片闪出来。
+                modifier = Modifier.appSkipToLookaheadSize(),
                 onHelpClick = onHelpClick
             )
         }
@@ -298,17 +339,21 @@ private fun HeaderBar(
     isContentUnderTopBar: Boolean,
     onBack: () -> Unit,
     onImport: () -> Unit,
+    modifier: Modifier = Modifier,
     onHelpClick: () -> Unit = {}
 ) {
     val isDark = isAppDarkTheme()
+    // 转场期间让 haze 停采样：容器变形恰好是每帧背景都在变的时刻，再叠实时模糊最容易掉帧。
+    val transitionActive = isAppSharedTransitionActive()
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .then(modifier)
             .hazeTopBar(
                 state = hazeState,
                 style = HazeMaterials.thin(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)),
                 blurRadius = 24.dp,
-                isContentUnderTopBar = isContentUnderTopBar
+                isContentUnderTopBar = if (transitionActive) false else isContentUnderTopBar
             )
             // 拦截点击：顶栏覆盖可滚动列表，不消费会让点击穿透到下方列表项
             .clickable(enabled = false, onClick = {})

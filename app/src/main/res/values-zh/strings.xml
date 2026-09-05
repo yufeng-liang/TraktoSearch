@@ -1,21 +1,57 @@
 <resources>
-    <string name="auth_migration_invite_hint">静默恢复未完成，请输入迁移类型的邀请码继续。</string>
+    <string name="auth_migration_invite_hint">静默恢复未完成，请输入迁移类型的取票码继续。</string>
     <string name="auth_offline_mode">当前处于离线模式，将使用本地缓存数据。</string>
     <string name="app_name">TraktoSearch</string>
-    <string name="auth_expired_message">请连接网络后重新激活访问权限。</string>
-    <string name="auth_invite_code">输入 12 位激活码</string>
-    <string name="auth_activate">激活</string>
-    <string name="auth_error_invalid_invite">邀请码无效。</string>
-    <string name="auth_error_invite_used">邀请码已被使用，请向管理员索取新的邀请码。</string>
-    <string name="auth_error_invite_revoked">邀请码已被撤销，请联系管理员。</string>
-    <string name="auth_error_invite_expired">邀请码已过期。</string>
+    <string name="auth_expired_message">请连接网络后重新取票。</string>
+    <string name="auth_invite_code">请输入 6 位取票码</string>
+    <string name="auth_activate">取票</string>
+    <string name="auth_error_invalid_invite">取票码无效。</string>
+    <string name="auth_error_invite_used">取票码已被使用，请向管理员索取新的取票码。</string>
+    <string name="auth_error_invite_revoked">取票码已被撤销，请联系管理员。</string>
+    <string name="auth_error_invite_expired">取票码已过期。</string>
     <string name="auth_error_device_limit">设备上限已满。</string>
     <string name="auth_error_migration_device_not_found">迁移需要已有绑定设备。</string>
     <string name="auth_error_migration_device_mismatch">该设备属于其他朋友。</string>
     <string name="auth_error_device_already_bound">该设备已经绑定。</string>
     <string name="auth_error_friend_disabled">当前访问权限已被停用。</string>
     <string name="auth_error_network">网络连接失败，请检查网络后重试。</string>
+    <string name="auth_error_rate_limited">尝试次数过多，请等几分钟后再试。</string>
     <string name="auth_error_generic">激活失败，请稍后重试。</string>
+
+    <!-- Ticket Machine -->
+    <string name="machine_status_ready">请输入取票码</string>
+    <string name="machine_status_verifying">正在核对…</string>
+    <string name="machine_detail_verifying">○ 正在核对取票码 · 请稍候</string>
+    <string name="machine_status_printing">正在打印…</string>
+    <string name="machine_status_collected">已取票</string>
+    <string name="machine_detail_collected">○ 已出票 · 请在票上选择入场方式</string>
+    <string name="machine_status_invalid">码不对</string>
+    <string name="machine_status_used">码已用过</string>
+    <string name="machine_status_revoked">码已作废</string>
+    <string name="machine_status_expired">码已过期</string>
+    <string name="machine_status_device_limit">设备已满</string>
+    <string name="machine_status_device_bound">设备已绑</string>
+    <string name="machine_status_migration_missing">缺原设备</string>
+    <string name="machine_status_migration_mismatch">设备不符</string>
+    <string name="machine_status_friend_disabled">权限停用</string>
+    <string name="machine_status_rate_limited">请稍候</string>
+    <string name="machine_status_network">网络不通</string>
+    <string name="machine_status_failed">取票失败</string>
+    <string name="machine_status_clipboard_empty">剪贴板没码</string>
+    <string name="machine_key_paste">粘贴</string>
+    <string name="machine_key_backspace_desc">退格</string>
+    <string name="machine_submit">取票</string>
+    <string name="machine_code_progress">取票码 %1$s，还需 %2$d 位</string>
+    <string name="machine_code_collected">取票码已使用，票已取出</string>
+
+    <!-- Ticket -->
+    <string name="ticket_hall">%1$d 号厅</string>
+    <string name="ticket_seat">%1$d 排 %2$d 座</string>
+    <string name="ticket_serial_no">NO. %1$s</string>
+    <string name="ticket_entry_trakt">Trakt 登录</string>
+    <string name="ticket_entry_authorizing">授权中…</string>
+    <string name="ticket_entry_douban">豆瓣登录</string>
+    <string name="ticket_entry_guest">以访客进入</string>
 
     <!-- Main Screen -->
     <string name="tab_search">搜索</string>
@@ -195,9 +231,8 @@
     <string name="login_guest">以访客身份进入</string>
     <string name="login_douban_import">或从豆瓣导入标记</string>
     <string name="login_douban">豆瓣登录</string>
-    <string name="login_activation_locked">○ 尚未激活 · 输入邀请码解锁观影空间</string>
-    <string name="login_activation_choose_path">激活成功，请选择 Trakt/豆瓣登录，或暂时以访客身份进入</string>
-    <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
+    <string name="login_activation_locked">○ 尚未取票 · 输入取票码换票入场</string>
+    <string name="machine_plate">TICKET MACHINE · V%1$s</string>
     <string name="douban_import_require_trakt_title">需要先登录 Trakt 账号</string>
     <string name="douban_import_require_trakt_desc">从豆瓣导入标记需要先登录 Trakt 账号，标记会同步到你的 Trakt 想看/已看列表。是否现在登录 Trakt？</string>
     <string name="douban_import_require_trakt_login">登录 Trakt</string>
@@ -335,6 +370,12 @@
     <string name="detail_original_title">原名：%1$s</string>
     <string name="detail_runtime_hours">%1$d小时%2$d分</string>
     <string name="detail_runtime_minutes">%1$d分钟</string>
+    <!-- 元信息胶囊无障碍标签：胶囊只显示值，读屏需要字段名 -->
+    <string name="detail_meta_genres_desc">类型：%1$s</string>
+    <string name="detail_meta_country_desc">国家/地区：%1$s</string>
+    <string name="detail_meta_release_date_desc">上映日期：%1$s</string>
+    <string name="detail_meta_runtime_desc">时长：%1$s</string>
+    <string name="douban_detail_comment_quote">「%1$s」</string>
     <string name="detail_year">%1$d年</string>
     <string name="detail_collapse">收起 ▲</string>
     <string name="detail_expand">展开 ▼</string>
@@ -356,7 +397,7 @@
     <string name="detail_load_more_comments">下滑加载更多</string>
     <string name="detail_all_comments_loaded">已加载全部 %1$d 条评论</string>
     <string name="detail_cast_crew">演职员</string>
-    <string name="detail_cast_all">全部 ></string>
+    <string name="detail_cast_all">全部</string>
     <string name="detail_director_tag">导演</string>
     <string name="detail_cast_as">饰 %1$s</string>
     <string name="detail_writer_tag">编剧</string>
@@ -476,20 +517,19 @@
     <string name="settings_accent_custom">自由调色</string>
     <string name="settings_accent_reset_default">恢复默认（跟随壁纸）</string>
     <!-- 应用色调 -->
-    <string name="accent_vintage_ticket">复古票根</string>
-    <string name="accent_water_lily">睡莲紫</string>
-    <string name="accent_sunrise">日出橙</string>
-    <string name="accent_japanese_bridge">日本桥绿</string>
-    <string name="accent_cathedral">教堂蓝灰</string>
-    <string name="accent_haystack">干草堆金</string>
     <string name="accent_renoir">雷诺阿粉</string>
-    <string name="accent_starry_night">星夜蓝</string>
     <string name="accent_poppy">虞美人红</string>
-    <string name="accent_wheat_field">麦田金黄</string>
-    <string name="accent_rouen_cathedral">鲁昂蓝紫</string>
-    <string name="accent_ballet">芭蕾粉紫</string>
-    <string name="accent_water_lily_green">睡莲绿</string>
+    <string name="accent_vintage_ticket">复古票根</string>
+    <string name="accent_sunrise">日出橙</string>
+    <string name="accent_haystack">干草堆金</string>
+    <string name="accent_giverny_moss">吉维尼苔绿</string>
+    <string name="accent_japanese_bridge">日本桥绿</string>
+    <string name="accent_venice_canal">威尼斯运河青</string>
     <string name="accent_boat_breakfast">船上午餐蓝</string>
+    <string name="accent_starry_night">星夜蓝</string>
+    <string name="accent_cathedral">教堂蓝灰</string>
+    <string name="accent_water_lily">睡莲紫</string>
+    <string name="accent_ballet">芭蕾粉紫</string>
 
     <!-- Language -->
     <string name="settings_language">语言</string>
@@ -530,8 +570,16 @@
     <string name="daily_stamp_total">累计</string>
     <string name="daily_stamp_hint">点一天，读那天的句子</string>
     <string name="daily_stamp_empty">还没有日签。明天打开 App，就有一枚了。</string>
+    <string name="daily_stamp_unarrived_hint">东隅已逝，桑榆非晚</string>
+    <string name="daily_stamp_future_month">未来的日子还没显影</string>
+    <string name="daily_stamp_future_card">不必急于翻阅未来，时间自有答案——那天见</string>
+    <string name="daily_stamp_missed">未签到</string>
+    <string name="daily_stamp_latent">还没到</string>
     <string name="daily_stamp_save">保存</string>
     <string name="daily_stamp_share">分享</string>
+    <string name="daily_stamp_detail">电影详情</string>
+    <string name="splash_quote_title">每日台词</string>
+    <string name="splash_quote_section_splash">开屏</string>
     <string name="daily_stamp_saved">已存进相册</string>
     <string name="daily_stamp_already_saved">相册里已经有了</string>
     <string name="daily_stamp_save_failed">没能存下这张卡</string>
@@ -703,6 +751,7 @@
   diskTypePath = $.type</string>
     <string name="help_detail_custom">自定义详情页：在设置中可以控制详情页各模块（演职员、预告片与截图、简介、我的评分、评论、推荐）的显示与隐藏</string>
     <string name="help_videos_images">预告片与截图：详情页展示预告片和剧照，点击预告片可在浏览器中播放，点击截图可查看大图并保存到相册</string>
+    <string name="help_detail_pull_refresh">下拉刷新：影视详情页下拉可重拉评分/演职员/季集/短评/推荐；豆瓣详情页下拉可重拉条目信息，已搜过资源时一并重搜</string>
     <string name="help_discover_filter_b1">影视筛选：在发现页标题栏点击筛选图标，或底部"去影视筛选页"卡片，可进入筛选页</string>
     <string name="help_discover_filter_b2">支持按类型、地区、标签、评分区间、年代筛选，可按热度、上映时间或评分排序</string>
     <string name="help_discover_filter_b3">电影与电视剧的筛选条件互相独立，切换 Tab 会保留各自的筛选选择</string>
@@ -714,6 +763,7 @@
     
     
     <string name="help_tips_b12">开启自动上报后，崩溃日志会在下次启动时上传，记录可在反馈与建议页查看；日志可能包含设备与应用状态等诊断信息。</string>
+    <string name="help_tips_b13">消息页把未读消息向右滑动即可标记已读；标题栏的「全部已读」一次清空所有未读。</string>
     <string name="help_vpn">VPN 说明</string>
     <string name="help_vpn_b1">本应用部分功能需要访问国外服务，不开启VPN可能无法正常访问</string>
     <string name="help_vpn_b2">涉及功能：预告片缩略图（YouTube）、Trakt 数据（热门/推荐/期待榜）、TMDB 数据（影视详情/海报）</string>
@@ -1172,6 +1222,7 @@
     <string name="cd_watched">已看</string>
     <string name="cd_saved">已保存</string>
     <string name="cd_save">保存</string>
+    <string name="cd_image_page">第 %1$d 张图片，共 %2$d 张</string>
     <string name="cd_edit">编辑</string>
     <string name="cd_delete">删除</string>
     <string name="cd_back_to_top">返回顶部</string>
@@ -1572,6 +1623,16 @@
     <string name="feedback_closed_hint">该反馈已关闭</string>
     <string name="feedback_load_more">加载更多</string>
     <string name="feedback_id_format">#%1$s</string>
+    <string name="feedback_day_today">今天</string>
+    <string name="feedback_day_yesterday">昨天</string>
+    <string name="feedback_timeline_submitted">已提交</string>
+    <string name="feedback_unread_reply">有新回复</string>
+    <string name="feedback_mark_read">标记已读</string>
+    <string name="feedback_screenshots_hint">最多 5 张 · 长按拖动排序</string>
+    <string name="feedback_type_required">先选一个类型</string>
+    <string name="feedback_discard_title">放弃这条反馈？</string>
+    <string name="feedback_discard_message">已经写好的内容不会保存。</string>
+    <string name="feedback_discard_confirm">放弃</string>
     <!-- 豆瓣同步稳定阶段文案 -->
     <string name="douban_sync_stage_idle">空闲</string>
     <string name="douban_sync_stage_preparing">准备同步</string>
@@ -1629,7 +1690,6 @@
     <string name="douban_sync_notification_public">豆瓣同步：%1$s</string>
     <string name="douban_sync_notification_channel_description">显示豆瓣同步进度</string>
     <string name="douban_login_waiting_auth">等待授权完成…</string>
-    <string name="auth_invite_bound_this_device">该邀请码已绑定设备。重启应用可尝试恢复，或更换新邀请码</string>
     <string name="douban_detail_entry_not_found">该条目尚未同步到本机，暂无法查看</string>
     <string name="douban_batch_remove_remote_failed">%1$d 个条目从豆瓣移除失败，将在下次同步时重试</string>
     <string name="detail_credits_douban_unavailable">豆瓣条目暂无演职员信息</string>
@@ -1644,14 +1704,18 @@
     <string name="ai_sprite_long_press_hint">点搜索页标题栏的精灵按钮或长按云朵进入精灵中心；短按云朵仍触发彩蛋。精灵可能短暂探头，输入或滚动时会收回。</string>
     <string name="ai_sprite_activate">喊「%1$s」来激活</string>
     <string name="ai_sprite_activating">正在听你喊「%1$s」…</string>
-    <string name="ai_sprite_listening">只需要喊一次名字</string>
+    <string name="ai_sprite_hold_to_talk">按住说「%1$s」</string>
+    <string name="ai_sprite_release_to_activate">松手激活</string>
+    <string name="ai_sprite_release_to_cancel">松手取消</string>
+    <string name="ai_sprite_heard">听到了！正在激活…</string>
+    <string name="ai_sprite_hold_hint">按住按钮喊一声「%1$s」，手指上滑可取消</string>
     <string name="ai_sprite_activation_success">到！</string>
     <string name="ai_sprite_preparing">准备中</string>
     <string name="ai_sprite_guest_hint">登录后才能激活精灵并使用 AI</string>
     <string name="ai_sprite_login">去登录</string>
     <string name="ai_sprite_text_fallback">改用文字激活</string>
     <string name="ai_sprite_voice_limit_reached">语音次数已用完</string>
-    <string name="ai_sprite_text_fallback_available">语音没成功？可以改用文字输入角色名激活</string>
+    <string name="ai_sprite_text_fallback_available">不方便说话？也可以输入角色名激活</string>
     <string name="ai_sprite_text_fallback_title">文字激活</string>
     <string name="ai_sprite_text_fallback_dialog_hint">输入「%1$s」后确认，效果和喊名字一样</string>
     <string name="ai_sprite_text_fallback_label">角色名</string>
@@ -1683,6 +1747,7 @@
     <string name="ai_taste_recommendations">给你的三部推荐</string>
     <string name="ai_taste_details">打开详情</string>
     <string name="ai_quiz_spoiler">本轮会涉及：%1$s，包含剧透</string>
+    <string name="ai_quiz_media_separator">、</string>
     <string name="ai_quiz_start">开始本轮闯关</string>
     <string name="ai_quiz_need_more_movies">开始闯关至少需要 7 部已看影视</string>
     <string name="ai_quiz_preview_title">先挑选本轮影视</string>
@@ -1734,8 +1799,12 @@
     <string name="ai_error_character_unavailable">这个角色还在准备中，换一个试试</string>
     <string name="ai_error_activation_required">需要先激活精灵才能使用这个功能</string>
     <string name="ai_error_activation_not_matched">名字没对上，再喊一次或改用文字激活</string>
+    <string name="ai_error_activation_too_short">按住时间太短，按住再喊一次</string>
+    <string name="ai_error_activation_silent">没听到声音，检查麦克风后再试</string>
+    <string name="ai_error_activation_too_quiet">声音太轻了，靠近一点再喊一次</string>
     <string name="ai_error_activation_retry_limit">本角色激活次数已用完，换一个角色再试</string>
     <string name="ai_error_audio_unavailable">麦克风不可用，改用文字激活</string>
+    <string name="ai_error_audio_permission_granted">已获麦克风授权，按住再喊一次</string>
     <string name="ai_error_name_empty">请先输入角色名</string>
     <string name="ai_error_not_enough_movies">已看影视不足 7 部，先去标记几部再来闯关</string>
     <string name="ai_error_watched_list_empty">还没有已看记录，先标记几部影视再来</string>
@@ -1910,7 +1979,7 @@
     <string name="opensource_use_lottie">播放 JSON 矢量动画（加载、空状态等动效）</string>
     <string name="opensource_use_richtext">渲染 Markdown 富文本（版本更新日志）</string>
     <string name="opensource_use_reorderable">列表长按拖拽排序</string>
-    <string name="opensource_use_zoomable">海报与剧照的双指缩放和拖动查看</string>
+    <string name="opensource_use_telephoto">海报与剧照的双指缩放，大图子采样加载</string>
     <string name="opensource_use_backdrop">液态玻璃效果的屏幕级采样背板</string>
     <string name="opensource_use_mesh_gradient">Android 12 及以下背景光晕的网格渐变动画回退实现</string>
     <string name="opensource_use_mirage">Android 13 及以上背景光晕的 AGSL 着色器动画实现</string>
@@ -1960,7 +2029,6 @@
     <string name="privacy_hero_desc">观影记录先留在手机上；功能确实需要联网时，这里会说明发送什么、为什么发送。</string>
     <string name="privacy_flow_title">数据流转实况</string>
     <string name="privacy_flow_live">动画示意</string>
-    <string name="privacy_flow_summary">点选不同功能，看看数据如何移动。动画是阅读用的视觉说明，不是实时网络抓包。</string>
     <string name="privacy_flow_hint">点选流程查看数据边界</string>
     <string name="privacy_flow_device">手机</string>
     <string name="privacy_flow_local_title">本地保存</string>
@@ -2014,7 +2082,10 @@
     <string name="swiftie_quiz_backspace">删除</string>
     <string name="swiftie_era_card_a11y">%1$s，发行于 %2$s，共 %3$d 首</string>
     <string name="swiftie_eras_axis_a11y">专辑时间轴，2006 到 2025，共 12 张专辑。拖动可跳到某个时代。</string>
+    <string name="swiftie_finale_a11y">Taylor Swift 的闪粉签名，下面挂着三条友谊手链：13 爱心 87、SWIFTIE、%1$s。手链下面写着：Taylor 和我，永远相伴。</string>
+    <string name="swiftie_finale_a11y_plain">Taylor Swift 的闪粉签名，下面挂着两条友谊手链：13 爱心 87、SWIFTIE。手链下面写着：Taylor 和我，永远相伴。</string>
     <string name="swiftie_skip">跳过</string>
+    <string name="swiftie_pause">暂停</string>
     <string name="swiftie_resume">继续</string>
     <string name="swiftie_audio_hint_all">打开声音并戴上耳机，体验最佳</string>
     <string name="swiftie_audio_hint_volume">打开声音，体验最佳</string>

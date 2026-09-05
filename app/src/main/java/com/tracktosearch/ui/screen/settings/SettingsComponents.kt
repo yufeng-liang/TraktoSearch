@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.settings
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,6 +39,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -50,11 +53,16 @@ import com.tracktosearch.ui.component.AdaptiveSingleLineText
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.SettingsEntryCardCorner
+import androidx.compose.foundation.LocalIndication
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
-import com.tracktosearch.ui.theme.appSwitchColors
+import com.tracktosearch.ui.haptic.hapticCombinedClickable
+import com.tracktosearch.ui.theme.GlassBorderDarkSubtle
+import com.tracktosearch.ui.theme.GlassFillDarkSubtle
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
+import com.tracktosearch.ui.theme.appSwitchColors
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 
@@ -96,7 +104,7 @@ fun SettingsGroupCard(
 ) {
     val isDark = isAppDarkTheme()
     val realBlur = listCardUsesRealBlur()
-    val blurFill = if (isDark) Color.White.copy(alpha = 0.08f)
+    val blurFill = if (isDark) GlassFillDarkSubtle
                    else Color.White.copy(alpha = 0.70f)
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Text(
@@ -112,7 +120,7 @@ fun SettingsGroupCard(
             isDark = isDark,
             shape = RoundedCornerShape(20.dp),
              backgroundColor = if (realBlur) blurFill else solidCardFill(isDark, blurFill),
-             borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
+             borderColor = if (isDark) GlassBorderDarkSubtle
                            else Color(0xFFE0E5EC).copy(alpha = 0.9f),
             elevation = 6.dp,
             blurRadius = 18.dp,
@@ -296,6 +304,7 @@ internal fun DataFlowCard(
  * - subtitleColor：小字颜色（merge 模式下整个合并文本使用此颜色）
  */
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 internal fun SettingsCard(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
@@ -305,6 +314,7 @@ internal fun SettingsCard(
     iconTintColor: Color = MaterialTheme.colorScheme.primary,
     loadingIcon: Boolean = false,
     subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
     containerColor: Color = Color.Transparent
 ) {
@@ -312,7 +322,15 @@ internal fun SettingsCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() }
+            .hapticCombinedClickable(
+                // interactionSource 传 null 让 Compose 自己建一份：这颗方块原先走的是
+                // combinedClickable 的短形式，涟漪来自 LocalIndication，换成长形式后要显式带上
+                interactionSource = null,
+                indication = LocalIndication.current,
+                semantic = HapticSemantic.LIGHT_TAP,
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
             .padding(vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -392,18 +410,22 @@ internal fun StatisticsCard(
 ) {
     val isDark = isAppDarkTheme()
     val realBlur = listCardUsesRealBlur()
-    val blurFill = if (isDark) Color.White.copy(alpha = 0.08f)
+    val blurFill = if (isDark) GlassFillDarkSubtle
                    else Color.White.copy(alpha = 0.70f)
     NeumorphicFrostedSurface(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() },
+            // 调用方的修饰符挂在外边距之内：容器变形要量的是卡片可见的那块圆角面，
+            // 挂在 padding 之外量到的是整行宽度，转场起始矩形会比用户看到的卡片宽出两侧留白。
+            .then(modifier)
+            .clip(RoundedCornerShape(SettingsEntryCardCorner))
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() }
+            .testTag("settings_statistics_card"),
         isDark = isDark,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(SettingsEntryCardCorner),
         backgroundColor = if (realBlur) blurFill else solidCardFill(isDark, blurFill),
-        borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
+        borderColor = if (isDark) GlassBorderDarkSubtle
                       else Color(0xFFE0E5EC).copy(alpha = 0.9f),
         elevation = 6.dp,
         blurRadius = 18.dp,

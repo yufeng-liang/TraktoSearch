@@ -27,10 +27,10 @@ class SwiftieTimelineTest {
         assertThat(SwiftieTimeline.DIFFUSION_START).isEqualTo(400L)
         assertThat(SwiftieTimeline.ERAS_INTRO_START).isEqualTo(1_100L)
         assertThat(SwiftieTimeline.ERAS_CARDS_START).isEqualTo(3_100L)
-        assertThat(SwiftieTimeline.ERAS_CARDS_END).isEqualTo(99_410L)
-        assertThat(SwiftieTimeline.SIGNATURE_START).isEqualTo(99_410L)
-        assertThat(SwiftieTimeline.BRACELET_START).isEqualTo(107_410L)
-        assertThat(SwiftieTimeline.FINAL_HOLD_START).isEqualTo(111_910L)
+        assertThat(SwiftieTimeline.ERAS_CARDS_END).isEqualTo(100_810L)
+        assertThat(SwiftieTimeline.SIGNATURE_START).isEqualTo(100_810L)
+        assertThat(SwiftieTimeline.BRACELET_START).isEqualTo(108_810L)
+        assertThat(SwiftieTimeline.FINAL_HOLD_START).isEqualTo(113_310L)
         assertThat(SwiftieTimeline.LOVER_BLOOM_START).isEqualTo(119_500L)
         assertThat(SwiftieTimeline.FADE_OUT_START).isEqualTo(123_000L)
     }
@@ -45,8 +45,8 @@ class SwiftieTimelineTest {
 
     @Test
     fun finalHoldAbsorbsTheSlackAndNeverGoesNegative() {
-        // 唯一的弹性段：曲目数一改，误差全落在这里，不许把 Lover 绽放挤出配乐
-        assertThat(SwiftieTimeline.FINAL_HOLD_MS).isEqualTo(6_090L)
+        // 唯一的弹性段：曲目数或 TTPD 前摇一改，误差全落在这里，不许把 Lover 绽放挤出配乐
+        assertThat(SwiftieTimeline.FINAL_HOLD_MS).isEqualTo(4_690L)
         assertThat(SwiftieTimeline.FINAL_HOLD_MS).isGreaterThan(0L)
         assertThat(SwiftieTimeline.FINAL_HOLD_START + SwiftieTimeline.FINAL_HOLD_MS)
             .isEqualTo(SwiftieTimeline.REWIND_START)
@@ -64,8 +64,8 @@ class SwiftieTimelineTest {
         assertThat(SwiftieTimeline.cardDurationMs(index = 0, trackCount = 11)).isEqualTo(7_930L)
         assertThat(SwiftieTimeline.cardDurationMs(index = 1, trackCount = 13)).isEqualTo(7_590L)
         assertThat(SwiftieTimeline.cardDurationMs(index = 6, trackCount = 18)).isEqualTo(8_840L)
-        // TTPD 用 Anthology 版 31 首，是最长的一张
-        assertThat(SwiftieTimeline.cardDurationMs(index = 10, trackCount = 31)).isEqualTo(9_930L)
+        // TTPD 用 Anthology 版 31 首，还要加 1400ms 打字机前摇，是最长的一张
+        assertThat(SwiftieTimeline.cardDurationMs(index = 10, trackCount = 31)).isEqualTo(11_330L)
         assertThat(SwiftieTimeline.cardDurationMs(index = 11, trackCount = 12)).isEqualTo(7_460L)
     }
 
@@ -74,7 +74,7 @@ class SwiftieTimelineTest {
         assertThat(SwiftieTimeline.ERA_TRACK_COUNTS).hasSize(12)
         assertThat(SwiftieTimeline.ERA_TRACK_COUNTS[10]).isEqualTo(31)
         assertThat(SwiftieTimeline.ERA_TRACK_COUNTS.sum()).isEqualTo(187)
-        assertThat(SwiftieTimeline.ERAS_CARDS_MS).isEqualTo(96_310L)
+        assertThat(SwiftieTimeline.ERAS_CARDS_MS).isEqualTo(97_710L)
         assertThat(SwiftieTimeline.ERAS_CARDS_START + SwiftieTimeline.ERAS_CARDS_MS)
             .isEqualTo(SwiftieTimeline.ERAS_CARDS_END)
     }
@@ -87,16 +87,16 @@ class SwiftieTimelineTest {
         assertThat(SwiftieTimeline.eraIndexAt(3_100L)).isEqualTo(0)
         assertThat(SwiftieTimeline.eraIndexAt(3_100L + 7_929L)).isEqualTo(0)
         assertThat(SwiftieTimeline.eraIndexAt(3_100L + 7_930L)).isEqualTo(1)
-        assertThat(SwiftieTimeline.eraIndexAt(99_409L)).isEqualTo(11)
+        assertThat(SwiftieTimeline.eraIndexAt(100_809L)).isEqualTo(11)
         // 边界必须是卡片段末尾，不是 REWIND_START —— 终局夹在两者之间
-        assertThat(SwiftieTimeline.eraIndexAt(99_410L)).isNull()
+        assertThat(SwiftieTimeline.eraIndexAt(100_810L)).isNull()
         assertThat(SwiftieTimeline.eraIndexAt(112_000L)).isNull()
     }
 
     @Test
     fun motionPreheatSitsInsideTheSignatureSegment() {
         // 105s 不出帧，写完签名前 1460ms 才预热运动
-        assertThat(SwiftieTimeline.MOTION_PREHEAT_AT).isEqualTo(105_950L)
+        assertThat(SwiftieTimeline.MOTION_PREHEAT_AT).isEqualTo(107_350L)
         assertThat(SwiftieTimeline.MOTION_PREHEAT_AT)
             .isGreaterThan(SwiftieTimeline.SIGNATURE_START)
         assertThat(SwiftieTimeline.MOTION_PREHEAT_AT)

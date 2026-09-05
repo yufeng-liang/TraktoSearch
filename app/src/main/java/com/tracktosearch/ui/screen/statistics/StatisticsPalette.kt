@@ -1,10 +1,8 @@
 package com.tracktosearch.ui.screen.statistics
 
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
+import com.tracktosearch.ui.component.isAppDarkTheme
 
 /**
  * 统计页图表专用分析色板（8 色暖调）。
@@ -44,16 +42,12 @@ const val ANALYTICS_PALETTE_SIZE = 8
 /**
  * 取当前主题下的分析色板。
  *
- * 按 surface 亮度判深浅，而不是 isSystemInDarkTheme()：本 App 主题模式由
- * ThemeStorage 控制，可与系统不一致。
+ * 走 isAppDarkTheme() 而不是 isSystemInDarkTheme()：本 App 主题模式由 ThemeStorage 控制，
+ * 可与系统不一致。那个判据也自带 remember 缓存，所以这里不用再包一层。
  */
 @Composable
-fun rememberAnalyticsPalette(): List<Color> {
-    val surface = MaterialTheme.colorScheme.surface
-    return remember(surface) {
-        if (surface.luminance() < 0.5f) ANALYTICS_DARK else ANALYTICS_LIGHT
-    }
-}
+fun rememberAnalyticsPalette(): List<Color> =
+    if (isAppDarkTheme()) ANALYTICS_DARK else ANALYTICS_LIGHT
 
 /**
  * 浅色变体色板，供分享长图使用。

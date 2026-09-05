@@ -1,9 +1,9 @@
 package com.tracktosearch.ui.screen.search
 
+
 import android.location.Location
 import android.location.LocationManager
 import android.os.Build
-import com.tracktosearch.BuildConfig
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,15 +17,18 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -37,7 +40,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
@@ -49,6 +51,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -91,21 +94,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -118,15 +121,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -138,78 +139,86 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.airbnb.lottie.compose.LottieAnimation
 import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.rememberLottieComposition
+import com.tracktosearch.BuildConfig
 import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.data.local.CloudPermissionStorage
 import com.tracktosearch.data.local.OnboardingStorage
-import com.tracktosearch.ui.component.DropdownAnchorMenu
-import com.tracktosearch.ui.theme.DesignToken
 import com.tracktosearch.data.local.SearchHistoryItem
 import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
 import com.tracktosearch.ui.animation.fadeSlideIn
+import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
+import com.tracktosearch.ui.component.AppVisualSurface
 import com.tracktosearch.ui.component.CloudEasterEgg
 import com.tracktosearch.ui.component.CloudOverlay
 import com.tracktosearch.ui.component.CloudThemeManager
+import com.tracktosearch.ui.component.DiscoverModalBottomSheet
+import com.tracktosearch.ui.component.DoubanRatingBadge
+import com.tracktosearch.ui.component.DropdownAnchorMenu
+import com.tracktosearch.ui.component.GlassHighlight
+import com.tracktosearch.ui.component.GlassIconButton
+import com.tracktosearch.ui.component.GlassScene
+import com.tracktosearch.ui.component.GlassSurfaceRole
+import com.tracktosearch.ui.component.LoadMoreFooter
+import com.tracktosearch.ui.component.LoadMoreFooterState
+import com.tracktosearch.ui.component.NeumorphicFrostedSurface
+import com.tracktosearch.ui.component.RatingBadge
+import com.tracktosearch.ui.component.VisualSurfaceKind
+import com.tracktosearch.ui.component.backdropSource
+import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.neumorphicShadow
+import com.tracktosearch.ui.component.rememberPosterPrefetch
+import com.tracktosearch.ui.screen.ai.AI_SPRITE_IDLE_DELAY_MS
+import com.tracktosearch.ui.screen.ai.AiSceneEvent
+import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
 import com.tracktosearch.ui.screen.ai.AiSpriteCenter
 import com.tracktosearch.ui.screen.ai.AiSpriteCenterEntryButton
-import com.tracktosearch.ui.screen.ai.rememberSharedAiSpriteViewModel
-import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
 import com.tracktosearch.ui.screen.ai.AiSpriteInterruptReason
 import com.tracktosearch.ui.screen.ai.AiSpriteInterruptRequest
 import com.tracktosearch.ui.screen.ai.AiSpriteMotion
 import com.tracktosearch.ui.screen.ai.AiSpriteOverlayTrigger
 import com.tracktosearch.ui.screen.ai.AiSpriteViewModel
-import com.tracktosearch.ui.screen.ai.AiSceneEvent
 import com.tracktosearch.ui.screen.ai.automaticSpriteArt
 import com.tracktosearch.ui.screen.ai.nextAiSpriteOverlayTrigger
+import com.tracktosearch.ui.screen.ai.rememberSharedAiSpriteViewModel
 import com.tracktosearch.ui.screen.ai.sceneArtFor
 import com.tracktosearch.ui.screen.ai.sceneEventForSearch
 import com.tracktosearch.ui.screen.ai.searchAnchorFor
 import com.tracktosearch.ui.screen.ai.shouldStartSpriteOverlay
-import com.tracktosearch.ui.screen.ai.AI_SPRITE_IDLE_DELAY_MS
 import com.tracktosearch.ui.screen.swiftie.SwiftieEggController
-import com.tracktosearch.ui.component.DiscoverModalBottomSheet
-import com.tracktosearch.ui.component.LoadMoreFooter
-import com.tracktosearch.ui.component.LoadMoreFooterState
-import com.tracktosearch.ui.component.DoubanRatingBadge
-import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
-import com.tracktosearch.ui.component.AppVisualSurface
-import com.tracktosearch.ui.component.GlassIconButton
-import com.tracktosearch.ui.component.GlassHighlight
-import com.tracktosearch.ui.component.GlassScene
-import com.tracktosearch.ui.component.GlassSurfaceRole
-import com.tracktosearch.ui.component.NeumorphicFrostedSurface
-import com.tracktosearch.ui.component.RatingBadge
-import com.tracktosearch.ui.component.VisualSurfaceKind
-import com.tracktosearch.ui.component.isAppDarkTheme
-import com.tracktosearch.ui.component.rememberPosterPrefetch
-import com.tracktosearch.ui.component.glassSceneForContent
-import com.tracktosearch.ui.component.backdropSource
-import com.tracktosearch.ui.component.neumorphicShadow
+import com.tracktosearch.ui.theme.DesignToken
+import com.tracktosearch.ui.theme.GlassBorderDark
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.NeumorphicBorderLight
+import com.tracktosearch.ui.theme.SearchTypeDisk
+import com.tracktosearch.ui.theme.SearchTypeMovie
+import com.tracktosearch.ui.theme.SearchTypePerson
+import com.tracktosearch.ui.theme.SearchTypeShow
+import com.tracktosearch.ui.theme.SearchTypeUnknown
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.theme.ambientTextHalo
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.hapticCombinedClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.theme.readableOn
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import androidx.compose.foundation.lazy.grid.items as gridItems
-import kotlinx.coroutines.delay
+import dev.chrisbanes.haze.hazeSource
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.regex.Pattern
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -842,8 +851,8 @@ fun SearchScreen(
                 elevation = 14.dp,
                 blurRadius = 28.dp,
                 shadowOffset = 10.dp,
-                backgroundColor = if (isDark) Color(0xFF222244).copy(alpha = 0.7f) else Color.White.copy(alpha = 0.65f),
-                borderColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.8f),
+                backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.7f else 0.65f),
+                borderColor = if (isDark) GlassBorderDark else Color.White.copy(alpha = 0.8f),
                 glassRole = GlassSurfaceRole.SearchField,
                 scene = searchGlassScene,
                 darkShadowAlpha = if (isDark) 0.65f else 0.28f,
@@ -965,12 +974,19 @@ private fun SearchBarTopNew(
     // 下拉锚点与清空输入两个 Material 按钮共用一份；DropdownAnchorMenu 的 anchor 槽不在 Popup 里，
     // 与本 composable 同一个宿主 View，菜单项那侧走 Modifier 扩展自己读 LocalView
     val haptics = rememberAppHaptics()
-    val typeColorMap = mapOf(
-        SearchSourceType.DISK to Color(0xFF26A69A),
-        SearchSourceType.MOVIE to Color(0xFF7986CB),
-        SearchSourceType.SHOW to Color(0xFFFFD54F),
-        SearchSourceType.PERSON to Color(0xFFF48FB1)
-    )
+    // 类型色当文字/图标用，先压到能压在当前底色上读清楚 —— 剧集的琥珀黄原色在浅底上不足 2:1
+    val typeColorSurface = MaterialTheme.colorScheme.surface
+    val typeColorMap = remember(typeColorSurface) {
+        mapOf(
+            SearchSourceType.DISK to readableOn(SearchTypeDisk, typeColorSurface),
+            SearchSourceType.MOVIE to readableOn(SearchTypeMovie, typeColorSurface),
+            SearchSourceType.SHOW to readableOn(SearchTypeShow, typeColorSurface),
+            SearchSourceType.PERSON to readableOn(SearchTypePerson, typeColorSurface)
+        )
+    }
+    val typeColorFallback = remember(typeColorSurface) {
+        readableOn(SearchTypeUnknown, typeColorSurface)
+    }
     // 搜索类型菜单：标签映射与固定宽度（最长文字 + 打勾 + 间隔 + 内边距，多语言适配）
     val orderedTypes = listOf(SearchSourceType.MOVIE, SearchSourceType.SHOW, SearchSourceType.PERSON, SearchSourceType.DISK)
     val typeLabelMap = orderedTypes.associateWith { type ->
@@ -998,7 +1014,7 @@ private fun SearchBarTopNew(
     ) {
         if (onBack != null) {
             IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.search_back), tint = if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0))
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.search_back), tint = MaterialTheme.colorScheme.primary)
             }
             Spacer(modifier = Modifier.width(2.dp))
         }
@@ -1023,7 +1039,7 @@ private fun SearchBarTopNew(
                 )
                 AdaptivePlaceholderText(
                     text = placeholderText,
-                    color = if (isDark) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             },
             leadingIcon = {
@@ -1046,7 +1062,7 @@ private fun SearchBarTopNew(
                                 Text(
                                     text = typeLabelMap[searchSourceType] ?: "",
                                     fontSize = 15.sp,
-                                    color = if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0),
+                                    color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.SemiBold,
                                     maxLines = 1
                                 )
@@ -1054,7 +1070,7 @@ private fun SearchBarTopNew(
                                     Icons.Rounded.ArrowDropDown,
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
-                                    tint = typeColorMap[searchSourceType] ?: Color(0xFF4CAF50)
+                                    tint = typeColorMap[searchSourceType] ?: typeColorFallback
                                 )
                             }
                         }
@@ -1075,7 +1091,7 @@ private fun SearchBarTopNew(
                                 Text(
                                     text = typeLabelMap[type] ?: "",
                                     style = typeLabelStyle,
-                                    color = typeColorMap[type] ?: Color(0xFF4CAF50),
+                                    color = typeColorMap[type] ?: typeColorFallback,
                                     modifier = Modifier.weight(1f)
                                 )
                                 if (type == searchSourceType) {
@@ -1103,9 +1119,9 @@ private fun SearchBarTopNew(
                 unfocusedIndicatorColor = Color.Transparent,
                 disabledIndicatorColor = Color.Transparent,
                 errorIndicatorColor = Color.Transparent,
-                focusedTextColor = if (isDark) Color.White else Color(0xFF263238),
-                unfocusedTextColor = if (isDark) Color.White else Color(0xFF263238),
-                cursorColor = if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0)
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                cursorColor = MaterialTheme.colorScheme.primary
             ),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { onSearch() }),
@@ -1136,7 +1152,7 @@ private fun SearchBarTopNew(
                                 Icons.Rounded.Close,
                                 contentDescription = stringResource(R.string.search_clear_input),
                                 modifier = Modifier.size(18.dp),
-                                tint = if (isDark) Color.White.copy(alpha = 0.72f) else Color(0xFF546E7A)
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         SearchActionButton(
@@ -1202,7 +1218,7 @@ private fun SearchActionButton(
                 lightAlpha = if (isDark) 0.10f else 0.70f,
                 blurRadius = 14.dp,
                 shadowOffset = 6.dp,
-                darkColor = Color(0xFF3C50A0),
+                darkColor = MaterialTheme.colorScheme.primary,
                 lightColor = Color.White
             )
             .clip(CircleShape)
@@ -1221,7 +1237,7 @@ private fun SearchActionButton(
             Icons.Rounded.Search,
             contentDescription = null,
             modifier = Modifier.size(iconSize),
-            tint = Color.White
+            tint = MaterialTheme.colorScheme.onPrimary
         )
     }
 }
@@ -1244,14 +1260,14 @@ private fun NeumorphicChip(
         label = "chip_scale"
     )
     val bgColor = if (isSelected) {
-        if (isDark) Color(0xFF3949AB).copy(alpha = 0.25f) else Color(0xFF5C6BC0).copy(alpha = 0.12f)
+        MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.25f else 0.12f)
     } else {
-        if (isDark) Color(0xFF222244).copy(alpha = 0.55f) else Color.White.copy(alpha = 0.70f)
+        MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.55f else 0.70f)
     }
     val borderColor = if (isSelected) {
-        if (isDark) Color(0xFF5C6BC0).copy(alpha = 0.4f) else Color(0xFF5C6BC0).copy(alpha = 0.25f)
+        MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.4f else 0.25f)
     } else {
-        if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFD0D5DC).copy(alpha = 0.85f)
+        if (isDark) GlassBorderDark else NeumorphicBorderLight.copy(alpha = 0.85f)
     }
     val elevation = 5.dp
     val chipShape = RoundedCornerShape(22.dp)
@@ -1320,12 +1336,19 @@ private fun SearchHistoryTwoRow(
     hazeState: HazeState,
     scene: GlassScene
 ) {
-    val typeColorMap = mapOf(
-        "disk" to Color(0xFF26A69A),
-        "movie" to Color(0xFF7986CB),
-        "show" to Color(0xFFFFD54F),
-        "person" to Color(0xFFF48FB1)
-    )
+    // 同上：历史标签也是 10sp 文字，原色读不清
+    val typeColorSurface = MaterialTheme.colorScheme.surface
+    val typeColorMap = remember(typeColorSurface) {
+        mapOf(
+            "disk" to readableOn(SearchTypeDisk, typeColorSurface),
+            "movie" to readableOn(SearchTypeMovie, typeColorSurface),
+            "show" to readableOn(SearchTypeShow, typeColorSurface),
+            "person" to readableOn(SearchTypePerson, typeColorSurface)
+        )
+    }
+    val typeColorFallback = remember(typeColorSurface) {
+        readableOn(SearchTypeUnknown, typeColorSurface)
+    }
     val haptics = rememberAppHaptics()
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -1338,7 +1361,7 @@ private fun SearchHistoryTwoRow(
             Text(
                 text = stringResource(R.string.search_history_title),
                 style = MaterialTheme.typography.titleSmall,
-                color = if (isDark) Color.White else Color(0xFF37474F),
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.SemiBold
             )
             // 一键清空全部历史，无二次确认，按有后果的主操作给 TAP
@@ -1361,17 +1384,17 @@ private fun SearchHistoryTwoRow(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             history.forEach { item ->
-                val tagColor = typeColorMap[item.type] ?: Color(0xFF4CAF50)
+                val tagColor = typeColorMap[item.type] ?: typeColorFallback
                 val isSelected = item.keyword == selectedKeyword
                 val textColor = if (isSelected) {
-                    if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0)
+                    MaterialTheme.colorScheme.primary
                 } else {
-                    if (isDark) Color.White.copy(alpha = 0.85f) else Color(0xFF455A64)
+                    MaterialTheme.colorScheme.onSurface
                 }
                 val iconTint = if (isSelected) {
-                    if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0)
+                    MaterialTheme.colorScheme.primary
                 } else {
-                    if (isDark) Color.White.copy(alpha = 0.5f) else Color(0xFF78909C)
+                    MaterialTheme.colorScheme.onSurfaceVariant
                 }
                 NeumorphicChip(
                     onClick = { onHistoryClick(item) },
@@ -1400,7 +1423,7 @@ private fun SearchHistoryTwoRow(
                                 else -> item.type
                             },
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                            color = if (isSelected) (if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0)) else tagColor,
+                            color = if (isSelected) (MaterialTheme.colorScheme.primary) else tagColor,
                             maxLines = 1,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -1461,7 +1484,7 @@ private fun PopularSearchesSectionNew(
             Text(
                 text = stringResource(R.string.hot_search),
                 style = MaterialTheme.typography.titleSmall.copy(shadow = ambientTextHalo()),
-                color = if (isDark) Color.White else Color(0xFF37474F),
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.SemiBold
             )
             // 手动刷新入口：热词失败只有 ON_RESUME 自动重试，标题行补一个小刷新按钮
@@ -1476,7 +1499,7 @@ private fun PopularSearchesSectionNew(
                     Icons.Rounded.Refresh,
                     contentDescription = stringResource(R.string.ai_feature_refresh),
                     modifier = Modifier.size(16.dp),
-                    tint = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF78909C)
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -1487,14 +1510,14 @@ private fun PopularSearchesSectionNew(
             popularSearches.forEach { keyword ->
                 val isSelected = keyword == selectedKeyword
                 val textColor = if (isSelected) {
-                    if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0)
+                    MaterialTheme.colorScheme.primary
                 } else {
-                    if (isDark) Color.White.copy(alpha = 0.85f) else Color(0xFF455A64)
+                    MaterialTheme.colorScheme.onSurface
                 }
                 val iconTint = if (isSelected) {
-                    if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0)
+                    MaterialTheme.colorScheme.primary
                 } else {
-                    if (isDark) Color.White.copy(alpha = 0.5f) else Color(0xFF78909C)
+                    MaterialTheme.colorScheme.onSurfaceVariant
                 }
                 NeumorphicChip(
                     onClick = { onPopularClick(keyword) },

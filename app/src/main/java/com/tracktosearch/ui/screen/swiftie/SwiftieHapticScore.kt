@@ -164,16 +164,16 @@ data class SwiftieEnvelopeCue(
  *
  * [SwiftieTimeline] 给段落边界，`AXIS_TICK_FADE_IN_AT` 给轴线那一记，
  * `CARD_GROW_MS` / `TRACK_REVEAL_START_MS` /
- * `TRACK_STAGGER_MS` 给卡片内部的节拍，`SIGNATURE_WRITE_MS` / `SIGNATURE_PAUSE_MS` /
- * `SIGNATURE_STROKE_COUNT` 给签名段，`BRACELET_DROP_MS` / `BRACELET_SWAY_MS` 给手链段，
- * `SWIFTIE_ERA_EDGES` 给倒滑跨过的五条刻度。改了曲目数或换了配乐，谱子跟着动。
+ * `TRACK_STAGGER_MS` 给卡片内部的节拍，`SIGNATURE_WRITE_MS` / `SIGNATURE_PAUSE_TOTAL_MS` /
+ * `SwiftieSignaturePath` 的两张权重表给签名段，`BRACELET_DROP_MS` / `BRACELET_SWAY_MS`
+ * 给手链段，`SWIFTIE_ERA_EDGES` 给倒滑跨过的五条刻度。改了曲目数或换了配乐，谱子跟着动。
  *
  * 唯一几个本文件自己定的数是**包络的形状**（切几格、峰值多高），它们不是时刻，
  * 集中在文件末尾并逐个写明出处。
  *
  * ### 总量
  *
- * 默认档 52 记离散 + 5 段包络。
+ * 默认档 53 记离散 + 5 段包络。
  * 最重要的一条不变式：**卡片段总共只有 24 记** —— 12 张卡各一记落地、12 段曲目列
  * 铺完各一记收尾，**不逐曲目**。逐曲目就是 96 秒里 180 次震动，手会麻，也什么都表达不了。
  *
@@ -359,32 +359,30 @@ private fun erasCardCues(): List<SwiftieHapticCue> =
     }
 
 /**
- * 触感用的 11 段笔画时间表。
+ * 触感用的笔画时间表，**与屏幕上那支笔用的是同一张表**。
  *
- * **这里的段界与屏幕上的段界不完全同一。** `SwiftieSignature` 真正用的表是按
- * `Pacifico` 花体的**字形宽度**分配时长的（宽字形写得久，笔速才恒定），而那些宽度要
- * 跑一次 `Paint.getTextPath` 才知道 —— 拿不到，也不该拿：谱子一旦要 `Context` 与字号
- * 就不再是纯函数，逐毫秒的单测就没了。所以这里喂等宽字形，只借
- * [buildSignatureStrokes] 那套「11 段 + 10 个 `SIGNATURE_PAUSE_MS` 间隙、取整误差
- * 由末段吸收」的算法，段数、总长（`SIGNATURE_WRITE_MS + 10 × SIGNATURE_PAUSE_MS`）
- * 与收尾时刻都和视觉严格一致，只有段内的分界会差几十毫秒。
+ * [buildSignatureWindows] 只吃两串权重加两个预算，纯函数，所以谱子直接调它 ——
+ * 不需要 `Context`、不需要字号、不需要 `Paint.getTextPath`，逐毫秒的单测保得住。
+ * 权重表 [SwiftieSignaturePath.WRITE_WEIGHT] 是把 `Pacifico` 花体每个字形的宽度
+ * 预先量好落成常量的（宽字形写得久，笔速才恒定），于是「哪一笔写多久、哪个间隙停多久」
+ * 视觉与触感逐毫秒同一，不再是从前那种等宽近似。
  *
- * 差这几十毫秒听不出来：一段笔画本来就是一段连续振动，不是一记有起点的敲击。
+ * 段数也随表走：现在是 12 笔（`i` 上那一点单独算一笔），别写死。
  */
-private fun signatureHapticStrokes(): List<SignatureStroke> = buildSignatureStrokes(
-    glyphs = List(SIGNATURE_STROKE_COUNT) { index ->
-        SignatureGlyph(fromX = index.toFloat(), toX = index + 1f, tipY = 0f)
-    },
+private fun signatureHapticWindows(): List<SignatureWindow> = buildSignatureWindows(
+    writeWeights = SwiftieSignaturePath.WRITE_WEIGHT,
+    pauseWeights = SwiftieSignaturePath.PAUSE_WEIGHT,
     writeMs = SIGNATURE_WRITE_MS,
-    pauseMs = SIGNATURE_PAUSE_MS,
+    pauseMs = SIGNATURE_PAUSE_TOTAL_MS,
 )
 
 /**
  * 签名段：一条「落笔连续、抬笔静默」的长包络 + 写完那一下的通体闪。
  *
- * 长包络是 11 段等幅 + 10 段归零交错排出来的 21 个控制点，总长正好
- * `SIGNATURE_WRITE_MS + 10 × SIGNATURE_PAUSE_MS`，收在闪光起点上。
- * 设计文档写「22 个控制点」，实际是 21（11 段笔画中间只夹 10 个间隙）。
+ * 长包络是 12 段等幅 + 11 段归零交错排出来的 23 个控制点，总长正好
+ * `SIGNATURE_WRITE_MS + SIGNATURE_PAUSE_TOTAL_MS`，收在闪光起点上。
+ * 每段的时长与每个间隙的时长都不等 —— 它们来自 [signatureHapticWindows] 那张权重表，
+ * 与屏幕上笔尖的走停严格同步。
  *
  * 这条包络**必然是多峰的**（0.25 / 0 / 0.25 / 0 …），所以 RichTap 那层接不下 ——
  * `richTapEnvelopeOf` 只收单峰、且会重采样成 4 个控制点。它会返回 false，
@@ -394,15 +392,17 @@ private fun signatureHapticStrokes(): List<SignatureStroke> = buildSignatureStro
  * 所以设计文档里「`tipYAt()` 映射到频率」这一半落不了地，见回报。
  */
 private fun signatureCues(): List<SwiftieHapticCue> {
-    val strokes = signatureHapticStrokes()
+    val strokes = signatureHapticWindows()
     val timingsMs = mutableListOf<Int>()
     val amplitudes = mutableListOf<Float>()
     strokes.forEachIndexed { index, stroke ->
         timingsMs += (stroke.endMs - stroke.startMs).toInt()
         amplitudes += SIGNATURE_WRITE_AMPLITUDE
-        // 末段之后没有间隙 —— 紧接着就是闪光
-        if (index != strokes.lastIndex) {
-            timingsMs += SIGNATURE_PAUSE_MS.toInt()
+        // 末段之后没有间隙 —— 紧接着就是闪光。中间那些间隙各自长短不同，
+        // 由下一段的落笔时刻反推，别按平均值补
+        val gapMs = strokes.getOrNull(index + 1)?.let { it.startMs - stroke.endMs } ?: 0L
+        if (gapMs > 0L) {
+            timingsMs += gapMs.toInt()
             amplitudes += 0f
         }
     }

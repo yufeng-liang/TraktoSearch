@@ -4,6 +4,7 @@ package com.tracktosearch.ui.screen.main
 
 import android.util.Log
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -99,6 +100,7 @@ import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.AppVisualSurface
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.GlassNavigationTabIndicator
@@ -179,6 +181,7 @@ interface ConnectivityObserverEntryPoint {
     fun connectivityObserver(): ConnectivityObserver
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun MainScreen(
     initialTab: Int = 0,
@@ -206,11 +209,13 @@ fun MainScreen(
     onMarkRecordsClick: () -> Unit = {},
     onTraktSearch: (type: String, query: String) -> Unit,
     onPersonClick: (tmdbId: Int, name: String, profileUrl: String?, avatarColor: Color?) -> Unit = { _, _, _, _ -> },
-    onListClick: (listId: Int, listName: String) -> Unit = { _, _ -> },
+    /** morph 见 DiscoverScreen 的同名回调：透传本次点击有无可配对的源侧卡片。 */
+    onListClick: (listId: Int, listName: String, morph: Boolean) -> Unit = { _, _, _ -> },
     onLogout: () -> Unit,
     onHelpClick: () -> Unit,
     onOpenSourceClick: () -> Unit,
-    onFilterDiscoverClick: () -> Unit = {},
+    /** 参数是入口标识（"card" / "icon"），透传给 DiscoverScreen 的同名回调。 */
+    onFilterDiscoverClick: (entry: String) -> Unit = {},
     onDoubanResync: () -> Unit = {},
     onNavigateToDoubanLogin: () -> Unit = {},
     onSpiderTest: () -> Unit = {},
@@ -219,6 +224,7 @@ fun MainScreen(
     onMessagesClick: () -> Unit = {},
     onSearchSourcesClick: () -> Unit = {},
     onPrivacyClick: () -> Unit = {},
+    onSplashQuoteClick: () -> Unit = {},
     onAiRecommendationClick: ((AiRecommendation) -> Unit)? = null
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
@@ -435,9 +441,12 @@ fun MainScreen(
     // 列表图片上传、页面淡入淡出与离屏录制全挤在同一帧。与 Watchlist 顶栏一致，
     // 转场端点变化（开始/结束）时才启停，避免每帧读动画状态导致整树重组。
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-    val isNavigationTransitionRunning = animatedVisibilityScope?.transition?.let { transition ->
-        transition.currentState != transition.targetState
-    } == true
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    // 共享元素的边界动画可能比 AnimatedVisibility 的进出场更长，只看后者的端点差异会提前
+    // 判定转场结束。两个信号取或：任一还在跑就算转场中；两个 scope 都拿不到时退回 false，
+    // 与没有转场时的行为一致。
+    val isNavigationTransitionRunning = sharedTransitionScope?.isTransitionActive == true ||
+        animatedVisibilityScope?.transition?.isRunning == true
     // Glass 模式下才需要 backdrop 采样源；blur 模式走 hazeSource，注册 layer 是纯浪费。
     val glowAsBackdrop = isGlassMode && meshEnabled
 
@@ -702,7 +711,6 @@ fun MainScreen(
                             onNavigateToDoubanLogin = onNavigateToDoubanLogin,
                             onNavigateToLogin = onNavigateToLogin,
                             onTraktLogin = onTraktLogin,
-                            onStatisticsClick = onStatisticsClick,
                             onDailyStampClick = onDailyStampClick,
                             modifier = Modifier.fillMaxSize()
                         )
@@ -731,6 +739,7 @@ fun MainScreen(
                         onGlassPilot = onGlassPilot,
                         onSearchSourcesClick = onSearchSourcesClick,
                         onPrivacyClick = onPrivacyClick,
+                        onSplashQuoteClick = onSplashQuoteClick,
                         modifier = Modifier.fillMaxSize()
                     )
                             }

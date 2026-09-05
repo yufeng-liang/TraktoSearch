@@ -129,14 +129,6 @@ object OpenSourceData {
                 repoUrl = "https://github.com/Calvin-LL/Reorderable"
             ),
             OssLibrary(
-                name = "Zoomable",
-                versionAliases = versionAliases("zoomable"),
-                license = APACHE,
-                developer = "Albert Chang",
-                usageRes = R.string.opensource_use_zoomable,
-                repoUrl = "https://github.com/mxalbert1996/Zoomable"
-            ),
-            OssLibrary(
                 name = "Backdrop",
                 versionAliases = versionAliases("backdrop"),
                 license = APACHE,
@@ -245,6 +237,14 @@ object OpenSourceData {
                 developer = "Coil Contributors",
                 usageRes = R.string.opensource_use_coil,
                 repoUrl = "https://github.com/coil-kt/coil"
+            ),
+            OssLibrary(
+                name = "Telephoto",
+                versionAliases = versionAliases("telephoto"),
+                license = APACHE,
+                developer = "Saket Narayan",
+                usageRes = R.string.opensource_use_telephoto,
+                repoUrl = "https://github.com/saket/telephoto"
             )
         )),
         OssGroup(R.string.opensource_group_text, listOf(

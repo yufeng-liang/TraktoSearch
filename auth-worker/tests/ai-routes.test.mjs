@@ -27,6 +27,15 @@ function createTestEnv(overrides = {}) {
     };
 }
 
+// 这些用例专门覆盖旧 MiMo 文本路径；生产默认路径由 agnes.test.mjs 覆盖。
+function createLegacyMimoTextEnv(overrides = {}) {
+    return createTestEnv({
+        AI_DEFAULT_PROVIDER: 'mimo',
+        MIMO_API_KEY: 'test-mimo-key',
+        ...overrides,
+    });
+}
+
 async function authHeader() {
     return `Bearer ${await signAccessToken('test-jwt-secret', 'friend-1', 'device-1')}`;
 }
@@ -851,6 +860,41 @@ test('activation consumes one recording and returns the role confirmation', asyn
     assert.equal(json.data.voiceStatus, 'ready');
 });
 
+test('activation accepts an explicit null audio field as text activation', async () => {
+    // Android 客户端用 kotlinx.serialization 序列化请求体，默认 explicitNulls=true，
+    // 没有音频时也会带上 "audioDataUrl": null。只判 undefined 会把它当成"带了音频"，
+    // 语音（本地识别后走文字激活）和文字兜底两条路都会被判成 INVALID_AUDIO。
+    const { response, json } = await call('/api/ai/activate', {
+        method: 'POST',
+        body: {
+            characterId: 'usagi',
+            sessionId: 'activation-null-audio-session',
+            spokenName: '乌萨奇',
+            audioDataUrl: null,
+        },
+        env: createTestEnv({ AI_TEST_VOICE_DESIGN_READY: true }),
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(json.data.activated, true);
+});
+
+test('activation still rejects a malformed audio field', async () => {
+    const { response, json } = await call('/api/ai/activate', {
+        method: 'POST',
+        body: {
+            characterId: 'usagi',
+            sessionId: 'activation-bad-audio-session',
+            spokenName: '乌萨奇',
+            audioDataUrl: 'not-a-data-url',
+        },
+        env: createTestEnv({ AI_TEST_VOICE_DESIGN_READY: true }),
+    });
+
+    assert.equal(response.status, 400);
+    assert.equal(json.code, 'INVALID_AUDIO');
+});
+
 test('activation keeps the text success when confirmation audio fails', async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async () => {
@@ -900,8 +944,7 @@ test('greeting keeps the text result when welcome audio fails', async () => {
         const { response, json } = await call('/api/ai/greeting', {
             method: 'POST',
             body: { characterId: 'usagi', includeAudio: true, sessionId: 'greeting-audio-failure-session' },
-            env: createTestEnv({
-                MIMO_API_KEY: 'test-mimo-key',
+            env: createLegacyMimoTextEnv({
                 AI_TEST_VOICE_DESIGN_READY: true,
             }),
         });
@@ -960,7 +1003,7 @@ test('daily nullifies the source URL when the HEAD check returns 404', async () 
         const { response, json } = await call('/api/ai/daily', {
             method: 'POST',
             body: { action: 'daily', sessionId: 'daily-head-404-session', forceRefresh: true },
-            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+            env: createLegacyMimoTextEnv(),
         });
 
         assert.equal(response.status, 200);
@@ -993,7 +1036,7 @@ test('daily keeps the source URL when the HEAD check is blocked by anti-scraping
         const { response, json } = await call('/api/ai/daily', {
             method: 'POST',
             body: { action: 'daily', sessionId: 'daily-head-403-session', forceRefresh: true },
-            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+            env: createLegacyMimoTextEnv(),
         });
 
         assert.equal(response.status, 200);
@@ -1062,6 +1105,46 @@ test('quiz submission inherits the session that created the cached quiz', async 
     assert.equal(submitted.json.quota.sessionUsed, 2);
 });
 
+test('quiz submit and feedback read legacy v1 quiz caches after the text cache version bump', async () => {
+    const kv = createMapKv();
+    const env = createTestEnv({ KV: kv });
+    const started = await call('/api/ai/quiz', {
+        method: 'POST',
+        body: {
+            action: 'quiz',
+            sessionId: 'legacy-quiz-compat-session',
+            quizId: 'legacy-quiz-compat',
+            movies: movies(),
+        },
+        env,
+    });
+
+    assert.equal(started.response.status, 200);
+    const currentKey = 'ai:v2:quiz:friend-1:legacy-quiz-compat';
+    const legacyKey = 'ai:v1:quiz:friend-1:legacy-quiz-compat';
+    const cached = env.AI_TEST_CACHE.get(currentKey);
+    assert.ok(cached, 'new quiz responses must be written under the v2 cache key');
+    env.AI_TEST_CACHE.delete(currentKey);
+    env.AI_TEST_CACHE.set(legacyKey, cached);
+
+    const submitted = await call('/api/ai/quiz/submit', {
+        method: 'POST',
+        body: { action: 'quiz.submit', quizId: 'legacy-quiz-compat', answers: {} },
+        env,
+    });
+    const feedback = await call('/api/ai/quiz/feedback', {
+        method: 'POST',
+        body: { action: 'quiz.feedback', quizId: 'legacy-quiz-compat', difficulty: 'just_right' },
+        env,
+    });
+
+    assert.equal(submitted.response.status, 200);
+    assert.equal(submitted.json.data.totalQuestions, 13);
+    assert.equal(feedback.response.status, 200);
+    assert.equal(feedback.json.data.success, true);
+    assert.equal(kv.store.has('ai:v1:quiz-difficulty:friend-1'), true);
+});
+
 test('production path fails closed when the MiMo secret is absent', async () => {
     await assert.rejects(
         () => callMimoJson({ AI_TEST_MODE: false }, 'mimo-v2.5', []),
@@ -1084,7 +1167,7 @@ test('greeting cache prevents a second Mimo request', async () => {
     };
 
     try {
-        const env = createTestEnv({ MIMO_API_KEY: 'test-mimo-key' });
+        const env = createLegacyMimoTextEnv();
         const first = await call('/api/ai/greeting', {
             method: 'POST',
             body: { characterId: 'usagi', sessionId: 'greeting-session' },
@@ -1119,7 +1202,7 @@ test('recommendations reject an upstream item without a valid year', async () =>
         const { response, json } = await call('/api/ai/taste', {
             method: 'POST',
             body: { sessionId: 'taste-session', movies: movies() },
-            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+            env: createLegacyMimoTextEnv(),
         });
 
         assert.equal(response.status, 502);
@@ -1141,7 +1224,7 @@ test('upstream failure is retried once and returned as a stable error', async ()
         const { response, json } = await call('/api/ai/greeting', {
             method: 'POST',
             body: { characterId: 'usagi', sessionId: 'failure-session' },
-            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+            env: createLegacyMimoTextEnv(),
         });
 
         assert.equal(response.status, 502);
@@ -1339,7 +1422,7 @@ test('taste defaults to the pro model and includes the nickname in the prompt', 
         const { response, json } = await call('/api/ai/taste', {
             method: 'POST',
             body: { action: 'taste', sessionId: 'taste-prompt-session', watched: movies(), forceRefresh: true },
-            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+            env: createLegacyMimoTextEnv(),
         });
 
         assert.equal(response.status, 200);
@@ -1367,7 +1450,7 @@ test('taste rejects a recommendation that repeats a watched title case-insensiti
         const { response, json } = await call('/api/ai/taste', {
             method: 'POST',
             body: { action: 'taste', sessionId: 'taste-watched-title-session', watched: movies(), forceRefresh: true },
-            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+            env: createLegacyMimoTextEnv(),
         });
 
         assert.equal(response.status, 502);
@@ -1391,7 +1474,7 @@ test('taste ignores upstream media IDs because recommendations are unwatched tit
         const { response, json } = await call('/api/ai/taste', {
             method: 'POST',
             body: { action: 'taste', sessionId: 'taste-ignore-media-ids-session', watched: movies(), forceRefresh: true },
-            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+            env: createLegacyMimoTextEnv(),
         });
 
         assert.equal(response.status, 200);
@@ -1417,7 +1500,7 @@ test('taste rejects a recommendation with an unsupported mediaType', async () =>
         const { response, json } = await call('/api/ai/taste', {
             method: 'POST',
             body: { action: 'taste', sessionId: 'taste-media-type-session', watched: movies(), forceRefresh: true },
-            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+            env: createLegacyMimoTextEnv(),
         });
 
         assert.equal(response.status, 502);
@@ -1444,7 +1527,7 @@ test('taste defaults an omitted mediaType to movie and accepts show', async () =
         const { response, json } = await call('/api/ai/taste', {
             method: 'POST',
             body: { action: 'taste', sessionId: 'taste-media-type-default-session', watched: movies(), forceRefresh: true },
-            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+            env: createLegacyMimoTextEnv(),
         });
 
         assert.equal(response.status, 200);
@@ -1475,7 +1558,7 @@ test('taste rejects more than eight recommendations', async () => {
         const { response, json } = await call('/api/ai/taste', {
             method: 'POST',
             body: { action: 'taste', sessionId: 'taste-too-many-session', watched: movies(), forceRefresh: true },
-            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+            env: createLegacyMimoTextEnv(),
         });
 
         assert.equal(response.status, 502);
@@ -1511,7 +1594,7 @@ test('quiz accepts a valid Mimo question package without answerKeywords', async 
         const { response, json } = await call('/api/ai/quiz', {
             method: 'POST',
             body: { action: 'quiz', sessionId: 'quiz-normalize-session', watched: movies(), forceRefresh: true },
-            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+            env: createLegacyMimoTextEnv(),
         });
 
         assert.equal(response.status, 200);
@@ -1533,7 +1616,7 @@ test('quiz falls back only after an invalid Mimo structure', async () => {
         const { response, json } = await call('/api/ai/quiz', {
             method: 'POST',
             body: { action: 'quiz', sessionId: 'quiz-invalid-structure-session', watched: movies(), forceRefresh: true },
-            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+            env: createLegacyMimoTextEnv(),
         });
 
         assert.equal(response.status, 200);
@@ -1559,7 +1642,7 @@ test('quiz treats an invalid model-generated question id as a structure failure'
         const { response, json } = await call('/api/ai/quiz', {
             method: 'POST',
             body: { action: 'quiz', sessionId: 'quiz-invalid-id-session', watched: movies(), forceRefresh: true },
-            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+            env: createLegacyMimoTextEnv(),
         });
 
         assert.equal(response.status, 200);
@@ -1581,7 +1664,7 @@ test('quiz falls back when the successful Mimo response envelope is not an objec
         const { response, json } = await call('/api/ai/quiz', {
             method: 'POST',
             body: { action: 'quiz', sessionId: 'quiz-invalid-envelope-session', watched: movies(), forceRefresh: true },
-            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+            env: createLegacyMimoTextEnv(),
         });
 
         assert.equal(response.status, 200);
@@ -1694,7 +1777,7 @@ test('greeting spoken text follows the character catchphrase position', async ()
         const chiikawa = await call('/api/ai/greeting', {
             method: 'POST',
             body: { characterId: 'chiikawa', sessionId: 'greeting-position-chiikawa-session' },
-            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+            env: createLegacyMimoTextEnv(),
         });
         assert.equal(chiikawa.response.status, 200);
         assert.equal(chiikawa.json.data.spokenText, '小明，今天也来挑一部好片吧。 鸭蛋。');
@@ -1702,7 +1785,7 @@ test('greeting spoken text follows the character catchphrase position', async ()
         const hachiware = await call('/api/ai/greeting', {
             method: 'POST',
             body: { characterId: 'hachiware', sessionId: 'greeting-position-hachiware-session' },
-            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+            env: createLegacyMimoTextEnv(),
         });
         assert.equal(hachiware.response.status, 200);
         assert.equal(hachiware.json.data.spokenText, '噢易！ 小明，今天也来挑一部好片吧。');
@@ -1844,8 +1927,7 @@ test('quiz prompt adapts to the recent difficulty feedback trend', async () => {
         const hard = await call('/api/ai/quiz', {
             method: 'POST',
             body: { action: 'quiz', sessionId: 'quiz-trend-hard-session', watched: movies() },
-            env: createTestEnv({
-                MIMO_API_KEY: 'test-mimo-key',
+            env: createLegacyMimoTextEnv({
                 KV: seededKv(difficultyRecord(['hard', 'hard', 'hard', 'easy', 'just_right'])),
             }),
         });
@@ -1856,8 +1938,7 @@ test('quiz prompt adapts to the recent difficulty feedback trend', async () => {
         const easy = await call('/api/ai/quiz', {
             method: 'POST',
             body: { action: 'quiz', sessionId: 'quiz-trend-easy-session', watched: movies() },
-            env: createTestEnv({
-                MIMO_API_KEY: 'test-mimo-key',
+            env: createLegacyMimoTextEnv({
                 KV: seededKv(difficultyRecord(['easy', 'easy', 'easy', 'hard', 'hard'])),
             }),
         });
@@ -1868,8 +1949,7 @@ test('quiz prompt adapts to the recent difficulty feedback trend', async () => {
         const neutral = await call('/api/ai/quiz', {
             method: 'POST',
             body: { action: 'quiz', sessionId: 'quiz-trend-neutral-session', watched: movies() },
-            env: createTestEnv({
-                MIMO_API_KEY: 'test-mimo-key',
+            env: createLegacyMimoTextEnv({
                 KV: seededKv(difficultyRecord(['hard', 'easy', 'just_right', 'easy', 'hard'])),
             }),
         });
@@ -1879,7 +1959,7 @@ test('quiz prompt adapts to the recent difficulty feedback trend', async () => {
         const empty = await call('/api/ai/quiz', {
             method: 'POST',
             body: { action: 'quiz', sessionId: 'quiz-trend-empty-session', watched: movies() },
-            env: createTestEnv({ MIMO_API_KEY: 'test-mimo-key' }),
+            env: createLegacyMimoTextEnv(),
         });
         assert.equal(empty.response.status, 200);
         assert.doesNotMatch(captured.messages[0].content, /用户反馈近期题目偏/);

@@ -1,0 +1,44 @@
+은 옛글 / UnYetgul (Un Fonts)
+
+Upstream file:
+https://mirrors.ctan.org/fonts/unfonts-extra/UnYetgul.ttf
+Project: http://kldp.net/projects/unfonts/
+
+Copyright © 1998-2008 by Koaunghi Un
+
+The font's own `name` table states:
+
+    This is the HLaTeX fonts made by Koaunghi Un. It originally used on the
+    HLaTeX only. It contains all Hangul Syllables defined in the Unicode. It
+    is converted to TrueType fonts with the FontForge. You can freely
+    redistribute it under the GNU GPL.
+
+    GNU General Public License
+    http://korea.gnu.org/copyleft/gpl.ko.html
+
+The records name no version. The unfonts project distributes under the GNU
+GPL version 2 or later, so the GPL-2.0 text in licenses/GPL-2.0.txt applies;
+if a later version is ever required, the "or later" grant covers it.
+
+As with the other GPL font in this repo, there is no font exception, so the
+binary inside the APK is a GPL work being conveyed: the licence text ships
+next to it and the subsetted TTF keeps every original `name` record.
+
+What ships in this repo:
+
+app/src/main/res/font/unyetgul_seal.ttf — 50 KB subset, 377 codepoints (the 376
+characters the Korean keywords use, plus U+0020 for the keywords that contain a
+space). Only the Korean seal keywords from assets/quotes.json (`keyword["ko"]`)
+are kept; the full font is 5.9 MB. Produced with:
+
+    python -m fontTools.subset UnYetgul.ttf \
+      --text-file=ko.txt --output-file=unyetgul_seal.ttf \
+      --name-IDs='*' --layout-features='*' \
+      --no-hinting --desubroutinize
+
+`--name-IDs='*'` keeps the copyright and GPL records listed above inside the
+subsetted file.
+
+Because the subset covers exactly those keywords, this font is only usable
+for the Korean seal. Adding a keyword to quotes.json means regenerating the
+subset, or that keyword silently falls back to the system serif.

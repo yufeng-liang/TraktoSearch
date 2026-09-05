@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [MediaItemEntity::class, MediaDetailEntity::class, NotificationRecordEntity::class, DoubanSyncedItem::class, DoubanSyncFailureEntity::class, DoubanSyncPendingItemEntity::class, DoubanSyncRollbackEntity::class, DoubanConsistencyCheckRunEntity::class, DoubanConsistencyCheckTaskEntity::class, DoubanConsistencyConflictEntity::class, UserReviewEntity::class, MarkActionRecordEntity::class, DailyStampEntity::class],
-    version = 16,
+    version = 17,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

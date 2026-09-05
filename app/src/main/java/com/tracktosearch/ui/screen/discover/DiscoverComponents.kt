@@ -49,13 +49,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
-import com.tracktosearch.ui.component.LocalActivePosterClickSetter
-import com.tracktosearch.ui.component.LocalActivePosterClickToken
-import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalIsCurrentTab
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppErrorVariant
@@ -70,6 +64,19 @@ import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.posterSharedKey
+import com.tracktosearch.ui.component.SharedOrigin
+import com.tracktosearch.ui.navigation.DetailSeedStore
+
+/**
+ * 发现页某个栏目的 origin。
+ *
+ * 各栏目共用一套卡片，同一部片子同时出现在「热门」和「为你推荐」是常态，
+ * 所以按栏目 id 再分一层，海报转场才只认被点击的那一栏里的那一张。
+ */
+internal fun discoverSectionOrigin(sectionId: String): String =
+    SharedOrigin.of(SharedOrigin.DISCOVER, sectionId)
 
 /** 通用电影卡片（复用豆瓣卡片样式） */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -86,31 +93,31 @@ internal fun MovieCard(
     tmdbId: Int = 0,
     /** 评分来源是否为豆瓣：true 显示绿色填充样式，false 显示带星星样式 */
     isDoubanRating: Boolean = false,
+    /** 本卡片所属栏目，见 [discoverSectionOrigin]；与 tmdbId 一起决定海报与详情页的配对。 */
+    origin: String,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-    // 当前活跃海报 tmdbId(-1=都不启用 / 具体值=只有匹配的启用)
-    val activePosterTmdbId = LocalActivePosterTmdbId.current
-    val setActivePosterTmdbId = LocalActivePosterClickSetter.current
-    // 当前活跃点击 token,每次点击递增;只有 token 匹配的卡片实例才启用 sharedElement
-    val activeClickToken = LocalActivePosterClickToken.current
-    var myClickToken by rememberSaveable { mutableStateOf(0) }
-    // 只有"当前可见 tab"且"被用户点击激活"的海报才启用 sharedElement
-    // clickToken 匹配避免同页面不同栏目下同 tmdbId 海报参与匹配(转场飘错根因)
-    val isCurrentTab = LocalIsCurrentTab.current
-    val enableShared = tmdbId > 0
-        && tmdbId == activePosterTmdbId
-        && isCurrentTab
-        && myClickToken != 0
-        && myClickToken == activeClickToken
+    // 只有被点过的卡片才挂共享元素修饰符；配对由 key 里的 origin 决定，不比对点击顺序。
+    var clicked by remember { mutableStateOf(false) }
     // posterUrl 仅依赖 posterPath，包进 remember 避免每次重组重复 toIntOrNull/TmdbImageUrls.build 解析
     val posterUrl = remember(posterPath) {
         posterPath?.let {
             if (it.startsWith("http")) it
             else if (it.toIntOrNull() != null) null // TMDB ID 无法直接拼海报 URL，需要通过详情接口获取
             else TmdbImageUrls.build(it)
+        }
+    }
+    // 点击时登记参与转场，并把海报与来源交给详情页：本栏目卡片的海报来自 TMDB 列表接口，
+    // 详情页 peek 详情缓存必然落空
+    val wrappedOnClick = remember(onClick, tmdbId, posterUrl, year, origin) {
+        {
+            if (tmdbId > 0) {
+                clicked = true
+                DetailSeedStore.remember(tmdbId, posterUrl, year.toIntOrNull(), origin)
+            }
+            onClick()
         }
     }
 
@@ -131,24 +138,15 @@ internal fun MovieCard(
             .width(105.dp)
             .scale(scale)
     ) {
-        // 当 enableShared 且两个 scope 可用时，给海报 Box 加 sharedElement 修饰（与详情页海报配对）
-        val posterBoxModifier = if (enableShared && sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-            with(sharedTransitionScope) {
-                Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(2f / 3f)
-                    .sharedElement(
-                        rememberSharedContentState(key = "poster-$tmdbId"),
-                        animatedVisibilityScope = animatedVisibilityScope
-                    )
-                    .clip(posterShape)
-            }
-        } else {
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(2f / 3f)
-                .clip(posterShape)
-        }
+        // 海报 Box 与详情页头图配对
+        val posterBoxModifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(2f / 3f)
+            .appSharedBounds(
+                key = if (clicked) posterSharedKey(tmdbId, origin) else null,
+                animatedVisibilityScope = animatedVisibilityScope,
+            )
+            .clip(posterShape)
         AppVisualSurface(
             kind = VisualSurfaceKind.Content,
             modifier = posterBoxModifier.hapticClickable(
@@ -157,13 +155,7 @@ internal fun MovieCard(
                 indication = null,
                 // 一屏里横滑几十张的媒体卡片，与共享的 ui/component/MovieCard、PosterCard 同档
                 semantic = HapticSemantic.LIGHT_TAP,
-                onClick = {
-                    // 点击时记录当前海报为活跃状态,并获取新 token,确保只有这个卡片参与转场
-                    if (tmdbId > 0) {
-                        myClickToken = setActivePosterTmdbId(tmdbId)
-                    }
-                    onClick()
-                }
+                onClick = wrappedOnClick
             ),
             shape = posterShape,
             backgroundColor = Color.Transparent,

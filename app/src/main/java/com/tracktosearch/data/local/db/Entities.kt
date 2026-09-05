@@ -10,13 +10,13 @@ import androidx.room.PrimaryKey
  */
 @Entity(
     tableName = "media_items",
+    primaryKeys = ["traktId", "type"],
     indices = [
         Index("type"),
         Index("type", "listedAt")
     ]
 )
 data class MediaItemEntity(
-    @PrimaryKey
     val traktId: Int,
     val tmdbId: Int,
     val type: String,          // watchlist_movie / watchlist_show / history_movie / history_show

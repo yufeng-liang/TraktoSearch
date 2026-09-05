@@ -1,21 +1,57 @@
 <resources>
-    <string name="auth_migration_invite_hint">自動復元を完了できませんでした。移行用の招待コードを入力して続行してください。</string>
+    <string name="auth_migration_invite_hint">自動復元を完了できませんでした。移行用のチケットコードを入力して続行してください。</string>
     <string name="auth_offline_mode">オフラインモード: キャッシュデータを使用しています。</string>
     <string name="app_name">TraktoSearch</string>
-    <string name="auth_expired_message">ネットワークに接続して、アクセスを再度有効化してください。</string>
-    <string name="auth_invite_code">12桁のアクティベーションコードを入力</string>
-    <string name="auth_activate">有効化</string>
-    <string name="auth_error_invalid_invite">招待コードが無効です。</string>
-    <string name="auth_error_invite_used">この招待コードは使用済みです。新しいコードを管理者に依頼してください。</string>
-    <string name="auth_error_invite_revoked">この招待コードは取り消されています。管理者に連絡してください。</string>
-    <string name="auth_error_invite_expired">招待コードの有効期限が切れています。</string>
+    <string name="auth_expired_message">ネットワークに接続して、もう一度発券してください。</string>
+    <string name="auth_invite_code">6桁のチケットコードを入力</string>
+    <string name="auth_activate">発券</string>
+    <string name="auth_error_invalid_invite">チケットコードが無効です。</string>
+    <string name="auth_error_invite_used">このチケットコードは使用済みです。新しいコードを管理者に依頼してください。</string>
+    <string name="auth_error_invite_revoked">このチケットコードは取り消されています。管理者に連絡してください。</string>
+    <string name="auth_error_invite_expired">チケットコードの有効期限が切れています。</string>
     <string name="auth_error_device_limit">デバイス上限に達しました。</string>
-    <string name="auth_error_migration_device_not_found">移行には既存の登録デバイスが必要です。</string>
+    <string name="auth_error_migration_device_not_found">移行には登録済みのデバイスが必要です。</string>
     <string name="auth_error_migration_device_mismatch">このデバイスは別の友達に属しています。</string>
     <string name="auth_error_device_already_bound">このデバイスはすでに登録されています。</string>
     <string name="auth_error_friend_disabled">このアクセスは無効化されています。</string>
     <string name="auth_error_network">ネットワークに接続できません。確認してもう一度お試しください。</string>
+    <string name="auth_error_rate_limited">試行回数が多すぎます。数分待ってからもう一度お試しください。</string>
     <string name="auth_error_generic">有効化に失敗しました。もう一度お試しください。</string>
+
+    <!-- Ticket Machine -->
+    <string name="machine_status_ready">コード入力</string>
+    <string name="machine_status_verifying">確認中…</string>
+    <string name="machine_detail_verifying">○ コードを確認中 · 少々お待ちください</string>
+    <string name="machine_status_printing">印刷中…</string>
+    <string name="machine_status_collected">発行完了</string>
+    <string name="machine_detail_collected">○ 発行済み · チケットで入場方法を選択</string>
+    <string name="machine_status_invalid">コード不正</string>
+    <string name="machine_status_used">使用済み</string>
+    <string name="machine_status_revoked">取消済み</string>
+    <string name="machine_status_expired">期限切れ</string>
+    <string name="machine_status_device_limit">上限到達</string>
+    <string name="machine_status_device_bound">登録済み</string>
+    <string name="machine_status_migration_missing">端末なし</string>
+    <string name="machine_status_migration_mismatch">端末不一致</string>
+    <string name="machine_status_friend_disabled">無効化</string>
+    <string name="machine_status_rate_limited">少々お待ち</string>
+    <string name="machine_status_network">通信不能</string>
+    <string name="machine_status_failed">発行失敗</string>
+    <string name="machine_status_clipboard_empty">コードなし</string>
+    <string name="machine_key_paste">貼り付け</string>
+    <string name="machine_key_backspace_desc">バックスペース</string>
+    <string name="machine_submit">発行</string>
+    <string name="machine_code_progress">チケットコード %1$s、残り %2$d 桁</string>
+    <string name="machine_code_collected">受け取り番号は使用済み、発行完了</string>
+
+    <!-- Ticket -->
+    <string name="ticket_hall">スクリーン %1$d</string>
+    <string name="ticket_seat">%1$d 列 %2$d 番</string>
+    <string name="ticket_serial_no">NO. %1$s</string>
+    <string name="ticket_entry_trakt">Traktでログイン</string>
+    <string name="ticket_entry_authorizing">認証中…</string>
+    <string name="ticket_entry_douban">豆瓣でログイン</string>
+    <string name="ticket_entry_guest">ゲストとして入場</string>
 
     <!-- Main Screen -->
     <string name="tab_search">検索</string>
@@ -237,20 +273,19 @@
     <string name="settings_accent_custom">カスタム</string>
     <string name="settings_accent_reset_default">デフォルトに戻す（壁紙）</string>
     <!-- アクセントカラー -->
-    <string name="accent_vintage_ticket">レトロチケット</string>
-    <string name="accent_water_lily">睡蓮紫</string>
-    <string name="accent_sunrise">日の出オレンジ</string>
-    <string name="accent_japanese_bridge">日本橋グリーン</string>
-    <string name="accent_cathedral">大聖堂ブルーグレー</string>
-    <string name="accent_haystack">干草ゴールド</string>
     <string name="accent_renoir">ルノワールピンク</string>
-    <string name="accent_starry_night">星月夜ブルー</string>
     <string name="accent_poppy">ポピー赤</string>
-    <string name="accent_wheat_field">麦畑ゴールド</string>
-    <string name="accent_rouen_cathedral">ルーアン大聖堂パープル</string>
-    <string name="accent_ballet">バレエパープル</string>
-    <string name="accent_water_lily_green">睡蓮グリーン</string>
+    <string name="accent_vintage_ticket">レトロチケット</string>
+    <string name="accent_sunrise">日の出オレンジ</string>
+    <string name="accent_haystack">干草ゴールド</string>
+    <string name="accent_giverny_moss">ジヴェルニー苔グリーン</string>
+    <string name="accent_japanese_bridge">日本橋グリーン</string>
+    <string name="accent_venice_canal">ヴェネツィア運河ターコイズ</string>
     <string name="accent_boat_breakfast">ボート朝食ブルー</string>
+    <string name="accent_starry_night">星月夜ブルー</string>
+    <string name="accent_cathedral">大聖堂ブルーグレー</string>
+    <string name="accent_water_lily">睡蓮紫</string>
+    <string name="accent_ballet">バレエパープル</string>
 
     <!-- Language -->
     <string name="settings_language">言語</string>
@@ -291,8 +326,16 @@
     <string name="daily_stamp_total">累計</string>
     <string name="daily_stamp_hint">日付をタップすると、その日の一言が読めます</string>
     <string name="daily_stamp_empty">まだ一枚もありません。明日アプリを開けば、一枚たまります。</string>
+    <string name="daily_stamp_unarrived_hint">過ぎた朝は戻らない。けれど夕暮れはまだ遅くない。</string>
+    <string name="daily_stamp_future_month">これからの日はまだ現れていない</string>
+    <string name="daily_stamp_future_card">未来を急いでめくらなくていい。時間が答えを持っている——その日に会いましょう。</string>
+    <string name="daily_stamp_missed">未記録</string>
+    <string name="daily_stamp_latent">まだ来ていない</string>
     <string name="daily_stamp_save">保存</string>
     <string name="daily_stamp_share">共有</string>
+    <string name="daily_stamp_detail">作品詳細</string>
+    <string name="splash_quote_title">今日の台詞</string>
+    <string name="splash_quote_section_splash">起動画面</string>
     <string name="daily_stamp_saved">アルバムに保存しました</string>
     <string name="daily_stamp_already_saved">すでにアルバムにあります</string>
     <string name="daily_stamp_save_failed">カードを保存できませんでした</string>
@@ -485,9 +528,8 @@
     <string name="login_denied">認証が拒否されました</string>
     <string name="login_success">ログイン成功、読み込み中…</string>
     <string name="login_sync_hint">ログイン後、Traktのウォッチリストが同期されます</string>
-    <string name="login_activation_locked">○ 未認証 · コードを入力して視聴スペースを解放</string>
-    <string name="login_activation_choose_path">有効化しました。Trakt または豆瓣にログインするか、ひとまずゲストとして続行してください。</string>
-    <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
+    <string name="login_activation_locked">○ 未発行 · コードを入力してチケットと引きかえ</string>
+    <string name="machine_plate">TICKET MACHINE · V%1$s</string>
 
     <!-- Ratings -->
 
@@ -520,6 +562,12 @@
     <string name="detail_original_title">原題: %1$s</string>
     <string name="detail_runtime_hours">%1$d時間%2$d分</string>
     <string name="detail_runtime_minutes">%1$d分</string>
+    <!-- メタ情報チップのアクセシビリティラベル -->
+    <string name="detail_meta_genres_desc">ジャンル：%1$s</string>
+    <string name="detail_meta_country_desc">国/地域：%1$s</string>
+    <string name="detail_meta_release_date_desc">公開日：%1$s</string>
+    <string name="detail_meta_runtime_desc">上映時間：%1$s</string>
+    <string name="douban_detail_comment_quote">「%1$s」</string>
     <string name="detail_year">%1$d年</string>
     <string name="detail_collapse">折りたたむ ▲</string>
     <string name="detail_expand">展開する ▼</string>
@@ -540,7 +588,7 @@
     <string name="detail_load_more_comments">下にスクロールしてさらに読み込む</string>
     <string name="detail_all_comments_loaded">全 %1$d 件のコメントを読み込みました</string>
     <string name="detail_cast_crew">キャスト＆スタッフ</string>
-    <string name="detail_cast_all">すべて ></string>
+    <string name="detail_cast_all">すべて</string>
     <string name="detail_director_tag">監督</string>
     <string name="detail_cast_as">%1$s 役</string>
     <string name="detail_writer_tag">脚本</string>
@@ -1079,6 +1127,7 @@
     <string name="cd_watched">視聴済み</string>
     <string name="cd_saved">保存済み</string>
     <string name="cd_save">保存</string>
+    <string name="cd_image_page">%2$d 枚中 %1$d 枚目の画像</string>
     <string name="cd_edit">編集</string>
     <string name="cd_delete">削除</string>
     <string name="cd_back_to_top">トップに戻る</string>
@@ -1448,6 +1497,7 @@
   diskTypePath = $.type</string>
     <string name="help_detail_custom">カスタム詳細ページ：設定で詳細ページの各モジュール（キャスト、予告編とスクリーンショット、あらすじ、マイレーティング、コメント、おすすめ）の表示/非表示を制御</string>
     <string name="help_videos_images">予告編とスクリーンショット：詳細ページに予告編とスチールを表示、予告編をタップしてブラウザで再生、スクリーンショットをタップして拡大表示しアルバムに保存</string>
+    <string name="help_detail_pull_refresh">プルトゥリフレッシュ：作品詳細ヘージで下に引くと評価/キャスト/シーズン/コメント/おすすめを再取得。豆矣詳細ヘージでは作品情報を再取得し、検索済みの場合はリソースも再検索します</string>
     <string name="help_discover_filter_b1">作品フィルター：発見ページのタイトルバーでフィルターアイコンをタップ、または下部の「作品フィルターページへ」カードからフィルターページに移動</string>
     <string name="help_discover_filter_b2">ジャンル、地域、タグ、評価範囲、年代でフィルタリング、人気度、公開日、評価で並べ替え可能</string>
     <string name="help_discover_filter_b3">映画とテレビ番組のフィルター条件は独立、タブ切り替えでそれぞれのフィルター選択を保持</string>
@@ -1459,6 +1509,7 @@
     
     
     <string name="help_tips_b12">自動アップロードを有効にすると、クラッシュログは次回起動時に送信され、履歴はフィードバックページで確認できます。ログには端末やアプリ状態などの診断情報が含まれる場合があります。</string>
+    <string name="help_tips_b13">メッセージ画面で未読の項目を右にスワイプすると既読になります。上部の「すべて既読」で一括処理できます。</string>
 
     <!-- 彩蛋メッセージ（9アニメ × 3メッセージ） -->
     <string name="easter_msg_shy_1">つつかれました、くすぐったい！</string>
@@ -1586,6 +1637,16 @@
     <string name="feedback_closed_hint">このフィードバックは閉じられました</string>
     <string name="feedback_load_more">もっと読み込む</string>
     <string name="feedback_id_format">#%1$s</string>
+    <string name="feedback_day_today">今日</string>
+    <string name="feedback_day_yesterday">昨日</string>
+    <string name="feedback_timeline_submitted">送信済み</string>
+    <string name="feedback_unread_reply">新しい返信</string>
+    <string name="feedback_mark_read">既読にする</string>
+    <string name="feedback_screenshots_hint">最大 5 枚・長押しで並べ替え</string>
+    <string name="feedback_type_required">まず種類を選んでください</string>
+    <string name="feedback_discard_title">この内容を破棄しますか？</string>
+    <string name="feedback_discard_message">入力した内容は保存されません。</string>
+    <string name="feedback_discard_confirm">破棄</string>
     <string name="douban_sync_stage_idle">待機中</string>
     <string name="douban_sync_stage_preparing">同期を準備中</string>
     <string name="douban_sync_stage_fetching_list">リストを取得中</string>
@@ -1642,7 +1703,6 @@
     <string name="douban_sync_notification_public">豆瓣同期：%1$s</string>
     <string name="douban_sync_notification_channel_description">豆瓣の同期進捗を表示</string>
     <string name="douban_login_waiting_auth">認証の完了を待っています…</string>
-    <string name="auth_invite_bound_this_device">この招待コードは既にデバイスに紐付いています。アプリを再起動して復元するか、新しいコードをお使いください</string>
     <string name="douban_detail_entry_not_found">このアイテムはまだこの端末に同期されていません</string>
     <string name="douban_batch_remove_remote_failed">%1$d 件の項目を豆瓣から削除できませんでした。次回同期時に再試行します</string>
     <string name="detail_credits_douban_unavailable">豆瓣限定アイテムにはキャスト情報がありません</string>
@@ -1657,14 +1717,18 @@
     <string name="ai_sprite_long_press_hint">検索ヘッダーのスプライトボタン、または雲の長押しでスプライトセンターを開きます。雲の短押しは従来どおりイースターエッグです。スプライトは短く顔を出すことがあり、入力やスクロールで戻ります。</string>
     <string name="ai_sprite_activate">「%1$s」と呼んで起動</string>
     <string name="ai_sprite_activating">「%1$s」を聞いています…</string>
-    <string name="ai_sprite_listening">名前を一度だけ言ってください</string>
+    <string name="ai_sprite_hold_to_talk">押しながら「%1$s」と呼ぶ</string>
+    <string name="ai_sprite_release_to_activate">離すと起動</string>
+    <string name="ai_sprite_release_to_cancel">離すとキャンセル</string>
+    <string name="ai_sprite_heard">聞こえたよ！起動中…</string>
+    <string name="ai_sprite_hold_hint">ボタンを押しながら「%1$s」と呼んでください。指を上にスライドするとキャンセルできます</string>
     <string name="ai_sprite_activation_success">起動したよ！</string>
     <string name="ai_sprite_preparing">準備中</string>
     <string name="ai_sprite_guest_hint">ログインするとスプライトと AI を利用できます</string>
     <string name="ai_sprite_login">ログインする</string>
     <string name="ai_sprite_text_fallback">文字で起動</string>
     <string name="ai_sprite_voice_limit_reached">音声の回数を使い切りました</string>
-    <string name="ai_sprite_text_fallback_available">音声で起動できませんか？キャラクター名を入力して起動できます</string>
+    <string name="ai_sprite_text_fallback_available">声を出しにくいときは、キャラクター名を入力して起動できます</string>
     <string name="ai_sprite_text_fallback_title">文字で起動</string>
     <string name="ai_sprite_text_fallback_dialog_hint">「%1$s」と入力して確定すると、呼びかけと同じ効果です</string>
     <string name="ai_sprite_text_fallback_label">キャラクター名</string>
@@ -1696,6 +1760,7 @@
     <string name="ai_taste_recommendations">あなたへの3作品</string>
     <string name="ai_taste_details">詳細を開く</string>
     <string name="ai_quiz_spoiler">対象作品：%1$s（ネタバレあり）</string>
+    <string name="ai_quiz_media_separator">、</string>
     <string name="ai_quiz_start">ラウンドを開始</string>
     <string name="ai_quiz_need_more_movies">クイズを始めるには視聴済みが 7 本以上必要です</string>
     <string name="ai_quiz_preview_title">今回の作品を選ぶ</string>
@@ -1747,8 +1812,12 @@
     <string name="ai_error_character_unavailable">このキャラクターは準備中です。別のキャラクターをお試しください</string>
     <string name="ai_error_activation_required">この機能を使うには先にスプライトを起動してください</string>
     <string name="ai_error_activation_not_matched">名前が一致しませんでした。もう一度呼ぶか文字入力で起動してください</string>
+    <string name="ai_error_activation_too_short">押している時間が短すぎました。押しながらもう一度呼んでください</string>
+    <string name="ai_error_activation_silent">音声が聞こえませんでした。マイクを確認して再試行してください</string>
+    <string name="ai_error_activation_too_quiet">声が小さすぎました。もう少し近づいてもう一度呼んでください</string>
     <string name="ai_error_activation_retry_limit">このキャラクターの起動回数を使い切りました。別のキャラクターをお試しください</string>
     <string name="ai_error_audio_unavailable">マイクが使えません。文字入力で起動してください</string>
+    <string name="ai_error_audio_permission_granted">マイクの許可が得られました。押しながらもう一度呼んでください</string>
     <string name="ai_error_name_empty">先にキャラクター名を入力してください</string>
     <string name="ai_error_not_enough_movies">視聴済みが 7 本未満です。先に何本か記録してください</string>
     <string name="ai_error_watched_list_empty">視聴履歴がありません。先に何本か記録してください</string>
@@ -1922,7 +1991,7 @@
     <string name="opensource_use_lottie">JSON ベクターアニメーションの再生（ロード中・空状態など）</string>
     <string name="opensource_use_richtext">Markdown リッチテキストの描画（更新履歴）</string>
     <string name="opensource_use_reorderable">リストの長押しドラッグ並べ替え</string>
-    <string name="opensource_use_zoomable">ポスター・シーンのピンチズームとドラッグ</string>
+    <string name="opensource_use_telephoto">ポスター・シーンのピンチズームと大画像のサブサンプリング</string>
     <string name="opensource_use_backdrop">リキッドガラス効果のための画面単位サンプリング基盤</string>
     <string name="opensource_use_mesh_gradient">Android 12 以下での背景グロー代替（メッシュグラデーションアニメーション）</string>
     <string name="opensource_use_mirage">Android 13 以上の背景グロー（AGSL シェーダーアニメーション）</string>
@@ -1972,7 +2041,6 @@
     <string name="privacy_hero_desc">視聴記録はまず端末に保存されます。通信が必要な機能では、送信する内容と理由をここで説明します。</string>
     <string name="privacy_flow_title">データフローの実演</string>
     <string name="privacy_flow_live">アニメーション例</string>
-    <string name="privacy_flow_summary">機能ごとのデータの動きを確認できます。これは理解のための図解であり、実際の通信を監視するものではありません。</string>
     <string name="privacy_flow_hint">フローを選んで境界を確認</string>
     <string name="privacy_flow_device">端末</string>
     <string name="privacy_flow_local_title">端末内保存</string>
@@ -2026,7 +2094,10 @@
     <string name="swiftie_quiz_backspace">削除</string>
     <string name="swiftie_era_card_a11y">%1$s、%2$s リリース、全 %3$d 曲</string>
     <string name="swiftie_eras_axis_a11y">アルバムのタイムライン、2006 年から 2025 年、全 12 作品。ドラッグでその時代へ移動できます。</string>
+    <string name="swiftie_finale_a11y">Taylor Swift のグリッターのサイン。その下にフレンドシップブレスレットが 3 本：13 ハート 87、SWIFTIE、%1$s。さらにその下に「Taylor と私、いつまでも一緒に」と書かれています。</string>
+    <string name="swiftie_finale_a11y_plain">Taylor Swift のグリッターのサイン。その下にフレンドシップブレスレットが 2 本：13 ハート 87、SWIFTIE。さらにその下に「Taylor と私、いつまでも一緒に」と書かれています。</string>
     <string name="swiftie_skip">スキップ</string>
+    <string name="swiftie_pause">一時停止</string>
     <string name="swiftie_resume">再開</string>
     <string name="swiftie_audio_hint_all">音量をオンにしてイヤホン着用で最高の体験に</string>
     <string name="swiftie_audio_hint_volume">音量をオンにすると最高の体験に</string>

@@ -36,8 +36,9 @@ class SplashQuoteLoader @Inject constructor(
             val bytes = posterStore.readBytes(quote) ?: return@withContext null
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                 ?: return@withContext null
-            // 到这里画面已经凑齐，开场那一条才算真的展示过
-            repository.markShown(quote)
+            // 这里只判断展示档位，不提前落「已展示」标记：用户此时可能仍停在激活页，
+            // 真正开演后由 MainActivity 的 onSplashQuoteShown 统一记录。
+            val isFirstToday = repository.isFirstShowToday()
             SplashQuoteUi(
                 quoteId = quote.id,
                 lines = lines,
@@ -47,8 +48,11 @@ class SplashQuoteLoader @Inject constructor(
                 isEnglish = lineLang == SplashQuote.FALLBACK_LANG,
                 titleWrap = SplashQuote.titleWrap(lang),
                 keyword = quote.keywordFor(lang),
+                sealKeyword = quote.sealKeywordFor(lang),
+                sealLang = lang,
                 keywordLatin = quote.keywordFor(SplashQuote.FALLBACK_LANG)
                     .takeIf { lang != SplashQuote.FALLBACK_LANG && it.isNotBlank() },
+                isFirstToday = isFirstToday,
             )
         } catch (e: Exception) {
             // 解码 OOM 或文件损坏：开屏不值得为此崩溃，跳过台词层即可

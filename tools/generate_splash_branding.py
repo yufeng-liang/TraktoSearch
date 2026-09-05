@@ -164,9 +164,12 @@ def main():
     td.rounded_rectangle((left, top, right, bottom), radius=16, fill=PAPER_DEEP,
                          outline=(80, 61, 50, 82), width=4)
     # 两侧检票孔。
+    # 孔必须用透明填充（不能 fill=PAPER）：系统 splash 深色档背景是 #241914，
+    # 不透明浅色孔在深色下会像实心票根、看不出打孔；透明孔在任何背景下都透出背景。
+    # 保留 outline 描边，让孔边缘在深浅两档都清晰。
     for cx in (left, right):
         td.ellipse((cx - 22, (top + bottom) // 2 - 22, cx + 22, (top + bottom) // 2 + 22),
-                   fill=PAPER, outline=(80, 61, 50, 64), width=3)
+                   fill=(0, 0, 0, 0), outline=(80, 61, 50, 64), width=3)
 
     divider_x = 940
     td.rectangle((58, 87, 911, 329), outline=(153, 99, 69, 72), width=2)
@@ -183,8 +186,10 @@ def main():
     draw_popcorn(td, 674, 278, 48)
     draw_film_strip(td, 750, 276, 52)
     draw_mini_clapper(td, 838, 274, 54)
-    draw_centered_spaced_text(td, 1052, 90, "07", font(SERIF, 112), CLAY_DARK, 0)
-    draw_centered_spaced_text(td, 1052, 286, "SCREEN", font(MONO, 27), CLAY_DARK, 3.3)
+    draw_centered_spaced_text(td, 1052, 90, "SCREEN", font(MONO, 27), CLAY_DARK, 3.3)
+    draw_centered_spaced_text(td, 1052, 128, "8", font(SERIF, 112), CLAY_DARK, 0)
+    draw_centered_spaced_text(td, 1052, 242, "DATE", font(MONO, 33), CLAY_DARK, 3.0)
+    draw_centered_spaced_text(td, 1052, 284, "8.11", font(MONO, 44), MUTED, 2.2)
 
     # CSS 的 overflow:hidden 会把打孔裁成票根边缘的缺口，不能保留贯穿的直线边框。
     ticket_mask = Image.new("L", (W, H), 0)

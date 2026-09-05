@@ -24,14 +24,6 @@ import kotlin.random.Random
 /** 一颗心：相对 x、相位、相对边长、是否近层。 */
 private class Heart(val x: Float, val phase: Float, val scale: Float, val near: Boolean)
 
-/** 0..1 单位方框里的心形。 */
-private fun unitHeartPath(): Path = Path().apply {
-    moveTo(0.5f, 0.92f)
-    cubicTo(-0.18f, 0.52f, 0.16f, 0.02f, 0.5f, 0.30f)
-    cubicTo(0.84f, 0.02f, 1.18f, 0.52f, 0.5f, 0.92f)
-    close()
-}
-
 /**
  * 8 颗心分布在左右两侧（Spec §4.1「四角」），中间让给算式与标题。
  * 固定种子，重组不跳位。

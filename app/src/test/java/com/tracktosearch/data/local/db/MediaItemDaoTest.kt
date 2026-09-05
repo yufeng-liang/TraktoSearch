@@ -2,6 +2,8 @@ package com.tracktosearch.data.local.db
 
 import android.content.Context
 import androidx.room.Room
+import androidx.sqlite.db.SupportSQLiteOpenHelper
+import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -19,6 +21,8 @@ class MediaItemDaoTest {
 
     private lateinit var db: AppDatabase
     private lateinit var dao: MediaItemDao
+    private var migrationHelper: SupportSQLiteOpenHelper? = null
+    private var migrationDatabaseName: String? = null
 
     @Before
     fun setup() {
@@ -30,7 +34,11 @@ class MediaItemDaoTest {
     }
 
     @After
-    fun teardown() { db.close() }
+    fun teardown() {
+        db.close()
+        migrationHelper?.close()
+        migrationDatabaseName?.let { RuntimeEnvironment.getApplication().deleteDatabase(it) }
+    }
 
     private fun sample(
         traktId: Int = 1,
@@ -83,6 +91,107 @@ class MediaItemDaoTest {
     @Test
     fun getByTypeList_空结果() = runTest {
         assertThat(dao.getByTypeList("watchlist_movie")).isEmpty()
+    }
+
+    @Test
+    fun insertAll_相同traktId的其他分类不会覆盖想看电影快照() = runTest {
+        val watchlistMovies = (1..10).map { traktId ->
+            sample(
+                traktId = traktId,
+                type = "watchlist_movie",
+                title = when (traktId) {
+                    9 -> "爱情公寓"
+                    10 -> "布达佩斯大饭店"
+                    else -> "电影$traktId"
+                },
+                listedAt = "2024-06-${(21 - traktId).toString().padStart(2, '0')}T10:00:00Z"
+            )
+        }
+        dao.insertAll(watchlistMovies)
+
+        // 剧集与电影的 Trakt ID 分属不同命名空间；写入同号剧集不能挤掉第 9 部电影。
+        dao.insertAll(
+            listOf(
+                sample(
+                    traktId = 9,
+                    type = "watchlist_show",
+                    title = "同号剧集"
+                )
+            )
+        )
+
+        val movies = dao.getByTypeList("watchlist_movie")
+        assertThat(movies).hasSize(10)
+        assertThat(movies[8].title).isEqualTo("爱情公寓")
+        assertThat(movies[9].title).isEqualTo("布达佩斯大饭店")
+        assertThat(dao.getByTypeList("watchlist_show").single().title).isEqualTo("同号剧集")
+    }
+
+    @Test
+    fun migration16To17_保留旧快照并允许不同分类使用相同traktId() {
+        val context: Context = RuntimeEnvironment.getApplication()
+        val databaseName = "media-item-migration-16-17-${System.nanoTime()}.db"
+        migrationDatabaseName = databaseName
+        migrationHelper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(databaseName)
+                .callback(object : SupportSQLiteOpenHelper.Callback(16) {
+                    override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        db.execSQL(
+                            """CREATE TABLE media_items (
+                                traktId INTEGER NOT NULL PRIMARY KEY,
+                                tmdbId INTEGER NOT NULL,
+                                type TEXT NOT NULL,
+                                title TEXT NOT NULL,
+                                displayTitle TEXT NOT NULL,
+                                year INTEGER,
+                                genres TEXT NOT NULL,
+                                posterUrl TEXT,
+                                imdbId TEXT NOT NULL,
+                                traktRating REAL NOT NULL,
+                                listedAt TEXT NOT NULL,
+                                cachedAt INTEGER NOT NULL
+                            )""".trimIndent()
+                        )
+                        db.execSQL(
+                            """INSERT INTO media_items VALUES
+                                (9, 109, 'watchlist_movie', '爱情公寓', '爱情公寓', 2018, '', NULL, 'tt1', 8.0, '2024-06-12T10:00:00Z', 1),
+                                (10, 110, 'watchlist_movie', '布达佩斯大饭店', '布达佩斯大饭店', 2014, '', NULL, 'tt2', 8.0, '2024-06-11T10:00:00Z', 1)
+                            """.trimIndent()
+                        )
+                    }
+
+                    override fun onUpgrade(
+                        db: androidx.sqlite.db.SupportSQLiteDatabase,
+                        oldVersion: Int,
+                        newVersion: Int
+                    ) = Unit
+                })
+                .build()
+        )
+        val migratedDatabase = migrationHelper!!.writableDatabase
+
+        DatabaseModule.MIGRATION_16_17.migrate(migratedDatabase)
+        migratedDatabase.execSQL(
+            """INSERT INTO media_items VALUES
+                (9, 209, 'watchlist_show', '同号剧集', '同号剧集', 2024, '', NULL, 'tt3', 8.0, '2024-06-20T10:00:00Z', 2)
+            """.trimIndent()
+        )
+
+        migratedDatabase.query(
+            "SELECT title FROM media_items WHERE type = 'watchlist_movie' ORDER BY listedAt DESC"
+        ).use { cursor ->
+            val titles = buildList {
+                while (cursor.moveToNext()) add(cursor.getString(0))
+            }
+            assertThat(titles).containsExactly("爱情公寓", "布达佩斯大饭店").inOrder()
+        }
+        migratedDatabase.query(
+            "SELECT title FROM media_items WHERE type = 'watchlist_show' AND traktId = 9"
+        ).use { cursor ->
+            assertThat(cursor.moveToFirst()).isTrue()
+            assertThat(cursor.getString(0)).isEqualTo("同号剧集")
+        }
     }
 
     @Test

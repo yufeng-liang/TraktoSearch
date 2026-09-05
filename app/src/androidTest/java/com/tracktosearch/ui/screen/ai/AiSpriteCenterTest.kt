@@ -58,7 +58,7 @@ class AiSpriteCenterTest {
     }
 
     @Test
-    fun failedVoiceActivationKeepsVoiceRetryAndOffersTextFallbackEntry() {
+    fun failedVoiceActivationKeepsHoldToTalkRetryAlongsideTextEntry() {
         val viewModel = mockk<AiSpriteViewModel>(relaxed = true)
         every { viewModel.uiState } returns MutableStateFlow(
             AiSpriteUiState(
@@ -67,7 +67,6 @@ class AiSpriteCenterTest {
                 authState = AuthState.AUTHORIZED,
                 activationAttempt = 1,
                 activationState = AiActivationState.FAILED,
-                textActivationOffered = true,
                 errorCode = "ACTIVATION_NOT_MATCHED"
             )
         )
@@ -82,9 +81,12 @@ class AiSpriteCenterTest {
             )
         }
         composeRule.waitForIdle()
-        // 主按钮仍是语音重试，文字兜底是并列出现的第二入口
+        // 主按钮仍是语音重试（按住说话），文字入口是并列的第二入口
+        composeRule.onAllNodesWithText(context.getString(R.string.ai_sprite_hold_to_talk, "乌萨奇"))
+            .assertCountEquals(1)
+        // 面板标题仍用「喊名字来激活」，按钮文案已换成按住提示，所以这句只剩标题一处
         composeRule.onAllNodesWithText(context.getString(R.string.ai_sprite_activate, "乌萨奇"))
-            .assertCountEquals(2)
+            .assertCountEquals(1)
         composeRule.onAllNodesWithText(context.getString(R.string.ai_sprite_text_fallback))
             .assertCountEquals(1)
     }
@@ -98,8 +100,7 @@ class AiSpriteCenterTest {
                 selectedCharacterId = "usagi",
                 authState = AuthState.AUTHORIZED,
                 activationAttempt = 1,
-                activationState = AiActivationState.FAILED,
-                textActivationOffered = true
+                activationState = AiActivationState.FAILED
             )
         )
         every { viewModel.audioEvents } returns MutableSharedFlow<AiAudio>()
@@ -185,7 +186,9 @@ class AiSpriteCenterTest {
 
         composeRule.onNodeWithText(context.getString(R.string.ai_sprite_activated_status, "乌萨奇"))
             .assertIsDisplayed()
-        // 激活成功后不该再留一个灰掉的「喊名字来激活」按钮当摆设
+        // 激活成功后不该再留一个灰掉的激活按钮当摆设：标题和按住提示都应该随面板一起消失
+        composeRule.onAllNodesWithText(context.getString(R.string.ai_sprite_hold_to_talk, "乌萨奇"))
+            .assertCountEquals(0)
         composeRule.onAllNodesWithText(context.getString(R.string.ai_sprite_activate, "乌萨奇"))
             .assertCountEquals(0)
     }

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#D4AA73</color>
-    <!-- 启动页背景（蓝色渐变起点色，作为纯色背景被系统 splash 使用） -->
+    <!-- 系统启动页背景。取值跟 SplashQuoteModels 里 SplashPalette 的 paper 一致，
+         这样系统 splash 切到自绘 splash 时看不出接缝。深色档见 values-night/colors.xml。 -->
     <color name="splash_background">#F7EFE2</color>
-    <!-- 启动页图标底衬色（半透明白色光晕） -->
 </resources>

@@ -4,11 +4,13 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.repeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -24,6 +26,8 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,23 +48,49 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.AppErrorState
+import com.tracktosearch.data.remote.feedback.FeedbackDetail
 import com.tracktosearch.data.remote.feedback.FeedbackReply
 import com.tracktosearch.data.remote.feedback.screenshotUrl
-import com.tracktosearch.ui.component.LocalFullscreenSharedKey
+import com.tracktosearch.ui.component.LocalFullscreenSharedElement
+import com.tracktosearch.ui.component.fullscreenSharedElementKey
 import com.tracktosearch.ui.component.ZoomableImageOverlay
+import com.tracktosearch.ui.component.hasListScrolled
+import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.zoomSharedSource
+import com.tracktosearch.ui.component.FeedbackListCardCorner
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.ZoomThumbnailCrop
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.appSkipToLookaheadSize
+import com.tracktosearch.ui.component.feedbackCardSharedKey
+import com.tracktosearch.ui.component.isAppSharedTransitionActive
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import dev.chrisbanes.haze.hazeSource
 
 private const val MAX_REPLY_SCREENSHOTS = 5
+private const val MAX_REPLY_LENGTH = 2000
+
+/** 字数计数器只在快到上限时出现，平时不在输入框上方占一行。 */
+private const val REPLY_COUNTER_VISIBLE_FROM = 1800
 
 // 详情页由系统 adjustResize 避让键盘，Scaffold 不应再次预消费底部 IME inset。
 internal fun feedbackDetailScaffoldContentWindowInsets(): WindowInsets = WindowInsets(0, 0, 0, 0)
 
+/**
+ * 回复在列表里的下标：0 是原帖卡，1 是「对话」小标题。
+ *
+ * 日期分隔标签画在气泡 item 内部而不是自己占一个 item，就是为了让这个偏移量保持常数 2，
+ * 否则带 replyId 的深链会跳到错的位置。
+ */
 internal fun conversationReplyListItemIndex(replyIndex: Int): Int = replyIndex + 2
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun FeedbackDetailScreen(
     feedbackId: String,
@@ -69,11 +99,23 @@ fun FeedbackDetailScreen(
     onNewFeedback: () -> Unit,
     viewModel: FeedbackViewModel = hiltViewModel()
 ) {
+    // 共享元素转场作用域：与反馈列表里那张卡片配对，整页作为容器一起变形。
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val detailState by viewModel.detailState.collectAsStateWithLifecycle()
     val replyState by viewModel.replyState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val listState = rememberLazyListState()
-    val haptics = rememberAppHaptics()
+    val hazeState = remember { HazeState() }
+    val hazeStyle = HazeMaterials.thin()
+    val timeLabels = rememberFeedbackTimeLabels()
+    val hasContentUnderTopBar by remember {
+        derivedStateOf {
+            hasListScrolled(
+                firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffsetPx = listState.firstVisibleItemScrollOffset
+            )
+        }
+    }
 
     var fullscreenUrls by remember { mutableStateOf<List<String>>(emptyList()) }
     var fullscreenIndex by remember { mutableStateOf<Int?>(null) }
@@ -134,116 +176,194 @@ fun FeedbackDetailScreen(
             "fb-compose-${replyFullscreenIndex!!.coerceIn(0, replyScreenshots.size - 1)}"
         else -> null
     }
-    CompositionLocalProvider(LocalFullscreenSharedKey provides fullscreenSharedKey) {
+    CompositionLocalProvider(
+        LocalFullscreenSharedElement provides fullscreenSharedElementKey(fullscreenSharedKey)
+    ) {
 
     Scaffold(
         contentWindowInsets = feedbackDetailScaffoldContentWindowInsets(),
-        topBar = {
-            TopAppBar(
-                title = {
-                    val displayId = (detailState as? FeedbackViewModel.DetailState.Success)?.data?.feedback?.display_id
-                    if (displayId != null && displayId.isNotBlank()) {
-                        Text(text = stringResource(R.string.feedback_id_format, displayId), fontWeight = FontWeight.ExtraBold)
-                    } else {
-                        Text(stringResource(R.string.feedback_title), fontWeight = FontWeight.ExtraBold)
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = stringResource(R.string.content_desc_back)
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            haptics.lightTap()
-                            onNewFeedback()
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Add,
-                            contentDescription = stringResource(R.string.feedback_new)
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background
+        // 容器色置透明、底色改由下面那个共享节点自己画，理由见该处注释。
+        // contentColor 显式写成 onBackground：Scaffold 默认取 contentColorFor(containerColor)，
+        // 而 contentColorFor(Transparent) 是 Unspecified，会让整页文字颜色退回外层 LocalContentColor。
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground
     ) { padding ->
-        when (val state = detailState) {
-            is FeedbackViewModel.DetailState.Loading -> {
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            }
-            is FeedbackViewModel.DetailState.Error -> {
-                AppErrorState(
-                    message = state.message,
-                    onRetry = { viewModel.loadDetail(feedbackId) },
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    retryLabel = stringResource(R.string.feedback_retry)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                // 与反馈列表卡片配对的是整页，而不是顶栏：卡片放大成页面、返回时收回成卡片。
+                // 挂在这个 Box 上是因为它是加载/错误/成功三个状态分支唯一的公共节点。
+                // 卡片侧圆角 FeedbackListCardCorner，页面侧是 0，转场期间在两者之间插值。
+                .appSharedBounds(
+                    key = feedbackCardSharedKey(feedbackId),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    corner = SharedCorner.flattenFrom(FeedbackListCardCorner),
+                    // 容器变形要的是「内容不变形、被裁剪逐渐露出」，默认的 scaleToBounds 会把内容
+                    // 跟着容器一起缩放绘制。逐帧重测的代价由内容侧的 appSkipToLookaheadSize 挡掉。
+                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
                 )
-            }
-            is FeedbackViewModel.DetailState.Success -> {
-                val feedback = state.data.feedback
-                val replies = state.data.replies
-                val isClosed = feedback.status == "CLOSED"
-                val isReplying = replyState is FeedbackViewModel.ReplyState.Uploading || replyState is FeedbackViewModel.ReplyState.Sending
-
-                Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 24.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                // 页面底色挪进共享节点内侧，并把 Scaffold 的容器色置透明。
+                // 否则 Scaffold 会在共享节点之外先铺满一整屏不透明底色，转场第一帧整屏就已经是本页的背景，
+                // 「卡片长成页面」退化成「页面已经在了，只是内容从一个小矩形里长出来」。
+                // 挪进来之后底色跟着动画边界一起长大，且被上面那层圆角动画裁剪，落定后与原来逐像素相同。
+                .background(MaterialTheme.colorScheme.background)
+                .padding(padding)
+        ) {
+            // 内容从顶栏下面穿过去，靠 contentPadding 让首屏不被压住
+            val topBarHeight = 64.dp +
+                WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            when (val state = detailState) {
+                is FeedbackViewModel.DetailState.Loading -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = topBarHeight),
+                        contentAlignment = Alignment.Center
                     ) {
-                        item(key = "original") { OriginalFeedbackCard(feedback = feedback, sharedKeyPrefix = "fb-conv-$feedbackId", onScreenshotClick = { urls, index -> fullscreenKeyPrefix = "fb-conv-$feedbackId"; fullscreenUrls = urls; fullscreenIndex = index }) }
-                        if (replies.isNotEmpty() || state.isRefreshing) {
-                            item(key = "conv_title") {
-                                Row(
-                                    modifier = Modifier.padding(top = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.feedback_conversation),
-                                        fontSize = 15.sp,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    if (state.isRefreshing) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(14.dp),
-                                            strokeWidth = 2.dp
+                        CircularProgressIndicator()
+                    }
+                }
+                is FeedbackViewModel.DetailState.Error -> {
+                    AppErrorState(
+                        message = state.message,
+                        onRetry = { viewModel.loadDetail(feedbackId) },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = topBarHeight),
+                        retryLabel = stringResource(R.string.feedback_retry)
+                    )
+                }
+                is FeedbackViewModel.DetailState.Success -> {
+                    val feedback = state.data.feedback
+                    val replies = state.data.replies
+                    val isClosed = feedback.status == "CLOSED"
+                    val isReplying = replyState is FeedbackViewModel.ReplyState.Uploading ||
+                        replyState is FeedbackViewModel.ReplyState.Sending
+                    // 同一天的回复只在第一条上方给一次日期标签
+                    val dayLabels = remember(replies, timeLabels) {
+                        var previousLabel: String? = null
+                        replies.map { reply ->
+                            val label = timeLabels.dayLabel(reply.created_at)
+                            val header = label.takeIf { it != previousLabel }
+                            previousLabel = label
+                            header
+                        }
+                    }
+
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier
+                                .weight(1f)
+                                // 整页参与容器变形时按落定尺寸布局：否则列表会跟着容器逐帧变宽，
+                                // 一次转场里重复决定「哪些项可见、每项多宽」几十遍
+                                .appSkipToLookaheadSize()
+                                .hazeSource(state = hazeState),
+                            contentPadding = PaddingValues(
+                                start = 16.dp,
+                                top = topBarHeight,
+                                end = 16.dp,
+                                bottom = 24.dp
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            item(key = "original") {
+                                OriginalFeedbackCard(
+                                    feedback = feedback,
+                                    timeLabels = timeLabels,
+                                    sharedKeyPrefix = "fb-conv-$feedbackId",
+                                    onScreenshotClick = { urls, index ->
+                                        fullscreenKeyPrefix = "fb-conv-$feedbackId"
+                                        fullscreenUrls = urls
+                                        fullscreenIndex = index
+                                    }
+                                )
+                            }
+                            if (replies.isNotEmpty() || state.isRefreshing) {
+                                item(key = "conv_title") {
+                                    Row(
+                                        modifier = Modifier.padding(top = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.feedback_conversation),
+                                            fontSize = 15.sp,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = FontWeight.Bold
                                         )
+                                        if (state.isRefreshing) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(14.dp),
+                                                strokeWidth = 2.dp
+                                            )
+                                        }
                                     }
                                 }
                             }
+                            itemsIndexed(replies, key = { _, reply -> reply.id }) { index, reply ->
+                                ConversationBubble(
+                                    reply = reply,
+                                    dayLabel = dayLabels.getOrNull(index),
+                                    timeLabels = timeLabels,
+                                    sharedKeyPrefix = "fb-reply-${reply.id}",
+                                    highlight = highlightReplyId == reply.id,
+                                    onHighlightDone = {
+                                        if (highlightReplyId == reply.id) highlightReplyId = null
+                                    },
+                                    onScreenshotClick = { urls, shotIndex ->
+                                        fullscreenKeyPrefix = "fb-reply-${reply.id}"
+                                        fullscreenUrls = urls
+                                        fullscreenIndex = shotIndex
+                                    }
+                                )
+                            }
                         }
-                        items(replies, key = { it.id }) { reply -> ConversationBubble(reply = reply, sharedKeyPrefix = "fb-reply-${reply.id}", highlight = highlightReplyId == reply.id, onHighlightDone = { if (highlightReplyId == reply.id) highlightReplyId = null }, onScreenshotClick = { urls, index -> fullscreenKeyPrefix = "fb-reply-${reply.id}"; fullscreenUrls = urls; fullscreenIndex = index }) }
-                    }
-                    if (isClosed) {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .navigationBarsPadding(),
-                            color = MaterialTheme.colorScheme.surfaceVariant
-                        ) {
-                            Text(
-                                text = stringResource(R.string.feedback_closed_hint),
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                                textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 14.sp
+                        if (isClosed) {
+                            ClosedFeedbackFooter()
+                        } else {
+                            ReplyBar(
+                                text = replyText,
+                                onTextChange = { if (it.length <= MAX_REPLY_LENGTH) replyText = it },
+                                screenshots = replyScreenshots,
+                                sharedKeyPrefix = "fb-compose",
+                                enabled = !isReplying,
+                                onAddScreenshot = { pickImageLauncher.launch("image/*") },
+                                onRemoveScreenshot = { idx ->
+                                    replyScreenshots = replyScreenshots.toMutableList()
+                                        .apply { removeAt(idx) }
+                                },
+                                onScreenshotClick = { idx -> replyFullscreenIndex = idx },
+                                onSend = {
+                                    if (replyText.isNotBlank()) {
+                                        viewModel.reply(
+                                            feedbackId = feedbackId,
+                                            content = replyText,
+                                            screenshotBytes = replyScreenshots.map { it.first },
+                                            screenshotMimeTypes = replyScreenshots.map { it.second }
+                                        )
+                                    }
+                                },
+                                isSending = isReplying,
+                                replyState = replyState
                             )
                         }
-                    } else {
-                        ReplyBar(text = replyText, onTextChange = { if (it.length <= 2000) replyText = it }, screenshots = replyScreenshots, sharedKeyPrefix = "fb-compose", enabled = !isReplying, onAddScreenshot = { pickImageLauncher.launch("image/*") }, onRemoveScreenshot = { idx -> replyScreenshots = replyScreenshots.toMutableList().apply { removeAt(idx) } }, onScreenshotClick = { idx -> replyFullscreenIndex = idx }, onSend = { if (replyText.isNotBlank()) { viewModel.reply(feedbackId = feedbackId, content = replyText, screenshotBytes = replyScreenshots.map { it.first }, screenshotMimeTypes = replyScreenshots.map { it.second }) } }, isSending = isReplying, replyState = replyState)
                     }
                 }
             }
+
+            FeedbackDetailTopBar(
+                hazeState = hazeState,
+                hazeStyle = hazeStyle,
+                isContentUnderTopBar = hasContentUnderTopBar,
+                displayId = (detailState as? FeedbackViewModel.DetailState.Success)
+                    ?.data?.feedback?.display_id,
+                onBack = onBack,
+                onNewFeedback = onNewFeedback,
+                // 顶栏不参与配对，但从第一帧就在：与内容一样按落定尺寸布局，跟着容器裁剪逐渐露出。
+                // 延迟入场会让容器长大的那段时间顶栏位置空着，落位时再整片闪出来。
+                modifier = Modifier.appSkipToLookaheadSize()
+            )
         }
     }
 
@@ -253,6 +373,9 @@ fun FeedbackDetailScreen(
         images = fullscreenUrls,
         initialIndex = fullscreenIndex?.coerceIn(0, fullscreenUrls.size - 1) ?: 0,
         sharedKeyPrefix = fullscreenKeyPrefix,
+        // 缩略图用 ContentScale.Fit（截图宽高比五花八门，裁切会切掉关键内容），
+        // 全屏侧因此只能逐帧重新测量，见 ZoomThumbnailCrop.Fit
+        thumbnailCrop = ZoomThumbnailCrop.Fit,
         onDismiss = { fullscreenIndex = null }
     )
     // 回复框预览全屏
@@ -261,16 +384,106 @@ fun FeedbackDetailScreen(
         images = replyScreenshots.map { it.first },
         initialIndex = replyFullscreenIndex?.coerceIn(0, replyScreenshots.size - 1) ?: 0,
         sharedKeyPrefix = "fb-compose",
+        thumbnailCrop = ZoomThumbnailCrop.Fit,
         onDismiss = { replyFullscreenIndex = null }
     )
-    } // CompositionLocalProvider(LocalFullscreenSharedKey)
+    } // CompositionLocalProvider(LocalFullscreenSharedElement)
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+/** 详情页顶栏：与消息页同一套 haze 贴顶写法，内容从下面穿过去。 */
 @Composable
-private fun OriginalFeedbackCard(feedback: com.tracktosearch.data.remote.feedback.FeedbackDetail, sharedKeyPrefix: String? = null, onScreenshotClick: (urls: List<String>, index: Int) -> Unit) {
+@OptIn(ExperimentalMaterial3Api::class)
+private fun FeedbackDetailTopBar(
+    hazeState: HazeState,
+    hazeStyle: HazeBlurStyle,
+    isContentUnderTopBar: Boolean,
+    displayId: String?,
+    onBack: () -> Unit,
+    onNewFeedback: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // 容器变形期间每帧背景都在变，此时还做实时模糊采样正是掉帧最集中的地方，先让 haze 停下来。
+    val transitionActive = isAppSharedTransitionActive()
+    val haptics = rememberAppHaptics()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            // 顶栏不参与配对：来源侧那张卡片上没有对应的标题栏，硬配对会把一行标题从卡片尺寸拉过来。
+            // 调用点因此传的是延迟入场的修饰符，观感上是「卡片先长成页面，页面再把顶栏放上来」。
+            .then(modifier)
+            .hazeTopBar(
+                state = hazeState,
+                style = hazeStyle,
+                blurRadius = 24.dp,
+                isContentUnderTopBar = isContentUnderTopBar && !transitionActive
+            )
+            // 顶栏覆盖列表，拦截空白区域点击，避免穿透到下面的卡片
+            .clickable(enabled = false, onClick = {})
+    ) {
+        Spacer(modifier = Modifier.statusBarsPadding())
+        TopAppBar(
+            title = {
+                Text(
+                    text = if (!displayId.isNullOrBlank()) {
+                        stringResource(R.string.feedback_id_format, displayId)
+                    } else {
+                        stringResource(R.string.feedback_title)
+                    },
+                    fontWeight = FontWeight.ExtraBold
+                )
+            },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = stringResource(R.string.content_desc_back)
+                    )
+                }
+            },
+            actions = {
+                IconButton(onClick = {
+                    haptics.lightTap()
+                    onNewFeedback()
+                }) {
+                    Icon(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = stringResource(R.string.feedback_new)
+                    )
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+            windowInsets = WindowInsets(0, 0, 0, 0)
+        )
+    }
+}
+
+/** 已关闭：原先是一条通栏灰底文字，看着像输入框被禁用；改成明确带锁图标的提示条。 */
+@Composable
+private fun ClosedFeedbackFooter() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        FeedbackNoticeBanner(
+            icon = Icons.Rounded.Lock,
+            text = stringResource(R.string.feedback_closed_hint),
+            accent = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
+@Composable
+private fun OriginalFeedbackCard(
+    feedback: FeedbackDetail,
+    timeLabels: FeedbackTimeLabels,
+    sharedKeyPrefix: String? = null,
+    onScreenshotClick: (urls: List<String>, index: Int) -> Unit
+) {
     val context = LocalContext.current
-    val screenshots = parseScreenshots(feedback.screenshots)
+    val screenshots = remember(feedback.screenshots) { parseScreenshots(feedback.screenshots) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -286,26 +499,18 @@ private fun OriginalFeedbackCard(feedback: com.tracktosearch.data.remote.feedbac
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = feedbackTypeLabel(feedback.type),
-                    fontSize = 13.sp,
-                    color = feedbackTypeColor(feedback.type),
-                    fontWeight = FontWeight.Bold
-                )
+                FeedbackTypeBadge(type = feedback.type)
                 Spacer(Modifier.weight(1f))
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = feedbackStatusColor(feedback.status).copy(alpha = 0.14f)
-                ) {
-                    Text(
-                        text = feedbackStatusLabel(feedback.status),
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                        fontSize = 12.sp,
-                        color = feedbackStatusColor(feedback.status),
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                Text(
+                    text = timeLabels.relative(feedback.created_at),
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
             }
+
+            // 状态只有三个值且单向推进，画成时间线比一个胶囊更能回答「我这条走到哪了」
+            FeedbackStatusTimeline(status = feedback.status)
 
             Text(
                 text = feedback.content,
@@ -369,22 +574,26 @@ private fun OriginalFeedbackCard(feedback: com.tracktosearch.data.remote.feedbac
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.SemiBold
                 )
-                appInfo.chunked(2).forEach { rowItems ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        rowItems.forEach { value ->
+                // 原先是 chunked(2) 两列 11sp 裸文字，值长了就被截在一半；
+                // 换成自动换行的小胶囊，每条按自己的长度占位
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    appInfo.forEach { value ->
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
+                        ) {
                             Text(
                                 text = value,
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
-                        if (rowItems.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
             }
@@ -394,15 +603,33 @@ private fun OriginalFeedbackCard(feedback: com.tracktosearch.data.remote.feedbac
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun ConversationBubble(reply: FeedbackReply, sharedKeyPrefix: String? = null, highlight: Boolean, onHighlightDone: () -> Unit, onScreenshotClick: (urls: List<String>, index: Int) -> Unit) {
+private fun ConversationBubble(
+    reply: FeedbackReply,
+    dayLabel: String?,
+    timeLabels: FeedbackTimeLabels,
+    sharedKeyPrefix: String? = null,
+    highlight: Boolean,
+    onHighlightDone: () -> Unit,
+    onScreenshotClick: (urls: List<String>, index: Int) -> Unit
+) {
     val context = LocalContext.current
     val isDeveloper = reply.author_role == "developer"
     val arrangement = if (isDeveloper) Arrangement.Start else Arrangement.End
-    val bubbleColor = if (isDeveloper) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary
-    val bubbleContentColor = if (isDeveloper) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onPrimary
-    val borderRadius = if (isDeveloper) RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp) else RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp)
-    val avatarColor = if (isDeveloper) Color(0xFF34D399) else MaterialTheme.colorScheme.primary
-    val avatarLabel = if (isDeveloper) "D" else "我"
+    val bubbleColor = if (isDeveloper) {
+        MaterialTheme.colorScheme.surfaceVariant
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
+    val bubbleContentColor = if (isDeveloper) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onPrimary
+    }
+    val borderRadius = if (isDeveloper) {
+        RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp)
+    } else {
+        RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp)
+    }
 
     val highlightProgress by animateFloatAsState(
         targetValue = if (highlight) 1f else 0f,
@@ -421,29 +648,52 @@ private fun ConversationBubble(reply: FeedbackReply, sharedKeyPrefix: String? = 
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = arrangement, verticalAlignment = Alignment.Bottom) {
-        if (isDeveloper) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(stringResource(R.string.feedback_role_developer), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(2.dp))
-                Box(
-                    modifier = Modifier.size(32.dp).clip(CircleShape).background(avatarColor),
-                    contentAlignment = Alignment.Center
+        if (dayLabel != null) {
+            // 日期分隔放在气泡 item 内部，别单独占 item，否则 conversationReplyListItemIndex 会错位
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = MaterialTheme.colorScheme.surfaceVariant
                 ) {
-                    Text(avatarLabel, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = dayLabel,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
-            Spacer(Modifier.width(8.dp))
         }
-        Surface(
-            modifier = Modifier.widthIn(max = 320.dp),
-            shape = borderRadius,
-            color = bubbleColor,
-            border = highlightBorder,
-            tonalElevation = if (isDeveloper) 1.dp else 0.dp
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = arrangement,
+            verticalAlignment = Alignment.Bottom
         ) {
+            // 角色原先是头像里手写的 "D" / "我"，读屏念不出；换成带 contentDescription 的图标头像
+            if (isDeveloper) {
+                RoleAvatar(isDeveloper = true, size = 32.dp)
+                Spacer(Modifier.width(8.dp))
+            }
+            Surface(
+                modifier = Modifier.widthIn(max = 320.dp),
+                shape = borderRadius,
+                color = bubbleColor,
+                border = highlightBorder,
+                tonalElevation = if (isDeveloper) 1.dp else 0.dp
+            ) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(text = reply.content, fontSize = 14.sp, color = bubbleContentColor)
+                    Text(
+                        text = reply.content,
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                        color = bubbleContentColor
+                    )
                     val screenshots = reply.screenshots
                     if (screenshots.isNotEmpty()) {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -474,23 +724,15 @@ private fun ConversationBubble(reply: FeedbackReply, sharedKeyPrefix: String? = 
             }
             if (!isDeveloper) {
                 Spacer(Modifier.width(8.dp))
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(stringResource(R.string.feedback_role_me), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(2.dp))
-                    Box(
-                        modifier = Modifier.size(32.dp).clip(CircleShape).background(avatarColor),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(avatarLabel, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
+                RoleAvatar(isDeveloper = false, size = 32.dp)
             }
         }
         Text(
-            text = formatTime(reply.created_at),
+            // 绝对时间戳 yyyy-MM-dd HH:mm 在对话流里太长，日期已经由分隔标签给了
+            text = timeLabels.relative(reply.created_at),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 40.dp),
+                .padding(horizontal = 40.dp, vertical = 2.dp),
             textAlign = if (isDeveloper) TextAlign.Start else TextAlign.End,
             fontSize = 10.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -500,7 +742,19 @@ private fun ConversationBubble(reply: FeedbackReply, sharedKeyPrefix: String? = 
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun ReplyBar(text: String, onTextChange: (String) -> Unit, screenshots: List<Pair<ByteArray, String>>, sharedKeyPrefix: String? = null, enabled: Boolean, onAddScreenshot: () -> Unit, onRemoveScreenshot: (Int) -> Unit, onScreenshotClick: (Int) -> Unit, onSend: () -> Unit, isSending: Boolean, replyState: FeedbackViewModel.ReplyState) {
+private fun ReplyBar(
+    text: String,
+    onTextChange: (String) -> Unit,
+    screenshots: List<Pair<ByteArray, String>>,
+    sharedKeyPrefix: String? = null,
+    enabled: Boolean,
+    onAddScreenshot: () -> Unit,
+    onRemoveScreenshot: (Int) -> Unit,
+    onScreenshotClick: (Int) -> Unit,
+    onSend: () -> Unit,
+    isSending: Boolean,
+    replyState: FeedbackViewModel.ReplyState
+) {
     val context = LocalContext.current
     val haptics = rememberAppHaptics()
     Surface(
@@ -539,12 +793,16 @@ private fun ReplyBar(text: String, onTextChange: (String) -> Unit, screenshots: 
                                     .zoomSharedSource(key = sharedKeyPrefix?.let { "$it-$index" })
                             )
                             if (enabled) {
+                                // 删除键原先是默认 48dp 的 IconButton，盖住整块缩略图，
+                                // 想点开预览反而先删了；收到 32dp，下半块留给预览
                                 IconButton(
                                     onClick = {
                                         haptics.lightTap()
                                         onRemoveScreenshot(index)
                                     },
-                                    modifier = Modifier.align(Alignment.TopEnd)
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .size(32.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Rounded.Close,
@@ -561,8 +819,53 @@ private fun ReplyBar(text: String, onTextChange: (String) -> Unit, screenshots: 
                     }
                 }
             }
+            // 上传是逐张走的，给确定进度比一个转圈能回答「还剩几张」
+            (replyState as? FeedbackViewModel.ReplyState.Uploading)?.let { uploading ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    LinearProgressIndicator(
+                        progress = {
+                            if (uploading.total <= 0) 0f
+                            else uploading.current.toFloat() / uploading.total
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(4.dp)
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.feedback_uploading,
+                            (uploading.current + 1).coerceAtMost(uploading.total),
+                            uploading.total
+                        ),
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                }
+            }
             (replyState as? FeedbackViewModel.ReplyState.Error)?.let {
-                Text(it.message, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                FeedbackNoticeBanner(
+                    icon = Icons.Rounded.ErrorOutline,
+                    text = it.message,
+                    accent = MaterialTheme.colorScheme.error
+                )
+            }
+            // 计数器平时不出现：2000 字对一条回复来说基本碰不到，常驻只是噪音
+            if (text.length >= REPLY_COUNTER_VISIBLE_FROM) {
+                Text(
+                    text = "${text.length}/$MAX_REPLY_LENGTH",
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.End,
+                    fontSize = 11.sp,
+                    color = if (text.length >= MAX_REPLY_LENGTH) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -592,6 +895,8 @@ private fun ReplyBar(text: String, onTextChange: (String) -> Unit, screenshots: 
                     },
                     enabled = enabled,
                     maxLines = 4,
+                    // 圆角输入框配右侧圆形发送键，比直角框更像对话输入
+                    shape = RoundedCornerShape(22.dp),
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
                 )
                 FilledIconButton(
@@ -600,7 +905,8 @@ private fun ReplyBar(text: String, onTextChange: (String) -> Unit, screenshots: 
                         onSend()
                     },
                     enabled = enabled && text.isNotBlank(),
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(48.dp),
+                    shape = CircleShape
                 ) {
                     if (isSending) {
                         CircularProgressIndicator(
@@ -629,9 +935,18 @@ internal fun parseScreenshots(json: String?): List<String> {
     }
 }
 
-private fun formatTime(timestamp: Long): String { val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()); return sdf.format(java.util.Date(timestamp * 1000)) }
 
-@Composable private fun feedbackTypeLabel(type: String): String = stringResource(when (type) { "FEATURE" -> R.string.feedback_type_feature; "BUG" -> R.string.feedback_type_bug; "UX" -> R.string.feedback_type_ux; else -> R.string.feedback_type_other })
-@Composable private fun feedbackTypeColor(type: String): Color = when (type) { "FEATURE" -> Color(0xFF34D399); "BUG" -> Color(0xFFFB7185); "UX" -> Color(0xFFFBBF24); else -> Color(0xFF9CA3AF) }
-@Composable private fun feedbackStatusLabel(status: String): String = stringResource(when (status) { "PENDING" -> R.string.feedback_status_pending; "REPLIED" -> R.string.feedback_status_replied; else -> R.string.feedback_status_closed })
-@Composable private fun feedbackStatusColor(status: String): Color = when (status) { "PENDING" -> MaterialTheme.colorScheme.primary; "REPLIED" -> Color(0xFF10B981); else -> MaterialTheme.colorScheme.onSurfaceVariant }
+
+
+
+
+
+
+
+
+
+
+
+
+
+

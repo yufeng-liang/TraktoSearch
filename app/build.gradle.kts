@@ -61,6 +61,12 @@ android {
         versionCode = 64
         versionName = "3.6.0"
 
+        // sherpa-onnx 全 ABI 太重：只保留 arm64-v8a（覆盖全部主流真机），
+        // 模拟器（x86_64）与老 32 位设备不再可装
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
+
         testInstrumentationRunner = "com.tracktosearch.CustomTestRunner"
 
         buildConfigField("String", "FEEDBACK_BASE_URL", "\"${properties.getProperty("feedback.base.url", "https://tracktosearch-gateway.pages.dev/gateway-api")}\"")
@@ -122,6 +128,32 @@ android {
             matchingFallbacks += listOf("release")
             isDebuggable = false
         }
+        // 霉粉彩蛋（126s 序列）的截图迭代专用包。彩蛋在正式包里藏在一道算术题之后、
+        // 只能从头顺序播，想看第 9 张专辑卡片得等 60 多秒 —— 视觉细节改一次要几分钟
+        // 才能看到结果。这个变体点开就是彩蛋，可跳到任意时刻并定格，见
+        // app/src/eggpreview/ 与 scripts/egg-shot.sh。
+        //
+        // 独立 applicationId（com.tracktosearch.eggpreview）而不是直接 installDebug，
+        // 两个理由：
+        // 1) 设备上那份 3.6.0 也是 debug 签名，同包名装上去就是覆盖安装 —— 会顶掉
+        //    用户的真实数据（想看列表、豆瓣凭据、日签记录），而这些数据本身就是
+        //    平时验证功能的素材，重建一次代价远大于多装一个包；
+        // 2) 改后缀之后两者共存，可以一边开着正式包对照一边刷预览包。
+        //    manifest 里所有 authority 都写成 ${applicationId}.xxx，跟着一起换，
+        //    不会与已装的包抢 provider。
+        //
+        // initWith(debug) 而不是 release：预览包一天要重装十几次，只服务视觉迭代。
+        // 过 R8 + 资源压缩纯粹是拿构建时间换一个不需要的产物形态，
+        // 而且 debug 签名正好省掉 release keystore —— 它不在版本库里，工作树里通常没有。
+        //
+        // matchingFallbacks：依赖侧（:benchmark 模块与各 AAR）没有 eggpreview 变体，
+        // 不给回落，变体解析阶段会直接失败而不是自己去找 debug。
+        create("eggpreview") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".eggpreview"
+            versionNameSuffix = "-egg"
+            matchingFallbacks += listOf("debug")
+        }
     }
 
     compileOptions {
@@ -151,6 +183,9 @@ android {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
         resources.excludes += "/META-INF/LICENSE.md"
         resources.excludes += "/META-INF/LICENSE-notice.md"
+        // sherpa-onnx 的 .so 较大（~125MB 原始），压缩进 APK 控制分发体积；
+        // 代价是安装后解压占用与首次加载略慢，可接受
+        jniLibs.useLegacyPackaging = true
     }
 }
 
@@ -277,6 +312,8 @@ tasks.configureEach {
 }
 
 dependencies {
+    // sherpa-onnx：精灵语音激活的本地关键词识别（KWS）引擎，AAR 含全 ABI JNI 库
+    implementation(files("libs/sherpa-onnx-1.13.6.aar"))
     /**
      * 把 `androidx.concurrent:concurrent-futures{,-ktx}` 抬到 1.2.0。
      *
@@ -375,7 +412,7 @@ dependencies {
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
     implementation(libs.reorderable)
-    implementation(libs.zoomable)
+    implementation(libs.telephoto.zoomable.image.coil)
     implementation(libs.compose.mesh.gradient)
     implementation(libs.mirage)
 

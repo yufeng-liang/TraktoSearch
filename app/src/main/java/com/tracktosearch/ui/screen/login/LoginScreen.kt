@@ -179,6 +179,17 @@ class LoginViewModel @Inject constructor(
         _loginState.value = LoginState.ERROR
         _errorMessage.value = null  // 使用默认的拒绝授权提示
     }
+
+    /**
+     * 浏览器压根没起来（设备上没有可用浏览器、被安全软件拦下）。
+     *
+     * 与 [onAuthDenied] 分开：那一条是用户拒绝，这一条是根本没走到授权页，
+     * 得带上原始异常，界面上才能给出「登录失败」而不是「授权被拒绝」。
+     */
+    fun onAuthLaunchFailed(error: Throwable) {
+        _loginState.value = LoginState.ERROR
+        _errorMessage.value = error
+    }
 }
 
 @Composable

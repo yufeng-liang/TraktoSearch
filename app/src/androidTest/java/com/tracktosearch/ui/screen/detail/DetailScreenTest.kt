@@ -86,11 +86,11 @@ class DetailScreenTest {
     }
 
     @Test
-    fun `未登录时点击操作触发_onNavigateToLogin`() {
+    fun `未登录Trakt时点击操作触发_onTraktLogin`() {
         var loginNavigated = false
         setContent(
-            uiState = DetailUiState(showLoginPrompt = true),
-            onNavigateToLogin = { loginNavigated = true }
+            uiState = DetailUiState(loginTarget = DetailLoginTarget.TRAKT),
+            onTraktLogin = { loginNavigated = true }
         )
         val loginBtn = context.getString(R.string.detail_login_go)
         composeRule.onNodeWithText(loginBtn).performClick()
@@ -173,7 +173,7 @@ class DetailScreenTest {
         uiState: DetailUiState = DetailUiState(),
         mediaType: MediaType = MediaType.MOVIE,
         onBack: (Boolean, Boolean) -> Unit = { _, _ -> },
-        onNavigateToLogin: () -> Unit = {}
+        onTraktLogin: () -> Unit = {}
     ) {
         composeRule.setContent {
             DetailScreen(
@@ -182,7 +182,7 @@ class DetailScreenTest {
                 title = "测试电影",
                 mediaType = mediaType,
                 onBack = onBack,
-                onNavigateToLogin = onNavigateToLogin,
+                onTraktLogin = onTraktLogin,
                 viewModel = createMockViewModel(uiState)
             )
         }

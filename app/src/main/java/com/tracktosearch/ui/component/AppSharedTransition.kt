@@ -1,0 +1,474 @@
+package com.tracktosearch.ui.component
+
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.BoundsTransform
+import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+
+/**
+ * 全 App 共享元素转场的统一入口。
+ *
+ * 设计要点：
+ * - 配对键是结构化的 [SharedKey]，由「是谁」「来自哪个集合」「是什么部件」三段组成。
+ *   源侧因此只需声明静态事实，不再需要点击 token、活跃 id 一类的运行期状态来消除重复海报的歧义。
+ * - 动画规格集中在本文件，[BoundsTransform] 刻意不作为参数暴露：全 App 的边界动画必须同速，
+ *   否则同一次导航里不同部件各自弹一套节奏，观感比不做转场更差。
+ * - 默认 resizeMode 由 [SharedElementType] 推导，只有配对两端宽高比不同的少数场合才需要显式覆盖。
+ */
+
+/** 共享元素的语义类型，决定默认的 resizeMode。 */
+enum class SharedElementType {
+    /** 整块容器（卡片放大成整页）。 */
+    Bounds,
+
+    /** 位图内容，海报、剧照、头像。 */
+    Image,
+
+    /** 文本，两端字号不同也不能重排。 */
+    Title,
+
+    /** 小图标，等比缩放不裁切。 */
+    Icon,
+
+    /** 背景层，渐变或纯色，允许非等比拉伸。 */
+    Background,
+}
+
+/**
+ * 共享元素配对键。两端只有三段全部相等才会配对。
+ *
+ * @param id 被共享的对象标识，通常是 tmdbId、列表 id 或图片 url 的稳定部分。
+ * @param origin 该元素所属的集合或页面实例，见 [SharedOrigin]。同一个 id 在同一屏出现多次
+ *   （追踪页和推荐栏都有同一部片子）时，靠 origin 区分谁是真正被点击的那一个：
+ *   目标侧携带的 origin 来自导航参数，只与来源那一侧相等。
+ * @param type 部件类型，见 [SharedElementType]。同一个 id 的海报、标题、背景各自独立配对。
+ */
+@Immutable
+data class SharedKey(
+    val id: String,
+    val origin: String,
+    val type: SharedElementType,
+)
+
+/**
+ * origin 取值。一个屏幕内有多个可能撞 id 的列表时，按列表而不是按屏幕细分。
+ * 只在此处声明跨页面配对用到的公共值；某个屏幕私有的多列表细分值就近声明在该屏幕文件里。
+ */
+object SharedOrigin {
+    /**
+     * 不参与来源区分的配对。
+     *
+     * 用于走不到「列表卡片点进详情」这条路的入口：通知点击、AI 推荐、深链等。这些入口没有
+     * 可配对的源侧海报，目标侧拿到本值也就等于不配对，正是想要的结果。
+     */
+    const val ANY = "any"
+
+    const val WATCHLIST = "watchlist"
+    const val DETAIL = "detail"
+    const val DISCOVER = "discover"
+    const val SEARCH = "search"
+    const val SETTINGS = "settings"
+    const val STATISTICS = "statistics"
+    const val TRAKT_LIST = "trakt-list"
+    const val DISCOVER_FILTER = "discover-filter"
+    const val FEEDBACK = "feedback"
+
+    /**
+     * 全屏图片查看器的缩略图/全屏配对。
+     *
+     * 这一族不需要 origin 消歧：同一时刻只可能开着一个查看器，由 [LocalFullscreenSharedElement]
+     * 指定哪一侧是 target，且调用点的字符串 id 里已经带了页面与索引。
+     */
+    const val FULLSCREEN_VIEWER = "fullscreen-viewer"
+
+    /**
+     * 同一屏里有多个可能撞 id 的列表时，用列表自己的 id 再分一层。
+     *
+     * 发现页各栏目共用一套卡片，同一部片子出现在「热门」和「为你推荐」两栏是常态；
+     * 追踪页则可能有同 tmdbId 的重复条目，这时 [slot] 传该条目的 selectionKey。
+     */
+    fun of(base: String, slot: String): String = "$base:$slot"
+}
+
+/**
+ * 影视海报配对键：列表卡片的海报与详情页头图。
+ *
+ * tmdbId 非正数时返回 null，即不参与转场。占位数据和只有豆瓣 id 的条目都会落在这里，
+ * 若让它们共用 `poster-0` 这个键，同屏多个占位项会互相配对，转场会飞向一个随机条目。
+ */
+fun posterSharedKey(tmdbId: Int, origin: String = SharedOrigin.ANY): SharedKey? =
+    if (tmdbId <= 0) null else SharedKey("poster-$tmdbId", origin, SharedElementType.Image)
+
+/** 人物头像配对键：演职员卡片与人物页头像。 */
+fun personAvatarSharedKey(personId: Int, origin: String = SharedOrigin.ANY): SharedKey? =
+    if (personId <= 0) null else SharedKey("person-avatar-$personId", origin, SharedElementType.Image)
+
+/** 社区列表配对键：发现页列表卡片与列表详情页标题栏。 */
+fun traktListSharedKey(listId: Int): SharedKey? =
+    if (listId <= 0) null else SharedKey("trakt-list-$listId", SharedOrigin.DISCOVER, SharedElementType.Bounds)
+
+/**
+ * 发现页社区列表卡片的圆角；与 [SettingsEntryCardCorner] 同理，两端必须取同一个数。
+ *
+ * 20dp 是与搜索源页内置源卡片、统计页卡片对齐后的统一列表卡片规格。
+ */
+val TraktListCardCorner = 20.dp
+
+/** 发现页筛选入口卡片与筛选页根容器。 */
+val DiscoverFilterCardKey = SharedKey("filter-entry-card", SharedOrigin.DISCOVER, SharedElementType.Bounds)
+
+/** 发现页筛选入口卡片的圆角；与 [SettingsEntryCardCorner] 同理，两端必须取同一个数。 */
+val DiscoverFilterCardCorner = 20.dp
+
+/** 设置页观看统计入口卡片与统计页。 */
+val StatisticsEntryKey = SharedKey("statistics-entry", SharedOrigin.SETTINGS, SharedElementType.Bounds)
+
+/** 设置页标记记录入口卡片与标记记录页。 */
+val MarkRecordsEntryKey = SharedKey("mark-records-entry", SharedOrigin.SETTINGS, SharedElementType.Bounds)
+
+/** 设置页搜索源入口卡片与搜索源页。 */
+val SearchSourcesEntryKey = SharedKey("search-sources-entry", SharedOrigin.SETTINGS, SharedElementType.Bounds)
+
+/**
+ * 反馈列表卡片与反馈详情页。
+ *
+ * id 必须带上具体那一条：同一屏还有消息列表也通向这个详情页，两条路的源侧不同，
+ * 只有点中的那张卡片该参与配对。
+ */
+fun feedbackCardSharedKey(feedbackId: String): SharedKey? =
+    if (feedbackId.isBlank()) null
+    else SharedKey("feedback-$feedbackId", SharedOrigin.FEEDBACK, SharedElementType.Bounds)
+
+/** 崩溃日志卡片与崩溃日志详情页。id 是日志文件名。 */
+fun crashLogCardSharedKey(recordId: String): SharedKey? =
+    if (recordId.isBlank()) null
+    else SharedKey("crash-log-$recordId", SharedOrigin.FEEDBACK, SharedElementType.Bounds)
+
+/** 反馈页两种列表卡片的圆角；两端必须取同一个数，见 [SettingsEntryCardCorner]。 */
+val FeedbackListCardCorner = 16.dp
+
+/**
+ * 设置页入口卡片的圆角。
+ *
+ * 容器变形的两端要拿同一个数：卡片侧的稳定态是它，页面侧的对端值也是它，中间才插得平。
+ * 写死在这里而不是各自 hardcode，是因为两处对不上时看到的不是编译错误，而是落地那一帧圆角跳一下。
+ */
+val SettingsEntryCardCorner = 20.dp
+
+/**
+ * 转场期间的圆角。
+ *
+ * [rest] 是本侧稳定态的圆角，[peer] 是配对另一侧稳定态的圆角。转场期间圆角在两者之间插值，
+ * 进入方向从 [peer] 收敛到 [rest]，退出方向反向。两侧各自填写自己的 rest 与对端的 peer，
+ * 因此同一对元素的两个调用点参数互为镜像。
+ *
+ * 传 null 表示不接管裁剪，沿用父级。
+ */
+@Immutable
+data class SharedCorner(val rest: Dp, val peer: Dp) {
+    companion object {
+        /** 两端圆角相同：转场期不变形，但仍然接管 overlay 裁剪，避免直角穿出。 */
+        fun uniform(radius: Dp) = SharedCorner(radius, radius)
+
+        /** 本侧无圆角，对端有：卡片放大成整页最常见的一对。 */
+        fun flattenFrom(peer: Dp) = SharedCorner(rest = 0.dp, peer = peer)
+    }
+}
+
+/**
+ * 边界动画规格：临界阻尼、无回弹。
+ *
+ * 位置和尺寸这类空间属性用偏软的 spring，落定约 480ms；阻尼比取 1 是因为海报和整页容器
+ * 过冲之后会先越过目标边界再退回来，在有明确矩形轮廓的元素上非常显眼。
+ */
+private val AppBoundsSpec: FiniteAnimationSpec<Rect> = spring(
+    dampingRatio = 1f,
+    stiffness = 380f,
+    visibilityThreshold = Rect.VisibilityThreshold,
+)
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+private val AppBoundsTransform = BoundsTransform { _, _ -> AppBoundsSpec }
+
+/**
+ * 透明度这类非空间属性用硬得多的 spring，落定约 200ms。
+ *
+ * 与边界动画的 0.42 倍时长比是刻意的：淡入先结束、形变后结束，观感上是「一个东西在移动」
+ * 而不是「一个东西在淡入的同时还在变形」。
+ */
+private val AppFadeSpec: FiniteAnimationSpec<Float> = spring(dampingRatio = 1f, stiffness = 1600f)
+
+internal val AppSharedEnter: EnterTransition = fadeIn(AppFadeSpec)
+internal val AppSharedExit: ExitTransition = fadeOut(AppFadeSpec)
+
+/**
+ * 按部件类型决定默认进出动画。
+ *
+ * [SharedElementType.Image] 与 [SharedElementType.Icon] 两端画的是同一张图，交叉淡入会在
+ * 重叠期把两份半透明内容叠出一次可见的发白，所以不淡。
+ *
+ * [SharedElementType.Bounds] 是整块容器（卡片放大成整页），同样不能淡：这类容器覆盖了半屏到
+ * 整屏，淡入淡出期间它是半透明的，对面那一页就会整片透进来 —— 进入标记记录页的那一瞬能看到
+ * 设置页的文字压在海报上，返回时能看到列表内容压在设置页卡片上。容器变形的正确揭示方式是
+ * 边界裁剪：容器边界从卡片长到整页，内容始终不透明，被边界一点点放出来。
+ *
+ * 其余类型（Title、Background）两端内容不同且面积小，需要淡过去。
+ *
+ * 这也是这里一律用 sharedBounds 而不是 sharedElement 的代价与补偿：sharedElement 天生不淡，
+ * 但同时锁死了 RemeasureToBounds；sharedBounds 给了 resizeMode，进出动画就得自己关掉。
+ */
+private fun SharedElementType.defaultEnter(): EnterTransition = when (this) {
+    SharedElementType.Image, SharedElementType.Icon, SharedElementType.Bounds -> EnterTransition.None
+    else -> AppSharedEnter
+}
+
+private fun SharedElementType.defaultExit(): ExitTransition = when (this) {
+    SharedElementType.Image, SharedElementType.Icon, SharedElementType.Bounds -> ExitTransition.None
+    else -> AppSharedExit
+}
+
+/**
+ * 按部件类型推导 resizeMode。
+ *
+ * 默认一律 scaleToBounds：它只在 lookahead 尺寸上量一次，之后靠 graphicsLayer 缩放，
+ * 而 RemeasureToBounds 会用逐帧的 `Constraints.fixed` 重新测量子树。后者对内部含有派生自尺寸的
+ * 状态的组件（分块解码的图片、按视口生成的网格）是灾难，一次转场里能触发几十次重新计算。
+ *
+ * 例外是「卡片放大成整页」这一类容器变形：scaleToBounds 会把内容跟着容器一起缩放绘制，一行标题
+ * 先被压扁再弹开。那种场合在调用点显式传 `RemeasureToBounds`，并给容器里的内容挂
+ * [appSkipToLookaheadSize] —— 容器自己逐帧按动画尺寸重新测量，内容按落定尺寸布局一次，于是内容
+ * 全程保持最终的位置与字号，只是被容器边界裁剪着逐渐露出，也就是 Material container transform
+ * 的揭示效果。目前统计页是这条路的试点，其余整页入口仍走默认值。
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+private fun SharedElementType.defaultResizeMode(): SharedTransitionScope.ResizeMode = when (this) {
+    // 容器变形从顶部揭示：整页内容的视觉重心在顶部，从中心揭示会让顶栏先被压扁再弹开。
+    SharedElementType.Bounds ->
+        SharedTransitionScope.ResizeMode.scaleToBounds(ContentScale.FillWidth, Alignment.TopCenter)
+    SharedElementType.Image ->
+        SharedTransitionScope.ResizeMode.scaleToBounds(ContentScale.Crop, Alignment.Center)
+    SharedElementType.Title ->
+        SharedTransitionScope.ResizeMode.scaleToBounds(ContentScale.FillWidth, Alignment.CenterStart)
+    SharedElementType.Icon ->
+        SharedTransitionScope.ResizeMode.scaleToBounds(ContentScale.Fit, Alignment.Center)
+    SharedElementType.Background ->
+        SharedTransitionScope.ResizeMode.scaleToBounds(ContentScale.FillBounds, Alignment.Center)
+}
+
+/** 圆角动画与边界动画同规格：圆角先于边界摊平会让方角提前露出来。 */
+private val AppCornerSpec: FiniteAnimationSpec<Dp> = spring(
+    dampingRatio = 1f,
+    stiffness = 380f,
+    visibilityThreshold = Dp.VisibilityThreshold,
+)
+
+/**
+ * 共享边界修饰符：全 App 的共享元素都走这一个入口。
+ *
+ * 一律用 sharedBounds 而不是 sharedElement —— 后者恒等于 RemeasureToBounds，没有 resizeMode 参数，
+ * 无法把逐帧重新测量换成「量一次 + graphicsLayer 缩放」。
+ *
+ * @param key 为 null 表示本次不参与转场，原样返回。
+ * @param animatedVisibilityScope 默认取当前导航目的地的作用域。全屏查看器这类自带 AnimatedVisibility
+ *   的场合必须显式传自己的作用域，否则配对到的是页面进出而不是查看器开合。
+ * @param corner 转场期间的圆角，null 表示不接管裁剪、沿用父级。
+ * @param resizeMode 默认按 [SharedKey.type] 推导，只有配对两端宽高比不同时才需要覆盖。
+ * @param enter 默认按 [SharedKey.type] 推导，同图配对不淡入。
+ * @param exit 默认按 [SharedKey.type] 推导，同图配对不淡出。
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+internal fun Modifier.appSharedBounds(
+    key: SharedKey?,
+    animatedVisibilityScope: AnimatedVisibilityScope? = LocalAnimatedVisibilityScope.current,
+    corner: SharedCorner? = null,
+    resizeMode: SharedTransitionScope.ResizeMode? = null,
+    enter: EnterTransition? = null,
+    exit: ExitTransition? = null,
+): Modifier {
+    val scope = LocalSharedTransitionScope.current
+    if (key == null || scope == null || animatedVisibilityScope == null ||
+        !LocalSharedTransitionEnabled.current
+    ) {
+        return this
+    }
+    // 同一个圆角值同时喂 clip 与 OverlayClip：转场期元素被抬到 overlay 里绘制，
+    // 两处裁剪必须同形状，否则落地那一帧圆角会跳一下。
+    val shape = corner?.let { c ->
+        val radius = animatedVisibilityScope.transition.animateDp(
+            transitionSpec = { AppCornerSpec },
+            label = "sharedCorner",
+        ) { state ->
+            when (state) {
+                EnterExitState.Visible -> c.rest
+                EnterExitState.PreEnter, EnterExitState.PostExit -> c.peer
+            }
+        }.value
+        RoundedCornerShape(radius)
+    }
+    val mode = resizeMode ?: key.type.defaultResizeMode()
+    val enterSpec = enter ?: key.type.defaultEnter()
+    val exitSpec = exit ?: key.type.defaultExit()
+    return with(scope) {
+        val state = rememberSharedContentState(key = key)
+        val bounds = if (shape == null) {
+            this@appSharedBounds.sharedBounds(
+                state,
+                animatedVisibilityScope = animatedVisibilityScope,
+                enter = enterSpec,
+                exit = exitSpec,
+                boundsTransform = AppBoundsTransform,
+                resizeMode = mode,
+            )
+        } else {
+            this@appSharedBounds.sharedBounds(
+                state,
+                animatedVisibilityScope = animatedVisibilityScope,
+                enter = enterSpec,
+                exit = exitSpec,
+                boundsTransform = AppBoundsTransform,
+                resizeMode = mode,
+                clipInOverlayDuringTransition = OverlayClip(shape),
+            )
+        }
+        if (shape == null) bounds else bounds.clip(shape)
+    }
+}
+
+/**
+ * 当前是否有共享元素转场在进行。
+ *
+ * 用来让转场期的高开销效果暂时让位：haze 实时采样、Backdrop 快照这类东西每帧都要重新取一遍背景，
+ * 而容器变形恰好是每帧背景都在变的时刻，两件事叠在一起正是掉帧最集中的地方。
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+internal fun isAppSharedTransitionActive(): Boolean {
+    val scope = LocalSharedTransitionScope.current ?: return false
+    return LocalSharedTransitionEnabled.current && scope.isTransitionActive
+}
+
+/**
+ * 让子树按 lookahead（落定后）的尺寸布局，转场期只在绘制上缩放。
+ *
+ * 容器变形的必需搭档：容器侧用 RemeasureToBounds 逐帧按动画尺寸重新测量，内容侧挂上这个修饰符
+ * 就只按落定尺寸布局一次，全程保持最终的位置与字号，被容器边界裁剪着逐渐露出。少了它，页面里的
+ * LazyColumn 会跟着容器逐帧变宽，一次转场里重复决定「哪些项可见、每项多宽」几十遍，文字也会跟着
+ * 重排。必须挂在共享边界节点的内侧。
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+internal fun Modifier.appSkipToLookaheadSize(): Modifier {
+    val scope = LocalSharedTransitionScope.current
+    if (scope == null || !LocalSharedTransitionEnabled.current) return this
+    return with(scope) { this@appSkipToLookaheadSize.skipToLookaheadSize() }
+}
+
+/** chrome 入场：等容器基本落位再淡入。 */
+private val AppChromeEnter: EnterTransition =
+    fadeIn(tween(durationMillis = 180, delayMillis = 250, easing = LinearOutSlowInEasing))
+
+/**
+ * chrome 退场：几乎立即消失。
+ *
+ * 返回时容器要收回成一张卡片，顶栏若还跟着一起缩，用户会看到标题和按钮被压扁。
+ */
+private val AppChromeExit: ExitTransition = fadeOut(tween(durationMillis = 20))
+
+/**
+ * 延迟入场的 chrome，并把自己抬进共享转场的 overlay 层。
+ *
+ * 用于覆盖在共享元素之上的 chrome，例如全屏图片查看器的关闭按钮和页码。转场期间被配对的元素
+ * 是画在 SharedTransitionScope 的 overlay 里的，普通兄弟节点无论 zIndex 多高都在它下面；
+ * 于是「图片飞到一半时关闭按钮被图片盖住」。[zIndexInOverlay] 取 1 即排在被配对元素之上。
+ *
+ * 页面级 chrome（统计页、榜单页的顶栏）不走这条路：整页容器变形时顶栏是容器的子节点，改为与
+ * 内容一样挂 [appSkipToLookaheadSize]，从第一帧就在最终位置上、跟着容器裁剪逐渐露出。延迟入场
+ * 会让容器长大的那段时间顶栏位置空着，落位时再整片闪出来。
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+internal fun Modifier.appSharedOverlayChrome(
+    animatedVisibilityScope: AnimatedVisibilityScope? = LocalAnimatedVisibilityScope.current,
+): Modifier {
+    val scope = LocalSharedTransitionScope.current
+    if (animatedVisibilityScope == null || scope == null || !LocalSharedTransitionEnabled.current) {
+        return this
+    }
+    return with(scope) {
+        with(animatedVisibilityScope) {
+            this@appSharedOverlayChrome
+                .animateEnterExit(enter = AppChromeEnter, exit = AppChromeExit)
+        // 位置参数就是 zIndexInOverlay；被配对元素的默认值是 0，取 1 即排在它之上。
+        }.renderInSharedTransitionScopeOverlay(1f)
+    }
+}
+
+/**
+ * 当前被全屏查看器打开的共享元素，未打开时为 null。
+ *
+ * 缩略图侧据此把自己置为「不可见」，保证同一 key 下同时只有一个 target。必须如此：缩略图侧挂的是
+ * NavHost 目的地的 AnimatedVisibilityScope，停在该页面期间恒为 Visible。若全屏侧打开时两侧同时是
+ * target，状态机会取「先注册」的缩略图作为目标边界提供者，打开时边界从全屏动到缩略图，方向反了，
+ * 观感上等于没有缩放动画。
+ */
+val LocalFullscreenSharedElement = compositionLocalOf<SharedKey?> { null }
+
+/**
+ * 缩略图/源侧修饰符：全屏查看器打开的正是本 key 时，本侧置为不可见。
+ *
+ * 走 caller-managed visibility 而不是 sharedBounds，因此没有 resizeMode 可选（API 不暴露该参数），
+ * 恒为逐帧重新测量。源侧尺寸小，且转场期的边界由目标侧提供，这个代价可以接受。
+ *
+ * @param corner 只取 [SharedCorner.rest]：本侧没有 EnterExitState 可驱动插值，圆角是静态的。
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+internal fun Modifier.appSharedSource(
+    key: SharedKey?,
+    corner: SharedCorner? = null,
+): Modifier {
+    val scope = LocalSharedTransitionScope.current
+    if (key == null || scope == null || !LocalSharedTransitionEnabled.current) return this
+    val openedKey = LocalFullscreenSharedElement.current
+    return with(scope) {
+        val state = rememberSharedContentState(key = key)
+        val shape = corner?.let { RoundedCornerShape(it.rest) }
+        if (shape == null) {
+            this@appSharedSource.sharedElementWithCallerManagedVisibility(
+                state,
+                visible = openedKey != key,
+                boundsTransform = AppBoundsTransform,
+            )
+        } else {
+            this@appSharedSource.sharedElementWithCallerManagedVisibility(
+                state,
+                visible = openedKey != key,
+                boundsTransform = AppBoundsTransform,
+                clipInOverlayDuringTransition = OverlayClip(shape),
+            )
+        }
+    }
+}

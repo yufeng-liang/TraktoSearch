@@ -2,15 +2,18 @@ package com.tracktosearch.ui.screen.markrecord
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -27,9 +30,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -37,6 +37,8 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -57,73 +59,82 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.testTag
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.ui.component.AppErrorState
-import com.tracktosearch.ui.component.GlassScene
-import com.tracktosearch.ui.component.NeumorphicIconButton
-import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.EmptyStateCard
+import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
+import com.tracktosearch.ui.component.NeumorphicFrostedSurface
+import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.ScrollToTopButton
-import com.tracktosearch.ui.navigation.DetailSeedStore
-import com.tracktosearch.ui.haptic.rememberAppHaptics
-import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropContentSource
-import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
-import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.hasListScrolled
+import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
+import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.navigation.DetailSeedStore
 import com.tracktosearch.ui.animation.EnterMode
 import com.tracktosearch.ui.animation.cardEnter
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.MarkRecordsEntryKey
+import com.tracktosearch.ui.component.SettingsEntryCardCorner
+import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.appSkipToLookaheadSize
+import com.tracktosearch.ui.component.isAppSharedTransitionActive
+import com.tracktosearch.ui.theme.GlassBorderDark
+import com.tracktosearch.ui.theme.GlassFillDark
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import dev.chrisbanes.haze.hazeSource
 import javax.inject.Inject
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
-import androidx.compose.runtime.saveable.listSaver
 
 /** 首屏骨架卡片数量：两列，铺满一屏左右即可，多了只是白耗合成 */
 private const val SKELETON_ITEM_COUNT = 8
@@ -141,7 +152,7 @@ class MarkRecordSessionViewModel @Inject constructor(
     val traktConnected: StateFlow<Boolean> = sessionModeManager.traktConnected
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun MarkRecordScreen(
     onBack: () -> Unit,
@@ -154,6 +165,9 @@ fun MarkRecordScreen(
     val traktConnected by sessionViewModel.traktConnected.collectAsStateWithLifecycle()
     val isDark = isAppDarkTheme()
     val haptics = rememberAppHaptics()
+    // 共享元素转场 scope（与设置页标记记录入口卡片配对）。本页没有 Scaffold，作用域自己从
+    // CompositionLocal 取，与 StatisticsScreen 的取法一致。
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val hazeState = remember { HazeState() }
     val hazeStyle = HazeMaterials.thin()
     val listState = rememberLazyGridState()
@@ -268,9 +282,24 @@ fun MarkRecordScreen(
         }
     }
 
+    // 与设置页标记记录入口卡片配对的是整页，而不是顶栏：卡片放大成页面、返回时收回成卡片。
+    // 卡片侧圆角 SettingsEntryCardCorner，页面侧是 0，转场期间在两者之间插值。
+    val transitionActive = isAppSharedTransitionActive()
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .appSharedBounds(
+                key = MarkRecordsEntryKey,
+                animatedVisibilityScope = animatedVisibilityScope,
+                corner = SharedCorner.flattenFrom(SettingsEntryCardCorner),
+                // 容器变形要的是「内容不变形、被裁剪逐渐露出」，默认的 scaleToBounds 会把内容
+                // 跟着容器一起缩放绘制。逐帧重测的代价由内容侧的 appSkipToLookaheadSize 挡掉。
+                resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+            )
+            // 页面底色挪进共享节点内侧：容器变形靠裁剪揭示，容器里必须是不透明的，
+            // 否则变形期这一片能直接看到下面那一页 —— 打开的瞬间设置页内容会叠在本页上。
+            // 底色跟着动画边界一起长大，且被上面那层圆角动画裁剪，落定后与原来逐像素相同。
+            .background(MaterialTheme.colorScheme.background)
             .onGloballyPositioned { rootPositionInRoot = it.positionInRoot() }
             .pointerInput(searchExpanded) {
                 if (!searchExpanded) return@pointerInput
@@ -289,6 +318,9 @@ fun MarkRecordScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                // 整页参与容器变形时按落定尺寸布局：否则网格会跟着容器逐帧变宽，
+                // 一次转场里重复决定「哪些项可见、每项多宽」几十遍
+                .appSkipToLookaheadSize()
                 .hazeSource(state = hazeState)
                 .backdropContentSource(),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -332,8 +364,14 @@ fun MarkRecordScreen(
                             posterColorExtractor = viewModel.posterColorExtractor,
                             onClick = {
                                 val onClick = if (item.mediaType == "movie") onMovieClick else onShowClick
-                                // 标记记录卡片已有海报与年份，交给详情页做首帧种子
-                                DetailSeedStore.remember(item.tmdbId, item.posterUrl, item.year)
+                                // 标记记录卡片已有海报与年份，交给详情页做首帧种子；
+                                // origin 让详情页拼出与本行海报相同的共享元素 key
+                                DetailSeedStore.remember(
+                                    item.tmdbId,
+                                    item.posterUrl,
+                                    item.year,
+                                    origin = markRecordOrigin(item)
+                                )
                                 onClick(
                                     item.traktId, item.tmdbId,
                                     item.displayTitle.ifBlank { item.title },
@@ -417,14 +455,18 @@ fun MarkRecordScreen(
         }
 
         // ========== 吸顶栏（Blur + 半透明背景） ==========
+        // 顶栏不参与配对：来源侧那张卡片上没有对应的标题栏，硬配对会把一行标题从卡片尺寸拉过来。
+        // 但它必须从第一帧就在，与网格一样按落定尺寸布局，跟着容器裁剪逐渐露出；延迟入场会让容器
+        // 长大的那段时间顶栏位置空着，落位时再整片闪出来。转场期间仍让 haze 停采样。
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .appSkipToLookaheadSize()
                 .hazeTopBar(
                     state = hazeState,
                     style = hazeStyle,
                     blurRadius = 24.dp,
-                    isContentUnderTopBar = hasContentUnderTopBar,
+                    isContentUnderTopBar = if (transitionActive) false else hasContentUnderTopBar,
                     scene = markRecordGlassScene
                 )
                 // 拦截点击：顶栏覆盖可滚动网格，不消费会让点击穿透到下方列表项
@@ -483,8 +525,8 @@ fun MarkRecordScreen(
                                     modifier = Modifier.fillMaxSize(),
                                     isDark = isDark,
                                     shape = RoundedCornerShape(21.dp),
-                                    backgroundColor = if (isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.55f),
-                                    borderColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.75f),
+                                    backgroundColor = if (isDark) GlassFillDark else Color.White.copy(alpha = 0.55f),
+                                    borderColor = if (isDark) GlassBorderDark else Color.White.copy(alpha = 0.75f),
                                     elevation = 4.dp,
                                     blurRadius = 16.dp,
                                     hazeState = hazeState,

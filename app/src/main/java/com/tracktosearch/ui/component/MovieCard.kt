@@ -80,6 +80,14 @@ fun MovieCard(
     posterUrl: String?,
     tmdbId: Int,
     onClick: () -> Unit,
+    /**
+     * 本卡片所属的列表，见 [SharedOrigin]。
+     *
+     * 与 tmdbId 一起构成海报的共享元素 key，详情页从 [DetailSeedStore] 读到同一个值才配对。
+     * 同一屏里两个列表都有这部片子时，靠这个值区分点的是哪一张，因此每个调用点都要显式给出，
+     * 没有默认值。
+     */
+    origin: String,
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
     isInWatchlist: Boolean = false,
@@ -93,24 +101,12 @@ fun MovieCard(
      */
     posterShimmer: ShimmerState? = null
 ) {
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-    // 当前活跃海报 tmdbId(-1=都不启用 / 具体值=只有匹配的启用)
-    val activePosterTmdbId = LocalActivePosterTmdbId.current
-    val setActivePosterTmdbId = LocalActivePosterClickSetter.current
-    // 当前活跃点击 token,每次点击递增;只有 token 匹配的卡片实例才启用 sharedElement
-    val activeClickToken = LocalActivePosterClickToken.current
-    // 记录"我自己被点击时"获得的 token
-    // 改用 remember(无 Saveable)：横竖屏配置变化后全部重新生成保持一致，避免旧 token 与 activeClickToken 不匹配导致共享元素转场飘错
-    var myClickToken by remember { mutableStateOf(0) }
-    // 只有"当前可见 tab"且"被用户点击激活"的海报才启用 sharedElement
-    // isCurrentTab 避免 HorizontalPager 常驻的非当前 tab 同 tmdbId 海报参与匹配
-    // clickToken 匹配避免同页面不同栏目下同 tmdbId 海报参与匹配(转场飘错根因)
-    val isCurrentTab = LocalIsCurrentTab.current
-    val enableShared = tmdbId == activePosterTmdbId
-        && isCurrentTab
-        && myClickToken != 0
-        && myClickToken == activeClickToken
+    // 只有被点过的卡片才挂共享元素修饰符。列表里每一格都挂的话，滚动时白付一份
+    // SharedContentState 与布局节点的开销，而其中至多一格会真的参与转场。
+    // 这个标记是卡片自己的局部状态，不是全局「当前活跃海报」：key 里已经带了 origin，
+    // 谁跟谁配对由 key 决定，不需要再比对点击顺序。
+    var clicked by remember { mutableStateOf(false) }
     val context = LocalContext.current
     // 通过 EntryPoint 获取 PosterColorExtractor 单例,用于提前提取海报主色写入缓存
     val posterColorExtractor = remember {
@@ -179,15 +175,15 @@ fun MovieCard(
         }
     }
 
-    // 包装点击回调:点击时记录当前海报为活跃状态,并获取新的 token
+    // 包装点击回调：登记本卡片参与转场，并把已渲染的海报/年份/来源交给详情页
     // remember 包裹避免每次重组创建新 lambda 实例,减少不必要 recomposition
-    val wrappedOnClick = remember(onClick, tmdbId, posterUrl, year) {
+    val wrappedOnClick = remember(onClick, tmdbId, posterUrl, year, origin) {
         {
             if (tmdbId > 0) {
-                myClickToken = setActivePosterTmdbId(tmdbId)
-                // 把卡片已渲染的海报/年份交给详情页做首帧种子：
-                // 发现页等栏目的海报来自 TMDB 列表接口，不会写入详情缓存，详情页 peek 落空
-                DetailSeedStore.remember(tmdbId, posterUrl, year)
+                clicked = true
+                // 发现页等栏目的海报来自 TMDB 列表接口，不会写入详情缓存，详情页 peek 落空；
+                // origin 让详情页拼出与本卡片相同的共享元素 key
+                DetailSeedStore.remember(tmdbId, posterUrl, year, origin)
             }
             onClick()
         }
@@ -237,25 +233,15 @@ fun MovieCard(
             } else {
                 Modifier
             }
-            val imageModifier = if (enableShared && sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-                with(sharedTransitionScope) {
-                    Modifier
-                        .sharedElement(
-                            rememberSharedContentState(key = "poster-$tmdbId"),
-                            animatedVisibilityScope = animatedVisibilityScope
-                        )
-                        .fillMaxWidth()
-                        .aspectRatio(2f / 3f)
-                        .clip(posterShape)
-                        .then(placeholderModifier)
-                }
-            } else {
-                Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(2f / 3f)
-                    .clip(posterShape)
-                    .then(placeholderModifier)
-            }
+            val imageModifier = Modifier
+                .appSharedBounds(
+                    key = if (clicked) posterSharedKey(tmdbId, origin) else null,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                )
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(posterShape)
+                .then(placeholderModifier)
 
             Box {
                 AsyncImage(

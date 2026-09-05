@@ -21,8 +21,14 @@ import androidx.compose.ui.text.rememberTextMeasurer
 
 /** 一颗珠子。 */
 internal sealed interface SwiftieBead {
-    /** 白色方形字母珠，正面印彩色字。 */
-    class Letter(val char: Char, val inkColor: Color) : SwiftieBead
+    /**
+     * 白色方形字母珠，正面印彩色字。
+     *
+     * [text] 是**一个字素簇**而不是一个 `Char`：昵称珠上可能是一个 emoji，
+     * 而 emoji 常常要好几个码点（见 [braceletNicknameTokens]）。彩色 emoji 自带颜色，
+     * 系统字体渲染时会忽略 [inkColor]。
+     */
+    class Letter(val text: String, val inkColor: Color) : SwiftieBead
 
     /** 半透明彩色圆珠。 */
     class Round(val color: Color) : SwiftieBead
@@ -122,17 +128,23 @@ private val HEART_BRUSH: Brush = Brush.radialGradient(
     radius = 0.85f
 )
 
-/** 把要用到的字符预排一遍。字母珠只有 `13 87 SWIFTIE` 这些字符，一次量完够用整条序列。 */
+/**
+ * 把要印在珠上的字预排一遍。
+ *
+ * **不指定 `fontFamily`**，所以走系统字体 —— 昵称珠上可能是中日韩文字或 emoji，而彩蛋
+ * 自带的那几个字体是按各自的字符子集化过的（`swiftie_script` 只有 `Taylor Swift` 加一句
+ * 文案的那些字母），拿它们排用户输入只会得到一串豆腐块。
+ */
 @Composable
-internal fun rememberBeadLetterLayouts(chars: String): Map<Char, TextLayoutResult> {
+internal fun rememberBeadLetterLayouts(texts: List<String>): Map<String, TextLayoutResult> {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    return remember(chars, measurer, density) {
+    return remember(texts, measurer, density) {
         val style = TextStyle(
             fontSize = with(density) { BEAD_LETTER_REFERENCE_PX.toSp() },
             fontWeight = FontWeight.Bold
         )
-        chars.toSet().associateWith { char -> measurer.measure(char.toString(), style) }
+        texts.toSet().associateWith { text -> measurer.measure(text, style) }
     }
 }
 
@@ -154,7 +166,7 @@ internal fun DrawScope.drawSwiftieBead(
     size: Float,
     rotationDeg: Float,
     highlight: Offset,
-    letterLayouts: Map<Char, TextLayoutResult>,
+    letterLayouts: Map<String, TextLayoutResult>,
     shadowBrush: Brush,
     bodyBrush: Brush
 ) {
@@ -166,7 +178,7 @@ internal fun DrawScope.drawSwiftieBead(
     rotate(degrees = rotationDeg, pivot = center) {
         when (bead) {
             is SwiftieBead.Letter ->
-                drawLetterBead(bead, center, size, highlight, letterLayouts[bead.char], bodyBrush)
+                drawLetterBead(bead, center, size, highlight, letterLayouts[bead.text], bodyBrush)
             is SwiftieBead.Round -> drawRoundBead(center, size, highlight, bodyBrush)
             SwiftieBead.Heart -> drawHeartBead(center, size, highlight, bodyBrush)
         }

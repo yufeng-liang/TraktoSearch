@@ -47,6 +47,22 @@ object SwiftieTimeline {
     /** 加时的两张：索引 0 = Taylor Swift，6 = Lover。 */
     val ANCHOR_INDICES: Set<Int> = setOf(0, 6)
 
+    /** TTPD 在 [ERA_TRACK_COUNTS] 里的位置。打字机那一拍要按索引认人。 */
+    const val TTPD_INDEX: Int = 10
+
+    /**
+     * TTPD 段开头留给打字机独奏的前摇。
+     *
+     * 这 1400ms 里屏幕上**没有卡片**：背景那台打字机自己敲字、滑架逐格右移，
+     * 1250ms 一次回车横扫，然后纸才从滚筒出来 —— 卡片就是那张纸（见 `SwiftieEraCard`
+     * 的 `feedProgress`）。没有这一拍，纸是「凭空长出来的」，打字机白画。
+     *
+     * 加在账本上而不是从 TTPD 自己的 5000ms 静置里挪：静置那段是 31 行读完之后
+     * 留给眼睛的，挪走就变成「行刚点完就收卡」。代价是唯一的弹性段
+     * [FINAL_HOLD_MS] 从 6090ms 缩到 4690ms（需求方已确认）。
+     */
+    const val TTPD_PREROLL_MS: Long = 1_400L
+
     /**
      * 12 张专辑曲目数，顺序与 Eras 一致。
      *
@@ -57,9 +73,10 @@ object SwiftieTimeline {
 
     fun cardDurationMs(index: Int, trackCount: Int): Long =
         CARD_BASE_MS + CARD_PER_TRACK_MS * trackCount +
-            if (index in ANCHOR_INDICES) CARD_ANCHOR_BONUS_MS else 0L
+            (if (index in ANCHOR_INDICES) CARD_ANCHOR_BONUS_MS else 0L) +
+            (if (index == TTPD_INDEX) TTPD_PREROLL_MS else 0L)
 
-    /** 12 张卡片合计 96310ms。 */
+    /** 12 张卡片合计 97710ms。 */
     val ERAS_CARDS_MS: Long = ERA_TRACK_COUNTS
         .withIndex()
         .sumOf { (index, count) -> cardDurationMs(index, count) }
@@ -81,23 +98,23 @@ object SwiftieTimeline {
     const val ERAS_CARDS_START: Long = ERAS_INTRO_START + ERAS_INTRO_MS
 
     /**
-     * T99410：第 12 张卡片走完。
+     * T100810：第 12 张卡片走完。
      *
      * 与 [REWIND_START] **不再是同一个值** —— 终局插在两者之间，
      * 所以判「是否还在卡片段内」只能用这个常量。
      */
     val ERAS_CARDS_END: Long = ERAS_CARDS_START + ERAS_CARDS_MS
 
-    /** T99410–107410：签名逐段揭示。 */
+    /** T100810–108810：签名逐段揭示。 */
     val SIGNATURE_START: Long = ERAS_CARDS_END
     const val SIGNATURE_MS: Long = 8_000L
 
-    /** T107410–111910：手链弹性落下。 */
+    /** T108810–113310：手链弹性落下。 */
     val BRACELET_START: Long = SIGNATURE_START + SIGNATURE_MS
     const val BRACELET_MS: Long = 4_500L
 
     /**
-     * T111910–118000：定格合影，留出截图时间。
+     * T113310–118000：定格合影，留出截图时间。
      *
      * 这一段是账本里唯一的**弹性段**：前面各段都由内容决定长度，
      * 后面各段由配乐钉死，误差全落在这里。改曲目数只会让定格变长变短，

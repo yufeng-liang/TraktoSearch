@@ -67,7 +67,6 @@ import com.tracktosearch.ui.component.DiscoverModalBottomSheet
 import com.tracktosearch.ui.component.RatingBadge
 import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.YearBadge
-import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.haptic.HapticSemantic
@@ -514,7 +513,6 @@ internal fun TrendingListsAllSheet(
     onListClick: (listId: Int, listName: String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val isDark = isAppDarkTheme()
     DiscoverModalBottomSheet(
         onDismissRequest = onDismiss
     ) {
@@ -547,53 +545,15 @@ internal fun TrendingListsAllSheet(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 itemsIndexed(lists, key = { _, item -> item.list.ids.slug }, contentType = { _, _ -> "list" }) { _, listResponse ->
-                    val interactionSource = remember { MutableInteractionSource() }
-                    val isPressed by interactionSource.collectIsPressedAsState()
-                    val cardScale by animateFloatAsState(
-                        targetValue = if (isPressed) 0.98f else 1f,
-                        label = "sheet_list_card_scale"
+                    // 与发现页里的同一批卡片共用 TrendingListCard，规格必须一致。
+                    // 这一侧不挂 appSharedBounds：ModalBottomSheet 在自己的窗口里，配不上共享元素。
+                    TrendingListCard(
+                        title = listResponse.list.name,
+                        meta = stringResource(R.string.discover_list_meta, listResponse.list.item_count, listResponse.list.user?.username ?: "", listResponse.like_count),
+                        description = listResponse.list.description,
+                        onClick = { onListClick(listResponse.list.ids.trakt, listResponse.list.name) },
+                        modifier = Modifier.fillMaxWidth()
                     )
-                    AppVisualSurface(
-                        kind = VisualSurfaceKind.Content,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .scale(cardScale)
-                            .hapticClickable(
-                                interactionSource = interactionSource,
-                                indication = null,
-                                // 列表项进详情
-                                semantic = HapticSemantic.LIGHT_TAP,
-                                onClick = { onListClick(listResponse.list.ids.trakt, listResponse.list.name) }
-                            ),
-                        shape = RoundedCornerShape(18.dp),
-                        backgroundColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
-                        borderColor = if (isDark) MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.9f)
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                            Text(
-                                text = listResponse.list.name,
-                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = stringResource(R.string.discover_list_meta, listResponse.list.item_count, listResponse.list.user?.username ?: "", listResponse.like_count),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            if (listResponse.list.description.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = listResponse.list.description,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
                 }
             }
         }

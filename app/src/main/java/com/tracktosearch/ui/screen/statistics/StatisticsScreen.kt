@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.statistics
 import android.content.ClipData
 import android.content.Intent
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -85,6 +86,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -99,8 +102,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.hasListScrolled
@@ -111,6 +112,13 @@ import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
+import com.tracktosearch.ui.component.SettingsEntryCardCorner
+import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.StatisticsEntryKey
+import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.appSkipToLookaheadSize
+import com.tracktosearch.ui.component.isAppSharedTransitionActive
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -136,7 +144,6 @@ fun StatisticsScreen(
     var showInfoDialog by remember { mutableStateOf(false) }
     val haptics = rememberAppHaptics()
     // 共享元素转场 scope(与设置页观看统计卡片配对)
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
     LaunchedEffect(Unit) {
@@ -230,13 +237,36 @@ fun StatisticsScreen(
     }
 
     Scaffold(
+        modifier = Modifier.testTag("statistics_screen"),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        // 容器色置透明、底色改由下面那个共享节点自己画，理由见该处注释。
+        // contentColor 显式写成 onBackground：Scaffold 默认取 contentColorFor(containerColor)，
+        // 而 contentColorFor(Transparent) 是 Unspecified，会让整页文字颜色退回外层 LocalContentColor。
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
+        // 与设置页观看统计入口卡片配对的是整页，而不是顶栏：卡片放大成页面、返回时收回成卡片。
+        // 卡片侧圆角 SettingsEntryCardCorner，页面侧是 0，转场期间在两者之间插值。
+        val transitionActive = isAppSharedTransitionActive()
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .appSharedBounds(
+                    key = StatisticsEntryKey,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    corner = SharedCorner.flattenFrom(SettingsEntryCardCorner),
+                    // 容器变形要的是「内容不变形、被裁剪逐渐露出」，所以这里不能用默认的
+                    // scaleToBounds：那会把顶栏和列表跟着容器一起缩放绘制，一行标题先被压扁再弹开。
+                    // 逐帧重新测量的代价由内容侧的 appSkipToLookaheadSize 挡掉，只有容器自己重测。
+                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+                )
+                // 页面底色挪进共享节点内侧，并把 Scaffold 的容器色置透明。
+                // 否则 Scaffold 会在共享节点之外先铺满一整屏不透明底色，转场第一帧整屏就已经是本页的背景，
+                // 「卡片长成页面」退化成「页面已经在了，只是内容从一个小矩形里长出来」。
+                // 挪进来之后底色跟着动画边界一起长大，且被上面那层圆角动画裁剪，落定后与原来逐像素相同。
+                .background(MaterialTheme.colorScheme.background)
         ) {
             val listState = rememberLazyListState()
             val hasContentUnderTopBar by remember {
@@ -300,6 +330,9 @@ fun StatisticsScreen(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
+                        // 容器变形的必需搭档：容器逐帧按动画尺寸重新测量，列表按落定尺寸布局一次，
+                        // 于是内容全程保持最终位置与字号，被容器边界裁剪着逐渐露出。
+                        .appSkipToLookaheadSize()
                         .hazeSource(state = statsHazeState)
                         .backdropSource(),
                     contentPadding = PaddingValues(
@@ -446,24 +479,19 @@ fun StatisticsScreen(
             }
             }
             // Haze模糊渐变TopAppBar（含状态栏）
-            // 「标题+返回箭头」整体与设置页观看统计入口配对（sharedBounds）
-            val headerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-                with(sharedTransitionScope) {
-                    Modifier.sharedBounds(
-                        sharedContentState = rememberSharedContentState(key = "settings-statistics-entry"),
-                        animatedVisibilityScope = animatedVisibilityScope
-                    )
-                }
-            } else { Modifier }
+            // 顶栏不参与配对：来源侧那张卡片上没有对应的标题栏，硬配对会把一行标题从卡片尺寸拉过来。
+            // 但它必须从第一帧就在，否则容器长大的那段时间整屏只有一块底色，落位时内容再整片闪出来。
+            // 与列表一样按落定尺寸布局，跟着容器裁剪逐渐露出；转场期间让 haze 停采样，
+            // 避免每帧背景都在变时还做实时模糊。
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(headerModifier)
+                    .appSkipToLookaheadSize()
                     .hazeTopBar(
                         state = statsHazeState,
                         style = statsHazeStyle,
-                        blurRadius = 24.dp,
-                        isContentUnderTopBar = hasContentUnderTopBar,
+                        blurRadius = TopBarBackdropBlurRadius,
+                        isContentUnderTopBar = hasContentUnderTopBar && !transitionActive,
                         scene = statisticsGlassScene
                     )
                     .clickable(enabled = false, onClick = {})

@@ -51,10 +51,76 @@ class AiModelsTest {
     }
 
     @Test
+    fun activateRequest_leavesOutTheAudioFieldWhenNothingIsUploaded() {
+        // 网关把"报文里出现 audioDataUrl"当成带了音频，显式 null 会被判成非法音频（400 INVALID_AUDIO），
+        // 语音激活（本地识别后换文字激活）与文字兜底两条路都要靠这个字段不出现才能通过。
+        val body = Json { encodeDefaults = true }
+            .encodeToJsonElement(
+                AiActivateRequest.serializer(),
+                AiActivateRequest(characterId = "usagi", spokenName = "乌萨奇", sessionId = "sprite-session")
+            )
+            .jsonObject
+
+        assertThat(body.keys).doesNotContain("audioDataUrl")
+        assertThat(body["spokenName"]?.jsonPrimitive?.content).isEqualTo("乌萨奇")
+        assertThat(body["sessionId"]?.jsonPrimitive?.content).isEqualTo("sprite-session")
+    }
+
+    @Test
+    fun activateRequest_keepsTheAudioFieldWhenAudioIsUploaded() {
+        val body = Json { encodeDefaults = true }
+            .encodeToJsonElement(
+                AiActivateRequest.serializer(),
+                AiActivateRequest(characterId = "usagi", audioDataUrl = "data:audio/wav;base64,AA==")
+            )
+            .jsonObject
+
+        assertThat(body["audioDataUrl"]?.jsonPrimitive?.content).isEqualTo("data:audio/wav;base64,AA==")
+    }
+
+    @Test
     fun ttsScenes_matchWorkerContract() {
         assertThat(AiTtsScene.entries.map { it.name }).containsExactly(
             "AUDITION", "ACTIVATION_ACK", "GREETING"
         ).inOrder()
+    }
+
+    @Test
+    fun characterDto_usesPreviewTextWhenLegacyAuditionTextIsMissing() {
+        val character = AiCharacterDto(
+            id = "usagi",
+            name = "乌萨奇",
+            activationWord = "乌萨奇",
+            isAvailable = true,
+            previewText = "服务端试听文案"
+        ).toDomain()
+
+        assertThat(character.auditionText).isEqualTo("服务端试听文案")
+    }
+
+    @Test
+    fun characterDto_fallsBackToCatalogAuditionTextWhenBothRemoteFieldsAreMissing() {
+        val character = AiCharacterDto(
+            id = "usagi",
+            name = "乌萨奇",
+            activationWord = "乌萨奇",
+            isAvailable = true
+        ).toDomain()
+
+        assertThat(character.auditionText)
+            .isEqualTo(AiCharacterCatalog.all.single { it.id == "usagi" }.auditionText)
+    }
+
+    @Test
+    fun characterDto_keepsAuditionTextEmptyWhenUnknownCharacterHasNoRemoteText() {
+        val character = AiCharacterDto(
+            id = "unknown",
+            name = "未知角色",
+            activationWord = "未知角色",
+            isAvailable = true
+        ).toDomain()
+
+        assertThat(character.auditionText).isEmpty()
     }
 
     @Test

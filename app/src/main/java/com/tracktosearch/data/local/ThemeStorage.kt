@@ -1,6 +1,7 @@
 package com.tracktosearch.data.local
 
 import android.content.Context
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -92,12 +93,21 @@ class ThemeStorage private constructor(
         }
     }
 
+    /** 冷启动同步读取已持久化的主题模式（等待 DataStore 首值加载完成）。 */
+    suspend fun readThemeModeSnapshot(): String {
+        initializationComplete.await()
+        return _themeMode.value
+    }
+
     suspend fun setThemeMode(mode: String) {
         initializationComplete.await()
         dataStore.edit { prefs ->
             prefs[KEY_THEME_MODE] = mode
         }
         _themeMode.value = mode
+        // App 内主题模式联动系统 uiMode（API 31+ 内部走 UiModeManager.setApplicationNightMode），
+        // 让下次冷启动时系统 Splash 直接按 app 设置选择 values/values-night 资源。
+        applyThemeModeToSystem(mode)
     }
 
     suspend fun setAccentColor(accent: MonetAccent?) {
@@ -166,12 +176,21 @@ class ThemeStorage private constructor(
         return prefs[KEY_MESH_PRESET] ?: MeshPreset.BLOOM.name
     }
 
+    /**
+     * 存的是枚举名字符串，所以删枚举项会读到认不出的名字。
+     *
+     * [RETIRED_ACCENTS] 把删掉的色调映射到色相最近的幸存者（差 2°-9°，
+     * 用户基本看不出换了），而不是一律掉回默认的复古票根 ——
+     * 从「麦田金黄」跳到棕色是能一眼看出来的，从它跳到「干草堆金」不会。
+     * 迁移是静默的，不写回存储：下次用户主动改色调时自然会覆盖掉旧值。
+     */
     private fun decodeAccentName(name: String?): MonetAccent? {
         return when (name) {
             DYNAMIC_ACCENT -> null
             null -> MonetAccent.VINTAGE_TICKET
-            else -> runCatching { MonetAccent.valueOf(name) }
-                .getOrElse { MonetAccent.VINTAGE_TICKET }
+            else -> RETIRED_ACCENTS[name]
+                ?: runCatching { MonetAccent.valueOf(name) }
+                    .getOrElse { MonetAccent.VINTAGE_TICKET }
         }
     }
 
@@ -188,6 +207,22 @@ class ThemeStorage private constructor(
     }
 
     companion object {
+        /**
+         * 把 app 内主题模式应用到系统 uiMode，让系统 Splash（starting window）在冷启动时
+         * 按 app 自己的深浅设置选资源，而不是只看系统夜间模式。
+         *
+         * dark/light 会覆盖 app 进程的 uiMode（API 31+ 由 AppCompat 走
+         * UiModeManager.setApplicationNightMode），system 则恢复跟随系统。
+         */
+        fun applyThemeModeToSystem(mode: String) {
+            val appCompatMode = when (mode) {
+                MODE_DARK -> AppCompatDelegate.MODE_NIGHT_YES
+                MODE_LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+                else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+            }
+            AppCompatDelegate.setDefaultNightMode(appCompatMode)
+        }
+
         const val MODE_SYSTEM = "system"
         const val MODE_DARK = "dark"
         const val MODE_LIGHT = "light"
@@ -199,5 +234,17 @@ class ThemeStorage private constructor(
         private val KEY_CUSTOM_ACCENT_ARGB = longPreferencesKey("custom_accent_argb")
         private val KEY_MESH_PRESET = stringPreferencesKey("mesh_preset")
         private val KEY_MESH_ENABLED = booleanPreferencesKey("mesh_enabled")
+
+        /**
+         * 已下线的色调 -> 色相最近的幸存者。见 [decodeAccentName]。
+         *
+         * 这三个当初是重复色：括号里是删除前后两者的 Lab 色相差，
+         * 同彩度同明度加上这个色差，肉眼分不出来，所以迁移过去不算换主题。
+         */
+        private val RETIRED_ACCENTS = mapOf(
+            "WHEAT_FIELD" to MonetAccent.HAYSTACK,             // 82° -> 91°
+            "ROUEN_CATHEDRAL" to MonetAccent.WATER_LILY,       // 302° -> 304°
+            "WATER_LILY_GREEN" to MonetAccent.JAPANESE_BRIDGE, // 154° -> 152°
+        )
     }
 }

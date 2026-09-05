@@ -583,7 +583,7 @@ fun DoubanSpiderTestScreen(
                                 selected = uiState.urlPreset == UrlPreset.ITEM,
                                 border = if (uiState.urlPreset == UrlPreset.ITEM) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                 colors = FilterChipDefaults.filterChipColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                                     labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                     selectedContainerColor = MaterialTheme.colorScheme.primary,
                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -595,7 +595,7 @@ fun DoubanSpiderTestScreen(
                                 selected = uiState.urlPreset == UrlPreset.USER_HOME,
                                 border = if (uiState.urlPreset == UrlPreset.USER_HOME) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                 colors = FilterChipDefaults.filterChipColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                                     labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                     selectedContainerColor = MaterialTheme.colorScheme.primary,
                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -630,7 +630,7 @@ fun DoubanSpiderTestScreen(
                                 selected = uiState.ua == TestUa.PC,
                                 border = if (uiState.ua == TestUa.PC) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                 colors = FilterChipDefaults.filterChipColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                                     labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                     selectedContainerColor = MaterialTheme.colorScheme.primary,
                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -642,7 +642,7 @@ fun DoubanSpiderTestScreen(
                                 selected = uiState.ua == TestUa.MOBILE,
                                 border = if (uiState.ua == TestUa.MOBILE) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                 colors = FilterChipDefaults.filterChipColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                                     labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                     selectedContainerColor = MaterialTheme.colorScheme.primary,
                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -732,7 +732,7 @@ fun DoubanSpiderTestScreen(
                                 selected = uiState.markRemoveMode == "web_remove",
                                 border = if (uiState.markRemoveMode == "web_remove") BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                 colors = FilterChipDefaults.filterChipColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                                     labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                     selectedContainerColor = MaterialTheme.colorScheme.primary,
                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -746,7 +746,7 @@ fun DoubanSpiderTestScreen(
                                 selected = uiState.markRemoveMode == "j_remove",
                                 border = if (uiState.markRemoveMode == "j_remove") BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                 colors = FilterChipDefaults.filterChipColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                                     labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                     selectedContainerColor = MaterialTheme.colorScheme.primary,
                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -905,7 +905,7 @@ fun DoubanSpiderTestScreen(
                                     selected = selected,
                                     border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                     colors = FilterChipDefaults.filterChipColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                                         labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                         selectedContainerColor = MaterialTheme.colorScheme.primary,
                                         selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -1027,7 +1027,7 @@ fun DoubanSpiderTestScreen(
                                 selected = uiState.recommendType == "movie",
                                 border = if (uiState.recommendType == "movie") BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                 colors = FilterChipDefaults.filterChipColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                                     labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                     selectedContainerColor = MaterialTheme.colorScheme.primary,
                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -1041,7 +1041,7 @@ fun DoubanSpiderTestScreen(
                                 selected = uiState.recommendType == "tv",
                                 border = if (uiState.recommendType == "tv") BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                 colors = FilterChipDefaults.filterChipColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                                     labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                     selectedContainerColor = MaterialTheme.colorScheme.primary,
                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimary

@@ -4,6 +4,15 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -26,22 +35,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentWidth
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.floatingGlassControlShadow
-import com.tracktosearch.ui.component.neumorphicOuterShadow
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.neumorphicOuterShadow
 import com.tracktosearch.ui.component.rememberGlassSelectionBounceScale
+import com.tracktosearch.ui.theme.GlassFillDark
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import dev.chrisbanes.haze.HazeState
@@ -123,7 +124,7 @@ internal fun WatchlistModeSelector(
             elevation = 7.dp,
             blurRadius = 16.dp,
             shadowOffset = 7.dp,
-            backgroundColor = if (isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.35f),
+            backgroundColor = if (isDark) GlassFillDark else Color.White.copy(alpha = 0.35f),
             borderColor = if (isDark) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.72f),
             darkShadowAlpha = if (isDark) 0.42f else 0.22f,
             lightShadowAlpha = if (isDark) 0.06f else 0.32f,
@@ -166,7 +167,7 @@ internal fun WatchlistModeSelector(
                 .height(42.dp)
                 // 未选中项底色与 BLUR 圆形按钮内部 blurFill 一致（浅色 White 0.72）
                 .background(
-                    if (isDark) Color.White.copy(alpha = 0.10f)
+                    if (isDark) GlassFillDark
                     else Color.White.copy(alpha = 0.72f)
                 )
                 .padding(horizontal = 4.dp, vertical = 3.dp),

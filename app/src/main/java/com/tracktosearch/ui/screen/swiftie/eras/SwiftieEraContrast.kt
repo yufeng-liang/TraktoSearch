@@ -36,9 +36,13 @@ internal object SwiftieEraContrast {
      * 母题层在文字底下**成片覆盖**时的最大主色不透明度。
      *
      * 取的是「有面积的那些层」的上限，而不是全母题的单点最大值：
-     * folklore 的松树三角（`MOTIF_ALPHA × 1.6 = 0.32`，从卡片底边长到 30–70% 高）
-     * 与 Showgirl 的羽毛（同为 0.32，9 条 `0.026 × minDimension` 宽的粗线扫过右下）
-     * 是最狠的两个，Red 的针织横纹（0.20，14 行几乎铺满）紧随其后。
+     * folklore 的近景松林（`MOTIF_ALPHA × 1.5 = 0.30`，整片林子攒进一条 Path
+     * 一次画完，所以相邻两棵重叠也不会叠深）与 Showgirl 的羽轴（`× 1.6 = 0.32`，
+     * 9 条 `0.020 × minDimension` 宽的粗线扫过右下）是最狠的两个，
+     * Red 的针织横纹（0.20，14 行几乎铺满）紧随其后。
+     *
+     * 母题之上还有一层 `drawEraAtmosphere` 的光与颗粒，**它不进这个模型** ——
+     * 那一层只用白色，只会把底色提亮、把对比度往好的方向推，而这里要的是最坏情况。
      *
      * **不取 0.48。** 那个数来自 TTPD 的游标方块（`× 2.4`）、Lover 上浮的心
      * （`× 2.2`，边长只有 `0.03–0.055 × minDimension`）与 reputation 的蛇形曲线
@@ -158,6 +162,39 @@ internal object SwiftieEraContrast {
 
     /** 24 次二分把明度定位到 1/16777216，远细于 8bit 通道能表达的精度。 */
     private const val HSL_BISECTION_STEPS = 24
+
+    /**
+     * 把 [color] **提亮**到「以 [alpha] 压在 [background] 上后对比度 ≥ [target]」。
+     *
+     * [readable] 只会压暗 —— 那是给半透明白卡片用的。轴线、播放头旋钮与 TS1-12 标签
+     * 落在**页面背景的下缘**上，而 12 张舞台里末档底色是深色的占 10 张
+     * （reputation 直接是纯黑）。在那些底色上压暗等于让标签彻底消失，
+     * 所以这里朝 `1f` 方向二分明度。
+     *
+     * 无饱和度的主色（reputation 的 `#111111`）会提成浅灰 —— 那正是这张专辑的
+     * 报纸黑白气质，不算丢辨识度。
+     */
+    fun readableOnDark(
+        color: Color,
+        background: Color,
+        target: Float = AA_SMALL,
+        alpha: Float = 1f
+    ): Color {
+        if (contrastRatio(composite(color, alpha, background), background) >= target) return color
+        val (hue, saturation, lightness) = toHsl(color)
+        var lo = lightness
+        var hi = 1f
+        repeat(HSL_BISECTION_STEPS) {
+            val mid = (lo + hi) / 2f
+            val candidate = fromHsl(hue, saturation, mid)
+            if (contrastRatio(composite(candidate, alpha, background), background) >= target) {
+                hi = mid
+            } else {
+                lo = mid
+            }
+        }
+        return fromHsl(hue, saturation, hi)
+    }
 
     private data class Hsl(val hue: Float, val saturation: Float, val lightness: Float)
 

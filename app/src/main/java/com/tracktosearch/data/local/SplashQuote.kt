@@ -18,14 +18,26 @@ import javax.inject.Singleton
  *
  * 海报走 TMDB：[tmdbId] + [posterPath] 组合出网关地址，命中 App 已有的图片链路；
  * 存绝对 URL 的话第三方图源一改就全挂。
+ *
+ * 入库标准：1960 年以后首映/首播的影视。更早的作品台词大多经过几十年转述，
+ * 引文版本互相矛盾，逐条核到原片不现实。
  */
 @Serializable
 data class SplashQuote(
     val id: String,
     val year: Int,
+    /**
+     * TMDB 命名空间：电影 `movie`、剧集 `show`。
+     *
+     * [tmdbId] 在两个命名空间里各自编号，同一个数字在 `/movie/` 和 `/tv/` 下是两部
+     * 不同的作品，所以点进详情页必须带上这个字段。海报路径不分命名空间，取图不受影响。
+     *
+     * 默认电影：库里绝大多数条目是电影，逐条写一遍 `"mediaType": "movie"` 只是噪音。
+     */
+    val mediaType: String = MEDIA_TYPE_MOVIE,
     val tmdbId: Int,
     val posterPath: String,
-    /** 是否随 APK 内置了海报：随包的 5 条保证首次安装当天就有画面 */
+    /** 是否随 APK 内置了海报：随包的 9 条保证首次安装当天就有画面 */
     val bundled: Boolean = false,
     /**
      * 台词是否以英文原文示人。
@@ -43,6 +55,9 @@ data class SplashQuote(
      *
      * 关键词参照整部片的主旨提炼，不取自台词原文；中文限 2–4 字以便刻进方形印章，
      * 其余语言不限长度。
+     *
+     * 除四种界面语言外还有一个 [SEAL_LANG_ZH] 键，存中文关键词的繁体字形，只给印章用，
+     * 见 [sealKeywordFor]。
      */
     val keyword: Map<String, String> = emptyMap(),
 ) {
@@ -59,6 +74,21 @@ data class SplashQuote(
         keyword[lang] ?: keyword[FALLBACK_LANG] ?: ""
 
     /**
+     * 印章上刻的关键词：中文走繁体，其余语言与 [keywordFor] 相同。
+     *
+     * 篆刻里没有简体——印章是这套设计里唯一「刻」出来的东西，用简体字形会立刻塌成
+     * 一个普通标签。但界面正文和无障碍朗读仍走 [keywordFor]：读屏念的应该是界面语言，
+     * 日历格子上的词也得跟界面一致，所以繁体只用在印面上，不替换关键词本身。
+     *
+     * 繁体字形是逐条写定在 assets/quotes.json 里的，不在运行时查简繁字表：一对多的字
+     * （余/餘、后/後、里/裡、发/發、尽/盡、游/遊、舍/捨…）选哪个得看词义，字表会在
+     * 「余情」「表里」这类词上给出错解，而这个错字是要印在图片上分享出去的。
+     * 繁体缺失时回落到简体，宁可字形不对也不能空着一枚印。
+     */
+    fun sealKeywordFor(lang: String): String =
+        if (lang == "zh") keyword[SEAL_LANG_ZH] ?: keywordFor(lang) else keywordFor(lang)
+
+    /**
      * 台词实际渲染用的语言。
      *
      * [preferOriginal] 的条目一律走英文；片名不跟着切，界面语言下的片名才认得出是哪部片。
@@ -68,6 +98,13 @@ data class SplashQuote(
 
     companion object {
         const val FALLBACK_LANG = "en"
+
+        /** [mediaType] 的两个取值，与 Routes.detailRoute 的 type 参数同名 */
+        const val MEDIA_TYPE_MOVIE = "movie"
+        const val MEDIA_TYPE_SHOW = "show"
+
+        /** [keyword] 里存繁体字形的键，只有中文有，只给印章用 */
+        const val SEAL_LANG_ZH = "zh-Hant"
 
         /** 台词库覆盖的语言 */
         private val SUPPORTED_LANGS = setOf("en", "zh", "ja", "ko")

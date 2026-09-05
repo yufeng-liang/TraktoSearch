@@ -48,6 +48,14 @@ internal data class SourceTagColors(
     val content: Color
 )
 
+// ====== 来源标签色板 ======
+// **不跟随强调色**：标签的作用是让同一条结果列表里不同来源一眼分得开，跟随强调色的话
+// 所有标签会变成同一色系。和 StatisticsPalette / DiscoverPalette 同一个取舍。
+//
+// 每个色都是「底色 + 配套文字色」成对给的，明暗两档各一套。改色时两个一起改并确认
+// 配对对比度 ≥ 4.5:1 —— 标签文字很小，现有 14 对最差的一对是 5.09:1，别把余量吃掉。
+// 三个已知来源各自固定一对，其余来源按名字 hash 落到 4 组通用配色上。
+
 private val lightCustomSourceTagColors = listOf(
     SourceTagColors(Color(0xFFD8C7A3), Color(0xFF5A4B2E)),
     SourceTagColors(Color(0xFFD2C4D0), Color(0xFF534352)),

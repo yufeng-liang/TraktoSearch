@@ -32,6 +32,8 @@
 -keep class net.sqlcipher.database.** { *; }
 -dontwarn net.sqlcipher.**
 
+# sherpa-onnx：保留 JNI 桥接类（native 方法按类名反射绑定）
+-keep class com.k2fsa.sherpa.onnx.** { *; }
 # RichTap 触感 SDK：lite 版的 proguard.txt 是 0 字节，没带 consumer 规则，只能自己写。
 # 下面这几条抄自同版本 NETWORK 构建自带的 consumer 规则，去掉了 network 那两行
 # （lite 版里没有 com.richtap.sdk.network 包）。

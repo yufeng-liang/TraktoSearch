@@ -124,8 +124,8 @@ class SwiftieHapticScoreTest {
 
     @Test
     fun wholeSequenceStaysInsideTheDiscreteBudget() {
-        // 52 记离散摊在 125.998 秒里。轴线那一段只有一记 —— 12 记拉链在屏幕上没有对应物
-        assertThat(score.discrete()).hasSize(52)
+        // 53 记离散摊在 125.998 秒里。轴线那一段只有一记 —— 12 记拉链在屏幕上没有对应物
+        assertThat(score.discrete()).hasSize(53)
         assertThat(score.discrete().size).isAtMost(65)
         assertThat(score.envelopes()).hasSize(5)
     }
@@ -213,7 +213,7 @@ class SwiftieHapticScoreTest {
                     it.atMs < SwiftieTimeline.ERAS_CARDS_END
             }
         ).isEqualTo(24)
-        assertThat(quiet.discrete()).hasSize(49)
+        assertThat(quiet.discrete()).hasSize(50)
         assertThat(quiet.envelopes()).hasSize(4)
     }
 
@@ -269,36 +269,42 @@ class SwiftieHapticScoreTest {
     // ------------------------------------------------------------------------
 
     @Test
-    fun signatureEnvelopeIsElevenPenStrokesWithTenLifts() {
+    fun signatureEnvelopeTracksThePenWindowsWithSilentLifts() {
         val write = score.envelope(SwiftieHapticCueKind.SIGNATURE_WRITE)
-        assertThat(SIGNATURE_STROKE_COUNT).isEqualTo(11)
-        // 11 段笔画中间只夹 10 个间隙 = 21 个控制点。设计文档写的 22 是数错了一格
-        assertThat(write.timingsMs).hasSize(2 * SIGNATURE_STROKE_COUNT - 1)
+        val strokeCount = SwiftieSignaturePath.WRITE_WEIGHT.size
+        // 段数跟着权重表走，不写死：现在是 12 笔（`i` 上那一点单独算一笔）
+        assertThat(strokeCount).isEqualTo(12)
+        // 12 段笔画中间只夹 11 个间隙 = 23 个控制点
+        assertThat(write.timingsMs).hasSize(2 * strokeCount - 1)
         assertThat(write.amplitudes).hasSize(write.timingsMs.size)
         assertThat(write.atMs).isEqualTo(SwiftieTimeline.SIGNATURE_START)
-        assertThat(write.durationMs)
-            .isEqualTo(SIGNATURE_WRITE_MS + SIGNATURE_PAUSE_MS * (SIGNATURE_STROKE_COUNT - 1))
+        assertThat(write.durationMs).isEqualTo(SIGNATURE_WRITE_MS + SIGNATURE_PAUSE_TOTAL_MS)
         write.timingsMs.forEachIndexed { index, ms ->
+            // 每一格都得是正数，0ms 的控制点 VibrationEffect 不收
+            assertThat(ms).isGreaterThan(0)
             if (index % 2 == 0) {
                 // 落笔：等幅 0.25，是一支笔在纸上走，不是一记敲击
                 assertThat(write.amplitudes[index]).isWithin(1e-6f).of(0.25f)
             } else {
-                // 抬笔：归零，而且正好一个 SIGNATURE_PAUSE_MS
-                assertThat(ms.toLong()).isEqualTo(SIGNATURE_PAUSE_MS)
+                // 抬笔：归零。每个间隙长短不一（换词前停得久），所以这里不钉单个值
                 assertThat(write.amplitudes[index]).isEqualTo(0f)
             }
         }
-        // 落笔那 11 格加起来正好是书写预算，取整误差由末段吸收
+        // 落笔那 12 格加起来正好是书写预算，抬笔那 11 格加起来正好是停顿预算，
+        // 两份各自由自己的末格吸收取整误差
         assertThat(write.timingsMs.filterIndexed { index, _ -> index % 2 == 0 }
             .sumOf { it.toLong() })
             .isEqualTo(SIGNATURE_WRITE_MS)
+        assertThat(write.timingsMs.filterIndexed { index, _ -> index % 2 == 1 }
+            .sumOf { it.toLong() })
+            .isEqualTo(SIGNATURE_PAUSE_TOTAL_MS)
     }
 
     @Test
     fun signatureStandInsSitOnTheStartOfEveryStroke() {
         val write = score.envelope(SwiftieHapticCueKind.SIGNATURE_WRITE)
         val strokes = score.of(SwiftieHapticCueKind.SIGNATURE_STROKE)
-        assertThat(strokes).hasSize(SIGNATURE_STROKE_COUNT)
+        assertThat(strokes).hasSize(SwiftieSignaturePath.WRITE_WEIGHT.size)
         // 替身与包络描述的是同一支笔：第 k 记必须压在第 k 段落笔的起点上
         strokes.forEachIndexed { index, cue ->
             val offsetMs = write.timingsMs.take(2 * index).sumOf { it.toLong() }

@@ -54,9 +54,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -90,11 +90,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -114,42 +114,39 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
+import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.util.PersonAvatarColorStore
-import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
-import com.tracktosearch.ui.component.LocalActivePosterClickSetter
-import com.tracktosearch.ui.component.LocalActivePosterClickToken
-import com.tracktosearch.ui.component.LocalActivePosterTmdbId
+import com.tracktosearch.ui.component.LoadMoreFooter
+import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.MovieCard
-import com.tracktosearch.ui.component.NeumorphicFrostedSurface
-import com.tracktosearch.ui.component.hasListScrolled
-import com.tracktosearch.ui.component.hazeTopBar
-import com.tracktosearch.ui.component.isAppDarkTheme
-import com.tracktosearch.ui.component.glassSceneForContent
-import com.tracktosearch.ui.component.backdropContentSource
-import com.tracktosearch.ui.component.backdropSource
-import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
-import com.tracktosearch.ui.component.appVisualEffect
 import com.tracktosearch.ui.component.MovieCardSkeleton
+import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
-import com.tracktosearch.ui.component.LoadMoreFooter
-import com.tracktosearch.ui.component.LoadMoreFooterState
+import com.tracktosearch.ui.component.appVisualEffect
+import com.tracktosearch.ui.component.backdropContentSource
+import com.tracktosearch.ui.component.backdropSource
+import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.hasListScrolled
+import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.screen.ai.AI_SPRITE_IDLE_DELAY_MS
+import com.tracktosearch.ui.screen.ai.AiSceneEvent
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
@@ -161,21 +158,24 @@ import com.tracktosearch.ui.screen.ai.AiSpriteInterruptRequest
 import com.tracktosearch.ui.screen.ai.AiSpriteMotion
 import com.tracktosearch.ui.screen.ai.AiSpriteOverlayTrigger
 import com.tracktosearch.ui.screen.ai.AiSpriteViewModel
-import com.tracktosearch.ui.screen.ai.AiSceneEvent
 import com.tracktosearch.ui.screen.ai.automaticSpriteArt
+import com.tracktosearch.ui.screen.ai.rememberSharedAiSpriteViewModel
 import com.tracktosearch.ui.screen.ai.sceneArtFor
 import com.tracktosearch.ui.screen.ai.sceneEventForSearch
 import com.tracktosearch.ui.screen.ai.searchAnchorFor
 import com.tracktosearch.ui.screen.ai.shouldStartSpriteOverlay
-import com.tracktosearch.ui.screen.ai.AI_SPRITE_IDLE_DELAY_MS
-import com.tracktosearch.ui.screen.ai.rememberSharedAiSpriteViewModel
+import com.tracktosearch.ui.theme.GlassBorderDark
+import com.tracktosearch.ui.theme.GlassFillDark
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.personAvatarSharedKey
+import com.tracktosearch.ui.component.SharedOrigin
 import dagger.hilt.android.EntryPointAccessors
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
-import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
 /** 计算网盘tab筛选后的结果数（用于Tab标签显示） */
@@ -209,8 +209,6 @@ fun TraktSearchScreen(
     val spriteState by spriteViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val haptics = rememberAppHaptics()
-    // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的卡片参与共享元素转场
-    var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
     val focusRequester = remember { FocusRequester() }
     val coroutineScope = rememberCoroutineScope()
     val hazeState = remember { HazeState() }
@@ -452,18 +450,6 @@ fun TraktSearchScreen(
     }
 
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    // 点击 token,确保只有被点击的卡片参与转场
-    var activeClickToken by remember { mutableStateOf(0) }
-
-    CompositionLocalProvider(
-        LocalActivePosterTmdbId provides activePosterTmdbId,
-        LocalActivePosterClickSetter provides { id ->
-            activePosterTmdbId = id
-            activeClickToken += 1
-            activeClickToken
-        },
-        LocalActivePosterClickToken provides activeClickToken
-    ) {
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
@@ -686,6 +672,7 @@ fun TraktSearchScreen(
                                     genres = item.genres,
                                     posterUrl = item.posterUrl,
                                     tmdbId = item.tmdbId,
+                                    origin = SharedOrigin.of(SharedOrigin.SEARCH, uiState.selectedTab.name),
                                     isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.traktId, item.tmdbId, uiState.selectedTab) == true,
                                     isWatched = watchlistWatchedIds?.isWatched(item.traktId, item.tmdbId, uiState.selectedTab) == true,
                                     modifier = if (index == 0) {
@@ -757,8 +744,8 @@ fun TraktSearchScreen(
                             .onGloballyPositioned { searchBoxBounds = it.boundsInRoot() },
                         isDark = isDark,
                         shape = RoundedCornerShape(21.dp),
-                        backgroundColor = if (isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.55f),
-                        borderColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.75f),
+                        backgroundColor = if (isDark) GlassFillDark else Color.White.copy(alpha = 0.55f),
+                        borderColor = if (isDark) GlassBorderDark else Color.White.copy(alpha = 0.75f),
                         glassRole = GlassSurfaceRole.SearchField,
                         interactionSource = searchInteractionSource,
                         scene = traktSearchGlassScene,
@@ -1033,7 +1020,6 @@ fun TraktSearchScreen(
             )
         }
     }
-    } // CompositionLocalProvider
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -1198,7 +1184,7 @@ private fun DiskSearchContent(
                                             selected = source in diskState.enabledSources,
                                             border = if (source in diskState.enabledSources) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                             colors = FilterChipDefaults.filterChipColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                                                 labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 selectedContainerColor = MaterialTheme.colorScheme.primary,
                                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -1245,7 +1231,7 @@ private fun DiskSearchContent(
                                             selected = type in diskState.enabledDiskTypes,
                                             border = if (type in diskState.enabledDiskTypes) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                             colors = FilterChipDefaults.filterChipColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                                                 labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 selectedContainerColor = MaterialTheme.colorScheme.primary,
                                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -1306,7 +1292,6 @@ private fun PersonSearchCard(
             PosterColorExtractorProvider::class.java
         ).posterColorExtractor()
     }
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     Card(
         onClick = onClick,
@@ -1325,19 +1310,13 @@ private fun PersonSearchCard(
                 contentAlignment = Alignment.Center
             ) {
                 if (profileUrl != null) {
-                    // 启用 sharedElement 转场:key 与 PersonHeaderContent 一致("person-avatar-$personId")
-                    val imageModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-                        with(sharedTransitionScope) {
-                            Modifier
-                                .sharedElement(
-                                    rememberSharedContentState(key = "person-avatar-$personId"),
-                                    animatedVisibilityScope = animatedVisibilityScope
-                                )
-                                .fillMaxSize()
-                        }
-                    } else {
-                        Modifier.fillMaxSize()
-                    }
+                    // 与 PersonHeaderContent 配对
+                    val imageModifier = Modifier
+                        .appSharedBounds(
+                            key = personAvatarSharedKey(personId),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                        )
+                        .fillMaxSize()
                     SubcomposeAsyncImage(
                         model = remember(profileUrl) {
                             ImageRequest.Builder(context)

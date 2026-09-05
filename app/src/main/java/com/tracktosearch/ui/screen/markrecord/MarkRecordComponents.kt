@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.markrecord
 
 import android.content.Context
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -58,14 +59,37 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.util.PosterColorExtractor
+import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.SharedOrigin
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.posterSharedKey
 import com.tracktosearch.ui.component.rememberShimmerBrush
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.theme.WcagBlackWhiteCrossover
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+/**
+ * 标记记录页的 origin 基名。
+ *
+ * [SharedOrigin] 只收跨页面配对用到的公共值，某个屏幕私有的细分值就近声明在该屏幕文件里。
+ */
+private const val MARK_RECORD_ORIGIN_BASE = "mark-record"
+
+/**
+ * 某一条标记记录的 origin。
+ *
+ * 同一部片子可以被反复标记（标了看过又取消，之后再标一次），列表里因此允许出现同 tmdbId 的
+ * 多行，只靠 tmdbId 分不出点的是哪一行。槽位取与网格 item key 相同的三段组合，
+ * [MarkRecordScreen] 的点击回调也用本函数写入 [com.tracktosearch.ui.navigation.DetailSeedStore]，
+ * 两侧才拼得出同一个 key。
+ */
+internal fun markRecordOrigin(item: MarkRecordItem): String =
+    SharedOrigin.of(MARK_RECORD_ORIGIN_BASE, "${item.traktId}_${item.actedAt}_${item.actionType}")
 
 /**
  * 标记记录列表项骨架屏。
@@ -130,6 +154,7 @@ fun MarkRecordItemSkeleton(modifier: Modifier = Modifier) {
  * @param item 记录数据
  * @param onClick 点击跳转详情页
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun MarkRecordItemRow(
     item: MarkRecordItem,
@@ -138,13 +163,18 @@ fun MarkRecordItemRow(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    // 只有被点过的那一行才挂共享元素修饰符：每行都挂的话，滚动时白付一份 SharedContentState
+    // 与布局节点的开销，而其中至多一行会真的参与转场。
+    var clicked by remember { mutableStateOf(false) }
+    val origin = remember(item) { markRecordOrigin(item) }
     // 移除分类（已无标记）的卡片：通过外层透明度让整张卡片均匀变暗
     val isRemoved = item.currentStatus == CurrentMarkStatus.NONE
     var dominantColor by remember { mutableStateOf<Color?>(null) }
 
-    // 根据主色亮度自适应文字颜色（深色主色用白字）
+    // 压在海报主色上的文字颜色。阈值用 WCAG 的黑白等对比点（约 0.179）而不是 0.5 ——
+    // 0.5 会让中等明度的暖色拿到白字，对比度掉到 3:1 以下。
     val onColor = dominantColor?.let { c ->
-        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.92f) else Color.White
+        if (c.luminance() > WcagBlackWhiteCrossover) Color.Black.copy(alpha = 0.92f) else Color.White
     } ?: Color.White
 
     // 卡片沉浸渐变：主色 1.0 → 主色 0.7 alpha
@@ -163,7 +193,11 @@ fun MarkRecordItemRow(
             .clip(RoundedCornerShape(16.dp))
             .then(if (isRemoved) Modifier.alpha(0.55f) else Modifier)
             .background(backgroundBrush)
-            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onClick)
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
+                // 先登记本行参与转场，再交给调用方导航
+                clicked = true
+                onClick()
+            }
             .padding(horizontal = 6.dp, vertical = 6.dp)
     ) {
         Row(
@@ -180,6 +214,11 @@ fun MarkRecordItemRow(
                 modifier = Modifier
                     .width(posterWidth)
                     .height(posterHeight)
+                    // 海报与详情页头图配对
+                    .appSharedBounds(
+                        key = if (clicked) posterSharedKey(item.tmdbId, origin) else null,
+                        corner = SharedCorner.uniform(8.dp),
+                    )
                     .clip(RoundedCornerShape(8.dp))
             ) {
                 if (fullPosterUrl != null) {
@@ -405,7 +444,7 @@ private fun MarkRecordFilterChip(
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = MaterialTheme.colorScheme.primary,
             selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
             labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
         ),
         border = FilterChipDefaults.filterChipBorder(

@@ -12,6 +12,7 @@ import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.data.ai.AiTtsScene
 import com.tracktosearch.data.ai.AiTtsRequest
 import com.tracktosearch.data.ai.AiWatchedTitleDto
+import kotlin.math.log10
 import kotlin.random.Random
 
 private const val MAX_VOICE_ACTIVATION_ATTEMPTS = 5
@@ -60,9 +61,17 @@ fun aiErrorMessageRes(errorCode: String?): Int = when (errorCode) {
     "ACTIVATION_UNAVAILABLE" -> R.string.ai_error_character_unavailable
     "ACTIVATION_NAME_EMPTY" -> R.string.ai_error_name_empty
     "ACTIVATION_NOT_MATCHED" -> R.string.ai_error_activation_not_matched
+    // 按住失败分档：麦克风没拾到、声音太轻、按得太短，三种情况的下一步动作完全不同
+    "ACTIVATION_TOO_SHORT" -> R.string.ai_error_activation_too_short
+    "ACTIVATION_SILENT" -> R.string.ai_error_activation_silent
+    "ACTIVATION_TOO_QUIET" -> R.string.ai_error_activation_too_quiet
     "AUDIO_UNAVAILABLE" -> R.string.ai_error_audio_unavailable
+    // 刚授予麦克风权限：借错误位提示「再按一次」，避免自动开录把用户吓一跳
+    "AUDIO_PERMISSION_GRANTED" -> R.string.ai_error_audio_permission_granted
     "NOT_ENOUGH_MOVIES" -> R.string.ai_error_not_enough_movies
     "WATCHED_LIST_EMPTY" -> R.string.ai_error_watched_list_empty
+    // 离线是功能页的内联状态，不应显示成泛化的服务器错误或遮罩弹窗
+    "OFFLINE" -> R.string.ai_feature_unavailable
     "CHARACTERS_LOAD_FAILED" -> R.string.ai_error_characters_failed
     // AiErrorCode.name
     "UNAUTHORIZED" -> R.string.ai_error_unauthorized
@@ -82,6 +91,8 @@ fun aiErrorMessageRes(errorCode: String?): Int = when (errorCode) {
  *
  * 片单不够、配额用完、授权失效这几类靠重试永远解决不了，
  * 继续给重试按钮只会让用户白点并多烧一次请求。
+ * 按住失败的四个码（TOO_SHORT / SILENT / TOO_QUIET / AUDIO_PERMISSION_GRANTED）
+ * 都是「再按一次就能解决」，走 else 分支拿到 true 即可，不必单列。
  */
 fun aiErrorIsRetryable(errorCode: String?): Boolean = when (errorCode) {
     "AUTH_REQUIRED",
@@ -89,6 +100,7 @@ fun aiErrorIsRetryable(errorCode: String?): Boolean = when (errorCode) {
     "QUOTA_EXCEEDED",
     "NOT_ENOUGH_MOVIES",
     "WATCHED_LIST_EMPTY",
+    "OFFLINE",
     "CHARACTER_UNAVAILABLE",
     "ACTIVATION_UNAVAILABLE",
     "ACTIVATION_RETRY_LIMIT",
@@ -185,6 +197,108 @@ fun canRequestVoiceActivation(attempt: Int): Boolean = attempt < MAX_VOICE_ACTIV
 /** 文字兜底同样限 5 次，避免输入框被反复提交刷服务端配额。 */
 fun canRequestTextActivation(attempt: Int): Boolean = attempt < MAX_TEXT_ACTIVATION_ATTEMPTS
 
+/** 按住时长下限：短于此按误触处理，不识别也不计次数。 */
+const val VOICE_HOLD_MIN_DURATION_MS = 500L
+
+/** 按住上限：到点自动收尾并按命中/未命中提交。 */
+const val VOICE_HOLD_MAX_DURATION_MS = 10_000L
+
+/** 峰值电平低于此值认为全程没有人声。 */
+const val VOICE_SILENCE_LEVEL = 0.04f
+
+/** 峰值电平低于此值认为有声但太轻，识别本来就不可能成。 */
+const val VOICE_TOO_QUIET_LEVEL = 0.12f
+
+/** 电平底噪线：安静房间的本底大约就在 -50 dBFS，再往下画竖条画的只是噪声。 */
+private const val VOICE_LEVEL_FLOOR_DB = -50f
+
+/** 上升系数：一帧走掉 60% 落差，开口那一瞬间竖条就立起来。 */
+private const val VOICE_LEVEL_ATTACK = 0.6f
+
+/** 下降系数：一帧只走 20% 落差，字与字之间的停顿不会让竖条抽回去。 */
+private const val VOICE_LEVEL_RELEASE = 0.2f
+
+enum class AiVoiceHoldOutcome { MATCHED, UNAVAILABLE, TOO_SHORT, SILENT, TOO_QUIET, NOT_MATCHED }
+
+/**
+ * 按住收尾判定，判定顺序即优先级。
+ *
+ * 命中优先于一切，包括按不到 500 ms 就松手：用户已经喊对了，没道理因为手快再罚一次。
+ * 其次才是设备不可用、时长、电平三档。
+ *
+ * 分出静音与太轻两档是为了让失败可行动——以前三种失败都只回一句「名字没对上」，
+ * 麦克风被别的应用占着的用户会一直以为是自己发音不准，直到 5 次机会全烧完。
+ * 喊了别的角色名会落到电平检查这一段，声音够大就判 NOT_MATCHED，
+ * 这是有意的：那种情况下用户确实喊错了名字。
+ */
+fun resolveVoiceHoldOutcome(
+    holdDurationMs: Long,
+    peakLevel: Float,
+    matchedCharacterId: String?,
+    selectedCharacterId: String,
+    captureUnavailable: Boolean
+): AiVoiceHoldOutcome = when {
+    matchedCharacterId == selectedCharacterId -> AiVoiceHoldOutcome.MATCHED
+    captureUnavailable -> AiVoiceHoldOutcome.UNAVAILABLE
+    holdDurationMs < VOICE_HOLD_MIN_DURATION_MS -> AiVoiceHoldOutcome.TOO_SHORT
+    peakLevel < VOICE_SILENCE_LEVEL -> AiVoiceHoldOutcome.SILENT
+    peakLevel < VOICE_TOO_QUIET_LEVEL -> AiVoiceHoldOutcome.TOO_QUIET
+    else -> AiVoiceHoldOutcome.NOT_MATCHED
+}
+
+/**
+ * 该结果要不要烧掉一次语音激活机会。
+ *
+ * 计数点从「按下」挪到「实际提交」：误触和拿不到麦克风都没送出任何请求，不该消耗机会。
+ * 静音反而要计次，否则对着关掉的麦克风可以无限重试，5 次上限就形同虚设。
+ * 这里刻意不写 else，将来加档位时编译器会逼着做一次「烧不烧次数」的决定。
+ */
+fun voiceHoldOutcomeCountsAsAttempt(outcome: AiVoiceHoldOutcome): Boolean = when (outcome) {
+    AiVoiceHoldOutcome.UNAVAILABLE,
+    AiVoiceHoldOutcome.TOO_SHORT -> false
+    AiVoiceHoldOutcome.MATCHED,
+    AiVoiceHoldOutcome.SILENT,
+    AiVoiceHoldOutcome.TOO_QUIET,
+    AiVoiceHoldOutcome.NOT_MATCHED -> true
+}
+
+/** 该结果对应的本地错误码；MATCHED 返回 null，那条路走的是激活成功链路而不是错误位。 */
+fun voiceHoldOutcomeErrorCode(outcome: AiVoiceHoldOutcome): String? = when (outcome) {
+    AiVoiceHoldOutcome.MATCHED -> null
+    AiVoiceHoldOutcome.UNAVAILABLE -> "AUDIO_UNAVAILABLE"
+    AiVoiceHoldOutcome.TOO_SHORT -> "ACTIVATION_TOO_SHORT"
+    AiVoiceHoldOutcome.SILENT -> "ACTIVATION_SILENT"
+    AiVoiceHoldOutcome.TOO_QUIET -> "ACTIVATION_TOO_QUIET"
+    AiVoiceHoldOutcome.NOT_MATCHED -> "ACTIVATION_NOT_MATCHED"
+}
+
+/**
+ * PCM 块的线性 RMS 换成 0..1 电平：-50 dBFS 及以下为 0，0 dBFS 为 1。
+ *
+ * 走 dB 而不是直接拿 RMS 当高度，是因为线性值下正常说话只有 0.05 上下，
+ * 竖条几乎贴着底走，用户会以为麦克风没拾到音。
+ * rms 小于等于 0 必须先挡掉：log10(0) 是负无穷，一路传到 Canvas 就是一排 NaN 竖条。
+ */
+fun normalizeVoiceLevel(rms: Float): Float {
+    if (rms <= 0f) return 0f
+    val dbfs = 20f * log10(rms)
+    return ((dbfs - VOICE_LEVEL_FLOOR_DB) / -VOICE_LEVEL_FLOOR_DB).coerceIn(0f, 1f)
+}
+
+/**
+ * 电平平滑：起快落慢。
+ *
+ * 一帧约 100 ms，直接画原始电平会被字与字之间的停顿抽成锯齿。
+ * 上升取 0.6 保证开口即可见，下降只取 0.2 让竖条缓缓落回去。
+ * 两端各夹一次 0..1，采集层给出越界值时也不会把竖条画出格子。
+ */
+fun smoothVoiceLevel(previous: Float, next: Float): Float {
+    val from = previous.coerceIn(0f, 1f)
+    val to = next.coerceIn(0f, 1f)
+    val factor = if (to > from) VOICE_LEVEL_ATTACK else VOICE_LEVEL_RELEASE
+    return (from + (to - from) * factor).coerceIn(0f, 1f)
+}
+
 /** 用户手输的角色名先去掉首尾空白再比对，避免输入法带的空格造成必然失败。 */
 fun normalizeSpokenName(input: String): String = input.trim()
 
@@ -238,7 +352,7 @@ fun shouldTriggerIdle(
 
 fun canActivateCharacter(character: AiCharacter, state: AiSpriteUiState): Boolean =
     character.isAvailable &&
-        state.isAuthorized &&
+        state.isAiAvailable &&
         state.activatedCharacterId != character.id &&
         state.activationState != AiActivationState.RECORDING &&
         state.activationState != AiActivationState.VERIFYING &&
@@ -246,22 +360,27 @@ fun canActivateCharacter(character: AiCharacter, state: AiSpriteUiState): Boolea
         canRequestVoiceActivation(state.activationAttempt)
 
 /**
- * 文字激活入口是否展示：语音失败过或麦克风不可用后才出现，且文字次数没用满。
+ * 文字激活入口是否展示：授权过、文字次数没用满、该角色还没激活，三条都满足就一直在。
  *
- * 用 state 里锁存的 textActivationOffered 而不是实时看 activationState，
- * 否则用户重试语音的那几秒入口会闪走。
+ * 原来还要求 state 里锁存过「语音失败或麦克风不可用」，也就是必须先让语音失败一次入口才出现。
+ * 图书馆、深夜、开会这些场合的用户根本开不了口，却被逼着先故意失败一次，
+ * 白烧一次语音机会才拿到能用的入口。改成常驻，语音与文字各自计次互不影响。
  */
 fun shouldShowTextActivation(state: AiSpriteUiState): Boolean =
     state.isAuthorized &&
-        state.textActivationOffered &&
         canRequestTextActivation(state.textActivationAttempt) &&
         state.selectedCharacterId != state.activatedCharacterId
 
-/** 文字激活按钮可点条件：入口已开放、没有请求在飞、该角色还没激活。 */
+/**
+ * 文字激活按钮可点条件：角色已上线、授权过、文字次数没用满、该角色还没激活、没有请求在飞。
+ *
+ * 这里同样不看「语音失败过没有」。入口改成常驻后若只放开展示条件，
+ * 按钮会常驻着灰给用户看，`AiSpriteViewModel.activateByText` 还会用同一个判定
+ * 回一句「角色还没准备好」，比原来的锁存更糟。
+ */
 fun canActivateCharacterByText(character: AiCharacter, state: AiSpriteUiState): Boolean =
     character.isAvailable &&
-        state.isAuthorized &&
-        state.textActivationOffered &&
+        state.isAiAvailable &&
         canRequestTextActivation(state.textActivationAttempt) &&
         state.activatedCharacterId != character.id &&
         state.activationState != AiActivationState.RECORDING &&
@@ -320,7 +439,24 @@ fun canReplaceQuizPreview(
 fun remainingQuizReplacements(replacementCount: Int): Int =
     (MAX_QUIZ_REPLACEMENTS - replacementCount).coerceAtLeast(0)
 
-private fun AiWatchedTitleDto.key(): String = "$mediaType:$mediaId"
+/**
+ * 问答候选的媒体类型规范化。
+ *
+ * Trakt 当前返回 show，但旧缓存/兼容调用可能使用 tv；两者属于同一类媒体，
+ * 必须共用 key，否则预览列表会出现重复项，或者本地化标题互相覆盖。
+ */
+internal fun normalizeQuizMediaType(mediaType: String): String =
+    if (mediaType.equals("show", ignoreCase = true) || mediaType.equals("tv", ignoreCase = true)) {
+        "show"
+    } else {
+        mediaType.trim().lowercase()
+    }
+
+/** 统一供候选去重、Compose item key 和本地化标题映射使用。 */
+internal fun quizMediaKey(mediaType: String, mediaId: String): String =
+    "${normalizeQuizMediaType(mediaType)}:$mediaId"
+
+internal fun AiWatchedTitleDto.key(): String = quizMediaKey(mediaType, mediaId)
 
 fun selectQuizPreview(
     candidates: List<AiWatchedTitleDto>,
@@ -387,12 +523,13 @@ fun quizAnswerLabels(
 
 fun quizCorrectAnswerText(
     question: AiQuizQuestion?,
-    result: AiQuizQuestionResult
+    result: AiQuizQuestionResult,
+    separator: String = "、"
 ): String? {
     val optionLabels = result.correctOptionIds.mapNotNull { correctId ->
         question?.options?.firstOrNull { it.id == correctId }?.text
     }
-    return optionLabels.joinToString("、").takeIf { it.isNotBlank() }
+    return optionLabels.joinToString(separator).takeIf { it.isNotBlank() }
         ?: result.correctAnswer?.trim()?.takeIf { it.isNotBlank() }
 }
 

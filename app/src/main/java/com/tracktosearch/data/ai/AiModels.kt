@@ -1,5 +1,7 @@
 package com.tracktosearch.data.ai
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -43,9 +45,13 @@ data class AiQuota(
 )
 
 @Serializable
+@OptIn(ExperimentalSerializationApi::class)
 data class AiActivateRequest(
     val characterId: String,
     val spokenName: String = "",
+    // 留 null 不序列化：网关把"报文里出现音频字段"当成带了音频，
+    // 显式 null 会被判成非法音频（400 INVALID_AUDIO），文字激活与语音激活都会被挡下
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val audioDataUrl: String? = null,
     val locale: String = "zh-CN",
     val sessionId: String = "activation"

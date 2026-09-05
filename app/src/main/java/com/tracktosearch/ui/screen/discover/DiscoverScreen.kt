@@ -57,7 +57,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.draw.innerShadow
@@ -89,18 +88,13 @@ import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
 import com.tracktosearch.ui.component.TopBarBackdropSourcePadding
-import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.rememberAppPullToRefreshState
 import com.tracktosearch.ui.component.AppPullToRefreshIndicator
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import com.tracktosearch.ui.component.LocalActivePosterClickToken
-import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.glassSceneForContent
@@ -117,6 +111,14 @@ import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.util.ToastEffect
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.appSkipToLookaheadSize
+import com.tracktosearch.ui.component.traktListSharedKey
+import com.tracktosearch.ui.component.DiscoverFilterCardKey
+import com.tracktosearch.ui.component.DiscoverFilterCardCorner
+import com.tracktosearch.ui.component.SharedOrigin
+import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.TraktListCardCorner
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -132,8 +134,10 @@ import kotlinx.coroutines.launch
 fun DiscoverScreen(
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
-    onListClick: (listId: Int, listName: String) -> Unit = { _, _ -> },
-    onFilterDiscoverClick: () -> Unit = {},
+    /** morph 表示本次点击有无可配对的源侧卡片：页面里的列表卡片传 true，「查看全部」弹窗传 false。 */
+    onListClick: (listId: Int, listName: String, morph: Boolean) -> Unit = { _, _, _ -> },
+    /** 参数是入口标识（"card" / "icon"）：只有卡片入口与筛选页做容器变形，导航层据此决定要不要叠页面淡入。 */
+    onFilterDiscoverClick: (entry: String) -> Unit = {},
     onDoubanLoginClick: () -> Unit = {},
     onTraktLoginClick: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -144,14 +148,9 @@ fun DiscoverScreen(
     val watchlistWatchedIds by viewModel.watchlistWatchedIds.collectAsStateWithLifecycle()
     val context = LocalContext.current
     // 共享元素转场 scope（用于底部入口卡片和右上角筛选图标与影视筛选页配对）
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     // 记录进入影视筛选页的入口来源（"card"=底部卡片 / "icon"=右上角图标），返回时据此决定哪个入口参与转场
     var activeFilterEntry by rememberSaveable { mutableStateOf<String?>(null) }
-    // 当前活跃的海报 tmdbId(-1=初始无活跃 / 具体值=被点击的海报),确保同页面多栏目相同海报只有被点击的参与转场
-    var activePosterTmdbId by rememberSaveable { mutableStateOf(-1) }
-    // 每次点击递增的 token,用于精确匹配被点击的卡片实例(避免同 tmdbId 海报跨栏目飘错)
-    var activeClickToken by rememberSaveable { mutableStateOf(0) }
 
     ToastEffect(viewModel.toastEvent)
     // 延迟加载 Trakt 栏目，避免与首屏豆瓣/TMDB 竞争网络带宽
@@ -317,15 +316,6 @@ fun DiscoverScreen(
         loadingCount = discoverLoadingCount,
         loadingItemWeight = 4
     )
-    CompositionLocalProvider(
-        LocalActivePosterTmdbId provides activePosterTmdbId,
-        LocalActivePosterClickSetter provides { id ->
-            activePosterTmdbId = id
-            activeClickToken += 1
-            activeClickToken  // 返回新 token 给调用方保存
-        },
-        LocalActivePosterClickToken provides activeClickToken
-    ) {
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = Color.Transparent
@@ -378,62 +368,12 @@ fun DiscoverScreen(
                     ) {
                 // 顶部 Hero 分类快捷入口：由栏目设置（显示/隐藏 + 排序）驱动
                 item(key = "discover_hero_categories") {
-                    // 缓存按主题生成的 5 个渐变 Brush，避免每次重组创建新实例
-                    val popularGradient = remember(isDark) {
-                        Brush.linearGradient(
-                            colors = if (isDark) {
-                                listOf(Color(0xFFE05A2D), Color(0xFFD89C2C))
-                            } else {
-                                listOf(Color(0xFFF06A2F), Color(0xFFE6AA35))
-                            },
-                            start = Offset(0f, Float.POSITIVE_INFINITY),
-                            end = Offset(Float.POSITIVE_INFINITY, 0f)
-                        )
-                    }
-                    val upcomingGradient = remember(isDark) {
-                        Brush.linearGradient(
-                            colors = if (isDark) {
-                                listOf(Color(0xFFC26391), Color(0xFF9968CC))
-                            } else {
-                                listOf(Color(0xFFCB6C98), Color(0xFF9C6BD1))
-                            },
-                            start = Offset(0f, Float.POSITIVE_INFINITY),
-                            end = Offset(Float.POSITIVE_INFINITY, 0f)
-                        )
-                    }
-                    val recommendGradient = remember(isDark) {
-                        Brush.linearGradient(
-                            colors = if (isDark) {
-                                listOf(Color(0xFF5587E0), Color(0xFF36A9C4))
-                            } else {
-                                listOf(Color(0xFF5C89E0), Color(0xFF36AFC7))
-                            },
-                            start = Offset(0f, Float.POSITIVE_INFINITY),
-                            end = Offset(Float.POSITIVE_INFINITY, 0f)
-                        )
-                    }
-                    val doubanGradient = remember(isDark) {
-                        Brush.linearGradient(
-                            colors = if (isDark) {
-                                listOf(Color(0xFF43B77A), Color(0xFF3CABBE))
-                            } else {
-                                listOf(Color(0xFF42B87C), Color(0xFF43A9C2))
-                            },
-                            start = Offset(0f, Float.POSITIVE_INFINITY),
-                            end = Offset(Float.POSITIVE_INFINITY, 0f)
-                        )
-                    }
-                    val listsGradient = remember(isDark) {
-                        Brush.linearGradient(
-                            colors = if (isDark) {
-                                listOf(Color(0xFFD86182), Color(0xFFB96D62))
-                            } else {
-                                listOf(Color(0xFFE56B89), Color(0xFFC67A6B))
-                            },
-                            start = Offset(0f, Float.POSITIVE_INFINITY),
-                            end = Offset(Float.POSITIVE_INFINITY, 0f)
-                        )
-                    }
+                    // 缓存渐变 Brush，避免每次重组创建新实例。色值与「为什么不跟主题」见 DiscoverPalette
+                    val popularGradient = remember { DiscoverPopularGradient.toBrush() }
+                    val upcomingGradient = remember { DiscoverUpcomingGradient.toBrush() }
+                    val recommendGradient = remember { DiscoverRecommendGradient.toBrush() }
+                    val doubanGradient = remember { DiscoverDoubanGradient.toBrush() }
+                    val listsGradient = remember { DiscoverListsGradient.toBrush() }
                     val doubanMovieCategory = uiState.doubanHotCategories
                         .firstOrNull { it.id == "douban-movie" }
                     // 栏目 id -> Hero 卡片定义（标题/渐变/点击/数据），仅包含需要展示为 Hero 的栏目
@@ -512,6 +452,7 @@ fun DiscoverScreen(
                         DiscoverSectionStorage.SECTION_ID_DOUBAN_RECOMMEND -> {
                             item(key = config.id) {
                                 DoubanRecommendSection(
+                                        posterOrigin = discoverSectionOrigin(config.id),
                                     state = uiState.doubanRecommendState,
                                     resolvingItemId = uiState.resolvingRecommendItemId,
                                     onItemClick = { item ->
@@ -610,6 +551,7 @@ fun DiscoverScreen(
                                         }
                                     }
                                     TmdbMovieSection(
+                                            posterOrigin = discoverSectionOrigin(config.id),
                                         title = "",
                                         movies = uiState.tmdbPopularMovies,
                                         isLoading = uiState.isLoadingPopular,
@@ -632,6 +574,7 @@ fun DiscoverScreen(
                         "tmdb-upcoming" -> {
                             item(key = "tmdb_upcoming") {
                                 TmdbMovieSection(
+                                        posterOrigin = discoverSectionOrigin(config.id),
                                     title = stringResource(R.string.discover_upcoming),
                                     movies = uiState.tmdbUpcomingMovies,
                                     isLoading = uiState.isLoadingUpcoming,
@@ -652,6 +595,7 @@ fun DiscoverScreen(
                         "trakt-recommendations" -> {
                             item(key = "trakt_recommendations") {
                                 TraktRecommendationSection(
+                                        posterOrigin = discoverSectionOrigin(config.id),
                                     title = stringResource(R.string.discover_recommended),
                                     movies = uiState.traktRecommendations,
                                     isLoading = uiState.isLoadingRecommendations,
@@ -674,6 +618,7 @@ fun DiscoverScreen(
                         "trakt-trending-movies" -> {
                             item(key = "trakt_trending_movies") {
                                 TraktTrendingMovieSection(
+                                        posterOrigin = discoverSectionOrigin(config.id),
                                     items = uiState.traktTrendingMovies,
                                     isLoading = uiState.isLoadingTrakt,
                                     resolvingItemId = uiState.resolvingTmdbId,
@@ -694,6 +639,7 @@ fun DiscoverScreen(
                         "trakt-trending-shows" -> {
                             item(key = "trakt_trending_shows") {
                                 TraktTrendingShowSection(
+                                        posterOrigin = discoverSectionOrigin(config.id),
                                     items = uiState.traktTrendingShows,
                                     isLoading = uiState.isLoadingTrakt,
                                     resolvingItemId = uiState.resolvingTmdbId,
@@ -714,6 +660,7 @@ fun DiscoverScreen(
                         "trakt-anticipated" -> {
                             item(key = "trakt_anticipated") {
                                 TraktAnticipatedSection(
+                                        posterOrigin = discoverSectionOrigin(config.id),
                                     anticipatedMovies = uiState.traktAnticipatedMovies,
                                     anticipatedShows = uiState.traktAnticipatedShows,
                                     isLoading = uiState.isLoadingTrakt,
@@ -740,6 +687,7 @@ fun DiscoverScreen(
                         "trakt-show-recommendations" -> {
                             item(key = "trakt_show_recommendations") {
                                 TraktShowRecommendationSection(
+                                        posterOrigin = discoverSectionOrigin(config.id),
                                     items = uiState.traktShowRecommendations,
                                     isLoading = uiState.isLoadingTrakt,
                                     resolvingItemId = uiState.resolvingTmdbId,
@@ -784,63 +732,25 @@ fun DiscoverScreen(
                                     } else {
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             uiState.trendingLists.take(5).forEachIndexed { index, listResponse ->
-                                                // 社区列表卡片与详情页标题栏整体配对（sharedBounds 转场）
-                                                val listCardModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-                                                    with(sharedTransitionScope) {
-                                                        Modifier.sharedBounds(
-                                                            sharedContentState = rememberSharedContentState(key = "trakt-list-card-${listResponse.list.ids.trakt}"),
-                                                            animatedVisibilityScope = animatedVisibilityScope
-                                                        )
-                                                    }
-                                                } else { Modifier }
-                                                val interactionSource = remember { MutableInteractionSource() }
-                                                val isPressed by interactionSource.collectIsPressedAsState()
-                                                val cardScale by animateFloatAsState(
-                                                    targetValue = if (isPressed) 0.98f else 1f,
-                                                    label = "trakt_list_card_scale_${index}"
+                                                // 社区列表卡片放大成整个列表详情页；圆角在 20dp 与 0 之间插值
+                                                // 目标侧走 RemeasureToBounds，动画边界一路长到整页；
+                                                // 本侧按落定尺寸布局，否则变形期里内容会被拉散
+                                                val listCardModifier = Modifier
+                                                    .appSharedBounds(
+                                                        key = traktListSharedKey(listResponse.list.ids.trakt),
+                                                        animatedVisibilityScope = animatedVisibilityScope,
+                                                        corner = SharedCorner.uniform(TraktListCardCorner),
+                                                    )
+                                                    .appSkipToLookaheadSize()
+                                                TrendingListCard(
+                                                    title = listResponse.list.name,
+                                                    meta = stringResource(R.string.discover_list_meta, listResponse.list.item_count, listResponse.list.user?.username ?: "", listResponse.like_count),
+                                                    onClick = { onListClick(listResponse.list.ids.trakt, listResponse.list.name, true) },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .then(listCardModifier)
+                                                        .fadeSlideIn(index)
                                                 )
-                                                Box(modifier = Modifier.fillMaxWidth().then(listCardModifier).fadeSlideIn(index)) {
-                                                    AppVisualSurface(
-                                                        kind = VisualSurfaceKind.Glass,
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .scale(cardScale)
-                                                            .hapticClickable(
-                                                                interactionSource = interactionSource,
-                                                                indication = null,
-                                                                // 列表项进详情
-                                                                semantic = HapticSemantic.LIGHT_TAP,
-                                                                onClick = { onListClick(listResponse.list.ids.trakt, listResponse.list.name) }
-                                                            ),
-                                                        shape = RoundedCornerShape(18.dp),
-                                                        role = GlassSurfaceRole.Card,
-                                                        interactionSource = interactionSource,
-                                                        scene = discoverGlassScene,
-                                                        backgroundColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
-                                                        borderColor = if (isDark) MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.9f)
-                                                    ) {
-                                                        Row(
-                                                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                                            verticalAlignment = Alignment.CenterVertically
-                                                        ) {
-                                                            Column(modifier = Modifier.weight(1f)) {
-                                                                Text(
-                                                                    text = listResponse.list.name,
-                                                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                                    maxLines = 1,
-                                                                    overflow = TextOverflow.Ellipsis
-                                                                )
-                                                                Text(
-                                                                    text = stringResource(R.string.discover_list_meta, listResponse.list.item_count, listResponse.list.user?.username ?: "", listResponse.like_count),
-                                                                    style = MaterialTheme.typography.bodySmall,
-                                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                                )
-                                                            }
-                                                        }
-                                                    }
-                                                }
                                             }
 
                                         }
@@ -858,32 +768,19 @@ fun DiscoverScreen(
                         targetValue = if (isPressed) 0.97f else 1f,
                         label = "discover_filter_entry_scale"
                     )
-                    // 当从底部卡片进入筛选页时（activeFilterEntry == "card"），给卡片加 sharedElement 与筛选页根容器配对
-                    val cardModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && activeFilterEntry == "card" && LocalSharedTransitionEnabled.current) {
-                        with(sharedTransitionScope) {
-                            Modifier
-                                .fillMaxWidth()
-                                .sharedElement(
-                                    rememberSharedContentState(key = "discover-filter-entry-card"),
-                                    animatedVisibilityScope = animatedVisibilityScope
-                                )
-                        }
-                    } else {
-                        Modifier.fillMaxWidth()
-                    }
-                    val shape = RoundedCornerShape(20.dp)
-                    // 浅玫瑰紫渐变（与「去豆瓣登录」卡片样式统一，仅渐变配色不同）
-                    val gradient = remember(isDark) {
-                        Brush.linearGradient(
-                            colors = if (isDark) {
-                                listOf(Color(0xFFA85BC2), Color(0xFFD45F7B))
-                            } else {
-                                listOf(Color(0xFFAD65BF), Color(0xFFE26C87))
-                            },
-                            start = Offset(0f, Float.POSITIVE_INFINITY),
-                            end = Offset(Float.POSITIVE_INFINITY, 0f)
+                    // 从底部卡片进入筛选页时（activeFilterEntry == "card"），本卡片与筛选页根容器配对
+                    val cardModifier = Modifier
+                        .fillMaxWidth()
+                        .appSharedBounds(
+                            key = DiscoverFilterCardKey.takeIf { activeFilterEntry == "card" },
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            corner = SharedCorner.uniform(DiscoverFilterCardCorner),
                         )
-                    }
+                        // 同上：本侧按落定尺寸布局，不跟着长到整页的动画边界重测
+                        .appSkipToLookaheadSize()
+                    val shape = RoundedCornerShape(DiscoverFilterCardCorner)
+                    // 浅玫瑰紫渐变（与「去豆瓣登录」卡片样式统一，仅渐变配色不同）
+                    val gradient = remember { DiscoverRoseGradient.toBrush() }
                     AppVisualSurface(
                         kind = VisualSurfaceKind.Content,
                         modifier = cardModifier
@@ -895,7 +792,7 @@ fun DiscoverScreen(
                                 semantic = HapticSemantic.TAP
                             ) {
                                 activeFilterEntry = "card"
-                                onFilterDiscoverClick()
+                                onFilterDiscoverClick("card")
                             },
                         shape = shape,
                         backgroundColor = Color.Transparent,
@@ -969,23 +866,15 @@ fun DiscoverScreen(
                         // 圆形操作按钮在 Glass 下使用轻量光学层，在 Blur 下沿用拟态按钮。
                         CompositionLocalProvider(LocalBackdrop provides discoverContentBackdrop) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                        // 当从右上角图标进入筛选页时（activeFilterEntry == "icon"），给图标加 sharedElement 与筛选页返回箭头配对
-                        val iconModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && activeFilterEntry == "icon" && LocalSharedTransitionEnabled.current) {
-                            with(sharedTransitionScope) {
-                                Modifier.sharedElement(
-                                    rememberSharedContentState(key = "discover-filter-entry-icon"),
-                                    animatedVisibilityScope = animatedVisibilityScope
-                                )
-                            }
-                        } else {
-                            Modifier
-                        }
+                        // 右上角筛选图标不再参与共享元素转场：它与筛选页那一行「返回箭头 + 标题」
+                        // 没有共同内容，配对出来的效果是一个圆图标拉伸成一整行，不如让页面按常规过渡进出。
+                        // 底部入口卡片（activeFilterEntry == "card"）仍然是容器变形。
                         AppIconButton(
                             onClick = {
                                 activeFilterEntry = "icon"
-                                onFilterDiscoverClick()
+                                onFilterDiscoverClick("icon")
                             },
-                            modifier = iconModifier,
+                            modifier = Modifier,
                             isDark = isDark,
                             hazeState = discoverHazeState,
                             role = GlassSurfaceRole.CircularControl,
@@ -1016,7 +905,6 @@ fun DiscoverScreen(
         }
     }
     }
-} // CompositionLocalProvider
 
     // 豆瓣热榜全量弹窗
     showDoubanAllDialog?.let { catId ->
@@ -1192,7 +1080,8 @@ fun DiscoverScreen(
             lists = uiState.trendingLists,
             onListClick = { listId, listName ->
                 showTrendingListsAll = false
-                onListClick(listId, listName)
+                // 弹窗在 ModalBottomSheet 自己的窗口里，配不上共享元素：走常规页面转场
+                onListClick(listId, listName, false)
             },
             onDismiss = { showTrendingListsAll = false }
         )

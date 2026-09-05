@@ -56,7 +56,8 @@ import com.tracktosearch.R
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.ui.component.GlassScene
-import com.tracktosearch.ui.component.LocalFullscreenSharedKey
+import com.tracktosearch.ui.component.LocalFullscreenSharedElement
+import com.tracktosearch.ui.component.fullscreenSharedElementKey
 import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.rememberPosterPrefetch
@@ -72,10 +73,31 @@ import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.zoomSharedSource
+import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.SharedOrigin
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.posterSharedKey
+import com.tracktosearch.ui.navigation.DetailSeedStore
 import com.tracktosearch.ui.util.ToastEffect
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
+
+/**
+ * 人物页作品栏的 origin 基名。
+ *
+ * [SharedOrigin] 只收跨页面配对用到的公共值，某个屏幕私有的细分值就近声明在该屏幕文件里。
+ */
+private const val PERSON_CREDIT_ORIGIN_BASE = "person-credit"
+
+/**
+ * 人物页某一条作品的 origin。
+ *
+ * 一个人的作品表里同一个 tmdbId 可能出现两次（既演又导），电影栏与电视剧栏也各有一份，
+ * 只靠 tmdbId 分不出点的是哪一张。槽位与 LazyRow 的 item key 同构（栏目 + tmdbId + 下标）。
+ */
+private fun personCreditOrigin(section: String, tmdbId: Int, index: Int): String =
+    SharedOrigin.of(PERSON_CREDIT_ORIGIN_BASE, "${section}_${tmdbId}_$index")
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -143,7 +165,9 @@ fun PersonScreen(
         val fullscreenSharedKey = personImageFullscreenKey
             ?.takeIf { selectedPersonImageIndex >= 0 }
             ?.let { "$it-$selectedPersonImageIndex" }
-        CompositionLocalProvider(LocalFullscreenSharedKey provides fullscreenSharedKey) {
+        CompositionLocalProvider(
+            LocalFullscreenSharedElement provides fullscreenSharedElementKey(fullscreenSharedKey)
+        ) {
         Box(modifier = Modifier
             .fillMaxSize()
             .padding(padding)
@@ -312,21 +336,40 @@ fun PersonScreen(
                                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                                             contentPadding = PaddingValues(horizontal = 16.dp)
                                         ) {
-                                            itemsIndexed(uiState.movieCredits, key = { index, credit -> "movie_${credit.id}_$index" }, contentType = { _, _ -> "media_card" }) { _, credit ->
+                                            itemsIndexed(uiState.movieCredits, key = { index, credit -> "movie_${credit.id}_$index" }, contentType = { _, _ -> "media_card" }) { index, credit ->
+                                                val posterUrl = credit.poster_path?.let { TmdbImageUrls.build(it) }
+                                                val year = credit.release_date.take(4)
+                                                val origin = personCreditOrigin("movie", credit.id, index)
+                                                // 只有被点过的那一张才挂共享元素修饰符
+                                                var clicked by remember { mutableStateOf(false) }
                                                 CreditPosterCard(
                                                     title = credit.title,
                                                     subtitle = credit.character,
-                                                    year = credit.release_date.take(4),
-                                                    posterUrl = credit.poster_path?.let { TmdbImageUrls.build(it) },
+                                                    year = year,
+                                                    posterUrl = posterUrl,
                                                     isResolving = uiState.resolvingTmdbId == credit.id,
                                                     onClick = {
+                                                        clicked = true
+                                                        // 作品表的海报来自 TMDB 人物作品接口，不写详情缓存，
+                                                        // 详情页 peek 必然落空，交给它做首帧种子；
+                                                        // origin 让详情页拼出与本卡片相同的共享元素 key
+                                                        DetailSeedStore.remember(
+                                                            credit.id,
+                                                            posterUrl,
+                                                            year.toIntOrNull(),
+                                                            origin = origin
+                                                        )
                                                         viewModel.resolveAndNavigate(
                                                             tmdbId = credit.id,
                                                             title = credit.title,
                                                             isMovie = true,
                                                             onNavigate = onMovieClick
                                                         )
-                                                    }
+                                                    },
+                                                    posterModifier = Modifier.appSharedBounds(
+                                                        key = if (clicked) posterSharedKey(credit.id, origin) else null,
+                                                        corner = SharedCorner.uniform(12.dp),
+                                                    )
                                                 )
                                             }
                                             if (uiState.movieCredits.isNotEmpty()) {
@@ -392,21 +435,39 @@ fun PersonScreen(
                                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                                             contentPadding = PaddingValues(horizontal = 16.dp)
                                         ) {
-                                            itemsIndexed(uiState.tvCredits, key = { index, credit -> "tv_${credit.id}_$index" }, contentType = { _, _ -> "media_card" }) { _, credit ->
+                                            itemsIndexed(uiState.tvCredits, key = { index, credit -> "tv_${credit.id}_$index" }, contentType = { _, _ -> "media_card" }) { index, credit ->
+                                                val posterUrl = credit.poster_path?.let { TmdbImageUrls.build(it) }
+                                                val year = credit.first_air_date.take(4)
+                                                val origin = personCreditOrigin("tv", credit.id, index)
+                                                // 只有被点过的那一张才挂共享元素修饰符
+                                                var clicked by remember { mutableStateOf(false) }
                                                 CreditPosterCard(
                                                     title = credit.name,
                                                     subtitle = credit.character,
-                                                    year = credit.first_air_date.take(4),
-                                                    posterUrl = credit.poster_path?.let { TmdbImageUrls.build(it) },
+                                                    year = year,
+                                                    posterUrl = posterUrl,
                                                     isResolving = uiState.resolvingTmdbId == credit.id,
                                                     onClick = {
+                                                        clicked = true
+                                                        // 理由同电影栏：列表接口的海报进不了详情缓存，
+                                                        // 海报与 origin 一起交给详情页
+                                                        DetailSeedStore.remember(
+                                                            credit.id,
+                                                            posterUrl,
+                                                            year.toIntOrNull(),
+                                                            origin = origin
+                                                        )
                                                         viewModel.resolveAndNavigate(
                                                             tmdbId = credit.id,
                                                             title = credit.name,
                                                             isMovie = false,
                                                             onNavigate = onShowClick
                                                         )
-                                                    }
+                                                    },
+                                                    posterModifier = Modifier.appSharedBounds(
+                                                        key = if (clicked) posterSharedKey(credit.id, origin) else null,
+                                                        corner = SharedCorner.uniform(12.dp),
+                                                    )
                                                 )
                                             }
                                             if (uiState.tvCredits.isNotEmpty()) {
@@ -531,7 +592,7 @@ fun PersonScreen(
                 }
             }
         }
-        } // CompositionLocalProvider(LocalFullscreenSharedKey)
+        } // CompositionLocalProvider(LocalFullscreenSharedElement)
     }
 }
 
@@ -542,7 +603,9 @@ private fun CreditPosterCard(
     year: String,
     posterUrl: String?,
     isResolving: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    /** 作用于海报容器的修饰符，用于共享元素转场；由调用方按自己那一栏的槽位构造 */
+    posterModifier: Modifier = Modifier
 ) {
     Column(
         modifier = Modifier
@@ -561,6 +624,7 @@ private fun CreditPosterCard(
                         MaterialTheme.colorScheme.surfaceVariant,
                         RoundedCornerShape(14.dp)
                     ),
+                posterModifier = posterModifier,
                 imageSize = 264
             )
             if (isResolving) {

@@ -21,6 +21,7 @@ import com.tracktosearch.data.remote.douban.DoubanRexxarMediaType
 import com.tracktosearch.data.remote.douban.DoubanRexxarRepository
 import com.tracktosearch.data.remote.douban.DoubanRexxarShortComment
 import com.tracktosearch.data.remote.douban.mergeDoubanDetail
+import com.tracktosearch.data.remote.douban.normalizeDoubanCountryNames
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
@@ -95,6 +96,12 @@ enum class CommentSource {
 }
 
 enum class OwnCommentTarget {
+    TRAKT,
+    DOUBAN
+}
+
+/** 详情页登录提示需要打开的平台，不能再用一个布尔值丢失目标信息。 */
+enum class DetailLoginTarget {
     TRAKT,
     DOUBAN
 }
@@ -205,9 +212,9 @@ data class DetailUiState(
     val creditsError: Boolean = false,
     // 预告片/截图加载失败（TMDB 或豆瓣 rexxar 任一路径失败且当前无数据时为 true）
     val videosError: Boolean = false,
-    // 未登录用户引导登录
+    // 未登录用户引导登录；目标平台决定确认按钮直达哪个网页登录流程
     val isLoggedIn: Boolean = true,
-    val showLoginPrompt: Boolean = false,
+    val loginTarget: DetailLoginTarget? = null,
     // 电视剧标记已看弹窗
     val showMarkWatchedDialog: Boolean = false,
     // 电影标记已看后弹出评分弹窗
@@ -223,7 +230,10 @@ data class DetailUiState(
     val doubanSyncRetryable: Boolean = false,
     /** 待重试的豆瓣动作 */
     val pendingDoubanAction: DoubanSyncAction? = null
-)
+) {
+    val showLoginPrompt: Boolean
+        get() = loginTarget != null
+}
 
 /** 场景 revision 只服务当前页面，详情缓存恢复时不能再次播放旧的加入想看动效。 */
 internal fun DetailUiState.withoutTransientSceneState(): DetailUiState =
@@ -279,7 +289,9 @@ private data class DoubanDetailSupplement(
     val overview: String?
         get() = detail?.summary?.takeIf { it.isNotBlank() }
     val country: String?
-        get() = detail?.countries?.takeIf { it.isNotEmpty() }?.joinToString(" / ")
+        get() = normalizeDoubanCountryNames(detail?.countries.orEmpty())
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString(" / ")
     val originalTitle: String?
         get() = item?.subtitle?.takeIf { it.isNotBlank() }
     val runtimeMinutes: Int?
@@ -616,6 +628,8 @@ class DetailViewModel @Inject constructor(
             originalTitle = seed?.originalTitle.orEmpty(),
             genres = seed?.genres.orEmpty(),
             releaseDate = seed?.releaseDate.orEmpty(),
+            country = seed?.country.orEmpty(),
+            runtime = seed?.runtime,
             status = seed?.status.orEmpty(),
             posterUrl = seededPoster,
             year = seededYear,
@@ -653,6 +667,9 @@ class DetailViewModel @Inject constructor(
                 // tmdbId > 0 时主标题/原名/海报都以 TMDB 为准（随后的富化必然覆盖），
                 // 这里不再写豆瓣值，消掉「路由标题→豆瓣标题→TMDB 标题」与海报换图两次跳变。
                 val preferTmdb = tmdbId > 0
+                // 头部元信息（年份/类型/地区/时长）一律「只填空、不覆盖」：种子已经填上的就是最终值。
+                // 以前这里用豆瓣值直接盖掉种子里的 TMDB 值，用户会看到胶囊文案在进页面后又变一次
+                // （典型是地区从「中国」跳成「中国大陆」）。
                 _uiState.value = current.copy(
                     title = if (preferTmdb) current.title else doubanSupplement.title ?: current.title,
                     displayTitle = if (preferTmdb) {
@@ -665,17 +682,17 @@ class DetailViewModel @Inject constructor(
                     } else {
                         doubanSupplement.originalTitle ?: current.originalTitle
                     },
-                    year = doubanSupplement.year ?: current.year,
+                    year = current.year ?: doubanSupplement.year,
                     overview = doubanSupplement.overview ?: current.overview,
                     genres = if (preferTmdb) {
                         current.genres.ifBlank { doubanSupplement.genres.orEmpty() }
                     } else {
                         doubanSupplement.genres ?: current.genres
                     },
-                    country = doubanSupplement.country ?: current.country,
+                    country = current.country.ifBlank { doubanSupplement.country.orEmpty() },
                     // 海报先以豆瓣兜底，后续 TMDB enrichment 存在时覆盖为 TMDB（TMDB 优先）
                     posterUrl = if (preferTmdb) current.posterUrl else current.posterUrl ?: doubanSupplement.posterUrl,
-                    runtime = doubanSupplement.runtimeMinutes ?: current.runtime,
+                    runtime = current.runtime ?: doubanSupplement.runtimeMinutes,
                     userRating = doubanSupplement.userRating ?: current.userRating,
                     userComment = doubanSupplement.item?.comment ?: current.userComment,
                     isRatingLoading = doubanSupplement.userRating == null && current.isRatingLoading,
@@ -722,34 +739,54 @@ class DetailViewModel @Inject constructor(
                 }
                 val enrichment: EnrichmentData? = prepared?.data
 
+                val beforeEnrichment = _uiState.value
                 // 主标题以 TMDB 中文标题为准，与列表卡片 displayTitle 保持一致；
                 // 豆瓣标题仅作纯豆瓣条目（无 TMDB 中文标题）时的兜底。
+                // 富化失败（enrichment == null）时退回首帧已显示的标题，最后才是路由标题——
+                // 直接退到路由标题会把 peek 到的中文名换成 Trakt 英文名，标题当面变一次。
                 val chineseTitle = enrichment?.chineseTitle?.takeIf { it.isNotEmpty() }
                     ?: doubanSupplement?.title
+                    ?: beforeEnrichment.displayTitle.takeIf { it.isNotBlank() }
                     ?: title
                 currentKeyword = chineseTitle
-                // 原名以 TMDB 外文原名为准（与主标题同源），豆瓣副标题仅作纯豆瓣条目兜底
+                // 原名以 TMDB 外文原名为准（与主标题同源），豆瓣副标题仅作纯豆瓣条目兜底，
+                // 同样保留首帧已显示的原名而不是让它被清掉
                 currentOriginalTitle = enrichment?.originalTitle?.takeIf { it.isNotEmpty() && it != chineseTitle }
                     ?: doubanSupplement?.originalTitle
+                    ?: beforeEnrichment.originalTitle.takeIf { it.isNotBlank() && it != chineseTitle }
                     ?: ""
                 val displayOriginalTitle = currentOriginalTitle.ifEmpty {
                     // 如果 TMDB 没返回 originalTitle 或与中文标题相同，使用 Trakt 原始标题
                     title.takeIf { it.isNotEmpty() && it != chineseTitle.replace("+", " ") } ?: ""
                 }
-                _uiState.value = _uiState.value.copy(
+                // 富化结果落地：种子/豆瓣补充已经填上的值一律保留，只补空缺。
+                // 以前这里是 `enrichment?.x ?: ""`，fetchEnrichment 失败返回 null 时会把首帧
+                // peek 到的类型/日期/状态甚至海报统统清成空 —— 头部内容当着用户的面消失一遍。
+                _uiState.value = beforeEnrichment.copy(
                     isLoading = false,
                     displayTitle = chineseTitle.replace("+", " "),
                     originalTitle = displayOriginalTitle,
-                    overview = doubanSupplement?.overview ?: enrichment?.overview ?: "",
+                    overview = doubanSupplement?.overview
+                        ?: enrichment?.overview?.takeIf { it.isNotBlank() }
+                        ?: beforeEnrichment.overview,
                     // 类型以 TMDB 为准（与列表卡片 genres 一致），豆瓣类型仅作纯豆瓣条目兜底
-                    genres = enrichment?.genres ?: doubanSupplement?.genres ?: "",
-                    country = doubanSupplement?.country ?: enrichment?.country ?: "",
+                    genres = enrichment?.genres?.takeIf { it.isNotBlank() }
+                        ?: beforeEnrichment.genres.ifBlank { doubanSupplement?.genres.orEmpty() },
+                    country = beforeEnrichment.country.ifBlank {
+                        doubanSupplement?.country ?: enrichment?.country.orEmpty()
+                    },
                     // 海报 TMDB 优先；纯豆瓣条目(tmdbId=0 无 TMDB 海报)时用豆瓣海报兜底
-                    posterUrl = enrichment?.posterUrl ?: doubanSupplement?.posterUrl,
-                    year = doubanSupplement?.year ?: enrichment?.year ?: year,
-                    releaseDate = enrichment?.releaseDate ?: "",
-                    runtime = doubanSupplement?.runtimeMinutes ?: enrichment?.runtime,
-                    status = enrichment?.status ?: ""
+                    posterUrl = enrichment?.posterUrl
+                        ?: doubanSupplement?.posterUrl
+                        ?: beforeEnrichment.posterUrl,
+                    year = beforeEnrichment.year ?: doubanSupplement?.year ?: enrichment?.year ?: year,
+                    releaseDate = beforeEnrichment.releaseDate.ifBlank {
+                        enrichment?.releaseDate.orEmpty()
+                    },
+                    runtime = beforeEnrichment.runtime
+                        ?: doubanSupplement?.runtimeMinutes
+                        ?: enrichment?.runtime,
+                    status = beforeEnrichment.status.ifBlank { enrichment?.status.orEmpty() }
                 )
                 // 拿到 posterUrl 后立即从缓存预查主色,让沉浸背景先于海报图片加载显示
                 prefetchPosterColor(enrichment?.posterUrl)
@@ -949,20 +986,28 @@ class DetailViewModel @Inject constructor(
             (current.ratings ?: MultiRatings()).copy(doubanRating = score)
         } ?: current.ratings
         currentKeyword = title
-        // 原名保持加载时确定的 TMDB 外文原名，不再被 rexxar/豆瓣合并覆盖
+        // 原名保持加载时确定的 TMDB 外文原名，不再被 rexxar/豆瓣合并覆盖。
+        //
+        // 年份/首播日期/地区/时长同理，只填空不覆盖：rexxar 是网络请求，往回写时用户早已在读
+        // 这一屏，任何改写都是当面跳变。典型两处 —— 地区从 TMDB 的「中国」跳成豆瓣的
+        // 「中国大陆」，首播日期从 TMDB 的本地上映日跳成豆瓣列在最前的某个电影节首映日。
+        // 与本函数上方对标题/类型/海报的处理、以及 startDoubanRexxarLoad 上「只做增量补充」
+        // 的约定保持一致。
         _uiState.value = current.copy(
             title = title,
             displayTitle = title,
             originalTitle = current.originalTitle,
-            year = presentation.year ?: current.year,
-            releaseDate = presentation.releaseDates.firstOrNull() ?: current.releaseDate,
+            year = current.year ?: presentation.year,
+            releaseDate = current.releaseDate.ifBlank {
+                presentation.releaseDates.firstOrNull().orEmpty()
+            },
             overview = presentation.overview ?: current.overview,
             // 类型保持列表一致的 TMDB 类型，rexxar 不再用豆瓣类型覆盖
             genres = current.genres.takeIf { it.isNotBlank() } ?: genres ?: "",
-            country = country ?: current.country,
+            country = current.country.ifBlank { country.orEmpty() },
             // 海报保持当前值（TMDB 优先，纯豆瓣为豆瓣图），rexxar 合并不再替换为豆瓣图
             posterUrl = current.posterUrl ?: presentation.posterUrl,
-            runtime = runtime ?: current.runtime,
+            runtime = current.runtime ?: runtime,
             ratings = ratings,
             doubanIdForSync = doubanId,
             ratingSource = DetailRatingSource.DOUBAN
@@ -1077,6 +1122,21 @@ class DetailViewModel @Inject constructor(
         if (currentSessionMode == SessionMode.DOUBAN) return true
         val doubanId = currentDoubanId ?: _uiState.value.doubanIdForSync
         return currentTraktId <= 0 && !doubanId.isNullOrBlank()
+    }
+
+    private fun requestLogin(
+        target: DetailLoginTarget = if (isDoubanBackedItem()) {
+            DetailLoginTarget.DOUBAN
+        } else {
+            DetailLoginTarget.TRAKT
+        }
+    ) {
+        _uiState.value = _uiState.value.copy(loginTarget = target)
+    }
+
+    /** 评分入口预检也必须保留当前条目的平台目标。 */
+    fun requestLoginForCurrentItem() {
+        requestLogin()
     }
 
     /** 普通详情没有有效 Trakt ID 时禁止把占位 ID 传给写接口。 */
@@ -1879,7 +1939,7 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             val targets = resolveOwnCommentTargets()
             if (targets.isEmpty()) {
-                _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+                requestLogin()
                 return@launch
             }
             if (OwnCommentTarget.DOUBAN in targets && current.userRating == null) {
@@ -1902,7 +1962,7 @@ class DetailViewModel @Inject constructor(
             val availableTargets = resolveOwnCommentTargets()
             val targets = current.retryOwnCommentTargets.intersect(availableTargets)
             if (targets.isEmpty()) {
-                _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+                requestLogin()
                 return@launch
             }
             saveOwnCommentToTargets(comment, targets)
@@ -2042,7 +2102,7 @@ class DetailViewModel @Inject constructor(
         }
         // 未登录：弹出登录引导
         if (!isLoggedIn) {
-            _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+            requestLogin(DetailLoginTarget.TRAKT)
             return
         }
         if (!canWriteToTrakt()) return
@@ -2089,7 +2149,7 @@ class DetailViewModel @Inject constructor(
             return
         }
         if (!isLoggedIn) {
-            _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+            requestLogin(DetailLoginTarget.TRAKT)
             return
         }
         if (!canWriteToTrakt()) return
@@ -2171,7 +2231,7 @@ class DetailViewModel @Inject constructor(
         }
         // 未登录：弹出登录引导（与 setRating 保持一致）
         if (!isLoggedIn) {
-            _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+            requestLogin(DetailLoginTarget.TRAKT)
             return
         }
         if (!canWriteToTrakt()) return
@@ -2264,7 +2324,7 @@ class DetailViewModel @Inject constructor(
         if (currentSessionMode == SessionMode.DOUBAN) return
         // 未登录：弹出登录引导
         if (tokenStorage.getCachedAccessToken().isNullOrEmpty()) {
-            _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+            requestLogin(DetailLoginTarget.TRAKT)
             return
         }
         if (!canWriteToTrakt()) return
@@ -2663,7 +2723,7 @@ class DetailViewModel @Inject constructor(
         }
         // 未登录：弹出登录引导（使用 getCachedAccessToken 同步检查，避免异步时序问题）
         if (tokenStorage.getCachedAccessToken().isNullOrEmpty()) {
-            _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+            requestLogin(DetailLoginTarget.TRAKT)
             return
         }
         if (!canWriteToTrakt()) return
@@ -2805,7 +2865,7 @@ class DetailViewModel @Inject constructor(
 
         // 未登录：弹出登录引导（使用 getCachedAccessToken 同步检查，避免异步时序问题）
         if (tokenStorage.getCachedAccessToken().isNullOrEmpty()) {
-            _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+            requestLogin(DetailLoginTarget.TRAKT)
             return
         }
         if (!canWriteToTrakt()) return
@@ -2893,7 +2953,7 @@ class DetailViewModel @Inject constructor(
             // 访客(GUEST)点豆瓣承载条目的标记:引导登录而不是报「同步失败」;
             // 豆瓣登录用户 cred 意外为 null 才算真正的同步失败,保留原 toast
             if (currentSessionMode == SessionMode.GUEST) {
-                _uiState.value = current.copy(showLoginPrompt = true)
+                requestLogin(DetailLoginTarget.DOUBAN)
             } else {
                 viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
             }
@@ -2986,7 +3046,7 @@ class DetailViewModel @Inject constructor(
             // 访客(GUEST)点豆瓣承载条目的标记:引导登录而不是报「同步失败」;
             // 豆瓣登录用户 cred 意外为 null 才算真正的同步失败,保留原 toast
             if (currentSessionMode == SessionMode.GUEST) {
-                _uiState.value = current.copy(showLoginPrompt = true)
+                requestLogin(DetailLoginTarget.DOUBAN)
             } else {
                 viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
             }
@@ -3142,7 +3202,7 @@ class DetailViewModel @Inject constructor(
             // 访客(GUEST)对豆瓣承载条目评分:引导登录而不是报「同步失败」;
             // 豆瓣登录用户 cred 意外为 null 才算真正的同步失败,保留原 toast
             if (currentSessionMode == SessionMode.GUEST) {
-                _uiState.value = current.copy(showLoginPrompt = true)
+                requestLogin(DetailLoginTarget.DOUBAN)
             } else {
                 viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
             }
@@ -3202,7 +3262,7 @@ class DetailViewModel @Inject constructor(
         if (cred == null) {
             // 访客(GUEST)对豆瓣承载条目取消评分:引导登录而不是报「同步失败」(与 setRatingDouban 一致)
             if (currentSessionMode == SessionMode.GUEST) {
-                _uiState.value = current.copy(showLoginPrompt = true)
+                requestLogin(DetailLoginTarget.DOUBAN)
             } else {
                 viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
             }
@@ -3236,7 +3296,7 @@ class DetailViewModel @Inject constructor(
 
     /** 关闭登录引导弹窗 */
     fun dismissLoginPrompt() {
-        _uiState.value = _uiState.value.copy(showLoginPrompt = false)
+        _uiState.value = _uiState.value.copy(loginTarget = null)
     }
 
     /**
@@ -3402,10 +3462,14 @@ class DetailViewModel @Inject constructor(
     }.getOrNull()
 
     /**
-     * 首帧种子：只包含「TMDB 是最终来源」的字段。
+     * 首帧种子：头部标题下那排元信息胶囊需要的全部字段。
      *
-     * 刻意不含 year / overview / country / runtime —— 这几项的最终取值优先豆瓣
-     * （见 loadDetail 里的合并顺序），提前填 TMDB 值反而会造成二次跳变。
+     * 曾经刻意不含 country / runtime，理由是「这两项最终取值优先豆瓣，提前填 TMDB 值反而
+     * 造成二次跳变」。现在头部元信息改成了「先到先得，后到只填空」（见 loadDetail 与
+     * [applyDoubanPresentation] 的合并注释），豆瓣不会再回头改已经显示出来的值，
+     * 于是种子越全越好：peek 命中时首帧就是 4 枚胶囊的最终形态，不再从 2 枚涨到 4 枚。
+     *
+     * 仍不含 overview —— 简介最终取值优先豆瓣，而且它在折叠文本里，换文案不影响上方布局。
      */
     private data class DetailSeed(
         val posterUrl: String?,
@@ -3413,6 +3477,8 @@ class DetailViewModel @Inject constructor(
         val originalTitle: String,
         val genres: String,
         val releaseDate: String,
+        val country: String,
+        val runtime: Int?,
         val status: String
     )
 
@@ -3431,10 +3497,30 @@ class DetailViewModel @Inject constructor(
         if (tmdbId <= 0) return null
         return when (mediaType) {
             MediaType.MOVIE -> tmdbRepository.peekMovieEnrichment(tmdbId, title, year)?.let {
-                buildSeed(it.posterUrl, it.chineseTitle, it.originalTitle, it.genres, it.releaseDate, it.status, title)
+                buildSeed(
+                    posterUrl = it.posterUrl,
+                    chineseTitle = it.chineseTitle,
+                    originalTitle = it.originalTitle,
+                    genres = it.genres,
+                    releaseDate = it.releaseDate,
+                    country = it.country,
+                    runtime = it.runtime,
+                    status = it.status,
+                    routeTitle = title
+                )
             }
             MediaType.SHOW -> tmdbRepository.peekTvEnrichment(tmdbId, title, year)?.let {
-                buildSeed(it.posterUrl, it.chineseTitle, it.originalTitle, it.genres, it.releaseDate, it.status, title)
+                buildSeed(
+                    posterUrl = it.posterUrl,
+                    chineseTitle = it.chineseTitle,
+                    originalTitle = it.originalTitle,
+                    genres = it.genres,
+                    releaseDate = it.releaseDate,
+                    country = it.country,
+                    runtime = it.episodeRunTime,
+                    status = it.status,
+                    routeTitle = title
+                )
             }
             MediaType.PERSON, MediaType.DISK -> null
         }
@@ -3450,6 +3536,8 @@ class DetailViewModel @Inject constructor(
         originalTitle: String,
         genres: String,
         releaseDate: String,
+        country: String,
+        runtime: Int?,
         status: String,
         routeTitle: String
     ): DetailSeed {
@@ -3460,6 +3548,8 @@ class DetailViewModel @Inject constructor(
             originalTitle = originalTitle.takeIf { it.isNotEmpty() && it != displayTitle }.orEmpty(),
             genres = genres,
             releaseDate = releaseDate,
+            country = country,
+            runtime = runtime?.takeIf { it > 0 },
             status = status
         )
     }

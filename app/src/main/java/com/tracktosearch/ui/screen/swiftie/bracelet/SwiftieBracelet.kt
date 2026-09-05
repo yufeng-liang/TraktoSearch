@@ -24,7 +24,6 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.ui.haptic.rememberAppHaptics
@@ -63,8 +62,8 @@ internal const val BRACELET_SWAY_MAX_DEG = 7f
 /** 手指拖动的跟随比例。0.65 是「弹性绳」的手感：跟手但拽不走。 */
 private const val DRAG_FOLLOW = 0.65f
 
-/** 字母珠会用到的全部字符，用来预排字形。 */
-private const val BEAD_CHARS = "1387SWIFTE"
+/** 固定内容的字母珠会用到的字，用来预排字形。昵称的字另外并进来。 */
+private val BEAD_TEXTS = listOf("1", "3", "8", "7", "S", "W", "I", "F", "T", "E")
 
 /** 圆珠配色：Lover 那套 + 一点薄荷，循环取用。 */
 private val ROUND_COLORS = listOf(
@@ -86,63 +85,96 @@ private val INK_COLORS = listOf(
 
 private fun roundBead(index: Int) = SwiftieBead.Round(ROUND_COLORS[index % ROUND_COLORS.size])
 
-private fun letterBead(char: Char, index: Int) =
-    SwiftieBead.Letter(char = char, inkColor = INK_COLORS[index % INK_COLORS.size])
+private fun letterBead(text: String, index: Int) =
+    SwiftieBead.Letter(text = text, inkColor = INK_COLORS[index % INK_COLORS.size])
 
 /**
- * 一条手链。
+ * 一条手链在画布里的槽位。
  *
- * @param yFraction 该条在画布里的纵向位置比例
- * @param widthFraction 宽度比例。后面的条略窄，堆叠才有纵深
+ * 宽度和下垂**跟着槽位走，不跟着内容走** —— 越靠前的越宽、垂得越深，这是唯一的纵深线索。
+ * 珠径由 [beadSizeFraction] 从宽度和颗数推出来，所以越靠前的珠子也越大，一起把层次做实。
+ *
+ * @param yFraction 该槽在画布里的纵向位置比例
+ * @param widthFraction 宽度比例
  * @param sagFraction 下垂量，相对自身宽度
  */
-private class BraceletStrand(
-    val beads: List<SwiftieBead>,
+internal class BraceletSlot(
     val yFraction: Float,
     val widthFraction: Float,
     val sagFraction: Float
 )
 
-/** 画的顺序就是从后到前：后面的先画，被前面的压住。 */
-private val STRANDS: List<BraceletStrand> = listOf(
-    // 最后一条：纯彩珠
-    BraceletStrand(
-        beads = List(13) { roundBead(it) },
-        yFraction = 0.30f,
-        widthFraction = 0.72f,
-        sagFraction = 0.12f
-    ),
-    // 中间一条：SWIFTIE
-    BraceletStrand(
-        beads = buildList {
-            repeat(2) { add(roundBead(it + 1)) }
-            "SWIFTIE".forEachIndexed { index, char -> add(letterBead(char, index)) }
-            repeat(2) { add(roundBead(it + 4)) }
-        },
-        yFraction = 0.44f,
-        widthFraction = 0.84f,
-        sagFraction = 0.14f
-    ),
-    // 最前一条：13 ♡ 87
-    BraceletStrand(
-        beads = buildList {
-            repeat(3) { add(roundBead(it)) }
-            add(letterBead('1', 0))
-            add(letterBead('3', 1))
-            add(SwiftieBead.Heart)
-            add(letterBead('8', 2))
-            add(letterBead('7', 3))
-            repeat(3) { add(roundBead(it + 2)) }
-        },
-        yFraction = 0.58f,
-        widthFraction = 0.94f,
-        sagFraction = 0.16f
-    )
+/** 从后到前三个槽位。只有两条时占**靠前**的两个，插槽底下不留空。 */
+internal val BRACELET_SLOTS = listOf(
+    BraceletSlot(yFraction = 0.24f, widthFraction = 0.84f, sagFraction = 0.14f),
+    BraceletSlot(yFraction = 0.40f, widthFraction = 0.94f, sagFraction = 0.16f),
+    BraceletSlot(yFraction = 0.56f, widthFraction = 0.96f, sagFraction = 0.18f)
 )
 
-/** 每颗珠固定的随机旋转，±8°（Spec §8）。固定种子，重组不会让珠子重新乱转。 */
+/**
+ * 珠径占画布宽度的比例。
+ *
+ * 1.02：珠子之间留极窄一线，绳子露出来才看得出是穿过去的。
+ */
+internal fun beadSizeFraction(beadCount: Int, widthFraction: Float): Float =
+    widthFraction / (beadCount * 1.02f)
+
+private class BraceletStrand(val beads: List<SwiftieBead>, val slot: BraceletSlot)
+
+/** `13 ♡ 87`：最后那条。11 颗。 */
+private fun heartBeads(): List<SwiftieBead> = buildList {
+    repeat(3) { add(roundBead(it)) }
+    add(letterBead("1", 0))
+    add(letterBead("3", 1))
+    add(SwiftieBead.Heart)
+    add(letterBead("8", 2))
+    add(letterBead("7", 3))
+    repeat(3) { add(roundBead(it + 2)) }
+}
+
+/** `SWIFTIE`：中间那条。11 颗。 */
+private fun swiftieBeads(): List<SwiftieBead> = buildList {
+    repeat(2) { add(roundBead(it + 1)) }
+    "SWIFTIE".forEachIndexed { index, char -> add(letterBead(char.toString(), index)) }
+    repeat(2) { add(roundBead(it + 4)) }
+}
+
+/**
+ * 昵称那条：字母珠居中，两侧补等量圆珠。
+ *
+ * 补到 11 颗（奇数个字）或 10 颗（偶数个字，两侧要一样多才居中），见
+ * [nicknameStrandBeadCount] —— 无论昵称是一个字还是九个字，这条的长度都一样，
+ * 堆叠不会一人一形。
+ */
+private fun nicknameBeads(tokens: List<String>): List<SwiftieBead> = buildList {
+    val padding = (nicknameStrandBeadCount(tokens.size) - tokens.size) / 2
+    repeat(padding) { add(roundBead(it + 2)) }
+    tokens.forEachIndexed { index, token -> add(letterBead(token, index)) }
+    repeat(padding) { add(roundBead(padding + it + 2)) }
+}
+
+/**
+ * 从后到前把内容摆进槽位：`13 ♡ 87` / `SWIFTIE` / 昵称。
+ *
+ * 昵称一个字都不剩（没登录、或者昵称全是标点）就只有两条，占靠前的两个槽 —— 这条手链
+ * 是挂在那儿的，空槽要留在上面，不能让手链在插槽里悬空。
+ */
+private fun braceletStrands(nickname: List<String>): List<BraceletStrand> {
+    val rows = buildList {
+        add(heartBeads())
+        add(swiftieBeads())
+        if (nickname.isNotEmpty()) add(nicknameBeads(nickname))
+    }
+    return rows.zip(BRACELET_SLOTS.takeLast(rows.size)) { beads, slot -> BraceletStrand(beads, slot) }
+}
+
+/**
+ * 每颗珠固定的随机旋转，±8°（Spec §8）。固定种子，重组不会让珠子重新乱转。
+ *
+ * 36 个够三条最长的情形（11 + 11 + 11）各拿一个，不用绕回去复用。
+ */
 private val BEAD_ROTATIONS: List<Float> = Random(13).let { random ->
-    List(24) { (random.nextFloat() * 2f - 1f) * 8f }
+    List(36) { (random.nextFloat() * 2f - 1f) * 8f }
 }
 
 private class PlacedBead(
@@ -195,16 +227,16 @@ private fun quadraticPointAt(from: Offset, control: Offset, to: Offset, t: Float
 }
 
 private fun planStrand(canvas: Size, strand: BraceletStrand, rotationOffset: Int): StrandPlan {
-    val width = canvas.width * strand.widthFraction
+    val slot = strand.slot
+    val width = canvas.width * slot.widthFraction
     val left = (canvas.width - width) / 2f
-    val baseY = canvas.height * strand.yFraction
-    // 1.02：珠子之间留极窄一线，绳子露出来才看得出是穿过去的
-    val beadSize = width / (strand.beads.size * 1.02f)
+    val baseY = canvas.height * slot.yFraction
+    val beadSize = canvas.width * beadSizeFraction(strand.beads.size, slot.widthFraction)
     // 下垂量按自身宽度算，但不能垂出画布 —— 插槽高度由调用方给（见 braceletHeightFor），
     // 万一将来有人写死一个偏小的高度，这里兜住：最低那颗珠的下缘也要留在画布内。
     // Spacer 不 clip，垂出去的部分不是被裁掉，是画到相邻内容上面去
     val maxSag = (canvas.height - baseY - beadSize / 2f).coerceAtLeast(0f)
-    val sag = (width * strand.sagFraction).coerceAtMost(maxSag)
+    val sag = (width * slot.sagFraction).coerceAtMost(maxSag)
     val from = Offset(left, baseY)
     val to = Offset(left + width, baseY)
     // 控制点垂 2×：二次贝塞尔在 t=0.5 处只走到控制点的一半，所以要给两倍才得到 sag
@@ -250,32 +282,35 @@ internal fun braceletSwayDegrees(elapsedMs: Long): Float {
  * 按可用宽度算手链插槽该有多高。
  *
  * 下垂量是**宽度**的比例（`sagFraction`），所以插槽高度必须跟着宽度走，不能写死。
- * 反推：最前那条宽 `0.94W`、垂 `0.16 × 0.94W = 0.150W`，基线在 `0.58H`，
- * 最低那颗珠还要再占半径 `0.042W`，于是 `0.58H + 0.192W ≤ H`，得 `H ≥ 0.458W`。
- * 取 0.46 —— 360dp 宽的手机算出 166dp，与原来写死的 170dp 基本一致；
- * 平板上跟着长，不会像原来那样让最前那条垂到插槽之外、画到相邻内容上。
- * 上下限只是防极端窄屏 / 超宽屏。
+ * 反推：最前那条宽 `0.96W`、垂 `0.18 × 0.96W = 0.173W`，基线在 `0.56H`，最低那颗珠还要
+ * 再占半径 `0.047W`，于是 `0.56H + 0.220W ≤ H`，得 `H ≥ 0.500W`。取 0.56 留一成余量 ——
+ * 360dp 宽的手机算出 202dp。上下限只是防极端窄屏 / 超宽屏；顶到上限之后
+ * [planStrand] 的 `maxSag` 会替它收着，垂浅一点而不是垂出插槽。
  */
-internal fun braceletHeightFor(width: Dp): Dp = (width * 0.46f).coerceIn(140.dp, 260.dp)
+internal fun braceletHeightFor(width: Dp): Dp = (width * 0.56f).coerceIn(140.dp, 300.dp)
 
 /**
- * 三条堆叠的友谊手链：`13 ♡ 87` / `SWIFTIE` / 一条纯彩珠（Spec §8）。
+ * 三条堆叠的友谊手链：`13 ♡ 87` / `SWIFTIE` / 用户昵称（Spec §8）。
  *
  * 全部 Canvas 程序化绘制 —— 项目里没有美术资源，也不引入。
  *
  * @param elapsedInBracelet 手链段起点以来的毫秒。喂 [BRACELET_SETTLED_MS] 就是收住的静态样子
  * @param interactive false 时不接拖动、不注册传感器（静态终态与低端机）
+ * @param nickname 要串在最前那条上的昵称。null 或者一个可用字符都不剩时只挂两条
  */
 @Composable
 fun SwiftieBracelet(
     elapsedInBracelet: () -> Long,
     modifier: Modifier = Modifier,
-    interactive: Boolean = true
+    interactive: Boolean = true,
+    nickname: String? = null
 ) {
     val lowRam = rememberIsLowRamDevice()
     // 低端机关掉陀螺仪高光（Spec §11.2）
     val highlight = rememberTiltHighlight(enabled = interactive && !lowRam)
-    val letterLayouts = rememberBeadLetterLayouts(BEAD_CHARS)
+    val tokens = remember(nickname) { braceletNicknameTokens(nickname) }
+    val strands = remember(tokens) { braceletStrands(tokens) }
+    val letterLayouts = rememberBeadLetterLayouts(BEAD_TEXTS + tokens)
     val dragOffset = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
     val scope = rememberCoroutineScope()
 
@@ -304,7 +339,7 @@ fun SwiftieBracelet(
                 onDragCancel = settle
             ) { change, dragAmount ->
                 change.consume()
-                val pitchPx = braceletBeadPitchPx(size.width.toFloat())
+                val pitchPx = braceletBeadPitchPx(size.width.toFloat(), strands)
                 travelPx += dragAmount.getDistance()
                 if (travelPx >= pitchPx) {
                     // 取余而不是减一个间距：一帧里走过三颗珠子只该响一记，
@@ -337,7 +372,7 @@ fun SwiftieBracelet(
             }
             .drawWithCache {
                 var rotationOffset = 0
-                val plans = STRANDS.map { strand ->
+                val plans = strands.map { strand ->
                     planStrand(size, strand, rotationOffset).also {
                         rotationOffset += strand.beads.size
                     }
@@ -384,15 +419,17 @@ private val REBOUND = spring<Offset>(
 /**
  * 最前那条手链上相邻两颗珠子的中心间距，像素。「逐珠划过」的触感按它计数。
  *
- * 取最前那条（`STRANDS` 的末位，也就是画得最后、压在最上面的 `13 ♡ 87`）：
- * 它最宽、珠子最大，手指真正划到的就是它。间距 = 该条宽度 ÷ 珠数，与 `planStrand`
- * 里珠心落在 `(index + 0.5) / size` 的排法一致。
+ * 取 [braceletStrands] 结果的末位，也就是画得最后、压在最上面那条：它挂在
+ * [BRACELET_SLOTS] 最宽的那个插槽上、珠子最大，手指真正划到的就是它。有昵称时
+ * 它就是昵称那条，珠数随昵称长短变，所以不能预先算成常量。
+ * 间距 = 该条宽度 ÷ 珠数，与 [planStrand] 里珠心落在 `(index + 0.5) / size` 的排法一致。
  *
  * 从画布宽度算而不是写死 dp：平板上珠子更大，一记之间本来就该走更远。
- * 夹到至少 1px 防零宽画布把它除成 0 或无穷。
+ * 夹到至少 1px 防零宽画布把它除成 0 或无穷；[strands] 空了也回退到 1px，
+ * 那时手链本来就没画出来，除以 0 会让这一格触感变成每像素一记。
  */
-private fun braceletBeadPitchPx(canvasWidthPx: Float): Float {
-    val strand = STRANDS.last()
-    return (canvasWidthPx * strand.widthFraction / strand.beads.size).coerceAtLeast(1f)
+private fun braceletBeadPitchPx(canvasWidthPx: Float, strands: List<BraceletStrand>): Float {
+    val strand = strands.lastOrNull() ?: return 1f
+    return (canvasWidthPx * strand.slot.widthFraction / strand.beads.size).coerceAtLeast(1f)
 }
 

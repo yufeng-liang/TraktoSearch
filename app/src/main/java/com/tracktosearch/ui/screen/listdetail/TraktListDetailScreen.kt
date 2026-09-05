@@ -2,6 +2,7 @@ package com.tracktosearch.ui.screen.listdetail
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,6 +37,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -57,12 +59,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.data.repository.MediaType
-import com.tracktosearch.ui.component.LocalActivePosterClickSetter
-import com.tracktosearch.ui.component.LocalActivePosterClickToken
-import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.glassSceneForContent
@@ -71,9 +68,18 @@ import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.component.rememberShimmer
 import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.traktListSharedKey
+import com.tracktosearch.ui.component.SharedOrigin
+import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.TraktListCardCorner
+import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
+import com.tracktosearch.ui.component.appSkipToLookaheadSize
+import com.tracktosearch.ui.component.isAppSharedTransitionActive
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -111,10 +117,17 @@ fun TraktListDetailScreen(
         loadingItemWeight = 4
     )
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的卡片参与共享元素转场
-    var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
+    // 顶栏与设置页三个子页面同一套行为：未滚动时完全透明，内容滚到顶栏下面才显出玻璃底。
+    // 转场期一律按「未滚动」处理，容器变形每帧背景都在变，实时模糊在这段时间只是白烧 GPU。
+    val hasContentUnderTopBar by remember {
+        derivedStateOf {
+            hasListScrolled(
+                firstVisibleItemIndex = gridState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffsetPx = gridState.firstVisibleItemScrollOffset
+            )
+        }
+    }
     // 共享元素转场 scope（标题栏整体与发现页社区列表卡片配对）
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
     BackHandler(enabled = true) { onBack() }
@@ -138,23 +151,33 @@ fun TraktListDetailScreen(
     // 骨架屏与未到位的海报共享一条 shimmer 动画：一屏九到十几个方块各跑一条会白烧一帧的时间
     val shimmer = rememberShimmer()
 
-    // 点击 token,确保只有被点击的卡片参与转场
-    var activeClickToken by remember { mutableStateOf(0) }
-
-    CompositionLocalProvider(
-        LocalActivePosterTmdbId provides activePosterTmdbId,
-        LocalActivePosterClickSetter provides { id ->
-            activePosterTmdbId = id
-            activeClickToken += 1
-            activeClickToken
-        },
-        LocalActivePosterClickToken provides activeClickToken
-    ) {
-    Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) { padding ->
+    Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        // 容器色置透明、底色改由下面那个共享节点自己画，理由见该处注释。
+        // contentColor 显式写成 onBackground：Scaffold 默认取 contentColorFor(containerColor)，
+        // 而 contentColorFor(Transparent) 是 Unspecified，会让整页文字颜色退回外层 LocalContentColor。
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground
+    ) { padding ->
+        // 与发现页社区列表卡片配对的是整页，而不是顶栏：卡片放大成页面、返回时收回成卡片。
+        val transitionActive = isAppSharedTransitionActive()
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .appSharedBounds(
+                    key = traktListSharedKey(uiState.listId),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    corner = SharedCorner.flattenFrom(TraktListCardCorner),
+                    // 容器变形要的是「内容不变形、被裁剪逐渐露出」，默认的 scaleToBounds 会把内容
+                    // 跟着容器一起缩放绘制。逐帧重测的代价由内容侧的 appSkipToLookaheadSize 挡掉。
+                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+                )
+                // 页面底色挪进共享节点内侧，并把 Scaffold 的容器色置透明。
+                // 否则 Scaffold 会在共享节点之外先铺满一整屏不透明底色，转场第一帧整屏就已经是本页的背景，
+                // 「卡片长成页面」退化成「页面已经在了，只是内容从一个小矩形里长出来」。
+                // 挪进来之后底色跟着动画边界一起长大，且被上面那层圆角动画裁剪，落定后与原来逐像素相同。
+                .background(MaterialTheme.colorScheme.background)
         ) {
             when {
                 // 首次加载：骨架屏
@@ -164,6 +187,7 @@ fun TraktListDetailScreen(
                             columns = GridCells.Fixed(3),
                             modifier = Modifier
                                 .fillMaxSize()
+                                .appSkipToLookaheadSize()
                                 .hazeSource(state = hazeState)
                                 .backdropContentSource(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -176,23 +200,18 @@ fun TraktListDetailScreen(
                             }
                         }
 
-                        // Haze 模糊标题栏（与发现页社区列表卡片配对 sharedBounds 转场）
-                        val loadingHeaderModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && uiState.listId > 0 && LocalSharedTransitionEnabled.current) {
-                            with(sharedTransitionScope) {
-                                Modifier.sharedBounds(
-                                    sharedContentState = rememberSharedContentState(key = "trakt-list-card-${uiState.listId}"),
-                                    animatedVisibilityScope = animatedVisibilityScope
-                                )
-                            }
-                        } else { Modifier }
+                        // Haze 模糊标题栏：不参与配对，但从第一帧就在 —— 与网格一样按落定尺寸布局，
+                        // 跟着容器裁剪逐渐露出；延迟入场会让顶栏位置先空着，落位时再整片闪出来。
+                        // 骨架阶段列表还没滚过，顶栏按透明处理，与真实内容态的未滚动状态一致
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .then(loadingHeaderModifier)
+                                .appSkipToLookaheadSize()
                                 .hazeTopBar(
                                     state = hazeState,
                                     style = hazeStyle,
-                                    blurRadius = 24.dp,
+                                    blurRadius = TopBarBackdropBlurRadius,
+                                    isContentUnderTopBar = false,
                                     scene = listGlassScene
                                 )
                                 .clickable(enabled = false, onClick = {})
@@ -246,6 +265,7 @@ fun TraktListDetailScreen(
                         state = gridState,
                         modifier = Modifier
                             .fillMaxSize()
+                            .appSkipToLookaheadSize()
                             .hazeSource(state = hazeState)
                             .backdropContentSource(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -262,6 +282,7 @@ fun TraktListDetailScreen(
                                 // posterUrl 已是完整 URL（ViewModel 统一），不要再拼尺寸前缀
                                 posterUrl = item.posterUrl,
                                 tmdbId = item.tmdbId,
+                                origin = SharedOrigin.of(SharedOrigin.TRAKT_LIST, uiState.listId.toString()),
                                 isInWatchlist = isInWatchlist,
                                 isWatched = isWatched,
                                 posterShimmer = shimmer,
@@ -299,23 +320,18 @@ fun TraktListDetailScreen(
                         scene = listGlassScene
                     )
 
-                    // Haze 模糊标题栏（与发现页社区列表卡片配对 sharedBounds 转场）
-                    val headerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && uiState.listId > 0 && LocalSharedTransitionEnabled.current) {
-                        with(sharedTransitionScope) {
-                            Modifier.sharedBounds(
-                                sharedContentState = rememberSharedContentState(key = "trakt-list-card-${uiState.listId}"),
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                        }
-                    } else { Modifier }
+                    // Haze 模糊标题栏：不参与配对，但从第一帧就在 —— 与网格一样按落定尺寸布局，
+                    // 跟着容器裁剪逐渐露出；延迟入场会让顶栏位置先空着，落位时再整片闪出来。
+                    // 未滚动时透明、滚动后显玻璃底，转场期仍停 haze 采样
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .then(headerModifier)
+                            .appSkipToLookaheadSize()
                             .hazeTopBar(
                                 state = hazeState,
                                 style = hazeStyle,
-                                blurRadius = 24.dp,
+                                blurRadius = TopBarBackdropBlurRadius,
+                                isContentUnderTopBar = hasContentUnderTopBar && !transitionActive,
                                 scene = listGlassScene
                             )
                             .clickable(enabled = false, onClick = {})
@@ -358,7 +374,6 @@ fun TraktListDetailScreen(
                 }
             }
         }
-    }
     }
 }
 

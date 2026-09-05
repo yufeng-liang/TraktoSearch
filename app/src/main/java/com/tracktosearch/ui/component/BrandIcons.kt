@@ -10,14 +10,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.unit.dp
 
-/** 激活页标题上方的场记板品牌图标，颜色随主题 primary/surface 变化。 */
+/** 场记板品牌图标；默认跟随主题，也可由特定页面传入固定品牌色。 */
 @Composable
-fun CinemaClapperIcon(modifier: Modifier = Modifier) {
-    val accent = androidx.compose.material3.MaterialTheme.colorScheme.primary
-    val paper = androidx.compose.material3.MaterialTheme.colorScheme.surface
+fun CinemaClapperIcon(
+    modifier: Modifier = Modifier,
+    accentColor: Color = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+    paperColor: Color = androidx.compose.material3.MaterialTheme.colorScheme.surface
+) {
     Box(
         modifier = modifier.size(width = 84.dp, height = 66.dp),
         contentAlignment = Alignment.TopCenter
@@ -26,7 +29,7 @@ fun CinemaClapperIcon(modifier: Modifier = Modifier) {
             modifier = Modifier
                 .size(width = 84.dp, height = 66.dp)
                 .clip(RoundedCornerShape(18.dp))
-                .background(accent)
+                .background(accentColor)
                 .drawBehind {
                     val bandWidth = 9.dp.toPx()
                     val bandStep = 19.dp.toPx()
@@ -40,7 +43,7 @@ fun CinemaClapperIcon(modifier: Modifier = Modifier) {
                             lineTo(left, 12.dp.toPx())
                             close()
                         }
-                        drawPath(path = path, color = paper)
+                        drawPath(path = path, color = paperColor)
                     }
                 }
         )
@@ -48,7 +51,7 @@ fun CinemaClapperIcon(modifier: Modifier = Modifier) {
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 12.dp)
-                .background(paper.copy(alpha = 0.28f))
+                .background(paperColor.copy(alpha = 0.28f))
                 .size(width = 60.dp, height = 2.dp)
         )
     }

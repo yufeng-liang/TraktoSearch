@@ -388,6 +388,44 @@ object DatabaseModule {
         }
     }
 
+    internal val MIGRATION_16_17 = object : Migration(16, 17) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // v16 -> v17：Trakt 的电影/剧集 ID 分属不同命名空间，且想看/已看共用此表。
+            // 旧表只以 traktId 为主键，会让同号的其他分类覆盖电影快照；改为 traktId + type。
+            db.execSQL(
+                """CREATE TABLE media_items_new (
+                    traktId INTEGER NOT NULL,
+                    tmdbId INTEGER NOT NULL,
+                    type TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    displayTitle TEXT NOT NULL,
+                    year INTEGER,
+                    genres TEXT NOT NULL,
+                    posterUrl TEXT,
+                    imdbId TEXT NOT NULL,
+                    traktRating REAL NOT NULL,
+                    listedAt TEXT NOT NULL,
+                    cachedAt INTEGER NOT NULL,
+                    PRIMARY KEY(traktId, type)
+                )""".trimIndent()
+            )
+            db.execSQL(
+                """INSERT INTO media_items_new (
+                    traktId, tmdbId, type, title, displayTitle, year, genres, posterUrl,
+                    imdbId, traktRating, listedAt, cachedAt
+                )
+                SELECT
+                    traktId, tmdbId, type, title, displayTitle, year, genres, posterUrl,
+                    imdbId, traktRating, listedAt, cachedAt
+                FROM media_items""".trimIndent()
+            )
+            db.execSQL("DROP TABLE media_items")
+            db.execSQL("ALTER TABLE media_items_new RENAME TO media_items")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_media_items_type ON media_items (type)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_media_items_type_listedAt ON media_items (type, listedAt)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -409,7 +447,7 @@ object DatabaseModule {
             "tracktosearch.db"
         )
             .openHelperFactory(factory)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
             .build()
     }
 

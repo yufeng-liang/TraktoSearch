@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.theme.GlassFillDarkSubtle
 
 /**
  * 详情页操作按钮组（想看 / 已看 / 评分）
@@ -66,7 +67,7 @@ fun ActionButtonRow(
             } else if (isLight) {
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
             } else {
-                Color.White.copy(alpha = 0.08f)
+                GlassFillDarkSubtle
             }
             val contentColor = if (action.isDestructive) {
                 MaterialTheme.colorScheme.error

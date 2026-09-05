@@ -68,14 +68,18 @@ class SwiftieQuizStateTest {
     }
 
     @Test
-    fun luckyHint_appearsOnThirdWrongAndStays() {
-        var state = SwiftieQuizState()
-        repeat(2) { state = state.append('1').append('2').submit().clearWrong() }
-        assertThat(state.showLuckyHint).isFalse()
-        state = state.append('1').append('2').submit()
-        assertThat(state.wrongCount).isEqualTo(3)
-        assertThat(state.showLuckyHint).isTrue()
-        // 提示出现后不再收回
-        assertThat(state.clearWrong().showLuckyHint).isTrue()
+    fun luckyHint_appearsOnTheFirstWrongAndStays() {
+        assertThat(SwiftieQuizState().showLuckyHint).isFalse()
+        // 没答满两位、还没提交过的中间态也不该给提示
+        assertThat(type('1').showLuckyHint).isFalse()
+        val wrong = type('1', '2').submit()
+        assertThat(wrong.wrongCount).isEqualTo(1)
+        assertThat(wrong.showLuckyHint).isTrue()
+        // 摇晃收尾清空输入，提示不跟着收回
+        assertThat(wrong.clearWrong().showLuckyHint).isTrue()
+        // 之后每次答错继续累加，提示一直在
+        val twice = wrong.clearWrong().append('9').append('9').submit()
+        assertThat(twice.wrongCount).isEqualTo(2)
+        assertThat(twice.showLuckyHint).isTrue()
     }
 }

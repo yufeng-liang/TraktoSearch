@@ -1,9 +1,9 @@
 package com.tracktosearch.ui.screen.settings
 
-import android.widget.Toast
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -20,8 +20,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -40,19 +40,19 @@ import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Animation
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Feedback
-import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
-import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.FormatQuote
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
-import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Notifications
@@ -80,12 +80,12 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -95,69 +95,76 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.kyant.backdrop.backdrops.LayerBackdrop
-import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.runtime.CompositionLocalProvider
-import com.tracktosearch.ui.component.LocalBackdrop
-import com.tracktosearch.ui.component.NeumorphicFrostedSurface
-import com.tracktosearch.ui.component.NeumorphicIconButton
-import com.tracktosearch.ui.component.DoubanLogo
-import com.tracktosearch.ui.component.GlassSurfaceRole
-import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
-import com.tracktosearch.ui.component.TopBarBackdropSourcePadding
-import com.tracktosearch.ui.component.TraktLogo
-import com.tracktosearch.ui.component.GlassScene
-import com.tracktosearch.ui.component.glassSceneForContent
-import com.tracktosearch.ui.component.hazeTopBar
-import com.tracktosearch.ui.component.hasListScrolled
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CooldownStatus
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.haptic.HapticModeSummary
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.hapticModeSummary
 import com.tracktosearch.ui.haptic.rememberAppHaptics
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.CloudThemeManager
+import com.tracktosearch.ui.component.DoubanLogo
+import com.tracktosearch.ui.component.GlassScene
+import com.tracktosearch.ui.component.GlassSurfaceRole
+import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.NeumorphicFrostedSurface
+import com.tracktosearch.ui.component.NeumorphicIconButton
+import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
+import com.tracktosearch.ui.component.TopBarBackdropSourcePadding
+import com.tracktosearch.ui.component.TraktLogo
 import com.tracktosearch.ui.component.UpdateDialog
-import com.tracktosearch.ui.screen.feedback.FeedbackViewModel
+import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.hasListScrolled
+import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
-import com.tracktosearch.ui.theme.MeshPreset
+import com.tracktosearch.ui.screen.feedback.FeedbackViewModel
+import com.tracktosearch.ui.theme.GlassBorderDarkSubtle
+import com.tracktosearch.ui.theme.GlassFillDarkSubtle
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.MeshPreset
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.theme.appSwitchColors
-import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.MarkRecordsEntryKey
+import com.tracktosearch.ui.component.SearchSourcesEntryKey
+import com.tracktosearch.ui.component.SettingsEntryCardCorner
+import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.StatisticsEntryKey
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import dev.chrisbanes.haze.hazeSource
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import java.text.SimpleDateFormat
+import java.util.Locale
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 /** EntryPoint 用于在设置页拿到 CloudThemeManager（关于页版本号连点拉起彩蛋题面） */
 @EntryPoint
@@ -230,6 +237,7 @@ fun SettingsScreen(
     onGlassPilot: () -> Unit = {},
     onSearchSourcesClick: () -> Unit = {},
     onPrivacyClick: () -> Unit = {},
+    onSplashQuoteClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -252,7 +260,6 @@ fun SettingsScreen(
     // 进设置页时已稳定,避免 SettingsViewModel 延迟构造导致的初始 false→true 跳变)
     val sharedTransitionEnabled = LocalSharedTransitionEnabled.current
     // 共享元素转场 scope（帮助与说明入口 → 帮助页标题栏配对）
-    val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
     // 豆瓣登录态:「重新同步豆瓣」点击前预检,未登录弹确认框引导登录
@@ -389,15 +396,13 @@ fun SettingsScreen(
     val currentMeshEnabled by viewModel.meshEnabled.collectAsStateWithLifecycle()
     // 霉粉彩蛋解锁位：未解锁时背景光晕列表里整项不出现「星云」
     val swiftieUnlocked by viewModel.swiftieUnlocked.collectAsStateWithLifecycle()
-    // 关于页版本号连点 3 次拉起彩蛋题面：题面显隐挂在 CloudThemeManager 上
+    // 关于页长按版本号拉起霉粉彩蛋题面：题面显隐挂在 CloudThemeManager 上
     val cloudThemeManager = remember {
         EntryPointAccessors.fromApplication(
             context.applicationContext,
             SettingsCloudThemeProvider::class.java
         ).cloudThemeManager()
     }
-    var versionTapCount by remember { mutableIntStateOf(0) }
-    var lastVersionTapAt by remember { mutableLongStateOf(0L) }
 
     val openUrl: (String) -> Unit = { url ->
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
@@ -574,14 +579,15 @@ fun SettingsScreen(
             // 豆瓣独立模式: StatisticsViewModel 支持基于豆瓣本地同步数据的统计，与 Trakt 统计同等可用
             if (isLoggedIn && (isDoubanMode || isTraktConnected)) {
                 item(key = "statistics_entry") {
-                    val statisticsEntryModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && sharedTransitionEnabled) {
-                        with(sharedTransitionScope) {
-                            Modifier.sharedBounds(
-                                sharedContentState = rememberSharedContentState(key = "settings-statistics-entry"),
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                        }
-                    } else { Modifier }
+                    val statisticsEntryModifier = Modifier
+                        .appSharedBounds(
+                            key = StatisticsEntryKey,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            corner = SharedCorner.uniform(SettingsEntryCardCorner),
+                        )
+                        // 目标侧走 RemeasureToBounds，动画边界会一路长到整页，本侧内容若跟着重测
+                        // 就会在淡出的那 200ms 里被拉散。按自己的落定尺寸布局，被裁剪着淡出即可。
+                        .appSkipToLookaheadSize()
                     StatisticsCard(
                         modifier = statisticsEntryModifier,
                         hazeState = settingsHazeState,
@@ -594,10 +600,19 @@ fun SettingsScreen(
             // 豆瓣独立模式: 标记记录页读取 Trakt history,无 trakt token,隐藏
             if (isLoggedIn && !isDoubanMode) {
                 item(key = "mark_records_entry") {
+                    val markRecordsEntryModifier = Modifier
+                        .appSharedBounds(
+                            key = MarkRecordsEntryKey,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            corner = SharedCorner.uniform(SettingsEntryCardCorner),
+                        )
+                        // 同统计入口：本侧按落定尺寸布局，不跟着长到整页的动画边界重测
+                        .appSkipToLookaheadSize()
                     MarkRecordsEntryCard(
-                    onClick = onMarkRecordsClick,
-                    hazeState = settingsHazeState
-                )
+                        modifier = markRecordsEntryModifier,
+                        onClick = onMarkRecordsClick,
+                        hazeState = settingsHazeState
+                    )
                 }
             }
 
@@ -611,7 +626,8 @@ fun SettingsScreen(
                     onAccentColorClick = { showAccentColorDialog = true },
                     onLanguageClick = { showLanguageDialog = true },
                     onDefaultTabClick = { showDefaultTabDialog = true },
-                    onHapticClick = { showHapticDialog = true }
+                    onHapticClick = { showHapticDialog = true },
+                    onSplashQuoteClick = onSplashQuoteClick
                 )
             }
 
@@ -648,7 +664,16 @@ fun SettingsScreen(
 
             // 搜索源（独立管理页入口，与标记记录入口卡片同构）
             item(key = "search_sources_entry") {
+                val searchSourcesEntryModifier = Modifier
+                    .appSharedBounds(
+                        key = SearchSourcesEntryKey,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        corner = SharedCorner.uniform(SettingsEntryCardCorner),
+                    )
+                    // 同统计入口：本侧按落定尺寸布局，不跟着长到整页的动画边界重测
+                    .appSkipToLookaheadSize()
                 SearchSourcesEntryCard(
+                    modifier = searchSourcesEntryModifier,
                     onClick = onSearchSourcesClick,
                     hazeState = settingsHazeState
                 )
@@ -808,22 +833,12 @@ fun SettingsScreen(
                     hazeState = settingsHazeState,
                     isCheckingUpdate = isCheckingUpdate,
                     onVersionClick = {
-                        // 版本号连点 3 次（每两下间隔 1.5s 内）拉起霉粉彩蛋题面，超时归零。
-                        //
-                        // 「检查更新」只在**一串连点的第一下**发起：原来 1、2 下都发，
-                        // 于是奔着彩蛋去的人会连打两次更新接口、进度条闪两回。
-                        // 第一下照发是为了不牺牲主功能 —— 只想查更新的人点一下就有反应，
-                        // 不必为了彩蛋把它推迟 1.5s
-                        val now = System.currentTimeMillis()
-                        versionTapCount = if (now - lastVersionTapAt > 1500) 1 else versionTapCount + 1
-                        lastVersionTapAt = now
-                        when {
-                            versionTapCount >= 3 -> {
-                                versionTapCount = 0
-                                cloudThemeManager.openSwiftieEgg()
-                            }
-                            versionTapCount == 1 -> viewModel.checkUpdate()
-                        }
+                        // 单击版本号只查更新；彩蛋入口改为长按触发，不再连点。
+                        viewModel.checkUpdate()
+                    },
+                    // 长按版本号拉起霉粉彩蛋题面，与检查更新互不干扰。
+                    onVersionLongClick = {
+                        cloudThemeManager.openSwiftieEgg()
                     },
                     onChangelogClick = {
                         viewModel.loadChangelog()
@@ -1412,6 +1427,7 @@ fun SettingsScreen(
 @Composable
 private fun MarkRecordsEntryCard(
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
     val isDark = isAppDarkTheme()
@@ -1421,17 +1437,20 @@ private fun MarkRecordsEntryCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(20.dp))
+            // 调用方的修饰符挂在外边距之内：容器变形要量的是卡片可见的那块圆角面，
+            // 挂在 padding 之外量到的是整行宽度，转场起始矩形会比用户看到的卡片宽出两侧留白。
+            .then(modifier)
+            .clip(RoundedCornerShape(SettingsEntryCardCorner))
             .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() },
         isDark = isDark,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(SettingsEntryCardCorner),
         backgroundColor = if (realBlur) {
-            if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.70f)
+            if (isDark) GlassFillDarkSubtle else Color.White.copy(alpha = 0.70f)
         } else {
             if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
             else Color.White.copy(alpha = 0.82f)
         },
-        borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
+        borderColor = if (isDark) GlassBorderDarkSubtle
                       else Color(0xFFE0E5EC).copy(alpha = 0.9f),
         elevation = 6.dp,
         blurRadius = 18.dp,
@@ -1493,6 +1512,7 @@ private fun MarkRecordsEntryCard(
 @Composable
 private fun SearchSourcesEntryCard(
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
     val isDark = isAppDarkTheme()
@@ -1502,17 +1522,20 @@ private fun SearchSourcesEntryCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(20.dp))
+            // 调用方的修饰符挂在外边距之内：容器变形要量的是卡片可见的那块圆角面，
+            // 挂在 padding 之外量到的是整行宽度，转场起始矩形会比用户看到的卡片宽出两侧留白。
+            .then(modifier)
+            .clip(RoundedCornerShape(SettingsEntryCardCorner))
             .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() },
         isDark = isDark,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(SettingsEntryCardCorner),
         backgroundColor = if (realBlur) {
-            if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.70f)
+            if (isDark) GlassFillDarkSubtle else Color.White.copy(alpha = 0.70f)
         } else {
             if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
             else Color.White.copy(alpha = 0.82f)
         },
-        borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
+        borderColor = if (isDark) GlassBorderDarkSubtle
                       else Color(0xFFE0E5EC).copy(alpha = 0.9f),
         elevation = 6.dp,
         blurRadius = 18.dp,
@@ -1588,12 +1611,12 @@ private fun PrivacyEntryCard(
         isDark = isDark,
         shape = RoundedCornerShape(20.dp),
         backgroundColor = if (realBlur) {
-            if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.70f)
+            if (isDark) GlassFillDarkSubtle else Color.White.copy(alpha = 0.70f)
         } else {
             if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
             else Color.White.copy(alpha = 0.82f)
         },
-        borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
+        borderColor = if (isDark) GlassBorderDarkSubtle
                       else Color(0xFFE0E5EC).copy(alpha = 0.9f),
         elevation = 6.dp,
         blurRadius = 18.dp,
@@ -1681,35 +1704,24 @@ private fun SharedTransitionSwitchCard(
 }
 
 /**
- * 开屏每日台词开关卡片（外观分组下，独占一行）。
+ * 开屏每日台词入口卡片（外观分组下，独占一行）。
  *
- * 开关状态在本函数内部收集：切换时只重组本卡片，不波及外观分组其余项。
+ * 从开关改成入口：开屏那一句和日签是同一件事的两面，凑成一个二级页才说得清，
+ * 见 SplashQuoteScreen。这里不再显示开关状态——状态在二级页第一行，点进去就看见。
  */
 @Composable
-private fun SplashQuoteSwitchCard(
-    viewModel: SettingsViewModel,
+private fun SplashQuoteEntryCard(
+    onClick: () -> Unit,
     containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
-    val haptics = rememberAppHaptics()
-    val enabled by viewModel.splashQuoteEnabled.collectAsStateWithLifecycle()
     SettingsItemCard(
         icon = Icons.Rounded.FormatQuote,
         title = stringResource(R.string.settings_splash_quote),
         subtitle = stringResource(R.string.settings_splash_quote_subtitle),
-        // 行区域那一记归 SettingsItemCard 自己的 hapticClickable，这里不能再发 —— 否则点行就是两下
-        onClick = { viewModel.setSplashQuoteEnabled(!enabled) },
-        containerColor = containerColor,
-        trailing = {
-            Switch(
-                checked = enabled,
-                // 直接拨开关是另一个手势面（与行点一次只命中一个），按新状态发 toggle
-                onCheckedChange = { value ->
-                    haptics.toggle(value)
-                    viewModel.setSplashQuoteEnabled(value)
-                },
-                colors = appSwitchColors()
-            )
-        }
+        // 这一记归 SettingsItemCard 自己的 hapticClickable；开关本身搬去了
+        // ui/screen/splashquote 那一页，触感跟着开关走
+        onClick = onClick,
+        containerColor = containerColor
     )
 }
 
@@ -1767,7 +1779,8 @@ private fun AppearanceGroupItem(
     onAccentColorClick: () -> Unit,
     onLanguageClick: () -> Unit,
     onDefaultTabClick: () -> Unit,
-    onHapticClick: () -> Unit
+    onHapticClick: () -> Unit,
+    onSplashQuoteClick: () -> Unit
 ) {
     val currentTheme by viewModel.themeMode.collectAsStateWithLifecycle()
     val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
@@ -1844,9 +1857,9 @@ private fun AppearanceGroupItem(
             onToggle = { viewModel.setSharedTransitionEnabled(it) },
             containerColor = Color.Transparent
         )
-        // 开屏每日台词开关(默认开启):关闭后系统场记板结束直接进主页
-        SplashQuoteSwitchCard(
-            viewModel = viewModel,
+        // 开屏每日台词入口：开关与日签日历都在二级页里
+        SplashQuoteEntryCard(
+            onClick = onSplashQuoteClick,
             containerColor = Color.Transparent
         )
         // 触感反馈三档(默认跟随系统):点开选档位，副标题回显当前档或环境限制
@@ -2027,6 +2040,7 @@ private fun AboutGroupItem(
     hazeState: HazeState?,
     isCheckingUpdate: Boolean,
     onVersionClick: () -> Unit,
+    onVersionLongClick: () -> Unit,
     onChangelogClick: () -> Unit,
     onHelpClick: () -> Unit,
     onOpenSourceClick: () -> Unit,
@@ -2043,6 +2057,7 @@ private fun AboutGroupItem(
             latestVersion = latestVersion,
             isCheckingUpdate = isCheckingUpdate,
             onVersionClick = onVersionClick,
+            onVersionLongClick = onVersionLongClick,
             onChangelogClick = onChangelogClick,
             onHelpClick = onHelpClick,
             onOpenSourceClick = onOpenSourceClick,
@@ -2318,6 +2333,7 @@ private fun AboutItem(
     latestVersion: String?,
     isCheckingUpdate: Boolean,
     onVersionClick: () -> Unit,
+    onVersionLongClick: () -> Unit,
     onChangelogClick: () -> Unit,
     onHelpClick: () -> Unit,
     onOpenSourceClick: () -> Unit,
@@ -2343,6 +2359,7 @@ private fun AboutItem(
             loadingIcon = isCheckingUpdate,
             subtitleColor = versionSubtitleColor,
             onClick = onVersionClick,
+            onLongClick = onVersionLongClick,
             containerColor = containerColor
         )
         SettingsCard(

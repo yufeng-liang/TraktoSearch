@@ -53,6 +53,7 @@ CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments
 ## 工作方式
 - 重要修改/功能性损失先说明计划再执行
 - 大任务拆可独立、范围不重叠子任务，按依赖用子智能体并行；主智能体统一审查/整合/验证/提交
+- 子代理并行期间禁止执行 Gradle（assembleDebug/test/lint 等一切 Gradle 任务）：本机可用内存撑不住多个 daemon，抢内存会让 daemon 起不来或测试 worker 被拖死并静默漏跑末尾的测试类。派子代理时在提示里明确写「不要跑 Gradle」，让它只改代码和写测试；构建与全部测试由主代理在所有子任务合并后统一跑一次
 - 修复/增功能/改 UI 验证通过后立即按实际改动提交，不合并无关功能
 - 大量删除前先本地提交一次便回滚
 - 多步任务按依赖推进：无共享写集并行，主智能体集成后最终 debug 验证
@@ -94,17 +95,31 @@ CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments
 - AuthManager.check() 收到 401 后刷新成功只允许重试一次 check；重试仍 401 应直接失败，禁止再次进入刷新递归，否则会 StackOverflow。
 - 单测优先保留认证/安全/缓存一致性/数据库与网络契约及用户交互；仅静态渲染、存在性、不崩溃、精确视觉参数和同一实现分支的重复空输入/CRUD 测试属于低收益，设计调整时应删除或合并，不要靠同步旧快照维持总量。
 - Robolectric 测试若不验证 Application 启动，且清单 Application 会启动 WorkManager/后台线程，使用 `@Config(application = android.app.Application::class)` 隔离；否则沙箱销毁后的残留线程可能污染下一用例。
-- Git worktree 建新分支后 local.properties 不在版本库，须手动从 F:\trae-project\local.properties 复制到 worktree 目录
+- Git worktree 建新分支后 local.properties 不在版本库。本机 `ANDROID_HOME=H:\android\Sdk` 已设，缺 local.properties 也能构建（2026-09-01 实测 worktree 内无该文件仍 assembleDebug 成功）；只有该环境变量失效时才需从 F:\trae-project\local.properties 手动复制
 - 单测跨用例污染优先查 preferencesDataStore：委托是进程单例，各用例新建 Repository 仍读同一份磁盘数据；PersistentTtlCache 落盘还有 400ms 攒批且跑在 Repository 私有 scope 上，用例结束后仍会补写。setup 清 persistentCaches、teardown 取消落盘 scope 再清一次
+- Watchlist 四类离线快照共用 `media_items` 表，主键必须包含 `(traktId, type)`：Trakt 电影/剧集 ID 分属不同命名空间，想看/已看也可能同号；只用 `traktId` 会让后写分类覆盖电影快照，冷启动列表少一项并导致后续卡片整体前移。改主键时同步加无损 Room 迁移与跨分类同号回归测试。
 - 详情页「以 TMDB 为准」类优先级改动须区分纯豆瓣条目（tmdbId=0）：无 TMDB 数据时无条件保留当前值会把豆瓣/Rexxar 结果永久挡在 UI 外
 - Compose 加载态对齐按容器语义处理：整页用 `Box(fillMaxSize, contentAlignment = Center)`，独占状态行用 `Row(fillMaxWidth, horizontalArrangement = Center)`，`AlertDialog.text` 内转圈也要先包全宽居中容器；按钮、图标槽、卡片遮罩等绑定具体操作对象的 loading 保持局部位置，勿一刀切改成整页居中
+- 激活页品牌场记板需要保持浅色模式外观时，不要直接复用深色 `MaterialTheme.colorScheme.primary/surface`；给 `CinemaClapperIcon` 提供显式颜色参数，只在激活页传入固定品牌棕与浅色纸面，其他页面继续保留主题适配。
+- 从 `ModalBottomSheet` 改成全屏内联面板时，清掉旧 Sheet 的 `fillMaxHeight(0.8f)` 等高度比例；`Column` 内标题栏后的可滚动内容用 `weight(1f)` 占满剩余高度，否则会在屏幕底部留下固定比例空白。用固定尺寸 Compose 布局测试比较内容底边与面板底边。
 - 开源相关页的依赖版本禁止手工复制：`app/build.gradle.kts` 从 `libs` Version Catalog 构建 `OPEN_SOURCE_VERSION_CATALOG_BASE64`，`OpenSourceData` 只声明版本别名；Gradle API 会把 `jieba-analysis` 这类连字符别名规范化成 `jieba.analysis`，解析时须统一 `-`/`_` 为 `.`
 - dsh plugin/dshmarket 更新报 ERR_PNPM_UNEXPECTED_STORE 是 pnpm 11 store 漂移：pnpm 11 配置键是驼峰 storeDir，只认 C:\Users\15778\AppData\Local\pnpm\config\config.yaml（profile .npmrc 连字符 store-dir 无效）；已全局写 storeDir: C:\Users\15778\.pnpm\store\v11 修复。git 源插件首次安装被 pnpm 拦 prepare 脚本，须 ~\.dsh\profiles\web\pnpm-workspace.yaml 的 allowBuilds 置 true 后重跑
 - 授权网关调试 App 默认用可直连 Pages 代理 https://tracktosearch-gateway.pages.dev/gateway-api 转发 auth-worker；勿把 workers.dev 直连写面向普通用户构建，否则部分网络超时
 - 激活后短暂进主界面又回激活页，先核 worktree gateway.base.url 和构建产物 GATEWAY_BASE_URL，再查 auth check 请求是否带 Bearer；不能只凭页面现象判邀请码失效
 - Trakt users/me?extended=full 可能只返用户名无头像；补拉优先 users/{username}/profile，网关或上游返 405 再回退 users/{username}，持久化成功返 images.avatar.full
 - assets/quotes.json 的 id 只增不删不改名：日签表 daily_stamp 只存 (epochDay, quoteId)，改名等于把用户翻过的历史卡片抹成打不开的空格子。要换台词或换片就新增一条 id，旧条目留着；池子里多一条只影响之后每天取模选到谁，不动已落库的历史。改台词文案、片名、关键词、海报路径都可以，唯独 id 不能动
+- 日签卡片外层用 `drawWithContent` 旁路录 `Picture` 时，不能再把 `Picture` 回放当屏幕内容：Coil `AsyncImage` 成功后的子绘制节点可能未被录入，表现为卡纸和文字正常但海报空白。屏幕应直接 `drawContent()`，`Picture` 只供导出；同时在 `onSuccess` 递增父层 draw 阶段读取的 revision，明确让整张卡重画。Robolectric `captureToImage` 对这条 Coil 位图链会误报，视觉结论用真机而非模拟器核验
+- 开屏每日台词可能先在登录页后台准备、进入主页后才真正显示；`SplashQuoteLoader` 只能组装画面和计算首看档位，禁止提前写“已展示”。首次序列进度、当天已看标记和日签签到统一放在 `SplashQuoteOverlay.onSplashQuoteShown`，否则用户在激活页退出或 OAuth 期间进程被回收会吞掉首次体验。
 - 访客模式不是独立授权态，而是“网关已激活 + Trakt 未连接 + 豆瓣未登录”的派生会话；勿再用单独 GuestModeStorage 决定启动路由，否则网关撤销/过期后会绕过激活页。激活成功页必须停留让用户选择 Trakt、豆瓣或访客，网关 EXPIRED 也不能自动拉起 Trakt OAuth
+- App 内平台登录提示必须携带明确目标（Trakt/豆瓣），不能只存 `showLoginPrompt` 布尔值；Trakt 确认按钮直调导航层 OAuth Custom Tab，豆瓣确认按钮直进 `DoubanLoginScreen`，`Routes.LOGIN` 仅用于网关未激活/失效，不得作为平台登录兜底
+- 删掉一层 `CompositionLocalProvider` 包裹时，删掉的 `{` 与 `}` 必须是同一对：开括号在页面上游（如 `Scaffold` 之前）、闭括号却顺手删了内层某个 provider 的那一个，全文件花括号仍然平衡、Kotlin 照样编译，但从那处起整棵树往里深了一层。DetailScreen 就这样把悬浮按钮、Snackbar 和全屏查看器全塞进了 `hazeSource` 的 Box，而注释还写着「hazeSource Box 结束」。改完用花括号计数核验块的真实闭合行，别信缩进和收尾注释——两者都不参与编译
+- haze 2.0.0-beta02 起 `hazeEffect` 采到的源里若有一个正处于自己的 `drawContent()`（即 effect 画在 source 子树内），直接 `IllegalArgumentException: Modifier.hazeEffect nodes cannot draw an ancestor Modifier.hazeSource`，旧版本只是静默丢源不模糊。`HazeSourceSelection.Behind` 靠 `findNearestAncestor` 找同 state 的祖先源再留 zIndex 更小的，能自动排除；显式传 `HazeSourceSelection.All` 的调用点（详情页/豆瓣详情页的悬浮按钮）没有这层保护，一旦被嵌进源子树就是必崩。R8 包的堆栈无用，用 debug 包取未混淆栈：`HazeSourceNode.draw` → `drawContentSafely` → …… → `HazeEffectNode.draw` 之间的 `LayoutNode.draw$ui` 数就是两者相隔的层数
+- macrobenchmark 前后对比之前先核实基线与被测构建之间只有本次改动：本仓库出现过并行会话的 fast-forward merge（`886cf78b`，改详情页头部 210 行 + ViewModel 109 行），四条转场用例里三条经过详情页，数据直接不可归因。跑 `git log --oneline <基线>..HEAD` 和 `git diff --stat <基线> HEAD` 确认改动范围，并记下被测 APK 的构建时刻与 merge 时刻的先后
+- Compose 共享元素「整页容器变形」的成本是转场期每帧 `layer.record { drawContent() }` 再 `drawLayer`：整页绘制命令逐帧重记，而静止页面根本不 record、只由 GPU 合成。页面里有热力图网格、词云这类内容时这一项就是转场期 CPU 帧耗时的主因，`scaleToBounds` / `skipToLookaheadSize` 都省不掉它（那两个省的是测量，不是绘制）。`sharedBounds(renderInOverlayDuringTransition = false)` 能省掉 record，但整页配对不能用：pop 时目标页画在上面，正在收缩的来源页被完全盖住，收缩动画看不见
+- 别把「在组合阶段读动画值」当成默认要修的性能问题，先量：把 `animateDp` 从组合阶段推到绘制阶段（自定义读 State 的 `Shape` + `graphicsLayer {}` block）在本项目实测反而更差（统计页转场 frameDurationCpuMs P90 22.1→23.6 ms），因为整页 body 的子项全 skippable、重组本身很便宜，而 `graphicsLayer {}` 的 block 每帧触发的放置阶段失效比那次重组更贵
+- 整页容器变形的共享节点内侧必须自己铺一层不透明底色（`.appSharedBounds(...).background(colorScheme.background)`，并把该页 Scaffold 的 `containerColor` 置透明）。少了这一层，变形期那块区域就直接看到对面那一页：打开标记记录页的瞬间设置页的「外观」「搜索源」整块叠在本页上。底色只能挂在共享节点内侧，挂外侧会先铺满一整屏，「卡片长成页面」退化成「页面已经在了，只是内容从一个小矩形里长出来」。七个整页入口曾漏掉标记记录页和发现筛选页两处，排查时逐个 grep `corner = SharedCorner.flattenFrom` 后面有没有 `.background(`
+- 整页容器变形不能带 `fadeIn`/`fadeOut`：容器覆盖半屏到整屏，淡的那段时间它整片半透明，两页互相穿透。`SharedElementType.Bounds` 的默认进出动画因此是 `None`，揭示完全交给边界裁剪 + 圆角动画。代价是旧页内容在收缩结束时硬切消失，而不是 Material 规范里的容器内交叉溶解 —— 交叉溶解在两页内容差异大时看着像脏叠影，本项目选了硬切
+- git bash 里 `adb pull /sdcard/x.png` 会被 msys 路径转换改成 `C:/Program Files/Git/sdcard/x.png` 而报 `failed to stat remote object`；写成 `//sdcard/x.png` 或加 `MSYS_NO_PATHCONV=1`。`adb shell '...'` 单引号里的设备路径不受影响，所以「screencap 成功、pull 失败」是正常现象，不是设备没生成文件
 - compileSdk 37 给 View 加了 performHapticFeedback(HapticFeedbackRequest) 重载，MockK 里单参 `performHapticFeedback(any())` 在它与 `(int)` 之间歧义，报 `Cannot infer type for type parameter 'T'`；mock View 触感一律写 `any<Int>()`。同类问题适用于任何被新重载撑成多签名的方法：报这条错先查 SDK 是否新增重载，而不是改 mock 结构
 
 ## Git 规范
@@ -129,6 +144,10 @@ CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments
 - Gradle installDebug 设备筛选可能因 ADB 返 API 属性异常跳过；先用 adb -s <serial> shell getprop ro.build.version.release 和 ro.build.version.sdk 记实际值
 - Gradle 提示 minSdkVersion 不兼容仍用 adb -s <serial> install -r <apk> 事实核验；曾 Gradle 报 API 21 但 ADB 直装返 Success 不一致
 - 安装成功须续 exec am start、UI 树检查、screencap 后 adb pull 截图、logcat -b crash，不能凭安装成功宣称功能过。系统属性与用户描述不一致保留命令输出报差异
+- 装 debug/benchmark 包报 INSTALL_FAILED_UPDATE_INCOMPATIBLE 先查签名不一致，勿当成「残留包没清干净」：本机设了 ANDROID_SDK_HOME=H:\Android_SDK\.android，AGP 在其后再拼一层 .android/debug.keystore，实际用的是 H:\Android_SDK\.android\.android\debug.keystore（该目录名本身以 .android 结尾，所以路径是双层，别照 ANDROID_SDK_HOME 直接拼一层去找，找不到不等于没用它）；而机上已装的应用是 Android Studio 用 C:\Users\15778\.android\debug.keystore 签的，两把不是同一把。benchmark 构建同样受影响（initWith(release) 后把 signingConfig 指回 debug）
+- macrobenchmark 的 test APK 不需要与被测应用同签名：pm list instrumentation 显示它 target 的是自己（com.tracktosearch.benchmark），instrumentation 的同签名限制只对「作用于别的包」成立。benchmark/build.gradle.kts 里那条「必须与被测应用同签名」的注释是错的，别照它去重签 test APK
+- 签名不一致禁止用卸载重装解决：会连带清掉网关激活态、Trakt/豆瓣登录和想看已看本地数据。正确做法是用 Studio 那把 keystore 重签后原地 install -r，apksigner sign --ks C:\Users\15778\.android\debug.keystore --ks-pass pass:android（debug keystore 的公开默认口令，非本项目凭证）--ks-key-alias androiddebugkey
+- 核对两边证书：apksigner verify --print-certs <apk> 看 APK 实际证书 SHA-256，keytool -list -v -keystore <path> 看 keystore 指纹，二者一致才可原地覆盖安装
 
 ## Android 开屏截图验收经验
 - 开屏视觉验收须记设备实际分辨率/密度/API/安装结果/主 Activity/启动进程/UI 树/logcat -b crash；构建成功≠真机视觉过

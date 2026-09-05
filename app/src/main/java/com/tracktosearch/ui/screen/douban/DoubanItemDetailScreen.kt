@@ -1,6 +1,4 @@
 package com.tracktosearch.ui.screen.douban
-import com.tracktosearch.ui.theme.RatingGold
-
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -13,6 +11,9 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -42,13 +43,13 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.CloudOff
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Movie
@@ -68,7 +69,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -95,14 +95,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -147,32 +148,51 @@ import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.ActionButtonRow
 import com.tracktosearch.ui.component.ActionItem
+import com.tracktosearch.ui.component.AppPullToRefreshIndicator
+import com.tracktosearch.ui.component.DetailTopBarIcon
 import com.tracktosearch.ui.component.DropdownAnchorMenu
+import com.tracktosearch.ui.component.EmptyStateCard
+import com.tracktosearch.ui.component.LocalBackdrop
+import com.tracktosearch.ui.component.LocalFullscreenSharedElement
+import com.tracktosearch.ui.component.fullscreenSharedElementKey
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
-import com.tracktosearch.ui.component.DetailTopBarIcon
-import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
-import com.tracktosearch.ui.component.LocalFullscreenSharedKey
-import com.tracktosearch.ui.component.LocalBackdrop
+import com.tracktosearch.ui.component.rememberAppPullToRefreshState
 import com.tracktosearch.ui.component.zoomSharedSource
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.screen.detail.DETAIL_TOP_BAR_HEIGHT
+import com.tracktosearch.ui.screen.detail.DetailMetaChip
+import com.tracktosearch.ui.screen.detail.DetailMetaChips
+import com.tracktosearch.ui.screen.detail.DetailSectionHeader
+import com.tracktosearch.ui.screen.detail.DoubanHeaderSkeleton
+import com.tracktosearch.ui.screen.detail.ExpandableText
+import com.tracktosearch.ui.screen.detail.FilterSection
 import com.tracktosearch.ui.screen.detail.PosterFullscreenOverlay
+import com.tracktosearch.ui.screen.detail.detailBarColor
+import com.tracktosearch.ui.screen.detail.detailOnPosterColor
+import com.tracktosearch.ui.screen.detail.detailOnPosterVariantColor
+import com.tracktosearch.ui.theme.RatingGold
+import com.tracktosearch.ui.theme.RatingGoldDim
 import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.showToast
 import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeSourceSelection
+import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -182,21 +202,16 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import javax.inject.Inject
+import kotlinx.coroutines.withTimeoutOrNull
+
 
 // ==================== ViewModel ====================
-
-// 豆瓣短评的 CJK 引号包裹格式(「短评」)。
-// 妥协方案：现有 string 资源没有带引号占位符的评论 key 且本次不允许新增资源，
-// 引号符号随语言变化的理想方案需新增 string 资源(如 douban_comment_quoted「%1$s」)。
-private const val COMMENT_QUOTES = "\u300c%1\$s\u300d"
 
 /**
  * 豆瓣详情加载阶段（详情Tab内联状态用）。
@@ -355,6 +370,48 @@ class DoubanItemDetailViewModel @Inject constructor(
                     isLoading = false,
                     error = e
                 )
+            }
+        }
+    }
+
+    /**
+     * 下拉刷新：重新解析详情数据源，并在资源 Tab 上强制重搜。
+     *
+     * 不能直接复用 [loadFailure]：它有 `failure != null` 早退（同一条目第二次调用直接返回，
+     * 刷新等于没发生），且会把整个 state 重置成 `DoubanItemDetailUiState(isLoading = true)`
+     * 把已有 failure 抹成 null，导致刷新期间整页闪回空白。这里只置 isLoading，
+     * 保留现有内容，请求失败时页面内容也不会被清掉。
+     */
+    fun pullToRefresh() {
+        val doubanId = currentDoubanId.takeIf { it.isNotEmpty() } ?: return
+        _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+        viewModelScope.launch {
+            try {
+                val source = loadDetailSource(doubanId)
+                if (source == null) {
+                    _uiState.value = _uiState.value.copy(isLoading = false)
+                    return@launch
+                }
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    failure = source.failure,
+                    isLegacyFailure = source.isLegacyFailure,
+                    detailInfo = source.detailInfo,
+                    detailLoadPhase = if (source.detailInfo != null) DetailLoadPhase.DONE
+                    else _uiState.value.detailLoadPhase
+                )
+                prefetchPosterColor(source.failure.posterUrl)
+                if (source.isLegacyFailure && source.detailInfo == null) {
+                    loadDetailInfo(source.failure)
+                }
+                // 资源已搜过才重搜：没搜过时用户还没进资源 Tab，不该由下拉触发 12+ 并发请求
+                if (_uiState.value.searchResults.isNotEmpty() || _uiState.value.searchError != null) {
+                    searchResources(forceRefresh = true)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(isLoading = false, error = e)
             }
         }
     }
@@ -1081,6 +1138,23 @@ fun DoubanItemDetailScreen(
     val copiedToast = stringResource(R.string.screen_douban_item_detail_copied)
     val haptics = rememberAppHaptics()
     val listState = rememberLazyListState()
+    // 下拉刷新：重新解析详情数据源（+ 已搜过资源时重搜）。整页原先只能靠退出重进刷新。
+    var doubanRefreshPending by remember { mutableStateOf(false) }
+    val doubanPullToRefreshState = rememberAppPullToRefreshState {
+        viewModel.pullToRefresh()
+        doubanRefreshPending = true
+    }
+    LaunchedEffect(doubanRefreshPending) {
+        if (!doubanRefreshPending) return@LaunchedEffect
+        // 等 isLoading 落下；资源重搜也一并等。10s 兜底，避免某一路请求挂死时指示器不回弹
+        withTimeoutOrNull(10_000) {
+            snapshotFlow { uiState.isLoading || uiState.isSearching }
+                .dropWhile { !it }
+                .first { !it }
+        }
+        doubanPullToRefreshState.finishRefresh()
+        doubanRefreshPending = false
+    }
     val hazeState = remember { HazeState() }
     val isDarkTheme = isAppDarkTheme()
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -1124,9 +1198,12 @@ fun DoubanItemDetailScreen(
             contentReady = true
         }
     }
-    val contentAlpha by remember(contentReady) {
-        derivedStateOf { if (contentReady) 1f else 0f }
-    }
+    // 与普通详情页一致的淡入：原先是 0/1 硬跳变，内容到达时整块闪现
+    val contentAlpha by animateFloatAsState(
+        targetValue = if (contentReady) 1f else 0f,
+        animationSpec = tween(durationMillis = 220),
+        label = "doubanContentAlpha"
+    )
 
     // 拦截系统返回手势
     BackHandler(enabled = true) {
@@ -1171,8 +1248,9 @@ fun DoubanItemDetailScreen(
         // 海报全屏查看打开时，把该 key 广播给海报源，让源侧置不可见，
         // 保证同一 key 同时只有一侧是 target（否则缩放转场方向会反）
         CompositionLocalProvider(
-            LocalFullscreenSharedKey provides
+            LocalFullscreenSharedElement provides fullscreenSharedElementKey(
                 if (showPosterFullscreen) "douban-poster-zoom-bounds-$doubanId" else null
+            )
         ) {
         Box(
             modifier = Modifier
@@ -1190,6 +1268,39 @@ fun DoubanItemDetailScreen(
                 )
             } ?: Modifier
 
+            val failure = uiState.failure
+
+            // 顶栏与吸顶 Tab 栏共用一条实色底（取色见 DetailVisuals.detailBarColor），与影视详情页同一套。
+            // isPinned 判定原先抄的是普通详情页的 `>= 1`，但本页 item 顺序是
+            // header(0) / writeback_actions(1) / tab_row(2)，导致 Tab 还在屏幕中段
+            // 底色就变实色了。这里按本页真实 index 修正为 `>= 2`。
+            // 提到采样源 Box 之外算：状态栏条、吸顶栏、标题淡入三处要用同一份。
+            val isPinned by remember {
+                derivedStateOf { listState.firstVisibleItemIndex >= 2 }
+            }
+            val pinnedBarColor = detailBarColor()
+            val barColor by animateColorAsState(
+                targetValue = if (isPinned) pinnedBarColor else Color.Transparent,
+                animationSpec = tween(durationMillis = 180),
+                label = "doubanBarColor"
+            )
+            // 沉浸渐变上的文字色：本页的栏目标题、演职员名等直接画在渐变上（不在卡片里），
+            // 按海报亮度自适应。原先取的是吸顶 Tab 栏的文字色，那个值现在跟着实色顶栏走主题色，
+            // 拿来染渐变上的文字会在深色海报 + 浅色主题时对比度不足。
+            val onImmersiveColor = detailOnPosterColor(uiState.posterDominantColor)
+
+            // 吸顶栏标题行里的条目名：滚过头部才淡入。原先滚过头部就只剩几个孤立的
+            // 悬浮圆按钮，页面上没有任何地方还写着在看哪个条目。
+            val topBarTitle = uiState.failure?.title
+                ?.let { if (it.contains("/")) it.substringBefore("/") else it }
+                ?.trim()
+                .orEmpty()
+            val topBarTitleAlpha by animateFloatAsState(
+                targetValue = if (isPinned && topBarTitle.isNotEmpty()) 1f else 0f,
+                animationSpec = tween(durationMillis = 220),
+                label = "doubanTopBarTitleAlpha"
+            )
+
             // blur 与 glass 都注册同一 Haze source：blur 直接采样，glass 悬浮控件用同一
             // Haze 状态做实时采样（悬浮控件处 LocalBackdrop=null 强制退化），保证沉浸渐变与
             // 滚动内容都能被采到。
@@ -1199,59 +1310,43 @@ fun DoubanItemDetailScreen(
                     .hazeSource(state = hazeState, zIndex = 0f)
                     .then(immersiveBackgroundModifier)
             ) {
-            val failure = uiState.failure
-
-            // Tab 栏底色/文字颜色计算(在 LazyColumn 之外定义,让状态栏区域也能用)
-            // - 非吸顶(tab 还在海报下方):底色透明,文字按渐变中段混合色亮度自适应
-            // - 吸顶(tab 滚动到顶部固定):底色为沉浸色与白色 0.635 混合,文字按底色亮度自适应
-            val isPinned by remember {
-                derivedStateOf { listState.firstVisibleItemIndex >= 1 }
-            }
-            val tabContainerColor = if (isPinned) {
-                uiState.posterDominantColor?.let { c ->
-                    lerp(MaterialTheme.colorScheme.background, c, 0.635f)
-                } ?: MaterialTheme.colorScheme.surface
-            } else {
-                Color.Transparent
-            }
-            val tabContentColor = when {
-                isPinned && tabContainerColor.luminance() <= 0.5f -> Color.White
-                !isPinned -> {
-                    // 非吸顶时 tab 在渐变中段,用该位置混合色亮度判断文字颜色
-                    val midColor = uiState.posterDominantColor?.let { c ->
-                        lerp(c, MaterialTheme.colorScheme.background, 0.8f)
-                    } ?: MaterialTheme.colorScheme.background
-                    if (midColor.luminance() <= 0.5f) Color.White else MaterialTheme.colorScheme.onSurface
-                }
-                else -> MaterialTheme.colorScheme.onSurface
-            }
-
-            // 吸顶时状态栏区域背景与 tabContainerColor 一致,非吸顶透明(透出渐变)
+            // 状态栏条与顶栏同色，滚过临界点时一起淡入；非吸顶透明（透出渐变）
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .windowInsetsTopHeight(WindowInsets.statusBars)
-                    .background(tabContainerColor)
+                    .background(barColor)
                     .align(Alignment.TopCenter)
             )
 
-            if (uiState.isLoading) {
+            if (uiState.isLoading && failure == null) {
+                // 首屏骨架：原先是整页空白居中转一个圈，海报和标题的位置完全没有预告，
+                // 数据到达时整页跳一下。下拉刷新时 failure 已有内容，不该退回骨架。
                 Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding(),
+                    contentAlignment = Alignment.TopCenter
                 ) {
-                    CircularProgressIndicator()
+                    DoubanHeaderSkeleton(modifier = Modifier.padding(top = 56.dp))
                 }
             } else if (failure != null) {
-                // 通过 LocalContentColor 把 tabContentColor 传下去,内部搜索源/网盘类型等文字可自适应
+                // 沉浸渐变上的文字（栏目标题、内部搜索源/网盘类型等）随海报亮度自适应
                 CompositionLocalProvider(
-                    LocalContentColor provides tabContentColor
+                    LocalContentColor provides onImmersiveColor
                 ) {
+                AppPullToRefreshIndicator(
+                    state = doubanPullToRefreshState,
+                    contentTop = 8.dp,
+                    modifier = Modifier.statusBarsPadding()
+                )
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .statusBarsPadding(),
+                        .statusBarsPadding()
+                        .nestedScroll(doubanPullToRefreshState.connection)
+                        .graphicsLayer { translationY = doubanPullToRefreshState.offset.floatValue },
                     contentPadding = PaddingValues(bottom = 16.dp)
                 ) {
                     // 头部区域:海报 + 标题 + 子标题 + 豆瓣评分 + 我的评分 + 标记信息 + 短评
@@ -1286,47 +1381,71 @@ fun DoubanItemDetailScreen(
                         }
                     }
 
-                    // Tab 行(吸顶) —
-                    // - 非吸顶(tab 还在海报下方):透明
-                    // - 吸顶:沉浸色与白色 0.5f 混合,文字按底色亮度自适应
+                    // 标题行 + Tab 行(吸顶)：与影视详情页同一处理 —— 两行同在一个 Column 里
+                    // 共用一次铺底、中间不加分隔线，吸顶后就是一整条实色顶栏。原先标题栏是
+                    // 页面外层一条独立的 Haze 毛玻璃，与这条吸顶栏深浅不一地叠在一起。
+                    // 标题行高度恒定（不吸顶时只是透明占位），否则吸顶瞬间 sticky item
+                    // 长高会把下方内容整体往下推一截。
                     stickyHeader(key = "tab_row") {
-                        // isPinned / tabContainerColor / tabContentColor 在 LazyColumn 外已计算
-                        PrimaryTabRow(
-                            selectedTabIndex = selectedTab,
-                            containerColor = tabContainerColor,
-                            contentColor = tabContentColor,
-                            modifier = Modifier.alpha(contentAlpha)
+                        Column(
+                            modifier = Modifier
+                                .alpha(contentAlpha)
+                                .background(barColor)
                         ) {
-                            Tab(
-                                selected = selectedTab == 0,
-                                onClick = {
-                                    haptics.segmentTick()
-                                    selectedTab = 0
-                                },
-                                text = {
-                                    Text(
-                                        stringResource(R.string.screen_douban_item_detail_tab_info),
-                                        maxLines = 1
-                                    )
-                                }
-                            )
-                            Tab(
-                                selected = selectedTab == 1,
-                                onClick = {
-                                    haptics.segmentTick()
-                                    selectedTab = 1
-                                    // 首次切换到资源搜索 Tab 时才触发搜索(延迟加载,减少进入页面时的并发负担)
-                                    if (!uiState.searchAttempted && !uiState.isSearching) {
-                                        viewModel.searchResources()
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(DETAIL_TOP_BAR_HEIGHT)
+                                    // 左右各让出 64dp 给悬浮的返回按钮与右上角按钮组
+                                    .padding(horizontal = 64.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = topBarTitle,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.graphicsLayer { alpha = topBarTitleAlpha }
+                                )
+                            }
+                            PrimaryTabRow(
+                                selectedTabIndex = selectedTab,
+                                containerColor = Color.Transparent,
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            ) {
+                                Tab(
+                                    selected = selectedTab == 0,
+                                    onClick = {
+                                        haptics.segmentTick()
+                                        selectedTab = 0
+                                    },
+                                    text = {
+                                        Text(
+                                            stringResource(R.string.screen_douban_item_detail_tab_info),
+                                            maxLines = 1
+                                        )
                                     }
-                                },
-                                text = {
-                                    Text(
-                                        "${stringResource(R.string.screen_douban_item_detail_tab_resources)}(${uiState.searchResults.size})",
-                                        maxLines = 1
-                                    )
-                                }
-                            )
+                                )
+                                Tab(
+                                    selected = selectedTab == 1,
+                                    onClick = {
+                                        haptics.segmentTick()
+                                        selectedTab = 1
+                                        // 首次切换到资源搜索 Tab 时才触发搜索(延迟加载,减少进入页面时的并发负担)
+                                        if (!uiState.searchAttempted && !uiState.isSearching) {
+                                            viewModel.searchResources()
+                                        }
+                                    },
+                                    text = {
+                                        Text(
+                                            "${stringResource(R.string.screen_douban_item_detail_tab_resources)}(${uiState.searchResults.size})",
+                                            maxLines = 1
+                                        )
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -1345,7 +1464,7 @@ fun DoubanItemDetailScreen(
                             }
                             item(key = "filter_section") {
                                 Box(modifier = Modifier.alpha(contentAlpha)) {
-                                    DoubanFilterSection(
+                                    FilterSection(
                                         availableSources = uiState.availableSources,
                                         enabledSources = uiState.enabledSources,
                                         customSourceNames = uiState.customSourceNames,
@@ -1516,6 +1635,9 @@ fun DoubanItemDetailScreen(
             // 以 zIndex 0<0 过滤掉自身导致模糊静默失效）；LocalBackdrop=null 让 glass 退化到
             // Haze 实时采样，再配合 HazeSourceSelection.All 强制采样内容源，blur/glass 都生效。
             CompositionLocalProvider(LocalBackdrop provides null) {
+            // 滚动后淡入的标题栏已并进吸顶 stickyHeader（与 Tab 行共用一次铺底），
+            // 这里只剩返回/标记/分享等悬浮圆按钮，正好压在标题行两侧留出的 64dp 上。
+
             // 返回按钮：使用与正常详情页一致的拟态玻璃和 ultraThin Haze。
             NeumorphicIconButton(
                 onClick = { handleBack() },
@@ -1754,7 +1876,7 @@ fun DoubanItemDetailScreen(
                 )
             }
         }
-        } // CompositionLocalProvider(LocalFullscreenSharedKey)
+        } // CompositionLocalProvider(LocalFullscreenSharedElement)
     }
 
     // 子标题编辑弹窗
@@ -1978,15 +2100,9 @@ private fun DoubanItemHeader(
     doubanId: String
 ) {
     val scope = rememberCoroutineScope()
-    // 根据海报主色调亮度自适应文字颜色,增强沉浸背景下的可读性
-    // 实际背景是海报色 alpha0.70 与主题背景的渐变,先按渐变中段混合再判亮度,
-    // 否则亮海报色在深色主题下会误选黑字,对比度不足(与普通详情页同一套逻辑)
-    val onPosterColor = posterColor?.let { c ->
-        if (lerp(c, MaterialTheme.colorScheme.background, 0.8f).luminance() > 0.5f) Color.Black.copy(alpha = 0.92f) else Color.White
-    } ?: MaterialTheme.colorScheme.onSurface
-    val onPosterVariantColor = posterColor?.let { c ->
-        if (lerp(c, MaterialTheme.colorScheme.background, 0.8f).luminance() > 0.5f) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.72f)
-    } ?: MaterialTheme.colorScheme.onSurfaceVariant
+    // 沉浸背景下的自适应文字色，判据收在 DetailVisuals（与普通详情页共用同一套）
+    val onPosterColor = detailOnPosterColor(posterColor)
+    val onPosterVariantColor = detailOnPosterVariantColor(posterColor)
     // 处理 title 中包含 / 的中英文名分隔:主标题取 / 前面,子标题优先用已有,为空时取 / 后面
     val titleContainsSlash = failure.title.contains("/")
     val displayTitle = if (titleContainsSlash) failure.title.substringBefore("/") else failure.title
@@ -1998,8 +2114,10 @@ private fun DoubanItemHeader(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            // 顶部留白 = TopAppBar 高度(64dp),状态栏 padding 由 LazyColumn 统一处理
-            .padding(top = 64.dp)
+            // 顶部留白让位给淡入标题栏（状态栏 padding 由 LazyColumn 统一处理）。
+            // 原先是 64dp 魔数「模拟 TopAppBar 高度」，实际本页并没有 TopAppBar：
+            // 顶部只有 40dp 悬浮按钮 + 4dp 上边距，56dp 刚好留出一行的量。
+            .padding(top = 56.dp)
             .padding(horizontal = 16.dp)
     ) {
         Row(
@@ -2054,7 +2172,7 @@ private fun DoubanItemHeader(
                             .fillMaxSize()
                             .zoomSharedSource(
                                 key = "douban-poster-zoom-bounds-$doubanId",
-                                clipShape = RoundedCornerShape(8.dp)
+                                clipRadius = 8.dp
                             )
                     )
                 } else {
@@ -2062,9 +2180,13 @@ private fun DoubanItemHeader(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        Text(
-                            text = "🎬",
-                            style = MaterialTheme.typography.titleLarge
+                        // 原先是 Text("🎬")：读屏念不出来，字形还跟系统 emoji 字体走。
+                        // 与普通详情页无海报时的图标占位统一。
+                        Icon(
+                            imageVector = Icons.Rounded.Movie,
+                            contentDescription = null,
+                            modifier = Modifier.size(36.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                         )
                     }
                 }
@@ -2091,25 +2213,40 @@ private fun DoubanItemHeader(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 // 子标题(可点击编辑;为空时若 title 含 / 则取 / 后面)
+                // 原先是纯 surfaceVariant 圆角块 + 一行文字，没有任何可点提示，
+                // 半透明底色反而更像禁用态。加描边 + 尾部铅笔图标明确「这里能改」。
                 Surface(
-                    shape = RoundedCornerShape(4.dp),
+                    shape = RoundedCornerShape(6.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier
                         .fillMaxWidth()
                         .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onSubtitleClick() }
                 ) {
-                    Text(
-                        text = displaySubtitle
-                            ?: stringResource(R.string.screen_douban_item_detail_subtitle_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (displaySubtitle != null)
-                            MaterialTheme.colorScheme.onSurface
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = displaySubtitle
+                                ?: stringResource(R.string.screen_douban_item_detail_subtitle_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (displaySubtitle != null)
+                                MaterialTheme.colorScheme.onSurface
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Rounded.Edit,
+                            contentDescription = stringResource(R.string.screen_douban_item_detail_subtitle_edit),
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -2165,7 +2302,7 @@ private fun DoubanItemHeader(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = COMMENT_QUOTES.format(failure.comment),
+                    text = stringResource(R.string.douban_detail_comment_quote, failure.comment),
                     style = MaterialTheme.typography.bodySmall,
                     fontStyle = FontStyle.Italic,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -2339,179 +2476,6 @@ private fun DoubanSearchKeywordBar(
     }
 }
 
-/** 网盘类型选项：常量集合，不必每次重组都 toList 一份新的 */
-private val DISK_TYPE_OPTIONS = ResourceRepository.ALL_DISK_TYPES.toList()
-
-/**
- * 资源筛选器(参照 [com.tracktosearch.ui.screen.detail.FilterSection],
- * 因原 FilterSection 为 internal 无法跨包访问,此处自建简化版)。
- */
-@Composable
-private fun DoubanFilterSection(
-    availableSources: List<String>,
-    enabledSources: Set<String>,
-    customSourceNames: Map<String, String>,
-    enabledDiskTypes: Set<DiskType>,
-    onToggleSource: (String) -> Unit,
-    onToggleDiskType: (DiskType) -> Unit,
-    relevanceEnabled: Boolean = false,
-    showHighRelevanceOnly: Boolean = false,
-    onToggleShowHighRelevanceOnly: () -> Unit = {}
-) {
-    val haptics = rememberAppHaptics()
-    val labelWidth = 64.dp
-
-    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-        // 搜索源
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.detail_filter_sources),
-                style = MaterialTheme.typography.labelMedium,
-                color = LocalContentColor.current,
-                modifier = Modifier.width(labelWidth)
-            )
-            androidx.compose.foundation.lazy.LazyRow(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(
-                    items = availableSources,
-                    key = { it }
-                ) { source ->
-                    val label = when (source) {
-                        "pansou" -> "PanSou"
-                        "panhub" -> "PanHub"
-                        "zreso" -> "Zreso"
-                        else -> customSourceNames[source] ?: source
-                    }
-                    androidx.compose.material3.FilterChip(
-                        selected = source in enabledSources,
-                        border = if (source in enabledSources) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-                        colors = FilterChipDefaults.filterChipColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                        ),
-                        onClick = {
-                            haptics.toggle(source !in enabledSources)
-                            onToggleSource(source)
-                        },
-                        label = {
-                            Text(
-                                label,
-                                style = MaterialTheme.typography.labelSmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        },
-                        modifier = Modifier.height(28.dp)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // 网盘类型
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.detail_filter_disk_types),
-                style = MaterialTheme.typography.labelMedium,
-                color = LocalContentColor.current,
-                modifier = Modifier.width(labelWidth)
-            )
-            androidx.compose.foundation.lazy.LazyRow(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(
-                    items = DISK_TYPE_OPTIONS,
-                    key = { it.name }
-                ) { type ->
-                    val label = when (type) {
-                        DiskType.QUARK -> stringResource(R.string.detail_disk_type_quark)
-                        DiskType.BAIDU -> stringResource(R.string.detail_disk_type_baidu)
-                        DiskType.ALI -> stringResource(R.string.detail_disk_type_ali)
-                        DiskType.XUNLEI -> stringResource(R.string.detail_disk_type_xunlei)
-                        DiskType.UC -> stringResource(R.string.detail_disk_type_uc)
-                        DiskType.ONEONEFIVE -> stringResource(R.string.detail_disk_type_115)
-                        DiskType.MAGNET -> stringResource(R.string.detail_disk_type_magnet)
-                        DiskType.OTHER -> stringResource(R.string.detail_disk_type_other)
-                    }
-                    androidx.compose.material3.FilterChip(
-                        selected = type in enabledDiskTypes,
-                        border = if (type in enabledDiskTypes) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-                        colors = FilterChipDefaults.filterChipColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                        ),
-                        onClick = {
-                            haptics.toggle(type !in enabledDiskTypes)
-                            onToggleDiskType(type)
-                        },
-                        label = {
-                            Text(
-                                label,
-                                style = MaterialTheme.typography.labelSmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        },
-                        modifier = Modifier.height(28.dp)
-                    )
-                }
-            }
-        }
-
-        // 相关度过滤：仅在存在目标影视上下文（relevanceEnabled）时显示
-        if (relevanceEnabled) {
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.detail_filter_relevance),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = LocalContentColor.current,
-                    modifier = Modifier.width(labelWidth)
-                )
-                androidx.compose.material3.FilterChip(
-                    selected = showHighRelevanceOnly,
-                    border = if (showHighRelevanceOnly) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-                    colors = FilterChipDefaults.filterChipColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    onClick = {
-                        haptics.toggle(!showHighRelevanceOnly)
-                        onToggleShowHighRelevanceOnly()
-                    },
-                    label = {
-                        Text(
-                            stringResource(R.string.detail_filter_high_relevance),
-                            style = MaterialTheme.typography.labelSmall,
-                            maxLines = 1
-                        )
-                    },
-                    modifier = Modifier.height(28.dp)
-                )
-            }
-        }
-    }
-}
-
 @Composable
 private fun DoubanSearchingState() {
     Box(
@@ -2635,6 +2599,31 @@ private fun DoubanDetailInfoTab(
                     Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(stringResource(R.string.screen_douban_item_detail_refetch))
+                }
+            }
+        }
+
+        // 剧情简介：原先埋在信息 Tab 最底部（13 行 MetaRow 之后），
+        // 且用裸 Text 全量展开，长简介把评分分布和演职员整段推到屏幕外。
+        // 现上移到操作按钮下方第一张卡，正文换详情页共用的 ExpandableText 折叠 4 行。
+        if (detailInfo?.summary != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = stringResource(R.string.detail_info_summary),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ExpandableText(text = detailInfo.summary, maxLines = 4)
                 }
             }
         }
@@ -2811,16 +2800,16 @@ private fun DoubanDetailInfoTab(
                             Spacer(modifier = Modifier.height(6.dp))
                         }
                         if (detailInfo.genres.isNotEmpty()) {
-                            MetaRow(
+                            MetaChipRow(
                                 label = stringResource(R.string.detail_info_genres),
-                                value = detailInfo.genres.joinToString(" / ")
+                                values = detailInfo.genres
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                         }
                         if (detailInfo.countries.isNotEmpty()) {
-                            MetaRow(
+                            MetaChipRow(
                                 label = stringResource(R.string.detail_info_countries),
-                                value = detailInfo.countries.joinToString(" / ")
+                                values = detailInfo.countries
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                         }
@@ -2881,9 +2870,9 @@ private fun DoubanDetailInfoTab(
                         }
                         // 语言
                         if (detailInfo.languages.isNotEmpty()) {
-                            MetaRow(
+                            MetaChipRow(
                                 label = stringResource(R.string.detail_info_languages),
-                                value = detailInfo.languages.joinToString(" / ")
+                                values = detailInfo.languages
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                         }
@@ -2895,34 +2884,6 @@ private fun DoubanDetailInfoTab(
                             )
                         }
                     }
-                }
-            }
-        }
-
-        // 剧情简介独立卡片
-        if (detailInfo?.summary != null) {
-            Spacer(modifier = Modifier.height(12.dp))
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = stringResource(R.string.detail_info_summary),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = detailInfo.summary,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.fillMaxWidth()
-                    )
                 }
             }
         }
@@ -2969,12 +2930,21 @@ private fun DoubanDetailInfoTab(
                                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
                             ) {
                                 val fraction = if (maxPct > 0) (pct / maxPct).toFloat() else 0f
+                                // 原先 5 档同一个 primary，条形图只剩长度一个维度。
+                                // 按档位取色后「好评压倒差评」一眼可读：高分金、中性、低分弱化。
+                                val barColor = when (index) {
+                                    0 -> RatingGold
+                                    1 -> RatingGoldDim
+                                    2 -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                                    3 -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.28f)
+                                }
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth(fraction)
                                         .fillMaxHeight()
                                         .clip(RoundedCornerShape(4.dp))
-                                        .background(MaterialTheme.colorScheme.primary)
+                                        .background(barColor)
                                 )
                             }
                             Spacer(modifier = Modifier.width(8.dp))
@@ -2993,21 +2963,24 @@ private fun DoubanDetailInfoTab(
         // 演职员卡片(横向滚动头像列表)
         if (detailInfo?.celebrities?.isNotEmpty() == true) {
             Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = stringResource(R.string.detail_info_celebrities),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+            // 这行标题直接画在沉浸渐变上（不在卡片里），故走 LocalContentColor 自适应，
+            // 与普通详情页各栏目标题同一种画法
+            DetailSectionHeader(
+                title = stringResource(R.string.detail_info_celebrities),
+                modifier = Modifier.padding(start = 4.dp)
             )
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(horizontal = 4.dp)
             ) {
                 items(detailInfo.celebrities) { celebrity ->
+                    // 尺寸对齐普通详情页 CastCard：68dp 列 + 68×95 海报比例头像 + 6dp 圆角。
+                    // 不直接复用 CastCard：它按 TMDB personId 建共享元素 key 并写
+                    // PersonAvatarColorStore，豆瓣演职员只有 url + 名字，套进去会让所有人
+                    // 共用同一个 key 并污染头像主色缓存。
                     Column(
                         modifier = Modifier
-                            .width(72.dp)
+                            .width(68.dp)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
@@ -3020,11 +2993,12 @@ private fun DoubanDetailInfoTab(
                             ),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Box(
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier
-                                .size(64.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .width(68.dp)
+                                .height(95.dp)
                         ) {
                             if (!celebrity.avatarUrl.isNullOrBlank()) {
                                 AsyncImage(
@@ -3044,7 +3018,7 @@ private fun DoubanDetailInfoTab(
                                     Icon(
                                         Icons.Rounded.TheaterComedy,
                                         contentDescription = null,
-                                        modifier = Modifier.size(28.dp),
+                                        modifier = Modifier.size(24.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
@@ -3054,17 +3028,19 @@ private fun DoubanDetailInfoTab(
                         Text(
                             text = celebrity.name,
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = LocalContentColor.current,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center
                         )
                         if (!celebrity.role.isNullOrBlank()) {
                             Text(
                                 text = celebrity.role,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = LocalContentColor.current.copy(alpha = 0.7f),
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
@@ -3074,6 +3050,14 @@ private fun DoubanDetailInfoTab(
     }
 }
 
+/**
+ * 单行元信息。
+ *
+ * 两处修正：
+ * - 值原先一律 `maxLines = 1` 截断，导演/编剧这类多人字段基本必截，想看全得回豆瓣。
+ *   放到 2 行，仍然截断但覆盖绝大多数字段。
+ * - [copyable] 原先只是「点了会复制」，界面上毫无提示，只能靠试。补一枚 12dp 复制图标。
+ */
 @Composable
 private fun MetaRow(label: String, value: String, copyable: Boolean = false) {
     val context = LocalContext.current
@@ -3103,11 +3087,43 @@ private fun MetaRow(label: String, value: String, copyable: Boolean = false) {
             color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.End,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .weight(1f)
                 .padding(start = 12.dp)
+        )
+        if (copyable) {
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.Rounded.ContentCopy,
+                contentDescription = stringResource(R.string.screen_douban_item_detail_copied),
+                modifier = Modifier.size(12.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/**
+ * 元信息 + 胶囊行。
+ *
+ * 类型 / 国家 / 语言原先是 `joinToString(" / ")` 拼成一行再 `maxLines = 1` 截断——
+ * 「剧情 / 犯罪 / 悬疑 / 惊悚」基本只看得到前两个。拆成胶囊后装不下自然换行。
+ */
+@Composable
+private fun MetaChipRow(label: String, values: List<String>) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        DetailMetaChips(
+            chips = values.map { DetailMetaChip(text = it, description = "$label $it") },
+            contentColor = MaterialTheme.colorScheme.onSurface
         )
     }
 }
