@@ -50,6 +50,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import com.tracktosearch.R
@@ -88,12 +89,10 @@ private val LUCKY_CAPSULE = Color.White.copy(alpha = 0.62f)
 /**
  * 提示的字号。
  *
- * 30sp 在别的字体上会显得大，Honey Script 上不会：它的小写字母 advance 只有
- * 0.15–0.27 em（正常字体约 0.5），x-height 0.387 em（正常约 0.5），所以同一个字号读出来
- * 比正常字体小一号还窄一半 —— `Her lucky number.` 整串只有 3.96 em，18sp 时宽 71dp，
- * 一枚不到 100dp 的小胶囊。30sp 下是 119dp，才像海报上写的一句话。
+ * 字号固定 32sp；Honey Script 的字形本身偏窄，因此另外用字距和只作用于文字的横向
+ * 拉伸，让 `Her lucky number.` 更舒展，同时不改变胶囊的水平内边距。
  */
-private val LUCKY_FONT_SIZE = 30.sp
+private val LUCKY_FONT_SIZE = 32.sp
 
 /**
  * 胶囊下缘补的内边距，用来把字在胶囊里摆正。
@@ -561,19 +560,25 @@ fun SwiftieLuckyHint(visible: Boolean, modifier: Modifier = Modifier) {
         animationSpec = tween(durationMillis = 400),
         label = "luckyHintAlpha"
     )
-    Text(
-        text = LUCKY_HINT,
-        style = TextStyle(
-            fontFamily = SwiftieFonts.Marker,
-            fontSize = LUCKY_FONT_SIZE,
-            color = SwiftiePalette.RoyalBlue,
-            textAlign = TextAlign.Center
-        ),
-        maxLines = 1,
-        // graphicsLayer 排在 background 之前，胶囊与字一起淡 —— 反过来只淡字、底还在
+    // 外层只负责胶囊和整体淡入淡出，避免横向拉伸把胶囊一起拉宽。
+    Box(
         modifier = modifier
             .graphicsLayer { alpha = hintAlpha }
             .background(LUCKY_CAPSULE, CircleShape)
             .padding(start = 18.dp, end = 18.dp, bottom = LUCKY_BASELINE_PAD)
-    )
+    ) {
+        Text(
+            text = LUCKY_HINT,
+            style = TextStyle(
+                fontFamily = SwiftieFonts.Marker,
+                fontSize = LUCKY_FONT_SIZE,
+                letterSpacing = 0.04.em,
+                color = SwiftiePalette.RoyalBlue,
+                textAlign = TextAlign.Center
+            ),
+            maxLines = 1,
+            // 只拉伸文字字形，保持胶囊水平内边距不变。
+            modifier = Modifier.graphicsLayer { scaleX = 1.12f }
+        )
+    }
 }
