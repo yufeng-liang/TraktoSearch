@@ -10,14 +10,14 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,16 +26,22 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,6 +68,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -71,6 +78,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.isSpecified
@@ -81,6 +89,14 @@ import coil.request.ImageRequest
 import coil.size.Scale
 import com.tracktosearch.R
 import com.tracktosearch.data.local.SplashQuote
+import com.tracktosearch.ui.component.NeumorphicIconButton
+import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.theme.appSwitchColors
+import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.util.performHaptic
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 import java.time.LocalDate
@@ -113,43 +129,54 @@ fun DailyStampScreen(
     viewModel: DailyStampViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val splashQuoteEnabled by viewModel.splashQuoteEnabled.collectAsState()
     val palette = rememberDailyStampPalette()
     val cardPalette = rememberDailyStampCardPalette()
     val content = rememberDailyStampContent(state)
+    val hazeState = remember { HazeState() }
+    var showSplashQuoteSettings by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(palette.paper)
     ) {
-        Column(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .dailyStampCardBlur(active = content.sheet != null)
-                .statusBarsPadding()
                 .navigationBarsPadding()
         ) {
-            DailyStampTopBar(palette = palette, onBack = onBack)
-            // 报头压到一屏能装下六行格子；真装不下（大字号、更高的状态栏）仍然能滚，
-            // 只是常见情况下不必滚。格子按这里量出来的余高收缩，见 DailyStampCalendar
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                val budget = maxHeight - DAILY_STAMP_CALENDAR_CHROME - 10.dp
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    DailyStampCalendar(
-                        state = state,
-                        palette = palette,
-                        locale = content.locale,
-                        today = content.today,
-                        cells = content.cells,
-                        openable = content.sheets.keys,
-                        gridHeightBudget = budget,
-                        onPreviousMonth = viewModel::previousMonth,
-                        onNextMonth = viewModel::nextMonth,
-                        onDayClick = { date -> viewModel.select(date) },
-                    )
-                    Spacer(Modifier.height(10.dp))
-                }
+            val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            val topBarHeight = 65.dp + statusBarHeight
+            // 顶栏改成与搜索源列表页相同的覆盖层：初始用内容顶部留白避开，滚动后内容
+            // 进入顶栏背后，Haze 才有真实内容可采样。网格预算仍扣掉同一份顶栏高度。
+            val budget = maxHeight - topBarHeight - DAILY_STAMP_CALENDAR_CHROME - 10.dp
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .dailyStampCardBlur(active = content.sheet != null)
+                    .padding(top = topBarHeight)
+            ) {
+                DailyStampCalendar(
+                    state = state,
+                    palette = palette,
+                    locale = content.locale,
+                    today = content.today,
+                    cells = content.cells,
+                    openable = content.sheets.keys,
+                    gridHeightBudget = budget,
+                    onPreviousMonth = viewModel::previousMonth,
+                    onNextMonth = viewModel::nextMonth,
+                    onDayClick = { date -> viewModel.select(date) },
+                )
+                Spacer(Modifier.height(10.dp))
             }
+            DailyStampTopBar(
+                hazeState = hazeState,
+                cardOpen = content.sheet != null,
+                onBack = onBack,
+                onSplashQuoteSettingsClick = { showSplashQuoteSettings = true },
+            )
         }
         DailyStampCardOverlay(
             sheet = content.sheet,
@@ -160,6 +187,17 @@ fun DailyStampScreen(
             onDismiss = { viewModel.select(null) },
             onQuoteClick = onQuoteClick,
         )
+        if (showSplashQuoteSettings) {
+            val view = LocalView.current
+            SplashQuoteSettingsDialog(
+                enabled = splashQuoteEnabled,
+                onEnabledChange = { enabled ->
+                    view.performHaptic(HapticType.CLICK)
+                    viewModel.setSplashQuoteEnabled(enabled)
+                },
+                onDismiss = { showSplashQuoteSettings = false },
+            )
+        }
     }
 }
 
@@ -287,7 +325,6 @@ internal fun DailyStampCalendar(
     Column {
         MonthMasthead(
             month = state.month,
-            locale = locale,
             palette = palette,
             streak = state.streak,
             total = state.total,
@@ -331,41 +368,116 @@ internal fun DailyStampCalendar(
     }
 }
 
-/** 只有返回箭头和标题，没有 Material TopAppBar 的容器色——这一屏的底就是那张纸 */
+/** 与搜索源列表页保持一致的毛玻璃顶栏和圆形操作按钮。 */
 @Composable
 private fun DailyStampTopBar(
-    palette: DailyStampPalette,
+    hazeState: HazeState,
+    cardOpen: Boolean,
     onBack: () -> Unit,
+    onSplashQuoteSettingsClick: () -> Unit,
 ) {
-    Row(
+    val isDark = isAppDarkTheme()
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 4.dp, end = 12.dp, top = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                imageVector = Icons.Rounded.KeyboardArrowLeft,
-                contentDescription = stringResource(R.string.content_desc_back),
-                tint = palette.ink,
+            .dailyStampCardBlur(active = cardOpen)
+            .hazeTopBar(
+                state = hazeState,
+                style = HazeMaterials.thin(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)),
+                blurRadius = 24.dp,
+                // 日签页按高度收缩到一屏展示，不滚动，因此始终保持初始透明态。
+                isContentUnderTopBar = false,
             )
+            .clickable(enabled = false, onClick = {})
+    ) {
+        Spacer(modifier = Modifier.statusBarsPadding())
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 1.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = stringResource(R.string.detail_back),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Text(
+                text = stringResource(R.string.splash_quote_title),
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            NeumorphicIconButton(
+                onClick = onSplashQuoteSettingsClick,
+                isDark = isDark,
+                lightBorderAlpha = 0.35f,
+                hazeState = hazeState,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Settings,
+                    contentDescription = stringResource(R.string.daily_stamp_splash_quote_settings),
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
-        Text(
-            text = stringResource(R.string.daily_stamp_title),
-            color = palette.ink,
-            fontSize = 15.sp,
-            fontFamily = FontFamily.Serif,
-            fontWeight = FontWeight.Medium,
-            letterSpacing = 0.16.em,
-        )
     }
+}
+
+/** 从日签页快速调整开屏每日台词开关。 */
+@Composable
+private fun SplashQuoteSettingsDialog(
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        title = { Text(stringResource(R.string.splash_quote_title)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(R.string.settings_splash_quote_subtitle),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_splash_quote),
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Switch(
+                        checked = enabled,
+                        onCheckedChange = onEnabledChange,
+                        colors = appSwitchColors(),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_done))
+            }
+        },
+    )
 }
 
 /**
  * 月份报头：月名 + 左右翻页，底下一行年月刻度与两个计数。
  *
  * 年月那段用等宽字体、拉开字距，和开屏顶上的日期是同一种处理——那是这两屏之间
- * 最直接的呼应。月名走衬线大字，locale 自己给「八月 / August / 8月 / 8월」。
+ * 最直接的呼应。月名走衬线大字，固定使用英文月份缩写（如 Sep），避免不同语言的全称
+ * 把这一行撑高或改变视觉重心。
  *
  * 刻度和计数挤进同一行、月名收到 23sp，是为了让六行格子在常见机型上一屏装得下。
  * 各占一行（刻度一行、月名一行、两个竖排计数一行）要 120dp，现在 53dp——
@@ -374,7 +486,6 @@ private fun DailyStampTopBar(
 @Composable
 private fun MonthMasthead(
     month: YearMonth,
-    locale: Locale,
     palette: DailyStampPalette,
     streak: Int,
     total: Int,
@@ -387,8 +498,8 @@ private fun MonthMasthead(
     val tick = remember(month) {
         month.atDay(1).format(DateTimeFormatter.ofPattern("yyyy.MM", Locale.US))
     }
-    val monthName = remember(month, locale) {
-        month.month.getDisplayName(TextStyle.FULL, locale)
+    val monthName = remember(month) {
+        month.month.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)
     }
     Column(
         modifier = Modifier
@@ -961,9 +1072,9 @@ private fun CellPoster(model: Any) {
  * 一行写完，放不下就省略号。以前关键词压在格子中央的淡海报上，宽度只够两三个字，
  * 拉丁词只能退成一个首字母；现在它独占一行，长词也照原样显示，格子里就是完整的词。
  *
- * 高度是**最小值**而不是固定值：钉死 14dp 的话，系统字号放大到 1.2 倍以上时这行字
- * 比框还高，上下被切掉一截——看起来像两个字叠在一起。空关键词也要占住这个最小高度，
- * 整行都没有关键词时这一行不能比别行矮。
+ * 字号按关键词长度动态收缩：短词比旧版更醒目，长词仍能在窄格子里尽量完整显示。
+ * 高度是**最小值**而不是固定值：系统字号放大时这一行可以自然长高，不会被框切掉。
+ * 空关键词也要占住这个最小高度，整行都没有关键词时这一行不能比别行矮。
  */
 @Composable
 private fun CellKeyword(
@@ -980,7 +1091,7 @@ private fun CellKeyword(
             Text(
                 text = keyword,
                 color = palette.tileInkSoft,
-                fontSize = 9.5.sp,
+                fontSize = dailyStampKeywordFontSize(keyword),
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
@@ -988,6 +1099,19 @@ private fun CellKeyword(
                 textAlign = TextAlign.Center,
             )
         }
+    }
+}
+
+/** 日历格关键词字号：短词放大，长词逐级缩小以适应格子宽度。 */
+internal fun dailyStampKeywordFontSize(keyword: String): TextUnit {
+    val length = keyword.codePointCount(0, keyword.length)
+    return when {
+        length <= 2 -> 13.sp
+        length == 3 -> 12.sp
+        length == 4 -> 11.sp
+        length == 5 -> 10.sp
+        length == 6 -> 9.5.sp
+        else -> 8.5.sp
     }
 }
 
@@ -1060,7 +1184,7 @@ private val TILE_RADIUS = 5.dp
 private val TILE_INSET = 2.5.dp
 
 /** 关键词那一行的最小高度，见 [CellKeyword] */
-private val KEYWORD_LINE = 14.dp
+private val KEYWORD_LINE = 17.dp
 
 /** 格子里海报的解码宽度：格子宽 45dp 上下，160px 铺满还留余量 */
 private const val POSTER_DECODE_PX = 160

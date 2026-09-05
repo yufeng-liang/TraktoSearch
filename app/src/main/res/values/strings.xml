@@ -551,6 +551,7 @@
 
     <!-- Daily Stamp -->
     <string name="daily_stamp_title">Daily Stamp</string>
+    <string name="daily_stamp_splash_quote_settings">Daily line settings</string>
     <string name="daily_stamp_previous_month">Previous month</string>
     <string name="daily_stamp_next_month">Next month</string>
     <plurals name="daily_stamp_day_count">

@@ -1637,7 +1637,7 @@ private fun SharedTransitionSwitchCard(
  * 开屏每日台词入口卡片（外观分组下，独占一行）。
  *
  * 从开关改成入口：开屏那一句和日签是同一件事的两面，凑成一个二级页才说得清，
- * 见 SplashQuoteScreen。这里不再显示开关状态——状态在二级页第一行，点进去就看见。
+ * 见 DailyStampScreen。这里不再显示开关状态——状态在二级页顶栏右侧，点进去即可调整。
  */
 @Composable
 private fun SplashQuoteEntryCard(

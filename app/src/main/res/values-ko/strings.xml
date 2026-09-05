@@ -307,6 +307,7 @@
 
     <!-- 하루 도장 -->
     <string name="daily_stamp_title">하루 도장</string>
+    <string name="daily_stamp_splash_quote_settings">오늘의 대사 설정</string>
     <string name="daily_stamp_previous_month">지난달</string>
     <string name="daily_stamp_next_month">다음 달</string>
     <plurals name="daily_stamp_day_count">
