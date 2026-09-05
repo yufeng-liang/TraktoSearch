@@ -2732,11 +2732,21 @@ private fun DrawScope.drawPastelRainbowHouse(
         size = Size(houseW, wallH),
         alpha = alpha * 0.42f
     )
-    // 烟囱先画在屋顶后面：屋顶覆盖住它的下缘，避免烟囱与屋顶颜色在交界处叠成一块。
-    drawRect(
+    // 烟囱先画在屋顶后面；底边改成屋顶右斜边的同一条线，避免水平矩形压进屋面。
+    val chimneyLeftX = houseX + houseW * 0.255f
+    val chimneyRightX = houseX + houseW * 0.345f
+    val chimneyBottomLeftY = eaveY - houseW * 0.42f * (1f - 0.255f / 0.62f)
+    val chimneyBottomRightY = eaveY - houseW * 0.42f * (1f - 0.345f / 0.62f)
+    val chimneyTopY = chimneyBottomLeftY - houseW * 0.12f
+    path.rewind()
+    path.moveTo(chimneyLeftX, chimneyTopY)
+    path.lineTo(chimneyRightX, chimneyTopY)
+    path.lineTo(chimneyRightX, chimneyBottomRightY)
+    path.lineTo(chimneyLeftX, chimneyBottomLeftY)
+    path.close()
+    drawPath(
+        path = path,
         color = HOUSE_CHIMNEY,
-        topLeft = Offset(houseX + houseW * 0.30f, eaveY - houseW * 0.34f),
-        size = Size(houseW * 0.09f, houseW * 0.22f),
         alpha = alpha * 0.72f
     )
     path.rewind()
