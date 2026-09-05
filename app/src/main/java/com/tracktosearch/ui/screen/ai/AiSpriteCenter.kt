@@ -96,6 +96,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiCharacter
 import com.tracktosearch.data.ai.AiQuizQuestionType
 import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.PopupShowEffect
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import kotlinx.coroutines.flow.collectLatest
@@ -258,6 +259,9 @@ fun AiSpriteCenter(
 
     // 锐评隐私弹窗挂在最外层：功能页与首页两个层级都要能触发
     // 首次使用说明弹窗：同意才允许上传数据并进入功能页
+    // 用户按的是「口味分析」，等来的却是一道前置弹窗 —— 按下与这一层出现之间隔着
+    // 一次 DataStore 挂起读，而且弹出来的不是他要的那一页。这一记是在标记这次改道
+    PopupShowEffect(state.showTasteConsent)
     if (state.showTasteConsent) {
         AlertDialog(
             onDismissRequest = viewModel::onTasteConsentDismissed,
@@ -286,6 +290,7 @@ fun AiSpriteCenter(
         )
     }
     // 功能被设置页开关关闭时的引导弹窗：确认后跳设置页
+    PopupShowEffect(state.showTasteDisabled)
     if (state.showTasteDisabled) {
         AlertDialog(
             onDismissRequest = viewModel::onTasteDisabledDismiss,

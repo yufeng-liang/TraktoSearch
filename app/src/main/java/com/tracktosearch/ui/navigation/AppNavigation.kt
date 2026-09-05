@@ -83,6 +83,7 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.BackdropProvider
 import com.tracktosearch.ui.component.UpdateDialog
+import com.tracktosearch.ui.haptic.PopupShowEffect
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.crashlog.CrashLogDetailScreen
 import com.tracktosearch.ui.screen.detail.DetailScreen
@@ -805,6 +806,8 @@ fun AppNavigation(
                                 rollbackDialogDismissed = false
                             }
                         }
+                        // 启动时读到回滚数据自己弹出来的，这一帧之前没有任何按压
+                        PopupShowEffect(rollbackCount > 0 && !rollbackDialogDismissed)
                         if (rollbackCount > 0 && !rollbackDialogDismissed) {
                             com.tracktosearch.ui.screen.douban.DoubanRollbackDialog(
                                 rollbackCount = rollbackCount,
@@ -837,6 +840,10 @@ fun AppNavigation(
                                 pendingDialogDismissed = false
                             }
                         }
+                        // 同上：进页面就弹，用户没按任何东西
+                        PopupShowEffect(
+                            pendingCount > 0 && rollbackCount == 0 && !pendingDialogDismissed
+                        )
                         if (pendingCount > 0 && rollbackCount == 0 && !pendingDialogDismissed) {
                             com.tracktosearch.ui.screen.douban.DoubanPendingItemsDialogWithDiscard(
                                 pendingCount = pendingCount,
@@ -1663,6 +1670,8 @@ fun AppNavigation(
                 }
             }
             // 更新弹窗（仅有新版本时才显示，覆盖在 NavHost 之上）
+            // 启动 800 ms 后自动查更新，查到才弹 —— 网络回来的那一刻与任何手势都无关
+            PopupShowEffect(updateInfo?.hasUpdate == true)
             updateInfo?.let { info ->
                 if (info.hasUpdate) {
                     UpdateDialog(
@@ -1719,6 +1728,8 @@ fun AppNavigation(
                 showAutoImport = true
             }
 
+            // 剪贴板里认出一份搜索源配置就弹，用户只是把 App 切到前台
+            PopupShowEffect(showAutoImport)
             if (showAutoImport) {
                 ImportSourceDialog(
                     onConfirm = { source ->

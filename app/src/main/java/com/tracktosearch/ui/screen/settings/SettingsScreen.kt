@@ -116,6 +116,7 @@ import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.haptic.HapticModeSummary
 import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.PopupShowEffect
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.hapticModeSummary
 import com.tracktosearch.ui.haptic.rememberAppHaptics
@@ -1199,6 +1200,9 @@ fun SettingsScreen(
     }
 
     // 检测到新版本时弹出更新弹窗（复用首页 UpdateDialog）
+    // 按「检查更新」那一下已经发过 tap()，但弹窗是网络回来之后才出现的 ——
+    // 中间隔着一次请求，早就不是同一帧了，所以这一记不算重复
+    PopupShowEffect(showUpdateDialog && updateInfo != null)
     if (showUpdateDialog && updateInfo != null) {
         UpdateDialog(
             updateInfo = updateInfo!!,

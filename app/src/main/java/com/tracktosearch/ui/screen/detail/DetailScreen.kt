@@ -127,6 +127,7 @@ import com.tracktosearch.ui.component.rememberAppPullToRefreshState
 import com.tracktosearch.ui.component.rememberShimmer
 import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.PopupShowEffect
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.ai.AiSceneEvent
@@ -1300,6 +1301,10 @@ fun DetailScreen(
             }
 
             // 评分弹窗（标记已看后自动弹出，或点击评分区域弹出）
+            // 只对**自动弹出**那一路发 popupShow：uiState.showRatingDialog 是
+            // markAsWatched 的 onSuccess 里置的，网络回来才弹，与手势无关。
+            // 本地那个 showRatingDialog 是点评分区域同一帧置的，那一下已经震过了
+            PopupShowEffect(uiState.showRatingDialog)
             if (showRatingDialog || uiState.showRatingDialog) {
                 RatingDialog(
                     initialRating = uiState.userRating,

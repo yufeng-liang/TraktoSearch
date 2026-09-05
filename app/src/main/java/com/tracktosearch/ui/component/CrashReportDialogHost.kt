@@ -77,6 +77,10 @@ fun CrashReportDialogHost(
         when (CrashPromptDecision.decide(crashCount, enabled, prompted)) {
             CrashPromptDecision.Action.None -> dialogVisible = false
             CrashPromptDecision.Action.Authorize -> {
+                // 启动时发现上次崩过就弹，用户什么都没按。这里直接调而不用
+                // PopupShowEffect：haptics 本来就在作用域里，而且下面 Uploading 那一路
+                // 要按「是不是用户刚按的」区别对待，边沿判断挂在 dialogVisible 上更准
+                haptics.popupShow()
                 dialogVisible = true
                 dialogKind = DialogKind.Authorize
             }
@@ -97,6 +101,9 @@ fun CrashReportDialogHost(
         lastUploadState = state
         when (state) {
             UploadState.Uploading -> {
+                // 两种来路：用户在授权弹窗里按了「上传」（那时 dialogVisible 已经是
+                // true，没有边沿，不发），或者启动时的自动上传（弹窗凭空出现，发）
+                if (!dialogVisible) haptics.popupShow()
                 dialogVisible = true
                 dialogKind = DialogKind.Uploading
             }
