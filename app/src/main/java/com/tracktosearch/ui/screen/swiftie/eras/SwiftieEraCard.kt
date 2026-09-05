@@ -139,6 +139,7 @@ fun SwiftieEraCard(
     slotHeight: Dp,
     collapseProgress: () -> Float = { 0f },
     feedProgress: (() -> Float)? = null,
+    loverAimAngle: () -> Float = { LOVER_FALLBACK_AIM_ANGLE },
     modifier: Modifier = Modifier
 ) {
     val lowRam = rememberIsLowRamDevice()
@@ -264,7 +265,11 @@ fun SwiftieEraCard(
                         color = era.mainColor,
                         phase = 0f,
                         lowRam = true,
-                        columnFade = 1f
+                        columnFade = 1f,
+                        // -1 = 定格档。Lover 那把弓因此永远停在松弦上着箭的静态，
+                        // 读一下真时钟就把整块定格的意义抹掉了
+                        eraElapsedMs = -1L,
+                        loverAimAngle = loverAimAngle()
                     )
                 } else {
                     val elapsed = elapsedInCard()
@@ -274,7 +279,9 @@ fun SwiftieEraCard(
                         phase = (elapsed.mod(MOTIF_CYCLE_MS)).toFloat() / MOTIF_CYCLE_MS,
                         lowRam = false,
                         // 长歌名会横穿右侧那一列，那几行点亮时道具让位（见 columnFadeAt）
-                        columnFade = columnFadeAt(elapsed, longTitles, stagger)
+                        columnFade = columnFadeAt(elapsed, longTitles, stagger),
+                        eraElapsedMs = elapsed,
+                        loverAimAngle = loverAimAngle()
                     )
                 }
             }

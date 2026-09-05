@@ -297,7 +297,7 @@ private fun DrawScope.drawStage(
         SwiftieEraBackdrop.HALFTONE_THRONE ->
             drawHalftoneThrone(path, top, phase, alpha, eraMs, shapes)
         SwiftieEraBackdrop.PASTEL_RAINBOW_HOUSE ->
-            drawPastelRainbowHouse(path, top, mid, deep, phase, alpha)
+            drawPastelRainbowHouse(path, top, mid, deep, phase, alpha, eraMs, card)
         SwiftieEraBackdrop.PINE_MOSS_PIANO ->
             drawPineMossPiano(path, top, mid, deep, phase, alpha, shapes)
         SwiftieEraBackdrop.BRANCH_LANTERNS ->
@@ -323,7 +323,7 @@ private val UNIT_CENTER = Offset(0.5f, 0.5f)
  * 建成顶层 `val` 而不是每次画的时候 `unitHeartPath()`：它只被读、从不被改，
  * 而 Lover 那张每帧都要画一次霓虹心。
  */
-private val UNIT_HEART: Path = unitHeartPath()
+private val UNIT_HEART: Path by lazy(LazyThreadSafetyMode.NONE) { unitHeartPath() }
 
 /** 暖光晕。灯泡、灯笼、窗内火光、台灯共用这一条。 */
 private val GLOW_WARM: Brush = Brush.radialGradient(
@@ -628,7 +628,7 @@ private val PORCH_POSTS = floatArrayOf(0.20f, 0.86f)
  * 卡片盖住的横带上缘。
  *
  * 卡片高度按曲目数派生，所以顶边每张不同：首专 11 首在 0.56h、Lover 18 首在 0.41h。
- * **要被看见的大主体必须落在这条线以上。** 第一轮截图里城堡、王座、钢琴、打字机、浴缸
+ * **要被看见的大主体必须落在这条线以上。** 第一轮截图里城堡、王座、钢琴、打字机、舞女
  * 全钉在 0.62–0.80h，结果 12 张里有 7 张的主体整个藏在卡片背后，屏幕上只剩一片渐变。
  *
  * 0.38f 留了 0.03 余量给 Lover 那张（12 张里除 TTPD 外最长的一张）。
@@ -2608,6 +2608,44 @@ private val CLOUD_PUFFS = floatArrayOf(
 /** Lover House 两扇窗的横向位置（相对屋宽）。 */
 private val HOUSE_WINDOWS = floatArrayOf(-0.30f, 0.30f)
 
+/** 烟囱单独用冷灰蓝，不再和屋顶共用半透明颜色叠成一块脏色。 */
+private val HOUSE_CHIMNEY = Color(0xFF8FA7C7)
+
+/** Lover House 的屋宽（占屏宽）与檐口高度（占屏高）。屋顶那颗心的位置从这两个数推。 */
+private const val LOVER_HOUSE_W = 0.36f
+
+private const val LOVER_EAVE_Y = 0.30f
+
+/**
+ * 屋顶那颗心的方框。
+ *
+ * 单独抽出来是因为**三层都要它**：背景这一层画心，页面最上层那 900ms 的飞行段要拿它当
+ * 落点（[SwiftieLoverArrowFlight]），插在心上那支箭的位置又要从它推。各写一份必然错开，
+ * 而错开一点在屏幕上就是「箭插在心旁边的空气里」。
+ */
+internal fun swiftieLoverHeartBox(size: Size): Rect {
+    val houseW = size.width * LOVER_HOUSE_W
+    val side = houseW * 0.34f
+    val cx = size.width * 0.50f
+    // 檐口往上：屋顶尖 0.42 个屋宽，再往上留 0.78 个心高
+    val cy = size.height * LOVER_EAVE_Y - houseW * 0.42f - side * 0.78f
+    return Rect(cx - side / 2f, cy - side / 2f, cx + side / 2f, cy + side / 2f)
+}
+
+/**
+ * 那颗心的体积色：左上受光的浅粉 → 右下背光的深玫红。
+ *
+ * 单位方框里建一次（见本节开头那条铁律）。渐变的圆心偏在 0.36/0.30 而不是正中 ——
+ * 光从左上来，高光就该偏在左上；居中的径向渐变读作一个发光的贴纸，没有体积。
+ */
+private val HEART_BODY: Brush = Brush.radialGradient(
+    0.00f to Color(0xFFFFD3E2),
+    0.42f to Color(0xFFF57FA6),
+    1.00f to Color(0xFFC93C68),
+    center = Offset(0.36f, 0.30f),
+    radius = 0.82f
+)
+
 /**
  * 一个 0f..1f 的确定性抖动，只用来给「同一个模板重复很多次」的东西错开尺寸。
  *
@@ -2621,11 +2659,11 @@ private fun jitter01(i: Int): Float {
 }
 
 /**
- * pastel 云海 + 一道彩虹 + 远景 Lover House + 屋顶霓虹心。
+ * pastel 云海 + 一道彩虹 + 远景 Lover House + 屋顶那颗心。
  *
  * *Lover* MV 整支设定在那栋粉蓝小屋里。这里的房子是**远景**、只有轮廓与窗光 ——
  * 精细的那一栋在 `SwiftieSnowGlobe` 的球内，收尾那 6.5 秒才登场，两处不能长一样。
- * 霓虹心按 [phase] 呼吸，是这一张唯一在动的东西。
+ * 屋顶那颗心按 [phase] 呼吸，命中之后带一支箭（见 [drawLoverHeart]）。
  */
 private fun DrawScope.drawPastelRainbowHouse(
     path: Path,
@@ -2633,7 +2671,9 @@ private fun DrawScope.drawPastelRainbowHouse(
     mid: Color,
     deep: Color,
     phase: Float,
-    alpha: Float
+    alpha: Float,
+    eraMs: Long,
+    card: Rect
 ) {
     val w = size.width
     val h = size.height
@@ -2679,16 +2719,25 @@ private fun DrawScope.drawPastelRainbowHouse(
     }
 
     // Lover House（远景）：墙 + 尖顶 + 门 + 两扇亮着的窗。
-    // 抬到 HERO_BOTTOM 以内 —— 原来在 0.70h，整栋压在卡片背后，等于没画
-    val houseW = w * 0.36f
+    // 抬到 HERO_BOTTOM 以内 —— 原来在 0.70h，整栋压在卡片背后，等于没画。
+    // 屋宽与檐口走 LOVER_HOUSE_W / LOVER_EAVE_Y：屋顶那颗心的位置由 swiftieLoverHeartBox
+    // 从同两个数推，而那个函数飞行段与卡片也在调 —— 这里写死一个 0.36f 就会两边错开
+    val houseW = w * LOVER_HOUSE_W
     val houseX = w * 0.50f
-    val eaveY = h * 0.30f
+    val eaveY = h * LOVER_EAVE_Y
     val wallH = h * 0.075f
     drawRect(
         color = deep,
         topLeft = Offset(houseX - houseW / 2f, eaveY),
         size = Size(houseW, wallH),
         alpha = alpha * 0.42f
+    )
+    // 烟囱先画在屋顶后面：屋顶覆盖住它的下缘，避免烟囱与屋顶颜色在交界处叠成一块。
+    drawRect(
+        color = HOUSE_CHIMNEY,
+        topLeft = Offset(houseX + houseW * 0.30f, eaveY - houseW * 0.34f),
+        size = Size(houseW * 0.09f, houseW * 0.22f),
+        alpha = alpha * 0.72f
     )
     path.rewind()
     path.moveTo(houseX, eaveY - houseW * 0.42f)
@@ -2714,22 +2763,22 @@ private fun DrawScope.drawPastelRainbowHouse(
             alpha = alpha * 0.9f
         )
     }
-    // 烟囱 + 门廊小雨篷 + 一排矮栅栏。
-    // 少了这三样就是一个方块加一个三角 —— 小孩画的房子，不是 Lover House
-    drawRect(
+    // 门上只留一条窄檐线和门把手，不再画宽大的梯形雨篷；
+    // 那个形状会在远景低透明度下读成房子里面摆了一张桌子。
+    drawLine(
         color = deep,
-        topLeft = Offset(houseX + houseW * 0.30f, eaveY - houseW * 0.34f),
-        size = Size(houseW * 0.09f, houseW * 0.22f),
-        alpha = alpha * 0.62f
+        start = Offset(houseX - houseW * 0.105f, eaveY + wallH * 0.36f),
+        end = Offset(houseX + houseW * 0.105f, eaveY + wallH * 0.36f),
+        strokeWidth = (h * 0.0028f).coerceAtLeast(1f),
+        alpha = alpha * 0.48f,
+        cap = StrokeCap.Round
     )
-    // 雨篷要明显宽于门，否则和门叠成一个「T」
-    path.rewind()
-    path.moveTo(houseX - houseW * 0.20f, eaveY + wallH * 0.44f)
-    path.lineTo(houseX + houseW * 0.20f, eaveY + wallH * 0.44f)
-    path.lineTo(houseX + houseW * 0.14f, eaveY + wallH * 0.32f)
-    path.lineTo(houseX - houseW * 0.14f, eaveY + wallH * 0.32f)
-    path.close()
-    drawPath(path = path, color = deep, alpha = alpha * 0.55f)
+    drawCircle(
+        color = HOUSE_CHIMNEY,
+        radius = (h * 0.0035f).coerceAtLeast(1f),
+        center = Offset(houseX + houseW * 0.035f, eaveY + wallH * 0.68f),
+        alpha = alpha * 0.82f
+    )
     // 栅栏：两道横杆 + 疏一点的立柱。第二轮立柱间距 0.075×屋宽、宽 0.016，
     // 屏幕上是一条拉链
     val fenceY = eaveY + wallH
@@ -2755,31 +2804,321 @@ private fun DrawScope.drawPastelRainbowHouse(
         picket += houseW * 0.13f
     }
 
-    // 屋顶霓虹心：描边而不是实心 —— 霓虹是一根弯成形状的灯管。
-    // 呼吸用 sin(phase*TAU)，一倍频，绕回时连续
+    // 屋顶那颗心。呼吸用 sin(phase*TAU)，一倍频，绕回时连续
     val pulse = 0.68f + 0.32f * sin(phase * TAU)
-    val heartSide = houseW * 0.34f
-    val heartCx = houseX
-    val heartCy = eaveY - houseW * 0.42f - heartSide * 0.78f
-    drawUnitGlow(
-        GLOW_WHITE,
-        Offset(heartCx, heartCy + heartSide * 0.1f),
-        heartSide * 3.4f,
-        alpha * 0.40f * pulse
-    )
+    drawLoverHeart(path, swiftieLoverHeartBox(size), pulse, alpha, eraMs, card)
+    drawFogBand(HERO_BOTTOM, 0.16f, top, alpha * DISTANT_ALPHA * 1.8f)
+}
+
+/**
+ * 屋顶那颗心 + 插在它上面的那支箭。
+ *
+ * ## 为什么不再是一根霓虹灯管
+ *
+ * 上一版是 `Stroke(width = 0.10f)` 描的一颗心 —— 霓虹灯管的读法没错，但需求方要的是
+ * 「立体感」和「箭穿过的层级感」：**一条描边没有体积可穿**，箭压上去只是两根线交叉。
+ * 所以改成有厚度的实心心：[HEART_BODY] 给左上受光 / 右下背光的体积，左上一团圆高光
+ * 交代釉面，右下一道反光边交代背光那一侧的转折，外圈光晕与灯管亮边都留着 ——
+ * 远景里它仍要读作屋顶上一块**发光的**招牌，而不是一颗贴纸。
+ *
+ * ## 层级
+ *
+ * 光晕 → 整支箭 → 心 → 箭的后半段（`0.49..1`）再来一遍。中段被心挡住、尾巴那一截又压
+ * 回心的上面，于是读作「从这一面插进去、从那一面穿出来」。少了最后一步箭就是躺在心
+ * 背后的一根棍子。0.49 是心的后缘落在箭身上的位置（心的半宽约 0.20 个箭长、
+ * 箭尖停在中心前 0.10 个箭长处）。
+ *
+ * 命中那一下心整体抖 [LOVER_RECOIL_MS]：`(1-t)·sin(2.2 圈)` 的衰减摆，同时带一下缩放与
+ * 旋转（箭一起转，它插在心上）。没有这一下，箭是「出现」在心上而不是「射」进去的。
+ *
+ * @param eraMs Lover 这一段已过的毫秒。小于 [LOVER_HIT_MS] = 还没命中，心是完整的
+ * @param card Lover 卡片在根坐标里的边框，只用来推箭长（三层同一个箭长）。
+ *   [Rect.Zero] = 还没量到，退回按心的尺寸估，宁可短一点也不要这一帧没有箭
+ */
+private fun DrawScope.drawLoverHeart(
+    path: Path,
+    heart: Rect,
+    pulse: Float,
+    alpha: Float,
+    eraMs: Long,
+    card: Rect
+) {
+    val side = heart.width
+    val stuck = eraMs >= LOVER_HIT_MS
+    // 命中后的衰减摆：0 → 1 走完 420ms。摆 2.2 圈，幅度线性收干
+    val recoil = if (!stuck) {
+        0f
+    } else {
+        val t = ((eraMs - LOVER_HIT_MS) / LOVER_RECOIL_MS).coerceIn(0f, 1f)
+        (1f - t) * sin(t * TAU * 2.2f)
+    }
+    val length = if (card.width > 0f) {
+        swiftieLoverStuckLength(swiftiePropBox(card.size))
+    } else {
+        side * 2.52f
+    }
+    val aim = swiftieLoverAim(card, size)
+    val tip = swiftieLoverStuckTip(heart, length, aim.unit)
+
     withTransform({
-        translate(heartCx - heartSide / 2f, heartCy - heartSide / 2f)
-        scale(heartSide, heartSide, pivot = Offset.Zero)
+        if (recoil != 0f) {
+            rotate(degrees = recoil * 5.0f, pivot = heart.center)
+            val s = 1f + recoil * 0.085f
+            scale(s, s, pivot = heart.center)
+        }
     }) {
-        drawPath(
-            path = UNIT_HEART,
-            color = SwiftiePalette.Glitter,
-            alpha = alpha * (0.55f + 0.45f * pulse),
-            // 线宽在单位空间里，所以它跟着心一起缩放，改 heartSide 不用重算
-            style = Stroke(width = 0.10f, cap = StrokeCap.Round)
+        // 光晕：命中那一下再亮一档（flash 随 recoil 的绝对值走，不跟着摆的正负闪）
+        val flash = if (stuck) abs(recoil) else 0f
+        drawUnitGlow(
+            GLOW_WHITE,
+            Offset(heart.center.x, heart.center.y + side * 0.1f),
+            side * (3.4f + flash * 1.1f),
+            alpha * (0.40f + flash * 0.30f) * pulse
+        )
+        if (stuck) drawArcheryArrow(tip, aim.angle, length, alpha * 0.95f)
+        withTransform({
+            translate(heart.left, heart.top)
+            scale(side, side, pivot = Offset.Zero)
+        }) {
+            // 体积：单位空间里的径向渐变，光心偏左上
+            drawPath(path = UNIT_HEART, brush = HEART_BODY, alpha = alpha * 0.94f)
+            // 灯管亮边：原来那一版的全部内容，现在降级成心的一圈边光。
+            // 线宽在单位空间里，所以它跟着心一起缩放，改 side 不用重算
+            drawPath(
+                path = UNIT_HEART,
+                color = SwiftiePalette.Glitter,
+                alpha = alpha * (0.42f + 0.34f * pulse),
+                style = Stroke(width = 0.055f, cap = StrokeCap.Round)
+            )
+        }
+        // 釉面高光：左上那一团。圆的 —— 高光是光源在曲面上的像，跟心的轮廓无关
+        drawUnitGlow(
+            GLOW_WHITE,
+            Offset(heart.left + side * 0.33f, heart.top + side * 0.30f),
+            side * 0.46f,
+            alpha * 0.62f
+        )
+        // 不再画右半边的白色反光弧。那条弧会在粉色釉面里读成一块突兀的白色月牙，
+        // 还会和穿心箭杆争夺视觉中心；保留左上高光与外轮廓，瓷釉体积已经足够。
+        // 穿透：靠近尾巴那一截压回心的上面。压之前先在心面上落一道**箭的影子** ——
+        // 箭杆浮在心的曲面之上，没有这道影子它只是画在心上的一条白线
+        if (stuck) {
+            val shade = Offset(side * 0.038f, side * 0.050f)
+            drawLine(
+                color = HEART_SHADOW,
+                start = heart.center + shade,
+                end = heart.center - aim.unit * (side * 0.46f) + shade,
+                strokeWidth = side * 0.055f,
+                alpha = alpha * 0.22f
+            )
+            // 箭尾重新浮到心面上；箭镞也要在前景补一遍，否则它嵌进心里后会被釉面完全盖住。
+            drawArcheryArrow(tip, aim.angle, length, alpha * 0.95f, from = 0.49f)
+            drawArcheryArrow(
+                tip,
+                aim.angle,
+                length,
+                alpha * 0.95f,
+                from = 0f,
+                to = 0.17f
+            )
+        }
+    }
+    // 迸光在回弹的变换之外画：它是空气里的光，不跟着心一起晃
+    if (stuck) {
+        drawHeartImpact(
+            path = path,
+            // 入射点落在心的边上（0.42 个心宽），不是心里 —— 光要从「扎进去的那个口」冒出来
+            entry = heart.center - aim.unit * (side * 0.42f),
+            side = side,
+            sinceHit = (eraMs - LOVER_HIT_MS).toFloat(),
+            angle = aim.angle,
+            alpha = alpha
         )
     }
-    drawFogBand(HERO_BOTTOM, 0.16f, top, alpha * DISTANT_ALPHA * 1.8f)
+}
+
+/** 箭在心面上那道影子的颜色。比心的暗部再深一档的玫红，不是灰 —— 灰影子读作脏。 */
+private val HEART_SHADOW = Color(0xFF8E2A4C)
+
+/** 命中反馈的完整时长：接触、折射、碎光三段收在同一拍里。 */
+private const val HEART_IMPACT_MS = 560f
+
+/** 玻璃釉面的玫粉边，不用金色星芒抢走 Lover 的粉。 */
+private val IMPACT_ROSE = Color(0xFFFF9EBD)
+
+/** 玻璃折射出来的奶白边。 */
+private val IMPACT_PEARL = Color(0xFFFFF2F6)
+
+/** 入射缝的深玫色。 */
+private val IMPACT_DEEP = Color(0xFFD75C86)
+
+/** 玻璃碎片的粉白亮面。 */
+private val IMPACT_SHARD = Color(0xFFFFC9DB)
+
+/** 只在命中反馈里使用：先快后慢，避免机械匀速。 */
+private fun impactEaseOut(value: Float): Float {
+    val t = value.coerceIn(0f, 1f)
+    val inverse = 1f - t
+    return 1f - inverse * inverse * inverse
+}
+
+/**
+ * 箭扎进糖釉爱心的反馈：**入射缝 + 折射弧 + 少量玻璃碎片**。
+ *
+ * 不再画平均分布的四芒星，也不做一圈廉价爆闪。命中点先出现一道与箭身垂直的细缝，
+ * 两组不闭合的弧线像玻璃受力后的折射边从缝旁展开，最后只留四枚短短的圆头碎片。
+ * 所有亮部都围绕入射点，不覆盖箭头主体；箭本身的尺寸、角度、层次完全不被动效改变。
+ */
+private fun DrawScope.drawHeartImpact(
+    path: Path,
+    entry: Offset,
+    side: Float,
+    sinceHit: Float,
+    angle: Float,
+    alpha: Float
+) {
+    val t = sinceHit / HEART_IMPACT_MS
+    if (t < 0f || t >= 1f) return
+
+    val fade = (1f - t) * (1f - t)
+    val ringT = impactEaseOut(((t - 0.035f) / 0.72f).coerceAtLeast(0f))
+    val shardT = impactEaseOut(((t - 0.10f) / 0.56f).coerceAtLeast(0f))
+    val seamT = (1f - t / 0.24f).coerceIn(0f, 1f)
+    val axis = Offset(cos(angle), sin(angle))
+    val tangent = Offset(-axis.y, axis.x)
+    val center = entry - axis * (side * 0.012f)
+    val axisDegrees = angle * 180f / PI.toFloat()
+
+    // 接触瞬间是一团很克制的釉面亮，不再用实心白点制造廉价闪烁。
+    drawUnitGlow(
+        GLOW_WHITE,
+        center,
+        side * (0.22f + 0.34f * ringT),
+        alpha * 0.20f * fade
+    )
+
+    // 入射缝：它是箭穿入心面的证据，方向始终垂直于箭身。
+    if (seamT > 0f) {
+        val seamHalf = side * (0.065f + 0.025f * seamT)
+        drawLine(
+            IMPACT_DEEP,
+            center - tangent * seamHalf,
+            center + tangent * seamHalf,
+            strokeWidth = side * 0.020f,
+            cap = StrokeCap.Round,
+            alpha = alpha * 0.62f * seamT
+        )
+        drawLine(
+            IMPACT_PEARL,
+            center - tangent * (seamHalf * 0.64f) - axis * (side * 0.014f),
+            center + tangent * (seamHalf * 0.64f) - axis * (side * 0.014f),
+            strokeWidth = side * 0.007f,
+            cap = StrokeCap.Round,
+            alpha = alpha * 0.78f * seamT
+        )
+    }
+
+    // 两组不闭合的弧：像糖釉表面反射出的弯月，不会变成完整圆环或齿轮。
+    val outerRadius = side * (0.12f + 0.34f * ringT)
+    val outerStroke = side * (0.025f - 0.010f * ringT).coerceAtLeast(0.010f)
+    drawArc(
+        color = IMPACT_ROSE,
+        startAngle = axisDegrees + 102f,
+        sweepAngle = 72f,
+        useCenter = false,
+        topLeft = center - Offset(outerRadius, outerRadius),
+        size = Size(outerRadius * 2f, outerRadius * 2f),
+        alpha = alpha * 0.42f * fade,
+        style = Stroke(width = outerStroke, cap = StrokeCap.Round)
+    )
+    drawArc(
+        color = IMPACT_ROSE,
+        startAngle = axisDegrees + 284f,
+        sweepAngle = 58f,
+        useCenter = false,
+        topLeft = center - Offset(outerRadius, outerRadius),
+        size = Size(outerRadius * 2f, outerRadius * 2f),
+        alpha = alpha * 0.34f * fade,
+        style = Stroke(width = outerStroke, cap = StrokeCap.Round)
+    )
+
+    val innerRadius = side * (0.075f + 0.21f * ringT)
+    drawArc(
+        color = IMPACT_PEARL,
+        startAngle = axisDegrees + 112f,
+        sweepAngle = 52f,
+        useCenter = false,
+        topLeft = center - Offset(innerRadius, innerRadius),
+        size = Size(innerRadius * 2f, innerRadius * 2f),
+        alpha = alpha * 0.58f * fade,
+        style = Stroke(width = side * 0.010f, cap = StrokeCap.Round)
+    )
+    drawArc(
+        color = IMPACT_DEEP,
+        startAngle = axisDegrees + 294f,
+        sweepAngle = 42f,
+        useCenter = false,
+        topLeft = center - Offset(innerRadius, innerRadius),
+        size = Size(innerRadius * 2f, innerRadius * 2f),
+        alpha = alpha * 0.25f * fade,
+        style = Stroke(width = side * 0.008f, cap = StrokeCap.Round)
+    )
+
+    // 一道偏移的曲线高光，模拟釉面折射而不是 UI 光效。
+    val ribbon = side * (0.09f + 0.18f * ringT)
+    path.rewind()
+    path.moveTo(
+        center.x - tangent.x * ribbon - axis.x * side * 0.08f,
+        center.y - tangent.y * ribbon - axis.y * side * 0.08f
+    )
+    path.cubicTo(
+        center.x - tangent.x * ribbon * 0.78f + axis.x * side * 0.10f,
+        center.y - tangent.y * ribbon * 0.78f + axis.y * side * 0.10f,
+        center.x + tangent.x * ribbon * 0.54f + axis.x * side * 0.16f,
+        center.y + tangent.y * ribbon * 0.54f + axis.y * side * 0.16f,
+        center.x + tangent.x * ribbon * 0.82f + axis.x * side * 0.23f,
+        center.y + tangent.y * ribbon * 0.82f + axis.y * side * 0.23f
+    )
+    drawPath(
+        path,
+        IMPACT_PEARL,
+        alpha = alpha * 0.34f * fade,
+        style = Stroke(width = side * 0.011f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    )
+
+    // 仅四枚短碎片：向外脱离，长度不同，保留空气感但不抢主体。
+    val shardAngles = floatArrayOf(
+        axisDegrees - 142f,
+        axisDegrees - 64f,
+        axisDegrees + 34f,
+        axisDegrees + 124f
+    )
+    val shardReach = floatArrayOf(0.17f, 0.12f, 0.20f, 0.14f)
+    for (i in shardAngles.indices) {
+        val rad = shardAngles[i] * PI.toFloat() / 180f
+        val direction = Offset(cos(rad), sin(rad))
+        val startRadius = side * (0.16f + 0.03f * shardT)
+        val endRadius = side * (0.16f + shardReach[i] * shardT)
+        val start = center + direction * startRadius
+        val end = center + direction * endRadius
+        val lift = tangent * (side * 0.006f)
+        drawLine(
+            IMPACT_DEEP,
+            start,
+            end,
+            strokeWidth = side * 0.014f,
+            cap = StrokeCap.Round,
+            alpha = alpha * 0.30f * fade * shardT
+        )
+        drawLine(
+            IMPACT_SHARD,
+            start - lift,
+            end - lift,
+            strokeWidth = side * 0.006f,
+            cap = StrokeCap.Round,
+            alpha = alpha * 0.62f * fade * shardT
+        )
+    }
 }
 
 // ─────────────────────── 8 · folklore ───────────────────────
@@ -4497,11 +4836,11 @@ private const val TYPE_LINE_SPAN = 0.88f
 // ─────────────────────── 12 · The Life of a Showgirl ───────────────────────
 
 /**
- * 剧场舞台：大幕 + 一排化妆镜边灯 + 追光锥 + 空浴缸剪影 + marquee 灯牌边框。
+ * 剧场舞台：大幕 + 追光锥 + 桁架灯 + 红幕中央的原创舞女剪影。
  *
- * 原先这一张画的是羽毛扇，被否掉了 —— 九条粗线扫过右下角读作一把扫帚。改成剧场本身：
- * 「Showgirl 的一生」讲的是幕后而不是道具，浴缸（官方主视觉里那只）比扇子更是它。
- * **不画人形** —— 一旦有人，这就从「舞台」变成「某个人的画像」。
+ * 原先这一张画的是羽毛扇，被否掉了 —— 九条粗线扫过右下角读作一把扫帚。这里把主体
+ * 收回到舞台本身：红丝绒开口、顶部灯架和一位被追光勾出轮廓的舞女，保留 Showgirl
+ * 的戏剧感，同时不照搬任何具体插画。
  *
  * 边灯按 [phase] 依次点亮（跑马灯），跑一圈正好是一个相位周期，所以绕回时接得上。
  */
@@ -4516,7 +4855,7 @@ private fun DrawScope.drawTheatreStage(
     val w = size.width
     val h = size.height
 
-    // 追光锥：自上缘正中打到舞台地板，落在浴缸上
+    // 追光锥：自上缘正中打到舞台地板，落在舞女身上
     drawCone(
         path = path,
         apexX = w * 0.52f,
@@ -4568,7 +4907,7 @@ private fun DrawScope.drawTheatreStage(
     // 是同一个毛病。
     //
     // 换成桁架灯：同样是「剧场」的信息，但形不撞（横杆 + 吊灯 vs 镶灯边框），
-    // 而且它给了浴缸一个**光源的来处** —— 原来那束追光是从屏幕上缘凭空打下来的。
+    // 而且它给了舞女一个**光源的来处** —— 原来那束追光是从屏幕上缘凭空打下来的。
     val trussY = h * 0.082f
     val trussH = h * 0.026f
     for (chord in 0..1) {
@@ -4622,7 +4961,7 @@ private fun DrawScope.drawTheatreStage(
             // 镜面：闪一下。五盏各自错相位，整排才不是同步的一串
             val lit = 0.62f + 0.38f * sin((phase * 2f + i * 0.21f) * TAU)
             drawBulb(Offset(lx, bodyTop + bodyH), w * 0.016f, lit, alpha * 0.9f)
-            // 光锥：从镜面往下，落到浴缸那一带
+            // 光锥：从灯面往下，落到舞台中央那一带
             drawCone(
                 path = path,
                 apexX = lx,
@@ -4635,247 +4974,224 @@ private fun DrawScope.drawTheatreStage(
         }
     }
 
-    // 空浴缸：外沿一圈厚唇 + 缸体 + 四只爪脚 + 水面与泡沫。**缸里没有人**。
-    // 抬进 HERO_BOTTOM：原来在 0.62–0.84h，整只缸压在卡片背后，
-    // 只剩一团发白的圆角矩形透上来，把卡片左三分之二洗成一片脏白。
-    //
-    // 第五轮把缸放大了（0.10h 高 → 0.15h）：灯牌撤掉之后 0.14–0.38h 全空了出来，
-    // 而这只缸是官方主视觉里的那件东西，本来就该是这一张的主体。
-    // 缸体也从 0.42 提到 0.86 —— 0.42 的搪瓷缸背后透着幕布的竖褶，读作一只塑料桶。
-    val tubLeft = w * 0.275f
-    val tubRight = w * 0.765f
-    // 0.250h 而不是 0.225h：上一版 0.15h 高、下缘又收掉 7%，比例是**桶**不是缸。
-    // 独脚浴缸横向比竖向长得多，缸壁近乎直，只在贴近底部才收 —— 收窄量也从 7% 降到 3.5%
-    val tubTop = h * 0.250f
-    val tubBottom = h * 0.378f
-    val tubW = tubRight - tubLeft
-    // 缸体：上宽下略窄的圆角形
-    path.rewind()
-    path.moveTo(tubLeft, tubTop)
-    path.lineTo(tubRight, tubTop)
-    path.lineTo(tubRight - tubW * 0.035f, tubBottom - tubW * 0.04f)
-    path.quadraticTo(
-        (tubLeft + tubRight) / 2f, tubBottom + tubW * 0.035f,
-        tubLeft + tubW * 0.035f, tubBottom - tubW * 0.04f
-    )
-    path.close()
-    // 0.96 而不是 0.86：第七轮截图里幕布的竖褶从缸壁里透上来，横过缸体读作一道道水平
-    // 条纹（缸体自己是纯白，透上来的褶被缸口的椭圆切成了横的），一只搪瓷缸读作条纹布桶。
-    // 搪瓷是不透光的
-    drawPath(path = path, color = PAPER_WHITE, alpha = alpha * 0.96f)
-    drawPath(
-        path = path,
-        color = deep,
-        alpha = alpha * 0.70f,
-        style = Stroke(width = (w * 0.004f).coerceAtLeast(1f))
-    )
-    // 缸体左侧一道竖高光 + 右侧一道暗部：搪瓷是弧面，平填一块白是一张纸板
-    drawLine(
-        color = Color.White,
-        start = Offset(tubLeft + tubW * 0.10f, tubTop + tubW * 0.06f),
-        end = Offset(tubLeft + tubW * 0.13f, tubBottom - tubW * 0.10f),
-        strokeWidth = (tubW * 0.030f).coerceAtLeast(2f),
-        alpha = alpha * 0.34f,
-        cap = StrokeCap.Round
-    )
-    drawLine(
-        color = deep,
-        start = Offset(tubRight - tubW * 0.09f, tubTop + tubW * 0.08f),
-        end = Offset(tubRight - tubW * 0.13f, tubBottom - tubW * 0.10f),
-        strokeWidth = (tubW * 0.040f).coerceAtLeast(2f),
-        alpha = alpha * 0.16f,
-        cap = StrokeCap.Round
-    )
-    // 厚唇：一条压在缸口的椭圆环，浴缸的边是有厚度的
-    drawOval(
-        color = PAPER_WHITE,
-        topLeft = Offset(tubLeft - tubW * 0.02f, tubTop - tubW * 0.055f),
-        size = Size(tubW * 1.04f, tubW * 0.115f),
-        alpha = alpha * 0.55f
-    )
-    // 缸口的内影：唇的里侧，缸因此是「有开口的」而不是一块实心白
-    drawOval(
-        color = deep,
-        topLeft = Offset(tubLeft + tubW * 0.03f, tubTop - tubW * 0.030f),
-        size = Size(tubW * 0.94f, tubW * 0.075f),
-        alpha = alpha * 0.45f
-    )
-    // 水面：缸口内的一片浅椭圆 + 一排泡沫。
-    // 一只**空**缸只是一件家具；有水才是官方主视觉里那一幕。
-    // 泡沫用一条路径里并起来的圆团一次填完 —— 逐个 drawCircle 的话交叠处会叠深一档，
-    // 一排大小相近的圆珠子（Red 与 folklore 两张都在这上面翻过车）
-    drawOval(
-        color = top,
-        topLeft = Offset(tubLeft + tubW * 0.055f, tubTop - tubW * 0.020f),
-        size = Size(tubW * 0.89f, tubW * 0.062f),
-        alpha = alpha * 0.62f
-    )
-    // 泡沫排两层、半径差到 2.6 倍、横向间距也按频率抖开。
-    // 上一版 13 团半径在 0.018–0.032 之间、y 只抖 ±0.012，等间距摆一排 ——
-    // 第六轮截图里那是**一串珍珠项链**贴在缸口上。真的泡沫是大小相差极大的团挤在一起，
-    // 所以半径 0.012–0.044（3.6 倍差），横向位置再叠一个频率错开
-    path.rewind()
-    for (layer in 0..1) {
-        val count = if (layer == 0) 11 else 9
-        for (b in 0 until count) {
-            val f = (b + 0.5f) / count
-            val jitterX = sin(f * (if (layer == 0) 9.1f else 6.7f) + layer * 2.3f) * 0.030f
-            val bx = tubLeft + tubW * (0.06f + f * 0.88f + jitterX)
-            val br = tubW * (0.012f + 0.032f * abs(sin(f * (if (layer == 0) 7.3f else 11.9f) + 1.1f)))
-            val by = tubTop - tubW * (if (layer == 0) 0.002f else 0.016f) +
-                sin(f * 4.7f + layer * 1.7f) * tubW * 0.020f
-            path.addOval(Rect(bx - br, by - br, bx + br, by + br))
-        }
-    }
-    drawPath(path = path, color = Color.White, alpha = alpha * 0.58f)
-    // 爪脚：踝 + 外撇的爪垫两段。前两只整只看得见，后两只**按比例缩小**（不是变淡）。
-    //
-    // 上一版是一个圆角矩形，圆角给到 0.030 而框只有 0.068×0.063，等于画了个椭圆；
-    // 后两只又叠了 vis 的半透明，第七轮截图里那两只读作缸底下方两颗**脱开的灰珠子**。
-    // 远近该用**大小**表示，不该用透明度：半透明的实心木件只会读作幽灵。
-    // 爪脚缸的辨识特征就是踝细、脚爪往外撇的那一块，所以这里必须是两段
-    for (i in 0 until TUB_FEET.size / 2) {
-        val f = TUB_FEET[i * 2]
-        val vis = TUB_FEET[i * 2 + 1]
-        val fx = tubLeft + tubW * f
-        val ankleH = tubW * 0.072f * vis
-        val padH = tubW * 0.044f * vis
-        val topY = tubBottom - tubW * 0.028f * vis
-        // 踝：上宽下窄的一小段梯形，接在缸底
-        path.rewind()
-        path.moveTo(fx - tubW * 0.030f * vis, topY)
-        path.lineTo(fx + tubW * 0.030f * vis, topY)
-        path.lineTo(fx + tubW * 0.019f * vis, topY + ankleH)
-        path.lineTo(fx - tubW * 0.019f * vis, topY + ankleH)
-        path.close()
-        drawPath(path = path, color = deep, alpha = alpha * 0.84f)
-        drawRoundRect(
-            color = deep,
-            topLeft = Offset(fx - tubW * 0.042f * vis, topY + ankleH - padH * 0.30f),
-            size = Size(tubW * 0.084f * vis, padH),
-            cornerRadius = CornerRadius(tubW * 0.012f * vis),
-            alpha = alpha * 0.90f
-        )
-    }
-    // 龙头：右端一根立柱 + 一段弯管，管口朝缸内。
-    // 第四轮只有那一段 150° 的弧、又细又小，压在橙底上读作一枚墨绿色的挂钩。
-    //
-    // 第五轮换掉了颜色。原来整支龙头用 [GOLD]（#D4AF37）—— 而这一张的中档底色是
-    // #E8620F 的橙：金画在橙上混出来是**黄绿**，第五轮截图里那支龙头读作一株
-    // 从缸沿长出来的嫩芽（当场没认出是龙头）。镀铬件本来就该是近白加深色描边，
-    // 白在橙底上永远不会串色
-    val tapX = tubRight - tubW * 0.13f
-    // 底座压在缸沿**之内**（+0.03 而不是 -0.02）。上一版整支龙头连底座都在缸口以上，
-    // 与缸沿之间还留着一道缝，第六轮截图里读作「浮在缸上方的一副自行车车把」。
-    // 龙头是从缸沿上装出来的，底座必须踩在沿上
-    val tapBase = tubTop + tubW * 0.030f
-    // 0.13 而不是 0.17：出水口只需要探进缸口一点，高过缸沿半个缸宽的龙头是消防栓
-    val tapH = tubW * 0.130f
-    // 管身：先描一道深色当轮廓，再压一道更细的近白当镀铬面。
-    // 两道叠出来才是「管」；单描一道白线在浅橙上几乎看不见
-    val pipeW = (tubW * 0.036f).coerceAtLeast(3f)
-    drawLine(
-        color = deep,
-        start = Offset(tapX, tapBase),
-        end = Offset(tapX, tapBase - tapH),
-        strokeWidth = pipeW,
-        alpha = alpha * 0.72f,
-        cap = StrokeCap.Round
-    )
-    drawLine(
-        color = PAPER_WHITE,
-        start = Offset(tapX, tapBase),
-        end = Offset(tapX, tapBase - tapH),
-        strokeWidth = pipeW * 0.58f,
-        alpha = alpha * 0.92f,
-        cap = StrokeCap.Round
-    )
-    // 鹅颈弯管：立柱顶端往**左**（缸内一侧）绕过去，末端挂一段朝下的出水口。
-    //
-    // 上一版这段弧的圆心就落在立柱顶端，于是立柱插在弧的**正中间**，两端等长地朝下 ——
-    // 第七轮截图里那是一副对称的 ∩ 形车把，不是龙头。真龙头是不对称的：一头是立柱，
-    // 另一头是朝下的水口。所以弧的**右端**接立柱，左端接出水口
-    val neckRx = tubW * 0.088f
-    val neckRy = tubW * 0.058f
-    val neckCx = tapX - neckRx
-    val neckCy = tapBase - tapH
-    val nozzleX = neckCx - neckRx
-    val nozzleBottom = neckCy + tubW * 0.048f
-    for (pass in 0..1) {
-        val col = if (pass == 0) deep else PAPER_WHITE
-        val wid = if (pass == 0) pipeW else pipeW * 0.58f
-        val a = alpha * (if (pass == 0) 0.72f else 0.92f)
-        drawArc(
-            color = col,
-            startAngle = 0f,
-            sweepAngle = -180f,
-            useCenter = false,
-            topLeft = Offset(neckCx - neckRx, neckCy - neckRy),
-            size = Size(neckRx * 2f, neckRy * 2f),
-            alpha = a,
-            style = Stroke(width = wid, cap = StrokeCap.Round)
-        )
-        // 出水口：弯管左端往下一小段
-        drawLine(
-            color = col,
-            start = Offset(nozzleX, neckCy),
-            end = Offset(nozzleX, nozzleBottom),
-            strokeWidth = wid,
-            alpha = a,
-            cap = StrokeCap.Round
-        )
-    }
-    // 水柱：出水口到水面那一小段。有它这支才是**开着的**龙头，
-    // 而不是缸沿上装着的一件金属摆件
-    drawLine(
-        color = Color.White,
-        start = Offset(nozzleX, nozzleBottom),
-        end = Offset(nozzleX, tubTop - tubW * 0.020f),
-        strokeWidth = pipeW * 0.50f,
-        alpha = alpha * 0.42f,
-        cap = StrokeCap.Round
-    )
-    // 阀门：两枚十字把手（冷热各一），龙头才不是一根光管子
-    for (v in 0..1) {
-        val vx = tapX + (if (v == 0) -1f else 1f) * tubW * 0.058f
-        // 把手落在底座那一档高度上，跟着底座一起踩在缸沿上
-        val vy = tapBase - tapH * 0.12f
-        drawCircle(color = deep, radius = tubW * 0.024f, center = Offset(vx, vy), alpha = alpha * 0.72f)
-        drawCircle(color = PAPER_WHITE, radius = tubW * 0.017f, center = Offset(vx, vy), alpha = alpha * 0.90f)
-        for (arm in 0..1) {
-            val ax = if (arm == 0) tubW * 0.024f else 0f
-            val ay = if (arm == 0) 0f else tubW * 0.024f
-            drawLine(
-                color = deep,
-                start = Offset(vx - ax, vy - ay),
-                end = Offset(vx + ax, vy + ay),
-                strokeWidth = (tubW * 0.008f).coerceAtLeast(1f),
-                alpha = alpha * 0.55f
-            )
-        }
-        // 把手到管身的短颈
-        drawLine(
-            color = PAPER_WHITE,
-            start = Offset(tapX, vy),
-            end = Offset(vx, vy),
-            strokeWidth = pipeW * 0.42f,
-            alpha = alpha * 0.85f
-        )
-    }
-    // 舞台地板：一条横向的暗带 + 一道被追光照亮的椭圆光斑，再压一层暖雾当空气中的尘
+    // 舞女：占据原本中央主体区域，但把脚收在卡片覆盖线之前，保证轮廓完整可读。
+    drawShowgirlDancer(path, top, mid, deep, phase, alpha)
+
+    // 舞台地板：一条横向暗带 + 追光落地的椭圆光斑，再压一层暖雾表现空气中的尘。
     drawFogBand(HERO_BOTTOM, 0.14f, deep, alpha * DISTANT_ALPHA * 2f)
     drawUnitGlow(GLOW_WHITE, Offset(w * 0.52f, h * 0.375f), w * 0.66f, alpha * 0.20f)
     drawFogBand(0.14f, 0.24f, top, alpha * DISTANT_ALPHA * 0.7f)
 }
 
 /**
- * 浴缸四只爪脚：(横向位置, 尺寸比例)。
+ * 原创舞女剪影：高举手臂、收腰亮片裙、错开的双腿和右侧轮廓光。
  *
- * 后两只是缸另一侧的脚，按 0.6 **整体缩小**（不是调透明度）—— 远近用大小表示。
+ * 采用几何化卡通轮廓而不是具体人物肖像：头发、姿态和裙摆让人一眼读成舞女，
+ * 三档橙红色与金色边缘光负责体积，裙褶用曲线而不是均匀直线，避免变成纸片。
  */
-private val TUB_FEET = floatArrayOf(
-    0.12f, 1.0f,
-    0.86f, 1.0f,
-    0.30f, 0.6f,
-    0.68f, 0.6f
-)
+private fun DrawScope.drawShowgirlDancer(
+    path: Path,
+    top: Color,
+    mid: Color,
+    deep: Color,
+    phase: Float,
+    alpha: Float
+) {
+    val w = size.width
+    val h = size.height
+    val cx = w * 0.52f
+    val floorY = h * 0.375f
+    val headR = w * 0.032f
+    val hair = Color(0xFF5A1B0B)
+    val dress = Color(0xFFB63D0D)
+    val dressLight = Color(0xFFE8751E)
+    val outline = deep
+    val sway = sin(phase * TAU) * w * 0.006f
+
+    // 追光中的空气亮斑，把人物从幕布里托出来。
+    drawUnitGlow(
+        GLOW_WARM,
+        Offset(cx + w * 0.015f, h * 0.245f),
+        w * 0.42f,
+        alpha * 0.24f
+    )
+
+    // 发髻与卷发轮廓：大小错开的圆团比一颗光秃的圆头更像舞台造型。
+    drawCircle(hair, headR * 1.20f, Offset(cx - headR * 0.52f, h * 0.158f), alpha = alpha * 0.90f)
+    drawCircle(hair, headR * 1.05f, Offset(cx + headR * 0.72f, h * 0.148f), alpha = alpha * 0.92f)
+    drawCircle(hair, headR * 0.82f, Offset(cx + headR * 1.06f, h * 0.178f), alpha = alpha * 0.88f)
+    drawCircle(dressLight, headR * 0.18f, Offset(cx - headR * 0.36f, h * 0.144f), alpha = alpha * 0.62f)
+
+    // 脸、颈、躯干合成一条干净的人形剪影，面部不画具体五官。
+    drawCircle(outline, headR, Offset(cx, h * 0.178f), alpha = alpha * 0.98f)
+    path.rewind()
+    path.moveTo(cx - w * 0.017f, h * 0.194f)
+    path.lineTo(cx + w * 0.016f, h * 0.194f)
+    path.lineTo(cx + w * 0.023f, h * 0.222f)
+    path.cubicTo(
+        cx + w * 0.047f, h * 0.232f,
+        cx + w * 0.054f, h * 0.254f,
+        cx + w * 0.035f, h * 0.274f
+    )
+    path.cubicTo(
+        cx + w * 0.020f, h * 0.287f,
+        cx - w * 0.020f, h * 0.287f,
+        cx - w * 0.038f, h * 0.273f
+    )
+    path.cubicTo(
+        cx - w * 0.056f, h * 0.252f,
+        cx - w * 0.047f, h * 0.232f,
+        cx - w * 0.022f, h * 0.221f
+    )
+    path.close()
+    drawPath(path, outline, alpha = alpha * 0.98f)
+
+    // 左臂抬起成舞姿，右臂贴腰形成 S 曲线，轮廓光只放在朝追光的一侧。
+    path.rewind()
+    path.moveTo(cx - w * 0.030f, h * 0.229f)
+    path.cubicTo(
+        cx - w * 0.076f, h * 0.218f,
+        cx - w * 0.112f, h * 0.190f,
+        cx - w * 0.104f, h * 0.155f
+    )
+    path.cubicTo(
+        cx - w * 0.100f, h * 0.141f,
+        cx - w * 0.084f, h * 0.136f,
+        cx - w * 0.077f, h * 0.146f
+    )
+    path.cubicTo(
+        cx - w * 0.078f, h * 0.186f,
+        cx - w * 0.056f, h * 0.211f,
+        cx - w * 0.011f, h * 0.242f
+    )
+    path.close()
+    drawPath(path, outline, alpha = alpha * 0.96f)
+    path.rewind()
+    path.moveTo(cx + w * 0.029f, h * 0.232f)
+    path.cubicTo(
+        cx + w * 0.074f, h * 0.241f,
+        cx + w * 0.083f, h * 0.266f,
+        cx + w * 0.056f, h * 0.286f
+    )
+    path.lineTo(cx + w * 0.038f, h * 0.276f)
+    path.cubicTo(
+        cx + w * 0.054f, h * 0.260f,
+        cx + w * 0.043f, h * 0.246f,
+        cx + w * 0.016f, h * 0.242f
+    )
+    path.close()
+    drawPath(path, outline, alpha = alpha * 0.92f)
+
+    // 腰部和裙摆：左侧轻抬、右侧展开，制造舞步中的旋转和舞台透视。
+    path.rewind()
+    path.moveTo(cx - w * 0.038f, h * 0.268f)
+    path.cubicTo(
+        cx - w * 0.060f, h * 0.286f,
+        cx - w * 0.122f, h * 0.300f,
+        cx - w * 0.165f + sway, h * 0.334f
+    )
+    path.cubicTo(
+        cx - w * 0.112f + sway, h * 0.350f,
+        cx - w * 0.066f, h * 0.358f,
+        cx - w * 0.012f, h * 0.360f
+    )
+    path.cubicTo(
+        cx + w * 0.069f, h * 0.361f,
+        cx + w * 0.145f + sway, h * 0.348f,
+        cx + w * 0.184f + sway, h * 0.326f
+    )
+    path.cubicTo(
+        cx + w * 0.139f, h * 0.300f,
+        cx + w * 0.078f, h * 0.286f,
+        cx + w * 0.037f, h * 0.268f
+    )
+    path.close()
+    drawPath(path, dress, alpha = alpha * 0.96f)
+
+    // 裙摆下方的暖色主面，给剪影一层卡通体积，不让它像一块黑色剪纸。
+    path.rewind()
+    path.moveTo(cx - w * 0.008f, h * 0.276f)
+    path.cubicTo(
+        cx + w * 0.032f, h * 0.302f,
+        cx + w * 0.082f, h * 0.315f,
+        cx + w * 0.145f + sway, h * 0.326f
+    )
+    path.cubicTo(
+        cx + w * 0.104f, h * 0.344f,
+        cx + w * 0.062f, h * 0.350f,
+        cx + w * 0.018f, h * 0.351f
+    )
+    path.cubicTo(
+        cx + w * 0.036f, h * 0.322f,
+        cx + w * 0.026f, h * 0.298f,
+        cx - w * 0.008f, h * 0.276f
+    )
+    path.close()
+    drawPath(path, dressLight, alpha = alpha * 0.58f)
+
+    // 双腿错开，脚踝落在舞台地面前；右腿略斜，姿态更像谢幕站姿而不是人体模型。
+    drawLine(
+        outline,
+        Offset(cx - w * 0.015f, h * 0.348f),
+        Offset(cx - w * 0.030f, floorY),
+        strokeWidth = w * 0.014f,
+        alpha = alpha * 0.94f,
+        cap = StrokeCap.Round
+    )
+    drawLine(
+        outline,
+        Offset(cx + w * 0.026f, h * 0.348f),
+        Offset(cx + w * 0.055f, floorY - h * 0.002f),
+        strokeWidth = w * 0.014f,
+        alpha = alpha * 0.94f,
+        cap = StrokeCap.Round
+    )
+    drawLine(
+        dressLight,
+        Offset(cx + w * 0.056f, floorY - h * 0.002f),
+        Offset(cx + w * 0.078f, floorY),
+        strokeWidth = w * 0.008f,
+        alpha = alpha * 0.82f,
+        cap = StrokeCap.Round
+    )
+
+    // 裙褶和亮片：曲线从腰部发散，按 phase 轻微闪动但不改变轮廓。
+    val shimmer = 0.68f + 0.32f * sin((phase * 2f + 0.18f) * TAU)
+    for (i in 0..3) {
+        val f = i / 3f
+        path.rewind()
+        path.moveTo(cx - w * (0.024f - f * 0.006f), h * 0.278f)
+        path.cubicTo(
+            cx + w * (0.008f + f * 0.015f), h * 0.300f,
+            cx + w * (0.026f + f * 0.050f) + sway, h * 0.323f,
+            cx + w * (0.038f + f * 0.100f) + sway, h * 0.347f
+        )
+        drawPath(
+            path,
+            color = if (i % 2 == 0) top else mid,
+            alpha = alpha * (0.28f + 0.11f * shimmer),
+            style = Stroke(width = w * 0.006f, cap = StrokeCap.Round)
+        )
+    }
+
+    // 右肩、腰线和裙摆外沿的金色轮廓光，朝向中央追光。
+    path.rewind()
+    path.moveTo(cx + w * 0.018f, h * 0.219f)
+    path.cubicTo(
+        cx + w * 0.046f, h * 0.232f,
+        cx + w * 0.050f, h * 0.254f,
+        cx + w * 0.032f, h * 0.273f
+    )
+    path.cubicTo(
+        cx + w * 0.085f, h * 0.286f,
+        cx + w * 0.142f + sway, h * 0.303f,
+        cx + w * 0.182f + sway, h * 0.326f
+    )
+    drawPath(
+        path,
+        color = LAMP_CORE,
+        alpha = alpha * 0.76f,
+        style = Stroke(width = w * 0.007f, cap = StrokeCap.Round)
+    )
+    drawCircle(LAMP_CORE, w * 0.006f, Offset(cx - w * 0.104f, h * 0.145f), alpha = alpha * 0.72f)
+}

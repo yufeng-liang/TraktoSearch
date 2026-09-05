@@ -50,6 +50,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
@@ -59,11 +60,15 @@ import androidx.core.view.WindowCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.screen.swiftie.eras.LOVER_HIT_MS
+import com.tracktosearch.ui.screen.swiftie.eras.LOVER_SHOT_MS
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieEraBackdropLayer
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieEraParticleLayer
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieEraStage
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieErasData
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieErasStage
+import com.tracktosearch.ui.screen.swiftie.eras.SwiftieLoverArrowFlight
+import com.tracktosearch.ui.screen.swiftie.eras.swiftieLoverAim
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.delay
@@ -275,6 +280,15 @@ private fun eraSlotAt(elapsedMs: Long): Int =
     } else {
         SwiftieErasData.LOVER_INDEX
     }
+
+/**
+ * Lover 那一段的总时长。终局期间背景钉在 Lover，段内时钟就用这个末帧值 ——
+ * 彩虹上那颗心因此保持「已被射中」的静态（见 `backdropEraElapsed`）。
+ */
+private val LOVER_ERA_MS: Long = SwiftieTimeline.cardDurationMs(
+    SwiftieErasData.LOVER_INDEX,
+    SwiftieTimeline.ERA_TRACK_COUNTS[SwiftieErasData.LOVER_INDEX]
+)
 
 /**
  * 换张交叉淡变进度。0f = 还没开始换，1f = 已经全是新的那张。
@@ -533,32 +547,57 @@ private fun SwiftieEggContent(
     }
 
     /**
-     * 本段已过多少毫秒。**只有 TTPD 那台打字机用** —— 它的敲字、滑架步进与出纸
-     * 必须与卡片对上拍，而 [backdropPhase] 是一条 3.6s 的循环锯齿，问不出「第几拍」。
+     * 本段已过多少毫秒。**三处读它**：TTPD 那台打字机（敲字 / 滑架步进 / 出纸要与卡片
+     * 对上拍）、reputation 那条蛇，以及 Lover 彩虹上那颗心（命中之后才带箭）。
+     * [backdropPhase] 是一条 3.6s 的循环锯齿，问不出「第几拍」。
      *
-     * 卡片段之外（intro / 终局 / 倒滑）返回 -1：打字机走待机态，不敲不出纸。
-     * 换张交叉淡变那 500ms 里 TTPD 是 `incoming`，此时它自己的段还没开始，
-     * 这个值是负的，同样落在待机态上 —— 正是要的效果，纸不能早出。
+     * intro 期间返回 -1：背景那时是第 1 张，没人读它。换张交叉淡变那 500ms 里 incoming
+     * 的段还没开始，`SwiftieEraBackdropLayer` 会**另外**给它 -1，纸不会早出。
      */
     val backdropEraElapsed: () -> Long = {
-        val index = SwiftieTimeline.eraIndexAt(clock.elapsedMs)
-        if (index == null) {
-            -1L
-        } else {
-            clock.elapsedMs - SwiftieTimeline.eraStartMs(index)
+        val elapsed = clock.elapsedMs
+        val index = SwiftieTimeline.eraIndexAt(elapsed)
+        when {
+            index != null -> elapsed - SwiftieTimeline.eraStartMs(index)
+            // 终局那 18.6s 背景钉在 Lover（见 eraSlotAt）。这里若也给 -1，插在彩虹那颗心上
+            // 的箭会在倒滑起点当场消失 —— 而收尾整段讲的正是「回到 Lover」。
+            // 给 Lover 段的末帧：命中与那一下回弹都早已走完，心是带箭的静态
+            elapsed >= SwiftieTimeline.ERAS_CARDS_START -> LOVER_ERA_MS
+            else -> -1L
         }
     }
 
     /**
-     * TTPD 卡片在根坐标里的边框（px）。[Rect.Zero] = 还没量到，打字机用兜底比例。
+     * 当前卡片在根坐标里的边框（px）。[Rect.Zero] = 还没量到，读它的两处各有兜底比例。
      *
-     * 要边框而不只是上缘：滚筒上那截立纸必须与纸同宽 —— 平板上卡片封顶 480dp 居中，
-     * 只按屏宽画的立纸会比出来的纸宽出一大截。
+     * **两张卡片回报到同一个 state**：同一时刻只挂着一张，而读它的两处都按段判人 ——
+     * TTPD 那台打字机要边框（不只是上缘）把滚筒上那截立纸对齐纸宽，平板上卡片封顶 480dp
+     * 居中，只按屏宽画的立纸会比出来的纸宽出一大截；Lover 那一箭要从卡片里的弓起飞，
+     * 起点必须是那张卡片的道具框，不是屏幕上的某个比例。
      *
      * 只在 draw lambda 里读，所以写它不会引起重组 —— 但**必须**是 snapshot state，
      * 普通 var 写完那一帧背景不会重画。
      */
-    var ttpdCardBounds by remember { mutableStateOf(Rect.Zero) }
+    var heroCardBounds by remember { mutableStateOf(Rect.Zero) }
+
+    /** 根 Box 的真实像素尺寸，与 [heroCardBounds] 和背景画布共用同一个根坐标系。 */
+    var rootSize by remember { mutableStateOf(Size.Zero) }
+
+    /**
+     * Lover 那一箭是否在飞。
+     *
+     * 一整支序列只有这 900ms 需要页面最上层那一层。`derivedStateOf` 只在布尔翻转时
+     * 通知依赖方（一段里两次），所以剩下的 95 秒连那个全屏节点都不存在 ——
+     * 常挂着的话每帧都要为它重录一次全屏 display list，而它 99% 的时间只是立刻 return。
+     */
+    val loverArrowFlying by remember {
+        derivedStateOf {
+            val elapsed = clock.elapsedMs
+            SwiftieTimeline.eraIndexAt(elapsed) == SwiftieErasData.LOVER_INDEX &&
+                elapsed - SwiftieTimeline.eraStartMs(SwiftieErasData.LOVER_INDEX) in
+                LOVER_SHOT_MS..LOVER_HIT_MS
+        }
+    }
     val particlePhase: () -> Float = {
         clock.elapsedMs.mod(PARTICLE_CYCLE_MS).toFloat() / PARTICLE_CYCLE_MS
     }
@@ -704,6 +743,7 @@ private fun SwiftieEggContent(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .onSizeChanged { rootSize = Size(it.width.toFloat(), it.height.toFloat()) }
             // T123000–125998：整层淡出，露出已经在运动的星云背景（Spec §5）。
             // 必须插在 background 之前 —— 写在之后只淡出子内容、底色仍然挡着星云
             .graphicsLayer {
@@ -764,7 +804,7 @@ private fun SwiftieEggContent(
                 crossfade = backdropCrossfade,
                 phase = backdropPhase,
                 eraElapsedMs = backdropEraElapsed,
-                cardBounds = { ttpdCardBounds },
+                cardBounds = { heroCardBounds },
                 lowRam = lowRam,
                 modifier = Modifier
                     .fillMaxSize()
@@ -804,9 +844,22 @@ private fun SwiftieEggContent(
                 clock = clock,
                 frozen = seekFrozen,
                 onFrozenChange = { seekFrozen = it },
-                onCardBoundsChange = { ttpdCardBounds = it },
+                onCardBoundsChange = { heroCardBounds = it },
+                loverAimAngle = { swiftieLoverAim(heroCardBounds, rootSize).angle },
                 modifier = Modifier.graphicsLayer { alpha = erasAlpha() }
             )
+            // Lover 那一箭在飞的 900ms：**必须挂在卡片之上**。弓在卡片里、心在背景里，
+            // 而箭要从卡片飞到背景上 —— 途中它得压在卡片上面，否则一离弦就钻到卡片背后
+            // 消失了。命中那一帧本层卸载，背景那一层同一帧接手画插住的那支箭
+            if (loverArrowFlying) {
+                SwiftieLoverArrowFlight(
+                    elapsedMs = backdropEraElapsed,
+                    cardBounds = { heroCardBounds },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = erasAlpha() }
+                )
+            }
         }
 
         // 终局挂到倒滑段末尾：交叉淡变在 T118500 走完，REWIND 到 T119500，

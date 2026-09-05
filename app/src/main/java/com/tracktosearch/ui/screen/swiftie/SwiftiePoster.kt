@@ -2,8 +2,13 @@ package com.tracktosearch.ui.screen.swiftie
 
 import android.content.Context
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -23,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -51,9 +57,6 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** 出题态答案槽里的未知数。 */
-private const val UNKNOWN = "X"
-
 /**
  * 答错一次就浮出的小字。
  *
@@ -63,6 +66,21 @@ private const val UNKNOWN = "X"
  * `contentDescription` 带出去。
  */
 private const val LUCKY_HINT = "Her lucky number."
+
+/**
+ * 答案槽光标硬闪的整周期：前半亮、后半灭，阶跃切换无渐变 ——
+ * 任何平台的所有输入框都这样闪，「这是输入位」的暗示最强。
+ */
+private const val CURSOR_BLINK_MS = 1060
+
+/** 光标（基线下划线）的厚度，占答案槽字高。 */
+private const val CURSOR_THICKNESS_FRACTION = 0.06f
+
+/** 光标悬在基线下方的高度，占答案槽字高。 */
+private const val CURSOR_BASELINE_GAP_FRACTION = 0.08f
+
+/** 有输入时光标与最后一位数字右缘的间距，占答案槽字高。 */
+private const val CURSOR_FOLLOW_GAP_FRACTION = 0.15f
 
 /** 提示胶囊的底色，与音频提示同一档白纱。 */
 private val LUCKY_CAPSULE = Color.White.copy(alpha = 0.62f)
@@ -256,9 +274,28 @@ internal fun SwiftiePoster(
     val a11y = if (state.showLuckyHint) "$question $hint" else question
 
     val art = remember(context, fit.size) { SwiftiePosterArt(context, fit.size) }
-    val slotPath = remember(art, state.input, state.solved) {
-        SwiftiePosterInk.slotPath(context, state.input.ifEmpty { UNKNOWN }, art.slot)
+    // 空槽返回空路径：占位提示由光标承担，不再画那个 X
+    val slotPath = remember(art, state.input) {
+        SwiftiePosterInk.slotPath(context, state.input, art.slot)
     }
+    // 光标跟着最后一位数字的右缘走，退格时它自己随 bounds 回退
+    val slotBounds = remember(slotPath) { slotPath.getBounds() }
+    // 光标的硬闪相位：与闪粉高光同模式，只在 draw lambda 里读，不触发重组
+    val cursorBlink = rememberInfiniteTransition(label = "swiftieCursorBlink")
+        .animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(CURSOR_BLINK_MS, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "swiftieCursorBlinkPhase"
+        )
+    // 「减少动效」下常显不闪：这是「往这儿输入」的功能性提示，不能整个消失
+    val reducedMotion = rememberReducedMotion()
+    // 输满 2 位提交键已点亮即是指引；答错的 300ms 摇晃与洋红描边才是焦点；答对后闪粉落位
+    val cursorVisible = state.phase == SwiftieQuizPhase.INPUT &&
+        state.input.length < SwiftieEggController.MAX_INPUT_LENGTH
     // 高光要收在闪粉里。答错那 300ms 槽位是描边而不是填充，就不该跟着闪
     val twinkleMask = remember(art, slotPath, state.phase) {
         Path().apply {
@@ -341,6 +378,7 @@ internal fun SwiftiePoster(
                                 art = art,
                                 fit = fit,
                                 slotPath = slotPath,
+                                slotBounds = slotBounds,
                                 twinkleMask = twinkleMask,
                                 wrong = state.phase == SwiftieQuizPhase.WRONG,
                                 settle = settle(),
@@ -348,6 +386,9 @@ internal fun SwiftiePoster(
                                 pop = pop.value,
                                 burst = burst.value,
                                 strokeWidth = strokeWidth,
+                                cursorOn = cursorVisible &&
+                                    (reducedMotion || cursorBlink.value < 0.5f),
+                                hasInput = state.input.isNotEmpty(),
                                 glitter = glitter,
                                 twinkles = twinkles,
                                 phase = time.value
@@ -396,12 +437,16 @@ private const val BURST_TRAVEL_FRACTION = 0.075f
  * @param shake 答错摇晃的横向位移（px）
  * @param pop 答案槽的落字回弹倍率
  * @param burst 落字亮点的进度，1 = 已散完
+ * @param cursorOn 光标这一帧是否画。可见性与硬闪相位由调用方在 draw 阶段合成：
+ *   空槽常驻占位、有输入跟在末位右缘、输满 / 答错 / 答对 / 减少动效各有归属
+ * @param hasInput 答案槽当前是否有数字，决定光标取槽心还是跟着末位走
  * @param phase 闪粉高光的共用相位
  */
 private fun DrawScope.drawEquation(
     art: SwiftiePosterArt,
     fit: SwiftiePosterFit,
     slotPath: Path,
+    slotBounds: Rect,
     twinkleMask: Path,
     wrong: Boolean,
     settle: Float,
@@ -409,6 +454,8 @@ private fun DrawScope.drawEquation(
     pop: Float,
     burst: Float,
     strokeWidth: Float,
+    cursorOn: Boolean,
+    hasInput: Boolean,
     glitter: Brush,
     twinkles: List<Sparkle>,
     phase: Float
@@ -429,6 +476,16 @@ private fun DrawScope.drawEquation(
     val top = box.top * poster.height
     val width = box.width * poster.width
     val height = box.height * poster.height
+    // 光标的度量全部从既有版式值推：答案槽正好放两位数字，宽度取一半就是单个数字的格子
+    val glyphH = SwiftiePosterInk.ANSWER.height * poster.height
+    val cursorW = SwiftiePosterInk.ANSWER.width * poster.width / 2f
+    val cursorH = glyphH * CURSOR_THICKNESS_FRACTION
+    val cursorTop = art.slot.baselineY + glyphH * CURSOR_BASELINE_GAP_FRACTION
+    val cursorLeft = if (hasInput) {
+        slotBounds.right + glyphH * CURSOR_FOLLOW_GAP_FRACTION
+    } else {
+        art.slot.centerX - cursorW / 2f
+    }
 
     withTransform({
         translate(left = shake, top = shift)
@@ -441,6 +498,14 @@ private fun DrawScope.drawEquation(
         } else {
             withTransform({ scale(pop, pop, slotCenter) }) {
                 drawPath(path = slotPath, brush = glitter)
+                // 光标与数字共用落字弹跳：敲一位进来，它跟着那一下一起弹
+                if (cursorOn) {
+                    drawRect(
+                        color = SwiftiePalette.RoyalBlue,
+                        topLeft = Offset(cursorLeft, cursorTop),
+                        size = Size(cursorW, cursorH)
+                    )
+                }
             }
         }
         // 高光与归位闪光都收进字形里，一点都不溢到天空上

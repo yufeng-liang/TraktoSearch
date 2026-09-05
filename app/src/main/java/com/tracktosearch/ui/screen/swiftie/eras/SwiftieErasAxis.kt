@@ -16,7 +16,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -37,7 +36,6 @@ import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.ui.screen.swiftie.SwiftiePalette
 import com.tracktosearch.ui.screen.swiftie.SwiftieTimeline
-import com.tracktosearch.ui.screen.swiftie.unitHeartPath
 import kotlin.math.round
 
 /**
@@ -123,41 +121,6 @@ private val AXIS_LABEL_FONT_SIZE = 8.dp
 /** 未走过的段落**与它的标签**：灰化。走过的换成该时代主色。两层共用一个灰，读起来才是一件事。 */
 private val DESATURATED = Color(0xFFB6AFAB)
 
-/** 7·3 心刻度的边长。 */
-private val HEART_TICK_SIZE = 5.dp
-
-/** 心刻度的金。与 Fearless 的主色是同一个金 —— 彩蛋不再自己发明第二版金色。 */
-private val HEART_TICK_GOLD = Color(0xFFD4AF37)
-
-/**
- * 金心的暗色键线。
- *
- * 金 `#D4AF37` 与 Lover 粉 `#F7A8C4` 的相对亮度几乎相等（1.14:1），走过之后纯填色的
- * 心压在色带上等于没画；未走过时压在灰色带上同样接近 1:1。垫一圈半透明黑之后金对
- * 键线有 3.5:1，两种状态都读得出这是一枚心 —— 描金本来也要有键线才像金属。
- */
-private val HEART_TICK_KEYLINE = Color.Black.copy(alpha = 0.55f)
-
-private val HEART_TICK_KEYLINE_WIDTH = 0.6.dp
-
-/**
- * 7·3 心刻度的横向比例。
- *
- * 霉霉 7 月 3 日结婚，Lover 恰好是第 **7** 张专辑、`Lover` 是其中第 **3** 首。
- *
- * 按**时间**折算而不是按曲目序号均分（`2.5 / 18`）：轴是时间轴，色带宽度按时长成
- * 比例，所以「第 3 首」在轴上的位置就是播放头走到那一行点亮时的位置。两种算法在
- * 360dp 屏上只差不到 2dp，但序号均分那个点对应的时刻晚了约 570ms —— 播放头压过
- * 金心时卡片上亮的已经是第 6 首，巧思就落空了。
- */
-private val HEART_TICK_FRACTION: Float = run {
-    val index = SwiftieErasData.LOVER_INDEX
-    val within = (TRACK_REVEAL_START_MS + TRACK_STAGGER_MS * 2).toFloat() /
-        SwiftieTimeline.cardDurationMs(index, SwiftieTimeline.ERA_TRACK_COUNTS[index])
-    SWIFTIE_ERA_EDGES[index] +
-        within * (SWIFTIE_ERA_EDGES[index + 1] - SWIFTIE_ERA_EDGES[index])
-}
-
 /** 舞台参数按 [index] 取，越界夹住 —— 这是 draw 阶段每帧都走的路，不能抛。 */
 private fun stageAt(index: Int): SwiftieEraStage =
     SwiftieErasData.STAGE[index.coerceIn(0, SwiftieErasData.STAGE.lastIndex)]
@@ -242,13 +205,6 @@ fun SwiftieErasAxis(
     // 整条色带的圆角轮廓（12 段连成一条的裁剪区，见 draw 里那段注释）。
     // 尺寸只有 draw 阶段才知道，所以这里只借一个对象出去，每帧 rewind 重填
     val barPath = remember { Path() }
-
-    // 心形用共用的 unitHeartPath()，在这里一次性放大到 5dp。若改成 draw 里套一层
-    // scale()，键线宽度会跟着一起放大 5 倍
-    val heartPath = remember(density) {
-        val edge = with(density) { HEART_TICK_SIZE.toPx() }
-        unitHeartPath().apply { transform(Matrix().apply { scale(x = edge, y = edge) }) }
-    }
 
     Column(modifier = modifier.fillMaxWidth()) {
         Canvas(
@@ -419,23 +375,10 @@ fun SwiftieErasAxis(
                     }
                 }
 
-                // 7·3：金心钉在第 7 段内部「第 3 首点亮」的那一刻（见 HEART_TICK_FRACTION）。
-                // 必须画在饱和层**之后** —— 那一层是不透明的主色，画在前面会被整块盖掉。
-                // 它画在 Canvas 上，本来就没有独立语义节点、读屏扫不到，
-                // **不要再给它补 contentDescription**：这是留给看得见的人的巧思
-                val heartEdge = HEART_TICK_SIZE.toPx()
-                translate(
-                    left = HEART_TICK_FRACTION * size.width - heartEdge / 2f,
-                    top = rise + (ribbonHeight - heartEdge) / 2f
-                ) {
-                    drawPath(path = heartPath, color = HEART_TICK_GOLD, alpha = ribbonPhase)
-                    drawPath(
-                        path = heartPath,
-                        color = HEART_TICK_KEYLINE,
-                        alpha = ribbonPhase,
-                        style = Stroke(width = HEART_TICK_KEYLINE_WIDTH.toPx())
-                    )
-                }
+                // 7·3 的巧思**不在这条轴上**。这里原来钉着一枚 5dp 的金心，在 360dp 屏上
+                // 只有十几个像素、还压在同色系的色带上，需求方的判断是「太小了」。
+                // 巧思整块搬到 Lover 卡片上：那里有一整行的宽度可用（见 SwiftieEraTracklist
+                // 的描金行与 The Archer 那一箭）
 
                 // 播放头：竖线穿过色带与刻度，下面挂一个反色内芯 + 同色环的旋钮
                 val headX = playheadFraction().coerceIn(0f, 1f) * size.width
