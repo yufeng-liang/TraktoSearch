@@ -103,12 +103,16 @@ fun CrashReportDialogHost(
             UploadState.Success -> {
                 // 手动触发（从 Uploading 转移）或启动自动上传完成（prev==null 且有崩溃）
                 if (UploadToastPolicy.shouldNotify(prev, state, crashCount)) {
+                    haptics.confirm()
                     context.showToast(context.getString(R.string.crash_upload_success))
                 }
                 dialogVisible = false
             }
             is UploadState.Failed -> {
+                // 触感与 toast 同一个闸门：shouldNotify 判的正是「这个终态是不是刚刚发生的」。
+                // 上一次会话遗留的 Failed（prev==null 且本次没崩溃）连 toast 都不弹，也不该震
                 if (UploadToastPolicy.shouldNotify(prev, state, crashCount)) {
+                    haptics.reject()
                     context.showToast(context.getString(R.string.crash_upload_failed))
                 }
                 dialogVisible = true

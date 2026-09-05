@@ -155,6 +155,7 @@
     <string name="detail_share">分享</string>
     <string name="detail_douban_sync_success">豆瓣数据已同步更新</string>
     <string name="detail_douban_sync_failed">豆瓣同步失败，可重试</string>
+    <string name="detail_douban_sync_deferred">豆瓣没能同步，这次改动会在下次同步时自动重试</string>
     <string name="detail_douban_sync_id_not_ready">豆瓣ID未就绪，可重试</string>
     <string name="detail_douban_sync_retry">重试豆瓣同步</string>
     <string name="detail_marked_watched">已看过</string>
@@ -1060,6 +1061,7 @@
     <string name="screen_douban_item_detail_refetch">重新爬取</string>
     <string name="screen_douban_item_detail_subtitle_hint">点击添加子标题（可用于资源搜索）</string>
     <string name="screen_douban_item_detail_subtitle_edit">编辑子标题</string>
+    <string name="screen_douban_item_detail_subtitle_save_failed">子标题没能保存，请重试</string>
     <string name="screen_douban_item_detail_search_with_subtitle">同时用子标题搜索</string>
     <string name="screen_douban_item_detail_tab_resources">资源搜索</string>
     <string name="screen_douban_item_detail_tab_info">详情信息</string>
@@ -1152,6 +1154,8 @@
     <!-- Snackbar Messages -->
     <string name="snackbar_test_success">测试成功，解析到 %d 条结果</string>
     <string name="snackbar_test_empty">连接成功，但未解析到结果</string>
+    <string name="editor_test_ok_sample">测试成功，解析到 %1$d 条结果，例如：%2$s</string>
+    <string name="editor_test_incomplete">请先填写名称与地址</string>
     <string name="snackbar_export_success">导出成功</string>
     <string name="snackbar_export_failed">导出失败：未知错误</string>
     <string name="snackbar_import_no_data">未找到有效记录</string>
@@ -1206,6 +1210,7 @@
     <string name="statistics_share">分享统计</string>
     <string name="statistics_share_generating">正在生成图片…</string>
     <string name="statistics_share_failed">图片保存失败，请重试</string>
+    <string name="statistics_partial_load_failed">部分统计数据没能加载，页面上的数字可能不全</string>
     <string name="statistics_share_saved">已保存到相册</string>
     <string name="statistics_share_open_failed">图片已保存到相册，但无法打开系统分享面板</string>
     <string name="statistics_share_not_ready">统计还在加载，稍后再试</string>
@@ -1574,6 +1579,7 @@
     <string name="mark_records_time_days_ago">%1$d 天前</string>
     <string name="mark_records_empty_all">暂无记录</string>
     <string name="mark_records_empty_filtered">没有符合筛选条件的记录</string>
+    <string name="mark_records_trakt_history_failed">Trakt 观看历史没能加载，这个列表可能不全</string>
     <string name="mark_records_clear_filter">清除筛选条件</string>
     <string name="mark_records_unknown_title">未知影视</string>
     <string name="mark_records_filter_media_type">媒体类型</string>

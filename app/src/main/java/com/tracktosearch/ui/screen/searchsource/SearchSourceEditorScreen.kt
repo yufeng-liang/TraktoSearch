@@ -103,7 +103,9 @@ fun SearchSourceEditorScreen(
     val importState by viewModel.importState.collectAsStateWithLifecycle()
     val appliedTemplateName by viewModel.appliedTemplateName.collectAsStateWithLifecycle()
     var showConflictDialog by remember { mutableStateOf(false) }
-    var testMessage by remember { mutableStateOf<String?>(null) }
+    var testOutcome by remember {
+        mutableStateOf<SearchSourceEditorViewModel.TestOutcome?>(null)
+    }
     var isTesting by remember { mutableStateOf(false) }
     var showTemplateSheet by remember { mutableStateOf(false) }
     // 只展开第一组：13 个字段一次铺开会把人吓退，其余两组按需打开
@@ -113,6 +115,9 @@ fun SearchSourceEditorScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val pasteEmptyMessage = stringResource(R.string.editor_paste_empty)
+    // 测试结果那一记触感挂在回调上而不是挂在 testOutcome 状态上：回调一次测试只走一遍，
+    // 而 LaunchedEffect(testOutcome) 会在旋屏后拿着旧结果再震一次
+    val outcomeHaptics = rememberAppHaptics()
 
     val values = SourceFormValues(
         name = name,
@@ -255,20 +260,23 @@ fun SearchSourceEditorScreen(
                 onNext = viewModel::nextStep,
                 onTest = {
                     isTesting = true
-                    testMessage = null
-                    viewModel.testCurrent { message ->
-                        testMessage = message
+                    testOutcome = null
+                    viewModel.testCurrent { outcome ->
+                        if (outcome.success) outcomeHaptics.confirm() else outcomeHaptics.reject()
+                        testOutcome = outcome
                         isTesting = false
                     }
                 },
                 isTesting = isTesting,
-                testMessage = testMessage,
+                testOutcome = testOutcome,
                 onSave = {
                     val conflict = viewModel.findConflict()
                     if (conflict != null && conflict.id != viewModel.currentEditingId()) {
                         showConflictDialog = true
                     } else {
-                        viewModel.save()
+                        // save() 返回 null 只有名称/地址为空一种可能，而 canSave 已经拦在按钮上；
+                        // 仍按返回值判，免得哪天 save() 多一条失败路径而这里还在盲报成功
+                        if (viewModel.save() != null) outcomeHaptics.confirm() else outcomeHaptics.reject()
                         onSaved()
                     }
                 },
@@ -299,7 +307,9 @@ fun SearchSourceEditorScreen(
                 val confirmHaptics = rememberAppHaptics()
                 TextButton(onClick = {
                     confirmHaptics.tap()
-                    showConflictDialog = false; viewModel.save(); onSaved()
+                    showConflictDialog = false
+                    if (viewModel.save() != null) confirmHaptics.confirm() else confirmHaptics.reject()
+                    onSaved()
                 }) {
                     Text(stringResource(R.string.import_confirm))
                 }
@@ -916,12 +926,12 @@ private fun EditorBottomBar(
     onNext: () -> Unit,
     onTest: () -> Unit,
     isTesting: Boolean,
-    testMessage: String?,
+    testOutcome: SearchSourceEditorViewModel.TestOutcome?,
     onSave: () -> Unit,
     canSave: Boolean
 ) {
     // 上一步/下一步/测试/保存都是带文字的操作按钮，同给 tap；
-    // 「保存成功」那一记 confirm 归另一个任务在 ViewModel 侧接，这里只发点击
+    // 「保存成功」那一记 confirm 由调用方在 onSave 回调里按 save() 的返回值发，这里只发点击
     val haptics = rememberAppHaptics()
     Column(
         modifier = modifier
@@ -941,11 +951,16 @@ private fun EditorBottomBar(
                     .calculateBottomPadding()
             )
     ) {
-        testMessage?.let { message ->
+        testOutcome?.let { outcome ->
             Text(
-                text = message,
+                text = outcome.message,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
+                // 成功与失败原来同画 primary 色，「测试失败」和「测试通过」长得一模一样
+                color = if (outcome.success) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.error
+                },
                 modifier = Modifier.padding(bottom = 8.dp)
             )
         }

@@ -1780,6 +1780,7 @@ fun WatchlistScreen(
                                                 isRemoving = false
                                                 // 部分条目移除失败时提示用户（成功的项已更新 UI 并启动豆瓣移除）
                                                 if (hasFailure) {
+                                                    haptics.reject()
                                                     context.showToast(
                                                         batchRemovePartialFailedMessage,
                                                         Toast.LENGTH_LONG

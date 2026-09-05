@@ -12,11 +12,14 @@ import com.tracktosearch.data.local.PanHubConfigStorage
 import com.tracktosearch.data.local.SearchSourceStorage
 import com.tracktosearch.data.remote.custom.CustomSearchService
 import com.tracktosearch.data.remote.panhub.PanHubConfig
+import com.tracktosearch.ui.haptic.HapticOutcome
+import com.tracktosearch.ui.haptic.HapticOutcomeEmitter
 import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -40,6 +43,10 @@ class SearchSourcesViewModel @Inject constructor(
     val zresoEnabled: StateFlow<Boolean> = searchSourceStorage.zresoEnabled
     val customSources: StateFlow<List<CustomSearchSource>> = customSearchSourceStorage.sources
     val panHubConfig: StateFlow<PanHubConfig> = panHubConfigStorage.config
+
+    /** 结果类触感的出口，界面侧一行 `HapticOutcomeEffect(viewModel.hapticOutcomes)` 收集。 */
+    private val hapticOutcomeEmitter = HapticOutcomeEmitter()
+    val hapticOutcomes: SharedFlow<HapticOutcome> = hapticOutcomeEmitter.outcomes
 
     fun setPansouEnabled(enabled: Boolean) {
         viewModelScope.launch { searchSourceStorage.setPansouEnabled(enabled) }
@@ -83,7 +90,13 @@ class SearchSourcesViewModel @Inject constructor(
     fun importSource(source: CustomSearchSource, overwrite: Boolean = false) {
         viewModelScope.launch {
             val conflict = findImportConflict(source)
-            if (conflict != null && !overwrite) return@launch
+            if (conflict != null && !overwrite) {
+                // 撞了同名/同地址又没说要覆盖：这里静默返回，界面上没有任何变化。
+                // 调用方在弹窗里已经先查过一次冲突，所以走到这一步是兜底路径 ——
+                // 但也正因为兜底，一声不响最容易让人以为导进去了
+                hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
+                return@launch
+            }
             val finalSource = source.copy(id = conflict?.id ?: java.util.UUID.randomUUID().toString())
             if (conflict != null) customSearchSourceStorage.updateSource(finalSource)
             else customSearchSourceStorage.addSource(finalSource)
@@ -143,6 +156,10 @@ class SearchSourcesViewModel @Inject constructor(
                 }
             }
             _testResults.value = _testResults.value + (source.id to state)
+            // state.success 已经决定了卡片上的对错图标，触感跟着同一个判据
+            hapticOutcomeEmitter.emit(
+                if (state.success == true) HapticOutcome.SUCCESS else HapticOutcome.FAILURE
+            )
         }
     }
 }

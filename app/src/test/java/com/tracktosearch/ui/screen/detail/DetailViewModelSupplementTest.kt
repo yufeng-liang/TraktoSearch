@@ -187,13 +187,42 @@ class DetailViewModelSupplementTest {
         val onlySource = "only_source"
         setUiState { it.copy(enabledSources = setOf(onlySource)) }
 
-        viewModel.toggleSource(onlySource)
+        // 返回值就是界面判「发 toggle 还是发 reject」的依据：被守卫挡下时必须是 false，
+        // 否则 chip 会在什么都没变的情况下震一记「已关闭」
+        val toggled = viewModel.toggleSource(onlySource)
 
+        assertThat(toggled).isFalse()
         assertThat(viewModel.uiState.value.enabledSources).containsExactly(onlySource)
+    }
+
+    @Test
+    fun toggleSource_真的切换时返回true() {
+        setUiState { it.copy(enabledSources = setOf("a", "b")) }
+
+        assertThat(viewModel.toggleSource("b")).isTrue()
+        assertThat(viewModel.uiState.value.enabledSources).containsExactly("a")
+
+        assertThat(viewModel.toggleSource("c")).isTrue()
+        assertThat(viewModel.uiState.value.enabledSources).containsExactly("a", "c")
     }
 
     // ==================== toggleDiskType 分支 ====================
 
+    @Test
+    fun toggleDiskType_最后一个类型不允许移除() {
+        setUiState { it.copy(enabledDiskTypes = setOf(DiskType.QUARK)) }
+
+        assertThat(viewModel.toggleDiskType(DiskType.QUARK)).isFalse()
+        assertThat(viewModel.uiState.value.enabledDiskTypes).containsExactly(DiskType.QUARK)
+    }
+
+    @Test
+    fun toggleDiskType_真的切换时返回true() {
+        setUiState { it.copy(enabledDiskTypes = setOf(DiskType.QUARK, DiskType.ALI)) }
+
+        assertThat(viewModel.toggleDiskType(DiskType.ALI)).isTrue()
+        assertThat(viewModel.uiState.value.enabledDiskTypes).containsExactly(DiskType.QUARK)
+    }
 
 
     // ==================== toggleShowHighRelevanceOnly ====================

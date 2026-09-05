@@ -99,6 +99,30 @@ fun DoubanSyncDialog(
         }
     }
 
+    // 同步终态那一记触感。用「上一次看到的 isComplete」做边沿检测，而不是直接
+    // LaunchedEffect(p.isComplete)：DoubanSyncManager 完成后不会立刻重置 progress，
+    // 弹窗重开时第一帧就可能拿到 isComplete=true —— 那是上一轮的旧结果，不该震。
+    // remember 而非 rememberSaveable：旋屏后重新以当前值为基线，同样不会补震一记
+    val outcomeHaptics = rememberAppHaptics()
+    var observedComplete by remember { mutableStateOf(p.isComplete) }
+    LaunchedEffect(p.isComplete) {
+        val wasComplete = observedComplete
+        observedComplete = p.isComplete
+        if (!p.isComplete || wasComplete) return@LaunchedEffect
+        // 取消不是结果：既没成也没败，用户自己按的，不用震回去告诉他
+        if (p.isCancelling) return@LaunchedEffect
+        // 判据就是下面结果区渲染出来的那几行：报错文案、失败数、未修复的冲突、
+        // 云端上传红字，任意一条成立就说明还有事要用户再来一趟
+        val clean = p.stage != DoubanSyncStage.FAILED &&
+            p.stage != DoubanSyncStage.LOGIN_REQUIRED &&
+            !p.cookieExpired &&
+            p.errorMessage.isNullOrBlank() &&
+            p.failedCount == 0 &&
+            p.conflictsFound == 0 &&
+            !(p.cloudUploadAttempted && !p.cloudUploadSucceeded)
+        if (clean) outcomeHaptics.confirm() else outcomeHaptics.reject()
+    }
+
     AlertDialog(
         onDismissRequest = {
             if (!p.isRunning) onDismiss()

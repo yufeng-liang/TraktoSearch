@@ -125,6 +125,7 @@ import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberAppPullToRefreshState
 import com.tracktosearch.ui.component.rememberShimmer
+import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
@@ -221,6 +222,9 @@ fun DetailScreen(
 
     // 豆瓣同步 Toast 提示（成功/失败/ID未就绪）
     ToastEffect(viewModel.toastEvent)
+
+    // 上面那些 toast、以及豆瓣乐观写失败时的重试按钮，配对的结果类触感都从这一行出
+    HapticOutcomeEffect(viewModel.hapticOutcomes)
 
     // 标记想看/取消看过：给一条带「撤销」的 Snackbar。误点之前只能自己再点回去。
     val markSnackbarHostState = remember { SnackbarHostState() }

@@ -312,6 +312,10 @@ fun DoubanLoginScreen(
                                     if (request?.isForMainFrame == true) {
                                         val code = error?.errorCode ?: WebViewClient.ERROR_UNKNOWN
                                         Log.w(TAG, "WebView 主框架加载失败: code=$code desc=${error?.description}")
+                                        // 只在主框架上发：子资源失败（图片、埋点）不影响用户能不能登录。
+                                        // cookie 解析那一路刻意不发 —— onPageFinished 每次翻页都会跑，
+                                        // 「还没有 dbcl2」是登录前的常态而不是失败，挂在那里会一路乱震
+                                        haptics.reject()
                                         loadState = if (code in NETWORK_ERROR_CODES) {
                                             networkErrorText
                                         } else {

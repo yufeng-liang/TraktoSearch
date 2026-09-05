@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.detail
 import android.util.Log
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.R
@@ -56,6 +57,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -65,6 +67,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import com.tracktosearch.ui.haptic.HapticOutcome
+import com.tracktosearch.ui.haptic.HapticOutcomeEmitter
 import com.tracktosearch.ui.navigation.DetailSeedStore
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -365,6 +369,34 @@ class DetailViewModel @Inject constructor(
     /** Toast 事件(参考 PersonViewModel 模式),用于豆瓣同步成功/失败提示 */
     private val _toastEvent = MutableSharedFlow<Int>()
     val toastEvent = _toastEvent.asSharedFlow()
+
+    /**
+     * 结果类触感的出口，界面侧一行 `HapticOutcomeEffect(viewModel.hapticOutcomes)` 收集。
+     *
+     * 不在这里直接调 `AppHaptics`：VM 活得比屏幕长，网络回来时用户可能已经离开这一屏；
+     * 而且豆瓣那几条结果发在 IO 线程上，而触感要求主线程。详见 ui/haptic/HapticOutcome.kt。
+     */
+    private val hapticOutcomeEmitter = HapticOutcomeEmitter()
+    val hapticOutcomes: SharedFlow<HapticOutcome> = hapticOutcomeEmitter.outcomes
+
+    /**
+     * 发一条结果 toast，并配上对应方向的触感。
+     *
+     * 本类有十几处结果 toast 散在十来个方法里，各自记得补一行 emit 迟早会漏，所以把
+     * 「说给用户看」与「震给用户摸」绑在同一个出口上。[_toastEvent] 是 rendezvous 流
+     * （replay 0、无缓冲），emit 会挂起到 UI 收走，所以非挂起上下文一律这样另起协程。
+     */
+    private fun emitResultToast(@StringRes resId: Int, outcome: HapticOutcome) {
+        hapticOutcomeEmitter.emit(outcome)
+        viewModelScope.launch { _toastEvent.emit(resId) }
+    }
+
+    /** [emitResultToast] 的挂起版：调用方已经在协程里，不必再起一个。 */
+    private suspend fun emitResultToastNow(@StringRes resId: Int, outcome: HapticOutcome) {
+        // 先发触感：toast 那一步会挂起到 UI 收走，触感不该跟着一起等
+        hapticOutcomeEmitter.emit(outcome)
+        _toastEvent.emit(resId)
+    }
 
     /**
      * 标记类操作成功事件，供 UI 弹带「撤销」的 Snackbar。
@@ -1142,7 +1174,7 @@ class DetailViewModel @Inject constructor(
     /** 普通详情没有有效 Trakt ID 时禁止把占位 ID 传给写接口。 */
     private fun canWriteToTrakt(): Boolean {
         if (currentTraktId > 0) return true
-        viewModelScope.launch { _toastEvent.emit(R.string.detail_load_error) }
+        emitResultToast(R.string.detail_load_error, HapticOutcome.FAILURE)
         return false
     }
 
@@ -1972,7 +2004,7 @@ class DetailViewModel @Inject constructor(
     fun confirmRatingWithComment(rating: Int?, comment: String) {
         if (rating == null || rating == 0) {
             if (_uiState.value.pendingOwnComment != null) {
-                viewModelScope.launch { _toastEvent.emit(R.string.detail_own_comment_rating_required) }
+                emitResultToast(R.string.detail_own_comment_rating_required, HapticOutcome.FAILURE)
                 return
             }
             removeRating()
@@ -2014,6 +2046,11 @@ class DetailViewModel @Inject constructor(
             retryOwnCommentTargets = failedTargets,
             isMarkedWatched = if (OwnCommentTarget.DOUBAN in targets) true else _uiState.value.isMarkedWatched,
             watchedChanged = if (OwnCommentTarget.DOUBAN in targets) true else _uiState.value.watchedChanged
+        )
+        // 界面把 retryOwnCommentTargets 渲染成重试入口，所以这里不必再补文案，只给方向。
+        // 部分成功算失败：只要还有一个平台要用户再来一次，这次就不算办成了
+        hapticOutcomeEmitter.emit(
+            if (failedTargets.isEmpty()) HapticOutcome.SUCCESS else HapticOutcome.FAILURE
         )
         cacheOwnComment(comment, traktCommentId, System.currentTimeMillis())
         if (OwnCommentTarget.DOUBAN in targets) {
@@ -2194,7 +2231,7 @@ class DetailViewModel @Inject constructor(
         if (cred == null || doubanId.isNullOrBlank()) {
             // 豆瓣未就绪 → 显示重试按钮（保留 pendingDoubanAction 供重试）
             _uiState.value = _uiState.value.copy(doubanSyncRetryable = true)
-            _toastEvent.emit(R.string.detail_douban_sync_id_not_ready)
+            emitResultToastNow(R.string.detail_douban_sync_id_not_ready, HapticOutcome.FAILURE)
             return
         }
 
@@ -2213,10 +2250,10 @@ class DetailViewModel @Inject constructor(
 
         if (result) {
             _uiState.value = _uiState.value.copy(doubanSyncRetryable = false, pendingDoubanAction = null)
-            _toastEvent.emit(R.string.detail_douban_sync_success)
+            emitResultToastNow(R.string.detail_douban_sync_success, HapticOutcome.SUCCESS)
         } else {
             _uiState.value = _uiState.value.copy(doubanSyncRetryable = true)
-            _toastEvent.emit(R.string.detail_douban_sync_failed)
+            emitResultToastNow(R.string.detail_douban_sync_failed, HapticOutcome.FAILURE)
         }
     }
 
@@ -2665,14 +2702,20 @@ class DetailViewModel @Inject constructor(
         )
     }
 
-    fun toggleSource(source: String) {
+    /**
+     * 切换搜索源筛选（至少保留 1 个）。
+     *
+     * @return true 已切换；false 被「至少保留 1 个」守卫拒绝，状态一个字节都没动。
+     *   界面靠这个回执决定发哪一记触感 —— 判据留在这里，不要让界面自己去数 size。
+     */
+    fun toggleSource(source: String): Boolean {
         val current = _uiState.value.enabledSources
         val newSources = if (source in current) {
             if (current.size == 1) current else current - source
         } else {
             current + source
         }
-        if (newSources == current) return
+        if (newSources == current) return false
         // 直接传新值过滤，避免从 _uiState.value 读到尚未提交的旧状态
         val (displayed, hiddenCount) = run {
             val filtered = resourceRepository.filterItems(
@@ -2685,16 +2728,22 @@ class DetailViewModel @Inject constructor(
             resources = displayed,
             lowRelevanceHiddenCount = hiddenCount
         )
+        return true
     }
 
-    fun toggleDiskType(type: DiskType) {
+    /**
+     * 切换网盘类型筛选（至少保留 1 个）。
+     *
+     * @return true 已切换；false 被守卫拒绝。与 [toggleSource] 同一个约定。
+     */
+    fun toggleDiskType(type: DiskType): Boolean {
         val current = _uiState.value.enabledDiskTypes
         val newTypes = if (type in current) {
             if (current.size == 1) current else current - type
         } else {
             current + type
         }
-        if (newTypes == current) return
+        if (newTypes == current) return false
         // 直接传新值过滤，避免从 _uiState.value 读到尚未提交的旧状态
         val (displayed, hiddenCount) = run {
             val filtered = resourceRepository.filterItems(
@@ -2707,6 +2756,7 @@ class DetailViewModel @Inject constructor(
             resources = displayed,
             lowRelevanceHiddenCount = hiddenCount
         )
+        return true
     }
 
     /** 切换标记已看/取消标记 */
@@ -2944,7 +2994,7 @@ class DetailViewModel @Inject constructor(
                 doubanSyncRetryable = true,
                 pendingDoubanAction = if (current.isMarkedWatchlist) DoubanSyncAction.REMOVE_WISH else DoubanSyncAction.WISH
             )
-            viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_id_not_ready) }
+            emitResultToast(R.string.detail_douban_sync_id_not_ready, HapticOutcome.FAILURE)
             return
         }
 
@@ -2955,7 +3005,7 @@ class DetailViewModel @Inject constructor(
             if (currentSessionMode == SessionMode.GUEST) {
                 requestLogin(DetailLoginTarget.DOUBAN)
             } else {
-                viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
+                emitResultToast(R.string.detail_douban_sync_failed, HapticOutcome.FAILURE)
             }
             return
         }
@@ -2985,6 +3035,9 @@ class DetailViewModel @Inject constructor(
                 // API 失败:乐观更新本地表,pendingSync=true(下次同步重试)
                 if (targetState) {
                     upsertDoubanSyncedItem(doubanId, status = "wish", pendingSync = true)
+                    // 想看照样翻成亮的、本地表也写了，屏幕上一个字都没变 —— 用户完全
+                    // 看不出豆瓣那边没写进去。补一条「会自动重试」的提示与一记 reject
+                    emitResultToastNow(R.string.detail_douban_sync_deferred, HapticOutcome.FAILURE)
                 } else {
                     // 取消失败仍保持乐观删除，但保留即时重试动作，避免豆瓣侧标记无法撤销。
                     runCatching { doubanSyncedItemDao.deleteByDoubanId(doubanId) }
@@ -2993,6 +3046,8 @@ class DetailViewModel @Inject constructor(
                         pendingDoubanAction = DoubanSyncAction.REMOVE_WISH
                     )
                     Log.w("DetailViewModel", "Douban removeInterest failed for $doubanId, optimistic delete applied")
+                    // 界面已经亮起重试按钮，这一记只是替那个按钮说「刚才那下没生效」
+                    hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
                 }
             }
 
@@ -3037,7 +3092,7 @@ class DetailViewModel @Inject constructor(
                 doubanSyncRetryable = true,
                 pendingDoubanAction = if (current.isMarkedWatched) DoubanSyncAction.REMOVE_COLLECT else DoubanSyncAction.COLLECT
             )
-            viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_id_not_ready) }
+            emitResultToast(R.string.detail_douban_sync_id_not_ready, HapticOutcome.FAILURE)
             return
         }
 
@@ -3048,7 +3103,7 @@ class DetailViewModel @Inject constructor(
             if (currentSessionMode == SessionMode.GUEST) {
                 requestLogin(DetailLoginTarget.DOUBAN)
             } else {
-                viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
+                emitResultToast(R.string.detail_douban_sync_failed, HapticOutcome.FAILURE)
             }
             return
         }
@@ -3069,6 +3124,7 @@ class DetailViewModel @Inject constructor(
                     // 失败:乐观回退为想看,pendingSync=true
                     upsertDoubanSyncedItem(doubanId, status = "wish", pendingSync = true)
                     Log.w("DetailViewModel", "Douban removeInterest failed for $doubanId, optimistic rollback to wish applied")
+                    emitResultToastNow(R.string.detail_douban_sync_deferred, HapticOutcome.FAILURE)
                 }
                 _uiState.value = _uiState.value.copy(
                     isMarkedWatched = false,
@@ -3104,6 +3160,8 @@ class DetailViewModel @Inject constructor(
                     pendingDoubanAction = DoubanSyncAction.COLLECT
                 )
                 Log.w("DetailViewModel", "Douban markCollect failed for $doubanId, optimistic collect applied")
+                // 同上：重试按钮已经出来了，触感替它解释「这一下没成」
+                hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
             }
             _uiState.value = _uiState.value.copy(
                 isMarkedWatched = true,
@@ -3194,7 +3252,7 @@ class DetailViewModel @Inject constructor(
                 doubanSyncRetryable = true,
                 pendingDoubanAction = DoubanSyncAction.COLLECT
             )
-            viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_id_not_ready) }
+            emitResultToast(R.string.detail_douban_sync_id_not_ready, HapticOutcome.FAILURE)
             return
         }
         val cred = doubanAuthStorage.getCredentials()
@@ -3204,7 +3262,7 @@ class DetailViewModel @Inject constructor(
             if (currentSessionMode == SessionMode.GUEST) {
                 requestLogin(DetailLoginTarget.DOUBAN)
             } else {
-                viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
+                emitResultToast(R.string.detail_douban_sync_failed, HapticOutcome.FAILURE)
             }
             return
         }
@@ -3234,6 +3292,8 @@ class DetailViewModel @Inject constructor(
             upsertDoubanSyncedItem(doubanId, status = "collect", pendingSync = !success)
             if (!success) {
                 Log.w("DetailViewModel", "Douban markWatchedWithRating failed for $doubanId, optimistic rating applied")
+                // 星星已经亮了、本地也写了，豆瓣那边没写进去却一点声音都没有
+                emitResultToastNow(R.string.detail_douban_sync_deferred, HapticOutcome.FAILURE)
             }
             saveToCache()
             saveUserReviewToLocal(rating, comment?.takeIf { it.isNotBlank() })
@@ -3255,7 +3315,7 @@ class DetailViewModel @Inject constructor(
         val doubanId = current.doubanIdForSync
         if (doubanId.isNullOrBlank()) {
             _uiState.value = current.copy(doubanSyncRetryable = true)
-            viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_id_not_ready) }
+            emitResultToast(R.string.detail_douban_sync_id_not_ready, HapticOutcome.FAILURE)
             return
         }
         val cred = doubanAuthStorage.getCredentials()
@@ -3264,7 +3324,7 @@ class DetailViewModel @Inject constructor(
             if (currentSessionMode == SessionMode.GUEST) {
                 requestLogin(DetailLoginTarget.DOUBAN)
             } else {
-                viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
+                emitResultToast(R.string.detail_douban_sync_failed, HapticOutcome.FAILURE)
             }
             return
         }
@@ -3288,6 +3348,7 @@ class DetailViewModel @Inject constructor(
             )
             if (!success) {
                 Log.w("DetailViewModel", "Douban markInterest(collect, no rating) failed for $doubanId, optimistic rating removal applied")
+                emitResultToastNow(R.string.detail_douban_sync_deferred, HapticOutcome.FAILURE)
             }
             saveToCache()
             deleteUserReviewFromLocal()
@@ -3316,7 +3377,7 @@ class DetailViewModel @Inject constructor(
                 doubanSyncRetryable = true,
                 pendingDoubanAction = action
             )
-            _toastEvent.emit(R.string.detail_douban_sync_id_not_ready)
+            emitResultToastNow(R.string.detail_douban_sync_id_not_ready, HapticOutcome.FAILURE)
             return
         }
 
@@ -3326,10 +3387,10 @@ class DetailViewModel @Inject constructor(
 
         if (result) {
             _uiState.value = _uiState.value.copy(doubanSyncRetryable = false, pendingDoubanAction = null)
-            _toastEvent.emit(R.string.detail_douban_sync_success)
+            emitResultToastNow(R.string.detail_douban_sync_success, HapticOutcome.SUCCESS)
         } else {
             _uiState.value = _uiState.value.copy(doubanSyncRetryable = true, pendingDoubanAction = action)
-            _toastEvent.emit(R.string.detail_douban_sync_failed)
+            emitResultToastNow(R.string.detail_douban_sync_failed, HapticOutcome.FAILURE)
         }
     }
 
@@ -3373,7 +3434,7 @@ class DetailViewModel @Inject constructor(
                     setResolvedDoubanId(doubanId)
                     saveToCache()
                 } else {
-                    _toastEvent.emit(R.string.detail_douban_sync_id_not_ready)
+                    emitResultToastNow(R.string.detail_douban_sync_id_not_ready, HapticOutcome.FAILURE)
                     return@launch
                 }
             }

@@ -1,14 +1,19 @@
 package com.tracktosearch.ui.screen.searchsource
 
+import android.content.Context
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.CustomSearchSourceStorage
 import com.tracktosearch.data.local.SearchSourceTemplates
 import com.tracktosearch.data.local.ShareCodec
 import com.tracktosearch.data.remote.custom.AutoProbe
 import com.tracktosearch.data.remote.custom.CustomSearchService
+import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +28,7 @@ private const val PROBE_KEYWORD = "The Wandering Earth"
 
 @HiltViewModel
 class SearchSourceEditorViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val customSearchSourceStorage: CustomSearchSourceStorage,
     private val customSearchService: CustomSearchService
 ) : ViewModel() {
@@ -340,17 +346,52 @@ class SearchSourceEditorViewModel @Inject constructor(
 
     fun currentEditingId(): String? = editingId
 
+    /**
+     * 编辑器内测试的结果。
+     *
+     * [success] 是这次补上的：回调原本只回一个 `String?`，界面对成功和失败都画 primary 色，
+     * 结果类触感也没有可挂的判据。文案在这里拼好（与列表页 `SearchSourcesViewModel.testCustomSource`
+     * 共用同一套资源），界面只负责显示并按 [success] 发 confirm / reject。
+     */
+    @Immutable
+    data class TestOutcome(val success: Boolean, val message: String)
+
     /** 编辑器内测试当前表单（列表页逻辑的临时版本） */
-    fun testCurrent(onResult: (String?) -> Unit) {
-        val source = currentSource() ?: return
+    fun testCurrent(onResult: (TestOutcome) -> Unit) {
+        val source = currentSource()
+        if (source == null) {
+            // 名称或地址为空时早退且**不**回调，会把界面的 isTesting 永久留在 true ——
+            // 转圈一直转、「测试」按钮一直禁用，除了退出编辑器没有别的出路。必须回一条失败
+            onResult(
+                TestOutcome(
+                    success = false,
+                    message = context.getString(R.string.editor_test_incomplete)
+                )
+            )
+            return
+        }
         viewModelScope.launch {
             val result = customSearchService.testSource(source)
             onResult(
                 when (result) {
-                    is CustomSearchService.TestResult.Success ->
-                        if (result.count > 0) "成功 ${result.count} 条：${result.sampleName ?: ""}"
-                        else "成功 0 条"
-                    is CustomSearchService.TestResult.Error -> result.message
+                    is CustomSearchService.TestResult.Success -> TestOutcome(
+                        success = true,
+                        message = when {
+                            result.count <= 0 -> context.getString(R.string.snackbar_test_empty)
+                            // 样例标题是这一页最有用的一条信息：解析规则对不对，看它就知道
+                            result.sampleName.isNullOrBlank() ->
+                                context.getString(R.string.snackbar_test_success, result.count)
+                            else -> context.getString(
+                                R.string.editor_test_ok_sample,
+                                result.count,
+                                result.sampleName
+                            )
+                        }
+                    )
+                    is CustomSearchService.TestResult.Error -> TestOutcome(
+                        success = false,
+                        message = Exception(result.message).toUserMessage(context, R.string.error_unknown)
+                    )
                 }
             )
         }

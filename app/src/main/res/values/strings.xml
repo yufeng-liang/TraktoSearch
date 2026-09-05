@@ -155,6 +155,7 @@
     <string name="detail_share">Share</string>
     <string name="detail_douban_sync_success">Douban data synced</string>
     <string name="detail_douban_sync_failed">Douban sync failed, retry available</string>
+    <string name="detail_douban_sync_deferred">Could not reach Douban. This change will be retried on the next sync.</string>
     <string name="detail_douban_sync_id_not_ready">Douban ID not ready, retry available</string>
     <string name="detail_douban_sync_retry">Retry Douban sync</string>
     <string name="detail_marked_watched">Watched</string>
@@ -1067,6 +1068,7 @@ Config:
     <string name="screen_douban_item_detail_refetch">Re-fetch</string>
     <string name="screen_douban_item_detail_subtitle_hint">Tap to add subtitle (for resource search)</string>
     <string name="screen_douban_item_detail_subtitle_edit">Edit subtitle</string>
+    <string name="screen_douban_item_detail_subtitle_save_failed">Could not save the subtitle. Please try again.</string>
     <string name="screen_douban_item_detail_search_with_subtitle">Search with subtitle</string>
     <string name="screen_douban_item_detail_tab_resources">Resources</string>
     <string name="screen_douban_item_detail_tab_info">Info</string>
@@ -1159,6 +1161,8 @@ Config:
     <!-- Snackbar Messages -->
     <string name="snackbar_test_success">Test passed, parsed %d results</string>
     <string name="snackbar_test_empty">Connected, but no results parsed</string>
+    <string name="editor_test_ok_sample">Test passed, parsed %1$d results, e.g. %2$s</string>
+    <string name="editor_test_incomplete">Fill in the name and base URL first</string>
     <string name="snackbar_export_success">Export successful</string>
     <string name="snackbar_export_failed">Export failed: unknown error</string>
     <string name="snackbar_import_no_data">No valid records found</string>
@@ -1213,6 +1217,7 @@ Config:
     <string name="statistics_share">Share stats</string>
     <string name="statistics_share_generating">Rendering image…</string>
     <string name="statistics_share_failed">Could not save the image. Please try again.</string>
+    <string name="statistics_partial_load_failed">Some stats could not be loaded, so the numbers may be incomplete</string>
     <string name="statistics_share_saved">Saved to Photos</string>
     <string name="statistics_share_open_failed">Saved to Photos, but couldn\'t open the share panel.</string>
     <string name="statistics_share_not_ready">Statistics are still loading — try again in a moment.</string>
@@ -1582,6 +1587,7 @@ Config:
     <string name="mark_records_time_days_ago">%1$d days ago</string>
     <string name="mark_records_empty_all">No records</string>
     <string name="mark_records_empty_filtered">No records match the filters</string>
+    <string name="mark_records_trakt_history_failed">Could not load Trakt watch history, so this list may be incomplete</string>
     <string name="mark_records_clear_filter">Clear filters</string>
     <string name="mark_records_unknown_title">Unknown title</string>
     <string name="mark_records_filter_media_type">Media Type</string>

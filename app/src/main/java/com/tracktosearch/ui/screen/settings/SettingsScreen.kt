@@ -119,6 +119,7 @@ import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.hapticModeSummary
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.haptic.semantic
 import com.tracktosearch.ui.component.CloudThemeManager
 import com.tracktosearch.ui.component.DoubanLogo
 import com.tracktosearch.ui.component.GlassScene
@@ -451,11 +452,17 @@ fun SettingsScreen(
         .collectAsStateWithLifecycle(initialValue = null as ExportMessage?)
     val exportMessageText = exportImportMessage
         ?.let { stringResource(it.resId, *it.args.toTypedArray()) }
+    // 这一处 snackbar 是本页所有导出/导入/清缓存/检查更新结果的唯一出口，触感就挂在这里，
+    // 不额外开第二条事件流；方向由 ExportMessage.outcome 给出，17 处构造点各自表过态
+    val outcomeHaptics = rememberAppHaptics()
     LaunchedEffect(exportImportMessage) {
-        exportMessageText?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.clearMessage()
-        }
+        // exportMessageText 与 exportImportMessage 同生同灭：前者就是后者渲染出来的文案
+        val text = exportMessageText ?: return@LaunchedEffect
+        // 先震后弹：showSnackbar 会挂起到提示消失，放在它后面就得等用户看完才震到手上。
+        // 进度类消息的 outcome 是 null，逐条刷新不发触感
+        exportImportMessage?.outcome?.let { outcomeHaptics.perform(it.semantic()) }
+        snackbarHostState.showSnackbar(text)
+        viewModel.clearMessage()
     }
     // 玻璃场景只依赖加载/登录等低频状态，包 remember 避免无关重组时重算；
     // 背景色作为 key 之一，主题切换时场景随之一并刷新（remember 块内不能调用

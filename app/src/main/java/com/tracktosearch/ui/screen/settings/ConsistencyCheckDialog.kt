@@ -76,6 +76,21 @@ fun ConsistencyCheckDialog(
         }
     }
 
+    // 检查终态那一记触感，边沿检测的理由同 DoubanSyncDialog：进度不会立刻重置，
+    // 弹窗重开的第一帧可能就是上一轮的 isComplete=true
+    val outcomeHaptics = rememberAppHaptics()
+    var observedComplete by remember { mutableStateOf(p.isComplete) }
+    LaunchedEffect(p.isComplete) {
+        val wasComplete = observedComplete
+        observedComplete = p.isComplete
+        if (!p.isComplete || wasComplete) return@LaunchedEffect
+        if (p.isCancelled || p.isCancelling) return@LaunchedEffect
+        // 这里刻意**不**把 conflictsFound > 0 算失败：查出冲突并改掉正是这个功能要干的事，
+        // 修复数就记在 doubanUpdated/traktUpdated 上。真正的失败是登录态断了或 errors > 0
+        val clean = !p.cookieExpired && !p.neverLoggedInDouban && p.errors == 0
+        if (clean) outcomeHaptics.confirm() else outcomeHaptics.reject()
+    }
+
     AlertDialog(
         onDismissRequest = {
             // 检查运行中不允许点击外部关闭（需点「转后台」或「取消」）

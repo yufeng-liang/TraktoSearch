@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.core.graphics.drawable.toBitmap
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import coil.imageLoader
@@ -19,11 +20,14 @@ import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.util.PersonAvatarColorStore
 import com.tracktosearch.data.util.PosterColorExtractor
+import com.tracktosearch.ui.haptic.HapticOutcome
+import com.tracktosearch.ui.haptic.HapticOutcomeEmitter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -82,6 +86,34 @@ class PersonViewModel @Inject constructor(
 
     private val _toastEvent = MutableSharedFlow<Int>()
     val toastEvent = _toastEvent.asSharedFlow()
+
+    /**
+     * 结果类触感的出口，界面侧一行 `HapticOutcomeEffect(viewModel.hapticOutcomes)` 收集。
+     *
+     * 不在 VM 里直接调 `AppHaptics`：VM 活得比屏幕长，网络回来时用户可能已经离开这一屏，
+     * 震一记而屏幕上什么都没有比不震更差。详见 ui/haptic/HapticOutcome.kt。
+     */
+    private val hapticOutcomeEmitter = HapticOutcomeEmitter()
+    val hapticOutcomes: SharedFlow<HapticOutcome> = hapticOutcomeEmitter.outcomes
+
+    /**
+     * 发一条结果 toast，并配上对应方向的触感。
+     *
+     * 把「说给用户看」与「震给用户摸」绑在同一个出口上：结果 toast 散在多个方法里，
+     * 各自记得补一行 emit 迟早会漏。[_toastEvent] 是 rendezvous 流（replay 0、无缓冲），
+     * emit 会挂起到 UI 收走，所以非挂起上下文一律这样另起协程。
+     */
+    private fun emitResultToast(@StringRes resId: Int, outcome: HapticOutcome) {
+        hapticOutcomeEmitter.emit(outcome)
+        viewModelScope.launch { _toastEvent.emit(resId) }
+    }
+
+    /** [emitResultToast] 的挂起版：调用方已经在协程里，不必再起一个。 */
+    private suspend fun emitResultToastNow(@StringRes resId: Int, outcome: HapticOutcome) {
+        // 先发触感：toast 那一步会挂起到 UI 收走，触感不该跟着一起等
+        hapticOutcomeEmitter.emit(outcome)
+        _toastEvent.emit(resId)
+    }
 
     private var currentPersonId: Int = 0
     private var loaded: Boolean = false
@@ -420,7 +452,7 @@ class PersonViewModel @Inject constructor(
             if (cachedTraktId > 0) {
                 onNavigate(cachedTraktId, tmdbId, title, traktRepository.getCachedImdbId(tmdbId, type).orEmpty(), 0.0)
             } else {
-                viewModelScope.launch { _toastEvent.emit(R.string.card_resolve_not_found) }
+                emitResultToast(R.string.card_resolve_not_found, HapticOutcome.FAILURE)
             }
             return
         }
@@ -435,7 +467,7 @@ class PersonViewModel @Inject constructor(
                     if (traktId != null && traktId > 0) {
                         onNavigate(traktId, tmdbId, title, imdbId ?: "", 0.0)
                     } else {
-                        _toastEvent.emit(R.string.card_resolve_not_found)
+                        emitResultToastNow(R.string.card_resolve_not_found, HapticOutcome.FAILURE)
                     }
                 }
             } catch (_: Exception) {

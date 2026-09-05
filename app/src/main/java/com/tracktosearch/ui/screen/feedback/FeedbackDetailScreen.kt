@@ -157,12 +157,23 @@ fun FeedbackDetailScreen(
         }
     }
 
+    val outcomeHaptics = rememberAppHaptics()
     LaunchedEffect(replyState) {
-        if (replyState is FeedbackViewModel.ReplyState.Success) {
-            replyText = ""
-            replyScreenshots = emptyList()
-            viewModel.resetReplyState()
-            viewModel.loadDetail(feedbackId)
+        when (replyState) {
+            is FeedbackViewModel.ReplyState.Success -> {
+                outcomeHaptics.confirm()
+                replyText = ""
+                replyScreenshots = emptyList()
+                viewModel.resetReplyState()
+                viewModel.loadDetail(feedbackId)
+            }
+            // 失败态在输入区上方渲染成错误卡片，触感是对那张卡片的补充
+            is FeedbackViewModel.ReplyState.Error -> outcomeHaptics.reject()
+            // 上传中/发送中/空闲都不是结果
+            FeedbackViewModel.ReplyState.Idle,
+            is FeedbackViewModel.ReplyState.Uploading,
+            FeedbackViewModel.ReplyState.Sending,
+            -> Unit
         }
     }
 

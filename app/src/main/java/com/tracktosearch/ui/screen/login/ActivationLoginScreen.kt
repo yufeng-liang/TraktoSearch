@@ -75,6 +75,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.OAuthCallback
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.LoginActionInk
 import com.tracktosearch.ui.theme.LoginErrorInk
@@ -119,6 +120,9 @@ fun ActivationLoginScreen(
     val isActivated = authState.activated
 
     val haptics = rememberAppHaptics()
+    // 取票失败与「已绑定但静默恢复成功」两种结果的触感从这一行出。正常取票成功不在
+    // 其中：那条路的反馈是下面走纸那六档 segmentTick
+    HapticOutcomeEffect(authViewModel.hapticOutcomes)
     val printProgress = remember { Animatable(0f) }
     var isPrinting by remember { mutableStateOf(false) }
     // 粘贴没抽到 6 位数字时的一次性提示。只占像素屏，不进 AuthUiState——

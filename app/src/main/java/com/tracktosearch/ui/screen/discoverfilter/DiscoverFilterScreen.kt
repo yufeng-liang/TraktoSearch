@@ -111,6 +111,7 @@ import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.theme.WcagBlackWhiteCrossover
 import com.tracktosearch.ui.theme.appSwitchColors
+import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
@@ -141,6 +142,8 @@ fun DiscoverFilterScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isLoggedIn by viewModel.isLoggedIn.collectAsStateWithLifecycle()
+    // 「筛选条件没变」的两处早退、以及搜索失败配对的 reject 都从这一行出
+    HapticOutcomeEffect(viewModel.hapticOutcomes)
     // 地区名走系统本地化译名，需要 Context
     val filterContext = LocalContext.current
     val hazeState = remember { HazeState() }

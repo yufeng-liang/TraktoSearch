@@ -17,14 +17,19 @@ import com.tracktosearch.data.repository.UserReviewRepository
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.MediaIdentity
 import com.tracktosearch.data.remote.trakt.dto.*
+import com.tracktosearch.ui.haptic.HapticOutcome
+import com.tracktosearch.ui.haptic.HapticOutcomeEmitter
 import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -34,6 +39,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 @Immutable
@@ -104,6 +110,20 @@ class StatisticsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(StatisticsUiState(initialLoading = true))
     val uiState: StateFlow<StatisticsUiState> = _uiState.asStateFlow()
 
+    /**
+     * 「部分数据没加载上」的一次性提示。
+     *
+     * 本类有六处非致命降级各自吞掉异常后照样出页面，而页面上是**错的数字**（少算的豆瓣
+     * 条目、缺失的评分、永远转着的词云骨架），[StatisticsUiState.error] 却是 null。
+     * 一屏数字全是错的而一声不响，比整页报错更糟。这里只补一句提示，不挡着看已有内容。
+     */
+    private val _toastEvent = MutableSharedFlow<Int>(extraBufferCapacity = 1)
+    val toastEvent: SharedFlow<Int> = _toastEvent.asSharedFlow()
+
+    /** 结果类触感的出口，界面侧一行 `HapticOutcomeEffect(viewModel.hapticOutcomes)` 收集。 */
+    private val hapticOutcomeEmitter = HapticOutcomeEmitter()
+    val hapticOutcomes: SharedFlow<HapticOutcome> = hapticOutcomeEmitter.outcomes
+
     private var loadJob: kotlinx.coroutines.Job? = null
 
     /** 渐进发布用的已到达数据；字段为 null 表示对应请求尚未返回。 */
@@ -146,6 +166,10 @@ class StatisticsViewModel @Inject constructor(
         loadJob?.cancel()
         _uiState.value = StatisticsUiState(initialLoading = true, error = null)
         loadJob = viewModelScope.launch {
+            // 非致命降级的账本：下面六处 runCatching 各自兜底成空集合后页面照样出，
+            // 但那时屏幕上的数字是错的。用 AtomicBoolean 是因为几处落账发生在
+            // Dispatchers.IO 的并行 async 里，普通 var 会有数据竞争
+            val degraded = AtomicBoolean(false)
             try {
                 val isDoubanMode = sessionModeManager.isDoubanMode.first()
                 if (!sessionModeManager.traktConnected.value && !isDoubanMode) {
@@ -158,7 +182,9 @@ class StatisticsViewModel @Inject constructor(
                 restoreSnapshot()
 
                 val doubanItemsDeferred = async(Dispatchers.IO) {
-                    runCatching { doubanSyncedItemDao.getAllSyncedItems() }.getOrDefault(emptyList())
+                    runCatching { doubanSyncedItemDao.getAllSyncedItems() }
+                        .onFailure { degraded.set(true) }
+                        .getOrDefault(emptyList())
                 }
                 // 详情缓存只读本地 DataStore，不触发豆瓣网络请求；用于补齐集数、片长和类型。
                 // getDetailSnapshot() 会全量读盘并反序列化所有豆瓣详情，没有「看过」条目时完全不必付这个代价。
@@ -167,7 +193,9 @@ class StatisticsViewModel @Inject constructor(
                     if (items.none { it.status.equals("collect", ignoreCase = true) }) {
                         emptyMap()
                     } else {
-                        runCatching { doubanRepository.getDetailSnapshot() }.getOrDefault(emptyMap())
+                        runCatching { doubanRepository.getDetailSnapshot() }
+                            .onFailure { degraded.set(true) }
+                            .getOrDefault(emptyMap())
                     }
                 }
 
@@ -176,7 +204,7 @@ class StatisticsViewModel @Inject constructor(
                     val doubanDetails = doubanDetailsDeferred.await()
                     val reviews = runCatching {
                         withContext(Dispatchers.IO) { userReviewRepository.getAllReviews() }
-                    }.getOrDefault(emptyList())
+                    }.onFailure { degraded.set(true) }.getOrDefault(emptyList())
                     val words = buildWordCloud(reviews, doubanItems)
                     publish(
                         LoadedData(
@@ -188,6 +216,7 @@ class StatisticsViewModel @Inject constructor(
                         )
                     )
                     saveSnapshot()
+                    notifyIfDegraded(degraded.get())
                     return@launch
                 }
 
@@ -238,10 +267,14 @@ class StatisticsViewModel @Inject constructor(
                 var data = LoadedData(isDoubanMode = isDoubanMode)
 
                 // 用户统计（非致命）：单个小请求，通常最先到达，总览与观影时长立即可见
-                data = data.copy(userStats = userStatsDeferred.await().getOrNull())
+                data = data.copy(
+                    userStats = userStatsDeferred.await().onFailure { degraded.set(true) }.getOrNull()
+                )
                 publish(data)
 
                 val wordCloudResult = wordCloudDeferred.await()
+                // 词云失败时 wordCloudReady 留在 false，界面画的是骨架 —— 看起来像还在加载
+                if (wordCloudResult.isFailure) degraded.set(true)
                 data = data.copy(
                     words = wordCloudResult.getOrDefault(emptyList()),
                     wordCloudReady = wordCloudResult.isSuccess,
@@ -278,19 +311,21 @@ class StatisticsViewModel @Inject constructor(
                 publish(data)
 
                 // 评分（非致命）
-                data = data.copy(allRatings = ratingsDeferred.await().getOrDefault(emptyList()))
+                data = data.copy(
+                    allRatings = ratingsDeferred.await()
+                        .onFailure { degraded.set(true) }
+                        .getOrDefault(emptyList())
+                )
                 publish(data)
 
                 // 全部到位后落盘，供下次进页秒出
                 saveSnapshot()
+                notifyIfDegraded(degraded.get())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    initialLoading = false,
-                    isRefreshing = false,
-                    error = e.toUserMessage(context, R.string.error_load_failed)
-                )
+                // 与三处致命请求失败落在同一个出口：错误文案与触感只有一处要维护
+                publishError(e)
             }
         }
     }
@@ -363,6 +398,19 @@ class StatisticsViewModel @Inject constructor(
             isRefreshing = false,
             error = error.toUserMessage(context, R.string.error_load_failed)
         )
+        hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
+    }
+
+    /**
+     * 有非致命降级时提示一句「数字可能不全」，并发一记 reject。
+     *
+     * 六处降级合成一条提示：一处一条会在网络差的时候连弹六个 toast、连震六记。
+     * 成功路径不发触感 —— 一屏数字铺出来本身就是反馈。
+     */
+    private fun notifyIfDegraded(degraded: Boolean) {
+        if (!degraded) return
+        _toastEvent.tryEmit(R.string.statistics_partial_load_failed)
+        hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
     }
 
     private fun buildWordCloud(

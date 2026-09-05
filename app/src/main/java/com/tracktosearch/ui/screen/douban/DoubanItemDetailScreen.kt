@@ -164,6 +164,9 @@ import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberAppPullToRefreshState
 import com.tracktosearch.ui.component.zoomSharedSource
+import com.tracktosearch.ui.haptic.HapticOutcome
+import com.tracktosearch.ui.haptic.HapticOutcomeEffect
+import com.tracktosearch.ui.haptic.HapticOutcomeEmitter
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
@@ -300,6 +303,14 @@ class DoubanItemDetailViewModel @Inject constructor(
     // 一次性 Toast 事件(传 R.string 资源 ID),用 extraBufferCapacity 避免背压丢消息
     private val _toastEvent = MutableSharedFlow<Int>(extraBufferCapacity = 4)
     val toastEvent: SharedFlow<Int> = _toastEvent.asSharedFlow()
+
+    /**
+     * 结果类触感的出口，界面侧一行 `HapticOutcomeEffect(viewModel.hapticOutcomes)` 收集。
+     *
+     * 豆瓣写回的终态可能落在 IO 线程上，而触感要求主线程；收集放在 UI 层一律主线程。
+     */
+    private val hapticOutcomeEmitter = HapticOutcomeEmitter()
+    val hapticOutcomes: SharedFlow<HapticOutcome> = hapticOutcomeEmitter.outcomes
 
     private var currentDoubanId: String = ""
     private var searchJob: Job? = null
@@ -513,6 +524,7 @@ class DoubanItemDetailViewModel @Inject constructor(
                     // 实际爬取豆瓣成功 → 弹乐观 Toast(上传全局池在 Repository 内异步执行)
                     if (fromNetwork) {
                         _toastEvent.tryEmit(R.string.douban_detail_updated_and_synced)
+                        hapticOutcomeEmitter.emit(HapticOutcome.SUCCESS)
                     }
                 }
             } catch (_: Exception) {
@@ -532,7 +544,17 @@ class DoubanItemDetailViewModel @Inject constructor(
     /** 更新子标题,持久化后刷新本地状态并自动重新搜索 */
     fun updateSubtitle(doubanId: String, subtitle: String?) {
         viewModelScope.launch {
-            doubanRetryManager.updateSubtitle(doubanId, subtitle)
+            // 原来这里没有 try/catch：写库抛异常时协程直接挂掉，弹窗关了、子标题没存下、
+            // 屏幕上一个字都不变，用户以为存好了。补一条失败提示与一记 reject
+            try {
+                doubanRetryManager.updateSubtitle(doubanId, subtitle)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.tryEmit(R.string.screen_douban_item_detail_subtitle_save_failed)
+                hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
+                return@launch
+            }
             val current = _uiState.value.failure ?: return@launch
             // updateSubtitle 内部会 trim 空串转 null,这里同步处理
             val normalized = subtitle?.trim()?.takeIf { it.isNotBlank() }
@@ -540,6 +562,7 @@ class DoubanItemDetailViewModel @Inject constructor(
                 failure = current.copy(subtitle = normalized),
                 searchWithSubtitle = !normalized.isNullOrBlank()
             )
+            // 成功不发触感：紧接着就重搜资源，结果列表刷出来本身就是反馈
             searchResources()
         }
     }
@@ -761,15 +784,20 @@ class DoubanItemDetailViewModel @Inject constructor(
         )
     }
 
-    /** 切换搜索源筛选(至少保留 1 个) */
-    fun toggleSource(source: String) {
+    /**
+     * 切换搜索源筛选（至少保留 1 个）。
+     *
+     * @return true 已切换；false 被守卫拒绝，状态没动。界面靠这个回执决定发哪一记触感，
+     *   判据留在这里而不是让 chip 自己去数 size。与 `DetailViewModel.toggleSource` 同一个约定。
+     */
+    fun toggleSource(source: String): Boolean {
         val current = _uiState.value.enabledSources
         val newSources = if (source in current) {
             if (current.size == 1) current else current - source
         } else {
             current + source
         }
-        if (newSources == current) return
+        if (newSources == current) return false
         val (displayed, hiddenCount) = run {
             val filtered = resourceRepository.filterItems(
                 allResources, newSources, _uiState.value.enabledDiskTypes
@@ -781,17 +809,22 @@ class DoubanItemDetailViewModel @Inject constructor(
             searchResults = displayed,
             lowRelevanceHiddenCount = hiddenCount
         )
+        return true
     }
 
-    /** 切换网盘类型筛选(至少保留 1 个) */
-    fun toggleDiskType(type: DiskType) {
+    /**
+     * 切换网盘类型筛选（至少保留 1 个）。
+     *
+     * @return true 已切换；false 被守卫拒绝。与 [toggleSource] 同一个约定。
+     */
+    fun toggleDiskType(type: DiskType): Boolean {
         val current = _uiState.value.enabledDiskTypes
         val newTypes = if (type in current) {
             if (current.size == 1) current else current - type
         } else {
             current + type
         }
-        if (newTypes == current) return
+        if (newTypes == current) return false
         val (displayed, hiddenCount) = run {
             val filtered = resourceRepository.filterItems(
                 allResources, _uiState.value.enabledSources, newTypes
@@ -803,6 +836,7 @@ class DoubanItemDetailViewModel @Inject constructor(
             searchResults = displayed,
             lowRelevanceHiddenCount = hiddenCount
         )
+        return true
     }
 
     fun showSubtitleDialog(show: Boolean) {
@@ -870,8 +904,11 @@ class DoubanItemDetailViewModel @Inject constructor(
                         }
                     }
                     _toastEvent.tryEmit(R.string.douban_detail_updated_and_synced)
+                    hapticOutcomeEmitter.emit(HapticOutcome.SUCCESS)
                 } ?: run {
                     _uiState.value = _uiState.value.copy(detailLoadPhase = DetailLoadPhase.FAILED)
+                    // 用户主动点的「重新爬取」，拿不到详情就是失败；界面同时切到 FAILED 态
+                    hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -904,8 +941,10 @@ class DoubanItemDetailViewModel @Inject constructor(
                         else -> R.string.douban_detail_mark_cleared
                     } else R.string.douban_detail_mark_cleared
                 )
+                hapticOutcomeEmitter.emit(HapticOutcome.SUCCESS)
             } catch (_: Exception) {
                 _toastEvent.tryEmit(R.string.douban_detail_mark_failed)
+                hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
             }
         }
     }
@@ -995,14 +1034,23 @@ class DoubanItemDetailViewModel @Inject constructor(
 
     /** 将写回结果映射为 Toast 文案资源 ID 并发事件 */
     private fun emitWritebackToast(outcome: MarkWriteOutcome) {
-        val resId = when (outcome) {
-            MarkWriteOutcome.Success -> R.string.douban_writeback_marked_success
-            MarkWriteOutcome.Removed -> R.string.douban_writeback_removed
-            MarkWriteOutcome.LoginRequired -> R.string.douban_writeback_login_required
-            MarkWriteOutcome.CookieExpired -> R.string.douban_writeback_cookie_expired
-            MarkWriteOutcome.CkFailed -> R.string.douban_writeback_ck_failed
-            is MarkWriteOutcome.Failed -> R.string.douban_writeback_failed
+        // 文案与触感方向定在同一个 when 里：往 MarkWriteOutcome 加一种结果时编译器会
+        // 同时逼着补两样，分开写就总有一天补了文案忘了触感
+        val (resId, haptic) = when (outcome) {
+            MarkWriteOutcome.Success ->
+                R.string.douban_writeback_marked_success to HapticOutcome.SUCCESS
+            MarkWriteOutcome.Removed ->
+                R.string.douban_writeback_removed to HapticOutcome.SUCCESS
+            MarkWriteOutcome.LoginRequired ->
+                R.string.douban_writeback_login_required to HapticOutcome.FAILURE
+            MarkWriteOutcome.CookieExpired ->
+                R.string.douban_writeback_cookie_expired to HapticOutcome.FAILURE
+            MarkWriteOutcome.CkFailed ->
+                R.string.douban_writeback_ck_failed to HapticOutcome.FAILURE
+            is MarkWriteOutcome.Failed ->
+                R.string.douban_writeback_failed to HapticOutcome.FAILURE
         }
+        hapticOutcomeEmitter.emit(haptic)
         _toastEvent.tryEmit(resId)
     }
 
@@ -1217,6 +1265,9 @@ fun DoubanItemDetailScreen(
 
     // 收集一次性 Toast 事件(爬取成功/标注成功/失败提示)
     ToastEffect(viewModel.toastEvent)
+
+    // 上面那些 toast 与写回结果配对的触感都从这一行出
+    HapticOutcomeEffect(viewModel.hapticOutcomes)
 
     // 加载完成后若 failure == null(条目已被删除/不存在),自动返回;
     // entryNotFound(三表全空)除外:立即弹回像点击失灵,改为页面内错误卡片

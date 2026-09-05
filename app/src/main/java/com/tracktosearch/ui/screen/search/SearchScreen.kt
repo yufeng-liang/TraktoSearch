@@ -199,10 +199,12 @@ import com.tracktosearch.ui.theme.SearchTypeShow
 import com.tracktosearch.ui.theme.SearchTypeUnknown
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.theme.ambientTextHalo
+import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.hapticCombinedClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.theme.readableOn
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -259,6 +261,9 @@ fun SearchScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val hotSearches by viewModel.hotSearches.collectAsStateWithLifecycle()
     val spriteState by spriteViewModel.uiState.collectAsStateWithLifecycle()
+    // 热榜卡片点不开时提示一句并震一记 —— 原来这种失败只是把转圈收掉
+    ToastEffect(viewModel.toastEvent)
+    HapticOutcomeEffect(viewModel.hapticOutcomes)
     // 页面重新可见时(ON_RESUME)，若热门搜索为空则重新加载(新片榜重试后可拿到数据)
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {

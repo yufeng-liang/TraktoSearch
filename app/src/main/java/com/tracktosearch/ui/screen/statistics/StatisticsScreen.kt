@@ -108,10 +108,12 @@ import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.rememberShimmer
 import com.tracktosearch.ui.component.shimmer
+import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
+import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.component.SettingsEntryCardCorner
 import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.StatisticsEntryKey
@@ -143,6 +145,10 @@ fun StatisticsScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showInfoDialog by remember { mutableStateOf(false) }
     val haptics = rememberAppHaptics()
+    // 部分区块降级时提示一句「数字可能不全」——那几处降级原本连一个字都不报
+    ToastEffect(viewModel.toastEvent)
+    // 加载失败、降级、长图分享失败配对的触感都从这一行出（长图那三处在下面直接调 haptics）
+    HapticOutcomeEffect(viewModel.hapticOutcomes)
     // 共享元素转场 scope(与设置页观看统计卡片配对)
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
@@ -218,9 +224,12 @@ fun StatisticsScreen(
                     }
                     val feedbackText = try {
                         context.startActivity(Intent.createChooser(intent, shareChooserTitle))
+                        haptics.confirm()
                         shareSavedText
                     } catch (_: Exception) {
                         // 相册已经保存成功；系统分享面板异常不能误报成“保存失败”。
+                        // 但「分享」这件事没办成，用户还得自己去相册找图再发一次，所以判 reject
+                        haptics.reject()
                         shareOpenFailedText
                     }
                     shareScope.launch { snackbarHostState.showSnackbar(feedbackText) }
@@ -228,6 +237,7 @@ fun StatisticsScreen(
                     throw e
                 } catch (_: Exception) {
                     // 渲染或相册写入失败时不拉起分享，也不显示“已保存”。
+                    haptics.reject()
                     snackbarHostState.showSnackbar(shareFailedText)
                 } finally {
                     sharing = false

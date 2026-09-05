@@ -78,6 +78,7 @@ import com.tracktosearch.ui.component.SharedOrigin
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.posterSharedKey
 import com.tracktosearch.ui.navigation.DetailSeedStore
+import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.util.ToastEffect
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -121,6 +122,9 @@ fun PersonScreen(
     }
 
     ToastEffect(viewModel.toastEvent)
+
+    // 卡片点开解析失败那几条 toast 配对的 reject 都从这一行出
+    HapticOutcomeEffect(viewModel.hapticOutcomes)
 
     val listState = rememberLazyListState()
     val hazeState = remember { HazeState() }

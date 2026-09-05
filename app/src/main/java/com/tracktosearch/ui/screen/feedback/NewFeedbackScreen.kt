@@ -104,10 +104,21 @@ fun NewFeedbackScreen(
     }
 
     // 提交成功后返回
+    val outcomeHaptics = rememberAppHaptics()
     LaunchedEffect(submitState) {
-        if (submitState is FeedbackViewModel.SubmitState.Success) {
-            onSuccess()
-            viewModel.resetSubmitState()
+        when (submitState) {
+            is FeedbackViewModel.SubmitState.Success -> {
+                outcomeHaptics.confirm()
+                onSuccess()
+                viewModel.resetSubmitState()
+            }
+            // 失败态在下面渲染成一张错误卡片，触感是对那张卡片的补充而不是唯一反馈
+            is FeedbackViewModel.SubmitState.Error -> outcomeHaptics.reject()
+            // 上传中/提交中/空闲都不是结果
+            FeedbackViewModel.SubmitState.Idle,
+            is FeedbackViewModel.SubmitState.Uploading,
+            FeedbackViewModel.SubmitState.Submitting,
+            -> Unit
         }
     }
 

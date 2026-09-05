@@ -2,8 +2,10 @@ package com.tracktosearch.ui.screen.search
 
 import android.content.Context
 import androidx.compose.runtime.Immutable
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tracktosearch.R
 import com.tracktosearch.data.local.SearchHistoryItem
 import com.tracktosearch.data.local.SearchHistoryStorage
 import com.tracktosearch.data.local.ViewedItemStorage
@@ -19,11 +21,16 @@ import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.TtlCache
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.tracktosearch.ui.haptic.HapticOutcome
+import com.tracktosearch.ui.haptic.HapticOutcomeEmitter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -70,6 +77,27 @@ class SearchViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
+
+    /**
+     * 热榜卡片点开失败的一次性提示。
+     *
+     * [SearchUiState] 没有 error 字段，原来解析不出条目时只是把转圈收掉就结束 ——
+     * 用户点了一下，界面转了一圈，然后什么都没发生，也不知道是没找到还是自己没点到。
+     * 文案沿用发现页/人物页同一套（card_resolve_*），三处点开失败手感一致。
+     */
+    private val _toastEvent = MutableSharedFlow<Int>(extraBufferCapacity = 1)
+    val toastEvent: SharedFlow<Int> = _toastEvent.asSharedFlow()
+
+    /** 结果类触感的出口，界面侧一行 `HapticOutcomeEffect(viewModel.hapticOutcomes)` 收集。 */
+    private val hapticOutcomeEmitter = HapticOutcomeEmitter()
+    val hapticOutcomes: SharedFlow<HapticOutcome> = hapticOutcomeEmitter.outcomes
+
+    /** 点开失败：收掉转圈、提示一句、震一记 reject。三个失败分支共用这一个出口。 */
+    private fun failResolve(@StringRes resId: Int) {
+        _uiState.value = _uiState.value.copy(resolvingItemId = null)
+        _toastEvent.tryEmit(resId)
+        hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
+    }
 
     // 热门搜索词 - 从豆瓣口碑榜实时获取
     private val _hotSearches = MutableStateFlow<List<String>>(emptyList())
@@ -211,7 +239,7 @@ class SearchViewModel @Inject constructor(
 
                 val searchResult = tmdbRepository.searchMovie(cleanTitle)
                 if (searchResult == null || searchResult.id <= 0) {
-                    _uiState.value = _uiState.value.copy(resolvingItemId = null)
+                    failResolve(R.string.card_resolve_not_found)
                     return@launch
                 }
 
@@ -224,13 +252,18 @@ class SearchViewModel @Inject constructor(
                     val imdbId = prefetchedImdbIds[item.id] ?: first?.movie?.ids?.imdb ?: ""
                     if (traktId != null && traktId > 0) {
                         onNavigate(traktId, searchResult.id, searchResult.title, imdbId, 0.0)
+                        _uiState.value = _uiState.value.copy(resolvingItemId = null)
+                    } else {
+                        // TMDB 找到了但 Trakt 转不出 id：一样是点不开，不能静默收场
+                        failResolve(R.string.card_resolve_not_found)
                     }
+                }.onFailure {
+                    failResolve(R.string.card_resolve_error)
                 }
-                _uiState.value = _uiState.value.copy(resolvingItemId = null)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(resolvingItemId = null)
+                failResolve(R.string.card_resolve_error)
             }
         }
     }

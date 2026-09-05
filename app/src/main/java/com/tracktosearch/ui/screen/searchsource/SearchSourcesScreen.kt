@@ -84,6 +84,7 @@ import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.isAppSharedTransitionActive
+import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
@@ -126,11 +127,15 @@ fun SearchSourcesScreen(
     val zresoEnabled by viewModel.zresoEnabled.collectAsStateWithLifecycle()
     val customSources by viewModel.customSources.collectAsStateWithLifecycle()
     val testResults by viewModel.testResults.collectAsStateWithLifecycle()
+    // 源测试结果、导入撞冲突时的 reject 都从这一行出
+    HapticOutcomeEffect(viewModel.hapticOutcomes)
     val panHubConfig by viewModel.panHubConfig.collectAsStateWithLifecycle()
     var showPanHubConfig by remember { mutableStateOf(false) }
     var showShareSource by remember { mutableStateOf<CustomSearchSource?>(null) }
     var showImportDialog by remember { mutableStateOf(false) }
     var pendingImport by remember { mutableStateOf<CustomSearchSource?>(null) }
+    // 导入弹层的确认按钮在自己的 subcomposition 里，但导入成功那一记发生在页面作用域
+    val importHaptics = rememberAppHaptics()
     // 导入成功反馈改走 Snackbar：与详情页标记、设置页清缓存的反馈风格一致，也不受系统「关闭通知/Toast」影响
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -295,6 +300,7 @@ fun SearchSourcesScreen(
                     pendingImport = source
                 } else {
                     viewModel.importSource(source)
+                    importHaptics.confirm()
                     scope.launch { snackbarHostState.showSnackbar(importSuccessMessage) }
                 }
             },
@@ -316,6 +322,7 @@ fun SearchSourcesScreen(
                     confirmHaptics.tap()
                     pendingImport = null
                     viewModel.importSource(source, overwrite = true)
+                    confirmHaptics.confirm()
                     scope.launch { snackbarHostState.showSnackbar(importSuccessMessage) }
                 }) { Text(stringResource(R.string.import_confirm)) }
             },

@@ -101,6 +101,7 @@ import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.VisualSurfaceKind
+import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.screen.search.DoubanHotAllSheet
@@ -153,6 +154,9 @@ fun DiscoverScreen(
     var activeFilterEntry by rememberSaveable { mutableStateOf<String?>(null) }
 
     ToastEffect(viewModel.toastEvent)
+
+    // 卡片点开解析失败那几条 toast 配对的 reject 都从这一行出
+    HapticOutcomeEffect(viewModel.hapticOutcomes)
     // 延迟加载 Trakt 栏目，避免与首屏豆瓣/TMDB 竞争网络带宽
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(800)

@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.searchsource
 
+import android.content.Context
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.CustomSearchSourceStorage
@@ -33,9 +34,12 @@ class SearchSourceEditorViewModelProbeTest {
     private val storage = mockk<CustomSearchSourceStorage>(relaxed = true)
     private val service = mockk<CustomSearchService>()
 
+    // 探测这条路不碰文案，Context 只是为了满足构造签名（testCurrent 才会用它取字符串）
+    private val context = mockk<Context>(relaxed = true)
+
     private fun viewModel(): SearchSourceEditorViewModel {
         every { storage.sources } returns MutableStateFlow(emptyList())
-        return SearchSourceEditorViewModel(storage, service).apply {
+        return SearchSourceEditorViewModel(context, storage, service).apply {
             setBaseUrl("https://example.com/")
         }
     }
@@ -189,7 +193,7 @@ class SearchSourceEditorViewModelProbeTest {
             parseMode = "pansou_template"
         )
         every { storage.sources } returns MutableStateFlow(listOf(existing))
-        val viewModel = SearchSourceEditorViewModel(storage, service).apply {
+        val viewModel = SearchSourceEditorViewModel(context, storage, service).apply {
             setBaseUrl("https://example.com/")
             setName("另一个名字")
         }

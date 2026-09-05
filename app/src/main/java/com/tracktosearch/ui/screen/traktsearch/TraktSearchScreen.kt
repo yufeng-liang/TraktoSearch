@@ -142,6 +142,7 @@ import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.rememberPosterPrefetch
+import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
@@ -209,6 +210,8 @@ fun TraktSearchScreen(
     val spriteState by spriteViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val haptics = rememberAppHaptics()
+    // 搜索失败（含网盘搜索原本整段吞掉的那处）配对的 reject 从这一行出
+    HapticOutcomeEffect(viewModel.hapticOutcomes)
     val focusRequester = remember { FocusRequester() }
     val coroutineScope = rememberCoroutineScope()
     val hazeState = remember { HazeState() }

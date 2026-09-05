@@ -112,7 +112,9 @@ import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
+import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.navigation.DetailSeedStore
 import com.tracktosearch.ui.animation.EnterMode
 import com.tracktosearch.ui.animation.cardEnter
@@ -165,6 +167,9 @@ fun MarkRecordScreen(
     val traktConnected by sessionViewModel.traktConnected.collectAsStateWithLifecycle()
     val isDark = isAppDarkTheme()
     val haptics = rememberAppHaptics()
+    // ALL 页只有 Trakt 那一半失败时提示一句「列表可能不全」——原来这种失败一个字都不报
+    ToastEffect(viewModel.toastEvent)
+    HapticOutcomeEffect(viewModel.hapticOutcomes)
     // 共享元素转场 scope（与设置页标记记录入口卡片配对）。本页没有 Scaffold，作用域自己从
     // CompositionLocal 取，与 StatisticsScreen 的取法一致。
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
