@@ -101,6 +101,20 @@ android {
     }
 
     buildTypes {
+        // 插桩测试专用的包名后缀，默认不加，靠 -PdebugSuffix 打开。
+        //
+        // 设备上那份 3.6.0 也是 debug 签名，但出自另一台机器的 debug keystore，同包名覆盖
+        // 安装报 INSTALL_FAILED_UPDATE_INCOMPATIBLE，而卸载重装会顶掉用户的真实数据
+        // （想看列表、豆瓣凭据、日签记录）—— 那些数据本身就是平时验证功能的素材。
+        // 加了后缀两者共存，理由与下面 eggpreview 那段同：manifest 里所有 authority 都写成
+        // ${applicationId}.xxx，跟着一起换，不会与已装的包抢 provider。
+        //
+        // 默认关掉而不是一直加着：日常 installDebug 若换了包名，会在桌面上凭空多出第二个
+        // 图标、而原来那份再也收不到更新。改包名只是跑测试时的手段，不该改变默认产物身份。
+        // 切换这个开关会改 BuildConfig.APPLICATION_ID，整个模块要重编一遍，别顺手带上。
+        debug {
+            if (project.hasProperty("debugSuffix")) applicationIdSuffix = ".debug"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
