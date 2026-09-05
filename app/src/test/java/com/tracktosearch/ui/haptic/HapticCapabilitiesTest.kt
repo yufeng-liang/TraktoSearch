@@ -306,6 +306,38 @@ class HapticCapabilitiesTest {
     }
 
     /**
+     * 同一条红线，扫描范围从触感包放宽到 `src/main/java` 全部代码。
+     *
+     * 理由：这两个 flag 的危害与它写在哪个包里无关 —— 任何一处
+     * `VibrationAttributes` 上挂了它，用户在系统设置里关掉的触感就会照震。
+     * 触感包内的约束由上一条守着，这一条守的是「有人在别的包里直接调 Vibrator」。
+     * `FLAG_IGNORE_VIEW_SETTING` 一并纳入：它绕的是 View 级开关，同族问题。
+     */
+    @Test
+    fun `全仓主源码都不许用两个 IGNORE_SETTING flag`() {
+        val sources = sourcesUnder(MAIN_SOURCE_RELATIVE_PATH)
+
+        assertWithMessage("没定位到主源码目录，这条红线断言就成了空跑").that(sources).isNotEmpty()
+        assertWithMessage("定位到的目录不对").that(sources.map { it.name })
+            .contains("HapticCapabilities.kt")
+
+        // 先按整份文本粗筛，只对真的出现过 flag 名的文件去注释 —— 全仓上千个 .kt，
+        // 逐个走 stripComments 的字符扫描没必要
+        val offenders = sources
+            .map { it to it.readText() }
+            .filter { (_, text) -> FORBIDDEN_FLAG in text || FORBIDDEN_VIEW_FLAG in text }
+            .filter { (_, text) ->
+                val code = stripComments(text)
+                FORBIDDEN_FLAG in code || FORBIDDEN_VIEW_FLAG in code
+            }
+            .map { (file, _) -> file.name }
+
+        assertWithMessage(
+            "不覆盖用户的系统触感设置：$FORBIDDEN_FLAG / $FORBIDDEN_VIEW_FLAG 全仓禁用"
+        ).that(offenders).isEmpty()
+    }
+
+    /**
      * 装一台设备。三项查询都收 lambda 而不是常量，是为了让「这一项抛 Error」也能表达。
      *
      * @param primitives 收到的候选 ID 列表，返回等长的支持位；测试可以故意返回错长度或直接抛
@@ -352,16 +384,16 @@ class HapticCapabilitiesTest {
     )
 
     /**
-     * 找出 `app/src/main/java/com/tracktosearch/ui/haptic` 下全部 .kt。
+     * 找出某个相对路径下全部 .kt。
      *
      * 单测的工作目录一般是 app 模块目录，从仓库根跑时又是仓库根，所以逐级往上找、
      * 两种前缀都试。找不到就返回空列表，让调用方把「定位失败」判成失败而不是悄悄通过。
      */
-    private fun hapticSources(): List<File> {
+    private fun sourcesUnder(relativePath: String): List<File> {
         var dir: File? = File("").absoluteFile
         while (dir != null) {
             for (prefix in listOf("", "app/")) {
-                val candidate = File(dir, prefix + HAPTIC_SOURCE_RELATIVE_PATH)
+                val candidate = File(dir, prefix + relativePath)
                 if (candidate.isDirectory) {
                     return candidate.walkTopDown()
                         .filter { it.isFile && it.extension == "kt" }
@@ -373,6 +405,8 @@ class HapticCapabilitiesTest {
         }
         return emptyList()
     }
+
+    private fun hapticSources(): List<File> = sourcesUnder(HAPTIC_SOURCE_RELATIVE_PATH)
 
     /**
      * 去掉 Kotlin 注释只留代码，让红线断言分得清「文档里写着禁止」与「代码里真的用了」。
@@ -420,7 +454,15 @@ class HapticCapabilitiesTest {
 
         const val FORBIDDEN_FLAG = "FLAG_IGNORE_GLOBAL_SETTING"
 
+        /**
+         * 同族的第二个开关：`FLAG_IGNORE_VIEW_SETTING` 绕的是 View 级的
+         * `isHapticFeedbackEnabled`，一样是在替用户改主意，一样禁用。
+         */
+        const val FORBIDDEN_VIEW_FLAG = "FLAG_IGNORE_VIEW_SETTING"
+
         const val HAPTIC_SOURCE_RELATIVE_PATH = "src/main/java/com/tracktosearch/ui/haptic"
+
+        const val MAIN_SOURCE_RELATIVE_PATH = "src/main/java"
 
         /** API 30 引入的五个 primitive。 */
         val API_30_PRIMITIVES = listOf(

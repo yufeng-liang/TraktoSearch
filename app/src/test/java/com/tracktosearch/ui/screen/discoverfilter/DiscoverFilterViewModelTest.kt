@@ -8,6 +8,7 @@ import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.test.MainDispatcherRule
+import com.tracktosearch.ui.haptic.HapticOutcome
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -17,6 +18,8 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
@@ -237,6 +240,63 @@ class DiscoverFilterViewModelTest {
         assertThat(state.error).isEqualTo("网络错误")
         assertThat(state.isLoading).isFalse()
         assertThat(state.items).isEmpty()
+    }
+
+    // ==================== 结果类触感的方向 ====================
+
+    /**
+     * 「条件没变」的早退是对的（同一个请求不该重发），但用户刚按了「应用」，
+     * 屏幕上一个像素都不会动 —— 他分不清是「已经是这个结果了」还是「按钮没响应」。
+     * reject 就是在说「这一下没生效」，所以早退必须**顺带发一记 FAILURE**。
+     *
+     * hapticOutcomes 的 replay 是 0，收集方必须先挂上再触发，否则那一记会被丢掉。
+     */
+    @Test
+    fun `search_条件未变的早退_发出FAILURE`() = runTest {
+        coEvery { tmdbRepository.discover(any(), any()) } returns TmdbRepository.DiscoverPage(
+            items = testItems,
+            totalPages = 5,
+            totalResults = 100
+        )
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        viewModel.toggleGenre(18) // 条件变一次，让这一轮真的搜出结果来
+        viewModel.search()
+        advanceUntilIdle()
+
+        val outcomes = mutableListOf<HapticOutcome>()
+        val collector = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.hapticOutcomes.collect { outcomes += it }
+        }
+
+        // 条件一个字没动就再按一次「应用」：被「条件未变且已有结果」挡掉
+        viewModel.search()
+        advanceUntilIdle()
+
+        assertThat(outcomes).containsExactly(HapticOutcome.FAILURE)
+        collector.cancel()
+    }
+
+    @Test
+    fun `search_网络失败_发出FAILURE`() = runTest {
+        coEvery { tmdbRepository.discover(any(), any()) } throws IOException("网络错误")
+        every { context.getString(R.string.error_network_unavailable) } returns "网络错误"
+
+        viewModel = createViewModel()
+        advanceUntilIdle() // 首屏搜索失败那一记发生在收集方挂上之前，收不到也不该收
+
+        val outcomes = mutableListOf<HapticOutcome>()
+        val collector = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.hapticOutcomes.collect { outcomes += it }
+        }
+
+        // 条件变一次绕过早退，让这一次真的发请求并再失败一遍
+        viewModel.toggleGenre(18)
+        viewModel.search()
+        advanceUntilIdle()
+
+        assertThat(outcomes).containsExactly(HapticOutcome.FAILURE)
+        collector.cancel()
     }
 
     /**

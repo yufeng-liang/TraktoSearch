@@ -19,7 +19,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * 自动探测失败原因的单元测试。
+ * 自动探测失败原因、以及 testCurrent 回调契约的单元测试。
  *
  * 探测会遍历多个 apiPath/keywordParam 变体，只有全部失败才落到 Failed。
  * 这里验证「失败原因取最靠前的进展」这条规则：只要有一个变体连上过服务器，
@@ -34,7 +34,8 @@ class SearchSourceEditorViewModelProbeTest {
     private val storage = mockk<CustomSearchSourceStorage>(relaxed = true)
     private val service = mockk<CustomSearchService>()
 
-    // 探测这条路不碰文案，Context 只是为了满足构造签名（testCurrent 才会用它取字符串）
+    // relaxed mock 的 getString 返回空串。这里断言的是 success 方向与「回调有没有被调到」，
+    // 不断言文案内容，所以空串够用
     private val context = mockk<Context>(relaxed = true)
 
     private fun viewModel(): SearchSourceEditorViewModel {
@@ -199,5 +200,59 @@ class SearchSourceEditorViewModelProbeTest {
         }
 
         assertThat(viewModel.findConflict()?.id).isEqualTo("existing")
+    }
+
+    // ==================== testCurrent：结果必须回调 ====================
+
+    /**
+     * 这条是回归测试。原来表单不全时 testCurrent 直接 return 且**不回调**，
+     * 于是界面的 isTesting 永久留在 true —— 转圈一直转、「测试」按钮一直禁用，
+     * 除了退出编辑器没有别的出路。断言的重点是「回调一定被调到」，
+     * success = false 只是顺带。
+     */
+    @Test
+    fun `表单不全时 testCurrent 仍然回调一条失败`() = runTest {
+        every { storage.sources } returns MutableStateFlow(emptyList())
+        // 只有 baseUrl 没有 name，currentSource() 会返回 null
+        val viewModel = SearchSourceEditorViewModel(context, storage, service).apply {
+            setBaseUrl("https://example.com/")
+        }
+
+        val outcomes = mutableListOf<SearchSourceEditorViewModel.TestOutcome>()
+        viewModel.testCurrent { outcomes += it }
+        advanceUntilIdle()
+
+        assertThat(outcomes).hasSize(1)
+        assertThat(outcomes.single().success).isFalse()
+    }
+
+    @Test
+    fun `解析到结果时 testCurrent 回调成功`() = runTest {
+        coEvery { service.testSource(any(), any()) } returns
+            CustomSearchService.TestResult.Success(count = 3, sampleName = "流浪地球")
+
+        val viewModel = viewModel().apply { setName("我的源") }
+
+        val outcomes = mutableListOf<SearchSourceEditorViewModel.TestOutcome>()
+        viewModel.testCurrent { outcomes += it }
+        advanceUntilIdle()
+
+        assertThat(outcomes).hasSize(1)
+        assertThat(outcomes.single().success).isTrue()
+    }
+
+    @Test
+    fun `服务端报错时 testCurrent 回调失败`() = runTest {
+        coEvery { service.testSource(any(), any()) } returns
+            CustomSearchService.TestResult.Error("boom")
+
+        val viewModel = viewModel().apply { setName("我的源") }
+
+        val outcomes = mutableListOf<SearchSourceEditorViewModel.TestOutcome>()
+        viewModel.testCurrent { outcomes += it }
+        advanceUntilIdle()
+
+        assertThat(outcomes).hasSize(1)
+        assertThat(outcomes.single().success).isFalse()
     }
 }

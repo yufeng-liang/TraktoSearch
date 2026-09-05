@@ -16,6 +16,7 @@ import com.tracktosearch.data.local.SearchSourceStorage
 import com.tracktosearch.data.local.SharedTransitionStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.ui.haptic.HapticMode
+import com.tracktosearch.ui.haptic.HapticOutcome
 import com.tracktosearch.data.local.db.OfflineCacheManager
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.notification.NotificationScheduler
@@ -31,6 +32,7 @@ import com.tracktosearch.data.repository.DoubanSyncProgress
 import com.tracktosearch.data.repository.DoubanTraktStatusConsistencyChecker
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.repository.UpdateInfo
 import com.tracktosearch.data.repository.UpdateRepository
 import com.tracktosearch.data.util.CrashLogUploader
 import com.tracktosearch.data.util.PersistentTtlCache
@@ -372,5 +374,100 @@ class SettingsViewModelTest {
 
         coVerify { crashLogStorage.setEnabled(true) }
         coVerify(exactly = 0) { crashLogUploader.uploadPendingLogs() }
+    }
+
+    // ==================== ExportMessage.outcome 的方向 ====================
+
+    // 这一页所有导出/导入/清缓存/检查更新的结果都从同一条 snackbar 出去，触感方向由
+    // ExportMessage.outcome 携带。outcome 是必填参数，所以编译器已经保证 17 个构造点
+    // 一个都不会漏写 —— 下面这些用例保证的是**不写反**：同一个动作的成功与失败两条路
+    // 各跑一遍，断言方向相反。
+
+    @Test
+    fun `清缓存成功时 outcome 为 SUCCESS`() = runTest {
+        viewModel.clearCache()
+        advanceUntilIdle()
+
+        assertThat(viewModel.exportImportState.value.message?.outcome)
+            .isEqualTo(HapticOutcome.SUCCESS)
+    }
+
+    @Test
+    fun `清缓存抛异常时 outcome 为 FAILURE`() = runTest {
+        coEvery { offlineCacheManager.clearAll() } throws RuntimeException("boom")
+
+        viewModel.clearCache()
+        advanceUntilIdle()
+
+        assertThat(viewModel.exportImportState.value.message?.outcome)
+            .isEqualTo(HapticOutcome.FAILURE)
+    }
+
+    @Test
+    fun `重置图片流量的 outcome 为 SUCCESS`() {
+        viewModel.clearImageTraffic()
+
+        assertThat(viewModel.exportImportState.value.message?.outcome)
+            .isEqualTo(HapticOutcome.SUCCESS)
+    }
+
+    @Test
+    fun `已是最新版本时 outcome 为 SUCCESS`() = runTest {
+        coEvery { updateRepository.checkForUpdate(force = true) } returns UpdateInfo(
+            latestVersion = "1.0.0",
+            downloadUrl = "",
+            changelog = "",
+            fileSize = 0L,
+            hasUpdate = false
+        )
+
+        viewModel.checkUpdate()
+        advanceUntilIdle()
+
+        assertThat(viewModel.exportImportState.value.message?.outcome)
+            .isEqualTo(HapticOutcome.SUCCESS)
+    }
+
+    @Test
+    fun `检查更新拿不到信息时 outcome 为 FAILURE`() = runTest {
+        coEvery { updateRepository.checkForUpdate(force = true) } returns null
+
+        viewModel.checkUpdate()
+        advanceUntilIdle()
+
+        assertThat(viewModel.exportImportState.value.message?.outcome)
+            .isEqualTo(HapticOutcome.FAILURE)
+    }
+
+    @Test
+    fun `检查更新抛异常时 outcome 为 FAILURE`() = runTest {
+        coEvery { updateRepository.checkForUpdate(force = true) } throws RuntimeException("boom")
+
+        viewModel.checkUpdate()
+        advanceUntilIdle()
+
+        assertThat(viewModel.exportImportState.value.message?.outcome)
+            .isEqualTo(HapticOutcome.FAILURE)
+    }
+
+    /**
+     * 有更新可下载时走的是弹窗，不是 snackbar —— 那条路刻意不带结果类触感：
+     * 弹窗自己弹出来就是反馈，而且「有新版本」既不是成功也不是失败。
+     */
+    @Test
+    fun `有新版本时不落 snackbar 消息`() = runTest {
+        coEvery { updateRepository.checkForUpdate(force = true) } returns UpdateInfo(
+            latestVersion = "9.9.9",
+            downloadUrl = "https://example.com/app.apk",
+            changelog = "新功能",
+            fileSize = 1L,
+            hasUpdate = true
+        )
+
+        viewModel.checkUpdate()
+        advanceUntilIdle()
+
+        assertThat(viewModel.showUpdateDialog.value).isTrue()
+        assertThat(viewModel.exportImportState.value.message).isNull()
     }
 }
