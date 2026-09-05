@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -279,21 +280,27 @@ fun SplashQuoteOverlay(
             drift = !reduceMotion
         )
 
-        // 海报、台词、出处、印章、日期同在这一列里从上往下排，中间垫着 spacer，
-        // 所以文字永远不会压在海报上——海报放大到 238×356 也不改变这一点，
-        // 不需要再给文字单独垫一块局部衬底。
+        // 海报、台词、出处、印章在这一列里从上往下排，中间垫着 spacer，
+        // 所以文字永远不会压在海报上——海报放大到 238×356 也不改变这一点。
         //
-        // 底部留出 [SKIP_ROW_DP]：居中要在「跳过那一行之上」发生，不是在整屏正中。
-        // 海报大一圈、印章下面又多一块日期之后，按整屏居中算，日期会压到跳过提示上。
+        // 日期块不在这一列里，它钉在底部（见下面那一段）。这一列于是要在底部让出
+        // [DATE_RESERVE_DP]，并留一道顶部安全边：状态栏就压在这一层上面，
+        // 少了这道边，矮屏上海报的上沿会钻到时钟底下去。
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
                 .padding(horizontal = 34.dp)
-                .padding(bottom = SKIP_ROW_DP),
+                .padding(top = 12.dp, bottom = DATE_RESERVE_DP),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            QuotePoster(poster = quote.poster, palette = palette, visible = posterVisible)
+            QuotePoster(
+                poster = quote.poster,
+                palette = palette,
+                visible = posterVisible,
+                lineCount = lineCount,
+            )
             Spacer(Modifier.height(20.dp))
             quote.lines.forEachIndexed { index, line ->
                 QuoteLine(
@@ -308,9 +315,21 @@ fun SplashQuoteOverlay(
             QuoteSource(quote = quote, palette = palette, visible = sourceVisible)
             Spacer(Modifier.height(20.dp))
             StampedSeal(quote = quote, palette = palette, visible = sealVisible)
-            Spacer(Modifier.height(12.dp))
-            DateStamp(date = today, palette = palette, visible = sealVisible)
         }
+
+        // 日期和撕口虚线都钉在屏幕底部，日期贴着虚线上方 16dp。
+        //
+        // 不跟着上面那一列流下来：那一列是居中的，多一行台词、换一台屏幕，它的底边就挪一截，
+        // 日期跟着走，和虚线的距离每台机器都不一样。钉住之后这个距离是定的，
+        // 而余量的伸缩全落在印章与日期之间那一段——那里本来就是留白。
+        DateStamp(
+            date = today,
+            palette = palette,
+            visible = sealVisible,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = DATE_BOTTOM_DP)
+        )
 
         // 撕口虚线：日签卡片的撕口用同一档 inkFaint 画。它把跳过提示圈成票根的下半截，
         // 顺便给「这一层还有底」一个交代——海报放大之后下半屏本来空得没有边界。
@@ -319,7 +338,7 @@ fun SplashQuoteOverlay(
             alpha = vignetteAlpha,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = SKIP_ROW_DP + 36.dp, start = 26.dp, end = 26.dp)
+                .padding(bottom = TEAR_BOTTOM_DP, start = 26.dp, end = 26.dp)
         )
 
         Text(
@@ -499,6 +518,7 @@ private fun DateStamp(
     date: LocalDate,
     palette: SplashPalette,
     visible: Boolean,
+    modifier: Modifier = Modifier,
 ) {
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
@@ -529,7 +549,7 @@ private fun DateStamp(
         }
     }
     Column(
-        modifier = Modifier
+        modifier = modifier
             .graphicsLayer {
                 this.alpha = alpha
                 translationY = riseDp.dp.toPx()
@@ -603,6 +623,7 @@ private fun QuotePoster(
     poster: ImageBitmap?,
     palette: SplashPalette,
     visible: Boolean,
+    lineCount: Int,
 ) {
     if (poster == null) return
     val alpha by animateFloatAsState(
@@ -622,8 +643,11 @@ private fun QuotePoster(
     )
     val compact = LocalConfiguration.current.screenHeightDp < POSTER_COMPACT_HEIGHT_DP ||
         LocalDensity.current.fontScale > POSTER_COMPACT_FONT_SCALE
-    val posterWidth = if (compact) 176.dp else 238.dp
-    val posterHeight = if (compact) 264.dp else 356.dp
+    // 四行台词的行高比三行多吃三十来 dp，海报跟着收一档，省下的那点全给顶部安全边。
+    // 收的是海报而不是字：字号是内容，海报是画面的尺寸，两者之中先让的该是后者。
+    val squeeze = if (!compact && lineCount >= POSTER_SQUEEZE_LINES) POSTER_SQUEEZE else 1f
+    val posterWidth = if (compact) 176.dp else 238.dp * squeeze
+    val posterHeight = if (compact) 264.dp else 356.dp * squeeze
     val tintColor = if (palette.isDark) Color(0xFF16100B) else palette.paper
     val tintAlpha = if (palette.isDark) 0.22f else 0.14f
     Box(
@@ -1251,13 +1275,27 @@ private const val RAIL_LINE_INK_DARK = 0.07f
 private val TEAR_DASH: Dp = 3.dp
 
 /**
- * 底部「轻触跳过」离屏幕底边多远，也是台词那一列在底部留出的空。
+ * 底部「轻触跳过」离屏幕底边多远。
  *
- * 两处必须是同一个数：这一列是在「跳过那一行之上」居中的，不是在整屏正中。海报放大
- * 一圈、印章下面又多一块日期之后，按整屏居中算，日期块会压到跳过提示上（844dp 屏上重叠 9dp）。
- * 56dp 收到 44dp 也是为这件事让出的 12dp。
+ * 56dp 收到 44dp 是给上面那一列腾地方：海报放大一圈、印章下面又多一块日期之后，
+ * 纵向余量本来就不够。
  */
 private val SKIP_ROW_DP: Dp = 44.dp
+
+/**
+ * 撕口虚线和日期块离屏幕底边多远，以及台词那一列为它们在底部让出多少。
+ *
+ * 两者都钉在底部，不跟着上面那一列流下来：那一列是居中的，多一行台词、换一台屏幕，
+ * 它的底边就挪一截，日期跟着走，和虚线的距离每台机器都不一样。钉住之后
+ * 「日期贴在虚线上方 16dp」在任何屏幕上都是同一个数，余量的伸缩全落在印章与日期
+ * 之间那一段——那里本来就是留白，差十几 dp 看不出来。
+ *
+ * [DATE_RESERVE_DP] 是日期块自己那 66dp 加上离印章至少 8dp 的空。让出这一块之后，
+ * 844dp 屏上四行台词仍剩 25dp，760dp 矮屏（海报回落一档）剩 16dp。
+ */
+private val TEAR_BOTTOM_DP: Dp = SKIP_ROW_DP + 36.dp
+private val DATE_BOTTOM_DP: Dp = TEAR_BOTTOM_DP + 16.dp
+private val DATE_RESERVE_DP: Dp = DATE_BOTTOM_DP + 74.dp
 
 /** 日期块里月日之间那道斜杠，以及它比数字淡多少——它是分隔符，不是信息 */
 private const val DATE_SLASH = " ⁄ "
@@ -1278,6 +1316,15 @@ private const val POSTER_COMPACT_HEIGHT_DP = 760
  * 系统的字体放大是用户明确要求的，压的应该是海报，不是字。
  */
 private const val POSTER_COMPACT_FONT_SCALE = 1.15f
+
+/**
+ * 台词到几行开始把海报收一档，以及收多少。
+ *
+ * 四行台词的行高整段比三行多三十来 dp，而这一层的纵向余量在 844dp 屏上只剩二十几。
+ * 0.92（238×356 → 219×328）省下 28dp，正好把顶部安全边保住。
+ */
+private const val POSTER_SQUEEZE_LINES = 4
+private const val POSTER_SQUEEZE = 0.92f
 
 /**
  * 后来才盖上来时整层的淡入时长。
