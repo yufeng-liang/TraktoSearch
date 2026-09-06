@@ -147,6 +147,10 @@ CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments
 - macrobenchmark 的 test APK 不需要与被测应用同签名：pm list instrumentation 显示它 target 的是自己（com.tracktosearch.benchmark），instrumentation 的同签名限制只对「作用于别的包」成立。benchmark/build.gradle.kts 里那条「必须与被测应用同签名」的注释是错的，别照它去重签 test APK
 - 签名不一致禁止用卸载重装解决：会连带清掉网关激活态、Trakt/豆瓣登录和想看已看本地数据。正确做法是用 Studio 那把 keystore 重签后原地 install -r，apksigner sign --ks C:\Users\15778\.android\debug.keystore --ks-pass pass:android（debug keystore 的公开默认口令，非本项目凭证）--ks-key-alias androiddebugkey
 - 核对两边证书：apksigner verify --print-certs <apk> 看 APK 实际证书 SHA-256，keytool -list -v -keystore <path> 看 keystore 指纹，二者一致才可原地覆盖安装
+- macrobenchmark 报 `ERRORS (not suppressed): DEBUGGABLE` 而本地产物明明不是 debuggable（`aapt2 dump badging` 无 application-debuggable）时，先看 `dumpsys package com.tracktosearch | grep -E "flags|codePath|lastUpdateTime"`：若 flags 仍带 DEBUGGABLE、codePath 与 lastUpdateTime 都是旧的，说明上一次 `install -r` 走的是 "Performing Incremental Install" —— 那条路径只增量替换 dex/资源，PackageManager 缓存的 ApplicationInfo 不刷新，跑的代码是新的但 benchmark 读到的元数据是旧的。再 `install -r` 一次通常会走 "Performing Streamed Install"，元数据随之刷新，不必卸载、不清数据。**不要**用 `androidx.benchmark.suppressErrors=DEBUGGABLE` 掩盖：真 debuggable 的包测出来的数字没有意义，这个错误值得每次都查
+- `:benchmark:connectedBenchmarkAndroidTest` 是歧义任务名（候选 connectedBenchmarkBenchmarkAndroidTest / connectedBenchmarkReleaseAndroidTest / connectedNonMinifiedBenchmarkAndroidTest）；而这台 HyperOS 上 `adb shell getprop` 整体返空（`adb shell echo ok` 正常），Gradle 因此把设备判成 `deviceApiLevel [21]` 并 Skipping device。绕过办法是手工 instrument，不必跟 Gradle 的设备筛选纠缠：
+  `adb shell am instrument -w -r -e class com.tracktosearch.benchmark.TransitionBenchmark -e additionalTestOutputDir /sdcard/Android/media/com.tracktosearch.benchmark/bench -e androidx.benchmark.output.enable true com.tracktosearch.benchmark/androidx.test.runner.AndroidJUnitRunner`
+- 单条 macrobenchmark 用例的 frameOverrunMs P90 自身噪声在本机可达 ±3ms（同一 APK 同一用例两次跑到过 4.2 与 0.95）。判回归前先复测那一条，并核对该路径本次有没有改过代码；单次超出历史区间 1~2ms 不足以定性
 
 ## Android 开屏截图验收经验
 - 开屏视觉验收须记设备实际分辨率/密度/API/安装结果/主 Activity/启动进程/UI 树/logcat -b crash；构建成功≠真机视觉过
