@@ -20,6 +20,13 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import com.tracktosearch.ui.screen.swiftie.SwiftiePalette
 import com.tracktosearch.ui.screen.swiftie.SwiftieTimeline
 import com.tracktosearch.ui.screen.swiftie.unitHeartPath
@@ -243,6 +250,7 @@ fun SwiftieEraBackdropLayer(
     }
     // 循环里反复 rewind 的那一条 Path，与 SwiftieEraMotifs / SwiftieEraParticles 同一条铁律
     val scratch = remember { Path() }
+    val numerals = rememberClockNumeralLayouts()
     Spacer(
         modifier = modifier.fillMaxSize().drawBehind {
             val from = outgoing().coerceIn(0, skies.lastIndex)
@@ -252,12 +260,12 @@ fun SwiftieEraBackdropLayer(
             val eraMs = eraElapsedMs()
             val card = cardBounds()
             if (mix <= 0f || from == to) {
-                drawStage(from, 1f, t, eraMs, card, skies, scratch, shapes, lowRam)
+                drawStage(from, 1f, t, eraMs, card, skies, scratch, shapes, numerals, lowRam)
             } else {
-                drawStage(from, 1f - mix, t, eraMs, card, skies, scratch, shapes, lowRam)
+                drawStage(from, 1f - mix, t, eraMs, card, skies, scratch, shapes, numerals, lowRam)
                 // 换张那 500ms 里 incoming 的段还没开始：给它 -1 走待机态，否则 TTPD 的纸
                 // 会在上一张还没收完时就开始往外吐，reputation 的蛇也会提前从左缘钻出来
-                drawStage(to, mix, t, -1L, card, skies, scratch, shapes, lowRam)
+                drawStage(to, mix, t, -1L, card, skies, scratch, shapes, numerals, lowRam)
             }
         }
     )
@@ -278,6 +286,7 @@ private fun DrawScope.drawStage(
     skies: List<Brush>,
     path: Path,
     shapes: BackdropShapes,
+    numerals: List<TextLayoutResult>,
     lowRam: Boolean
 ) {
     if (alpha <= 0.01f) return
@@ -303,7 +312,7 @@ private fun DrawScope.drawStage(
         SwiftieEraBackdrop.BRANCH_LANTERNS ->
             drawBranchLanterns(path, top, mid, deep, phase, alpha, lowRam)
         SwiftieEraBackdrop.MIDNIGHT_CLOCK ->
-            drawMidnightClock(path, top, mid, deep, phase, alpha, shapes)
+            drawMidnightClock(path, top, mid, deep, phase, alpha, shapes, numerals)
         SwiftieEraBackdrop.TYPEWRITER_DESK ->
             drawTypewriterDesk(path, top, mid, deep, phase, alpha, eraMs, card)
         SwiftieEraBackdrop.THEATRE_STAGE -> drawTheatreStage(path, top, mid, deep, phase, alpha)
@@ -3983,11 +3992,39 @@ private fun starInto(path: Path, cx: Float, cy: Float, outer: Float, rotationDeg
     path.close()
 }
 
+/** 罗马数字预排的参考字号（px）。真实大小在 draw 阶段按表盘半径缩放。 */
+private const val NUMERAL_REFERENCE_PX = 100f
+
+/** XII 在 12 点位，顺时针排到 XI —— 与 drawMidnightClock 的整点刻度同序。 */
+private val ROMAN_NUMERALS =
+    listOf("XII", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI")
+
+/**
+ * 表盘的 12 个罗马数字预排一次。
+ *
+ * `TextMeasurer` 只能在组合阶段用（与手链字母珠 `rememberBeadLetterLayouts` 同一套路）：
+ * 这里按参考字号排好，draw 阶段再缩放到表盘半径。衬线体加粗 ——
+ * 无衬线的罗马数字读作一排代码。
+ */
+@Composable
+private fun rememberClockNumeralLayouts(): List<TextLayoutResult> {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    return remember(measurer, density) {
+        val style = TextStyle(
+            fontSize = with(density) { NUMERAL_REFERENCE_PX.toSp() },
+            fontFamily = FontFamily.Serif,
+            fontWeight = FontWeight.Bold
+        )
+        ROMAN_NUMERALS.map { measurer.measure(it, style) }
+    }
+}
+
 /**
  * 午夜星空 + 一面星形指针的钟 + 薰衣草雾。
  *
  * Midnights 的封面是那只手举着的打火机与深蓝，而「午夜」这个词本身需要一面钟才落得实。
- * 两根指针都指向 12 —— 那是这张专辑的书名。星星的明灭是 [phase] 的**二倍频**，
+ * 两根指针都指向 3 —— 凌晨三点。星星的明灭是 [phase] 的**二倍频**，
  * 相位按序号错开，所以不会整片一起闪。
  */
 private fun DrawScope.drawMidnightClock(
@@ -3997,7 +4034,8 @@ private fun DrawScope.drawMidnightClock(
     deep: Color,
     phase: Float,
     alpha: Float,
-    shapes: BackdropShapes
+    shapes: BackdropShapes,
+    numerals: List<TextLayoutResult>
 ) {
     val w = size.width
     val h = size.height
@@ -4020,7 +4058,7 @@ private fun DrawScope.drawMidnightClock(
         }
     }
 
-    // 钟：表盘 + 表圈 + 60 格分刻度（整点加粗）+ 两根指向 12 的星形指针。
+    // 钟：表盘 + 表圈 + 60 格分刻度（整点加粗）+ 罗马数字 + 指向 3 点的星形指针。
     // 钟心抬到 0.24h：半径 0.26w 时表盘占 0.12–0.36h，整面都在 HERO_BOTTOM 以内
     val clockCenter = Offset(w * 0.50f, h * 0.24f)
     val clockR = w * 0.26f
@@ -4073,6 +4111,27 @@ private fun DrawScope.drawMidnightClock(
             cap = StrokeCap.Round
         )
     }
+    // 罗马数字压在刻度内侧、指针下：预排在组合阶段（见 rememberClockNumeralLayouts），
+    // 这里只按表盘半径缩放平移。3 点的 III 正好迎着时针，12 点的 XII 压在分针根上 ——
+    // 指针画在数字之上，和真表一样
+    val numeralScale = clockR * 0.145f / NUMERAL_REFERENCE_PX
+    numerals.forEachIndexed { i, layout ->
+        val a = i / 12f * TAU - PI.toFloat() / 2f
+        val nx = clockCenter.x + cos(a) * clockR * 0.65f
+        val ny = clockCenter.y + sin(a) * clockR * 0.65f
+        val nw = layout.size.width * numeralScale
+        val nh = layout.size.height * numeralScale
+        withTransform({
+            translate(nx - nw / 2f, ny - nh / 2f)
+            scale(scaleX = numeralScale, scaleY = numeralScale, pivot = Offset.Zero)
+        }) {
+            drawText(
+                textLayoutResult = layout,
+                color = SwiftiePalette.Lavender,
+                alpha = alpha * 0.72f
+            )
+        }
+    }
     // 表蒙子的反光：左上（9 点到 12 点之间）**两道细亮条**。玻璃靠它读出来，
     // 少了它表盘只是一块涂黑的圆板。
     //
@@ -4100,19 +4159,25 @@ private fun DrawScope.drawMidnightClock(
             )
         )
     }
-    // 两根指针都朝上 = 午夜。时针短而粗，分针长而细，星尖收在指针末端
+    // 3 点：时针短而粗、指向 3，分针长而细、指向 12。星尖收在指针末端
     for (i in 0..1) {
         val len = if (i == 0) 0.46f else 0.78f
         val thick = if (i == 0) 0.016f else 0.010f
+        // i = 0 时针横向朝 3，i = 1 分针竖直朝 12
+        val end = if (i == 0) {
+            Offset(clockCenter.x + clockR * len, clockCenter.y)
+        } else {
+            Offset(clockCenter.x, clockCenter.y - clockR * len)
+        }
         drawLine(
             color = SwiftiePalette.Lavender,
             start = clockCenter,
-            end = Offset(clockCenter.x, clockCenter.y - clockR * len),
+            end = end,
             strokeWidth = w * thick,
             alpha = alpha * 0.62f,
             cap = StrokeCap.Round
         )
-        starInto(path, clockCenter.x, clockCenter.y - clockR * len, w * 0.026f, phase * 360f / 5f)
+        starInto(path, end.x, end.y, w * 0.026f, phase * 360f / 5f)
         drawPath(path = path, color = Color.White, alpha = alpha * 0.68f)
     }
     drawCircle(color = SwiftiePalette.Lavender, radius = w * 0.012f, center = clockCenter, alpha = alpha * 0.7f)
